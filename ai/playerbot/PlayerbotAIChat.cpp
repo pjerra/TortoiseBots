@@ -29,46 +29,50 @@ ChatChannelSource PlayerbotAI::GetChatChannelSource(Player* bot, uint32 type, st
         }
         else
         {
-            ChannelMgr* cMgr = channelMgr(bot->GetTeam());
-            if (!cMgr)
+            return UnportedBlockResultCompat(tbcompat::Feature::AddonChat, ChatChannelSource::SRC_UNDEFINED, [&](auto* bot) -> ChatChannelSource
             {
-                return ChatChannelSource::SRC_UNDEFINED;
-            }
-
-            const Channel* channel = cMgr->GetChannel(channelName, sObjectAccessor.FindPlayerPointer(bot->GetObjectGuid()));
-
-            if (channel)
-            {
-                switch (channel->GetChannelId())
+                auto* cMgr = channelMgr(bot->GetTeam());
+                if (!cMgr)
                 {
-                case ChatChannelId::GENERAL:
-                {
-                    return ChatChannelSource::SRC_GENERAL;
-                }
-                case ChatChannelId::TRADE:
-                {
-                    return ChatChannelSource::SRC_TRADE;
-                }
-                case ChatChannelId::LOCAL_DEFENSE:
-                {
-                    return ChatChannelSource::SRC_LOCAL_DEFENSE;
-                }
-                case ChatChannelId::WORLD_DEFENSE:
-                {
-                    return ChatChannelSource::SRC_WORLD_DEFENSE;
-                }
-                case ChatChannelId::LOOKING_FOR_GROUP:
-                {
-                    return ChatChannelSource::SRC_LOOKING_FOR_GROUP;
-                }
-                case ChatChannelId::GUILD_RECRUITMENT:
-                {
-                    return ChatChannelSource::SRC_GUILD_RECRUITMENT;
-                }
-                default:
                     return ChatChannelSource::SRC_UNDEFINED;
                 }
-            }
+
+                auto* channel = cMgr->GetChannel(channelName, sObjectAccessor.FindPlayerPointer(bot->GetObjectGuid()));
+
+                if (channel)
+                {
+                    switch (channel->GetChannelId())
+                    {
+                    case ChatChannelId::GENERAL:
+                    {
+                        return ChatChannelSource::SRC_GENERAL;
+                    }
+                    case ChatChannelId::TRADE:
+                    {
+                        return ChatChannelSource::SRC_TRADE;
+                    }
+                    case ChatChannelId::LOCAL_DEFENSE:
+                    {
+                        return ChatChannelSource::SRC_LOCAL_DEFENSE;
+                    }
+                    case ChatChannelId::WORLD_DEFENSE:
+                    {
+                        return ChatChannelSource::SRC_WORLD_DEFENSE;
+                    }
+                    case ChatChannelId::LOOKING_FOR_GROUP:
+                    {
+                        return ChatChannelSource::SRC_LOOKING_FOR_GROUP;
+                    }
+                    case ChatChannelId::GUILD_RECRUITMENT:
+                    {
+                        return ChatChannelSource::SRC_GUILD_RECRUITMENT;
+                    }
+                    default:
+                        return ChatChannelSource::SRC_UNDEFINED;
+                    }
+                }
+                return ChatChannelSource::SRC_UNDEFINED;
+            }, bot);
         }
     }
     else
@@ -132,7 +136,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
             for (auto& player : sRandomBotFacade.GetPlayers())
             {
                 // The facade view can outlive removed bots; resolve by GUID.
-                Player* guildBot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, player.first));
+                Player* guildBot = sObjectAccessor.FindPlayer(PlayerGuidCompat(player.first));
                 if (!guildBot || !guildBot->IsInWorld())
                     continue;
 
@@ -140,29 +144,13 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
                 {
                     if (likePlayer)
                     {
-                        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-                        uint32 lang = LANG_UNIVERSAL;
-
-                        packet_template << CHAT_MSG_GUILD;
-                        packet_template << LANG_UNIVERSAL;
-                        packet_template << msg;
-
-                        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-                        bot->GetSession()->QueuePacket(packetPtr.release());
+                        BotChatLikePlayerCompat(bot, CHAT_MSG_GUILD, LANG_UNIVERSAL, msg);
                         return true;
                     }
                     break;
                 }
             }
-            if (!guild->HasRankRight(bot->GetRank(), GR_RIGHT_GCHATSPEAK))
-            {
-                return false;
-            }
-
-            guild->BroadcastToGuild(bot->GetSession(), msg.c_str(), LANG_UNIVERSAL);
-            return true;
+            return GuildSayCompat(bot, guild, msg);
         }
     }
 
@@ -172,13 +160,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
 static bool SayToNamedChannel(Player* bot, std::string const& name, std::string const& msg)
 {
     if (!bot || msg.empty()) return false;
-    ChannelMgr* mgr = channelMgr(bot->GetTeam());
-    Channel* channel = mgr ? mgr->GetOrCreateChannel(name) : nullptr;
-    if (!channel) return false;
-    ObjectGuid guid = bot->GetObjectGuid();
-    channel->Join(guid, "", false);
-    channel->AsyncSay(guid, msg.c_str(), LANG_UNIVERSAL);
-    return true;
+    return SayToChannelCompat(bot, name, msg);
 }
 
 bool PlayerbotAI::SayToWorld(std::string msg) { return SayToNamedChannel(bot, "World", msg); }
@@ -202,27 +184,11 @@ bool PlayerbotAI::SayToParty(std::string msg, bool likePlayer)
 
     if (likePlayer)
     {
-        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-        uint32 lang = LANG_UNIVERSAL;
-
-        packet_template << CHAT_MSG_PARTY;
-        packet_template << LANG_UNIVERSAL;
-        packet_template << msg;
-
-        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-        bot->GetSession()->QueuePacket(packetPtr.release());
+        BotChatLikePlayerCompat(bot, CHAT_MSG_PARTY, LANG_UNIVERSAL, msg);
         return true;
     }
 
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, msg.c_str(), LANG_UNIVERSAL, CHAT_TAG_NONE, bot->getObjectGuid(), bot->GetName());
-
-    for (auto reciever : GetPlayersInGroup())
-    {
-        sServerFacade.SendPacket(reciever, data);
-    }
+    BotGroupChatCompat(bot, CHAT_MSG_PARTY, msg, GetPlayersInGroup());
 
     return true;
 }
@@ -234,13 +200,7 @@ bool PlayerbotAI::SayToRaid(std::string msg)
         return false;
     }
 
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_RAID, msg.c_str(), LANG_UNIVERSAL, CHAT_TAG_NONE, bot->getObjectGuid(), bot->GetName());
-
-    for (auto reciever : GetPlayersInGroup())
-    {
-        sServerFacade.SendPacket(reciever, data);
-    }
+    BotGroupChatCompat(bot, CHAT_MSG_RAID, msg, GetPlayersInGroup());
 
     return true;
 }
@@ -263,19 +223,11 @@ bool PlayerbotAI::Yell(std::string msg, bool likePlayer)
 
     if (likePlayer)
     {
-        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-        packet_template << CHAT_MSG_YELL;
-        packet_template << lang;
-        packet_template << msg;
-
-        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-        bot->GetSession()->QueuePacket(packetPtr.release());
+        BotChatLikePlayerCompat(bot, CHAT_MSG_YELL, lang, msg);
         return true;
     }
 
-    bot->Yell(msg, lang);
+    BotYellCompat(bot, msg, lang);
 
     return true;
 }
@@ -298,19 +250,11 @@ bool PlayerbotAI::Say(std::string msg, bool likePlayer)
 
     if (likePlayer)
     {
-        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-        packet_template << CHAT_MSG_SAY;
-        packet_template << lang;
-        packet_template << msg;
-
-        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-        bot->GetSession()->QueuePacket(packetPtr.release());
+        BotChatLikePlayerCompat(bot, CHAT_MSG_SAY, lang, msg);
         return true;
     }
 
-    bot->Say(msg, lang);
+    BotSayCompat(bot, msg, lang);
 
     return true;
 }
@@ -320,32 +264,26 @@ bool PlayerbotAI::Whisper(std::string msg, std::string receiverName, bool likePl
     if (msg.empty())
         return false;
 
-    ObjectGuid receiver = sObjectMgr.GetPlayerGuidByName(receiverName);
-    Player* rPlayer = sObjectMgr.GetPlayer(receiver);
+    ObjectGuid receiver = PlayerGuidByNameCompat(receiverName);
+    Player* rPlayer = GetPlayerCompat(receiver);
 
     if (!rPlayer)
     {
         return false;
     }
 
-    if (rPlayer == bot)
-    {
-        WorldPacket data;
-        ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, msg.c_str(), LANG_UNIVERSAL, bot->GetChatTag(), bot->getObjectGuid(), bot->GetName());
-        rPlayer->GetSession()->SendPacket(&data);
-
-        return true;
-    }
-
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, msg.c_str(), LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
-    rPlayer->GetSession()->SendPacket(&data);
+    // Both branches built the same packet for the receiver (the second with GetObjectGuid, the same guid).
+    BotWhisperCompat(bot, rPlayer, msg);
     return true;
 }
 
 bool PlayerbotAI::TellPlayerNoFacing(Player* player, std::string text, PlayerbotSecurityLevel securityLevel, bool isPrivate, bool noRepeat, bool ignoreSilent)
 {
     if(!player)
+        return false;
+
+    // An empty text says nothing (ForeverCore has no bot text table: BOT_TEXT answers ""): skip it like the other Tell/Say/Whisper functions do.
+    if (text.empty())
         return false;
 
     if (!ignoreSilent && HasStrategy("silent", BotState::BOT_STATE_NON_COMBAT))
@@ -456,8 +394,7 @@ bool PlayerbotAI::TellPlayerNoFacing(Player* player, std::string text, Playerbot
                 {
                     text = "BOT\t" + text;
 
-                    ChatHandler::BuildChatPacket(data, type == CHAT_MSG_ADDON ? CHAT_MSG_PARTY : type, text.c_str(), type == CHAT_MSG_ADDON ? LANG_ADDON : LANG_UNIVERSAL, CHAT_TAG_NONE, bot->getObjectGuid(), bot->GetName());
-                    sServerFacade.SendPacket(player, data);
+                    SendChatPacketCompat(sServerFacade, bot, player, type == CHAT_MSG_ADDON ? CHAT_MSG_PARTY : type, text, type == CHAT_MSG_ADDON ? LANG_ADDON : LANG_UNIVERSAL);
                     return true;
                 }
 

@@ -117,7 +117,7 @@ bool HealTargetFullHealthTrigger::IsActive()
     if (!currentSpell || currentSpell->getState() != SPELL_STATE_PREPARING || !currentSpell->GetCastedTime())
         return false;
 
-    SpellEntry const* info = currentSpell->m_spellInfo;
+    SpellEntry const* info = GetSpellEntryCompat(currentSpell->m_spellInfo);
     if (!info || info->IsChanneledSpell() || info->IsAreaOfEffectSpell())
         return false;
 
@@ -140,7 +140,7 @@ bool HealTargetFullHealthTrigger::IsActive()
     // The cast's cached unit-target pointer is refreshed only in the bot's next Spell::update, and the map frees a unit
     // removed in this tick, so resolve the guid the cast holds: a target that left the world reads none.
     ObjectGuid const targetGuid = currentSpell->m_targets.getUnitTargetGuid();
-    Unit* target = targetGuid ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
+    Unit* target = !targetGuid.IsEmpty() ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
     if (!target || !target->IsInWorld() || !target->IsAlive() || target->GetMap() != bot->GetMap())
         return false;
 
@@ -153,8 +153,8 @@ bool HealTargetFullHealthTrigger::IsActive()
         // Use the actual in-flight target, not the selector's next cached target.
         for (Unit* attacker : target->GetAttackers())
             if (attacker->CanReachWithMeleeAutoAttack(target))
-                incomingDamage += uint32((attacker->GetFloatValue(UNIT_FIELD_MINDAMAGE) +
-                    attacker->GetFloatValue(UNIT_FIELD_MAXDAMAGE)) / 2);
+                incomingDamage += uint32((UnitMinDamageCompat(attacker) +
+                    UnitMaxDamageCompat(attacker)) / 2);
     }
 
     uint64 healValue = 0;
@@ -164,7 +164,7 @@ bool HealTargetFullHealthTrigger::IsActive()
         {
             if (!info->Effect[effect])
                 continue;
-            int32 const amount = currentSpell->CalculateDamage(SpellEffectIndex(effect), target);
+            int32 const amount = SpellCalculateDamageCompat(currentSpell, effect, target);
             if (amount > 0)
                 healValue += static_cast<uint32>(amount);
         }
@@ -176,7 +176,7 @@ bool HealTargetFullHealthTrigger::IsActive()
         return false;
     if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
     {
-        std::string msg = "target healed, can save " + std::to_string(currentSpell->GetPowerCost()) +
+        std::string msg = "target healed, can save " + std::to_string(SpellManaCostCompat(currentSpell)) +
             " mana, cast left: " + std::to_string(currentSpell->GetCastedTime()) + "ms";
         ai->TellPlayerNoFacing(GetMaster(), msg);
     }

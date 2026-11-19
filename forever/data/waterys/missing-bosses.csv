@@ -1,0 +1,29 @@
+entry,name,raid,verdict,detail
+62037,Zuluhed the Whacked,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62038,Elder Hollowblood,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62056,Bogpaw Truthsay,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62057,Gowlfang,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62066,Cavernweb Broodmother,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62067,Web Master Torkon,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62068,Slagfist Destroyer,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62069,Halgan Redbrand,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62070,Overlord Blackheart,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+62071,Garlok Flamekeeper,dragonmaw_retreat,not in Forever data (unreleased),creature_model_info row only; no creature_template row
+61263,Regent-Lady Celia Harlow,gilneas_city,not in Forever data (unreleased),no template row; Gilneas custom
+61264,Regent-Lord Mortimer Harlow,gilneas_city,not in Forever data (unreleased),no template row; Gilneas custom
+61419,Matthias Holtz,gilneas_city,not in Forever data (unreleased),model + spell_target_position refs only
+61422,Dustivan Blackcowl,gilneas_city,not in Forever data (unreleased),model + quest refs only; no template row
+60715,'Broody',hateforge_quarry,not in Forever data (unreleased),creature_model_info row only
+92935,Guard Captain Gort,karazhan_crypt,not in Forever data (unreleased),quest_template + treasure-picker refs only
+61221,Brood Queen Araxxna,lower_karazhan_halls,not in Forever data (unreleased),model + quest refs only; no template row
+61225,Moroes,lower_karazhan_halls,not in Forever data (unreleased),model + quest refs only; no template row
+57642,Sorcerer-Thane Thaurissan,molten_core,not in Forever data (unreleased),model + quest refs only (12 world-DB refs); no template row
+93107,Arc'tiras,stormwind_vault,not in Forever data (unreleased),model + quest/POI refs only; no template row
+62549,Duke Balor the IV,stormwrought_ruins,not in Forever data (unreleased),model + quest refs only; no template row
+62673,Mergothid,stormwrought_ruins,not in Forever data (unreleased),model + quest refs only; no template row
+2139,Loktanag the Vile,timbermaw_hold,not in Forever data (unreleased),model row only (id collides with gameobject_template 2139, unrelated); no creature_template row
+59981,Sanv Tas'dal,upper_karazhan_halls,not in Forever data (unreleased),model + quest refs only; no template row
+61939,Keeper Gnarlmoon,upper_karazhan_halls,not in Forever data (unreleased),model + serverside_spell refs only
+61951,Anomalus,upper_karazhan_halls,not in Forever data (unreleased),model + quest refs only; no template row
+61958,Echo of Medivh,upper_karazhan_halls,not in Forever data (unreleased),model + quest refs only; no template row
+14599,High Priest Thekal,zulgurub,under another entry,TB entry 14599 has no template row (gossip/npc_text hits are menu/text ids, not the creature); FB encounter + TDB template entry is 14509

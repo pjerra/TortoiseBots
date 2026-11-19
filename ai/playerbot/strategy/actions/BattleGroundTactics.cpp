@@ -2345,7 +2345,7 @@ static bool BgTeamHasRealPlayer(BattleGround* bg, Team team)
 {
     for (auto const& itr : bg->GetPlayers())
     {
-        if (Player* p = sObjectMgr.GetPlayer(itr.first))
+        if (Player* p = GetPlayerCompat(itr.first))
             if (!PlayerbotAIStorage::Instance().GetAI(p) && p->GetTeam() == team)
                 return true;
     }
@@ -2391,7 +2391,7 @@ uint32 BGTactics::wsgFlagRole(BattleGround* bg)
         if (itr.second.PlayerTeam != bot->GetTeam())
             continue;
 
-        Player* p = sObjectMgr.GetPlayer(itr.first);
+        Player* p = GetPlayerCompat(itr.first);
         if (!p || !PlayerbotAIStorage::Instance().GetAI(p))
             continue;
 
@@ -2855,7 +2855,7 @@ bool BGTactics::selectObjective(bool reset)
         float nearestDist = FLT_MAX;
         for (auto const& itr : bg->GetPlayers())
         {
-            Player* enemy = sObjectMgr.GetPlayer(itr.first);
+            Player* enemy = GetPlayerCompat(itr.first);
             if (!enemy || !enemy->IsInWorld() || !enemy->IsAlive() || enemy->GetTeam() == bot->GetTeam() ||
                 enemy->GetMapId() != bot->GetMapId())
                 continue;
@@ -3258,7 +3258,7 @@ bool BGTactics::atFlag(std::vector<BattleBotPath*> const& vPaths, std::vector<ui
         if (Unit* pFriend = ai->GetUnit(guid))
         {
             if (pFriend->GetCurrentSpell(CURRENT_GENERIC_SPELL) &&
-                pFriend->GetCurrentSpell(CURRENT_GENERIC_SPELL)->m_spellInfo->Id == SPELL_CAPTURE_BANNER)
+                GetSpellEntryCompat(pFriend->GetCurrentSpell(CURRENT_GENERIC_SPELL)->m_spellInfo)->Id == SPELL_CAPTURE_BANNER)
             {
                 resetObjective();
                 startNewPathBegin(vPaths);

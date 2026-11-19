@@ -23,7 +23,7 @@ bool ai::HunterHasLoadedRangedWeapon(PlayerbotAI* playerbotAi)
     if (!ranged)
         return false;
 
-    if (ranged->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
+    if (GetItemProtoCompat(ranged)->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
         return true;
 
     return HunterHasRangedAmmo(playerbotAi);
@@ -183,7 +183,7 @@ bool HunterEquipAmmoAction::Execute(Event& event)
     uint32 ammoClass = ITEM_CLASS_PROJECTILE;
     uint32 subClass = 0;
 
-    switch (ranged->GetProto()->SubClass)
+    switch (GetItemProtoCompat(ranged)->SubClass)
     {
     case ITEM_SUBCLASS_WEAPON_GUN:
         subClass = ITEM_SUBCLASS_BULLET;
@@ -204,7 +204,7 @@ bool HunterEquipAmmoAction::Execute(Event& event)
     {
         if (!item)
             return;
-        const ItemPrototype* proto = item->GetProto();
+        const ItemPrototype* proto = GetItemProtoCompat(item);
         if (!proto)
             return;
         if (proto->Class == ammoClass && proto->SubClass == subClass)
@@ -262,7 +262,7 @@ bool HunterStepOutAction::Execute(Event& event)
     if (!target || !state)
         return false;
 
-    uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
+    uint64 const targetRaw = GuidKeyCompat(target->GetObjectGuid());
     uint32 const nowMs = WorldTimer::getMSTime();
 
     // A step is already under way for this mob: let it finish. A finished
@@ -291,7 +291,7 @@ bool HunterStepOutAction::Execute(Event& event)
     // Reach terms between centre and edge distance, constant for the step.
     float const reach = std::max(0.0f, center - edge);
     float const step = HunterStepOutLength(edge, minRange, state->stepOutAttempt);
-    float const away = target->GetAngle(bot);
+    float const away = GetAngleCompat(target, bot);
     WorldPosition const botPos(bot);
 
     std::list<ObjectGuid> const& possibleTargets = AI_VALUE(std::list<ObjectGuid>, "possible targets");

@@ -53,7 +53,12 @@ class PriestLesserHealWiringTest(unittest.TestCase):
         self.assertNotIn("->CanCastSpell(", source)
         self.assertIn('GetValue<uint32>("spell id", "heal")', fn)
         self.assertIn("LookupSpellInfo(probedId)", fn)
-        self.assertIn("Spell::CalculatePowerCost(spellInfo, bot, nullptr, nullptr)", fn)
+        # The price goes through the both-core helper (R3: ForeverCore has no Spell::CalculatePowerCost); its Turtle body is the same call as before.
+        self.assertIn("SpellPowerCostCompat(spellInfo, bot)", fn)
+        r3 = (ROOT / "ai/cmangos-compat-r3.h").read_text()
+        helper = r3[r3.index("inline uint32 SpellPowerCostCompat"):]
+        helper = helper[:helper.index("\n")]
+        self.assertIn("Spell::CalculatePowerCost(spell, const_cast<Unit*>(caster), nullptr, nullptr)", helper)
         self.assertIn("PriestSuppressLesserHeal(true, PriestProbedHealAffordable(cost, bot->GetPower(POWER_MANA)))", fn)
         # The priced spell is the probed one: no per-rank loop prices a cheaper rank (review H1).
         self.assertNotIn("PriestAnyHealRankAffordable", source)

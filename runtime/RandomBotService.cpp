@@ -57,6 +57,7 @@
 #include <memory>
 #include <random>
 #include <set>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -790,10 +791,10 @@ bool RandomBotService::TryAutoCreate(LineageRequest const* lineage)
     // One bounded attempt per cadence (caller is throttled to
     // RandomBotUpdateInterval, >=1s). No per-tick LIKE scan.
 
-    uint32 perAccountLimit = sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_ACCOUNT);
+    uint32 perAccountLimit = WorldU32ConfigW2(CONFIG_UINT32_CHARACTERS_PER_ACCOUNT);
     if (!perAccountLimit)
         perAccountLimit = 10;
-    uint32 perRealmLimit = sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM);
+    uint32 perRealmLimit = WorldU32ConfigW2(CONFIG_UINT32_CHARACTERS_PER_REALM);
     if (!perRealmLimit)
         perRealmLimit = 50;
     uint32 accountLimit = std::min(perAccountLimit, perRealmLimit);
@@ -840,7 +841,7 @@ bool RandomBotService::TryAutoCreate(LineageRequest const* lineage)
         return false;
     }
 
-    bool allowTwoSide = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS) != 0;
+    bool allowTwoSide = WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS) != 0;
 
     // Pending-account handling for LoginDatabase async AccountMgr::CreateAccount
     // (LoginDatabase queues INSERT after AllowAsyncTransactions, separate from core PR #416): keep
@@ -1507,7 +1508,7 @@ void RandomBotService::QueueOrderBots(uint32_t target, uint32_t perInterval, uin
         Candidate const& candidate = m_candidates[index];
         if (Player* player = sObjectAccessor.FindPlayer(candidate.characterGuid))
         {
-            if (!player->GetSession() || !player->GetSession()->IsHeadless())
+            if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                 continue;
         }
         if (BotSessionAdapter::GetHeadlessSessionState(candidate.characterGuid) != HeadlessSessionState::NotFound)
@@ -1588,7 +1589,7 @@ void RandomBotService::MaintainOnlinePool()
 
             if (Player* player = sObjectAccessor.FindPlayer(pinnedCandidate->characterGuid))
             {
-                if (!player->GetSession() || !player->GetSession()->IsHeadless())
+                if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                     continue;
             }
             if (BotSessionAdapter::GetHeadlessSessionState(pinnedCandidate->characterGuid) != HeadlessSessionState::NotFound)
@@ -1646,7 +1647,7 @@ void RandomBotService::MaintainOnlinePool()
             if (Player* player = sObjectAccessor.FindPlayer(candidate.characterGuid))
             {
                 // A network session owns the character; never steal it.
-                if (!player->GetSession() || !player->GetSession()->IsHeadless())
+                if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                 {
                     m_ladderRetryMs[index] = nowMs + LADDER_BUSY_RETRY_MS;
                     ++sessionBusy;
@@ -1709,7 +1710,7 @@ void RandomBotService::MaintainOnlinePool()
             // A network session owns the character; native random control may
             // never steal it. Headless sessions are likewise left to the
             // existing BotManager record/reclaim path.
-            if (!player->GetSession() || !player->GetSession()->IsHeadless())
+            if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                 continue;
         }
         if (BotSessionAdapter::GetHeadlessSessionState(candidate.characterGuid) != HeadlessSessionState::NotFound)

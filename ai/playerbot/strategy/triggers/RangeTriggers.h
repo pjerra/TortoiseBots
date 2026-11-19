@@ -40,7 +40,7 @@ namespace ai
                     return false;
                 }
 
-                float const combatReach = bot->GetCombatReach(target, false, 0.0f);
+                float const combatReach = GetCombatReachCompat(bot, target, false, 0.0f);
                 float const minDistance = ai->GetRange("spell") + combatReach;
                 float const targetDistance = sServerFacade.getDistance2d(bot, target) + combatReach;
 
@@ -162,7 +162,7 @@ namespace ai
                     return false;
                 }
 
-                float const combatReach = bot->GetCombatReach(target, false, 0.0f);
+                float const combatReach = GetCombatReachCompat(bot, target, false, 0.0f);
                 float const minShootDistance = ai->GetRange("shoot") + combatReach;
                 float const targetDistance = sServerFacade.getDistance2d(bot, target) + combatReach;
 
@@ -306,7 +306,7 @@ namespace ai
             if (!target)
                 return false;
 
-            return !bot->CanReachWithMeleeAutoAttack(target) || !bot->IsWithinLOSInMap(target, true);
+            return !bot->CanReachWithMeleeAutoAttack(target) || !IsWithinLOSInMapCompat(bot, target, true);
         }
     };
 
@@ -326,7 +326,7 @@ namespace ai
             if (!sServerFacade.IsHostileTo(bot, target))
                 return false;
 
-            return target && (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !bot->IsWithinLOSInMap(target, true);
+            return target && (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !IsWithinLOSInMapCompat(bot, target, true);
         }
     };
 
@@ -349,8 +349,8 @@ namespace ai
                     float(sPlayerbotAIConfig.almostFullHealth)))
                 return false;
 
-            bool const outOfRange = (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) ||
-                !bot->IsWithinLOSInMap(target, true);
+            bool const outOfRange = (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) ||
+                !IsWithinLOSInMapCompat(bot, target, true);
             if (!outOfRange)
                 return false;
 
@@ -499,7 +499,7 @@ namespace ai
                     {
                         stationMagmaLogAt = now;
                         TB_LOG_BASIC("TortoiseBots: %s: magma formation station at %.1f %.1f %.1f: move z %.1f, "
-                            "navmesh z %.1f (map %u)", bot->GetName(), loc.x, loc.y, loc.z, move.moveZ,
+                            "navmesh z %.1f (map %u)", CStrCompat(bot->GetName()), loc.x, loc.y, loc.z, move.moveZ,
                             move.navmeshZ, bot->GetMapId());
                     }
                     if (ai::PlanMagmaMoveZ(true, move.moveInMagma, move.navmeshDry, move.navmeshZ, move.moveZ) ==

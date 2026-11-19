@@ -50,7 +50,7 @@ namespace
             Group::MemberSlotList const& slots = group->GetMemberSlots();
             for (Group::member_citerator itr = slots.begin(); itr != slots.end(); ++itr)
             {
-                Player* member = sObjectMgr.GetPlayer(itr->guid);
+                Player* member = ObjectAccessor::FindPlayer(itr->guid);
                 if (!member || member == bot || !sServerFacade.IsAlive(member) || !member->IsInWorld() ||
                     member->GetMapId() != bot->GetMapId())
                     continue;
@@ -63,7 +63,7 @@ namespace
         // holding a far order is wedged, not pulling.
         if (!attackGuid.IsEmpty() && target->getObjectGuid() == attackGuid &&
             bot->IsWithinDistInMap(target, sPlayerbotAIConfig.reactDistance) &&
-            (sServerFacade.isMoving(bot) || bot->IsMoving()))
+            (sServerFacade.isMoving(bot) || IsMovingCompat(bot)))
             return true;
         // Someone else's fight the bot walked into: a target already in
         // core combat with threat on anyone holds while it is close enough

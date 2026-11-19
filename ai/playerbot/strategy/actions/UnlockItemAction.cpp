@@ -19,10 +19,10 @@ namespace
 {
 bool IsPickable(Item* item, Player* bot)
 {
-    if (!item || !bot || !item->GetProto())
+    if (!item || !bot || !GetItemProtoCompat(item))
         return false;
 
-    uint32 lockId = item->GetProto()->LockID;
+    uint32 lockId = GetItemProtoCompat(item)->LockID;
     if (!lockId || item->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED))
         return false;
 
@@ -72,7 +72,7 @@ void UnlockItemAction::UnlockItem(Item* item, Player* requester)
     if (botAI->CastSpell(PICK_LOCK_SPELL_ID, bot, item))
     {
         std::ostringstream out;
-        out << "Used Pick Lock on: " << item->GetProto()->Name1;
+        out << "Used Pick Lock on: " << GetItemProtoCompat(item)->Name1;
         ai->TellPlayer(requester ? requester : bot, out.str());
     }
     else

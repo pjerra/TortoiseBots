@@ -45,7 +45,7 @@ void Tell(Player* player, std::string const& text)
 Player* OnlineOwner(ObjectGuid ownerGuid)
 {
     Player* owner = ownerGuid.IsEmpty() ? nullptr : sObjectAccessor.FindPlayer(ownerGuid);
-    return owner && owner->GetSession() && owner->GetSession()->HasNetworkTransport() ? owner : nullptr;
+    return owner && owner->GetSession() && HasNetworkTransportCompat(owner->GetSession()) ? owner : nullptr;
 }
 
 // Free slots in the backpack and ordinary bags (not quivers or special bags).
@@ -58,8 +58,8 @@ uint32_t FreeBagSlots(Player* bot)
     for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
     {
         Bag const* pBag = dynamic_cast<Bag const*>(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag));
-        if (pBag && pBag->GetProto()->Class == ITEM_CLASS_CONTAINER &&
-            pBag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
+        if (pBag && GetItemProtoCompat(pBag)->Class == ITEM_CLASS_CONTAINER &&
+            GetItemProtoCompat(pBag)->SubClass == ITEM_SUBCLASS_CONTAINER)
             free += pBag->GetFreeSlots();
     }
     return free;
@@ -94,7 +94,7 @@ std::vector<std::string> AwayEquippedLinks(Player* bot, AltBotAwayPoint const& f
         if (!to.equipped[slot] || to.equipped[slot] == from.equipped[slot])
             continue;
         Item const* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, static_cast<uint8>(slot));
-        if (!item || !item->GetProto() || item->GetProto()->Quality < ITEM_QUALITY_UNCOMMON)
+        if (!item || !GetItemProtoCompat(item) || GetItemProtoCompat(item)->Quality < ITEM_QUALITY_UNCOMMON)
             continue;
         links.push_back(ai::ChatHelper::formatItem(const_cast<Item*>(item)));
     }
@@ -125,7 +125,7 @@ std::string AwayActivity(Player* bot)
     if (!bot->IsAlive())
         return AltBotAwayActivityWord(true, false, false, false, false, false);
     bool const fighting = bot->IsInCombat();
-    bool const resting = bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || bot->IsTaxiFlying();
+    bool const resting = HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING) || bot->IsTaxiFlying();
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     bool questTravel = false;
     bool anyTravel = false;
@@ -191,7 +191,7 @@ bool GroupAloneOnMap(Player* bot)
     for (Player* member : LiveGroupMembers(group))
     {
         if (member && member != bot && member->GetMapId() == bot->GetMapId() && member->GetSession() &&
-            member->GetSession()->HasNetworkTransport())
+            HasNetworkTransportCompat(member->GetSession()))
             return false;
     }
     return true;
@@ -341,7 +341,7 @@ void AltBotService::TryStart(ObjectGuid guid)
         return;
 
     Player* bot = sObjectAccessor.FindPlayer(guid);
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return;
     // Still (or again) grouped: a party member was removed, not this alt.
     if (bot->GetGroup())
@@ -514,7 +514,7 @@ bool AltBotService::TakeBack(Player* requester, Player* bot)
 
 void AltBotService::OnMasterBound(Player* bot, Player* master)
 {
-    if (!bot || !master || !master->GetSession() || !master->GetSession()->HasNetworkTransport())
+    if (!bot || !master || !master->GetSession() || !HasNetworkTransportCompat(master->GetSession()))
         return;
     // B8: another player's group gives it a master too; only the owner's
     // account takes the alt back.
@@ -537,7 +537,7 @@ void AltBotService::OnReclaimed(Player* player)
 
 void AltBotService::OnOwnerLogout(Player* owner)
 {
-    if (!owner || !owner->GetSession() || !owner->GetSession()->HasNetworkTransport())
+    if (!owner || !owner->GetSession() || !HasNetworkTransportCompat(owner->GetSession()))
         return;
     uint32_t const accountId = owner->GetSession()->GetAccountId();
     std::vector<std::pair<uint32_t, AltBotAwayPoint>> snapshots;
@@ -566,7 +566,7 @@ void AltBotService::OnOwnerLogout(Player* owner)
 
 void AltBotService::OnOwnerLogin(Player* owner)
 {
-    if (!owner || !owner->GetSession() || !owner->GetSession()->HasNetworkTransport())
+    if (!owner || !owner->GetSession() || !HasNetworkTransportCompat(owner->GetSession()))
         return;
     for (auto const& named : AwayLines(owner->GetSession()->GetAccountId()))
         Tell(owner, named.second);

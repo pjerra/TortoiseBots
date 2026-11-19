@@ -41,6 +41,7 @@
 #include "../../runtime/policy/pvp/WorldPvpSeekPolicy.h"
 #include "playerbot/strategy/values/WorldPvpSeekLog.h"
 #include "Battlegrounds/BattleGroundMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 // The class context of a bot; the augmenters of other modules are applied on top in
 // createAiObjectContext below (AiContextAugment.h).
@@ -345,7 +346,7 @@ static BotRoles GetTalentRoles(const Player* player)
 static bool HasShieldEquipped(const Player* player)
 {
     Item const* offhand = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-    ItemPrototype const* prototype = offhand ? offhand->GetProto() : nullptr;
+    ItemPrototype const* prototype = offhand ? GetItemProtoCompat(offhand) : nullptr;
     return prototype && prototype->Class == ITEM_CLASS_ARMOR &&
         prototype->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD;
 }
@@ -1481,7 +1482,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(player);
         Player* master = ai ? ai->GetMaster() : nullptr;
 
-        if (master && master->GetSession() && master->GetSession()->HasNetworkTransport())
+        if (master && master->GetSession() && HasNetworkTransportCompat(master->GetSession()))
         {
             // A real player's bot rebuilds with "follow" (GetDefaultMovementStrategy,
             // mod-playerbots parity): a role change or regroup reset must not swap
@@ -1555,7 +1556,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 nonCombatEngine->addStrategy("rpg");
             }
 
-            if(!master || (master->GetSession() && !master->GetSession()->HasNetworkTransport()))
+            if(!master || (master->GetSession() && !HasNetworkTransportCompat(master->GetSession())))
             {
                 nonCombatEngine->addStrategy("maintenance");
             }
@@ -1597,7 +1598,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                             nonCombatEngine->addStrategy("rpg");
                         }
 
-                        if ((!master || (master->GetSession() && !master->GetSession()->HasNetworkTransport())) && !isHire)
+                        if ((!master || (master->GetSession() && !HasNetworkTransportCompat(master->GetSession()))) && !isHire)
                         {
                             nonCombatEngine->addStrategy("maintenance");
                         }

@@ -172,7 +172,7 @@ bool ai::HealerWandAllowed(PlayerbotAI* ai, Unit* target)
     gate.targetEngaged = TargetFightsGroup(bot, target);
     gate.aloneNear = NoGroupMemberNear(bot);
     ObjectGuid const ordered = context->GetValue<ObjectGuid>("explicit attack target")->Get();
-    gate.explicitOrder = target && ordered && ordered == target->GetObjectGuid();
+    gate.explicitOrder = target && !ordered.IsEmpty() && ordered == target->GetObjectGuid();
     gate.healOnly = ai->RunHealOnly();
     gate.noMana = context->GetValue<bool>("has mana", "self target")->Get() &&
         context->GetValue<uint8>("mana", "self target")->Get() < 5;
@@ -231,7 +231,7 @@ bool HealerShouldAttackTrigger::IsActive()
     Unit* const target = AI_VALUE(Unit*, "current target");
     ObjectGuid const ordered = AI_VALUE(ObjectGuid, "explicit attack target");
     bool const engaged = TargetFightsGroup(bot, target) ||
-        (target && ordered && ordered == target->GetObjectGuid());
+        (target && !ordered.IsEmpty() && ordered == target->GetObjectGuid());
     if (!HealerDamageTargetAllowed(true, target != nullptr, engaged))
         return false;
 
@@ -254,7 +254,7 @@ bool HealerShouldAttackTrigger::IsActive()
 bool WandBlocksCastTrigger::IsWanding()
 {
     Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
+    return autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo) && GetSpellEntryCompat(autoRepeat->m_spellInfo)->Category == WAND_SHOOT_CATEGORY;
 }
 
 WandSpellProbe WandBlocksCastTrigger::ProbeSpell(std::string const& spell, Unit* target, bool checkForm)
@@ -277,14 +277,13 @@ WandCastBlockers WandBlocksCastTrigger::CastBlockers(std::string const& spell, U
 
     // Spell::CheckCasterAuras: silence and the school lockout of a
     // Counterspell-like interrupt (Unit::IsSpellProhibited), pacify.
-    uint32 const unitFlags = bot->GetUInt32Value(UNIT_FIELD_FLAGS);
     if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE)
     {
-        blockers.silenced = (unitFlags & UNIT_FLAG_SILENCED) != 0;
-        blockers.lockedOut = bot->IsSpellProhibited(spellInfo);
+        blockers.silenced = UnitSilencedCompat(bot);
+        blockers.lockedOut = SpellProhibitedCompat(bot, spellInfo);
     }
     else if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_PACIFY)
-        blockers.silenced = (unitFlags & UNIT_FLAG_PACIFIED) != 0;
+        blockers.silenced = UnitPacifiedCompat(bot);
 
     // Player::ProhibitSpellSchool puts every spell of the school on its own
     // cooldown, and the bot-side check reports that as NOT_READY too. The
@@ -829,7 +828,7 @@ bool SuccessorWhiteCapTrigger::IsActive()
     // Each attack mode is judged on its own target (SuccessorWhiteStopsOf): melee on the boss with the wand on an add stops
     // the swing only, and the reverse interrupts the auto-repeat only.
     Spell* const autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    const bool repeating = autoRepeat && autoRepeat->m_spellInfo;
+    const bool repeating = autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo);
     const bool meleeOnSuccessor = bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING) && bot->GetVictim() == target;
     // Compare the guid the cast holds: its cached unit-target pointer can point at a unit the map freed this tick.
     const bool autoRepeatOnSuccessor = repeating && autoRepeat->m_targets.getUnitTargetGuid() == target->GetObjectGuid();
@@ -866,7 +865,7 @@ bool ThreatResetWhiteStopTrigger::IsActive()
     if (!ThreatResetHolds(ai, bot, target))
         return false;
     Spell* const autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    const bool repeating = autoRepeat && autoRepeat->m_spellInfo;
+    const bool repeating = autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo);
     const bool meleeOnTarget = bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING) && bot->GetVictim() == target;
     // Compare the guid the cast holds: its cached unit-target pointer can point at a unit the map freed this tick.
     const bool autoRepeatOnTarget = repeating && autoRepeat->m_targets.getUnitTargetGuid() == target->GetObjectGuid();
@@ -1190,7 +1189,7 @@ bool DeflectSpellTrigger::IsActive()
     Spell* spell = target->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     if (spell)
     {
-        SpellEntry const* tarSpellInfo = spell->m_spellInfo;
+        SpellEntry const* tarSpellInfo = GetSpellEntryCompat(spell->m_spellInfo);
         if (tarSpellInfo)
         {
             attackSchool = GetSpellSchoolMask(tarSpellInfo);
@@ -1339,7 +1338,7 @@ bool TankAssistTrigger::IsActive()
     Unit* victim = currentTarget->GetVictim();
     Player* victimPlayer = victim ? dynamic_cast<Player*>(victim) : nullptr;
     Group* group = bot->GetGroup();
-    ObjectGuid const mainTank = group ? group->GetMainTankGuid() : ObjectGuid();
+    ObjectGuid const mainTank = group ? GroupMainTankGuidCompat(group) : ObjectGuid();
     bool const isExplicitMainTank = group && !mainTank.IsEmpty() && mainTank == bot->getObjectGuid();
     bool holdsCurrent = TankHoldsCurrentTarget(victim == bot,
         victimPlayer && ai->IsTank(victimPlayer), isExplicitMainTank);
@@ -1379,7 +1378,7 @@ bool RearFlankNeededTrigger::IsActive()
         return false;
     if (AI_VALUE2(bool, "behind", "current target"))
         return false;
-    return target->HasInArc(bot, 2.0f * (float)M_PI / 2.0f);
+    return HasInArcCompat(target, bot, 2.0f * (float)M_PI / 2.0f);
 }
 
 bool IsNotFacingTargetTrigger::IsActive()
@@ -1408,7 +1407,7 @@ bool TankFaceNeededTrigger::IsActive()
     // stepping to the far side of the mob points its front at the tank.
     if (!target->GetVictim() || target->GetVictim()->getObjectGuid() != bot->getObjectGuid())
         return false;
-    if (!bot->CanReachWithMeleeAutoAttack(target) || target->IsMoving())
+    if (!bot->CanReachWithMeleeAutoAttack(target) || IsMovingCompat(target))
         return false;
     Group* group = bot->GetGroup();
     if (!group)
@@ -1433,7 +1432,7 @@ bool TankFaceNeededTrigger::IsActive()
     // Hysteresis (donor TankFaceAction, tolerable = PI/2): fire only while
     // the mob's front points at the party side. After the sidestep the tank
     // sits ~108 degrees off, outside this window, so it does not jitter.
-    float delta = averageAngle - target->GetAngle(bot);
+    float delta = averageAngle - GetAngleCompat(target, bot);
     while (delta > M_PI)
         delta -= 2.0f * M_PI;
     while (delta < -M_PI)
@@ -1534,9 +1533,9 @@ bool WandBlocksCcTrigger::ComputeCcCastWaiting()
         SpellRangeEntry const* rangeEntry = spellInfo ? sSpellRangeStore.LookupEntry(spellInfo->rangeIndex) : nullptr;
         if (!rangeEntry)
             continue;
-        float maxRange = rangeEntry->maxRange;
-        bot->ApplySpellMod(spellId, SPELLMOD_RANGE, maxRange);
-        if (bot->GetCombatDistance(target) > maxRange)
+        float maxRange = SpellRangeMax(rangeEntry);
+        ApplySpellModRangeCompat(bot, spellId, maxRange);
+        if (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > maxRange)
             continue;
 
         WandState const state{true, ProbeSpell(spell, target), keepWandForThreat, noManaRowActive};
@@ -1682,12 +1681,12 @@ bool CorpseNearTrigger::IsActive()
 
 bool IsFallingTrigger::IsActive()
 {
-    return bot->HasMovementFlag(MOVEFLAG_JUMPING);
+    return HasMovementFlagCompat(bot, MOVEFLAG_JUMPING);
 }
 
 bool IsFallingFarTrigger::IsActive()
 {
-    return bot->HasMovementFlag(MOVEFLAG_FALLINGFAR);
+    return HasMovementFlagCompat(bot, MOVEFLAG_FALLINGFAR);
 }
 
 bool HasAreaDebuffTrigger::IsActive()
@@ -1860,7 +1859,7 @@ bool TargetOfAttacker::IsActive()
 bool TargetOfAttackerInRange::IsActive()
 {
     const Unit* closestAttacker = AI_VALUE(Unit*, "closest attacker targeting me");
-    return closestAttacker && bot->GetCombatDistance(closestAttacker) <= (distance - sPlayerbotAIConfig.contactDistance);
+    return closestAttacker && GetDistanceCompat(bot, closestAttacker, SizeFactor::CombatReach) <= (distance - sPlayerbotAIConfig.contactDistance);
 }
 
 bool TargetOfCastedAuraTypeTrigger::IsActive()
@@ -1876,7 +1875,7 @@ bool TargetOfCastedAuraTypeTrigger::IsActive()
             const Spell* genericSpell = attacker->GetCurrentSpell(CurrentSpellTypes::CURRENT_GENERIC_SPELL);
             if (genericSpell)
             {
-                const SpellEntry* spellInfo = genericSpell->m_spellInfo;
+                const SpellEntry* spellInfo = GetSpellEntryCompat(genericSpell->m_spellInfo);
                 if (spellInfo)
                 {
                     for (int32 i = SpellEffectIndex::EFFECT_INDEX_0; i <= SpellEffectIndex::EFFECT_INDEX_2; i++)
@@ -1895,7 +1894,7 @@ bool TargetOfCastedAuraTypeTrigger::IsActive()
                 const Spell* channeledSpell = attacker->GetCurrentSpell(CurrentSpellTypes::CURRENT_CHANNELED_SPELL);
                 if (channeledSpell)
                 {
-                    const SpellEntry* spellInfo = channeledSpell->m_spellInfo;
+                    const SpellEntry* spellInfo = GetSpellEntryCompat(channeledSpell->m_spellInfo);
                     if (spellInfo)
                     {
                         for (int32 i = SpellEffectIndex::EFFECT_INDEX_0; i <= SpellEffectIndex::EFFECT_INDEX_2; i++)
@@ -1940,7 +1939,7 @@ bool DispelOnTargetTrigger::IsActive()
         const std::vector<Aura*> auras = ai->GetAuras(target);
         for (const Aura* aura : auras)
         {
-            const SpellEntry* spellInfo = aura->GetSpellProto();
+            const SpellEntry* spellInfo = GetSpellEntryCompat(aura->GetSpellProto());
             if (spellInfo && ((1 << spellInfo->Dispel) & dispelMask))
             {
                 return true;
@@ -2004,7 +2003,7 @@ bool ItemTargetTrigger::IsTargetValid(Unit* target)
         if (itemAuraCheck)
         {
             const uint32 itemId = GetItemId();
-            const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+            const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
             if (proto)
             {
                 for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -2036,7 +2035,7 @@ bool ItemTargetTrigger::IsSpellReady()
     if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
         return false;
 
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
     if (proto)
     {
         for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -2076,19 +2075,19 @@ bool AtWarTrigger::IsActive()
         if (!repState)
             continue;
 
-        if (!(repState->Flags & FACTION_FLAG_VISIBLE))
+        if (!(ReputationHasFlagCompat(repState, FACTION_FLAG_VISIBLE)))
             continue;
 
-        if (repState->Flags & FACTION_FLAG_HIDDEN)
+        if (ReputationHasFlagCompat(repState, FACTION_FLAG_HIDDEN))
             continue;
 
-        if (repState->Flags & FACTION_FLAG_INVISIBLE_FORCED)
+        if (ReputationHasFlagCompat(repState, FACTION_FLAG_INVISIBLE_FORCED))
             continue;
 
-        if (repState->Flags & FACTION_FLAG_PEACE_FORCED)
+        if (ReputationHasFlagCompat(repState, FACTION_FLAG_PEACE_FORCED))
             continue;
 
-        if (!(repState->Flags & FACTION_FLAG_AT_WAR))
+        if (!(ReputationHasFlagCompat(repState, FACTION_FLAG_AT_WAR)))
             continue;
 
         if (mgr.GetRank(factionEntry) < REP_HOSTILE)

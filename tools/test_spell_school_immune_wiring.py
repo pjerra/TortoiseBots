@@ -45,7 +45,7 @@ class SpellSchoolImmuneWiringTest(unittest.TestCase):
     def test_the_school_mask_is_judged_against_the_template_mask(self):
         self.assertRegex(USEFUL,
                          r"TortoiseBots::SpellSchoolImmune\(static_cast<uint32>\(info->GetSpellSchoolMask\(\)\),\s*"
-                         r"creatureInfo->school_immune_mask\)")
+                         r"CreatureSchoolImmuneMaskCompat\(creatureInfo\)\)")
         self.assertIn("return false;", immune_block())
 
     def test_only_a_creature_target(self):

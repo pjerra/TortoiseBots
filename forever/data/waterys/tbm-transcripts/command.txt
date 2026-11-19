@@ -1,0 +1,30 @@
+# command: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## command-addon
+Requester: Labby
+Observed at: 2026-11-18T02:21:30.879315607-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon, whisper
+Observed addon channel labels (client decoder): guild
+REQUEST
+command Quasar co ?
+REPLIES BEGIN
+Forwarded command for Quasar: co ?; action success is not guaranteed.
+Combat Strategies: anubrekhan burn, anubrekhan main, aoe, aoe protection raid, boost, boost protection raid, buff, buff protection raid, cast time, cc, cc protection raid, chase jump, close, default, duel, dungeon, faerlina worshipper guard, mount, naxxramas, protection, protection raid, pull, pvp, racials, role consumables, roll, tank assist, tank face
+REPLIES END
+
+## command-chat
+Requester: Labby
+Observed at: 2026-11-18T02:21:44.044822146-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system, whisper
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot command Ilda co ?
+REPLIES BEGIN
+Forwarded command for Ilda: co ?; action success is not guaranteed.
+Combat Strategies: anubrekhan burn, anubrekhan guard, aoe, aoe protection raid, boost, boost protection raid, buff, buff protection raid, cast time, cc, cc protection raid, chase jump, close, default, duel, dungeon, faerlina worshipper guard, mount, naxxramas, protection, protection raid, pull, pull back, pvp, racials, role consumables, roll, tank assist, tank face
+REPLIES END
+

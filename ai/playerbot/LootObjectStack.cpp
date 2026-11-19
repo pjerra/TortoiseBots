@@ -100,57 +100,65 @@ LootObject::LootObject(Player* bot, ObjectGuid guid, bool playerOrder)
 // refuses it (Creature::GetLootRecipient() resolves the pet guid to nothing). "Always tag the mob
 // yourself or the pet kill gives no loot and no XP" is the vanilla rule, not a module bug; making
 // such corpses lootable needs the core to credit the pet's owner, not a change here.
+// The module's personal-item rule (policy/loot/CorpseLootPolicy.h), handed to the both-core corpse helpers (TbCompat_V2.h /
+// cmangos-compat-s2v.h): T runs it, F never calls it (money only, D2). A template, so ForeverCore does not compile its body against the core's Loot.
+struct VisiblePersonalItemRule
+{
+    template <class LootT, class PlayerT>
+    bool operator()(LootT const& loot, PlayerT* viewer) const { return ai::HasVisiblePersonalItemFor(loot, viewer); }
+};
+
 static bool MayLootCorpse(Player* bot, Creature* creature)
 {
-    if (!bot->IsAllowedToLoot(creature))
+    if (!CorpseAllowedToLootCompat(bot, creature))
         return false;
 
     Group* group = bot->GetGroup();
     if (!group || group->isBGGroup() || group->GetLootMethod() == FREE_FOR_ALL)
         return true;                                        // the core grants every member this corpse
 
-    Loot const& loot = creature->loot;
-    if (loot.roundRobinPlayer == 0 || loot.roundRobinPlayer == bot->GetObjectGuid())
+    ObjectGuid const turn = CorpseRoundRobinGuidCompat(creature, bot);
+    if (turn.IsEmpty() || turn == bot->GetObjectGuid())
         return true;                                        // no turn assigned (released) or this bot's turn
 
     // The assigned master looter opens its corpses even if the turn recorded at the kill went
     // elsewhere (the turn is the tapper when the group had no looter guid yet).
-    if (group->GetLootMethod() == MASTER_LOOT && group->GetLooterGuid() == bot->GetObjectGuid())
+    if (group->GetLootMethod() == MASTER_LOOT && GroupMasterLooterGuidCompat(group) == bot->GetObjectGuid())
         return true;
 
-    return ai::HasVisiblePersonalItemFor(loot, bot);        // another member's turn: personal loot it will show
+    // another member's turn: personal loot it will show (F: money only, none is claimed)
+    return CorpseHasVisiblePersonalItemForCompat(creature, bot, VisiblePersonalItemRule());
 }
 // Collects every item an open chest can hold, following reference tables
 // one level deep. Returns false as soon as one item is better than common.
 static bool CollectCommonChestLoot(LootTemplateAccess const* access, std::vector<uint32>& items, int depth)
 {
-    auto visit = [&](LootStoreItem const& row) -> bool
+    auto visit = [&](LootStoreItemCompat const& row) -> bool
     {
         if (row.mincountOrRef < 0)
         {
             if (depth > 0)
                 return true;
-            LootTemplate const* referenced = LootTemplates_Reference.GetLootFor(uint32(-row.mincountOrRef));
-            return !referenced || CollectCommonChestLoot(
-                reinterpret_cast<LootTemplateAccess const*>(referenced), items, depth + 1);
+            LootTemplateAccess const* referenced = ReferenceLootTemplateCompat<LootTemplateAccess>(uint32(-row.mincountOrRef));
+            return !referenced || CollectCommonChestLoot(referenced, items, depth + 1);
         }
         if (!row.itemid)
             return true;
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(row.itemid);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(row.itemid);
         if (!proto || proto->Quality > ITEM_QUALITY_NORMAL)
             return false;
         items.push_back(row.itemid);
         return true;
     };
-    for (LootStoreItem const& row : access->Entries)
+    for (LootStoreItemCompat const& row : access->Entries)
         if (!visit(row))
             return false;
     for (LootLootGroupAccess const& group : access->Groups)
     {
-        for (LootStoreItem const& row : group.ExplicitlyChanced)
+        for (LootStoreItemCompat const& row : group.ExplicitlyChanced)
             if (!visit(row))
                 return false;
-        for (LootStoreItem const& row : group.EqualChanced)
+        for (LootStoreItemCompat const& row : group.EqualChanced)
             if (!visit(row))
                 return false;
     }
@@ -164,15 +172,14 @@ static bool IsCommonWorldProp(Player* bot, GameObject* go, bool playerOrder)
 {
     if (go->GetGoType() != GAMEOBJECT_TYPE_CHEST || !go->GetGOInfo())
         return false;
-    LootTemplate const* pickupLoot = LootTemplates_Gameobject.GetLootFor(go->GetGOInfo()->GetLootId());
+    LootTemplateAccess const* pickupLoot = GameObjectLootTemplateCompat<LootTemplateAccess>(go->GetGOInfo());
     if (!pickupLoot)
         return false;
     ai::GameObjectPickupFacts facts;
     facts.isChest = true;
     facts.playerOrder = playerOrder;
     std::vector<uint32> items;
-    facts.onlyCommonLoot = CollectCommonChestLoot(
-        reinterpret_cast<LootTemplateAccess const*>(pickupLoot), items, 0);
+    facts.onlyCommonLoot = CollectCommonChestLoot(pickupLoot, items, 0);
     if (facts.onlyCommonLoot)
     {
         facts.questObject = sObjectMgr.IsGameObjectForQuests(go->GetEntry()) || go->ActivateToQuest(bot);
@@ -218,19 +225,16 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
 
             if (debug)
             {
-                Loot const& loot = creature->loot;
-                bool const otherTurn = loot.roundRobinPlayer != 0 && loot.roundRobinPlayer != bot->GetObjectGuid();
-                bool const reserved = loot.hasItemFor(bot) && !ai::HasVisiblePersonalItemFor(loot, bot);
+                CorpseRefusalFactsCompat const facts = CorpseRefusalFactsOfCompat(creature, bot, VisiblePersonalItemRule());
                 ai->TellDebug(ai->GetMaster(), "Creature lootable but not this bot's to loot: " +
-                    ai::CorpseRefusalReason(loot.IsAllowedLooter(bot->GetObjectGuid(), false), !loot.m_questItems.empty(),
-                                            loot.hasItemFor(bot), otherTurn, reserved), "debug loot");
+                    ai::CorpseRefusalReason(facts.allowedLooter, facts.hasQuestItems, facts.hasItemFor, facts.otherTurn, facts.reserved),
+                    "debug loot");
             }
         }
 
         // Skinnable only once the corpse loot is gone (same condition the core applies to the
         // Skinning spell) and only while the core would let this bot skin it.
-        if (creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE) && creature->loot.isLooted() &&
-            creature->IsSkinnableBy(bot))
+        if (CorpseSkinnableByCompat(bot, creature))
         {
             skillId = SKILL_SKINNING;
             uint32 targetLevel = creature->GetLevel();
@@ -263,13 +267,13 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
     }
 
     GameObject* go = ai->GetGameObject(guid);
-    if (go && sServerFacade.isSpawned(go) && go->getLootState() == GO_READY)
+    if (go && sServerFacade.isSpawned(go) && go->getLootState() == GO_READY && GameObjectLootAllowedCompat(go))
     {
         bool isQuestItemOnly = false;
 
         /*if (!guid.IsEmpty())
         {
-            for (auto& entry : GAI_VALUE2(std::list<int32>, "item drop list", -1*uint(go->GetEntry())))
+            for (auto& entry : GAI_VALUE2_COMPAT(std::list<int32>, "item drop list", -1*uint(go->GetEntry())))
             {
                 if (IsNeededForQuest(bot, entry))
                 {
@@ -286,7 +290,7 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
                 ai->TellDebug(ai->GetMaster(), "Go has only quests items we don't need.", "debug loot");
             return;
         }
-        uint32 goId = go->GetGOInfo()->id;
+        uint32 goId = go->GetEntry();     // the template id is the object's entry on both cores
         // Bone Chew Toy piles (GO 1000380 near Goldshire): the only quest
         // needing the item is the inactive 40298, so opening them only
         // fills bags with junk (892 copies across 118 bots). The manual
@@ -339,7 +343,7 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
                         if (debug)
                             ai->TellDebug(ai->GetMaster(), "Go requires skill.", "debug loot");
                         skillId = SkillByLockType(LockType(lockInfo->Index[i]));
-                        reqSkillValue = std::max((uint32)1, lockInfo->Skill[i]);
+                        reqSkillValue = std::max<uint32>(1, lockInfo->Skill[i]);
                         this->guid = guid;
                     }
                     break;
@@ -352,7 +356,7 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
         }
     }
 
-    if (debug && guid && !this->guid && guid.IsGameObject())
+    if (debug && !guid.IsEmpty() && this->guid.IsEmpty() && guid.IsGameObject())
         ai->TellDebug(ai->GetMaster(), "Go has bad lock.", "debug loot");
 
     if (this->guid.IsGameObject() && skillId == SKILL_NONE && !reqItem)
@@ -471,7 +475,7 @@ bool LootObject::IsLootPossible(Player* bot)
     // corpse must be empty before the Skinning cast is legal, so their grey
     // loot queues too.
     if (skillId == SKILL_NONE && guid.IsCreature() &&
-        !AI_VALUE2_LAZY(bool, "should loot object", std::to_string(guid.GetRawValue())) &&
+        !AI_VALUE2_LAZY(bool, "should loot object", GuidQualifierCompat(guid)) &&
         !GuildOrderSkinMobFor(bot, guid.GetEntry()))
         return false;
 
@@ -512,7 +516,7 @@ bool LootObject::IsLootPossible(Player* bot)
                     if (go->ActivateToQuest(bot))
                     {
                         bool hasQuestItems = false;
-                        for (auto& entry : GAI_VALUE2(std::list<uint32>, "entry loot list", -1*int(go->GetEntry())))
+                        for (auto& entry : GAI_VALUE2_COMPAT(std::list<uint32>, "entry loot list", -1*int(go->GetEntry())))
                         {
                             if (ItemUsageValue::IsNeededForQuest(bot, entry))
                             {
@@ -581,7 +585,7 @@ bool LootObject::IsInLootRange(Player* bot)
     if (wo->IsCreature())
     {
         Creature* creature = (Creature*)wo;
-        return creature->IsWithinDistInMap(bot, bot->GetMaxLootDistance(creature), true, SizeFactor::None);
+        return CorpseInLootRangeCompat(bot, creature);
     }
 
     return sServerFacade.IsDistanceLessOrEqualThan(sServerFacade.getDistance2d(bot, wo), INTERACTION_DISTANCE);
@@ -740,7 +744,7 @@ std::vector<LootObject> LootObjectStack::OrderByDistance(float maxDistance)
     availableLoot.shrink(time(0) - LOOT_OBJECT_TTL_SECONDS);
     if (availableLoot.size() < beforeShrink)
         sLog.outDebug("[BOT LOOT] %s: loot stack expired %zu corpse(s) (>%us old, dropped before looting)",
-            bot->GetName(), beforeShrink - availableLoot.size(), (unsigned)LOOT_OBJECT_TTL_SECONDS);
+            CStrCompat(bot->GetName()), beforeShrink - availableLoot.size(), (unsigned)LOOT_OBJECT_TTL_SECONDS);
 
     std::map<float, LootObject> sortedMap;
     LootTargetList safeCopy(availableLoot);

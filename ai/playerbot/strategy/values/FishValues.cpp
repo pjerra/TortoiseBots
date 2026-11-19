@@ -34,7 +34,7 @@ bool CanFishValue::Calculate()
     if (!sRandomBotFacade.IsFreeBot(bot) || ai->HasRealPlayerMaster())
         return false;
 
-    if (bot->IsInWater() || bot->IsUnderwater())
+    if (bot->IsInWater() || IsUnderwaterCompat(bot))
         return false;
 
     if (sServerFacade.IsInCombat(bot))
@@ -81,7 +81,7 @@ bool CanOpenFishingDobberValue::Calculate()
     if (!bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
         return false;
 
-    std::string spellName = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo->SpellName[0];
+    std::string spellName = GetSpellEntryCompat(bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo)->SpellName[0];
     if (spellName.find("Fishing") != 0)
         return false;
 
@@ -96,7 +96,7 @@ bool DoneFishingValue::Calculate()
     Item* mhItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
 
     //Does not have fishing pole equiped.
-    if (!mhItem || mhItem->GetProto()->Class != ITEM_CLASS_WEAPON || mhItem->GetProto()->SubClass != ITEM_SUBCLASS_WEAPON_FISHING_POLE)
+    if (!mhItem || GetItemProtoCompat(mhItem)->Class != ITEM_CLASS_WEAPON || GetItemProtoCompat(mhItem)->SubClass != ITEM_SUBCLASS_WEAPON_FISHING_POLE)
         return false;
 
     // Between two casts the bot holds the pole and channels nothing - that is not "done":
@@ -110,7 +110,7 @@ bool DoneFishingValue::Calculate()
 
     if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        std::string spellName = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo->SpellName[0];
+        std::string spellName = GetSpellEntryCompat(bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo)->SpellName[0];
         if (spellName.find("Fishing") == 0)
             return false;
     }

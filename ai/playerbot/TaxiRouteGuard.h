@@ -37,12 +37,6 @@ namespace ai
         uint32 destNode = BotInstantFlightDestNode(sPlayerbotAIConfig.botInstantFlight, bot->IsTaxiFlying(), nodes);
         if (!destNode)
             return false;
-        TaxiNodesEntry const* dest = sObjectMgr.GetTaxiNodeEntry(destNode);
-        if (!dest)
-            return false;
-        bot->GetTaxi().ClearTaxiDestinations();
-        bot->CleanupFlagsOnTaxiPathFinished();
-        bot->GetMotionMaster()->MovementExpired();
-        return bot->TeleportTo(dest->map_id, dest->x, dest->y, dest->z, bot->GetOrientation());
+        return TaxiInstantFinishCompat(bot, destNode);
     }
 }

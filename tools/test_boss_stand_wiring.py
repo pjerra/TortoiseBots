@@ -90,7 +90,7 @@ class BossStandWiring(unittest.TestCase):
         fn = body(ACTIONS, "BossStandTarget ai::FindBossStand(")
         self.assertIn("table.Rows(mapId, unit->GetEntry())", fn)
         self.assertIn("unit->GetCurrentSpell(CURRENT_GENERIC_SPELL)", fn)
-        self.assertIn("spell->m_spellInfo->Id", fn)
+        self.assertIn("GetSpellEntryCompat(spell->m_spellInfo)->Id", fn)
         self.assertIn("StandPointsNow(*rows, role, unit->GetPositionX(), unit->GetPositionY(), casting,", fn)
         self.assertIn("unit->HasAura(aura)", fn)
 

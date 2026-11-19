@@ -1,0 +1,6 @@
+id,name,status,found_in,note
+16922,,MISSING,absent,hypeer live check: missing on Forever
+18803,,MISSING,absent,hypeer live check: missing on Forever
+19019,"Thunderfury, Blessed Blade of the Windseeker",OK,"armory_item, ItemSparse.db2",live Thunderfury id
+17802,"Thunderfury, Blessed Blade of the Windseeker DEPRECATED",CHANGED,"armory_item, ItemSparse.db2",deprecated duplicate; use 19019
+289294,"Thunderfury, Blessed Blade of the Windseeker",OK,ItemSparse.db2,second live Thunderfury id (ItemSparse only)

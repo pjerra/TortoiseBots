@@ -14,7 +14,7 @@ Unit* Stance::GetTarget()
     if (target) return target;
 
     ObjectGuid attackTarget = context->GetValue<ObjectGuid>("attack target")->Get();
-    if (attackTarget) ai->GetUnit(attackTarget);
+    if (!attackTarget.IsEmpty()) ai->GetUnit(attackTarget);
 
     return NULL;
 }
@@ -36,7 +36,7 @@ WorldLocation Stance::GetNearLocation(float angle, float distance)
          y = target->getPositionY()+ sin(angle) * distance,
          z = target->getPositionZ();
 
-    if (bot->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true))
+    if (IsWithinLOSCompat(bot, x, y, z + bot->GetCollisionHeight(), true))
         return WorldLocation(bot->GetMapId(), x, y, z);
 
     return Formation::NullLocation;
@@ -134,7 +134,7 @@ namespace ai
                 {
                     if (member && ai->IsSafe(member) && member != bot && ai->IsRanged(member))
                     {
-                        angle += target->GetAngle(member);
+                        angle += GetAngleCompat(target, member);
                         count++;
                     }
                 }

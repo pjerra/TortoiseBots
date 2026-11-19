@@ -1171,7 +1171,7 @@ namespace ai
 
         virtual bool IsActive() override
         {
-            return AI_VALUE(ObjectGuid, "new player nearby");
+            return !AI_VALUE(ObjectGuid, "new player nearby").IsEmpty();
         }
     };
 
@@ -1382,9 +1382,9 @@ namespace ai
                 bot->HasAuraType(SPELL_AURA_AOE_CHARM))
                 return true;
             uint32 sleepMask = 1 << (MECHANIC_SLEEP - 1);
-            for (auto itr : bot->GetSpellAuraHolderMap())
+            for (auto const& itr : AuraHolderMapCompat(bot))
             {
-                if (itr.second->HasMechanicMask(sleepMask))
+                if (AuraHasMechanicMaskCompat(itr.second, sleepMask))
                     return true;
             }
             return false;
@@ -1404,9 +1404,9 @@ namespace ai
             if (bot->HasAuraType(SPELL_AURA_MOD_FEAR))
                 return true;
             uint32 sleepSapMask = (1 << (MECHANIC_SLEEP - 1)) | (1 << (MECHANIC_SAPPED - 1));
-            for (auto itr : bot->GetSpellAuraHolderMap())
+            for (auto const& itr : AuraHolderMapCompat(bot))
             {
-                if (itr.second->HasMechanicMask(sleepSapMask))
+                if (AuraHasMechanicMaskCompat(itr.second, sleepSapMask))
                     return true;
             }
             return false;
@@ -1494,9 +1494,9 @@ namespace ai
             uint32 poisMask = GetDispellMask(DISPEL_POISON);
             uint32 bleedType = 1 << (MECHANIC_BLEED - 1);
             bool wantsCure = false;
-            for (auto itr : bot->GetSpellAuraHolderMap())
+            for (auto const& itr : AuraHolderMapCompat(bot))
             {
-                SpellEntry const* spell = itr.second->GetSpellProto();
+                SpellEntry const* spell = GetSpellEntryCompat(itr.second->GetSpellProto());
                 if (IsPositiveSpell(spell->Id))
                     continue;
 
@@ -1509,7 +1509,7 @@ namespace ai
                 if (((1 << spell->Dispel) & disMask) || ((1 << spell->Dispel) & poisMask))
                     wantsCure = true;
 
-                if (itr.second->HasMechanicMask(bleedType))
+                if (AuraHasMechanicMaskCompat(itr.second, bleedType))
                     wantsCure = true;
             }
             return wantsCure;
@@ -1526,7 +1526,7 @@ namespace ai
             Unit* master = ai->GetMaster();
             if (ai->HasAura("shadowmeld", bot))
                 return false;
-            return ((!master || (master && master->HasStealthAura() && !master->IsMoving())) && !bot->IsMoving());
+            return ((!master || (master && master->HasStealthAura() && !IsMovingCompat(master))) && !IsMovingCompat(bot));
         }
     };
 
@@ -1747,42 +1747,37 @@ namespace ai
                 // with): banned quests at any status, war-effort item
                 // turn-ins when incomplete/failed. Without this the 5s
                 // rescan sleeps through a full log of banned quests.
-                if (ai::IsBannedQuest(questId, !quest->IsActive()))
+                QuestTriageViewCompat const view = QuestTriageViewOfCompat(bot, quest);
+                if (ai::IsBannedQuest(questId, view.inactive))
                     return true;
-                bool hasItemObjective = false;
-                for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-                    if (quest->ReqItemId[i] && quest->ReqItemCount[i])
-                        hasItemObjective = true;
-                for (uint8 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
-                    if (quest->ReqSourceId[i] && quest->ReqSourceCount[i])
-                        hasItemObjective = true;
+                bool hasItemObjective = view.hasItemObjective;
                 if (status != QUEST_STATUS_COMPLETE &&
                     ai::IsWarEffortTurnIn(quest->GetZoneOrSort(), hasItemObjective))
                     return true;
                 if (status == QUEST_STATUS_FAILED)
                     return true;
-                bool grey = quest->GetQuestLevel() > 0 &&
-                    bot->GetLevel() >= bot->GetQuestLevelForPlayer(quest) + 8;
+                bool grey = view.level > 0 &&
+                    bot->GetLevel() >= view.levelForPlayer + 8;
                 if (status == QUEST_STATUS_INCOMPLETE)
                 {
                     if (!grey)
                     {
-                        if (ai::QuestTriageShouldDrop((int)quest->GetQuestLevel(), bot->GetLevel(),
-                            quest->GetType(), quest->GetSuggestedPlayers(), false,
+                        if (ai::QuestTriageShouldDrop((int)view.level, bot->GetLevel(),
+                            view.type, view.suggestedPlayers, false,
                             quest->GetZoneOrSort(), bot->GetZoneId()))
                             return true;
                         continue;
                     }
-                    if (!quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
+                    if (!view.deliver)
                         return true;
-                    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-                        if (quest->ReqItemCount[i] && bot->GetItemCount(quest->ReqItemId[i]) < quest->ReqItemCount[i])
+                    for (auto const& required : view.items)
+                        if (bot->GetItemCount(required.id) < required.count)
                             return true;
                 }
                 else if (!bot->CanRewardQuest(quest, false))
                 {
-                    if (quest->GetRewOrReqMoney() < 0 &&
-                        bot->GetMoney() < uint32(-quest->GetRewOrReqMoney()))
+                    if (view.rewardOrRequiredMoney < 0 &&
+                        bot->GetMoney() < uint32(-view.rewardOrRequiredMoney))
                         continue;
                     return true;
                 }

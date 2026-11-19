@@ -115,20 +115,7 @@ void CustomStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
 void CustomStrategy::LoadActionLines(uint32 owner)
 {
-    std::string safeQualifier = qualifier;
-    CharacterDatabase.escape_string(safeQualifier);
-    auto results = CharacterDatabase.PQuery("SELECT action_line FROM ai_playerbot_custom_strategy WHERE name = '%s' and owner = '%u' order by idx",
-            safeQualifier.c_str(), owner);
-    std::unique_ptr<QueryResult> results_guard(results);
-    if (results)
-    {
-        do
-        {
-            Field* fields = results->Fetch();
-            std::string action = fields[0].GetString();
-            this->actionLines.push_back(action);
-        } while (results->NextRow());
-    }
+    LoadCustomStrategyLinesCompat(qualifier, owner, this->actionLines);
 }
 
 void CustomStrategy::Reset()

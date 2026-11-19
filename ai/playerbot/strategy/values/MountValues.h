@@ -10,7 +10,7 @@ namespace ai
     public:
         MountValue(uint32 spellId) : spellId(spellId) {};
         MountValue(const ItemPrototype* proto) : proto(proto) { spellId = GetMountSpell(proto->ItemId); };
-        MountValue(Item* item) { spellId = GetMountSpell(item->GetProto()->ItemId); proto = item->GetProto(); };
+        MountValue(Item* item) { spellId = GetMountSpell(GetItemProtoCompat(item)->ItemId); proto = GetItemProtoCompat(item); };
         MountValue(const MountValue& mount) : spellId(mount.spellId), proto(mount.proto) {};
 
         bool IsItem() const { return proto; }

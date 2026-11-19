@@ -70,11 +70,11 @@ bool HasHoldableStoneToEquip(Player* bot, std::list<Item*> const& stones)
     slots.offHandEmpty = !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
     Item* mainHand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
     slots.hasMainHand = mainHand != nullptr;
-    slots.mainHandInventoryType = mainHand ? mainHand->GetProto()->InventoryType : 0;
+    slots.mainHandInventoryType = mainHand ? GetItemProtoCompat(mainHand)->InventoryType : 0;
     for (Item* stone : stones)
     {
         if (stone && !stone->IsEquipped() &&
-            TortoiseBots::CanHoldWarlockStone(stone->GetProto()->InventoryType, slots))
+            TortoiseBots::CanHoldWarlockStone(GetItemProtoCompat(stone)->InventoryType, slots))
             return true;
     }
     return false;
@@ -769,9 +769,9 @@ bool RainOfFireChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo)
+        if (GetSpellEntryCompat(spell->m_spellInfo))
         {
-            uint32 id = spell->m_spellInfo->Id;
+            uint32 id = GetSpellEntryCompat(spell->m_spellInfo)->Id;
             if (id == 5740 || id == 6219 || id == 11677 || id == 11678 || id == 27212)
             {
                 // A unit under our crowd control inside the rain breaks the
@@ -823,7 +823,7 @@ bool DarkHarvestChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo && spell->m_spellInfo->Id == 52550)
+        if (GetSpellEntryCompat(spell->m_spellInfo) && GetSpellEntryCompat(spell->m_spellInfo)->Id == 52550)
         {
             // A dying target refunds the cooldown: keep channeling it. Cancel
             // only when a LIVE target has lost every own DoT.

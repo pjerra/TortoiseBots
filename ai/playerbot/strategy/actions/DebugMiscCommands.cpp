@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <typeindex>
 #include "Maps/MoveMap.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -551,7 +552,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
         std::ostringstream out;
         out << "=== Quest: " << questId << " ===";
         out << "\n" << pQuest->GetTitle();
-        out << "\nLevel: " << pQuest->GetQuestLevel();
+        out << "\nLevel: " << QuestLevelCompat(pQuest);
         out << "\nStatus: ";
         if (!inLog)
             out << "NOT IN LOG";
@@ -615,11 +616,11 @@ bool DebugAction::HandleNPC(Event& event, Player* requester, const std::string& 
 
     if (guidP.GetArea() && guidP.GetAreaLevel())
         out << " level: " << guidP.GetAreaLevel();
-    if (guidP.GetArea()->ZoneId && GetAreaEntryByAreaID(guidP.GetArea()->ZoneId))
+    if (AreaZoneIdCompat(guidP.GetArea()) && GetAreaEntryByAreaID(AreaZoneIdCompat(guidP.GetArea())))
     {
-        out << " z:" << GetAreaEntryByAreaID(guidP.GetArea()->ZoneId)->Name;
-        if (sTravelMgr.GetAreaLevel(guidP.GetArea()->ZoneId))
-            out << " level: " << sTravelMgr.GetAreaLevel(guidP.GetArea()->ZoneId);
+        out << " z:" << GetAreaEntryByAreaID(AreaZoneIdCompat(guidP.GetArea()))->Name;
+        if (sTravelMgr.GetAreaLevel(AreaZoneIdCompat(guidP.GetArea())))
+            out << " level: " << sTravelMgr.GetAreaLevel(AreaZoneIdCompat(guidP.GetArea()));
     }
 
     out << "] ";

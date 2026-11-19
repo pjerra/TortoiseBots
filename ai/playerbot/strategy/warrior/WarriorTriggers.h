@@ -52,10 +52,10 @@ namespace ai
                 return false;
 
             if (Player* playerTarget = target->ToPlayer())
-                return playerTarget->GetWeaponForAttack(BASE_ATTACK, true, true) != nullptr;
+                return GetWeaponForAttackCompat(playerTarget, BASE_ATTACK, true, true) != nullptr;
 
             Creature* creatureTarget = target->ToCreature();
-            return creatureTarget && creatureTarget->HasWeapon();
+            return creatureTarget && CreatureHasWeaponCompat(creatureTarget);
         }
     };
     DEBUFF_TRIGGER(DemoralizingShoutDebuffTrigger, "demoralizing shout");
@@ -196,12 +196,12 @@ namespace ai
                 BattleShoutAttackPower(AI_VALUE2(uint32, "spell id", "battle shout")), talentBonus);
             if (Aura* might = ai->GetAura("blessing of might", bot))
             {
-                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(might->GetSpellProto()->Id)))
+                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(GetSpellEntryCompat(might->GetSpellProto())->Id)))
                     return false;
             }
             if (Aura* greaterMight = ai->GetAura("greater blessing of might", bot))
             {
-                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(greaterMight->GetSpellProto()->Id)))
+                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(GetSpellEntryCompat(greaterMight->GetSpellProto())->Id)))
                     return false;
             }
             return true;
@@ -295,7 +295,7 @@ namespace ai
             Unit* target = GetTarget();
             if (!target || !target->IsAlive())
                 return false;
-            return bot->GetWeaponForAttack(BASE_ATTACK, true, true) != nullptr;
+            return GetWeaponForAttackCompat(bot, BASE_ATTACK, true, true) != nullptr;
         }
     };
 }

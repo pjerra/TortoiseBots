@@ -2,7 +2,7 @@
 
 #include "Objects/Player.h"
 #include "World.h"
-static inline uint32 GetTotalTalentPoints_TB(Player* bot) { uint32 pts = bot->GetLevel() < 10 ? 0 : bot->GetLevel() - 9; pts += bot->GetBonusTalentCount(); return uint32(pts * sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT)); }
+static inline uint32 GetTotalTalentPoints_TB(Player* bot) { return TotalTalentPointsCompat(bot); }
 
 struct TalentEntry;
 struct TalentTabEntry;
@@ -25,7 +25,7 @@ class TalentSpec {
             int maxRank;
             TalentEntry const* talentInfo;
             TalentTabEntry const* talentTabInfo;
-            int tabPage() { return talentTabInfo->tabpage; }
+            int tabPage() { return TalentTabPageCompat(talentTabInfo); }
         };
 
         uint32 points = 0;

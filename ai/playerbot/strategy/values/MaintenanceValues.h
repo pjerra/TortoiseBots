@@ -226,7 +226,7 @@ namespace ai
             float minDeposit = 0;
             for (auto item : AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)))
             {
-                uint32 deposit = ItemUsageValue::GetAhDepositCost(item->GetProto(), item->GetCount());
+                uint32 deposit = ItemUsageValue::GetAhDepositCost(GetItemProtoCompat(item), item->GetCount());
 
                 if (minDeposit == 0 || deposit < minDeposit)
                     minDeposit = deposit;
@@ -332,7 +332,7 @@ namespace ai
             // for a tight leash) with the master on the move, no new drink
             // starts - the catch-up follow (ACTION_HIGH) owns the tick
             // instead.
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 return true;
 
             float const botToMaster = sServerFacade.getDistance2d(bot, master);
@@ -388,7 +388,7 @@ namespace ai
 
             // Follow-first, same as drink above: no new meal starts while
             // the bot should be catching up to its moving master.
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 return true;
 
             float const botToMaster = sServerFacade.getDistance2d(bot, master);
@@ -439,14 +439,14 @@ namespace ai
             if (bot->GetGroup()->isRaidGroup())
                 minDistance = sPlayerbotAIConfig.raidFollowDistance;
 
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 minDistance += sPlayerbotAIConfig.EatDrinkMinDistance;
 
             if (bot->IsWithinDist(master, minDistance))
                 return drinkDuration;
 
             float masterOrientation = master->GetOrientation();
-            float angleToBot = master->GetAngle(bot);
+            float angleToBot = GetAngleCompat(master, bot);
             float angleDiff = fabs(masterOrientation - angleToBot);
 
             if (angleDiff > M_PI / 2 && angleDiff < 3 * M_PI / 2)
@@ -484,14 +484,14 @@ namespace ai
             if (bot->GetGroup()->isRaidGroup())
                 minDistance = sPlayerbotAIConfig.raidFollowDistance;
 
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 minDistance += sPlayerbotAIConfig.EatDrinkMinDistance;
 
             if (bot->IsWithinDist(master, minDistance))
                 return eatDuration;
 
             float masterOrientation = master->GetOrientation();
-            float angleToBot = master->GetAngle(bot);
+            float angleToBot = GetAngleCompat(master, bot);
             float angleDiff = fabs(masterOrientation - angleToBot);
 
             if (angleDiff > M_PI / 2 && angleDiff < 3 * M_PI / 2)

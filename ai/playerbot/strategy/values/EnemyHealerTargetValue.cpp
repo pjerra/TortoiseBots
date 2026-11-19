@@ -29,11 +29,11 @@ Unit* EnemyHealerTargetValue::Calculate()
 
         // A real heal only: "positive" also covers self buffs such as Lightning Shield.
         Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        bool healing = spell && PlayerbotAI::IsHealSpell(spell->m_spellInfo);
+        bool healing = spell && PlayerbotAI::IsHealSpell(GetSpellEntryCompat(spell->m_spellInfo));
         if (!healing)
         {
             spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-            healing = spell && PlayerbotAI::IsHealSpell(spell->m_spellInfo);
+            healing = spell && PlayerbotAI::IsHealSpell(GetSpellEntryCompat(spell->m_spellInfo));
         }
         if (!healing)
             continue;

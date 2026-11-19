@@ -14,6 +14,7 @@
 #include "playerbot/GroupMembers.h"
 #include "Group/Group.h"
 #include "Maps/Map.h"
+#include "playerbot/TbCompatW2.h"
 using namespace ai;
 
 namespace
@@ -115,7 +116,7 @@ namespace
                    (spellData.SpellTrigger == ITEM_SPELLTRIGGER_ON_USE || spellData.SpellTrigger == ITEM_SPELLTRIGGER_CHANCE_ON_HIT))))
                 continue;
 
-            SpellEntry const* spellproto = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+            SpellEntry const* spellproto = GetSpellEntryCompat(spellData.SpellId);
             if (!spellproto)
                 continue;
 
@@ -281,7 +282,7 @@ bool LootVoteAction::Execute(Event& event)
     if (voterGuid == bot->getObjectGuid())
         return false;
 
-    Player* voter = sObjectMgr.GetPlayer(voterGuid);
+    Player* voter = GetPlayerCompat(voterGuid);
     if (!voter || !ai->IsRealPlayer(voter))
         return false;
 
@@ -562,7 +563,7 @@ RollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, RollVote* f
             bool equipped = false;
             for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
                 if (Item* worn = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-                    if (worn->GetProto()->ItemId == itemProto->ItemId)
+                    if (GetItemProtoCompat(worn)->ItemId == itemProto->ItemId)
                     {
                         equipped = true;
                         break;
@@ -672,7 +673,7 @@ bool RollAction::RealPlayerMayNeed(ObjectGuid lootGuid, ItemQualifier& itemQuali
 
         bool voteSeen = !seenVoter.IsEmpty() && member->GetObjectGuid() == seenVoter && seenVote < MAX_ROLL_FROM_CLIENT;
         ai::LootRollVote vote = voteSeen ? ai::LootRollVote(seenVote) : ai::LootRollVote::Pass;
-        bool canUse = member->CanUseItem(proto) == EQUIP_ERR_OK;
+        bool canUse = member->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK;
 
         if (ai::RealPlayerCompetes(voteSeen, vote, canUse, yieldUnseenUsable))
             return true;
@@ -763,7 +764,7 @@ bool RollAction::AllRealRollersVoted(ObjectGuid lootGuid, uint32 slot)
         if (lootTarget && !member->IsWithinLootXPDist(lootTarget))
             continue;
 
-        if (member->CanUseItem(proto) != EQUIP_ERR_OK)
+        if (member->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
             continue;
 
         if (item && !item->AllowedForPlayer(member, lootTarget))
@@ -826,7 +827,7 @@ Player* RollAction::FindBetterFittingMember(ObjectGuid lootGuid, uint32 slot, It
         bool isMemberBot = memberAi && !memberAi->IsRealPlayer();
 
         // A bot that only lacks the level still counts: it wants it as a future upgrade.
-        if (member->CanUseItem(itemProto) != EQUIP_ERR_OK &&
+        if (member->CanUseItem(GetItemTemplateCompat(itemProto)) != EQUIP_ERR_OK &&
             !(isMemberBot && ItemUsageValue::IsFutureUpgrade(itemQualifier, member)))
             continue;
 

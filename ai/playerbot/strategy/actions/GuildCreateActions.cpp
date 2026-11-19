@@ -9,6 +9,7 @@
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
 #include "runtime/HireLifecycle.h"
 #include "runtime/AltBotService.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -129,7 +130,7 @@ bool PetitionOfferAction::Execute(Event& event)
     if (!guid)
         return false;
 
-    Player* player = sObjectMgr.GetPlayer(guid);
+    Player* player = GetPlayerCompat(guid);
 
     if (!player)
         return false;
@@ -163,7 +164,7 @@ bool PetitionOfferNearbyAction::Execute(Event& event)
     std::list<ObjectGuid> nearGuids = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest friendly players")->Get();
     for (auto& i : nearGuids)
     {
-        Player* player = sObjectMgr.GetPlayer(i);
+        Player* player = GetPlayerCompat(i);
 
         if (!player)
             continue;
@@ -313,8 +314,8 @@ bool PetitionTurnInAction::isUseful()
     AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot));
     if (areaEntry)
     {
-        if (areaEntry->ZoneId)
-            areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+        if (AreaZoneIdCompat(areaEntry))
+            areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
         if (areaEntry && areaEntry->Flags & AREA_FLAG_CAPITAL)
             inCity = true;
@@ -322,7 +323,7 @@ bool PetitionTurnInAction::isUseful()
 
     return inCity && ai::GuildFoundingTurnInTripNeeded(bot->GetGuildId() != 0,
         AI_VALUE2(uint32, "item count", chat->formatQItem(5863)) > 0,
-        AI_VALUE(uint8, "petition signs"), sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS)) && !AI_VALUE(bool, "travel target traveling");
+        AI_VALUE(uint8, "petition signs"), WorldU32ConfigW2(CONFIG_UINT32_MIN_PETITION_SIGNS)) && !AI_VALUE(bool, "travel target traveling");
 };
 
 bool BuyTabardAction::Execute(Event& event)
@@ -379,8 +380,8 @@ bool BuyTabardAction::isUseful()
     AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot));
     if (areaEntry)
     {
-        if (areaEntry->ZoneId)
-            areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+        if (AreaZoneIdCompat(areaEntry))
+            areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
         if (areaEntry && areaEntry->Flags & AREA_FLAG_CAPITAL)
             inCity = true;

@@ -147,7 +147,7 @@ namespace ai
             // or force-rebuff window). Combat rows always fire.
             if (!TotemAutoRowActive(ai, bot, bot->IsInCombat()))
                 return false;
-            if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
+            if (!inMovement && IsMovingCompat(bot) && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
                 return false;
             }
@@ -273,7 +273,7 @@ namespace ai
         {
             if (!TotemAutoRowActive(ai, bot, bot->IsInCombat()))
                 return false;
-            if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
+            if (!inMovement && IsMovingCompat(bot) && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
                 return false;
             }
@@ -349,7 +349,7 @@ namespace ai
         {
             if (!TotemAutoRowActive(ai, bot, bot->IsInCombat()))
                 return false;
-            if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
+            if (!inMovement && IsMovingCompat(bot) && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
                 return false;
             }
@@ -438,7 +438,7 @@ namespace ai
         {
             if (!TotemAutoRowActive(ai, bot, bot->IsInCombat()))
                 return false;
-            if (!inMovement && bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
+            if (!inMovement && IsMovingCompat(bot) && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
             {
                 return false;
             }
@@ -632,7 +632,7 @@ namespace ai
                 for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
                 {
                     const Aura* aura = *itr;
-                    const SpellEntry* entry = aura->GetSpellProto();
+                    const SpellEntry* entry = GetSpellEntryCompat(aura->GetSpellProto());
                     uint32 spellId = entry->Id;
                     if (!IsPositiveSpell(spellId))
                         continue;

@@ -16,6 +16,7 @@
 #include "policy/gear/SpecArmorPolicy.h"
 #include "policy/gear/FeralSpecPolicy.h"
 #include "../../runtime/policy/provision/AmmoCachePolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 char * strstri (const char* str1, const char* str2);
 
@@ -24,6 +25,11 @@ namespace
     bool IsRandomGearCandidate(ItemPrototype const* proto, uint8 clazz)
     {
         if (!proto)
+            return false;
+
+        // A mirror whose fill found a missing client table must never be generated for a bot (the core aborts on an
+        // equippable item whose damage row is missing); see IsItemProtoUsableCompat.
+        if (!IsItemProtoUsableCompat(proto))
             return false;
 
         if (proto->Flags & (ITEM_FLAG_CONJURED | ITEM_FLAG_DEPRECATED | ITEM_FLAG_WRAPPER))
@@ -121,7 +127,7 @@ bool RandomItemMgr::IsTransmogClone(ItemPrototype const* proto) const
 
 bool RandomItemMgr::IsTransmogClone(uint32 itemId) const
 {
-    return IsTransmogClone(sObjectMgr.GetItemPrototype(itemId));
+    return IsTransmogClone(GetItemProtoByIdCompat(itemId));
 }
 
 void RandomItemMgr::Init()
@@ -167,7 +173,7 @@ RandomItemList RandomItemMgr::Query(uint32 level, RandomItemType type, RandomIte
     for (RandomItemList::iterator i = list.begin(); i != list.end(); ++i)
     {
         uint32 itemId = *i;
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto)
             continue;
 
@@ -242,7 +248,7 @@ void RandomItemMgr::BuildRandomItemCache()
 
         for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
@@ -283,8 +289,8 @@ void RandomItemMgr::BuildRandomItemCache()
         CharacterDatabase.CommitTransaction();
 
         uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-        if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-            maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+        if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+            maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
         for (uint32 level = 0; level < (maxLevel / 10); level++)
         {
             for (uint32 type = RANDOM_ITEM_GUILD_TASK; type <= RANDOM_ITEM_GUILD_TASK_REWARD_TRADE_RARE; type++)
@@ -297,7 +303,7 @@ void RandomItemMgr::BuildRandomItemCache()
                 for (RandomItemList::iterator i = list.begin(); i != list.end(); ++i)
                 {
                     uint32 itemId = *i;
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                     if (!proto)
                         continue;
 
@@ -828,7 +834,7 @@ void RandomItemMgr::BuildItemInfoCache()
             delete itemInfo;
 
     slotItemIds.clear();
-    uint32 maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    uint32 maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     for (uint32 i = 0; i <= MAX_STAT_SCALES; ++i)
     {
@@ -968,7 +974,7 @@ void RandomItemMgr::BuildItemInfoCache()
     {
         bar.step();
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto)
             continue;
 
@@ -1095,7 +1101,7 @@ void RandomItemMgr::BuildItemInfoCache()
                         cacheInfo->source = ITEM_SOURCE_QUEST;
                         cacheInfo->sourceIds.push_back(*i);
                         if (!cacheInfo->minLevel)
-                            cacheInfo->minLevel = quest->GetQuestLevel();
+                            cacheInfo->minLevel = QuestLevelCompat(quest);
 
                         // check quest team
                         if (!cacheInfo->team)
@@ -1612,7 +1618,7 @@ uint32 RandomItemMgr::CalculateStatWeight(uint8 playerclass, uint8 spec, ItemPro
             continue;
 
         // check if it is valid spell
-        SpellEntry const* spellproto = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        SpellEntry const* spellproto = GetSpellEntryCompat(spellData.SpellId);
         if (!spellproto)
             continue;
 
@@ -1960,7 +1966,7 @@ uint32 RandomItemMgr::CalculateBestRandomEnchantId(uint8 playerclass, uint8 spec
     if (!itemId)
         return 0;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return 0;
 
@@ -2026,7 +2032,7 @@ uint32 RandomItemMgr::CalculateEnchantWeight(uint8 playerclass, uint8 spec, uint
             if (!pEnchant->spellid[s])
                 continue;
 
-            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(pEnchant->spellid[s]);
+            SpellEntry const* spellInfo = GetSpellEntryCompat(pEnchant->spellid[s]);
 
             if (!spellInfo)
                 continue;
@@ -2586,7 +2592,7 @@ void RandomItemMgr::BuildSourceTierIndex()
                 // Recipe source tier: rep-gated recipe excludes (REP flag is
                 // set separately); raid / end-game-dungeon loot recipe takes
                 // the loot tier; trainer / vendor / world loot stays base.
-                ItemPrototype const* recipeProto = sObjectMgr.GetItemPrototype(recipeItem);
+                ItemPrototype const* recipeProto = GetItemProtoByIdCompat(recipeItem);
                 ItemSourceTier tier = ITEM_SOURCE_TIER_BASE;
                 if (recipeProto && (recipeProto->RequiredReputationFaction || recipeProto->RequiredReputationRank))
                 {
@@ -2621,7 +2627,7 @@ void RandomItemMgr::BuildSourceTierIndex()
     pvpItemSets.clear();
     for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
     {
-        ItemPrototype const* setProto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* setProto = GetItemProtoByIdCompat(itemId);
         if (!setProto || !setProto->ItemSet)
             continue;
         if ((setProto->Flags & ITEM_FLAG_NO_DISENCHANT) || setProto->RequiredHonorRank)
@@ -2735,7 +2741,7 @@ bool RandomItemMgr::IsForbiddenBotGear(uint32 itemId)
     facts.blacklisted = TortoiseBots::GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, itemId);
     if (facts.blacklisted)
         return true;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return true;
     std::list<uint32> const& whitelist = sPlayerbotAIConfig.randomGearWhitelist;
@@ -3506,7 +3512,7 @@ bool RandomItemMgr::CanBuyFromVendor(Player *player, uint32 itemId, uint32 creat
 
         if (crItem && crItem->item == itemId)
         {
-            ItemPrototype const* pProto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* pProto = GetItemProtoByIdCompat(itemId);
             if (pProto)
             {
                 // when no faction required but rank > 0 will be used faction id from the vendor faction template to compare the rank
@@ -3739,7 +3745,7 @@ uint32 RandomItemMgr::GetLiveStatWeight(Player* player, uint32 itemId, uint32 sp
     // skip non pvp items for some specs
     if (info->pvpRank < 16 && player->GetHonorMgr().GetHighestRank().rank == 18)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (proto && !(
             info->slot == EQUIPMENT_SLOT_WAIST ||
             info->slot == EQUIPMENT_SLOT_WRISTS ||
@@ -3767,7 +3773,7 @@ uint32 RandomItemMgr::GetLiveStatWeight(Player* player, uint32 itemId, uint32 sp
     // but gets its value from the suffix the caller picks per spec, so it is
     // exempt: zeroing it here left hired companions at 30+ without a neck
     // or rings, since most green jewellery is random-suffix.
-    ItemPrototype const* clampProto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* clampProto = GetItemProtoByIdCompat(itemId);
     if (info->weights[specId] == 1 && player->GetLevel() >= 30 &&
         !(clampProto && clampProto->RandomProperty) && (
         info->slot == EQUIPMENT_SLOT_NECK ||
@@ -3917,7 +3923,7 @@ void RandomItemMgr::BuildEquipCache()
 
         for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
@@ -4114,8 +4120,8 @@ RandomItemList const& RandomItemMgr::GetSlotItemIds(uint32 slot)
 void RandomItemMgr::BuildAmmoCache()
 {
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building ammo cache for %d levels", maxLevel);
     // Every white row of the class and subclass a bot of `level` can use; the
@@ -4226,8 +4232,8 @@ uint32 RandomItemMgr::GetQuiver(uint32 level)
 void RandomItemMgr::BuildPotionCache()
 {
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building potion cache for %d levels", maxLevel);
 	int counter2 = 0;
@@ -4240,7 +4246,7 @@ void RandomItemMgr::BuildPotionCache()
 
             for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                 if (!proto)
                     continue;
 
@@ -4308,8 +4314,8 @@ void RandomItemMgr::BuildPotionCache()
 void RandomItemMgr::BuildFoodCache()
 {
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building food cache for %d levels", maxLevel);
 	int counter3 = 0;
@@ -4322,7 +4328,7 @@ void RandomItemMgr::BuildFoodCache()
 
             for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                 if (!proto)
                     continue;
 
@@ -4430,8 +4436,8 @@ void RandomItemMgr::BuildTradeCache()
     tradeCache.clear();
 
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building trade cache for %d levels", maxLevel);
 	int counter4 = 0;
@@ -4439,7 +4445,7 @@ void RandomItemMgr::BuildTradeCache()
     {
         for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
@@ -4570,7 +4576,7 @@ uint32 RandomItemMgr::CalculateProcEnchantWeight(uint8 playerclass, uint8 spec, 
         uint32 procSpellId = pEnchant->spellid[s];
         if (!procSpellId)
             continue;
-        SpellEntry const* procInfo = sSpellTemplate.LookupEntry<SpellEntry>(procSpellId);
+        SpellEntry const* procInfo = GetSpellEntryCompat(procSpellId);
         if (!procInfo)
             continue;
 
@@ -4655,7 +4661,7 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
     if (botEnchantCandidates.empty())
         return 0;
 
-    ItemPrototype const* proto = item->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(item);
     if (!proto)
         return 0;
 
@@ -4694,7 +4700,7 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
         if (candidate.minLevel + levelMargin > level)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(candidate.spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(candidate.spellId);
         if (!spellInfo || spellInfo->Effect[0] != SPELL_EFFECT_ENCHANT_ITEM)
             continue;
         uint32 enchantId = spellInfo->EffectMiscValue[0];

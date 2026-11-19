@@ -141,8 +141,8 @@ static bool CanTradeItemTo(Player* bot, Item* item, Player* requester)
 static std::string InventoryItemFlags(PlayerbotAI* ai, Player* bot, Player* requester, Item* item)
 {
     std::string flags;
-    ItemPrototype const* proto = item->GetProto();
-    if (proto && proto->InventoryType != INVTYPE_NON_EQUIP && bot->CanUseItem(proto) == EQUIP_ERR_OK)
+    ItemPrototype const* proto = GetItemProtoCompat(item);
+    if (proto && proto->InventoryType != INVTYPE_NON_EQUIP && bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK)
     {
         flags += 'e';
         ai::ItemUsage usage = ai->GetAiObjectContext()->GetValue<ai::ItemUsage>("item usage",
@@ -330,12 +330,12 @@ char const* EquipResultMessage(InventoryResult msg)
 
 void ClearDisplacedEquipPin(PlayerbotAI* ai, Player* bot, Item* item)
 {
-    if (!ai || !bot || !item || !item->GetProto())
+    if (!ai || !bot || !item || !GetItemProtoCompat(item))
         return;
     AiObjectContext* context = ai->GetAiObjectContext();
     if (!context)
         return;
-    uint32 const itemId = item->GetProto()->ItemId;
+    uint32 const itemId = GetItemProtoCompat(item)->ItemId;
     if (AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", itemId, ForceItemUsage::FORCE_USAGE_NONE) != ForceItemUsage::FORCE_USAGE_EQUIP)
         return;
     bool const isClaimed = TortoiseBots::ClaimLifecycle::Instance().IsClaimed(bot->GetGUIDLow());
@@ -407,7 +407,7 @@ bool HandleItem(ChatHandler* handler, char const* args)
         return true;
     }
     Item* item = bot->GetItemByPos(static_cast<uint8>(bag), static_cast<uint8>(slot));
-    if (!item || !item->GetProto())
+    if (!item || !GetItemProtoCompat(item))
     {
         SendActionError(handler, intent, "no-item", "That item is no longer there; refresh the bag view.");
         SendInventorySnapshot(handler, bot, requester);
@@ -417,7 +417,7 @@ bool HandleItem(ChatHandler* handler, char const* args)
 
     if (op == "equip")
     {
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
         std::string slotToken;
         bool const hasTargetSlot = static_cast<bool>(input >> slotToken);
         uint8 targetSlot = NULL_SLOT;
@@ -437,7 +437,7 @@ bool HandleItem(ChatHandler* handler, char const* args)
             }
         }
 
-        if (equipped || proto->InventoryType == INVTYPE_NON_EQUIP || bot->CanUseItem(proto) != EQUIP_ERR_OK)
+        if (equipped || proto->InventoryType == INVTYPE_NON_EQUIP || bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
         {
             SendActionError(handler, intent, "cannot-equip", "The bot cannot equip this item.");
             return true;

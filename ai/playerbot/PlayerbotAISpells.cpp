@@ -52,7 +52,7 @@ SpellCastResult CheckSpellPower(SpellEntry const* spellInfo, Unit* caster, Item*
     if (spellInfo->powerType >= MAX_POWERS && spellInfo->powerType != POWER_HEALTH)
         return SPELL_CAST_OK;
 
-    uint32 const cost = Spell::CalculatePowerCost(spellInfo, caster, nullptr, nullptr);
+    uint32 const cost = SpellPowerCostCompat(spellInfo, caster);
     if (spellInfo->powerType == POWER_HEALTH)
         return caster->GetHealth() > cost ? SPELL_CAST_OK : SPELL_FAILED_CASTER_AURASTATE;
 
@@ -71,7 +71,7 @@ bool IsStunDiminishingGroup(DiminishingGroup group)
 // of the unit's few DR slots, cheap enough for this path.
 bool StunDiminished(Unit* target, SpellEntry const* stunSpell, bool triggered)
 {
-    DiminishingGroup const group = stunSpell->GetDiminishingReturnsGroup(triggered);
+    DiminishingGroup const group = DiminishingGroupOfSpellCompat(stunSpell, triggered);
     return IsStunDiminishingGroup(group) && target->GetDiminishing(group) == DIMINISHING_LEVEL_IMMUNE;
 }
 } // namespace
@@ -85,10 +85,10 @@ bool IsRealAura(Player* bot, Aura const* aura, Unit* unit)
         return true;
 
     uint32 stacks = aura->GetStackAmount();
-    if (stacks >= aura->GetSpellProto()->StackAmount)
+    if (stacks >= GetSpellEntryCompat(aura->GetSpellProto())->StackAmount)
         return true;
 
-    if (aura->GetCaster() == bot || IsPositiveSpell(aura->GetSpellProto()) || aura->IsAreaAura())
+    if (aura->GetCaster() == bot || IsPositiveSpell(GetSpellEntryCompat(aura->GetSpellProto())) || AuraIsAreaCompat(aura))
         return true;
 
     return false;
@@ -120,12 +120,12 @@ bool PlayerbotAI::HasAura(std::string name, Unit* unit, bool maxStack, bool chec
         if (auraTypeId != TOTAL_AURAS && auraType != auraTypeId)
             continue;
 
-		Unit::AuraList const& auras = unit->GetAurasByType((AuraType)auraType);
+		AuraListCompat const& auras = AurasByTypeCompat(unit, (AuraType)auraType);
 
         if (auras.empty())
             continue;
 
-        for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); i++)
+        for (AuraListCompat::const_iterator i = auras.begin(); i != auras.end(); i++)
         {
             Aura* aura = *i;
             if (!aura)
@@ -133,41 +133,41 @@ bool PlayerbotAI::HasAura(std::string name, Unit* unit, bool maxStack, bool chec
 
             if (ids.empty())
             {
-                const std::string auraName = aura->GetSpellProto()->SpellName[0];
+                const std::string auraName = GetSpellEntryCompat(aura->GetSpellProto())->SpellName[0];
                 if (auraName.empty() || auraName.length() != wnamepart.length() || !Utf8FitTo(auraName, wnamepart))
                     continue;
             }
             else
             {
-                if (std::find(ids.begin(), ids.end(), aura->GetSpellProto()->Id) == ids.end())
+                if (std::find(ids.begin(), ids.end(), GetSpellEntryCompat(aura->GetSpellProto())->Id) == ids.end())
                     continue;
             }
 
 			if (IsRealAura(bot, aura, unit))
             {
-                if (hasMyAura && aura->GetHolder())
+                if (hasMyAura && AuraHolderCompat(aura))
                 {
-                    if (aura->GetHolder()->GetCasterGuid() == bot->getObjectGuid())
+                    if (AuraHolderCompat(aura)->GetCasterGuid() == bot->getObjectGuid())
                         return true;
                     else
                         continue;
                 }
 
-                if (checkIsOwner && aura->GetHolder())
+                if (checkIsOwner && AuraHolderCompat(aura))
                 {
-                    if (aura->GetHolder()->GetCasterGuid() != bot->getObjectGuid())
+                    if (AuraHolderCompat(aura)->GetCasterGuid() != bot->getObjectGuid())
                         continue;
                 }
 
-                uint32 maxStackAmount = aura->GetSpellProto()->StackAmount;
-                uint32 maxProcCharges = aura->GetSpellProto()->procCharges;
+                uint32 maxStackAmount = GetSpellEntryCompat(aura->GetSpellProto())->StackAmount;
+                uint32 maxProcCharges = GetSpellEntryCompat(aura->GetSpellProto())->procCharges;
 
                 if (maxStack)
                 {
                     if (maxStackAmount && aura->GetStackAmount() >= maxStackAmount)
                         auraAmount++;
 
-                    if (maxProcCharges && aura->GetHolder()->GetAuraCharges() >= maxProcCharges)
+                    if (maxProcCharges && AuraHolderCompat(aura)->GetAuraCharges() >= maxProcCharges)
                         auraAmount++;
                 }
                 else
@@ -177,7 +177,7 @@ bool PlayerbotAI::HasAura(std::string name, Unit* unit, bool maxStack, bool chec
 
                 if (minDuration > 0)
                 {
-                    int32 auraDuration = aura->GetHolder()->GetAuraDuration();
+                    int32 auraDuration = AuraHolderCompat(aura)->GetAuraDuration();
                     minDurationPassed = minDuration <= auraDuration;
                 }
 
@@ -208,12 +208,12 @@ Aura* PlayerbotAI::GetAura(uint32 spellId, Unit* unit, bool checkIsOwner)
     {
         for (uint32 effect = EFFECT_INDEX_0; effect <= EFFECT_INDEX_2; effect++)
         {
-            Aura* auraTmp = ((Unit*)unit)->GetAura(spellId, (SpellEffectIndex)effect);
+            Aura* auraTmp = GetAuraCompat((Unit*)unit, spellId, effect);
             if (IsRealAura(bot, auraTmp, (Unit*)unit))
             {
                 if (checkIsOwner)
                 {
-                    if (aura->GetHolder() && aura->GetHolder()->GetCasterGuid() == bot->getObjectGuid())
+                    if (AuraHolderCompat(aura) && AuraHolderCompat(aura)->GetCasterGuid() == bot->getObjectGuid())
                     {
                         aura = auraTmp;
                         break;
@@ -249,12 +249,12 @@ Aura* PlayerbotAI::GetAura(std::string name, Unit* unit, bool checkIsOwner)
 
         for (uint32 auraType = SPELL_AURA_BIND_SIGHT; auraType < TOTAL_AURAS; auraType++)
         {
-            Unit::AuraList const& auras = unit->GetAurasByType((AuraType)auraType);
+            AuraListCompat const& auras = AurasByTypeCompat(unit, (AuraType)auraType);
 
             if (auras.empty())
                 continue;
 
-            for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); i++)
+            for (AuraListCompat::const_iterator i = auras.begin(); i != auras.end(); i++)
             {
                 Aura* aura = *i;
                 if (!aura)
@@ -262,21 +262,21 @@ Aura* PlayerbotAI::GetAura(std::string name, Unit* unit, bool checkIsOwner)
 
                 if (ids.empty())
                 {
-                    const std::string auraName = aura->GetSpellProto()->SpellName[0];
+                    const std::string auraName = GetSpellEntryCompat(aura->GetSpellProto())->SpellName[0];
                     if (auraName.empty() || auraName.length() != wnamepart.length() || !Utf8FitTo(auraName, wnamepart))
                         continue;
                 }
                 else
                 {
-                    if (std::find(ids.begin(), ids.end(), aura->GetSpellProto()->Id) == ids.end())
+                    if (std::find(ids.begin(), ids.end(), GetSpellEntryCompat(aura->GetSpellProto())->Id) == ids.end())
                         continue;
                 }
 
                 if (IsRealAura(bot, aura, unit))
                 {
-                    if (checkIsOwner && aura->GetHolder())
+                    if (checkIsOwner && AuraHolderCompat(aura))
                     {
-                        if (aura->GetHolder()->GetCasterGuid() == bot->getObjectGuid())
+                        if (AuraHolderCompat(aura)->GetCasterGuid() == bot->getObjectGuid())
                         {
                             return aura;
                         }
@@ -298,17 +298,17 @@ std::vector<Aura*> PlayerbotAI::GetAuras(Unit* unit, bool allAuras, bool positiv
     std::vector<Aura*> outAuras;
     for (uint32 auraType = SPELL_AURA_BIND_SIGHT; auraType < TOTAL_AURAS; auraType++)
     {
-        Unit::AuraList const& auras = unit->GetAurasByType((AuraType)auraType);
+        AuraListCompat const& auras = AurasByTypeCompat(unit, (AuraType)auraType);
 
         if (auras.empty())
             continue;
 
-        for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); i++)
+        for (AuraListCompat::const_iterator i = auras.begin(); i != auras.end(); i++)
         {
             Aura* aura = *i;
             if (aura)
             {
-                if (allAuras || (positive && aura->IsPositive()) || (!positive && !aura->IsPositive()))
+                if (allAuras || (positive && AuraIsPositiveCompat(aura)) || (!positive && !AuraIsPositiveCompat(aura)))
                 {
                     outAuras.push_back(aura);
                 }
@@ -358,21 +358,21 @@ bool PlayerbotAI::GetSpellRange(std::string name, float* maxRange, float* minRan
                     rangeMod = bot->GetCombatReach();
                 else
                 {
-                    spellMinRange = spellRangeEntry->minRange;
-                    spellMaxRange = spellRangeEntry->maxRange;
+                    spellMinRange = SpellRangeMin(spellRangeEntry);
+                    spellMaxRange = SpellRangeMax(spellRangeEntry);
                 }
 
                 if (spellInfo->Attributes & SPELL_ATTR_USES_RANGED_SLOT)
                 {
                     if (Item* rangedWeapon = bot->GetWeaponForAttack(RANGED_ATTACK))
                     {
-                        spellMaxRange *= rangedWeapon->GetProto()->RangedModRange * 0.01f;
+                        spellMaxRange *= GetItemProtoCompat(rangedWeapon)->RangedModRange * 0.01f;
                     }
                 }
 
                 if (Player* modOwner = bot->GetSpellModOwner())
                 {
-                    modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_RANGE, spellMaxRange);
+                    ApplySpellModRangeCompat(modOwner, spellInfo->Id, spellMaxRange);
                 }
 
                 spellMaxRange += rangeMod;
@@ -400,7 +400,7 @@ uint32 PlayerbotAI::GetSpellCastDuration(Spell* spell)
     uint32 spellDuration = 0;
     if(spell)
     {
-        const SpellEntry* const pSpellInfo = spell->m_spellInfo;
+        const SpellEntry* const pSpellInfo = GetSpellEntryCompat(spell->m_spellInfo);
         spellDuration = spell->GetCastTime();
         if (IsChanneledSpell(pSpellInfo))
         {
@@ -600,7 +600,7 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
     // expression is spelled exactly as Spell::prepare() spells it: channeled
     // and auto-repeat spells are not "in progress" for this purpose.
     if (bot->IsNonMeleeSpellCasted(false, true, true) ||
-        TortoiseBots::RemoteCommander::RitualHolds().Holds(bot->GetObjectGuid().GetRawValue()))
+        TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidKeyCompat(bot->GetObjectGuid())))
     {
         if (checkResult)
         {
@@ -641,7 +641,7 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
         Spell* autorepeatSpell = bot->GetCurrentSpell(CURRENT_MELEE_SPELL);
         if (autorepeatSpell)
         {
-            if (autorepeatSpell->m_spellInfo->Id == spellInfo->Id)
+            if (GetSpellEntryCompat(autorepeatSpell->m_spellInfo)->Id == spellInfo->Id)
             {
                 if (checkResult)
                 {
@@ -707,8 +707,8 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
             // Damage spells skip the per-effect check below (mechanic/effect immunities do not stop damage),
             // but a school or damage immunity (fire elementals, Ice Block) makes the cast do nothing: report it
             // as not castable so the rotation falls through to the next row (e.g. Frostbolt).
-            if (target->IsImmuneToDamage(spellInfo->GetSpellSchoolMask(), spellInfo) ||
-                target->IsImmuneToSpell(spellInfo, bot == target))
+            if (IsImmuneToDamageCompat(target, spellInfo, bot) ||
+                IsImmuneToSpellCompat(target, spellInfo, bot == target, bot))
             {
                 if (checkResult)
                 {
@@ -722,7 +722,7 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
         {
             for (int32 i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2; i++)
             {
-                bool immune = target->IsImmuneToSpellEffect(spellInfo, (SpellEffectIndex)i, false);
+                bool immune = IsImmuneToSpellEffectCompat(target, spellInfo, (SpellEffectIndex)i, false, bot);
                 if (immune)
                 {
                     if (checkResult)
@@ -783,7 +783,7 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
         bool const fromBehindOnly = spellInfo->IsFromBehindOnlySpell();
         // Only the two facing rules read the arc; every other spell skips the angle math.
         bool const facingMatters = fromBehindOnly || spellInfo->Attributes == ai::kTargetMustFaceCasterAttributes;
-        bool const targetFacesCaster = facingMatters && target->HasInArc(bot);
+        bool const targetFacesCaster = facingMatters && HasInArcCompat(target, bot, M_PI_F);
         if (facingMatters && ai::TargetFacingRefuses(spellInfo->Attributes, fromBehindOnly, targetFacesCaster))
         {
             if (checkResult)
@@ -797,16 +797,16 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
 
 	ObjectGuid oldSel = bot->GetSelectionGuid();
 	//bot->SetSelectionGuid(target->getObjectGuid());
-	Spell *spell = new Spell(bot, spellInfo, false);
+	Spell *spell = NewSpellCompat(bot, spellInfo, false);
 
-    spell->m_targets.setUnitTarget(target);
-    spell->SetCastItem(castItem);
-    spell->m_targets.setItemTarget(spell->m_targets.getItemTarget());
-    spell->m_targets.setItemTarget(spellItemTarget);
+    SpellTargetsSetUnitCompat(spell->m_targets, target);
+    SpellSetCastItemCompat(spell, castItem);
+    SpellTargetsSetItemCompat(spell->m_targets, SpellTargetsGetItemCompat(spell->m_targets));
+    SpellTargetsSetItemCompat(spell->m_targets, spellItemTarget);
 
     SpellCastResult result = spell->CheckCast(true);
     delete spell;
-	//if (oldSel)
+	//if (!oldSel.IsEmpty())
 	//	bot->SetSelectionGuid(oldSel);
 
     if (checkResult)
@@ -935,15 +935,15 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, GameObject* goTarget, uint8 effec
 
     //ObjectGuid oldSel = bot->GetSelectionGuid();
     bot->SetSelectionGuid(goTarget->getObjectGuid());
-    Spell* spell = new Spell(bot, spellInfo, false);
+    Spell* spell = NewSpellCompat(bot, spellInfo, false);
 
-    spell->m_targets.setGOTarget(goTarget);
-    spell->SetCastItem(aiObjectContext->GetValue<Item*>("item for spell", spellid)->Get());
-    spell->m_targets.setItemTarget(spell->m_targets.getItemTarget());
+    SpellTargetsSetGOCompat(spell->m_targets, goTarget);
+    SpellSetCastItemCompat(spell, aiObjectContext->GetValue<Item*>("item for spell", spellid)->Get());
+    SpellTargetsSetItemCompat(spell->m_targets, SpellTargetsGetItemCompat(spell->m_targets));
 
     SpellCastResult result = spell->CheckCast(true);
     delete spell;
-    //if (oldSel)
+    //if (!oldSel.IsEmpty())
     //    bot->SetSelectionGuid(oldSel);
 
     if (checkResult)
@@ -1052,11 +1052,11 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, float x, float y, float z, uint8 
         }
     }
 
-    Spell* spell = new Spell(bot, spellInfo, false);
+    Spell* spell = NewSpellCompat(bot, spellInfo, false);
 
-    spell->m_targets.setDestination(x, y, z);
-    spell->SetCastItem(itemTarget ? itemTarget : aiObjectContext->GetValue<Item*>("item for spell", spellid)->Get());
-    spell->m_targets.setItemTarget(spell->m_targets.getItemTarget());
+    SpellTargetsSetDestinationCompat(spell->m_targets, x, y, z);
+    SpellSetCastItemCompat(spell, itemTarget ? itemTarget : aiObjectContext->GetValue<Item*>("item for spell", spellid)->Get());
+    SpellTargetsSetItemCompat(spell->m_targets, SpellTargetsGetItemCompat(spell->m_targets));
 
     SpellCastResult result = spell->CheckCast(true);
     delete spell;
@@ -1138,8 +1138,8 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         SpellEntry const* fallbackSpellInfo = sServerFacade.LookupSpellInfo(spellId);
         if (fallbackSpellInfo && CheckSpellTargetAlignment(fallbackSpellInfo, bot) != SPELL_CAST_OK)
         {
-            sLog.outDetail("PlayerbotAI::CastSpell: %s target resolved to self for harmful spell %u - refusing to self-cast", bot->GetName(), spellId);
-            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=self-harmful-refused", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+            sLog.outDetail("PlayerbotAI::CastSpell: %s target resolved to self for harmful spell %u - refusing to self-cast", CStrCompat(bot->GetName()), spellId);
+            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=self-harmful-refused", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
             return false;
         }
     }
@@ -1148,7 +1148,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     // core resolves the type of a Cure cast at random, so the hold is judged again here, at the last gate.
     if (DispelCastBlocked(this, target, spellId))
     {
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=dispel-hold", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=dispel-hold", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         return false;
     }
 
@@ -1157,7 +1157,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     {
         // M1 trail: pet-owned ability leaves the unit-cast path here; the
         // pet overload owns the actual attempt/result from this point.
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=pet-redirect", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=pet-redirect", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         return CastPetSpell(spellId, target);
     }
 
@@ -1172,9 +1172,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     // plus the herb/ore/opening spells of the same path. Same expression as prepare(): a channeled
     // or auto-repeat spell does not count as "in progress".
     if (bot->IsNonMeleeSpellCasted(false, true, true) ||
-        TortoiseBots::RemoteCommander::RitualHolds().Holds(bot->GetObjectGuid().GetRawValue()))
+        TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidKeyCompat(bot->GetObjectGuid())))
     {
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=cast-in-progress", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=cast-in-progress", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         NoteCastCheckFail(SPELL_FAILED_SPELL_IN_PROGRESS);
         return false;
     }
@@ -1186,7 +1186,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
 
     if (bot->IsFlying() || bot->IsTaxiFlying())
     {
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=flying", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=flying", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         return false;
     }
 
@@ -1232,13 +1232,13 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
             *outSpellDuration = sPlayerbotAIConfig.globalCoolDown;
         }
 
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=stand-or-facing-delay stand=%u stopped=%u realMaster=%u motion=%u", spellId, (unsigned long long)target->getObjectGuid().GetRawValue(),
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=stand-or-facing-delay stand=%u stopped=%u realMaster=%u motion=%u", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()),
             (uint32)bot->GetStandState(), (uint32)bot->IsStopped(), (uint32)HasRealPlayerMaster(), (uint32)mm.GetCurrentMovementGeneratorType());
         return false;
     }
 
     const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(spellId);
-    Spell *spell = new Spell(bot, pSpellInfo, false);
+    Spell *spell = NewSpellCompat(bot, pSpellInfo, false);
 
     SpellCastTargets targets;
     if ((pSpellInfo->Targets & TARGET_FLAG_ITEM) || spellId == 1804)
@@ -1258,11 +1258,11 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         // casts from bag items).
         if (!itemTarget && (pSpellInfo->Targets & TARGET_FLAG_ITEM))
         {
-            targets.setItemTarget(castItem);
+            SpellTargetsSetItemCompat(targets, castItem);
             castItem = nullptr;
         }
-        spell->SetCastItem(castItem);
-        targets.setItemTarget(spell->m_targets.getItemTarget());
+        SpellSetCastItemCompat(spell, castItem);
+        SpellTargetsSetItemCompat(targets, SpellTargetsGetItemCompat(spell->m_targets));
 
         if (bot->GetTradeData())
         {
@@ -1275,17 +1275,17 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     {
         WorldLocation aoe = aiObjectContext->GetValue<WorldLocation>("aoe position")->Get();
         if (aoe.x != 0)
-            targets.setDestination(aoe.x, aoe.y, aoe.z);
+            SpellTargetsSetDestinationCompat(targets, aoe.x, aoe.y, aoe.z);
         else if (target && target->getObjectGuid() != bot->getObjectGuid())
-            targets.setDestination(target->getPositionX(), target->getPositionY(), target->getPositionZ());
+            SpellTargetsSetDestinationCompat(targets, target->getPositionX(), target->getPositionY(), target->getPositionZ());
     }
     else if (pSpellInfo->Targets & TARGET_FLAG_SOURCE_LOCATION)
     {
-        targets.setDestination(bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
+        SpellTargetsSetDestinationCompat(targets, bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
     }
     else
     {
-        targets.setUnitTarget(target);
+        SpellTargetsSetUnitCompat(targets, target);
     }
 
     if (spellId == 1953) // simulate blink coordinates
@@ -1297,7 +1297,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         float fz = bot->getPositionZ();
 
         bot->UpdateAllowedPositionZ(fx, fy, fz);
-        targets.setDestination(fx, fy, fz);
+        SpellTargetsSetDestinationCompat(targets, fx, fy, fz);
     }
 
     if (pSpellInfo->Effect[0] == SPELL_EFFECT_OPEN_LOCK ||
@@ -1307,7 +1307,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         GameObject* go = GetGameObject(loot.guid);
         if (go && sServerFacade.isSpawned(go))
         {
-            targets.setGOTarget(go);
+            SpellTargetsSetGOCompat(targets, go);
             faceTo = go;
         }
         else
@@ -1315,7 +1315,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
             Unit* creature = GetUnit(loot.guid);
             if (creature)
             {
-                targets.setUnitTarget(creature);
+                SpellTargetsSetUnitCompat(targets, creature);
                 faceTo = creature;
             }
         }
@@ -1331,7 +1331,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         if (IsJumping() || bot->IsFalling())
         {
             spell->cancel();
-            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-jump-fall", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-jump-fall", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
             NoteCastCheckFail(SPELL_FAILED_MOVING);
             return false;
         }
@@ -1347,45 +1347,13 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
             }
 
             spell->cancel();
-            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-no-master", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-no-master", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
             NoteCastCheckFail(SPELL_FAILED_MOVING);
             return false;
         }
     }
 
-    for (uint32 j = 0; j < MAX_EFFECT_INDEX; ++j)
-    {
-        uint8 slot = 0;
-        switch (pSpellInfo->Effect[j])
-        {
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT1: slot = 0; break;
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT2: slot = 1; break;
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT3: slot = 2; break;
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT4: slot = 3; break;
-        default: continue;
-        }
-
-        if (ObjectGuid guid = bot->m_ObjectSlotGuid[slot])
-        {
-            if (GameObject* obj = bot ? bot->GetMap()->GetGameObject(guid) : nullptr)
-            {
-                //Object is not mine because I created an object with same guid on different map.
-                //Make object mine, remove it from my list and give it back to the original owner.
-                if (obj->GetOwnerGuid() != bot->getObjectGuid())
-                {
-                    ObjectGuid ownerGuid = obj->GetOwnerGuid();
-                    obj->SetOwnerGuid(bot->getObjectGuid());
-                    obj->SetLootState(GO_JUST_DEACTIVATED);
-
-                    bot->RemoveGameObject(obj, false);
-                    bot->m_ObjectSlotGuid[slot].Clear();
-
-                    obj->SetOwnerGuid(ownerGuid);
-                }
-            }
-        }
-    }
-
+    ReleaseForeignSummonObjectsCompat(bot, pSpellInfo);
 
     // M1 trail: attempt plus native preparation result. PREPARE ok means the
     // core accepted the cast, not that effects landed — no module-visible
@@ -1397,13 +1365,13 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     if (pSpellInfo->Effect[0] == SPELL_EFFECT_OPEN_LOCK ||
         pSpellInfo->Effect[0] == SPELL_EFFECT_SKINNING)
     {
-        if (!spell->m_targets.getItemTarget())
+        if (!SpellTargetsGetItemCompat(spell->m_targets))
         {
             LootObject loot = *aiObjectContext->GetValue<LootObject>("loot target");
             if (!loot.IsLootPossible(bot))
             {
                 spell->cancel();
-                botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=loot-impossible", spellId, (unsigned long long)target->getObjectGuid().GetRawValue());
+                botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=loot-impossible", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
                 //delete spell;
                 return false;
             }
@@ -1435,7 +1403,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
 
     aiObjectContext->GetValue<ai::PositionMap&>("position")->Get()["random"].Reset();
 
-    if (oldSel)
+    if (!oldSel.IsEmpty())
         bot->SetSelectionGuid(oldSel);
 
     if (HasStrategy("debug spell", BotState::BOT_STATE_NON_COMBAT))
@@ -1497,25 +1465,25 @@ bool PlayerbotAI::CastSpell(uint32 spellId, GameObject* goTarget, Item* itemTarg
     }
 
     const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(spellId);
-    Spell* spell = new Spell(bot, pSpellInfo, false);
+    Spell* spell = NewSpellCompat(bot, pSpellInfo, false);
 
     SpellCastTargets targets;
     if (pSpellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
     {
         WorldLocation aoe = aiObjectContext->GetValue<WorldLocation>("aoe position")->Get();
         if (aoe.x != 0)
-            targets.setDestination(aoe.x, aoe.y, aoe.z);
+            SpellTargetsSetDestinationCompat(targets, aoe.x, aoe.y, aoe.z);
         else if (goTarget && goTarget->getObjectGuid() != bot->getObjectGuid())
-            targets.setDestination(goTarget->getPositionX(), goTarget->getPositionY(), goTarget->getPositionZ());
+            SpellTargetsSetDestinationCompat(targets, goTarget->getPositionX(), goTarget->getPositionY(), goTarget->getPositionZ());
     }
     else if (pSpellInfo->Targets & TARGET_FLAG_SOURCE_LOCATION)
     {
-        targets.setDestination(bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
+        SpellTargetsSetDestinationCompat(targets, bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
     }
 
-    targets.setGOTarget(goTarget);
-    spell->SetCastItem(itemTarget ? itemTarget : aiObjectContext->GetValue<Item*>("item for spell", spellId)->Get());
-    targets.setItemTarget(spell->m_targets.getItemTarget());
+    SpellTargetsSetGOCompat(targets, goTarget);
+    SpellSetCastItemCompat(spell, itemTarget ? itemTarget : aiObjectContext->GetValue<Item*>("item for spell", spellId)->Get());
+    SpellTargetsSetItemCompat(targets, SpellTargetsGetItemCompat(spell->m_targets));
 
     if (goTarget->GetGoType() == GAMEOBJECT_TYPE_CHEST)
     {
@@ -1532,7 +1500,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, GameObject* goTarget, Item* itemTarg
         float fz = bot->getPositionZ();
 
         bot->UpdateAllowedPositionZ(fx, fy, fz);
-        targets.setDestination(fx, fy, fz);
+        SpellTargetsSetDestinationCompat(targets, fx, fy, fz);
     }
 
     // Fail the cast if the bot is moving and the spell is a casting/channeled spell.
@@ -1649,13 +1617,13 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
     }
 
     const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(spellId);
-    Spell* spell = new Spell(bot, pSpellInfo, false);
+    Spell* spell = NewSpellCompat(bot, pSpellInfo, false);
 
     SpellCastTargets targets;
     if ((pSpellInfo->Targets & TARGET_FLAG_ITEM) || spellId == 1804)
     {
-        spell->SetCastItem(itemTarget ? itemTarget : aiObjectContext->GetValue<Item*>("item for spell", spellId)->Get());
-        targets.setItemTarget(spell->m_targets.getItemTarget());
+        SpellSetCastItemCompat(spell, itemTarget ? itemTarget : aiObjectContext->GetValue<Item*>("item for spell", spellId)->Get());
+        SpellTargetsSetItemCompat(targets, SpellTargetsGetItemCompat(spell->m_targets));
 
         if (bot->GetTradeData())
         {
@@ -1667,11 +1635,11 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
     else if (pSpellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
     {
         WorldLocation aoe = aiObjectContext->GetValue<WorldLocation>("aoe position")->Get();
-        targets.setDestination(x, y, z);
+        SpellTargetsSetDestinationCompat(targets, x, y, z);
     }
     else if (pSpellInfo->Targets & TARGET_FLAG_SOURCE_LOCATION)
     {
-        targets.setDestination(bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
+        SpellTargetsSetDestinationCompat(targets, bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
     }
     else
     {
@@ -1721,7 +1689,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
     if (pSpellInfo->Effect[0] == SPELL_EFFECT_OPEN_LOCK ||
         pSpellInfo->Effect[0] == SPELL_EFFECT_SKINNING)
     {
-        if (!spell->m_targets.getItemTarget())
+        if (!SpellTargetsGetItemCompat(spell->m_targets))
         {
             LootObject loot = *aiObjectContext->GetValue<LootObject>("loot target");
             if (!loot.IsLootPossible(bot))
@@ -1746,7 +1714,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
     aiObjectContext->GetValue<LastSpellCast&>("last spell cast")->Get().Set(spellId, bot->getObjectGuid(), time(0));
     aiObjectContext->GetValue<ai::PositionMap&>("position")->Get()["random"].Reset();
 
-    if (oldSel)
+    if (!oldSel.IsEmpty())
         bot->SetSelectionGuid(oldSel);
 
     if (HasStrategy("debug spell", BotState::BOT_STATE_NON_COMBAT))
@@ -1789,11 +1757,7 @@ bool PlayerbotAI::CastPetSpell(uint32 spellId, Unit* target)
 
         uint32 command = (flag << 24) | spellId;
 
-        WorldPacket data(CMSG_PET_ACTION);
-        data << pet->getObjectGuid();
-        data << command;
-        data << (target ? target->getObjectGuid() : ObjectGuid());
-        bot->GetSession()->HandlePetAction(data);
+        HandlePetActionCompat(bot->GetSession(), pet->getObjectGuid(), command, target ? target->getObjectGuid() : ObjectGuid());
         return true;
     }
 
@@ -1815,14 +1779,14 @@ void PlayerbotAI::InterruptSpell(bool withMeleeAndAuto, const char* site, float 
                 continue;
         }
         Spell* currentSpell = bot->GetCurrentSpell((CurrentSpellTypes)type);
-        if (currentSpell && currentSpell->m_spellInfo && (currentSpell->m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT))
+        if (currentSpell && GetSpellEntryCompat(currentSpell->m_spellInfo) && (GetSpellEntryCompat(currentSpell->m_spellInfo)->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT))
         {
             // The CastCancel row: this is the one choke point every ai->InterruptSpell() caller's cancel goes through
             // (the reaction engine, movement, target picks), so a cast lost here is named even when the caller is not.
             // The slot is the one about to be interrupted, never whichever cast happens to be live first.
             LogCastCancel(this, site ? site : "ai", (CurrentSpellTypes)type, movedYd);
             bot->InterruptSpell((CurrentSpellTypes)type);
-            SpellInterrupted(currentSpell->m_spellInfo->Id);
+            SpellInterrupted(GetSpellEntryCompat(currentSpell->m_spellInfo)->Id);
         }
     }
 }
@@ -1832,7 +1796,7 @@ bool PlayerbotAI::RemoveAura(const std::string& name)
     const Aura* aura = GetAura(name, bot);
     if (aura)
     {
-        const uint32 spellId = aura->GetSpellProto()->Id;
+        const uint32 spellId = GetSpellEntryCompat(aura->GetSpellProto())->Id;
         if (spellId > 0)
         {
             bot->RemoveAurasDueToSpell(spellId);
@@ -1865,15 +1829,15 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
     auto ReadSlot = [target](CurrentSpellTypes type, bool channeledSlot, ai::InterruptTargetSpell& out) -> ai::InterruptTargetSpell const*
     {
         Spell* current = target->GetCurrentSpell(type);
-        if (!current || !current->m_spellInfo)
+        if (!current || !GetSpellEntryCompat(current->m_spellInfo))
             return nullptr;
         out.spell = current;
         out.channeledSlot = channeledSlot;
         out.state = current->getState();
         out.castTime = current->GetCastTime();
-        out.preventionType = current->m_spellInfo->PreventionType;
-        out.interruptFlags = current->m_spellInfo->InterruptFlags;
-        out.channelInterruptFlags = current->m_spellInfo->ChannelInterruptFlags;
+        out.preventionType = GetSpellEntryCompat(current->m_spellInfo)->PreventionType;
+        out.interruptFlags = GetSpellEntryCompat(current->m_spellInfo)->InterruptFlags;
+        out.channelInterruptFlags = GetSpellEntryCompat(current->m_spellInfo)->ChannelInterruptFlags;
         return &out;
     };
     ai::InterruptTargetSpell generic{}, channeled{};
@@ -1893,16 +1857,16 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
         // treated as unstunnable without the bit: they are the fights where a
         // wasted 60 s stun cooldown hurts most.
         ai::InterruptStunImmunity& stunImmunity = interrupt.stunImmunity;
-        stunImmunity.spellImmune = target->IsImmuneToSpell(spellInfo, false);
-        stunImmunity.alreadyStunned = !target->GetAurasByType(SPELL_AURA_MOD_STUN).empty();
+        stunImmunity.spellImmune = IsImmuneToSpellCompat(target, spellInfo, false, bot);
+        stunImmunity.alreadyStunned = !AurasByTypeCompat(target, SPELL_AURA_MOD_STUN).empty();
         stunImmunity.stunDiminished = StunDiminished(target, spellInfo, false);
         if (target->IsCreature())
         {
             Creature* const creature = static_cast<Creature*>(target);
             CreatureInfo const* const info = creature->GetCreatureInfo();
-            stunImmunity.stunMechanicImmune = ai::StunMechanicImmune(info->mechanic_immune_mask);
+            stunImmunity.stunMechanicImmune = ai::StunMechanicImmune(CreatureMechanicImmuneMaskCompat(info));
             stunImmunity.boss = creature->IsWorldBoss() ||
-                info->rank == CREATURE_ELITE_WORLDBOSS ||
+                CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS ||
                 ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry());
         }
     }
@@ -1910,7 +1874,7 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
     {
         interrupt.effect[i] = spellInfo->Effect[i];
         interrupt.effectAura[i] = spellInfo->EffectApplyAuraName[i];
-        interrupt.effectImmune[i] = target->IsImmuneToSpellEffect(spellInfo, (SpellEffectIndex)i, true);
+        interrupt.effectImmune[i] = IsImmuneToSpellEffectCompat(target, spellInfo, (SpellEffectIndex)i, true, bot);
         // Intercept's stun is one level away: its charge triggers 20253, which
         // is the MOD_STUN aura. Follow the trigger once, and take the immunity
         // answer from the triggered spell's own spell and effect, so a
@@ -1918,14 +1882,14 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
         if (allowStun && spellInfo->Effect[i] == SPELL_EFFECT_TRIGGER_SPELL)
         {
             SpellEntry const* triggered = sServerFacade.LookupSpellInfo(spellInfo->EffectTriggerSpell[i]);
-            if (triggered && !target->IsImmuneToSpell(triggered, false) &&
+            if (triggered && !IsImmuneToSpellCompat(target, triggered, false, bot) &&
                 !StunDiminished(target, triggered, true))
             {
                 for (int32 j = EFFECT_INDEX_0; j <= EFFECT_INDEX_2; ++j)
                 {
                     if (triggered->Effect[j] == SPELL_EFFECT_APPLY_AURA &&
                         triggered->EffectApplyAuraName[j] == SPELL_AURA_MOD_STUN &&
-                        !target->IsImmuneToSpellEffect(triggered, (SpellEffectIndex)j, true))
+                        !IsImmuneToSpellEffectCompat(target, triggered, (SpellEffectIndex)j, true, bot))
                     {
                         interrupt.effectTriggeredStun[i] = true;
                         break;
@@ -1981,7 +1945,7 @@ bool PlayerbotAI::IsSpreadingAura(const SpellEntry* entry)
 
     DispelSpellInput const input = ToDispelSpellInput(entry);
     bool const spreading = IsSpreadingAuraSpell(input, [](std::uint32_t trigId, DispelSpellInput& out) -> bool {
-        const SpellEntry* trigEntry = sSpellMgr.GetSpellEntry(trigId);
+        const SpellEntry* trigEntry = GetSpellEntryCompat(trigId);
         if (!trigEntry)
             return false;
         out = ToDispelSpellInput(trigEntry);
@@ -2007,11 +1971,11 @@ bool PlayerbotAI::HasAuraToDispel(Unit* target, uint32 dispelType, const DispelO
     bool isFriend = sServerFacade.IsFriendlyTo(bot, target);
 	for (uint32 type = SPELL_AURA_NONE; type < TOTAL_AURAS; ++type)
 	{
-		Unit::AuraList const& auras = target->GetAurasByType((AuraType)type);
-		for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
+		AuraListCompat const& auras = AurasByTypeCompat(target, (AuraType)type);
+		for (AuraListCompat::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
 		{
 			const Aura* aura = *itr;
-			const SpellEntry* entry = aura->GetSpellProto();
+			const SpellEntry* entry = GetSpellEntryCompat(aura->GetSpellProto());
 			uint32 spellId = entry->Id;
 
 			bool isPositiveSpell = IsPositiveSpell(spellId);
@@ -2090,8 +2054,8 @@ bool PlayerbotAI::IsHealSpell(const SpellEntry* spell)
     // Holy Light/Flash of Light
     if (spell->SpellFamilyName == SPELLFAMILY_PALADIN)
     {
-        if (spell->SpellIconID == 70 ||
-            spell->SpellIconID == 242)
+        if (SpellIconIdIsCompat(spell, 70) ||
+            SpellIconIdIsCompat(spell, 242))
             return true;
     }
 
@@ -2177,7 +2141,7 @@ bool PlayerbotAI::IsHerb(const GameObject* go)
 
 bool PlayerbotAI::HasSpellItems(uint32 spellId, const Item* castItem) const
 {
-    const SpellEntry* spellEntry = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    const SpellEntry* spellEntry = GetSpellEntryCompat(spellId);
     if (spellEntry)
     {
         if (HasCheat(BotCheatMask::item))
@@ -2201,7 +2165,7 @@ bool PlayerbotAI::HasSpellItems(uint32 spellId, const Item* castItem) const
                     // if CastItem is also spell reagent
                     if (castItem && castItem->GetEntry() == itemid)
                     {
-                        const ItemPrototype* proto = castItem->GetProto();
+                        const ItemPrototype* proto = GetItemProtoCompat(castItem);
                         if (!proto)
                         {
                             return false;
@@ -2210,7 +2174,7 @@ bool PlayerbotAI::HasSpellItems(uint32 spellId, const Item* castItem) const
                         for (uint8 s = 0; s < MAX_ITEM_PROTO_SPELLS; ++s)
                         {
                             // CastItem will be used up and does not count as reagent
-                            int32 charges = castItem->GetSpellCharges(s);
+                            int32 charges = ItemSpellChargesCompat(castItem, s);
                             if (proto->Spells[s].SpellCharges < 0 && abs(charges) < 2)
                             {
                                 ++itemcount;

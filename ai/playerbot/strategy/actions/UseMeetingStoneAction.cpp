@@ -11,6 +11,7 @@
 
 #include "playerbot/strategy/values/PositionValue.h"
 #include "Transports/Transport.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace MaNGOS;
 
@@ -206,14 +207,14 @@ bool SummonAction::FindSpotBeside(Player* summoner, Player* player, float follow
         // world, cannot path anywhere and just stands there.
         bool const badGround = std::fabs(z - summoner->getPositionZ()) > MAX_GROUND_DROP;
 
-        if (badGround || !summoner->IsWithinLOS(x, y, z + player->GetCollisionHeight(), true))
+        if (badGround || !IsWithinLOSCompat(summoner, x, y, z + player->GetCollisionHeight(), true))
         {
             x = summoner->getPositionX();
             y = summoner->getPositionY();
             z = summoner->getPositionZ();
         }
 
-        if (summoner->IsWithinLOS(x, y, z + player->GetCollisionHeight(), true))
+        if (IsWithinLOSCompat(summoner, x, y, z + player->GetCollisionHeight(), true))
         {
             outX = x;
             outY = y;

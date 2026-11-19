@@ -1,0 +1,231 @@
+raid,boss_name,turtle_entry,forever_entry,kind,source
+aq20,,15338,15338,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+aq20,,15341,15341,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+aq20,,15355,15355,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+aq20,,180619,180619,add,world DB (gameobject_template)
+aq20,Ayamiss the Hunter,15369,15369,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq20,Buru the Gorger,15370,15370,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq20,Kurinnaxx,15348,15348,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq20,Moam,15340,15340,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq20,Ossirian the Unscarred,15339,15339,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Battleguard Sartura,15516,15516,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,C'Thun,15727,15727,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Emperor Vek'lor,15276,15276,boss,TB tactics + world DB (creature_template)
+aq40,Emperor Vek'nilash,15275,15275,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Eye of C'Thun,15589,15589,boss,TB tactics + world DB (creature_template)
+aq40,Fankriss the Unyielding,15510,15510,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Lord Kri,15511,15511,boss,TB tactics + world DB (creature_template)
+aq40,Ouro,15517,15517,boss,TB tactics + world DB (creature_template)
+aq40,Princess Huhuran,15509,15509,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Princess Yauj,15543,15543,boss,TB tactics + world DB (creature_template)
+aq40,Spawn of Fankriss,15630,15630,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+aq40,The Prophet Skeram,15263,15263,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Vem,15544,15544,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+aq40,Viscidus,15299,15299,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+black_morass,Antnormi,65125,65125,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Chronar,65113,65113,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Echo of Kael'thas Sunstrider,65118,65118,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Echo of Lady Vashj,65119,65119,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Echo of the Lich King,65117,65117,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Epidamu,61575,61575,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Mossheart,65124,65124,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Rotmaw,65122,65122,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+black_morass,Time-Lord Epochronos,65116,65116,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Ambassador Flamelash,9156,9156,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Anvilrage Medic,8894,8894,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Bael'Gar,9016,9016,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Emperor Dagran Thaurissan,9019,9019,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Fineous Darkvire,9056,9056,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,General Angerforge,9033,9033,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Golem Lord Argelmach,8983,8983,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,High Interrogator Gerstahn,9018,9018,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Houndmaster Grebmar,9319,9319,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Lord Incendius,9017,9017,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+blackrock_depths,Magmus,9938,9938,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+bwl,Broodlord Lashlayer,12017,12017,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Chromaggus,14020,14020,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Corrupted Healing Stream Totem V,14664,14664,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+bwl,Corrupted Infernal,14668,14668,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+bwl,Corrupted Stoneskin Totem VI,14663,14663,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+bwl,Corrupted Windfury Totem III,14666,14666,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+bwl,Ebonroc,14601,14601,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Firemaw,11983,11983,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Flamegor,11981,11981,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Grethok the Controller,12557,12557,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+bwl,Lord Victor Nefarius,10162,10162,boss,TB tactics + world DB (creature_template)
+bwl,Nefarian,11583,11583,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Razorgore the Untamed,12435,12435,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+bwl,Vaelastrasz the Corrupt,13020,13020,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+crescent_grove,Fenektis the Deceiver,92111,92111,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+crescent_grove,Grovetender Engryss,92107,92107,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+crescent_grove,High Priestess A'lathea,92108,92108,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+crescent_grove,Keeper Ranathos,92109,92109,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+crescent_grove,Master Raxxieth,92110,92110,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+dragonmaw_retreat,Bogpaw Truthsay,62056,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Cavernweb Broodmother,62066,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Elder Hollowblood,62038,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Garlok Flamekeeper,62071,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Gowlfang,62057,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Halgan Redbrand,62069,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Overlord Blackheart,62070,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Searistrasz,62072,62072,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+dragonmaw_retreat,Slagfist Destroyer,62068,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Web Master Torkon,62067,none,boss,TB tactics (absent from Forever creature_template)
+dragonmaw_retreat,Zuluhed the Whacked,62037,none,boss,TB tactics (absent from Forever creature_template)
+emerald_sanctum,Erennius,60747,60747,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+emerald_sanctum,Sanctum Dragonkin,60743,60743,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+emerald_sanctum,Sanctum Dreamer,60742,60742,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+emerald_sanctum,Sanctum Scalebane,60746,60746,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+emerald_sanctum,Sanctum Supressor,61212,61212,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+emerald_sanctum,Sanctum Wyrmkin,60745,60745,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+emerald_sanctum,Solnius,60748,60748,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+frostmane_hollow,Battlemaster Ubukaz,63131,63131,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+frostmane_hollow,Hailar the Frigid,63130,63130,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+frostmane_hollow,Handler Oboka,63132,63132,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+frostmane_hollow,Kan'za the Seer,63129,63129,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+frostmane_hollow,Tan'sha the Sleek,63133,63133,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+gilneas_city,Dustivan Blackcowl,61422,none,boss,TB tactics (absent from Forever creature_template)
+gilneas_city,Genn Greymane,61418,61418,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+gilneas_city,Judge Sutherland,61421,61421,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+gilneas_city,Marshal Magnus Greystone,61423,61423,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+gilneas_city,Matthias Holtz,61419,none,boss,TB tactics (absent from Forever creature_template)
+gilneas_city,Packmaster Ragetooth,61420,61420,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+gilneas_city,Regent-Lady Celia Harlow,61263,none,boss,TB tactics (absent from Forever creature_template)
+gilneas_city,Regent-Lord Mortimer Harlow,61264,none,boss,TB tactics (absent from Forever creature_template)
+hateforge_quarry,'Broody',60715,none,boss,TB tactics (absent from Forever creature_template)
+hateforge_quarry,Corrosis,60829,60829,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+hateforge_quarry,Engineer Figgles,60736,60736,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+hateforge_quarry,Faceless Terror,60738,60738,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+hateforge_quarry,Har'gesh Doomcaller,60737,60737,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+hateforge_quarry,Hatereaver Annihilator,60734,60734,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+hateforge_quarry,High Foreman Bargul Blackhammer,60735,60735,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+karazhan_crypt,Alarus,91928,91928,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+karazhan_crypt,Archlich Enkhraz,91916,91916,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+karazhan_crypt,Commander Andreon,91919,91919,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+karazhan_crypt,Corpsemuncher,91917,91917,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+karazhan_crypt,Guard Captain Gort,92935,none,boss,TB tactics (absent from Forever creature_template)
+karazhan_crypt,Hivaxxis,91929,91929,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+karazhan_crypt,Marrowspike,91920,91920,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+lower_karazhan_halls,Brood Queen Araxxna,61221,none,boss,TB tactics (absent from Forever creature_template)
+lower_karazhan_halls,Clawlord Howlfang,61223,61223,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+lower_karazhan_halls,Grizikil,61224,61224,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+lower_karazhan_halls,Lord Blackwald II,61222,61222,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+lower_karazhan_halls,Moroes,61225,none,boss,TB tactics (absent from Forever creature_template)
+molten_core,Baron Geddon,12056,12056,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Basalthar,65020,65020,boss,TB tactics + world DB (creature_template)
+molten_core,Core Rager,11672,11672,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+molten_core,Garr,12057,12057,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Gehennas,12259,12259,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Golemagg the Incinerator,11988,11988,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Incindis,52145,52145,boss,TB tactics + world DB (creature_template)
+molten_core,Lucifron,12118,12118,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Magmadar,11982,11982,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Majordomo Executus,12018,12018,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Ragnaros,11502,11502,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Shazzrah,12264,12264,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+molten_core,Sorcerer-Thane Thaurissan,57642,none,boss,"TB tactics (12 world-DB refs, absent from Forever creature_template)"
+molten_core,Sulfuron Harbinger,12098,12098,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,,15933,15933,trash,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Anub'Rekhan,15956,15956,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Crypt Guard,16573,16573,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Deathknight Understudy,16803,16803,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Gluth,15932,15932,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Gothik the Harvester,16060,16060,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Grand Widow Faerlina,15953,15953,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Grobbulus,15931,15931,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Guardian of Icecrown,16441,16441,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Heigan the Unclean,15936,15936,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Highlord Mograine,16062,16062,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Instructor Razuvious,16061,16061,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Kel'Thuzad,15990,15990,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Lady Blaumeux,16065,16065,boss,TB tactics + world DB (creature_template)
+naxxramas,Loatheb,16011,16011,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Maexxna,15952,15952,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Naxxramas Follower,16505,16505,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Naxxramas Worshipper,16506,16506,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Noth the Plaguebringer,15954,15954,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Patchwerk,16028,16028,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Sapphiron,15989,15989,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Sir Zeliek,16063,16063,boss,TB tactics + world DB (creature_template)
+naxxramas,Soldier of the Frozen Wastes,16427,16427,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Soul Weaver,16429,16429,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Spore,16286,16286,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Thaddius,15928,15928,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+naxxramas,Thane Korth'azz,16064,16064,boss,TB tactics + world DB (creature_template)
+naxxramas,Unstoppable Abomination,16428,16428,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+naxxramas,Zombie Chow,16360,16360,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+onyxia,,176511,176511,add,world DB (gameobject_template)
+onyxia,Onyxia,10184,10184,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+onyxia,Onyxian Whelp,11262,11262,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwind_vault,Arc'tiras,93107,none,boss,TB tactics (absent from Forever creature_template)
+stormwind_vault,Aszosh Grimflame,80853,80853,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwind_vault,Black Bride,80850,80850,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwind_vault,Damian,80854,80854,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwind_vault,Tham'Grarr,80852,80852,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwind_vault,Volkan Cruelblade,80851,80851,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Chieftain Stormsong,62551,62551,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Dagar the Glutton,62547,62547,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Deathlord Tidebane,62550,62550,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Duke Balor the IV,62549,none,boss,TB tactics (absent from Forever creature_template)
+stormwrought_ruins,Eldermaw the Primordial,62661,62661,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Ighal'for,62671,62671,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Lady Drazare,62665,62665,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Librarian Theodorus,62552,62552,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Mergothid,62673,none,boss,TB tactics (absent from Forever creature_template)
+stormwrought_ruins,Mycellakos,62664,62664,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Oronok Torn-Heart,62548,62548,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Remains of the Innocent,62670,62670,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+stormwrought_ruins,Subjugator Halthas Shadecrest,62652,62652,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Archdruid Kronn,62938,62938,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Chieftain Partath,62941,62941,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Dreamform of Kronn,60699,60699,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Karrsh the Sentinel,62934,62934,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Kodiak,62937,62937,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Loktanag the Vile,2139,none,boss,TB tactics (absent from Forever creature_template)
+timbermaw_hold,Ormanos the Cracked,62935,62935,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Rotgrowl,62936,62936,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Selenaxx Foulheart,62940,62940,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+timbermaw_hold,Trioch the Devourer,62946,62946,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,General Drakkisath,10363,10363,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Gizrul the Slavener,10268,10268,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Gyth,10339,10339,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Halycon,10220,10220,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Highlord Omokk,9196,9196,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Lord Valthalak,16042,16042,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Mother Smolderweb,10596,10596,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Overlord Wyrmthalak,9568,9568,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Pyroguard Emberseer,9816,9816,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Quartermaster Zigris,9736,9736,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Shadow Hunter Vosh'gajin,9236,9236,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Smolderthorn Berserker,9268,9268,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Spirestone Warlord,9216,9216,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,The Beast,10430,10430,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,War Master Voone,9237,9237,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_blackrock_spire,Warchief Rend Blackhand,10429,10429,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Anomalus,61951,none,boss,TB tactics (absent from Forever creature_template)
+upper_karazhan_halls,Bishop,59971,59971,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Echo of Medivh,61958,none,boss,TB tactics (absent from Forever creature_template)
+upper_karazhan_halls,Keeper Gnarlmoon,61939,none,boss,TB tactics (absent from Forever creature_template)
+upper_karazhan_halls,King,59967,59967,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Knight,59968,59968,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Kruul,59991,59991,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Ley-Watcher Incantagos,61946,61946,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Rook,59970,59970,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Rupturan The Broken,59961,59961,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+upper_karazhan_halls,Sanv Tas'dal,59981,none,boss,TB tactics (absent from Forever creature_template)
+windhorn_canyon,Ahgk'tos the Pure,62778,62778,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+windhorn_canyon,Ambassador Vortalus,62783,62783,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+windhorn_canyon,Bonespeaker Narlgom,62780,62780,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+windhorn_canyon,Chieftain Shalk Blackwind,62782,62782,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+windhorn_canyon,Pathun Duskhide,62779,62779,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+windhorn_canyon,Prophet Stormhoof,62781,62781,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+windhorn_canyon,Walgan Bloodcaller,62784,62784,boss,"TB tactics + world DB (creature_template present, no FB encounter data)"
+zulgurub,,11357,11357,add,"TB tactics + world DB (creature_template present, no FB encounter data)"
+zulgurub,Bloodlord Mandokir,11382,11382,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+zulgurub,Hakkar,14834,14834,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+zulgurub,High Priest Thekal,14599,14509,boss,TB tactics + FB encounter entry xref + world DB (creature_template)
+zulgurub,High Priest Venoxis,14507,14507,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+zulgurub,High Priestess Arlokk,14515,14515,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+zulgurub,High Priestess Jeklik,14517,14517,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+zulgurub,High Priestess Mar'li,14510,14510,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)
+zulgurub,Jin'do the Hexxer,11380,11380,boss,ForeverBots code (RaidEncounterData_*) + world DB (creature_template)

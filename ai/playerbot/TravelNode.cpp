@@ -19,6 +19,7 @@
 #include "playerbot/RandomBotFacade.h"
 #include "Maps/MoveMap.h"
 #include "strategy/values/HazardsValue.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -1732,7 +1733,7 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
                 startStub->currentGold = 9999999;
                 for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
                 {
-                    Player* player = sObjectMgr.GetPlayer(guid);
+                    Player* player = GetPlayerCompat(guid);
 
                     if (!player)
                         continue;
@@ -3831,19 +3832,19 @@ TravelNodeMap::PathFindResult TravelNodeMap::testPathToLoop(const WorldPosition&
 
     for (uint8 i = 0; i < 40; i++)
     {
-        strictFinder->calculate(currentPos.GetVector3(), endPos.GetVector3(), false);
-        pathType = strictFinder->getPathType();
-        points = strictFinder->getPath();
+        PathCalculateCompat(*strictFinder, currentPos.GetVector3(), endPos.GetVector3(), false);
+        pathType = PathType(PathTypeCompat(*strictFinder));
+        points = PathPointsCompat(*strictFinder);
         // The flag over-marks stairs a player walks: when strict does not
         // reach, the permissive answer is graded and a climb a player could
         // take replaces the strict leg.
         if (WorldPosition::FellBackToPermissive(pathType))
         {
-            pathfinder->calculate(currentPos.GetVector3(), endPos.GetVector3(), false);
-            if (WorldPosition::PermissivePathWalkable(pathfinder->getPath()))
+            PathCalculateCompat(*pathfinder, currentPos.GetVector3(), endPos.GetVector3(), false);
+            if (WorldPosition::PermissivePathWalkable(PathPointsCompat(*pathfinder)))
             {
-                pathType = pathfinder->getPathType();
-                points = pathfinder->getPath();
+                pathType = PathType(PathTypeCompat(*pathfinder));
+                points = PathPointsCompat(*pathfinder);
             }
         }
 

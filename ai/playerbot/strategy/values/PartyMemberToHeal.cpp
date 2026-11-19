@@ -38,7 +38,7 @@ uint32 getIncomingdamage(Unit const* pTarget)
     uint32 damage = 0;
     for (auto const& pAttacker : pTarget->GetAttackers())
         if (pAttacker->CanReachWithMeleeAutoAttack(pTarget))
-            damage += uint32((pAttacker->GetFloatValue(UNIT_FIELD_MINDAMAGE) + pAttacker->GetFloatValue(UNIT_FIELD_MAXDAMAGE)) / 2);
+            damage += uint32((UnitMinDamageCompat(pAttacker) + UnitMaxDamageCompat(pAttacker)) / 2);
 
     return damage;
 }
@@ -89,16 +89,16 @@ std::map<ObjectGuid, uint32> IncomingHealsValue::Calculate()
         if (!caster || caster == bot || !caster->IsAlive())
             continue;
         Spell* spell = caster->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (!spell || spell->getState() != SPELL_STATE_PREPARING || !PlayerbotAI::IsHealSpell(spell->m_spellInfo))
+        if (!spell || !SpellIsPreparingCompat(spell) || !PlayerbotAI::IsHealSpell(GetSpellEntryCompat(spell->m_spellInfo)))
             continue;
-        Unit* target = ai->GetUnit(spell->m_targets.getUnitTargetGuid());
+        Unit* target = ai->GetUnit(SpellUnitTargetGuidCompat(spell));
         if (!target || !target->IsAlive())
             continue;
         for (uint32 effect = 0; effect < MAX_EFFECT_INDEX; ++effect)
         {
-            if (spell->m_spellInfo->Effect[effect] != SPELL_EFFECT_HEAL)
+            if (GetSpellEntryCompat(spell->m_spellInfo)->Effect[effect] != SPELL_EFFECT_HEAL)
                 continue;
-            int32 const amount = spell->CalculateDamage(SpellEffectIndex(effect), target);
+            int32 const amount = SpellCalculateDamageCompat(spell, effect, target);
             if (amount > 0)
                 incoming[target->GetObjectGuid()] += uint32(amount);
         }
@@ -152,17 +152,17 @@ bool ai::AnotherHealerCoversAlly(PlayerbotAI* ai, Unit* ally, float maxDistance)
         uint8 const cls = member->GetClass();
         bool const classCanHeal = cls == CLASS_PRIEST || cls == CLASS_PALADIN || cls == CLASS_DRUID || cls == CLASS_SHAMAN;
         bool const sameMap = member->GetMap() == bot->GetMap();
-        if (HealerCoversAlly(member->IsAlive(), sameMap, sameMap ? member->GetDistance(ally, SizeFactor::CombatReach) : 0.0f,
+        if (HealerCoversAlly(member->IsAlive(), sameMap, sameMap ? GetDistanceCompat(member, ally, SizeFactor::CombatReach) : 0.0f,
                 maxDistance, classCanHeal,
                 [member]()
                 {
                     uint32 const maxMana = member->GetMaxPower(POWER_MANA);
                     float const manaPct = maxMana ? member->GetPower(POWER_MANA) * 100.0f / maxMana : 100.0f;
                     return HealerFitToCover(member->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL),
-                        (member->GetUInt32Value(UNIT_FIELD_FLAGS) & (UNIT_FLAG_SILENCED | UNIT_FLAG_PACIFIED)) != 0, manaPct);
+                        IsSilencedCompat(member) || HasUnitFlagCompat(member, UNIT_FLAG_PACIFIED), manaPct);
                 },
                 [member]() { return PlayerbotAI::IsHeal(member); },
-                [member, ally]() { return member->IsWithinLOSInMap(ally, true); }))
+                [member, ally]() { return IsWithinLOSInMapCompat(member, ally, true); }))
             return true;
     }
     return false;
@@ -199,11 +199,11 @@ Unit* PartyMemberToHeal::Calculate()
         std::vector<uint64_t> focusRaw;
         focusRaw.reserve(focus.size());
         for (ObjectGuid const& guid : focus)
-            focusRaw.push_back(guid.GetRawValue());
+            focusRaw.push_back(GuidKeyCompat(guid));
         std::vector<uint64_t> assignedRaw;
         assignedRaw.reserve(seat.assigned.size());
         for (ObjectGuid const& guid : seat.assigned)
-            assignedRaw.push_back(guid.GetRawValue());
+            assignedRaw.push_back(GuidKeyCompat(guid));
         Unit* tank = seat.seated && FocusListIsLayoutAssignment(focusRaw, assignedRaw)
             ? ai->GetUnit(seat.tank)
             : nullptr;
@@ -255,7 +255,7 @@ Unit* PartyMemberToHeal::Calculate()
     std::uint64_t const meetPuller = SeekMeetHealPuller(bot->GetInstanceId());
     auto const meetHealHeld = [&](Unit* target)
     {
-        if (!SeekMeetHealWalker(target->GetObjectGuid().GetRawValue(), meetPuller))
+        if (!SeekMeetHealWalker(GuidKeyCompat(target->GetObjectGuid()), meetPuller))
             return false;
         return SeekMeetHealHeld(sPlayerbotAIConfig.dungeonRunSeekMeetNoHeal, true, true,
             SeekMeetHealHpAfterIncoming(target->GetHealthPercent(), getIncomingdamage(target), target->GetMaxHealth()));
@@ -282,15 +282,15 @@ Unit* PartyMemberToHeal::Calculate()
         {
             float const reachLimit = HealReachLimit(ai);
             if (DropCoveredCandidate(target->GetHealthPercent(), float(sPlayerbotAIConfig.criticalHealth),
-                [&]() { return bot->GetDistance(target, SizeFactor::CombatReach) > reachLimit ||
-                    !bot->IsWithinLOSInMap(target, true); },
+                [&]() { return GetDistanceCompat(bot, target, SizeFactor::CombatReach) > reachLimit ||
+                    !IsWithinLOSInMapCompat(bot, target, true); },
                 [&]() { return AnotherHealerCoversAlly(ai, target, reachLimit); }))
                 return;
         }
         auto const incoming = incomingHeals.find(target->GetObjectGuid());
         uint32 const creditedHealth = HealthWithIncoming(target->GetHealth(), target->GetMaxHealth(),
             incoming == incomingHeals.end() ? 0 : incoming->second, sPlayerbotAIConfig.lowHealth);
-        HealingCandidate candidate{target->GetObjectGuid().GetRawValue(), creditedHealth,
+        HealingCandidate candidate{GuidKeyCompat(target->GetObjectGuid()), creditedHealth,
             target->GetMaxHealth(), preHealing ? getIncomingdamage(target) : 0,
             tank, pet, false,
             sServerFacade.IsWithinLOSInMap(bot, target)};
@@ -333,7 +333,7 @@ Unit* PartyMemberToHeal::Calculate()
         for (Player* player : LiveGroupMembers(bot->GetGroup()))
             if (player != bot &&
                 RaidAssistCandidate(true, sServerFacade.IsWithinLOSInMap(bot, player),
-                    bot->GetDistance(player, SizeFactor::CombatReach) <= reach,
+                    GetDistanceCompat(bot, player, SizeFactor::CombatReach) <= reach,
                     player->GetHealthPercent()))
                 addTarget(player, ai->IsTank(player), false);
     }
@@ -368,7 +368,7 @@ Unit* PartyMemberToHeal::Calculate()
 
 bool PartyMemberToHeal::CanHealPet(Pet* pet)
 {
-    return HealablePet(MINI_PET == pet->getPetType(), sServerFacade.IsAlive(pet));
+    return HealablePet(PetIsMiniPetCompat(pet), sServerFacade.IsAlive(pet));
 }
 
 bool PartyMemberToHeal::Check(Unit* player)
@@ -391,12 +391,12 @@ bool PartyMemberToHeal::Check(Unit* player)
     if (player->IsPlayer())
     {
         Player* member = static_cast<Player*>(player);
-        if (member->IsBeingTeleported() || (member->m_duel && member->m_duel->opponent))
+        if (member->IsBeingTeleported() || !DuelOpponentGuidCompat(member).IsEmpty())
             return false;
     }
 
     // A hidden GM is never a spell target (see PartyMemberValue::Check).
-    if (player->IsPlayer() && player->GetVisibility() == VISIBILITY_OFF)
+    if (player->IsPlayer() && IsHiddenGmCompat(player))
         return false;
 
     if (sServerFacade.getDistance2d(bot, player) > maxDist)
@@ -526,7 +526,7 @@ Unit* PartyMemberToRemoveRoots::Calculate()
         {
             if (sServerFacade.IsAlive(player))
             {
-                if (player->m_duel && player->m_duel->opponent)
+                if (!DuelOpponentGuidCompat(player).IsEmpty())
                     continue;
 
                 if (player->HasAuraType(SPELL_AURA_MOD_ROOT) || player->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED))
@@ -553,7 +553,7 @@ Unit* TankToRemoveRoots::Calculate()
     {
         if (!sServerFacade.IsAlive(player) || !ai->IsTank(player))
             continue;
-        if (player->m_duel && player->m_duel->opponent)
+        if (!DuelOpponentGuidCompat(player).IsEmpty())
             continue;
         if (player->HasAuraType(SPELL_AURA_MOD_ROOT) || player->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED))
         {
@@ -583,8 +583,8 @@ RaidTankRoles ai::GetRaidTankRoles(PlayerbotAI* ai)
     // Explicit raid flags first (donor GetMainTankGuid; the core owns the
     // Main Tank / Main Assist flags on Group, raid-only by design), then
     // promoted assistants among the assist tanks, then live tanks by slot.
-    ObjectGuid const mainTankGuid = group->GetMainTankGuid();
-    ObjectGuid const mainAssistGuid = group->GetMainAssistantGuid();
+    ObjectGuid const mainTankGuid = GroupMainTankGuidCompat(group);
+    ObjectGuid const mainAssistGuid = GroupMainAssistGuidCompat(group);
 
     std::vector<Player*> members;
     std::vector<RaidTankCandidate> slots;

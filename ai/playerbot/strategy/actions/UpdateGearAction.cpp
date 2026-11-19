@@ -204,7 +204,7 @@ uint8 UpdateGearAction::GetMasterItemProgressionLevel(uint8 slot, uint8 avgProgr
         const Item* item = GetMaster()->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
         if (item)
         {
-            itemLevel = item->GetProto()->ItemLevel;
+            itemLevel = GetItemProtoCompat(item)->ItemLevel;
         }
 
         uint8 itemProgressionLevel = GetProgressionLevel(itemLevel);

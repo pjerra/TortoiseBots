@@ -11,6 +11,7 @@
 #endif
 #ifdef ENABLE_ELUNA
 #include "LuaEngine.h"
+#include "playerbot/TbCompatW2.h"
 #endif
 
 
@@ -101,7 +102,7 @@ bool XpGainAction::Execute(Event& event)
     if (levelAfter > levelBefore)
     {
         sLog.outBasic("Bot #%d <%s> levelled %d->%d (Execute hook), expiring travel target",
-            bot->GetGUIDLow(), bot->GetName(), levelBefore, levelAfter);
+            bot->GetGUIDLow(), CStrCompat(bot->GetName()), levelBefore, levelAfter);
         // Issue #401: the ammo container, thrown tier and soul pouch are
         // server-managed by level. Re-check the starter set on ding so a
         // bot that levels past a tier boundary picks it up without waiting
@@ -161,7 +162,7 @@ void XpGainAction::GiveXP(int32 xp, Unit* victim)
 #endif /* ENABLE_ELUNA */
 
     // XP to money conversion processed in Player::RewardQuest
-    if (level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+    if (level >= WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
     {
         return;
     }
@@ -185,11 +186,11 @@ void XpGainAction::GiveXP(int32 xp, Unit* victim)
     uint32 nextLvlXP = bot->GetUInt32Value(PLAYER_NEXT_LEVEL_XP);
     uint32 newXP = curXP + xp + rested_bonus_xp;
 
-    while (newXP >= nextLvlXP && level < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+    while (newXP >= nextLvlXP && level < WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
     {
         newXP -= nextLvlXP;
 
-        if (level < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        if (level < WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
         {
             bot->GiveLevel(level + 1);
         }

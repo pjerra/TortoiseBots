@@ -4,6 +4,7 @@
 #include "../../../runtime/BotManager.h"
 #include "../../../runtime/policy/provision/ClassConsumablePolicy.h"
 #include "../../../runtime/policy/provision/MimicConsumablePolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace TortoiseBots;
@@ -67,7 +68,7 @@ uint32_t MimicConsumableAction::ResolveBotItem(MimicPurpose purpose, uint32_t ma
 
 void MimicConsumableAction::RemoveConflictingAura(MimicPurpose purpose, uint32_t botItemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(botItemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(botItemId);
     if (!proto || !proto->Spells[0].SpellId)
         return;
     uint32_t mySpell = proto->Spells[0].SpellId;
@@ -79,7 +80,7 @@ void MimicConsumableAction::RemoveConflictingAura(MimicPurpose purpose, uint32_t
     {
         for (size_t i = 0; i < count; ++i)
         {
-            ItemPrototype const* other = sObjectMgr.GetItemPrototype(ladder[i].itemId);
+            ItemPrototype const* other = GetItemProtoByIdCompat(ladder[i].itemId);
             if (!other || !other->Spells[0].SpellId || other->Spells[0].SpellId == mySpell)
                 continue;
             if (bot->HasAura(other->Spells[0].SpellId))
@@ -134,7 +135,7 @@ void MimicConsumableAction::RemoveConflictingAura(MimicPurpose purpose, uint32_t
 
 bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(stoneItemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(stoneItemId);
     if (!proto || !proto->Spells[0].SpellId)
         return false;
 
@@ -155,7 +156,7 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
     }
     // Blunt weapons take weightstones, edged weapons sharpening stones:
     // swap to the same-tier stone of the matching family.
-    uint32_t subClass = mainWeapon->GetProto() ? mainWeapon->GetProto()->SubClass : 0;
+    uint32_t subClass = GetItemProtoCompat(mainWeapon) ? GetItemProtoCompat(mainWeapon)->SubClass : 0;
     bool blunt = subClass == ITEM_SUBCLASS_WEAPON_MACE || subClass == ITEM_SUBCLASS_WEAPON_MACE2 ||
                  subClass == ITEM_SUBCLASS_WEAPON_AXE || subClass == ITEM_SUBCLASS_WEAPON_AXE2;
     bool isWeight = false;
@@ -165,7 +166,7 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
     if (blunt != isWeight)
     {
         uint32_t level = bot->GetLevel();
-        proto = sObjectMgr.GetItemPrototype(blunt ? BestTierForLevel(WEIGHTSTONE_LADDER, level)
+        proto = GetItemProtoByIdCompat(blunt ? BestTierForLevel(WEIGHTSTONE_LADDER, level)
                                                  : BestTierForLevel(SHARPENING_LADDER, level));
         if (!proto || !proto->Spells[0].SpellId)
             return false;
@@ -184,7 +185,7 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
             uint32_t spellId = proto->Spells[i].SpellId;
             if (!spellId)
                 continue;
-            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
             if (!spellInfo)
                 continue;
             BotUseItemSpell* spell = BotUseItemSpell::Create(bot, spellInfo,
@@ -208,8 +209,8 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
     if (bot->GetClass() == CLASS_WARRIOR)
     {
         Item* offWeapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-        if (offWeapon && offWeapon->GetProto() &&
-            offWeapon->GetProto()->Class == ITEM_CLASS_WEAPON)
+        if (offWeapon && GetItemProtoCompat(offWeapon) &&
+            GetItemProtoCompat(offWeapon)->Class == ITEM_CLASS_WEAPON)
             ok = imbueOne(offWeapon) || ok;
     }
     if (ok)
@@ -230,7 +231,7 @@ static bool HasUseSpell(ItemPrototype const* proto)
         if (proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE &&
             proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
-        if (sSpellTemplate.LookupEntry<SpellEntry>(spellId))
+        if (GetSpellEntryCompat(spellId))
             return true;
     }
     return false;
@@ -238,7 +239,7 @@ static bool HasUseSpell(ItemPrototype const* proto)
 
 bool MimicConsumableAction::CastMimicItem(uint32_t botItemId, bool withEatEmote)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(botItemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(botItemId);
     // Broken custom items (no spell on the prototype) are skipped.
     if (!HasUseSpell(proto))
         return false;
@@ -256,7 +257,7 @@ bool MimicConsumableAction::CastMimicItem(uint32_t botItemId, bool withEatEmote)
         if (proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE &&
             proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
         if (!spellInfo)
             continue;
         // Spell-bound targeting (e.g. weapon imbues resolved earlier) is
@@ -314,7 +315,7 @@ bool MimicConsumableAction::Execute(Event& event)
     Item* masterItem = master->GetItemByPos(bagIndex, slot);
     if (!masterItem)
         return false;
-    ItemPrototype const* masterProto = masterItem->GetProto();
+    ItemPrototype const* masterProto = GetItemProtoCompat(masterItem);
     if (!masterProto || !masterProto->Spells[0].SpellId)
         return false;
     uint32_t masterItemId = masterItem->GetEntry();
@@ -346,7 +347,7 @@ bool MimicConsumableAction::Execute(Event& event)
             // daggers/swords like everyone else.
             if (resolution.singleItemId)
             {
-                ItemPrototype const* stoneProto = sObjectMgr.GetItemPrototype(resolution.singleItemId);
+                ItemPrototype const* stoneProto = GetItemProtoByIdCompat(resolution.singleItemId);
                 if (!stoneProto)
                     return false;
                 if (!ApplyWeaponImbue(resolution.singleItemId))
@@ -365,7 +366,7 @@ bool MimicConsumableAction::Execute(Event& event)
         }
         if (!resolution.singleItemId)
             return false;
-        ItemPrototype const* stoneProto = sObjectMgr.GetItemPrototype(resolution.singleItemId);
+        ItemPrototype const* stoneProto = GetItemProtoByIdCompat(resolution.singleItemId);
         if (!stoneProto)
             return false;
         if (TortoiseBots::IsOilEntry(resolution.singleItemId))
@@ -394,7 +395,7 @@ bool MimicConsumableAction::Execute(Event& event)
     if (!CastMimicItem(botItemId, eatEmote))
         return false;
 
-    ItemPrototype const* botProto = sObjectMgr.GetItemPrototype(botItemId);
+    ItemPrototype const* botProto = GetItemProtoByIdCompat(botItemId);
     Feedback(botProto ? botProto->Name1.c_str() : nullptr, silent);
     return true;
 }

@@ -49,6 +49,7 @@
 #include <set>
 #include <sstream>
 #include <unordered_set>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -77,7 +78,7 @@ void SendBidderRefund(AuctionEntry* auction, MailAuctionAnswers reason)
         return;
 
     ObjectGuid bidderGuid(HIGHGUID_PLAYER, auction->bidder);
-    Player* bidder = sObjectMgr.GetPlayer(bidderGuid);
+    Player* bidder = GetPlayerCompat(bidderGuid);
     if (bidder && bidder->GetSession())
     {
         if (reason == AUCTION_OUTBIDDED)
@@ -87,7 +88,7 @@ void SendBidderRefund(AuctionEntry* auction, MailAuctionAnswers reason)
         return;
     }
 
-    if (!sObjectMgr.GetPlayerAccountIdByGUID(bidderGuid))
+    if (!AccountIdOfCharacterCompat(bidderGuid))
         return;
     if (IsOfflineHardcore(auction->bidder))
         return;
@@ -208,7 +209,7 @@ AhBotService& AhBotService::Instance()
 
 std::vector<uint32_t> AhBotService::EnabledHouseIds() const
 {
-    if (sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION))
+    if (WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION))
         return { 7 };
     return { 1, 6, 7 };
 }
@@ -243,7 +244,7 @@ void AhBotService::EnsureVendorPricesLoaded()
     do
     {
         uint32_t itemId = res->Fetch()[0].GetUInt32();
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto || proto->Class == ITEM_CLASS_TRADE_GOODS || !proto->SellPrice)
             continue;
         m_vendorSellPrices[itemId] = proto->SellPrice;
@@ -491,7 +492,7 @@ bool AhBotService::StepSellOne()
         return false;
     }
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return true;
 
@@ -598,7 +599,7 @@ bool AhBotService::StepBuyOne()
     if (!pItem || pItem->GetCount() == 0)
         return true;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(auction->itemTemplate);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(auction->itemTemplate);
     if (!proto)
         return true;
 
@@ -637,7 +638,7 @@ bool AhBotService::StepBuyOne()
         auction->bidder = buyerGuidLow;
         auction->bid = eval.amount;
 
-        if (Player* ownerPlayer = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, auction->owner)))
+        if (Player* ownerPlayer = GetPlayerCompat(ObjectGuid(HIGHGUID_PLAYER, auction->owner)))
         {
             if (ownerPlayer->GetSession())
                 ownerPlayer->GetSession()->SendAuctionOwnerNotification(auction, false);

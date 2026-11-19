@@ -67,7 +67,7 @@ bool CanInterruptCurrentSpell(Spell const* spell)
     // same lifecycle contract used by the mature implementation: preparing,
     // casting, and delayed spells can still be interrupted. Finished/idle
     // spells are not current interrupt targets.
-    return spell && spell->getState() <= SPELL_STATE_DELAYED;
+    return spell && spell->getState() <= SpellStateLastCompat;
 }
 
 // Seconds between two out-of-combat cast attempts of the same upkeep buff on the
@@ -134,9 +134,9 @@ void BuffClaimRegistry::Claim(ObjectGuid const& caster, ObjectGuid const& scope,
     }
 
     BuffClaim claim;
-    claim.caster = caster.GetRawValue();
+    claim.caster = GuidKeyCompat(caster);
     claim.expiry = now + BUFF_CLAIM_TTL;
-    claims[std::make_pair(scope.GetRawValue(), spell)] = claim;
+    claims[std::make_pair(GuidKeyCompat(scope), spell)] = claim;
 }
 
 bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid const& scope, std::string const& spell)
@@ -146,7 +146,7 @@ bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid co
     std::map<std::pair<uint64, std::string>, BuffClaim>& claims = BuffClaims();
 
     std::map<std::pair<uint64, std::string>, BuffClaim>::iterator it =
-        claims.find(std::make_pair(scope.GetRawValue(), spell));
+        claims.find(std::make_pair(GuidKeyCompat(scope), spell));
     if (it == claims.end())
         return false;
 
@@ -158,7 +158,7 @@ bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid co
 
     // The caster's own claim must never block it: consecutive casts of one bot
     // stay governed by the retry cooldowns alone.
-    return it->second.caster != caster.GetRawValue();
+    return it->second.caster != GuidKeyCompat(caster);
 }
 
 ObjectGuid BuffClaimRegistry::GroupScope(Player* bot)
@@ -167,7 +167,7 @@ ObjectGuid BuffClaimRegistry::GroupScope(Player* bot)
     if (!group)
         return bot ? bot->GetObjectGuid() : ObjectGuid();
 
-    return ObjectGuid(BUFF_CLAIM_GROUP_SCOPE_TAG | uint64(group->GetId()));
+    return GroupScopeGuidCompat(group, BUFF_CLAIM_GROUP_SCOPE_TAG);
 }
 
 bool BuffClaimRegistry::IsTargetClaimedByOther(Player* caster, Unit* target, std::string const& spell)
@@ -226,11 +226,11 @@ bool CastSpellAction::Execute(Event& event)
                 continue;
 
             uint32 itemId = pSpellInfo->EffectItemType[0];
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
-            if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+            if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
                 continue;
 
             if (pSpellInfo->Id > castId)
@@ -244,7 +244,7 @@ bool CastSpellAction::Execute(Event& event)
         Unit* target = GetTarget();
         if (!target)
         {
-            sLog.outDebug("%s: CastSpellAction::Execute aborting '%s' - target resolved to null at cast time", bot->GetName(), spellName.c_str());
+            sLog.outDebug("%s: CastSpellAction::Execute aborting '%s' - target resolved to null at cast time", CStrCompat(bot->GetName()), spellName.c_str());
             return false;
         }
 
@@ -308,7 +308,7 @@ bool CastSpellAction::isPossible()
     }
     else
     {
-        float dist = bot->GetDistance(spellTarget, ai->IsRanged(bot) ? SizeFactor::CombatReach : SizeFactor::CombatReachWithMelee);
+        float dist = GetDistanceCompat(bot, spellTarget, ai->IsRanged(bot) ? SizeFactor::CombatReach : SizeFactor::CombatReachWithMelee);
         if (range == ATTACK_DISTANCE)
         {
             canReach = bot->CanReachWithMeleeAutoAttack(spellTarget);
@@ -427,7 +427,7 @@ bool CastSpellAction::isUseful()
             CreatureInfo const* creatureInfo = static_cast<Creature*>(spellTarget)->GetCreatureInfo();
             if (creatureInfo && !info->IsPositiveSpell() &&
                 TortoiseBots::SpellSchoolImmune(static_cast<uint32>(info->GetSpellSchoolMask()),
-                    creatureInfo->school_immune_mask))
+                    CreatureSchoolImmuneMaskCompat(creatureInfo)))
                 return false;
         }
     }
@@ -540,7 +540,7 @@ bool CastPetSpellAction::isPossible()
                 const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(spellId);
                 if (pSpellInfo)
                 {
-                    const float dist = pet->GetDistance(spellTarget, SizeFactor::CombatReach);
+                    const float dist = GetDistanceCompat(pet, spellTarget, SizeFactor::CombatReach);
                     canReach = dist <= (range + sPlayerbotAIConfig.contactDistance);
 
                     if (pSpellInfo->rangeIndex != SPELL_RANGE_IDX_COMBAT && pSpellInfo->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY && pSpellInfo->rangeIndex != SPELL_RANGE_IDX_ANYWHERE)
@@ -664,7 +664,7 @@ bool CastBuffSpellAction::isUseful()
         // down and the follow row owns the tick. Instant buffs still fire
         // (cast on the run, movement untouched); combat rows are untouched.
         Player* master = ai->GetMaster();
-        if (master && master->IsMoving() && bot->GetGroup() &&
+        if (master && IsMovingCompat(master) && bot->GetGroup() &&
             (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
                 ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
         {
@@ -764,7 +764,7 @@ uint32 BuffOnPartyAction::CountGroupMembersMissingBoth(std::string const& groupN
             continue;
         // A hidden GM never gets the buff (see PartyMemberValue::Check), so
         // counting them would keep the group version wanted forever.
-        if (member->GetVisibility() == VISIBILITY_OFF)
+        if (PlayerHiddenGmCompat(member))
             continue;
         Aura* single = ai->GetAura(GetSpellName(), member);
         if (!ai::BuffNeedsRefresh(single != nullptr, single ? single->GetAuraDuration() : 0,
@@ -959,7 +959,7 @@ uint32 HealPartyMemberAction::DownrankSpellId(Unit* target)
         std::string rankName = info->SpellName[0];
         strToLower(rankName);
         if (rankName != name || info->SpellFamilyName != topInfo->SpellFamilyName ||
-            info->SpellIconID != topInfo->SpellIconID)
+            SpellIconIdCompat(info) != SpellIconIdCompat(topInfo) || !SameRankLineCompat(info, topInfo))
             continue;
         uint32 heal = 0;
         for (uint32 effect = 0; effect < MAX_EFFECT_INDEX; ++effect)
@@ -970,10 +970,7 @@ uint32 HealPartyMemberAction::DownrankSpellId(Unit* target)
                 continue;
             // Same estimate shape as the server's EffectHeal:
             // base incl. level scaling, then the +healing bonus.
-            int32 base = bot->CalculateSpellDamage(target, info, SpellEffectIndex(effect), nullptr);
-            if (base <= 0)
-                continue;
-            heal += bot->SpellHealingBonusDone(target, info, SpellEffectIndex(effect), base, HEAL);
+            heal += EstimateHealOfEffectCompat(bot, target, info, effect);
         }
         if (!heal)
             continue;
@@ -1088,7 +1085,7 @@ bool CastShootAction::Execute(Event& event)
     {
         // Prevent calling the shoot spell when already active
         Spell* autoRepeatSpell = ai->GetBot()->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-        if (autoRepeatSpell && (autoRepeatSpell->m_spellInfo->Id == GetSpellID()))
+        if (autoRepeatSpell && (GetSpellEntryCompat(autoRepeatSpell->m_spellInfo)->Id == GetSpellID()))
         {
             succeeded = true;
         }
@@ -1121,7 +1118,7 @@ void CastShootAction::UpdateWeaponInfo()
 
             needsAmmo = true;
 
-            const ItemPrototype* itemPrototype = equippedWeapon->GetProto();
+            const ItemPrototype* itemPrototype = GetItemProtoCompat(equippedWeapon);
             switch (itemPrototype->SubClass)
             {
                 case ITEM_SUBCLASS_WEAPON_GUN:
@@ -1169,7 +1166,7 @@ void CastShootAction::UpdateWeaponInfo()
 
         // Check the ammunition
         needsAmmo = (GetSpellName() != "shoot") ? (AI_VALUE2(uint32, "item count", "ammo") <= 0) : false;
-        if (!needsAmmo && bot->GetUInt32Value(PLAYER_AMMO_ID) == 0)
+        if (!needsAmmo && AmmoItemIdCompat(bot) == 0)
         {
             std::list<Item*> ammo = AI_VALUE2(std::list<Item*>, "inventory items", "ammo");
             if (!ammo.empty() && ammo.front())
@@ -1185,7 +1182,7 @@ void CastShootAction::UpdateWeaponInfo()
 bool StopWandAction::isUseful()
 {
     Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
+    return autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo) && GetSpellEntryCompat(autoRepeat->m_spellInfo)->Category == WAND_SHOOT_CATEGORY;
 }
 
 bool StopWandAction::Execute(Event& event)
@@ -1233,7 +1230,7 @@ bool InterruptCurrentSpellAction::Execute(Event& event)
             // target that turned out full, so this is the interrupt that loses the mana and the cast.
             ai::LogCastCancel(ai, "heal_full", (CurrentSpellTypes)type);
             bot->InterruptSpell((CurrentSpellTypes)type);
-            ai->SpellInterrupted(currentSpell->m_spellInfo->Id);
+            ai->SpellInterrupted(GetSpellEntryCompat(currentSpell->m_spellInfo)->Id);
             interrupted = true;
         }
     }
@@ -1286,7 +1283,7 @@ bool CastItemTargetAction::IsTargetValid(Unit* target)
         if (itemAuraCheck)
         {
             const uint32 itemId = GetItemId();
-            const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+            const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
             if (proto)
             {
                 for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -1314,7 +1311,7 @@ bool CastItemTargetAction::IsTargetValid(Unit* target)
 
 bool CastItemTargetAction::isUseful()
 {
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+    const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
     if (proto)
     {
         std::set<uint32>& skipSpells = AI_VALUE(std::set<uint32>&, "skip spells list");
@@ -1345,12 +1342,12 @@ bool CastItemTargetAction::isPossible()
     if (!itemId)
         return false;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return false;
 
-    if (HasSpellCooldown(itemId))
+    if (HasItemSpellCooldown(itemId))
         return false;
 
     if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
@@ -1370,7 +1367,7 @@ bool CastItemTargetAction::isPossible()
         if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellData.SpellId);
         if (!spellInfo)
         {
             continue;
@@ -1386,7 +1383,7 @@ bool CastItemTargetAction::Execute(Event& event)
 {
     uint32 itemId = GetItemId();
     Unit* target = GetTarget();
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return false;
@@ -1403,68 +1400,12 @@ bool CastItemTargetAction::Execute(Event& event)
         item = items.front();
     }
 
-    SpellCastTargets targets;
-    if (target)
-    {
-        targets.setUnitTarget(target);
-        targets.setDestination(target->getPositionX(), target->getPositionY(), target->getPositionZ());
-    }
-    else
-        targets.m_targetMask = TARGET_FLAG_SELF;
-
-    // use triggered flag only for items with many spell casts and for not first cast
-    int count = 0;
-
-    for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
-    {
-        _Spell const& spellData = proto->Spells[i];
-
-        // no spell
-        if (!spellData.SpellId)
-            continue;
-
-        // wrong triggering type
-        if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
-            continue;
-
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
-        if (!spellInfo)
-        {
-            continue;
-        }
-
-        if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
-            targets.m_targetMask = TARGET_FLAG_DEST_LOCATION;
-
-        BotUseItemSpell* spell = new BotUseItemSpell(bot, spellInfo, (count > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
-
-        Item* tItem = nullptr;
-
-        if (item)
-        {
-            spell->SetCastItem(item);
-        }
-
-        bool result = (spell->ForceSpellStart(&targets) == SPELL_CAST_OK);
-
-        if (!result)
-            return false;
-
-        // NOTE: no manual cooldown on the item-cheat path (see UseAction::
-        // UseItemInternal). The core applies spell + category cooldowns in
-        // Spell::SendSpellCooldown after validation; pre-applying them here
-        // made the deferred SpellEvent re-validation see our own cooldown
-        // and cancel the just-started cast.
-
-        ++count;
-    }
-
-    return count;
+    return CastItemOnTargetCompat<BotUseItemSpell>(bot, target, item, proto);
 }
 
-bool CastItemTargetAction::HasSpellCooldown(uint32 itemId)
+bool CastItemTargetAction::HasItemSpellCooldown(uint32 itemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return false;

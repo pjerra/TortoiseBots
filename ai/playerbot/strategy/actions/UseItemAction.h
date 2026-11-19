@@ -11,18 +11,18 @@
 namespace ai
 {
     //This class bypasses the requirement for a bot to have a key item in their inventory when opening a lock.
-    class BotUseItemSpell : public Spell
+    class BotUseItemSpell : public ItemCastSpellBaseCompat
     {
     public:
         BotUseItemSpell(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags, ObjectGuid originalCasterGUID = ObjectGuid(), SpellEntry const* triggeredBy = nullptr, bool itemCheats = false)
-            : Spell(caster->ToUnit() ? caster->ToUnit() : (Unit*)nullptr, info, triggeredFlags != 0, originalCasterGUID, triggeredBy), itemCheats(itemCheats) {};
+            : ItemCastSpellBaseCompat(caster->ToUnit() ? caster->ToUnit() : (Unit*)nullptr, info, triggeredFlags != 0, originalCasterGUID, triggeredBy), itemCheats(itemCheats) {};
 
         static BotUseItemSpell* Create(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags, ObjectGuid originalCasterGUID = ObjectGuid(), SpellEntry const* triggeredBy = nullptr, bool itemCheats = false)
         {
             if (!caster || !info)
                 return nullptr;
 
-            if (info != sSpellTemplate.LookupEntry<SpellEntry>(info->Id))
+            if (info != GetSpellEntryCompat(info->Id))
                 return nullptr;
 
             return new BotUseItemSpell(caster, info, triggeredFlags, originalCasterGUID, triggeredBy, itemCheats);
@@ -32,6 +32,10 @@ namespace ai
         bool OpenLockCheck();
 
     private:
+        // OpenLockCheck reads the Spell's lock-target internals: its body is a friend template of the per-core compat header
+        // (T: cmangos-compat-s2i.h, F: a stub that counts the feature, TbCompat_I2.h).
+        template <class SpellType> friend bool ::BotUseItemOpenLockCheckCompat(SpellType*);
+
         bool itemCheats;
     };
 
@@ -118,7 +122,7 @@ namespace ai
                 return sRandomItemMgr.GetRandomPotion(bot->GetLevel(), effect);
             }
 
-            return items.front()->GetProto()->ItemId;
+            return GetItemProtoCompat(items.front())->ItemId;
         }
 
         bool Execute(Event& event) override
@@ -132,7 +136,7 @@ namespace ai
             else
             {
                 // Force potion cooldown to prevent spamming this action
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+                const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
                 if (proto)
                 {
                     for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -146,11 +150,11 @@ namespace ai
                                 continue;
                             }
 
-                            const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+                            const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
                             if (spellInfo)
                             {
                                 bot->RemoveSpellCooldown(spellInfo->Id, false);
-                                bot->AddSpellAndCategoryCooldowns(spellInfo, proto->ItemId);
+                                AddSpellAndCategoryCooldownsCompat(bot, spellInfo, proto->ItemId);
                                 break;
                             }
                         }
@@ -229,7 +233,7 @@ namespace ai
                 }
             }
 
-            return items.front()->GetProto()->ItemId;
+            return GetItemProtoCompat(items.front())->ItemId;
         }
 
         bool Execute(Event& event) override
@@ -243,7 +247,7 @@ namespace ai
             else
             {
                 // Force potion cooldown to prevent spamming this action
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+                const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
                 if (proto)
                 {
                     for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -257,11 +261,11 @@ namespace ai
                                 continue;
                             }
 
-                            const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+                            const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
                             if (spellInfo)
                             {
                                 bot->RemoveSpellCooldown(spellInfo->Id, false);
-                                bot->AddSpellAndCategoryCooldowns(spellInfo, proto->ItemId);
+                                AddSpellAndCategoryCooldownsCompat(bot, spellInfo, proto->ItemId);
                                 break;
                             }
                         }

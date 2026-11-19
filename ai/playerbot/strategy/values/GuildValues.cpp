@@ -183,7 +183,7 @@ inline uint32_t SnapshotCraftSpell(Player* bot, SupplySnapshot& snapshot, uint32
 
 bool IsUnlimitedVendorItem(uint32_t itemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     return proto && ItemUsageValue::IsItemSoldByAnyVendor(proto) &&
         !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(proto);
 }
@@ -554,7 +554,7 @@ SupplyStep ChooseSourceStep(Player* bot, OrderRecord const& order, SupplyCandida
     SupplyStep const current = order.supplyItemId == candidate.itemId ? order.supplyStep : SupplyStep::None;
     if (picked != current)
         TB_LOG_DETAIL("TortoiseBots: order %s supply item %u: %s -> %s (guild bank %s, craft %s, farm %s)",
-            bot->GetName(), candidate.itemId, TortoiseBots::GuildOrders::SupplyStepToken(current),
+            CStrCompat(bot->GetName()), candidate.itemId, TortoiseBots::GuildOrders::SupplyStepToken(current),
             TortoiseBots::GuildOrders::SupplyStepToken(picked),
             TortoiseBots::GuildOrders::GuildHasBank(bot->GetGuildId()) ? "yes" : "no",
             candidate.craft ? "yes" : "no",
@@ -1162,7 +1162,7 @@ GuildOrder GuildOrderValue::Calculate()
     }
     order.itemId = stored->itemId;
     order.amount = stored->amount;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(stored->itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(stored->itemId);
     order.target = proto ? proto->Name1 : std::to_string(stored->itemId);
     return order;
 }
@@ -1235,7 +1235,7 @@ bool HasGuildTravelOrderValue::Calculate()
         last = time(nullptr);
         std::optional<OrderRecord> stored = TortoiseBots::GuildOrders::Find(bot->GetGUIDLow());
         if (stored && stored->state == TortoiseBots::GuildOrders::OrderState::Working)
-            TB_LOG_DETAIL("TortoiseBots: order %s does not travel: %s (step %s)", bot->GetName(), why,
+            TB_LOG_DETAIL("TortoiseBots: order %s does not travel: %s (step %s)", CStrCompat(bot->GetName()), why,
                 TortoiseBots::GuildOrders::SupplyStepToken(stored->supplyStep));
     };
     // No order work while grouped with a player, for any order type. An
@@ -1307,7 +1307,7 @@ bool HasGuildTravelOrderValue::Calculate()
             {
                 at = time(nullptr);
                 TB_LOG_DETAIL("TortoiseBots: order %s counts: delivered %u bags %u mail %u of %u (record item %u, order item %u, state %s)",
-                    bot->GetName(), current->delivered, bot->GetItemCount(order.itemId),
+                    CStrCompat(bot->GetName()), current->delivered, bot->GetItemCount(order.itemId),
                     ai::OrderMailboxItems(bot, order.itemId), order.amount, current->itemId, order.itemId,
                     TortoiseBots::GuildOrders::StateToken(current->state));
             }
@@ -1438,7 +1438,7 @@ uint32 ai::GuildOrderCraftReagentFor(PlayerbotAI* ai, Player* bot, uint32 itemId
         },
         [&](uint32 reagentId)
         {
-            ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+            ItemPrototype const* reagentProto = GetItemProtoByIdCompat(reagentId);
             return reagentProto && ItemUsageValue::IsItemSoldByAnyVendor(reagentProto) &&
                 !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(reagentProto);
         },
@@ -1478,7 +1478,7 @@ double ai::GuildOrderCraftHardestReagentKills(PlayerbotAI* ai, Player* bot, uint
         uint32 have = ai->GetInventoryItemsCountWithId(reagentId);
         if (have >= need)
             continue;
-        ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+        ItemPrototype const* reagentProto = GetItemProtoByIdCompat(reagentId);
         if (reagentProto && ItemUsageValue::IsItemSoldByAnyVendor(reagentProto) &&
             !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(reagentProto))
             continue;
@@ -1582,8 +1582,8 @@ bool CanBuyTabard::Calculate()
 	AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot));
 	if (areaEntry)
 	{
-		if (areaEntry->ZoneId)
-			areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+		if (AreaZoneIdCompat(areaEntry))
+			areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
 		if (areaEntry && areaEntry->Flags & AREA_FLAG_CAPITAL)
 			inCity = true;

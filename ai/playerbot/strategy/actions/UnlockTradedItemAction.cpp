@@ -19,7 +19,7 @@ bool UnlockTradedItemAction::isUseful()
     Player* trader = bot->GetTrader();
     TradeData* tradeData = trader ? bot->GetTradeData() : nullptr;
     Item* lockbox = tradeData ? tradeData->GetTraderData()->GetItem(TRADE_SLOT_NONTRADED) : nullptr;
-    ItemPrototype const* proto = lockbox ? lockbox->GetProto() : nullptr;
+    ItemPrototype const* proto = lockbox ? GetItemProtoCompat(lockbox) : nullptr;
     return ai::TradeLockboxUseful(bot->GetClass() == CLASS_ROGUE, lockbox && proto,
         proto && proto->LockID != 0,
         lockbox && lockbox->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED));
@@ -54,10 +54,10 @@ bool UnlockTradedItemAction::Execute(Event& event)
 
 bool UnlockTradedItemAction::CanUnlockItem(Item* item)
 {
-    if (!item || !item->GetProto())
+    if (!item || !GetItemProtoCompat(item))
         return false;
 
-    ItemPrototype const* itemTemplate = item->GetProto();
+    ItemPrototype const* itemTemplate = GetItemProtoCompat(item);
     if (bot->GetClass() != CLASS_ROGUE || !botAI->HasSkill(SKILL_LOCKPICKING) || !bot->HasSpell(PICK_LOCK_SPELL_ID))
         return false;
 
@@ -94,7 +94,7 @@ bool UnlockTradedItemAction::UnlockItem(Item* item, Player* requester)
     if (botAI->CastSpell(PICK_LOCK_SPELL_ID, bot->GetTrader(), item))
     {
         std::ostringstream out;
-        out << "Picking Lock on traded item: " << item->GetProto()->Name1;
+        out << "Picking Lock on traded item: " << GetItemProtoCompat(item)->Name1;
         ai->TellPlayer(requester ? requester : bot, out.str());
         return true;
     }

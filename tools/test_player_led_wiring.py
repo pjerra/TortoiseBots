@@ -132,7 +132,7 @@ class PlayerLedGlueWiringTest(unittest.TestCase):
     def test_anchor_reads_the_player_only(self):
         read = strip_comments(body(COMMANDS, "TortoiseBots::PlayerLed::Anchor ReadPlayerLedAnchor(", "\n}\n"))
         self.assertIn("TortoiseBots::PlayerLed::MovedSince(pl, a.x, a.y, a.z)", read)
-        self.assertIn("a.moving = moved || commander->IsMoving();", read)
+        self.assertIn("a.moving = moved || IsMovingCompat(commander);", read)
         self.assertIn("a.botsMaxYd = yd;", read)
         self.assertIn("bot->GetDistance(commander)", read)
         # Read only: nothing is ordered to the player.
@@ -187,7 +187,7 @@ class PlayerLedAwayAndPathWiringTest(unittest.TestCase):
         check = tick[tick.index("TortoiseBots::PlayerLed::PathCheck const pathOk"):tick.index("TortoiseBots::PlayerLed::Pick(")]
         self.assertIn("PathFinder path(lead);", check)
         self.assertIn("TortoiseBots::PlayerLed::StepSpot(run, step, x, y, z);", check)
-        self.assertIn("TortoiseBots::PlayerLed::PathShortEnough(noPath, path.Length(), DistanceTo(lead, x, y, z))", check)
+        self.assertIn("TortoiseBots::PlayerLed::PathShortEnough(noPath, PathLengthCompat(path), DistanceTo(lead, x, y, z))", check)
         self.assertIn("(type & PATHFIND_NOPATH)", check)
         self.assertIn("ReadPlayerLedEngaged(commander, bots), pathOk);", tick)
 

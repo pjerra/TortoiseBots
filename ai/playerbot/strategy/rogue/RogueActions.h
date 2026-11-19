@@ -285,7 +285,7 @@ namespace ai
         bool isUseful() override
         {
             Unit* target = GetTarget();
-            if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
+            if (target && bot->CanReachWithMeleeAutoAttack(target) && IsWithinLOSInMapCompat(bot, target, true))
                 return false;
 
             return ReachTargetAction::isUseful();
@@ -300,7 +300,7 @@ namespace ai
             if (sPlayerbotAIConfig.sapApproachAvoidPack)
                 return ApproachAroundPack(target, standDist);
 
-            const float angle = target->GetAngle(bot);
+            const float angle = GetAngleCompat(target, bot);
             WorldPosition stand(target->GetMapId(),
                 target->GetPositionX() + standDist * std::cos(angle),
                 target->GetPositionY() + standDist * std::sin(angle),
@@ -544,7 +544,7 @@ namespace ai
             for (const uint32 itemId : poisonItemIds)
             {
                 // Check if bot can use the poison
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+                const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
                 if (proto && (bot->GetLevel() >= proto->RequiredLevel) && (poisonLevel < proto->RequiredLevel))
                 {
                     // Check if the bot has the poison in the bag
@@ -575,7 +575,7 @@ namespace ai
                             const _Spell& spellData = poisonProto->Spells[i];
                             if (spellData.SpellId)
                             {
-                                const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+                                const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
                                 if (spellInfo)
                                 {
                                     BotUseItemSpell* spell = new BotUseItemSpell(bot, spellInfo, (count > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
@@ -620,7 +620,7 @@ namespace ai
             // Check if poison item is in bag
             for (const uint32 itemId : poisonItemIds)
             {
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+                const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
                 if (proto && (bot->GetLevel() >= proto->RequiredLevel))
                 {
                     if (ai->HasCheat(BotCheatMask::item) || bot->HasItemCount(itemId, 1))

@@ -53,7 +53,7 @@ bool DebugAction::HandleItem(Event& event, Player* requester, const std::string&
     if (item)
     {
         qualifier = ItemQualifier(item);
-        proto = item->GetProto();
+        proto = GetItemProtoCompat(item);
     }
     else
     {
@@ -268,7 +268,7 @@ bool DebugAction::HandleDrops(Event& event, Player* requester, const std::string
             std::vector<std::string> qualifiers = { std::to_string(entry) , std::to_string(itemId) };
             std::string qualifier = Qualified::MultiQualify(qualifiers, " ");
             float chance = GAI_VALUE2(float, "loot chance", qualifier);
-            if (chance > 0 && sObjectMgr.GetItemPrototype(itemId))
+            if (chance > 0 && GetItemProtoByIdCompat(itemId))
             {
                 chances.push_back(std::make_pair(itemId, chance));
             }
@@ -280,7 +280,7 @@ bool DebugAction::HandleDrops(Event& event, Player* requester, const std::string
 
         for (auto chance : chances)
         {
-            out << chat->formatItem(sObjectMgr.GetItemPrototype(chance.first), 0, 0) << ": " << chance.second << "%";
+            out << chat->formatItem(GetItemProtoByIdCompat(chance.first), 0, 0) << ": " << chance.second << "%";
             ai->TellPlayerNoFacing(requester, out);
             out.str("");
             out.clear();
@@ -303,7 +303,7 @@ bool DebugAction::HandlePrice(Event& event, Player* requester, const std::string
     {
         std::ostringstream out;
 
-        const ItemPrototype* proto = sObjectMgr.GetItemPrototype(id);
+        const ItemPrototype* proto = GetItemProtoByIdCompat(id);
         if (!proto)
             continue;
 

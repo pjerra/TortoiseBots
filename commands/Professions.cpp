@@ -122,7 +122,7 @@ void FillAbilityRow(AbilityRow& row, SkillLineAbilityEntry const* ability, Playe
     row.maxValue = ability->max_value;
     row.known = bot->HasSpell(ability->spellId);
     row.passive = IsPassiveSpell(ability->spellId);
-    SpellEntry const* spell = sSpellMgr.GetSpellEntry(ability->spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(ability->spellId);
     if (!spell)
         return;
     row.effect0 = spell->Effect[EFFECT_INDEX_0];
@@ -153,12 +153,12 @@ std::string CraftOrderField(AbilityRow const& row)
     GuildOrders::CraftOrderableInputs inputs;
     inputs.known = row.known;
     inputs.createsItem = row.createsItem;
-    if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(row.createdItemId))
+    if (ItemPrototype const* proto = GetItemProtoByIdCompat(row.createdItemId))
     {
         inputs.itemOrderable = GuildOrders::IsOrderableItem(proto);
         inputs.itemNeedsProfession = proto->RequiredSkill != 0;
     }
-    if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(row.spellId))
+    if (SpellEntry const* spell = GetSpellEntryCompat(row.spellId))
         inputs.spellRecoveryMs = spell->GetRecoveryTime();
     return GuildOrders::CraftOrderToken(GuildOrders::CraftOrderableVerdict(inputs));
 }
@@ -209,7 +209,7 @@ void SendProfessionSnapshot(ChatHandler* handler, Player* bot)
             recipeItem = cached->second;
             uint32_t trainerSkill = 0;
             bool const fromTrainer = ai::GuildOrderTaughtByAnyTrainer(row.spellId, trainerSkill);
-            ItemPrototype const* recipeProto = recipeItem ? sObjectMgr.GetItemPrototype(recipeItem) : nullptr;
+            ItemPrototype const* recipeProto = recipeItem ? GetItemProtoByIdCompat(recipeItem) : nullptr;
             uint32_t const itemSkill = recipeProto ? recipeProto->RequiredSkillRank : 0;
             row.reqSkillValue = GuildOrders::EnchantReqSkillCombine(fromTrainer, trainerSkill,
                 recipeProto != nullptr, itemSkill);
@@ -259,7 +259,7 @@ std::vector<CraftRecipeSnapshot> OrderableCraftRecipes(Player* bot, std::vector<
         {
             if (!ability || !ability->spellId || !bot->HasSpell(ability->spellId))
                 continue;
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(ability->spellId);
+            SpellEntry const* spell = GetSpellEntryCompat(ability->spellId);
             if (!spell)
                 continue;
             uint32_t createdItemId = 0;
@@ -273,7 +273,7 @@ std::vector<CraftRecipeSnapshot> OrderableCraftRecipes(Player* bot, std::vector<
             }
             if (!createdItemId)
                 continue;
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(createdItemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(createdItemId);
             if (!proto)
                 continue;
             std::string lower = proto->Name1;
@@ -332,7 +332,7 @@ std::vector<EnchantSnapshot> OrderableEnchantSpells(Player* bot, std::vector<std
         snapshot.slot = entry.slot;
         snapshot.skillValue = skillValue;
         snapshot.reqSkillValue = entry.reqSkill;
-        SpellEntry const* spell = sSpellMgr.GetSpellEntry(entry.spellId);
+        SpellEntry const* spell = GetSpellEntryCompat(entry.spellId);
         if (spell)
         {
             for (uint32 e = 0; e < MAX_SPELL_REAGENTS; ++e)

@@ -62,7 +62,7 @@ uint32_t GuildOrderRecipeItemFor(uint32_t spellId)
         {
             if (!proto->Spells[e].SpellId)
                 continue;
-            SpellEntry const* use = sSpellMgr.GetSpellEntry(proto->Spells[e].SpellId);
+            SpellEntry const* use = GetSpellEntryCompat(proto->Spells[e].SpellId);
             if (!use)
                 continue;
             for (uint32 f = 0; f < MAX_EFFECT_INDEX; ++f)
@@ -90,7 +90,7 @@ bool GuildOrderTaughtByTrainer(uint32_t spellId, uint32_t trainerType,
         if (!tSpell || !tSpell->spell)
             continue;
         bool teaches = tSpell->spell == spellId;
-        if (SpellEntry const* teaching = sSpellMgr.GetSpellEntry(tSpell->spell))
+        if (SpellEntry const* teaching = GetSpellEntryCompat(tSpell->spell))
             for (uint32 e = 0; e < MAX_EFFECT_INDEX && !teaches; ++e)
                 teaches = teaching->Effect[e] == SPELL_EFFECT_LEARN_SPELL &&
                     teaching->EffectTriggerSpell[e] == spellId;
@@ -157,7 +157,7 @@ uint32_t GuildOrderEnchantReqSkill(uint32_t spellId, uint32_t recipeItem)
 {
     uint32_t trainerSkill = 0;
     bool const fromTrainer = GuildOrderTaughtByAnyTrainer(spellId, trainerSkill);
-    ItemPrototype const* recipeProto = recipeItem ? sObjectMgr.GetItemPrototype(recipeItem) : nullptr;
+    ItemPrototype const* recipeProto = recipeItem ? GetItemProtoByIdCompat(recipeItem) : nullptr;
     uint32_t const itemSkill = recipeProto ? recipeProto->RequiredSkillRank : 0;
     if (fromTrainer && recipeProto)
         return std::min(trainerSkill, itemSkill);
@@ -191,7 +191,7 @@ void BuildGuildOrderEnchantIndex()
     std::vector<EnchantEntry>& index = EnchantIndex();
     for (auto const& [spellId, rows] : bySpell)
     {
-        SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+        SpellEntry const* spell = GetSpellEntryCompat(spellId);
         if (!spell)
             continue;
         bool hasEnchant = false;

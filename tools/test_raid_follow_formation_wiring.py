@@ -62,7 +62,7 @@ class RaidFollowFormationWiringTest(unittest.TestCase):
         guard = body(FORMATIONS, "bool ai::FinalizeFollowSpot(", "\n}\n")
         self.assertIn("refuseVoid && ground <= INVALID_HEIGHT", guard)
         self.assertIn("ai::FollowSpotGroundRejected(fromZ, ground)", guard)
-        self.assertIn("map->GetLosHitPosition(", guard)
+        self.assertIn("GetLosHitPositionCompat(map, ", guard)
         self.assertIn("bot->UpdateAllowedPositionZ(x, y, z);", guard)
         self.assertIn("std::clamp(z, minZ, maxZ)", guard)
 

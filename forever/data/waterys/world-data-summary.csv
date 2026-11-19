@@ -1,0 +1,20 @@
+table,rows,rows_on_forever,rows_missing,note
+ai_playerbot_zone_level,3876,1222,2654,"module cache table (absent on Forever, must be created); 2654 ids not in AreaTable.db2 (Turtle areas + negatives)"
+ai_playerbot_named_location (FISH_*),52766,52766,0,"coords, no entry refs; portable if maps exist (map 0/1)"
+ai_playerbot_named_location (other),17,17,0,coords; verify per-row on live
+ai_dungeon_plan,260,0,260,"TB module table; no Forever counterpart, ports as data"
+ai_dungeon_boss,105,0,105,"TB module table; no Forever counterpart, ports as data"
+ai_dungeon_leg,260,0,260,"TB module table; no Forever counterpart, ports as data"
+ai_dungeon_step,261,0,261,"TB module table; no Forever counterpart, ports as data"
+ai_dungeon_leg_need,11,0,11,"TB module table; no Forever counterpart, ports as data"
+ai_boss_tactic,60,0,60,"TB module table; no Forever counterpart, ports as data"
+ai_boss_stand,3,0,3,"TB module table; no Forever counterpart, ports as data"
+ai_combat_aura_watch,3,0,3,"TB module table; no Forever counterpart, ports as data"
+ai_playerbot_texts,1,0,1,"TB module table; no Forever counterpart, ports as data"
+ai_playerbot_enchants,2,0,2,"TB module table; no Forever counterpart, ports as data"
+ai_playerbot_enchant_candidates,1,0,1,"TB module table; no Forever counterpart, ports as data"
+ai_playerbot_weightscales,2,0,2,"TB module table; no Forever counterpart, ports as data"
+ai_playerbot_weightscale_data,5,0,5,"TB module table; no Forever counterpart, ports as data"
+ai_bot_lfg_plan,1,0,1,"TB module table; no Forever counterpart, ports as data"
+tortoise_bots_hire_gear,3,0,3,"TB module table; no Forever counterpart, ports as data"
+creature_template (TB 90k-97k rows),82,75,7,recruiters/credits overlap Forever rows - renumber required (see id-ranges.md)

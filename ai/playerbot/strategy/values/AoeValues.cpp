@@ -30,7 +30,7 @@ std::list<ObjectGuid> AoeCountValue::FindMaxDensity(Player* bot, float range)
             {
                 // The group's own rule, by guid: an unrelated low-health attacker beside a healthy member is no
                 // member and stays in the density.
-                if (LinkedDeathHoldsMember(scan.param, scan.members, guid.GetRawValue()))
+                if (LinkedDeathHoldsMember(scan.param, scan.members, GuidKeyCompat(guid)))
                     continue;
                 kept.push_back(guid);
             }
@@ -116,14 +116,14 @@ bool HasAreaDebuffValue::Calculate()
         if (IsSoughtCloudFor(ai, bot, go))
             continue;
 
-        SpellEntry const* spellProto = sSpellTemplate.LookupEntry<SpellEntry>(go->GetSpellId());
+        SpellEntry const* spellProto = GetSpellEntryCompat(go->GetSpellId());
         if (!spellProto)
             continue;
 
-        if (IsPositiveEffect(spellProto, go->GetEffIndex()))
+        if (IsPositiveEffect(spellProto, DynamicObjectEffectIndexCompat(go)))
             continue;
 
-        if (go->IsAffecting(checkTarget))
+        if (DynamicObjectAffectsCompat(go, checkTarget))
             return true;
     }
 

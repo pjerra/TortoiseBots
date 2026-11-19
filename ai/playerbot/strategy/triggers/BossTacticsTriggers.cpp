@@ -131,7 +131,7 @@ std::string CarrierStrikeSpellText(PlayerbotAI* ai, Player* bot, CarrierStrikeVe
 void InterruptCarrierStrikeCast(PlayerbotAI* ai, Player* bot, uint32 shadeEntry)
 {
     Spell* const current = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-    if (!current || !current->m_spellInfo)
+    if (!current || !GetSpellEntryCompat(current->m_spellInfo))
         return;
     // The cast's cached unit-target pointer is refreshed only in the bot's next Spell::update, and the map frees a unit
     // removed in this tick (Jin'do's death despawns the Shades), so resolve the guid the cast holds: a target that left
@@ -145,7 +145,7 @@ void InterruptCarrierStrikeCast(PlayerbotAI* ai, Player* bot, uint32 shadeEntry)
     {
         std::string const spell(name);
         uint32 const spellId = AI_VALUE2(uint32, "spell id", spell);
-        if (spellId != 0 && spellId == current->m_spellInfo->Id)
+        if (spellId != 0 && spellId == GetSpellEntryCompat(current->m_spellInfo)->Id)
         {
             ai::LogCastCancelNonMelee(ai, "carrier_strike", false);
             bot->InterruptNonMeleeSpells(false);
@@ -310,7 +310,7 @@ bool BossTacticsCarrierStrikeTrigger::IsActive()
         bool const inCoverReach = shade && bot->GetDistance(shade) <= kShadeCoverReachYd &&
             ShadeCoverSameFloor(bot->GetPositionZ() - shade->GetPositionZ());
         ShadeCoverLatch latch = GetShadeCoverLatch(bot);
-        bool const latched = ShadeCoverLatchHolds(latch, shade ? shade->GetObjectGuid().GetRawValue() : 0,
+        bool const latched = ShadeCoverLatchHolds(latch, shade ? GuidKeyCompat(shade->GetObjectGuid()) : 0,
             in.cursed, shade && ShadeOnGroupHealer(bot, shade), shadeVictim == bot, WorldTimer::getMSTime());
         SetShadeCoverLatch(bot, latch);
         // On a threat_successor fight only while leaving cannot change the successor: this off-tank's threat on that

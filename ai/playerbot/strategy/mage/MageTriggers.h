@@ -311,12 +311,12 @@ namespace ai
                     if (aura)
                     {
                         // Check if the stack is at the maximum
-                        const uint32 maxStackAmount = aura->GetSpellProto()->StackAmount;
-                        const uint32 stackAmount = aura->GetHolder()->GetStackAmount();
+                        const uint32 maxStackAmount = GetSpellEntryCompat(aura->GetSpellProto())->StackAmount;
+                        const uint32 stackAmount = AuraHolderCompat(aura)->GetStackAmount();
                         if (stackAmount >= maxStackAmount)
                         {
                             // Check if the aura is about to expire
-                            if (aura->GetHolder()->GetAuraDuration() > 7000)
+                            if (AuraHolderCompat(aura)->GetAuraDuration() > 7000)
                             {
                                 return false;
                             }

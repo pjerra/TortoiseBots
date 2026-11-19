@@ -99,10 +99,7 @@ namespace ai
             {
                 if (bot->IsWithinDistInMap(go, INTERACTION_DISTANCE, false))
                 {
-                    WorldPacket data(CMSG_GAMEOBJ_USE);
-                    data << go->getObjectGuid();
-                    bot->GetSession()->HandleGameObjectUseOpcode(data);
-                    return true;
+                    return UseGameObjectCompat(bot, go);
                 }
                 else
                 {

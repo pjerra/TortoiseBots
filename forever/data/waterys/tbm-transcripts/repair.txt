@@ -1,0 +1,28 @@
+# repair: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## repair-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:01.592679794-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+repair
+REPLIES BEGIN
+Commanded 0 bot(s) to repair equipment.
+REPLIES END
+
+## repair-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:04.825962442-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot repair
+REPLIES BEGIN
+Commanded 0 bot(s) to repair equipment.
+REPLIES END
+

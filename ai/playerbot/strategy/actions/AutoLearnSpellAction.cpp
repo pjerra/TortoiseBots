@@ -384,7 +384,7 @@ void AutoLearnSpellAction::GetClassQuestItem(Quest const* quest, std::ostringstr
         for (uint32 i = 0; i < quest->GetRewItemsCount(); i++)
         {
             ItemPosCountVec itemVec;
-            ItemPrototype const* itemP = sObjectMgr.GetItemPrototype(quest->RewItemId[i]);
+            ItemPrototype const* itemP = GetItemProtoByIdCompat(quest->RewItemId[i]);
             InventoryResult result = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, itemVec, itemP->ItemId, quest->RewItemCount[i]);
             if (result == EQUIP_ERR_OK)
             {
@@ -392,7 +392,7 @@ void AutoLearnSpellAction::GetClassQuestItem(Quest const* quest, std::ostringstr
                     quest->RewItemId[i] != 8095)   // Stops Rogues from getting a quest reward item that is a quest item itself.
                 {
                     ItemPosCountVec itemVec;
-                    ItemPrototype const* itemP = sObjectMgr.GetItemPrototype(quest->RewItemId[i]);
+                    ItemPrototype const* itemP = GetItemProtoByIdCompat(quest->RewItemId[i]);
                     InventoryResult result = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, itemVec, itemP->ItemId, quest->RewItemCount[i]);
                     if (result == EQUIP_ERR_OK)
                     {

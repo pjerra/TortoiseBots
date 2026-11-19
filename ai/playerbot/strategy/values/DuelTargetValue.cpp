@@ -6,6 +6,7 @@ using namespace ai;
 
 Unit* DuelTargetValue::Calculate()
 {
-    if (!bot->m_duel || bot->m_duel->opponent.IsEmpty()) return nullptr;
-    return ObjectAccessor::GetUnit(*bot, bot->m_duel->opponent);
+    ObjectGuid const opponent = DuelOpponentGuidCompat(bot);
+    if (opponent.IsEmpty()) return nullptr;
+    return ObjectAccessor::GetUnit(*bot, opponent);
 }

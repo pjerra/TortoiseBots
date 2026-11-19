@@ -23,8 +23,8 @@ bool OpenItemAction::Execute(Event& /*event*/)
     for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END && !item; ++slot)
     {
         Item* candidate = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        if (candidate && candidate->GetProto() &&
-            ((candidate->GetProto()->Flags & ITEM_FLAG_LOOTABLE) || candidate->GetProto()->LockID))
+        if (candidate && GetItemProtoCompat(candidate) &&
+            ((GetItemProtoCompat(candidate)->Flags & ITEM_FLAG_LOOTABLE) || GetItemProtoCompat(candidate)->LockID))
             item = candidate;
     }
     if (item)
@@ -51,6 +51,6 @@ void OpenItemAction::OpenItem(Item* item, uint8 bag, uint8 slot)
     botAI->GetAiObjectContext()->GetValue<LootObject>("loot target")->Set(lootObject);
 
     std::ostringstream out;
-    out << "Opened item: " << item->GetProto()->Name1;
+    out << "Opened item: " << GetItemProtoCompat(item)->Name1;
     botAI->TellPlayerNoFacing(botAI->GetMaster(), out.str());
 }

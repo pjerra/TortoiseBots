@@ -70,10 +70,10 @@ class PlaceUnstickWiring(unittest.TestCase):
         unstick = body(MOVEMENT, "bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)")
         self.assertIn("if (ai::PlaceUnstickDecide(in) != ai::PlaceUnstickVerdict::Teleport)", unstick)
         self.assertIn("in.inInstance = map->IsDungeon();", unstick)
-        self.assertIn("in.inBattleground = bot->InBattleGround() || map->IsBattleGround();", unstick)
+        self.assertIn("in.inBattleground = bot->InBattleGround() || MapIsBattlegroundCompat(map);", unstick)
         self.assertIn("in.botCharmed = !bot->GetCharmerGuid().IsEmpty();", unstick)
         # Possess only: the bot's own pet or an enslaved demon leaves it its own mover.
-        self.assertIn("in.botCharming = ai::PlaceUnstickBotPossessing(bot->GetMover() == bot);", unstick)
+        self.assertIn("in.botCharming = ai::PlaceUnstickBotPossessing(PlayerMoverCompat(bot) == bot);", unstick)
         self.assertNotIn("GetCharmGuid()", unstick)
         self.assertIn("in.masterOnTransport = hasMaster && master->GetTransport() != nullptr;", unstick)
         self.assertIn("in.botCasting = bot->IsNonMeleeSpellCasted(true);", unstick)
@@ -92,8 +92,8 @@ class PlaceUnstickWiring(unittest.TestCase):
         # A connected start restarts the streak: the query runs at most once per 10 s streak.
         self.assertIn("ai::PlaceUnstickRestartStreak(state, nowMs);", unstick[probe:teleport])
         query = body(MOVEMENT, "static bool ProbePlaceUnstickIsolated(uint32 mapId, float fx, float fy, float fz, Player* master)")
-        self.assertIn("PathInfo::FindWalkPoly(query, start, filter, startNearest)", query)
-        self.assertIn("PathInfo::FindWalkPoly(query, end, filter, endNearest)", query)
+        self.assertIn("NavMeshFindWalkPolyCompat(query, start, filter, startNearest)", query)
+        self.assertIn("NavMeshFindWalkPolyCompat(query, end, filter, endNearest)", query)
         self.assertIn("query->findPath(startRef, endRef", query)
         self.assertIn("bool const reachedEnd = polys[polyCount - 1] == endRef;", query)
         self.assertIn("return ai::PlaceUnstickStartIsolated(true, true, true, reachedEnd, reachYd, regionEnclosed);", query)

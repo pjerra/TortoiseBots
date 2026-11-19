@@ -43,7 +43,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
         fn = body(MOVES, "std::string MovementAction::GetFailNote()", "\n}\n")
         self.assertIn("bool const tried = lastMove.moveTries != failNoteMark;", fn)
         self.assertIn("MoveFailNote(MoveFailNoteReason(failNoteMark, lastMove.moveTries, MoveFailReasonName(lastMove.moveFailReason)),", fn)
-        self.assertIn("bot->HasMovementFlag(MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);", fn)
+        self.assertIn("HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);", fn)
 
     def test_reason_belongs_to_this_try(self):
         # Opus review 2026-10-23: the mark is taken before Execute and each try resets the reason.
@@ -59,7 +59,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
 
     def test_path_type_is_recorded_around_the_route(self):
         step = body(WORLDPOS, "std::vector<WorldPosition> WorldPosition::getPathStepFrom(const WorldPosition& startPos, std::unique_ptr<PathFinder>& pathfinder", "\n}\n")
-        self.assertIn("type = permissiveKept ? pathfinder->getPathType() : strictType;\n    LastPathStepType() = static_cast<uint32>(type);", step)
+        self.assertIn("type = permissiveKept ? PathType(PathTypeCompat(*pathfinder)) : strictType;\n    LastPathStepType() = static_cast<uint32>(type);", step)
         move = body(MOVES, "bool MovementAction::MoveTo2(", "\n}\n")
         self.assertIn("    WorldPosition::LastPathStepType() = 0;\n    TravelPath movePath = ResolveMovePath(startPos, endPos, mover, lastMove);\n"
                       "    lastMove.movePathType = WorldPosition::LastPathStepType();", move)
@@ -79,7 +79,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
         # The path type is read in the shared check (CheckLeadMove) and captured by
         # `cmd move` only when it asked for a path (not "hold here").
         check = body(COMMANDS, "static LeadMoveCheck CheckLeadMove(", "\n}\n\nstatic bool CommanderMove(")
-        self.assertIn("check.rawPathType = static_cast<uint32>(active->getPathType());", check)
+        self.assertIn("check.rawPathType = static_cast<uint32>(PathTypeCompat(*active));", check)
         self.assertIn("check.facts.pathType = check.rawPathType;", check)
         fn = body(COMMANDS, "static bool CommanderMove(", "\n}\n")
         self.assertIn("if (s_runOrderCapture.active && !RemoteCommander::IsAtLead(facts.distanceFromLead))\n    {\n"
@@ -91,7 +91,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
 
     def test_run_facts_read_the_lead_bots_water_and_move(self):
         fn = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,", "\n}\n")
-        self.assertIn("f.leadInWater = lead->IsInWater() || lead->IsUnderwater();", fn)
+        self.assertIn("f.leadInWater = lead->IsInWater() || IsUnderwaterCompat(lead);", fn)
         self.assertIn("f.leadMoveFailed = ai::PositionMoveFailing(lastMove.positionMoveFailMs, WorldTimer::getMSTime()) || f.leadStayWalkResting;", fn)
         self.assertIn("f.leadMoveFailReason = ai::MoveFailReasonName(lastMove.moveFailReason);", fn)
 

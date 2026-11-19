@@ -321,9 +321,9 @@ bool VolleyChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo)
+        if (GetSpellEntryCompat(spell->m_spellInfo))
         {
-            uint32 id = spell->m_spellInfo->Id;
+            uint32 id = GetSpellEntryCompat(spell->m_spellInfo)->Id;
             if (id == 1510 || id == 14294 || id == 14295)
             {
                 // A unit under our crowd control inside the volley breaks the

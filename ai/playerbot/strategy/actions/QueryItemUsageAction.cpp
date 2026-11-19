@@ -4,6 +4,7 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/RandomBotFacade.h"
 #include "playerbot/RandomItemMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -224,7 +225,7 @@ std::string QueryItemUsageAction::QueryItemPrice(ItemQualifier& qualifier)
         for (std::list<Item*>::iterator i = items.begin(); i != items.end(); ++i)
         {
             Item* sell = *i;
-            sellPrice += sell->GetCount() * ItemUsageValue::GetBotSellPrice(sell->GetProto(), bot);
+            sellPrice += sell->GetCount() * ItemUsageValue::GetBotSellPrice(GetItemProtoCompat(sell), bot);
         }
 
         if(sellPrice)
@@ -292,7 +293,7 @@ std::string QueryItemUsageAction::QueryItemPower(ItemQualifier& qualifier)
 {
     uint32 power = sRandomItemMgr.ItemStatWeight(bot, qualifier);
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(qualifier.GetId());
+    ItemPrototype const* proto = GetItemProtoByIdCompat(qualifier.GetId());
 
     if (power)
     {

@@ -71,7 +71,7 @@ namespace ai
                     targetA != TARGET_LOCATION_CASTER_DEST;
                 if (effectRadius <= 0.0f)
                     if (SpellRangeEntry const* rangeEntry = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex))
-                        effectRadius = rangeEntry->maxRange;
+                        effectRadius = SpellRangeMax(rangeEntry);
                 if (effectRadius > radius)
                 {
                     radius = effectRadius;

@@ -54,14 +54,12 @@ std::list<ObjectGuid> NearestGameObjects::Calculate()
     {
         uint32 gameObjectID = stoi(qualifier);
         GameObjectsInObjectRangeCheck u_check(bot, range, gameObjectID);
-        GameObjectListSearcher<GameObjectsInObjectRangeCheck> searcher(targets, u_check);
-        Cell::VisitAllObjects((const WorldObject*)bot, searcher, range);
+        VisitGameObjectsCompat(bot, targets, u_check, range);
     }
     else
     {
         AnyGameObjectInObjectRangeCheck u_check(bot, range);
-        GameObjectListSearcher<AnyGameObjectInObjectRangeCheck> searcher(targets, u_check);
-        Cell::VisitAllObjects((const WorldObject*)bot, searcher, range);
+        VisitGameObjectsCompat(bot, targets, u_check, range);
     }
 
     std::list<ObjectGuid> result;
@@ -95,10 +93,9 @@ std::list<ObjectGuid> NearestDynamicObjects::Calculate()
 {
     std::list<WorldObject*> targets;
     DynamicObjectsInRangeCheck u_check(bot, range);
-    WorldObjectListSearcher<DynamicObjectsInRangeCheck> searcher(targets, u_check);
     // A dynamic object lives only in the grid container; the world containers
     // (players, creatures, corpses) never hold one, so visit the grid only.
-    Cell::VisitGridObjects((const WorldObject*)bot, searcher, range);
+    VisitGridObjectsCompat(bot, targets, u_check, range);
 
     std::list<ObjectGuid> result;
     for (std::list<WorldObject*>::iterator tIter = targets.begin(); tIter != targets.end(); ++tIter)
@@ -135,7 +132,7 @@ float ai::DamagingTrapHazardRadius(GameObject* go)
     if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_TRAP)
         return 0.0f;
     float const trapRadius = (float)goInfo->trap.radius + go->GetCombatReach();
-    SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(goInfo->trap.spellId);
+    SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(GameObjectTrapSpellIdCompat(goInfo));
     if (!spellProto)
         return trapRadius;
     for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -173,7 +170,7 @@ bool IsDamagingTrap(GameObject* go, Player* bot)
         if (owner && sServerFacade.IsFriendlyTo(owner, bot))
             return false;
     }
-    uint32 const spellId = goInfo->trap.spellId;
+    uint32 const spellId = GameObjectTrapSpellIdCompat(goInfo);
     if (!spellId)
         return false;
     SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(spellId);
@@ -231,7 +228,7 @@ void PushDynObjHazard(PlayerbotAI* ai, Player* bot, DynamicObject* dyn, std::vec
     SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(dyn->GetSpellId());
     if (!spellProto)
         return;
-    bool const positive = spellProto->IsPositiveEffect(dyn->GetEffIndex());
+    bool const positive = spellProto->IsPositiveEffect(DynamicObjectEffectIndexCompat(dyn));
     WorldObject* caster = dyn->GetCaster();
     Unit* casterUnit = caster ? caster->ToUnit() : nullptr;
     bool const casterPlayerControlled = casterUnit && casterUnit->GetCharmerOrOwnerPlayerOrPlayerItself() != nullptr;
@@ -323,8 +320,7 @@ void ai::CollectDamagingTrapHazardsAt(PlayerbotAI* ai, Player* bot, float x, flo
         return;
     std::list<GameObject*> targets;
     TrapsNearPointCheck u_check(bot->GetMapId(), x, y, z, kTrapScanRangeYd);
-    GameObjectListSearcher<TrapsNearPointCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(x, y, map, searcher, kTrapScanRangeYd, true);
+    VisitGameObjectsAtCompat(x, y, map, targets, u_check, kTrapScanRangeYd);
     for (GameObject* go : targets)
     {
         if (!go->IsInWorld() || !IsDamagingTrap(go, bot))
@@ -377,8 +373,7 @@ void ai::CollectDamagingDynObjHazardsAt(PlayerbotAI* ai, Player* bot, float x, f
         return;
     std::list<WorldObject*> targets;
     DynObjsNearPointCheck u_check(bot->GetMapId(), x, y, z, kTrapScanRangeYd);
-    WorldObjectListSearcher<DynObjsNearPointCheck> searcher(targets, u_check);
-    Cell::VisitGridObjects(x, y, map, searcher, kTrapScanRangeYd, true);
+    VisitGridObjectsAtCompat(x, y, map, targets, u_check, kTrapScanRangeYd);
     for (WorldObject* wo : targets)
         PushDynObjHazard(ai, bot, static_cast<DynamicObject*>(wo), out, creatureCastersOnly);
 }
@@ -387,8 +382,7 @@ std::list<ObjectGuid> NearestDamagingTrapsValue::Calculate()
 {
     std::list<GameObject*> targets;
     AnyGameObjectInObjectRangeCheck u_check(bot, kTrapScanRangeYd);
-    GameObjectListSearcher<AnyGameObjectInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects((const WorldObject*)bot, searcher, kTrapScanRangeYd);
+    VisitGameObjectsCompat(bot, targets, u_check, kTrapScanRangeYd);
 
     std::list<ObjectGuid> result;
     for (std::list<GameObject*>::iterator tIter = targets.begin(); tIter != targets.end(); ++tIter)

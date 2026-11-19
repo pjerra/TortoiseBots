@@ -208,14 +208,14 @@ bool PossibleAttackTargetsValue::IsImmuneToDamage(Unit* target, Player* player)
 
     for (const Aura* aura : ai->GetAuras(target))
     {
-        const SpellEntry* spellInfo = aura->GetSpellProto();
+        const SpellEntry* spellInfo = GetSpellEntryCompat(aura->GetSpellProto());
         if (!spellInfo)
             continue;
 
         if (spellInfo->Mechanic == MECHANIC_BANISH)
             return true;
 
-        if (!aura->IsPositive())
+        if (!AuraIsPositiveCompat(aura))
             continue;
 
         if (spellInfo->Mechanic == MECHANIC_INVULNERABILITY ||
@@ -242,7 +242,7 @@ std::string PossibleAttackTargetsValue::Format()
         if (wo)
             out << wo->GetName();
         else
-            out << target;
+            out << GuidTextCompat(target);
     }
 
     return out.str();
@@ -273,10 +273,10 @@ bool PossibleAttackTargetsValue::IsTapped(Unit* target, Player* player)
             if (victimPlayer && IsInGroup_Helper(player, victimPlayer)) //Target is attacking groupmember.
                 return true;
 
-            if (!creature->HasLootRecipient()) //Target is untapped.
+            if (!CreatureHasLootRecipientCompat(creature)) //Target is untapped.
                 return true;
 
-            if (creature->IsTappedBy(player)) //Target is tapped by player.
+            if (CreatureIsTappedByCompat(creature, player)) //Target is tapped by player.
                 return true;
 
             if (master && target->GetThreatManager().getThreat(master)) //Master as threat
@@ -343,10 +343,10 @@ bool PossibleAttackTargetsValue::IsValid(Unit* target, Player* player, float ran
     if (!IsPossibleTarget(target, player, range, ignoreCC))
         return false;
 
-    if (sServerFacade.GetThreatManager(target).getCurrentVictim())
+    if (CurrentThreatVictimCompat(target))
         return true;
 
-    if (target->GetGuidValue(UNIT_FIELD_TARGET))
+    if (!UnitTargetGuidCompat(target).IsEmpty())
         return true;
 
     if (target->getObjectGuid().IsPlayer())
@@ -433,7 +433,7 @@ bool PossibleAddsValue::Calculate()
         if (find(attackers.begin(), attackers.end(), guid) != attackers.end()) continue;
 
         Unit* add = ai->GetUnit(guid);
-        if (add && !add->GetGuidValue(UNIT_FIELD_TARGET) && !sServerFacade.GetThreatManager(add).getCurrentVictim() && sServerFacade.IsHostileTo(add, bot))
+        if (add && UnitTargetGuidCompat(add).IsEmpty() && !CurrentThreatVictimCompat(add) && sServerFacade.IsHostileTo(add, bot))
         {
             for (std::list<ObjectGuid>::iterator j = attackers.begin(); j != attackers.end(); ++j)
             {

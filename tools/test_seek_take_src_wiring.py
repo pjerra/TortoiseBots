@@ -66,7 +66,7 @@ class SeekTakeHeldWiring(unittest.TestCase):
         log = body(ACTIONS, "void LogSeekTakeHeld(PlayerbotAI* ai, Player* bot, Unit* son, const SeekCapGuardInfo& info,")
         self.assertIn('"seek take held son=%u taker=%s reason=cap_guard ref=%s share=%.0f src=%s victim=%s on_nontank_ms=%u "\n'
                       '             "victim_hp=%.0f"', log)
-        self.assertIn('victim ? victim->GetName() : "none", onNonTankMs, victim ? victim->GetHealthPercent() : 100.0f);', log)
+        self.assertIn('victim ? CStrCompat(victim->GetName()) : "none", onNonTankMs, victim ? victim->GetHealthPercent() : 100.0f);', log)
         self.assertIn('"BossTacticsSeekPull"', log)
         # Throttled per tank and Son, 2 s.
         self.assertIn("constexpr std::uint32_t kSeekTakeHeldLogGapMs = 2000;", ACTIONS)

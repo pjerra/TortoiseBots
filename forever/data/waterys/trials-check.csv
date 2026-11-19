@@ -1,0 +1,17 @@
+trial,missing,verdict
+druid-resto-heal-latency,none,usable_as_is
+paladin-blessing-ooc,none (Blessing of Light/Salvation/Sanctuary have no SpellName.db2 row in shipped DB2s but exist in SpellEffect+SpellMisc and FB upkeep casts them; display-name gap only),usable_as_is
+paladin-holy-heal-latency,none,usable_as_is
+priest-holy-dispel-magic,none,usable_as_is
+priest-holy-fort-ooc,none,usable_as_is
+priest-holy-heal-latency,none,usable_as_is
+priest-holy-pws-battle-control,none,usable_as_is
+priest-holy-pws-battle-ooc-control,none,usable_as_is
+priest-holy-pws-bear-bal-2tank,none,usable_as_is
+priest-holy-pws-bear-bal,none,usable_as_is
+priest-holy-pws-bot-warrior-control,none,usable_as_is
+priest-holy-pws-def-arms-2tank,none,usable_as_is
+priest-holy-pws-def-arms-ooc,none,usable_as_is
+priest-holy-pws-def-arms,none,usable_as_is
+priest-holy-pws-forced-role,none,usable_as_is
+priest-shadow-form-prepull,none,usable_as_is

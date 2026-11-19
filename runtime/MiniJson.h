@@ -33,6 +33,15 @@ struct Value
     std::vector<Value> arr;
     std::vector<std::pair<std::string, Value>> obj;
 
+    // Declared here and defaulted after the struct: `obj` holds pairs of this very type, and a C++20 compiler
+    // (ForeverCore builds with one) needs Value complete before it can make these.
+    Value();
+    Value(const Value& other);
+    Value(Value&& other) noexcept;
+    Value& operator=(const Value& other);
+    Value& operator=(Value&& other) noexcept;
+    ~Value();
+
     const Value* Find(std::string_view key) const
     {
         for (const auto& entry : obj)
@@ -41,6 +50,13 @@ struct Value
         return nullptr;
     }
 };
+
+inline Value::Value() = default;
+inline Value::Value(const Value& other) = default;
+inline Value::Value(Value&& other) noexcept = default;
+inline Value& Value::operator=(const Value& other) = default;
+inline Value& Value::operator=(Value&& other) noexcept = default;
+inline Value::~Value() = default;
 
 namespace detail
 {

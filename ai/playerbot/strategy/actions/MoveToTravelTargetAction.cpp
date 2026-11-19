@@ -120,16 +120,16 @@ static bool TakerUnwalkable(Player* bot, Creature* taker)
 {
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(taker->GetPositionX(), taker->GetPositionY(), taker->GetPositionZ(), false);
+    PathCalculateCompat(path, taker->GetPositionX(), taker->GetPositionY(), taker->GetPositionZ(), false);
 
-    PathType const type = path.getPathType();
+    PathType const type = PathType(PathTypeCompat(path));
     if (type & PATHFIND_NOT_USING_PATH)
         return false;
 
     if (type & PATHFIND_NOPATH)
         return true;
 
-    Vector3 const end = path.getActualEndPosition();
+    Vector3 const end = PathActualEndCompat(path);
     return taker->GetDistance(end.x, end.y, end.z) > INTERACTION_DISTANCE;
 }
 
@@ -526,7 +526,7 @@ bool MoveToTravelTargetAction::TravelLegChainDue(PlayerbotAI* ai, Player* bot)
     // dungeon or grouped wait stands still by design.
     if (!bot || bot->IsInCombat() || bot->IsTaxiFlying() || bot->IsFlying() ||
         bot->IsMounted() || bot->IsBeingTeleported() || bot->GetTransport() ||
-        bot->InBattleGround() || bot->IsInWater() || bot->IsUnderwater() ||
+        bot->InBattleGround() || bot->IsInWater() || IsUnderwaterCompat(bot) ||
         bot->HasMovementFlag(MOVEFLAG_SWIMMING))
         return false;
     if (bot->GetMap() && bot->GetMap()->IsDungeon())
@@ -866,7 +866,7 @@ bool MoveToTravelTargetAction::TryMesaLift(WorldPosition const& location, float&
     uint32 goalZone = 0;
     if (botZone == ai::kBarrensZone || botZone == ai::kThousandNeedlesZone)
         if (AreaTableEntry const* area = location.GetArea())
-            goalZone = area->ZoneId ? area->ZoneId : area->Id;
+            goalZone = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
     ai::MesaLiftPick const pick = ai::MesaLiftFor(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), botZone,
         location.GetMapId(), location.getX(), location.getY(), location.getZ(), goalZone);
     if (pick.dir == ai::MesaLiftDir::None || !MayRideLift(ai, bot))
@@ -1109,7 +1109,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             if (!member->IsAlive())
                 continue;
 
-            if (!member->IsMoving())
+            if (!IsMovingCompat(member))
                 continue;
 
             if (PlayerbotAIStorage::Instance().GetAI(member) &&
@@ -1261,7 +1261,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
 
     // A step toward the target (TryStepTowardTarget) is still walking: let it finish
     // instead of clearing it with a move that already found no route.
-    if (bot->IsMoving() && AI_VALUE2(time_t, "manual time", "travel step until") > time(0))
+    if (IsMovingCompat(bot) && AI_VALUE2(time_t, "manual time", "travel step until") > time(0))
         return true;
 
     TravelNodeMap::LastRouteFail().clear();
@@ -1319,8 +1319,8 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             {
                 PathFinder probe(bot);
                 WorldPosition::ExcludeSteepSlopes(probe);
-                probe.calculate(location.getX(), location.getY(), location.getZ(), false);
-                pathTag = TravelMoveFailPathTag((uint32_t)probe.getPathType());
+                PathCalculateCompat(probe, location.getX(), location.getY(), location.getZ(), false);
+                pathTag = TravelMoveFailPathTag((uint32_t)PathTypeCompat(probe));
             }
             // A guild-order farm trip the mesh cannot reach says so about that
             // target point: the planner leaves the zone out once another point
@@ -1329,7 +1329,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             if (purpose == "guild order" && TortoiseBots::GuildOrders::TravelPathUnreachable(pathTag))
             {
                 AreaTableEntry const* area = location.GetArea();
-                uint32_t const zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+                uint32_t const zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
                 if (zoneId)
                     TortoiseBots::GuildOrders::NoteFarmZoneTargetFailed(bot->GetGUIDLow(), zoneId,
                         location.GetMapId(), location.getX(), location.getY(), location.getZ());
@@ -1507,9 +1507,9 @@ bool MoveToTravelTargetAction::isUseful()
     // same turn instead of waiting for the leg to end (~3 s still on a busy
     // realm). Pure walk legs only: the helper refuses combat, flight paths,
     // mounts, swimming, transports, dungeon and group-wait moves.
-    bool const legChainDue = bot->IsMoving() && TravelLegChainDue(ai, bot);
+    bool const legChainDue = IsMovingCompat(bot) && TravelLegChainDue(ai, bot);
     if (MEM_AI_VALUE(WorldPosition, "current position")->LastChangeDelay() < 10)
-        if (bot->IsMoving() && !legChainDue)
+        if (IsMovingCompat(bot) && !legChainDue)
             return false;
 
     if (!AI_VALUE(bool, "can move around"))

@@ -1,0 +1,101 @@
+[tortoisebots]
+
+#
+#    TortoiseBots.Enable
+#        Description: Master switch. 0 = the module loads but does nothing and its commands refuse.
+#        Default:     0
+#
+
+TortoiseBots.Enable = 0
+
+#
+#    TortoiseBots.Spike.FollowDistance
+#        Description: How far behind its master a bot stands, in yards.
+#        Default:     3
+#
+
+TortoiseBots.Spike.FollowDistance = 3
+
+#
+#    TortoiseBots.Slice.EngineByDefault
+#        Description: A bot that logs in runs on the real bot engine (PlayerbotAI) instead of the spike's follow/assist.
+#                     Only has an effect in a build made with TORTOISEBOTS_SLICE1. `.tb engine <character> on|off`
+#                     changes it for one bot that is already logged in.
+#        Default:     0
+#
+
+TortoiseBots.Slice.EngineByDefault = 0
+
+#
+#    TortoiseBots.Slice.MasterGraceSeconds
+#        Description: How long a bot waits when its master logs out. The bot stays in the world and in its party, stops acting, and follows
+#                     again when the master is back in the world within this time; after it the bot logs out. 0 = the bots log out with
+#                     their master at once. Capped at 3600.
+#        Default:     300 (the hire lifecycle's own default: AiPlayerbot.HireDisconnectGracePeriod)
+#
+
+TortoiseBots.Slice.MasterGraceSeconds = 300
+
+#
+#    TortoiseBots.Slice.DeadBackstopSeconds
+#        Description: How long a commanded bot's body may lie in a dungeon (nothing raising it, its commander away, a hold that never ends)
+#                     before the bot releases itself and comes back at the dungeon's entrance. 10 to 3600.
+#        Default:     180
+#
+
+TortoiseBots.Slice.DeadBackstopSeconds = 180
+
+#
+#    Logger.tortoisebots
+#        Description: The module's own log category (bot login and logout, the engine, the `slice: missing ...` lines).
+#                     Without a logger of its own the category falls to the root logger, which only logs errors, so the
+#                     module's information and warning lines would not appear at all. Level 3 = info (1 trace, 2 debug,
+#                     3 info, 4 warn, 5 error). The appenders are the ones of the stock worldserver.conf.
+#        Default:     3
+#
+
+Logger.tortoisebots = 3,Console Server
+
+#
+#    TortoiseBots.Slice.RestHealthPct
+#        Description: The rest gate of `.tb state` (resting=no): a bot is rested when its health is at or above this percent of its maximum
+#                     (and, for a bot that uses mana, its mana is at or above TortoiseBots.Slice.RestManaPct, and it is not in combat,
+#                     eating or drinking). Read on every `.tb state`, so a change by a config reload counts at once. 0 to 100.
+#        Default:     90
+#
+
+TortoiseBots.Slice.RestHealthPct = 90
+
+#
+#    TortoiseBots.Slice.RestManaPct
+#        Description: The mana part of the rest gate (see TortoiseBots.Slice.RestHealthPct). Bots that do not use mana ignore it. 0 to 100.
+#        Default:     80
+#
+
+TortoiseBots.Slice.RestManaPct = 80
+
+#
+#    TortoiseBots.Dashboard.Enable
+#        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
+#        Default:     1
+#
+
+TortoiseBots.Dashboard.Enable = 1
+
+#
+#    TortoiseBots.Dashboard.Host
+#    TortoiseBots.Dashboard.Port
+#        Description: Where the dashboard listens for telemetry (its -udp-host / -udp-port). The host must be an IP address.
+#        Default:     127.0.0.1, 9195
+#
+
+TortoiseBots.Dashboard.Host = "127.0.0.1"
+TortoiseBots.Dashboard.Port = 9195
+
+#
+#    TortoiseBots.Dashboard.IntervalMs
+#        Description: How often the roster is sent, in milliseconds (at least 500).
+#        Default:     2000
+#
+
+TortoiseBots.Dashboard.IntervalMs = 2000

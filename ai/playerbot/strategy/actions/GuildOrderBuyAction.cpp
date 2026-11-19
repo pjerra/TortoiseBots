@@ -26,7 +26,7 @@ namespace
 
 bool IsUnlimitedVendorItem(uint32_t itemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     return proto && ItemUsageValue::IsItemSoldByAnyVendor(proto) &&
         !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(proto);
 }
@@ -187,7 +187,7 @@ uint32_t LowestListingUnitPrice(AuctionHouseObject* auctionHouse, uint32_t itemI
         if (!auction || !auction->buyout)
             continue;
         Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
-        if (!item || item->GetProto()->ItemId != itemId || !item->GetCount())
+        if (!item || GetItemProtoCompat(item)->ItemId != itemId || !item->GetCount())
             continue;
         uint32_t const unit = AuctionUnitPrice(auction->buyout, item->GetCount());
         if (unit && (!lowest || unit < lowest))
@@ -283,7 +283,7 @@ uint32_t RelistSurplus(PlayerbotAI* ai, Player* bot, Unit* auctioneer, uint32_t 
     if (bot->GetItemByGuid(itemGuid))
         return 0;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     sPlayerbotAIConfig.logEvent(ai, "GuildAhRelist", proto ? proto->Name1 : "item",
         std::to_string(itemId) + ":" + std::to_string(postCount) + ":" + std::to_string(buyout));
     // The posting carries guild-funded value: the sale gold or the returned
@@ -350,7 +350,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
             // guild-bank deposit).
             if (SurplusDestinationAfterRelist(false, relistCount) == SurplusDestination::DeliveryLeftover)
             {
-                ItemPrototype const* failedProto = sObjectMgr.GetItemPrototype(itemId);
+                ItemPrototype const* failedProto = GetItemProtoByIdCompat(itemId);
                 sPlayerbotAIConfig.logEvent(ai, "GuildAhRelistFailed",
                     failedProto ? failedProto->Name1 : "item", std::to_string(itemId));
             }
@@ -387,7 +387,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
                 auction->buyout > maxAffordable)
                 continue;
             Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
-            if (!item || item->GetProto()->ItemId != itemId)
+            if (!item || GetItemProtoCompat(item)->ItemId != itemId)
                 continue;
             uint32_t count = item->GetCount();
             if (!count)
@@ -452,7 +452,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
         sAuctionMgr.GetAItem(best.itemGuid) == nullptr;
     ahLock.unlock();
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (bought)
     {
         sPlayerbotAIConfig.logEvent(ai, "GuildAhBuy", proto ? proto->Name1 : "item", std::to_string(itemId));

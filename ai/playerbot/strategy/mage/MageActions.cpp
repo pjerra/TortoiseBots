@@ -25,7 +25,7 @@ bool CastBlinkBackAction::Execute(Event& event)
     // (and sends a heartbeat) instead of a timed spline turn.
     ai->StopMoving();
 
-    float away = bot->GetAngle(threat) + M_PI_F;
+    float away = GetAngleCompat(bot, threat) + M_PI_F;
     if (away >= 2.0f * M_PI_F)
         away -= 2.0f * M_PI_F;
     sServerFacade.SetFacingTo(bot, away, true);

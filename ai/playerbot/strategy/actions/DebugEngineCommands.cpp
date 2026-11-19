@@ -201,7 +201,7 @@ bool DebugAction::HandleStuck(Event& event, Player* requester, const std::string
     posOut << "Pos: " << botPos.getX() << "," << botPos.getY() << "," << botPos.getZ() << " (" << botPos.GetAreaName() << ")";
     ai->TellPlayer(requester, posOut.str());
 
-    bool isMoving = bot->IsMoving();
+    bool isMoving = IsMovingCompat(bot);
     ai->TellPlayer(requester, std::string("IsMoving: ") + (isMoving ? "yes" : "no"));
 
     bool isMounted = bot->IsMounted();
@@ -389,7 +389,7 @@ bool DebugAction::HandleCombat(Event& event, Player* requester, const std::strin
 {
     ai->TellPlayer(requester, "=== Combat State Diagnostic ===");
 
-    bool unitFlagInCombat = bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IN_COMBAT);
+    bool unitFlagInCombat = HasUnitFlagCompat(bot, UNIT_FLAG_IN_COMBAT);
     ai->TellPlayer(requester, std::string("UNIT_FLAG_IN_COMBAT: ") + (unitFlagInCombat ? "SET" : "clear"));
 
     bool isInCombat = bot->IsInCombat();

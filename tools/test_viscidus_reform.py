@@ -29,6 +29,8 @@ struct AI {Player* player;bool tank=true;unsigned ready=0,casts=0;bool CanCastSp
  bool IsTank(Player*){return tank;}bool CastSpell(unsigned id,Unit*){++casts;return id!=0;}
  bool CastSpell(unsigned,Player*){++casts;return true;}unsigned spell(){return 71;}};
 using PlayerbotAI=AI;
+inline uint64 GuidKeyCompat(Guid g){return g.GetRawValue();}
+inline bool HasUnitFlagCompat(Unit* u,unsigned f){return u->HasFlag(UNIT_FIELD_FLAGS,f);}
 #define GET_PLAYERBOT_AI(p) ((p)->ai)
 #define AI_VALUE2(type,name,key) ai->spell()
 std::vector<Player*> members;
@@ -63,6 +65,7 @@ struct Unit{float distance=4,reach=12;unsigned visibility=1;bool spawning=false;
  float GetCombatReach(Unit*,bool,float){return reach;}};
 using Player=Unit;struct WorldPosition{Unit* u;explicit WorldPosition(Unit* p):u(p){}float distance(WorldPosition b){return u->distance;}};
 struct AI{bool tank=false,heal=false,ranged=true;bool IsTank(Player*){return tank;}bool IsHeal(Player*){return heal;}bool IsRanged(Player*){return ranged;}};
+inline bool HasUnitFlagCompat(Unit* u,unsigned f){return u->HasFlag(UNIT_FIELD_FLAGS,f);}
 struct ViscidusCombatAction{Player* bot;AI* ai;Unit* boss;Unit* Boss(){return boss;}bool KeepDistance();};
 '''+block(s,'bool ViscidusCombatAction::KeepDistance(')+r'''
 int main(){Player bot;Unit boss;AI ai;ViscidusCombatAction a{&bot,&ai,&boss};assert(a.KeepDistance());

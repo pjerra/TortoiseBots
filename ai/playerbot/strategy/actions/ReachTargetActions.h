@@ -124,7 +124,7 @@ namespace ai
                 if (range > ATTACK_DISTANCE && !RequiresAttackableTarget())
                 {
                     float const stopDist = bot->GetDistance(target);
-                    if (RangedApproachInPosition(stopDist, range, bot->IsWithinLOSInMap(target, true)))
+                    if (RangedApproachInPosition(stopDist, range, IsWithinLOSInMapCompat(bot, target, true)))
                     {
                         if (!bot->IsStopped())
                             ai->StopMoving();
@@ -135,7 +135,7 @@ namespace ai
                 // Ignore movement if too far
                 const float distanceToTarget = bot->GetDistance(target);
                 float chaseDist = range;
-                const bool inLos = bot->IsWithinLOSInMap(target, true);
+                const bool inLos = IsWithinLOSInMapCompat(bot, target, true);
                 const bool isFriend = sServerFacade.IsFriendlyTo(bot, target);
 
                 // Stand-still clock: counts time in which neither the bot nor its target made
@@ -190,9 +190,9 @@ namespace ai
                     if (ai::ShouldNotChaseEvader(creature->IsInEvadeMode()))
                     {
                         float homeX, homeY, homeZ, homeO;
-                        creature->GetRespawnCoord(homeX, homeY, homeZ, &homeO);
+                        GetRespawnCoordCompat(creature, homeX, homeY, homeZ, &homeO);
                         float combatStartX, combatStartY, combatStartZ;
-                        creature->GetCombatStartPosition(combatStartX, combatStartY, combatStartZ);
+                        CombatStartPositionCompat(creature, combatStartX, combatStartY, combatStartZ);
                         ai::EvadeChaseState state;
                         state.evading = true;
                         state.unreachable = creature->IsEvadeBecauseTargetNotReachable();
@@ -445,7 +445,7 @@ namespace ai
             if (MoveIntoRangeAlongPath(target, distance))
                 return true;
 
-            return ChaseTo(target, distance, bot->GetAngle(target));
+            return ChaseTo(target, distance, GetAngleCompat(bot, target));
         }
 
         // Inside a dungeon the core's chase generator refuses a destination
@@ -485,7 +485,7 @@ namespace ai
             // Out of sight the chase would walk to the target's own spot and
             // no tick stops it on the way (casts are refused while moving),
             // so the path point below is picked without sight as well.
-            bool const startInSight = bot->IsWithinLOSInMap(target, true);
+            bool const startInSight = IsWithinLOSInMapCompat(bot, target, true);
 
             if (!ai->CanMove() || !ai->IsSafe(target))
                 return false;
@@ -528,7 +528,7 @@ namespace ai
             float const targetHeight = target->GetCollisionHeight();
             auto const seesTarget = [map, &goal, botHeight, targetHeight](ApproachPoint const& point)
             {
-                return map->isInLineOfSight(point.x, point.y, point.z + botHeight,
+                return IsInLineOfSightCompat(map, point.x, point.y, point.z + botHeight,
                     goal.x, goal.y, goal.z + targetHeight, true);
             };
 
@@ -647,7 +647,7 @@ namespace ai
             float const targetX = target->GetPositionX();
             float const targetY = target->GetPositionY();
             float const targetZ = target->GetPositionZ();
-            float const groundZ = map->GetHeight(targetX, targetY, targetZ, true);
+            float const groundZ = GetHeightCompat(map, targetX, targetY, targetZ, true);
             bool const groundValid = groundZ > INVALID_HEIGHT + 1.0f;
 
             if (!HoverReachApplies(true, map->IsDungeon(), hostile, distance, ATTACK_DISTANCE, groundValid, targetZ, groundZ))
@@ -707,7 +707,7 @@ namespace ai
             float const targetHeight = target->GetCollisionHeight();
             auto const seesTarget = [map, &goal, botHeight, targetHeight](ApproachPoint const& point)
             {
-                return map->isInLineOfSight(point.x, point.y, point.z + botHeight,
+                return IsInLineOfSightCompat(map, point.x, point.y, point.z + botHeight,
                     goal.x, goal.y, goal.z + targetHeight, true);
             };
 
@@ -780,17 +780,7 @@ namespace ai
                 SpellEntry const* spell = sServerFacade.LookupSpellInfo(
                     AI_VALUE2(uint32, "spell id", spellName));
                 if (spell && spell->rangeIndex == SPELL_RANGE_IDX_COMBAT)
-                {
-                    float modifier = 1.0f;
-                    if (Player* owner = bot->GetSpellModOwner())
-                    {
-                        float base = ATTACK_DISTANCE;
-                        modifier += owner->ApplySpellMod(spell->Id, SPELLMOD_RANGE, base);
-                    }
-                    modifier += bot->GetTotalAuraRangeModifier(SPELL_AURA_MOD_ATTACK_AND_SPELL_RANGE) /
-                        1000.0f / ATTACK_DISTANCE;
-                    return bot->CanReachWithMeleeSpellAttack(target, modifier);
-                }
+                    return MeleeSpellReachCompat(bot, spell, target);
             }
             if (range <= 0.0f && RequiresAttackableTarget())
                 return bot->CanReachWithMeleeAutoAttack(target);
@@ -831,7 +821,7 @@ namespace ai
                         }
 
                         // Force move if not in los
-                        if (bot->IsWithinLOSInMap(target, true))
+                        if (IsWithinLOSInMapCompat(bot, target, true))
                         {
                             // A ranged reach stands at the stop band inside
                             // the range envelope, not at the rim or the
@@ -938,7 +928,7 @@ namespace ai
         bool isUseful() override
         {
             Unit* target = GetTarget();
-            if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
+            if (target && bot->CanReachWithMeleeAutoAttack(target) && IsWithinLOSInMapCompat(bot, target, true))
                 return false;
 
             return ReachTargetAction::isUseful();
@@ -989,7 +979,7 @@ namespace ai
         float const x = target->GetPositionX();
         float const y = target->GetPositionY();
         float const z = target->GetPositionZ();
-        float const floor = target->GetMap()->GetHeight(x, y, z, true);
+        float const floor = GetHeightCompat(target->GetMap(), x, y, z, true);
         if (floor <= INVALID_HEIGHT || !PullTargetAirborne(true, z, floor))
             return false;
         groundZ = floor;
@@ -1066,10 +1056,10 @@ namespace ai
                     MoveTo(target->GetMapId(), target->getPositionX(), target->getPositionY(), groundZ,
                         false, false, false, false, "move_reach"))
                     return true;
-                return ChaseTo(target, distance, bot->GetAngle(target));
+                return ChaseTo(target, distance, GetAngleCompat(bot, target));
             }
 
-            bool const inLos = bot->IsWithinLOSInMap(target, true);
+            bool const inLos = IsWithinLOSInMapCompat(bot, target, true);
 
             // Already inside the pull's own shooting range with line of sight:
             // the shot is ready, do not reposition. The reach action's range is

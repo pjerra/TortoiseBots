@@ -123,7 +123,7 @@ class BossAnchorWiring(unittest.TestCase):
         self.assertIn("monitor.NoteBossState(groupId, ", fn)
         # Before the timeline gate: the evade outcome needs no AiPlayerbot.CombatTimeline.
         self.assertLess(fn.index("monitor.NoteBossState("), fn.index("monitor.TimelineEnabled()"))
-        for guard in ("IsInEvadeMode()", "GetRespawnCoord(", "GetMaxHealth()"):
+        for guard in ("IsInEvadeMode()", "GetRespawnCoordCompat(", "GetMaxHealth()"):
             self.assertIn(guard, fn)
 
 
@@ -197,7 +197,7 @@ class BossAnchorChase(unittest.TestCase):
         self.assertLess(assign, fn.index("// Check if the end position is inside a hazard"))
         self.assertIn("if (anchored && !InsideAnchor(anchor, obj->GetPositionX(), obj->GetPositionY()))", fn)
         self.assertLess(fn.index("!InsideAnchor(anchor, obj->GetPositionX(), obj->GetPositionY())"),
-                        fn.index("mm.MoveChase((Unit*)obj, distance, angle);"))
+                        fn.index("MoveChaseCompat(mm, (Unit*)obj, distance, angle);"))
         # The hazard dodge that replaces the end point is clamped and re-checked, and the hazard-avoiding path's points
         # must all stay inside; otherwise the move is refused this tick.
         hazard = fn[fn.index("if (IsHazardNearPosition(endPosition, &hazardPosition))"):fn.index("MotionMaster& mm")]
@@ -215,7 +215,7 @@ class BossAnchorChase(unittest.TestCase):
         spline = fn[fn.index("bool const hazardPath = GeneratePathAvoidingHazards(path);"):fn.index("init.Launch();")]
         self.assertIn("if (anchored && hazardPath && !AnchorPathInside(anchor, pathXY))", spline)
         self.assertLess(spline.index("AnchorPathInside("), spline.index("if (hazardPath)\n"))
-        self.assertLess(spline.index("AnchorPathInside("), spline.index("mm.Clear(false, true);"))
+        self.assertLess(spline.index("AnchorPathInside("), spline.index("MotionClearCompat(mm, false, true);"))
         # Gated: every anchor branch asks `anchored` first, so without a live anchor row nothing changes.
         self.assertIn("if (anchored && chased && bot->IsHostileTo(chased) &&\n        !AnchorAllowsChase(", fn)
         for line in fn.splitlines():

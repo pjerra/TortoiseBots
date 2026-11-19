@@ -1,0 +1,5 @@
+class,pet,summon_spell_id,signature_ability,source,status,client_build
+Warlock,Imp,688,Blood Pact,OwnerPicks.h (Demon 688) + APL,present,"70888 (repack server/data/dbc, 2026-11-11)"
+Warlock,Voidwalker,697,Torment/Suffering,OwnerPicks.h (Demon 697) + APL,present,"70888 (repack server/data/dbc, 2026-11-11)"
+Warlock,Succubus,712,Seduction,OwnerPicks.h (Demon 712) + APL,present,"70888 (repack server/data/dbc, 2026-11-11)"
+Warlock,Felhunter,691,Spell Lock/Devour Magic,OwnerPicks.h (Demon 691) + APL,present,"70888 (repack server/data/dbc, 2026-11-11)"

@@ -57,7 +57,7 @@ uint32 GroupBoolCountValue::Calculate()
 
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player)
             continue;
@@ -79,7 +79,7 @@ bool GroupBoolANDValue::Calculate()
 {
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player)
             continue;
@@ -101,7 +101,7 @@ bool GroupBoolORValue::Calculate()
 {
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player)
             continue;
@@ -125,7 +125,7 @@ bool GroupReadyValue::Calculate()
 
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* member = sObjectMgr.GetPlayer(guid);
+        Player* member = GetPlayerCompat(guid);
 
         if (!member)
             continue;

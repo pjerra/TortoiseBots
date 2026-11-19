@@ -316,7 +316,7 @@ bool ItemReadyTrigger::IsActive()
     // Check if the bot has the item or if it has cheats enabled
     if (bot->HasItemCount(itemID, 1) || ai->HasCheat(BotCheatMask::item))
     {
-        const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemID);
+        const ItemPrototype* proto = GetItemProtoByIdCompat(itemID);
         if (proto)
         {
             // Check if the item is in cooldown
@@ -494,7 +494,7 @@ bool DragonBreathRiskTrigger::IsActive()
         return false;
     // Angle between the dragon's facing and the bot, in radians.
     float facing = target->GetOrientation();
-    float toBot = target->GetAngle(bot);
+    float toBot = GetAngleCompat(target, bot);
     float diff = fabs(toBot - facing);
     while (diff > M_PI_F)
         diff = fabs(diff - 2.0f * M_PI_F);

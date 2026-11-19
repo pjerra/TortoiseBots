@@ -53,6 +53,7 @@
 #include <set>
 #include <sstream>
 #include <iomanip>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots {
 
@@ -274,20 +275,20 @@ uint8 BaseMacroState(Player* bot, PlayerbotAI* ai)
     if (sServerFacade.IsInCombat(bot) || (ai && ai->GetState() == BotState::BOT_STATE_COMBAT))
         return STATE_COMBAT;
 
-    if (bot->IsMoving() ||
+    if (IsMovingCompat(bot) ||
         (bot->GetMotionMaster() &&
          (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE ||
           bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE ||
           bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE)))
         return STATE_MOVING;
 
-    if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING))
+    if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING))
         return STATE_RESTING;
 
     // Standing still but doing something: looting, casting, sitting to
     // eat/drink, or an active travel destination being worked. Member reads
     // only; the work-target flag is refreshed at snapshot cadence.
-    if (bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_LOOTING))
+    if (HasUnitFlagCompat(bot, UNIT_FLAG_LOOTING))
         return STATE_BUSY;
     if (bot->IsNonMeleeSpellCasted(false))
         return STATE_BUSY;
@@ -331,7 +332,7 @@ Activity NoteActivity(Player* bot, bool hasWorkTarget, ObservabilityEmitter::Bot
     float dy = bot->GetPositionY() - track.lastY;
     if (dx * dx + dy * dy >= 0.25f)
         act.progress = true;
-    if (bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_LOOTING))
+    if (HasUnitFlagCompat(bot, UNIT_FLAG_LOOTING))
         act.progress = true;
     if (bot->IsNonMeleeSpellCasted(false))
         act.progress = true;
@@ -409,7 +410,7 @@ void CollectOnlinePlayers(std::vector<Player*>& out)
     for (auto const& pair : sWorld.GetAllSessions())
     {
         WorldSession* sess = pair.second;
-        if (!sess || !sess->HasNetworkTransport())
+        if (!sess || !HasNetworkTransportCompat(sess))
             continue;
         Player* player = sess->GetPlayer();
         if (!player || !player->IsInWorld())
@@ -954,7 +955,7 @@ void ObservabilityEmitter::EmitBotActivity(std::string const& event,
     if (IsItemEvent(event))
     {
         uint32 itemId = ParseItemId(info2);
-        ItemPrototype const* proto = itemId ? sObjectMgr.GetItemPrototype(itemId) : nullptr;
+        ItemPrototype const* proto = itemId ? GetItemProtoByIdCompat(itemId) : nullptr;
         if (proto)
         {
             ss << ",\"item_id\":" << itemId
@@ -1214,7 +1215,7 @@ void ObservabilityEmitter::Update(uint32 diff)
         }
         // A new target starts its own clock: the reported duration belongs to
         // the unit named in the event, not to the fight as a whole.
-        uint64 const combatTargetGuid = combatTarget ? combatTarget->GetObjectGuid().GetRawValue() : 0;
+        uint64 const combatTargetGuid = combatTarget ? GuidKeyCompat(combatTarget->GetObjectGuid()) : 0;
         if (combatTargetGuid != track.unreachableTargetGuid)
         {
             track.unreachableTargetGuid = combatTargetGuid;
@@ -1228,7 +1229,7 @@ void ObservabilityEmitter::Update(uint32 diff)
             bool unreachable = (dist > 45.0f);
             if (!unreachable && (track.unreachableDurationMs > 0 || track.lastSampleMs == nowMs))
             {
-                inLos = bot->IsWithinLOSInMap(combatTarget, true);
+                inLos = IsWithinLOSInMapCompat(bot, combatTarget, true);
                 unreachable = !inLos;
             }
 
@@ -1724,13 +1725,13 @@ void ObservabilityEmitter::EmitDungeonMobs(std::vector<Player*> const& bots, std
             ++group.bots;
         DMT::MemberInfo info;
         info.guid = unit->GetGUIDLow();
-        info.id = unit->GetObjectGuid().GetRawValue();
+        info.id = GuidKeyCompat(unit->GetObjectGuid());
         // What it has selected, else what it fights: two field reads.
         ::ObjectGuid target = unit->GetTargetGuid();
         if (target.IsEmpty())
             if (Unit* victim = unit->GetVictim())
                 target = victim->GetObjectGuid();
-        info.target = target.GetRawValue();
+        info.target = GuidKeyCompat(target);
         info.x = unit->GetPositionX();
         info.y = unit->GetPositionY();
         info.bot = isBot;
@@ -1959,14 +1960,14 @@ void ObservabilityEmitter::EmitCommanders()
             b.x = bot->GetPositionX();
             b.y = bot->GetPositionY();
             b.z = bot->GetPositionZ();
-            b.id = bot->GetObjectGuid().GetRawValue();
-            b.away = ref.awayBots.count(bot->GetObjectGuid().GetRawValue()) != 0;
+            b.id = GuidKeyCompat(bot->GetObjectGuid());
+            b.away = ref.awayBots.count(GuidKeyCompat(bot->GetObjectGuid())) != 0;
             // What it has selected, else what it fights: two field reads.
             ::ObjectGuid target = bot->GetTargetGuid();
             if (target.IsEmpty())
                 if (Unit* victim = bot->GetVictim())
                     target = victim->GetObjectGuid();
-            b.target = target.GetRawValue();
+            b.target = GuidKeyCompat(target);
             for (CommanderTelemetry::BotExtra const& extra : ref.botExtras) // at most kMaxBotsPerBinding of them
                 if (extra.id == b.id)
                 {
@@ -2031,24 +2032,24 @@ void ObservabilityEmitter::EmitServerInfo()
        << ",\"core_revision\":\"" << EscapeJson(CoreRevision()) << "\""
        << ",\"core_date\":\"" << EscapeJson(CoreRevisionDate()) << "\""
        << ",\"uptime\":" << sWorld.GetUptime()
-       << ",\"max_level\":" << sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)
+       << ",\"max_level\":" << WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL)
        << ",\"rates\":{"
-       << "\"xp_kill\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL)
-       << ",\"xp_kill_elite\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL_ELITE)
-       << ",\"xp_quest\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST)
-       << ",\"xp_explore\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE)
-       << ",\"drop_money\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY)
-       << ",\"drop_poor\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_POOR)
-       << ",\"drop_normal\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_NORMAL)
-       << ",\"drop_uncommon\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON)
-       << ",\"drop_rare\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_RARE)
-       << ",\"drop_epic\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_EPIC)
-       << ",\"drop_legendary\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_LEGENDARY)
-       << ",\"honor\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_HONOR)
-       << ",\"rep_gain\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_GAIN)
-       << ",\"rep_low_kill\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL)
-       << ",\"rep_low_quest\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST)
-       << ",\"talent\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT)
+       << "\"xp_kill\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_KILL)
+       << ",\"xp_kill_elite\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_KILL_ELITE)
+       << ",\"xp_quest\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_QUEST)
+       << ",\"xp_explore\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_EXPLORE)
+       << ",\"drop_money\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_MONEY)
+       << ",\"drop_poor\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_POOR)
+       << ",\"drop_normal\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_NORMAL)
+       << ",\"drop_uncommon\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON)
+       << ",\"drop_rare\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_RARE)
+       << ",\"drop_epic\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_EPIC)
+       << ",\"drop_legendary\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_LEGENDARY)
+       << ",\"honor\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_HONOR)
+       << ",\"rep_gain\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_REPUTATION_GAIN)
+       << ",\"rep_low_kill\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL)
+       << ",\"rep_low_quest\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST)
+       << ",\"talent\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_TALENT)
        << ",\"bot_xp_mult\":" << sPlayerbotAIConfig.playerbotsXPrate
        << "}"
        << ",\"bots\":{"

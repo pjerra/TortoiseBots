@@ -86,7 +86,7 @@ class IslandEscapeWiringTest(unittest.TestCase):
     def test_the_line_check_reads_floor_liquid_and_hostiles(self):
         f = body(self.escape, "auto lineFits = ", "\n    };\n")
         samples = at(f, "EscapeSegmentSamples(lx, ly, lz, px, py, pz)")
-        height = at(f, "map->GetHeight(sample.x, sample.y, sample.z + kSegmentGroundYd, true,")
+        height = at(f, "GetHeightCompat(map, sample.x, sample.y, sample.z + kSegmentGroundYd, true,")
         liquid = at(f, "getLiquidStatus(sample.x, sample.y, floor + 0.5f, MAP_ALL_LIQUIDS,")
         at(f, "!= LIQUID_MAP_NO_WATER;")
         hostiles = at(f, "HostileCreaturesAround(lead, GroundDistance(lx, ly, px, py) + kEscapeHostileYd, hostiles);")
@@ -103,7 +103,7 @@ class IslandEscapeWiringTest(unittest.TestCase):
     def test_island_facts(self):
         f = body(COMMANDS, "bool ApproachOnPath(", "\n}\n")
         note = at(f, "NoteLeadWay(path, lead, x, y, z, *way);")
-        nopath = at(f, "if (path.getPathType() & PATHFIND_NOPATH)")
+        nopath = at(f, "if (PathTypeCompat(path) & PATHFIND_NOPATH)")
         self.assertLess(note, nopath)
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
         at(facts, "if (f.leadIsland && lead->IsAlive())\n        f.goodSpotCut = GoodSpotCutOff(lead, slot.run);")
@@ -143,11 +143,11 @@ class IslandEscapeWiringTest(unittest.TestCase):
         f = body(COMMANDS, "bool NearestReachablePoint(", "\n}\n")
         check = at(f, "if (!TortoiseBots::DungeonRun::DetourPointReachable((type & PATHFIND_NOPATH) != 0,\n"
                       "                (type & PATHFIND_INCOMPLETE) != 0, ai::PlanDistance(end.x, end.y, end.z, px, py, ground),\n"
-                      "                DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), path.Length()))\n            return false;")
+                      "                DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), PathLengthCompat(path)))\n            return false;")
         self.assertLess(check, at(f, "ox = px;"))
         self.assertNotIn("> 5.0f)", f)
         # r13-19z30 Uldaman: the candidate's own probe toward the plan's point leads on too (a closed pit).
-        probe = at(f, "probe.calculate(Vector3(px, py, ground), Vector3(x, y, z), false);")
+        probe = at(f, "PathCalculateCompat(probe, Vector3(px, py, ground), Vector3(x, y, z), false);")
         leads = at(f, "if (!TortoiseBots::DungeonRun::DetourCandidateLeadsOn((probeType & PATHFIND_NOPATH) != 0,")
         self.assertTrue(check < probe < leads < at(f, "ox = px;"))
         at(f, "DistanceTo(lead, probeEnd.x, probeEnd.y, probeEnd.z), ai::PlanDistance(px, py, ground, x, y, z),\n"

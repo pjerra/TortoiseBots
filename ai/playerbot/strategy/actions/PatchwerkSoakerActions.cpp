@@ -225,7 +225,7 @@ bool ai::PatchwerkSoakersReadyForPull(PlayerbotAI* puller)
             !sServerFacade.IsFriendlyTo(puller->GetBot(), member) || !peer->CanMove() ||
             MissingSoakStance(peer) || peer->GetAIInternalUpdateDelay() > 250 ||
             member->GetDistance(puller->GetBot()) > 1.0f ||
-            !member->IsWithinLOSInMap(puller->GetBot(), true))
+            !IsWithinLOSInMapCompat(member, puller->GetBot(), true))
             return false;
     }
     return true;
@@ -237,9 +237,9 @@ bool PatchwerkSoakStageAction::Execute(Event& event)
     if (!mainTank || !isPossible()) return false;
     if (char const* stance = MissingSoakStance(ai))
         return ai->DoSpecificAction(stance, event, true);
-    if (bot->GetDistance(mainTank) <= 1.0f && bot->IsWithinLOSInMap(mainTank, true))
+    if (bot->GetDistance(mainTank) <= 1.0f && IsWithinLOSInMapCompat(bot, mainTank, true))
     {
-        if (bot->IsMoving()) ai->StopMoving();
+        if (IsMovingCompat(bot)) ai->StopMoving();
         return true;
     }
     // A friendly rendezvous, never an Attack/Chase of an idle boss. Use the
@@ -274,9 +274,9 @@ bool PatchwerkMainEngageAction::Execute(Event& event)
         return false;
     context->GetValue<Unit*>("tank target")->Reset();
     context->GetValue<bool>("invalid target", "current target")->Reset();
-    if (!bot->CanReachWithMeleeAutoAttack(boss) || !bot->IsWithinLOSInMap(boss, true))
+    if (!bot->CanReachWithMeleeAutoAttack(boss) || !IsWithinLOSInMapCompat(bot, boss, true))
     {
-        ChaseTo(boss, 0.0f, bot->GetAngle(boss));
+        ChaseTo(boss, 0.0f, GetAngleCompat(bot, boss));
         bot->Attack(boss, true); // ChaseTo's fallback may use Attack(false).
     }
     // Do not charge another pull-end/movement action delay before the normal
@@ -341,7 +341,7 @@ bool PatchwerkSoakEngageAction::isUseful()
     Unit* boss = GetPatchwerkSoakBoss(ai);
     return boss && (MissingSoakStance(ai) || bot->GetVictim() != boss ||
         !bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING) ||
-        !bot->CanReachWithMeleeAutoAttack(boss) || !bot->IsWithinLOSInMap(boss, true));
+        !bot->CanReachWithMeleeAutoAttack(boss) || !IsWithinLOSInMapCompat(bot, boss, true));
 }
 
 bool PatchwerkSoakEngageAction::Execute(Event& event)
@@ -361,9 +361,9 @@ bool PatchwerkSoakEngageAction::Execute(Event& event)
         context->GetValue<Unit*>("tank target")->Reset();
         context->GetValue<bool>("invalid target", "current target")->Reset();
     }
-    if (!bot->CanReachWithMeleeAutoAttack(boss) || !bot->IsWithinLOSInMap(boss, true))
+    if (!bot->CanReachWithMeleeAutoAttack(boss) || !IsWithinLOSInMapCompat(bot, boss, true))
     {
-        bool const moved = ChaseTo(boss, 0.0f, bot->GetAngle(boss));
+        bool const moved = ChaseTo(boss, 0.0f, GetAngleCompat(bot, boss));
         // ChaseTo's core fallback arms a chase with Attack(false). Restore
         // melee swings so arrival never needs another attack command.
         bot->Attack(boss, true);
@@ -414,7 +414,7 @@ bool ai::PatchwerkNeedsMeleeHold(PlayerbotAI* ai, Unit* boss)
         return false;
     Player* mainTank = nullptr;
     std::vector<uint64> soakers;
-    SpellEntry const* strike = sSpellTemplate.LookupEntry<SpellEntry>(28308);
+    SpellEntry const* strike = GetSpellEntryCompat(28308);
     if (!strike)
         return true;
     for (Player* member : LiveGroupMembers(ai->GetBot()->GetGroup()))

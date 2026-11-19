@@ -76,8 +76,8 @@ void CurrentCastIds(Unit* unit, uint32& genericId, uint32& channeledId)
 {
     Spell* generic = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     Spell* channeled = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    genericId = generic && generic->m_spellInfo ? generic->m_spellInfo->Id : 0;
-    channeledId = channeled && channeled->m_spellInfo ? channeled->m_spellInfo->Id : 0;
+    genericId = generic && GetSpellEntryCompat(generic->m_spellInfo) ? GetSpellEntryCompat(generic->m_spellInfo)->Id : 0;
+    channeledId = channeled && GetSpellEntryCompat(channeled->m_spellInfo) ? GetSpellEntryCompat(channeled->m_spellInfo)->Id : 0;
 }
 
 // The caster's cast slot a row matched: the same pick as ListedCastRadius, so the logged spell is the one whose radius
@@ -1672,7 +1672,7 @@ void LogSeekPull(PlayerbotAI* ai, Player* bot, Unit* son, float yd, SeekPullStep
         last = nowMs;
     }
     char info1[128];
-    snprintf(info1, sizeof(info1), "seek pull: %s -> %u %.1f yd %s", bot->GetName(), son->GetGUIDLow(), yd,
+    snprintf(info1, sizeof(info1), "seek pull: %s -> %u %.1f yd %s", CStrCompat(bot->GetName()), son->GetGUIDLow(), yd,
              SeekPullStepName(step));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
@@ -1717,7 +1717,7 @@ void LogSeekTake(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, bo
     Unit* const victim = son->GetVictim();
     char info1[224];
     snprintf(info1, sizeof(info1), "seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f",
-             bot->GetName(), son->GetGUIDLow(), victim ? victim->GetName() : "none", reason, meet ? 1 : 0, src.c_str(),
+             CStrCompat(bot->GetName()), son->GetGUIDLow(), victim ? CStrCompat(victim->GetName()) : "none", reason, meet ? 1 : 0, src.c_str(),
              bot->GetDistance(son), beyondYd);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
@@ -1763,8 +1763,8 @@ void LogSeekTakeHeld(PlayerbotAI* ai, Player* bot, Unit* son, const SeekCapGuard
     snprintf(info1, sizeof(info1),
              "seek take held son=%u taker=%s reason=cap_guard ref=%s share=%.0f src=%s victim=%s on_nontank_ms=%u "
              "victim_hp=%.0f",
-             son->GetGUIDLow(), bot->GetName(), info.refName.c_str(), info.sharePct, src,
-             victim ? victim->GetName() : "none", onNonTankMs, victim ? victim->GetHealthPercent() : 100.0f);
+             son->GetGUIDLow(), CStrCompat(bot->GetName()), info.refName.c_str(), info.sharePct, src,
+             victim ? CStrCompat(victim->GetName()) : "none", onNonTankMs, victim ? victim->GetHealthPercent() : 100.0f);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -1816,7 +1816,7 @@ void LogSeekMeetWait(PlayerbotAI* ai, Player* bot, Unit* son, Unit* victim, std:
     const std::uint64_t guid = son->GetObjectGuid().GetRawValue();
     char info1[192];
     snprintf(info1, sizeof(info1), "son=%u,event=wait,reason=receiver_wait,victim=%s,son_yd=%.1f,after_ms=%u",
-             ObjectGuid(guid).GetCounter(), victim ? victim->GetName() : "none", bot->GetDistance(son),
+             ObjectGuid(guid).GetCounter(), victim ? CStrCompat(victim->GetName()) : "none", bot->GetDistance(son),
              nowMs - meetMs);
     LogSeekMeet(ai, info1);
 }
@@ -1846,7 +1846,7 @@ bool AnchorShotStandFor(Player* bot, const BossAnchorCircle& c, Unit* son, float
     Map* map = bot->GetMap();
     if (!map)
         return false;
-    float const floor = map->GetHeight(x, y, c.z + 5.0f);
+    float const floor = GetHeightCompat(map, x, y, c.z + 5.0f);
     if (!AnchorFloorOk(c, floor > INVALID_HEIGHT, floor))
         return false;
     z = floor;
@@ -2022,7 +2022,7 @@ void NoteSeekReceiverExempt(PlayerbotAI* ai, Player* bot, std::uint64_t son, std
     const std::uint64_t guid = son;
     char info1[160];
     snprintf(info1, sizeof(info1), "son=%u,event=receiver_exempt,receiver=%s,beyond_yd=%.1f",
-             ObjectGuid(guid).GetCounter(), bot->GetName(), beyondYd);
+             ObjectGuid(guid).GetCounter(), CStrCompat(bot->GetName()), beyondYd);
     LogSeekMeet(ai, info1);
 }
 
@@ -2112,7 +2112,7 @@ void WalkoutShotStateInfo(Player* puller, Creature* son, char* out, std::size_t 
     {
         bool castOnSon = false;
         Spell* const cast = WalkoutCurrentCast(puller, son, castOnSon);
-        std::uint32_t const spellId = cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0;
+        std::uint32_t const spellId = cast && GetSpellEntryCompat(cast->m_spellInfo) ? GetSpellEntryCompat(cast->m_spellInfo)->Id : 0;
         float const sonYd = puller->GetDistance(son);
         bool const los = puller->IsWithinLOSInMap(son);
         bool const inRange = sonYd <= WalkoutShotRangeYd(puller->GetClass() == CLASS_HUNTER);
@@ -2393,11 +2393,11 @@ bool SeekWalkoutPathOk(Player* member, float x, float y, float z)
 {
     PathFinder path(member);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
-    uint32 const type = static_cast<uint32>(path.getPathType());
+    PathCalculateCompat(path, x, y, z, false);
+    uint32 const type = static_cast<uint32>(PathTypeCompat(path));
     if (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH))
         return false;
-    Vector3 const end = path.getActualEndPosition();
+    Vector3 const end = PathActualEndCompat(path);
     float const dx = end.x - x;
     float const dy = end.y - y;
     float const dz = end.z - z;
@@ -2409,9 +2409,9 @@ void SeekWalkoutPathProbe(Player* bot, float x, float y, float z, std::uint32_t&
 {
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
-    type = static_cast<std::uint32_t>(path.getPathType());
-    yd = path.Length();
+    PathCalculateCompat(path, x, y, z, false);
+    type = static_cast<std::uint32_t>(PathTypeCompat(path));
+    yd = PathLengthCompat(path);
 }
 
 // The walk-out stand for `son`: the first point out from the anchor's edge toward it (WalkoutStandCandidates, 2 yd
@@ -2426,7 +2426,7 @@ bool FindSeekWalkoutStand(Player* bot, const BossAnchorCircle& c, Unit* son, flo
         return false;
     auto const test = [&](float px, float py) -> bool
     {
-        float const floor = map->GetHeight(px, py, c.z + 5.0f);
+        float const floor = GetHeightCompat(map, px, py, c.z + 5.0f);
         bool const found = floor > INVALID_HEIGHT;
         float const dx = son->GetPositionX() - px;
         float const dy = son->GetPositionY() - py;
@@ -2658,7 +2658,7 @@ Player* PickWalkoutPrePlace(PlayerbotAI* ai, Map* map, Unit* boss, const std::ve
         return nullptr;
     if (!WalkoutMeetPrePlacePoint(tank, standX, standY, x, y))
         return nullptr;
-    float const floor = map ? map->GetHeight(x, y, tank.z + 5.0f) : INVALID_HEIGHT;
+    float const floor = map ? GetHeightCompat(map, x, y, tank.z + 5.0f) : INVALID_HEIGHT;
     if (!AnchorFloorOk(tank, floor > INVALID_HEIGHT, floor))
     {
         floorRefused = roles.tanks[static_cast<std::size_t>(pick)];
@@ -2692,7 +2692,7 @@ void EndLostWalkoutPrePlace(PlayerbotAI* ai, Map* map, Unit* boss, std::uint32_t
     const std::uint64_t guid = state.son ? state.son : state.meetSon;
     char info1[128];
     snprintf(info1, sizeof(info1), "son=%u,event=preplace_end,receiver=%s,reason=%s",
-             ObjectGuid(guid).GetCounter(), receiver ? receiver->GetName() : "none",
+             ObjectGuid(guid).GetCounter(), receiver ? CStrCompat(receiver->GetName()) : "none",
              !alive ? "receiver_dead" : charmed ? "receiver_charmed" : "receiver_victim");
     LogSeekMeet(ai, info1);
 }
@@ -2812,8 +2812,8 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
             {
                 char info1[192];
                 snprintf(info1, sizeof(info1), "son=%u,event=taken,receiver=%s,by=%s,after_ms=%u",
-                         ObjectGuid(guid).GetCounter(), meetReceiver ? meetReceiver->GetName() : "none",
-                         takenBy->GetName(), nowMs - state.meetMs);
+                         ObjectGuid(guid).GetCounter(), meetReceiver ? CStrCompat(meetReceiver->GetName()) : "none",
+                         CStrCompat(takenBy->GetName()), nowMs - state.meetMs);
                 LogSeekMeet(ai, info1);
             }
             else if (cleared)
@@ -2973,7 +2973,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
                         snprintf(info1, sizeof(info1),
                                  "son=%u,event=meet,receiver=%s,tank_idx=%d,receiver_yd=%.1f,due_in=%u,"
                                  "receiver_point_yd=%.1f",
-                                 ObjectGuid(guid).GetCounter(), receiver->GetName(), pick,
+                                 ObjectGuid(guid).GetCounter(), CStrCompat(receiver->GetName()), pick,
                                  puller ? puller->GetDistance(receiver) : -1.0f, out.dueInMs / 1000,
                                  receiverPointYd);
                     }
@@ -3017,7 +3017,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         {
             bool castOnSon = false;
             Spell* const cast = puller ? WalkoutCurrentCast(puller, son, castOnSon) : nullptr;
-            std::uint32_t const spellId = cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0;
+            std::uint32_t const spellId = cast && GetSpellEntryCompat(cast->m_spellInfo) ? GetSpellEntryCompat(cast->m_spellInfo)->Id : 0;
             bool const los = puller && son && puller->IsWithinLOSInMap(son);
             float const z = puller ? puller->GetPositionZ() : -1.0f;
             float const standYd = puller && state.standMs ?
@@ -3348,22 +3348,22 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         if (sPlayerbotAIConfig.dungeonRunSeekSiphonClock)
             snprintf(info1, sizeof(info1),
                      "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f floor=%u",
-                     bot->GetName(), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
+                     CStrCompat(bot->GetName()), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
                      rules.firstStartMinMs / 1000);
         else
             snprintf(info1, sizeof(info1),
-                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f", bot->GetName(),
+                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f", CStrCompat(bot->GetName()),
                      scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr);
     }
     else
-        snprintf(info1, sizeof(info1), "seek pull: ranged walk-out %s -> %u", bot->GetName(), scan.son->GetGUIDLow());
+        snprintf(info1, sizeof(info1), "seek pull: ranged walk-out %s -> %u", CStrCompat(bot->GetName()), scan.son->GetGUIDLow());
     LogSeekWalkout(ai, info1);
     if (prePlaceTank)
     {
         const std::uint64_t guid = sonGuid;
         char info2[160];
         snprintf(info2, sizeof(info2), "son=%u,event=preplace,receiver=%s,receiver_yd=%.1f,point_yd=%.1f",
-                 ObjectGuid(guid).GetCounter(), prePlaceTank->GetName(), bot->GetDistance(prePlaceTank),
+                 ObjectGuid(guid).GetCounter(), CStrCompat(prePlaceTank->GetName()), bot->GetDistance(prePlaceTank),
                  prePlaceTank->GetDistance2d(prePlaceX, prePlaceY));
         LogSeekMeet(ai, info2);
     }
@@ -3372,7 +3372,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         const std::uint64_t guid = sonGuid;
         char info2[128];
         snprintf(info2, sizeof(info2), "son=%u,event=preplace_skip,receiver=%s,reason=%s",
-                 ObjectGuid(guid).GetCounter(), prePlaceFloorRefused->GetName(), "floor");
+                 ObjectGuid(guid).GetCounter(), CStrCompat(prePlaceFloorRefused->GetName()), "floor");
         LogSeekMeet(ai, info2);
     }
     out.walkout = true;
@@ -4636,7 +4636,7 @@ void LogSeekCharm(PlayerbotAI* ai, Player* bot, Unit* boss, std::uint64_t charme
              "charmed=%s:%s,victim=%s:%s,ot1=%.0f,ot2=%.0f,top=%s,cap_ref=%s,ref_kind=%s,cap_ref_threat=%.0f,"
              "top_dps_threat=%.0f%s",
              CharmRoleWord(charmed), CharmClassWord(charmed), CharmRoleWord(victim), CharmClassWord(victim),
-             ot1, ot2, top, capRef ? capRef->GetName() : "none",
+             ot1, ot2, top, capRef ? CStrCompat(capRef->GetName()) : "none",
              !capRef ? "none" : capPick.offTank ? "offtank" : "main", capRef ? capPick.threat : -1.0f, topDpsThreat,
              extra);
     char info2[160];
@@ -4974,7 +4974,7 @@ bool ai::IsSoughtCloudFor(PlayerbotAI* ai, Player* bot, DynamicObject* dyn)
     if (!bot->IsInWorld() || !ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT) ||
         !GetBossTactics().HasSeekAuraMap(bot->GetMapId()))
         return false;
-    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(dyn->GetSpellId());
+    SpellEntry const* spell = GetSpellEntryCompat(dyn->GetSpellId());
     if (!spell)
         return false;
     const std::uint32_t trigger = spell->EffectTriggerSpell[dyn->GetEffIndex()];
@@ -5267,7 +5267,7 @@ void ai::CollectDispelAuras(Unit* member, uint32 dispelType, std::vector<AuraOnM
         Unit::AuraList const& auras = member->GetAurasByType((AuraType)type);
         for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
         {
-            const SpellEntry* entry = (*itr)->GetSpellProto();
+            const SpellEntry* entry = GetSpellEntryCompat((*itr)->GetSpellProto());
             if (entry && entry->Dispel == dispelType)
             {
                 AuraOnMember aura;
@@ -5288,7 +5288,7 @@ void ai::CollectAllDispelAuras(Unit* member, std::vector<AuraOnMember>& out)
         Unit::AuraList const& auras = member->GetAurasByType((AuraType)type);
         for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
         {
-            const SpellEntry* entry = (*itr)->GetSpellProto();
+            const SpellEntry* entry = GetSpellEntryCompat((*itr)->GetSpellProto());
             if (entry && entry->Dispel != DISPEL_NONE)
             {
                 AuraOnMember aura;
@@ -5861,7 +5861,7 @@ void LogSeekTakenSonCapped(PlayerbotAI* ai, Player* bot, Unit* son, std::uint8_t
         return;
     char info1[160];
     snprintf(info1, sizeof(info1), "seek take capped son=%u bot=%s pct=%u since_take_ms=%u", son->GetGUIDLow(),
-             bot->GetName(), static_cast<unsigned>(pct), sinceTakeMs);
+             CStrCompat(bot->GetName()), static_cast<unsigned>(pct), sinceTakeMs);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -6781,7 +6781,7 @@ void ai::LogShadeCover(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fig
                 snprintf(targetText, sizeof(targetText), "none");
             char info2[160];
             snprintf(info2, sizeof(info2), "shade=%u:%u,healer=%s,dist=%.1f,target=%s", shade->GetEntry(),
-                     shade->GetGUIDLow(), victim ? victim->GetName() : "none", facts.distanceYd, targetText);
+                     shade->GetGUIDLow(), victim ? CStrCompat(victim->GetName()) : "none", facts.distanceYd, targetText);
             sPlayerbotAIConfig.logEvent(memberAi, "BossTacticsShadeCover", info1, info2);
         }
     }
@@ -6893,7 +6893,7 @@ bool ai::AoeTauntStillNeeded(PlayerbotAI* ai, Player* bot)
     members.push_back(bot);
     for (Group::member_citerator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
     {
-        if (Player* member = sObjectMgr.GetPlayer(itr->guid))
+        if (Player* member = GetPlayerCompat(itr->guid))
             members.push_back(member);
     }
     for (Unit* member : members)
@@ -7728,7 +7728,7 @@ void CollectSpellDispelTypes(SpellEntry const* entry, std::vector<uint32>& out, 
                  (entry->AttributesEx & SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
             AddDispelType(out, entry->EffectMiscValue[i]);
         else if (depth == 0 && entry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_TRIGGER_SPELL)
-            CollectSpellDispelTypes(sSpellMgr.GetSpellEntry(entry->EffectTriggerSpell[i]), out, depth + 1);
+            CollectSpellDispelTypes(GetSpellEntryCompat(entry->EffectTriggerSpell[i]), out, depth + 1);
     }
 }
 
@@ -7789,7 +7789,7 @@ float TotemDispelRadius(SpellEntry const* totemSpell)
     {
         if (totemSpell->EffectApplyAuraName[i] != SPELL_AURA_PERIODIC_TRIGGER_SPELL)
             continue;
-        SpellEntry const* pulse = sSpellMgr.GetSpellEntry(totemSpell->EffectTriggerSpell[i]);
+        SpellEntry const* pulse = GetSpellEntryCompat(totemSpell->EffectTriggerSpell[i]);
         if (!pulse)
             continue;
         for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
@@ -7821,11 +7821,11 @@ bool SweepDispelCures(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, 
             if (!aura)
                 continue;
             std::vector<uint32> types;
-            CollectSpellDispelTypes(aura->GetSpellProto(), types);
+            CollectSpellDispelTypes(GetSpellEntryCompat(aura->GetSpellProto()), types);
             if (types.empty())
                 continue;
             ObjectGuid const casterGuid = aura->GetCasterGuid();
-            Player* caster = sObjectMgr.GetPlayer(casterGuid);
+            Player* caster = GetPlayerCompat(casterGuid);
             if (!caster || !GET_PLAYERBOT_AI(caster))
                 continue;
             for (uint32 type : types)
@@ -7851,7 +7851,7 @@ bool SweepDispelCures(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, 
         Totem* totem = bot->GetTotem(TotemSlot(slot));
         if (!totem || !totem->IsAlive())
             continue;
-        SpellEntry const* totemSpell = sSpellMgr.GetSpellEntry(totem->GetSpell());
+        SpellEntry const* totemSpell = GetSpellEntryCompat(totem->GetSpell());
         std::vector<uint32> types;
         CollectSpellDispelTypes(totemSpell, types);
         if (types.empty())
@@ -7917,7 +7917,7 @@ bool ai::DispelCastBlocked(PlayerbotAI* ai, Unit* target, uint32 spellId)
     {
         targetKind = DispelTargetKind::Self;
     }
-    else if (Player* member = sObjectMgr.GetPlayer(target->GetObjectGuid()))
+    else if (Player* member = GetPlayerCompat(target->GetObjectGuid()))
     {
         if (member->GetGroup() && member->GetGroup() == bot->GetGroup())
             targetKind = DispelTargetKind::GroupMember;
@@ -7933,7 +7933,7 @@ bool ai::DispelCastBlocked(PlayerbotAI* ai, Unit* target, uint32 spellId)
     if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
         return false;
     std::vector<uint32> types;
-    CollectSpellDispelTypes(sSpellMgr.GetSpellEntry(spellId), types);
+    CollectSpellDispelTypes(GetSpellEntryCompat(spellId), types);
     if (types.empty())
         return false;
     const ActiveBossRows rows = DispelRows(ScanBossTactics(ai, bot));
@@ -8287,7 +8287,7 @@ bool BossTacticsAvoidCastAction::Execute(Event& event)
     {
         // The slot the row matched, the same pick the walk-out's radius used (ListedCastRadius).
         Spell* const spell = ListedCastSpell(fight.rows, caster);
-        LogAvoidCast(ai, bot, caster, spell, spell && spell->m_spellInfo ? spell->m_spellInfo->Id : 0, danger.radius,
+        LogAvoidCast(ai, bot, caster, spell, spell && GetSpellEntryCompat(spell->m_spellInfo) ? GetSpellEntryCompat(spell->m_spellInfo)->Id : 0, danger.radius,
                      distBefore, destDistance, stopped, walk);
     }
     return walk == AvoidCastWalk::Started;
@@ -8479,8 +8479,8 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
         uint32 casting = 0;
         if (Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         {
-            if (spell->m_spellInfo)
-                casting = spell->m_spellInfo->Id;
+            if (GetSpellEntryCompat(spell->m_spellInfo))
+                casting = GetSpellEntryCompat(spell->m_spellInfo)->Id;
         }
         // A spell cast triggered (a breath) never shows as the current spell: the state the cast leaves opens the
         // window of a row whose signal says so (the boss stands still and has no target; the row also names the aura
@@ -9617,7 +9617,7 @@ bool SpreadSlotPointUsable(PlayerbotAI* ai, Player* bot, float centreZ, const Sp
     if (std::fabs(clampX - x) > 0.5f || std::fabs(clampY - y) > 0.5f)
         return false;
     Map* const map = bot->GetMap();
-    const float floor = map ? map->GetHeight(clampX, clampY, centreZ + 5.0f) : INVALID_HEIGHT;
+    const float floor = map ? GetHeightCompat(map, clampX, clampY, centreZ + 5.0f) : INVALID_HEIGHT;
     if (floor <= INVALID_HEIGHT || std::fabs(floor - centreZ) > kBossAnchorFloorYd)
         return false;
     x = clampX;
@@ -9981,7 +9981,7 @@ void NotePrePlaceHold(PlayerbotAI* ai, Player* bot, const SeekPrePlaceProgress& 
     const std::uint64_t guid = progress.son;
     char info1[200];
     snprintf(info1, sizeof(info1), "son=%u,event=preplace_hold,receiver=%s,boss=%u,action=%s,point_yd=%.1f",
-             ObjectGuid(guid).GetCounter(), bot->GetName(), bossEntry, actionKind ? actionKind : "reach",
+             ObjectGuid(guid).GetCounter(), CStrCompat(bot->GetName()), bossEntry, actionKind ? actionKind : "reach",
              bot->GetDistance2d(progress.x, progress.y));
     LogSeekMeet(ai, info1);
 }
@@ -10031,7 +10031,7 @@ bool ai::ClampMoveToBossAnchor(PlayerbotAI* ai, Player* bot, float& x, float& y,
         return true;
     // The floor at the clamped point, probed from the centre's level: the platform's top, never a ledge below it.
     Map* map = bot->GetMap();
-    float const floor = map ? map->GetHeight(cx, cy, circle.z + 5.0f) : INVALID_HEIGHT;
+    float const floor = map ? GetHeightCompat(map, cx, cy, circle.z + 5.0f) : INVALID_HEIGHT;
     if (!AnchorFloorOk(circle, floor > INVALID_HEIGHT, floor))
         return false;
     x = cx;
@@ -10458,7 +10458,7 @@ void SeekReliefTakeNoteExec(PlayerbotAI* ai, Player* bot, const RaidTankRoles& r
         return;
     char info1[192];
     snprintf(info1, sizeof(info1), "seek relief son=%u from=%s by=%s dwell_ms=%u n=%u cap=%d reach_yd=%.1f",
-             son->GetGUIDLow(), from ? from->GetName() : "none", bot->GetName(), static_cast<unsigned>(dwellMs),
+             son->GetGUIDLow(), from ? CStrCompat(from->GetName()) : "none", CStrCompat(bot->GetName()), static_cast<unsigned>(dwellMs),
              static_cast<unsigned>(takes), SeekTankLeaveCollapsesCap(ai, roles, boss, bot, nullptr) ? 1 : 0,
              bot->GetDistance(son));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
@@ -10520,7 +10520,7 @@ bool SeekMeetPrePlaceTask(Player* bot, const BossTacticRow* row, SeekTankTask& t
         const std::uint64_t guid = progress.son;
         char info1[160];
         snprintf(info1, sizeof(info1), "son=%u,event=preplace_arrive,receiver=%s,after_ms=%u,point_yd=%.1f",
-                 ObjectGuid(guid).GetCounter(), bot->GetName(), afterMs, bot->GetDistance2d(x, y));
+                 ObjectGuid(guid).GetCounter(), CStrCompat(bot->GetName()), afterMs, bot->GetDistance2d(x, y));
         LogSeekMeet(botAi, info1);
     }
     return true;
@@ -11070,7 +11070,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                             char info1[192];
                             snprintf(info1, sizeof(info1),
                                      "son=%u,event=shot_wait,receiver=%s,receiver_point_yd=%.1f,waited_ms=%u,reason=%s",
-                                     ObjectGuid(guid).GetCounter(), receiver ? receiver->GetName() : "none",
+                                     ObjectGuid(guid).GetCounter(), receiver ? CStrCompat(receiver->GetName()) : "none",
                                      pointYd, wait.waitedMs,
                                      WalkoutShotWaitReason(live, pointYd, wait.waitedMs, task.walkoutDueInMs,
                                                            wait.taskAgeMs));
@@ -11102,7 +11102,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 if (WalkoutShotWaits(castOnSon, cast != nullptr))
                 {
                     LogSeekWalkoutStand(ai, bot, task.source, WalkoutStandBranch::CastWait, range,
-                                        cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0);
+                                        cast && GetSpellEntryCompat(cast->m_spellInfo) ? GetSpellEntryCompat(cast->m_spellInfo)->Id : 0);
                     return true;
                 }
                 ai::LogCastCancelNonMelee(ai, "seek_shot", false);
@@ -12314,7 +12314,7 @@ ai::TankPostHealDuty ai::FindTankPostHealDuty(PlayerbotAI* ai, Player* bot)
     }
     if (holderGuid == 0)
         return duty;
-    Player* const holder = sObjectMgr.GetPlayer(ObjectGuid(holderGuid));
+    Player* const holder = GetPlayerCompat(ObjectGuid(holderGuid));
     if (!holder || !holder->IsInWorld() || holder->GetMapId() != bot->GetMapId() ||
         !sServerFacade.IsAlive(holder))
         return duty;
@@ -12411,7 +12411,7 @@ bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)
     }
     for (std::uint64_t const key : others)
     {
-        Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(key));
+        Player* const tank = GetPlayerCompat(ObjectGuid(key));
         if (!tank || tank->GetInstanceId() != bot->GetInstanceId() || !TankPostTankCanAct(tank))
             continue;
         float const ownerYd = TankPostDistanceYd(tank->GetPositionX(), tank->GetPositionY(), tank->GetPositionZ(),
@@ -12434,7 +12434,7 @@ bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)
             std::uint32_t const nowMs = WorldTimer::getMSTime();
             TankPostLooseClockState const loose = TankPostLooseClock(it->second.looseSinceMs,
                 it->second.unhittableSinceMs, onOwner,
-                !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE), tank->IsValidAttackTarget(target),
+                !HasUnitFlagCompat(target, UNIT_FLAG_NOT_SELECTABLE), tank->IsValidAttackTarget(target),
                 nowMs);
             it->second.looseSinceMs = loose.looseSinceMs;
             it->second.unhittableSinceMs = loose.unhittableSinceMs;
@@ -12536,7 +12536,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     {
         if (other.second.done)
             continue;
-        Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(other.first));
+        Player* const tank = GetPlayerCompat(ObjectGuid(other.first));
         if (!tank || tank->GetInstanceId() != bot->GetInstanceId() ||
             !TankPostRowHeldByOther(true, TankPostTankCanAct(tank)))
             continue;
@@ -12620,7 +12620,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
                     ++it;
                     continue;
                 }
-                Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(it->first));
+                Player* const tank = GetPlayerCompat(ObjectGuid(it->first));
                 if (tank && !TankPostTankCanAct(tank))
                 {
                     if (!it->second.done)
@@ -12634,7 +12634,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
         }
         for (const std::pair<std::uint64_t, TankPostRecord>& dead : ended)
         {
-            Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(dead.first));
+            Player* const tank = GetPlayerCompat(ObjectGuid(dead.first));
             PlayerbotAI* const tankAi = tank ? GET_PLAYERBOT_AI(tank) : nullptr;
             BossTacticRow endedRow;
             endedRow.map = dead.second.map;
@@ -12938,9 +12938,9 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
                 used = sizeof(info2) - 1;
             for (std::size_t i = 0; i < picked.size() && i < record.healers.size(); ++i)
             {
-                Player* const healer = sObjectMgr.GetPlayer(ObjectGuid(picked[i]));
+                Player* const healer = GetPlayerCompat(ObjectGuid(picked[i]));
                 const int written = std::snprintf(info2 + used, sizeof(info2) - used, ",h%u=%s",
-                    static_cast<unsigned>(i + 1), healer ? healer->GetName() : "gone");
+                    static_cast<unsigned>(i + 1), healer ? CStrCompat(healer->GetName()) : "gone");
                 if (written > 0)
                     used = std::min(used + static_cast<std::size_t>(written), sizeof(info2) - 1);
             }
@@ -13059,7 +13059,7 @@ bool BossTacticsTankPostAction::TakeSubject(const BossTankPost& task, Unit* curr
     in.keyOn = sPlayerbotAIConfig.dungeonRunTankPostTaunts;
     in.engage = true;
     in.subjectOnTank = victim == bot;
-    in.subjectSelectable = !subject->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    in.subjectSelectable = !HasUnitFlagCompat(subject, UNIT_FLAG_NOT_SELECTABLE);
     in.victimIsTank = victim && victim->GetTypeId() == TYPEID_PLAYER &&
         PlayerbotAI::IsTank(static_cast<Player*>(victim));
     in.ownsSubjectOn = sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject;
@@ -13179,7 +13179,7 @@ bool BossTacticsTankPostAction::Execute(Event& event)
         {
             // The point is on a floor under the unit's height; one with no ground under it is no walk.
             Map* const map = bot->GetMap();
-            float const floor = map ? map->GetHeight(x, y, z + 5.0f) : INVALID_HEIGHT;
+            float const floor = map ? GetHeightCompat(map, x, y, z + 5.0f) : INVALID_HEIGHT;
             walkPoint = floor > INVALID_HEIGHT;
             if (walkPoint)
                 z = floor + 0.05f;

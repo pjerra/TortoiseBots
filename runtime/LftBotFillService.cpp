@@ -126,7 +126,7 @@ bool LftBotFillService::IsEligibleCandidate(Player* bot) const
 {
     if (!bot) return false;
     if (!bot->IsInWorld()) return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless()) return false;
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession())) return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow())) return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid())) return false;
     if (sLFTMgr.IsQueued(bot->GetObjectGuid()) || sLFTMgr.IsInOffer(bot->GetObjectGuid())) return false;
@@ -149,7 +149,7 @@ bool LftBotFillService::IsEligibleCandidate(Player* bot) const
 bool LftBotFillService::IsModuleOwnedHeadlessBot(Player const* bot) const
 {
     if (!bot) return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless()) return false;
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession())) return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow())) return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid())) return false;
     const Player* p = bot;
@@ -195,7 +195,7 @@ std::string LftBotFillService::RoleMismatchReason(Player* bot, uint8 needRole) c
         if (cls == CLASS_WARRIOR || cls == CLASS_PALADIN || cls == CLASS_SHAMAN)
         {
             Item const* offhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-            ItemPrototype const* proto = offhand ? offhand->GetProto() : nullptr;
+            ItemPrototype const* proto = offhand ? GetItemProtoCompat(offhand) : nullptr;
             bool shield = proto && proto->Class == ITEM_CLASS_ARMOR &&
                 proto->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD;
             // Best-shield-from-bags quick fix runs at queue time; eligibility
@@ -239,7 +239,7 @@ bool LftBotFillService::EquipBestShieldFromBags(Player* bot) const
     if (!bot)
         return false;
     Item const* offhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-    ItemPrototype const* worn = offhand ? offhand->GetProto() : nullptr;
+    ItemPrototype const* worn = offhand ? GetItemProtoCompat(offhand) : nullptr;
     if (worn && worn->Class == ITEM_CLASS_ARMOR && worn->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD)
         return true;
 
@@ -266,12 +266,12 @@ bool LftBotFillService::EquipBestShieldFromBags(Player* bot) const
     Item* best = nullptr;
     forEachBagItem([&](Item* item)
     {
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
         if (!proto || proto->Class != ITEM_CLASS_ARMOR || proto->SubClass != ITEM_SUBCLASS_ARMOR_SHIELD)
             return;
         if (bot->CanUseItem(item) != EQUIP_ERR_OK)
             return;
-        if (!best || proto->ItemLevel > best->GetProto()->ItemLevel)
+        if (!best || proto->ItemLevel > GetItemProtoCompat(best)->ItemLevel)
             best = item;
     });
 
@@ -289,7 +289,7 @@ bool LftBotFillService::EquipBestShieldFromBags(Player* bot) const
         Item* bestMh = nullptr;
         forEachBagItem([&](Item* item)
         {
-            ItemPrototype const* proto = item->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat(item);
             if (!proto || proto->Class != ITEM_CLASS_WEAPON ||
                 (proto->InventoryType != INVTYPE_WEAPON && proto->InventoryType != INVTYPE_WEAPONMAINHAND))
                 return;
@@ -298,7 +298,7 @@ bool LftBotFillService::EquipBestShieldFromBags(Player* bot) const
             if (bot->CanEquipItem(EQUIPMENT_SLOT_MAINHAND, dest, item, true) != EQUIP_ERR_OK)
                 return;
 
-            if (!bestMh || proto->ItemLevel > bestMh->GetProto()->ItemLevel)
+            if (!bestMh || proto->ItemLevel > GetItemProtoCompat(bestMh)->ItemLevel)
                 bestMh = item;
         });
 
@@ -333,7 +333,7 @@ bool LftBotFillService::EquipBestShieldFromBags(Player* bot) const
     bot->SwapItem(src, dst);
 
     Item const* equipped = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-    ItemPrototype const* equippedProto = equipped ? equipped->GetProto() : nullptr;
+    ItemPrototype const* equippedProto = equipped ? GetItemProtoCompat(equipped) : nullptr;
     if (equippedProto && equippedProto->Class == ITEM_CLASS_ARMOR && equippedProto->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD)
         return true;
 
@@ -544,12 +544,12 @@ void LftBotFillService::AcceptPartyBotOffers()
         ObjectGuid const hireMaster = hired ? HireLifecycle::Instance().GetMaster(guid) : ObjectGuid();
         Player* candidates[2] = { ai->GetLiveMaster(), nullptr };
         if (Group* group = bot->GetGroup())
-            candidates[1] = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+            candidates[1] = GetPlayerCompat(group->GetLeaderGuid());
         Player* anchor = nullptr;
         for (Player* candidate : candidates)
         {
             if (!candidate || candidate == bot || !candidate->IsInWorld() || !candidate->GetSession() ||
-                !candidate->GetSession()->HasNetworkTransport() ||
+                !HasNetworkTransportCompat(candidate->GetSession()) ||
                 !sLFTMgr.IsInOffer(candidate->GetObjectGuid()))
                 continue;
             bool const anchorIsHireMaster = !hireMaster.IsEmpty() && candidate->GetObjectGuid() == hireMaster;

@@ -12,6 +12,7 @@
 #include <map>
 #include <mutex>
 #include <sstream>
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 namespace {
@@ -60,7 +61,7 @@ struct Opening { ObjectGuid boss, mainTank; uint32_t started = 0; };
 using Key = std::pair<uint32_t,uint32_t>;
 std::mutex openingMutex;
 std::map<Key, Opening> openings;
-Key KeyFor(Player* bot) { return {bot->GetInstanceId(), bot->GetGroup()->GetId()}; }
+Key KeyFor(Player* bot) { return {bot->GetInstanceId(), GroupIdW2(bot->GetGroup())}; }
 uint32_t Started(Player* bot)
 {
     std::lock_guard<std::mutex> lock(openingMutex);
@@ -237,7 +238,7 @@ bool ai::UpdatePatchwerkSafety(PlayerbotAI* ai)
         previous->Set(patient);
         if (bot->IsNonMeleeSpellCasted(true, false, true)) return true;
         if (HealerSupport(ai)) return true;
-        if (!bot->IsWithinLOSInMap(patient, true) || bot->GetDistance(patient) > ai->GetRange("heal"))
+        if (!IsWithinLOSInMapCompat(bot, patient, true) || bot->GetDistance(patient) > ai->GetRange("heal"))
         {
             Event event("patchwerk tank healing reach");
             return ai->DoSpecificAction("reach party member to heal", event, true);

@@ -86,6 +86,47 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
     return nullptr;
 }
 
+// The item's template, in the spelling the shared bot code uses on both cores (the ForeverCore half is in
+// forever-compat-shim.h). On this core that is exactly what the old call sites said, plus a null check: a null item
+// crashed there.
+inline ItemPrototype const* GetItemProtoCompat(Item const* item)
+{
+    return item ? item->GetProto() : nullptr;
+}
+
+// The core's item template record from the bot's ItemPrototype. This core's ItemPrototype IS the core record.
+inline ItemPrototype const* GetItemTemplateCompat(ItemPrototype const* proto)
+{
+    return proto;
+}
+
+inline ItemPrototype const* GetItemTemplateCompat(Item const* item)
+{
+    return item ? item->GetProto() : nullptr;
+}
+
+// The item template by entry, in the spelling the shared bot code uses on both cores (the ForeverCore half is in
+// forever-compat-shim.h). This is the core's own lookup.
+inline ItemPrototype const* GetItemProtoByIdCompat(uint32 entry)
+{
+    return entry ? sObjectMgr.GetItemPrototype(entry) : nullptr;
+}
+
+// Whether a bot may accept the item for equipping, rolling need, buying or generating. On this core every non-null
+// template is usable: the client tables it reads are the ones the server runs with. The ForeverCore half refuses a mirror
+// whose fill found a missing client table (an incomplete item, TbItemPrototype.h), because the core itself aborts in
+// Player::_ApplyWeaponDamage on a weapon whose item level has no damage row.
+inline bool IsItemProtoUsableCompat(ItemPrototype const* proto)
+{
+    return proto != nullptr;
+}
+
+// A unit's movement state, in the spelling the shared bot code uses on both cores. On this core it is the member.
+inline bool IsMovingCompat(Unit const* unit)
+{
+    return unit && unit->IsMoving();
+}
+
 // === Type renames ===
 // Mature strategy code uses GenericTransport for the core's ordinary
 // Transport type. Keep the alias local to the module; it is not a vehicle API.
@@ -864,6 +905,18 @@ inline CmangosLootMgrAdapter sLootMgr;
 // Penqle uses GetLosHitPosition. The bot module's call sites were patched at
 // the source level (TravelMgr.cpp / WorldPosition.h).
 
+// === Spell fetch helpers, spelled the same on both cores ===
+// On ForeverCore each of these hands back our SpellEntry mirror of the core's SpellInfo (TbSpellEntry.h); here the record IS
+// the core's SpellEntry, so the pointer is identity. GetSpellInfoCompat is the way back for a core function that wants the
+// core's record (the same object here). The client's SpellRange row spells its two numbers minRange/maxRange here and
+// RangeMin[i]/RangeMax[i] there.
+inline float SpellRangeMin(SpellRangeEntry const* entry) { return entry ? entry->minRange : 0.0f; }
+inline float SpellRangeMax(SpellRangeEntry const* entry) { return entry ? entry->maxRange : 0.0f; }
+inline SpellEntry const* GetSpellEntryCompat(uint32 id) { return sSpellMgr.GetSpellEntry(id); }
+inline SpellEntry const* GetSpellEntryCompat(SpellEntry const* entry) { return entry; }
+inline SpellEntry const* GetSpellInfoCompat(SpellEntry const* entry) { return entry; }
+inline uint32 GetMaxSpellIdCompat() { return sSpellMgr.GetMaxSpellId(); }
+
 // === Free-function helpers (cmangos style) wrapping Penqle SpellEntry methods ===
 // cmangos exposes these as free functions; Penqle wraps them in SpellEntry::method.
 inline uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell = nullptr) {
@@ -1011,3 +1064,15 @@ inline bool isRealPlayer_Helper(Player* p) {
 }
 inline bool IsInGroup_Helper(Player* a, Player* b, bool sameGroup=false) { if (!a || !b) return false; Group* g = a->GetGroup(); if (!g) return false; if (sameGroup) { Group* og = b->GetGroup(); return g == og; } return g->IsMember(b->GetObjectGuid()); }
 inline bool IsRealPlayer_Helper(Player* p) { return isRealPlayer_Helper(p); }
+
+// Both-core helpers added by the ForeverCore port (slice 1, round R3): same names as forever/src/compat/TbCompat_Unit.h.
+#include "cmangos-compat-r3.h"
+#include "cmangos-compat-r4v.h"
+#include "cmangos-compat-r4a.h"
+#include "cmangos-compat-r4p.h"
+#include "cmangos-compat-r4c.h"
+#include "cmangos-compat-unported.h"
+#include "cmangos-compat-s2v.h"
+#include "cmangos-compat-s2i.h"
+#include "cmangos-compat-s3.h"
+#include "cmangos-compat-d4.h"

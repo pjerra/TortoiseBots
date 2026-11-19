@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <typeindex>
 #include "Maps/MoveMap.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -135,7 +136,7 @@ void DebugAction::addAura(uint32 spellId, Unit* target)
 {
     if (!target)
         return;
-    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return;
 
@@ -186,7 +187,7 @@ bool DebugAction::HandleDSpell(Event& event, Player* requester, const std::strin
         botPos.setY(botPos.getY() + sin(ang) * dist);
         botPos.setZ(botPos.GetHeight(bot->GetInstanceId()) + 2);
 
-        Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+        Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
         if (!wpCreature)
             continue;
 
@@ -215,7 +216,7 @@ bool DebugAction::HandleVSpell(Event& event, Player* requester, const std::strin
         botPos.setY(botPos.getY() + sin(ang) * dist);
         botPos.setZ(botPos.GetHeight(bot->GetInstanceId()) + 2);
 
-        Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+        Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
 
         if (wpCreature)
         {
@@ -247,7 +248,7 @@ bool DebugAction::HandleASpell(Event& event, Player* requester, const std::strin
         botPos.setY(botPos.getY() + sin(ang) * dist);
         botPos.setZ(botPos.GetHeight(bot->GetInstanceId()) + 2);
 
-        Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 5000.0f + i * 100.0f);
+        Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 5000.0f + i * 100.0f);
         if (!wpCreature)
             continue;
         wpCreature->SetObjectScale(0.5f);
@@ -274,7 +275,7 @@ bool DebugAction::HandleCSpell(Event& event, Player* requester, const std::strin
         botPos.setY(botPos.getY() + sin(ang) * dist);
         botPos.setZ(botPos.GetHeight(bot->GetInstanceId()) + 2);
 
-        Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+        Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
         if (!wpCreature)
             continue;
         units.push_back(wpCreature->getObjectGuid());
@@ -348,7 +349,7 @@ bool DebugAction::HandleTSpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
 
             if (wpCreature)
             {
@@ -379,7 +380,7 @@ bool DebugAction::HandleUSpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(effect, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, effect, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
         }
     }
     return true;
@@ -420,7 +421,7 @@ bool DebugAction::HandleVSpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
 
             if (wpCreature)
             {
@@ -466,7 +467,7 @@ bool DebugAction::HandleISpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
 
             if (wpCreature)
             {
@@ -511,7 +512,7 @@ bool DebugAction::HandleCSpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            wpCreature = bot->SummonCreature(6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            wpCreature = SummonCreatureCompat(bot, 6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
 
             if (wpCreature && lCreature)
             {
@@ -540,7 +541,7 @@ bool DebugAction::HandleASpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
 
             if (wpCreature)
             {
@@ -574,7 +575,7 @@ bool DebugAction::HandleGSpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
 
@@ -654,7 +655,7 @@ bool DebugAction::HandleMSpellMap(Event& event, Player* requester, const std::st
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
 
@@ -734,7 +735,7 @@ bool DebugAction::HandleSoundMap(Event& event, Player* requester, const std::str
             botPos.setY(botPos.getY() + (dy - 5) * 5);
             botPos.setZ(botPos.GetHeight(bot->GetInstanceId()));
 
-            Creature* wpCreature = bot->SummonCreature(6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 6, botPos.getX(), botPos.getY(), botPos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
 

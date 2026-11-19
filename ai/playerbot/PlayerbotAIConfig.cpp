@@ -393,7 +393,7 @@ std::vector<std::pair<std::string, std::string>> PlayerbotAIConfig::FindConfigEn
 
 void PlayerbotAIConfig::LoadAhBotPriceKeys()
 {
-    static_assert(PlayerbotAIConfig::kAhBotMaxItemClass == MAX_ITEM_CLASS, "AhBot class array size must match MAX_ITEM_CLASS");
+    static_assert(PlayerbotAIConfig::kAhBotMaxItemClass == LegacyItemClassCountCompat, "AhBot class array size must match the item class count");
     ahBotCompleteItemValueOverrideEnabled = config.GetBoolDefault("AiPlayerbot.AhBot.CompleteItemValueOverride.Enabled", false);
     ahBotCompleteItemValueOverrideItems = config.GetStringDefault("AiPlayerbot.AhBot.CompleteItemValueOverride.Items", "");
     ahBotCompleteItemValueOverrideDoApplyBidVariations = config.GetBoolDefault("AiPlayerbot.AhBot.CompleteItemValueOverride.DoApplyBidVariations", false);
@@ -471,17 +471,19 @@ void PlayerbotAIConfig::LoadAhBotPriceKeys()
     ahBotPriceMultiplierItemLevelCategoryKey = config.GetFloatDefault("AiPlayerbot.AhBot.PriceMultiplier.ItemLevel.Category.Key", 0.0f);
     ahBotPriceMultiplierItemLevelCategoryMisc = config.GetFloatDefault("AiPlayerbot.AhBot.PriceMultiplier.ItemLevel.Category.Misc", 0.0f);
     {
+        // The tables and loops use the pricing policy's own sizes (16 classes, 7 qualities), not the core's macros: ForeverCore's
+        // MAX_ITEM_CLASS is 21 and MAX_ITEM_QUALITY 8, which read a null name (a crash) and wrote past the 16-row array.
         ai::AhBotPricingConfig const ahBotDefaults = ai::MakeDefaultVanillaPricingConfig();
-        static char const* const kCatNames[MAX_ITEM_CLASS] = {
+        static char const* const kCatNames[ai::kAhBotPriceMaxItemClass] = {
             "Consumable", "Container", "Weapon", nullptr, "Armor", "Reagent", "Projectile",
             "TradeGood", "Generic", "Recipe", nullptr, "Quiver", "Quest", "Key", nullptr, "Misc"
         };
-        static char const* const kQualNames[MAX_ITEM_QUALITY] = {
+        static char const* const kQualNames[ai::kAhBotPriceMaxItemQuality] = {
             "Poor", "Normal", "Uncommon", "Rare", "Epic", "Legendary", "Artifact"
         };
-        for (uint32 c = 0; c < MAX_ITEM_CLASS; ++c)
+        for (uint32 c = 0; c < ai::kAhBotPriceMaxItemClass; ++c)
         {
-            for (uint32 q = 0; q < MAX_ITEM_QUALITY; ++q)
+            for (uint32 q = 0; q < ai::kAhBotPriceMaxItemQuality; ++q)
             {
                 float def = ahBotDefaults.priceMultiplierCategoryQuality[c][q];
                 if (kCatNames[c])
@@ -495,7 +497,7 @@ void PlayerbotAIConfig::LoadAhBotPriceKeys()
                 }
             }
         }
-        for (uint32 q = 0; q < MAX_ITEM_QUALITY; ++q)
+        for (uint32 q = 0; q < ai::kAhBotPriceMaxItemQuality; ++q)
         {
             std::string mountKey = std::string("AiPlayerbot.AhBot.PriceMultiplier.CategoryMount.Quality") + kQualNames[q];
             ahBotPriceMultiplierCategoryMountQuality[q] = config.GetFloatDefault(mountKey.c_str(), ahBotDefaults.priceMultiplierCategoryMountQuality[q]);
@@ -1773,7 +1775,7 @@ void PlayerbotAIConfig::loadFreeAltBotAccounts()
             if (std::find(toggleAlwaysOnlineAccounts.begin(), toggleAlwaysOnlineAccounts.end(), accountName) != toggleAlwaysOnlineAccounts.end())
                 accountToggle = true;
 
-            auto result = CharacterDatabase.PQuery("SELECT name, guid FROM characters WHERE account = '%u'", accountId);
+            auto result = CharacterPQueryCompat("SELECT name, guid FROM characters WHERE account = '%u'", accountId);
             if (!result)
                 continue;
 
@@ -2082,7 +2084,7 @@ void PlayerbotAIConfig::logEvent(PlayerbotAI* ai, std::string eventName, ObjectG
     std::string info1 = "";
 
     Unit* victim;
-    if (guid)
+    if (!guid.IsEmpty())
     {
         victim = ai->GetUnit(guid);
         if (victim)
@@ -2119,9 +2121,14 @@ void PlayerbotAIConfig::LoadTalentSpecs()
 
     uint32 maxSpecLevel = 0;
 
+    // ForeverCore: the premade specs are not ported (one summary line, not one error per configured spec, and no spec is read). Turtle: always true.
+    bool const premadeSpecsPorted = PremadeSpecsPortedCompat();
+
     for (uint32 cls = 1; cls < MAX_CLASSES; ++cls)
     {
         classSpecs[cls] = ClassSpecs(1 << (cls - 1));
+        if (!premadeSpecsPorted)
+            continue;
         for (uint32 spec = 0; spec < 10; ++spec)
         {
             std::ostringstream os; os << "AiPlayerbot.PremadeSpecName." << cls << "." << spec;
@@ -2133,7 +2140,7 @@ void PlayerbotAIConfig::LoadTalentSpecs()
 
                 TalentPath talentPath(spec, specName, probability);
 
-                for (uint32 level = 10; level <= DEFAULT_MAX_LEVEL; level++)
+                for (uint32 level = 10; level <= MaxLevelCompat(); level++)
                 {
                     std::ostringstream os; os << "AiPlayerbot.PremadeSpecLink." << cls << "." << spec << "." << level;
                     std::string specLink = config.GetStringDefault(os.str().c_str(), "");
@@ -2177,11 +2184,15 @@ void PlayerbotAIConfig::LoadTalentSpecs()
         }
     }
 
-    if (classSpecs[1].talentPath.empty())
+    if (!premadeSpecsPorted)
+    {
+        // said once by PremadeSpecsPortedCompat
+    }
+    else if (classSpecs[1].talentPath.empty())
         sLog.outErrorDb("No premade specs found!!");
     else
     {
-        if (maxSpecLevel < DEFAULT_MAX_LEVEL && randomBotMaxLevel < DEFAULT_MAX_LEVEL)
+        if (maxSpecLevel < MaxLevelCompat() && randomBotMaxLevel < MaxLevelCompat())
             sLog.outErrorDb("!!!!!!!!!!! randomBotMaxLevel and the talent specs are below the Vanilla/Tortoise level cap. Please check the configuration.");
 
     }

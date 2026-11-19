@@ -71,7 +71,7 @@ bool PlayerConvenience::RequestSummon(Player* requester, Player* bot, Player* an
     if (origin == bot || !origin->IsInWorld() || !origin->IsAlive() ||
         origin->IsBeingTeleported() || origin->IsTaxiFlying())
         return false;
-    if (!bot->IsInWorld() || !bot->GetSession() || !bot->GetSession()->IsHeadless() ||
+    if (!bot->IsInWorld() || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) ||
         bot->IsBeingTeleported() || !bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())
         return false;
 
@@ -98,10 +98,10 @@ bool PlayerConvenience::RequestSummon(Player* requester, Player* bot, Player* an
     float destX = origin->getPositionX() + std::cos(angle) * distance;
     float destY = origin->getPositionY() + std::sin(angle) * distance;
     float const originZ = origin->getPositionZ();
-    float const ground = origin->GetMap()->GetHeight(destX, destY, originZ, true);
+    float const ground = GetHeightCompat(origin->GetMap(), destX, destY, originZ, true);
     bool const groundFound = ground > INVALID_HEIGHT;
     float destZ = groundFound ? ground + 0.05f : originZ;   // + 0.05f as UpdateGroundPositionZ
-    bool const inLos = groundFound && origin->IsWithinLOS(destX, destY, destZ + bot->GetCollisionHeight(), true);
+    bool const inLos = groundFound && IsWithinLOSCompat(origin, destX, destY, destZ + bot->GetCollisionHeight(), true);
 
     // The visual portal used by the first implementation was not part of the
     // Tortoise data contract. Reuse the mature summon action's conservative
@@ -152,7 +152,7 @@ bool PlayerConvenience::RequestGroupSummon(Player* requester, Player* bot, Summo
         return false;
     if (!requester->IsAlive() && !conditions.allowMasterDead)
         return false;
-    if (!bot->IsInWorld() || !bot->GetSession() || !bot->GetSession()->IsHeadless() ||
+    if (!bot->IsInWorld() || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) ||
         bot->IsBeingTeleported() || bot->IsTaxiFlying())
         return false;
     // The native flow never summons into or out of combat; the knob opens
@@ -252,7 +252,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
         // The summon point: the master, or the anchor named at the request
         // (issue #884). It holds the portal and must stay where it was.
         Player* origin = state.anchorGuid.IsEmpty() ? master : sObjectAccessor.FindPlayer(state.anchorGuid);
-        if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless() || !master ||
+        if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) || !master ||
             !origin || !origin->IsInWorld() || !origin->IsAlive() || origin->IsBeingTeleported() ||
             origin->IsTaxiFlying() ||
             origin->GetMapId() != state.destMap)
@@ -276,7 +276,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
 
         if (state.phase == SummonState::Phase::AwaitingArrival)
         {
-            if (bot->GetSession() && bot->GetSession()->IsHeadless())
+            if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
             {
                 if (bot->IsBeingTeleportedNear())
                     bot->ExecuteTeleportNear();
@@ -398,7 +398,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
             it = m_summons.erase(it);
             continue;
         }
-        if (bot->GetSession() && bot->GetSession()->IsHeadless())
+        if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
         {
             if (bot->IsBeingTeleportedNear())
                 bot->ExecuteTeleportNear();

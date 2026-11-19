@@ -689,12 +689,12 @@ class DispelHoldAtCastTime(unittest.TestCase):
     def test_the_cast_path_refuses_the_spell_before_the_core_cast(self):
         fn = body(PLAYERBOT_AI_SPELLS, "bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target")
         self.assertIn("DispelCastBlocked(this, target, spellId)", fn)
-        self.assertLess(fn.index("DispelCastBlocked"), fn.index("new Spell("))
+        self.assertLess(fn.index("DispelCastBlocked"), fn.index("NewSpellCompat("))
         self.assertIn("reason=dispel-hold", fn)
 
     def test_the_cast_gate_judges_every_type_the_spell_removes(self):
         fn = body(ACTIONS, "bool ai::DispelCastBlocked")
-        self.assertIn("CollectSpellDispelTypes(sSpellMgr.GetSpellEntry(spellId), types)", fn)
+        self.assertIn("CollectSpellDispelTypes(GetSpellEntryCompat(spellId), types)", fn)
         self.assertIn("DispelCastVerdict(targetKind, rows, auras, types", fn)
         self.assertIn("GetBossTactics().HasDispelMap(bot->GetMapId())", fn)
         self.assertIn('ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT)', fn)

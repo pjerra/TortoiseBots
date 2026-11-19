@@ -58,7 +58,7 @@ bool ai::IsViscidusShatterTarget(Player* player, Unit* target)
 bool ai::ViscidusBlocksSpell(PlayerbotAI* ai, uint32 spellId, Unit* target)
 {
     if (!ViscidusEnabled(ai) || !target || target->GetEntry() != 15299) return false;
-    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(spellId);
     return spell && ViscidusHoldDamage(IsViscidusShatterTarget(ai->GetBot(), target),
         !IsPositiveSpell(spell), spell->School == SPELL_SCHOOL_FROST, WaitingCaster(ai));
 }
@@ -108,12 +108,12 @@ Unit* ViscidusCombatAction::Target()
         // Urgency comes from distance to the merge point. Within one short
         // tier, prefer the bot's local lane instead of sending the entire ring
         // across the room after a tiny difference in spawn coordinates.
-        if (!best || ViscidusGlobBefore(glob->GetDistance(boss), bot->GetDistance(glob), glob->GetObjectGuid().GetRawValue(),
-            best->GetDistance(boss), bot->GetDistance(best), best->GetObjectGuid().GetRawValue())) best = glob;
+        if (!best || ViscidusGlobBefore(glob->GetDistance(boss), bot->GetDistance(glob), GuidKeyCompat(glob->GetObjectGuid()),
+            best->GetDistance(boss), bot->GetDistance(best), GuidKeyCompat(best->GetObjectGuid()))) best = glob;
     }
     if (best && retained && ViscidusMergeTier(retained->GetDistance(boss)) == ViscidusMergeTier(best->GetDistance(boss))) return retained;
     if (best) return best;
-    if (boss->GetVisibility() == VISIBILITY_OFF || boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING) ||
+    if (boss->GetVisibility() == VISIBILITY_OFF || HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING) ||
         !bot->IsValidAttackTarget(boss)) return nullptr;
     return boss;
 }
@@ -138,7 +138,7 @@ std::list<HazardPosition> ViscidusCombatAction::Clouds()
             // Three-second warning before the first persistent-area cast, and
             // the brief gap before its ten-second refresh. Never infer expiry
             // from the initial cast; the trigger survives for three minutes.
-            SpellEntry const* toxin = sSpellTemplate.LookupEntry<SpellEntry>(25989);
+            SpellEntry const* toxin = GetSpellEntryCompat(25989);
             SpellRadiusEntry const* radius = toxin ? sSpellRadiusStore.LookupEntry(toxin->EffectRadiusIndex[EFFECT_INDEX_0]) : nullptr;
             if (radius && radius->Radius > 0) hazards.emplace_back(WorldPosition(trigger), radius->Radius + 2.0f);
         }
@@ -184,11 +184,11 @@ bool ViscidusCombatAction::RingPoint(WorldPosition& point)
             PlayerbotAI* memberAi = GET_PLAYERBOT_AI(player);
             if (memberAi && player->IsAlive() && player->IsInMap(bot) && ViscidusEnabled(memberAi) &&
                 !memberAi->IsHeal(player) && !memberAi->IsTank(player) && !memberAi->IsRanged(player))
-                members.push_back(player->GetObjectGuid().GetRawValue());
+                members.push_back(GuidKeyCompat(player->GetObjectGuid()));
         }
-    if (members.empty()) members.push_back(bot->GetObjectGuid().GetRawValue());
+    if (members.empty()) members.push_back(GuidKeyCompat(bot->GetObjectGuid()));
     std::sort(members.begin(), members.end());
-    auto slot = std::find(members.begin(), members.end(), bot->GetObjectGuid().GetRawValue());
+    auto slot = std::find(members.begin(), members.end(), GuidKeyCompat(bot->GetObjectGuid()));
     if (slot == members.end()) return false;
     float angle = ViscidusRingAngle(unsigned(slot - members.begin()), unsigned(members.size()));
     // Keep swings in reach throughout the 150-hit frozen window. The ring
@@ -267,7 +267,7 @@ bool ViscidusCombatAction::KeepDistance()
 {
     Unit* boss = Boss();
     if (!boss || ai->IsTank(bot) || !(ai->IsHeal(bot) || ai->IsRanged(bot)) ||
-        boss->GetVisibility() == VISIBILITY_OFF || boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING)) return false;
+        boss->GetVisibility() == VISIBILITY_OFF || HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING)) return false;
     return WorldPosition(bot).distance(WorldPosition(boss)) < boss->GetCombatReach(bot, false, 0.0f) + 5.0f;
 }
 bool ai::NeedsViscidusDistance(PlayerbotAI* ai)
@@ -321,7 +321,7 @@ namespace
         if (!name) return 0;
         AiObjectContext* context = ai->GetAiObjectContext();
         uint32 id = AI_VALUE2(uint32, "spell id", name);
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(id);
+        SpellEntry const* spell = GetSpellEntryCompat(id);
         if (!spell || !ai->GetBot()->HasSpell(id) || boss->IsImmuneToSpell(spell, false)) return 0;
         for (unsigned i = 0; i < MAX_EFFECT_INDEX; ++i)
             if ((spell->Effect[i] == SPELL_EFFECT_ATTACK_ME || spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT) &&
@@ -334,7 +334,7 @@ namespace
 bool ViscidusCombatAction::TankRecovery(Unit* boss)
 {
     if (!boss || !ai->IsTank(bot) || boss->GetVisibility() == VISIBILITY_OFF ||
-        boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING) || TankVictim(ai, boss)) return false;
+        HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING) || TankVictim(ai, boss)) return false;
     Player* chosen = nullptr;
     uint32 spell = 0;
     for (Player* member : LiveGroupMembers(bot->GetGroup()))
@@ -354,7 +354,7 @@ bool ViscidusCombatAction::TankRecovery(Unit* boss)
             std::lock_guard<std::mutex> lock(retakeMutex);
             for (auto it = retakeClaims.begin(); it != retakeClaims.end();)
                 if (uint32(now - it->second) > 60000) it = retakeClaims.erase(it); else ++it;
-            auto key = std::make_pair(bot->GetInstanceId(), boss->GetObjectGuid().GetRawValue());
+            auto key = std::make_pair(bot->GetInstanceId(), GuidKeyCompat(boss->GetObjectGuid()));
             auto previous = retakeClaims.find(key);
             if (previous != retakeClaims.end() && uint32(now - previous->second) < 2000) return false;
             retakeClaims[key] = now;
@@ -381,30 +381,30 @@ bool ViscidusCombatAction::GlobBurst(Unit* target)
     auto cast = [&](char const* name, Unit* recipient)
     {
         uint32 id = AI_VALUE2(uint32, "spell id", name);
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(id);
+        SpellEntry const* spell = GetSpellEntryCompat(id);
         if (!spell || IsChanneledSpell(spell) || GetSpellCastTime(spell, bot) ||
             !ai->CanCastSpell(id, recipient) || !ai->CastSpell(id, recipient)) return false;
         sPlayerbotAIConfig.logEvent(ai, "ViscidusGlobBurst", name,
             "instance=" + std::to_string(bot->GetInstanceId()) + "|spell=" + std::to_string(id) +
-            "|glob=" + std::to_string(target->GetObjectGuid().GetRawValue()));
+            "|glob=" + std::to_string(GuidKeyCompat(target->GetObjectGuid())));
         return true;
     };
     if (bot->GetClass() == CLASS_MAGE)
     {
         uint32 explosion = AI_VALUE2(uint32, "spell id", "arcane explosion");
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(explosion);
+        SpellEntry const* spell = GetSpellEntryCompat(explosion);
         float radius = 0;
         if (spell) for (unsigned i = 0; i < MAX_EFFECT_INDEX; ++i)
             if (SpellRadiusEntry const* entry = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
                 radius = std::max(radius, entry->Radius);
         if (radius <= 0) return false;
-        if (bot->GetDistance(target) > radius - 1.0f || !bot->IsWithinLOSInMap(target, true))
+        if (bot->GetDistance(target) > radius - 1.0f || !IsWithinLOSInMapCompat(bot, target, true))
             return MoveNear(target, std::max(1.0f, radius - 3.0f));
         Unit* boss = Boss();
         if (boss && target->GetDistance(boss) < 20.0f && !target->HasAuraType(SPELL_AURA_MOD_ROOT))
         {
             uint32 nova = AI_VALUE2(uint32, "spell id", "frost nova");
-            SpellEntry const* root = sSpellTemplate.LookupEntry<SpellEntry>(nova);
+            SpellEntry const* root = GetSpellEntryCompat(nova);
             float range = 0;
             if (root) for (unsigned i = 0; i < MAX_EFFECT_INDEX; ++i)
                 if (SpellRadiusEntry const* entry = sSpellRadiusStore.LookupEntry(root->EffectRadiusIndex[i])) range = std::max(range, entry->Radius);
@@ -453,7 +453,7 @@ bool ViscidusCombatAction::Execute(Event&)
         RESET_AI_VALUE(Unit*, "dps target");
         sPlayerbotAIConfig.logEvent(ai, "ViscidusTarget", "encounter handoff",
             "instance=" + std::to_string(bot->GetInstanceId()) + "|entry=" + std::to_string(target->GetEntry()) +
-            "|guid=" + std::to_string(target->GetObjectGuid().GetRawValue()));
+            "|guid=" + std::to_string(GuidKeyCompat(target->GetObjectGuid())));
     }
     if (target->GetEntry() == 15299 && TankRecovery(target)) return true;
     if (target->GetEntry() == 15667 && GlobBurst(target)) return true;
@@ -467,7 +467,7 @@ bool ViscidusCombatAction::Execute(Event&)
     if (target->GetEntry() == 15299 && bot->GetClass() == CLASS_MAGE && bot->HasSpell(116))
     {
         if (bot->IsNonMeleeSpellCasted(true)) return selected;
-        if (bot->GetDistance(target) > 28.0f || !bot->IsWithinLOSInMap(target, true)) return MoveNear(target, 25.0f);
+        if (bot->GetDistance(target) > 28.0f || !IsWithinLOSInMapCompat(bot, target, true)) return MoveNear(target, 25.0f);
         return ai->CastSpell(116, target); // Hits, not rank damage, advance the core frost counter.
     }
     return selected;
@@ -476,7 +476,7 @@ void ViscidusCombatAction::Update()
 {
     Unit* boss = Boss();
     if (!boss) return;
-    bool split = boss->GetVisibility() == VISIBILITY_OFF || boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+    bool split = boss->GetVisibility() == VISIBILITY_OFF || HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING);
     if (split) wasSplit = true;
     else if (wasSplit)
     {
@@ -503,7 +503,7 @@ void ViscidusCombatAction::Update()
         if (Spell* spell = bot->GetCurrentSpell(type))
             if ((spell->m_targets.getUnitTargetGuid() == boss->GetObjectGuid() ||
                  AI_VALUE(Unit*, "current target") == boss) &&
-                ViscidusBlocksSpell(ai, spell->m_spellInfo->Id, boss))
+                ViscidusBlocksSpell(ai, GetSpellEntryCompat(spell->m_spellInfo)->Id, boss))
             {
                 // The core's InterruptSpell(type, false) leaves a delayed cast alone: only a real cancel writes a row.
                 if (spell->getState() != SPELL_STATE_DELAYED)
@@ -516,7 +516,7 @@ void ViscidusCombatAction::Update()
     if (target->GetEntry() == 15667 && bot->GetClass() == CLASS_MAGE)
         for (CurrentSpellTypes type : {CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL})
             if (Spell* spell = bot->GetCurrentSpell(type))
-                if (!IsPositiveSpell(spell->m_spellInfo) && (IsChanneledSpell(spell->m_spellInfo) || GetSpellCastTime(spell->m_spellInfo, bot)))
+                if (!IsPositiveSpell(GetSpellEntryCompat(spell->m_spellInfo)) && (IsChanneledSpell(GetSpellEntryCompat(spell->m_spellInfo)) || GetSpellCastTime(GetSpellEntryCompat(spell->m_spellInfo), bot)))
                 {
                     // The core's InterruptSpell(type, false) leaves a delayed cast alone: only a real cancel writes a row.
                     if (spell->getState() != SPELL_STATE_DELAYED)
@@ -537,7 +537,7 @@ void ViscidusCombatAction::Update()
         ai->SetActionDuration(uint32(0));
         sPlayerbotAIConfig.logEvent(ai, "ViscidusTarget", "prompt encounter handoff",
             "instance=" + std::to_string(bot->GetInstanceId()) + "|entry=" + std::to_string(target->GetEntry()) +
-            "|guid=" + std::to_string(target->GetObjectGuid().GetRawValue()));
+            "|guid=" + std::to_string(GuidKeyCompat(target->GetObjectGuid())));
     }
 }
 void ai::UpdateViscidus(PlayerbotAI* ai)

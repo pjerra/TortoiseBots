@@ -21,6 +21,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORLDPOS = (ROOT / "ai/playerbot/WorldPosition.cpp").read_text()
+# Slice 1 R4C/R4M: the liquid query and the other core calls of WorldPosition.cpp went to both-core helpers; on this core each helper is
+# the call WorldPosition.cpp always made, in this file.
+COMPAT_R3 = (ROOT / "ai/cmangos-compat-r3.h").read_text()
 MOVES = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
 
 
@@ -54,23 +57,32 @@ class SwimPathWiringTest(unittest.TestCase):
         # kSwimLiquidRequest (all liquids; a water | ocean request found no BFD water,
         # the vmap ANDs it with the WMO's raw liquid id 1), and the answer's type
         # flags (magma, slime) are handed back for the policy to refuse.
-        self.assertIn("terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data)", self.fits)
+        # (R4M: the lambda calls LiquidStatusCompat; its Turtle-side body (cmangos-compat-r3.h) is the core's getLiquidStatus call.)
+        self.assertIn("uint32 const status = static_cast<uint32>(LiquidStatusCompat(terrain, x, y, z, request, &data));", self.fits)
         self.assertIn("typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;", self.fits)
+        helper = body(COMPAT_R3, "inline GridMapLiquidStatus LiquidStatusCompat(", "\n}\n")
+        self.assertIn("return terrain->getLiquidStatus(x, y, z, reqLiquidType, data);", helper)
         self.assertNotIn("MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN", self.fits)
         self.assertIn("ai::kSwimLiquidRequest == 0,", WORLDPOS)
         self.assertIn("ai::SwimLineInWater(a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ(), liquidAt)", self.fits)
-        self.assertIn("            if (!map->isInLineOfSight(a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))\n                return false;", self.fits)
+        self.assertIn("            if (!IsInLineOfSightCompat(map, a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))\n                return false;", self.fits)
         self.assertIn("            if (!ai::SwimLineInWater(", self.fits)
         # Every leg, not just the first.
         self.assertIn("for (size_t i = 1; i < path.size(); ++i)", self.fits)
 
     def test_fits_refuses_transport_and_other_map(self):
-        self.assertIn("if (!bot || bot->GetTransport() || path.size() < 2)\n            return false;", self.fits)
+        self.assertIn("if (!bot || TransportOfCompat(bot) || path.size() < 2)\n            return false;", self.fits)
         self.assertIn("a.GetMapId() != map->GetId() || b.GetMapId() != map->GetId()", self.fits)
 
     def test_bits_are_asserted_against_the_core(self):
+        # The assert now goes through PathTypeBitsMatchCoreCompat (ai/cmangos-compat-unported.h on Turtle, where it
+        # compares each policy constant with the core's PATHFIND_ name; ForeverCore claims no equality: UNPORTED.md).
+        unported = (ROOT / "ai/cmangos-compat-unported.h").read_text()
+        self.assertIn("static_assert(PathTypeBitsMatchCoreCompat(ai::kPathTypeNormal, ai::kPathTypeShortcut, "
+                      "ai::kPathTypeIncomplete, ai::kPathTypeNoPath,\n"
+                      "    ai::kPathTypeNotUsingPath, ai::kPathTypeDestForced, ai::kPathTypeFlyPath, ai::kPathTypeUnderwater),", WORLDPOS)
         for name in ("NORMAL", "SHORTCUT", "INCOMPLETE", "NOPATH", "NOT_USING_PATH", "DEST_FORCED", "FLYPATH", "UNDERWATER"):
-            self.assertRegex(WORLDPOS, r"ai::kPathType\w+ == PATHFIND_%s\b" % name)
+            self.assertRegex(unported, r"\w+ == PATHFIND_%s\b" % name)
         for name in ("NO_WATER", "ABOVE_WATER", "WATER_WALK", "IN_WATER", "UNDER_WATER"):
             self.assertRegex(WORLDPOS, r"ai::kLiquid\w+ == LIQUID_MAP_%s\b" % name)
 
@@ -106,7 +118,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
     def test_handoff_guards_and_dispatch(self):
         h = self.hand
         self.assertIn("ai->IsRealPlayer() || bot->GetTransport() || bot->IsFlying() || bot->IsTaxiFlying()", h)
-        self.assertIn("bot->IsInWater() || bot->IsUnderwater() || bot->HasMovementFlag(MOVEFLAG_SWIMMING)", h)
+        self.assertIn("bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING)", h)
         # Round 1 (a): a follow that holds before packs never hands off.
         self.assertIn("if (packHold != nullptr)", h)
         self.assertLess(h.index("if (packHold != nullptr)"), h.index("PathFinder path(bot);"))
@@ -114,8 +126,8 @@ class SwimHandoffWiringTest(unittest.TestCase):
         self.assertIn("f.routeEndFromBot = route.empty() ? 0.0f : route.back().distance(startPos);", h)
         self.assertNotIn("route.size() < 2 ? 0.0f", h)
         self.assertLess(h.index("f.routeEndFromBot > ai::kSwimNoProgressYd"), h.index("PathFinder path(bot);"))
-        self.assertIn("map->FindCollisionModel(", h)
-        self.assertIn("terrain->IsSwimmable(startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here)", h)
+        self.assertIn("LineHitsCollisionModelCompat(map, ", h)
+        self.assertIn("TerrainIsSwimmableCompat(terrain, startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here)", h)
         self.assertIn("GridMapLiquidData endData{};", h)
         self.assertIn("ai::kSwimLiquidRequest, &endData);", h)
         self.assertIn("f.endInWater = ai::SwimSampleInWater(", h)
@@ -136,12 +148,12 @@ class SwimHandoffWiringTest(unittest.TestCase):
         h = self.hand
         # Round 1 (b)/(2): the 0x1 answer walks its own points (path.getPath()) through the same
         # ClipPath (hostile/hazard + packHold), and launches exactly that validated spline.
-        self.assertIn("for (G3D::Vector3 const& p : path.getPath())", h)
+        self.assertIn("for (G3D::Vector3 const& p : PathPointsCompat(path))", h)
         self.assertIn("clipped.ClipPath(ai, bot, ignoreEnemyTargets, packHold);", h)
-        self.assertIn('Movement::MoveSplineInit init(*bot, "SwimHandoffCore");', h)
+        self.assertIn('MoveSplineInitCompat init(*bot, "SwimHandoffCore");', h)
         # The 0x1 branch launches the validated spline only (no MovePoint recompute beside the 0x81 line).
         core = h[h.index('if (kind == ai::SwimHandoff::CoreLine && f.coreType == ai::kPathTypeNormal)'):h.index('else if (kind == ai::SwimHandoff::CoreLine)')]
-        self.assertIn('Movement::MoveSplineInit init(*bot, "SwimHandoffCore");', core)
+        self.assertIn('MoveSplineInitCompat init(*bot, "SwimHandoffCore");', core)
         # Round 1 (c): the 0x81 line and the swim-out legs run the same ClipPath, segment by
         # segment; a cut refuses. packHold is threaded (a hold clips too).
         self.assertIn("static bool SwimHandoffLegClear(", MOVES)
@@ -153,7 +165,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
         # waypoint-only slime loop missed a leg crossing a pool between two safe
         # points); the hand-off passes slime on, ordinary moves pass it off.
         self.assertIn("RouteEntersLiquidHazard(bot, startPos, line, hazardAt, true, hazardIsSlime)", h)
-        self.assertLess(h.index("for (G3D::Vector3 const& p : path.getPath())"), h.index("RouteEntersLiquidHazard(bot, startPos, line, hazardAt, true,"))
+        self.assertLess(h.index("for (G3D::Vector3 const& p : PathPointsCompat(path))"), h.index("RouteEntersLiquidHazard(bot, startPos, line, hazardAt, true,"))
         self.assertIn("hazardIsSlime", h)
         self.assertNotIn("slimeOnLine", h)
         self.assertIn("linePoints = coreRoute;", h)
@@ -161,7 +173,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
         self.assertIn('"slime"', h)
         self.assertIn('"magma"', h)
         # Round 1 (3): the swim-out end needs ground within 1 yd below it.
-        self.assertIn("map->GetHeight(endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f)", h)
+        self.assertIn("GetHeightCompat(map, endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f)", h)
         self.assertIn("INVALID_HEIGHT", h)
         self.assertIn("f.endHasGround", h)
         # Round 1: every refused stall logs its reason, rate-limited on the hand-off stamp.
@@ -193,7 +205,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
     def test_why_mirrors_the_fits_test(self):
         why = body(WORLDPOS, "std::string WorldPosition::SwimLineWhy(", "\n}\n")
         self.assertIn("ai::SwimLineFirstFailing(", why)
-        self.assertIn("map->isInLineOfSight(a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true)", why)
+        self.assertIn("IsInLineOfSightCompat(map, a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true)", why)
 
 
 if __name__ == "__main__":

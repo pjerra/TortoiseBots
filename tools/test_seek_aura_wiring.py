@@ -64,7 +64,7 @@ class CloudExemptionWiring(unittest.TestCase):
         calc = body(AOE, "bool HasAreaDebuffValue::Calculate()")
         self.assertIn("if (IsSoughtCloudFor(ai, bot, go))", calc)
         self.assertLess(calc.index("if (IsSoughtCloudFor(ai, bot, go))"),
-                        calc.index("IsPositiveEffect(spellProto, go->GetEffIndex())"))
+                        calc.index("IsPositiveEffect(spellProto, DynamicObjectEffectIndexCompat(go))"))
 
     def test_the_matcher_reads_both_the_spell_and_its_trigger(self):
         match = body(ACTIONS, "bool ai::IsSoughtCloudFor(")

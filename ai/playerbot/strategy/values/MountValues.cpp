@@ -18,7 +18,7 @@ using namespace ai;
 
 uint32 MountValue::GetSpeed(uint32 spellId)
 {
-    const SpellEntry* const spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    const SpellEntry* const spellInfo = GetSpellEntryCompat(spellId);
 
     if (!spellInfo)
         return 0;
@@ -97,7 +97,7 @@ uint32 MountValue::GetRiderMountSpeed(Player* bot)
 
 uint32 MountValue::GetDynamicMountSpeed(uint32 spellId, uint32 riderSpeed)
 {
-    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return 0;
     if (spellInfo->Custom & SPELL_CUSTOM_MOUNT_SPEED_100)
@@ -113,7 +113,7 @@ bool MountValue::IsMountSpell(uint32 spellId)
     // their mount before riding (GetSpeed hardcodes their 39%).
     if (spellId == 783 || spellId == 2645)
         return true;
-    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return false;
     // Core definition (HandleAuraModIncreaseMountedSpeed ~3895): the mount
@@ -140,7 +140,7 @@ uint32 MountValue::GetSpeedFor(Player* bot, uint32 riderSpeed) const
 {
     if (!bot)
         return GetSpeed(spellId);
-    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return 0;
     // Hardcoded non-mount forms keep their static speeds (travel form,
@@ -162,7 +162,7 @@ uint32 MountValue::GetMountSpell(uint32 itemId)
     if (std::optional<uint32> collectionSpell = sMountMgr.GetMountSpellId(itemId))
         return *collectionSpell;
 
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return 0;
@@ -278,7 +278,7 @@ bool MountValue::IsAllowedFor(Player* bot) const
     {
         auto itr = CollectionItemBySpell().find(spellId);
         if (itr != CollectionItemBySpell().end())
-            itemProto = sObjectMgr.GetItemPrototype(itr->second);
+            itemProto = GetItemProtoByIdCompat(itr->second);
     }
 
     // Spell-only mounts (class mounts, forms, donor spells) have no item to classify.
@@ -294,7 +294,7 @@ bool MountValue::IsAllowedFor(Player* bot) const
 
 bool MountValue::IsValidLocation(Player* bot)
 {
-    const SpellEntry* const spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    const SpellEntry* const spellInfo = GetSpellEntryCompat(spellId);
 
     if (!spellInfo)
         return false;
@@ -368,7 +368,7 @@ uint32 CurrentMountSpeedValue::Calculate()
             if (!aura)
                 continue;
 
-            SpellEntry const* auraSpell = aura->GetSpellProto();
+            SpellEntry const* auraSpell = GetSpellEntryCompat(aura->GetSpellProto());
             if (!auraSpell)
                 continue;
             // Only known mounts/forms report speed; any other buff sharing
@@ -407,7 +407,7 @@ std::vector<MountValue> FullMountListValue::Calculate()
 
     for (uint32 id = 0; id < sSpellTemplate.GetMaxEntry(); ++id)
     {
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(id);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(id);
         if (!spellInfo)
             continue;
 

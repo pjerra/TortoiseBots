@@ -172,7 +172,7 @@ bool CastCustomSpellAction::Execute(Event& event)
         return true;
     }
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }
@@ -206,7 +206,7 @@ bool CastCustomSpellAction::Execute(Event& event)
         else
         {
 
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
             replyArgs["%spell"] = ChatHelper::formatItem(proto);
         }
     }
@@ -355,7 +355,7 @@ bool CastCustomSpellAction::CastSummonPlayer(Player* requester, std::string comm
                         const Group::MemberSlotList& groupSlot = group->GetMemberSlots();
                         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
                         {
-                            Player* member = sObjectMgr.GetPlayer(itr->guid);
+                            Player* member = GetPlayerCompat(itr->guid);
                             if (member)
                             {
                                 if (member->GetName() == playerName)
@@ -385,7 +385,7 @@ bool CastCustomSpellAction::CastSummonPlayer(Player* requester, std::string comm
                                 const Group::MemberSlotList& groupSlot = group->GetMemberSlots();
                                 for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
                                 {
-                                    Player* member = sObjectMgr.GetPlayer(itr->guid);
+                                    Player* member = GetPlayerCompat(itr->guid);
                                     if (member)
                                     {
                                         if (itr->guid == targetGuid)
@@ -738,7 +738,7 @@ bool CraftRandomItemAction::Execute(Event& event)
         if (!newItemId)
             continue;
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
 
         if (!proto)
             continue;
@@ -772,7 +772,7 @@ bool DisenchantRandomItemAction::Execute(Event& event)
 
     items.reverse();
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }
@@ -784,7 +784,7 @@ bool DisenchantRandomItemAction::Execute(Event& event)
 
     for (auto& item: items)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(item);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(item);
 
         if (!proto)
             continue;
@@ -875,14 +875,14 @@ bool MailServiceStackBack(Player* bot, uint32_t senderLow, Item* item, std::stri
 {
     if (!bot || !item)
         return false;
-    Player* sender = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, senderLow));
+    Player* sender = GetPlayerCompat(ObjectGuid(HIGHGUID_PLAYER, senderLow));
     ObjectGuid receiverGuid = sender ? sender->getObjectGuid() : ObjectGuid(HIGHGUID_PLAYER, senderLow);
     std::ostringstream body;
     body << "Hello,\n\n";
     if (reason.empty())
         body << "Here are the materials from your disenchant request.\n\n";
     else
-        body << "I could not disenchant this (" << item->GetProto()->Name1 << "): " << reason << ".\n\n";
+        body << "I could not disenchant this (" << GetItemProtoCompat(item)->Name1 << "): " << reason << ".\n\n";
     body << bot->GetName() << '\n';
     bot->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
     item->DeleteFromInventoryDB();
@@ -1090,7 +1090,7 @@ bool GuildDisenchantServiceAction::Execute(Event& event)
         queue.erase(queue.begin());
         return false;
     }
-    ItemPrototype const* proto = item->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(item);
     if (!proto)
     {
         TortoiseBots::GuildOrders::DeleteDisenchantRow(bot->GetGUIDLow(), queued.itemGuidLow);
@@ -1140,7 +1140,7 @@ bool GuildDisenchantServiceAction::Execute(Event& event)
     ItemQualifier itemQualifier(queued.itemId);
     // Cast on the exact queued stack, not by a chat link: a link with a
     // space in the item name never parsed to a bag item.
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
         ai->StopMoving();
     if (bot->IsMounted())
         ai->Unmount();

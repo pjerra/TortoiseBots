@@ -83,7 +83,7 @@ ItemPrototype const* FindFirstCreatedItem(SpellEntry const* spell)
     {
         if (spell->Effect[eff] == SPELL_EFFECT_CREATE_ITEM && spell->EffectItemType[eff] > 0)
         {
-            if (ItemPrototype const* produced = sObjectMgr.GetItemPrototype(spell->EffectItemType[eff]))
+            if (ItemPrototype const* produced = GetItemProtoByIdCompat(spell->EffectItemType[eff]))
                 return produced;
         }
     }
@@ -101,7 +101,7 @@ ItemPrototype const* GetProducedItemFromRecipe(ItemPrototype const* recipeProto)
         uint32 const spellId = recipeProto->Spells[i].SpellId;
         if (!spellId)
             continue;
-        SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+        SpellEntry const* spell = GetSpellEntryCompat(spellId);
         if (!spell)
             continue;
         if (ItemPrototype const* direct = FindFirstCreatedItem(spell))
@@ -110,7 +110,7 @@ ItemPrototype const* GetProducedItemFromRecipe(ItemPrototype const* recipeProto)
         {
             if (spell->Effect[eff] == SPELL_EFFECT_LEARN_SPELL && spell->EffectTriggerSpell[eff] > 0)
             {
-                if (SpellEntry const* craft = sSpellMgr.GetSpellEntry(spell->EffectTriggerSpell[eff]))
+                if (SpellEntry const* craft = GetSpellEntryCompat(spell->EffectTriggerSpell[eff]))
                 {
                     if (ItemPrototype const* produced = FindFirstCreatedItem(craft))
                         return produced;
@@ -425,7 +425,7 @@ void CollectObtainableAndPhases(
             uint32 const spellId = proto.Spells[i].SpellId;
             if (!spellId)
                 continue;
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            SpellEntry const* spell = GetSpellEntryCompat(spellId);
             if (!spell)
                 continue;
             for (uint8 eff = 0; eff < MAX_EFFECT_INDEX; ++eff)
@@ -439,10 +439,10 @@ void CollectObtainableAndPhases(
     // 8. Craft spells (SPELL_EFFECT_CREATE_ITEM) and fixpoint propagation over reagents/recipes.
     std::vector<CraftSpellInfo> craftSpells;
     std::unordered_set<uint32_t> craftedItemIds;
-    uint32 const maxSpellId = sSpellMgr.GetMaxSpellId();
+    uint32 const maxSpellId = GetMaxSpellIdCompat();
     for (uint32 spellId = 1; spellId < maxSpellId; ++spellId)
     {
-        SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+        SpellEntry const* spell = GetSpellEntryCompat(spellId);
         if (!spell)
             continue;
 

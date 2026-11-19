@@ -33,14 +33,14 @@ public:
 
         if (player)
         {
-			if (player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) && player->InBattleGround())
+			if (HasPlayerFlagCompat(player, PLAYER_FLAGS_GHOST) && player->InBattleGround())
 				return false;
 		}
 
         // Leave range handling to the resurrection action's reach prerequisite.
         // Filtering here made a corpse disappear before the mature movement
         // action could close to spell range.
-        return player && !player->IsRessurectRequested() &&
+        return player && !IsResurrectRequestedCompat(player) &&
             sServerFacade.GetDeathState(player) == CORPSE &&
             !value->IsTargetOfSpellCast(player, predicate);
     }

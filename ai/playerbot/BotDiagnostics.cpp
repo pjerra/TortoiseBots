@@ -149,7 +149,7 @@ void PlayerbotAI::UpdateEvadeProbe()
         return;
     }
 
-    uint64 const guid = creature->getObjectGuid().GetRawValue();
+    uint64 const guid = GuidKeyCompat(creature->getObjectGuid());
     uint32 const healthPct = (uint32)creature->GetHealthPercent();
     bool const sameTarget = (evadeProbe.sampledTarget == guid);
     bool const victim = (creature->GetVictim() == bot);
@@ -193,10 +193,10 @@ void PlayerbotAI::UpdateEvadeProbe()
         out << " hp=" << healthPct;
         out << " dist2d=" << (uint32)sServerFacade.getDistance2d(bot, creature);
         out << " dz=" << (int)(bot->GetPositionZ() - creature->GetPositionZ());
-        out << " los=" << (int)bot->IsWithinLOSInMap(creature, true);
+        out << " los=" << (int)IsWithinLOSInMapCompat(bot, creature, true);
         out << " botcombat=" << (int)bot->IsInCombat();
         out << " victim=" << (int)victim;
-        out << " botmove=" << (int)bot->IsMoving();
+        out << " botmove=" << (int)IsMovingCompat(bot);
         out << " botcast=" << (int)bot->IsNonMeleeSpellCasted(false);
         out << " evade=" << (int)evading;
         out << " notreach=" << (int)notReachable;
@@ -218,9 +218,9 @@ void PlayerbotAI::UpdateEvadeProbe()
         // one the bot is, which is the report "the hunter's pet pulls, the owner walks on
         // and the mob is left alone".
         float homeX, homeY, homeZ, homeO;
-        creature->GetRespawnCoord(homeX, homeY, homeZ, &homeO);
+        GetRespawnCoordCompat(creature, homeX, homeY, homeZ, &homeO);
         float combatStartX, combatStartY, combatStartZ;
-        creature->GetCombatStartPosition(combatStartX, combatStartY, combatStartZ);
+        CombatStartPositionCompat(creature, combatStartX, combatStartY, combatStartZ);
         Unit* pet = bot->GetPet();
         out << " motion=" << (uint32)creature->GetMotionMaster()->GetCurrentMovementGeneratorType();
         out << " homedist=" << (uint32)creature->GetDistance(homeX, homeY, homeZ);

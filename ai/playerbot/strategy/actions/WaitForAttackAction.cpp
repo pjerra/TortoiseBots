@@ -15,7 +15,7 @@ bool WaitForAttackKeepSafeDistanceAction::Execute(Event& event)
 
     if (target && target->IsAlive())
     {
-        const float safeDistance = std::max(float(target->GetCombatReach(bot, false, 0.0f) + ATTACK_DISTANCE), WaitForAttackStrategy::GetSafeDistance());
+        const float safeDistance = std::max(float(GetCombatReachCompat(target, bot, false, 0.0f) + ATTACK_DISTANCE), WaitForAttackStrategy::GetSafeDistance());
         const float safeDistanceThreshold = WaitForAttackStrategy::GetSafeDistanceThreshold();
 
         // Find the best point around the target.
@@ -46,7 +46,7 @@ const ai::WorldPosition WaitForAttackKeepSafeDistanceAction::GetBestPoint(Unit* 
         for (uint32 dist = 0; dist < distance; dist++)
         {
             WorldPosition point = targetPosition + WorldPosition(0, dist * cos(startAngle), dist * sin(startAngle), 1.0f);
-            Creature* wpCreature = bot->SummonCreature(1, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 1000.0f + dist * 100.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 1, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 1000.0f + dist * 100.0f);
         }
     }
 
@@ -63,7 +63,7 @@ const ai::WorldPosition WaitForAttackKeepSafeDistanceAction::GetBestPoint(Unit* 
 
             if (ai->HasStrategy("debug move", BotState::BOT_STATE_COMBAT))
             {
-                Creature* wpCreature = bot->SummonCreature(1, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f + tryAngle * 1000.0f);
+                Creature* wpCreature = SummonCreatureCompat(bot, 1, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f + tryAngle * 1000.0f);
             }
 
             // Check if the target is visible from the point
@@ -80,7 +80,7 @@ const ai::WorldPosition WaitForAttackKeepSafeDistanceAction::GetBestPoint(Unit* 
 
             if (ai->HasStrategy("debug move", BotState::BOT_STATE_COMBAT))
             {
-                Creature* wpCreature = bot->SummonCreature(15631, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f + tryAngle * 1000.0f);
+                Creature* wpCreature = SummonCreatureCompat(bot, 15631, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f + tryAngle * 1000.0f);
             }
 
             return point;
@@ -105,7 +105,7 @@ bool WaitForAttackKeepSafeDistanceAction::IsEnemyClose(const WorldPosition& poin
                 // If the enemy is not neutral
                 if (enemy->IsHostileTo(bot))
                 {
-                    const float enemyAttackRange = enemy->GetCombatReach(bot, false, 0.0f) + ATTACK_DISTANCE;
+                    const float enemyAttackRange = GetCombatReachCompat(enemy, bot, false, 0.0f) + ATTACK_DISTANCE;
                     const float distanceToPoint = WorldPosition(enemy).sqDistance(point);
                     if (distanceToPoint <= (enemyAttackRange * enemyAttackRange))
                     {

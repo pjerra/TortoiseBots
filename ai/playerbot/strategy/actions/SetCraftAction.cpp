@@ -39,7 +39,7 @@ bool SetCraftAction::Execute(Event& event)
     }
 
     uint32 itemId = *itemIds.begin();
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return false;
 
@@ -115,7 +115,7 @@ void SetCraftAction::TellCraft(Player* requester)
         return;
     }
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(data.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(data.itemId);
     if (!proto)
         return;
 
@@ -126,7 +126,7 @@ void SetCraftAction::TellCraft(Player* requester)
     {
         uint32 item = i->first;
         int required = i->second;
-        ItemPrototype const* reagent = sObjectMgr.GetItemPrototype(item);
+        ItemPrototype const* reagent = GetItemProtoByIdCompat(item);
         if (reagent)
         {
             if (first) { first = false; } else out << ", ";
@@ -148,7 +148,7 @@ uint32 SetCraftAction::GetCraftFee(CraftData& data)
     if (data.IsEmpty())
         return 0;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(data.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(data.itemId);
     if (!proto)
         return 0;
 

@@ -56,6 +56,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -3111,7 +3112,7 @@ std::string ZoneName(uint32_t zoneId)
     AreaTableEntry const* entry = GetAreaEntryByAreaID(zoneId);
     if (!entry)
         return "-";
-    AreaTableEntry const* zone = entry->ZoneId ? GetAreaEntryByAreaID(entry->ZoneId) : entry;
+    AreaTableEntry const* zone = AreaZoneIdCompat(entry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(entry)) : entry;
     if (!zone || !zone->Name)
         return "-";
     return zone->Name;
@@ -3123,7 +3124,7 @@ std::string BotName(uint32_t botGuidLow)
     if (Player* bot = sObjectAccessor.FindPlayer(guid))
         return bot->GetName();
     std::string name;
-    if (sObjectMgr.GetPlayerNameByGUID(guid, name))
+    if (PlayerNameByGuidCompat(guid, name))
         return name;
     return "?";
 }
@@ -3182,7 +3183,7 @@ bool NeedVendorAffordable(Player* bot, bool online, NeedItem const& need)
 {
     if (!online || !bot || !need.itemId || !need.count)
         return false;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(need.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(need.itemId);
     if (!proto || !::ai::ItemUsageValue::IsItemSoldByAnyVendorWithoutLimit(proto))
         return false;
     uint32_t buyCount = proto->BuyCount ? proto->BuyCount : 1;
@@ -3510,7 +3511,7 @@ void SendNeedWhisper(OrderRecord const& order)
     if (!botAi)
         return;
 
-    ItemPrototype const* output = sObjectMgr.GetItemPrototype(order.itemId);
+    ItemPrototype const* output = GetItemProtoByIdCompat(order.itemId);
     std::string outputName = output ? output->Name1 : std::to_string(order.itemId);
     if (order.type == OrderType::Enchant)
         if (SpellEntry const* enchant = sServerFacade.LookupSpellInfo(order.itemId))
@@ -3520,7 +3521,7 @@ void SendNeedWhisper(OrderRecord const& order)
     {
         if (message.back() != ' ')
             message += ", ";
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(need.itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(need.itemId);
         message += std::to_string(need.count) + " " + (proto ? proto->Name1 : std::to_string(need.itemId));
     }
     message += "; trade it, mail it or put it in the guild bank";
@@ -3546,7 +3547,7 @@ bool IsDurableOrderBot(uint32_t guidLow)
         return false;
     if (ClaimLifecycle::Instance().IsClaimed(guidLow))
         return true;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    uint32_t accountId = AccountIdOfCharacterCompat(guid);
     return accountId && RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
 
@@ -3554,7 +3555,7 @@ bool IsOthersAlt(uint32_t guidLow, uint32_t requesterAccountId)
 {
     if (!guidLow || ClaimLifecycle::Instance().IsClaimed(guidLow))
         return false;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, guidLow));
+    uint32_t accountId = AccountIdOfCharacterCompat(ObjectGuid(HIGHGUID_PLAYER, guidLow));
     return accountId && accountId != requesterAccountId &&
         !RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
@@ -4176,7 +4177,7 @@ uint32_t Carry(Player* bot, OrderRecord const& order)
 std::string FormatOrderLine(uint32_t guildId, OrderRecord const& order, uint32_t have, uint32_t carry)
 {
     (void)guildId;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(order.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(order.itemId);
     std::string itemName = proto ? proto->Name1 : "?";
     // An enchant row carries the spell id: the addon shows the enchant name.
     if (order.type == OrderType::Enchant)

@@ -46,6 +46,11 @@ struct Unit {
     bool IsStopped() const { return !moving; }
     float GetSpeed(int) const { return 7; }
 };
+using GenericTransport = Transport;
+// The both-core helpers of ai/cmangos-compat-unported.h and TbCompat_C.h (T bodies, same text).
+inline GenericTransport* TransportOfCompat(Unit* unit) { return unit->GetTransport(); }
+template <class Init>
+inline void SplineSetTransportCompat(Init& init, GenericTransport* transport) { init.SetTransport(transport->GetGUIDLow()); }
 struct WorldPosition {
     float GetPathLength(const std::vector<WorldPosition>&) const { return 10; }
     std::vector<G3D::Vector3> toPointsArray(const std::vector<WorldPosition>& path) const {
@@ -65,6 +70,10 @@ struct MoveSplineInit {
     }
 };
 }
+// The both-core helpers (ai/cmangos-compat-r4a.h): on Turtle each is the old call, so the mock forwards to the old mock call.
+inline void MotionClearCompat(MotionMaster& mm, bool reset, bool all) { mm.Clear(reset, all); }
+using MoveSplineInitCompat = Movement::MoveSplineInit;
+inline const char* CStrCompat(const char* text) { return text; }
 struct Log { template<class... T> void outDetail(const char*, T...) {} } sLog;
 struct MovementAction {
     Unit* bot;

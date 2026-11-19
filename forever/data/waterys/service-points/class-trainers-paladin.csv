@@ -1,0 +1,12 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+5491,Arthur the Faithful,0,-8573.13,861.07,106.6,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+1232,Azar Stronghammer,0,-5586.76,-542.16,403.62,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+5148,Beldruk Doombrow,0,-4592.85,-907.69,502.85,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+5149,Brandur Ironhammer,0,-4601.65,-896.47,502.85,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+926,Bromos Grummner,0,-6120.68,382.09,395.63,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+925,Brother Sammuel,0,-8914.57,-215.02,82.3,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+927,Brother Wilhelm,0,-9468.14,108.98,57.66,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+5492,Katherine the Pure,0,-8564.39,880.63,106.6,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+928,Lord Grayson Shadowbreaker,0,-8577.5,881.47,106.6,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+5147,Valgar Highforge,0,-4596.14,-901.01,524.78,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin
+8140,Brother Karman,1,-3692.69,-4513.3,11.8,894,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),paladin

@@ -1,0 +1,104 @@
+# list: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## list-addon
+Requester: Labby
+Observed at: 2026-11-18T02:17:33.084245854-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+list
+REPLIES BEGIN
+Kordrim: in world, random 1, AI 1
+Dinkle: in world, random 1, AI 1
+Hawkfury: in world, random 1, AI 1
+Twitter: in world, random 1, AI 1
+Sheepinator: in world, random 1, AI 1
+Yrsannaa: in world, random 1, AI 1
+Aelaria: in world, random 1, AI 1
+Wildheart: in world, random 1, AI 1
+Hald: in world, random 1, AI 1
+Halira: in world, random 1, AI 1
+Quel: in world, random 1, AI 1
+Nightwalker: in world, random 1, AI 1
+Lyssanthe: in world, random 1, AI 1
+Leste: in world, random 1, AI 1
+Oranor: in world, random 1, AI 1
+Bubbletastic: in world, random 1, AI 1
+Warble: in world, random 1, AI 1
+Toobias: in world, random 1, AI 1
+Brunn: in world, random 1, AI 1
+Shalyn: in world, random 1, AI 1
+Kathragna: in world, random 1, AI 1
+Ilda: in world, random 1, AI 1
+Quasar: in world, random 1, AI 1
+Vaeliaa: in world, random 1, AI 1
+Arendrin: in world, random 1, AI 1
+Irelah: in world, random 1, AI 1
+Caerethor: in world, random 1, AI 1
+Ithil: in world, random 1, AI 1
+Boomkinz: in world, random 1, AI 1
+Binkle: in world, random 1, AI 1
+Matth: in world, random 1, AI 1
+Mathon: in world, random 1, AI 1
+Gnomey: in world, random 1, AI 1
+Smashface: in world, random 1, AI 1
+Kaelius: in world, random 1, AI 1
+Alen: in world, random 1, AI 1
+Marda: in world, random 1, AI 1
+Ivory: in world, random 1, AI 1
+Tobian: in world, random 1, AI 1
+REPLIES END
+
+## list-chat
+Requester: Labby
+Observed at: 2026-11-18T02:17:36.267575245-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot list
+REPLIES BEGIN
+Kordrim: in world, random 1, AI 1
+Dinkle: in world, random 1, AI 1
+Hawkfury: in world, random 1, AI 1
+Twitter: in world, random 1, AI 1
+Sheepinator: in world, random 1, AI 1
+Yrsannaa: in world, random 1, AI 1
+Aelaria: in world, random 1, AI 1
+Wildheart: in world, random 1, AI 1
+Hald: in world, random 1, AI 1
+Halira: in world, random 1, AI 1
+Quel: in world, random 1, AI 1
+Nightwalker: in world, random 1, AI 1
+Lyssanthe: in world, random 1, AI 1
+Leste: in world, random 1, AI 1
+Oranor: in world, random 1, AI 1
+Bubbletastic: in world, random 1, AI 1
+Warble: in world, random 1, AI 1
+Toobias: in world, random 1, AI 1
+Brunn: in world, random 1, AI 1
+Shalyn: in world, random 1, AI 1
+Kathragna: in world, random 1, AI 1
+Ilda: in world, random 1, AI 1
+Quasar: in world, random 1, AI 1
+Vaeliaa: in world, random 1, AI 1
+Arendrin: in world, random 1, AI 1
+Irelah: in world, random 1, AI 1
+Caerethor: in world, random 1, AI 1
+Ithil: in world, random 1, AI 1
+Boomkinz: in world, random 1, AI 1
+Binkle: in world, random 1, AI 1
+Matth: in world, random 1, AI 1
+Mathon: in world, random 1, AI 1
+Gnomey: in world, random 1, AI 1
+Smashface: in world, random 1, AI 1
+Kaelius: in world, random 1, AI 1
+Alen: in world, random 1, AI 1
+Marda: in world, random 1, AI 1
+Ivory: in world, random 1, AI 1
+Tobian: in world, random 1, AI 1
+REPLIES END
+

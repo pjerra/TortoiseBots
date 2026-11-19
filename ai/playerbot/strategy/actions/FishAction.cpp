@@ -276,7 +276,7 @@ WorldPosition ai::GetShoreCastSpot(Player* bot, WorldPosition const& from, World
     TerrainInfo const* terrain = bot->GetMap()->GetTerrain();
     if (terrain && terrain->IsInWater(from.getX(), from.getY(), from.getZ()))
         return WorldPosition();
-    float const ground = bot->GetMap()->GetHeight(from.getX(), from.getY(), from.getZ(), true);
+    float const ground = GetHeightCompat(bot->GetMap(), from.getX(), from.getY(), from.getZ(), true);
     if (ground <= INVALID_HEIGHT)
         return WorldPosition();
     if ((water.getZ() - 0.5f) > from.getZ() && (water.getZ() - 0.5f) > ground)
@@ -307,7 +307,7 @@ WorldPosition ai::StepTowardFishableWater(Player* bot, WorldPosition const& from
         float const t = back / dist2d;
         float const sx = from.getX() + dx * t;
         float const sy = from.getY() + dy * t;
-        float const standZ = bot->GetMap()->GetHeight(sx, sy, from.getZ(), true);
+        float const standZ = GetHeightCompat(bot->GetMap(), sx, sy, from.getZ(), true);
         if (standZ <= INVALID_HEIGHT)
             continue;
         WorldPosition const stand(bot->GetMapId(), sx, sy, standZ);
@@ -511,7 +511,7 @@ bool FishAction::Execute(Event& event)
             return false;
     }
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
         SetDuration(100);
@@ -613,8 +613,8 @@ bool FishAction::Execute(Event& event)
     // cheapest pole that reaches the planned zone, so it wins over item
     // level - an old pole outranks nothing when the zone needs the grant.
     Item* mainHand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
-    bool poleInHand = mainHand && mainHand->GetProto()->Class == ITEM_CLASS_WEAPON &&
-        mainHand->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE;
+    bool poleInHand = mainHand && GetItemProtoCompat(mainHand)->Class == ITEM_CLASS_WEAPON &&
+        GetItemProtoCompat(mainHand)->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE;
     uint32_t orderPole = ai::GuildOrderFishingPoleFor(bot);
     if (orderPole && (!poleInHand || mainHand->GetEntry() != orderPole))
     {
@@ -623,8 +623,8 @@ bool FishAction::Execute(Event& event)
             {
                 EquipAction::EquipItem(ai, GetMaster(), candidate);
                 mainHand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
-                poleInHand = mainHand && mainHand->GetProto()->Class == ITEM_CLASS_WEAPON &&
-                    mainHand->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE;
+                poleInHand = mainHand && GetItemProtoCompat(mainHand)->Class == ITEM_CLASS_WEAPON &&
+                    GetItemProtoCompat(mainHand)->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE;
                 break;
             }
     }
@@ -632,7 +632,7 @@ bool FishAction::Execute(Event& event)
     {
         Item* pole = poles.front();
         for (Item* candidate : poles)
-            if (candidate->GetProto()->ItemLevel > pole->GetProto()->ItemLevel)
+            if (GetItemProtoCompat(candidate)->ItemLevel > GetItemProtoCompat(pole)->ItemLevel)
                 pole = candidate;
         EquipAction::EquipItem(ai, GetMaster(), pole);
     }

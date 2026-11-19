@@ -114,11 +114,11 @@ char StateLetter(PlayerbotAI* ai, Player* bot)
 uint32_t CurrentSpellId(Unit* unit)
 {
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     return 0;
 }
 
@@ -127,7 +127,7 @@ int FacingDegrees(Player* bot, Unit* unit)
 {
     constexpr float kTwoPi = 6.28318530718f;
     constexpr float kPi = 3.14159265359f;
-    float d = std::fabs(bot->GetAngle(unit) - bot->GetOrientation());
+    float d = std::fabs(GetAngleCompat(bot, unit) - bot->GetOrientation());
     while (d > kTwoPi)
         d -= kTwoPi;
     if (d > kPi)
@@ -149,7 +149,7 @@ uint32_t HarmfulGroundAura(Player* bot)
             continue;
         if (!holder->IsPersistent() && !holder->IsAreaAura())
             continue;
-        SpellEntry const* spell = holder->GetSpellProto();
+        SpellEntry const* spell = GetSpellEntryCompat(holder->GetSpellProto());
         if (!spell)
             continue;
         for (int i = 0; i < MAX_EFFECT_INDEX; ++i)

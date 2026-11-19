@@ -271,7 +271,7 @@ uint32_t MailStacks(Player* bot, uint32_t itemId, ObjectGuid receiverGuid,
     mailedAny = false;
     if (!bot || !receiverGuid || receiverGuid == bot->getObjectGuid())
         return 0;
-    Player* receiver = sObjectMgr.GetPlayer(receiverGuid);
+    Player* receiver = GetPlayerCompat(receiverGuid);
     uint32_t mailed = 0;
     while (delivered + mailed < amount)
     {
@@ -343,7 +343,7 @@ uint32_t MailGiverSurplus(Player* bot, uint32_t itemId, uint32_t quota, ObjectGu
 {
     if (!bot || !itemId || !quota || !giverGuid || giverGuid == bot->getObjectGuid())
         return 0;
-    Player* giver = sObjectMgr.GetPlayer(giverGuid);
+    Player* giver = GetPlayerCompat(giverGuid);
     uint32_t mailed = 0;
     while (mailed < quota)
     {
@@ -397,7 +397,7 @@ std::string OrderDisplayName(OrderRecord const& order)
 {
     if (order.type != OrderType::Enchant)
     {
-        if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(order.itemId))
+        if (ItemPrototype const* proto = GetItemProtoByIdCompat(order.itemId))
             return proto->Name1;
         return "?";
     }
@@ -803,7 +803,7 @@ private:
         uint32_t remaining = order->supplyCount;
         bool withdrawAttempted = false;
         bool emptyThisVisit = false;
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(order->supplyItemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(order->supplyItemId);
         uint32_t stackSize = proto ? proto->GetMaxStackSize() : 0;
         if (stackSize)
         {

@@ -89,7 +89,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
                 continue;
 
             auto pmo = sPerformanceMonitor.start(PERF_MON_VALUE, "IsMoreProfitableToSellToAHThanToVendor", ai);
-            bool isMoreProfitableToSellToAHThanToVendor = ItemUsageValue::IsMoreProfitableToSellToAHThanToVendor(item->GetProto(), bot);
+            bool isMoreProfitableToSellToAHThanToVendor = ItemUsageValue::IsMoreProfitableToSellToAHThanToVendor(GetItemProtoCompat(item), bot);
             pmo.reset();
 
             if (!isMoreProfitableToSellToAHThanToVendor)
@@ -103,7 +103,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
             if (deposit > freeMoney)
                 return false;
 
-            const ItemPrototype* proto = item->GetProto();
+            const ItemPrototype* proto = GetItemProtoCompat(item);
 
             if (!pricePerItemCache[proto->ItemId])
             {
@@ -153,10 +153,10 @@ bool AhAction::PostItem(Player* requester, Item* item, uint32 price, Unit* aucti
 {
     // The order protected set bypasses usage lists on explicit posts: never
     // hand over the order item, the supply item or a known-recipe reagent.
-    if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, item->GetProto()->ItemId))
+    if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
         return false;
     ObjectGuid itemGuid = item->getObjectGuid();
-    ItemPrototype const* proto = item->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(item);
 
     ItemQualifier itemQualifier(item);
 
@@ -275,7 +275,7 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
             case ItemUsage::ITEM_USAGE_AH:
             {
                 auto pmo = sPerformanceMonitor.start(PERF_MON_VALUE, "IsWorthBuyingFromAhToResellAtAH", ai);
-                bool isWorthBuyingFromAhToResellAtAH = ItemUsageValue::IsWorthBuyingFromAhToResellAtAH(sObjectMgr.GetItemPrototype(auction->itemTemplate), totalCost, AuctionItemCount(auction));
+                bool isWorthBuyingFromAhToResellAtAH = ItemUsageValue::IsWorthBuyingFromAhToResellAtAH(GetItemProtoByIdCompat(auction->itemTemplate), totalCost, AuctionItemCount(auction));
                 pmo.reset();
 
                 if (!isWorthBuyingFromAhToResellAtAH)
@@ -285,7 +285,7 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
             }
             case ItemUsage::ITEM_USAGE_VENDOR:
                 //basically if AH price is lower than vendor sell price then it's worth it
-                if (totalCost / auctionItemCount >= (int32)sObjectMgr.GetItemPrototype(auction->itemTemplate)->SellPrice)
+                if (totalCost / auctionItemCount >= (int32)GetItemProtoByIdCompat(auction->itemTemplate)->SellPrice)
                     continue;
                 power = 1000;
                 break;
@@ -384,7 +384,7 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
         if (curAuction.owner == bot->GetGUIDLow() || curAuction.ownerAccount == bot->GetSession()->GetAccountId())
             continue;
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(curAuction.itemTemplate);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(curAuction.itemTemplate);
 
         if (!proto)
             continue;
@@ -457,7 +457,7 @@ bool AhBidAction::BidItem(Player* requester, AuctionEntry* auction, uint32 price
     if (!count)
         return false;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(auction->itemTemplate);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(auction->itemTemplate);
 
     bot->GetSession()->HandleAuctionPlaceBid(packet);
 
@@ -517,7 +517,7 @@ bool AhCancelAction::ExecuteCommand(Player* requester, std::string text, Unit* a
             continue;
         }
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry->itemTemplate);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(entry->itemTemplate);
         if (proto && !proto->Name1.empty() && strstri(proto->Name1, text.c_str()))
         {
             toCancel.push_back(entry);
@@ -547,7 +547,7 @@ bool AhCancelAction::CancelAuctionEntry(Player* requester, AuctionEntry* auction
 
     uint32 auctionId = auction->Id;
     uint32 itemTemplate = auction->itemTemplate;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemTemplate);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemTemplate);
 
     WorldPacket packet;
     packet << auctioneer->getObjectGuid();

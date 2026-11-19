@@ -1,0 +1,13 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+986,Haromm,0,-10506.9,-3328.17,20.89,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3032,Beram Skychaser,1,-980.84,287.17,138.08,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3344,Kardris Dreamseeker,1,1933.69,-4224.86,42.18,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3062,Meela Dawnstrider,1,-2873.88,-264.71,54.01,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3066,Narm Skychaser,1,-2298.96,-437.74,-5.36,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+13417,Sagorne Creststrider,1,1937.84,-4222.84,42.18,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3157,Shikrik,1,-623.94,-4203.88,38.43,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3403,Sian'tsu,1,1932.88,-4211.3,42.18,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3030,Siln Skychaser,1,-996.92,278.46,138.08,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3173,Swart,1,307.11,-4839.91,10.61,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+3031,Tigor Skychaser,1,-980.77,269.9,138.08,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman
+251374,Windshaper Boro,2991,4082.28,1851.06,976.85,3599,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),shaman

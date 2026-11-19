@@ -1,0 +1,5 @@
+# The two ForeverCore-only slice sources, for a syntax-only census of just them (R2):
+#   FOREVER_SLOT=<n> FOREVER_CENSUS_LIST=forever/tools/slice_sources_check.txt forever/tools/vm-census.sh "" 14
+forever/src/slice/SliceAiObjectContext.cpp
+forever/src/slice/SliceAiFactory.cpp
+forever/src/slice/SliceLog.cpp

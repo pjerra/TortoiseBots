@@ -96,7 +96,7 @@ class CharmYieldWiring(unittest.TestCase):
         self.assertLess(hold.index("ownCharmer"), hold.index("LiveGroupMembers(bot->GetGroup())"))
         self.assertIn("pet->SetReactState(REACT_PASSIVE);", hold)
         self.assertIn("pet->AttackStop();", hold)
-        self.assertIn("bot->CallForAllControlledUnits(ParkGuardian{charmHoldGuardianStances_}, CONTROLLED_GUARDIANS)", hold)
+        self.assertIn("ForAllGuardiansCompat(bot, ParkGuardian{charmHoldGuardianStances_})", hold)
         self.assertIn("if (!creature || creature->IsTotem())", hold)
         self.assertIn("creature->SetReactState(REACT_PASSIVE);", hold)
         self.assertIn("creature->AttackStop();", hold)

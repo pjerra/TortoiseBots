@@ -14,7 +14,9 @@ namespace ai
     // passive via their owner's own AI (ParkPetForPullHold, restored by
     // their own EndPullWindow even on group-leave/logout/death); the tank's
     // own pet is pinned by PullStartAction and restored by PullEndAction.
-    void PausePartyPullHold(Player* tank, uint32 joinDelaySeconds);
+    void PausePartyPullHold(Player* tank, uint32 joinDelaySeconds, bool leadKeyed = false, uint32 windowSecondsOverride = 0);
+    // leadKeyed: the held bots' window is the run leader's lead-keyed kind (released on the tank's lead, PullLeadReleaseReason; joinDelaySeconds is its minimum).
+    // windowSecondsOverride: the window length when not the pullback default (pullBackMaxReturnTime + join delay).
 
     class PullRequestAction : public ChatCommandAction
     {

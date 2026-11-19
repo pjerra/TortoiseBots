@@ -2,6 +2,7 @@
 #include "BudgetValues.h"
 #include "ItemUsageValue.h"
 #include "MountValues.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -23,7 +24,7 @@ uint32 RepairCostValue::RepairCost(const Item* item, bool fullCost)
             return 0;
     }
 
-    ItemPrototype const* ditemProto = item->GetProto();
+    ItemPrototype const* ditemProto = GetItemProtoCompat(item);
 
     DurabilityCostsEntry const* dcost = sDurabilityCostsStore.LookupEntry(ditemProto->ItemLevel);
     if (!dcost)
@@ -173,32 +174,32 @@ uint32 MoneyNeededForValue::Calculate()
         float totalDeposit = 0;
         for (auto item : AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)))
         {
-            float deposit = float(item->GetProto()->SellPrice * item->GetCount() * (time / MIN_AUCTION_TIME));
+            float deposit = float(GetItemProtoCompat(item)->SellPrice * item->GetCount() * (time / MIN_AUCTION_TIME));
 
             deposit = deposit * 15 * 3.0f / 100.0f;
 
-            float min_deposit = float(sWorld.getConfig(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
+            float min_deposit = float(WorldU32ConfigW2(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
 
             if (deposit < min_deposit)
                 deposit = min_deposit;
 
-            deposit *= sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
+            deposit *= WorldFloatConfigW2(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
 
             totalDeposit += deposit;
         }
 
         for (auto item : AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_BROKEN_AH)))
         {
-            float deposit = float(item->GetProto()->SellPrice * item->GetCount() * (time / MIN_AUCTION_TIME));
+            float deposit = float(GetItemProtoCompat(item)->SellPrice * item->GetCount() * (time / MIN_AUCTION_TIME));
 
             deposit = deposit * 15 * 3.0f / 100.0f;
 
-            float min_deposit = float(sWorld.getConfig(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
+            float min_deposit = float(WorldU32ConfigW2(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
 
             if (deposit < min_deposit)
                 deposit = min_deposit;
 
-            deposit *= sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
+            deposit *= WorldFloatConfigW2(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
 
             totalDeposit += deposit;
 
@@ -213,7 +214,7 @@ uint32 MoneyNeededForValue::Calculate()
             if (LostDurability == 0)
                 continue;
 
-            ItemPrototype const* ditemProto = item->GetProto();
+            ItemPrototype const* ditemProto = GetItemProtoCompat(item);
 
             DurabilityCostsEntry const* dcost = sDurabilityCostsStore.LookupEntry(ditemProto->ItemLevel);
             if (!dcost)

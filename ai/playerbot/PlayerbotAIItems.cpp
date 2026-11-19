@@ -43,7 +43,7 @@ std::vector<Bag*> PlayerbotAI::GetEquippedQuivers()
     {
         if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
-            if (bag->GetProto()->Class == ITEM_CLASS_QUIVER)
+            if (GetItemProtoCompat(bag)->Class == ITEM_CLASS_QUIVER)
             {
                 bags.push_back(bag);
             }
@@ -79,7 +79,7 @@ std::vector<Item*> PlayerbotAI::GetInventoryAndEquippedItems()
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
@@ -124,7 +124,7 @@ std::vector<Item*> PlayerbotAI::GetInventoryItems()
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
@@ -147,7 +147,7 @@ uint32 PlayerbotAI::GetInventoryItemsCountWithId(uint32 itemId)
             {
                 if (Item* pItem = pBag->GetItemByPos(j))
                 {
-                    if (pItem->GetProto()->ItemId == itemId)
+                    if (GetItemProtoCompat(pItem)->ItemId == itemId)
                     {
                         count += pItem->GetCount();
                     }
@@ -160,18 +160,18 @@ uint32 PlayerbotAI::GetInventoryItemsCountWithId(uint32 itemId)
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
-            if (pItem->GetProto()->ItemId == itemId)
+            if (GetItemProtoCompat(pItem)->ItemId == itemId)
             {
                 count += pItem->GetCount();
             }
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
-            if (pItem->GetProto()->ItemId == itemId)
+            if (GetItemProtoCompat(pItem)->ItemId == itemId)
             {
                 count += pItem->GetCount();
             }
@@ -192,7 +192,7 @@ bool PlayerbotAI::HasItemInInventory(uint32 itemId)
             {
                 if (Item* pItem = pBag->GetItemByPos(j))
                 {
-                    if (pItem->GetProto()->ItemId == itemId)
+                    if (GetItemProtoCompat(pItem)->ItemId == itemId)
                     {
                         return true;
                     }
@@ -205,18 +205,18 @@ bool PlayerbotAI::HasItemInInventory(uint32 itemId)
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
-            if (pItem->GetProto()->ItemId == itemId)
+            if (GetItemProtoCompat(pItem)->ItemId == itemId)
             {
                 return true;
             }
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
-            if (pItem->GetProto()->ItemId == itemId)
+            if (GetItemProtoCompat(pItem)->ItemId == itemId)
             {
                 return true;
             }
@@ -241,7 +241,7 @@ bool PlayerbotAI::HasNotFullStacksInBagsForLootItems(LootItemList const& lootIte
                 {
                     if (Item* pItem = pBag->GetItemByPos(j))
                     {
-                        if (pItem->GetProto()->ItemId == lootItem.itemid
+                        if (GetItemProtoCompat(pItem)->ItemId == lootItem.itemid
                             && pItem->GetCount() < pItem->GetMaxStackCount())
                         {
                             return true;
@@ -255,7 +255,7 @@ bool PlayerbotAI::HasNotFullStacksInBagsForLootItems(LootItemList const& lootIte
         {
             if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
             {
-                if (pItem->GetProto()->ItemId == lootItem.itemid
+                if (GetItemProtoCompat(pItem)->ItemId == lootItem.itemid
                     && pItem->GetCount() < pItem->GetMaxStackCount())
                 {
                     return true;
@@ -270,8 +270,8 @@ bool PlayerbotAI::HasNotFullStacksInBagsForLootItems(LootItemList const& lootIte
 static Loot* LootForWorldObject(WorldObject* wo)
 {
     if (!wo) return nullptr;
-    if (wo->IsCreature()) return &static_cast<Creature*>(wo)->loot;
-    if (wo->IsGameObject()) return &static_cast<GameObject*>(wo)->loot;
+    if (wo->IsCreature()) return LootOfCreatureCompat(static_cast<Creature*>(wo));
+    if (wo->IsGameObject()) return LootOfGameObjectCompat(static_cast<GameObject*>(wo));
     return nullptr;
 }
 
@@ -311,7 +311,7 @@ void PlayerbotAI::InventoryIterateItemsInBags(IterateItemsVisitor* visitor)
             if (!visitor->Visit(pItem))
                 return;
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
             if (!visitor->Visit(pItem))
                 return;
@@ -339,7 +339,7 @@ void PlayerbotAI::InventoryIterateItemsInEquip(IterateItemsVisitor* visitor)
 
 void PlayerbotAI::InventoryIterateItemsInBank(IterateItemsVisitor* visitor)
 {
-    for (uint8 slot = BANK_SLOT_ITEM_START; slot < BANK_SLOT_ITEM_END; slot++)
+    for (uint8 slot : BankItemSlotsCompat())
     {
         Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
         if (!pItem)
@@ -404,7 +404,7 @@ bool compare_items(const ItemPrototype* proto1, const ItemPrototype* proto2)
 
 bool compare_items_by_level(const Item* item1, const Item* item2)
 {
-    return compare_items(item1->GetProto(), item2->GetProto());
+    return compare_items(GetItemProtoCompat(item1), GetItemProtoCompat(item2));
 }
 
 void PlayerbotAI::InventoryTellItems(Player* player, std::map<uint32, int> itemMap, std::map<uint32, bool> soulbound)
@@ -412,7 +412,7 @@ void PlayerbotAI::InventoryTellItems(Player* player, std::map<uint32, int> itemM
     std::list<ItemPrototype const*> items;
     for (std::map<uint32, int>::iterator i = itemMap.begin(); i != itemMap.end(); i++)
     {
-        items.push_back(sObjectMgr.GetItemPrototype(i->first));
+        items.push_back(GetItemProtoByIdCompat(i->first));
     }
 
     items.sort(compare_items);
@@ -609,7 +609,7 @@ std::list<Item*> PlayerbotAI::InventoryParseItems(std::string text, IterateItems
         Item* const pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
         if (pItem)
         {
-            FindAmmoVisitor visitor(bot, pItem->GetProto()->SubClass);
+            FindAmmoVisitor visitor(bot, GetItemProtoCompat(pItem)->SubClass);
             VISIT;
         }
     }
@@ -777,9 +777,9 @@ Item* PlayerbotAI::FindPoison() const
       Item* const pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
       if (pItem)
       {
-         const ItemPrototype* const pItemProto = pItem->GetProto();
+         const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-         if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+         if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
 
          if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == 6)
@@ -796,9 +796,9 @@ Item* PlayerbotAI::FindPoison() const
             Item* const pItem = bot->GetItemByPos(bag, slot);
             if (pItem)
             {
-               const ItemPrototype* const pItemProto = pItem->GetProto();
+               const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-               if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+               if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
                if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == 6)
@@ -817,12 +817,12 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
       Item* const pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
       if (pItem)
       {
-         const ItemPrototype* const pItemProto = pItem->GetProto();
+         const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-         if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+         if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
 
-         if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && pItemProto->DisplayInfoID == displayId)
+         if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && ItemProtoHasDisplayIdCompat(pItemProto, displayId))
             return pItem;
       }
    }
@@ -836,12 +836,12 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
             Item* const pItem = bot->GetItemByPos(bag, slot);
             if (pItem)
             {
-               const ItemPrototype* const pItemProto = pItem->GetProto();
+               const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-               if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+               if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
-               if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && pItemProto->DisplayInfoID == displayId)
+               if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && ItemProtoHasDisplayIdCompat(pItemProto, displayId))
                   return pItem;
             }
          }
@@ -857,9 +857,9 @@ Item* PlayerbotAI::FindBandage() const
       Item* const pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
       if (pItem)
       {
-         const ItemPrototype* const pItemProto = pItem->GetProto();
+         const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-         if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+         if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
          if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == ITEM_SUBCLASS_FOOD)
             return pItem;
@@ -875,9 +875,9 @@ Item* PlayerbotAI::FindBandage() const
             Item* const pItem = bot->GetItemByPos(bag, slot);
             if (pItem)
             {
-               const ItemPrototype* const pItemProto = pItem->GetProto();
+               const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-               if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+               if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
                if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == ITEM_SUBCLASS_FOOD)
@@ -912,7 +912,7 @@ static const uint32 uPriorizedWeightStoneIds[6] =
 Item* PlayerbotAI::FindStoneFor(Item* weapon) const
 {
     Item* stone;
-    ItemPrototype const* pProto = weapon->GetProto();
+    ItemPrototype const* pProto = GetItemProtoCompat(weapon);
     if (pProto && pProto->Class == ITEM_CLASS_WEAPON && (pProto->SubClass == ITEM_SUBCLASS_WEAPON_SWORD || pProto->SubClass == ITEM_SUBCLASS_WEAPON_SWORD2
         || pProto->SubClass == ITEM_SUBCLASS_WEAPON_AXE || pProto->SubClass == ITEM_SUBCLASS_WEAPON_AXE2
         || pProto->SubClass == ITEM_SUBCLASS_WEAPON_DAGGER))
@@ -950,7 +950,7 @@ static const uint32 uPriorizedManaOilIds[3] =
 Item* PlayerbotAI::FindOilFor(Item* weapon) const
 {
     Item* oil = nullptr;
-    ItemPrototype const* pProto = weapon->GetProto();
+    ItemPrototype const* pProto = GetItemProtoCompat(weapon);
 
     const std::vector<uint32> uPriorizedWizardOilIds = { MINOR_WIZARD_OIL, LESSER_WIZARD_OIL, BRILLIANT_WIZARD_OIL, WIZARD_OIL };
     const std::vector<uint32> uPriorizedManaOilIds = { MINOR_MANA_OIL, LESSER_MANA_OIL, BRILLIANT_MANA_OIL };
@@ -1034,40 +1034,15 @@ void PlayerbotAI::ImbueItem(Item* item, uint16 targetFlag, ObjectGuid targetGUID
    uint8 spell_index = 0;
    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
    {
-      if (item->GetProto()->Spells[i].SpellId > 0)
+      if (GetItemProtoCompat(item)->Spells[i].SpellId > 0)
       {
-         spellId = item->GetProto()->Spells[i].SpellId;
+         spellId = GetItemProtoCompat(item)->Spells[i].SpellId;
          spell_index = i;
          break;
       }
    }
 
-#ifdef CMANGOS
-   std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_USE_ITEM, 20));
-#endif
-#ifdef MANGOS
-   WorldPacket* packet = new WorldPacket(CMSG_USE_ITEM);
-#endif
-
-   *packet << bagIndex;
-   *packet << slot;
-   *packet << spell_index;
-   *packet << targetFlag;
-
-#ifdef CMANGOS
-   if (targetFlag & (TARGET_FLAG_UNIT | TARGET_FLAG_ITEM | TARGET_FLAG_GAMEOBJECT))
-#endif
-#ifdef MANGOS
-   if (targetFlag & (TARGET_FLAG_UNIT | TARGET_FLAG_ITEM | TARGET_FLAG_OBJECT))
-#endif
-      *packet << targetGUID.WriteAsPacked();
-
-#ifdef CMANGOS
-   bot->GetSession()->QueuePacket(packet.release());
-#endif
-#ifdef MANGOS
-   bot->GetSession()->QueuePacket(packet);
-#endif
+   QueueUseItemPacketCompat(bot, bagIndex, slot, spell_index, targetFlag, targetGUID);
 }
 
 void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
@@ -1092,7 +1067,7 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
 #ifdef MANGOS
    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellid);
 #else
-   SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellid);
+   SpellEntry const* spellInfo = GetSpellEntryCompat(spellid);
 #endif
    if (!spellInfo)
       return;
@@ -1100,15 +1075,15 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
    uint32 enchantid = spellInfo->EffectMiscValue[0];
    if (!enchantid)
    {
-      sLog.outError("%u: Invalid enchantid %s %s" , enchantid , " report to devs", bot->GetName());
+      sLog.outError("%u: Invalid enchantid %s %s" , enchantid , " report to devs", CStrCompat(bot->GetName()));
       return;
    }
 
-   if (!((1 << pItem->GetProto()->SubClass) & spellInfo->EquippedItemSubClassMask) &&
-      !((1 << pItem->GetProto()->InventoryType) & spellInfo->EquippedItemInventoryTypeMask))
+   if (!((1 << GetItemProtoCompat(pItem)->SubClass) & spellInfo->EquippedItemSubClassMask) &&
+      !((1 << GetItemProtoCompat(pItem)->InventoryType) & spellInfo->EquippedItemInventoryTypeMask))
    {
 
-      sLog.outError("%s: items could not be enchanted, wrong item type equipped", bot->GetName());
+      sLog.outError("%s: items could not be enchanted, wrong item type equipped", CStrCompat(bot->GetName()));
 
       return;
    }
@@ -1119,5 +1094,5 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
    pItem->SetEnchantment(enchantSlot, enchantid, 0, 0);
    bot->ApplyEnchantment(pItem, enchantSlot, true);
 
-   sLog.outDetail("%s: items was enchanted successfully!", bot->GetName());
+   sLog.outDetail("%s: items was enchanted successfully!", CStrCompat(bot->GetName()));
 }

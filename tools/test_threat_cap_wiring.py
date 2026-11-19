@@ -469,7 +469,7 @@ class InterruptIgnoresThreat(unittest.TestCase):
         # The flat threat is the core's spell threat table entry for the interrupt's spell id, 0 without one.
         self.assertIn(
             "if (SpellThreatEntry const* threatEntry = sSpellMgr.GetSpellThreatEntry(interruptAction->GetSpellID()))"
-            "\n            interruptFlatThreat = threatEntry->threat;", inputs)
+            "\n            interruptFlatThreat = SpellFlatThreatCompat(*threatEntry);", inputs)
         # Melee or ranged by the core's own test: can the mob reach the bot with a melee swing.
         self.assertIn("interruptRanged = !interruptTarget || !interruptTarget->CanReachWithMeleeAutoAttack(bot);",
                       inputs)

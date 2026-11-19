@@ -115,7 +115,7 @@ bool TravelAction::Execute(Event& event)
             Quest const* quest = sObjectMgr.GetQuestTemplate(objective->GetQuestId());
             uint32 const itemId = quest ? quest->ReqItemId[objective->GetObjective()] : 0;
             uint32 const itemCount = quest ? quest->ReqItemCount[objective->GetObjective()] : 0;
-            ItemPrototype const* proto = itemId ? sObjectMgr.GetItemPrototype(itemId) : nullptr;
+            ItemPrototype const* proto = itemId ? GetItemProtoByIdCompat(itemId) : nullptr;
             Creature* vendor = proto && objective->GetEntry() > 0 ?
                 bot->FindNearestCreature((uint32)objective->GetEntry(), INTERACTION_DISTANCE * 4) : nullptr;
             if (vendor && vendor->IsAlive() && vendor->IsVendor() && bot->GetItemCount(itemId, true) < itemCount)
@@ -124,7 +124,7 @@ bool TravelAction::Execute(Event& event)
                 {
                     // A few yards to the innkeeper; checked, so a mesh trap
                     // between the stalls refuses instead of cutting through.
-                    if (!bot->IsMoving())
+                    if (!IsMovingCompat(bot))
                         WalkChecked(WorldPosition(vendor->GetMapId(), vendor->GetPositionX(), vendor->GetPositionY(), vendor->GetPositionZ()));
                     return true;
                 }
@@ -167,7 +167,7 @@ bool TravelAction::Execute(Event& event)
                         if (sServerFacade.getDistance2d(bot, board) > INTERACTION_DISTANCE)
                         {
                             // A few yards to the board; checked like the vendor.
-                            if (!bot->IsMoving())
+                            if (!IsMovingCompat(bot))
                                 WalkChecked(WorldPosition(board->GetMapId(), board->GetPositionX(), board->GetPositionY(), board->GetPositionZ()));
                             return true;
                         }

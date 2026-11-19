@@ -96,11 +96,11 @@ Player* CheckMailAction::GetProcessableOwner(Mail* mail, Player* bot)
     if (mail->stationery == MAIL_STATIONERY_AUCTION || mail->messageType != MAIL_NORMAL)
         return nullptr;
 
-    Player* owner = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, mail->sender));
+    Player* owner = GetPlayerCompat(ObjectGuid(HIGHGUID_PLAYER, mail->sender));
     if (!owner)
         return nullptr;
 
-    uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(owner->getObjectGuid());
+    uint32 account = AccountIdOfCharacterCompat(owner->getObjectGuid());
     if (sPlayerbotAIConfig.IsInRandomAccountList(account))
         return nullptr;
 
@@ -210,7 +210,7 @@ void CheckMailAction::QueueDisenchantMail(Mail* mail)
             ++freeSlots;
     for (uint8_t bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
         if (Bag* pack = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag))
-            if (pack->GetProto() && pack->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
+            if (GetItemProtoCompat(pack) && GetItemProtoCompat(pack)->SubClass == ITEM_SUBCLASS_CONTAINER)
                 freeSlots += pack->GetFreeSlots();
     uint32_t waiting = 0;
     for (TortoiseBots::GuildOrders::DisenchantQueueEntry const& row :

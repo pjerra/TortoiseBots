@@ -24,10 +24,10 @@ bool SpellCastUsefulValue::Calculate()
 	{
 		Spell* spell = bot->GetCurrentSpell(CURRENT_MELEE_SPELL);
 #ifdef CMANGOS
-		if (spell && spell->m_spellInfo->Id == spellid && IsNextMeleeSwingSpell(spell->m_spellInfo) && bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING))
+		if (spell && GetSpellEntryCompat(spell->m_spellInfo)->Id == spellid && IsNextMeleeSwingSpell(GetSpellEntryCompat(spell->m_spellInfo)) && bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING))
 #endif
 #ifdef MANGOS
-		if (spell && spell->m_spellInfo->Id == spellid && spell->IsNextMeleeSwingSpell() && bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING))
+		if (spell && GetSpellEntryCompat(spell->m_spellInfo)->Id == spellid && spell->IsNextMeleeSwingSpell() && bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING))
 #endif
 			return false;
 	}
@@ -37,13 +37,13 @@ bool SpellCastUsefulValue::Calculate()
         if (spellid == lastSpellId)
         {
             Spell* const pSpell = bot->FindCurrentSpellBySpellId(lastSpellId);
-            if (pSpell && (pSpell->getState() == SPELL_STATE_CASTING || pSpell->getState() == SPELL_STATE_CHANNELING))
+            if (pSpell && SpellIsChannelingCompat(pSpell))
                 return false;
         }
 	}
 
     if (IsAutoRepeatRangedSpell(spellInfo) && bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL) &&
-            bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL)->m_spellInfo->Id == spellid)
+            GetSpellEntryCompat(bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL)->m_spellInfo)->Id == spellid)
     {
         return false;
     }

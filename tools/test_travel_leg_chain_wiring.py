@@ -36,14 +36,14 @@ class LegChainTravelWiringTest(unittest.TestCase):
 
     def test_chains_only_while_moving(self):
         fn = TRAVEL[TRAVEL.index("bool MoveToTravelTargetAction::isUseful()"):]
-        self.assertIn("bot->IsMoving() && TravelLegChainDue(ai, bot)", fn)
+        self.assertIn("IsMovingCompat(bot) && TravelLegChainDue(ai, bot)", fn)
 
     def test_pure_walk_only(self):
         helper = TRAVEL[TRAVEL.index("bool MoveToTravelTargetAction::TravelLegChainDue("):]
         helper = helper[:helper.index("bool MoveToTravelTargetAction::TravelMoveMadeNoProgress()")]
         for guard in ("IsInCombat()", "IsTaxiFlying()", "IsFlying()", "IsMounted()",
                       "IsBeingTeleported()", "GetTransport()", "InBattleGround()",
-                      "IsInWater()", "IsUnderwater()", "MOVEFLAG_SWIMMING",
+                      "IsInWater()", "IsUnderwaterCompat(bot)", "MOVEFLAG_SWIMMING",
                       "IsDungeon()", "BOT_STATE_COMBAT"):
             self.assertIn(guard, helper)
 

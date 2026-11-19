@@ -1,0 +1,17 @@
+ai/playerbot/GuidPosition.h:38 - GetCreatureData() via GetCounter() - counter IS the mangos spawn id
+ai/playerbot/GuidPosition.h:41 - GetGameObjectData() via GetCounter() - same
+ai/playerbot/GuidPosition.cpp:161 - IsPartOfAPool<Creature>(GetCounter()) - spawn id lookup
+ai/playerbot/GuidPosition.cpp:163 - IsPartOfAPool<GameObject>(GetCounter()) - same
+ai/playerbot/GuidPosition.cpp:179 - GetGameEventId<Creature>(GetCounter()) - spawn id lookup
+ai/playerbot/GuidPosition.cpp:181 - GetGameEventId<GameObject>(GetCounter()) - same
+ai/playerbot/WorldPosition.cpp:109 - GetGODataPair(guid.GetCounter()) - spawn id lookup
+ai/playerbot/WorldPosition.cpp:131 - GetCreatureDataPair(guid.GetCounter()) - spawn id lookup
+ai/playerbot/WorldPosition.cpp:940 - bare spawn id (gopair->first) rebuilt into ObjectGuid for transports - needs entry+spawn scheme
+ai/playerbot/strategy/generic/WorldBuffTravelStrategy.h:70 - GO_DM_NORTH_DOOR_GUID=49948 hardcoded spawn id
+ai/playerbot/strategy/actions/WorldBuffTravelActions.cpp:533 - GetGOData(GO_DM_NORTH_DOOR_GUID) - hardcoded spawn id use
+ai/playerbot/strategy/actions/WorldBuffTravelActions.cpp:575 - GetGOData(GO_DM_NORTH_DOOR_GUID) - same
+ai/playerbot/strategy/actions/WorldBuffTravelActions.cpp:658 - GetGOData(GO_DM_NORTH_DOOR_GUID) - same
+ai/playerbot/strategy/actions/DebugMiscCommands.cpp:627 - GetGameEventId via guidP.GetCounter() (debug)
+ai/playerbot/strategy/actions/DebugMiscCommands.cpp:632 - IsPartOfTopPool via guidP.GetCounter() (debug)
+ai/playerbot/strategy/values/GuidPositionValues.cpp:100,127 - guid.GetCounter() compared to user-supplied entry numbers
+ai/playerbot/strategy/actions/RpgSubActions.cpp:91 - GetCreatureData() via GuidPosition (indirect spawn-id lookup)

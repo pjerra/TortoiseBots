@@ -151,8 +151,11 @@ fi
 grep -q 'CheckCast(true)' ai/playerbot/strategy/actions/UseItemAction.cpp \
     || fail "item casts are not using the native core pre-cast contract"
 
-grep -q 'GetMotionMaster()->GetCurrent' ai/playerbot/ServerFacade.cpp \
+grep -q 'GetMotionMaster()->GetCurrent' ai/playerbot/ServerFacade.cpp ai/cmangos-compat-r4c.h \
     || fail "chase inspection fell back to a non-native victim/default path"
+# The helper's own body lives in the compat header (the grep above passes on it alone); the facade must still call it.
+grep -q 'TargetedMovementTargetCompat(target)' ai/playerbot/ServerFacade.cpp \
+    || fail "ServerFacade no longer asks the chase target through TargetedMovementTargetCompat"
 grep -q 'GetChannelEntryFor' ai/cmangos-compat-shim.h \
     || fail "chat-channel compatibility proxy is not backed by core data"
 grep -q 'GenerateFishLocations", false' ai/playerbot/PlayerbotAIConfig.cpp \

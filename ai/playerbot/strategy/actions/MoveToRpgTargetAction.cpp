@@ -52,7 +52,7 @@ bool MoveToRpgTargetAction::Execute(Event& event)
         }
     }
 
-    if (unit && unit->IsMoving() && !urand(0, 20) && guidP.sqDistance2d(bot) < INTERACTION_DISTANCE * INTERACTION_DISTANCE * 2)
+    if (unit && IsMovingCompat(unit) && !urand(0, 20) && guidP.sqDistance2d(bot) < INTERACTION_DISTANCE * INTERACTION_DISTANCE * 2)
     {
         AI_VALUE(std::set<ObjectGuid>&,"ignore rpg target").insert(AI_VALUE(GuidPosition, "rpg target"));
 
@@ -154,14 +154,14 @@ bool MoveToRpgTargetAction::Execute(Event& event)
     float angle;
     float distance = 1.0f;
 
-    if (bot->IsWithinLOS(x, y, z, true))
+    if (IsWithinLOSCompat(bot, x, y, z, true))
     {
-        if (!unit || !unit->IsMoving())
-            angle = wo->GetAngle(bot) + (M_PI * irand(-25, 25) / 100.0); //Closest 45 degrees towards the target
+        if (!unit || !IsMovingCompat(unit))
+            angle = GetAngleCompat(wo, bot) + (M_PI * irand(-25, 25) / 100.0); //Closest 45 degrees towards the target
         else if (!unit->HasInArc(bot))
             angle = wo->getOrientation() + (M_PI * irand(-10, 10) / 100.0); //20 degrees infront of target (leading it's movement)
         else
-            angle = wo->GetAngle(bot); //Current approuch angle.
+            angle = GetAngleCompat(wo, bot); //Current approuch angle.
 
         if (guidP.sqDistance2d(bot) < INTERACTION_DISTANCE * INTERACTION_DISTANCE)
             distance = sqrt(guidP.sqDistance2d(bot)); //Stay at this distance.
@@ -190,7 +190,7 @@ bool MoveToRpgTargetAction::Execute(Event& event)
 
     bool couldMove;
 
-    if (unit && unit->IsMoving() && bot->GetDistance(unit) < INTERACTION_DISTANCE * 2 && unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
+    if (unit && IsMovingCompat(unit) && bot->GetDistance(unit) < INTERACTION_DISTANCE * 2 && unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
     {
 
         // The pinned core does not expose waypoint pause state; leave the
@@ -260,7 +260,7 @@ bool MoveToRpgTargetAction::isUseful()
     }
 
     if(MEM_AI_VALUE(WorldPosition, "current position")->LastChangeDelay() < 60)
-        if (bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+        if (IsMovingCompat(bot) && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
             return false;
 
     if (ChooseRpgTargetAction::TravelJourneyInFlight(ai))

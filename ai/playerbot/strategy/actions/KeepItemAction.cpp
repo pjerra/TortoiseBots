@@ -35,7 +35,7 @@ bool KeepItemAction::Execute(Event& event)
         std::list<Item*> found = ai->InventoryParseItems(text, mask);
 
         for (auto& item : found)
-            ids.insert(item->GetProto()->ItemId);
+            ids.insert(GetItemProtoCompat(item)->ItemId);
     }
 
     if (ids.empty())

@@ -25,7 +25,7 @@ bool HasNetworkHumanNearby(Player* bot)
     for (auto const& entry : sWorld.GetAllSessions())
     {
         WorldSession* session = entry.second;
-        if (!session || !session->HasNetworkTransport())
+        if (!session || !HasNetworkTransportCompat(session))
             continue;
         Player* player = session->GetPlayer();
         if (!player || player == bot || !player->IsInWorld())
@@ -154,7 +154,7 @@ ActivePiorityType PlayerbotAI::GetPriorityType()
     for (auto const& entry : sWorld.GetAllSessions())
     {
         WorldSession* session = entry.second;
-        if (!session || !session->HasNetworkTransport())
+        if (!session || !HasNetworkTransportCompat(session))
             continue;
         Player* player = session->GetPlayer();
         if (!player || player == bot || !player->IsInWorld())
@@ -313,8 +313,8 @@ bool PlayerbotAI::IsSpatialScanIdle() const
     // Rested in a protected zone (inn/capital): stationary regen, no threats.
     // Sanctuary flag covers city/inn rest areas; RESTING without movement
     // covers drinking/eating recovery elsewhere safe.
-    if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
-        (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY) || !sServerFacade.isMoving(bot)))
+    if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING) &&
+        (PlayerInSanctuaryCompat(bot) || !sServerFacade.isMoving(bot)))
         return true;
     return false;
 }
@@ -378,7 +378,7 @@ bool PlayerbotAI::HasPlayerRelation()
     for (auto const& entry : sWorld.GetAllSessions())
     {
         WorldSession* session = entry.second;
-        if (!session || !session->HasNetworkTransport())
+        if (!session || !HasNetworkTransportCompat(session))
             continue;
         Player* peer = session->GetPlayer();
         if (!peer || peer == bot || !peer->IsInWorld())

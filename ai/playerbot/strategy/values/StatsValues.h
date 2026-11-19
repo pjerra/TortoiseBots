@@ -233,7 +233,7 @@ namespace ai
     public:
         ExperienceValue(PlayerbotAI* ai, std::string name = "experience", uint32 checkInterval = 60) : MemoryCalculatedValue<uint32>(ai, name, checkInterval) {}
         virtual bool EqualToLast(uint32 value) override { return value == lastValue; }
-        virtual uint32 Calculate() override { return bot->GetUInt32Value(PLAYER_XP);}
+        virtual uint32 Calculate() override { return PlayerXPCompat(bot);}
 
         virtual std::string Format() override
         {
@@ -247,7 +247,7 @@ namespace ai
     public:
         HonorValue(PlayerbotAI* ai, std::string name = "honor", uint32 checkInterval = 60) : ExperienceValue(ai, name, checkInterval) {}
         virtual bool EqualToLast(uint32 value) override { return value == lastValue; }
-        virtual uint32 Calculate() override { return bot->GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS); }
+        virtual uint32 Calculate() override { return PlayerLifetimeHonorableKillsCompat(bot); }
     };
     // Money earned or spent is progress too: a level-60 bot (XP never moves),
     // a town crafter/vendor, or a bot selling loot all change GetMoney() while

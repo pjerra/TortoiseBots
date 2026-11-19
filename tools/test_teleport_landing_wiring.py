@@ -31,7 +31,7 @@ class TeleportLandingWiringTest(unittest.TestCase):
         fn = body(AI, "void PlayerbotAI::HandleTeleportAck()", "\nvoid PlayerbotAI::Reset(")
         near = body(fn, "if (bot->IsBeingTeleportedNear())", "else if (bot->IsBeingTeleportedFar())")
         # The ack first (the core moves the bot), then the landing read off the new position.
-        self.assertLess(near.index("HandleMoveTeleportAckOpcode(p)"), near.index("sPlayerbotAIConfig.teleportLandingFall"))
+        self.assertLess(near.index("AckNearTeleportCompat(bot)"), near.index("sPlayerbotAIConfig.teleportLandingFall"))
         self.assertIn("NearTeleportJumpState(", near)
         # The same feet probe the jump landing uses, and the map's floor beside it: the higher walkable floor wins.
         self.assertIn("kFeetProbeDepth", near)
@@ -54,7 +54,7 @@ class TeleportLandingWiringTest(unittest.TestCase):
         # before its condition: a pending fall or knockback is dropped by every acknowledged near teleport, or the
         # old destination Relocates the bot back when jumpTime expires.
         key = near.index("if (sPlayerbotAIConfig.teleportLandingFall)")
-        self.assertLess(near.index("HandleMoveTeleportAckOpcode(p)"), near.index("jumpTime = 0"))
+        self.assertLess(near.index("AckNearTeleportCompat(bot)"), near.index("jumpTime = 0"))
         self.assertLess(near.index("jumpTime = 0"), key)
         self.assertLess(near.index("fallAfterJump = false"), key)
         self.assertLess(near.index("ResetJumpDestination()"), key)

@@ -95,12 +95,8 @@ class ServerFacade
 
         bool IsInRoots(Unit *unit)
         {
-#ifdef MANGOS
-            return unit->IsInRoots();
-#endif
-#ifdef CMANGOS
-            return unit->IsInRoots();
-#endif
+            // The core's own answer: Unit::IsInRoots() on Turtle, Unit::HasRootAura() on ForeverCore (RootedCompat, R9).
+            return RootedCompat(unit);
         }
 
         bool IsCharmed(Unit *unit)
@@ -126,14 +122,18 @@ class ServerFacade
         bool isInFront(Unit *unit, WorldObject const* target, float distance,  float arc /*= M_PI_F*/)
         {
 #ifdef MANGOS
-            return unit && target && unit->IsWithinDistInMap(target, distance, false) && unit->HasInArc(target, arc);
+            return unit && target && unit->IsWithinDistInMap(target, distance, false) && HasInArcCompat(unit, target, arc);
 #endif
 #ifdef CMANGOS
-            return unit && target && unit->IsWithinDistInMap(target, distance, false) && unit->HasInArc(target, arc);
+            return unit && target && unit->IsWithinDistInMap(target, distance, false) && HasInArcCompat(unit, target, arc);
 #endif
         }
 
-        HostileRefManager& GetHostileRefManager(Unit *unit)
+        // A template so that the declaration names no type ForeverCore lacks (it has no HostileRefManager): never instantiated there; the
+        // slice no longer calls it (TellTargetAction uses ForEachThreatenerThreatCompat). On Turtle every call site (the commander's
+        // deleteReferences / getFirst, outside the slice) instantiates it with its own Unit type and gets the same reference as before.
+        template <class UnitType>
+        decltype(auto) GetHostileRefManager(UnitType *unit)
         {
 #ifdef MANGOS
             return unit->GetHostileRefManager();
@@ -179,7 +179,7 @@ class ServerFacade
             return sSpellStore.LookupEntry(spellId);
 #endif
 #ifdef CMANGOS
-            return sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            return GetSpellEntryCompat(spellId);
 #endif
         }
 
@@ -203,7 +203,7 @@ class ServerFacade
             if (!go->GetOwnerGuid().IsEmpty())
                 return false;
 
-            SpellEntry const* spellInfo = LookupSpellInfo(goInfo->trap.spellId);
+            SpellEntry const* spellInfo = LookupSpellInfo(GameObjectTrapSpellIdCompat(goInfo));
             if (!spellInfo)
                 return false;
 
@@ -235,7 +235,7 @@ class ServerFacade
             return bot->IsWithinLOSInMap(wo);
 #endif
 #ifdef CMANGOS
-            return bot->IsWithinLOSInMap(wo, true);
+            return IsWithinLOSInMapCompat(bot, wo, true);
 #endif
         }
 
@@ -250,7 +250,7 @@ class ServerFacade
         bool IsDistanceLessOrEqualThan(float dist1, float dist2);
 
         void SetFacingTo(Unit* unit, float angle, bool force = false);
-        void SetFacingTo(Unit* unit, WorldObject* wo, bool force = false) {SetFacingTo(unit, unit->GetAngle(wo), force);}
+        void SetFacingTo(Unit* unit, WorldObject* wo, bool force = false) {SetFacingTo(unit, GetAngleCompat(unit, wo), force);}
 
         bool IsFriendlyTo(Unit* bot, Unit* to);
         bool IsFriendlyTo(WorldObject* bot, Unit* to);
@@ -267,12 +267,8 @@ class ServerFacade
 
         BattleGroundTypeId BgTemplateId(BattleGroundQueueTypeId queueTypeId)
         {
-#ifdef MANGOS
-            return sBattleGroundMgr.BGTemplateId(queueTypeId);
-#endif
-#ifdef CMANGOS
-            return sBattleGroundMgr.BGTemplateId(queueTypeId);
-#endif
+            return UnportedBlockResultCompat(tbcompat::Feature::BattlegroundQueue, BattleGroundTypeId(),
+                [](auto& mgr, auto queueType) { return mgr.BGTemplateId(queueType); }, sBattleGroundMgr, queueTypeId);
         }
 
         BattleGroundTypeId BGTemplateId(BattleGroundQueueTypeId queueTypeId)
@@ -282,7 +278,7 @@ class ServerFacade
 
         uint32 GetAreaId(WorldObject* wo)
         {
-            return sTerrainMgr.GetAreaId(wo->GetMapId(), wo->GetPositionX(), wo->GetPositionY(), wo->GetPositionZ());
+            return GetAreaIdCompat(wo);
         }
 };
 

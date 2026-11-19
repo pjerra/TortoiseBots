@@ -56,7 +56,7 @@ uint32 ReadyTaunt(PlayerbotAI* ai, Unit* boss)
     if (!name || MissingStance(ai)) return 0;
     AiObjectContext* context = ai->GetAiObjectContext();
     uint32 const id = AI_VALUE2(uint32, "spell id", name);
-    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(id);
+    SpellEntry const* spell = GetSpellEntryCompat(id);
     if (!id || !spell || !ai->GetBot()->HasSpell(id)) return 0;
     bool taunt = false;
     for (int effect = EFFECT_INDEX_0; effect <= EFFECT_INDEX_2; ++effect)
@@ -99,12 +99,12 @@ SwapRequest RequestSwap(PlayerbotAI* ai, bool claim)
     for (auto it = swaps.begin(); it != swaps.end();)
         if (now - it->second.lastSeen > 60000) it = swaps.erase(it);
         else ++it;
-    auto& record = swaps[{boss->GetInstanceId(), boss->GetObjectGuid().GetRawValue()}];
+    auto& record = swaps[{boss->GetInstanceId(), GuidKeyCompat(boss->GetObjectGuid())}];
     record.lastSeen = now;
     // Do not reset this guard on a victim change or an aura refresh: neither
     // may allow a second volunteer to taunt in the same handoff tick.
-    bool const ready = claim ? record.window.Claim(ai->GetBot()->GetObjectGuid().GetRawValue(),
-        chosen->GetObjectGuid().GetRawValue(), now) : record.window.Ready(now);
+    bool const ready = claim ? record.window.Claim(GuidKeyCompat(ai->GetBot()->GetObjectGuid()),
+        GuidKeyCompat(chosen->GetObjectGuid()), now) : record.window.Ready(now);
     return ready ? SwapRequest{boss, chosenSpell} : SwapRequest{};
 }
 class FankrissTauntMultiplier : public Multiplier

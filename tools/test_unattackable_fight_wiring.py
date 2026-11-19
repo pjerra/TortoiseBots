@@ -205,7 +205,7 @@ class UnattackableFightWiringTest(unittest.TestCase):
         # The cast the clock reads is not a self-cast.
         spell = body(CODE, "uint32 ProgressSpellId(Unit* unit)")
         self.assertIn("spell->m_targets.getUnitTargetGuid() == unit->GetObjectGuid()", spell)
-        self.assertIn("TortoiseBots::DungeonRun::ProgressSpell(spell->m_spellInfo->Id, targetSelf);", spell)
+        self.assertIn("TortoiseBots::DungeonRun::ProgressSpell(GetSpellEntryCompat(spell->m_spellInfo)->Id, targetSelf);", spell)
         participates = body(policy, "inline bool MemberParticipates(const MemberFact& m)\n{")
         self.assertIn("return m.actedMs < kParticipateMs;", participates)
         self.assertNotIn("targetGuid", participates)

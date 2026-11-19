@@ -48,6 +48,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -100,7 +101,7 @@ bool AhMarketService::IsBotInBattlegroundOrInstance(Player* bot) const
     if (bot->InBattleGround() || bot->InBattleGroundQueue())
         return true;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsBattleGround())
+        if (map->IsDungeon() || MapIsBattlegroundCompat(map))
             return true;
     return false;
 }
@@ -274,7 +275,7 @@ bool AhMarketService::TryTeleportToAuctioneer(Player* bot)
     if (bot->TeleportTo(nearest->mapId, nearest->x, nearest->y, nearest->z, o, 0))
     {
         TB_LOG_DEBUG("TortoiseBots: AhMarket teleported bot %s to auctioneer %u at map %u %.1f %.1f %.1f",
-            bot->GetName(), nearest->entry, nearest->mapId, nearest->x, nearest->y, nearest->z);
+            CStrCompat(bot->GetName()), nearest->entry, nearest->mapId, nearest->x, nearest->y, nearest->z);
         return true;
     }
     return false;
@@ -282,7 +283,7 @@ bool AhMarketService::TryTeleportToAuctioneer(Player* bot)
 
 AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool allowTeleport)
 {
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return PostResult::Failed;
     if (!bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported())
         return PostResult::Failed;
@@ -315,9 +316,9 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     bool hasProfitable = false;
     for (Item* item : items)
     {
-        if (!item || !item->GetProto())
+        if (!item || !GetItemProtoCompat(item))
             continue;
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
         std::string qualifier = ai::ItemQualifier(item).GetQualifier();
         ai->GetAiObjectContext()->GetValue<ai::ItemUsage>("item usage", qualifier)->Reset();
         ai::ItemUsage usage = ai->GetAiObjectContext()->GetValue<ai::ItemUsage>("item usage", qualifier)->Get();
@@ -368,7 +369,7 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     if (!ahObject)
         return PostResult::Failed;
 
-    uint32 limit = sWorld.getConfig(CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT);
+    uint32 limit = WorldU32ConfigW2(CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT);
     if (limit && ahObject->GetAccountAuctionCount(bot->GetSession()->GetAccountId()) >= limit)
         return PostResult::Failed;
 
@@ -376,10 +377,10 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     // existing cache. Break early on first profitable post to keep tick cheap.
     for (Item* item : items)
     {
-        if (!item || !item->GetProto())
+        if (!item || !GetItemProtoCompat(item))
             continue;
 
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
 
         // The order keep set bypasses usage lists: never hand over the order
         // item, the supply item or a known-recipe reagent.
@@ -452,7 +453,7 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
         sRandomBotFacade.SetValue(bot->GetGUIDLow(), "ahMarketLastPost", 1, "", (int32)sPlayerbotAIConfig.ahMarketInterval * 2);
         sPlayerbotAIConfig.logEvent(ai, "AhMarket", proto->Name1, std::to_string(proto->ItemId));
         TB_LOG_DEBUG("TortoiseBots: AhMarket bot %s posted %s x%u for %u buyout (deposit %u) via auctioneer %s",
-            bot->GetName(), proto->Name1.c_str(), count, buyout, deposit, auctioneer->GetName());
+            CStrCompat(bot->GetName()), proto->Name1.c_str(), count, buyout, deposit, CStrCompat(auctioneer->GetName()));
 
         return PostResult::Posted;
     }
@@ -510,7 +511,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
     if (sRandomItemMgr.IsTransmogClone(auction->itemTemplate))
         return false;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(auction->itemTemplate);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(auction->itemTemplate);
     if (!proto)
         return false;
 
@@ -554,7 +555,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
         if (ai::AhBuyerExcluded(auction->owner, auction->ownerAccount, auction->bidder,
                 bot->GetGUIDLow(), bot->GetSession()->GetAccountId()))
             continue;
-        if (auction->bidder && sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, auction->bidder)) == bot->GetSession()->GetAccountId())
+        if (auction->bidder && AccountIdOfCharacterCompat(ObjectGuid(HIGHGUID_PLAYER, auction->bidder)) == bot->GetSession()->GetAccountId())
             continue;
         ::PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(bot);
         if (!botAi)

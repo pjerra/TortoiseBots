@@ -63,7 +63,7 @@ class ThreatSuccessorNotHolder(unittest.TestCase):
         self.assertIn("std::map<std::pair<std::uint32_t, std::uint64_t>, std::uint32_t> g_hexScan;", VALUES)
         log = member(VALUES, "void LogHexSnapshot(", "\n}\n")
         self.assertIn("g_hexScan[std::make_pair(static_cast<std::uint32_t>(boss->GetInstanceId()), "
-                      "boss->GetObjectGuid().GetRawValue())]", log)
+                      "GuidKeyCompat(boss->GetObjectGuid()))]", log)
 
     def test_a_zero_reference_holds_the_damage_dealers(self):
         calc = member(VALUES, "uint8 ThreatValue::Calculate(Unit* target)", "\n}\n")

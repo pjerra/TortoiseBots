@@ -1,0 +1,8 @@
+# Slice 1, package R4P: the .cpp files this package owns (census list).
+ai/playerbot/PlayerbotAI.cpp
+ai/playerbot/PlayerbotAIActivity.cpp
+ai/playerbot/PlayerbotAIChat.cpp
+ai/playerbot/PlayerbotAIItems.cpp
+ai/playerbot/PlayerbotAIPackets.cpp
+ai/playerbot/PlayerbotAIQuests.cpp
+ai/playerbot/PlayerbotAISpells.cpp

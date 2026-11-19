@@ -70,7 +70,8 @@ public:
     uint32 extractSpellId(std::string str)
     {
         char* source = (char*)str.c_str();
-        return ExtractSpellIdFromLink(&source);
+        return UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, uint32(0),
+            [&](auto* self) -> uint32 { return self->ExtractSpellIdFromLink(&source); }, this);
     }
 };
 
@@ -617,11 +618,11 @@ public:
     float GetRange(std::string type);
 
     static ReputationRank GetFactionReaction(FactionTemplateEntry const* thisTemplate, FactionTemplateEntry const* otherTemplate);
-    // cmangos uses sFactionTemplateStore.LookupEntry(N); Penqle uses sObjectMgr.GetFactionTemplateEntry(N).
-    static bool friendToAlliance(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, sObjectMgr.GetFactionTemplateEntry(1)) >= REP_NEUTRAL; }
-    static bool friendToHorde(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, sObjectMgr.GetFactionTemplateEntry(2)) >= REP_NEUTRAL; }
+    // cmangos uses sFactionTemplateStore.LookupEntry(N); Penqle uses GetFactionTemplateEntryCompat(N).
+    static bool friendToAlliance(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, GetFactionTemplateEntryCompat(1)) >= REP_NEUTRAL; }
+    static bool friendToHorde(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, GetFactionTemplateEntryCompat(2)) >= REP_NEUTRAL; }
     bool IsFriendlyTo(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(bot->GetFactionTemplateEntry(), templateEntry) >= REP_NEUTRAL; }
-    bool IsFriendlyTo(uint32 faction) { return GetFactionReaction(bot->GetFactionTemplateEntry(), sObjectMgr.GetFactionTemplateEntry(faction)) >= REP_NEUTRAL; }
+    bool IsFriendlyTo(uint32 faction) { return GetFactionReaction(bot->GetFactionTemplateEntry(), GetFactionTemplateEntryCompat(faction)) >= REP_NEUTRAL; }
     static bool AddAura(Unit* unit, uint32 spellId);
     ReputationRank getReaction(FactionTemplateEntry const* factionTemplate) { return GetFactionReaction(bot->GetFactionTemplateEntry(), factionTemplate);}
 
@@ -737,13 +738,13 @@ public:
     // a real client. Headless sessions intentionally have no network transport.
     bool IsRealPlayer()
     {
-        return bot && bot->GetSession() && bot->GetSession()->HasNetworkTransport();
+        return bot && bot->GetSession() && HasNetworkTransportCompat(bot->GetSession());
     }
     bool IsRealPlayer(Unit* unit)
     {
         if (!unit->IsPlayer()) return false;
         Player* pl = (Player*)unit;
-        return pl->GetSession() && pl->GetSession()->HasNetworkTransport();
+        return pl->GetSession() && HasNetworkTransportCompat(pl->GetSession());
     }
     bool IsSelfMaster() { return master ? (master == bot) : false; }
     // Resolve the cached master against the live object accessor. The core
@@ -752,9 +753,9 @@ public:
     // pointers before any GetSession()/deref.
     Player* GetLiveMaster();
     //Bot has a master that is a player.
-    bool HasRealPlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && m->GetSession()->HasNetworkTransport(); }
+    bool HasRealPlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && HasNetworkTransportCompat(m->GetSession()); }
     //Bot has a master that is actively playing.
-    bool HasActivePlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && m->GetSession()->HasNetworkTransport(); }
+    bool HasActivePlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && HasNetworkTransportCompat(m->GetSession()); }
     //Checks if the bot is summoned as alt of a player
     bool IsAlt() { return HasRealPlayerMaster() && !TortoiseBots::BotManager::Instance().IsRandomBot(bot->GetObjectGuid()); }
     // Module-owned characters keep their saved build and class defaults. This

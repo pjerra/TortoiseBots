@@ -106,11 +106,11 @@ void ai::UpdateFankrissFocus(PlayerbotAI* ai) {
  if(FankrissSingleTargetActive(ai)) {
   Player* bot=ai->GetBot();
   for(CurrentSpellTypes type:{CURRENT_GENERIC_SPELL,CURRENT_CHANNELED_SPELL,CURRENT_MELEE_SPELL})
-   if(Spell* spell=bot->GetCurrentSpell(type))if(FankrissAoeSpell(spell->m_spellInfo)){if(spell->getState()!=SPELL_STATE_DELAYED)ai::LogCastCancel(ai,"fankriss",type);bot->InterruptSpell(type,false);}
+   if(Spell* spell=bot->GetCurrentSpell(type))if(FankrissAoeSpell(GetSpellEntryCompat(spell->m_spellInfo))){if(spell->getState()!=SPELL_STATE_DELAYED)ai::LogCastCancel(ai,"fankriss",type);bot->InterruptSpell(type,false);}
   std::vector<uint32> remove;
   for(auto const& entry:bot->GetSpellAuraHolderMap())
-   if(entry.second&&entry.second->GetCasterGuid()==bot->GetObjectGuid()&&FankrissAoeSpell(entry.second->GetSpellProto()))
-    remove.push_back(entry.second->GetSpellProto()->Id);
+   if(entry.second&&entry.second->GetCasterGuid()==bot->GetObjectGuid()&&FankrissAoeSpell(GetSpellEntryCompat(entry.second->GetSpellProto())))
+    remove.push_back(GetSpellEntryCompat(entry.second->GetSpellProto())->Id);
   for(uint32 id:remove)bot->RemoveAurasDueToSpell(id);
  }
  if(!FankrissFocusEnabled(ai))return;
@@ -184,7 +184,7 @@ uint32 FankrissControlSpell(PlayerbotAI* ai,Unit* spawn) {
  AiObjectContext* context=ai->GetAiObjectContext();
  for(char const* name:names) {
   uint32 id=AI_VALUE2(uint32,"spell id",name);
-  SpellEntry const* spell=sSpellTemplate.LookupEntry<SpellEntry>(id);
+  SpellEntry const* spell=GetSpellEntryCompat(id);
   if(!spell||!ai->GetBot()->HasSpell(id)||ai->HasAura(name,spawn)||spawn->IsImmuneToSpell(spell,false))continue;
   bool useful=false;
   for(unsigned i=0;i<3;++i)if(spell->Effect[i]==SPELL_EFFECT_APPLY_AURA&&
@@ -242,7 +242,7 @@ bool FankrissAoeSpellDepth(SpellEntry const* spell,unsigned depth) {
  }
  // Proc auras can be positive while their triggered spell damages an area.
  if(depth)for(unsigned i=0;i<3;++i)if(spell->EffectTriggerSpell[i])
-  if(FankrissAoeSpellDepth(sSpellTemplate.LookupEntry<SpellEntry>(spell->EffectTriggerSpell[i]),depth-1))return true;
+  if(FankrissAoeSpellDepth(GetSpellEntryCompat(spell->EffectTriggerSpell[i]),depth-1))return true;
  if(spell->IsPositiveSpell())return false;
  if(spell->IsAreaOfEffectSpell())return true;
  for(unsigned i=0;i<3;++i)if(spell->EffectChainTarget[i]>1)return true;
@@ -251,7 +251,7 @@ bool FankrissAoeSpellDepth(SpellEntry const* spell,unsigned depth) {
 }
 bool ai::FankrissAoeSpell(SpellEntry const* spell) {return FankrissAoeSpellDepth(spell,2);}
 bool ai::FankrissBlocksAoe(PlayerbotAI* ai,uint32 id) {
- return FankrissSingleTargetActive(ai)&&FankrissAoeSpell(sSpellTemplate.LookupEntry<SpellEntry>(id));
+ return FankrissSingleTargetActive(ai)&&FankrissAoeSpell(GetSpellEntryCompat(id));
 }
 namespace {
 struct RescueRecord {ObjectGuid target;uint32 seen=0;};
@@ -291,7 +291,7 @@ Unit* ai::GetFankrissRescueTarget(PlayerbotAI* ai) {
   PlayerbotAI* brain=PlayerbotAIStorage::Instance().GetAI(member);
   if(!brain||!FankrissSingleTargetActive(brain)||!member->IsInMap(bot)||
      member->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL)||member->HasAura(720)||member->HasAura(731)||member->HasAura(1121)||
-     member->GetDistance(bug)>20.f||!member->IsWithinLOSInMap(bug,true))continue;
+     member->GetDistance(bug)>20.f||!IsWithinLOSInMapCompat(member, bug,true))continue;
   if(brain->IsMelee(member)&&!member->CanReachWithMeleeAutoAttack(bug))continue;
   if(member->GetClass()==CLASS_HUNTER&&member->GetDistance(bug)<8.f)continue;
   helpers.emplace_back(member->GetDistance(bug),member->GetObjectGuid());
@@ -306,7 +306,7 @@ Unit* ai::GetFankrissDpsTarget(PlayerbotAI* ai) {
   Player* bot=ai->GetBot();
   bool range=ai->IsMelee(bot)?bot->CanReachWithMeleeAutoAttack(spawn):bot->GetDistance(spawn)<=ai->GetRange("spell");
   if(bot->GetClass()==CLASS_HUNTER&&bot->GetDistance(spawn)<8.f)range=false;
-  if(range&&bot->IsWithinLOSInMap(spawn,true))return spawn;
+  if(range&&IsWithinLOSInMapCompat(bot, spawn,true))return spawn;
  }
  if(FankrissSingleTargetActive(ai))return ai->GetAiObjectContext()->GetValue<Unit*>("fankriss active boss")->Get();
  return nullptr;

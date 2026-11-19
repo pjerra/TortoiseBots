@@ -86,7 +86,7 @@ TrinketEffectClass UseTrinketAction::ClassifyTrinketSpell(SpellEntry const* spel
 
 bool UseTrinketAction::UseTrinket(Player* requester, Item* item)
 {
-    const ItemPrototype* proto = item->GetProto();
+    const ItemPrototype* proto = GetItemProtoCompat(item);
     if (proto->InventoryType != INVTYPE_TRINKET || !item->IsEquipped())
         return false;
     if (bot->CanUseItem(item) != EQUIP_ERR_OK || item->IsInTrade())

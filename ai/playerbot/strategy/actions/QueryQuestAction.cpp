@@ -74,7 +74,7 @@ void QueryQuestAction::TellObjectives(Player* requester, uint32 questId)
         {
             int required = questTemplate->ReqItemCount[i];
             int available = questStatus.m_itemcount[i];
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(questTemplate->ReqItemId[i]);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(questTemplate->ReqItemId[i]);
             TellObjective(requester, chat->formatItem(proto), available, required);
         }
 

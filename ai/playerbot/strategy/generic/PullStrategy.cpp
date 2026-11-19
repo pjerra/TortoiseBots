@@ -120,7 +120,7 @@ PullRangedBlocker PullStrategy::GetRangedBlocker(float distance) const
     if (!rangedWeapon)
         return PullRangedBlocker::NoWeapon;
 
-    const ItemPrototype* proto = rangedWeapon->GetProto();
+    const ItemPrototype* proto = GetItemProtoCompat(rangedWeapon);
     if (proto)
     {
         // Untrained weapon skill: the shoot cast would fail CanCastSpell
@@ -131,7 +131,7 @@ PullRangedBlocker PullStrategy::GetRangedBlocker(float distance) const
             case ITEM_SUBCLASS_WEAPON_BOW: trained = ai->HasSkill(SKILL_BOWS); break;
             case ITEM_SUBCLASS_WEAPON_GUN: trained = ai->HasSkill(SKILL_GUNS); break;
             case ITEM_SUBCLASS_WEAPON_CROSSBOW: trained = ai->HasSkill(SKILL_CROSSBOWS); break;
-            case ITEM_SUBCLASS_WEAPON_THROWN: trained = ai->HasSkill(SKILL_THROWN); break;
+            case ITEM_SUBCLASS_WEAPON_THROWN: trained = HasThrownSkillCompat(ai); break;
             case ITEM_SUBCLASS_WEAPON_WAND: trained = ai->HasSkill(SKILL_WANDS); break;
             default: break;
         }
@@ -148,7 +148,7 @@ PullRangedBlocker PullStrategy::GetRangedBlocker(float distance) const
 
         if (proto->SubClass != ITEM_SUBCLASS_WEAPON_THROWN && proto->SubClass != ITEM_SUBCLASS_WEAPON_WAND)
         {
-            if (ai->GetBot()->GetUInt32Value(PLAYER_AMMO_ID) == 0)
+            if (AmmoItemIdCompat(ai->GetBot()) == 0)
             {
                 std::list<Item*> ammo = ai->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "ammo")->Get();
                 if (!ammo.empty() && ammo.front())
@@ -223,7 +223,7 @@ std::string PullStrategy::GetSpellName() const
         const Item* equippedWeapon = ai->GetBot()->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
         if (equippedWeapon)
         {
-            const ItemPrototype* itemPrototype = equippedWeapon->GetProto();
+            const ItemPrototype* itemPrototype = GetItemProtoCompat(equippedWeapon);
             if (itemPrototype)
             {
                 switch (itemPrototype->SubClass)
@@ -530,7 +530,7 @@ void PullStrategy::DecideOpening(Unit* target)
     input.autoEnabled = sPlayerbotAIConfig.rangedPull;
     input.meleeApproach = sPlayerbotAIConfig.rangedPullMeleeApproach;
     input.distance = bot->GetDistance(target);
-    input.inLos = bot->IsWithinLOSInMap(target, true);
+    input.inLos = IsWithinLOSInMapCompat(bot, target, true);
 
     // What the tank would fire, and how far. The weapon classes shoot with the
     // spell their weapon teaches; hunters and casters use their pull spell.
@@ -538,7 +538,7 @@ void PullStrategy::DecideOpening(Unit* target)
     if (spell == "shoot")
     {
         const Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-        spell = ShootSpellOf(weapon ? weapon->GetProto() : nullptr);
+        spell = ShootSpellOf(weapon ? GetItemProtoCompat(weapon) : nullptr);
     }
     float maxRange = 0.0f;
     if (!spell.empty() && ai->GetSpellRange(spell, &maxRange))

@@ -78,6 +78,7 @@
 #include "../runtime/CombatMonitorPolicy.h"
 #include "../runtime/BoundFightPolicy.h"
 #include "../runtime/ObservabilityEmitter.h"
+#include "playerbot/TbCompatW2.h"
 #include "../runtime/PlayerUseObjectPolicy.h"
 #include "../runtime/RunItemNeedPolicy.h" // item-leg skip (spec C1/D): needs + ledger, namespace TortoiseBots::RunItemNeed
 #include "../runtime/RunItemNeedFacts.h" // the leg's need facts from the party's bags (item-leg skip review round 2)
@@ -589,7 +590,7 @@ bool IsWorldBot(Player* bot)
         return false;
     if (!record->masterGuid.IsEmpty())
         if (Player* master = ObjectAccessor::FindPlayer(record->masterGuid))
-            if (master->GetSession() && master->GetSession()->HasNetworkTransport())
+            if (master->GetSession() && HasNetworkTransportCompat(master->GetSession()))
                 return false;
     return true;
 }
@@ -731,7 +732,7 @@ void GiveRunItems(DungeonRunSlot& slot, Player* lead, const std::vector<RunGiveO
             if (slot.bagsFullLogged.insert(botRaw).second) // once per run per bot, not every tick
             {
                 TB_LOG_DETAIL("TortoiseBots: run leader: cannot give item %u to %s (no bag space): the leg gate / step pause covers it.",
-                    order.item, bot->GetName());
+                    order.item, CStrCompat(bot->GetName()));
                 if (!slot.run.note.empty())
                     slot.run.note += " ";
                 slot.run.note += std::string(bot->GetName()) + "'s bags are full: item " + std::to_string(order.item) + " not given (the leg gate / step pause covers it)";
@@ -749,7 +750,7 @@ void GiveRunItems(DungeonRunSlot& slot, Player* lead, const std::vector<RunGiveO
         if (!RunGivenRowInsert(itemGuidLow, bot->GetGUIDLow(), order.item))
         {
             sLog.outError("TortoiseBots: run leader: the ledger write for item %u (guid %u) to %s failed: not given.",
-                order.item, itemGuidLow, bot->GetName());
+                order.item, itemGuidLow, CStrCompat(bot->GetName()));
             delete given;
             continue;
         }
@@ -957,7 +958,7 @@ RemoteCommander::BindingState ReadBindingState(RemoteCommander::Binding const& b
     state.raidAllowed = sPlayerbotAIConfig.dungeonRunRaid && sPlayerbotAIConfig.dungeonSelfClear;
     Player* commander = FindCharacter(binding.commanderGuid);
     state.commanderOnline = commander && commander->GetSession() &&
-        commander->GetSession()->HasNetworkTransport();
+        HasNetworkTransportCompat(commander->GetSession());
     Player* lead = FindCharacter(binding.leadGuid);
     state.leadOnline = lead != nullptr;
     if (Group* group = lead ? lead->GetGroup() : nullptr)
@@ -1206,7 +1207,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
                 present.found = commander != nullptr;
                 present.inWorld = commander && commander->IsInWorld();
                 present.hasSession = commander && commander->GetSession() &&
-                    commander->GetSession()->HasNetworkTransport();
+                    HasNetworkTransportCompat(commander->GetSession());
                 present.isMember = group->IsMember(ObjectGuid(commanderRaw));
                 present.leadFound = lead && group->IsMember(lead->GetObjectGuid());
                 present.playerLed = removed.playerLed;
@@ -1222,7 +1223,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
                                 continue;
                             Player* const player = FindCharacter(slot.guid.GetRawValue());
                             if (player && player->IsInWorld() && player->GetSession() &&
-                                player->GetSession()->HasNetworkTransport())
+                                HasNetworkTransportCompat(player->GetSession()))
                             {
                                 group->ChangeLeader(slot.guid);
                                 break;
@@ -1250,7 +1251,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
         TortoiseBots::CombatMonitorService::Instance().Forget(removed.groupId);
     TB_LOG_DETAIL("TortoiseBots: %s %s released group of %s: %s",
         removed.system ? "system run" : "remote commander",
-        commander ? commander->GetName() : "(offline)", lead ? lead->GetName() : "(offline)",
+        commander ? CStrCompat(commander->GetName()) : "(offline)", lead ? CStrCompat(lead->GetName()) : "(offline)",
         RemoteCommander::ReleaseReasonText(reason));
     if (notify)
         if (std::unique_ptr<ChatHandler> const chat = CommanderReplyHandler(commanderRaw, removed.system))
@@ -1438,11 +1439,11 @@ RemoteCommander::View::Snapshot& ViewSnapshot()
 uint32 CurrentSpellId(Unit* unit)
 {
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     return 0;
 }
 
@@ -1453,10 +1454,10 @@ uint32 ProgressSpellId(Unit* unit)
     Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     if (!spell)
         spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    if (!spell || !spell->m_spellInfo)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return 0;
     bool const targetSelf = spell->m_targets.getUnitTargetGuid() == unit->GetObjectGuid();
-    return TortoiseBots::DungeonRun::ProgressSpell(spell->m_spellInfo->Id, targetSelf);
+    return TortoiseBots::DungeonRun::ProgressSpell(GetSpellEntryCompat(spell->m_spellInfo)->Id, targetSelf);
 }
 
 char ViewStateLetter(PlayerbotAI* ai, Player* bot)
@@ -1607,7 +1608,7 @@ void AddViewHostile(RemoteCommander::View::Snapshot& snapshot, RemoteCommander::
     hostile->critter = unit->GetCreatureType() == CREATURE_TYPE_CRITTER;
     hostile->civilian = creature && creature->IsCivilian();
     hostile->guard = creature && creature->IsGuard();
-    hostile->unattackable = unit->HasFlag(UNIT_FIELD_FLAGS,
+    hostile->unattackable = HasUnitFlagCompat(unit,
         UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NON_ATTACKABLE_2);
 
     // Engaged: the top of its own threat list, in % of the top entry.
@@ -2871,7 +2872,7 @@ bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, floa
         if (!TortoiseBots::DungeonRun::HealerBackPoint(leadX, leadY, target->GetPositionX(), target->GetPositionY(),
                 back, px, py) || !MaNGOS::IsValidMapCoord(px, py, leadZ))
             return false;
-        float const ground = map->GetHeight(px, py, leadZ + 3.0f);
+        float const ground = GetHeightCompat(map, px, py, leadZ + 3.0f);
         if (ground <= INVALID_HEIGHT || std::fabs(ground - leadZ) > 3.0f)
             continue;
         if (!map->isInLineOfSight(leadX, leadY, leadZ + 2.0f, px, py, ground + 2.0f))
@@ -2881,10 +2882,10 @@ bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, floa
         // The route must be calculated before it is read: a fresh PathFinder's
         // end is (0, 0, 0), so the distance check below rejected EVERY stand
         // and the healer never took its pull spot (found 2026-11-13).
-        path.calculate(px, py, ground, false);
-        if (path.getPathType() & PATHFIND_NOPATH)
+        PathCalculateCompat(path, px, py, ground, false);
+        if (PathTypeCompat(path) & PATHFIND_NOPATH)
             continue;
-        Vector3 const end = path.getActualEndPosition();
+        Vector3 const end = PathActualEndCompat(path);
         if (ai::PlanDistance(end.x, end.y, end.z, px, py, ground) > 3.0f)
             continue;
         ox = px;
@@ -3068,7 +3069,7 @@ static void TotemFocusCutSlot(Player* bot, CurrentSpellTypes slot, ObjectGuid fo
     else
         return; // a melee or autorepeat slot (an Auto Shot, a wand's shot) is never cut
     Spell* const spell = bot->GetCurrentSpell(slot);
-    if (!spell || !spell->m_spellInfo)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return;
     // The cast's own target, looked up by guid on the bot's map. SpellCastTargets::m_unitTarget (getUnitTarget) is a
     // raw pointer the map thread refreshes only in the caster's next Spell::update, and Map::Remove frees a dead
@@ -3083,8 +3084,8 @@ static void TotemFocusCutSlot(Player* bot, CurrentSpellTypes slot, ObjectGuid fo
         target = castGuid ? map->GetUnit(castGuid) : bot->GetSelectedUnit();
     if (target && !target->IsInWorld())
         target = nullptr;
-    if (!TortoiseBots::DungeonRun::TotemFocusMayInterrupt(kind, spell->m_spellInfo->Id,
-            TotemFocusResurrects(spell->m_spellInfo), spell->m_spellInfo->IsPositiveSpell(),
+    if (!TortoiseBots::DungeonRun::TotemFocusMayInterrupt(kind, GetSpellEntryCompat(spell->m_spellInfo)->Id,
+            TotemFocusResurrects(GetSpellEntryCompat(spell->m_spellInfo)), GetSpellEntryCompat(spell->m_spellInfo)->IsPositiveSpell(),
             TortoiseBots::DungeonRun::TotemFocusTargetHostile(!castGuid.IsEmpty(), target != nullptr,
                 target && bot->IsHostileTo(target)),
             !castGuid.IsEmpty() && castGuid == focusGuid))
@@ -3402,7 +3403,7 @@ static void NoteRunMagma(Player* lead, float x, float y, float z, RunMagmaNote k
         return;
     last = now;
     TB_LOG_DETAIL("TortoiseBots: %s in magma at %.1f %.1f %.1f (map %u, lead %s)", what, x, y, z,
-        lead->GetMapId(), lead->GetName());
+        lead->GetMapId(), CStrCompat(lead->GetName()));
 }
 
 static_assert(TortoiseBots::DungeonRun::kStallDirectMaxYd == RemoteCommander::kDirectMaxDistance &&
@@ -3442,7 +3443,7 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
     // is never taken for the floor (RemoteCommander::ChooseFloorZ).
     if (MaNGOS::IsValidMapCoord(point.x, point.y, point.z + RemoteCommander::kFloorSnapRange))
     {
-        float const belowZ = mover->GetMap()->GetHeight(point.x, point.y, point.z, true,
+        float const belowZ = GetHeightCompat(mover->GetMap(), point.x, point.y, point.z, true,
             RemoteCommander::kFloorBelowBand + RemoteCommander::kFloorBelowHeadroom);
         float aboveZ = INVALID_HEIGHT;
         // A point in water is not lifted out of it onto a surface the lead bot cannot reach (Karazhan Crypt
@@ -3458,7 +3459,7 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
         uint32 raisedPathType = 0;
         if (!RemoteCommander::FloorBelowUsable(point.z, belowZ, belowZ > INVALID_HEIGHT))
         {
-            aboveZ = mover->GetMap()->GetHeight(point.x, point.y,
+            aboveZ = GetHeightCompat(mover->GetMap(), point.x, point.y,
                 point.z + RemoteCommander::kFloorSnapRange, true,
                 2.0f * RemoteCommander::kFloorSnapRange);
             if (aboveZ > INVALID_HEIGHT)
@@ -3483,9 +3484,9 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
                     if (!atOrigin)
                     {
                         PathFinder raisedPath(mover);
-                        raisedPath.calculate(origin, Vector3(point.x, point.y, aboveZ), false);
-                        raisedPathType = static_cast<uint32>(raisedPath.getPathType());
-                        Vector3 const raisedEnd = raisedPath.getActualEndPosition();
+                        PathCalculateCompat(raisedPath, origin, Vector3(point.x, point.y, aboveZ), false);
+                        raisedPathType = static_cast<uint32>(PathTypeCompat(raisedPath));
+                        Vector3 const raisedEnd = PathActualEndCompat(raisedPath);
                         float const ex = raisedEnd.x - point.x;
                         float const ey = raisedEnd.y - point.y;
                         float const ez = raisedEnd.z - aboveZ;
@@ -3532,22 +3533,22 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
     {
         PathFinder path(mover);
         ai::WorldPosition::ExcludeSteepSlopes(path);
-        path.calculate(origin, Vector3(point.x, point.y, point.z), false);
+        PathCalculateCompat(path, origin, Vector3(point.x, point.y, point.z), false);
         // The flag over-marks stairs a player walks: when strict does not
         // reach, the permissive retry walks the mover when a player could
         // climb it, else the strict answer stands.
         PathFinder permissive(mover);
         PathFinder* active = &path;
-        if (ai::WorldPosition::FellBackToPermissive(path.getPathType()))
+        if (ai::WorldPosition::FellBackToPermissive(PathType(PathTypeCompat(path))))
         {
-            permissive.calculate(origin, Vector3(point.x, point.y, point.z), false);
-            if (ai::WorldPosition::PermissivePathWalkable(permissive.getPath()))
+            PathCalculateCompat(permissive, origin, Vector3(point.x, point.y, point.z), false);
+            if (ai::WorldPosition::PermissivePathWalkable(PathPointsCompat(permissive)))
                 active = &permissive;
         }
         {
-            check.rawPathType = static_cast<uint32>(active->getPathType());
+            check.rawPathType = static_cast<uint32>(PathTypeCompat(*active));
             check.facts.pathType = check.rawPathType;
-            Vector3 const end = active->getActualEndPosition();
+            Vector3 const end = PathActualEndCompat(*active);
             check.actualEnd[0] = end.x;
             check.actualEnd[1] = end.y;
             check.actualEnd[2] = end.z;
@@ -3561,8 +3562,8 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
             check.facts.endFromLead = std::sqrt(lx * lx + ly * ly + lz * lz);
             // PathInfo::Length asserts a non-empty path; a shortcut path always has
             // two points, a refused one may have none.
-            if (active->getPath().size() >= 2)
-                check.length = active->Length();
+            if (PathPointsCompat(*active).size() >= 2)
+                check.length = PathLengthCompat(*active);
         }
     }
     check.verdict = RemoteCommander::CheckMove(check.facts);
@@ -3684,15 +3685,15 @@ bool HandleScout(ChatHandler* handler, char const* args)
     if (request.form == RemoteCommander::ScoutForm::Cfg)
     {
         handler->PSendSysMessage("%s", RemoteCommander::ScoutCfgLine(request.id,
-            sPlayerbotAIConfig.reactDistance, sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO),
-            sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS)).c_str());
+            sPlayerbotAIConfig.reactDistance, WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO),
+            WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS)).c_str());
         return true;
     }
     if (request.form == RemoteCommander::ScoutForm::Where)
     {
         handler->PSendSysMessage("%s", RemoteCommander::ScoutPosLine(request.id,
             caller->GetPositionX(), caller->GetPositionY(), caller->GetPositionZ(),
-            caller->IsMoving(), caller->IsInWater(), caller->IsSwimming()).c_str());
+            IsMovingCompat(caller), caller->IsInWater(), caller->IsSwimming()).c_str());
         return true;
     }
 
@@ -3736,8 +3737,8 @@ bool HandleScout(ChatHandler* handler, char const* args)
     if (!RemoteCommander::IsAtLead(std::sqrt(dx * dx + dy * dy + dz * dz)))
     {
         PathFinder path(caller);
-        path.calculate(origin, Vector3(request.point.x, request.point.y, request.point.z), false);
-        pathType = static_cast<uint32>(path.getPathType());
+        PathCalculateCompat(path, origin, Vector3(request.point.x, request.point.y, request.point.z), false);
+        pathType = static_cast<uint32>(PathTypeCompat(path));
     }
     caller->GetMotionMaster()->MovePoint(0, request.point.x, request.point.y, request.point.z,
         MOVE_RUN_MODE | MOVE_PATHFINDING);
@@ -3765,23 +3766,23 @@ static RemoteCommander::DirectJoin DirectFollowerJoin(Player* bot, Map* map, flo
     {
         PathFinder path(bot);
         ai::WorldPosition::ExcludeSteepSlopes(path);
-        path.calculate(leadX, leadY, leadZ, false);
+        PathCalculateCompat(path, leadX, leadY, leadZ, false);
         PathFinder permissive(bot);
         PathFinder* active = &path;
-        if (ai::WorldPosition::FellBackToPermissive(path.getPathType()))
+        if (ai::WorldPosition::FellBackToPermissive(PathType(PathTypeCompat(path))))
         {
-            permissive.calculate(leadX, leadY, leadZ, false);
-            if (ai::WorldPosition::PermissivePathWalkable(permissive.getPath()))
+            PathCalculateCompat(permissive, leadX, leadY, leadZ, false);
+            if (ai::WorldPosition::PermissivePathWalkable(PathPointsCompat(permissive)))
                 active = &permissive;
         }
-        Vector3 const end = active->getActualEndPosition();
-        uint32 const type = static_cast<uint32>(active->getPathType());
+        Vector3 const end = PathActualEndCompat(*active);
+        uint32 const type = static_cast<uint32>(PathTypeCompat(*active));
         pathComplete = (type & PATHFIND_NORMAL) &&
             !(type & (PATHFIND_INCOMPLETE | PATHFIND_NOPATH | PATHFIND_SHORTCUT)) &&
-            (end - leadSpot).length() <= 2.0f && active->getPath().size() >= 2;
-        pathLength = active->Length();
+            (end - leadSpot).length() <= 2.0f && PathPointsCompat(*active).size() >= 2;
+        pathLength = PathLengthCompat(*active);
         if (pathComplete)
-            route = active->getPath();
+            route = PathPointsCompat(*active);
     }
     // The last resort: its own straight line to the point (on the lead bot's floor, the point in reach and sight).
     bool ownLine = false;
@@ -3846,7 +3847,7 @@ static bool CommanderMoveDirect(ChatHandler* handler, CommanderOrder const& orde
     Map* const map = lead->GetMap();
     float ground = INVALID_HEIGHT;
     if (MaNGOS::IsValidMapCoord(point.x, point.y, point.z))
-        ground = map->GetHeight(point.x, point.y, point.z, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
+        ground = GetHeightCompat(map, point.x, point.y, point.z, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
     if (RemoteCommander::CheckDirectGround(ground, point.z) != RemoteCommander::DirectVerdict::Ok)
     {
         SendActionError(handler, intent, RemoteCommander::DirectVerdictCode(RemoteCommander::DirectVerdict::NoGround),
@@ -4735,7 +4736,7 @@ void StopRitualChannel(CommanderTask const& task)
     if (!bot || !bot->IsInWorld() || !task.actSpellId)
         return;
     Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    if (!spell || !spell->m_spellInfo || spell->m_spellInfo->Id != task.actSpellId)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo) || GetSpellEntryCompat(spell->m_spellInfo)->Id != task.actSpellId)
         return;
     GameObject* go = bot->GetMap() ? bot->GetMap()->GetGameObject(ObjectGuid(task.targetRaw)) : nullptr;
     if (go && go->GetGoState() == GO_STATE_ACTIVE)
@@ -4884,7 +4885,7 @@ void KeepStillDuringAct(CommanderTask const& task, Player* bot)
     if (!RemoteCommander::HoldsForAct(task.targetRaw != 0, task.noWalk) || !task.actStarted || !task.actSpellId)
         return;
     Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-    if (!spell || !spell->m_spellInfo || spell->m_spellInfo->Id != task.actSpellId)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo) || GetSpellEntryCompat(spell->m_spellInfo)->Id != task.actSpellId)
         return;
     if (bot->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
         return;
@@ -5136,7 +5137,7 @@ ActStart BeginTaskAct(CommanderTask& task, Player* commander, Player* bot, Playe
     if (task.actStarted)
         if (Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         {
-            task.actSpellId = spell->m_spellInfo ? spell->m_spellInfo->Id : 0;
+            task.actSpellId = GetSpellEntryCompat(spell->m_spellInfo) ? GetSpellEntryCompat(spell->m_spellInfo)->Id : 0;
             task.actCastMs = spell->GetCastedTime();
             task.actFrom = RemoteCommander::Point3{ bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() };
             task.state.actBudgetMs = RemoteCommander::ActBudgetAfterCast(task.state, task.lootLike,
@@ -5248,7 +5249,7 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, Area
     facts.phaseOpen = tele->requiredPhase <= sWorld.GetContentPhase();
     facts.level = bot->GetLevel();
     facts.requiredLevel = tele->requiredLevel;
-    facts.ignoreLevel = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL);
+    facts.ignoreLevel = WorldBoolConfigW2(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL);
     // The maps where a Lunatic challenger enters below the level (the same list as the core's handler).
     static constexpr uint32 kLunaticMaps[] = { 36, 43, 389, 822 };
     for (uint32 mapId : kLunaticMaps)
@@ -5279,7 +5280,7 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, Area
         facts.conditionWaived = RemoteCommander::WaiveCondition(sPlayerbotAIConfig.raidEntryByCommander,
             facts.raidMap, unscriptedTrigger, commanderIsRealPlayer, commanderOfRaid, commanderMeets);
     }
-    facts.ignoreRaid = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
+    facts.ignoreRaid = WorldBoolConfigW2(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
     Group* group = bot->GetGroup();
     facts.inRaidGroup = group && group->isRaidGroup();
     auto* bound = bot->GetBoundInstanceSaveForSelfOrGroup(targetMap->id);
@@ -5446,7 +5447,7 @@ bool StepCommanderTask(CommanderTask& task, uint32 diff)
     {
         task.actRunMs += diff;
         Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        bool const running = spell && spell->m_spellInfo && spell->m_spellInfo->Id == task.actSpellId;
+        bool const running = spell && GetSpellEntryCompat(spell->m_spellInfo) && GetSpellEntryCompat(spell->m_spellInfo)->Id == task.actSpellId;
         if (RemoteCommander::ActCastBroken(running, task.actCastMs, task.actRunMs))
         {
             float const moved = bot->GetDistance(task.actFrom.x, task.actFrom.y, task.actFrom.z, SizeFactor::None);
@@ -6068,7 +6069,7 @@ static bool CommanderUse(ChatHandler* handler, CommanderOrder const& order, Play
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     if (!CommanderTaskGuard(handler, intent, bot, ai, false))
         return true;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(request.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(request.itemId);
     if (!proto)
     {
         SendActionError(handler, intent, RemoteCommander::kCodeInvalid, "No item with that id exists.");
@@ -6079,7 +6080,7 @@ static bool CommanderUse(ChatHandler* handler, CommanderOrder const& order, Play
         SendActionError(handler, intent, RemoteCommander::kCodeNoItem, "The bot carries no such item in its bags.");
         return true;
     }
-    if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+    if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
     {
         SendActionError(handler, intent, RemoteCommander::kCodeFailed,
             "The bot cannot use that item (level, class or skill).");
@@ -7112,8 +7113,8 @@ static_assert(TortoiseBots::DungeonRun::kEscapeMaxVertical == RemoteCommander::k
     "the hop off an island is held to a direct step's height limit");
 void NoteLeadWay(PathFinder const& path, Player* lead, float x, float y, float z, TortoiseBots::DungeonRun::Facts& f)
 {
-    uint32 const type = static_cast<uint32>(path.getPathType());
-    Vector3 const end = path.getActualEndPosition();
+    uint32 const type = static_cast<uint32>(PathTypeCompat(path));
+    Vector3 const end = PathActualEndCompat(path);
     float const endFromLead = DistanceTo(lead, end.x, end.y, end.z);
     bool const incomplete = (type & PATHFIND_INCOMPLETE) != 0;
     bool const noPath = (type & PATHFIND_NOPATH) != 0;
@@ -7134,8 +7135,8 @@ bool GoodSpotCutOff(Player* lead, TortoiseBots::DungeonRun::Run const& run)
         return false;
     PathFinder path(lead);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(run.goodLeadX, run.goodLeadY, run.goodLeadZ, false);
-    return (static_cast<uint32>(path.getPathType()) & (PATHFIND_INCOMPLETE | PATHFIND_NOPATH)) != 0;
+    PathCalculateCompat(path, run.goodLeadX, run.goodLeadY, run.goodLeadZ, false);
+    return (static_cast<uint32>(PathTypeCompat(path)) & (PATHFIND_INCOMPLETE | PATHFIND_NOPATH)) != 0;
 }
 
 // The dry walk (AiPlayerbot.DungeonRunDryWalk): the lead bot's way to (x,y,z) over walkable NAV_GROUND polys
@@ -7214,10 +7215,10 @@ static bool CorePathSwims(Player* lead, float x, float y, float z, float* coreYd
     if (!lead || !lead->IsInWorld())
         return false;
     PathFinder path(lead);
-    path.calculate(x, y, z, false);
+    PathCalculateCompat(path, x, y, z, false);
     std::vector<PathPoint> points;
     points.push_back(PathPoint{lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ()});
-    for (Vector3 const& p : path.getPath())
+    for (Vector3 const& p : PathPointsCompat(path))
         points.push_back(PathPoint{p.x, p.y, p.z});
     if (coreYd)
         for (std::size_t i = 1; i < points.size(); ++i)
@@ -7300,15 +7301,15 @@ bool ApproachOnPath(Player* lead, float x, float y, float z, float& ox, float& o
     using namespace TortoiseBots::DungeonRun;
     PathFinder path(lead);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
+    PathCalculateCompat(path, x, y, z, false);
     if (way)
         NoteLeadWay(path, lead, x, y, z, *way);
     // A path a walk may not take (DungeonRun::PathWalkable false: short of the point, and not a capped path that still
     // gets on toward it): DungeonRun::Facts::approachIncomplete.
     if (incomplete)
     {
-        uint32 const type = static_cast<uint32>(path.getPathType());
-        Vector3 const end = path.getActualEndPosition();
+        uint32 const type = static_cast<uint32>(PathTypeCompat(path));
+        Vector3 const end = PathActualEndCompat(path);
         *incomplete = !PathWalkable((type & PATHFIND_NOPATH) != 0, (type & PATHFIND_INCOMPLETE) != 0,
             lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), end.x, end.y, end.z, x, y, z);
     }
@@ -7322,9 +7323,9 @@ bool ApproachOnPath(Player* lead, float x, float y, float z, float& ox, float& o
             return ApproachHopOn(dry, x, y, z, ox, oy, oz);
         }
     }
-    if (path.getPathType() & PATHFIND_NOPATH)
+    if (PathTypeCompat(path) & PATHFIND_NOPATH)
         return false;
-    Movement::PointsArray const& points = path.getPath();
+    Movement::PointsArray const& points = PathPointsCompat(path);
     if (whole)
         for (Vector3 const& p : points)
             whole->push_back(PathPoint{p.x, p.y, p.z});
@@ -7343,16 +7344,16 @@ bool DirectNavPath(Player* lead, float x, float y, float z, std::vector<Tortoise
     points.clear();
     PathFinder path(lead);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
-    uint32 const type = static_cast<uint32>(path.getPathType());
-    Vector3 const end = path.getActualEndPosition();
+    PathCalculateCompat(path, x, y, z, false);
+    uint32 const type = static_cast<uint32>(PathTypeCompat(path));
+    Vector3 const end = PathActualEndCompat(path);
     bool const fallback = (type & PATHFIND_NOT_USING_PATH) != 0 ||
         DryChordFallback(dryWalk, (type & PATHFIND_UNDERWATER) != 0, DryAt(lead, x, y, z));
     if (!NavPathReaches((type & PATHFIND_NOPATH) != 0, (type & PATHFIND_INCOMPLETE) != 0, (type & PATHFIND_SHORTCUT) != 0,
             fallback, end.x, end.y, end.z, x, y, z))
         return false;
     float length = 0.0f;
-    Movement::PointsArray const& way = path.getPath();
+    Movement::PointsArray const& way = PathPointsCompat(path);
     for (size_t i = 0; i < way.size(); ++i)
     {
         points.push_back(PathPoint{way[i].x, way[i].y, way[i].z});
@@ -7505,12 +7506,12 @@ bool LegOnPath(Player* lead, float x, float y, float z, float maxYd, float& ox, 
 {
     PathFinder path(lead);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
-    uint32 const type = static_cast<uint32>(path.getPathType());
+    PathCalculateCompat(path, x, y, z, false);
+    uint32 const type = static_cast<uint32>(PathTypeCompat(path));
     if (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_NOT_USING_PATH | PATHFIND_SHORTCUT))
         return false;
     std::vector<TortoiseBots::DungeonRun::PathPoint> points;
-    for (Vector3 const& p : path.getPath())
+    for (Vector3 const& p : PathPointsCompat(path))
         points.push_back(TortoiseBots::DungeonRun::PathPoint{p.x, p.y, p.z});
     std::vector<TortoiseBots::DungeonRun::StandHostile> hostiles;
     std::list<Unit*> around;
@@ -7559,7 +7560,7 @@ bool ApproachStandSearch(Player* lead, TortoiseBots::DungeonRun::Run const& run,
             float const py = step.y + ring * std::sin(angle);
             if (anchored && !ai::InsideAnchor(anchor, px, py))
                 continue;
-            float const ground = map->GetHeight(px, py, step.z + 5.0f);
+            float const ground = GetHeightCompat(map, px, py, step.z + 5.0f);
             if (ground <= INVALID_HEIGHT || std::fabs(ground - step.z) > 10.0f)
                 continue;
             StandCandidate c;
@@ -7568,17 +7569,17 @@ bool ApproachStandSearch(Player* lead, TortoiseBots::DungeonRun::Run const& run,
             c.z = ground;
             PathFinder path(lead);
             ai::WorldPosition::ExcludeSteepSlopes(path);
-            path.calculate(px, py, ground, false);
-            uint32 const type = static_cast<uint32>(path.getPathType());
-            Vector3 const end = path.getActualEndPosition();
+            PathCalculateCompat(path, px, py, ground, false);
+            uint32 const type = static_cast<uint32>(PathTypeCompat(path));
+            Vector3 const end = PathActualEndCompat(path);
             c.reachable = !(type & (PATHFIND_NOT_USING_PATH | PATHFIND_SHORTCUT)) &&
                 DetourPointReachable((type & PATHFIND_NOPATH) != 0, (type & PATHFIND_INCOMPLETE) != 0,
                     ai::PlanDistance(end.x, end.y, end.z, px, py, ground), DistanceTo(lead, end.x, end.y, end.z),
-                    DistanceTo(lead, px, py, ground), path.Length());
+                    DistanceTo(lead, px, py, ground), PathLengthCompat(path));
             if (!c.reachable)
                 continue;
-            c.pathYd = path.Length();
-            for (Vector3 const& v : path.getPath())
+            c.pathYd = PathLengthCompat(path);
+            for (Vector3 const& v : PathPointsCompat(path))
                 c.path.push_back(PathPoint{v.x, v.y, v.z});
             c.los = map->isInLineOfSight(px, py, ground + 2.0f, step.x, step.y, step.z + 2.0f, true);
             candidates.push_back(c);
@@ -7608,32 +7609,32 @@ bool NearestReachablePoint(Player* lead, float x, float y, float z, float maxYd,
         return false;
     auto reachable = [&](float px, float py, float pz) -> bool
     {
-        float const ground = map->GetHeight(px, py, pz + 5.0f);
+        float const ground = GetHeightCompat(map, px, py, pz + 5.0f);
         if (ground <= INVALID_HEIGHT || std::fabs(ground - pz) > 10.0f)
             return false;
         if (dryOnly && map->GetTerrain()->getLiquidStatus(px, py, ground + 0.5f, MAP_ALL_LIQUIDS, nullptr) != LIQUID_MAP_NO_WATER)
             return false;
         PathFinder path(lead);
         ai::WorldPosition::ExcludeSteepSlopes(path);
-        path.calculate(px, py, ground, false);
-        uint32 const type = static_cast<uint32>(path.getPathType());
+        PathCalculateCompat(path, px, py, ground, false);
+        uint32 const type = static_cast<uint32>(PathTypeCompat(path));
         if (dryOnly && (type & (PATHFIND_UNDERWATER | PATHFIND_NOT_USING_PATH | PATHFIND_SHORTCUT)))
             return false;
-        Vector3 const end = path.getActualEndPosition();
+        Vector3 const end = PathActualEndCompat(path);
         // Near the point AND, when partial, leading on (r6-19z24: two ring points
         // whose partial paths ended on the lead bot's island were taken, and refused),
         // and off the lead bot (r9-19z26: a ring point 1.3 yd from it on its island).
         if (!TortoiseBots::DungeonRun::DetourPointReachable((type & PATHFIND_NOPATH) != 0,
                 (type & PATHFIND_INCOMPLETE) != 0, ai::PlanDistance(end.x, end.y, end.z, px, py, ground),
-                DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), path.Length()))
+                DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), PathLengthCompat(path)))
             return false;
         // And its OWN path toward the plan's point leads on (r13-19z30 Uldaman: the
         // pit the tank fell into has a ring point the lead's path reaches, and no way out).
         PathFinder probe(lead);
         ai::WorldPosition::ExcludeSteepSlopes(probe);
-        probe.calculate(Vector3(px, py, ground), Vector3(x, y, z), false);
-        uint32 const probeType = static_cast<uint32>(probe.getPathType());
-        Vector3 const probeEnd = probe.getActualEndPosition();
+        PathCalculateCompat(probe, Vector3(px, py, ground), Vector3(x, y, z), false);
+        uint32 const probeType = static_cast<uint32>(PathTypeCompat(probe));
+        Vector3 const probeEnd = PathActualEndCompat(probe);
         if (!TortoiseBots::DungeonRun::DetourCandidateLeadsOn((probeType & PATHFIND_NOPATH) != 0,
                 (probeType & PATHFIND_INCOMPLETE) != 0, ai::PlanDistance(probeEnd.x, probeEnd.y, probeEnd.z, px, py, ground),
                 DistanceTo(lead, probeEnd.x, probeEnd.y, probeEnd.z), ai::PlanDistance(px, py, ground, x, y, z),
@@ -7717,18 +7718,18 @@ bool RunBotWalk(Player* commander, std::string const& order, std::string& answer
     }
     PathFinder path(bot);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
+    PathCalculateCompat(path, x, y, z, false);
     PathFinder permissive(bot);
     PathFinder* active = &path;
-    if (ai::WorldPosition::FellBackToPermissive(path.getPathType()))
+    if (ai::WorldPosition::FellBackToPermissive(PathType(PathTypeCompat(path))))
     {
-        permissive.calculate(x, y, z, false);
-        if (ai::WorldPosition::PermissivePathWalkable(permissive.getPath()))
+        PathCalculateCompat(permissive, x, y, z, false);
+        if (ai::WorldPosition::PermissivePathWalkable(PathPointsCompat(permissive)))
             active = &permissive;
     }
-    Vector3 const end = active->getActualEndPosition();
+    Vector3 const end = PathActualEndCompat(*active);
     float const short_ = std::sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y) + (end.z - z) * (end.z - z));
-    if ((active->getPathType() & PATHFIND_NOPATH) || short_ > 5.0f)
+    if ((PathTypeCompat(*active) & PATHFIND_NOPATH) || short_ > 5.0f)
     {
         answer = "unreachable: " + std::string(name) + " has no navmesh path to the point (it ends " +
             std::to_string(static_cast<int>(short_)) + " yd short)";
@@ -7738,11 +7739,11 @@ bool RunBotWalk(Player* commander, std::string const& order, std::string& answer
     // the summon goes instead (DungeonRun::StragglerWalkRefused).
     {
         std::vector<TortoiseBots::DungeonRun::PathPoint> points;
-        for (Vector3 const& v : active->getPath())
+        for (Vector3 const& v : PathPointsCompat(*active))
             points.push_back(TortoiseBots::DungeonRun::PathPoint{v.x, v.y, v.z});
         float const bx = bot->GetPositionX(), by = bot->GetPositionY(), bz = bot->GetPositionZ();
         float const straight = std::sqrt((x - bx) * (x - bx) + (y - by) * (y - by) + (z - bz) * (z - bz));
-        float const pathYd = active->Length();
+        float const pathYd = PathLengthCompat(*active);
         auto const run = DungeonRuns().find(commanderRaw);
         bool const hasRun = run != DungeonRuns().end() && run->second.run.plan;
         std::vector<TortoiseBots::DungeonRun::StandHostile> hostiles;
@@ -7819,7 +7820,7 @@ bool RunIslandEscape(Player* commander, std::string const& order, std::string& a
     {
         if (!MaNGOS::IsValidMapCoord(px, py, lz))
             return false;
-        ground = map->GetHeight(px, py, lz + h, true, kEscapeMaxVertical + h);
+        ground = GetHeightCompat(map, px, py, lz + h, true, kEscapeMaxVertical + h);
         return ground > INVALID_HEIGHT && std::fabs(ground - lz) <= kEscapeMaxVertical &&
             map->isInLineOfSight(lx, ly, lz + h, px, py, ground + h);
     };
@@ -7833,7 +7834,7 @@ bool RunIslandEscape(Player* commander, std::string const& order, std::string& a
         {
             if (!MaNGOS::IsValidMapCoord(sample.x, sample.y, sample.z))
                 continue; // no ground read: NoGround
-            float const floor = map->GetHeight(sample.x, sample.y, sample.z + kSegmentGroundYd, true,
+            float const floor = GetHeightCompat(map, sample.x, sample.y, sample.z + kSegmentGroundYd, true,
                 2.0f * kSegmentGroundYd);
             sample.ground = floor > INVALID_HEIGHT;
             sample.groundZ = floor;
@@ -7871,9 +7872,9 @@ bool RunIslandEscape(Player* commander, std::string const& order, std::string& a
                 continue;
             PathFinder probe(lead);
             ai::WorldPosition::ExcludeSteepSlopes(probe);
-            probe.calculate(Vector3(px, py, pz), Vector3(tx, ty, tz), false);
-            Vector3 const end = probe.getActualEndPosition();
-            uint32 const probeType = static_cast<uint32>(probe.getPathType());
+            PathCalculateCompat(probe, Vector3(px, py, pz), Vector3(tx, ty, tz), false);
+            Vector3 const end = PathActualEndCompat(probe);
+            uint32 const probeType = static_cast<uint32>(PathTypeCompat(probe));
             if (!RingSpotLeadsOn((probeType & PATHFIND_NOPATH) != 0, (probeType & PATHFIND_INCOMPLETE) != 0,
                     ai::PlanDistance(end.x, end.y, end.z, px, py, pz), ai::PlanDistance(end.x, end.y, end.z, lx, ly, lz)))
                 continue;
@@ -7974,7 +7975,7 @@ bool RunStrandedTeleport(Player* commander, std::string const& order, std::strin
         return false;
     }
     // The plan's point was reached by walking: its floor, read just above it.
-    float const floor = map->GetHeight(x, y, z + 2.0f, true, 4.0f);
+    float const floor = GetHeightCompat(map, x, y, z + 2.0f, true, 4.0f);
     float const ground = floor > INVALID_HEIGHT ? floor : z;
     // The teleport first: a refused one leaves the lead bot exactly as it was
     // (its AI, movement, tasks and stay anchor untouched), and the run tries again.
@@ -8075,14 +8076,14 @@ bool RunOffMapReturn(Player* commander, std::string const& order, std::string& a
         answer = "failed: the teleport was refused";
         return false;
     }
-    if (bot->GetSession() && bot->GetSession()->IsHeadless())
+    if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
     {
         if (bot->IsBeingTeleportedNear())
             bot->ExecuteTeleportNear();
         else if (bot->IsBeingTeleportedFar())
             bot->GetSession()->HandleMoveWorldportAckOpcode();
     }
-    TB_LOG_DETAIL("TortoiseBots: run leader: %s returned to the lead bot from outside the instance", bot->GetName());
+    TB_LOG_DETAIL("TortoiseBots: run leader: %s returned to the lead bot from outside the instance", CStrCompat(bot->GetName()));
     answer = "returned " + std::string(name) + " to " + lead->GetName();
     return true;
 }
@@ -8164,7 +8165,7 @@ bool RunFetchReturn(Player* commander, std::string const& order, std::string& an
         }
         bot->GetMotionMaster()->Clear(false);
         bot->StopMoving();
-        if (bot->GetSession() && bot->GetSession()->IsHeadless())
+        if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
         {
             if (bot->IsBeingTeleportedNear())
                 bot->ExecuteTeleportNear();
@@ -8186,7 +8187,7 @@ bool RunFetchReturn(Player* commander, std::string const& order, std::string& an
         answer = "unavailable: " + refused;
         return false;
     }
-    TB_LOG_DETAIL("TortoiseBots: run leader: %s teleported back to %s", fetched.c_str(), lead->GetName());
+    TB_LOG_DETAIL("TortoiseBots: run leader: %s teleported back to %s", fetched.c_str(), CStrCompat(lead->GetName()));
     answer = "fetched " + fetched + " to " + TortoiseBots::DungeonRun::Num(x) + " " + TortoiseBots::DungeonRun::Num(y) +
         " " + TortoiseBots::DungeonRun::Num(z) +
         (refused.empty() ? std::string() : "; left out " + refused);
@@ -8281,7 +8282,7 @@ TortoiseBots::DungeonRun::RejoinSettle SettleRejoin(uint64 raw, Player* bot, boo
     if (verdict == RejoinSettle::Restore)
     {
         std::string const outcome = RestoreRejoinBind(bot, p);
-        sLog.outBasic("[RUN] rejoin %s undone (%s, instance %u): %s", bot->GetName(),
+        sLog.outBasic("[RUN] rejoin %s undone (%s, instance %u): %s", CStrCompat(bot->GetName()),
             refused ? "the teleport was refused" : settleNow ? "logged out or back in elsewhere" :
             "not in the lead bot's copy in time", bot->GetInstanceId(), outcome.c_str());
     }
@@ -8488,7 +8489,7 @@ bool RunInstanceRejoin(Player* commander, std::string const& order, std::string&
         answer = "failed: the teleport was refused";
         return false;
     }
-    if (bot->GetSession() && bot->GetSession()->IsHeadless())
+    if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
     {
         if (bot->IsBeingTeleportedNear())
             bot->ExecuteTeleportNear();
@@ -8505,7 +8506,7 @@ bool HasMealAura(Player* bot)
 {
     for (auto const& entry : bot->GetSpellAuraHolderMap())
     {
-        SpellEntry const* spell = entry.second ? entry.second->GetSpellProto() : nullptr;
+        SpellEntry const* spell = entry.second ? GetSpellEntryCompat(entry.second->GetSpellProto()) : nullptr;
         if (spell && (spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
             return true;
     }
@@ -8642,7 +8643,7 @@ float RunHomeYd(Unit* unit)
     if (!creature->HasStaticDBSpawnData())
         return -1.0f;
     float homeX = 0.0f, homeY = 0.0f, homeZ = 0.0f;
-    creature->GetRespawnCoord(homeX, homeY, homeZ);
+    GetRespawnCoordCompat(creature, homeX, homeY, homeZ);
     float const dx = unit->GetPositionX() - homeX;
     float const dy = unit->GetPositionY() - homeY;
     float const dz = unit->GetPositionZ() - homeZ;
@@ -9148,14 +9149,14 @@ void ComputeMemberReach(Player* lead, Player* bot, WedgeReachRead& read)
         return;
     PathFinder path(bot);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), false);
-    Vector3 const end = path.getActualEndPosition();
-    uint32 const type = static_cast<uint32>(path.getPathType());
+    PathCalculateCompat(path, lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), false);
+    Vector3 const end = PathActualEndCompat(path);
+    uint32 const type = static_cast<uint32>(PathTypeCompat(path));
     read.path = (type & PATHFIND_NORMAL) &&
         !(type & (PATHFIND_INCOMPLETE | PATHFIND_NOPATH | PATHFIND_SHORTCUT)) &&
         (end - Vector3(lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ())).length() <= 2.0f &&
-        path.getPath().size() >= 2;
-    read.lenYd = path.Length();
+        PathPointsCompat(path).size() >= 2;
+    read.lenYd = PathLengthCompat(path);
 }
 
 // `cached` false is the destructive drop's read: the drop never decides on a reading up to kWedgeReachReadMs old
@@ -9246,7 +9247,7 @@ void DropUnattackableCombat(Player* lead, std::vector<Player*> const& bots, std:
         sServerFacade.GetHostileRefManager(bot).deleteReferences();
         bot->CombatStop();
         TB_LOG_DETAIL("TortoiseBots: run leader: %s dropped combat with units the group cannot attack only%s",
-            bot->GetName(), wedged ? " (wedged on another floor)" : "");
+            CStrCompat(bot->GetName()), wedged ? " (wedged on another floor)" : "");
     }
 }
 
@@ -9810,7 +9811,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
             fact.fleeRoomYd = FearRoomFor(attacker, fact.creatureType, fact.ccImmune, f);
             fact.engaged = true;
             bool const melee = attacker->CanReachWithMeleeAutoAttack(victim);
-            fact.hitting = melee || (!attacker->IsMoving() && attacker->IsNonMeleeSpellCasted(false));
+            fact.hitting = melee || (!IsMovingCompat(attacker) && attacker->IsNonMeleeSpellCasted(false));
             fact.castingAtRange = fact.hitting && !melee;
             if (fact.castingAtRange && fact.distLead > TortoiseBots::DungeonRun::kGuardNoWalkYd)
                 fact.campIdle = IdleHostilesNear(anchor, attacker, TortoiseBots::DungeonRun::kGuardCampYd);
@@ -9826,7 +9827,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
                 fact.victimName = victim->GetName(); // RaidGuardTick: never the off-tank holding the boss; the trash
                                                      // round robin keeps an off-tank on its own add (RaidTrashOffTankHolds)
             fact.attackable = GroupCanAttack(anchor, attacker); // never picked up when it cannot be attacked
-            fact.selectable = !attacker->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            fact.selectable = !HasUnitFlagCompat(attacker, UNIT_FLAG_NOT_SELECTABLE);
             if (hold)
                 fact.distSpot = DistanceTo(attacker, hold->x, hold->y, hold->z);
             if (inParty)
@@ -9964,7 +9965,7 @@ std::vector<uint32> const& BossSpawnLowGuids(uint32 mapId, uint32 entry)
     auto worker = [&](CreatureDataPair const& pair) -> bool
     {
         CreatureData const& data = pair.second;
-        if (data.position.mapId != mapId)
+        if (SpawnMapIdW2(data) != mapId)
             return false;
         for (uint32 id : data.creature_id)
             if (id == entry)
@@ -10031,7 +10032,7 @@ uint32 OwnBossSpawnLow(uint32 mapId, ai::PlanStep const& step)
     for (uint32 low : BossSpawnLowGuids(mapId, step.entry))
         if (CreatureData const* data = sObjectMgr.GetCreatureData(low))
         {
-            float const yd = ai::PlanDistance(data->position.x, data->position.y, data->position.z,
+            float const yd = ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data),
                 step.x, step.y, step.z);
             if (!own || yd < ownYd)
             {
@@ -10129,7 +10130,7 @@ void ReadBossInInstance(ai::PlanStep const& step, Player* lead, TortoiseBots::Du
         Creature* creature = map->GetCreature(data->GetObjectGuid(low));
         // Not in the map and its spawn point in a grid nobody has loaded: that area was not searched, and the note
         // says so (no grid is loaded for the search). A creature that walked off its spawn grid is found by guid.
-        if (!creature && !map->IsLoaded(data->position.x, data->position.y))
+        if (!creature && !map->IsLoaded(SpawnXW2(*data), SpawnYW2(*data)))
         {
             f.bossSearchUnloaded = true;
             continue;
@@ -10259,11 +10260,11 @@ static std::vector<ai::AggroPoint> SampleWalkTo(Player* lead, float x, float y, 
     path.push_back(ai::AggroPoint{lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ()});
     PathFinder finder(lead);
     ai::WorldPosition::ExcludeSteepSlopes(finder);
-    finder.calculate(x, y, z, false);
-    uint32 const type = static_cast<uint32>(finder.getPathType());
+    PathCalculateCompat(finder, x, y, z, false);
+    uint32 const type = static_cast<uint32>(PathTypeCompat(finder));
     bool const walkable = (type & PATHFIND_NOPATH) == 0 &&
         (type & (PATHFIND_NORMAL | PATHFIND_INCOMPLETE | PATHFIND_NOT_USING_PATH)) != 0;
-    Movement::PointsArray const& points = finder.getPath();
+    Movement::PointsArray const& points = PathPointsCompat(finder);
     if (walkable && points.size() >= 2)
         for (Vector3 const& p : points)
             path.push_back(ai::AggroPoint{p.x, p.y, p.z});
@@ -10326,11 +10327,11 @@ void ReadPullJoiners(Player* lead, std::vector<Player*> const& bots, ai::PlanSte
             params.lowestPartyLevel = std::min<uint32>(params.lowestPartyLevel, bot->GetLevel());
     if (params.lowestPartyLevel == 255)
         params.lowestPartyLevel = lead->GetLevel();
-    params.aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    params.aggroRate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     // The estimate never uses less than the observed cross-pack ring (the ZG terrace's spawn pairs 11.0-19.5 yd
     // apart): the server's 10 yd setting is read, and the policy's floor applies to it.
     params.familyAssistYd = std::max(ai::kAggroFamilyAssistMinYd,
-        sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
+        WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
     // creature_linking: a master's aggro wakes its slave (FLAG_AGGRO_ON_AGGRO), and with FLAG_TO_AGGRO_ON_AGGRO a
     // slave's aggro wakes its master. The master is the row's guid when it has one, else any creature of its entry in range.
     for (std::size_t i = 0; i < creatures.size(); ++i)
@@ -10523,7 +10524,7 @@ void ReadRezRoster(Player* lead, std::vector<Player*> const& bots, TortoiseBots:
         for (size_t i = 0; list && i < 5 && !spellId; ++i)
             if (bot->HasSpell(list[i]))
                 spellId = list[i];
-        SpellEntry const* spell = spellId ? sSpellTemplate.LookupEntry<SpellEntry>(spellId) : nullptr;
+        SpellEntry const* spell = spellId ? GetSpellEntryCompat(spellId) : nullptr;
         // Rebirth's 30 minute cooldown is a category cooldown, stored under the id that was cast, so the
         // category is asked, not only the rank's own id; the reagent (Rebirth's seed) must be in the bags.
         bool ready = spell && !bot->HasSpellCooldown(spellId) &&
@@ -10541,8 +10542,8 @@ void ReadRezRoster(Player* lead, std::vector<Player*> const& bots, TortoiseBots:
         }
         if (list)
             if (Spell* casting = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-                for (size_t k = 0; casting->m_spellInfo && k < 5; ++k)
-                    if (casting->m_spellInfo->Id == list[k])
+                for (size_t k = 0; GetSpellEntryCompat(casting->m_spellInfo) && k < 5; ++k)
+                    if (GetSpellEntryCompat(casting->m_spellInfo)->Id == list[k])
                         f.rezInProgress = true;
         m.placed = true;
         m.x = bot->GetPositionX();
@@ -10630,9 +10631,9 @@ void ReadPullStand(DungeonRunSlot const& slot, Player* lead, std::vector<Player*
         return;
     PathFinder path(lead);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), false);
+    PathCalculateCompat(path, unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), false);
     // As the ranged reach's own path (WorldPosition::getPathStepFrom): a complete or a partial path only.
-    if (path.getPathType() != PATHFIND_NORMAL && path.getPathType() != PATHFIND_INCOMPLETE)
+    if (PathTypeCompat(path) != PATHFIND_NORMAL && PathTypeCompat(path) != PATHFIND_INCOMPLETE)
         return;
     std::vector<ai::ApproachPoint> points;
     ai::ApproachPoint front;
@@ -10647,7 +10648,7 @@ void ReadPullStand(DungeonRunSlot const& slot, Player* lead, std::vector<Player*
         for (PathPoint const& p : dry)
             points.push_back(ai::ApproachPoint{p.x, p.y, p.z});
     else
-        for (Vector3 const& p : path.getPath())
+        for (Vector3 const& p : PathPointsCompat(path))
         {
             ai::ApproachPoint point;
             point.x = p.x;
@@ -10934,7 +10935,7 @@ static void ReadStandClearance(Player* lead, std::vector<Player*> const& bots,
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::vector<Creature*> scanned;
     std::vector<uint64> formations;
     std::vector<bool> inPack;
@@ -11146,9 +11147,9 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
             if (own->IsAlive() && TortoiseBots::DungeonRun::ScriptChangedFrom(own) == next->entry)
             {
                 CreatureData const* const row = own->GetCreatureData();
-                float const rowX = row ? row->position.x : own->GetPositionX();
-                float const rowY = row ? row->position.y : own->GetPositionY();
-                float const rowZ = row ? row->position.z : own->GetPositionZ();
+                float const rowX = row ? SpawnXW2(*row) : own->GetPositionX();
+                float const rowY = row ? SpawnYW2(*row) : own->GetPositionY();
+                float const rowZ = row ? SpawnZW2(*row) : own->GetPositionZ();
                 if (ai::PlanDistance(rowX, rowY, rowZ, next->x, next->y, next->z) <= next->radius + kSpawnOwnTolYd)
                 {
                     pack.insert(RunFormationOf(own));
@@ -11160,7 +11161,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
         for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))
         {
             CreatureData const* const data = sObjectMgr.GetCreatureData(low);
-            if (!data || ai::PlanDistance(data->position.x, data->position.y, data->position.z, next->x, next->y,
+            if (!data || ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data), next->x, next->y,
                     next->z) > next->radius + kSpawnOwnTolYd)
                 continue;
             if (Creature* const member = map->GetCreature(data->GetObjectGuid(low)))
@@ -11173,7 +11174,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     HostileCreaturesAround(lead, kStandClearScanYd, found);
     for (Unit* unit : found)
@@ -11199,8 +11200,8 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
     // The path to the authored approach, walked back from its end: the last point outside every unit of the pack.
     PathFinder path(lead);
     ai::WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(row.x, row.y, row.z, false);
-    if (path.getPathType() != PATHFIND_NORMAL && path.getPathType() != PATHFIND_INCOMPLETE)
+    PathCalculateCompat(path, row.x, row.y, row.z, false);
+    if (PathTypeCompat(path) != PATHFIND_NORMAL && PathTypeCompat(path) != PATHFIND_INCOMPLETE)
         return;
     f.holdAheadRead = true; // looked for: no point found is the policy's note, not a read still to come
     std::vector<ai::ApproachPoint> walk;
@@ -11209,7 +11210,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
     front.y = lead->GetPositionY();
     front.z = lead->GetPositionZ();
     walk.push_back(front);
-    for (Vector3 const& p : path.getPath())
+    for (Vector3 const& p : PathPointsCompat(path))
     {
         ai::ApproachPoint point;
         point.x = p.x;
@@ -11316,8 +11317,8 @@ static void ReadPullAhead(DungeonRunSlot const& slot, Player* lead, std::vector<
                     params.lowestPartyLevel = std::min<uint32>(params.lowestPartyLevel, bot->GetLevel());
             if (params.lowestPartyLevel == 255)
                 params.lowestPartyLevel = lead->GetLevel();
-            params.aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
-            params.familyAssistYd = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
+            params.aggroRate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+            params.familyAssistYd = WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
             params.ringYd = ringYd;
             params.ringHops = ai::kAggroRingHops;
             params.floorDz = ai::kAggroFloorDz;
@@ -11570,7 +11571,7 @@ static void ReadRescueFacts(Player* lead, std::vector<Player*> const& bots, floa
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMap() == map && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     RescueHostileNear check{ lead, x, y, z, kRescueScanYd };
     MaNGOS::UnitListSearcher<RescueHostileNear> searcher(found, check);
@@ -11615,7 +11616,7 @@ static void ReadFetchFacts(Player* lead, std::vector<Player*> const& bots, Torto
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMap() == map && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     HostileCreaturesAround(lead, kFetchScanYd, found);
     for (Unit* unit : found)
@@ -11641,7 +11642,7 @@ static void ReadFetchFacts(Player* lead, std::vector<Player*> const& bots, Torto
             float const angle = 6.2831853f * static_cast<float>(i) / kFetchRingSteps;
             float const px = lx + std::cos(angle) * ring;
             float const py = ly + std::sin(angle) * ring;
-            float const ground = map->GetHeight(px, py, lz + kFetchFloorDzYd, true, 2.0f * kFetchFloorDzYd);
+            float const ground = GetHeightCompat(map, px, py, lz + kFetchFloorDzYd, true, 2.0f * kFetchFloorDzYd);
             if (ground <= INVALID_HEIGHT || std::fabs(ground - lz) > kFetchFloorDzYd ||
                 !lead->IsWithinLOS(px, py, ground + 2.0f))
                 continue;
@@ -11795,7 +11796,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         bool surfaceFound = false;
         if (Map* const surfaceMap = lead->GetMap())
         {
-            float const height = surfaceMap->GetHeight(lead->GetPositionX(), lead->GetPositionY(), leadZ + 0.5f);
+            float const height = GetHeightCompat(surfaceMap, lead->GetPositionX(), lead->GetPositionY(), leadZ + 0.5f);
             surfaceFound = height > INVALID_HEIGHT + 1.0f;
             if (surfaceFound)
                 surfaceZ = height;
@@ -11804,7 +11805,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             surfaceFound, surfaceZ);
         f.leadFloorZ = TortoiseBots::DungeonRun::LeadFloorZ(mapFloorZ, probeFound, probeZ);
         f.leadOffFloor = mmapLoaded && TortoiseBots::DungeonRun::LeadOffFloor(leadZ, mapFloorZ, probeFound, probeZ,
-            lead->IsInWater() || lead->IsUnderwater(), onSurface);
+            lead->IsInWater() || IsUnderwaterCompat(lead), onSurface);
     }
     // The terrain read the rescue, strand and return pickers share (DungeonRun::Facts::pointLiquid): a point in or
     // under liquid at its own z is never one to walk or teleport the lead bot to (ZG walk 33: the rescue put it in
@@ -11815,13 +11816,13 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             GridMapLiquidStatus const status = map->GetTerrain()->getLiquidStatus(x, y, z, MAP_ALL_LIQUIDS, nullptr);
             return status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER;
         };
-    f.leadMoving = lead->IsMoving(); // an exact waypoint's stand-still proof (DungeonRunPolicy.h ExactWalkTo)
+    f.leadMoving = IsMovingCompat(lead); // an exact waypoint's stand-still proof (DungeonRunPolicy.h ExactWalkTo)
     // The walk after a rest (DungeonRun::RestWalkResendDue): a rest state confirms the stall, a cast defers it.
     f.leadResting = HasMealAura(lead) || lead->GetStandState() != UNIT_STAND_STATE_STAND;
     f.leadCasting = lead->IsNonMeleeSpellCasted(true, false, true);
     // The stuck note and the stall's fallback (DungeonRun::StuckNote, StallFallback): the lead bot in water, and
     // its own "move to position" failing now (stamped by MoveToPositionAction::Execute).
-    f.leadInWater = lead->IsInWater() || lead->IsUnderwater();
+    f.leadInWater = lead->IsInWater() || IsUnderwaterCompat(lead);
     if (PlayerbotAI* const moveAi = PlayerbotAIStorage::Instance().GetAI(lead))
     {
         ai::LastMovement& lastMove = moveAi->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get();
@@ -11874,7 +11875,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     float joinGround = joinZ;
     if (joinWanted && MaNGOS::IsValidMapCoord(joinX, joinY, joinZ))
     {
-        float const ground = joinMap->GetHeight(joinX, joinY, joinZ, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
+        float const ground = GetHeightCompat(joinMap, joinX, joinY, joinZ, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
         if (RemoteCommander::CheckDirectGround(ground, joinZ) == RemoteCommander::DirectVerdict::Ok)
             joinGround = ground;
     }
@@ -12114,9 +12115,9 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         {
             PathFinder path(lead);
             ai::WorldPosition::ExcludeSteepSlopes(path);
-            path.calculate(ax, ay, az, false);
-            uint32 const type = static_cast<uint32>(path.getPathType());
-            Vector3 const end = path.getActualEndPosition();
+            PathCalculateCompat(path, ax, ay, az, false);
+            uint32 const type = static_cast<uint32>(PathTypeCompat(path));
+            Vector3 const end = PathActualEndCompat(path);
             float const offset = std::sqrt((end.x - ax) * (end.x - ax) + (end.y - ay) * (end.y - ay) +
                 (end.z - az) * (end.z - az));
             f.anchorReachable = !(type & RemoteCommander::kPathNoPath) &&
@@ -12231,8 +12232,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     // The gate reads the spawn row's place, not the creature's: a dragged boss dies far from
                     // his row, while a far row's creature may die near the step.
                     CreatureData const* row = own->GetCreatureData();
-                    float const rowX = row ? row->position.x : own->GetPositionX();
-                    float const rowY = row ? row->position.y : own->GetPositionY();
+                    float const rowX = row ? SpawnXW2(*row) : own->GetPositionX();
+                    float const rowY = row ? SpawnYW2(*row) : own->GetPositionY();
                     float const ownFromSpot2d = std::sqrt(
                         (rowX - step->x) * (rowX - step->x) +
                         (rowY - step->y) * (rowY - step->y));
@@ -12378,7 +12379,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         if (CreatureData const* data = creature->GetCreatureData())
                         {
                             read.hasSpawn = true;
-                            read.spawnYd = ai::PlanDistance(data->position.x, data->position.y, data->position.z,
+                            read.spawnYd = ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data),
                                 step->x, step->y, step->z);
                         }
                         read.ownWaypoint = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
@@ -12392,7 +12393,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         read.airborne = creature->CanFly() || creature->IsFlying() || creature->IsLevitating();
                         if (AirborneFloorAsked(read, step->radius, f.packClearMarginYd))
                         {
-                            float const ground = creature->GetMap()->GetHeight(creature->GetPositionX(),
+                            float const ground = GetHeightCompat(creature->GetMap(), creature->GetPositionX(),
                                 creature->GetPositionY(), creature->GetPositionZ(), true,
                                 std::fabs(read.dz) + kPackResidueZYd + 2.0f);
                             read.airborneSameFloor = SameFloorUnder(ground > INVALID_HEIGHT, ground, step->z);
@@ -12498,7 +12499,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                                     if (member->GetEntry() != entry)
                                         continue;
                                     spawned.emplace_back(RunFormationOf(member), member->IsAlive());
-                                    if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x,
+                                    if (ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data), step->x,
                                             step->y, step->z) <= step->radius + kSpawnOwnTolYd)
                                         f.standPullOwnRead.push_back(spawned.back().first);
                                 }
@@ -12575,7 +12576,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                 {
                     PathFinder path(lead);
                     ai::WorldPosition::ExcludeSteepSlopes(path);
-                    path.calculate(step->x, step->y, step->z, false);
+                    PathCalculateCompat(path, step->x, step->y, step->z, false);
                     NoteLeadWay(path, lead, step->x, step->y, step->z, f);
                     if (forward)
                         TortoiseBots::DungeonRun::StoreMoveProbe(slot.moveProbe, slot.run.step, lead->GetPositionX(),
@@ -12610,13 +12611,13 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                 float const uz = unit->GetPositionZ();
                 PathFinder path(lead);
                 ai::WorldPosition::ExcludeSteepSlopes(path);
-                path.calculate(ux, uy, uz, false);
-                uint32 const type = static_cast<uint32>(path.getPathType());
-                Vector3 const end = path.getActualEndPosition();
+                PathCalculateCompat(path, ux, uy, uz, false);
+                uint32 const type = static_cast<uint32>(PathTypeCompat(path));
+                Vector3 const end = PathActualEndCompat(path);
                 bool const fallback = (type & PATHFIND_NOT_USING_PATH) != 0 ||
                     DryChordFallback(f.dryWalk, (type & PATHFIND_UNDERWATER) != 0, DryAt(lead, ux, uy, uz));
                 float pathYd = 0.0f;
-                Movement::PointsArray const& way = path.getPath();
+                Movement::PointsArray const& way = PathPointsCompat(path);
                 for (size_t i = 1; i < way.size(); ++i)
                     pathYd += ai::PlanDistance(way[i - 1].x, way[i - 1].y, way[i - 1].z, way[i].x, way[i].y, way[i].z);
                 float const straightYd = ai::PlanDistance(
@@ -13206,14 +13207,14 @@ void SyncHoldStands(Player* commander, Player* lead, std::vector<Player*> const&
             if (!ai)
                 continue;
             float x = lead->GetPositionX(), y = lead->GetPositionY(), z = lead->GetPositionZ();
-            float const ground = lead->GetMap()->GetHeight(stand->x, stand->y, stand->z + 5.0f);
+            float const ground = GetHeightCompat(lead->GetMap(), stand->x, stand->y, stand->z + 5.0f);
             if (ground > INVALID_HEIGHT && std::fabs(ground - stand->z) <= 5.0f)
             {
                 PathFinder path(lead);
                 ai::WorldPosition::ExcludeSteepSlopes(path);
-                path.calculate(stand->x, stand->y, ground, false);
-                Vector3 const end = path.getActualEndPosition();
-                if (!(path.getPathType() & PATHFIND_NOPATH) &&
+                PathCalculateCompat(path, stand->x, stand->y, ground, false);
+                Vector3 const end = PathActualEndCompat(path);
+                if (!(PathTypeCompat(path) & PATHFIND_NOPATH) &&
                     ai::PlanDistance(end.x, end.y, end.z, stand->x, stand->y, ground) <= 2.0f)
                 {
                     x = stand->x;
@@ -13329,7 +13330,7 @@ void AddPlayerAttackers(Player* lead, std::vector<Player*> const& bots, std::vec
             fact.fleeRoomYd = FearRoomFor(attacker, fact.creatureType, fact.ccImmune, f);
             fact.engaged = true;
             bool const melee = attacker->CanReachWithMeleeAutoAttack(player);
-            fact.hitting = melee || (!attacker->IsMoving() && attacker->IsNonMeleeSpellCasted(false));
+            fact.hitting = melee || (!IsMovingCompat(attacker) && attacker->IsNonMeleeSpellCasted(false));
             fact.castingAtRange = fact.hitting && !melee;
             if (fact.castingAtRange && fact.distLead > TortoiseBots::DungeonRun::kGuardNoWalkYd)
                 fact.campIdle = IdleHostilesNear(anchor, attacker, TortoiseBots::DungeonRun::kGuardCampYd);
@@ -13340,7 +13341,7 @@ void AddPlayerAttackers(Player* lead, std::vector<Player*> const& bots, std::vec
                 fact.victimTank = PlayerbotAI::IsTank(player);
             }
             fact.attackable = GroupCanAttack(anchor, attacker);
-            fact.selectable = !attacker->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            fact.selectable = !HasUnitFlagCompat(attacker, UNIT_FLAG_NOT_SELECTABLE);
             if (hold)
                 fact.distSpot = DistanceTo(attacker, hold->x, hold->y, hold->z);
             f.partyAttackers.push_back(fact);
@@ -13370,7 +13371,7 @@ void ReadRunPlayers(DungeonRunSlot const& slot, uint64 commanderRaw, Player* lea
         TortoiseBots::DungeonRun::PlayerFact p;
         p.commander = entry.guid.GetRawValue() == commanderRaw;
         Player* const member = FindCharacter(entry.guid.GetRawValue());
-        if (!member || !member->GetSession() || !member->GetSession()->HasNetworkTransport())
+        if (!member || !member->GetSession() || !HasNetworkTransportCompat(member->GetSession()))
         {
             // Logged out (or his connection lost) but still a member: offline, not in the instance; a pull waits
             // for him (bounded, then a pause naming him offline).
@@ -13384,7 +13385,7 @@ void ReadRunPlayers(DungeonRunSlot const& slot, uint64 commanderRaw, Player* lea
         p.name = member->GetName();
         p.onMap = member->IsInWorld() && member->GetMapId() == slot.run.plan->map;
         p.alive = member->IsAlive();
-        p.ghost = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+        p.ghost = HasPlayerFlagCompat(member, PLAYER_FLAGS_GHOST);
         p.yd = p.onMap && lead->IsInWorld() && member->GetMap() == lead->GetMap() ? member->GetDistance(lead) : 1000.0f;
         p.healthPct = member->GetMaxHealth() ? member->GetHealth() * 100 / member->GetMaxHealth() : 100;
         p.gm = IsBotAdministrator(member); // the hp clamp (DungeonRun::OnlyGmFightOverDeadBots)
@@ -13443,9 +13444,9 @@ TortoiseBots::PlayerLed::Anchor ReadPlayerLedAnchor(Player* commander, std::vect
     a.z = commander->GetPositionZ();
     a.onMap = commander->GetMapId() == planMap;
     a.alive = commander->IsAlive();
-    a.ghost = commander->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    a.ghost = HasPlayerFlagCompat(commander, PLAYER_FLAGS_GHOST);
     bool const moved = TortoiseBots::PlayerLed::MovedSince(pl, a.x, a.y, a.z);
-    a.moving = moved || commander->IsMoving();
+    a.moving = moved || IsMovingCompat(commander);
     a.partyInCombat = a.alive && commander->IsInCombat();
     for (Player* bot : bots)
     {
@@ -13542,7 +13543,7 @@ static void SyncReturnHolds(Player* commander, RemoteCommander::Binding const& b
                 bot->GetMotionMaster()->Clear(false);
                 bot->StopMoving();
                 TB_LOG_DETAIL("TortoiseBots: run leader: %s revived %.0f yd from the lead bot: holds still for a summon",
-                    bot->GetName(), yd);
+                    CStrCompat(bot->GetName()), yd);
             }
             auto const revived = slot.reviveHoldMs.find(raw);
             if (revived != slot.reviveHoldMs.end())
@@ -13592,7 +13593,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
         // The deferred packs left alive go into the note (DungeonRun::EndRunEarly).
         TortoiseBots::DungeonRun::EndRunEarly(slot.run,
             TortoiseBots::DungeonRun::RunTimeLimitNote(sPlayerbotAIConfig.dungeonRunMaxMinutes));
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander ? commander->GetName() : "?",
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander ? CStrCompat(commander->GetName()) : "?",
             slot.run.note.c_str());
         SendRunLine(commander, slot, true);
         ReleaseRunHold(commander, binding->leadGuid, slot);
@@ -13713,7 +13714,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
                         ReadHoldDone(*current, lead, doneFacts);
                         if (TortoiseBots::DungeonRun::HoldDoneWhilePaused(slot.run, doneFacts))
                         {
-                            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(),
+                            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()),
                                 slot.run.note.c_str());
                             SendRunLine(commander, slot, false);
                         }
@@ -13728,7 +13729,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
                 ReadRunNeedFacts(slot, doorLead, doorFacts);
                 if (TortoiseBots::DungeonRun::DoorOpenWhilePaused(slot.run, doorFacts))
                 {
-                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.note.c_str());
+                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.note.c_str());
                     SendRunLine(commander, slot, false);
                 }
             }
@@ -13759,7 +13760,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
                 }
                 if (TortoiseBots::DungeonRun::CeilingFightOverWhilePaused(slot.run, partyInCombat, dt))
                 {
-                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(),
+                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()),
                         slot.run.note.c_str());
                     SendRunLine(commander, slot, false);
                 }
@@ -13772,7 +13773,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             lead->GetMapId() == slot.run.plan->map;
         if (TortoiseBots::DungeonRun::LeadBackWhilePaused(slot.run, back, dt))
         {
-            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.note.c_str());
+            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.note.c_str());
             SendRunLine(commander, slot, false);
         }
     }
@@ -13791,7 +13792,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             TortoiseBots::DungeonRun::ApplyPlayerFacts(holdFacts);
             if (TortoiseBots::DungeonRun::PlayerHoldBackWhilePaused(slot.run, holdFacts, dt))
             {
-                TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.note.c_str());
+                TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.note.c_str());
                 SendRunLine(commander, slot, false);
             }
         }
@@ -13844,13 +13845,13 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             TortoiseBots::PlayerLed::StepSpot(run, step, x, y, z);
             PathFinder path(lead);
             ai::WorldPosition::ExcludeSteepSlopes(path);
-            path.calculate(x, y, z, false);
-            uint32 const type = static_cast<uint32>(path.getPathType());
+            PathCalculateCompat(path, x, y, z, false);
+            uint32 const type = static_cast<uint32>(PathTypeCompat(path));
             // No path, or one that stops more than 5 yd short of the spot (a spot off the mesh by a little is fine).
-            Vector3 const end = path.getActualEndPosition();
+            Vector3 const end = PathActualEndCompat(path);
             bool const noPath = (type & PATHFIND_NOPATH) ||
                 ((type & PATHFIND_INCOMPLETE) && ai::PlanDistance(end.x, end.y, end.z, x, y, z) > 5.0f);
-            return TortoiseBots::PlayerLed::PathShortEnough(noPath, path.Length(), DistanceTo(lead, x, y, z));
+            return TortoiseBots::PlayerLed::PathShortEnough(noPath, PathLengthCompat(path), DistanceTo(lead, x, y, z));
         };
         TortoiseBots::PlayerLed::Pick(slot.run, slot.playerLed, anchor, ReadPlayerLedEngaged(commander, bots), pathOk);
     }
@@ -13926,7 +13927,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
         speedRate = 1.0f;
     }
     if (speedRate != speedBefore)
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: test speed %s", commander->GetName(),
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: test speed %s", CStrCompat(commander->GetName()),
             speedRate > 1.0f ? (TortoiseBots::DungeonRun::Num(speedRate) + " (walking)").c_str() : "1.0 (a fight, a pull, a rest or an event)");
     ApplyRunSpeed(commanderRaw, lead, bots, speedRate);
     // A bot held in combat by units the group cannot attack only past the grace leaves it (CombatDropTick).
@@ -13964,7 +13965,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             answer = facts;
             PathFinder path(lead);
             ai::WorldPosition::ExcludeSteepSlopes(path);
-            path.calculate(step->x, step->y, step->z, false);
+            PathCalculateCompat(path, step->x, step->y, step->z, false);
             NoteLeadWay(path, lead, step->x, step->y, step->z, answer);
             told = &answer;
         }
@@ -13974,7 +13975,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     // (DungeonRun::DeferUnreachablePack, in the tick or in the stand's answer above): logged once.
     if (!slot.run.deferLog.empty())
     {
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.deferLog.c_str());
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.deferLog.c_str());
         slot.run.deferLog.clear();
     }
     // While the party rests the lead bot holds where it stands
@@ -14165,7 +14166,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     SyncHoldStands(commander, lead, bots, it->second, order);
     SendRunLine(commander, it->second, false);
     if (it->second.run.state != TortoiseBots::DungeonRun::State::Running)
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), it->second.lastLine.c_str());
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), it->second.lastLine.c_str());
 }
 
 
@@ -14308,7 +14309,7 @@ static bool SpeedChangeWaitsFor(Player* bot)
 {
     if (!bot)
         return false;
-    bool const inWater = bot->IsInWater() || bot->IsUnderwater() ||
+    bool const inWater = bot->IsInWater() || IsUnderwaterCompat(bot) ||
         bot->HasMovementFlag(MOVEFLAG_SWIMMING);
     bool const splineMoving = !bot->movespline->Finalized();
     return TortoiseBots::DungeonRun::SpeedChangeWaits(inWater, splineMoving);
@@ -15395,7 +15396,7 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
                 commanderRaw, commander->GetName(), plan->name, captureNowMs);
             if (captureId.empty())
                 if (std::string const& why = TortoiseBots::DecisionCaptureService::Instance().lastError(); !why.empty())
-                    TB_LOG_BASIC("TortoiseBots: decision capture for %s not started: %s", commander->GetName(), why.c_str());
+                    TB_LOG_BASIC("TortoiseBots: decision capture for %s not started: %s", CStrCompat(commander->GetName()), why.c_str());
         }
         // Item-leg skip: give after the slot exists; the warning rides the start note.
         stored.giveRun = startPlan.giveRun;
@@ -15414,7 +15415,7 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         s_dungeonRunMs = 0;
         std::string const captureSuffix =
             captureId.empty() ? std::string() : " (decision capture " + captureId + ")";
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s started plan %s at step %u%s%s", commander->GetName(), plan->name.c_str(),
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s started plan %s at step %u%s%s", CStrCompat(commander->GetName()), plan->name.c_str(),
             static_cast<uint32>(startStep + 1),
             stored.run.testSpeed > 1.0f ? (" at " + TortoiseBots::DungeonRun::SpeedLabel(stored.run)).c_str() : "",
             captureSuffix.c_str());
@@ -15651,7 +15652,7 @@ void NoteCommanderOrderResult(ChatHandler* handler, std::string const& intent, b
 // The name of a spell (English), empty when unknown.
 static std::string SpellNameOf(uint32 spellId)
 {
-    SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(spellId);
     return spell ? spell->SpellName[0] : std::string();
 }
 
@@ -15720,13 +15721,13 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
     for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
     {
         Spell* spell = unit->GetCurrentSpell(type);
-        if (!spell || !spell->m_spellInfo)
+        if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
             continue;
         s_breathWindows.Forget(windowKey);
-        mob.castId = spell->m_spellInfo->Id;
+        mob.castId = GetSpellEntryCompat(spell->m_spellInfo)->Id;
         mob.castLeftMs = spell->GetCastedTime();
         mob.channel = type == CURRENT_CHANNELED_SPELL;
-        mob.castTotalMs = mob.channel ? static_cast<uint32>(spell->m_spellInfo->GetDuration())
+        mob.castTotalMs = mob.channel ? static_cast<uint32>(GetSpellEntryCompat(spell->m_spellInfo)->GetDuration())
                                       : static_cast<uint32>(spell->GetCastTime());
         mob.castTarget = spell->m_targets.getUnitTargetGuid().GetRawValue();
         if (TortoiseBots::SpellShape::Shape const* shape = TortoiseBots::SpellShape::For(mob.castId))
@@ -15757,7 +15758,7 @@ static char DispelLetter(uint32 dispel)
 static CommanderTelemetry::AuraRead AuraReadOf(SpellAuraHolder const* holder)
 {
     CommanderTelemetry::AuraRead read;
-    SpellEntry const* proto = holder->GetSpellProto();
+    SpellEntry const* proto = GetSpellEntryCompat(holder->GetSpellProto());
     if (!proto)
         return read;
     read.aura.id = proto->Id;
@@ -15788,8 +15789,8 @@ static void FillMobState(Unit* unit, CommanderTelemetry::MobInfo& mob)
             immuneMasks.push_back(aura->GetModifier()->m_miscvalue);
     uint32 const immuneMask = CommanderTelemetry::FoldImmuneSchools(immuneMasks);
     mob.flags = CommanderTelemetry::UnitFlags(
-        unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE),
-        unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE_2 | UNIT_FLAG_IMMUNE_TO_PLAYER) || CommanderTelemetry::ImmuneToAllSchools(immuneMask),
+        HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE),
+        HasUnitFlagCompat(unit, UNIT_FLAG_NON_ATTACKABLE_2 | UNIT_FLAG_IMMUNE_TO_PLAYER) || CommanderTelemetry::ImmuneToAllSchools(immuneMask),
         unit->IsHovering() || unit->IsFlying(),
         unit->GetStandState() == UNIT_STAND_STATE_DEAD,
         creature && creature->IsInEvadeMode());
@@ -15902,19 +15903,19 @@ void BuildBossSpawnCache()
         if (!entry)
             return false;
         CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-        bool const boss = plans.IsBossEntry(data.position.mapId, entry) ||
+        bool const boss = plans.IsBossEntry(SpawnMapIdW2(data), entry) ||
             (info && (info->rank == CREATURE_ELITE_WORLDBOSS || (info->flags_extra & CREATURE_FLAG_EXTRA_INSTANCE_BIND)));
         if (!boss)
             return false;
-        uint64 const key = (static_cast<uint64>(data.position.mapId) << 32) | entry;
+        uint64 const key = (static_cast<uint64>(SpawnMapIdW2(data)) << 32) | entry;
         CommanderTelemetry::BossSpawnRow row;
         row.dbGuid = pair.first;
         row.info.entry = entry;
         row.info.name = info ? info->name : std::string();
-        row.info.x = data.position.x;
-        row.info.y = data.position.y;
+        row.info.x = SpawnXW2(data);
+        row.info.y = SpawnYW2(data);
         row.info.inPlan = planOrder.count(key) != 0;
-        rowsByMap[data.position.mapId].push_back(std::move(row));
+        rowsByMap[SpawnMapIdW2(data)].push_back(std::move(row));
         spawned.insert(key);
         return false; // keep going
     };
@@ -16137,7 +16138,7 @@ static void ReadReadyAuras(Player* bot, ReadyCacheEntry& entry)
         SpellAuraHolder const* holder = aura.second;
         if (!holder || holder->IsDeleted() || holder->IsPassive())
             continue;
-        SpellEntry const* proto = holder->GetSpellProto();
+        SpellEntry const* proto = GetSpellEntryCompat(holder->GetSpellProto());
         if (!proto)
             continue;
         uint32 const mask = sSpellMgr.GetSpellElixirMask(proto->Id);
@@ -16170,7 +16171,7 @@ static void ReadReadyKeySpells(Player* bot, ReadyCacheEntry& entry)
     {
         if (known.second.state == PLAYERSPELL_REMOVED || known.second.disabled)
             continue;
-        SpellEntry const* proto = sSpellMgr.GetSpellEntry(known.first);
+        SpellEntry const* proto = GetSpellEntryCompat(known.first);
         if (!proto)
             continue;
         TortoiseBots::ReadyCheck::SpellCd cd;
@@ -16337,7 +16338,7 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
             extra.cast = SpellNameOf(member.casting);
         extra.cc = CommanderTelemetry::CcKind(bot->HasUnitState(UNIT_STAT_STUNNED), bot->HasUnitState(UNIT_STAT_CONFUSED),
             bot->HasUnitState(UNIT_STAT_FLEEING), bot->HasUnitState(UNIT_STAT_ROOT));
-        extra.moving = bot->IsMoving();
+        extra.moving = IsMovingCompat(bot);
         if (member.casting)
             extra.castTarget = CurrentSpellTargetGuid(bot);
         if (bot->IsAlive() && !bot->IsInCombat())
@@ -16429,7 +16430,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         {
             ref.commander = CommanderDisplayName(*binding, commander);
             ref.commanderGuid = ::ObjectGuid(commanderRaw).GetCounter();
-            ref.commanderOnline = commander && commander->GetSession() && commander->GetSession()->HasNetworkTransport();
+            ref.commanderOnline = commander && commander->GetSession() && HasNetworkTransportCompat(commander->GetSession());
         }
         ref.groupId = binding->groupId;
         if (auto const laid = RaidLayouts().find(binding->groupId); laid != RaidLayouts().end())
@@ -16612,7 +16613,7 @@ static void FillDungeonMob(Player* seer, Unit* unit, CommanderTelemetry::MobInfo
     ReputationRank const reaction = seer->GetReactionTo(unit);
     mob.reaction = reaction <= REP_HOSTILE ? 'h' : (reaction >= REP_FRIENDLY ? 'f' : 'n');
     Creature* creature = unit->ToCreature();
-    bool const unattackable = unit->HasFlag(UNIT_FIELD_FLAGS,
+    bool const unattackable = HasUnitFlagCompat(unit,
         UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NON_ATTACKABLE_2);
     mob.kind = unit->GetCreatureType() == CREATURE_TYPE_CRITTER ? 'k'
         : creature && creature->IsCivilian() ? 'v'
@@ -16816,7 +16817,7 @@ static void FeedCombatMonitor(RemoteCommander::Binding const& binding, Player* l
                 SpellAuraHolder const* holder = entry.second;
                 if (!holder || holder->IsDeleted() || holder->IsPassive())
                     continue;
-                SpellEntry const* proto = holder->GetSpellProto();
+                SpellEntry const* proto = GetSpellEntryCompat(holder->GetSpellProto());
                 if (!proto)
                     continue;
                 for (std::string const& key : CombatMonitor::DebuffKeys(proto->SpellName[0],
@@ -16953,7 +16954,7 @@ void SampleFightTimeline(uint32 groupId, Player* anchor)
     if (creature)
     {
         float homeX = 0.0f, homeY = 0.0f, homeZ = 0.0f;
-        creature->GetRespawnCoord(homeX, homeY, homeZ);
+        GetRespawnCoordCompat(creature, homeX, homeY, homeZ);
         atHome = boss->GetDistance2d(homeX, homeY) <= CombatMonitor::kBossHomeYd;
     }
     monitor.NoteBossState(groupId, boss->IsAlive(), boss->IsInCombat(), creature && creature->IsInEvadeMode(),
@@ -17418,7 +17419,7 @@ bool JoinBoundRaid(Player* commander, Player* bot)
     if (bot->GetMapId() != lead->GetMapId() || bot->GetDistance(lead) > 100.0f)
         bot->TeleportTo(lead->GetMapId(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(),
             lead->GetOrientation(), 0);
-    TB_LOG_BASIC("TortoiseBots: hire %s joined %s's bound raid (%u of %u seats)", bot->GetName(), lead->GetName(),
+    TB_LOG_BASIC("TortoiseBots: hire %s joined %s's bound raid (%u of %u seats)", CStrCompat(bot->GetName()), CStrCompat(lead->GetName()),
         group->GetMembersCount(), static_cast<uint32>(RemoteCommander::kMaxRaidBindSize));
     return true;
 }
@@ -17778,7 +17779,7 @@ std::string FormatUseLockError(Player* bot, GameObject* go)
     RemoteCommander::LockFacts const facts = GoLockFacts(bot, go);
     if (facts.keyItem > 0 && !facts.hasKey)
     {
-        if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(facts.keyItem))
+        if (ItemPrototype const* proto = GetItemProtoByIdCompat(facts.keyItem))
             return std::string("Locked: needs ") + proto->Name1;
         return "Locked: needs key";
     }

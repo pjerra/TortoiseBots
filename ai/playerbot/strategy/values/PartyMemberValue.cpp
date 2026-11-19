@@ -175,7 +175,7 @@ bool PartyMemberValue::Check(Unit* player)
     // picked that member every tick forever and the members after it in the
     // list never got the buff (paladin blessing loop, 2026-10-11).
     // mod-playerbots skips GMs as blessing targets the same way.
-    if (player->IsPlayer() && player->GetVisibility() == VISIBILITY_OFF)
+    if (player->IsPlayer() && IsHiddenGmCompat(player))
         return false;
 
     return bot->IsWithinDistInMap(player, sPlayerbotAIConfig.sightDistance, false);
@@ -199,15 +199,15 @@ bool PartyMemberValue::IsTargetOfSpellCast(Unit* target, SpellEntryPredicate &pr
             for (int type = CURRENT_GENERIC_SPELL; type < CURRENT_MAX_SPELL; type++)
             {
                 Spell* spell = player->GetCurrentSpell((CurrentSpellTypes)type);
-                if (spell && predicate.Check(spell->m_spellInfo))
+                if (spell && predicate.Check(GetSpellEntryCompat(spell->m_spellInfo)))
                 {
-                    ObjectGuid unitTarget = spell->m_targets.getUnitTargetGuid();
+                    ObjectGuid unitTarget = SpellUnitTargetGuidCompat(spell);
                     if (unitTarget == targetGuid)
                         return true;
 
-                    if (corpseGuid)
+                    if (!corpseGuid.IsEmpty())
                     {
-                        ObjectGuid corpseTarget = spell->m_targets.getCorpseTargetGuid();
+                        ObjectGuid corpseTarget = SpellCorpseTargetGuidCompat(spell);
                         if (corpseTarget == corpseGuid)
                             return true;
                     }

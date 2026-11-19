@@ -150,7 +150,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # floor height). Dropping it would restore over a transport ride.
         self.assertIn("!bot->GetTransport()", f[clampedAt:keep])
         # (void) casts only in mutation scratch, never in shipped tests.
-        self.assertNotIn("(void)", f[clampedAt:at(f, "CalculatePassengerOffset(p.x, p.y, p.z);")])
+        self.assertNotIn("(void)", f[clampedAt:at(f, "SplinePointToTransportCompat(botTransport, p.x, p.y, p.z);")])
     def test_route_check_never_edits_the_route(self):
         # Round 2: the ONE sampled liquid-hazard guard (magma, and slime for
         # the hand-off) owns the traversal; the magma-only entry keeps its name.
@@ -170,8 +170,11 @@ class MagmaGuardWiringTest(unittest.TestCase):
 
     def test_magma_query_is_the_cores(self):
         f = body(WORLDPOS, "bool WorldPosition::isInMagma(", "\n}\n")
-        self.assertIn("getLiquidStatus(x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid)", f)
+        # (R4M: the query is LiquidStatusCompat, whose Turtle-side body (cmangos-compat-r3.h) is the core's getLiquidStatus call the code always made.)
+        self.assertIn("LiquidStatusCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid)", f)
         self.assertIn("ai::IsMagmaHazard(liquid.type_flags", f)
+        compat = (ROOT / "ai/cmangos-compat-r3.h").read_text()
+        self.assertIn("return terrain->getLiquidStatus(x, y, z, reqLiquidType, data);", compat)
 
     def test_formation_station_skips_a_slot_in_magma(self):
         f = body(TRIGGERS, "class FormationStationTrigger", "\n    };\n")
@@ -221,7 +224,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         f = body(MOVES, "bool MovementAction::Follow(Unit* target, float distance, float angle)\n", "\n}\n")
         hold = at(f, "if (HoldFollowOutOfMagma(target, distance, angle))")
         running = at(f, "if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)")
-        dispatch = at(f, "mm.MoveFollow(target, distance, angle);")
+        dispatch = at(f, "MoveFollowCompat(mm, target, distance, angle);")
         self.assertLess(hold, running)
         self.assertLess(hold, dispatch)
         # Both follow call sites reach this one guarded dispatch: the 2-arg
@@ -252,7 +255,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertIn("targetInMagma = SlotGoesIntoMagma(bot, WorldPosition(target), targetMagmaAt);", f)
         self.assertIn("switch (ai::PlanMagmaFollow(slotInMagma, targetInMagma, engaged))", f)
         self.assertIn("case ai::MagmaFollowAction::HoldOnTarget:", f)
-        self.assertIn("mm.MoveFollow(target, 0.0f, 0.0f);", f)
+        self.assertIn("MoveFollowCompat(mm, target, 0.0f, 0.0f);", f)
         self.assertIn("case ai::MagmaFollowAction::HoldInPlace:", f)
         self.assertIn("ai->StopMoving();", f)
         self.assertIn("magmaFollowEngaged = targetGuid;", f)
@@ -272,12 +275,12 @@ class MagmaGuardWiringTest(unittest.TestCase):
         restore_body = f[restore:hold]
         self.assertIn("magmaFollowEngaged = ObjectGuid();", restore_body)
         self.assertIn("if (distance > 0.0f)", restore_body)
-        self.assertIn("mm.MoveFollow(target, distance, angle);", restore_body)
+        self.assertIn("MoveFollowCompat(mm, target, distance, angle);", restore_body)
         # Leaving the guard's map ends a hold too.
         gate = at(f, "if (!MagmaGuardOn(bot))")
         self.assertLess(gate, restore)
         self.assertIn("if (!engaged)\n            return false;", f[gate:restore])
-        self.assertIn("mm.MoveFollow(target, distance, angle);", f[gate:restore])
+        self.assertIn("MoveFollowCompat(mm, target, distance, angle);", f[gate:restore])
         # Per-tick cost: a fresh memo answers before any terrain work.
         memo = at(f, "ai::MagmaRecheckDue(magmaFollowMemo.valid, slotX, slotY,")
         self.assertLess(memo, check)
@@ -289,7 +292,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         route_gate = at(helper, "ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()),")
         self.assertIn("MagmaSeenOnMap(bot->GetMapId()));", helper)
         self.assertIn("if (!routeCheck)\n        return false;", helper[route_gate:])
-        calc = at(helper, "path.calculate(slot.getX(), slot.getY(), slot.getZ(), false);")
+        calc = at(helper, "PathCalculateCompat(path, slot.getX(), slot.getY(), slot.getZ(), false);")
         self.assertLess(route_gate, calc)
         self.assertIn("RouteEntersMagma(bot, WorldPosition(bot), route, magmaAt)", helper)
         self.assertIn("ai::MagmaGuardApplies(bot->GetMap()->IsDungeon())", helper)
@@ -348,7 +351,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         plan = at(f, "ai::MagmaMoveZPlan const plan = ai::PlanMagmaMoveZ(true, move.moveInMagma,")
         keep = at(f[plan:], "p.z = navmeshZ;") + plan
         refuse = at(f, "RefuseMagmaMove(bot, dispatchMove, magmaAt, magmaAt, nullptr, \"clamped waypoint\");")
-        generator = at(f, "mm.MovePoint(path.back().GetMapId(), pointPath.back().x, pointPath.back().y, "
+        generator = at(f, "MovePointCompat(mm, path.back().GetMapId(), pointPath.back().x, pointPath.back().y, "
                           "pointPath.back().z,")
         launch = at(f, "init.Launch();")
         self.assertLess(sink, plan)
@@ -378,9 +381,9 @@ class MagmaGuardWiringTest(unittest.TestCase):
         f = body(MOVES, "bool MovementAction::DispatchMovement(", "\n}\n")
         verdict = at(f, "if (!DispatchPointMagmaChecked(bot, dispatchMove, checkedX, checkedY, checkedZ, "
                         "\"dispatch point\"))")
-        plain = at(f, "mm.MovePoint(movePosition.GetMapId(),")
+        plain = at(f, "MovePointCompat(mm, movePosition.GetMapId(),")
         checked = at(f, "if (!WalkChecked(movePosition, moveMode == FORCED_MOVEMENT_WALK))")
-        endpoint = at(f, "mm.MovePoint(path.back().GetMapId(), pointPath.back().x")
+        endpoint = at(f, "MovePointCompat(mm, path.back().GetMapId(), pointPath.back().x")
         launch = at(f, "init.Launch();")
         self.assertLess(verdict, plain)
         self.assertLess(verdict, checked)
@@ -403,7 +406,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # check, so a checked single point could still walk into lava.
         f = body(MOVES, "bool MovementAction::LaunchLandWalk(", "\n}\n")
         verdict = at(f, "if (!DispatchPointMagmaChecked(bot, lastMove, reachedX, reachedY, reachedZ, \"land walk\"))")
-        move = at(f, "bot->GetMotionMaster()->MovePoint(endPos.GetMapId(), reachedX, reachedY, reachedZ,")
+        move = at(f, "MovePointCompat(*bot->GetMotionMaster(), endPos.GetMapId(), reachedX, reachedY, reachedZ,")
         launch = at(f, "init.Launch();")
         self.assertLess(verdict, move)
         self.assertLess(move, launch)
@@ -437,7 +440,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertIn("if (!recheck && !magmaChaseMemo.held)\n        return false;", g[memo:check])
         self.assertIn("magmaChaseMemo.held = held;", g[check:])
         self.assertIn("target->GetOrientation(), slotDistance, angle);", g)
-        self.assertIn("distance + target->GetObjectBoundingRadius() + bot->GetObjectBoundingRadius();", g)
+        self.assertIn("distance + ObjectBoundingRadiusCompat(target) + ObjectBoundingRadiusCompat(bot);", g)
         # A zero-offset (melee) chase has no angle: the ring guard decides.
         self.assertIn("if (!(distance > 0.0f))\n        return HoldMeleeChaseOutOfMagma(target);", g)
         self.assertNotIn("CreatureAuraChaseGoal", g)
@@ -456,7 +459,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # Already in melee reach with line of sight: the core does not move.
         self.assertLess(at(g, "bot->CanReachWithMeleeAutoAttack(chased)"),
                         at(g, "ai::kMeleeRingSamples"))
-        self.assertIn("float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();", g)
+        self.assertIn("float const radius = ObjectBoundingRadiusCompat(target) + MeleeReachCompat(bot);", g)
         # The random point can be as close as the bounding radii: a target
         # standing in lava holds before any ring sample decides.
         self.assertIn("if (targetPos.isInMagma())", g)
@@ -471,7 +474,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertLess(gate, loop)
         self.assertIn("return false;", g[gate:loop])
         self.assertIn("ai::MeleeRingPoint(target->GetPositionX(), target->GetPositionY(), radius, i)", g[loop:])
-        plan = at(g, "ai::PlanMeleeRing(inMagma, target->GetAngle(bot))")
+        plan = at(g, "ai::PlanMeleeRing(inMagma, GetAngleCompat(target, bot))")
         self.assertLess(loop, plan)
         # The ring samples are reused inside the re-check window instead of
         # being taken again every tick.
@@ -487,16 +490,16 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # radius lands on the sampled ring, and the sampled bearing relative
         # to the target's facing (the core adds the facing back).
         self.assertIn(
-            "float const offset = radius - target->GetObjectBoundingRadius() - bot->GetObjectBoundingRadius();", g)
+            "float const offset = radius - ObjectBoundingRadiusCompat(target) - ObjectBoundingRadiusCompat(bot);", g)
         self.assertIn("float const chaseAngle = plan.angle - target->GetOrientation();", g)
-        self.assertIn("mm.MoveChase(chased, offset, chaseAngle);", g)
+        self.assertIn("MoveChaseCompat(mm, chased, offset, chaseAngle);", g)
         # A chase already running on that bearing is left alone: re-dispatching
         # every tick would reset the generator.
         self.assertIn("magmaRingChaseTarget == target->getObjectGuid()", g)
         self.assertIn("magmaRingChaseAngle - chaseAngle", g)
         # An offset the generator would round to zero falls back to a walk.
         fallback = at(g, "if (!(offset > 0.0f))")
-        self.assertLess(fallback, at(g, "mm.MoveChase(chased, offset, chaseAngle);"))
+        self.assertLess(fallback, at(g, "MoveChaseCompat(mm, chased, offset, chaseAngle);"))
         self.assertIn("return MoveTo(dryPoint.GetMapId(), dryPoint.getX(), dryPoint.getY(), dryPoint.getZ());", g)
 
     def test_terrain_queries_wait_for_the_memo(self):
@@ -531,12 +534,12 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # was (0, 0, 0) and every stand was rejected (found 2026-11-13).
         f = body(COMMANDS, "bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, float& oy, float& oz)",
                  "\n}\n")
-        calc = at(f, "path.calculate(px, py, ground, false);")
-        kind = at(f, "path.getPathType()")
-        end = at(f, "path.getActualEndPosition()")
+        calc = at(f, "PathCalculateCompat(path, px, py, ground, false);")
+        kind = at(f, "PathTypeCompat(path)")
+        end = at(f, "PathActualEndCompat(path)")
         self.assertLess(calc, kind)
         self.assertLess(calc, end)
-        self.assertEqual(f.count("path.calculate("), 1)
+        self.assertEqual(f.count("PathCalculateCompat(path,"), 1)
 
 
 if __name__ == "__main__":

@@ -51,6 +51,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace
 {
@@ -95,7 +96,7 @@ bool GroupHasRealPlayer(PlayerbotAI* ai, Player* bot)
             member.online = true;
             member.hasClient = ai->IsRealPlayer(online);
         }
-        else if (uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(slot.guid))
+        else if (uint32 account = AccountIdOfCharacterCompat(slot.guid))
         {
             member.hasAccount = true;
             member.botAccount = sPlayerbotAIConfig.IsInRandomAccountList(account);
@@ -123,7 +124,7 @@ void RandomBotFacade::SyncNativePlayers()
     players.clear();
     for (Player* player : TortoiseBots::BotManager::Instance().GetAllBots())
     {
-        if (!player || !player->GetSession() || !player->GetSession()->IsHeadless())
+        if (!player || !player->GetSession() || !IsHeadlessCompat(player->GetSession()))
             continue;
 
         TortoiseBots::BotRecord* record =
@@ -449,7 +450,7 @@ std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32 itemId, uint32 hou
     if (it == ahMirror.end())
         return result;
 
-    bool twoSide = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION);
+    bool twoSide = WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION);
     for (auto const& entry : it->second)
     {
         if (twoSide)
@@ -481,7 +482,7 @@ InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, 
     if (!player)
         return EQUIP_ERR_ITEM_NOT_FOUND;
 
-    ItemPrototype const* prototype = sObjectMgr.GetItemPrototype(item);
+    ItemPrototype const* prototype = GetItemProtoByIdCompat(item);
     // swap=true: the caller compares old-vs-new itself and replaces in place; with
     // swap=false CanEquipItem rejects an occupied slot (e.g. starter MH weapon)
     // and every upgrade candidate dies there.

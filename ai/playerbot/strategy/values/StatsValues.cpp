@@ -37,7 +37,7 @@ bool PetIsDeadValue::Calculate()
     if (bot->GetPet())
         return sServerFacade.GetDeathState(bot->GetPet()) != ALIVE;
 
-    if (bot->GetPetGuid())
+    if (!bot->GetPetGuid().IsEmpty())
         return true;
 
     return false;
@@ -48,7 +48,7 @@ bool PetIsHappyValue::Calculate()
     if (!bot->GetPet())
         return true;
 
-    return bot->GetPet()->GetHappinessState() == HAPPY;
+    return PetIsHappyCompat(bot->GetPet());
 }
 
 
@@ -90,10 +90,10 @@ bool HasManaValue::Calculate()
 uint8 ComboPointsValue::Calculate()
 {
     Unit *target = GetTarget();
-	if (!target || target->getObjectGuid() != bot->GetComboTargetGuid())
+	if (!target || target->getObjectGuid() != ComboTargetGuidCompat(bot))
 		return 0;
 
-    return bot->GetComboPoints();
+    return ComboPointsCompat(bot);
 }
 
 bool IsMountedValue::Calculate()
@@ -128,7 +128,7 @@ bool IsInCombatValue::Calculate()
             Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
             for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
             {
-                Player *member = sObjectMgr.GetPlayer(itr->guid);
+                Player *member = GetPlayerCompat(itr->guid);
                 if (!member || member == bot) continue;
 
                 if (sServerFacade.IsInCombat(member) &&
@@ -155,7 +155,7 @@ uint8 BagSpaceValue::Calculate()
         const Bag* const pBag = (Bag*) bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
         if (pBag)
         {
-            ItemPrototype const* pBagProto = pBag->GetProto();
+            ItemPrototype const* pBagProto = GetItemProtoCompat(pBag);
             if (pBagProto->Class == ITEM_CLASS_CONTAINER && pBagProto->SubClass == ITEM_SUBCLASS_CONTAINER)
             {
                 total += pBag->GetBagSize();
@@ -181,13 +181,13 @@ uint8 DurabilityValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
         totalMax += maxDurability;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         total += curDurability;
     }
@@ -210,13 +210,13 @@ uint8 DurabilityInventoryValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
         totalMax += maxDurability;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         total += curDurability;
     }
@@ -239,11 +239,11 @@ uint8 LowestDurabilityValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         durabilityPercent = (static_cast<float> (curDurability) / maxDurability) * 100;
 

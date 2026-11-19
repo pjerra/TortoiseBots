@@ -17,6 +17,7 @@
 #include "Guild/GuildMgr.h"
 #include "runtime/HireLifecycle.h"
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -565,7 +566,7 @@ bool ShouldTravelNamedValue::Calculate()
             return ai::GuildCharterAffordable(
                 AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::guild));
         return ai::GuildPetitionReadyToTurnIn(AI_VALUE(uint8, "petition signs"),
-            sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS));
+            WorldU32ConfigW2(CONFIG_UINT32_MIN_PETITION_SIGNS));
     }
     else if (name == "mount")
     {
@@ -819,7 +820,7 @@ bool ShouldLeaveOutgrownZoneValue::Calculate()
     // floor below is a zone-level test, so the trigger must be one too or
     // the two disagree on what "outgrown" means.
     AreaTableEntry const* botArea = WorldPosition(bot).GetArea();
-    uint32 botZoneId = botArea ? (botArea->ZoneId ? botArea->ZoneId : botArea->Id) : 0;
+    uint32 botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : botArea->Id) : 0;
     int32 zoneLevel = 0;
     bool const zoneKnown = botZoneId && sTravelMgr.TryGetValidatedAreaLevel(botZoneId, zoneLevel) && zoneLevel > 0;
     bool const outgrown = zoneKnown && zoneLevel + 5 < (int32)bot->GetLevel();

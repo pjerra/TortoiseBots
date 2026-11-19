@@ -1,0 +1,4 @@
+# Slice 2, package I2: the .cpp files this package owns (census list).
+ai/playerbot/strategy/actions/LootAction.cpp
+ai/playerbot/strategy/actions/AddLootAction.cpp
+ai/playerbot/strategy/actions/UseItemAction.cpp

@@ -116,7 +116,7 @@ class TotemFocusWiringTest(unittest.TestCase):
         self.assertIn("ObjectGuid focusGuid", COMMANDER)
         self.assertIn("TortoiseBots::DungeonRun::TotemFocusMayInterrupt(kind", cut)
         # Only a cast that is positively offense: the spell not beneficial, its target hostile.
-        self.assertIn("spell->m_spellInfo->IsPositiveSpell()", cut)
+        self.assertIn("GetSpellEntryCompat(spell->m_spellInfo)->IsPositiveSpell()", cut)
         self.assertIn("TotemFocusTargetHostile(!castGuid.IsEmpty(), target != nullptr,", cut)
         self.assertIn("target && bot->IsHostileTo(target)", cut)
         # The cast's target is looked up by guid: the core's raw m_unitTarget pointer can be freed on the World thread.

@@ -158,7 +158,7 @@ void TalkToQuestGiverAction::RewardNoItem(Quest const* quest, WorldObject* quest
 void TalkToQuestGiverAction::RewardSingleItem(Quest const* quest, WorldObject* questGiver, std::string& out)
 {
     int index = 0;
-    ItemPrototype const *item = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[index]);
+    ItemPrototype const *item = GetItemProtoByIdCompat(quest->RewChoiceItemId[index]);
 
     std::map<std::string, std::string> args;
     args["%quest"] = chat->formatQuest(quest);
@@ -289,7 +289,7 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
                 if (candidate.first == rewardIndex)
                     rewardScore = candidate.second;
         }
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[rewardIndex]);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(quest->RewChoiceItemId[rewardIndex]);
         if (proto)
         {
             args["%item"] = chat->formatItem(proto);
@@ -317,7 +317,7 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
         else
         {
             uint32 rewardIndex = bestIds.empty() ? 0 : *bestIds.begin();
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[rewardIndex]);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(quest->RewChoiceItemId[rewardIndex]);
             if (proto)
             {
                 args["%item"] = chat->formatItem(proto);
@@ -335,7 +335,7 @@ void TalkToQuestGiverAction::AskToSelectReward(Player* requester, Quest const* q
     std::ostringstream msg;
     for (uint8 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
     {
-        ItemPrototype const* item = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[i]);
+        ItemPrototype const* item = GetItemProtoByIdCompat(quest->RewChoiceItemId[i]);
         ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", quest->RewChoiceItemId[i]);
 
         if (!forEquip || BestRewards(quest).count(i) > 0)

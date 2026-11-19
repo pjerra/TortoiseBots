@@ -72,8 +72,8 @@ class BotsLetRunnersGoAtLedgesTest(unittest.TestCase):
 
     def test_the_way_is_read_from_the_navmesh(self):
         f = body(ATTACKERS, "static void ReadRunnerWay(Unit* target, Player* bot, bool& complete, bool& cliff)\n{")
-        at(f, "path.calculate(tx, ty, tz, false);")
-        at(f, "complete = path.getPathType() == PATHFIND_NORMAL;")
+        at(f, "PathCalculateCompat(path, tx, ty, tz, false);")
+        at(f, "complete = PathIsCompleteCompat(path);")
         at(f, "cliff = ai::PathHasCliff(points);")
         at(f, "points.push_back(front);")
 

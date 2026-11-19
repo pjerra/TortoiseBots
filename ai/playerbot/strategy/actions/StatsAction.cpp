@@ -60,7 +60,7 @@ void StatsAction::ListPower(std::ostringstream& out)
 
         if (power)
         {
-            ItemPrototype const* proto = item->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat(item);
             qualityCount[proto->Quality]++;
 
         }
@@ -94,7 +94,7 @@ void StatsAction::ListBagSlots(std::ostringstream &out)
         const Bag* const pBag = (Bag*) bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
         if (pBag)
         {
-            ItemPrototype const* pBagProto = pBag->GetProto();
+            ItemPrototype const* pBagProto = GetItemProtoCompat(pBag);
             if (pBagProto->Class == ITEM_CLASS_CONTAINER && pBagProto->SubClass == ITEM_SUBCLASS_CONTAINER)
             {
                 total += pBag->GetBagSize();
@@ -174,7 +174,7 @@ uint32 StatsAction::EstRepair(uint16 pos)
     uint32 LostDurability = maxDurability - curDurability;
     if(LostDurability>0)
     {
-        ItemPrototype const *ditemProto = item->GetProto();
+        ItemPrototype const *ditemProto = GetItemProtoCompat(item);
 
         DurabilityCostsEntry const *dcost = sDurabilityCostsStore.LookupEntry(ditemProto->ItemLevel);
         if(!dcost)

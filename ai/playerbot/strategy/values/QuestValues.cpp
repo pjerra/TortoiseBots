@@ -5,6 +5,7 @@
 #include "ItemUsageValue.h"
 #include "MaintenanceValues.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -59,7 +60,7 @@ EntryQuestRelationMap EntryQuestRelationMapValue::Calculate()
 				uint32 itemId = quest->ReqItemId[objective];
 				while (itemId)
 				{
-					ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+					ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
 					if (proto)
 					{
@@ -168,7 +169,7 @@ questGiverMap QuestGiversValue::Calculate()
 				{
 					Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
 
-					if (quest && (level < quest->GetMinLevel() || (int32)level > quest->GetQuestLevel() + 10))
+					if (quest && (level < quest->GetMinLevel() || (int32)level > QuestLevelCompat(quest) + 10))
 						continue;
 				}
 
@@ -517,7 +518,7 @@ uint32 DialogStatusValue::getDialogStatus(Player* bot, int32 questgiver, uint32 
 			{
 				if (bot->SatisfyQuestLevel(pQuest, false))
 				{
-					int32 lowLevelDiff = sWorld.getConfig(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF);
+					int32 lowLevelDiff = WorldI32ConfigW2(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF);
 						if (pQuest->IsAutoComplete() || (pQuest->IsRepeatable() && bot->getQuestStatusMap()[itr->second].m_rewarded))
 					{
 						dialogStatusNew = DIALOG_STATUS_REWARD_REP;
@@ -573,7 +574,7 @@ bool NeedQuestObjectiveValue::CanGetItemSomewhere(const uint32 itemId, const uin
     if (GAI_VALUE2(std::list<int32>, "item vendor list", itemId).empty()) //Can not get it from vendor.
         return true;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return true;
@@ -654,7 +655,7 @@ bool CanUseItemOn::Calculate()
 	else if (guidP.IsGameObject())
 		gameObject = guidP.GetGameObject(bot->GetInstanceId());
 
-	ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+	ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
 	if (!proto)
 		return false;

@@ -138,9 +138,9 @@ std::string Engine::FailureKey(Action* action, Event& event, ActionResult result
 {
     uint64_t targetGuid = 0;
     if (Unit* target = action->GetTarget())
-        targetGuid = target->GetObjectGuid().GetRawValue();
+        targetGuid = GuidKeyCompat(target->GetObjectGuid());
     // RPG actions expose self as target; distinguish their destination too.
-    uint64_t destGuid = aiObjectContext->GetValue<GuidPosition>("rpg target")->Get().GetRawValue();
+    uint64_t destGuid = GuidKeyCompat(aiObjectContext->GetValue<GuidPosition>("rpg target")->Get());
     return ActionFailureBackoff::Key(action->getName(), event.getSource(), targetGuid, destGuid,
         static_cast<uint32_t>(result));
 }
@@ -324,7 +324,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
         for (PendingAction const& entry : pending)
             snapshot.emplace_back(entry.name, entry.relevance);
         TortoiseBots::WhyTraceService::Instance().NoteTickStart(
-            ai->GetBot()->GetObjectGuid().GetRawValue(), snapshot);
+            GuidKeyCompat(ai->GetBot()->GetObjectGuid()), snapshot);
     }
 
     std::vector<Action*> modifiedActions;
@@ -1071,7 +1071,7 @@ bool Engine::ListenAndExecute(Action* action, Event& event)
         if (sPlayerbotAIConfig.CanLogAction(ai, action->getName(), true, lastActionName))
         {
             sLog.outString("TortoiseBots AI: Engine executing Action=%s Trigger=%s bot=%s",
-            action->getName().c_str(), event.getSource().c_str(), ai->GetBot()->GetName());
+            action->getName().c_str(), event.getSource().c_str(), CStrCompat(ai->GetBot()->GetName()));
         }
     actionExecuted = actionExecutionListeners.AllowExecution(action, event) ? action->Execute(event) : true;
         if (actionExecuted)
@@ -1159,7 +1159,7 @@ void Engine::LogAction(const char* format, ...)
     if (sPlayerbotAIConfig.logInGroupOnly && !bot->GetGroup())
         return;
 
-    sLog.outDetail( "%s %s", bot->GetName(), buf);
+    sLog.outDetail( "%s %s", CStrCompat(bot->GetName()), buf);
 
     // BotActionLog tee: every PUSH/A/Tick line also lands in the bot's
     // per-bot file under logs/bots/ when AiPlayerbot.EnableActionLog=1.
@@ -1257,5 +1257,5 @@ void Engine::LogValues()
         return;
 
     std::string text = ai->GetAiObjectContext()->FormatValues();
-    sLog.outDebug( "Values for %s: %s", bot->GetName(), text.c_str());
+    sLog.outDebug( "Values for %s: %s", CStrCompat(bot->GetName()), text.c_str());
 }

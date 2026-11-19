@@ -108,7 +108,7 @@ static bool HandleServicePortal(ChatHandler* handler, Player* requester, Player*
     ai::PortalCastDecision decision = !listed
         ? ai::PortalCastDecision{ai::PortalRefusal::UnknownCity, false, false}
         : ai::DecidePortalCast(facts, spellId, bot->HasSpell(spellId),
-            bot->HasItemCount(ai::PortalRuneItemId(), 1), bot->IsMoving());
+            bot->HasItemCount(ai::PortalRuneItemId(), 1), IsMovingCompat(bot));
     if (decision.refusal != ai::PortalRefusal::None)
     {
         SendActionError(handler, intent, ai::PortalRefusalCode(decision.refusal),

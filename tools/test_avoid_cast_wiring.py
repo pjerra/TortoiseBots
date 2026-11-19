@@ -452,7 +452,7 @@ class HoldLivesInTheTargetChoice(unittest.TestCase):
         self.assertIn("if (HeldDpsTarget(ai, bot, target))", DPS_TARGET)
         # ... and a held linked_death member (M4): the bot stops instead of nuking it.
         self.assertIn("LinkedDeathHoldsMember(linkedScan.param, linkedScan.members, "
-                      "target->GetObjectGuid().GetRawValue())", DPS_TARGET)
+                      "GuidKeyCompat(target->GetObjectGuid()))", DPS_TARGET)
 
     def test_the_hold_is_opt_in_and_checks_the_rows_first(self):
         # Opt-in like IsTankHoldPickup: a bot without the "boss tactics" strategy in combat never holds. Cheapest first:
@@ -535,7 +535,7 @@ class OneAtATimeWiring(unittest.TestCase):
         # The value's own scan is the grid search, and it lists the units that fight.
         scan = body(BLOCKERS, "std::vector<SoleCandidate> SoleKillCandidatesValue::Calculate(")
         self.assertIn("creature->IsInCombat()", scan)
-        self.assertIn("candidate.guid = creature->GetObjectGuid().GetRawValue()", scan)
+        self.assertIn("candidate.guid = GuidKeyCompat(creature->GetObjectGuid())", scan)
         self.assertIn("candidate.hpPct = static_cast<int>(creature->GetHealthPercent())", scan)
         self.assertIn("candidate.inCombat = true", scan)
         self.assertNotIn('"attackers"', scan)
@@ -550,7 +550,7 @@ class OneAtATimeWiring(unittest.TestCase):
         fn = body(DPS_TARGET, "bool HeldDpsTarget(", "\n    }\n")
         self.assertIn("pacedRow", fn)
         self.assertIn("BossTacticKind::OneAtATime", fn)
-        self.assertIn("OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), unit->GetObjectGuid().GetRawValue())", fn)
+        self.assertIn("OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), GuidKeyCompat(unit->GetObjectGuid()))", fn)
         # An explicit attack order lifts the hold_kill exemption (the dps pickers keep it), never the pacing.
         self.assertLess(fn.index("OneAtATimeHolds(SoleKillGuid("), fn.index("if (ordered)"))
         # "focus mode exposes only the chosen target while another held Servant is within the AoE footprint": the
@@ -589,7 +589,7 @@ class OneAtATimeWiring(unittest.TestCase):
         # The decisive line: the helper is true exactly for a one_at_a_time non-pick (a mutation that drops it leaves
         # the ordered bot on a non-pick).
         self.assertIn("return OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), "
-                      "unit->GetObjectGuid().GetRawValue());", fn)
+                      "GuidKeyCompat(unit->GetObjectGuid()));", fn)
         # Opt-in like HeldDpsTarget: a bot without "boss tactics" in combat keeps its explicit order. The strategy gate
         # sits after the cheap row check and before the pick.
         self.assertIn("if (!pacedRow || !ai->HasStrategy(\"boss tactics\", BotState::BOT_STATE_COMBAT))\n            return false;", fn)
@@ -787,7 +787,7 @@ class LinkedDeathFightWideScan(unittest.TestCase):
         self.assertLess(fn.index("linkedScan = ScanBossLinkedDeath(ai, bot);"),
                         fn.index("RtiTargetValue::CalculateFocus()"))
         self.assertIn("!(linked && LinkedDeathHoldsMember(linkedScan.param, linkedScan.members, "
-                      "rti->GetObjectGuid().GetRawValue()))", fn)
+                      "GuidKeyCompat(rti->GetObjectGuid())))", fn)
         # One scan per pick: the group pick reads the scan the mark was judged against.
         self.assertEqual(fn.count("ScanBossLinkedDeath("), 1)
         self.assertIn("PickLinkedDeath(linkedScan.param, linkedScan.members)", fn)
@@ -944,7 +944,7 @@ class LinkedDeathBurnOrderWiring(unittest.TestCase):
         self.assertIn("linkedHold = linked && !linkedScan.released && !linkedScan.latched;", fn)
 
     def test_the_aoe_density_reads_the_group_rule(self):
-        self.assertIn("LinkedDeathHoldsMember(scan.param, scan.members, guid.GetRawValue())", AOE_VALUES)
+        self.assertIn("LinkedDeathHoldsMember(scan.param, scan.members, GuidKeyCompat(guid))", AOE_VALUES)
         self.assertNotIn("LinkedDeathHolds(scan.param, static_cast<int>", AOE_VALUES)
 
     def test_the_run_guard_leaves_a_group_member_alone(self):

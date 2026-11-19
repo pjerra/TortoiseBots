@@ -28,7 +28,7 @@ bool TradeAction::Execute(Event& event)
         {
             if (guid.IsPlayer())
             {
-                player = sObjectMgr.GetPlayer(guid);
+                player = GetPlayerCompat(guid);
             }
         }
 
@@ -77,7 +77,7 @@ bool TradeAction::Execute(Event& event)
         Item* item = *i;
 
         // Never trade away order stock.
-        if (bot->GetGuildId() && GuildOrderConsumesItem(bot, item->GetProto()->ItemId))
+        if (bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
             continue;
 
         if (!bot->GetTrader() || item->IsInTrade())

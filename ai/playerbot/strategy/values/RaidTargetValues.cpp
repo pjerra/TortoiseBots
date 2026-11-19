@@ -39,8 +39,7 @@ Unit* BossTargetValue::Calculate()
 
     std::list<Unit*> nearby;
     MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck check(bot, bot, 100.0f);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(nearby, check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    VisitUnitsCompat(bot, nearby, check, 100.0f);
     for (Unit* unit : nearby)
     {
         // Engagement gate (donor searches attackers only): a dormant
@@ -53,7 +52,7 @@ Unit* BossTargetValue::Calculate()
         const CreatureInfo* info = creature->GetCreatureInfo();
         // Rank 3 = WORLDBOSS in Turtle's creature_template (verified for
         // every AQ20/Naxx boss; adds are rank 0/1).
-        if (!info || info->rank != CREATURE_ELITE_WORLDBOSS)
+        if (!info || CreatureRankCompat(creature) != CREATURE_ELITE_WORLDBOSS)
             continue;
         float dist = bot->GetDistance(unit);
         if (!closest || dist < closestDist)

@@ -46,6 +46,7 @@
 
 #include <algorithm>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -95,7 +96,7 @@ bool IsServiceBgType(BattleGroundTypeId bgType)
 bool MeetsServiceTypeGate(::Player* bot, BattleGroundTypeId bgType)
 {
     if (bgType == BATTLEGROUND_BR)
-        return bot->GetLevel() >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+        return bot->GetLevel() >= WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
     return true;
 }
 
@@ -107,7 +108,7 @@ bool IsHumanWaitingParticipant(BattleGroundQueue::QueuedParticipantInfo const& i
     ::Player* player = sObjectAccessor.FindPlayer(info.guid);
     if (!player || !player->IsInWorld() || !player->GetSession())
         return false;
-    if (player->GetSession()->IsHeadless())
+    if (IsHeadlessCompat(player->GetSession()))
         return false;
     return !BotManager::Instance().IsRandomBot(info.guid);
 }
@@ -130,7 +131,7 @@ std::vector<HumanBgDemand> GetHumanBgDemands()
         // would wait on and could start a second match with no human in it.
         // AV honours the core's Alterac.MinPlayersInQueue gate (default 0).
         uint32 queueFloor = bgType == BATTLEGROUND_AV
-            ? sWorld.getConfig(CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE) : 0;
+            ? WorldU32ConfigW2(CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE) : 0;
         uint32 sideTarget = HumanBgSideTarget(bgTemplate->GetMinPlayersPerTeam(),
             bgTemplate->GetMaxPlayersPerTeam(), queueFloor);
 
@@ -206,7 +207,7 @@ bool BattlegroundQueueService::IsEligible(::Player* bot) const
         return false;
     if (!bot->IsInWorld())
         return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow()))
         return false;
@@ -251,7 +252,7 @@ bool BattlegroundQueueService::IsEligible(::Player* bot) const
     if (sLFTMgr.IsQueued(bot->GetObjectGuid()) || sLFTMgr.IsInOffer(bot->GetObjectGuid()))
         return false;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsBattleGround())
+        if (map->IsDungeon() || MapIsBattlegroundCompat(map))
             return false;
     // Lease arbitration (issue #89): host guards above stay authoritative.
     if (!BotActivityLeaseManager::Instance().IsAvailableForBackground(bot->GetGUIDLow()))
@@ -292,7 +293,7 @@ bool BattlegroundQueueService::IsGroupFullyBotOwned(::Group* group) const
         if (!member || !member->IsInWorld())
             return false;
         WorldSession* sess = member->GetSession();
-        if (!sess || !sess->IsHeadless())
+        if (!sess || !IsHeadlessCompat(sess))
             return false;
         if (!BotManager::Instance().IsRandomBot(slot.guid))
             return false;
@@ -313,7 +314,7 @@ bool BattlegroundQueueService::HasLiveNonBotMember(::Group* group) const
         if (!member || !member->IsInWorld())
             continue; // offline/non-live -> not considered live
         WorldSession* sess = member->GetSession();
-        if (!sess || !sess->IsHeadless())
+        if (!sess || !IsHeadlessCompat(sess))
             return true;
         if (!BotManager::Instance().IsRandomBot(slot.guid))
             return true;
@@ -759,7 +760,7 @@ uint32_t BattlegroundQueueService::CountRunningBotOnlyWsg(uint32_t bracketIndex)
         {
             Player* member = sObjectAccessor.FindPlayer(pair.first);
             if (!member || !member->IsInWorld() || !member->GetSession() ||
-                !member->GetSession()->IsHeadless() ||
+                !IsHeadlessCompat(member->GetSession()) ||
                 !BotManager::Instance().IsRandomBot(pair.first))
             {
                 botOnly = false;
@@ -867,7 +868,7 @@ void BattlegroundQueueService::CountSeededForTeams(uint32_t queueTypeValue, uint
         {
             Player* inMember = sObjectAccessor.FindPlayer(pair.first);
             if (!inMember || !inMember->IsInWorld() || !inMember->GetSession() ||
-                !inMember->GetSession()->IsHeadless() ||
+                !IsHeadlessCompat(inMember->GetSession()) ||
                 !BotManager::Instance().IsRandomBot(pair.first))
             {
                 botOnly = false;

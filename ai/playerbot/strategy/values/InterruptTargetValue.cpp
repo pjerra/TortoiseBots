@@ -75,11 +75,11 @@ Unit* InterruptTargetValue::Calculate()
         // A cast that sleeps, fears, sheep-shackles or heals someone
         // outranks a plain damage cast.
         Spell* cast = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (!cast || !cast->m_spellInfo)
+        if (!cast || !GetSpellEntryCompat(cast->m_spellInfo))
             cast = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-        bool const priority = cast && cast->m_spellInfo &&
-            (PlayerbotAI::IsHealSpell(cast->m_spellInfo) ||
-             FindNonCcTargetStrategy::IsCcSpell(cast->m_spellInfo));
+        bool const priority = cast && GetSpellEntryCompat(cast->m_spellInfo) &&
+            (PlayerbotAI::IsHealSpell(GetSpellEntryCompat(cast->m_spellInfo)) ||
+             FindNonCcTargetStrategy::IsCcSpell(GetSpellEntryCompat(cast->m_spellInfo)));
 
         bool const claimed = bot->GetGroup() &&
             BuffClaimRegistry::IsClaimedByOther(bot->GetObjectGuid(), unit->GetObjectGuid(), InterruptClaimKey());

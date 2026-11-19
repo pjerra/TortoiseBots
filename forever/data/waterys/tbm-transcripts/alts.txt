@@ -1,0 +1,28 @@
+# alts: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## alts-addon
+Requester: Labby
+Observed at: 2026-11-18T02:17:39.473905035-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+alts
+REPLIES BEGIN
+TBM:ALTSUM_END|0
+REPLIES END
+
+## alts-chat
+Requester: Labby
+Observed at: 2026-11-18T02:17:42.752193322-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot alts
+REPLIES BEGIN
+TBM:ALTSUM_END|0
+REPLIES END
+
