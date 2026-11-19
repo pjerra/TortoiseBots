@@ -47,6 +47,10 @@
 #include "playerbot/strategy/actions/PatchwerkSafety.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
+#include "playerbot/strategy/actions/QueryItemUsageAction.h"
+#include "playerbot/RandomBotFacade.h"
+#include "playerbot/strategy/values/BudgetValues.h"
+#include "../../../runtime/GuildOrderStore.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
 #include "playerbot/strategy/actions/WorldBuffAction.h"
@@ -408,6 +412,44 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTr
 bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
 std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
 }
+
+// =====================================================================================================================
+// Slice 9 (package L9): ItemUsageValue.cpp and LootRollAction.cpp are in the slice, and what they call outside it is answered here. Every answer is
+// the "not there" value of the legacy code, so the item usage value classifies LESS: no equip upgrade is ever found (the stat weights are 0 and no
+// spec may wear anything), so nothing is looted or rolled for equipping, and no mount, auction listing or repair price is known.
+// =====================================================================================================================
+// RandomItemMgr.cpp (feature "random item tables"): the weights and the spec rules. Absent = weight 0, no spec wears the item, no spec at all.
+uint32 RandomItemMgr::ItemStatWeight(Player*, ai::ItemQualifier&) { NoteItems(); return 0; }
+uint32 RandomItemMgr::ItemStatWeight(Player*, Item*) { NoteItems(); return 0; }
+bool RandomItemMgr::ShouldEquipArmorForSpec(uint8, uint8, ItemPrototype const*) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSpec(Player const*, uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSpec(uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSlot(Player const*, uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSlot(uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
+uint32 RandomItemMgr::GetFallbackSpecId(uint8) { NoteItems(); return 0; }
+std::string RandomItemMgr::GetSpecName(uint32) { NoteItems(); return std::string(); }
+ai::ItemStatFamily RandomItemMgr::GetSpecStatFamily(uint32) { NoteItems(); return ai::ItemStatFamily::None; }
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): the pool's price multipliers, trade discounts, auction prices and the unseen-item equip check. Absent =
+// neutral multipliers (1.0), no discount, no listing, the equip is refused.
+double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
+double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
+void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
+std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
+InventoryResult RandomBotFacade::CanEquipUnseenItem(Player*, uint8, uint16&, uint32) { NotePool(); return EQUIP_ERR_CANT_DO_RIGHT_NOW; }
+// MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
+uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
+uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
+uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
+bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
+// BudgetValues.cpp: the repair price of an item. Absent = free (0), which only matters for the budget of a vendor trip.
+uint32 ai::RepairCostValue::RepairCost(Item const*, bool) { NoteMisc(); return 0; }
+// GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
+namespace TortoiseBots { namespace GuildOrders {
+void RefreshOrderProtectedSet(Player*) { NotePool(); }
+void NoteBagsFull(uint32_t) { NotePool(); }
+} }
+// QueryItemUsageAction.cpp: the `query item usage` chat reply (a debug answer) is not built; the class is the base of the roll actions, which override Execute.
+bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 
 // =====================================================================================================================
 // Managers with tables (owner files: ai/playerbot/RandomItemMgr.cpp, PlayerbotTextMgr.cpp, PlayerbotHelpMgr.cpp,
