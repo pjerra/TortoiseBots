@@ -17,6 +17,7 @@
 #include "Guild/GuildMgr.h"
 #include "runtime/HireLifecycle.h"
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 

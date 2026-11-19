@@ -5,6 +5,7 @@
 #include "Util.h"
 
 #include <algorithm>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {

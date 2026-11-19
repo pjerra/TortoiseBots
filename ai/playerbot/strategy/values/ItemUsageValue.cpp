@@ -16,6 +16,7 @@
 #include "../../../../runtime/policy/provision/ClassConsumablePolicy.h"
 #include "../../../../runtime/policy/ah/AhReadModelPolicy.h"
 #include "../../../../runtime/policy/ah/AhSellPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 

@@ -24,6 +24,7 @@
 #include "runtime/GuildOrderGiveUpPolicy.h"
 #include "ObjectAccessor.h"
 #include "Formulas.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;

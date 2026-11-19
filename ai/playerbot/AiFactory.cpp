@@ -41,6 +41,7 @@
 #include "../../runtime/policy/pvp/WorldPvpSeekPolicy.h"
 #include "playerbot/strategy/values/WorldPvpSeekLog.h"
 #include "Battlegrounds/BattleGroundMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 // The class context of a bot; the augmenters of other modules are applied on top in
 // createAiObjectContext below (AiContextAugment.h).

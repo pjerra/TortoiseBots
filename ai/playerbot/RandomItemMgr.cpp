@@ -16,6 +16,7 @@
 #include "policy/gear/SpecArmorPolicy.h"
 #include "policy/gear/FeralSpecPolicy.h"
 #include "../../runtime/policy/provision/AmmoCachePolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 char * strstri (const char* str1, const char* str2);
 

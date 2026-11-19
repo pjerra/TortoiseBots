@@ -78,6 +78,7 @@
 #include "../runtime/CombatMonitorPolicy.h"
 #include "../runtime/BoundFightPolicy.h"
 #include "../runtime/ObservabilityEmitter.h"
+#include "playerbot/TbCompatW2.h"
 #include "../runtime/PlayerUseObjectPolicy.h"
 #include "../runtime/RunItemNeedPolicy.h" // item-leg skip (spec C1/D): needs + ledger, namespace TortoiseBots::RunItemNeed
 #include "../runtime/RunItemNeedFacts.h" // the leg's need facts from the party's bags (item-leg skip review round 2)

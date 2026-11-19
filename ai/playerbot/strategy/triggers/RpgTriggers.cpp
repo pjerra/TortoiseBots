@@ -17,6 +17,7 @@
 #include "Timer.h"
 #include "World.h"
 #include <ctime>
+#include "playerbot/TbCompatW2.h"
 using namespace ai;
 
 bool RpgTrigger::IsActive()

@@ -5,6 +5,7 @@
 
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TbCompatW2.h"
 using namespace ai;
 
 std::map<std::string, uint32> EmoteActionBase::emotes;

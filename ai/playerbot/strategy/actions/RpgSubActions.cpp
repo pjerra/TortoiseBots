@@ -14,6 +14,7 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/RandomBotFacade.h"
 #include "playerbot/strategy/values/MaintenanceValues.h"
+#include "playerbot/TbCompatW2.h"
 
 
 using namespace ai;
