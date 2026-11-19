@@ -64,4 +64,15 @@ Spec: `~/TortoiseBots-audit/FOREVER-RUN-S5S6-SPEC.md` 5.1-5.4 (C6's row), D1 and
 
 ## 8. Gates (final tree)
 
-(filled at the end)
+All in the default build slot of the VM, on the final code commit (`C6: server log through the compat log`; later commits are notes).
+
+| Gate | Result |
+|---|---|
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0`, links; `nm`: `run::Update`, `StartRun`, `StopRun`, `HandleRun` strong, `run::Issue`/`StartCheck` the weak stand-ins. (The first ON build failed on `TC_LOG_INFO`, which `compat/botpch_forever.h` redefines; the three calls are `sLog.outString` now, as `TbOrders.cpp` writes.) |
+| option-OFF module build (`-DTORTOISEBOTS_SLICE1=OFF`, target `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` (`HandleRun` answers `engine-not-built`; the other files are empty objects) |
+| census SLICE5 / 4 / 3 / 2 / 1 | `files 172 / 174 / 170 / 160 / 133, compile clean = files, error places 0`, includes of a missing header 0 (C6 adds no legacy file) |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=215` |
+| `test_run_facts` (F6's, unchanged) | `RESULT: PASS` |
+| `test_run_c6` (g++ -std=c++17 -Wall -Wextra on the VM, `~/c6-test`) | `RESULT: PASS: 28 checks, 0 failed` |
+| Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed |
+| server / SQL | none started, none applied |
