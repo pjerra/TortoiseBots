@@ -610,7 +610,7 @@ void BotManager::SweepDeadBots(uint32_t diff)
                     char buf[256];
                     WorldLocation const& dest = p->GetTeleportDest();
                     snprintf(buf, sizeof(buf), "%s(%lds near=%d far=%d alive=%d ghost=%d map=%u acks=%u ignored=%u "
-                        "pos=%.0f,%.0f dest=%u:%.0f,%.0f)", p->GetName(),
+                        "pos=%.0f,%.0f dest=%u:%.0f,%.0f)", CStrCompat(p->GetName()),
                         static_cast<long>(now - since->second), p->IsBeingTeleportedNear() ? 1 : 0,
                         p->IsBeingTeleportedFar() ? 1 : 0, p->IsAlive() ? 1 : 0,
                         HasPlayerFlagCompat(p, PLAYER_FLAGS_GHOST) ? 1 : 0, p->GetMapId(),
