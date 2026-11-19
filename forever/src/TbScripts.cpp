@@ -112,6 +112,7 @@ public:
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
+        TortoiseBots::Dashboard::WriteItemsFile();
         // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
         // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
         // store into a table that is never rebuilt.
@@ -158,6 +159,10 @@ class tortoisebots_player : public PlayerScript
 {
 public:
     tortoisebots_player() : PlayerScript("tortoisebots_player") { }
+
+    void OnCreatureKill(Player* killer, Creature* killed) override { TortoiseBots::Dashboard::OnKill(killer, killed); }
+    void OnPlayerKilledByCreature(Creature* killer, Player* killed) override { TortoiseBots::Dashboard::OnKilledByCreature(killer, killed); }
+    void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {

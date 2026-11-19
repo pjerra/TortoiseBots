@@ -31,6 +31,8 @@ type BotSummary struct {
 	Money     uint32 `json:"money"`
 	TotalTime uint32 `json:"totaltime"`
 	Online    uint8  `json:"online"`
+	Zone      uint32 `json:"zone,omitempty"`
+	Map       uint32 `json:"map,omitempty"`
 	Spec      string `json:"spec,omitempty"`
 	// Kind is the dashboard kind label (Issue #872): pool, hired, claimed,
 	// player, or own (a player-account character offline or unclassified).
