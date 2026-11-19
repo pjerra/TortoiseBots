@@ -35,7 +35,8 @@ class RunReleaseHoldWiringTest(unittest.TestCase):
         u = self.useful
         self.assertIn('#include "runtime/RunReleaseHold.h"', ACTION)
         gate = u.index("TortoiseBots::RunReleaseHold::Decide(")
-        self.assertLess(u.index("if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))"), gate)
+        # slice 4 (P4): the ghost-flag read goes through the both-core helper (Turtle: the same HasFlag call); the gate still comes after it
+        self.assertLess(u.index("if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))"), gate)
         for stock in ("if (!bot->GetGroup())", "if (!ai->GetGroupMaster())", "if (!ai->HasActivePlayerMaster())",
                       'AI_VALUE2(float, "distance", "master target")'):
             self.assertLess(gate, u.index(stock), stock)
