@@ -123,13 +123,16 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     if (name != "loot start roll" && name != "loot response")
         return;
 
-    tbs9::BotLootMemo& memo = tbs9::Memo()[bot->GetGUID()];
-    tbs9::Prune(bot, memo);
-    if (memo.windows.empty() && memo.rolls.empty() && bot->GetLootRolls().empty() && bot->GetAELootView().empty())
+    // The cheap exit of every tick: the bot has no roll and no window, so there is nothing to announce and nothing to remember.
+    if (bot->GetLootRolls().empty() && bot->GetAELootView().empty())
     {
-        tbs9::Memo().erase(bot->GetGUID());
+        if (!tbs9::Memo().empty())
+            tbs9::Memo().erase(bot->GetGUID());
         return;
     }
+
+    tbs9::BotLootMemo& memo = tbs9::Memo()[bot->GetGUID()];
+    tbs9::Prune(bot, memo);
 
     if (name == "loot start roll")
     {

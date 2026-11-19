@@ -1422,7 +1422,7 @@ bool ItemUsageValue::IsItemUsefulForSkill(ItemPrototype const* proto)
             return true;
         if (ai->HasSkill(SKILL_FISHING) && IsItemUsedBySkill(proto, SKILL_FISHING))
             return true;
-        if (ai->HasSkill(SKILL_FIRST_AID) && IsItemUsedBySkill(proto, SKILL_FIRST_AID))
+        if (ai->HasSkill((SkillType)SKILL_FIRST_AID) && IsItemUsedBySkill(proto, SKILL_FIRST_AID))
             return true;
         if (ai->HasSkill(SKILL_COOKING) && IsItemUsedBySkill(proto, SKILL_COOKING))
             return true;
@@ -1461,7 +1461,7 @@ bool ItemUsageValue::IsItemUsefulForSkill(ItemPrototype const* proto)
         case ITEM_SUBCLASS_ALCHEMY_RECIPE:
             return ai->HasSkill(SKILL_ALCHEMY);
         case ITEM_SUBCLASS_FIRST_AID_MANUAL:
-            return ai->HasSkill(SKILL_FIRST_AID);
+            return ai->HasSkill((SkillType)SKILL_FIRST_AID);
         case ITEM_SUBCLASS_ENCHANTING_FORMULA:
             return ai->HasSkill(SKILL_ENCHANTING);
         case ITEM_SUBCLASS_FISHING_MANUAL:
