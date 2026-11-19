@@ -47,7 +47,7 @@ class ApproachStandWiringTest(unittest.TestCase):
         self.assertIn("float const minRing = ApproachStandMinRing(step);", fn)
         self.assertIn("HostileCreaturesAround(lead, DistanceTo(lead, step.x, step.y, step.z) + reach, around);", fn)
         self.assertIn("c.los = map->isInLineOfSight(px, py, ground + 2.0f, step.x, step.y, step.z + 2.0f, true);", fn)
-        self.assertIn("DistanceTo(lead, px, py, ground), path.Length());", fn)
+        self.assertIn("DistanceTo(lead, px, py, ground), PathLengthCompat(path));", fn)
         self.assertIn("c.path.push_back(PathPoint{v.x, v.y, v.z});", fn)
         self.assertIn("int const best = PickApproachStand(run, step, candidates, hostiles, team);", fn)
 
@@ -90,7 +90,7 @@ class TooFarLegWiringTest(unittest.TestCase):
         fn = body(COMMANDS, "bool LegOnPath(Player* lead,", "\n}\n")
         self.assertIn("if (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_NOT_USING_PATH | PATHFIND_SHORTCUT))\n"
                       "        return false;", fn)
-        self.assertIn("for (Vector3 const& p : path.getPath())", fn)
+        self.assertIn("for (Vector3 const& p : PathPointsCompat(path))", fn)
 
     def test_walk_sends_its_point_again_after_the_leg(self):
         fn = body(POLICY, "inline bool WalkTo(Run& r, const Facts& f,", "\n}\n")

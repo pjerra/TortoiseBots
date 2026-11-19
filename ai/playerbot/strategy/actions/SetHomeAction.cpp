@@ -18,8 +18,8 @@ static bool InnLeadsSomewhereUseful(PlayerbotAI* ai, Player* bot, uint32 innArea
 
     if (AreaTableEntry const* innArea = GetAreaEntryByAreaID(innAreaId))
     {
-        if (innArea->ZoneId)
-            innArea = GetAreaEntryByAreaID(innArea->ZoneId);
+        if (AreaZoneIdCompat(innArea))
+            innArea = GetAreaEntryByAreaID(AreaZoneIdCompat(innArea));
 
         if (innArea && innArea->Flags & AREA_FLAG_CAPITAL)
             return true;

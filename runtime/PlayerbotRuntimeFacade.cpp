@@ -95,7 +95,7 @@ bool GroupHasRealPlayer(PlayerbotAI* ai, Player* bot)
             member.online = true;
             member.hasClient = ai->IsRealPlayer(online);
         }
-        else if (uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(slot.guid))
+        else if (uint32 account = AccountIdOfCharacterCompat(slot.guid))
         {
             member.hasAccount = true;
             member.botAccount = sPlayerbotAIConfig.IsInRandomAccountList(account);
@@ -123,7 +123,7 @@ void RandomBotFacade::SyncNativePlayers()
     players.clear();
     for (Player* player : TortoiseBots::BotManager::Instance().GetAllBots())
     {
-        if (!player || !player->GetSession() || !player->GetSession()->IsHeadless())
+        if (!player || !player->GetSession() || !IsHeadlessCompat(player->GetSession()))
             continue;
 
         TortoiseBots::BotRecord* record =

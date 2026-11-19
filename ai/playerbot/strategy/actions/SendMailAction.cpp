@@ -11,7 +11,7 @@ using namespace ai;
 bool SendMailAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
-    uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(bot->getObjectGuid());
+    uint32 account = AccountIdOfCharacterCompat(bot->getObjectGuid());
     bool randomBot = sPlayerbotAIConfig.IsInRandomAccountList(account);
 
     std::string text = event.GetParam();

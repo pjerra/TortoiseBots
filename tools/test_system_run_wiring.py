@@ -75,7 +75,7 @@ class SystemBindingWiringTest(unittest.TestCase):
         self.assertIn("HireLifecycle::Instance().IsHired(", gate)
         self.assertIn("ClaimLifecycle::Instance().IsClaimed(", gate)
         self.assertIn("AltBotService::Instance().IsAutonomous(", gate)
-        self.assertIn("HasNetworkTransport()", gate)
+        self.assertIn("HasNetworkTransportCompat(master->GetSession())", gate)
     def test_owner_checks_follow_the_binding(self):
         self.assertEqual(COMMANDS.count("CanControlBot(order.commander"), 1)
 

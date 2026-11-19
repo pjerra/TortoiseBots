@@ -165,7 +165,7 @@ class HireBoundRaidWiringTest(unittest.TestCase):
         presence = body(HIRE_SRC, "static SeatMasterPresence SeatMasterPresenceOf(ObjectGuid masterGuid)", "\n}\n")
         self.assertIn("sObjectAccessor.FindPlayerNotInWorld(masterGuid)", presence)
         self.assertIn("master && master->IsBeingTeleportedFar()", presence)
-        self.assertIn("!master->GetSession()->IsHeadless()", presence)
+        self.assertIn("!IsHeadlessCompat(master->GetSession())", presence)
         attempts = update.index("never joined master after 60 reunite attempts")
         self.assertLess(attempts, update.index('CancelBoundSeatHire(*it, "it could not reach the bound raid");'))
         self.assertLess(update.index('CancelBoundSeatHire(*it, "it could not reach the bound raid");'),
@@ -200,7 +200,7 @@ class HireBoundRaidWiringTest(unittest.TestCase):
         hire = body(HIRE_SRC, "HireOutcome HireProvisionService::Hire(", "uint32_t HireProvisionService::QuoteHireFee(")
         order = [
             "pending.seatMode = HireSeatModeFor(intoBoundRaid);",
-            "pending.seatGrant.commanderGuid = masterGuid.GetRawValue();",
+            "pending.seatGrant.commanderGuid = GuidKeyCompat(masterGuid);",
             "pending.seatGrant.leadGuid = boundRaid.leadGuid;",
             "pending.seatGrant.groupId = boundRaid.groupId;",
             "pending.cost = cost;",

@@ -99,12 +99,12 @@ SwapRequest RequestSwap(PlayerbotAI* ai, bool claim)
     for (auto it = swaps.begin(); it != swaps.end();)
         if (now - it->second.lastSeen > 60000) it = swaps.erase(it);
         else ++it;
-    auto& record = swaps[{boss->GetInstanceId(), boss->GetObjectGuid().GetRawValue()}];
+    auto& record = swaps[{boss->GetInstanceId(), GuidKeyCompat(boss->GetObjectGuid())}];
     record.lastSeen = now;
     // Do not reset this guard on a victim change or an aura refresh: neither
     // may allow a second volunteer to taunt in the same handoff tick.
-    bool const ready = claim ? record.window.Claim(ai->GetBot()->GetObjectGuid().GetRawValue(),
-        chosen->GetObjectGuid().GetRawValue(), now) : record.window.Ready(now);
+    bool const ready = claim ? record.window.Claim(GuidKeyCompat(ai->GetBot()->GetObjectGuid()),
+        GuidKeyCompat(chosen->GetObjectGuid()), now) : record.window.Ready(now);
     return ready ? SwapRequest{boss, chosenSpell} : SwapRequest{};
 }
 class FankrissTauntMultiplier : public Multiplier

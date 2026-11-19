@@ -289,7 +289,7 @@ bool DebugAction::HandleShowNode(Event& event, Player* requester, const std::str
 
             for (auto p : ppath)
             {
-                Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
+                Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
                 if (!wpCreature)
                     continue;
                 //addAura(246, wpCreature);
@@ -317,7 +317,7 @@ bool DebugAction::HandleNodes(Event& event, Player* requester, const std::string
 
     bool inCombat = bot->IsInCombat();
     bool inWater = bot->IsInWater();
-    bool isUnderWater = bot->IsUnderwater();
+    bool isUnderWater = IsUnderwaterCompat(bot);
     ai->TellPlayer(requester, "Bot state: combat=" + std::string(inCombat ? "YES" : "NO") +
                    " water=" + std::string(inWater ? "YES" : "NO") +
                    " underwater=" + std::string(isUnderWater ? "YES" : "NO"));
@@ -387,9 +387,9 @@ bool DebugAction::HandleNodes(Event& event, Player* requester, const std::string
         float dist = pos.distance(*startNode->getPosition());
 
         std::unique_ptr<PathFinder> pathfinder = std::make_unique<PathFinder>(bot);
-        pathfinder->calculate(pos.GetVector3(), startNode->getPosition()->GetVector3(), false);
+        PathCalculateCompat(*pathfinder, pos.GetVector3(), startNode->getPosition()->GetVector3(), false);
 
-        PointsArray points = pathfinder->getPath();
+        PointsArray points = PathPointsCompat(*pathfinder);
         bool hasFullPath = false;
         if (!points.empty())
         {

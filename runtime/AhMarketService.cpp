@@ -100,7 +100,7 @@ bool AhMarketService::IsBotInBattlegroundOrInstance(Player* bot) const
     if (bot->InBattleGround() || bot->InBattleGroundQueue())
         return true;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsBattleGround())
+        if (map->IsDungeon() || MapIsBattlegroundCompat(map))
             return true;
     return false;
 }
@@ -274,7 +274,7 @@ bool AhMarketService::TryTeleportToAuctioneer(Player* bot)
     if (bot->TeleportTo(nearest->mapId, nearest->x, nearest->y, nearest->z, o, 0))
     {
         TB_LOG_DEBUG("TortoiseBots: AhMarket teleported bot %s to auctioneer %u at map %u %.1f %.1f %.1f",
-            bot->GetName(), nearest->entry, nearest->mapId, nearest->x, nearest->y, nearest->z);
+            CStrCompat(bot->GetName()), nearest->entry, nearest->mapId, nearest->x, nearest->y, nearest->z);
         return true;
     }
     return false;
@@ -282,7 +282,7 @@ bool AhMarketService::TryTeleportToAuctioneer(Player* bot)
 
 AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool allowTeleport)
 {
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return PostResult::Failed;
     if (!bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported())
         return PostResult::Failed;
@@ -452,7 +452,7 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
         sRandomBotFacade.SetValue(bot->GetGUIDLow(), "ahMarketLastPost", 1, "", (int32)sPlayerbotAIConfig.ahMarketInterval * 2);
         sPlayerbotAIConfig.logEvent(ai, "AhMarket", proto->Name1, std::to_string(proto->ItemId));
         TB_LOG_DEBUG("TortoiseBots: AhMarket bot %s posted %s x%u for %u buyout (deposit %u) via auctioneer %s",
-            bot->GetName(), proto->Name1.c_str(), count, buyout, deposit, auctioneer->GetName());
+            CStrCompat(bot->GetName()), proto->Name1.c_str(), count, buyout, deposit, CStrCompat(auctioneer->GetName()));
 
         return PostResult::Posted;
     }
@@ -554,7 +554,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
         if (ai::AhBuyerExcluded(auction->owner, auction->ownerAccount, auction->bidder,
                 bot->GetGUIDLow(), bot->GetSession()->GetAccountId()))
             continue;
-        if (auction->bidder && sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, auction->bidder)) == bot->GetSession()->GetAccountId())
+        if (auction->bidder && AccountIdOfCharacterCompat(ObjectGuid(HIGHGUID_PLAYER, auction->bidder)) == bot->GetSession()->GetAccountId())
             continue;
         ::PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(bot);
         if (!botAi)

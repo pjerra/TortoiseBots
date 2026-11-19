@@ -27,7 +27,7 @@ bool WhoAction::Execute(Event& event)
     if (owner->HasUnitState(UNIT_STAT_STUNNED))
         return false;
 
-    if (!sObjectMgr.GetPlayer(owner->getObjectGuid()))
+    if (!GetPlayerCompat(owner->getObjectGuid()))
         return false;
 
     std::ostringstream out;

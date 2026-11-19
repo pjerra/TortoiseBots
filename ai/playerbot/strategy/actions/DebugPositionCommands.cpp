@@ -125,9 +125,9 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
         if (area)
         {
             out << " (" << area->Name << ")";
-            if (area->ZoneId)
+            if (AreaZoneIdCompat(area))
             {
-                const AreaTableEntry* zone = GetAreaEntryByAreaID(area->ZoneId);
+                const AreaTableEntry* zone = GetAreaEntryByAreaID(AreaZoneIdCompat(area));
                 if (zone)
                     out << " Zone: " << zone->Name;
             }
@@ -406,7 +406,7 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
 
                     if (debugMove && i < 20)
                     {
-                        bot->SummonCreature(2334, p.point.getX(), p.point.getY(), p.point.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
+                        SummonCreatureCompat(bot, 2334, p.point.getX(), p.point.getY(), p.point.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
                     }
 
                     prevPos = p.point;
@@ -416,7 +416,7 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
 
             if (debugMove && !fullPath.GetPath().empty())
             {
-                bot->SummonCreature(6, fullPath.GetFront().getX(), fullPath.GetFront().getY(), fullPath.GetFront().getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 30000.0f);
+                SummonCreatureCompat(bot, 6, fullPath.GetFront().getX(), fullPath.GetFront().getY(), fullPath.GetFront().getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 30000.0f);
             }
 
             std::ostringstream summary;
@@ -533,7 +533,7 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
 
                 if (debugMove)
                 {
-                    bot->SummonCreature(2334, nodePos.getX(), nodePos.getY(), nodePos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
+                    SummonCreatureCompat(bot, 2334, nodePos.getX(), nodePos.getY(), nodePos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f);
                 }
 
                 prevPos = nodePos;
@@ -541,7 +541,7 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
 
             if (debugMove && !route.GetNodes().empty())
             {
-                bot->SummonCreature(6, route.GetNodes().front()->getPosition()->getX(),
+                SummonCreatureCompat(bot, 6, route.GetNodes().front()->getPosition()->getX(),
                     route.GetNodes().front()->getPosition()->getY(),
                     route.GetNodes().front()->getPosition()->getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 30000.0f);
             }
@@ -691,7 +691,7 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
         uint32 area = sServerFacade.GetAreaId(bot);
         if (const AreaTableEntry* areaEntry = GetAreaEntryByAreaID(area))
         {
-            if (AreaTableEntry const* zoneEntry = areaEntry->ZoneId ? GetAreaEntryByAreaID(areaEntry->ZoneId) : areaEntry)
+            if (AreaTableEntry const* zoneEntry = AreaZoneIdCompat(areaEntry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry)) : areaEntry)
                 out << " |" << zoneEntry->Name << "|";
         }
         ai->TellPlayer(requester, out.str());

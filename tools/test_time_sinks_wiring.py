@@ -37,7 +37,7 @@ class TimeSinksWiringTest(unittest.TestCase):
         self.assertIn("*incomplete = !PathWalkable((type & PATHFIND_NOPATH) != 0, (type & PATHFIND_INCOMPLETE) != 0,\n"
                       "            lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), end.x, end.y, end.z, x, y, z);", approach)
         # Before the no-path return, so a no path leaves it read too.
-        self.assertLess(approach.index("*incomplete ="), approach.index("if (path.getPathType() & PATHFIND_NOPATH)"))
+        self.assertLess(approach.index("*incomplete ="), approach.index("if (PathTypeCompat(path) & PATHFIND_NOPATH)"))
         self.assertIn("direct ? &f.approachIncomplete : nullptr, f.dryWalk);", COMMANDS)
         walk_back = body(POLICY, "inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& order)",
                          "\n}\n")

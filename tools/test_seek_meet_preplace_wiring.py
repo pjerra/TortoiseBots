@@ -47,7 +47,7 @@ class SeekMeetPrePlaceWiring(unittest.TestCase):
                       " prePlaceY,\n                              prePlaceFloorRefused)\n        : nullptr;", start)
         # A point off the platform's level: no pre-place, one `reason=floor` row.
         self.assertIn("else if (prePlaceFloorRefused)", start)
-        self.assertIn('prePlaceFloorRefused->GetName(), "floor");', start)
+        self.assertIn('CStrCompat(prePlaceFloorRefused->GetName()), "floor");', start)
         self.assertIn('"son=%u,event=preplace_skip,receiver=%s,reason=%s"', start)
         self.assertNotIn("event=preplace_end", start)
         # Recorded under the lock, right after the task starts, for that task.
@@ -56,7 +56,7 @@ class SeekMeetPrePlaceWiring(unittest.TestCase):
         self.assertIn('"son=%u,event=preplace,receiver=%s,receiver_yd=%.1f,point_yd=%.1f"', start)
         helper = body(ACTIONS, "Player* PickWalkoutPrePlace(PlayerbotAI* ai, Map* map, Unit* boss,")
         # The point's floor is read as the anchor clamp reads it.
-        self.assertIn("float const floor = map ? map->GetHeight(x, y, tank.z + 5.0f) : INVALID_HEIGHT;", helper)
+        self.assertIn("float const floor = map ? GetHeightCompat(map, x, y, tank.z + 5.0f) : INVALID_HEIGHT;", helper)
         self.assertIn("if (!AnchorFloorOk(tank, floor > INVALID_HEIGHT, floor))", helper)
         self.assertLess(helper.index("WalkoutMeetPrePlacePoint("), helper.index("AnchorFloorOk("))
         self.assertIn("int const pick = PickMeetPrePlaceReceiver(tanks);", helper)

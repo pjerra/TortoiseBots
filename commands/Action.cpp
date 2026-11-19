@@ -1007,7 +1007,7 @@ bool RunPullOrder(ChatHandler* handler, BotCommandContext const& context, Player
         bool launchOnNextTick = false;
         if (pullTarget && pullTarget->IsInWorld() && pullTarget->GetMap())
         {
-            float const floor = pullTarget->GetMap()->GetHeight(pullTarget->GetPositionX(),
+            float const floor = GetHeightCompat(pullTarget->GetMap(), pullTarget->GetPositionX(),
                 pullTarget->GetPositionY(), pullTarget->GetPositionZ(), true);
             launchOnNextTick = ai::PullTargetAirborne(floor > INVALID_HEIGHT, pullTarget->GetPositionZ(), floor);
         }

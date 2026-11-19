@@ -28,7 +28,7 @@ bool TradeAction::Execute(Event& event)
         {
             if (guid.IsPlayer())
             {
-                player = sObjectMgr.GetPlayer(guid);
+                player = GetPlayerCompat(guid);
             }
         }
 

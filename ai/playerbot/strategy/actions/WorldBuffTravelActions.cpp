@@ -279,7 +279,7 @@ bool WorldBuffTravelApplyAction::TrySummonFarAwayMembers(WorldBuffTravelStep ste
         if (itr->guid == bot->getObjectGuid())
             continue;
 
-        Player* member = sObjectMgr.GetPlayer(itr->guid);
+        Player* member = GetPlayerCompat(itr->guid);
         if (!member)
         {
             ++pendingCount;

@@ -147,7 +147,7 @@ JudgementUpkeepState ReadJudgementUpkeep(PlayerbotAI* ai, Player* bot, bool want
         if (member != bot && (member->GetMapId() != bot->GetMapId() || bot->GetDistance(member) > 100.0f))
             continue;
         JudgementPaladin& entry = paladins[paladinCount++];
-        entry.id = member->GetObjectGuid().GetRawValue();
+        entry.id = GuidKeyCompat(member->GetObjectGuid());
         entry.healer = PlayerbotAI::IsHeal(member);
         entry.tank = PlayerbotAI::IsTank(member);
         entry.canWisdom = paladinAi->HasSpell("seal of wisdom");
@@ -157,7 +157,7 @@ JudgementUpkeepState ReadJudgementUpkeep(PlayerbotAI* ai, Player* bot, bool want
     if (!IsJudgementUpkeepTarget(true, eliteOrBoss, tankTarget && inInstance, (uint8)target->GetHealthPercent()))
         return state;
 
-    state.kind = JudgementKindFor(bot->GetObjectGuid().GetRawValue(), paladins, paladinCount);
+    state.kind = JudgementKindFor(GuidKeyCompat(bot->GetObjectGuid()), paladins, paladinCount);
     if (state.kind == JudgementKind::None)
         return state;
 
@@ -241,7 +241,7 @@ bool GreaterBlessingTrigger::IsActive()
     Unit* target = GetTarget();
     if (target)
     {
-        if (!bot->GetMap()->IsDungeon() && !bot->GetMap()->IsBattleGround())
+        if (!bot->GetMap()->IsDungeon() && !MapIsBattlegroundCompat(bot->GetMap()))
             return false;
 
         std::vector<std::string> altBlessings;
@@ -379,7 +379,7 @@ bool BlessingOnPartyTrigger::IsActive()
 
 bool GreaterBlessingOnPartyTrigger::IsActive()
 {
-    if (!bot->GetMap()->IsDungeon() && !bot->GetMap()->IsBattleGround())
+    if (!bot->GetMap()->IsDungeon() && !MapIsBattlegroundCompat(bot->GetMap()))
         return false;
 
     Unit* target = FindBlessingCandidate(ai, bot, true);

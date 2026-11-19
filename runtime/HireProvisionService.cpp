@@ -193,7 +193,7 @@ bool HireProvisionService::CheckHireAllowed(Player* requester, bool fromGossip, 
 static SeatMasterPresence SeatMasterPresenceOf(ObjectGuid masterGuid)
 {
     Player* master = sObjectAccessor.FindPlayerNotInWorld(masterGuid);
-    bool const liveSession = master && master->GetSession() && !master->GetSession()->IsHeadless();
+    bool const liveSession = master && master->GetSession() && !IsHeadlessCompat(master->GetSession());
     return DecideSeatMasterPresence(master != nullptr, liveSession, master && master->IsInWorld(),
         master && master->IsBeingTeleportedFar());
 }
@@ -462,7 +462,7 @@ HireOutcome HireProvisionService::Hire(Player* requester, HireSelection const& s
     pending.queuedAt = time(nullptr);
     // C6: the authorization this hire was charged under; a bound-raid seat is rechecked before it joins.
     pending.seatMode = HireSeatModeFor(intoBoundRaid);
-    pending.seatGrant.commanderGuid = masterGuid.GetRawValue();
+    pending.seatGrant.commanderGuid = GuidKeyCompat(masterGuid);
     pending.seatGrant.leadGuid = boundRaid.leadGuid;
     pending.seatGrant.groupId = boundRaid.groupId;
     pending.cost = cost;
@@ -717,7 +717,7 @@ void HireProvisionService::StepRaidJobs()
         // dying. Only a master that is gone (logged out) drops the job, and
         // then there is no one left to send the summary to.
         Player* master = sObjectAccessor.FindPlayerNotInWorld(job.masterGuid);
-        bool online = master && master->GetSession() && !master->GetSession()->IsHeadless();
+        bool online = master && master->GetSession() && !IsHeadlessCompat(master->GetSession());
         if (online && (!master->IsInWorld() || master->IsBeingTeleportedFar()))
         {
             ++i;
@@ -1179,7 +1179,7 @@ bool HireProvisionService::ProvisionNow(Player* bot, PendingProvision& pending)
         return false;
     Player* master = sObjectAccessor.FindPlayer(pending.masterGuid);
     bool masterOnline = master && master->IsInWorld() && master->GetSession() &&
-        !master->GetSession()->IsHeadless();
+        !IsHeadlessCompat(master->GetSession());
 
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     if (!ai)
@@ -1261,7 +1261,7 @@ bool HireProvisionService::ProvisionNow(Player* bot, PendingProvision& pending)
         if (!joined)
         {
             sLog.outError("TortoiseBots: hired bot %s could not join master %s after provisioning",
-                bot->GetName(), master->GetName());
+                CStrCompat(bot->GetName()), CStrCompat(master->GetName()));
             return false;
         }
         if (intoBoundRaid)
@@ -1281,7 +1281,7 @@ bool HireProvisionService::ProvisionNow(Player* bot, PendingProvision& pending)
         auto totalElapsedMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
         TB_LOG_BASIC("TortoiseBots: hired companion %s (level %u role %u) joined %s (provision %lldms, total %lldms)",
-            bot->GetName(), bot->GetLevel(), forcedRole, master->GetName(),
+            CStrCompat(bot->GetName()), bot->GetLevel(), forcedRole, CStrCompat(master->GetName()),
             (long long)provisionElapsedMs, (long long)totalElapsedMs);
     }
     else
@@ -1289,7 +1289,7 @@ bool HireProvisionService::ProvisionNow(Player* bot, PendingProvision& pending)
         // Master is offline (grace-period hire): leave the bot where it is.
         // HireLifecycle reunites them when the master returns.
         TB_LOG_BASIC("TortoiseBots: hired companion %s provisioned while master offline in %lldms; grouped on return",
-            bot->GetName(), (long long)provisionElapsedMs);
+            CStrCompat(bot->GetName()), (long long)provisionElapsedMs);
     }
     return true;
 }
@@ -1354,11 +1354,11 @@ void HireProvisionService::ProvisionHeavy(Player* bot, PendingProvision const& p
                 TalentSpec applied(bot);
                 if (applied.GetTalentLink() != spec.GetTalentLink())
                     sLog.outError("TortoiseBots: hire talents for %s (class %u spec '%s') do not match selected build '%s' (%s vs %s)",
-                        bot->GetName(), uint32(bot->GetClass()), specName ? specName : "role", chosen->name.c_str(),
+                        CStrCompat(bot->GetName()), uint32(bot->GetClass()), specName ? specName : "role", chosen->name.c_str(),
                         applied.GetTalentLink().c_str(), spec.GetTalentLink().c_str());
                 if (!HireSpecHonoured(specName, chosen->name.c_str()))
                     sLog.outError("TortoiseBots: hired %s (class %u) for spec '%s' but no premade build exists for it at role %u; provisioned '%s' instead",
-                        bot->GetName(), uint32(bot->GetClass()), specName, uint32(forcedRole), chosen->name.c_str());
+                        CStrCompat(bot->GetName()), uint32(bot->GetClass()), specName, uint32(forcedRole), chosen->name.c_str());
                 sRandomBotFacade.SetValue(bot->GetGUIDLow(), "specNo", chosen->id + 1);
                 sRandomBotFacade.SetValue(bot->GetGUIDLow(), "specLink", 0);
                 appliedSpec = true;
@@ -1371,7 +1371,7 @@ void HireProvisionService::ProvisionHeavy(Player* bot, PendingProvision const& p
         {
             if (specName)
                 sLog.outError("TortoiseBots: hired %s (class %u) for spec '%s' but no premade build could be applied; falling back to the role",
-                    bot->GetName(), uint32(bot->GetClass()), specName);
+                    CStrCompat(bot->GetName()), uint32(bot->GetClass()), specName);
             ai->DoSpecificAction("auto talents", talentEvent, true);
         }
         else if (PlayerbotAIStorage::Instance().GetAI(bot))
@@ -1473,7 +1473,7 @@ bool HireProvisionService::SeatHireCancelled(Player* bot, Player* master, Pendin
         return false;
     BotCommands::BoundRaidFacts const boundRaid = BotCommands::BoundRaidOf(master);
     BoundSeatNow now;
-    now.commanderGuid = master->GetObjectGuid().GetRawValue();
+    now.commanderGuid = GuidKeyCompat(master->GetObjectGuid());
     now.commanderOnline = true;
     now.bound = boundRaid.bound;
     now.leadGuid = boundRaid.leadGuid;
@@ -1522,7 +1522,7 @@ void HireProvisionService::CancelBoundSeatHire(PendingProvision const& pending, 
     cancel.masterGuid = pending.masterGuid;
     cancel.cost = pending.cost;
     cancel.why = why;
-    if (!sObjectMgr.GetPlayerNameByGUID(pending.botGuid, cancel.name))
+    if (!PlayerNameByGuidCompat(pending.botGuid, cancel.name))
         cancel.name = "your companion";
     // The hire ends now (as `.bot remove`: master cleared, logged off). As on Hire()'s failed paths the fee goes
     // back only once the hire is undone: here once the character's deletion is recorded (ledger 'dismissed').
@@ -1682,7 +1682,7 @@ void HireProvisionService::Update(uint32_t diff)
             if (!summoning && seatPresence != SeatMasterPresence::Wait && ++it->reuniteAttempts >= 60)
             {
                 sLog.outError("TortoiseBots: hired bot %s never joined master after 60 reunite attempts; leaving grouped on return",
-                    bot->GetName());
+                    CStrCompat(bot->GetName()));
                 // C6: a bound-raid seat is never left for the ordinary regroup: cancelled.
                 if (HireNeedsSeatRecheck(it->seatMode, it->boundSeatJoined))
                     CancelBoundSeatHire(*it, "it could not reach the bound raid");

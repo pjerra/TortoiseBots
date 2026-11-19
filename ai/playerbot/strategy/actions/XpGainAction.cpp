@@ -101,7 +101,7 @@ bool XpGainAction::Execute(Event& event)
     if (levelAfter > levelBefore)
     {
         sLog.outBasic("Bot #%d <%s> levelled %d->%d (Execute hook), expiring travel target",
-            bot->GetGUIDLow(), bot->GetName(), levelBefore, levelAfter);
+            bot->GetGUIDLow(), CStrCompat(bot->GetName()), levelBefore, levelAfter);
         // Issue #401: the ammo container, thrown tier and soul pouch are
         // server-managed by level. Re-check the starter set on ding so a
         // bot that levels past a tier boundary picks it up without waiting

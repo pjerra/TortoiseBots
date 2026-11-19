@@ -291,7 +291,7 @@ Unit* ai::GetFankrissRescueTarget(PlayerbotAI* ai) {
   PlayerbotAI* brain=PlayerbotAIStorage::Instance().GetAI(member);
   if(!brain||!FankrissSingleTargetActive(brain)||!member->IsInMap(bot)||
      member->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL)||member->HasAura(720)||member->HasAura(731)||member->HasAura(1121)||
-     member->GetDistance(bug)>20.f||!member->IsWithinLOSInMap(bug,true))continue;
+     member->GetDistance(bug)>20.f||!IsWithinLOSInMapCompat(member, bug,true))continue;
   if(brain->IsMelee(member)&&!member->CanReachWithMeleeAutoAttack(bug))continue;
   if(member->GetClass()==CLASS_HUNTER&&member->GetDistance(bug)<8.f)continue;
   helpers.emplace_back(member->GetDistance(bug),member->GetObjectGuid());
@@ -306,7 +306,7 @@ Unit* ai::GetFankrissDpsTarget(PlayerbotAI* ai) {
   Player* bot=ai->GetBot();
   bool range=ai->IsMelee(bot)?bot->CanReachWithMeleeAutoAttack(spawn):bot->GetDistance(spawn)<=ai->GetRange("spell");
   if(bot->GetClass()==CLASS_HUNTER&&bot->GetDistance(spawn)<8.f)range=false;
-  if(range&&bot->IsWithinLOSInMap(spawn,true))return spawn;
+  if(range&&IsWithinLOSInMapCompat(bot, spawn,true))return spawn;
  }
  if(FankrissSingleTargetActive(ai))return ai->GetAiObjectContext()->GetValue<Unit*>("fankriss active boss")->Get();
  return nullptr;

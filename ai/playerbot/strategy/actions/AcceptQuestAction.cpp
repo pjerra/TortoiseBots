@@ -39,7 +39,7 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
     // scaling content, never blocked; owned/hired bots follow the player.
     // Donor mod-playerbots IsQuestCapableDoing (NewRpgBaseAction.cpp:573)
     // refuses +3 at any level; the pool uses +1 below 10.
-    if (!ai::QuestTakerTripFits((int)quest->GetQuestLevel(), false, bot->GetLevel(),
+    if (!ai::QuestTakerTripFits((int)QuestLevelCompat(quest), false, bot->GetLevel(),
         sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster()))
         return false;
 
@@ -50,7 +50,7 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
     // owned/hired bots follow the player. Donor mod-playerbots
     // IsQuestCapableDoing, same +3 / type / suggested numbers.
     if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
-        !ai::QuestAcceptSoloCapable((int)quest->GetQuestLevel(), bot->GetLevel(),
+        !ai::QuestAcceptSoloCapable((int)QuestLevelCompat(quest), bot->GetLevel(),
             quest->GetType(), quest->GetSuggestedPlayers(),
             AI_VALUE(bool, "can fight boss")))
         return false;
@@ -106,7 +106,7 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
         (sRandomBotFacade.IsRandomBot(bot) ||
             TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid())) &&
         !quest->GetRequiredClasses() &&
-        quest->GetQuestLevel() > 0 &&
+        QuestLevelCompat(quest) > 0 &&
         bot->GetLevel() > bot->GetQuestLevelForPlayer(quest) + (uint32)sWorld.getConfig(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF) + 1)
     {
         if (!AI_VALUE2(bool, "need quest reward", (int32)quest->GetQuestId()) && !IsFixedRewardUpgrade(context, quest))

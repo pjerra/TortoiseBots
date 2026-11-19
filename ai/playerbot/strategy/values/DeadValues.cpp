@@ -78,7 +78,7 @@ GuidPosition GraveyardValue::Calculate()
             bot->GetGUIDLow(),
             bot->GetTeam() == ALLIANCE ? "A" : "H",
             bot->GetLevel(),
-            bot->GetName()
+            CStrCompat(bot->GetName())
         );
         return GuidPosition();
     }
@@ -104,7 +104,7 @@ GuidPosition BestGraveyardValue::Calculate()
             bot->GetGUIDLow(),
             bot->GetTeam() == ALLIANCE ? "A" : "H",
             bot->GetLevel(),
-            bot->GetName()
+            CStrCompat(bot->GetName())
         );
         return GuidPosition();
     }
@@ -124,7 +124,7 @@ GuidPosition BestGraveyardValue::Calculate()
             bot->GetGUIDLow(),
             bot->GetTeam() == ALLIANCE ? "A" : "H",
             bot->GetLevel(),
-            bot->GetName()
+            CStrCompat(bot->GetName())
         );
     }
 
@@ -143,7 +143,7 @@ GuidPosition BestGraveyardValue::Calculate()
             bot->GetGUIDLow(),
             bot->GetTeam() == ALLIANCE ? "A" : "H",
             bot->GetLevel(),
-            bot->GetName()
+            CStrCompat(bot->GetName())
         );
     }
 
@@ -160,7 +160,7 @@ GuidPosition BestGraveyardValue::Calculate()
             bot->GetGUIDLow(),
             bot->GetTeam() == ALLIANCE ? "A" : "H",
             bot->GetLevel(),
-            bot->GetName()
+            CStrCompat(bot->GetName())
         );
     }
 
@@ -259,7 +259,7 @@ bool ShouldSpiritHealerValue::Calculate()
         if (anchor != 0 && now - anchor >= (time_t)kGhostStallSec)
         {
             sLog.outDetail("[BOT CORPSE] %s: find corpse stalled %.1fy from the corpse for %us, reviving at the spirit healer",
-                bot->GetName(), corpseDist, kGhostStallSec);
+                CStrCompat(bot->GetName()), corpseDist, kGhostStallSec);
             SET_AI_VALUE2(time_t, "manual time", "ghost walk anchor", now); // re-arm, the revive may take a tick or two
             return true;
         }

@@ -70,7 +70,7 @@ void OrderError(ChatHandler* handler, char const* code, std::string const& messa
 // edit officer notes.
 bool CheckGiver(ChatHandler* handler, Player* requester, uint32_t guildId)
 {
-    if (!requester || !requester->GetSession() || !requester->GetSession()->HasNetworkTransport())
+    if (!requester || !requester->GetSession() || !HasNetworkTransportCompat(requester->GetSession()))
     {
         OrderError(handler, "forbidden", "Only a real player can give orders.");
         return false;
@@ -106,7 +106,7 @@ bool ResolveOrderBot(std::string const& name, Player*& bot, ObjectGuid& guid)
         guid = bot->getObjectGuid();
         return true;
     }
-    guid = sObjectMgr.GetPlayerGuidByName(fixed);
+    guid = PlayerGuidByNameCompat(fixed);
     return !guid.IsEmpty();
 }
 
@@ -120,7 +120,7 @@ bool IsOrderBot(Player* bot, ObjectGuid guid)
         return BotManager::Instance().IsBot(guid);
     if (ClaimLifecycle::Instance().IsClaimed(guid.GetCounter()))
         return true;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    uint32_t accountId = AccountIdOfCharacterCompat(guid);
     return accountId && RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
 
@@ -421,7 +421,7 @@ bool HandleOrderEnchantGive(ChatHandler* handler, Player* requester, std::string
                 GuildOrders::EnchantReplaceVerdict::Busy)
             {
                 std::string giverName = "?";
-                sObjectMgr.GetPlayerNameByGUID(
+                PlayerNameByGuidCompat(
                     ObjectGuid(HIGHGUID_PLAYER, existing->giverGuidLow), giverName);
                 OrderError(handler, "busy", ((bot ? bot->GetName() : botName) +
                     std::string(" is busy with an enchant order for ") + giverName + ".").c_str());
@@ -687,7 +687,7 @@ bool HandleOrderGive(ChatHandler* handler, Player* requester, std::string const&
                 GuildOrders::EnchantReplaceVerdict::Busy)
             {
                 std::string giverName = "?";
-                sObjectMgr.GetPlayerNameByGUID(
+                PlayerNameByGuidCompat(
                     ObjectGuid(HIGHGUID_PLAYER, existing->giverGuidLow), giverName);
                 OrderError(handler, "busy", ((bot ? bot->GetName() : botName) +
                     std::string(" is busy with an enchant order for ") + giverName + ".").c_str());
@@ -934,7 +934,7 @@ bool HandleOrderAccess(ChatHandler* handler, Player* requester)
 
 bool HandleOrderRank(ChatHandler* handler, Player* requester, std::string const& rankToken)
 {
-    if (!requester || !requester->GetSession() || !requester->GetSession()->HasNetworkTransport())
+    if (!requester || !requester->GetSession() || !HasNetworkTransportCompat(requester->GetSession()))
     {
         OrderError(handler, "forbidden", "Only a real player can change the bots' rank.");
         return true;
@@ -1033,7 +1033,7 @@ bool HandleOrderSteps(ChatHandler* handler, Player* requester, std::string const
     else
     {
         std::string stored;
-        name = sObjectMgr.GetPlayerNameByGUID(guid, stored) ? stored : botName;
+        name = PlayerNameByGuidCompat(guid, stored) ? stored : botName;
     }
     name = ProtocolSafe(name);
     std::optional<GuildOrders::OrderStepHistory> h = GuildOrders::FindStepHistory(guid.GetCounter());

@@ -281,7 +281,7 @@ bool LootVoteAction::Execute(Event& event)
     if (voterGuid == bot->getObjectGuid())
         return false;
 
-    Player* voter = sObjectMgr.GetPlayer(voterGuid);
+    Player* voter = GetPlayerCompat(voterGuid);
     if (!voter || !ai->IsRealPlayer(voter))
         return false;
 

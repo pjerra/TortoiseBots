@@ -301,7 +301,7 @@ namespace ai
 
             if (Group* group = bot->GetGroup())
             {
-                Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+                Player* leader = GetPlayerCompat(group->GetLeaderGuid());
                 if (!leader)
                     return false;
 

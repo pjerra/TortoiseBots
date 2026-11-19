@@ -125,8 +125,8 @@ uint32_t ZoneOf(uint16_t areaFlag, uint32_t mapId, uint32_t& areaId, bool& allyH
         return 0;
     areaId = area->Id;
     uint32_t areaTeam = area->Team;
-    uint32_t zoneId = area->ZoneId ? area->ZoneId : area->Id;
-    if (areaTeam == AREATEAM_NONE && area->ZoneId)
+    uint32_t zoneId = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
+    if (areaTeam == AREATEAM_NONE && AreaZoneIdCompat(area))
         if (AreaEntry const* zone = AreaEntry::GetById(area->ZoneId))
             areaTeam = zone->Team;
     allyHome = areaTeam == AREATEAM_ALLY;
@@ -518,7 +518,7 @@ uint32_t GuildOrderFishingPoleFor(Player* bot)
             continue;
         uint32_t fishArea = uint32_t(-(source.entry + kFishingZoneEntryBias));
         AreaTableEntry const* area = AreaEntry::GetById(fishArea);
-        uint32_t fishZone = (area && area->ZoneId) ? area->ZoneId : fishArea;
+        uint32_t fishZone = (area && AreaZoneIdCompat(area)) ? AreaZoneIdCompat(area) : fishArea;
         if (fishZone != record->farmZoneId)
             continue;
         fishes = true;
@@ -547,7 +547,7 @@ bool GuildOrderEntryUsableFor(uint32_t itemId, int32_t entry, uint32_t botLevel,
             continue;
         uint32_t fishArea = uint32_t(-(source.entry + kFishingZoneEntryBias));
         AreaTableEntry const* area = AreaEntry::GetById(fishArea);
-        uint32_t fishZone = (area && area->ZoneId) ? area->ZoneId : fishArea;
+        uint32_t fishZone = (area && AreaZoneIdCompat(area)) ? AreaZoneIdCompat(area) : fishArea;
         if (fishZone != zoneId)
             continue;
         if (!hasSkill)
@@ -730,8 +730,8 @@ SourcePlan PlanGuildOrderSources(Player* bot, uint32_t itemId, OrderType type, b
             continue;
         uint32_t zoneId = fishAreaId;
         AreaTableEntry const* area = fishArea;
-        if (area && area->ZoneId)
-            zoneId = area->ZoneId;
+        if (area && AreaZoneIdCompat(area))
+            zoneId = AreaZoneIdCompat(area);
         // Continent gate: areas carry the map in the DBC; the bot fishes
         // only where it already is.
         if (!area || area->MapId != int32_t(botFishingMap))
@@ -740,7 +740,7 @@ SourcePlan PlanGuildOrderSources(Player* bot, uint32_t itemId, OrderType type, b
         // other sources' slices.
         {
             uint32_t areaTeam = area->Team;
-            if (areaTeam == AREATEAM_NONE && area->ZoneId)
+            if (areaTeam == AREATEAM_NONE && AreaZoneIdCompat(area))
                 if (AreaEntry const* zone = AreaEntry::GetById(area->ZoneId))
                     areaTeam = zone->Team;
             if ((team == ALLIANCE && areaTeam == AREATEAM_HORDE) || (team == HORDE && areaTeam == AREATEAM_ALLY))
