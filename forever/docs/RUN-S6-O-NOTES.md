@@ -80,7 +80,7 @@ All in slot 3 of the build VM, on the final tree (the last code commit is `O6: p
 | `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=215` (unchanged from F6) |
 | `test_run_orders` (g++ -std=c++17 -Wall -Wextra, VM: `cd` to the worktree on the VM, `g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_run_orders.cpp -o /tmp/t && /tmp/t`) | `RESULT: PASS (128 checks)`: every order string of the policy parses to its verb; every refusal text is accepted by the policy's own parsers (`ReactTooFarAnswer`, `UnreachableAnswer`, `LeadNoProgressRefusal`, `IsPathRefusal`, `DirectStragglerName`, the `invalid-target` prefix); the tracker settles ok / failed / expired / superseded / party-wide cases |
 | `test_run_facts` (F6's, unchanged) | `RESULT: PASS` |
-| `test_dungeon_run_policy`, `test_system_run_policy` (unchanged) | see the report (run on the VM) |
+| `test_dungeon_run_policy`, `test_system_run_policy` (unchanged, VM) | `ok`, `109 checks passed` |
 | Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed |
 | server / SQL | none started, none applied |
 
