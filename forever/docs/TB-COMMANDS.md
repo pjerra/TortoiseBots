@@ -309,7 +309,7 @@ a resurrection offered by a party member or the commander is accepted at once (`
 
 `.tb plan` reads the dungeon plan tables the module loads at boot (`ai_dungeon_plan`, `_leg`, `_step`, `_leg_need`, `_boss`, `ai_boss_tactic` and the ForeverCore-only `ai_dungeon_step_unit`, SQL in `forever/sql/world`, delivery in `forever/sql/README.md`).
 It follows the grammar of section 3: markers `plan-begin` / `plan-end` (addendum A2: named after the COMMAND, the verb is the end line's `verb=`), `count=`/`records=`, `error` on one line, the token last.
-**The sample lines below were built by hand from the encoder's rules (`Enc`/`Rec` in `host/TbH3.cpp`, a literal re-implementation, the numbers are example values) and are what the writers produce: `.tb grammar selftest` now also prints one `plan`, `leg`, `unit`, `run` and `event` record built by the real writers (fixed example values). The first boot replaces these samples with its real output.**
+**The sample lines below are REAL output of the module on ForeverCore (package M5, build VM test server, 2026-11-19, the Ragefire Chasm rows exported by forever-agent 63fc3f78: 9 legs, 80 steps, 103 unit rows).** `.tb grammar selftest` also prints one `plan`, `leg`, `unit`, `unit` (optional), `run` and `event` record built by the real writers (fixed example values).
 In the default build (option OFF) `.tb plan` answers `error code=engine-not-built`.
 
 `list`, `info` and `check` are read only; `reload` re-reads the plan tables into the module's memory (no bot, world or database row changes). Errors (`code=`): `missing-argument`, `missing-verb`, `unknown-verb`, `unexpected-argument` (words), `not-loaded` (the plan table was never loaded or sealed: the loader did not run, the module is off, or the plan loader is not merged),
@@ -319,7 +319,7 @@ In the default build (option OFF) `.tb plan` answers `error code=engine-not-buil
 One `plan` record per loaded plan (by name): `plan= map= legs= steps=` and `units=` (the unit rows kept for it; absent when the unit rows were not read). End: `verb=list plans=`.
 ```
 plan-begin #p1
-plan plan=ragefire_chasm map=389 legs=9 steps=84 units=101 #p1
+plan plan=ragefire_chasm map=389 legs=9 steps=80 units=103 #p1
 plan-end count=1 records=1 verb=list plans=1 #p1
 ```
 
@@ -328,10 +328,11 @@ plan-end count=1 records=1 verb=list plans=1 #p1
 Then one `leg leg= name= steps=` per leg a leg row or a step names. End: `verb=info plan= skipped=`: `skipped` = the plan's rows in the database (steps, legs, leg needs) that the loaded table does not hold, i.e. what the loader refused (the server log names each); absent when a count could not be read (unknown is not zero).
 ```
 plan-begin #p2
-plan plan=ragefire_chasm map=389 legs=9 steps=84 moves=29 pulls=51 bosses=4 units=101 cc_priority=11319;11324;11322 kill_first=11319 source=turtle-agent%205c7b6ca%20dungeons%2Fragefire_chasm.json #p2
+plan plan=ragefire_chasm map=389 legs=9 steps=80 moves=25 pulls=51 bosses=4 units=103 cc_priority=11319;11324;11322 kill_first=11319 source=forever-agent%2063fc3f78%20dungeons%2Fragefire_chasm.json #p2
 leg leg=0 name=tunnel steps=6 #p2
 leg leg=1 name=tunnel_end steps=4 #p2
-plan-end count=3 records=3 verb=info plan=ragefire_chasm skipped=0 #p2
+(... seven more leg records: trogg_cave 12, oggleflint 4, trogg_west 17, molten_cave 9, taragaman 7, jergosh 10, bazzalan 11 ...)
+plan-end count=10 records=10 verb=info plan=ragefire_chasm skipped=0 #p2
 ```
 
 ### `.tb plan <plan> check <character> [#token]`
@@ -342,22 +343,25 @@ one-to-one (greedy by distance: every pair within 15 yd, nearest first, a row an
 A step is `ok` when every non-optional member of it is matched or near and at least one member was found; `steps_short` counts the steps with unit rows that are not ok. End: `verb=check plan= bot= map= inst= units= matched= near= missing= optional= steps= steps_ok= steps_short=` (`optional` counts the missing units that are optional; they are also in `missing`).
 A `role=patrol` row that finds no free spawn takes the spawn a row of its own step (same leg and seq, same entry) already holds, when that spawn stands within 15 yd of it: the exporter writes the patrolling pack member twice (the pack row and the patrol row at the first path point), and they are one creature (merge package M5). The match is CACHED per (map, instance id, plan): it is what the run glue's pack lookup (S6) reads; the command recomputes it each time. The spec named the end line `check-end`; addendum A2 (markers named after the command) wins, so it is `plan-end ... verb=check`.
 ```
-plan-begin #p3
-unit leg=0 seq=1 idx=0 entry=11320 role=pack result=matched yd=0.42 spawn=125331 alive=yes #p3
-unit leg=2 seq=4 idx=3 entry=11320 role=pack result=near yd=8.60 spawn=20048642 alive=yes #p3
-unit leg=2 seq=4 idx=4 entry=8996 role=pack result=missing optional=yes #p3
-plan-end count=3 records=3 verb=check plan=ragefire_chasm bot=Mtank map=389 inst=1 units=101 matched=93 near=1 missing=7 optional=7 steps=55 steps_ok=55 steps_short=0 #p3
+plan-begin #c1
+unit leg=2 seq=2 idx=0 entry=11318 role=pack result=matched yd=0.00 spawn=20048648 alive=yes #c1
+unit leg=2 seq=2 idx=1 entry=11318 role=patrol result=matched yd=0.05 spawn=20048648 alive=yes #c1
+unit leg=4 seq=16 idx=0 entry=11320 role=pack result=near yd=8.61 spawn=20048642 alive=yes #c1
+unit leg=6 seq=4 idx=2 entry=8996 role=pack result=missing optional=yes #c1
+(... 99 more unit records ...)
+plan-end count=103 records=103 verb=check plan=ragefire_chasm bot=Mtank map=389 inst=3 units=103 matched=95 near=1 missing=7 optional=7 steps=55 steps_ok=55 steps_short=0 #c1
 ```
 
 ### `.tb plan reload [#token]`
 Reads the plan tables again through the loader (`ReloadDungeonPlans`) with every running run's plan pointer as `inUse`, and swaps them in only when every row passes (the loader's own rules). When the swap happened the unit rows are read again against the new table and the cached matches are dropped. No record lines: the end line says it. End: `verb=reload swapped=yes|no`, `why=` exactly when `swapped=no` (the loader's reason, free text), `changes=` (when swapped: how many plan changes the loader listed), `plans= steps=` of the table now in use, and `units= units_refused=` (the last unit-row read; absent when it was not read).
 ```
 plan-begin #p4
-plan-end count=0 records=0 verb=reload swapped=yes changes=0 plans=1 steps=84 units=101 units_refused=0 #p4
+plan-end count=0 records=0 verb=reload swapped=yes changes=0 plans=1 steps=80 units=103 units_refused=0 #r1
 ```
 ```
-plan-begin #p5
-plan-end count=0 records=0 verb=reload swapped=no why=1%20plan%2C%200%20leg%2C%202%20step%2C%200%20boss%20and%200%20boss%20tactic%20rows%20refused%2C%200%20plans%20with%20bad%20unit%20lists%20%28the%20server%20log%20names%20every%20row%29 plans=1 steps=84 units=99 units_refused=2 #p5
+plan-begin #r2
+plan-end count=0 records=0 verb=reload swapped=no why=0%20plan%2C%200%20leg%2C%201%20step%2C%200%20boss%20and%200%20boss%20tactic%20rows%20refused%2C%200%20plans%20with%20bad%20unit%20lists%3B%20ai_dungeon_step%20%27rfc_broken%27%20leg%200%20seq%201%20%28pull%29%3A%20BadEntries%20%28the%20server%20log%20names%20every%20row%29 plans=1 steps=80 units=103 units_refused=0 #r2
+(a copy of the plan under another name with one pull step's entries set to `abc`; the old tables stay)
 ```
 
 Error examples:
