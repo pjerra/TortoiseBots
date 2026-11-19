@@ -107,7 +107,7 @@ not ported. Places are counted in the after-census on the files this pass may to
 | Census, baseline | `forever/tools/vm-census.sh "" 10` | `files 649 compile clean 323 with errors 326 error places 7648 (in 349 files)` |
 | Census, after | same | `files 649 compile clean 332 with errors 317 error places 6839 (in 338 files)` — 809 places closed, no file gained one, 11 files clean |
 | Census, slice 1 | `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 10` | see the gate at the end of the file |
-| Helper files unchanged | `git diff --stat port/forever HEAD -- forever/src ai/cmangos-compat*` | empty |
+| Helper files unchanged | `git diff --stat 37434278c HEAD -- forever/src ai/cmangos-compat*` (37434278c = the merge base with `port/forever` when this branch started) | empty |
 | ForeverCore module, slice option off | `ssh yulon-ubuntu2 '~/forever-build/build.sh 12 tortoisebots'` | see the gate at the end of the file |
 | Turtle build / tests | `vm-build ~/wt-wide-pass --wait`, `vm-test tb ~/wt-wide-pass` | see the gate at the end of the file |
 
@@ -141,3 +141,12 @@ weakened or turned into a looser match; two count assertions kept their exact ex
 | `test_time_sinks_wiring` | `PathTypeCompat(path) & PATHFIND_NOPATH` |
 | `test_viscidus_burst`, `test_viscidus_cycle`, `test_viscidus_reform` | their `g++` harness now defines the two doubles the extracted production method calls (`GuidKeyCompat`, `IsWithinLOSInMapCompat`/`HasUnitFlagCompat`), like the core doubles it already had |
 | `tools/hire_deferred_dismissal_fixture.inc` | the `Session` double gained `IsHeadlessCompat`, the helper the extracted `HireLifecycle` methods call |
+
+The suite runs as `bash tools/verify_all.sh ../tortoise-wow-f3` (the `../tortoise-wow` next to this worktree is another
+checkout without the host seams, so the host-contract section needs the explicit path); the engine tests are the same
+`vm-test tb` gate.
+
+`port/forever` moved while this branch was open (slice 2 merged, `dce9f4f31`, 57 commits). Of the 170 files this pass
+changed, exactly one is also touched by those 57 (`MaintenanceValues.h`, and with the same `GetAngleCompat` change), so a
+merge is clean; the helper-file gate is quoted against the merge base because against the moved `port/forever` the diff
+shows slice 2's own helper changes reversed, not this pass.
