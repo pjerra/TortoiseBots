@@ -18,6 +18,7 @@
 #include <memory>
 #include <unordered_set>
 
+#include "Corpse.h"
 #include "CreatureData.h"
 #include "CreatureGroups.h"
 #include "GameTime.h"
@@ -27,6 +28,7 @@
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Pet.h"
+#include "Spell.h"
 #include "Player.h"
 #include "PathGenerator.h"
 #include "Unit.h"
@@ -38,6 +40,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/WorldPosition.h"
+#include "runtime/RezHoldPolicy.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/generic/PullStrategy.h"
@@ -327,6 +330,113 @@ void ReadParty(Ctx& c, Facts& f, bool& playerInGroup)
                 break;
             }
     fx::RollUpParty(f, party);
+}
+
+// ---- the rez hold's roster (N6; commands/Commander.cpp:10474 ReadRezRoster, the same reads) ----
+// RezHoldPolicy.h decides from this roster whether the regroup HOLDS for a resurrection (the priest's own AI raises the dead where they lie), waits for the
+// resurrector's mana, or sends `revive party`. AiPlayerbot.DungeonRunRezHold (default false on Turtle) is FORCED ON here: M6's first live test showed the
+// fixed 15 s wait (kPartyRezWaitMs) releasing the dead before a priest that had to walk or drink first could cast (10 s cast + reaction). Read only while
+// someone is dead, like the Turtle glue. "No resurrector" (no priest, paladin, shaman or druid, or none with the spell ready) is the policy's own SendRevive
+// verdict: the practice revive stays the fallback. Group slots are read directly (the dead are not in c.bots).
+void ReadRezRoster(Ctx& c, Facts& f)
+{
+    using RezHold::RezClass;
+    static uint32 const priest[] = {20770, 10881, 10880, 2010, 2006};
+    static uint32 const paladin[] = {20773, 20772, 10324, 10322, 7328};
+    static uint32 const shaman[] = {20777, 20776, 20610, 20609, 2008};
+    static uint32 const druid[] = {20748, 20747, 20742, 20739, 20484};
+    Player* const lead = c.lead;
+    Group* const group = lead->GetGroup();
+    if (!group)
+        return;
+    std::vector<Player*> bots;
+    bots.push_back(lead);
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        if (slot.guid != lead->GetGUID() && bots.size() < fx::kMaxMembers)
+            if (Player* bot = ObjectAccessor::FindPlayer(slot.guid))
+                if (h3::IsHostBot(bot) && InWorldPlayer(bot))
+                    bots.push_back(bot);
+    f.rezHold = true;
+    std::vector<Player*> memberBots;      // parallel to f.rezMembers
+    std::vector<WorldObject*> memberBody; // ... the body of a dead member (its corpse, else the bot itself: not released yet)
+    for (Player* bot : bots)
+    {
+        RezHold::Member m;
+        m.name = bot->GetName();
+        m.healer = PlayerbotAI::IsHeal(bot);
+        m.tank = PlayerbotAI::IsTank(bot);
+        if (!bot->IsAlive())
+        {
+            m.dead = true;
+            Corpse* corpse = bot->GetCorpse();
+            WorldObject* body = corpse ? static_cast<WorldObject*>(corpse) : static_cast<WorldObject*>(bot);
+            m.corpseYd = body->GetMapId() == lead->GetMapId() ? body->GetDistance(lead) : 1000.0f;
+            m.placed = true;
+            m.bodyX = body->GetPositionX();
+            m.bodyY = body->GetPositionY();
+            m.bodyZ = body->GetPositionZ();
+            if (IsResurrectRequestedCompat(bot))
+                f.rezInProgress = true;         // raised: the request waits for the bot to accept it
+            f.rezMembers.push_back(m);
+            memberBots.push_back(bot);
+            memberBody.push_back(body);
+            continue;
+        }
+        m.inCombat = bot->IsInCombat();
+        uint32 const* list = nullptr;
+        uint8 const cls = bot->GetClass();
+        switch (cls)
+        {
+            case CLASS_PRIEST: list = priest; m.rez = RezClass::Priest; break;
+            case CLASS_PALADIN: list = paladin; m.rez = RezClass::Paladin; break;
+            case CLASS_SHAMAN: list = shaman; m.rez = RezClass::Shaman; break;
+            case CLASS_DRUID: list = druid; m.rez = RezClass::Druid; break;
+            default: break;
+        }
+        m.blocksDruid = (cls == CLASS_PRIEST || cls == CLASS_PALADIN || cls == CLASS_SHAMAN) &&
+            bot->GetMapId() == lead->GetMapId() && bot->GetDistance(lead) <= sPlayerbotAIConfig.sightDistance;
+        uint32 spellId = 0;
+        for (size_t i = 0; list && i < 5 && !spellId; ++i)
+            if (bot->HasSpell(list[i]))
+                spellId = list[i];
+        SpellEntry const* spell = spellId ? GetSpellEntryCompat(spellId) : nullptr;
+        bool ready = spell && !bot->HasSpellCooldown(spellId) && !(spell->Category && HasSpellCategoryCooldownCompat(bot, spell->Category));
+        for (uint32 k = 0; ready && k < MAX_SPELL_REAGENTS; ++k)
+            if (spell->Reagent[k] > 0 && !bot->HasItemCount(uint32(spell->Reagent[k]), spell->ReagentCount[k]))
+                ready = false;
+        if (!ready)
+            m.rez = RezClass::None;
+        else
+        {
+            m.mana = bot->GetPower(POWER_MANA);
+            m.rezCost = spell->manaCost ? spell->manaCost : uint32(spell->ManaCostPercentage) * bot->GetCreateMana() / 100;
+        }
+        if (list)
+            if (Spell* casting = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                if (SpellInfo const* info = casting->GetSpellInfo())
+                    for (size_t k = 0; k < 5; ++k)
+                        if (info->Id == list[k])
+                            f.rezInProgress = true;
+        m.placed = true;
+        m.x = bot->GetPositionX();
+        m.y = bot->GetPositionY();
+        m.z = bot->GetPositionZ();
+        f.rezMembers.push_back(m);
+        memberBots.push_back(bot);
+        memberBody.push_back(nullptr);
+    }
+    // Sight, for the hold's note: one ray per living rezzer to the body the run expects raised first (the policy's own pick).
+    int const target = RezHold::PickTarget(f.rezMembers);
+    WorldObject* const body = target >= 0 ? memberBody[static_cast<size_t>(target)] : nullptr;
+    for (size_t i = 0; body && i < f.rezMembers.size(); ++i)
+    {
+        RezHold::Member& m = f.rezMembers[i];
+        if (!m.dead && m.rez != RezClass::None && memberBots[i]->GetMapId() == body->GetMapId())
+        {
+            ++c.R().losQueries;
+            m.seesBody = memberBots[i]->IsWithinLOSInMap(body);
+        }
+    }
 }
 
 // ---- engaged units: the units on the attacker sets of the bots and their pets, and their victims (Commander.cpp:8860-8937) ----
@@ -918,6 +1028,8 @@ bool ReadFacts(RunRec& rec, uint32 nowMs, DungeonRun::Facts& f, FactsReport* rep
     c.map = c.lead->GetMap();
     bool playerInGroup = false;
     ReadParty(c, f, playerInGroup);
+    if (f.dead > 0)
+        ReadRezRoster(c, f);
     ReadLead(c, f);
     if (f.anyInCombat)
     {
