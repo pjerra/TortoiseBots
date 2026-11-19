@@ -52,6 +52,7 @@
 #include <unordered_map>
 #include <vector>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace
 {
@@ -74,7 +75,7 @@ std::string ValueKey(uint32 guid, std::string const& name)
 
 std::string TradeKey(ObjectGuid bot, ObjectGuid master)
 {
-    return bot.GetString() + "\n" + master.GetString();
+    return GuidStringW3(bot) + "\n" + GuidStringW3(master);
 }
 
 // Issue #1605: a party with a human's character in it is the player's, not

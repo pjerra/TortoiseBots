@@ -69,6 +69,7 @@
 #include <set>
 #include <thread>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -445,7 +446,7 @@ HireOutcome HireProvisionService::Hire(Player* requester, HireSelection const& s
         outcome.status = HireStatus::Failed;
         outcome.message = "Could not record your hire. No gold was taken.";
         sLog.outError("TortoiseBots: hire ledger unavailable; the hire of character %s (%u) was rolled back",
-            guid.GetString().c_str(), guid.GetCounter());
+            GuidStringW3(guid).c_str(), guid.GetCounter());
         return outcome;
     }
     if (BotRecord* record = BotManager::Instance().FindBot(guid))
@@ -1533,7 +1534,7 @@ void HireProvisionService::CancelBoundSeatHire(PendingProvision const& pending, 
         if (master->IsInWorld() && master->GetSession())
             ChatHandler(master).PSendSysMessage("Your hire of %s was cancelled: %s.", cancel.name.c_str(), why.c_str());
     TB_LOG_BASIC("TortoiseBots: bound raid seat hire %s of %s cancelled (%s); deletion %s", cancel.name.c_str(),
-        pending.masterGuid.GetString().c_str(), why.c_str(), cancel.state.deletionQueued ? "recorded" : "not recorded yet, retried");
+        GuidStringW3(pending.masterGuid).c_str(), why.c_str(), cancel.state.deletionQueued ? "recorded" : "not recorded yet, retried");
     if (!SettleSeatCancel(cancel))
         m_seatCancels.push_back(cancel);
 }
@@ -1555,7 +1556,7 @@ bool HireProvisionService::SettleSeatCancel(SeatCancel& cancel)
             case SeatCancelAction::GiveUp:
                 sLog.outError("TortoiseBots: cancelled seat hire %s of %s: its deletion was never recorded after %u "
                     "attempts; no refund (the hire has ended, its character is left for the ledger recovery)",
-                    cancel.name.c_str(), cancel.masterGuid.GetString().c_str(), cancel.state.attempts);
+                    cancel.name.c_str(), GuidStringW3(cancel.masterGuid).c_str(), cancel.state.attempts);
                 return true;
         }
         return true;
@@ -1583,7 +1584,7 @@ void HireProvisionService::RefundSeatCancel(SeatCancel const& cancel)
             ChatHandler(master).PSendSysMessage("Your fee for %s was returned.", cancel.name.c_str());
     }
     TB_LOG_BASIC("TortoiseBots: cancelled seat hire %s of %s: fee %u %s", cancel.name.c_str(),
-        cancel.masterGuid.GetString().c_str(), cancel.cost, !cancel.cost ? "none" : inHand ? "refunded" : "mailed");
+        GuidStringW3(cancel.masterGuid).c_str(), cancel.cost, !cancel.cost ? "none" : inHand ? "refunded" : "mailed");
 }
 
 void HireProvisionService::SweepSeatCancels()

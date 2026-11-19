@@ -67,6 +67,7 @@
 #include <cmath>
 #include <chrono>
 #include <ctime>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
@@ -1750,7 +1751,7 @@ bool BotManager::RunPendingAddRemoveTest(uint32_t accountId, ::ObjectGuid guid)
         sObjectAccessor.FindPlayer(guid) || FindBot(guid))
     {
         sLog.outError("TortoiseBots: PendingAddRemoveTest precondition failed for acct %u guid %s",
-            accountId, guid.GetString().c_str());
+            accountId, GuidStringW3(guid).c_str());
         return false;
     }
 
@@ -1785,21 +1786,21 @@ bool BotManager::AddBotWithMaster(uint32_t accountId, ::ObjectGuid guid, ::Objec
     uint32_t key = 0;
     if (!BotRegistryKey(guid.GetRawValue(), key))
     {
-        TB_LOG_DETAIL("TortoiseBots: AddBot guid %s is not a player guid", guid.GetString().c_str());
+        TB_LOG_DETAIL("TortoiseBots: AddBot guid %s is not a player guid", GuidStringW3(guid).c_str());
         return false;
     }
     if (AhBotSellerAccount::Instance().IsSellerGuid(key) ||
         AhBotSellerAccount::Instance().IsSellerAccount(accountId))
     {
         sLog.outError("TortoiseBots: AddBot %s on acct %u rejected (AH bot seller characters never log in)",
-            guid.GetString().c_str(), accountId);
+            GuidStringW3(guid).c_str(), accountId);
         return false;
     }
     auto it = m_bots.find(key);
     if (it != m_bots.end())
     {
         TB_LOG_DETAIL("TortoiseBots: AddBot guid %s already tracked (state %u enteredWorld %u)",
-            guid.GetString().c_str(), static_cast<uint32_t>(it->second.record.lifecycle), it->second.record.enteredWorld);
+            GuidStringW3(guid).c_str(), static_cast<uint32_t>(it->second.record.lifecycle), it->second.record.enteredWorld);
         return false;
     }
 
@@ -1808,7 +1809,7 @@ bool BotManager::AddBotWithMaster(uint32_t accountId, ::ObjectGuid guid, ::Objec
         state != HeadlessSessionState::NotFound)
     {
         sLog.outError("TortoiseBots: AddBot guid %s rejected because the character already has a live or pending session (state %u)",
-            guid.GetString().c_str(), static_cast<uint32>(state));
+            GuidStringW3(guid).c_str(), static_cast<uint32>(state));
         return false;
     }
 
@@ -1825,7 +1826,7 @@ bool BotManager::AddBotWithMaster(uint32_t accountId, ::ObjectGuid guid, ::Objec
     if (!masterGuid.IsEmpty())
         BotActivityLeaseManager::Instance().ClaimForMaster(key);
     TB_LOG_DETAIL("TortoiseBots: AddBot %s on acct %u master %s (PendingAdd, StartHeadlessSession)",
-        guid.GetString().c_str(), accountId, masterGuid.GetString().c_str());
+        GuidStringW3(guid).c_str(), accountId, GuidStringW3(masterGuid).c_str());
     return true;
 }
 
@@ -1847,7 +1848,7 @@ bool BotManager::RegisterOwnedCharacter(uint32_t ownerAccountId, uint32_t charac
     if (!stored)
     {
         sLog.outError("TortoiseBots: could not persist ownership for character %s (owner account %u)",
-            characterGuid.GetString().c_str(), ownerAccountId);
+            GuidStringW3(characterGuid).c_str(), ownerAccountId);
         return false;
     }
 
@@ -1954,7 +1955,7 @@ bool BotManager::RemoveBot(::ObjectGuid guid, bool save)
             m_pendingBotRemovals.push_back(pending);
         }
         TB_LOG_DETAIL("TortoiseBots: RemoveBot %s deferred until AI update completes (Removing)",
-            guid.GetString().c_str());
+            GuidStringW3(guid).c_str());
         return true;
     }
 
@@ -1977,15 +1978,15 @@ bool BotManager::RemoveBot(::ObjectGuid guid, bool save)
         {
             ::WorldSession* s = p->GetSession();
             if (s && HasNetworkTransportCompat(s))
-                TB_LOG_DETAIL("TortoiseBots: RemoveBot %s reclaimed by network — releasing", guid.GetString().c_str());
+                TB_LOG_DETAIL("TortoiseBots: RemoveBot %s reclaimed by network — releasing", GuidStringW3(guid).c_str());
         }
         m_bots.erase(it);
         sRandomBotFacade.MarkNativePlayersDirty();
-        TB_LOG_DETAIL("TortoiseBots: RemoveBot %s immediate NotFound — erased", guid.GetString().c_str());
+        TB_LOG_DETAIL("TortoiseBots: RemoveBot %s immediate NotFound — erased", GuidStringW3(guid).c_str());
         return true;
     }
 
-    TB_LOG_DETAIL("TortoiseBots: RemoveBot %s (Removing; erasure deferred until NotFound)", guid.GetString().c_str());
+    TB_LOG_DETAIL("TortoiseBots: RemoveBot %s (Removing; erasure deferred until NotFound)", GuidStringW3(guid).c_str());
     return true;
 }
 
@@ -2092,7 +2093,7 @@ bool BotManager::BindBotMaster(::ObjectGuid botGuid, ::ObjectGuid masterGuid)
         (IsHeadlessCompat(master->GetSession()) && !moduleHeadlessMaster))
     {
         sLog.outError("TortoiseBots: cannot bind bot %s to missing or unsupported master %s",
-            botGuid.GetString().c_str(), masterGuid.GetString().c_str());
+            GuidStringW3(botGuid).c_str(), GuidStringW3(masterGuid).c_str());
         return false;
     }
 
@@ -2103,7 +2104,7 @@ bool BotManager::BindBotMaster(::ObjectGuid botGuid, ::ObjectGuid masterGuid)
         if (!IsLiveHeadlessBot(it->second, bot))
         {
             sLog.outError("TortoiseBots: cannot bind bot %s because its live session is not module-owned Headless",
-                botGuid.GetString().c_str());
+                GuidStringW3(botGuid).c_str());
             return false;
         }
 
@@ -2111,13 +2112,13 @@ bool BotManager::BindBotMaster(::ObjectGuid botGuid, ::ObjectGuid masterGuid)
         if (!ai)
         {
             sLog.outError("TortoiseBots: cannot bind bot %s because mature PlayerbotAI is unavailable",
-                botGuid.GetString().c_str());
+                GuidStringW3(botGuid).c_str());
             return false;
         }
         if (!it->second.aiAdapter || !it->second.aiAdapter->IsInitialized())
         {
             sLog.outError("TortoiseBots: cannot bind bot %s because its module AI adapter is unavailable",
-                botGuid.GetString().c_str());
+                GuidStringW3(botGuid).c_str());
             return false;
         }
     }
@@ -2147,7 +2148,7 @@ bool BotManager::ClearBotMaster(::ObjectGuid botGuid)
         if (!IsLiveHeadlessBot(it->second, bot))
         {
             sLog.outError("TortoiseBots: cannot clear master for bot %s because its live session is not module-owned Headless",
-                botGuid.GetString().c_str());
+                GuidStringW3(botGuid).c_str());
             return false;
         }
 
@@ -2155,13 +2156,13 @@ bool BotManager::ClearBotMaster(::ObjectGuid botGuid)
         if (!ai)
         {
             sLog.outError("TortoiseBots: cannot clear master for bot %s because mature PlayerbotAI is unavailable",
-                botGuid.GetString().c_str());
+                GuidStringW3(botGuid).c_str());
             return false;
         }
         if (!it->second.aiAdapter || !it->second.aiAdapter->IsInitialized())
         {
             sLog.outError("TortoiseBots: cannot clear master for bot %s because its module AI adapter is unavailable",
-                botGuid.GetString().c_str());
+                GuidStringW3(botGuid).c_str());
             return false;
         }
     }
@@ -2188,7 +2189,7 @@ bool BotManager::SetBotFollow(::ObjectGuid botGuid, ::ObjectGuid masterGuid)
     if (!bot || !IsLiveHeadlessBot(it->second, bot) || !ai)
     {
         sLog.outError("TortoiseBots: SetBotFollow bot %s rejected because Headless bot or mature AI is unavailable",
-            botGuid.GetString().c_str());
+            GuidStringW3(botGuid).c_str());
         return false;
     }
 
@@ -2197,12 +2198,12 @@ bool BotManager::SetBotFollow(::ObjectGuid botGuid, ::ObjectGuid masterGuid)
     if (!ai->DoSpecificAction("follow chat shortcut", followEvent, true))
     {
         sLog.outError("TortoiseBots: mature follow action failed for bot %s",
-            botGuid.GetString().c_str());
+            GuidStringW3(botGuid).c_str());
         return false;
     }
 
     TB_LOG_DETAIL("TortoiseBots: SetBotFollow bot %s -> master %s",
-        botGuid.GetString().c_str(), masterGuid.GetString().c_str());
+        GuidStringW3(botGuid).c_str(), GuidStringW3(masterGuid).c_str());
     return true;
 }
 
@@ -2215,7 +2216,7 @@ void BotManager::SetAutoTestEnabled(bool enable, uint32_t accountId, ::ObjectGui
     m_autoState = AutoState::Idle;
     m_autoTestPassed = false;
     TB_LOG_BASIC("TortoiseBots: AutoTest %s acct %u guid %s",
-        enable ? "enabled" : "disabled", accountId, guid.GetString().c_str());
+        enable ? "enabled" : "disabled", accountId, GuidStringW3(guid).c_str());
 }
 
 void BotManager::SetPacketBridgeTestEnabled(bool enable, uint32_t accountId,
@@ -2229,7 +2230,7 @@ void BotManager::SetPacketBridgeTestEnabled(bool enable, uint32_t accountId,
     m_packetTestStage = 0;
     TB_LOG_BASIC("TortoiseBots: PacketBridgeTest %s acct %u master %s bot %s",
         enable ? "enabled" : "disabled", accountId,
-        masterGuid.GetString().c_str(), botGuid.GetString().c_str());
+        GuidStringW3(masterGuid).c_str(), GuidStringW3(botGuid).c_str());
 }
 
 namespace
@@ -2708,7 +2709,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
             if (p && p->GetSession() && HasNetworkTransportCompat(p->GetSession()))
             {
                 TB_LOG_DETAIL("TortoiseBots: Bot %s reclaimed by network during removal — releasing",
-                    rec.characterGuid.GetString().c_str());
+                    GuidStringW3(rec.characterGuid).c_str());
                 uint32_t guidLow = rec.characterGuid.GetCounter();
                 it = m_bots.erase(it);
                 sRandomBotFacade.MarkNativePlayersDirty();
@@ -2718,7 +2719,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
             }
             if (state == HeadlessSessionState::NotFound)
             {
-                TB_LOG_DETAIL("TortoiseBots: Bot %s removal complete (NotFound)", rec.characterGuid.GetString().c_str());
+                TB_LOG_DETAIL("TortoiseBots: Bot %s removal complete (NotFound)", GuidStringW3(rec.characterGuid).c_str());
                 uint32_t guidLow = rec.characterGuid.GetCounter();
                 it = m_bots.erase(it);
                 sRandomBotFacade.MarkNativePlayersDirty();
@@ -2738,7 +2739,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
             if (playerSess && HasNetworkTransportCompat(playerSess))
             {
                 TB_LOG_DETAIL("TortoiseBots: Bot %s reclaimed by network session acct %u — releasing",
-                    rec.characterGuid.GetString().c_str(), playerSess->GetAccountId());
+                    GuidStringW3(rec.characterGuid).c_str(), playerSess->GetAccountId());
                 uint32_t guidLow = rec.characterGuid.GetCounter();
                 it = m_bots.erase(it);
                 sRandomBotFacade.MarkNativePlayersDirty();
@@ -2773,7 +2774,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
                     !entry.aiAdapter || !entry.aiAdapter->IsUsable())
                 {
                     sLog.outError("TortoiseBots: Bot %s lost usable PlayerbotAI; stopping the Headless session",
-                        rec.characterGuid.GetString().c_str());
+                        GuidStringW3(rec.characterGuid).c_str());
                     rec.enteredWorld = false;
                     rec.lifecycle = BotLifecycle::Removing;
                     rec.syncedInWorld = false;
@@ -2796,7 +2797,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
             if (state == HeadlessSessionState::NotFound)
             {
                 sLog.outError("TortoiseBots: Bot %s login ended without a session (NotFound)",
-                    rec.characterGuid.GetString().c_str());
+                    GuidStringW3(rec.characterGuid).c_str());
                 uint32_t guidLow = rec.characterGuid.GetCounter();
                 it = m_bots.erase(it);
                 sRandomBotFacade.MarkNativePlayersDirty();
@@ -2812,7 +2813,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
         if (state == HeadlessSessionState::NotFound)
         {
             TB_LOG_DETAIL("TortoiseBots: Bot %s session ended (NotFound) — releasing",
-                rec.characterGuid.GetString().c_str());
+                GuidStringW3(rec.characterGuid).c_str());
             uint32_t guidLow = rec.characterGuid.GetCounter();
             it = m_bots.erase(it);
             sRandomBotFacade.MarkNativePlayersDirty();
@@ -3092,7 +3093,7 @@ void BotManager::UpdateAutoTest(uint32_t diff)
         case AutoState::Idle:
             if (m_autoTestTicks > 20)
             {
-                TB_LOG_BASIC("TortoiseBots: AutoTest step 1 — login bot %s", m_autoTestGuid.GetString().c_str());
+                TB_LOG_BASIC("TortoiseBots: AutoTest step 1 — login bot %s", GuidStringW3(m_autoTestGuid).c_str());
                 if (AddBot(m_autoTestAccount, m_autoTestGuid))
                 {
                     m_autoState = AutoState::LoggingIn;

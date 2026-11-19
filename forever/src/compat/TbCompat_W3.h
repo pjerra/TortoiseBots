@@ -14,8 +14,9 @@
 
 // =====================================================================================================================
 // Family 2: a guid as text. T: ObjectGuid::GetString() ("<type> <name> (Entry/Low ...)"). F: ObjectGuid::ToString()
-// (ObjectGuid.h:397). Every rewritten site prints the text in a log line or uses it as a display fallback, never as a key, so the
-// two spellings of the same guid may differ between the cores (the text of a log line is not an identity).
+// (ObjectGuid.h:397). 65 of the 66 rewritten sites print the text in a log line or use it as a display name (HireLifecycle.cpp:317),
+// where the two spellings of the same guid may differ between the cores. The 66th is PlayerbotRuntimeFacade.cpp TradeKey: an
+// in-memory map key (bot + master), never stored or sent; ToString carries the whole guid value, so it is one key per pair.
 // =====================================================================================================================
 inline std::string GuidStringW3(ObjectGuid const& guid) { return guid.ToString(); }
 

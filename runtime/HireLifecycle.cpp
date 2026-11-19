@@ -41,6 +41,7 @@
 #include <ctime>
 #include <memory>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -314,13 +315,13 @@ void HireLifecycle::DismissSurplusAfterBinding(ObjectGuid commanderGuid)
         ObjectGuid const guid = owned[index];
         std::string name;
         if (!PlayerNameByGuidCompat(guid, name))
-            name = guid.GetString();
+            name = GuidStringW3(guid);
         names += (names.empty() ? "" : ", ") + name;
         // The normal dismiss (`.bot remove`): the hire ends, its character is deleted, no refund.
         DismissNow(guid, "bound raid ended above the companion limit");
     }
     TB_LOG_BASIC("TortoiseBots: commander %s's raid binding ended with %u companions over the limit of %u: %s dismissed",
-        commanderGuid.GetString().c_str(), static_cast<uint32>(plan.dismiss.size()), cap, names.c_str());
+        GuidStringW3(commanderGuid).c_str(), static_cast<uint32>(plan.dismiss.size()), cap, names.c_str());
     Player* master = sObjectAccessor.FindPlayer(commanderGuid);
     if (master && master->IsInWorld() && master->GetSession())
         ChatHandler(master).PSendSysMessage("%s left: your bound raid ended and outside one you command at most %u companions.",
@@ -403,7 +404,7 @@ uint32_t HireLifecycle::EndCommand(ObjectGuid commanderGuid)
             record.commandState = HireCommandState::None;
     }
     TB_LOG_DETAIL("TortoiseBots: commander %s released %u hired companion(s) back to their hirer",
-        commanderGuid.GetString().c_str(), handled);
+        GuidStringW3(commanderGuid).c_str(), handled);
     return handled;
 }
 
@@ -557,10 +558,10 @@ bool HireLifecycle::Dismiss(HiredRecord const& record, char const* reason, bool 
         deletionDurable = QueueDeletion(botGuidLow, characterAccountId, reason ? reason : "released");
     else
         sLog.outError("TortoiseBots: hired bot %s has no hire ledger row; its character is left in place",
-            record.botGuid.GetString().c_str());
+            GuidStringW3(record.botGuid).c_str());
 
     TB_LOG_BASIC("TortoiseBots: hired bot %s dismissed (%s); logging off for deletion",
-        record.botGuid.GetString().c_str(), reason ? reason : "released");
+        GuidStringW3(record.botGuid).c_str(), reason ? reason : "released");
     BotGearService::Instance().UnpinBot(botGuidLow);
     BotManager::Instance().RemoveBot(record.botGuid, false);
     m_dismissing.erase(botGuidLow);
@@ -696,7 +697,7 @@ void HireLifecycle::OnMasterLogout(Player* master)
         }
         TB_LOG_BASIC("TortoiseBots: master %s offline; hired bot %s guards for %us",
             master->GetName(),
-            record.botGuid.GetString().c_str(),
+            GuidStringW3(record.botGuid).c_str(),
             sPlayerbotAIConfig.hireDisconnectGracePeriod);
     }
 }

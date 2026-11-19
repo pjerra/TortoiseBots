@@ -3,6 +3,7 @@
 #include "GossipHelloAction.h"
 
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TbCompatW3.h"
 
 
 using namespace ai;
@@ -30,7 +31,7 @@ bool GossipHelloAction::Execute(Event& event)
 	Creature *pCreature = bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_NONE);
 	if (!pCreature)
 	{
-		DEBUG_LOG("Playerbot: received CMSG_GOSSIP_HELLO for an unavailable target %s.", guid.GetString().c_str());
+		DEBUG_LOG("Playerbot: received CMSG_GOSSIP_HELLO for an unavailable target %s.", GuidStringW3(guid).c_str());
 		return false;
 	}
 

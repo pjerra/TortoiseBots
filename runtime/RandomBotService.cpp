@@ -58,6 +58,7 @@
 #include <random>
 #include <set>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -1196,7 +1197,7 @@ void RandomBotService::RemoveExpiredBots(uint32_t diff)
                 {
                     m_quickLogoutLogMs = nowMs;
                     TB_LOG_BASIC("TortoiseBots: level ladder: %s (level %u) left %u ms after entering the world - set aside for an hour (%u such quick logouts so far)",
-                        candidate.characterGuid.GetString().c_str(), uint32(candidate.level), m_ageMs[i], m_quickLogouts);
+                        GuidStringW3(candidate.characterGuid).c_str(), uint32(candidate.level), m_ageMs[i], m_quickLogouts);
                 }
             }
             m_wasBot[i] = 0;
@@ -1302,7 +1303,7 @@ void RandomBotService::RemoveExpiredBots(uint32_t diff)
             continue;
 
         TB_LOG_DETAIL("TortoiseBots: native random bot %s reached its online lifetime; removing",
-            candidate.characterGuid.GetString().c_str());
+            GuidStringW3(candidate.characterGuid).c_str());
         m_xpProgress.erase(candidate.characterGuid.GetCounter());
         BotManager::Instance().RemoveBot(candidate.characterGuid, true);
         BotActivityLeaseManager::Instance().Release(candidate.characterGuid.GetCounter(), BotActivity::Grinding);
@@ -1521,7 +1522,7 @@ void RandomBotService::QueueOrderBots(uint32_t target, uint32_t perInterval, uin
             ++online;
             ++added;
             TB_LOG_DETAIL("TortoiseBots: order random bot %s queued on account %u (prioritized)",
-                candidate.characterGuid.GetString().c_str(), candidate.accountId);
+                GuidStringW3(candidate.characterGuid).c_str(), candidate.accountId);
         }
         else
             BotActivityLeaseManager::Instance().Release(guidLow, BotActivity::Grinding);
@@ -1603,7 +1604,7 @@ void RandomBotService::MaintainOnlinePool()
                 ++online;
                 ++added;
                 TB_LOG_DETAIL("TortoiseBots: pinned random bot %s queued on account %u (prioritized)",
-                    pinnedCandidate->characterGuid.GetString().c_str(), pinnedCandidate->accountId);
+                    GuidStringW3(pinnedCandidate->characterGuid).c_str(), pinnedCandidate->accountId);
             }
             else
                 BotActivityLeaseManager::Instance().Release(guidLow, BotActivity::Grinding);
@@ -1674,7 +1675,7 @@ void RandomBotService::MaintainOnlinePool()
                 ++onlinePerBand[LadderBandOf(candidate.level)];
                 if (candidate.team == HORDE) ++onlineHorde; else ++onlineAlliance;
                 TB_LOG_DETAIL("TortoiseBots: level ladder queued random bot %s (level %u, band %s) on account %u",
-                    candidate.characterGuid.GetString().c_str(), uint32(candidate.level),
+                    GuidStringW3(candidate.characterGuid).c_str(), uint32(candidate.level),
                     LadderBandName(LadderBandOf(candidate.level)).c_str(), candidate.accountId);
             }
             else
@@ -1725,7 +1726,7 @@ void RandomBotService::MaintainOnlinePool()
             ++online;
             ++added;
             TB_LOG_DETAIL("TortoiseBots: native random bot %s queued on account %u",
-                candidate.characterGuid.GetString().c_str(), candidate.accountId);
+                GuidStringW3(candidate.characterGuid).c_str(), candidate.accountId);
         }
         else
             BotActivityLeaseManager::Instance().Release(guidLow, BotActivity::Grinding);
@@ -1906,7 +1907,7 @@ void RandomBotService::JoinParentGuild(uint32_t parentGuidLow, ObjectGuid altGui
     if (GuildOrders::GuildHasRealPlayer(guildId))
         return;
     if (guild->AddMember(altGuid, guild->GetLowestRank()) != GuildAddStatus::OK)
-        TB_LOG_DETAIL("TortoiseBots: lineage alt %s could not join guild %u", altGuid.GetString().c_str(), guildId);
+        TB_LOG_DETAIL("TortoiseBots: lineage alt %s could not join guild %u", GuidStringW3(altGuid).c_str(), guildId);
 }
 
 void RandomBotService::Update(uint32_t diff)

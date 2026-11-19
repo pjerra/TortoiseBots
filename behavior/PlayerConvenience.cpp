@@ -25,6 +25,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
@@ -268,7 +269,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
         if (!record || record->masterGuid != state.masterGuid)
         {
             sLog.outString("TortoiseBots: Summon cancelled for bot %s because its master changed",
-                state.botGuid.GetString().c_str());
+                GuidStringW3(state.botGuid).c_str());
             cleanupPortal(state, origin);
             it = m_summons.erase(it);
             continue;
@@ -289,7 +290,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
                 if (state.elapsedMs > kSummonArrivalTimeoutMs)
                 {
                     sLog.outError("TortoiseBots: Summon arrival timed out for bot %s",
-                        state.botGuid.GetString().c_str());
+                        GuidStringW3(state.botGuid).c_str());
                     cleanupPortal(state, origin);
                     it = m_summons.erase(it);
                 }
@@ -324,7 +325,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
             if (bot->GetMapId() != state.destMap || !BotManager::Instance().SetBotFollow(state.botGuid, state.masterGuid))
             {
                 sLog.outError("TortoiseBots: Summon follow restore failed for bot %s",
-                    state.botGuid.GetString().c_str());
+                    GuidStringW3(state.botGuid).c_str());
                 cleanupPortal(state, origin);
                 it = m_summons.erase(it);
                 continue;

@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <vector>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -540,7 +541,7 @@ bool BattlegroundQueueService::TryQueue(::Player* bot, uint32 queueTypeValue)
     }
 
     TB_LOG_DETAIL("TortoiseBots: BG auto-queue %s (%s) level %u team %u guid %s%s",
-        bot->GetName(), name, bot->GetLevel(), bot->GetTeam(), bot->GetObjectGuid().GetString().c_str(),
+        bot->GetName(), name, bot->GetLevel(), bot->GetTeam(), GuidStringW3(bot->GetObjectGuid()).c_str(),
         joinAsGroup ? " as group" : " solo");
     return true;
 }
