@@ -16,6 +16,7 @@
 #include "policy/gear/SpecArmorPolicy.h"
 #include "policy/gear/FeralSpecPolicy.h"
 #include "../../runtime/policy/provision/AmmoCachePolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 char * strstri (const char* str1, const char* str2);
 
@@ -288,8 +289,8 @@ void RandomItemMgr::BuildRandomItemCache()
         CharacterDatabase.CommitTransaction();
 
         uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-        if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-            maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+        if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+            maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
         for (uint32 level = 0; level < (maxLevel / 10); level++)
         {
             for (uint32 type = RANDOM_ITEM_GUILD_TASK; type <= RANDOM_ITEM_GUILD_TASK_REWARD_TRADE_RARE; type++)
@@ -833,7 +834,7 @@ void RandomItemMgr::BuildItemInfoCache()
             delete itemInfo;
 
     slotItemIds.clear();
-    uint32 maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    uint32 maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     for (uint32 i = 0; i <= MAX_STAT_SCALES; ++i)
     {
@@ -4119,8 +4120,8 @@ RandomItemList const& RandomItemMgr::GetSlotItemIds(uint32 slot)
 void RandomItemMgr::BuildAmmoCache()
 {
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building ammo cache for %d levels", maxLevel);
     // Every white row of the class and subclass a bot of `level` can use; the
@@ -4231,8 +4232,8 @@ uint32 RandomItemMgr::GetQuiver(uint32 level)
 void RandomItemMgr::BuildPotionCache()
 {
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building potion cache for %d levels", maxLevel);
 	int counter2 = 0;
@@ -4313,8 +4314,8 @@ void RandomItemMgr::BuildPotionCache()
 void RandomItemMgr::BuildFoodCache()
 {
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building food cache for %d levels", maxLevel);
 	int counter3 = 0;
@@ -4435,8 +4436,8 @@ void RandomItemMgr::BuildTradeCache()
     tradeCache.clear();
 
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
-    if (maxLevel > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    if (maxLevel > WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        maxLevel = WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
 
     sLog.outBasic("Building trade cache for %d levels", maxLevel);
 	int counter4 = 0;

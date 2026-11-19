@@ -11,6 +11,7 @@
 
 #include "playerbot/strategy/values/PositionValue.h"
 #include "Transports/Transport.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace MaNGOS;
 

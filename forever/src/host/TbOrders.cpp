@@ -9,24 +9,35 @@
 #include "MiscPackets.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbOrdersApi.h"
+#include "host/TbOrderQueuePure.h"
+#include "host/run/TbRunLiquid.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
 #include "compat/botpch_forever.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <deque>
 #include <map>
+#include <set>
 #include <sstream>
 #include "Group.h"
+#include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "Unit.h"
 
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/PullStartPolicy.h"
+#include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/generic/PullStrategy.h"
+#include "playerbot/strategy/values/AttackersValue.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
@@ -62,6 +73,7 @@ struct Order
     float x = 0, y = 0, z = 0;  // come
     uint32 map = 0;
     uint32 queuedAt = 0;
+    bool fromRun = false;       // O6: the run leader's order (QueueOrder): owner is the bot itself, a pull hold anchors on the tank's own spot
 };
 
 struct BotRec
@@ -76,6 +88,13 @@ std::map<ObjectGuid, BotRec>& Recs()
 {
     static std::map<ObjectGuid, BotRec> recs;
     return recs;
+}
+
+// R6 (review item 5): the leaders of the live runs (HoldRunLead): BeforeEngineTick keeps them from following their commander.
+std::set<ObjectGuid>& RunLeads()
+{
+    static std::set<ObjectGuid> leads;
+    return leads;
 }
 
 std::map<ObjectGuid, uint8>& Roles()
@@ -244,6 +263,69 @@ bool AttackThroughMark(Player* bot, PlayerbotAI* ai, Player* owner, ObjectGuid u
     return ok;
 }
 
+// O6: the stay position written the way `come` writes it (below): the entry "stay" of the position value. The facts' leadStayKnown reads this entry.
+void WriteStay(PlayerbotAI* ai, float x, float y, float z, uint32 map)
+{
+    ai::PositionMap& positions = ai->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
+    ai::PositionEntry stay = positions["stay"];
+    stay.Set(x, y, z, map);
+    positions["stay"] = stay;
+}
+
+// O6: a run's pull hold anchors on the TANK's own spot. ai::PausePartyPullHold anchors on the tank's master (the bound commander), which may stand outside
+// the instance; the run's tank is its own anchor. Written for the same members and the same two entries the hold writes (every member that is neither
+// a tank nor a healer: PullActions.cpp:106-141), after the hold ran.
+void AnchorPullHoldOnTank(Player* tank)
+{
+    Group* group = tank ? tank->GetGroup() : nullptr;
+    if (!group)
+        return;
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        Player* member = ObjectAccessor::FindPlayer(slot.guid);
+        if (!member || member == tank || !member->IsInWorld() || member->GetMapId() != tank->GetMapId())
+            continue;
+        PlayerbotAI* memberAi = AiOf(member);
+        if (!memberAi || !memberAi->GetAiObjectContext() || PlayerbotAI::IsTank(member, true) || PlayerbotAI::IsHeal(member, true))
+            continue;
+        ai::PositionMap& positions = memberAi->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
+        for (char const* key : { "stay", "pull hold" })
+        {
+            ai::PositionEntry entry = positions[key];
+            entry.Set(tank->GetPositionX(), tank->GetPositionY(), tank->GetPositionZ(), tank->GetMapId());
+            positions[key] = entry;
+        }
+    }
+}
+
+// N6: what the legacy pull order does once the request is accepted (commands/Action.cpp:930-960, Party.cpp:1152): the tank may break its stay
+// (RelaxTacticalMovement = DropQueuedMovementOrders + EndStayForOrder), its action clock is cleared so the pull does not wait out whatever it was doing, and a
+// casting or seated tank is made ready (PullStartPolicy.h ReadyTankForPull: "reach pull" does not move a casting or sitting bot). Without this the run's
+// `come` (the stand the policy put the tank on) left the stay strategy on, its "return to stay position" trigger walked the tank back every tick, and a pack
+// more than about 30 yd from the stand was never reached (M6 live test: steps 16 and 17, `tgt=` empty, position unchanged for minutes, 175 `pull-release
+// reason=expired`). The legacy order also runs one quiet decision tick (ExecuteQuietNextAction); the engines tick every world update here, so the cleared clock is enough.
+void RelaxTankForPull(Player* tank, PlayerbotAI* ai, bool fromRun)
+{
+    ai->DropQueuedMovementOrders();
+    ai->EndStayForOrder();
+    // R6 (review item 5): EndStayForOrder hands a bot with no movement mode its default, `follow` of its commander; a run never rebinds its leader, so for a run
+    // order that follow comes off again (the tank holds where it is if the pull does not land). The pull's own end may add it back: the run-lead hold below (BeforeEngineTick) puts it on stay.
+    if (fromRun)
+    {
+        ai->ChangeStrategy("-follow", BotState::BOT_STATE_NON_COMBAT);
+        ai->ChangeStrategy("-follow", BotState::BOT_STATE_REACTION);
+    }
+    ai->ClearActionClock();
+    ai::PullReadyFacts facts;
+    facts.casting = tank->IsNonMeleeSpellCast(true, false, true);
+    facts.seated = tank->GetStandState() != UNIT_STAND_STATE_STAND;
+    ai::PullReadySteps const steps = ai::ReadyTankForPull(facts);
+    if (steps.interrupt)
+        tank->InterruptNonMeleeSpells(false);
+    if (steps.stand)
+        tank->SetStandState(UNIT_STAND_STATE_STAND);
+}
+
 // Role: the forced role of the AI, then a rebuild of the kit from it (the slice's AiFactory reads it), then the movement mode back as it was.
 void ApplyKit(PlayerbotAI* ai, uint8 role, bool setRole)
 {
@@ -308,7 +390,10 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         // legacy chat pull, lead-keyed: damage warriors stay on the commander's anchor, every member's window opens only after the pull LANDED
         // (PullActions.cpp RestampPullParty) and ends when the whole pack is on the tank (3 s at the earliest, 10 s at the latest), at once when a
         // mob hits a held bot or the tank is under 60 %, and at the latest 15 s after the order if the pull never lands.
+        RelaxTankForPull(bot, ai, o.fromRun);
         ai::PausePartyPullHold(bot, kPullJoinDelaySeconds, true, kPullApproachWindowSeconds);
+        if (o.fromRun)
+            AnchorPullHoldOnTank(bot);
         return "ok";
     }
     if (o.verb == "endpull")
@@ -355,6 +440,136 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     {
         ApplyKit(ai, ai->GetForcedRole(), false);
         return "ok";
+    }
+    // ---- O6: the verbs the run leader needs (run/TbRunOrders.cpp), reached through QueueOrder only ----
+    if (o.verb == "move-direct")
+    {
+        // CommanderMoveDirect for the lead (Commander.cpp:3810): a straight walk (no path) to the point; the AI would re-plan it on the navmesh at its next
+        // step (the stay spot is ahead), so it sleeps for the walk, at most 4 s (RemoteCommander::kDirectMaxSleepMs), and not in a fight. The followers get
+        // a plain `follow` from the executor. The point's z is the floor the judge read under it.
+        // R6 (review item 7, round 2): the straight line is read again where it is walked (the judge read it when the order was made; the bot may have moved since),
+        // with the same move rule as the judge (TbRunLiquid.h): wet samples only as the contiguous prefix that holds the bot's own spot, the end dry.
+        if (Map* map = bot->GetMap(); map && run::liquid::SegmentPrefixRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
+            return "fail:liquid";
+        ai->DropQueuedMovementOrders();
+        ai->Reset();
+        ai->SetMovementStrategy("stay");
+        WriteStay(ai, o.x, o.y, o.z, o.map);
+        TortoiseBots::StayWalkOrdered(ai->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get().stayWalk);
+        bot->GetMotionMaster()->Clear();
+        bot->GetMotionMaster()->MovePoint(0, o.x, o.y, o.z, false);
+        if (!bot->IsInCombat())
+        {
+            float const dx = o.x - bot->GetPositionX(), dy = o.y - bot->GetPositionY(), dz = o.z - bot->GetPositionZ();
+            float const length = std::sqrt(dx * dx + dy * dy + dz * dz);
+            float const speed = bot->GetSpeed(MOVE_RUN) > 1.0f ? bot->GetSpeed(MOVE_RUN) : 7.0f;
+            ai->SetActionDuration(std::min<uint32>(uint32(length / speed * 1000.0f) + sPlayerbotAIConfig.reactDelay, 4000u));
+        }
+        return ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? "ok" : "fail:strategy-not-registered:stay";
+    }
+    if (o.verb == "pullback")
+    {
+        // The chat action `pullback my target` (PullbackMyTargetAction, PullActions.cpp:278) is not in the slice's action context, so its steps are done here
+        // with the same public calls: the tank's "pull back" strategy on for this pull, the per-command mode recorded on the PullStrategy (the return leg and
+        // the ranged opening read it), then `pull my target` (the same request action), and everything rolled back when the request refuses. The pull
+        // anchor is the tank's own spot: it is where the party hold stands and where the tank returns to after the shot (the event's owner is the tank itself
+        // for a run order, so the request's "pull" position is the same spot). The stay position is written there, the way `come` writes it, before the
+        // request runs (the facts' leadStayKnown, and the walk back after a pick-up).
+        WriteStay(ai, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId());
+        bool const hadPullBack = ai->HasStrategy("pull back", BotState::BOT_STATE_COMBAT) || ai->HasStrategy("pull back", BotState::BOT_STATE_NON_COMBAT);
+        ai::PullStrategy::CommandState commandBefore;
+        bool hasCommandBefore = false;
+        if (ai::PullStrategy* probe = ai::PullStrategy::Get(ai))
+        {
+            commandBefore = probe->SaveCommand();
+            hasCommandBefore = true;
+        }
+        ai->ChangeStrategy("+pull back", BotState::BOT_STATE_ALL);
+        if (ai::PullStrategy* strategy = ai::PullStrategy::Get(ai))
+            strategy->BeginCommand(true, hadPullBack, sPlayerbotAIConfig.pullBackDpsJoinDelay, false);
+        if (!act("pull my target", Event("tb order", o.unit, owner)))
+        {
+            if (ai::PullStrategy* strategy = ai::PullStrategy::Get(ai))
+            {
+                if (hasCommandBefore)
+                    strategy->RestoreCommand(commandBefore);
+                else
+                    strategy->OnPullEnded();
+            }
+            if (!hadPullBack)
+                ai->ChangeStrategy("-pull back", BotState::BOT_STATE_ALL);
+            return "fail:pullback";
+        }
+        RelaxTankForPull(bot, ai, o.fromRun);
+        ai::PausePartyPullHold(bot, kPullJoinDelaySeconds, true, kPullApproachWindowSeconds);   // L2: the same lead-keyed hold as `pull`
+        if (o.fromRun)
+            AnchorPullHoldOnTank(bot);
+        return "ok";
+    }
+    if (o.verb == "focus")
+    {
+        // CommanderFocus (Commander.cpp:3322) for the plain target: the skull on the unit in the bot's group, which STAYS for the fight (the engine's
+        // "rti target" reads it every tick; no other order of the run puts it back), the bot off its stay, its "rti" on skull, then the attack on it.
+        Group* group = bot->GetGroup();
+        if (!group)
+            return "fail:no-party";
+        group->SetTargetIcon(uint8(MarkIndex("skull")), o.unit, owner->GetGUID());
+        ai->DropQueuedMovementOrders();
+        ai->EndStayForOrder();
+        // The legacy `rti` action only sets the value of that name (RtiAction.cpp:31) and tells the player; the action is not in the slice's context.
+        if (ai::Value<std::string>* rti = ai->GetAiObjectContext()->GetValue<std::string>("rti"))
+            rti->Set("skull");
+        else
+            return "fail:focus-rti";
+        if (ai::Value<Unit*>* value = ai->GetAiObjectContext()->GetValue<Unit*>("rti target"))
+            value->Reset();
+        if (act("attack rti target", Event("focus skull", std::string(), owner)))
+            return "ok";
+        // N6: "attack rti target" refuses when the marked unit is not in the bot's sight yet: the value `rti target` (RtiTargetValue.h CalculateMark) needs the unit
+        // within AiPlayerbot.SightDistance AND in line of sight, and a pack is marked before the pull, usually out of both. The order is the MARK, and it is
+        // set (group icon + `rti` value above): the tank's and the damage bots' own target picks read it every tick (CalculateFocus) as soon as the unit is
+        // seen. So when the value says "not visible yet" the order did what it can do now and the answer is ok; any other refusal (the unit is visible and the
+        // attack is still refused: evading, dead, charmed, out of the order range) stays fail:focus.
+        // R6 (review item 8): ok ONLY when the marked unit exists, is alive, stands on the bot's map and the value is empty for the reason this comment names
+        // (not in sight / out of range yet). An empty value over a dead, despawned or foreign-map unit is a failed order, not a mark that waits.
+        ai::Value<Unit*>* seen = ai->GetAiObjectContext()->GetValue<Unit*>("rti target");
+        Unit* marked = ObjectAccessor::GetUnit(*bot, o.unit);
+        if (seen && !seen->Get() && FocusMarkWaits(marked != nullptr, marked && marked->IsInWorld(), marked && marked->IsAlive(),
+                marked && marked->GetMapId() == bot->GetMapId()))
+            return "ok";
+        return "fail:focus";
+    }
+    if (o.verb == "rest")
+    {
+        // OrderRest (commands/BotCommandContext.cpp:124): drink when the mana is short, eat when the health is, "rest to full" so the resume triggers go on
+        // to 100 %, and the bot sits out the meal (30 s). Nothing short = nothing to do = ok. The actions refuse in a fight (isUseful): fail:rest.
+        bool const needMana = bot->GetPowerType() == POWER_MANA && bot->GetPower(POWER_MANA) < bot->GetMaxPower(POWER_MANA);
+        bool const needHealth = bot->GetHealth() < bot->GetMaxHealth();
+        if (!needMana && !needHealth)
+            return "ok";
+        if (!bot->IsAlive())
+            return "fail:rest-dead";
+        ai::Value<bool>* restToFull = ai->GetAiObjectContext()->GetValue<bool>("rest to full");
+        if (restToFull)
+            restToFull->Set(true);
+        bool rested = false;
+        if (needMana && act("drink", Event("tb order", std::string(), owner)))
+            rested = true;
+        if (needHealth && act("food", Event("tb order", std::string(), owner)))
+            rested = true;
+        if (rested)
+        {
+            ai->SetActionDuration(30000);
+            return "ok";
+        }
+        if (restToFull)
+            restToFull->Set(false);
+        // N6: no meal was started. In a fight that is a real refusal (the actions refuse in combat). Out of combat the bot has nothing to eat or drink (no item,
+        // or below the bot's own "should drink/eat" floors): it rests by regeneration, which the engine does for a bot that stands out of combat, and the order
+        // is "ok" (it ends by the policy's own health and mana floors or its rest cap, not by an action). Before N6 this was fail:rest and the run logged a
+        // late failure for every rest of a bot without food.
+        bool const fighting = bot->IsInCombat() || ai->IsGroupMemberNearInCombat() || ai->GetAiObjectContext()->GetValue<bool>("has attackers")->Get();
+        return fighting ? "fail:rest" : "ok";
     }
     return "fail:unknown-verb";
 }
@@ -455,6 +670,19 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     if (auto role = Roles().find(guid); role != Roles().end() && ai->GetForcedRole() != role->second)
         ApplyKit(ai, role->second, true);
 
+    // R6 (review item 5): a run's leader out of combat with no pull under way never follows its commander (ShouldHoldLead): it holds where it stands.
+    if (RunLeads().count(guid))
+    {
+        bool const following = ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("follow", BotState::BOT_STATE_REACTION);
+        ai::PullStrategy* pull = ai::PullStrategy::Get(ai);
+        bool const pullActive = pull && (pull->HasPullStarted() || pull->IsCommandActive());
+        if (ShouldHoldLead(following, bot->IsInCombat(), pullActive))
+        {
+            WriteStay(ai, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId());
+            ai->SetMovementStrategy("stay");
+        }
+    }
+
     auto rec = Recs().find(guid);
     if (rec == Recs().end() || rec->second.queue.empty())
         return;
@@ -492,6 +720,211 @@ uint8 WantedRole(ObjectGuid bot)
 {
     auto role = Roles().find(bot);
     return role == Roles().end() ? uint8(0) : role->second;
+}
+
+// ---- O6: the queue as a call (TbOrdersApi.h) ----
+
+namespace
+{
+// The refusals PullRequestAction::Execute would make later (PullActions.cpp:200-224), asked now (commands/Party.cpp:528 CheckPullTarget, same codes and
+// texts): a refused pull must change no bot's state, and the run leader's pause rules read the code.
+bool CheckPullUnit(Player* bot, ObjectGuid guid, std::string& code, std::string& detail)
+{
+    Unit* target = ObjectAccessor::GetUnit(*bot, guid);
+    if (!target || !target->IsInWorld() || target->GetMapId() != bot->GetMapId())
+    {
+        code = "invalid-target";
+        detail = "The target is not on the tank's map any more.";
+        return false;
+    }
+    if (!target->IsAlive())
+    {
+        code = "dead-target";
+        detail = "The target is dead.";
+        return false;
+    }
+    if (sServerFacade.IsFriendlyTo(target, bot))
+    {
+        code = "friendly";
+        detail = "The target is friendly to the tank and cannot be pulled.";
+        return false;
+    }
+    float const maxPullDistance = sPlayerbotAIConfig.reactDistance * 3;
+    if (target->GetDistance(bot) > maxPullDistance)
+    {
+        code = "too-far";
+        detail = "The target is too far from the tank to pull (more than " + std::to_string(uint32(maxPullDistance)) + " yd).";
+        return false;
+    }
+    if (!ai::AttackersValue::IsValid(target, bot, nullptr, false))
+    {
+        code = "invalid-target";
+        detail = "The tank cannot pull the target: it is not attackable, evading, out of the tank's sight, or a player.";
+        return false;
+    }
+    return true;
+}
+}
+
+bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::string& detail)
+{
+    PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+    if (!ai || !ai->GetAiObjectContext())
+    {
+        code = "no-engine";
+        detail = "the bot has no running engine (`.tb engine <bot> on`)";
+        return false;
+    }
+    if (auto rec = Recs().find(bot->GetGUID()); rec != Recs().end() && rec->second.queue.size() >= OrderQueueMax)
+    {
+        code = "queue-full";
+        detail = "the bot's engine is not ticking: " + std::to_string(rec->second.queue.size()) + " orders wait";
+        return false;
+    }
+    auto const need = [&](char const* key)
+    {
+        if (ActionRegistered(ai, key))
+            return true;
+        code = "action-not-registered";
+        detail = std::string("the legacy action `") + key + "` is not registered in this build";
+        return false;
+    };
+    std::string const& verb = spec.verb;
+    if (verb == "follow")
+        return need("follow chat shortcut");
+    if (verb == "stay")
+        return need("stay chat shortcut");
+    if (verb == "endpull")
+        return need("end pull");
+    if (verb == "come" || verb == "move-direct")
+        return true;
+    if (verb == "release")
+    {
+        if (!need("release"))
+            return false;
+        if (!BotMgr::Instance().ReleaseHasEntrance(bot))
+        {
+            code = "no-entrance";
+            detail = "the instance has no entrance point (no script or no trigger target): a release would revive the bot outside, so it is held";
+            return false;
+        }
+        return true;
+    }
+    if (verb == "rest")
+    {
+        bool const needMana = bot->GetPowerType() == POWER_MANA && bot->GetPower(POWER_MANA) < bot->GetMaxPower(POWER_MANA);
+        bool const needHealth = bot->GetHealth() < bot->GetMaxHealth();
+        if (!bot->IsAlive())
+        {
+            code = "not-alive";
+            detail = "the bot is dead";
+            return false;
+        }
+        return (!needMana || need("drink")) && (!needHealth || need("food"));
+    }
+    if (verb == "attack" || verb == "focus" || verb == "pull" || verb == "pullback")
+    {
+        char const* key = (verb == "attack" || verb == "focus") ? "attack rti target" : "pull my target";
+        if (!need(key))
+            return false;
+        if (verb == "focus" && !ai->GetAiObjectContext()->GetValue<std::string>("rti"))
+        {
+            code = "value-not-registered";
+            detail = "the value `rti` is not registered in this build";
+            return false;
+        }
+        if (!bot->GetGroup())
+        {
+            code = "no-party";
+            detail = "the order uses the raid mark of the bot's party; the bot is in no party";
+            return false;
+        }
+        if (verb == "pull" || verb == "pullback")
+        {
+            if (!ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT) || !PlayerbotAI::IsTank(bot, true))
+            {
+                code = "no-pull-strategy";
+                detail = "the bot has no `pull` combat strategy or is not a tank (give it the tank role)";
+                return false;
+            }
+            return CheckPullUnit(bot, spec.unit, code, detail);
+        }
+        Unit* unit = ObjectAccessor::GetUnit(*bot, spec.unit);
+        if (!unit)
+        {
+            code = "target-not-found";
+            detail = "no such unit on the bot's map";
+            return false;
+        }
+        if (!unit->IsAlive())
+        {
+            code = "target-dead";
+            detail = "the target is dead";
+            return false;
+        }
+        if (!bot->IsValidAttackTarget(unit))
+        {
+            code = "not-attackable";
+            detail = "the core says this bot may not attack that unit";
+            return false;
+        }
+        return true;
+    }
+    code = "unknown-verb";
+    detail = verb;
+    return false;
+}
+
+bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::string& detail, uint32& seq)
+{
+    if (!PreflightOrder(bot, spec, code, detail))
+        return false;
+    Order order;
+    order.verb = spec.verb;
+    order.arg = spec.arg;
+    order.unit = spec.unit;
+    order.x = spec.x;
+    order.y = spec.y;
+    order.z = spec.z;
+    order.map = spec.map;
+    order.fromRun = spec.fromRun;
+    Player* commander = CommanderOf(bot);
+    order.owner = (commander && !spec.fromRun) ? commander->GetGUID() : bot->GetGUID();
+    return Enqueue(bot, std::move(order), code, detail, seq);
+}
+
+// R6 (review item 1): see TbOrdersApi.h. The queue part is the pure CancelFromRun (TbOrderQueuePure.h, tools/test_run_cancel.cpp).
+uint32 CancelRunOrders(ObjectGuid bot)
+{
+    auto rec = Recs().find(bot);
+    if (rec == Recs().end())
+        return 0;
+    uint32 lastCancelled = 0;
+    size_t const removed = CancelFromRun(rec->second.queue, [&lastCancelled](Order const& order) { lastCancelled = std::max(lastCancelled, order.seq); });
+    // The bot's last order was one of them: its result must not read "queued" (nothing is going to run it), and the run's late-failure read hears the truth.
+    if (removed && rec->second.seq == lastCancelled)
+        rec->second.result = "fail:cancelled";
+    return uint32(removed);
+}
+
+void HoldRunLead(ObjectGuid bot, bool on)
+{
+    if (on)
+        RunLeads().insert(bot);
+    else
+        RunLeads().erase(bot);
+}
+
+void EndRunPull(Player* bot)
+{
+    PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+    if (!ai || !ai->GetAiObjectContext())
+        return;
+    // The tank: the pull strategy's own end (the "end pull" action restores the per-command pullback mode and the pet stance, then clears the pull).
+    if (ai::PullStrategy* strategy = ai::PullStrategy::Get(ai); strategy && (strategy->HasPullStarted() || strategy->IsCommandActive()))
+        ai->DoSpecificAction("end pull", Event("tb order", std::string(), bot), true);
+    // Every bot: its own join window / party hold (the anchor copy and the stay it owns go with it).
+    ai->EndPullWindow("run-end");
 }
 
 // ---- `.tb order <bot|party [leader]> <verb> [arg] [#token]` ----

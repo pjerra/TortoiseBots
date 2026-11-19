@@ -86,7 +86,7 @@ class ReloadPlansWiring(unittest.TestCase):
         self.assertIn("ReadDungeonPlanRows(table, counts, GetBossTactics());", load)
         self.assertIn("ReadDungeonPlanRows(*next, counts, *nextTactics);", reload) # the boss steps join the new tactics
         # the six data queries and the revision query
-        self.assertEqual(MGR.count("WorldDatabase.Query("), 6)
+        self.assertEqual(MGR.count("WorldQueryCompat("), 6)
         for select in ("FROM `ai_dungeon_plan`", "FROM `ai_dungeon_leg`", "FROM `ai_dungeon_step`",
                        "FROM `ai_dungeon_leg_need`", "FROM `ai_dungeon_boss`"):
             self.assertIn(select, body(MGR, "static void ReadDungeonPlanRows("))
@@ -95,11 +95,15 @@ class ReloadPlansWiring(unittest.TestCase):
         # boss tactics through the startup reader too
         self.assertIn("uint32 const skippedTactics = ReadBossTacticRows(*nextTactics, &tacticRowsRead);", reload)
         self.assertIn("ReadBossTacticRows(table);", body(TACTICS, "void ai::LoadBossTactics()"))
-        self.assertEqual(TACTICS.count("WorldDatabase.Query("), 1)
+        self.assertEqual(TACTICS.count("WorldQueryCompat("), 1)
         # the decision is the tested commit, into the holders the getters read
         self.assertIn("CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), "
-                      "std::move(nextTactics),\n        skippedTactics, reads, inUse, &ai::ReconcileSeekFightState);",
+                      "std::move(nextTactics),\n        skippedTactics, reads, inUse, reconcile ? std::function<void(const BossTacticTable&)>(reconcile) : "
+                      "std::function<void(const BossTacticTable&)>(),\n        haveHost ? &extra : nullptr);",
                       reload)
+        # N5: a host table (ForeverCore's unit rows) is read and checked before the commit and installed by it; the Turtle call passes none
+        self.assertIn("host->prepare(*next, extra.rowsRead)", reload)
+        self.assertIn("PlanReloadHost const* host = nullptr", (ROOT / "ai/playerbot/DungeonPlanMgr.h").read_text())
         self.assertIn("return DungeonPlanHolder().Current();", body(MGR, "DungeonPlanTable& ai::GetDungeonPlans()"))
         self.assertIn("return BossTacticsHolder().Current();", body(TACTICS, "BossTacticTable& ai::GetBossTactics()"))
         # never reloads before the startup load sealed the set
@@ -149,7 +153,7 @@ class ReloadPlansWiring(unittest.TestCase):
         for counter in ("++counts.planRows;", "++counts.legRows;", "++counts.stepRows;", "++counts.needRows;",
                         "++counts.bossRows;"):
             self.assertEqual(rows.count(counter), 1, counter)
-        self.assertIn("if (!table.AddLeg(plan, fields[1].GetUInt8(), fields[2].GetCppString()))", rows)
+        self.assertIn("if (!table.AddLeg(plan, fields[1].GetUInt8(), FieldTextCompat(fields[2])))", rows)
         self.assertIn("++counts.skippedLegs;", rows)
         self.assertIn("++skippedPlans;", rows)
         self.assertIn("++counts.badUnits;", rows)
@@ -168,6 +172,48 @@ class ReloadPlansWiring(unittest.TestCase):
     def test_documented(self):
         self.assertIn("`.bot run reloadplans`", DOC_CMD)
         self.assertIn("`.bot run reloadplans`", DOC_RUN)
+
+
+class LoaderPortWiring(unittest.TestCase):
+    """Slice 5 (ForeverCore port): the loader reads through the both-core helpers; the Turtle side of each is the call it always made,
+    and the seek_aura reconciler reaches the reload through a registered pointer instead of the boss-tactics header."""
+    COMPAT_T = (ROOT / "ai/cmangos-compat-s5.h").read_text()
+    ACTIONS = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_text()
+    TACTICS_H = (ROOT / "ai/playerbot/BossTacticsMgr.h").read_text()
+
+    def test_turtle_side_of_the_helpers_is_the_original_call(self):
+        self.assertIn("return std::unique_ptr<QueryResult>(WorldDatabase.Query(sql));", self.COMPAT_T)
+        self.assertIn("return field.GetCppString();", self.COMPAT_T)
+
+    def test_loaders_use_no_core_call_of_their_own(self):
+        for name, text in (("DungeonPlanMgr.cpp", MGR), ("BossTacticsMgr.cpp", TACTICS)):
+            self.assertNotIn("WorldDatabase.", text, name)
+            self.assertNotIn("GetCppString", text, name)
+            self.assertNotIn("unique_ptr<QueryResult>", text, name)
+            self.assertNotIn('#include "cmangos-compat-s5.h"', text, name)  # the shims carry the pair
+
+    def test_both_shims_include_the_pair(self):
+        self.assertIn('#include "cmangos-compat-s5.h"', (ROOT / "ai/cmangos-compat-shim.h").read_text())
+        self.assertIn('#include "TbCompat_S5.h"', (ROOT / "forever/src/compat/forever-compat-shim.h").read_text())
+
+    def test_a_missing_reconciler_is_reported_on_turtle(self):
+        # N5: the Turtle core always registers the seek_aura reconciler, so a null pointer at reload is logged there (ForeverCore has no boss tactics: silent)
+        self.assertIn("if (!reconcile)\n        SeekReconcilerMissingCompat();", MGR)
+        self.assertIn("sLog.outError(", self.COMPAT_T.split("SeekReconcilerMissingCompat()")[1])
+        self.assertIn("inline void SeekReconcilerMissingCompat() {}", (ROOT / "forever/src/compat/TbCompat_S5.h").read_text())
+
+    def test_the_loader_does_not_include_the_boss_tactics_actions(self):
+        self.assertNotIn("BossTacticsActions.h", MGR)
+        self.assertNotIn("ReconcileSeekFightState", MGR)
+
+    def test_the_reconciler_is_registered_by_the_boss_tactics_actions_at_startup(self):
+        self.assertIn("(ai::SetSeekFightReconciler(&ai::ReconcileSeekFightState), true);", self.ACTIONS)
+        self.assertIn("using SeekFightReconciler = void (*)(const BossTacticTable& next);", self.TACTICS_H)
+        self.assertIn("static SeekFightReconciler g_seekFightReconciler = nullptr;", TACTICS)
+
+    def test_the_reload_skips_an_unregistered_reconciler(self):
+        reload = body(MGR, "PlanReloadReport ai::ReloadDungeonPlans(")
+        self.assertIn("SeekFightReconciler const reconcile = GetSeekFightReconciler();", reload)
 
 
 if __name__ == "__main__":

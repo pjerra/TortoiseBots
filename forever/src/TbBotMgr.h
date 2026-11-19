@@ -73,6 +73,8 @@ public:
     // caller's (host/TbHostBotManager.cpp BindBotMaster/ClearBotMaster set it too).
     bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
+    // Every logged-in bot (the dashboard roster).
+    std::vector<ObjectGuid> BotGuids() const { std::vector<ObjectGuid> out; out.reserve(_bots.size()); for (auto const& [guid, bot] : _bots) out.push_back(guid); return out; }
     std::size_t Count() const { return _bots.size(); }
     // H3 (slice 3): the host master guid of a bot (empty = none or not a bot), and what `.tb state` shows of its follow state.
     ObjectGuid MasterOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? ObjectGuid::Empty : itr->second.master; }

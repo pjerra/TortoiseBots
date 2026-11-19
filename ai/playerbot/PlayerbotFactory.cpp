@@ -38,6 +38,7 @@
 #include "strategy/values/MountValues.h"
 #include "policy/gear/EmptySlotFillPolicy.h"
 #include "playerbot/policy/travel/MountShopPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 

@@ -576,6 +576,81 @@ static void TestBeforeInstallSeesTheNewTactics()
     CHECK(tactics.Current().Size() == 1);
 }
 
+// The host's own table (ForeverCore's ai_dungeon_step_unit) changes together with the plan and tactic tables or not at all (review fix N5, item 2).
+static PlanReloadExtra GoodExtra(int& installs, std::function<void()> probe = std::function<void()>())
+{
+    PlanReloadExtra extra;
+    extra.table = "ai_dungeon_step_unit";
+    extra.before = extra.after = Fp(103, 77);
+    extra.rowsRead = 103;
+    extra.install = [&installs, probe]() { ++installs; if (probe) probe(); };
+    return extra;
+}
+
+static void TestHostTableIsAllOrNothing()
+{
+    int installs = 0;
+    // a. the host refused its own rows (a failed query, a malformed row): nothing changes, the reason is the host's, install never runs
+    {
+        Server server;
+        const DungeonPlanTable* before = &server.plans.Current();
+        const BossTacticTable* tacticsBefore = &server.tactics.Current();
+        PlanReloadExtra extra = GoodExtra(installs);
+        extra.refusal = "2 step unit rows refused";
+        PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), PlanLoadCounts(), server.tactics, Tactics(3), 0, {}, {},
+            std::function<void(const BossTacticTable&)>(), &extra);
+        CHECK(!out.swapped && out.reason == "2 step unit rows refused");
+        CHECK(&server.plans.Current() == before && &server.tactics.Current() == tacticsBefore && installs == 0);
+    }
+    // b. the host table's revision query failed, changed during the load, or the rows read are not the rows it holds: refused, nothing installed
+    for (int variant = 0; variant < 3; ++variant)
+    {
+        Server server;
+        const DungeonPlanTable* before = &server.plans.Current();
+        PlanReloadExtra extra = GoodExtra(installs);
+        if (variant == 0)
+            extra.after.ok = false;
+        else if (variant == 1)
+            extra.after = Fp(104, 78);
+        else
+            extra.rowsRead = 100;
+        PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), PlanLoadCounts(), server.tactics, Tactics(3), 0, {}, {},
+            std::function<void(const BossTacticTable&)>(), &extra);
+        CHECK(!out.swapped && out.reason.find("ai_dungeon_step_unit") != std::string::npos);
+        CHECK(&server.plans.Current() == before && installs == 0);
+    }
+    // c. a refused plan row refuses the host table's install too
+    {
+        Server server;
+        const DungeonPlanTable* before = &server.plans.Current();
+        PlanLoadCounts counts;
+        counts.skippedSteps = 1;
+        PlanReloadExtra extra = GoodExtra(installs);
+        PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), counts, server.tactics, Tactics(3), 0, {}, {},
+            std::function<void(const BossTacticTable&)>(), &extra);
+        CHECK(!out.swapped && &server.plans.Current() == before && installs == 0);
+    }
+    // d. all pass: the host's install runs exactly once, after the reconcile hook and BEFORE the plan and tactic tables are replaced
+    {
+        Server server;
+        const DungeonPlanTable* before = &server.plans.Current();
+        const BossTacticTable* tacticsBefore = &server.tactics.Current();
+        bool oldTablesStillCurrent = false;
+        std::string order;
+        PlanReloadExtra extra = GoodExtra(installs, [&]() { order += "H"; oldTablesStillCurrent = &server.plans.Current() == before && &server.tactics.Current() == tacticsBefore; });
+        PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), PlanLoadCounts(), server.tactics, Tactics(3), 0, {}, {},
+            [&](const BossTacticTable&) { order += "R"; }, &extra);
+        CHECK(out.swapped && installs == 1 && oldTablesStillCurrent && order == "RH");
+        CHECK(&server.plans.Current() != before);
+    }
+    // e. without a host table the call is the old one
+    {
+        Server server;
+        PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), PlanLoadCounts(), server.tactics, Tactics(3), 0, {}, {});
+        CHECK(out.swapped);
+    }
+}
+
 int main()
 {
     TestReloadSeesOpenProof();
@@ -593,6 +668,7 @@ int main()
     TestFingerprintSqlIsNullSafe();
     TestBadLegKeepsBothOldTables();
     TestFailedOrChangingReadsKeepTheOldSet();
+    TestHostTableIsAllOrNothing();
     std::cout << "dungeon plan reload policy: all tests passed\n";
     return 0;
 }

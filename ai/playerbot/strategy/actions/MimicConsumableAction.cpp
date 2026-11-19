@@ -4,6 +4,7 @@
 #include "../../../runtime/BotManager.h"
 #include "../../../runtime/policy/provision/ClassConsumablePolicy.h"
 #include "../../../runtime/policy/provision/MimicConsumablePolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace TortoiseBots;

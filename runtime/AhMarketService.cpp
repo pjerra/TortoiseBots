@@ -48,6 +48,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -368,7 +369,7 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     if (!ahObject)
         return PostResult::Failed;
 
-    uint32 limit = sWorld.getConfig(CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT);
+    uint32 limit = WorldU32ConfigW2(CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT);
     if (limit && ahObject->GetAccountAuctionCount(bot->GetSession()->GetAccountId()) >= limit)
         return PostResult::Failed;
 

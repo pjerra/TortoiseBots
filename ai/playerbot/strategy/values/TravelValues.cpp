@@ -17,6 +17,7 @@
 #include "Guild/GuildMgr.h"
 #include "runtime/HireLifecycle.h"
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -565,7 +566,7 @@ bool ShouldTravelNamedValue::Calculate()
             return ai::GuildCharterAffordable(
                 AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::guild));
         return ai::GuildPetitionReadyToTurnIn(AI_VALUE(uint8, "petition signs"),
-            sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS));
+            WorldU32ConfigW2(CONFIG_UINT32_MIN_PETITION_SIGNS));
     }
     else if (name == "mount")
     {

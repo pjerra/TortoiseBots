@@ -29,7 +29,7 @@ const zone = /<img[^>]*id="map-img"[^>]*>/.exec(indexHtml);
 assert.ok(world && !/\bsrc=/.test(world[0]), "the continent image starts with no source: " + (world || []).toString());
 assert.ok(zone && !/\bsrc=/.test(zone[0]), "the zone image starts with no source: " + (zone || []).toString());
 
-const ctx = { console };
+const ctx = { console, isForever: false };
 vm.createContext(ctx);
 vm.runInContext(grab("worldArtFile"), ctx);
 assert.strictEqual(vm.runInContext("worldArtFile(0)", ctx), "/maps/azeroth.webp");

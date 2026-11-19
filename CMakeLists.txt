@@ -68,9 +68,9 @@ set_target_properties(tortoisebots
     FOLDER "src/modules/TortoiseBots")
 
 if(TORTOISEBOTS_SLICE1)
-  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-4 list (forever/SLICE4.txt),
-  # which holds every file of SLICE1.txt, SLICE2.txt and SLICE3.txt plus the dead-strategy, release and resurrection files (forever/docs/SLICE4-P-NOTES.md).
-  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE4.txt)
+  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-5 list (forever/SLICE5.txt),
+  # which holds every file of SLICE1.txt .. SLICE4.txt plus the plan loader (DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md).
+  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE5.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TB_SLICE_LIST})
@@ -93,7 +93,7 @@ if(TORTOISEBOTS_SLICE1)
       continue()
     endif()
     if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${line})
-      message(FATAL_ERROR "TortoiseBots: forever/SLICE4.txt names ${line}, which does not exist")
+      message(FATAL_ERROR "TortoiseBots: forever/SLICE5.txt names ${line}, which does not exist")
     endif()
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()
@@ -132,6 +132,12 @@ if(TORTOISEBOTS_SLICE1)
   option(TORTOISEBOTS_DEBUG_INFO "Compile the module with -g (gdb backtraces with arguments)" OFF)
   if(TORTOISEBOTS_DEBUG_INFO AND NOT MSVC)
     target_compile_options(tortoisebots PRIVATE -g -fno-omit-frame-pointer)
+  endif()
+
+  # The legacy packet tables put ForeverCore's 32-bit opcodes into 16-bit fields (they are never registered there). The core
+  # gives clang -Wno-narrowing but not GCC, so a GCC build stops on them: give GCC the same.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(tortoisebots PRIVATE -Wno-narrowing)
   endif()
 
   target_compile_definitions(tortoisebots

@@ -36,7 +36,7 @@ class PackClearGateWiringTest(unittest.TestCase):
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
         pull = body(facts, "case ai::PlanStepKind::Pull:", "case ai::PlanStepKind::Move:")
         self.assertIn("creature->GetCreatureData()", pull)
-        self.assertIn("data->position.x", pull)
+        self.assertIn("SpawnXW2(*data)", pull)
         self.assertNotIn("GetRespawnCoord(", pull)
 
     def test_residue_units_carry_their_position(self):

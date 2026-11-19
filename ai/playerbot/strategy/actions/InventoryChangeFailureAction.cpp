@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "InventoryChangeFailureAction.h"
+#include "playerbot/TbCompatW2.h"
 
 
 using namespace ai;

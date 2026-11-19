@@ -4967,6 +4967,10 @@ void ai::ReconcileSeekFightState(const BossTacticTable& next)
     ReconcileSeekRecords(g_seekRecords, next);
 }
 
+// The plan reload re-keys the seek records through the loader's pointer (BossTacticsMgr.h SetSeekFightReconciler), so the loader does not
+// include this file (slice 5, forever/docs/RUN-S5-P-NOTES.md). Registered once at startup: the call the loader always made.
+[[maybe_unused]] static bool const g_seekFightReconcilerRegistered = (ai::SetSeekFightReconciler(&ai::ReconcileSeekFightState), true);
+
 bool ai::IsSoughtCloudFor(PlayerbotAI* ai, Player* bot, DynamicObject* dyn)
 {
     if (!dyn || !ai || !bot || !sPlayerbotAIConfig.dungeonRunSeekAura)

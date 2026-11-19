@@ -526,3 +526,76 @@ func TestEventsFrameCarriesTheCursor(t *testing.T) {
 		t.Fatalf("the next frame must continue the cursor: %+v", frames)
 	}
 }
+
+func TestForeverProjectionUsesUIMap(t *testing.T) {
+	l, store, _ := newTestListener()
+	l.SetForever(true)
+
+	batch := `{"v":12,"session":77,"seq":1,"ts":1791990000,"type":"BOT_BATCH","batch_index":0,"total_batches":1,"bots":[` +
+		`{"guid":101,"name":"Arthas","class":"paladin","level":60,"map":0,"zone":12,"x":100,"y":200,"ui_map":1429,"ui_x":42.5,"ui_y":67.25,"ui_cont":1415,"ui_cx":44.1,"ui_cy":79.2},` +
+		`{"guid":102,"name":"Sylvanas","class":"hunter","level":60,"map":0,"zone":12,"x":100,"y":200,"ui_map":0,"ui_x":10,"ui_y":20}` +
+		`]}`
+	l.processPacket([]byte(batch))
+
+	snap := store.Snapshot()
+	if len(snap.Bots) != 2 {
+		t.Fatalf("got %d bots, want 2", len(snap.Bots))
+	}
+	byGUID := map[uint32]model.BotSnapshot{}
+	for _, b := range snap.Bots {
+		byGUID[b.GUID] = b
+	}
+	if b := byGUID[101]; !b.Projected || b.UIMap != 1429 || b.PctX != 42.5 || b.PctY != 67.25 || b.UICont != 1415 || b.UICX != 44.1 || b.UICY != 79.2 {
+		t.Fatalf("bot 101 projection = %+v", b)
+	}
+	if b := byGUID[102]; b.Projected || b.PctX != 0 || b.PctY != 0 {
+		t.Fatalf("bot 102 without ui_map should not be projected: %+v", b)
+	}
+}
+
+func TestBotStatsDatagramForeverOnly(t *testing.T) {
+	pkt := `{"v":12,"session":77,"seq":5,"ts":1791990000,"type":"BOT_STATS","stats":[{"guid":3125,"source":"live","maxhealth":60,"maxpower2":100,"strength":23,"melee_damage":"5 - 6","melee_speed":1.9}]}`
+
+	// Non-forever mode ignores BOT_STATS and does not record an anomaly.
+	lTurtle, storeTurtle, _ := newTestListener()
+	lTurtle.processPacket([]byte(pkt))
+	if _, ok := storeTurtle.BotStats(3125); ok {
+		t.Fatal("non-forever listener should ignore BOT_STATS")
+	}
+	if storeTurtle.Anomalies().Count() != 0 {
+		t.Fatalf("BOT_STATS must not be recorded as an anomaly, got %d", storeTurtle.Anomalies().Count())
+	}
+
+	// Forever mode stores BOT_STATS and does not record an anomaly.
+	lForever, storeForever, _ := newTestListener()
+	lForever.SetForever(true)
+	lForever.processPacket([]byte(pkt))
+	st, ok := storeForever.BotStats(3125)
+	if !ok || st.MaxHealth != 60 || st.MaxPower2 != 100 || st.MeleeDamage != "5 - 6" || st.MeleeSpeed != 1.9 {
+		t.Fatalf("forever listener did not store BOT_STATS: (%+v, %v)", st, ok)
+	}
+	if storeForever.Anomalies().Count() != 0 {
+		t.Fatalf("BOT_STATS must not be recorded as an anomaly, got %d", storeForever.Anomalies().Count())
+	}
+}
+
+func TestBotStatsClassicSheetFieldsRoundTrip(t *testing.T) {
+	pkt := `{"v":12,"session":78,"seq":6,"ts":1791990001,"type":"BOT_STATS","stats":[{"guid":3128,"source":"live","maxhealth":3500,"maxpower2":1000,"mana_regen":12,"mana_regen_casting":4,"defense":300,"defense_max":300,"block_value":85,"spell_penetration":18,"expertise":1.5,"ratings":{"1":40,"5":20,"23":10},"rating_bonus":{"1":16,"5":1.3,"23":1.5}}]}`
+
+	lForever, storeForever, _ := newTestListener()
+	lForever.SetForever(true)
+	lForever.processPacket([]byte(pkt))
+	st, ok := storeForever.BotStats(3128)
+	if !ok {
+		t.Fatal("forever listener did not store BOT_STATS")
+	}
+	if st.ManaRegenCasting != 4 || st.Defense != 300 || st.DefenseMax != 300 || st.BlockValue != 85 || st.SpellPenetration != 18 || st.Expertise != 1.5 {
+		t.Fatalf("unexpected sheet fields: %+v", st)
+	}
+	if st.Ratings["1"] != 40 || st.Ratings["5"] != 20 || st.Ratings["23"] != 10 {
+		t.Fatalf("unexpected ratings: %+v", st.Ratings)
+	}
+	if st.RatingBonus["1"] != 16 || st.RatingBonus["5"] != 1.3 || st.RatingBonus["23"] != 1.5 {
+		t.Fatalf("unexpected rating_bonus: %+v", st.RatingBonus)
+	}
+}

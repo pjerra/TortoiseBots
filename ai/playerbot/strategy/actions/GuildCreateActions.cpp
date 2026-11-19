@@ -9,6 +9,7 @@
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
 #include "runtime/HireLifecycle.h"
 #include "runtime/AltBotService.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -322,7 +323,7 @@ bool PetitionTurnInAction::isUseful()
 
     return inCity && ai::GuildFoundingTurnInTripNeeded(bot->GetGuildId() != 0,
         AI_VALUE2(uint32, "item count", chat->formatQItem(5863)) > 0,
-        AI_VALUE(uint8, "petition signs"), sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS)) && !AI_VALUE(bool, "travel target traveling");
+        AI_VALUE(uint8, "petition signs"), WorldU32ConfigW2(CONFIG_UINT32_MIN_PETITION_SIGNS)) && !AI_VALUE(bool, "travel target traveling");
 };
 
 bool BuyTabardAction::Execute(Event& event)
