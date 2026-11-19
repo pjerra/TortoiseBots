@@ -56,7 +56,7 @@ class TimedStrategyReapplyWiringTest(unittest.TestCase):
         self.assertIn("GetMemberSlots()", scan)
         self.assertIn("ObjectAccessor::FindPlayer(slot.guid)", scan)
         self.assertIn("ai->IsRealPlayer(online)", scan)
-        self.assertIn("sObjectMgr.GetPlayerAccountIdByGUID(slot.guid)", scan)
+        self.assertIn("AccountIdOfCharacterCompat(slot.guid)", scan)
         self.assertIn("sPlayerbotAIConfig.IsInRandomAccountList(account)", scan)
         self.assertIn("TimedReapplyMemberIsRealPlayer(member)", scan)
 

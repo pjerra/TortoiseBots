@@ -47,9 +47,9 @@ class LftPartyAcceptWiringTest(unittest.TestCase):
         # Both anchors (live master, group leader) are candidates, each a live
         # network player in an offer.
         self.assertIn("ai->GetLiveMaster()", fn)
-        self.assertIn("sObjectMgr.GetPlayer(group->GetLeaderGuid())", fn)
+        self.assertIn("GetPlayerCompat(group->GetLeaderGuid())", fn)
         self.assertIn("IsInOffer(candidate->GetObjectGuid())", fn)
-        self.assertIn("HasNetworkTransport()", fn)
+        self.assertIn("HasNetworkTransportCompat(candidate->GetSession())", fn)
 
     def test_hire_needs_its_hirer_in_the_same_offer(self):
         fn = strip_comments(body(CPP, "void LftBotFillService::AcceptPartyBotOffers()", "\n}\n"))

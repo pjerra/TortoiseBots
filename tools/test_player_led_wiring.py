@@ -187,7 +187,7 @@ class PlayerLedAwayAndPathWiringTest(unittest.TestCase):
         check = tick[tick.index("TortoiseBots::PlayerLed::PathCheck const pathOk"):tick.index("TortoiseBots::PlayerLed::Pick(")]
         self.assertIn("PathFinder path(lead);", check)
         self.assertIn("TortoiseBots::PlayerLed::StepSpot(run, step, x, y, z);", check)
-        self.assertIn("TortoiseBots::PlayerLed::PathShortEnough(noPath, path.Length(), DistanceTo(lead, x, y, z))", check)
+        self.assertIn("TortoiseBots::PlayerLed::PathShortEnough(noPath, PathLengthCompat(path), DistanceTo(lead, x, y, z))", check)
         self.assertIn("(type & PATHFIND_NOPATH)", check)
         self.assertIn("ReadPlayerLedEngaged(commander, bots), pathOk);", tick)
 

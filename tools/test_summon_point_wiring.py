@@ -22,7 +22,7 @@ class SummonPointWiringTest(unittest.TestCase):
     def test_summon_point_uses_the_policy_and_the_map_height(self):
         self.assertIn('#include "SummonPointPolicy.h"', CONVENIENCE)
         self.assertIn("SummonPointIsSafe(", CONVENIENCE)
-        self.assertIn("GetHeight(destX, destY", CONVENIENCE)
+        self.assertIn("GetHeightCompat(origin->GetMap(), destX, destY", CONVENIENCE)
 
     def test_ground_position_z_helper_is_gone(self):
         self.assertNotIn("UpdateGroundPositionZ(destX", CONVENIENCE)

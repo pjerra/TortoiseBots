@@ -122,7 +122,7 @@ class ShadeHealerCover(unittest.TestCase):
         self.assertIn("if (sPlayerbotAIConfig.dungeonRunShadeHealerCover)", trigger)
         self.assertIn("bot->GetDistance(shade) <= kShadeCoverReachYd &&", trigger)
         self.assertIn("ShadeCoverSameFloor(bot->GetPositionZ() - shade->GetPositionZ())", trigger)
-        self.assertIn("ShadeCoverLatchHolds(latch, shade ? shade->GetObjectGuid().GetRawValue() : 0,", trigger)
+        self.assertIn("ShadeCoverLatchHolds(latch, shade ? GuidKeyCompat(shade->GetObjectGuid()) : 0,", trigger)
         self.assertIn("SetShadeCoverLatch(bot, latch);", trigger)
         self.assertIn("sPlayerbotAIConfig.dungeonRunShadeHealerCover && role == CarrierStrikeRole::OffTank", trigger)
         self.assertIn("in.cursed, shade && ShadeOnGroupHealer(bot, shade), shadeVictim == bot,", trigger)

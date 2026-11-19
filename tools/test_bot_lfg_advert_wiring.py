@@ -101,7 +101,7 @@ class BotLfgWhisperWiringTest(unittest.TestCase):
 
     def test_handle_whisper_pins(self):
         fn = body(SVC, "void BotLfgService::HandleWhisper(", "\n}\n")
-        ordered = ("HasNetworkTransport()", "BotManager::Instance().IsBot(", "BotLfgAdvert::IsInviteRequest(",
+        ordered = ("HasNetworkTransportCompat(sender->GetSession())", "BotManager::Instance().IsBot(", "BotLfgAdvert::IsInviteRequest(",
                    "BotLfgAdvert::PlayerFitsRole(", "BotLfgAdvert::DecideWhisper(", "HandleGroupInviteOpcode(",
                    "GetGroupInvite()")
         for snippet in ordered:

@@ -35,7 +35,7 @@ class RunReleaseHoldWiringTest(unittest.TestCase):
         u = self.useful
         self.assertIn('#include "runtime/RunReleaseHold.h"', ACTION)
         gate = u.index("TortoiseBots::RunReleaseHold::Decide(")
-        self.assertLess(u.index("if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))"), gate)
+        self.assertLess(u.index("if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))"), gate)
         for stock in ("if (!bot->GetGroup())", "if (!ai->GetGroupMaster())", "if (!ai->HasActivePlayerMaster())",
                       'AI_VALUE2(float, "distance", "master target")'):
             self.assertLess(gate, u.index(stock), stock)

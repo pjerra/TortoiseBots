@@ -37,6 +37,8 @@ unsigned Id(char const*n){std::string s=n;return s=="arcane explosion"?1:s=="fro
 #define AI_VALUE2(type,key,name) Id(name)
 bool IsChanneledSpell(SpellEntry const*s){return s->channel;}unsigned GetSpellCastTime(SpellEntry const*s,Player*){return s->cast;}
 struct Config{void logEvent(AI*,const char*,const char*,std::string){}}sPlayerbotAIConfig;
+inline unsigned GuidKeyCompat(Unit::Guid g){return g.GetRawValue();}
+inline bool IsWithinLOSInMapCompat(Player* a,Unit* b,bool c){return a->IsWithinLOSInMap(b,c);}
 struct ViscidusCombatAction{Player*bot;AI*ai;Unit boss;float moved=-1;
  Unit*Boss(){return &boss;}bool MoveNear(Unit*,float radius=0){moved=radius;return true;}bool GlobBurst(Unit*);};
 '''+method+r'''

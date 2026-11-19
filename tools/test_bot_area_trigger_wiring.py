@@ -127,7 +127,7 @@ class BotAreaTriggerWiringTest(unittest.TestCase):
     def test_party_gate(self):
         fn = body(MGR, "void ai::UpdateBotAreaTriggers(", "\n}\n")
         self.assertIn("TortoiseBots::BotCommands::IsInCommandedGroup(bot)", fn)
-        self.assertIn("HasNetworkTransport()", fn)
+        self.assertIn("HasNetworkTransportCompat(member->GetSession())", fn)
         self.assertIn("IsWithinDist(bot, kBotAreaTriggerHumanRange)", fn)
         self.assertIn("return IsBotAreaTriggerPartyAllowed(commanded, humanNearby);", fn)
         self.assertIn("state.Step(bot->GetMapId(), bot->GetInstanceId(), insideNow, nearNow, partyAllowed)", fn)

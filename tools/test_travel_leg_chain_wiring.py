@@ -43,7 +43,7 @@ class LegChainTravelWiringTest(unittest.TestCase):
         helper = helper[:helper.index("bool MoveToTravelTargetAction::TravelMoveMadeNoProgress()")]
         for guard in ("IsInCombat()", "IsTaxiFlying()", "IsFlying()", "IsMounted()",
                       "IsBeingTeleported()", "GetTransport()", "InBattleGround()",
-                      "IsInWater()", "IsUnderwater()", "MOVEFLAG_SWIMMING",
+                      "IsInWater()", "IsUnderwaterCompat(bot)", "MOVEFLAG_SWIMMING",
                       "IsDungeon()", "BOT_STATE_COMBAT"):
             self.assertIn(guard, helper)
 
