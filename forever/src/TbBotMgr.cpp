@@ -789,8 +789,9 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
         bot.block.clear();
         bot.blockText.clear();
         uint32 const instanceId = me->GetInstanceId();
-        if (instanceId && !_entryTriggerByInstance.count(instanceId))
-            _entryTriggerByInstance[instanceId] = e.triggerId;
+        InstanceScript const* const landedScript = me->GetMap() && me->GetMap()->ToInstanceMap() ? me->GetMap()->ToInstanceMap()->GetInstanceScript() : nullptr;
+        if (instanceId && (!_entryTriggerByInstance.count(instanceId) || (landedScript && landedScript->GetEntranceLocation() == 0)))
+            _entryTriggerByInstance[instanceId] = e.triggerId;   // a fresh instance under a recycled id (entrance still 0) takes the trigger of THIS entry
         TC_LOG_INFO("tortoisebots", "BotMgr: {} entered map {} (instance {}) through area trigger {}", me->GetName(), e.targetMap, instanceId, e.triggerId);
         bot.entry = Entry();
         return;
@@ -964,9 +965,17 @@ void BotMgr::EnsureEntrance(Player* me)
     if (!instanceMap || !instanceMap->IsDungeon())
         return;
     uint32 const instanceId = instanceMap->GetInstanceId();
-    if (_entranceByInstance.count(instanceId))
-        return;
     InstanceScript* script = instanceMap->GetInstanceScript();
+    if (auto const cached = _entranceByInstance.find(instanceId); cached != _entranceByInstance.end())
+    {
+        // M4 live finding: the core REUSES the id of an instance that was reset and unloaded (MapManager::GenerateInstanceId takes the first free id), so the
+        // next instance of the dungeon came back as the same id with a fresh script and entrance 0, and "once per instance id" never gave it one. A cached
+        // entrance that the script no longer holds means a new instance under an old id: forget both caches and give it its entrance again.
+        if (cached->second == 0 || !script || script->GetEntranceLocation() != 0)
+            return;
+        _entranceByInstance.erase(cached);
+        _entryTriggerByInstance.erase(instanceId);
+    }
     if (!script)
     {
         _entranceByInstance[instanceId] = 0;

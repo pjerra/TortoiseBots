@@ -107,7 +107,7 @@ void SelfTestRecords(Reply& reply)
     reply.Line(Rec("enter").S("bot", "Mtank").N("trigger", 2230).N("map", 389).S("status", "started").B("inbox", true).B("direct", false));
     reply.Line(Rec("enter").S("bot", "Mlow").N("trigger", 2230).N("map", 389).S("leader", "Mtank").S("status", "refused").S("code", "level").T("msg", "level too low for this instance (needs 10)"));
     reply.Line(Rec("instance").S("leader", "Mtank").N("map", 389).S("name", "Ragefire Chasm").N("inst", 1).N("diff", 1).N("players", 5).N("gms", 1).N("mobs_alive", 88).N("mobs_total", 91).N("mobs_loaded", 91)
-        .LP("boss", {{"11517", "alive"}, {"11518", "dead"}}).N("entrance", 1102230).N("recent", 1).S("owner", "Mtank"));
+        .LP("boss", {{"2732", "alive"}, {"2734", "dead"}}).N("entrance", 1102230).N("recent", 1).S("owner", "Mtank"));
     reply.Line(Rec("leave").S("bot", "Mtank").N("map", 1).S("status", "started"));
     reply.Line(Rec("reset").N("map", 389).N("inst", 1).S("status", "ok"));
     reply.Line(Rec("tele").S("bot", "Mcmd").S("to", "Mtank").S("status", "started").N("map", 389).N("inst", 1).S("tag", "SETUP"));
