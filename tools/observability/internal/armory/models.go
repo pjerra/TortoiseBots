@@ -43,48 +43,80 @@ type BotSummary struct {
 	Guild string `json:"guild,omitempty"`
 	// Professions are the trade and secondary skills the character knows.
 	Professions []SkillEntry `json:"professions,omitempty"`
+	LevelTime   uint32       `json:"leveltime,omitempty"`
+	XP          uint32       `json:"xp,omitempty"`
+	RestBonus   float64      `json:"rest_bonus,omitempty"`
+	RestState   uint8        `json:"rest_state,omitempty"`
+	Honor       uint32       `json:"honor,omitempty"`
+	HonorLevel  uint32       `json:"honor_level,omitempty"`
+	TotalKills  uint32       `json:"total_kills,omitempty"`
+	TodayKills  uint16       `json:"today_kills,omitempty"`
+	YesterdayKills uint16    `json:"yesterday_kills,omitempty"`
+}
+
+type ItemSetPieceInfo struct {
+	ID   uint32 `json:"id"`
+	Name string `json:"name"`
+}
+
+type ItemSetBonusInfo struct {
+	Pieces uint32 `json:"pieces"`
+	Spell  uint32 `json:"spell"`
+	Name   string `json:"name,omitempty"`
+	Desc   string `json:"desc,omitempty"`
+}
+
+type ItemSetInfo struct {
+	ID      uint32             `json:"id"`
+	Name    string             `json:"name"`
+	Items   []ItemSetPieceInfo `json:"items,omitempty"`
+	Bonuses []ItemSetBonusInfo `json:"bonuses,omitempty"`
 }
 
 // ItemDetail carries the tooltip-relevant fields from world.item_template:
 // combat/display attributes only, no assets, no icon files.
 type ItemDetail struct {
-	Class          uint8    `json:"class"`
-	SubClass       uint8    `json:"subclass"`
-	Description    string   `json:"description,omitempty"`
-	Bonding        uint8    `json:"bonding"`
-	RequiredLevel  uint8    `json:"required_level"`
-	RequiredSkill  uint32   `json:"required_skill,omitempty"`
-	AllowableClass int32    `json:"allowable_class"`
-	AllowableRace  int32    `json:"allowable_race"`
-	MaxCount       uint32   `json:"max_count,omitempty"`
-	Stackable      uint32   `json:"stackable,omitempty"`
-	ContainerSlots uint32   `json:"container_slots,omitempty"`
-	Delay          uint32   `json:"delay,omitempty"`
-	AmmoType       uint8    `json:"ammo_type,omitempty"`
-	DmgMin1        float64  `json:"dmg_min1,omitempty"`
-	DmgMax1        float64  `json:"dmg_max1,omitempty"`
-	DmgType1       uint8    `json:"dmg_type1,omitempty"`
-	DmgMin2        float64  `json:"dmg_min2,omitempty"`
-	DmgMax2        float64  `json:"dmg_max2,omitempty"`
-	DmgMin3        float64  `json:"dmg_min3,omitempty"`
-	DmgMax3        float64  `json:"dmg_max3,omitempty"`
-	Block          uint32   `json:"block,omitempty"`
-	Armor          int32    `json:"armor,omitempty"`
-	ResHoly        int32    `json:"res_holy,omitempty"`
-	ResFire        int32    `json:"res_fire,omitempty"`
-	ResNature      int32    `json:"res_nature,omitempty"`
-	ResFrost       int32    `json:"res_frost,omitempty"`
-	ResShadow      int32    `json:"res_shadow,omitempty"`
-	ResArcane      int32    `json:"res_arcane,omitempty"`
-	StatTypes      []uint32 `json:"stat_types,omitempty"`
-	StatValues     []int32  `json:"stat_values,omitempty"`
-	SpellIDs       []uint32 `json:"spell_ids,omitempty"`
-	SpellTriggers  []uint32 `json:"spell_triggers,omitempty"`
-	SpellNames     []string `json:"spell_names,omitempty"`
-	SpellDescs     []string `json:"spell_descs,omitempty"`
-	RandomStats    []string `json:"random_stats,omitempty"`
-	MaxDurability  uint32   `json:"max_durability,omitempty"`
-	SellPrice      uint32   `json:"sell_price,omitempty"`
+	Class             uint8        `json:"class"`
+	SubClass          uint8        `json:"subclass"`
+	Description       string       `json:"description,omitempty"`
+	Bonding           uint8        `json:"bonding"`
+	RequiredLevel     uint8        `json:"required_level"`
+	RequiredSkill     uint32       `json:"required_skill,omitempty"`
+	RequiredSkillRank uint32       `json:"required_skill_rank,omitempty"`
+	RequiredSkillName string       `json:"required_skill_name,omitempty"`
+	AllowableClass    int32        `json:"allowable_class"`
+	AllowableRace     int32        `json:"allowable_race"`
+	MaxCount          uint32       `json:"max_count,omitempty"`
+	Stackable         uint32       `json:"stackable,omitempty"`
+	ContainerSlots    uint32       `json:"container_slots,omitempty"`
+	Delay             uint32       `json:"delay,omitempty"`
+	AmmoType          uint8        `json:"ammo_type,omitempty"`
+	DmgMin1           float64      `json:"dmg_min1,omitempty"`
+	DmgMax1           float64      `json:"dmg_max1,omitempty"`
+	DmgType1          uint8        `json:"dmg_type1,omitempty"`
+	DmgMin2           float64      `json:"dmg_min2,omitempty"`
+	DmgMax2           float64      `json:"dmg_max2,omitempty"`
+	DmgMin3           float64      `json:"dmg_min3,omitempty"`
+	DmgMax3           float64      `json:"dmg_max3,omitempty"`
+	Block             uint32       `json:"block,omitempty"`
+	Armor             int32        `json:"armor,omitempty"`
+	ResHoly           int32        `json:"res_holy,omitempty"`
+	ResFire           int32        `json:"res_fire,omitempty"`
+	ResNature         int32        `json:"res_nature,omitempty"`
+	ResFrost          int32        `json:"res_frost,omitempty"`
+	ResShadow         int32        `json:"res_shadow,omitempty"`
+	ResArcane         int32        `json:"res_arcane,omitempty"`
+	StatTypes         []uint32     `json:"stat_types,omitempty"`
+	StatValues        []int32      `json:"stat_values,omitempty"`
+	SpellIDs          []uint32     `json:"spell_ids,omitempty"`
+	SpellTriggers     []uint32     `json:"spell_triggers,omitempty"`
+	SpellNames        []string     `json:"spell_names,omitempty"`
+	SpellDescs        []string     `json:"spell_descs,omitempty"`
+	RandomStats       []string     `json:"random_stats,omitempty"`
+	Durability        *uint32      `json:"durability,omitempty"`
+	MaxDurability     uint32       `json:"max_durability,omitempty"`
+	SellPrice         uint32       `json:"sell_price,omitempty"`
+	ItemSet           *ItemSetInfo `json:"item_set,omitempty"`
 }
 
 type ItemEnchantmentInfo struct {
@@ -217,10 +249,14 @@ type SpellEntry struct {
 	Misc     []int32  `json:"misc,omitempty"`
 	Triggers []uint32 `json:"triggers,omitempty"`
 	// DurationMs/RangeYd/CastMs resolve $d/$r/$c from the operator DBCs.
-	DurationMs int32  `json:"duration_ms,omitempty"`
-	RangeYd    int32  `json:"range_yd,omitempty"`
-	CastMs     int32  `json:"cast_ms,omitempty"`
-	School     uint32 `json:"school"`
+	DurationMs int32   `json:"duration_ms,omitempty"`
+	RangeYd    int32   `json:"range_yd,omitempty"`
+	CastMs     int32   `json:"cast_ms,omitempty"`
+	CooldownMs int32   `json:"cooldown_ms,omitempty"`
+	PowerType  int32   `json:"power_type,omitempty"`
+	Cost       int32   `json:"cost,omitempty"`
+	CostPct    float64 `json:"cost_pct,omitempty"`
+	School     uint32  `json:"school"`
 	IconID     uint32 `json:"icon_id"`
 	// Icon is the icon *name* from world.spellicon when that mirror table is
 	// populated, otherwise empty. No image files are served.
@@ -247,9 +283,12 @@ type SpellEntry struct {
 const SpellOriginStarting = "starting"
 
 type SkillEntry struct {
-	Skill uint32 `json:"skill"`
-	Value uint32 `json:"value"`
-	Max   uint32 `json:"max"`
+	Skill    uint32 `json:"skill"`
+	Value    uint32 `json:"value"`
+	Max      uint32 `json:"max"`
+	Name     string `json:"name,omitempty"`
+	Category uint32 `json:"category,omitempty"`
+	Icon     string `json:"icon,omitempty"`
 }
 
 // TalentNode is one talent box. Rank is derived from the bot's known spells:
@@ -293,6 +332,43 @@ type BotProfile struct {
 	Pet *PetInfo `json:"pet,omitempty"`
 	// Lineage is the character's line of lineage alts; nil when it has none.
 	Lineage *LineageInfo `json:"lineage,omitempty"`
+	// ForeverCore profile panels (reputation, quest log, live auras).
+	Reputation      []ReputationEntry `json:"reputation,omitempty"`
+	Quests          []QuestEntry      `json:"quests,omitempty"`
+	CompletedQuests uint32            `json:"completed_quests,omitempty"`
+	Auras           []AuraEntry       `json:"auras,omitempty"`
+}
+
+type ReputationEntry struct {
+	Faction  uint32 `json:"faction"`
+	Name     string `json:"name"`
+	Standing int32  `json:"standing"`
+	Tier     string `json:"tier"`
+	Min      int32  `json:"min"`
+	Max      int32  `json:"max"`
+	Flags    uint16 `json:"flags,omitempty"`
+}
+
+type QuestObjective struct {
+	Index uint8 `json:"index"`
+	Count int32 `json:"count"`
+}
+
+type QuestEntry struct {
+	Quest      uint32           `json:"quest"`
+	Title      string           `json:"title"`
+	Status     uint8            `json:"status"`
+	Explored   bool             `json:"explored,omitempty"`
+	Objectives []QuestObjective `json:"objectives,omitempty"`
+}
+
+type AuraEntry struct {
+	Spell       uint32 `json:"spell"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon,omitempty"`
+	RemainingMs int64  `json:"remaining_ms"`
+	Stacks      int32  `json:"stacks,omitempty"`
+	Positive    bool   `json:"positive"`
 }
 
 type PetInfo struct {
@@ -312,6 +388,7 @@ type PetSpell struct {
 	Spell    uint32 `json:"spell"`
 	Name     string `json:"name"`
 	Subtext  string `json:"subtext"`
+	Icon     string `json:"icon,omitempty"`
 	Passive  bool   `json:"passive,omitempty"`
 	Autocast bool   `json:"autocast,omitempty"`
 }

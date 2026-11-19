@@ -11,48 +11,48 @@ const (
 
 // BotStatsEntry holds one bot's live character sheet from a BOT_STATS datagram.
 type BotStatsEntry struct {
-	GUID              uint32  `json:"guid"`
-	Source            string  `json:"source"`
-	MaxHealth         uint32  `json:"maxhealth"`
-	MaxPower1         uint32  `json:"maxpower1"`
-	MaxPower2         uint32  `json:"maxpower2"`
-	MaxPower3         uint32  `json:"maxpower3"`
-	MaxPower4         uint32  `json:"maxpower4"`
-	MaxPower5         uint32  `json:"maxpower5"`
-	Strength          float64 `json:"strength"`
-	Agility           float64 `json:"agility"`
-	Stamina           float64 `json:"stamina"`
-	Intellect         float64 `json:"intellect"`
-	Spirit            float64 `json:"spirit"`
-	Armor             uint32  `json:"armor"`
-	ResHoly           uint32  `json:"res_holy"`
-	ResFire           uint32  `json:"res_fire"`
-	ResNature         uint32  `json:"res_nature"`
-	ResFrost          uint32  `json:"res_frost"`
-	ResShadow         uint32  `json:"res_shadow"`
-	ResArcane         uint32  `json:"res_arcane"`
-	BlockPct          float64 `json:"block_pct"`
-	DodgePct          float64 `json:"dodge_pct"`
-	ParryPct          float64 `json:"parry_pct"`
-	MeleeCritPct      float64 `json:"melee_crit_pct"`
-	RangedCritPct     float64 `json:"ranged_crit_pct"`
-	AttackPower       float64 `json:"attack_power"`
-	RangedAttackPower float64 `json:"ranged_attack_power"`
-	MeleeDamage       string  `json:"melee_damage"`
-	RangedDamage      string  `json:"ranged_damage"`
-	MeleeSpeed        float64 `json:"melee_speed"`
-	RangedSpeed       float64 `json:"ranged_speed"`
-	CastSpeed         float64 `json:"cast_speed"`
-	MeleeHit          float64 `json:"melee_hit"`
-	RangedHit         float64 `json:"ranged_hit"`
-	SpellHit          float64 `json:"spell_hit"`
-	SpellDamage       uint32  `json:"spell_damage"`
-	HealingPower      uint32  `json:"healing_power"`
-	SpellCritPct      float64 `json:"spell_crit_pct"`
-	ManaRegen         uint32  `json:"mana_regen"`
-	SpellDmgFire      uint32  `json:"spell_dmg_fire"`
-	SpellDmgFrost     uint32  `json:"spell_dmg_frost"`
-	SpellDmgShadow    uint32  `json:"spell_dmg_shadow"`
+	GUID              uint32             `json:"guid"`
+	Source            string             `json:"source"`
+	MaxHealth         uint32             `json:"maxhealth"`
+	MaxPower1         uint32             `json:"maxpower1"`
+	MaxPower2         uint32             `json:"maxpower2"`
+	MaxPower3         uint32             `json:"maxpower3"`
+	MaxPower4         uint32             `json:"maxpower4"`
+	MaxPower5         uint32             `json:"maxpower5"`
+	Strength          float64            `json:"strength"`
+	Agility           float64            `json:"agility"`
+	Stamina           float64            `json:"stamina"`
+	Intellect         float64            `json:"intellect"`
+	Spirit            float64            `json:"spirit"`
+	Armor             uint32             `json:"armor"`
+	ResHoly           uint32             `json:"res_holy"`
+	ResFire           uint32             `json:"res_fire"`
+	ResNature         uint32             `json:"res_nature"`
+	ResFrost          uint32             `json:"res_frost"`
+	ResShadow         uint32             `json:"res_shadow"`
+	ResArcane         uint32             `json:"res_arcane"`
+	BlockPct          float64            `json:"block_pct"`
+	DodgePct          float64            `json:"dodge_pct"`
+	ParryPct          float64            `json:"parry_pct"`
+	MeleeCritPct      float64            `json:"melee_crit_pct"`
+	RangedCritPct     float64            `json:"ranged_crit_pct"`
+	AttackPower       float64            `json:"attack_power"`
+	RangedAttackPower float64            `json:"ranged_attack_power"`
+	MeleeDamage       string             `json:"melee_damage"`
+	RangedDamage      string             `json:"ranged_damage"`
+	MeleeSpeed        float64            `json:"melee_speed"`
+	RangedSpeed       float64            `json:"ranged_speed"`
+	CastSpeed         float64            `json:"cast_speed"`
+	MeleeHit          float64            `json:"melee_hit"`
+	RangedHit         float64            `json:"ranged_hit"`
+	SpellHit          float64            `json:"spell_hit"`
+	SpellDamage       uint32             `json:"spell_damage"`
+	HealingPower      uint32             `json:"healing_power"`
+	SpellCritPct      float64            `json:"spell_crit_pct"`
+	ManaRegen         uint32             `json:"mana_regen"`
+	SpellDmgFire      uint32             `json:"spell_dmg_fire"`
+	SpellDmgFrost     uint32             `json:"spell_dmg_frost"`
+	SpellDmgShadow    uint32             `json:"spell_dmg_shadow"`
 	SpellDmgNature    uint32             `json:"spell_dmg_nature"`
 	SpellDmgArcane    uint32             `json:"spell_dmg_arcane"`
 	SpellDmgHoly      uint32             `json:"spell_dmg_holy"`
@@ -64,6 +64,7 @@ type BotStatsEntry struct {
 	Expertise         float64            `json:"expertise,omitempty"`
 	Ratings           map[string]int32   `json:"ratings,omitempty"`
 	RatingBonus       map[string]float64 `json:"rating_bonus,omitempty"`
+	Auras             [][]int64          `json:"auras,omitempty"`
 }
 
 // BotStatsPayload is the UDP BOT_STATS datagram.

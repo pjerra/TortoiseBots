@@ -105,6 +105,7 @@ func main() {
 	dbChar := flag.String("db-char", getEnv("DB_CHAR", "tw_char"), "MariaDB / MySQL characters database name")
 	dbWorld := flag.String("db-world", getEnv("DB_WORLD", "tw_world"), "MariaDB / MySQL world database name")
 	dbcDir := flag.String("dbc-dir", getEnv("DBC_DIR", ""), "Optional operator DBC directory (same files mangosd reads); enables talent trees when world talent mirrors are empty")
+	dataDir := flag.String("data-dir", getEnv("TBDASH_DATA_DIR", ""), "Optional ForeverCore data directory containing tortoisebots-*.json (env TBDASH_DATA_DIR)")
 	itemsFile := flag.String("items-file", getEnv("TBDASH_ITEMS_FILE", ""), "Optional ForeverCore item catalog JSON (tortoisebots-items.json) for item names, quality and item level (env TBDASH_ITEMS_FILE)")
 	uimapsFile := flag.String("uimaps-file", getEnv("TBDASH_UIMAPS_FILE", ""), "Optional ForeverCore UiMap catalog JSON (tortoisebots-uimaps.json) for map names (env TBDASH_UIMAPS_FILE)")
 	artDir := flag.String("art-dir", getEnv("TBDASH_ART_DIR", ""), "Optional ForeverCore art folder containing maps/ and icons/ (env TBDASH_ART_DIR)")
@@ -253,22 +254,60 @@ func main() {
 	}
 	log.Printf("[Auth] %s MySQL authentication ready against %s:%d/%s", *core, *dbHost, *dbPort, *dbName)
 
+	effectiveDataDir := *dataDir
+	if effectiveDataDir == "" && *itemsFile != "" {
+		effectiveDataDir = filepath.Dir(*itemsFile)
+	}
+	resolvedItemsFile := *itemsFile
+	if resolvedItemsFile == "" && effectiveDataDir != "" {
+		candidate := filepath.Join(effectiveDataDir, "tortoisebots-items.json")
+		if _, err := os.Stat(candidate); err == nil {
+			resolvedItemsFile = candidate
+		}
+	}
+	resolvedUimapsFile := *uimapsFile
+	if resolvedUimapsFile == "" && effectiveDataDir != "" {
+		candidate := filepath.Join(effectiveDataDir, "tortoisebots-uimaps.json")
+		if _, err := os.Stat(candidate); err == nil {
+			resolvedUimapsFile = candidate
+		}
+	}
 	var itemCatalog *foreveritems.Store
-	if *itemsFile != "" {
-		itemCatalog = foreveritems.New(*itemsFile)
+	if resolvedItemsFile != "" {
+		itemCatalog = foreveritems.New(resolvedItemsFile)
+	}
+	var foreverCatalog *armory.ForeverCatalog
+	var foreverLookups *foreveritems.Lookups
+	if *core == "forever" {
+		foreverCatalog = armory.LoadForeverCatalog(effectiveDataDir, *artDir)
+		foreverLookups = foreveritems.NewLookups(effectiveDataDir, *artDir)
 	}
 
 	armoryService, err := armory.NewService(armory.Config{
-		Core:       *core,
-		DBHost:     *dbHost,
-		DBPort:     *dbPort,
-		DBUser:     *dbUser,
-		DBPassword: *dbPass,
-		CharDB:     *dbChar,
-		WorldDB:    *dbWorld,
-		LogonDB:    *dbName,
-		DBCDir:     *dbcDir,
-		Items:      itemCatalog,
+		Core:        *core,
+		DBHost:      *dbHost,
+		DBPort:      *dbPort,
+		DBUser:      *dbUser,
+		DBPassword:  *dbPass,
+		CharDB:      *dbChar,
+		WorldDB:     *dbWorld,
+		LogonDB:     *dbName,
+		DBCDir:      *dbcDir,
+		Items:       itemCatalog,
+		Lookups:     foreverLookups,
+		DataDir:     effectiveDataDir,
+		ArtDir:      *artDir,
+		ForeverData: foreverCatalog,
+		LiveAuras: func(guid uint32) [][]int64 {
+			if *core != "forever" {
+				return nil
+			}
+			bs, ok := store.BotStats(guid)
+			if !ok {
+				return nil
+			}
+			return bs.Auras
+		},
 		LiveGUIDs: func() []uint32 {
 			snap := store.Snapshot()
 			out := make([]uint32, 0, len(snap.Bots))
@@ -705,16 +744,24 @@ func main() {
 
 	mux.HandleFunc("GET /api/v1/uimaps", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if *uimapsFile == "" {
+		if resolvedUimapsFile == "" {
 			_, _ = w.Write([]byte(`{"maps":[]}`))
 			return
 		}
-		data, err := os.ReadFile(*uimapsFile)
+		data, err := os.ReadFile(resolvedUimapsFile)
 		if err != nil {
 			_, _ = w.Write([]byte(`{"maps":[]}`))
 			return
 		}
 		_, _ = w.Write(data)
+	}))
+
+	mux.HandleFunc("GET /api/v1/areas", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if foreverLookups == nil {
+			writeJSON(w, map[string]interface{}{"areas": map[string]interface{}{}})
+			return
+		}
+		writeJSON(w, map[string]interface{}{"areas": foreverLookups.Areas()})
 	}))
 
 	mux.HandleFunc("/api/v1/grinding", requireAuth(func(w http.ResponseWriter, r *http.Request) {

@@ -295,6 +295,19 @@
     const text = hint || full;
     let html = `<div class="tip-name">${esc(name)}${sub ? ` ${sub}` : ''}</div>`;
     html += `<div class="tip-sub">${esc(spellSchoolName(sp.school))}</div>`;
+    const meta = [];
+    if (sp.cost > 0 || sp.cost_pct > 0) {
+      const pwrNames = { 0: 'Mana', 1: 'Rage', 2: 'Focus', 3: 'Energy' };
+      const pwr = pwrNames[sp.power_type] || 'Power';
+      const amt = sp.cost > 0 ? (sp.power_type === 1 ? Math.round(sp.cost / 10) : sp.cost) : `${sp.cost_pct}%`;
+      meta.push(`${amt} ${pwr}`);
+    }
+    if (sp.range_yd > 0) meta.push(`${sp.range_yd} yd`);
+    if (sp.cast_ms > 0) meta.push(`${fmtDur(sp.cast_ms)} cast`);
+    if (sp.cooldown_ms > 0) meta.push(`${fmtDur(sp.cooldown_ms)} cd`);
+    if (meta.length) {
+      html += `<div class="tip-sub">${esc(meta.join(' · '))}</div>`;
+    }
     if (sp.origin === 'starting') {
       html += `<div class="tip-sub">Starting spell — granted on login, not stored in character_spell</div>`;
     }
@@ -433,7 +446,19 @@
   // free of DBC/client assets.
   const ITEM_STAT_NAMES = {
     0: 'Mana', 1: 'Health', 3: 'Agility', 4: 'Strength',
-    5: 'Intellect', 6: 'Spirit', 7: 'Stamina'
+    5: 'Intellect', 6: 'Spirit', 7: 'Stamina',
+    12: 'Defense Rating', 13: 'Dodge Rating', 14: 'Parry Rating', 15: 'Block Rating',
+    16: 'Melee Hit Rating', 17: 'Ranged Hit Rating', 18: 'Spell Hit Rating',
+    19: 'Melee Crit Rating', 20: 'Ranged Crit Rating', 21: 'Spell Crit Rating',
+    28: 'Melee Haste Rating', 29: 'Ranged Haste Rating', 30: 'Spell Haste Rating',
+    31: 'Hit Rating', 32: 'Critical Strike Rating', 35: 'Resilience Rating',
+    36: 'Haste Rating', 37: 'Expertise Rating', 38: 'Attack Power',
+    39: 'Ranged Attack Power', 40: 'Versatility', 41: 'Bonus Healing',
+    42: 'Spell Damage', 43: 'Mana Regeneration', 44: 'Armor Penetration Rating',
+    45: 'Spell Power', 46: 'Health Regeneration', 47: 'Spell Penetration',
+    48: 'Block Value', 49: 'Mastery Rating', 50: 'Bonus Armor',
+    51: 'Fire Resistance', 52: 'Frost Resistance', 53: 'Holy Resistance',
+    54: 'Shadow Resistance', 55: 'Nature Resistance', 56: 'Arcane Resistance'
   };
   const ITEM_BONDING_NAMES = {
     0: '', 1: 'Binds when picked up', 2: 'Binds when equipped',
@@ -690,6 +715,7 @@
   // web research for Balor/Northwind, provisional deDE translations for
   // 5601/5602. Areas with no name anywhere keep the "Zone N" fallback.
   let EXTRA_ZONE_NAMES = {};
+  let FOREVER_AREAS = {};
   // ZONE_BOUNDS (from /data/zones.json, the DBC bounds) is assigned by
   // fetchZoneBounds below and doubles as the last-resort name source:
   // zone_maps.json only covers zones with artwork, so custom zones like
@@ -706,6 +732,9 @@
   function getZoneName(zoneId, mapId) {
     if (zoneId === null || zoneId === undefined) return '-';
     const zid = Number(zoneId);
+    if (isForever && FOREVER_AREAS[zid] && FOREVER_AREAS[zid].name) {
+      return FOREVER_AREAS[zid].name;
+    }
     const zone = ZONE_CONFIG[zid];
     if (zone) return displayZoneName(zone.name);
     const extra = EXTRA_ZONE_NAMES[zid];
@@ -842,7 +871,7 @@
     server: { hash: 'server', title: 'Server' }
   };
   const HASH_TO_TAB = Object.fromEntries(Object.entries(TABS).map(([k, v]) => [v.hash, k]));
-  const PROFILE_TABS = ['overview', 'gear', 'talents', 'spells', 'professions', 'skills', 'pet', 'bags', 'progress'];
+  const PROFILE_TABS = ['overview', 'gear', 'talents', 'spells', 'professions', 'skills', 'pet', 'bags', 'reputation', 'quests', 'progress'];
 
   function openNavDrawer() {
     if (!el.sidebar) return;
@@ -1396,18 +1425,34 @@
         loadZoneMap(zid);
       });
     }
-    fetchZoneBounds();
-    fetch('/data/zone_names.json')
-      .then(r => r.json())
-      .then(cfg => {
-        if (cfg && Object.keys(cfg).length > 0) {
-          EXTRA_ZONE_NAMES = cfg;
-          if (state.activeTab === 'map') renderMap();
-          if (state.activeTab === 'overview') renderAttention();
-          if (state.activeTab === 'commanders') renderCommanders();
-        }
-      })
-      .catch(() => {});
+    if (isForever) {
+      fetch('/api/v1/areas')
+        .then(r => r.json())
+        .then(cfg => {
+          if (cfg && cfg.areas && Object.keys(cfg.areas).length > 0) {
+            FOREVER_AREAS = cfg.areas;
+            if (state.activeTab === 'map') renderMap();
+            if (state.activeTab === 'overview') renderAttention();
+            if (state.activeTab === 'bots') renderRoster();
+            if (state.activeTab === 'issues') renderIssueTable();
+            if (state.activeTab === 'activity') renderActivity();
+          }
+        })
+        .catch(() => {});
+    } else {
+      fetchZoneBounds();
+      fetch('/data/zone_names.json')
+        .then(r => r.json())
+        .then(cfg => {
+          if (cfg && Object.keys(cfg).length > 0) {
+            EXTRA_ZONE_NAMES = cfg;
+            if (state.activeTab === 'map') renderMap();
+            if (state.activeTab === 'overview') renderAttention();
+            if (state.activeTab === 'commanders') renderCommanders();
+          }
+        })
+        .catch(() => {});
+    }
     if (el.worldTab0) el.worldTab0.addEventListener('click', () => setWorldTab(0));
     if (el.worldTab1) el.worldTab1.addEventListener('click', () => setWorldTab(1));
     if (el.toggleZoneChips && el.worldChipsWrapper) {
@@ -2265,6 +2310,47 @@
     const rates = info.rates || {}, bots = info.bots || {}, diag = info.diagnostics || {};
     const num = v => (v === undefined || v === null || v === '' ? '–' : esc(v));
     const cfg = k => `AiPlayerbot.${k}`;
+    if (isForever) {
+      const rateRows = [
+        ['XP kill', rates.xp_kill, 'RATE_XP_KILL'],
+        ['XP quest', rates.xp_quest, 'RATE_XP_QUEST'],
+        ['XP explore', rates.xp_explore, 'RATE_XP_EXPLORE'],
+        ['XP BG kill', rates.xp_bg_kill, 'RATE_XP_BG_KILL'],
+        ['Drop money', rates.drop_money, 'RATE_DROP_MONEY'],
+        ['Drop normal', rates.drop_item_normal, 'RATE_DROP_ITEM_NORMAL'],
+        ['Drop rare', rates.drop_item_rare, 'RATE_DROP_ITEM_RARE'],
+        ['Drop epic', rates.drop_item_epic, 'RATE_DROP_ITEM_EPIC'],
+        ['Reputation', rates.reputation, 'RATE_REPUTATION_GAIN'],
+        ['Honor', rates.honor, 'RATE_HONOR'],
+        ['Rest ingame', rates.rest_ingame, 'RATE_REST_INGAME'],
+        ['Skill discovery', rates.skill_discovery, 'RATE_SKILL_DISCOVERY']
+      ].filter(([, v]) => v !== undefined && v !== null && v !== '').map(([l, v, h]) => [l, num(v), h]);
+      const botRows = [
+        ['Bots enabled', flagBadge(bots.enabled), 'TortoiseBots.Enabled'],
+        ['Bots online', num(bots.online), ''],
+        bots.engine_by_default !== undefined ? ['Engine by default', flagBadge(bots.engine_by_default), 'TortoiseBots.Slice.EngineByDefault'] : null,
+        bots.master_grace_s !== undefined ? ['Master grace', `${num(bots.master_grace_s)} s`, 'TortoiseBots.Slice.MasterGraceSeconds'] : null,
+        bots.dead_backstop_s !== undefined ? ['Dead backstop', `${num(bots.dead_backstop_s)} s`, 'TortoiseBots.Slice.DeadBackstopSeconds'] : null,
+        bots.dashboard_interval_ms !== undefined ? ['Dashboard interval', `${num(bots.dashboard_interval_ms)} ms`, ''] : null
+      ].filter(Boolean);
+      const diagRows = [
+        ['Core', esc(diag.core || 'ForeverCore'), ''],
+        diag.core_branch ? ['Branch', esc(diag.core_branch), ''] : null,
+        info.uptime !== undefined ? ['Uptime', esc(fmtDuration(info.uptime)), ''] : null
+      ].filter(Boolean);
+      host.innerHTML = `
+        <div class="server-versions">
+          <span><span class="setting-dim">TortoiseBots</span> <strong class="mono">${esc(info.module_version || '?')}</strong></span>
+          <span><span class="setting-dim">core</span> <strong class="mono">${esc(info.core_revision || '?')}</strong> <span class="setting-dim">${esc(info.core_date || '')}</span></span>
+          <span><span class="setting-dim">max level</span> <strong class="mono">${num(info.max_level)}</strong></span>
+        </div>
+        <div class="settings-grid">
+          ${rateRows.length ? settingsSection('RATES · CORE WORLD', rateRows) : ''}
+          ${botRows.length ? settingsSection('BOTS · SLICE', botRows) : ''}
+          ${diagRows.length ? settingsSection('DIAGNOSTICS · CORE', diagRows) : ''}
+        </div>`;
+      return;
+    }
     host.innerHTML = `
       <div class="server-versions">
         <span><span class="setting-dim">TortoiseBots</span> <strong class="mono">${esc(info.module_version || '?')}</strong></span>
@@ -2566,6 +2652,8 @@
     dot.style.left = `${pctX}%`;
     dot.style.top = `${pctY}%`;
     if (!b.player) dot.style.backgroundColor = classColor(b.class);
+    // Forever zone art is light parchment: a bigger marker so the bots stand out on it.
+    if (isForever && !b.player) { dot.style.width = '18px'; dot.style.height = '21px'; dot.style.filter = 'drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px rgba(0,0,0,0.8))'; }
     const deg = (b.o || 0) * (180 / Math.PI);
     dot.style.transform = `translate(-50%, -50%) rotate(${-deg}deg)`;
     return dot;
@@ -3447,6 +3535,11 @@
   }
 
   function initGuildOrders() {
+    if (isForever) {
+      const tabLink = document.querySelector('.menu-item[data-tab="guildorders"]');
+      if (tabLink) tabLink.style.display = 'none';
+      return;
+    }
     let typing = null;
     document.getElementById('go-search').addEventListener('input', e => {
       clearTimeout(typing);
@@ -3513,6 +3606,12 @@
   }
 
   function renderAhBot(ahbot) {
+    const panel = document.getElementById('ahbot-panel');
+    if (typeof isForever !== 'undefined' && isForever && (!ahbot || !ahbot.enabled)) {
+      if (panel) panel.style.display = 'none';
+      return;
+    }
+    if (panel) panel.style.display = '';
     const body = document.getElementById('ahbot-body');
     const badge = document.getElementById('ahbot-status-badge');
     const note = document.getElementById('ahbot-status-note');
@@ -3691,13 +3790,28 @@
       else if (r.seller_kind === 'market') seller = '<span class="cell-muted">AH market</span>';
       else seller = `${esc(r.seller_name || '?')} <span class="badge badge-success">player</span>`;
       const bid = r.bid > 0 ? formatMoney(r.bid) : `<span class="cell-muted">${formatMoney(r.start_bid)}</span>`;
-      return `<tr><td title="Item level ${esc(r.item_level)} · #${esc(r.item_template)}">${icon}<span class="quality-text-${esc(r.quality)}">${esc(r.name)}</span>${count}</td>` +
+      const tipItem = {
+        item_template: r.item_template,
+        name: r.name,
+        quality: r.quality,
+        item_level: r.item_level,
+        inventory_type: r.inventory_type || 0,
+        count: r.count,
+        enchantments: r.enchantments,
+        detail: r.detail || { class: r.item_class, required_level: r.required_level }
+      };
+      return `<tr><td data-tip='${esc(JSON.stringify(tipItem))}'><span style="cursor:default;">${icon}<span class="quality-text-${esc(r.quality)}">${esc(r.name)}</span>${count}</span></td>` +
         `<td class="mono">${r.required_level || '–'}</td><td>${seller}</td><td class="mono">${bid}</td>` +
         `<td class="mono">${r.buyout ? formatMoney(r.buyout) : '–'}</td><td class="mono">${esc(ahTimeLeft(r.expire_at))}</td></tr>`;
     }).join('');
+    if (typeof bindItemTooltips === 'function') bindItemTooltips(body);
   }
 
   function initAuctions() {
+    if (isForever) {
+      const ahbotBtn = document.querySelector('#ah-kind button[data-v="ahbot"]');
+      if (ahbotBtn) ahbotBtn.style.display = 'none';
+    }
     const refetch = () => { ah.page = 0; fetchAuctions(); };
     let typingTimer = null;
     const bindInput = (id, key, debounce) => {
@@ -4584,6 +4698,39 @@
 
     html += lineageHtml(state.profile && state.profile.lineage, guid);
 
+    const ps = state.profile && state.profile.summary;
+    if (ps && (isForever || ps.honor || ps.total_kills || ps.leveltime || ps.rest_bonus)) {
+      const restLabels = { 0: 'None', 1: 'Rested', 2: 'Normal' };
+      const restText = ps.rest_bonus ? `${Math.round(ps.rest_bonus)} XP (${restLabels[ps.rest_state] || 'Rested'})` : (restLabels[ps.rest_state] || 'Normal');
+      html += `<div class="profile-grid profile-section">
+        <div class="kv-card">
+          <div class="section-label">Character &amp; Played</div>
+          ${kv('Money', formatMoney(ps.money))}
+          ${kv('Total played', `<span class="mono">${esc(formatPlayed(ps.totaltime))}</span>`)}
+          ${kv('Level played', `<span class="mono">${esc(formatPlayed(ps.leveltime || 0))}</span>`)}
+          ${kv('Rested XP', `<span class="mono">${esc(restText)}</span>`)}
+        </div>
+        <div class="kv-card">
+          <div class="section-label">Honor &amp; PvP</div>
+          ${kv('Honor', `<span class="mono">${esc(ps.honor || 0)} (Lv ${esc(ps.honor_level || 0)})</span>`)}
+          ${kv('Total kills', `<span class="mono">${esc(ps.total_kills || 0)}</span>`)}
+          ${kv('Today / Yesterday', `<span class="mono">${esc(ps.today_kills || 0)} / ${esc(ps.yesterday_kills || 0)}</span>`)}
+        </div>
+      </div>`;
+    }
+
+    const auras = state.profile && state.profile.auras;
+    if (Array.isArray(auras) && auras.length) {
+      const badges = auras.map(au => {
+        const iconUrl = getItemIconUrl(au.icon);
+        const iconHtml = iconUrl ? `<img src="${iconUrl}" onerror="this.style.display='none';" class="spell-table-icon">` : '';
+        const dur = au.remaining_ms < 0 ? 'perm' : fmtDur(au.remaining_ms);
+        const stk = au.stacks > 1 ? ` ×${au.stacks}` : '';
+        return `<span class="badge ${au.positive ? 'badge-success' : 'badge-warn'}" style="display:inline-flex;align-items:center;gap:4px;" title="${esc(au.name)} (#${au.spell})">${iconHtml}<span>${esc(au.name)}${esc(stk)}</span><span class="mono" style="opacity:0.8;">${esc(dur)}</span></span>`;
+      }).join(' ');
+      html += `<div class="profile-section"><div class="section-label">Active Buffs &amp; Auras · ${auras.length}</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${badges}</div></div>`;
+    }
+
     if (mine.length || past.length) {
       html += `<div class="profile-section"><div class="section-label">Issues</div>
         ${mine.map(i => `<div class="issue-chip ${esc(i.severity)}"><span>${esc(ISSUE_LABELS[i.type] || i.type)} · ${esc(getZoneName(i.zone, i.map))}</span><span class="mono">${esc(fmtDuration(i.duration_sec))}</span></div>`).join('')}
@@ -4722,6 +4869,8 @@
     else if (tab === 'professions') renderArmoryProfessions(p);
     else if (tab === 'skills') renderArmorySkills(p);
     else if (tab === 'pet') renderArmoryPet(p);
+    else if (tab === 'reputation') renderArmoryReputation(p);
+    else if (tab === 'quests') renderArmoryQuests(p);
     else if (tab === 'progress') renderArmoryProgress(p);
   }
 
@@ -4758,6 +4907,20 @@
       const typeName = item.inventory_type ? INVTYPE_NAMES[item.inventory_type] : itemSubclassName(d.class, d.subclass);
       if (typeName && !slots) lines.push(`<div class="tip-row"><span>${esc(typeName)}</span><span>${esc(itemSubclassName(d.class, d.subclass))}</span></div>`);
       if (d.required_level) lines.push(`<div class="tip-row"><span>Requires Level</span><span>${esc(d.required_level)}</span></div>`);
+      if (d.required_skill) {
+        const skName = d.required_skill_name || `Skill #${d.required_skill}`;
+        const skRank = d.required_skill_rank ? ` (${d.required_skill_rank})` : '';
+        lines.push(`<div class="tip-row"><span>Requires ${esc(skName)}${esc(skRank)}</span></div>`);
+      }
+      if (d.allowable_class > 0 && d.allowable_class !== 32767 && d.allowable_class !== -1) {
+        const allowedClasses = [];
+        for (const [cid, cname] of Object.entries(CLASS_NAMES)) {
+          if (d.allowable_class & (1 << (Number(cid) - 1))) allowedClasses.push(cname);
+        }
+        if (allowedClasses.length > 0 && allowedClasses.length < Object.keys(CLASS_NAMES).length) {
+          lines.push(`<div class="tip-row"><span>Classes: ${esc(allowedClasses.join(', '))}</span></div>`);
+        }
+      }
       if (d.armor) lines.push(`<div class="tip-row"><span>${esc(d.armor)} Armor</span></div>`);
       if (d.block) lines.push(`<div class="tip-row"><span>${esc(d.block)} Block</span></div>`);
       if (d.dmg_min1 || d.dmg_max1) {
@@ -4843,7 +5006,20 @@
       });
 
       if (d.max_durability) {
-        lines.push(`<div class="tip-sub">Durability ${esc(d.max_durability)} / ${esc(d.max_durability)}</div>`);
+        const curDur = (d.durability !== undefined && d.durability !== null) ? d.durability : d.max_durability;
+        lines.push(`<div class="tip-sub">Durability ${esc(curDur)} / ${esc(d.max_durability)}</div>`);
+      }
+      if (d.item_set && d.item_set.name) {
+        const set = d.item_set;
+        const pieces = Array.isArray(set.items) ? set.items : [];
+        lines.push(`<div class="tip-set" style="margin-top:6px; color:#ffd100;">${esc(set.name)}${pieces.length ? ` (${pieces.length} pieces)` : ''}</div>`);
+        pieces.forEach(p => {
+          lines.push(`<div class="tip-sub" style="padding-left:8px;">${esc(p.name || (`Item #${p.id}`))}</div>`);
+        });
+        (set.bonuses || []).forEach(b => {
+          const bText = (b.desc || b.name || `Spell #${b.spell}`).trim();
+          lines.push(`<div class="tip-proc" style="color:#8b949e;">(${esc(b.pieces)}) Set: ${esc(bText)}</div>`);
+        });
       }
       if (d.description) lines.push(`<div class="tip-flavor">${esc(d.description.replace(/^"|"$/g, ''))}</div>`);
       lines.push(`<div class="tip-sub mono">#${esc(item.item_template)} · ${esc(qualityName(q))}</div>`);
@@ -5467,17 +5643,18 @@
     return `<div style="overflow-x: auto;"><table class="data-table"><thead><tr><th>Skill</th><th>Value</th><th>Max</th><th style="width: 40%;">Progress</th></tr></thead><tbody>${list.map(sk => {
       const pct = sk.max ? Math.min(100, Math.round((sk.value / sk.max) * 100)) : 0;
       const color = sk.max && sk.value >= sk.max ? 'var(--accent-green-bright)' : (pct >= 70 ? 'var(--accent-blue-bright)' : 'var(--accent-yellow)');
-      const iconName = skillIconById(sk.skill);
+      const iconName = sk.icon || skillIconById(sk.skill);
       const iconUrl = getItemIconUrl(iconName);
       const iconHtml = iconUrl
         ? `<img src="${iconUrl}" onerror="this.style.display='none';" class="spell-table-icon">`
         : '';
+      const skLabel = sk.name || skillNameById(sk.skill);
       return `<tr>
         <td>
           <div style="display: flex; align-items: center; gap: 8px;">
             ${iconHtml}
             <div>
-              <span style="font-weight: 600;">${esc(skillNameById(sk.skill))}</span>
+              <span style="font-weight: 600;">${esc(skLabel)}</span>
               <span class="mono" style="color: var(--text-dim); font-size: 0.7rem; margin-left: 4px;">#${esc(sk.skill)}</span>
             </div>
           </div>
@@ -5560,7 +5737,11 @@
     const spells = pet.spells || [];
     const actives = spells.filter(s => !s.passive && s.name !== 'Avoidance');
     const passives = spells.filter(s => s.passive || s.name === 'Avoidance');
-    const row = s => `<tr><td>${esc(s.name || ('Spell ' + s.spell))}</td><td>${esc(s.subtext || '')}</td><td>${s.passive ? '' : (s.autocast ? 'on' : 'off')}</td></tr>`;
+    const row = s => {
+      const iconUrl = getItemIconUrl(s.icon);
+      const iconHtml = iconUrl ? `<img src="${iconUrl}" onerror="this.style.display='none';" class="spell-table-icon">` : '';
+      return `<tr><td><div style="display:flex;align-items:center;gap:8px;">${iconHtml}<span>${esc(s.name || ('Spell ' + s.spell))}</span></div></td><td>${esc(s.subtext || '')}</td><td>${s.passive ? '' : (s.autocast ? 'on' : 'off')}</td></tr>`;
+    };
     const table = (title, list) => list.length
       ? `<div class="section-label" style="margin: 14px 0 8px;">${title}</div><div style="overflow-x: auto;"><table class="data-table"><thead><tr><th>Ability</th><th>Rank</th><th>Autocast</th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>`
       : '';
@@ -5585,14 +5766,61 @@
       host.innerHTML = `<div class="empty-hint">No skill rows recorded for this bot.</div>`;
       return;
     }
-    const groupOf = id => COMBAT_SKILL_IDS.includes(id) ? 0
-      : (ARMOR_SKILL_IDS.includes(id) ? 1 : 2);
+    const groupOf = sk => {
+      if (sk.category === 6 || COMBAT_SKILL_IDS.includes(sk.skill)) return 0;
+      if (sk.category === 8 || ARMOR_SKILL_IDS.includes(sk.skill)) return 1;
+      return 2;
+    };
 
-    const sorted = [...skills].sort((a, b) => groupOf(a.skill) - groupOf(b.skill) || skillNameById(a.skill).localeCompare(skillNameById(b.skill)));
+    const sorted = [...skills].sort((a, b) => groupOf(a) - groupOf(b) || (a.name || skillNameById(a.skill)).localeCompare(b.name || skillNameById(b.skill)));
     const groups = [[], [], []];
-    sorted.forEach(sk => groups[groupOf(sk.skill)].push(sk));
-    const titles = ['Weapons & Defense', 'Armor Proficiencies', 'Languages'];
+    sorted.forEach(sk => groups[groupOf(sk)].push(sk));
+    const titles = ['Weapons & Defense', 'Armor Proficiencies', 'Languages & Other'];
     host.innerHTML = groups.map((g, i) => g.length ? `<div class="section-label" style="margin: 14px 0 8px;">${titles[i]}</div>${skillTable(g)}` : '').join('') || `<div class="empty-hint">No skills.</div>`;
+  }
+
+  function renderArmoryReputation(p) {
+    const host = document.getElementById('armory-content-reputation');
+    if (!host) return;
+    const list = p.reputation || [];
+    if (!list.length) {
+      host.innerHTML = '<div class="empty-hint">No reputation entries recorded for this bot.</div>';
+      return;
+    }
+    const rows = list.map(r => {
+      const span = Math.max(1, (r.max || 3000) - (r.min || 0));
+      const cur = Math.max(0, (r.standing || 0) - (r.min || 0));
+      const pct = Math.min(100, Math.round((cur / span) * 100));
+      return `<tr>
+        <td><strong>${esc(r.name)}</strong> <span class="mono" style="color: var(--text-dim); font-size: 0.7rem;">#${esc(r.faction)}</span></td>
+        <td><span class="badge">${esc(r.tier)}</span></td>
+        <td class="mono">${esc(cur)} / ${esc(span)}</td>
+        <td style="width: 35%;"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${pct}%; background: var(--accent-green-bright);"></div></div></td>
+      </tr>`;
+    }).join('');
+    host.innerHTML = `<div class="section-label" style="margin: 0 0 8px;">REPUTATION · ${list.length}</div><div style="overflow-x: auto;"><table class="data-table"><thead><tr><th>Faction</th><th>Standing</th><th>Progress</th><th>Bar</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderArmoryQuests(p) {
+    const host = document.getElementById('armory-content-quests');
+    if (!host) return;
+    const list = p.quests || [];
+    const done = p.completed_quests || 0;
+    const head = `<div class="empty-hint" style="margin-bottom: 10px;">Completed quests: <strong class="mono">${esc(done)}</strong> · Active quest log: <strong class="mono">${esc(list.length)}</strong></div>`;
+    if (!list.length) {
+      host.innerHTML = head + '<div class="empty-hint">Quest log is empty.</div>';
+      return;
+    }
+    const statusLabel = st => (st === 1 ? 'Complete' : (st === 2 ? 'Failed' : 'In progress'));
+    const rows = list.map(q => {
+      const objs = (q.objectives || []).map(o => `#${o.index}: ${o.count}`).join(', ');
+      return `<tr>
+        <td class="mono" style="color: var(--text-dim);">#${esc(q.quest)}</td>
+        <td><strong>${esc(q.title)}</strong>${objs ? `<div class="cell-muted mono" style="font-size: 0.75rem;">${esc(objs)}</div>` : ''}</td>
+        <td><span class="badge ${q.status === 1 ? 'badge-success' : (q.status === 2 ? 'badge-error' : 'badge-info')}">${esc(statusLabel(q.status))}</span></td>
+      </tr>`;
+    }).join('');
+    host.innerHTML = head + `<div style="overflow-x: auto;"><table class="data-table"><thead><tr><th>ID</th><th>Quest</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   // REST helpers: a 401 means the GM session expired, so send the operator to
