@@ -70,7 +70,8 @@ set_target_properties(tortoisebots
 if(TORTOISEBOTS_SLICE1)
   # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-4 list (forever/SLICE4.txt),
   # which holds every file of SLICE1.txt, SLICE2.txt and SLICE3.txt plus the dead-strategy, release and resurrection files (forever/docs/SLICE4-P-NOTES.md).
-  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE4.txt)
+  # Slice 9 (L9): forever/SLICE9.txt = the slice-4 list plus LootRollAction.cpp and ItemUsageValue.cpp (the merge worker combines it with SLICE8).
+  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE9.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TB_SLICE_LIST})
@@ -93,7 +94,7 @@ if(TORTOISEBOTS_SLICE1)
       continue()
     endif()
     if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${line})
-      message(FATAL_ERROR "TortoiseBots: forever/SLICE4.txt names ${line}, which does not exist")
+      message(FATAL_ERROR "TortoiseBots: forever/SLICE9.txt names ${line}, which does not exist")
     endif()
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()

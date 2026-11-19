@@ -18,7 +18,7 @@ using namespace ai;
 
 namespace
 {
-    std::string RollVoteName(RollVote vote)
+    std::string RollVoteName(BotRollVote vote)
     {
         switch (vote)
         {
@@ -33,7 +33,7 @@ namespace
         }
     }
 
-    void LogLootRoll(PlayerbotAI* ai, ItemQualifier& itemQualifier, RollVote vote, std::string const& reason)
+    void LogLootRoll(PlayerbotAI* ai, ItemQualifier& itemQualifier, BotRollVote vote, std::string const& reason)
     {
         ItemPrototype const* proto = itemQualifier.GetProto();
         std::string itemName = proto ? proto->Name1 : "unknown item";
@@ -66,7 +66,7 @@ namespace
             Player* member = ObjectAccessor::FindPlayer(slot.guid);
             if (!member || member == bot || !member->IsInWorld() || !ai->IsRealPlayer(member))
                 continue;
-            member->SendAddonMessage("TBM", wireLine);
+            SendAddonMessageCompat(*member, "TBM", wireLine);
         }
     }
 
@@ -146,33 +146,8 @@ namespace
             }
         }
 
-        if (randomPropertyId)
-        {
-            if (ItemRandomPropertiesEntry const* randProp = sItemRandomPropertiesStore.LookupEntry(abs(randomPropertyId)))
-            {
-                for (uint32 i = PROP_ENCHANTMENT_SLOT_0; i < PROP_ENCHANTMENT_SLOT_0 + 3; ++i)
-                {
-                    uint32 enchantId = randProp->enchant_id[i - PROP_ENCHANTMENT_SLOT_0];
-                    if (!enchantId)
-                        continue;
-                    if (SpellItemEnchantmentEntry const* pEnchant = sSpellItemEnchantmentStore.LookupEntry(enchantId))
-                    {
-                        for (int s = 0; s < 3; ++s)
-                        {
-                            if (pEnchant->type[s] == 5) // Stat
-                            {
-                                uint32 statMod = pEnchant->spellid[s];
-                                int32 amount = pEnchant->amount[s];
-                                if (statMod == ITEM_MOD_AGILITY) summary.agility += amount;
-                                else if (statMod == ITEM_MOD_STRENGTH) summary.strength += amount;
-                                else if (statMod == ITEM_MOD_INTELLECT || statMod == ITEM_MOD_SPIRIT) summary.spell += amount;
-                                else if (statMod == ITEM_MOD_STAMINA) summary.stamina += amount;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // The stats of a 1.12 random property (T: the block of this function as it was; F has none, TbCompat_S9.h).
+        AddRandomPropertyStatsCompat(summary, randomPropertyId);
 
         return summary;
     }
@@ -344,10 +319,7 @@ bool RollAction::Execute(Event& event)
             if (!isdigit(d))
                 return false;
 
-        WorldPacket data(MSG_RANDOM_ROLL);
-        data << stoi(args[1]);
-        data << stoi(args[2]);
-        bot->GetSession()->HandleRandomRollOpcode(data);
+        RandomRollCompat(bot, stoi(args[1]), stoi(args[2]));
 
         return true;
     }
@@ -383,7 +355,7 @@ bool RollAction::Execute(Event& event)
         return false;
     }
 
-    RollVote vote = ROLL_NOT_VALID;
+    BotRollVote vote = ROLL_NOT_VALID;
 
     if (type.find("need") == 0)
         vote = ROLL_NEED;
@@ -406,7 +378,7 @@ bool RollAction::Execute(Event& event)
         if (!ids.empty() && ids.find(itemQualifier.GetId()) == ids.end())
             continue;
 
-        RollVote doVote = vote;
+        BotRollVote doVote = vote;
         if (doVote == ROLL_NOT_VALID) //Auto
         {
             rolledItems += RollWithEtiquette(roll.first, roll.second);
@@ -428,19 +400,19 @@ bool RollAction::Execute(Event& event)
 
 ItemQualifier RollAction::GetRollItem(ObjectGuid lootGuid, uint32 slot)
 {
-    if (Loot* loot = sLootMgr.GetLoot(bot, lootGuid))
-        if (LootItem* item = loot->LootItemInSlot(slot, bot->GetGUIDLow()))
+    if (Loot* loot = LootOfGuidCompat(bot, lootGuid))
+        if (LootItem* item = LootItemOfSlotCompat(loot, slot, bot))
             return ItemQualifier(item);
 
     // The core keeps active roll state private; do not infer an item or vote.
     return ItemQualifier();
 }
 
-RollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, RollVote* finalVote, std::string* reasonOut, bool log)
+BotRollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, BotRollVote* finalVote, std::string* reasonOut, bool log)
 {
     ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", itemQualifier.GetQualifier());
 
-    RollVote needVote = ROLL_PASS;
+    BotRollVote needVote = ROLL_PASS;
     switch (usage)
     {
     case ItemUsage::ITEM_USAGE_EQUIP:
@@ -599,7 +571,7 @@ RollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, RollVote* f
         TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid()))
         needVote = ROLL_GREED;
 
-    RollVote decision = canLoot ? needVote : ROLL_PASS;
+    BotRollVote decision = canLoot ? needVote : ROLL_PASS;
     if (finalVote)
         *finalVote = decision;
     if (reasonOut)
@@ -610,7 +582,7 @@ RollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, RollVote* f
     return decision;
 }
 
-bool RollAction::RollOnItemInSlot(RollVote vote, ObjectGuid lootGuid, uint32 slot)
+bool RollAction::RollOnItemInSlot(BotRollVote vote, ObjectGuid lootGuid, uint32 slot)
 {
     Group* group = bot->GetGroup();
     if (!group)
@@ -621,7 +593,9 @@ bool RollAction::RollOnItemInSlot(RollVote vote, ObjectGuid lootGuid, uint32 slo
 
     // Same entry point the client uses via CMSG_LOOT_ROLL. The core checks
     // eligibility and resolves the roll once everyone has voted.
-    if (!group->CountRollVote(bot, lootGuid, slot, vote))
+    // ForeverCore votes greed only (TbCompat_S9.h): the one sink every vote passes, so an ordered "roll need" is greed there too. T: the vote as it was.
+    vote = GreedOnlyVoteCompat(vote);
+    if (!RollVoteCompat(bot, group, lootGuid, slot, vote))
         return false;
 
     LootRollMap lootRolls = AI_VALUE(LootRollMap, "active rolls");
@@ -667,7 +641,7 @@ bool RollAction::RealPlayerMayNeed(ObjectGuid lootGuid, ItemQualifier& itemQuali
         if (member == bot || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
             continue;
 
-        if (lootTarget && !member->IsWithinLootXPDist(lootTarget))
+        if (lootTarget && !MemberInLootRangeCompat(member, lootTarget))
             continue;
 
         bool voteSeen = !seenVoter.IsEmpty() && member->GetObjectGuid() == seenVoter && seenVote < MAX_ROLL_FROM_CLIENT;
@@ -702,7 +676,7 @@ bool RollAction::ShouldWaitForPlayers(ObjectGuid lootGuid, uint32 slot)
         if (member == bot || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
             continue;
 
-        if (lootTarget && !member->IsWithinLootXPDist(lootTarget))
+        if (lootTarget && !MemberInLootRangeCompat(member, lootTarget))
             continue;
 
         anyRealPlayer = true;
@@ -730,7 +704,7 @@ bool RollAction::ShouldWaitForPlayers(ObjectGuid lootGuid, uint32 slot)
 
     // The core counts down from LOOT_ROLL_TIMEOUT (60 s); a zero timer means
     // the window already resolved - vote now rather than hold forever.
-    uint32 remainingMs = lootTarget ? lootTarget->GetGroupLootTimer() : 0;
+    uint32 remainingMs = lootTarget ? GroupLootTimerCompat(lootTarget) : 0;
     if (!remainingMs)
         return false;
 
@@ -749,8 +723,8 @@ bool RollAction::AllRealRollersVoted(ObjectGuid lootGuid, uint32 slot)
     if (!proto)
         return false;
 
-    Loot* loot = sLootMgr.GetLoot(bot, lootGuid);
-    LootItem* item = (loot && slot < loot->items.size()) ? &loot->items[slot] : nullptr;
+    Loot* loot = LootOfGuidCompat(bot, lootGuid);
+    LootItem* item = LootItemAtIndexCompat(loot, slot);
 
     Creature* lootTarget = bot->GetMap() ? bot->GetMap()->GetCreature(lootGuid) : nullptr;
     LootVoteMap seenVotes = AI_VALUE(LootVoteMap, "seen need rolls");
@@ -760,13 +734,13 @@ bool RollAction::AllRealRollersVoted(ObjectGuid lootGuid, uint32 slot)
         if (member == bot || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
             continue;
 
-        if (lootTarget && !member->IsWithinLootXPDist(lootTarget))
+        if (lootTarget && !MemberInLootRangeCompat(member, lootTarget))
             continue;
 
         if (member->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
             continue;
 
-        if (item && !item->AllowedForPlayer(member, lootTarget))
+        if (item && !LootItemAllowedForCompat(item, member, lootTarget, loot))
             continue;
 
         if (seenVotes.find({ lootGuid, slot, member->GetObjectGuid() }) == seenVotes.end())
@@ -807,8 +781,8 @@ Player* RollAction::FindBetterFittingMember(ObjectGuid lootGuid, uint32 slot, It
     bool isWeapon = itemProto->Class == ITEM_CLASS_WEAPON;
     bool isRangedWeapon = isWeapon && itemProto->IsRangedWeapon();
 
-    Loot* loot = sLootMgr.GetLoot(bot, lootGuid);
-    LootItem* item = (loot && slot < loot->items.size()) ? &loot->items[slot] : nullptr;
+    Loot* loot = LootOfGuidCompat(bot, lootGuid);
+    LootItem* item = LootItemAtIndexCompat(loot, slot);
 
     bool const hiredYieldsToPlayers = TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid()) &&
         ai->HasRealPlayerMaster();
@@ -819,7 +793,7 @@ Player* RollAction::FindBetterFittingMember(ObjectGuid lootGuid, uint32 slot, It
         if (member == bot || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
             continue;
 
-        if (lootTarget && !member->IsWithinLootXPDist(lootTarget))
+        if (lootTarget && !MemberInLootRangeCompat(member, lootTarget))
             continue;
 
         PlayerbotAI* memberAi = PlayerbotAIStorage::Instance().GetAI(member);
@@ -872,7 +846,7 @@ Player* RollAction::FindBetterFittingMember(ObjectGuid lootGuid, uint32 slot, It
             if (!hiredYieldsToPlayers)
                 continue;
 
-            if (item && !item->AllowedForPlayer(member, lootTarget))
+            if (item && !LootItemAllowedForCompat(item, member, lootTarget, loot))
                 continue;
 
             // A player who already greeded or passed leaves the item to the others.
@@ -924,7 +898,7 @@ bool RollAction::RollWithEtiquette(ObjectGuid lootGuid, uint32 slot, ObjectGuid 
     }
 
     std::string reason;
-    RollVote vote = CalculateRollVote(itemQualifier, nullptr, &reason, false);
+    BotRollVote vote = CalculateRollVote(itemQualifier, nullptr, &reason, false);
 
     if (vote == ROLL_NEED)
     {

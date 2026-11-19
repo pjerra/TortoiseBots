@@ -349,17 +349,7 @@ std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list
     return {};
 }
 
-// ItemUsageValue.cpp (feature "item usage", lead decision D2: the item-usage value is a later slice; the `item usage` key is not registered, the
-// missing-key stand-in answers ITEM_USAGE_NONE).
-// IsNeededForQuest: absent = "no quest needs this item". Value: false. Effect (LootObjectStack.cpp:187): the corpse-refusal facts do not name a quest item
-// (a debug text), the game object branch (:521) is not reached on ForeverCore. No item is looted for a quest either way (items are not looted).
-bool ItemUsageValue::IsNeededForQuest(Player*, uint32, bool) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
-// IsFutureUpgrade: absent = "not an upgrade". Value: false. Effect (LootStrategyValue.cpp:25): a CanLoot answer that would wait for an upgrade is "no" (LESS).
-bool ItemUsageValue::IsFutureUpgrade(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
-// QueryItemUsageForEquip: absent = the item has no equip use. Value: ITEM_USAGE_NONE. Effect (LootValues.cpp HasUpgradeValue, not registered): no upgrade is found.
-ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return ItemUsage::ITEM_USAGE_NONE; }
-// GetRecipeSpell: absent = the item teaches no recipe. Value: 0. Effect (UseItemAction.cpp UseRandomRecipe): no recipe is picked, the action finds nothing to use (LESS).
-uint32 ItemUsageValue::GetRecipeSpell(ItemPrototype const*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return 0; }
+// ItemUsageValue.cpp is in the slice since slice 9 (package L9): its four stand-ins (IsNeededForQuest, IsFutureUpgrade, QueryItemUsageForEquip, GetRecipeSpell) are gone.
 
 // GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
 // Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
