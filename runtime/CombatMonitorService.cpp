@@ -15,10 +15,10 @@
 #include "../ai/playerbot/PlayerbotAIConfig.h"
 #include "Database/DatabaseEnv.h"
 #include "Log.h"
+#include "../ai/playerbot/TbCompatW3.h"
 #endif
 
 #include <memory>
-#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
