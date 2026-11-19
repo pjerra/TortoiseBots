@@ -32,6 +32,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/generic/PullStrategy.h"
 #include "playerbot/strategy/values/AttackersValue.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
@@ -424,12 +425,37 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     }
     if (o.verb == "pullback")
     {
-        // The pull anchor is the tank's own spot: it is where the party hold stands and where the tank returns to after the shot (the event's owner is the
-        // tank itself for a run order, so the action's "pull" position is the same spot). The stay position is written there, the way `come` writes it,
-        // before the action runs (the facts' leadStayKnown, and the walk back after a pick-up).
+        // The chat action `pullback my target` (PullbackMyTargetAction, PullActions.cpp:278) is not in the slice's action context, so its steps are done here
+        // with the same public calls: the tank's "pull back" strategy on for this pull, the per-command mode recorded on the PullStrategy (the return leg and
+        // the ranged opening read it), then `pull my target` (the same request action), and everything rolled back when the request refuses. The pull
+        // anchor is the tank's own spot: it is where the party hold stands and where the tank returns to after the shot (the event's owner is the tank itself
+        // for a run order, so the request's "pull" position is the same spot). The stay position is written there, the way `come` writes it, before the
+        // request runs (the facts' leadStayKnown, and the walk back after a pick-up).
         WriteStay(ai, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId());
-        if (!act("pullback my target", Event("tb order", o.unit, owner)))
+        bool const hadPullBack = ai->HasStrategy("pull back", BotState::BOT_STATE_COMBAT) || ai->HasStrategy("pull back", BotState::BOT_STATE_NON_COMBAT);
+        ai::PullStrategy::CommandState commandBefore;
+        bool hasCommandBefore = false;
+        if (ai::PullStrategy* probe = ai::PullStrategy::Get(ai))
+        {
+            commandBefore = probe->SaveCommand();
+            hasCommandBefore = true;
+        }
+        ai->ChangeStrategy("+pull back", BotState::BOT_STATE_ALL);
+        if (ai::PullStrategy* strategy = ai::PullStrategy::Get(ai))
+            strategy->BeginCommand(true, hadPullBack, sPlayerbotAIConfig.pullBackDpsJoinDelay, false);
+        if (!act("pull my target", Event("tb order", o.unit, owner)))
+        {
+            if (ai::PullStrategy* strategy = ai::PullStrategy::Get(ai))
+            {
+                if (hasCommandBefore)
+                    strategy->RestoreCommand(commandBefore);
+                else
+                    strategy->OnPullEnded();
+            }
+            if (!hadPullBack)
+                ai->ChangeStrategy("-pull back", BotState::BOT_STATE_ALL);
             return "fail:pullback";
+        }
         ai::PausePartyPullHold(bot, kPullJoinDelaySeconds, true, kPullApproachWindowSeconds);   // L2: the same lead-keyed hold as `pull`
         if (o.fromRun)
             AnchorPullHoldOnTank(bot);
@@ -445,7 +471,10 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         group->SetTargetIcon(uint8(MarkIndex("skull")), o.unit, owner->GetGUID());
         ai->DropQueuedMovementOrders();
         ai->EndStayForOrder();
-        if (!act("rti", Event("focus skull", std::string("skull"), owner)))
+        // The legacy `rti` action only sets the value of that name (RtiAction.cpp:31) and tells the player; the action is not in the slice's context.
+        if (ai::Value<std::string>* rti = ai->GetAiObjectContext()->GetValue<std::string>("rti"))
+            rti->Set("skull");
+        else
             return "fail:focus-rti";
         if (ai::Value<Unit*>* value = ai->GetAiObjectContext()->GetValue<Unit*>("rti target"))
             value->Reset();
@@ -715,9 +744,15 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
     }
     if (verb == "attack" || verb == "focus" || verb == "pull" || verb == "pullback")
     {
-        char const* key = verb == "attack" ? "attack rti target" : verb == "focus" ? "attack rti target" : verb == "pull" ? "pull my target" : "pullback my target";
-        if (!need(key) || (verb == "focus" && !need("rti")))
+        char const* key = (verb == "attack" || verb == "focus") ? "attack rti target" : "pull my target";
+        if (!need(key))
             return false;
+        if (verb == "focus" && !ai->GetAiObjectContext()->GetValue<std::string>("rti"))
+        {
+            code = "value-not-registered";
+            detail = "the value `rti` is not registered in this build";
+            return false;
+        }
         if (!bot->GetGroup())
         {
             code = "no-party";
