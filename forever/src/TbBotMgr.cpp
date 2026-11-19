@@ -970,11 +970,11 @@ void BotMgr::EnsureEntrance(Player* me)
     {
         // M4 live finding: the core REUSES the id of an instance that was reset and unloaded (MapManager::GenerateInstanceId takes the first free id), so the
         // next instance of the dungeon came back as the same id with a fresh script and entrance 0, and "once per instance id" never gave it one. A cached
-        // entrance that the script no longer holds means a new instance under an old id: forget both caches and give it its entrance again.
+        // entrance that the script no longer holds means a new instance under an old id: forget the cache and give it its entrance again (the trigger
+        // cache is refreshed at every landing in UpdateEntry, so the trigger of the entry that opened this instance is already there).
         if (cached->second == 0 || !script || script->GetEntranceLocation() != 0)
             return;
         _entranceByInstance.erase(cached);
-        _entryTriggerByInstance.erase(instanceId);
     }
     if (!script)
     {
