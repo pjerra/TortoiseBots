@@ -59,7 +59,7 @@ Turtle side in `ai/cmangos-compat-r3.h` or the `-r4*.h` file named).
 | respawn | `c->GetRespawnCoord(x, y, z)` | `GetRespawnCoordCompat` (`c->GetRespawnCoord(...)`) | 2 | 1 |
 | holder | `aura->GetHolder()` | `AuraHolderCompat` (`aura->GetHolder()`) | 2 | 1 |
 
-816 replacements in 135 files; the census counts 809 error places closed (a place is one file, line and message, and
+816 replacements in 135 files; the census counts 807 error places closed (a place is one file, line and message, and
 some lines carried two). The guid-key family is the one with a ForeverCore-side behaviour note: the key is a hash of
 the 128 bits, which is the model slice 1 already uses (`SLICE1-R4M-NOTES.md` section 3); on Turtle the value is the raw
 guid, unchanged. It was applied only to files that never turn such a number back into a guid or a player.
@@ -101,12 +101,21 @@ not ported. Places are counted in the after-census on the files this pass may to
 | guid keys in the files that rebuild a guid from the number | the files are untouched (the census counted 428 places in them before this pass) | `ObjectGuid(raw)`, `FindCharacter(raw)`, `GuidPosition(raw)`, `QueuePublicNote(raw)` read the number back; a hash cannot be turned back, so the file needs the real port (store the `ObjectGuid`) | `commands/Commander.cpp:10206`, `ai/playerbot/strategy/actions/BossTacticsActions.cpp:170`, `ai/playerbot/PlayerbotDbStore.cpp:24` |
 | feature areas (auction, battleground, guild rank, taxi, quest internals, pets) | the rest | the feature is not ported | see `UNPORTED.md` |
 
+## Where the places went
+
+Largest drops (`where.tsv`, before -> after): `commands/Commander.cpp` 163, `ai/playerbot/strategy/actions/BossTacticsActions.cpp` 48,
+`ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp` 41, `runtime/BotManager.cpp` 37, `ai/playerbot/TravelMgr.cpp` 26,
+`ChooseTravelTargetAction.cpp` 19, `ViscidusActions.cpp` 18, `ReleaseSpiritAction.h` 15, `PlayerbotFactory.cpp` 15,
+`runtime/ObservabilityEmitter.cpp` 14. Eleven files compile clean now that had errors before (DruidTriggers.h,
+MageActions.cpp, MageTriggers.h, PaladinTriggers.h, LineTargetValue.cpp, DebugEngineCommands.cpp, HireAction.cpp,
+ListQuestsActions.cpp, TellLosAction.cpp, ThaddiusDungeonActions.cpp, ThaddiusDungeonTriggers.cpp); no file gained a place.
+
 ## Numbers and gates
 
 | Gate | Command | Result |
 |---|---|---|
 | Census, baseline | `forever/tools/vm-census.sh "" 10` | `files 649 compile clean 323 with errors 326 error places 7648 (in 349 files)` |
-| Census, after | same | `files 649 compile clean 332 with errors 317 error places 6839 (in 338 files)` — 809 places closed, no file gained one, 11 files clean |
+| Census, after | same | `files 649 compile clean 332 with errors 317 error places 6841 (in 338 files)` — 807 places closed, no file gained one, 11 files clean |
 | Census, slice 1 | `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 10` | see the gate at the end of the file |
 | Helper files unchanged | `git diff --stat 37434278c HEAD -- forever/src ai/cmangos-compat*` (37434278c = the merge base with `port/forever` when this branch started) | empty |
 | ForeverCore module, slice option off | `ssh yulon-ubuntu2 '~/forever-build/build.sh 12 tortoisebots'` | see the gate at the end of the file |
@@ -114,12 +123,13 @@ not ported. Places are counted in the after-census on the files this pass may to
 
 ## Wiring tests
 
-31 test files under `tools/` were re-pinned, each to the new spelling of the SAME expression (no assertion deleted,
+37 test files under `tools/` (and one fixture include) were re-pinned, each to the new spelling of the SAME expression (no assertion deleted,
 weakened or turned into a looser match; two count assertions kept their exact expected number with the new call shape):
 
 | test | what the pin now reads |
 |---|---|
 | `test_airborne_nukes_wiring` | `IsWithinLOSInMapCompat(bot, target, true)` |
+| `test_add_crew_wiring`, `test_avoid_cast_wiring`, `test_victim_escape_wiring`, `test_jindo_r4_shade_wiring`, `test_hire_bound_raid_wiring` | `GuidKeyCompat(...)` where the row key was built from `GetRawValue()` |
 | `test_approach_walkback_wiring` | `PathLengthCompat(path)`, `PathPointsCompat(path)` |
 | `test_bot_area_trigger_wiring`, `test_bot_lfg_advert_wiring`, `test_player_in_party_wiring`, `test_system_run_wiring`, `test_lft_party_accept_wiring` | `HasNetworkTransportCompat(<session>)` |
 | `test_cast_cancel_wiring` | `target ? CStrCompat(target->GetName())` |
