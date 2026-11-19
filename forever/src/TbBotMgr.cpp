@@ -783,6 +783,8 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
     // Landed: the bot stands on the trigger's target map. (The caller made sure the bot is in the world and not being teleported.)
     if (me->GetMapId() == e.targetMap)
     {
+        me->GetMotionMaster()->Clear();   // nothing of the walk may carry over into the dungeon
+        me->StopMoving();
         bot.entered = e.direct ? "order" : "trigger";
         bot.block.clear();
         bot.blockText.clear();
@@ -869,6 +871,11 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
         e.phase = "waiting-leader";
         return;
     }
+
+    // M4 live finding: the walk's MovePoint generator survived the teleport and the bot kept walking toward the BOX'S map-1 coordinates inside the dungeon
+    // (a straight line, 200+ yd in 30 s). Stop it before the handler runs.
+    me->GetMotionMaster()->Clear();
+    me->StopMoving();
 
     // The entry check, behind the one guarded function (C1), then the core's own path.
     if (EntryCheck const check = CheckEntry(me, e.targetMap); !check.code.empty())

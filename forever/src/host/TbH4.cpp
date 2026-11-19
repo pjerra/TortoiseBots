@@ -306,7 +306,7 @@ InstanceMap* FindInstance(Player* leader, uint32 mapId, std::string& why)
 struct SpawnCounts
 {
     uint32 total = 0, alive = 0, loaded = 0;
-    std::vector<std::vector<std::string>> bosses;   // {entry, alive|dead}
+    std::vector<std::vector<std::string>> bosses;   // {dungeon encounter id (the boss index when the script names none), alive|dead}
 };
 
 // Creatures of the instance: every creature spawn of the map (and difficulty) in the world database is "total"; a spawn is alive when its loaded creature
@@ -338,9 +338,6 @@ SpawnCounts CountSpawns(InstanceMap* map)
             alive = false;
         if (alive)
             ++counts.alive;
-        if (CreatureTemplate const* tpl = sObjectMgr->GetCreatureTemplate(data.id))
-            if (tpl->flags_extra & CREATURE_FLAG_EXTRA_DUNGEON_BOSS)
-                counts.bosses.push_back({ std::to_string(data.id), alive ? "alive" : "dead" });
     }
     return counts;
 }
@@ -387,12 +384,22 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 ++gms;
         Group* group = leader->GetGroup();
         InstanceScript const* script = map->GetInstanceScript();
+        // M4 live finding: the bosses are NOT found through the creature template: the core strips CREATURE_FLAG_EXTRA_DUNGEON_BOSS from the database
+        // value (CREATURE_FLAG_EXTRA_DB_ALLOWED, CreatureData.h:382), so the old spawn scan listed none. The instance script's own boss table is the truth:
+        // one entry per boss, named by its DungeonEncounter id (the boss index when the script names none), dead = the boss state is DONE.
+        SpawnCounts counts2 = counts;
+        counts2.bosses.clear();
+        for (uint32 boss = 0; script && boss < script->GetEncounterCount(); ++boss)
+        {
+            DungeonEncounterEntry const* encounter = script->GetBossDungeonEncounter(boss);
+            counts2.bosses.push_back({ std::to_string(encounter ? encounter->ID : boss), script->GetBossState(boss) == DONE ? "dead" : "alive" });
+        }
         Reply reply(handler, args, "instance");
         reply.Begin();
         Rec rec("instance");
         rec.S("leader", leader->GetName()).N("map", map->GetId()).S("name", map->GetMapName()).N("inst", map->GetInstanceId()).N("diff", uint32(map->GetDifficultyID()));
         rec.N("players", map->GetPlayersCountExceptGMs()).N("gms", gms);
-        rec.N("mobs_alive", counts.alive).N("mobs_total", counts.total).N("mobs_loaded", counts.loaded).LP("boss", counts.bosses);
+        rec.N("mobs_alive", counts.alive).N("mobs_total", counts.total).N("mobs_loaded", counts.loaded).LP("boss", counts2.bosses);
         rec.N("entrance", script ? script->GetEntranceLocation() : 0);
         rec.N("recent", group ? group->GetRecentInstanceId(map->GetId()) : leader->GetRecentInstanceId(map->GetId()));
         rec.S("owner", map->GetOwningGroup() ? std::string(map->GetOwningGroup()->GetLeaderName()) : std::string());
