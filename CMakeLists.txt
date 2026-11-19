@@ -134,6 +134,12 @@ if(TORTOISEBOTS_SLICE1)
     target_compile_options(tortoisebots PRIVATE -g -fno-omit-frame-pointer)
   endif()
 
+  # The legacy packet tables put ForeverCore's 32-bit opcodes into 16-bit fields (they are never registered there). The core
+  # gives clang -Wno-narrowing but not GCC, so a GCC build stops on them: give GCC the same.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(tortoisebots PRIVATE -Wno-narrowing)
+  endif()
+
   target_compile_definitions(tortoisebots
     PUBLIC
       TORTOISEBOTS_SLICE1=1
