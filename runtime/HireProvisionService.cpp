@@ -68,6 +68,7 @@
 #include <random>
 #include <set>
 #include <thread>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -500,7 +501,7 @@ uint32_t HireProvisionService::QuoteHireFee(uint32_t ownedBefore, uint32_t level
 bool HireProvisionService::CrossFactionHireEnabled()
 {
     return sPlayerbotAIConfig.hireCrossFactionNeutralInns &&
-        sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP);
+        WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP);
 }
 
 bool HireProvisionService::FillDefaultRaceGender(Player* requester, HireSelection& sel)
@@ -874,12 +875,12 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
     if (prefix.empty())
         prefix = "RNDBOT";
 
-    uint32_t perAccountLimit = sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM);
+    uint32_t perAccountLimit = WorldU32ConfigW2(CONFIG_UINT32_CHARACTERS_PER_REALM);
     if (!perAccountLimit)
-        perAccountLimit = sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_ACCOUNT);
+        perAccountLimit = WorldU32ConfigW2(CONFIG_UINT32_CHARACTERS_PER_ACCOUNT);
     if (!perAccountLimit)
         perAccountLimit = 10;
-    bool allowTwoSide = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS) != 0;
+    bool allowTwoSide = WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS) != 0;
 
 
     // Issue #265: only registered pool accounts are eligible; new accounts are

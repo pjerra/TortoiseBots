@@ -199,4 +199,5 @@ def main():
         json.dump({"emotes": mapped, "other": OTHER, "files": found, "unported": unported}, open(sys.argv[2], "w"), indent=1)
 
 
-main()
+if __name__ == "__main__":
+    main()

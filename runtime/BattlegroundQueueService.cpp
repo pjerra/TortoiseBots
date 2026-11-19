@@ -46,6 +46,7 @@
 
 #include <algorithm>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -95,7 +96,7 @@ bool IsServiceBgType(BattleGroundTypeId bgType)
 bool MeetsServiceTypeGate(::Player* bot, BattleGroundTypeId bgType)
 {
     if (bgType == BATTLEGROUND_BR)
-        return bot->GetLevel() >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+        return bot->GetLevel() >= WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL);
     return true;
 }
 
@@ -130,7 +131,7 @@ std::vector<HumanBgDemand> GetHumanBgDemands()
         // would wait on and could start a second match with no human in it.
         // AV honours the core's Alterac.MinPlayersInQueue gate (default 0).
         uint32 queueFloor = bgType == BATTLEGROUND_AV
-            ? sWorld.getConfig(CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE) : 0;
+            ? WorldU32ConfigW2(CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE) : 0;
         uint32 sideTarget = HumanBgSideTarget(bgTemplate->GetMinPlayersPerTeam(),
             bgTemplate->GetMaxPlayersPerTeam(), queueFloor);
 

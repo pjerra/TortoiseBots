@@ -5,3 +5,9 @@
 
 // Family 1 (names): nothing to define here. The Turtle core has TEXTEMOTE_*, BIND_WHEN_USE, EQUIP_ERR_* and the rest under the
 // names the code already uses; the ForeverCore header maps them.
+
+// Family 2 (server settings): the Turtle getter is overloaded on the key's enum; one helper per value type is the same call.
+inline uint32 WorldU32ConfigW2(eConfigUInt32Values key) { return sWorld.getConfig(key); }
+inline int32 WorldI32ConfigW2(eConfigInt32Values key) { return sWorld.getConfig(key); }
+inline bool WorldBoolConfigW2(eConfigBoolValues key) { return sWorld.getConfig(key); }
+inline float WorldFloatConfigW2(eConfigFloatValues key) { return sWorld.getConfig(key); }

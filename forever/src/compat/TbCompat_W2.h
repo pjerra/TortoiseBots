@@ -227,3 +227,148 @@
 #define EQUIP_ERR_TRIED_TO_SPLIT_MORE_THAN_COUNT     EQUIP_ERR_TOO_FEW_TO_SPLIT
 #define EQUIP_ERR_COULDNT_SPLIT_ITEMS                EQUIP_ERR_SPLIT_FAILED
 // END GENERATED NAMES
+
+// =====================================================================================================================
+// Family 2: server settings. Turtle `sWorld.getConfig(KEY)` is one overloaded member per value type (uint32, int32, bool, float);
+// ForeverCore keeps four separate stores (getIntConfig, getBoolConfig, getFloatConfig, and the rates behind getRate). One helper
+// per Turtle value type; the key is passed as the Turtle name, which resolves on ForeverCore to one of:
+//   1. the core's own enumerator of the same setting (the CONFIG_* macros of forever-compat-shim.h:265-282, plus the rate macros
+//      below): the helper reads the core's value, so the bot sees what the operator set in worldserver.conf;
+//   2. a key of this file's enums (TbW2U32Key, TbW2BoolKey, TbW2FloatKey) for a setting ForeverCore does not have: the helper returns
+//      the Turtle default (the second argument of setConfig in the Turtle World.cpp, cited per key) and logs it once. Never a value
+//      of our own. "Rate.Talent" is the one exception that has a ForeverCore spelling as a config-file key and not as a World
+//      member: TraitMgr.cpp:95-105 reads it with sConfigMgr->GetFloatDefault, same meaning (talent points per level times it).
+// The per-key table (Turtle key and default, ForeverCore enumerator, its default, file:line) is in WIDE-PASS-R2-NOTES.md.
+// =====================================================================================================================
+#include <atomic>
+
+// Rates the core keeps behind World::getRate (World.h:482 enum Rates, World.cpp:1005-1056 each name and default 1.0). Same name
+// without the type token, same meaning, same default 1.0 as the Turtle rate.
+#ifndef CONFIG_FLOAT_RATE_AUCTION_DEPOSIT
+#define CONFIG_FLOAT_RATE_AUCTION_DEPOSIT              RATE_AUCTION_DEPOSIT
+#endif
+#ifndef CONFIG_FLOAT_RATE_CREATURE_AGGRO
+#define CONFIG_FLOAT_RATE_CREATURE_AGGRO               RATE_CREATURE_AGGRO
+#endif
+#ifndef CONFIG_FLOAT_RATE_XP_KILL
+#define CONFIG_FLOAT_RATE_XP_KILL                      RATE_XP_KILL
+#endif
+#ifndef CONFIG_FLOAT_RATE_XP_QUEST
+#define CONFIG_FLOAT_RATE_XP_QUEST                     RATE_XP_QUEST
+#endif
+#ifndef CONFIG_FLOAT_RATE_XP_EXPLORE
+#define CONFIG_FLOAT_RATE_XP_EXPLORE                   RATE_XP_EXPLORE
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_MONEY
+#define CONFIG_FLOAT_RATE_DROP_MONEY                   RATE_DROP_MONEY
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_ITEM_POOR
+#define CONFIG_FLOAT_RATE_DROP_ITEM_POOR               RATE_DROP_ITEM_POOR
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_ITEM_NORMAL
+#define CONFIG_FLOAT_RATE_DROP_ITEM_NORMAL             RATE_DROP_ITEM_NORMAL
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON
+#define CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON           RATE_DROP_ITEM_UNCOMMON
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_ITEM_RARE
+#define CONFIG_FLOAT_RATE_DROP_ITEM_RARE               RATE_DROP_ITEM_RARE
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_ITEM_EPIC
+#define CONFIG_FLOAT_RATE_DROP_ITEM_EPIC               RATE_DROP_ITEM_EPIC
+#endif
+#ifndef CONFIG_FLOAT_RATE_DROP_ITEM_LEGENDARY
+#define CONFIG_FLOAT_RATE_DROP_ITEM_LEGENDARY          RATE_DROP_ITEM_LEGENDARY
+#endif
+#ifndef CONFIG_FLOAT_RATE_HONOR
+#define CONFIG_FLOAT_RATE_HONOR                        RATE_HONOR
+#endif
+#ifndef CONFIG_FLOAT_RATE_REPUTATION_GAIN
+#define CONFIG_FLOAT_RATE_REPUTATION_GAIN              RATE_REPUTATION_GAIN
+#endif
+#ifndef CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL
+#define CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL     RATE_REPUTATION_LOWLEVEL_KILL
+#endif
+#ifndef CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST
+#define CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST    RATE_REPUTATION_LOWLEVEL_QUEST
+#endif
+
+// Settings ForeverCore has no member for. The enumerator is the Turtle name; the helper below returns the Turtle default.
+enum TbW2U32Key : uint32
+{
+    CONFIG_UINT32_AUCTION_DEPOSIT_MIN,              // Turtle World.cpp:993 "Auction.Deposit.Min", default 0 (a floor on the deposit, in copper)
+    CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT, // Turtle World.cpp:994 "Auction.AccountConcurrentLimit", default 0 (0 = no limit)
+    CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE,          // Turtle World.cpp:1222 "Alterac.MinPlayersInQueue", default 0
+    TBW2_U32_KEYS
+};
+enum TbW2BoolKey : uint32
+{
+    CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS,            // Turtle World.cpp:1058 "AllowTwoSide.Accounts", default false
+    TBW2_BOOL_KEYS
+};
+enum TbW2FloatKey : uint32
+{
+    CONFIG_FLOAT_RATE_XP_KILL_ELITE,                // Turtle World.cpp:964 "Rate.XP.Kill.Elite", default 1.0 (ForeverCore has one kill rate, Rate.XP.Kill)
+    CONFIG_FLOAT_RATE_TALENT,                       // Turtle World.cpp:1001 "Rate.Talent", default 1.0; ForeverCore: the config key, TraitMgr.cpp:105
+    TBW2_FLOAT_KEYS
+};
+
+namespace tbw2
+{
+// True the first time a bit is seen; the log line is printed once per key and per process.
+inline bool FirstTime(std::atomic<uint32>& seen, uint32 key)
+{
+    return !(seen.fetch_or(1u << key) & (1u << key));
+}
+inline void NoteDefault(char const* turtleKey, char const* turtleValue)
+{
+    TC_LOG_WARN("server.loading", "TortoiseBots: server setting {} has no ForeverCore equivalent; the bot uses the Turtle default {}", turtleKey, turtleValue);
+}
+}
+
+inline uint32 WorldU32ConfigW2(WorldIntConfigs key) { return sWorld.getIntConfig(key); }
+inline uint32 WorldU32ConfigW2(TbW2U32Key key)
+{
+    static std::atomic<uint32> seen{0};
+    char const* name = "?";
+    switch (key)
+    {
+        case CONFIG_UINT32_AUCTION_DEPOSIT_MIN:              name = "Auction.Deposit.Min"; break;
+        case CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT: name = "Auction.AccountConcurrentLimit"; break;
+        case CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE:          name = "Alterac.MinPlayersInQueue"; break;
+        default: break;
+    }
+    if (tbw2::FirstTime(seen, key))
+        tbw2::NoteDefault(name, "0");
+    return 0;   // all three Turtle defaults are 0
+}
+
+// The Turtle int32 store. ForeverCore keeps every integer setting as uint32; Quests.LowLevelHideDiff is the one int32 key read
+// (default 4, World.cpp:835), so the value is read back as signed, as the Turtle getter returns it.
+inline int32 WorldI32ConfigW2(WorldIntConfigs key) { return int32(sWorld.getIntConfig(key)); }
+
+inline bool WorldBoolConfigW2(WorldBoolConfigs key) { return sWorld.getBoolConfig(key); }
+inline bool WorldBoolConfigW2(TbW2BoolKey key)
+{
+    static std::atomic<uint32> seen{0};
+    if (tbw2::FirstTime(seen, key))
+        tbw2::NoteDefault("AllowTwoSide.Accounts", "false");
+    return false;   // the Turtle default
+}
+
+inline float WorldFloatConfigW2(WorldFloatConfigs key) { return sWorld.getFloatConfig(key); }
+inline float WorldFloatConfigW2(Rates key) { return sWorld.getRate(key); }
+inline float WorldFloatConfigW2(TbW2FloatKey key)
+{
+    switch (key)
+    {
+        case CONFIG_FLOAT_RATE_TALENT:
+            return sConfigMgr->GetFloatDefault("Rate.Talent", 1.0f);   // TraitMgr.cpp:105, default 1 (worldserver.conf.dist:2758)
+        default:
+            break;
+    }
+    static std::atomic<uint32> seen{0};
+    if (tbw2::FirstTime(seen, key))
+        tbw2::NoteDefault("Rate.XP.Kill.Elite", "1");
+    return 1.0f;   // the Turtle default of Rate.XP.Kill.Elite
+}

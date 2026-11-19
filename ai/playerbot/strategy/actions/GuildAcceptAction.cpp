@@ -9,6 +9,7 @@
 #include "../../../runtime/HireLifecycle.h"
 #include "runtime/AltBotPolicy.h"
 #include "runtime/AltBotService.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -104,7 +105,7 @@ bool GuildAcceptAction::Execute(Event& event)
             bool const isAlreadyClaimed = TortoiseBots::ClaimLifecycle::Instance().IsClaimed(botGuidLow);
             bool const isOpposingFaction = bot->GetTeam() != inviter->GetTeam();
             bool const isHired = TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid());
-            bool const allowCrossFactionGuilds = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GUILD);
+            bool const allowCrossFactionGuilds = WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GUILD);
             if (!TortoiseBots::MayClaimBot(true, true, isAlreadyClaimed, isOpposingFaction, isHired, allowCrossFactionGuilds))
             {
                 sLog.outBasic("TortoiseBots: claim refused for bot %u (already claimed, opposing faction, or hired)", botGuidLow);

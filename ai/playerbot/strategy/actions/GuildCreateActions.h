@@ -5,6 +5,7 @@
 #include "playerbot/ServerFacade.h"
 #include "runtime/BotActivityLease.h"
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 namespace ai
 {
@@ -47,7 +48,7 @@ namespace ai
                 !AI_VALUE2(uint32, "item count", chat->formatQItem(5863)))
                 return false;
             if (ai::GuildPetitionReadyToTurnIn(AI_VALUE(uint8, "petition signs"),
-                sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS)))
+                WorldU32ConfigW2(CONFIG_UINT32_MIN_PETITION_SIGNS)))
                 return false;
             TortoiseBots::BotActivity activity = TortoiseBots::BotActivityLeaseManager::Instance().GetActivity(bot->GetGUIDLow());
             return activity == TortoiseBots::BotActivity::Idle || activity == TortoiseBots::BotActivity::Grinding ||

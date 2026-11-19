@@ -3685,8 +3685,8 @@ bool HandleScout(ChatHandler* handler, char const* args)
     if (request.form == RemoteCommander::ScoutForm::Cfg)
     {
         handler->PSendSysMessage("%s", RemoteCommander::ScoutCfgLine(request.id,
-            sPlayerbotAIConfig.reactDistance, sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO),
-            sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS)).c_str());
+            sPlayerbotAIConfig.reactDistance, WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO),
+            WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS)).c_str());
         return true;
     }
     if (request.form == RemoteCommander::ScoutForm::Where)
@@ -5249,7 +5249,7 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, Area
     facts.phaseOpen = tele->requiredPhase <= sWorld.GetContentPhase();
     facts.level = bot->GetLevel();
     facts.requiredLevel = tele->requiredLevel;
-    facts.ignoreLevel = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL);
+    facts.ignoreLevel = WorldBoolConfigW2(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL);
     // The maps where a Lunatic challenger enters below the level (the same list as the core's handler).
     static constexpr uint32 kLunaticMaps[] = { 36, 43, 389, 822 };
     for (uint32 mapId : kLunaticMaps)
@@ -5280,7 +5280,7 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, Area
         facts.conditionWaived = RemoteCommander::WaiveCondition(sPlayerbotAIConfig.raidEntryByCommander,
             facts.raidMap, unscriptedTrigger, commanderIsRealPlayer, commanderOfRaid, commanderMeets);
     }
-    facts.ignoreRaid = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
+    facts.ignoreRaid = WorldBoolConfigW2(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
     Group* group = bot->GetGroup();
     facts.inRaidGroup = group && group->isRaidGroup();
     auto* bound = bot->GetBoundInstanceSaveForSelfOrGroup(targetMap->id);
@@ -10327,11 +10327,11 @@ void ReadPullJoiners(Player* lead, std::vector<Player*> const& bots, ai::PlanSte
             params.lowestPartyLevel = std::min<uint32>(params.lowestPartyLevel, bot->GetLevel());
     if (params.lowestPartyLevel == 255)
         params.lowestPartyLevel = lead->GetLevel();
-    params.aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    params.aggroRate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     // The estimate never uses less than the observed cross-pack ring (the ZG terrace's spawn pairs 11.0-19.5 yd
     // apart): the server's 10 yd setting is read, and the policy's floor applies to it.
     params.familyAssistYd = std::max(ai::kAggroFamilyAssistMinYd,
-        sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
+        WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
     // creature_linking: a master's aggro wakes its slave (FLAG_AGGRO_ON_AGGRO), and with FLAG_TO_AGGRO_ON_AGGRO a
     // slave's aggro wakes its master. The master is the row's guid when it has one, else any creature of its entry in range.
     for (std::size_t i = 0; i < creatures.size(); ++i)
@@ -10935,7 +10935,7 @@ static void ReadStandClearance(Player* lead, std::vector<Player*> const& bots,
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::vector<Creature*> scanned;
     std::vector<uint64> formations;
     std::vector<bool> inPack;
@@ -11174,7 +11174,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     HostileCreaturesAround(lead, kStandClearScanYd, found);
     for (Unit* unit : found)
@@ -11317,8 +11317,8 @@ static void ReadPullAhead(DungeonRunSlot const& slot, Player* lead, std::vector<
                     params.lowestPartyLevel = std::min<uint32>(params.lowestPartyLevel, bot->GetLevel());
             if (params.lowestPartyLevel == 255)
                 params.lowestPartyLevel = lead->GetLevel();
-            params.aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
-            params.familyAssistYd = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
+            params.aggroRate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+            params.familyAssistYd = WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
             params.ringYd = ringYd;
             params.ringHops = ai::kAggroRingHops;
             params.floorDz = ai::kAggroFloorDz;
@@ -11571,7 +11571,7 @@ static void ReadRescueFacts(Player* lead, std::vector<Player*> const& bots, floa
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMap() == map && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     RescueHostileNear check{ lead, x, y, z, kRescueScanYd };
     MaNGOS::UnitListSearcher<RescueHostileNear> searcher(found, check);
@@ -11616,7 +11616,7 @@ static void ReadFetchFacts(Player* lead, std::vector<Player*> const& bots, Torto
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMap() == map && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     HostileCreaturesAround(lead, kFetchScanYd, found);
     for (Unit* unit : found)
