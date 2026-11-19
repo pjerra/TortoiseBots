@@ -1,5 +1,7 @@
-# Slice 8 (mage, rogue and crowd control): SLICE4.txt plus the 22 .cpp files (10 mage, 10 rogue, 2 give-item) of FOREVER-SLICE-MAGE-ROGUE-SPEC section 3 (S5/S6 lists are appended at merge).
-# One path per line. Used by: FOREVER_SLOT=2 FOREVER_CENSUS_LIST=forever/SLICE8.txt forever/tools/vm-census.sh "" 14
+# Slice 8 (mage, rogue and crowd control): the slice-5 list (SLICE5.txt: SLICE4.txt plus the plan loader DungeonPlanMgr.cpp, BossTacticsMgr.cpp)
+# plus the 22 K8 .cpp files (10 mage, 10 rogue, GiveItemAction.cpp, PartyMemberWithoutItemValue.cpp) of FOREVER-SLICE-MAGE-ROGUE-SPEC section 3.
+# Rebuilt from SLICE5.txt + K8's additions (K8's own SLICE8.txt was SLICE4.txt + 22, without the S5 loader files). CMake reads this file.
+# One path per line. Used by: FOREVER_SLOT=<n> FOREVER_CENSUS_LIST=forever/SLICE8.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
 ai/playerbot/BotLog.cpp
@@ -41,6 +43,7 @@ ai/playerbot/strategy/actions/ChooseTargetActions.cpp
 ai/playerbot/strategy/actions/FollowActions.cpp
 ai/playerbot/strategy/actions/GenericActions.cpp
 ai/playerbot/strategy/actions/GenericSpellActions.cpp
+ai/playerbot/strategy/actions/GiveItemAction.cpp
 ai/playerbot/strategy/actions/MovementActions.cpp
 ai/playerbot/strategy/actions/ReachTargetActions.cpp
 ai/playerbot/strategy/actions/RemoveAuraAction.cpp
@@ -50,6 +53,26 @@ ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp
+ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp
+ai/playerbot/strategy/mage/FireMageStrategy.cpp
+ai/playerbot/strategy/mage/FrostMageStrategy.cpp
+ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp
+ai/playerbot/strategy/mage/GenericMageStrategy.cpp
+ai/playerbot/strategy/mage/MageActions.cpp
+ai/playerbot/strategy/mage/MageAiObjectContext.cpp
+ai/playerbot/strategy/mage/MageMultipliers.cpp
+ai/playerbot/strategy/mage/MageStrategy.cpp
+ai/playerbot/strategy/mage/MageTriggers.cpp
+ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp
+ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp
+ai/playerbot/strategy/rogue/DpsRogueStrategy.cpp
+ai/playerbot/strategy/rogue/GenericRogueNonCombatStrategy.cpp
+ai/playerbot/strategy/rogue/RogueActions.cpp
+ai/playerbot/strategy/rogue/RogueAiObjectContext.cpp
+ai/playerbot/strategy/rogue/RogueMultipliers.cpp
+ai/playerbot/strategy/rogue/RogueStrategy.cpp
+ai/playerbot/strategy/rogue/RogueTriggers.cpp
+ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp
 ai/playerbot/strategy/triggers/BotStateTriggers.cpp
 ai/playerbot/strategy/triggers/GenericTriggers.cpp
 ai/playerbot/strategy/triggers/HealthTriggers.cpp
@@ -94,6 +117,7 @@ ai/playerbot/strategy/values/OperatorValues.cpp
 ai/playerbot/strategy/values/PartyMemberToHeal.cpp
 ai/playerbot/strategy/values/PartyMemberValue.cpp
 ai/playerbot/strategy/values/PartyMemberWithoutAuraValue.cpp
+ai/playerbot/strategy/values/PartyMemberWithoutItemValue.cpp
 ai/playerbot/strategy/values/PetTargetValue.cpp
 ai/playerbot/strategy/values/PositionValue.cpp
 ai/playerbot/strategy/values/PossibleAttackTargetsValue.cpp
@@ -174,25 +198,5 @@ ai/playerbot/strategy/generic/DeadStrategy.cpp
 ai/playerbot/strategy/actions/ReleaseSpiritAction.cpp
 ai/playerbot/strategy/actions/AcceptResurrectAction.cpp
 ai/playerbot/strategy/values/PartyMemberToResurrect.cpp
-ai/playerbot/strategy/actions/GiveItemAction.cpp
-ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp
-ai/playerbot/strategy/mage/FireMageStrategy.cpp
-ai/playerbot/strategy/mage/FrostMageStrategy.cpp
-ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp
-ai/playerbot/strategy/mage/GenericMageStrategy.cpp
-ai/playerbot/strategy/mage/MageActions.cpp
-ai/playerbot/strategy/mage/MageAiObjectContext.cpp
-ai/playerbot/strategy/mage/MageMultipliers.cpp
-ai/playerbot/strategy/mage/MageStrategy.cpp
-ai/playerbot/strategy/mage/MageTriggers.cpp
-ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp
-ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp
-ai/playerbot/strategy/rogue/DpsRogueStrategy.cpp
-ai/playerbot/strategy/rogue/GenericRogueNonCombatStrategy.cpp
-ai/playerbot/strategy/rogue/RogueActions.cpp
-ai/playerbot/strategy/rogue/RogueAiObjectContext.cpp
-ai/playerbot/strategy/rogue/RogueMultipliers.cpp
-ai/playerbot/strategy/rogue/RogueStrategy.cpp
-ai/playerbot/strategy/rogue/RogueTriggers.cpp
-ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp
-ai/playerbot/strategy/values/PartyMemberWithoutItemValue.cpp
+ai/playerbot/DungeonPlanMgr.cpp
+ai/playerbot/BossTacticsMgr.cpp
