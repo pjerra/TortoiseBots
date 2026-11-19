@@ -9,6 +9,7 @@
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
+#include "host/run/TbRunOrders.h"
 #include "runtime/SystemRunPolicy.h"
 
 #include "GameTime.h"
@@ -21,6 +22,8 @@
 #include "TbBotMgr.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/strategy/Event.h"
+#include "PlayerbotAIStorage.h"
 #include "runtime/BotManager.h"
 
 #include <algorithm>
@@ -196,44 +199,6 @@ TickTotals& TickCostRw()
     return totals;
 }
 
-// ---- the order executor (package O6). Until O6's header is merged this stand-in refuses every order: the run then pauses on the first one with the
-// ---- words below (it does LESS, never a guess). The merge replaces the bodies, nothing else in this file.
-namespace bridge
-{
-struct Outcome
-{
-    bool accepted = false;
-    std::string answer;         // P's `OrderRefused` input: the synchronous judge's refusal text ("unreachable: ...", "too-far: ...", "busy ...")
-    bool pathRead = false;      // the judge read the lead's path type for a plain `move` (NoteMovePathType)
-    uint32 pathType = 0;
-};
-
-Outcome Issue(RunRec& /*rec*/, Player* /*lead*/, std::string const& order)
-{
-    Outcome out;
-    out.answer = "unsupported: no order executor is built into this module yet (" + order.substr(0, order.find(' ')) + ")";
-    return out;
-}
-
-// `stay` for every member and the leader at the end of a run: how many orders the executor accepted.
-uint32 StayParty(RunRec& /*rec*/, Player* /*lead*/)
-{
-    return 0;
-}
-
-// Queues the engine kit rebuild a bot needs when its commanded state changes (`.tb master` does it). False: not possible (the start then refuses a member
-// that is not commanded yet).
-bool CanRekit()
-{
-    return false;
-}
-
-// The run's own skull mark on a unit (P's focus order) comes off.
-void DropFocusMark(RunRec& /*rec*/, uint64 /*handle*/)
-{
-}
-}
-
 Player* InWorld(ObjectGuid guid)
 {
     Player* player = ObjectAccessor::FindPlayer(guid);
@@ -264,6 +229,39 @@ bool PartyInCombat(RunRec const& rec)
             if (bot->IsAlive() && InCombatWithPet(bot))
                 return true;
     return false;
+}
+
+// ---- what the run leader's order executor (package O6, TbRunOrders.h) does not cover: the end of a run and the run's own skull mark ----
+
+// `stay` for the leader and every member at the end of a run, by the action `.tb order <bot> stay` runs (TbOrders.cpp `Run`: "stay chat shortcut"), called here
+// at once on the world thread (the engines tick in BotMgr::Update before this tick, never inside it). Returns how many bots it worked on: the reply says so.
+uint32 StayParty(RunRec const& rec)
+{
+    Player* const owner = InWorld(rec.leader);
+    uint32 stayed = 0;
+    for (ObjectGuid guid : PartyGuids(rec))
+    {
+        Player* bot = InWorld(guid);
+        PlayerbotAI* ai = bot ? PlayerbotAIStorage::Instance().GetAI(bot) : nullptr;
+        if (!ai || !ai->GetAiObjectContext())
+            continue;
+        if (ai->DoSpecificAction("stay chat shortcut", Event("tb order", std::string(), owner ? owner : bot), true))
+            ++stayed;
+    }
+    return stayed;
+}
+
+// The run's own skull mark on a unit (P's focus order, `DropFocus`) comes off, only where it still is (T: EndRunIcon).
+void DropFocusMark(RunRec const& rec, uint64 handle)
+{
+    ObjectGuid unit;
+    Player* lead = InWorld(rec.leader);
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    if (!group || !ResolveHandle(rec.leader, handle, unit))
+        return;
+    uint8 const icon = DungeonRun::kFocusIcon;
+    if (group->GetTargetIcon(icon) == unit)
+        group->SetTargetIcon(icon, ObjectGuid::Empty, rec.leader);
 }
 
 int32 UnitOfStep(ai::PlanStep const& step)
@@ -452,7 +450,12 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
 uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
 {
     Observe(rec, nowMs, nullptr);
-    uint32 const stayed = bridge::StayParty(rec, InWorld(rec.leader));
+    uint32 const stayed = StayParty(rec);
+    if (rec.run.focusIconClear)
+    {
+        DropFocusMark(rec, rec.run.focusIconClear);
+        rec.run.focusIconClear = 0;
+    }
     ReleaseAll(rec);
     rec.stopPending = false;
     rec.stopped = stopped;
@@ -460,6 +463,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
         rec.stopReason = why;
     rec.endedMs = nowMs ? nowMs : 1;
     ForgetRun(rec.leader);
+    ForgetRunOrders(rec.leader);
     ai::DungeonPlan const* plan = rec.run.plan;
     int32 const current = plan && rec.run.step < plan->steps.size() ? int32(rec.run.step) : -1;
     Note(rec, nowMs, stopped ? "stop" : "done", current, why);
@@ -616,6 +620,16 @@ void TickRun(RunRec& rec, uint32 nowMs)
     }
     DungeonRun::ApplyPlayerFacts(facts);
     run.liveTactics = &ai::GetBossTactics();
+    // An order the executor accepted earlier failed when the bot's engine ran it: the policy hears it as any refusal, before it decides this tick.
+    std::vector<LateFailure> late;
+    TakeLateFailures(rec, nowMs, late);
+    for (LateFailure const& failure : late)
+        DungeonRun::OrderRefused(run, failure.order, failure.text);
+    if (run.state != State::Running)
+    {
+        Observe(rec, nowMs, &facts);
+        return;
+    }
     std::string const order = DungeonRun::Tick(run, facts, dt);
     // The searches the policy asks the glue for after its tick. Neither search is ported (a stand-in search is a legacy NearestReachablePoint / ring search):
     // "found nothing" is the do-less answer, the policy then hops, retries or pauses by its own rules.
@@ -638,25 +652,25 @@ void TickRun(RunRec& rec, uint32 nowMs)
     run.ccLandedDrop.clear();
     if (run.focusIconClear)
     {
-        bridge::DropFocusMark(rec, run.focusIconClear);
+        DropFocusMark(rec, run.focusIconClear);
         run.focusIconClear = 0;
     }
 
     if (!order.empty())
     {
-        bridge::Outcome const outcome = bridge::Issue(rec, lead, order);
-        if (outcome.accepted)
+        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
+        if (answer.accepted)
         {
-            if (outcome.pathRead)
-                DungeonRun::NoteMovePathType(run, order, outcome.pathType);
+            if (answer.movePathRead)
+                DungeonRun::NoteMovePathType(run, order, answer.movePathType);
             int32 const at = run.step < plan->steps.size() ? int32(run.step) : -1;
             if (order.compare(0, 5, "pull ") == 0 || order.compare(0, 9, "pullback ") == 0)
                 Note(rec, nowMs, "pull", at);
             else if (order.compare(0, 6, "revive") == 0)
                 Note(rec, nowMs, "revive", at, order);
         }
-        else if (!DungeonRun::StallDirectRefused(run, order, outcome.answer))
-            DungeonRun::OrderRefused(run, order, outcome.answer);
+        else if (!DungeonRun::StallDirectRefused(run, order, answer.text))
+            DungeonRun::OrderRefused(run, order, answer.text);
         // Everything the executor queued above is the run's own: the baseline of the outside-order check moves past it.
         BaselineOrders(rec);
     }
@@ -715,6 +729,12 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
         return refuse("not-bot", "the leader must be a host bot in the world");
     if (!plan || plan->steps.empty())
         return refuse("no-plan", "the plan has no steps");
+    // The executor's own question first (O6): a host bot with an engine that leads its party, the tank role set, every member a host bot with an engine.
+    {
+        std::string code, message;
+        if (!StartCheck(leader->GetGUID(), code, message))
+            return refuse(code.empty() ? "not-bot" : code.c_str(), message);
+    }
     std::string const name = leader->GetName();
     Group* group = leader->GetGroup();
     if (!group || group->GetLeaderGUID() != leader->GetGUID())
@@ -725,8 +745,6 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
         return refuse("already-running", name + " already has a run (.tb run status " + name + ")");
     if (leader->GetMapId() != plan->map)
         return refuse("wrong-map", name + " is not on map " + std::to_string(plan->map) + " (the plan's map)");
-    if (!PlayerbotAI::IsTank(leader))
-        return refuse("not-tank", name + " is not a tank: set the role first (.tb role " + name + " tank)");
     std::vector<Player*> others;
     for (Group::MemberSlot const& slot : group->GetMemberSlots())
     {
@@ -735,16 +753,12 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
             return refuse("not-bot", slot.name + " is not in the world");
         if (!BotMgr::Instance().IsBot(slot.guid))
             return refuse("player-in-group", slot.name + " is not a host bot: a run is for bots only");
-        bool away = false, blocked = false, hasBrain = false;
-        uint32 awaySeconds = 0;
-        std::string blockedWhy;
-        if (!BotMgr::Instance().FollowStatus(slot.guid, away, awaySeconds, blocked, blockedWhy, hasBrain) || !hasBrain)
-            return refuse("no-engine", slot.name + " has no running engine (.tb engine " + slot.name + " on)");
         if (member->GetMapId() != plan->map || member->GetInstanceId() != leader->GetInstanceId())
             return refuse("wrong-map", slot.name + " is not in the leader's instance of map " + std::to_string(plan->map));
         if (slot.guid == leader->GetGUID())
             continue;
-        if (h3::CommanderGuid(slot.guid).IsEmpty() && !bridge::CanRekit())
+        // A member that is not commanded yet would need its engine kit rebuilt when the run binds it (`.tb master` queues that); a run does not do it: bind the party first.
+        if (h3::CommanderGuid(slot.guid).IsEmpty())
             return refuse("not-commanded", slot.name + " has no commander yet: bind the party first (.tb master party " + name + " <commander>)");
         others.push_back(member);
     }
