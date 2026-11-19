@@ -80,6 +80,20 @@ call, at boot and `.tb plan reload`. Failure value: the do-less one (nothing loa
 6. Python wiring pins outside this branch that name the old spellings of these two files must be re-pinned the same way; slice 4's own
    re-pins touch other files.
 
+### Fit with H5 (run/h5, `RUN-S5-H-NOTES.md` section 5; read only)
+
+* `ai/playerbot/DungeonPlanMgr.h` is byte-identical in run/h5 and here: GetDungeonPlans, LoadDungeonPlans, ReloadDungeonPlans, PlanReloadReport
+  keep their signatures. No difference.
+* Removal at merge (item 2 above): in `forever/src/slice/SliceLinkStubs.cpp` the stand-ins `ai::GetDungeonPlans`, `ai::LoadDungeonPlans` AND
+  `ai::GetBossTactics`, `ai::LoadBossTactics` (BossTacticsMgr.cpp is in SLICE5.txt too). H5's weak `ai::ReloadDungeonPlans` in
+  `TbPlanLoaderStandIn.cpp` is replaced by the strong one here (the merge deletes that file).
+* P5 adds no load call: `LoadDungeonPlans` is only called by H5's `run::LoadPlans()`. It does not read `ai_dungeon_step_unit` and ignores it, so
+  plans whose steps have unit rows load as before.
+* DDL check of `forever/sql/world/2026_11_20_00_tortoisebots_plans.sql` against every column the two loaders and the revision queries read
+  (plan 6, leg 3, step 15, leg_need 8, boss 2, boss_tactic 19; the tactic revision columns map, boss_entry, kind, target_entry, spell_id, priority,
+  param, healers): all exist, with the types the Field getters expect (tinyint unsigned -> GetUInt8, smallint unsigned -> GetUInt16, int unsigned ->
+  GetUInt32, float -> GetFloat, varchar -> text). No mismatch.
+
 ## 4. Gates (final code commit `63182629f`, later commits are tools and notes only)
 
 See the end of this file (filled in when the runs finished).
