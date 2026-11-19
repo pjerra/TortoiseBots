@@ -12,7 +12,7 @@
 // Everything else the header declares stays undefined: a reference to it fails at link time, which is the point (R6).
 //
 // Defaults, from the spec: combat "arms", "dps assist", "close", "buff"; non-combat "arms", "dps assist", "follow";
-// dead and reaction engines get no strategy; the talent tab is 0 (arms) whatever the bot's talents.
+// the reaction engine gets only the class strategy and the dead engine only "dead" (slice 4); the talent tab is 0 (arms) whatever the bot's talents.
 // Slice 2 (FOREVER-SLICE2-SPEC section 3): a priest gets its own context (PriestAiObjectContext, compiled as it is) and, on tab 0
 // (discipline: the slice never reads talents), combat "discipline", "offdps", "dps assist", "ranged", "buff", "cast time"; non-combat
 // "discipline", "dps assist", "follow", "buff", "food", "loot", "default"; reaction "discipline". The full factory's "flee", "cure",
@@ -177,9 +177,16 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     nonCombatEngine->addStrategies("arms", "dps assist", "follow", "food", "loot", "default", NULL);
 }
 
-void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* /*deadEngine*/)
+void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* deadEngine)
 {
-    // Death and resurrection are out of the slice (spec section 1).
+    // Slice 4 (FOREVER-SLICE4-SPEC section 2): the dead engine runs "dead" only (the full factory adds "dead stay default follow group",
+    // AiFactory.cpp:1776; the stay, follow and group parts are the corpse run, which is out of the slice). "dead" fires `auto release`
+    // (the dungeon-crew rule: runtime/RunReleaseHold.h); `accept resurrect` is called by the host when the core's resurrection request arrives
+    // (the `resurrect request` trigger is not registered: spec section 2); every other trigger of DeadStrategy.cpp names a key the slice
+    // does not register on purpose (repop, self resurrect, spirit healer, find corpse, revive from corpse, corpse near, falling far, move
+    // long stuck, resurrect request, bg reset objective force, the `val` triggers): the engine skips them, each is logged once as
+    // `slice: missing ...`, and each is a thing the bot then does LESS (forever/docs/SLICE4-P-NOTES.md section 4).
+    deadEngine->addStrategy("dead");
 }
 
 void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const facade, ReactionEngine* reactionEngine)

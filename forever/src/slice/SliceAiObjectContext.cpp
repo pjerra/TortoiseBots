@@ -13,6 +13,7 @@
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/actions/AcceptResurrectAction.h"
 #include "playerbot/strategy/actions/AddLootAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
@@ -26,12 +27,14 @@
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
+#include "playerbot/strategy/actions/ReleaseSpiritAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
+#include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
@@ -102,6 +105,7 @@
 #include "playerbot/strategy/values/OperatorValues.h"
 #include "playerbot/strategy/values/PartyMemberToDispel.h"
 #include "playerbot/strategy/values/PartyMemberToHeal.h"
+#include "playerbot/strategy/values/PartyMemberToResurrect.h"
 #include "playerbot/strategy/values/PartyMemberWithoutAuraValue.h"
 #include "playerbot/strategy/values/PetTargetValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
@@ -132,7 +136,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (11 of its keys)
+    // the registry of StrategyContext (12 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -149,6 +153,7 @@ namespace slice
             creators["passive"] = [](PlayerbotAI* ai) { return new PassiveStrategy(ai); };
             creators["tank face"] = [](PlayerbotAI* ai) { return new TankFaceStrategy(ai); };
             creators["wait for attack"] = [](PlayerbotAI* ai) { return new WaitForAttackStrategy(ai); };
+            creators["dead"] = [](PlayerbotAI* ai) { return new DeadStrategy(ai); };
         }
     };
 
@@ -175,7 +180,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (38 of its keys)
+    // the registry of ActionContext (39 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -219,10 +224,11 @@ namespace slice
             creators["successor white cap noop"] = [](PlayerbotAI* ai) { return new SuccessorWhiteCapNoopAction(ai); };
             creators["threat reset white stop noop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopNoopAction(ai); };
             creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
+            creators["reach party member to resurrect"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToResurrectAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (5 of its keys)
+    // the registry of ChatActionContext (6 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -233,20 +239,23 @@ namespace slice
             creators["follow chat shortcut"] = [](PlayerbotAI* ai) { return new FollowChatShortcutAction(ai); };
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
+            creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
         }
     };
 
-    // the registry of WorldPacketActionContext (1 of its keys)
+    // the registry of WorldPacketActionContext (3 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
         SliceWorldPacketActionContext()
         {
             creators["store loot"] = [](PlayerbotAI* ai) { return new StoreLootAction(ai); };
+            creators["auto release"] = [](PlayerbotAI* ai) { return new AutoReleaseSpiritAction(ai); };
+            creators["accept resurrect"] = [](PlayerbotAI* ai) { return new AcceptResurrectAction(ai); };
         }
     };
 
-    // the registry of TriggerContext (72 of its keys)
+    // the registry of TriggerContext (74 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -324,6 +333,8 @@ namespace slice
             creators["wait for attack safe distance"] = [](PlayerbotAI* ai) { return new WaitForAttackSafeDistanceTrigger(ai); };
             creators["successor white cap"] = [](PlayerbotAI* ai) { return new SuccessorWhiteCapTrigger(ai); };
             creators["threat reset white stop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopTrigger(ai); };
+            creators["party member dead"] = [](PlayerbotAI* ai) { return new PartyMemberDeadTrigger(ai); };
+            creators["resurrect"] = [](PlayerbotAI* ai) { return new ResurrectTrigger(ai); };
         }
     };
 
@@ -337,7 +348,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (169 of its keys)
+    // the registry of ValueContext (170 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -512,11 +523,12 @@ namespace slice
             creators["inventory item ids"] = [](PlayerbotAI* ai) { return new InventoryItemIdValue(ai); };
             creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
             creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
+            creators["party member to resurrect"] = [](PlayerbotAI* ai) { return new PartyMemberToResurrect(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 16, kActions = 44, kTriggers = 73, kValues = 169;
+    constexpr unsigned kStrategies = 17, kActions = 48, kTriggers = 75, kValues = 170;
 }
 }
 
