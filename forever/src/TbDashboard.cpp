@@ -215,7 +215,7 @@ void QueueEvent(Player* bot, char const* event, std::string const& info1, std::s
     ev << "{\"event\":\"" << event << "\",\"info1\":\"" << Escape(info1) << "\",\"info2\":\"" << Escape(info2) << "\",\"bot\":\""
        << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter() << ",\"class\":\"" << ClassName(bot->GetClass())
        << "\",\"level\":" << uint32(bot->GetLevel()) << ",\"map\":" << bot->GetMapId() << ",\"zone\":" << bot->GetZoneId()
-       << ",\"money\":" << bot->GetMoney() << extra << "}";
+       << (extra.find("\"money\"") == std::string::npos ? ",\"money\":" + std::to_string(bot->GetMoney()) : std::string()) << extra << "}";
     s.events.push_back(ev.str());
 }
 
@@ -256,8 +256,7 @@ void SendServerInfo()
        << ",\"skill_discovery\":" << sWorld->getRate(RATE_SKILL_DISCOVERY) << "}"
        << ",\"bots\":{\"enabled\":\"" << (mgr.Enabled() ? 1 : 0) << "\",\"online\":" << mgr.Count()
        << ",\"engine_by_default\":\"" << (sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false) ? 1 : 0)
-       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dead_backstop_s\":" << sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", 180)
-       << ",\"dashboard_interval_ms\":" << s.intervalMs << "}"
+       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dashboard_interval_ms\":" << s.intervalMs << "}"
        << ",\"diagnostics\":{\"core\":\"ForeverCore\",\"core_branch\":\"" << Escape(GitRevision::GetBranch()) << "\"}}";
     Send(ss.str());
 }
@@ -882,6 +881,16 @@ void OnKilledByCreature(Creature* killer, Player* killed)
     QueueEvent(killed, "BotDeath", name, "");
     if (auto itr = Get().track.find(killed->GetGUID()); itr != Get().track.end())
         itr->second.alive = false;
+}
+
+// A money change (corpse money, vendor, repairs, trainers): the event carries the new balance, from which the
+// dashboard counts money earned and spent. The hook runs before the change, so the balance is computed here.
+void OnMoneyChanged(Player* player, int64 amount)
+{
+    if (!IsBot(player) || !amount)
+        return;
+    int64 const after = std::max<int64>(0, int64(player->GetMoney()) + amount);
+    QueueEvent(player, "MoneyChanged", std::to_string(amount), "", ",\"money\":" + std::to_string(after));
 }
 
 // A looted item stored in the bot's bags: the loot feed and the loot counters (item, quality, vendor value of the stack).
