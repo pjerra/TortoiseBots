@@ -1,5 +1,6 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
+#include "TbDashboard.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
@@ -97,6 +98,7 @@ public:
     void OnConfigLoad(bool reload) override
     {
         BotMgr::Instance().LoadConfig();
+        TortoiseBots::Dashboard::LoadConfig();
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -106,6 +108,7 @@ public:
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
+        TortoiseBots::Dashboard::LoadConfig();
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
@@ -132,6 +135,7 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        TortoiseBots::Dashboard::Update(diff);
         uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
         uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
         PerfWindow& perf = Perf();
