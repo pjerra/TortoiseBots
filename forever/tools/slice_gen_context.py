@@ -93,7 +93,24 @@ SLICE4_KEYS = {
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# Slice 10 (package H10, FOREVER-SLICE10-HYBRIDS-SPEC section 3 "Registry keys", forever/docs/SLICE10-K-NOTES.md section 4; listed with creator file:line in
+# forever/docs/SLICE10-H-NOTES.md): the keys the compiled druid, paladin and shaman contexts and their kits name that the slice did not register yet. `low mana` and
+# `enemy is close` are not in the spec's table but the restoration shaman (`low mana`) and the holy paladin (`enemy is close`) kits fire them (K10 notes: also on
+# slice 8's list, listed once). Left unregistered on purpose (each one does less): manual saved string (D5: totem mode stays auto), travel target traveling, enemy player
+# target, has enemy player targets, grind target; enemy flagcarrier near, player has flag, new pet, has (greater) blessing of salvation, resist aura swap over, not
+# sensing undead, kick, aquatic form; apply oil/stone, oil of immolation, throw grenade, mana/stoneshield potion, remove (greater) blessing of salvation, set pet stance,
+# sense undead, switch to melee/ranged, cancel channel, powershift, reach party member for totem (no totem order). Cat, balance, enhancement, elemental and the Turtle
+# shaman tank kit are out of the slice (D2), so behind target / not behind target (the feral dps) stay out too.
+SLICE10_KEYS = {
+    "strategy": "",
+    "action": "move out of enemy contact, restore spec aura",
+    "trigger": "enemy too close for melee, not facing target, rooted, party member rooted, tank rooted, enough mana, healer low mana, medium aoe heal, "
+               "ranged medium aoe and healer should attack, target of attacker close, loose adds near, low mana, enemy is close",
+    "value": "has own totem, have any own totem, possible attack targets count, revive targets, boost targets, healer low mana",
+}
+def _join(*ds):
+    return {k: [x.strip() for d in ds for x in d[k].split(",") if x.strip()] for k in SLICE_KEYS}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE10_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

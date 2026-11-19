@@ -24,6 +24,20 @@
 // combat "protection", "tank assist", "pull", "close", "tank face"; non-combat "protection", "tank assist", "follow", "food", "default". Any other
 // warrior (dps): the arms kit as before plus "threat" (where KeepsPartyThreatBackoff says so) and non-combat "food". The priest gets "threat" the same
 // way. Left out on purpose (spec): "pull back", "behind", "aoe", "cc", "boost", "should pull" (autonomous pulls), "chat".
+// Slice 10 (FOREVER-SLICE10-HYBRIDS-SPEC sections 2 and 7, lead decisions D1-D6; forever/docs/SLICE10-H-NOTES.md): a druid, a paladin and a shaman get their own contexts
+// (DruidAiObjectContext, PaladinAiObjectContext, ShamanAiObjectContext, compiled as they are), a talent tab read from the ORDERED role (the slice never reads talents:
+// druid tank 1 feral / otherwise 2 restoration; paladin tank 1 protection / otherwise 0 holy; shaman 2 restoration), a healer role when none was ordered, and these kits
+// (HybridKitOf below). Bear druid (forced role tank): combat "tank feral", "tank assist", "pull", "close", "tank face", "cure", "buff"; non-combat "tank feral", "tank assist",
+// "follow", "cure", "buff", "food", "default"; reaction "tank feral". Restoration druid: combat "restoration", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt";
+// non-combat "restoration", "dps assist", "follow", "cure", "buff", "food", "default"; reaction "restoration". Holy paladin: combat "holy", "dps assist", "ranged", "cure", "buff", "aura",
+// "blessing", "cast time", "heal interrupt"; non-combat "holy", "dps assist", "follow", "cure", "buff", "food", "default", "aura", "blessing"; reaction "holy". Protection paladin
+// (recorded only, D1): combat "protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff"; non-combat "protection", "tank assist" + the same tail; reaction
+// "protection". Restoration shaman: combat "restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt"; non-combat "restoration", "dps assist", "follow",
+// "cure", "buff", "food", "default" (no "totems" out of combat: D5, the totems drop in combat only); reaction "restoration". A tank kit (bear, protection) returns before the threat rule, as
+// the warrior's does (a tank never backs off the threat it holds; the spec's lists name "threat" in the two tank kits, but KeepsPartyThreatBackoff is false for a tank, so the strategy was
+// never added to the warrior's; the kits here follow the warrior's). The three healer kits get "threat" from KeepsPartyThreatBackoff as the priest does. Left out on purpose (the spec's
+// list): the full kits' "aoe", "cc", "boost", "flee", "pull back", "offheal"/"offdps", "stealth", "oom melee", the druid's under-level-10 "leveling" kit, every cat, balance, retribution,
+// enhancement and elemental kit, and the Turtle shaman tank kit (a shaman ordered to tank keeps the restoration kit: `.tb role <shaman> tank` is not supported in this slice).
 #include "compat/botpch_forever.h"
 #include "playerbot/playerbot.h"
 #include "playerbot/AiFactory.h"
@@ -31,6 +45,9 @@
 #include "playerbot/strategy/ReactionEngine.h"
 #include "playerbot/strategy/warrior/WarriorAiObjectContext.h"
 #include "playerbot/strategy/priest/PriestAiObjectContext.h"
+#include "playerbot/strategy/druid/DruidAiObjectContext.h"
+#include "playerbot/strategy/paladin/PaladinAiObjectContext.h"
+#include "playerbot/strategy/shaman/ShamanAiObjectContext.h"
 #include "../../../runtime/PlayerbotAIStorage.h"
 #include "../../../runtime/CommandedGroupQuery.h"
 #include "../../../runtime/RemoteCommanderPolicy.h"
@@ -40,23 +57,24 @@
 
 AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* ai)
 {
-    // The slice registers the warrior's and the priest's class strategies (SliceAiObjectContext.cpp + the class context compiled as it
+    // The slice registers the warrior's, the priest's, the druid's, the paladin's and the shaman's class strategies (SliceAiObjectContext.cpp + the class context compiled as it
     // is); another class would run on the warrior's kit, so say so once.
     if (player && player->GetClass() == CLASS_PRIEST)
         return new slice::GuardedContext<PriestAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_DRUID)
+        return new slice::GuardedContext<DruidAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_PALADIN)
+        return new slice::GuardedContext<PaladinAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_SHAMAN)
+        return new slice::GuardedContext<ShamanAiObjectContext>(ai);
 
     static bool warned = false;
     if (player && player->GetClass() != CLASS_WARRIOR && !warned)
     {
         warned = true;
-        slice::LogWarn("slice: " + player->GetName() + " is neither a warrior nor a priest; the slice build gives every other bot the warrior context");
+        slice::LogWarn("slice: " + player->GetName() + " is not a warrior, priest, druid, paladin or shaman; the slice build gives every other bot the warrior context");
     }
     return new slice::GuardedContext<WarriorAiObjectContext>(ai);
-}
-
-int AiFactory::GetPlayerSpecTab(const Player* /*player*/)
-{
-    return 0; // arms
 }
 
 std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* /*player*/)
@@ -86,6 +104,78 @@ bool WarriorIsTank(Player const* player, PlayerbotAI* const facade)
 {
     return player && player->GetClass() == CLASS_WARRIOR && OrderedRole(player, facade) == static_cast<uint8>(BOT_ROLE_TANK);
 }
+
+// The ordered role as GetPlayerRoles reads it, for callers that have no PlayerbotAI at hand (GetPlayerSpecTab): the player-wide stored role, else the bot's own
+// forced role when its AI is already stored (it is not while the AI is being constructed: then only the stored role counts).
+uint8 OrderedRoleNoFacade(Player const* player)
+{
+    if (!player)
+        return static_cast<uint8>(BOT_ROLE_NONE);
+    uint8 ordered = PlayerbotAIStorage::Instance().GetPlayerForcedRole(player->GetObjectGuid());
+    if (ordered == static_cast<uint8>(BOT_ROLE_NONE))
+        if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(player->GetObjectGuid()))
+            ordered = botAi->GetForcedRole() == 1 ? static_cast<uint8>(BOT_ROLE_TANK) :
+                      botAi->GetForcedRole() == 2 ? static_cast<uint8>(BOT_ROLE_HEALER) :
+                      botAi->GetForcedRole() ? static_cast<uint8>(BOT_ROLE_DPS) : static_cast<uint8>(BOT_ROLE_NONE);
+    return ordered;
+}
+
+// Slice 10: the kit a druid, paladin or shaman plays (spec section 2, D1/D2). Only the tank order changes it: a druid ordered to tank is the bear and a paladin the protection
+// paladin (recorded only); every other order or none is the healer kit (restoration druid, holy paladin, restoration shaman). A shaman never tanks here (D2).
+enum class HybridKit { None, Bear, RestoDruid, HolyPaladin, ProtPaladin, RestoShaman };
+
+HybridKit HybridKitOf(Player const* player, uint8 orderedRole)
+{
+    if (!player)
+        return HybridKit::None;
+    bool const tank = orderedRole == static_cast<uint8>(BOT_ROLE_TANK);
+    switch (player->GetClass())
+    {
+        case CLASS_DRUID: return tank ? HybridKit::Bear : HybridKit::RestoDruid;
+        case CLASS_PALADIN: return tank ? HybridKit::ProtPaladin : HybridKit::HolyPaladin;
+        case CLASS_SHAMAN: return HybridKit::RestoShaman;
+        default: return HybridKit::None;
+    }
+}
+
+bool IsTankKit(HybridKit kit)
+{
+    return kit == HybridKit::Bear || kit == HybridKit::ProtPaladin;
+}
+
+// The class strategy that names the kit (the reaction engine's one strategy, and the spec strategy of the combat and non-combat kits).
+char const* HybridSpecStrategy(HybridKit kit)
+{
+    switch (kit)
+    {
+        case HybridKit::Bear: return "tank feral";
+        case HybridKit::RestoDruid: return "restoration";
+        case HybridKit::HolyPaladin: return "holy";
+        case HybridKit::ProtPaladin: return "protection";
+        case HybridKit::RestoShaman: return "restoration";
+        default: return nullptr;
+    }
+}
+}
+
+int AiFactory::GetPlayerSpecTab(const Player* player)
+{
+    // The slice never reads talents. A druid, paladin or shaman gets the tab its kit belongs to (the full factory's tabs: DruidAiObjectContext / PaladinAiObjectContext / ShamanAiObjectContext
+    // strategies read it, e.g. GenericDruidStrategy.cpp:68): druid feral 1 for the bear, restoration 2 otherwise; paladin protection 1 for the protection kit, holy 0 otherwise; shaman
+    // restoration 2. Every other class keeps tab 0 (warrior arms, priest discipline).
+    if (player)
+    {
+        switch (HybridKitOf(player, OrderedRoleNoFacade(player)))
+        {
+            case HybridKit::Bear: return 1;
+            case HybridKit::RestoDruid: return 2;
+            case HybridKit::HolyPaladin: return 0;
+            case HybridKit::ProtPaladin: return 1;
+            case HybridKit::RestoShaman: return 2;
+            default: break;
+        }
+    }
+    return 0; // arms
 }
 
 // The full factory's text (AiFactory.cpp:633-642), compiled here because AiFactory.cpp is not in the slice: non-tank bots of a party with a real
@@ -135,6 +225,10 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
     // A priest on tab 0 or 1 (discipline, holy: the only tabs the slice gives it) heals (AiFactory.cpp GetPlayerRoles(cls, tab): tab 2 is dps).
     if (player && player->GetClass() == CLASS_PRIEST)
         return BOT_ROLE_HEALER;
+    // Slice 10: with no ordered role a druid (restoration, tab 2), a paladin (holy, tab 0) and a shaman (restoration, tab 2) heal, as the tabs above give
+    // (AiFactory.cpp:267-330); a tank order came first above (a bear druid is a tank, the run's lead reads it through PlayerbotAI::IsTank).
+    if (player && (player->GetClass() == CLASS_DRUID || player->GetClass() == CLASS_PALADIN || player->GetClass() == CLASS_SHAMAN))
+        return BOT_ROLE_HEALER;
     return BOT_ROLE_NONE;
 }
 
@@ -146,6 +240,30 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3 of slice 2. The priest falls through to the `threat` block below
         // (slice 3: a commanded healer backs off the tank's threat).
         combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", "heal interrupt", NULL);
+    }
+    else if (HybridKitOf(player, OrderedRole(player, facade)) != HybridKit::None)
+    {
+        switch (HybridKitOf(player, OrderedRole(player, facade)))
+        {
+            case HybridKit::Bear:
+                // AiFactory.cpp:807-853 (tab 1, tanking) without "pull back" and "aoe", "cc", "boost".
+                combatEngine->addStrategies("tank feral", "tank assist", "pull", "close", "tank face", "cure", "buff", NULL);
+                return;                             // a tank never backs off the threat it holds
+            case HybridKit::ProtPaladin:
+                combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff", NULL);
+                return;
+            case HybridKit::RestoDruid:
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
+                break;
+            case HybridKit::HolyPaladin:
+                combatEngine->addStrategies("holy", "dps assist", "ranged", "cure", "buff", "aura", "blessing", "cast time", "heal interrupt", NULL);
+                break;
+            case HybridKit::RestoShaman:
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt", NULL);
+                break;
+            default:
+                break;
+        }
     }
     else if (WarriorIsTank(player, facade))
     {
@@ -166,6 +284,15 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     if (player && player->GetClass() == CLASS_PRIEST)
     {
         nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "default", NULL);
+        return;
+    }
+    if (HybridKit const kit = HybridKitOf(player, OrderedRole(player, facade)); kit != HybridKit::None)
+    {
+        // AiFactory.cpp:1284-1300, :1322-1345, :1408-1440: the spec strategy, the assist strategy of the role, then follow, cure, buff, food and the engine's own "default"
+        // (+ the paladin's aura and blessing). No "totems" out of combat (D5), no "aoe", "cc", "boost", "loot".
+        nonCombatEngine->addStrategies(HybridSpecStrategy(kit), IsTankKit(kit) ? "tank assist" : "dps assist", "follow", "cure", "buff", "food", "default", NULL);
+        if (kit == HybridKit::HolyPaladin || kit == HybridKit::ProtPaladin)
+            nonCombatEngine->addStrategies("aura", "blessing", NULL);
         return;
     }
     if (WarriorIsTank(player, facade))
@@ -197,6 +324,12 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
     // never left it (R8 observation d).
     // The tank's spec strategy, as AiFactory.cpp:2085 (a warrior on the protection tab).
+    // Slice 10: the bear's "tank feral", the restoration druid's and shaman's "restoration", the paladin's "holy" or "protection" (AiFactory.cpp:1990-2125).
+    if (char const* hybrid = HybridSpecStrategy(HybridKitOf(player, OrderedRole(player, facade))))
+    {
+        reactionEngine->addStrategy(hybrid);
+        return;
+    }
     reactionEngine->addStrategy(player && player->GetClass() == CLASS_PRIEST ? "discipline" : (WarriorIsTank(player, facade) ? "protection" : "arms"));
 }
 

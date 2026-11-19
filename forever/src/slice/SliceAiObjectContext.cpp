@@ -19,6 +19,7 @@
 #include "playerbot/strategy/actions/BotStateActions.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
+#include "playerbot/strategy/actions/DungeonActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
@@ -76,6 +77,7 @@
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/strategy/values/GroupValues.h"
 #include "playerbot/strategy/values/HasAvailableLootValue.h"
+#include "playerbot/strategy/values/HasOwnTotemValue.h"
 #include "playerbot/strategy/values/HasTotemValue.h"
 #include "playerbot/strategy/values/HazardsValue.h"
 #include "playerbot/strategy/values/InterruptTargetValue.h"
@@ -180,7 +182,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (39 of its keys)
+    // the registry of ActionContext (41 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -225,6 +227,8 @@ namespace slice
             creators["threat reset white stop noop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopNoopAction(ai); };
             creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
             creators["reach party member to resurrect"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToResurrectAction(ai); };
+            creators["move out of enemy contact"] = [](PlayerbotAI* ai) { return new MoveOutOfEnemyContactAction(ai); };
+            creators["restore spec aura"] = [](PlayerbotAI* ai) { return new RestoreSpecAuraAction(ai); };
         }
     };
 
@@ -255,7 +259,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (74 of its keys)
+    // the registry of TriggerContext (87 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -335,6 +339,19 @@ namespace slice
             creators["threat reset white stop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopTrigger(ai); };
             creators["party member dead"] = [](PlayerbotAI* ai) { return new PartyMemberDeadTrigger(ai); };
             creators["resurrect"] = [](PlayerbotAI* ai) { return new ResurrectTrigger(ai); };
+            creators["enemy too close for melee"] = [](PlayerbotAI* ai) { return new EnemyTooCloseForMeleeTrigger(ai); };
+            creators["not facing target"] = [](PlayerbotAI* ai) { return new IsNotFacingTargetTrigger(ai); };
+            creators["rooted"] = [](PlayerbotAI* ai) { return new RootedTrigger(ai); };
+            creators["party member rooted"] = [](PlayerbotAI* ai) { return new PartyMemberRootedTrigger(ai); };
+            creators["tank rooted"] = [](PlayerbotAI* ai) { return new TankRootedTrigger(ai); };
+            creators["enough mana"] = [](PlayerbotAI* ai) { return new EnoughManaTrigger(ai); };
+            creators["healer low mana"] = [](PlayerbotAI* ai) { return new HealerLowManaTrigger(ai); };
+            creators["medium aoe heal"] = [](PlayerbotAI* ai) { return new AoeHealTrigger(ai, "medium aoe heal", "medium", 2); };
+            creators["ranged medium aoe and healer should attack"] = [](PlayerbotAI* ai) { return new TwoTriggers(ai, "ranged medium aoe", "healer should attack"); };
+            creators["target of attacker close"] = [](PlayerbotAI* ai) { return new TargetOfAttackerClose(ai); };
+            creators["loose adds near"] = [](PlayerbotAI* ai) { return new LooseAddsNearTrigger(ai); };
+            creators["low mana"] = [](PlayerbotAI* ai) { return new LowManaTrigger(ai); };
+            creators["enemy is close"] = [](PlayerbotAI* ai) { return new EnemyIsCloseTrigger(ai); };
         }
     };
 
@@ -348,7 +365,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (170 of its keys)
+    // the registry of ValueContext (176 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -524,11 +541,17 @@ namespace slice
             creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
             creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
             creators["party member to resurrect"] = [](PlayerbotAI* ai) { return new PartyMemberToResurrect(ai); };
+            creators["has own totem"] = [](PlayerbotAI* ai) { return new HasOwnTotemValue(ai); };
+            creators["have any own totem"] = [](PlayerbotAI* ai) { return new HaveAnyOwnTotemValue(ai); };
+            creators["possible attack targets count"] = [](PlayerbotAI* ai) { return new PossibleAttackTargetsCountValue(ai); };
+            creators["revive targets"] = [](PlayerbotAI* ai) { return new ReviveTargetsValue(ai); };
+            creators["boost targets"] = [](PlayerbotAI* ai) { return new BoostTargetsValue(ai); };
+            creators["healer low mana"] = [](PlayerbotAI* ai) { return new HealerLowMana(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 17, kActions = 48, kTriggers = 75, kValues = 170;
+    constexpr unsigned kStrategies = 17, kActions = 50, kTriggers = 88, kValues = 176;
 }
 }
 
