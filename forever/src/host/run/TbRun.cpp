@@ -43,7 +43,7 @@ std::map<ObjectGuid, std::unique_ptr<RunRec>>& Table()
     return table;
 }
 
-// pulls = the pull steps of the plan; done = the pull steps the run has passed (an index below the current step, all of them once the run is done) that
+// pulls = the pull steps of the plan; done = the pull steps the run has passed (an index below the current step, all of them once the run is done by reaching the plan's end, not when it was stopped) that
 // it did not record as skipped, deferred or given up (the Run's own lists), so a pull the run left uncleared is not counted done.
 void CountPulls(RunRec const& rec, uint32& pulls, uint32& done)
 {
@@ -52,7 +52,7 @@ void CountPulls(RunRec const& rec, uint32& pulls, uint32& done)
     ai::DungeonPlan const* plan = rec.run.plan;
     if (!plan)
         return;
-    size_t const passed = rec.run.state == DungeonRun::State::Done ? plan->steps.size() : std::min(rec.run.step, plan->steps.size());
+    size_t const passed = (rec.run.state == DungeonRun::State::Done && !rec.stopped) ? plan->steps.size() : std::min(rec.run.step, plan->steps.size());
     auto listed = [](std::vector<size_t> const& list, size_t index) { return std::find(list.begin(), list.end(), index) != list.end(); };
     for (size_t i = 0; i < plan->steps.size(); ++i)
     {
