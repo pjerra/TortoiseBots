@@ -35,9 +35,9 @@ bool StartCheck(ObjectGuid leader, std::string& code, std::string& message);
 | `move x y z direct` | the lead's checks (`CheckDirectStep`, floor under the point, line of sight) and each follower's reach, then lead `move-direct` (a straight `MovePoint(generatePath=false)`, stay position written at the floor under the point, the AI asleep for the walk, at most 4 s), followers `follow` | `too-far`, `no-ground`, `no-los`, and `too-far: <bot> is not with <lead> ...` (names the follower, as T does) |
 | `walk <bot> x y z` | that bot `come x y z` after the same move judge from ITS position | the move refusals, `no-bot`, `unavailable` |
 | `pull <h> [body]` | the tank's `pull` (the existing verb: `pull my target` + the party hold) | `invalid-target`, `dead-target`, `friendly`, `no-target`, `too-far` (3 x ReactDistance), `no-tank`, `no-party` |
-| `pullback <h>` | new verb `pullback`: stay position written at the tank's own spot, `pullback my target`, the same lead-keyed hold as `pull` | as `pull` |
+| `pullback <h>` | new verb `pullback`: stay position written at the tank's own spot, then the steps of the chat action `pullback my target` (which the slice's action context does not hold) with the same public calls ("pull back" strategy on, `PullStrategy::BeginCommand`, `pull my target`, rolled back when refused), then the same lead-keyed hold as `pull` | as `pull` |
 | `attack <h> [bot]` | the target judged as T (`CheckOrderTarget`), then `attack` (the mark route of slice 3) for the named bot, or for every living bot but healers and a tank holding another mob | the target codes, `no-bot`, `no-party`, `failed` |
-| `focus <h>` | new verb `focus`: the skull on the unit in the group (it STAYS for the fight), each bot off its stay, `rti` on skull, `attack rti target` | the target codes, `failed` |
+| `focus <h>` | new verb `focus`: the skull on the unit in the group (it STAYS for the fight), each bot off its stay, the `rti` value set to skull (the legacy `rti` action only sets it and is not in the slice's context), `attack rti target` | the target codes, `failed` |
 | `rest` | new verb `rest`: drink when mana is short, eat when health is short, "rest to full", the bot sits out 30 s; nothing short = ok | `failed` (no bot took it), `action-not-registered` |
 | `revive party` | every dead bot `release` (slice 4; inside the instance the core revives it at the entrance, D2), every living member `follow`; a ghost already released is left alone | `not-dead`, `no-entrance`, `failed` |
 | `summon <bot>` | refused (D3): no bot is teleported to the lead | `unsupported` |
@@ -69,3 +69,19 @@ Binding facts for the F6 needs (section 8 of its notes): (1) every guid is a han
 * Add `forever/tools/test_run_orders.cpp` to the VM policy-test list next to `test_run_facts`.
 
 ## 7. Gates
+
+All in slot 3 of the build VM, on the final tree (the last code commit is `O6: pullback and focus done with the calls the slice has`; later commits are notes).
+
+| Gate | Result |
+|---|---|
+| option-ON build (`FOREVER_SLOT=3 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0`; `TbOrders.cpp.o` and `TbRunOrders.cpp.o` rebuilt, `libtortoisebots.a` holds `run::Issue`, `TakeLateFailures`, `StartCheck`, `ForgetRunOrders`, `h3::QueueOrder`, `h3::PreflightOrder` (the linker does not pull the `run::` ones into `worldserver` until C6 calls them) |
+| option-OFF module build (`-DTORTOISEBOTS_SLICE1=OFF`, target `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; `TbRunOrders.cpp` is an empty object, `TbOrders.cpp` answers `engine-not-built` as before |
+| census SLICE5 / SLICE4 / SLICE3 / SLICE2 / SLICE1 | `files 172 / 174 / 170 / 160 / 133, compile clean = files, error places 0`, includes of a missing header 0 (O6 adds no legacy file) |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=215` (unchanged from F6) |
+| `test_run_orders` (g++ -std=c++17 -Wall -Wextra, VM: `cd` to the worktree on the VM, `g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_run_orders.cpp -o /tmp/t && /tmp/t`) | `RESULT: PASS (128 checks)`: every order string of the policy parses to its verb; every refusal text is accepted by the policy's own parsers (`ReactTooFarAnswer`, `UnreachableAnswer`, `LeadNoProgressRefusal`, `IsPathRefusal`, `DirectStragglerName`, the `invalid-target` prefix); the tracker settles ok / failed / expired / superseded / party-wide cases |
+| `test_run_facts` (F6's, unchanged) | `RESULT: PASS` |
+| `test_dungeon_run_policy`, `test_system_run_policy` (unchanged) | see the report (run on the VM) |
+| Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed |
+| server / SQL | none started, none applied |
+
+What these gates do NOT prove: the core calls themselves (that is the build, and a live run). First things to watch live (M6): the answer of the first `move` (path type, snap), `pull`/`pullback` on the first pack (the hold anchored on the tank, the tank returning to its spot), `rest` on the priest, `revive party` after a death (`release` result at the entrance), and `TakeLateFailures` (how many late failures a run produces: spec U2).
