@@ -73,7 +73,7 @@ std::atomic<bool> g_disabledLogged{false};
 //  (b) the same client table read here for the links the core did not turn into a chain entry: SkillLineAbilityEntry::SupercedesSpell (DB2Structure.h:3724).
 //      Links are followed only; a spell with two different successors or two different predecessors is ambiguous and none of its links is used.
 //  (c) the trainers' required-ability links (trainer_spell.ReqAbility), kept as rank links only where both spells are the same ability by the spell data
-//      (family, family flags): the live data showed (b) has no link for the 1.12 class spells; see the comment in BuildChainTable.
+//      (family, family flags, effect shape): the live data showed (b) has no link for the 1.12 class spells; see the comment in BuildChainTable.
 // Built once with the index (published before it), immutable afterwards.
 struct ChainTable
 {
@@ -250,7 +250,7 @@ ChainTable const* BuildChainTable()
     // ability it requires (Trainer::Spell::ReqAbility, Trainer.h:59; the core's own gate in Trainer::GetSpellState, Trainer.cpp:431-433): 591 Smite
     // requires 585, 2052 Lesser Heal requires 2050. That is the game's own prerequisite data, but a prerequisite is not always a rank (Whirlwind requires
     // Berserker Stance, Revenge requires Defensive Stance), so a link counts as a rank link only when both spells are the same ability by the spell
-    // data itself: the same spell family and the same family flag mask, the required one with the lower spell level (the icon is NOT compared: Heal changes its icon between rank 2 and rank 3, 2055 -> 6063). Everything else
+    // data itself: the same spell family, the same family flag mask and the same effect shape (per effect: effect type, aura, both implicit targets), the required one with the lower spell level. The icon is NOT compared (Heal changes its icon between rank 2 and rank 3, 2055 -> 6063); the effect shape is what tells Divine Spirit (single target) from Prayer of Spirit (party), which share family and flags (27681 requires 14752). Everything else
     // is counted as "prerequisite, not a rank" (listed by `.tb ranks`). The name of a spell is never read.
     {
         std::set<std::pair<uint32, uint32>> seen;
@@ -265,7 +265,15 @@ ChainTable const* BuildChainTable()
                     SpellInfo const* const higher = sSpellMgr->GetSpellInfo(spell.SpellId, DIFFICULTY_NONE);
                     if (!lower || !higher)
                         continue;
-                    bool const sameAbility = lower->SpellFamilyName != 0 && lower->SpellFamilyName == higher->SpellFamilyName &&
+                    bool sameShape = lower->GetEffects().size() == higher->GetEffects().size();
+                    for (size_t i = 0; sameShape && i < lower->GetEffects().size(); ++i)
+                    {
+                        SpellEffectInfo const& a = lower->GetEffects()[i];
+                        SpellEffectInfo const& b = higher->GetEffects()[i];
+                        sameShape = a.Effect == b.Effect && a.ApplyAuraName == b.ApplyAuraName && a.TargetA.GetTarget() == b.TargetA.GetTarget() &&
+                            a.TargetB.GetTarget() == b.TargetB.GetTarget();
+                    }
+                    bool const sameAbility = sameShape && lower->SpellFamilyName != 0 && lower->SpellFamilyName == higher->SpellFamilyName &&
                         lower->SpellFamilyFlags[0] == higher->SpellFamilyFlags[0] && lower->SpellFamilyFlags[1] == higher->SpellFamilyFlags[1] &&
                         lower->SpellFamilyFlags[2] == higher->SpellFamilyFlags[2] && lower->SpellFamilyFlags[3] == higher->SpellFamilyFlags[3] &&
                         lower->SpellLevel < higher->SpellLevel;

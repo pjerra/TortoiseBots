@@ -350,9 +350,15 @@ public:
         std::list<Creature*> creatures;
         bot->GetCreatureListWithEntryInGrid(creatures, 0, 60.0f);
         Creature* nearest = nullptr;
+        uint32 corpses = 0;
         for (Creature* creature : creatures)
+        {
+            if (!creature->IsAlive())
+                ++corpses;
             if (creature->IsAlive() && (!nearest || bot->GetDistance(creature) < bot->GetDistance(nearest)))
                 nearest = creature;
+        }
+        handler->PSendSysMessage("TortoiseBots: corpses within 60 yd: %u.", corpses);
         if (nearest)
         {
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, nearest alive %s at %.1f yd (may attack: %s, friendly: %s).",
