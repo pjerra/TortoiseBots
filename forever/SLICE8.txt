@@ -1,5 +1,6 @@
 # Slice 8 (mage, rogue and crowd control): the slice-5 list (SLICE5.txt: SLICE4.txt plus the plan loader DungeonPlanMgr.cpp, BossTacticsMgr.cpp)
-# plus the 22 K8 .cpp files (10 mage, 10 rogue, GiveItemAction.cpp, PartyMemberWithoutItemValue.cpp) of FOREVER-SLICE-MAGE-ROGUE-SPEC section 3.
+# plus the 22 K8 .cpp files (10 mage, 10 rogue, GiveItemAction.cpp, PartyMemberWithoutItemValue.cpp) of FOREVER-SLICE-MAGE-ROGUE-SPEC section 3
+# plus CancelChannelAction.cpp (H8: the registered key `cancel channel` links against it; the spec's list missed it).
 # Rebuilt from SLICE5.txt + K8's additions (K8's own SLICE8.txt was SLICE4.txt + 22, without the S5 loader files). CMake reads this file.
 # One path per line. Used by: FOREVER_SLOT=<n> FOREVER_CENSUS_LIST=forever/SLICE8.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
@@ -38,6 +39,7 @@ ai/playerbot/strategy/Trigger.cpp
 ai/playerbot/strategy/Value.cpp
 ai/playerbot/strategy/actions/AttackAction.cpp
 ai/playerbot/strategy/actions/BotStateActions.cpp
+ai/playerbot/strategy/actions/CancelChannelAction.cpp
 ai/playerbot/strategy/actions/ChangeStrategyAction.cpp
 ai/playerbot/strategy/actions/ChooseTargetActions.cpp
 ai/playerbot/strategy/actions/FollowActions.cpp
