@@ -168,7 +168,7 @@ End line: `state-end count=<lines> bots=<n> resting=<number of bots resting> rea
 Real output (one bot):
 ```
 state-begin #t1
-state bot=Tank role=tank rolesrc=forced class=warrior level=18 hp=708 hpmax=708 hppct=100 power=rage pw=0 pwmax=100 st=non-combat incombat=no tgt= tgtentry= tgthp= victim= hold=no mv=follow stuck= engine=yes pos=-9100.0,-2005.0,131.0 map=0 inst=0 dl=self dm=0.0 ord=0:none lastorder= co=close;protection;pull;tank%20assist;tank%20face nc=default;follow;food;protection;tank%20assist cast_queued=0 cast_delivered=0 cast_dropped=0 cast_pending=0 eating=no drinking=no resting=no rest_why= #t1
+state bot=Tank role=tank rolesrc=forced class=warrior level=18 hp=708 hpmax=708 hppct=100 power=rage pw=0 pwmax=100 st=non-combat incombat=no tgt= tgtentry= tgthp= victim= hold=no mv=follow stuck= engine=yes pos=-9100.0,-2005.0,131.0 map=0 inst=0 dl=self dm=0.0 ord=0: lastorder= co=close;protection;pull;tank%20assist;tank%20face nc=default;follow;food;protection;tank%20assist cast_queued=0 cast_delivered=0 cast_dropped=0 cast_pending=0 eating=no drinking=no resting=no rest_why= #t1
 state-end count=1 bots=1 resting=0 ready=yes marks=0 target=Tank #t1
 ```
 (names in the sample are the live test's; the structure is exact.)

@@ -138,7 +138,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     BotMgr::Instance().FollowStatus(guid, away, awaySeconds, blocked, blockedWhy, hasBrain);
 
     OrderStatus const order = LastOrder(guid);
-    std::string orderResult = order.result;
+    std::string orderResult = order.result == "none" ? std::string() : order.result;   // no order yet: an empty result, never the word `none`
 
     bool eating = false, drinking = false;
     if (ai)
