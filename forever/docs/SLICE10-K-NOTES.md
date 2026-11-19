@@ -76,4 +76,14 @@ Run here with the list constant and `CLASS_CONTEXTS` patched in a throw-away cop
 
 ## 9. Gates (final commit)
 
-Filled in below at the end of the work.
+Tested tree: the last code commit is `K10d: the balance mana test stubs AttackStopCompat`; the commits after it are notes only.
+
+| Gate | Result |
+|---|---|
+| census, `SLICE10.txt`, slot 5 | `files 214  compile clean 214  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (baseline: 13 places in 6 files) |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` (SLICE4.txt as committed) | `(a)=0  (b)=215`, unchanged; with SLICE10.txt and the three class contexts (throw-away copy): `(a)=0  (b)=252` |
+| module build, slice option OFF, slot 5 | `CMAKE_RC=0 MAKE_RC=0` (nothing under `ai/` is in the option-off build) |
+| policy tests (`policy-tests-s10k.sh`, the 478 of clean_tests.txt) | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`: the same counts and the same six names as the baseline run `pt-9l` |
+| wiring tests naming a changed file (12 tests, `verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`) | all OK; `test_balance_mana_melee.py` failed on the new call until its stub was added, then OK |
+| Turtle `vm-build ~/wt-s10-k --wait`, `vm-test tb ~/wt-s10-k` | **PENDING**: the live servers were gone after about 25 minutes (`forever-world` count 0), but `vm-build` stopped before compiling: `only 4G free on /mnt/tb/tb-build, need >= 8G` (`/mnt/tb` is 95% full: `vm-test` 33 GB, `tb-build` 18 GB). Nothing was deleted (other workers' trees). Run both once 8 GB is free. The Turtle side of every edit is the original expression (the helpers forward the old call), so a Turtle break is not expected, but it is unproven. |
