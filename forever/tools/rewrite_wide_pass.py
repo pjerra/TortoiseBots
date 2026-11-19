@@ -242,7 +242,8 @@ def transform_bgmap(line):
 
 
 def transform_summon(line):
-    return sub_all(RECV + r"->SummonCreature\(", lambda m: "SummonCreatureCompat(" + m.group(1) + ", ", line)
+    return sub_all(RECV + r"->SummonCreature\(",
+                   lambda m: "SummonCreatureCompat(" + m.group(1) + (", " if line[m.end():].strip() else ","), line)
 
 
 def transform_accountid(line):

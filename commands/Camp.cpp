@@ -278,7 +278,7 @@ bool HandleCampShow(ChatHandler* handler, Player* gm)
         firePt.x, firePt.y, fireZ, firePt.o,
         0.0f, 0.0f, std::sin(firePt.o / 2.0f), std::cos(firePt.o / 2.0f),
         CAMP_SHOW_DURATION_SEC, false));
-    SummonCreatureCompat(gm, 
+    SummonCreatureCompat(gm,
         CAMP_SEAT_MARKER_CREATURE_ENTRY,
         seatPt.x, seatPt.y, seatZ, seatPt.o,
         TEMPSPAWN_TIMED_DESPAWN, CAMP_SHOW_DURATION_SEC * 1000);
