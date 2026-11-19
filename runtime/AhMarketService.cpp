@@ -100,7 +100,7 @@ bool AhMarketService::IsBotInBattlegroundOrInstance(Player* bot) const
     if (bot->InBattleGround() || bot->InBattleGroundQueue())
         return true;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsBattleGround())
+        if (map->IsDungeon() || MapIsBattlegroundCompat(map))
             return true;
     return false;
 }

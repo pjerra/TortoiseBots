@@ -251,7 +251,7 @@ bool BattlegroundQueueService::IsEligible(::Player* bot) const
     if (sLFTMgr.IsQueued(bot->GetObjectGuid()) || sLFTMgr.IsInOffer(bot->GetObjectGuid()))
         return false;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsBattleGround())
+        if (map->IsDungeon() || MapIsBattlegroundCompat(map))
             return false;
     // Lease arbitration (issue #89): host guards above stay authoritative.
     if (!BotActivityLeaseManager::Instance().IsAvailableForBackground(bot->GetGUIDLow()))

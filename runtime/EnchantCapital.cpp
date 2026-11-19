@@ -43,7 +43,7 @@ bool InInstance(Player* bot)
     if (bot->InBattleGround() || bot->InBattleGroundQueue())
         return true;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsRaid() || map->IsBattleGround())
+        if (map->IsDungeon() || map->IsRaid() || MapIsBattlegroundCompat(map))
             return true;
     return false;
 }

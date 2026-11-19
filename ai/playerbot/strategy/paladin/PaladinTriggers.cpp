@@ -241,7 +241,7 @@ bool GreaterBlessingTrigger::IsActive()
     Unit* target = GetTarget();
     if (target)
     {
-        if (!bot->GetMap()->IsDungeon() && !bot->GetMap()->IsBattleGround())
+        if (!bot->GetMap()->IsDungeon() && !MapIsBattlegroundCompat(bot->GetMap()))
             return false;
 
         std::vector<std::string> altBlessings;
@@ -379,7 +379,7 @@ bool BlessingOnPartyTrigger::IsActive()
 
 bool GreaterBlessingOnPartyTrigger::IsActive()
 {
-    if (!bot->GetMap()->IsDungeon() && !bot->GetMap()->IsBattleGround())
+    if (!bot->GetMap()->IsDungeon() && !MapIsBattlegroundCompat(bot->GetMap()))
         return false;
 
     Unit* target = FindBlessingCandidate(ai, bot, true);

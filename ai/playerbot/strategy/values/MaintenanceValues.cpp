@@ -119,7 +119,7 @@ bool ai::AhBuyerTripNeeded(PlayerbotAI* ai)
     if (bot->InBattleGround() || bot->InBattleGroundQueue())
         return false;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsBattleGround())
+        if (map->IsDungeon() || MapIsBattlegroundCompat(map))
             return false;
     AiObjectContext* context = ai->GetAiObjectContext();
 
