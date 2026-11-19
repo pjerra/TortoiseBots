@@ -10,7 +10,7 @@ namespace
 {
     float SapGroundZ(Map* map, float x, float y, float refZ)
     {
-        float const z = map->GetHeight(x, y, refZ + 2.0f, true);
+        float const z = GetHeightCompat(map, x, y, refZ + 2.0f, true);
         return z > INVALID_HEIGHT ? z : refZ;
     }
 }
@@ -63,10 +63,10 @@ bool ReachSapAction::ApproachAroundPack(Unit* target, float standDist)
         float const fromZ = fromBot ? botZ : SapGroundZ(map, from.x, from.y, targetZ);
         PathFinder path(bot);
         WorldPosition::ExcludeSteepSlopes(path);
-        path.calculate(Vector3(from.x, from.y, fromZ), Vector3(to.x, to.y, SapGroundZ(map, to.x, to.y, targetZ)), false);
-        if (path.getPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE))
+        PathCalculateCompat(path, Vector3(from.x, from.y, fromZ), Vector3(to.x, to.y, SapGroundZ(map, to.x, to.y, targetZ)), false);
+        if (PathTypeCompat(path) & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE))
             return false;
-        for (auto const& p : path.getPath())
+        for (auto const& p : PathPointsCompat(path))
             out.push_back(SapPoint{p.x, p.y});
         return !out.empty();
     };
@@ -81,7 +81,7 @@ bool ReachSapAction::ApproachAroundPack(Unit* target, float standDist)
     {
         if (replanned)
             sLog.outBasic("TortoiseBots: %s skips Sap on %s (entry %u): no approach stays clear of its %u pack-mates",
-                bot->GetName(), target->GetName(), target->GetEntry(), static_cast<uint32>(mates.size()));
+                CStrCompat(bot->GetName()), CStrCompat(target->GetName()), target->GetEntry(), static_cast<uint32>(mates.size()));
         context->GetValue<int32>("manual int", kSapSkipTargetKey)->Set(static_cast<int32>(target->GetObjectGuid().GetCounter()));
         context->GetValue<int32>("manual int", kSapSkipUntilKey)->Set(static_cast<int32>(now + kSapSkipMs));
         return false;

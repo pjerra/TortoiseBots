@@ -565,7 +565,7 @@ class RunLeaderWiringTest(unittest.TestCase):
                 break
         rare = above[open_at:close_at + 1]  # the rare branch's own block, brace-matched
         self.assertIn("waterSwimmable = terrain->IsSwimmable(point.x, point.y, point.z);", rare)
-        self.assertIn("raisedPath.calculate(origin, Vector3(point.x, point.y, aboveZ), false);", rare)
+        self.assertIn("PathCalculateCompat(raisedPath, origin, Vector3(point.x, point.y, aboveZ), false);", rare)
         # ... and only for a swimmable water point (a shallow one keeps the old rule without a path query).
         self.assertIn("if (waterSwimmable)\n", rare)
         self.assertLess(rare.index("if (waterSwimmable)\n"), rare.index("PathFinder raisedPath(mover);"))
@@ -1182,9 +1182,9 @@ class RunLeaderWiringTest(unittest.TestCase):
         # The path's destination is the current move row's point (the authored approach); the next row names the
         # pulled pack only.
         self.assertIn("const ai::PlanStep& row = slot.run.plan->steps[slot.run.step];", hold)
-        self.assertIn("path.calculate(row.x, row.y, row.z, false);", hold)
+        self.assertIn("PathCalculateCompat(path, row.x, row.y, row.z, false);", hold)
         self.assertIn("if (!HoldAheadPoint(walk, f.holdAheadReach, hold))", hold)
-        self.assertIn("path.getPathType() != PATHFIND_NORMAL && path.getPathType() != PATHFIND_INCOMPLETE", hold)
+        self.assertIn("PathTypeCompat(path) != PATHFIND_NORMAL && PathTypeCompat(path) != PATHFIND_INCOMPLETE", hold)
         # The stand's own read is untouched: its path still starts at the lead bot's position.
         stand = body(COMMANDS, "void ReadPullStand(DungeonRunSlot const& slot,", "\n}\n")
         self.assertIn("front.x = lead->GetPositionX();", stand)
@@ -1428,7 +1428,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("bool const searched = unreachable && TortoiseBots::DungeonRun::MoveFallbackWanted(it->second.run);", code)
         self.assertIn("bool const found = searched &&\n                NearestReachablePoint(", code)
         # Opus review: the stand-in's path from the lead bot is capped (DetourPointReachable's pathYd).
-        self.assertIn("DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), path.Length()))",
+        self.assertIn("DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), PathLengthCompat(path)))",
                       body(COMMANDS, "bool NearestReachablePoint(", "\n}\n"))
         self.assertIn("pathYd <= pointFromLeadYd + kDetourMaxPathYd &&", body(policy, "inline bool DetourPointReachable(", "\n}\n"))
         # Every rewind of the step forgets the step's refusals.
@@ -1508,7 +1508,7 @@ class RunHoldsItsDeadWiringTest(unittest.TestCase):
         # places a deferral comes from (the tick, and the stand search's answer), and clears it.
         tick = body(strip_comments(COMMANDS), "void TickDungeonRun(uint64 commanderRaw, uint32 dt)", "\n}\n")
         log = ("if (!slot.run.deferLog.empty())\n    {\n"
-               "        TB_LOG_DETAIL(\"TortoiseBots: run leader of %s: %s\", commander->GetName(), slot.run.deferLog.c_str());\n"
+               "        TB_LOG_DETAIL(\"TortoiseBots: run leader of %s: %s\", CStrCompat(commander->GetName()), slot.run.deferLog.c_str());\n"
                "        slot.run.deferLog.clear();\n    }")
         self.assertIn(log, tick)
         self.assertLess(tick.index("TortoiseBots::DungeonRun::Tick(slot.run, facts, dt);"), tick.index(log))
@@ -1567,7 +1567,7 @@ class RunHoldsItsDeadWiringTest(unittest.TestCase):
         self.assertIn(way, tick)
         self.assertLess(tick.index("{\n            answer = facts;"), tick.index(way))
         self.assertIn("PathFinder path(lead);\n            ai::WorldPosition::ExcludeSteepSlopes(path);\n"
-                      "            path.calculate(step->x, step->y, step->z, false);\n"
+                      "            PathCalculateCompat(path, step->x, step->y, step->z, false);\n"
                       "            NoteLeadWay(path, lead, step->x, step->y, step->z, answer);", tick)
         # The answer is the copy: the policy's island branch must not see the live facts' empty reading.
         self.assertIn("NoteLeadWay(path, lead, step->x, step->y, step->z, answer);\n            told = &answer;",
@@ -1958,7 +1958,7 @@ class RunTestSpeedWiringTest(unittest.TestCase):
         self.assertLess(restore.index("SpeedChangeWaitsFor(bot)"), restore.index("pet->UpdateSpeed"))
         self.assertIn("return false;", restore)
         gate = body(code, "static bool SpeedChangeWaitsFor(Player* bot)", "\n}\n")
-        self.assertIn("bot->IsInWater() || bot->IsUnderwater() ||", gate)
+        self.assertIn("bot->IsInWater() || IsUnderwaterCompat(bot) ||", gate)
         self.assertIn("bot->HasMovementFlag(MOVEFLAG_SWIMMING)", gate)
         self.assertIn("!bot->movespline->Finalized()", gate)
         self.assertIn("TortoiseBots::DungeonRun::SpeedChangeWaits(", gate)

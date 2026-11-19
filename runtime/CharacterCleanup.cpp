@@ -41,10 +41,10 @@ namespace
 bool RefundBidder(AuctionEntry* auction, std::string& error)
 {
     ObjectGuid bidderGuid(HIGHGUID_PLAYER, auction->bidder);
-    Player* bidder = sObjectMgr.GetPlayer(bidderGuid);
+    Player* bidder = GetPlayerCompat(bidderGuid);
     uint32 bidderAccountId = 0;
     if (!bidder)
-        bidderAccountId = sObjectMgr.GetPlayerAccountIdByGUID(bidderGuid);
+        bidderAccountId = AccountIdOfCharacterCompat(bidderGuid);
     if (!bidder && !bidderAccountId)
     {
         error = "auction " + std::to_string(auction->Id) + " holds bid " + std::to_string(auction->bid) +

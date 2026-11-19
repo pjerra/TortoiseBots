@@ -44,7 +44,7 @@ namespace ai
         {
             if (!TortoiseBots::BotManager::Instance().ClearBotMaster(bot->GetObjectGuid()))
                 sLog.outError("TortoiseBots: failed to clear durable master for %s after leaving group",
-                    bot->GetName());
+                    CStrCompat(bot->GetName()));
             // LFT fill role is spent once the dungeon group is gone: drop it
             // so the next ResetStrategies falls back to the talent spec.
             ai->SetForcedRole(0);

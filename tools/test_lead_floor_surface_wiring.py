@@ -17,9 +17,9 @@ class LeadFloorSurfaceWiringTest(unittest.TestCase):
     def test_the_glue_reads_the_surface_and_the_transport(self):
         i = COMMANDER.index("f.leadOffFloor = mmapLoaded")
         glue = COMMANDER[i - 1500:i + 400]
-        self.assertIn("surfaceMap->GetHeight(lead->GetPositionX(), lead->GetPositionY(), leadZ + 0.5f)", glue)
+        self.assertIn("GetHeightCompat(surfaceMap, lead->GetPositionX(), lead->GetPositionY(), leadZ + 0.5f)", glue)
         self.assertIn("TortoiseBots::DungeonRun::LeadOnSurface(leadZ, lead->GetTransport() != nullptr,", glue)
-        self.assertIn("lead->IsInWater() || lead->IsUnderwater(), onSurface);", glue)
+        self.assertIn("lead->IsInWater() || IsUnderwaterCompat(lead), onSurface);", glue)
 
     def test_every_summon_site_shares_the_pause(self):
         self.assertIn("r.summonRefusedOffFloor = true;", POLICY)

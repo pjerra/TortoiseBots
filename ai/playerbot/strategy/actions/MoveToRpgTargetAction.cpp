@@ -154,14 +154,14 @@ bool MoveToRpgTargetAction::Execute(Event& event)
     float angle;
     float distance = 1.0f;
 
-    if (bot->IsWithinLOS(x, y, z, true))
+    if (IsWithinLOSCompat(bot, x, y, z, true))
     {
         if (!unit || !IsMovingCompat(unit))
-            angle = wo->GetAngle(bot) + (M_PI * irand(-25, 25) / 100.0); //Closest 45 degrees towards the target
+            angle = GetAngleCompat(wo, bot) + (M_PI * irand(-25, 25) / 100.0); //Closest 45 degrees towards the target
         else if (!unit->HasInArc(bot))
             angle = wo->getOrientation() + (M_PI * irand(-10, 10) / 100.0); //20 degrees infront of target (leading it's movement)
         else
-            angle = wo->GetAngle(bot); //Current approuch angle.
+            angle = GetAngleCompat(wo, bot); //Current approuch angle.
 
         if (guidP.sqDistance2d(bot) < INTERACTION_DISTANCE * INTERACTION_DISTANCE)
             distance = sqrt(guidP.sqDistance2d(bot)); //Stay at this distance.

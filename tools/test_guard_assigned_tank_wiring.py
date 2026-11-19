@@ -198,7 +198,7 @@ class GuardAssignedTankWiring(unittest.TestCase):
         self.assertIn("ai::GuardLeavesToAssignedTank(f.raid.guardClockHittable, tankHolds, started,", tick)
         # The glue fills both: selectable at both attacker sites, the key into the raid facts.
         self.assertEqual(COMMANDER.count(
-            "fact.selectable = !attacker->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);"), 2)
+            "fact.selectable = !HasUnitFlagCompat(attacker, UNIT_FLAG_NOT_SELECTABLE);"), 2)
         self.assertIn("f.raid.guardClockHittable = sPlayerbotAIConfig.dungeonRunGuardClockHittable;",
             COMMANDER)
         # The regenerated header lists the new fields.

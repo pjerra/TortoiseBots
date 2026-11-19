@@ -206,7 +206,7 @@ std::string PreviewZoneName(uint32_t zoneId)
     AreaTableEntry const* entry = GetAreaEntryByAreaID(zoneId);
     if (!entry)
         return "-";
-    AreaTableEntry const* zone = entry->ZoneId ? GetAreaEntryByAreaID(entry->ZoneId) : entry;
+    AreaTableEntry const* zone = AreaZoneIdCompat(entry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(entry)) : entry;
     if (!zone || !zone->Name)
         return "-";
     return zone->Name;
@@ -241,7 +241,7 @@ bool HandleOrderPreview(ChatHandler* handler, Player* requester, std::string con
     if (!bot)
         bot = sObjectAccessor.FindPlayerByName(fixed.c_str());
     if (!bot)
-        guid = sObjectMgr.GetPlayerGuidByName(fixed);
+        guid = PlayerGuidByNameCompat(fixed);
     else
         guid = bot->getObjectGuid();
     if (guid.IsEmpty())
@@ -302,7 +302,7 @@ bool HandleOrderPreview(ChatHandler* handler, Player* requester, std::string con
         return true;
     }
     Guild* guild = sGuildMgr.GetGuildById(guildId);
-    if (!requester->GetSession() || !requester->GetSession()->HasNetworkTransport() ||
+    if (!requester->GetSession() || !HasNetworkTransportCompat(requester->GetSession()) ||
         !guild || !guild->HasRankRight(requester->GetRank(), GR_RIGHT_EOFFNOTE))
     {
         SendActionError(handler, "order", "forbidden", "Your guild rank may not give orders.");

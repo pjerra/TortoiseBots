@@ -310,7 +310,7 @@ bool BossTacticsCarrierStrikeTrigger::IsActive()
         bool const inCoverReach = shade && bot->GetDistance(shade) <= kShadeCoverReachYd &&
             ShadeCoverSameFloor(bot->GetPositionZ() - shade->GetPositionZ());
         ShadeCoverLatch latch = GetShadeCoverLatch(bot);
-        bool const latched = ShadeCoverLatchHolds(latch, shade ? shade->GetObjectGuid().GetRawValue() : 0,
+        bool const latched = ShadeCoverLatchHolds(latch, shade ? GuidKeyCompat(shade->GetObjectGuid()) : 0,
             in.cursed, shade && ShadeOnGroupHealer(bot, shade), shadeVictim == bot, WorldTimer::getMSTime());
         SetShadeCoverLatch(bot, latch);
         // On a threat_successor fight only while leaving cannot change the successor: this off-tank's threat on that

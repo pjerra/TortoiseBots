@@ -134,7 +134,7 @@ void FillRaidDetail(Group* group, RaidTelemetry::GroupInfo& info)
         RaidTelemetry::DetailEntry entry;
         entry.guid = slot.guid.GetCounter();
         CommanderTelemetry::BotExtra extra;
-        extra.id = slot.guid.GetRawValue();
+        extra.id = GuidKeyCompat(slot.guid);
         ReadRaidReadyFacts(bot, extra, now);
         FillRaidBotDebuffs(bot, extra);
         if (extra.hasReady)

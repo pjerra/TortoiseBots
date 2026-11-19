@@ -80,7 +80,7 @@ bool MoveAwayFromHazard::Execute(Event& event)
                     {
                         if (ai->HasStrategy("debug move", BotState::BOT_STATE_COMBAT))
                         {
-                            bot->SummonCreature(15631, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+                            SummonCreatureCompat(bot, 15631, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
                         }
 
                         if (MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true, "avoid_hazard"))
@@ -97,7 +97,7 @@ bool MoveAwayFromHazard::Execute(Event& event)
 
                 if (ai->HasStrategy("debug move", BotState::BOT_STATE_COMBAT))
                 {
-                    bot->SummonCreature(1, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+                    SummonCreatureCompat(bot, 1, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
                 }
 
                 angle += angleIncrement;
@@ -219,7 +219,7 @@ bool MoveAwayFromCreature::Execute(Event& event)
         {
             if (ai->HasStrategy("debug move", BotState::BOT_STATE_COMBAT))
             {
-                bot->SummonCreature(15631, validPoint->getX(), validPoint->getY(), validPoint->getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+                SummonCreatureCompat(bot, 15631, validPoint->getX(), validPoint->getY(), validPoint->getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
             }
 
             if (MoveTo(bot->GetMapId(), validPoint->getX(), validPoint->getY(), validPoint->getZ(), false, IsReaction(), false, true, "avoid_creature"))
@@ -235,8 +235,8 @@ bool MoveAwayFromCreature::Execute(Event& event)
 
         if (ai->HasStrategy("debug move", BotState::BOT_STATE_COMBAT))
         {
-            bot->SummonCreature(1, pointLeft.getX(), pointLeft.getY(), pointLeft.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
-            bot->SummonCreature(1, pointRight.getX(), pointRight.getY(), pointRight.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+            SummonCreatureCompat(bot, 1, pointLeft.getX(), pointLeft.getY(), pointLeft.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+            SummonCreatureCompat(bot, 1, pointRight.getX(), pointRight.getY(), pointRight.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
         }
 
         angleLeft += angleIncrement;
@@ -575,12 +575,12 @@ RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()
     float const tx = target->GetPositionX();
     float const ty = target->GetPositionY();
     float const tz = target->GetPositionZ();
-    float const groundZ = bot->GetMap()->GetHeight(tx, ty, tz, true);
+    float const groundZ = GetHeightCompat(bot->GetMap(), tx, ty, tz, true);
     bool const groundValid = groundZ > INVALID_HEIGHT + 1.0f;
     bool const hovering = HoverReachApplies(true, bot->GetMap()->IsDungeon(), sServerFacade.IsHostileTo(bot, target),
         bot->GetDistance(target), ATTACK_DISTANCE, groundValid, tz, groundZ);
     bool const inRange = bot->GetDistance(target, SizeFactor::CombatReach) <= ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance &&
-        bot->IsWithinLOSInMap(target, true);
+        IsWithinLOSInMapCompat(bot, target, true);
     bool const spreadRowLive = BossSpreadLive(ai, bot);
     float const radius = SpreadRadiusYd();
     // No ally is the far end of the distance scale: the first read asks whether the hold would apply if the bot stood
@@ -696,7 +696,7 @@ bool RaidSpreadAction::Execute(Event& event)
     const WorldPosition nearPos(nearest);
     float away = nearPos.GetAngleTo(botPos);
     uint32 const nowMs = WorldTimer::getMSTime();
-    lastMove.spreadFailures.Observe(nearest->GetObjectGuid().GetRawValue(),
+    lastMove.spreadFailures.Observe(GuidKeyCompat(nearest->GetObjectGuid()),
         bot->GetMapId(), nearestDist, nowMs, bot->movespline->GetId());
     // Prefer headings that have not failed to gain spacing. A second pass
     // allows remembered failures so the cache can never block every route.
@@ -732,7 +732,7 @@ bool RaidSpreadAction::Execute(Event& event)
             {
                 if (logSpread)
                     LogBossSpread(ai, bot, "stepped", -1, -1.0f, -1);
-                lastMove.spreadFailures.BeginAttempt(nearest->GetObjectGuid().GetRawValue(),
+                lastMove.spreadFailures.BeginAttempt(GuidKeyCompat(nearest->GetObjectGuid()),
                     bot->GetMapId(), botPos.GetAngleTo(out), nearestDist, nowMs, bot->movespline->GetId());
                 lastMove.lastSpreadStepMs = WorldTimer::getMSTime();
                 // The landing becomes the stay spot: the return-to-stay keeps the spacing the row asked for instead of

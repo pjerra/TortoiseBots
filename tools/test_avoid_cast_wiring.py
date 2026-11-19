@@ -535,7 +535,7 @@ class OneAtATimeWiring(unittest.TestCase):
         # The value's own scan is the grid search, and it lists the units that fight.
         scan = body(BLOCKERS, "std::vector<SoleCandidate> SoleKillCandidatesValue::Calculate(")
         self.assertIn("creature->IsInCombat()", scan)
-        self.assertIn("candidate.guid = creature->GetObjectGuid().GetRawValue()", scan)
+        self.assertIn("candidate.guid = GuidKeyCompat(creature->GetObjectGuid())", scan)
         self.assertIn("candidate.hpPct = static_cast<int>(creature->GetHealthPercent())", scan)
         self.assertIn("candidate.inCombat = true", scan)
         self.assertNotIn('"attackers"', scan)

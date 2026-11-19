@@ -95,7 +95,7 @@ bool GuildAcceptAction::Execute(Event& event)
         // bot has none). Enforce the remaining MayClaimBot gates here: pool bot,
         // not already claimed, faction (unless cross-faction guilds are enabled),
         // and not hired.
-        if (inviter && inviter->GetSession() && !inviter->GetSession()->IsHeadless() &&
+        if (inviter && inviter->GetSession() && !IsHeadlessCompat(inviter->GetSession()) &&
             sRandomBotFacade.IsRandomBot(bot))
         {
             uint32 inviterAccountId = inviter->GetSession()->GetAccountId();

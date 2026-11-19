@@ -106,7 +106,7 @@ void ai::UpdateBotAreaTriggers(Player* bot, BotAreaTriggerState& state, std::vec
         {
             Player* member = ObjectAccessor::FindPlayer(slot.guid);
             if (member && member != bot && member->IsInWorld() && member->GetSession() &&
-                member->GetSession()->HasNetworkTransport() && member->GetMapId() == bot->GetMapId() &&
+                HasNetworkTransportCompat(member->GetSession()) && member->GetMapId() == bot->GetMapId() &&
                 member->GetInstanceId() == bot->GetInstanceId() &&
                 member->IsWithinDist(bot, kBotAreaTriggerHumanRange))
             {
@@ -129,7 +129,7 @@ void ai::UpdateBotAreaTriggers(Player* bot, BotAreaTriggerState& state, std::vec
         AreaTriggerEntry const* at = sObjectMgr.GetAreaTrigger(id);
         if (!at)
             continue;
-        sLog.outDetail("TortoiseBots: %s fires area trigger %u (map %u).", bot->GetName(), id, bot->GetMapId());
+        sLog.outDetail("TortoiseBots: %s fires area trigger %u (map %u).", CStrCompat(bot->GetName()), id, bot->GetMapId());
         bool const armedByRun = std::find(armedIds.begin(), armedIds.end(), id) != armedIds.end();
         bool const ran = sScriptMgr.OnAreaTrigger(bot, at);
         // A run-armed trigger counts as fired for the run (DungeonRun::NoteTriggerFired) only

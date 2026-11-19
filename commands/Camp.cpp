@@ -83,7 +83,7 @@ float SnapCampGroundZ(Map* map, float x, float y, float z)
 {
     if (!map)
         return INVALID_HEIGHT;
-    return map->GetHeight(x, y, z + 5.0f);
+    return GetHeightCompat(map, x, y, z + 5.0f);
 }
 
 bool IsCampPointReachable(Player* gm, float fromX, float fromY, float fromZ, float toX, float toY, float toZ)
@@ -91,8 +91,8 @@ bool IsCampPointReachable(Player* gm, float fromX, float fromY, float fromZ, flo
     if (toZ <= INVALID_HEIGHT || fromZ <= INVALID_HEIGHT)
         return false;
     PathFinder path(gm);
-    path.calculate(Vector3(fromX, fromY, fromZ), Vector3(toX, toY, toZ), false);
-    uint32 const pt = static_cast<uint32>(path.getPathType());
+    PathCalculateCompat(path, Vector3(fromX, fromY, fromZ), Vector3(toX, toY, toZ), false);
+    uint32 const pt = static_cast<uint32>(PathTypeCompat(path));
     return (pt & PATHFIND_NORMAL) != 0 &&
            (pt & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_NOT_USING_PATH)) == 0;
 }
@@ -278,7 +278,7 @@ bool HandleCampShow(ChatHandler* handler, Player* gm)
         firePt.x, firePt.y, fireZ, firePt.o,
         0.0f, 0.0f, std::sin(firePt.o / 2.0f), std::cos(firePt.o / 2.0f),
         CAMP_SHOW_DURATION_SEC, false));
-    gm->SummonCreature(
+    SummonCreatureCompat(gm,
         CAMP_SEAT_MARKER_CREATURE_ENTRY,
         seatPt.x, seatPt.y, seatZ, seatPt.o,
         TEMPSPAWN_TIMED_DESPAWN, CAMP_SHOW_DURATION_SEC * 1000);

@@ -19,7 +19,7 @@ Unit* LineTargetValue::Calculate()
     Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
     for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
     {
-        Player *player = sObjectMgr.GetPlayer(itr->guid);
+        Player *player = GetPlayerCompat(itr->guid);
         if( !player || !sServerFacade.IsAlive(player) || player == master)
             continue;
 

@@ -79,7 +79,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
         # The path type is read in the shared check (CheckLeadMove) and captured by
         # `cmd move` only when it asked for a path (not "hold here").
         check = body(COMMANDS, "static LeadMoveCheck CheckLeadMove(", "\n}\n\nstatic bool CommanderMove(")
-        self.assertIn("check.rawPathType = static_cast<uint32>(active->getPathType());", check)
+        self.assertIn("check.rawPathType = static_cast<uint32>(PathTypeCompat(*active));", check)
         self.assertIn("check.facts.pathType = check.rawPathType;", check)
         fn = body(COMMANDS, "static bool CommanderMove(", "\n}\n")
         self.assertIn("if (s_runOrderCapture.active && !RemoteCommander::IsAtLead(facts.distanceFromLead))\n    {\n"
@@ -91,7 +91,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
 
     def test_run_facts_read_the_lead_bots_water_and_move(self):
         fn = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,", "\n}\n")
-        self.assertIn("f.leadInWater = lead->IsInWater() || lead->IsUnderwater();", fn)
+        self.assertIn("f.leadInWater = lead->IsInWater() || IsUnderwaterCompat(lead);", fn)
         self.assertIn("f.leadMoveFailed = ai::PositionMoveFailing(lastMove.positionMoveFailMs, WorldTimer::getMSTime()) || f.leadStayWalkResting;", fn)
         self.assertIn("f.leadMoveFailReason = ai::MoveFailReasonName(lastMove.moveFailReason);", fn)
 

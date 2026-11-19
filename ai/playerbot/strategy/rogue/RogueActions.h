@@ -285,7 +285,7 @@ namespace ai
         bool isUseful() override
         {
             Unit* target = GetTarget();
-            if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
+            if (target && bot->CanReachWithMeleeAutoAttack(target) && IsWithinLOSInMapCompat(bot, target, true))
                 return false;
 
             return ReachTargetAction::isUseful();
@@ -300,7 +300,7 @@ namespace ai
             if (sPlayerbotAIConfig.sapApproachAvoidPack)
                 return ApproachAroundPack(target, standDist);
 
-            const float angle = target->GetAngle(bot);
+            const float angle = GetAngleCompat(target, bot);
             WorldPosition stand(target->GetMapId(),
                 target->GetPositionX() + standDist * std::cos(angle),
                 target->GetPositionY() + standDist * std::sin(angle),

@@ -67,7 +67,7 @@ bool TellLosAction::Execute(Event& event)
           for (GameObject* go : objects)
           {
              WorldPosition spellPosition(go);
-             Creature* wpCreature = ai->GetBot()->SummonCreature(15631, spellPosition.getX(), spellPosition.getY(), spellPosition.getZ(), spellPosition.getO(), TEMPSPAWN_TIMED_DESPAWN, 2000.0f);
+             Creature* wpCreature = SummonCreatureCompat(ai->GetBot(), 15631, spellPosition.getX(), spellPosition.getY(), spellPosition.getZ(), spellPosition.getO(), TEMPSPAWN_TIMED_DESPAWN, 2000.0f);
              if (wpCreature)
                  wpCreature->SetObjectScale(0.5f);
           }
@@ -208,7 +208,7 @@ void TellLosAction::TellGameObjects(Player* requester, std::string title, const 
       }
 
       WorldPosition spellPosition(go);
-      Creature* wpCreature = ai->GetBot()->SummonCreature(15631, spellPosition.getX(), spellPosition.getY(), spellPosition.getZ(), spellPosition.getO(), TEMPSPAWN_TIMED_DESPAWN, 2000.0f);
+      Creature* wpCreature = SummonCreatureCompat(ai->GetBot(), 15631, spellPosition.getX(), spellPosition.getY(), spellPosition.getZ(), spellPosition.getO(), TEMPSPAWN_TIMED_DESPAWN, 2000.0f);
       if (wpCreature)
           wpCreature->SetObjectScale(0.5f);
 

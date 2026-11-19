@@ -494,7 +494,7 @@ bool DragonBreathRiskTrigger::IsActive()
         return false;
     // Angle between the dragon's facing and the bot, in radians.
     float facing = target->GetOrientation();
-    float toBot = target->GetAngle(bot);
+    float toBot = GetAngleCompat(target, bot);
     float diff = fabs(toBot - facing);
     while (diff > M_PI_F)
         diff = fabs(diff - 2.0f * M_PI_F);

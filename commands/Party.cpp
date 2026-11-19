@@ -152,8 +152,8 @@ bool HandleInvite(ChatHandler* handler, char const* args)
         requesterGroup = requester->GetOriginalGroup();
     if (requesterGroup && !requesterGroup->IsLeader(requester->GetObjectGuid()))
     {
-        Player* currentLeader = sObjectMgr.GetPlayer(requesterGroup->GetLeaderGuid());
-        if (currentLeader && currentLeader->GetSession() && currentLeader->GetSession()->IsHeadless())
+        Player* currentLeader = GetPlayerCompat(requesterGroup->GetLeaderGuid());
+        if (currentLeader && currentLeader->GetSession() && IsHeadlessCompat(currentLeader->GetSession()))
             requesterGroup->ChangeLeader(requester->GetObjectGuid());
     }
     if (requesterGroup && !requesterGroup->IsRaidGroup() &&
@@ -210,8 +210,8 @@ bool HandleUninvite(ChatHandler* handler, char const* args)
         requesterGroup = requester->GetOriginalGroup();
     if (requesterGroup && !requesterGroup->IsLeader(requester->GetObjectGuid()))
     {
-        Player* currentLeader = sObjectMgr.GetPlayer(requesterGroup->GetLeaderGuid());
-        if (currentLeader && currentLeader->GetSession() && currentLeader->GetSession()->IsHeadless())
+        Player* currentLeader = GetPlayerCompat(requesterGroup->GetLeaderGuid());
+        if (currentLeader && currentLeader->GetSession() && IsHeadlessCompat(currentLeader->GetSession()))
             requesterGroup->ChangeLeader(requester->GetObjectGuid());
     }
 
@@ -1205,7 +1205,7 @@ bool HandleSummon(ChatHandler* handler, char const* args)
         handler->PSendSysMessage("You may only summon a bot on your account.");
         return true;
     }
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless() || !BotManager::Instance().IsBot(bot->GetObjectGuid()))
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) || !BotManager::Instance().IsBot(bot->GetObjectGuid()))
     {
         handler->PSendSysMessage("Character '%s' is not a module-owned Headless bot.", name.c_str());
         return true;

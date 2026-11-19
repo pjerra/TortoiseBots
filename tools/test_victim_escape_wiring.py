@@ -177,7 +177,7 @@ class VictimEscapeWiring(unittest.TestCase):
         self.assertIn("EvictOldest(g_victimEscapeRefusedLog,", ACTIONS)
         log = body(ACTIONS, "void LogVictimEscape(")
         # The refused row's slot is the victim and the writer: a paladin's refusal is not hidden by the victim's.
-        self.assertIn("std::make_pair(victim->GetObjectGuid().GetRawValue(), ai->GetBot()->GetObjectGuid().GetRawValue())", log)
+        self.assertIn("std::make_pair(GuidKeyCompat(victim->GetObjectGuid()), GuidKeyCompat(ai->GetBot()->GetObjectGuid()))", log)
 
     def test_cast_breaks_own_cast_and_notes_the_escape(self):
         # The interrupt only follows a plan whose full cast check passed: the triggers and actions plan first.

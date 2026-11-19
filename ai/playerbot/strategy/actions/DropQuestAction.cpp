@@ -59,7 +59,7 @@ bool CleanQuestLogAction::IsGreyIncomplete(Quest const* quest)
 {
     // QuestLevel <= 0 is scaling: GetQuestLevelForPlayer falls back to bot
     // level, so such quests are never treated as grey.
-    if (!quest || quest->GetQuestLevel() <= 0)
+    if (!quest || QuestLevelCompat(quest) <= 0)
         return false;
     return bot->GetLevel() >= bot->GetQuestLevelForPlayer(quest) + 8;
 }
@@ -137,7 +137,7 @@ bool CleanQuestLogAction::IsDroppable(Quest const* quest, QuestStatus status, bo
         // picks that only pin log slots. Triage runs only when the log is
         // nearly full (Execute gates it); grey quests are left to the rules
         // above and COMPLETE quests never reach here.
-        if (triage && upkeep && ai::QuestTriageShouldDrop((int)quest->GetQuestLevel(), bot->GetLevel(),
+        if (triage && upkeep && ai::QuestTriageShouldDrop((int)QuestLevelCompat(quest), bot->GetLevel(),
             quest->GetType(), quest->GetSuggestedPlayers(), false,
             quest->GetZoneOrSort(), bot->GetZoneId()))
             return true;
@@ -239,7 +239,7 @@ bool CleanQuestLogAction::Execute(Event& event)
             Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
             if (!IsDroppable(quest, status, upkeep, true))
                 continue;
-            int rank = ai::QuestTriageRank((int)quest->GetQuestLevel(), bot->GetLevel(),
+            int rank = ai::QuestTriageRank((int)QuestLevelCompat(quest), bot->GetLevel(),
                 quest->GetType(), quest->GetSuggestedPlayers(),
                 quest->GetZoneOrSort(), bot->GetZoneId(), HasObjectiveProgress(quest));
             // A quest IsDroppable accepts for another reason (rank 0) goes last.

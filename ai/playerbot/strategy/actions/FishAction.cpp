@@ -276,7 +276,7 @@ WorldPosition ai::GetShoreCastSpot(Player* bot, WorldPosition const& from, World
     TerrainInfo const* terrain = bot->GetMap()->GetTerrain();
     if (terrain && terrain->IsInWater(from.getX(), from.getY(), from.getZ()))
         return WorldPosition();
-    float const ground = bot->GetMap()->GetHeight(from.getX(), from.getY(), from.getZ(), true);
+    float const ground = GetHeightCompat(bot->GetMap(), from.getX(), from.getY(), from.getZ(), true);
     if (ground <= INVALID_HEIGHT)
         return WorldPosition();
     if ((water.getZ() - 0.5f) > from.getZ() && (water.getZ() - 0.5f) > ground)
@@ -307,7 +307,7 @@ WorldPosition ai::StepTowardFishableWater(Player* bot, WorldPosition const& from
         float const t = back / dist2d;
         float const sx = from.getX() + dx * t;
         float const sy = from.getY() + dy * t;
-        float const standZ = bot->GetMap()->GetHeight(sx, sy, from.getZ(), true);
+        float const standZ = GetHeightCompat(bot->GetMap(), sx, sy, from.getZ(), true);
         if (standZ <= INVALID_HEIGHT)
             continue;
         WorldPosition const stand(bot->GetMapId(), sx, sy, standZ);

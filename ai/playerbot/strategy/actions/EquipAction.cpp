@@ -758,7 +758,7 @@ bool EquipUpgradesAction::Execute(Event& event)
         filledSlots.insert(slot);
         didEquip = true;
 
-        sLog.outDetail("Bot #%d <%s> auto equips item %d (%s)", bot->GetGUIDLow(), bot->GetName(), GetItemProtoCompat(item)->ItemId, usage == ItemUsage::ITEM_USAGE_EQUIP ? "better than current" : "wrong item but empty slot");
+        sLog.outDetail("Bot #%d <%s> auto equips item %d (%s)", bot->GetGUIDLow(), CStrCompat(bot->GetName()), GetItemProtoCompat(item)->ItemId, usage == ItemUsage::ITEM_USAGE_EQUIP ? "better than current" : "wrong item but empty slot");
         ai->TellDebug(ai->GetMaster(), "Equipping: " + chat->formatItem(item) + " - " + ItemUsageValue::ReasonForNeed(usage, item, 1, bot), "debug equip");
 
         Item* displacedPrimary = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
@@ -846,7 +846,7 @@ bool EquipUpgradesAction::Execute(Event& event)
                 {
                     EquipItemToSlot(GetMaster(), displacedMH, EQUIPMENT_SLOT_OFFHAND);
                     filledSlots.insert(EQUIPMENT_SLOT_OFFHAND);
-                    sLog.outDetail("Bot #%d <%s> cascades old main hand %d to offhand", bot->GetGUIDLow(), bot->GetName(), displacedProto->ItemId);
+                    sLog.outDetail("Bot #%d <%s> cascades old main hand %d to offhand", bot->GetGUIDLow(), CStrCompat(bot->GetName()), displacedProto->ItemId);
                     if (TortoiseBots::ShouldKeepDisplacedClaimedGear(isClaimed) && curOH &&
                         bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) == displacedMH &&
                         SetForceItemUsageIfChanged(ai, curOH, ForceItemUsage::FORCE_USAGE_KEEP, true))
@@ -909,7 +909,7 @@ bool EquipUpgradesAction::Execute(Event& event)
                             RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(mh).GetQualifier());
 
                             sLog.outDetail("Bot #%d <%s> swapped MH/OH weapons to put higher top-end damage (%.1f) in main hand",
-                                bot->GetGUIDLow(), bot->GetName(), ohMaxDmg);
+                                bot->GetGUIDLow(), CStrCompat(bot->GetName()), ohMaxDmg);
                         }
                     }
                 }

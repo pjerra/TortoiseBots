@@ -76,7 +76,7 @@ int ListQuestsAction::ListQuests(Player* requester, bool completed, bool silent,
 
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player)
             continue;

@@ -124,7 +124,7 @@ uint8 BotPlayerAdapter::GetBotRoles(Player* who)
 
 void BotPlayerAdapter::OnLogin(Player* player)
 {
-    if (player && player->GetSession() && player->GetSession()->HasNetworkTransport())
+    if (player && player->GetSession() && HasNetworkTransportCompat(player->GetSession()))
     {
         RandomBotService::Instance().OnHumanLogin();
         HireLifecycle::Instance().OnMasterLogin(player);
@@ -159,7 +159,7 @@ void BotPlayerAdapter::OnMapChanged(Player* player)
 
     // A bot's own far teleport (PlayerbotAI::HandleTeleportAck acks it) lands
     // here once per map change: re-apply the instance guard for the new map.
-    if (!player->GetSession()->HasNetworkTransport())
+    if (!HasNetworkTransportCompat(player->GetSession()))
     {
         if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(player))
             AiFactory::ApplyInstanceGuardOnMapChange(player, ai);
@@ -212,7 +212,7 @@ void BotPlayerAdapter::OnUpdate(Player* player, uint32 /*diff*/)
     // Fast path, no lock: a real player, a petless bot or a pet within 100
     // yards returns on field reads and one map-local lookup. Only a pet about
     // to be unsummoned for range reaches the AI lookup and the full check.
-    if (!player || !player->GetSession() || player->GetSession()->HasNetworkTransport())
+    if (!player || !player->GetSession() || HasNetworkTransportCompat(player->GetSession()))
         return;
     ObjectGuid const petGuid = player->GetPetGuid();
     if (petGuid.IsEmpty() || !player->IsInWorld())
@@ -256,7 +256,7 @@ void BotPlayerAdapter::OnBeforeLogout(Player* player)
     // Start the hire grace clock while the master object is still valid.
     // OnLogout fires after the session tears down; OnPlayerBeforeLogout only
     // detaches AI pointers, so ordering here is safe.
-    if (player && player->GetSession() && player->GetSession()->HasNetworkTransport())
+    if (player && player->GetSession() && HasNetworkTransportCompat(player->GetSession()))
         HireLifecycle::Instance().OnMasterLogout(player);
     BotManager::Instance().OnPlayerBeforeLogout(player);
 }
@@ -266,7 +266,7 @@ void BotPlayerAdapter::OnLogout(Player* player)
     // ta252 round 3: the Player is still valid here; a run rejoin that did not land is undone with it.
     BotCommands::SettleRunRejoinOnLogout(player);
     BotManager::Instance().OnPlayerLogout(player);
-    if (player && player->GetSession() && player->GetSession()->HasNetworkTransport())
+    if (player && player->GetSession() && HasNetworkTransportCompat(player->GetSession()))
         RandomBotService::Instance().OnHumanLogout();
 }
 

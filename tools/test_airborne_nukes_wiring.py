@@ -67,7 +67,7 @@ class AirborneNukesWiringTest(unittest.TestCase):
         self.assertIn("HoverReachTakerIsRangedDps(", fn)
         self.assertIn("HoverReachApplies(true, bot->GetMap()->IsDungeon()", fn)
         self.assertIn('ai->GetRange("spell")', fn)
-        self.assertIn("IsWithinLOSInMap(target, true)", fn)
+        self.assertIn("IsWithinLOSInMapCompat(bot, target, true)", fn)
         self.assertIn("BossSpreadLive(ai, bot)", fn)
         self.assertIn("NearestStackedAlly(nearestYd)", fn)
         self.assertIn("SpreadRadiusYd()", fn)

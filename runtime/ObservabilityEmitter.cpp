@@ -281,13 +281,13 @@ uint8 BaseMacroState(Player* bot, PlayerbotAI* ai)
           bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE)))
         return STATE_MOVING;
 
-    if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING))
+    if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING))
         return STATE_RESTING;
 
     // Standing still but doing something: looting, casting, sitting to
     // eat/drink, or an active travel destination being worked. Member reads
     // only; the work-target flag is refreshed at snapshot cadence.
-    if (bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_LOOTING))
+    if (HasUnitFlagCompat(bot, UNIT_FLAG_LOOTING))
         return STATE_BUSY;
     if (bot->IsNonMeleeSpellCasted(false))
         return STATE_BUSY;
@@ -331,7 +331,7 @@ Activity NoteActivity(Player* bot, bool hasWorkTarget, ObservabilityEmitter::Bot
     float dy = bot->GetPositionY() - track.lastY;
     if (dx * dx + dy * dy >= 0.25f)
         act.progress = true;
-    if (bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_LOOTING))
+    if (HasUnitFlagCompat(bot, UNIT_FLAG_LOOTING))
         act.progress = true;
     if (bot->IsNonMeleeSpellCasted(false))
         act.progress = true;
@@ -409,7 +409,7 @@ void CollectOnlinePlayers(std::vector<Player*>& out)
     for (auto const& pair : sWorld.GetAllSessions())
     {
         WorldSession* sess = pair.second;
-        if (!sess || !sess->HasNetworkTransport())
+        if (!sess || !HasNetworkTransportCompat(sess))
             continue;
         Player* player = sess->GetPlayer();
         if (!player || !player->IsInWorld())
@@ -1214,7 +1214,7 @@ void ObservabilityEmitter::Update(uint32 diff)
         }
         // A new target starts its own clock: the reported duration belongs to
         // the unit named in the event, not to the fight as a whole.
-        uint64 const combatTargetGuid = combatTarget ? combatTarget->GetObjectGuid().GetRawValue() : 0;
+        uint64 const combatTargetGuid = combatTarget ? GuidKeyCompat(combatTarget->GetObjectGuid()) : 0;
         if (combatTargetGuid != track.unreachableTargetGuid)
         {
             track.unreachableTargetGuid = combatTargetGuid;
@@ -1228,7 +1228,7 @@ void ObservabilityEmitter::Update(uint32 diff)
             bool unreachable = (dist > 45.0f);
             if (!unreachable && (track.unreachableDurationMs > 0 || track.lastSampleMs == nowMs))
             {
-                inLos = bot->IsWithinLOSInMap(combatTarget, true);
+                inLos = IsWithinLOSInMapCompat(bot, combatTarget, true);
                 unreachable = !inLos;
             }
 
@@ -1724,13 +1724,13 @@ void ObservabilityEmitter::EmitDungeonMobs(std::vector<Player*> const& bots, std
             ++group.bots;
         DMT::MemberInfo info;
         info.guid = unit->GetGUIDLow();
-        info.id = unit->GetObjectGuid().GetRawValue();
+        info.id = GuidKeyCompat(unit->GetObjectGuid());
         // What it has selected, else what it fights: two field reads.
         ::ObjectGuid target = unit->GetTargetGuid();
         if (target.IsEmpty())
             if (Unit* victim = unit->GetVictim())
                 target = victim->GetObjectGuid();
-        info.target = target.GetRawValue();
+        info.target = GuidKeyCompat(target);
         info.x = unit->GetPositionX();
         info.y = unit->GetPositionY();
         info.bot = isBot;
@@ -1959,14 +1959,14 @@ void ObservabilityEmitter::EmitCommanders()
             b.x = bot->GetPositionX();
             b.y = bot->GetPositionY();
             b.z = bot->GetPositionZ();
-            b.id = bot->GetObjectGuid().GetRawValue();
-            b.away = ref.awayBots.count(bot->GetObjectGuid().GetRawValue()) != 0;
+            b.id = GuidKeyCompat(bot->GetObjectGuid());
+            b.away = ref.awayBots.count(GuidKeyCompat(bot->GetObjectGuid())) != 0;
             // What it has selected, else what it fights: two field reads.
             ::ObjectGuid target = bot->GetTargetGuid();
             if (target.IsEmpty())
                 if (Unit* victim = bot->GetVictim())
                     target = victim->GetObjectGuid();
-            b.target = target.GetRawValue();
+            b.target = GuidKeyCompat(target);
             for (CommanderTelemetry::BotExtra const& extra : ref.botExtras) // at most kMaxBotsPerBinding of them
                 if (extra.id == b.id)
                 {

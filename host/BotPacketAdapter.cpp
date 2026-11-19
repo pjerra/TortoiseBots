@@ -285,7 +285,7 @@ bool BotPacketAdapter::CanPacketSend(WorldSession* session, WorldPacket const& p
 
     RaidBossDiagnostics::ObservePacket(session, packet);
 
-    if (session->IsHeadless())
+    if (IsHeadlessCompat(session))
     {
         // Issue #844: any thread. Off the world thread nothing here
         // dereferences the bot's Player or AI; the storage maps the session's
@@ -424,7 +424,7 @@ void BotPacketAdapter::ClearDeferredPackets()
 
 bool BotPacketAdapter::CanPacketReceive(WorldSession* session, WorldPacket const& packet)
 {
-    if (!session || session->IsHeadless())
+    if (!session || IsHeadlessCompat(session))
         return true;
 
     DispatchMasterIncoming(session, packet);
@@ -435,7 +435,7 @@ bool BotPacketAdapter::CanPacketReceive(WorldSession* session, WorldPacket const
 
 void BotPacketAdapter::DispatchMasterIncoming(WorldSession* session, WorldPacket const& packet)
 {
-    if (!session || session->IsHeadless())
+    if (!session || IsHeadlessCompat(session))
         return;
 
     Player* master = session->GetPlayer();

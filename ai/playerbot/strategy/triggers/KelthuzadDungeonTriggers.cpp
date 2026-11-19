@@ -59,7 +59,7 @@ bool KelthuzadPhaseOneTrigger::IsActive()
     Unit* kt = FindKt(ai, bot);
     if (!kt)
         return false;
-    return kt->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    return HasUnitFlagCompat(kt, UNIT_FLAG_NOT_SELECTABLE);
 }
 
 bool KelthuzadPhaseTwoTrigger::IsActive()
@@ -70,5 +70,5 @@ bool KelthuzadPhaseTwoTrigger::IsActive()
     // Vanilla: KT sits out phase 1 with NOT_SELECTABLE (core sets
     // IMMUNE_TO_PLAYER | NOT_SELECTABLE until phase 2), not the donor's
     // NON_ATTACKABLE.
-    return !kt->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    return !HasUnitFlagCompat(kt, UNIT_FLAG_NOT_SELECTABLE);
 }

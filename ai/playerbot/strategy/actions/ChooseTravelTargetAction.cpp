@@ -767,7 +767,7 @@ bool ChooseTravelTargetAction::Execute(Event& event)
         // were offered", which looks identical from the outside.
         if (sRandomBotFacade.IsPinnedBot(bot->GetGUIDLow()))
             sLog.outBasic("QUESTPROBE: %s got %u destination ranges for '%s' and picked none",
-                bot->GetName(), uint32(scanList.size()), futureTravelPurpose.c_str());
+                CStrCompat(bot->GetName()), uint32(scanList.size()), futureTravelPurpose.c_str());
 
         //A vendor errand has no other diagnostic: a search that never yields a
         //destination leaves the loot in the bags and produces no event at all,
@@ -841,7 +841,7 @@ bool ChooseTravelTargetAction::Execute(Event& event)
             newTarget.getPosition())
         {
             AreaTableEntry const* area = newTarget.getPosition()->GetArea();
-            uint32 zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+            uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
             if (zoneId)
                 TortoiseBots::GuildOrders::CommitAuctionZone(bot->GetGUIDLow(), zoneId);
         }
@@ -1025,7 +1025,7 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
         sPlayerbotAIConfig.logEvent(ai, "TravelTarget", purpose, destZone);
         if (newPickDest && IsGuildOrderTravelName(purpose) && newPickPos)
             TB_LOG_DETAIL("TortoiseBots: order %s walks to %s at map %u (%.0f, %.0f) in %s, purpose %s",
-                bot->GetName(), newPickDest->GetTitle().c_str(), newPickPos->getMapId(), newPickPos->getX(),
+                CStrCompat(bot->GetName()), newPickDest->GetTitle().c_str(), newPickPos->getMapId(), newPickPos->getX(),
                 newPickPos->getY(), destZone.c_str(), purpose.c_str());
 
         // One vendor journey at a time: a walk to a vendor has just started, and
@@ -1344,7 +1344,7 @@ static bool RouteIsSurvivableUncached(Player* bot, WorldPosition const& start, W
     // cross danger no waypoint sits in. Head leg keeps its original free
     // level pass; the town rule on it is what strands town bots (B1).
     AreaTableEntry const* startArea = start.GetArea();
-    uint32 const startZoneId = startArea ? (startArea->ZoneId ? startArea->ZoneId : startArea->Id) : 0;
+    uint32 const startZoneId = startArea ? (AreaZoneIdCompat(startArea) ? AreaZoneIdCompat(startArea) : startArea->Id) : 0;
     ai::RouteStartGround ground(
         ai::TravelRouteAreaTooHigh(start.GetAreaLevel(), bot->GetLevel()),
         avoidTowns && start.IsGuardedHostileTownFor(bot, ai::TRAVEL_ROUTE_SAMPLE_RADIUS_YD, false));
@@ -1355,7 +1355,7 @@ static bool RouteIsSurvivableUncached(Player* bot, WorldPosition const& start, W
         if (!p)
             continue;
         AreaTableEntry const* nodeArea = p->GetArea();
-        uint32 const nodeZoneId = nodeArea ? (nodeArea->ZoneId ? nodeArea->ZoneId : nodeArea->Id) : 0;
+        uint32 const nodeZoneId = nodeArea ? (AreaZoneIdCompat(nodeArea) ? AreaZoneIdCompat(nodeArea) : nodeArea->Id) : 0;
         bool const exemptLevel = ground.LevelExempt(nodeZoneId, startZoneId);
         int32 const level = p->GetAreaLevel();
         if (!exemptLevel && ai::TravelRouteAreaTooHigh(level, bot->GetLevel()))
@@ -1395,7 +1395,7 @@ static bool RouteIsSurvivableUncached(Player* bot, WorldPosition const& start, W
     if (ok && prevNode)
     {
         AreaTableEntry const* destArea = position->GetArea();
-        uint32 const destZoneId = destArea ? (destArea->ZoneId ? destArea->ZoneId : destArea->Id) : 0;
+        uint32 const destZoneId = destArea ? (AreaZoneIdCompat(destArea) ? AreaZoneIdCompat(destArea) : destArea->Id) : 0;
         bool const tailExemptLevel = ground.LevelExempt(destZoneId, startZoneId);
         bool const tailExemptTown = ground.TownExempt(start.distance(*position));
         if (!RouteLegIsSurvivable(bot, *prevNode->getPosition(), *position, nullptr,
@@ -1660,7 +1660,7 @@ ai::TravelPickOutcome ChooseTravelTargetAction::SetBestTargetSliced(Player* requ
                     }
 
                     AreaTableEntry const* area = position->GetArea();
-                    uint32 zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+                    uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
                     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
                         (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
                     {
@@ -1949,7 +1949,7 @@ bool ChooseGroupTravelTargetAction::Execute(Event& event)
     //Find targets of the group.
     for (auto& member : groupPlayers)
     {
-        Player* player = sObjectMgr.GetPlayer(member);
+        Player* player = GetPlayerCompat(member);
 
         if (!player)
             continue;
@@ -2239,7 +2239,7 @@ bool RequestTravelTargetAction::Execute(Event& event)
         // reason is "capital" (trainers/AH/bank live there). Unknown zones
         // exclude nothing.
         AreaTableEntry const* botArea = WorldPosition(bot).GetArea();
-        uint32 botZoneId = botArea ? (botArea->ZoneId ? botArea->ZoneId : botArea->Id) : 0;
+        uint32 botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : botArea->Id) : 0;
         outgrownExcludeZone = ZoneMigrationExcludeZone(botZoneId,
             WorldPosition(bot).HasAreaFlag(AREA_FLAG_CAPITAL));
     }
@@ -2470,7 +2470,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             SET_AI_VALUE2(time_t, "manual time", "order request log::" + travelName, time(0) + MINUTE);
             std::string parentName;
             if (logged && logged->parentBotGuidLow &&
-                !sObjectMgr.GetPlayerNameByGUID(
+                !PlayerNameByGuidCompat(
                     ObjectGuid(HIGHGUID_PLAYER, logged->parentBotGuidLow), parentName))
                 parentName.clear();
             sPlayerbotAIConfig.logEvent(ai, "GuildOrderRequest", travelName, leg,
@@ -2704,7 +2704,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             return false;
         bool ahSupply = mailRecord->supplyStep == TortoiseBots::GuildOrders::SupplyStep::AuctionHouse;
         TB_LOG_DETAIL("TortoiseBots: order %s travel request: step %s item %u zone %u (travel order %s, farm item %u)",
-            bot->GetName(), TortoiseBots::GuildOrders::SupplyStepToken(mailRecord->supplyStep),
+            CStrCompat(bot->GetName()), TortoiseBots::GuildOrders::SupplyStepToken(mailRecord->supplyStep),
             mailRecord->itemId, mailRecord->farmZoneId, order.IsTravelOrder() ? "yes" : "no", orderFarmItem);
 
         if (!order.IsTravelOrder() && !(order.IsCraftOrder() && orderFarmItem) && !ahSupply &&
@@ -2846,14 +2846,14 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                 {
                     OrderReason reason = plan.verdict == OrderReason::None ? OrderReason::NoSource : plan.verdict;
                     TB_LOG_DETAIL("TortoiseBots: order %s farm item %u: no zone to farm (plan has %u zones, verdict %s, bot map %u)",
-                        bot->GetName(), itemId, uint32_t(plan.zones.size()),
+                        CStrCompat(bot->GetName()), itemId, uint32_t(plan.zones.size()),
                         TortoiseBots::GuildOrders::ReasonToken(reason), bot->GetMapId());
                     SetState(bot->GetGUIDLow(), TortoiseBots::GuildOrders::StateForReason(reason), reason);
                     return false;
                 }
                 farmZoneId = plan.zones[pick].zoneId;
                 TB_LOG_DETAIL("TortoiseBots: order %s farm item %u: zone %u picked (%u of %u, bot map %u)",
-                    bot->GetName(), itemId, farmZoneId, uint32_t(pick + 1), uint32_t(plan.zones.size()), bot->GetMapId());
+                    CStrCompat(bot->GetName()), itemId, farmZoneId, uint32_t(pick + 1), uint32_t(plan.zones.size()), bot->GetMapId());
                 SetFarmZone(bot->GetGUIDLow(), farmZoneId, plan.zones[pick].chance, uint32_t(pick), itemId);
             }
 
@@ -2875,8 +2875,8 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                     continue;
                 uint32_t fishZone = uint32_t(-(source.entry + ai::kFishingZoneEntryBias));
                 AreaTableEntry const* fishArea = AreaEntry::GetById(uint32_t(-(source.entry + ai::kFishingZoneEntryBias)));
-                if (fishArea && fishArea->ZoneId)
-                    fishZone = fishArea->ZoneId;
+                if (fishArea && AreaZoneIdCompat(fishArea))
+                    fishZone = AreaZoneIdCompat(fishArea);
                 if (fishZone != farmZoneId)
                     continue;
                 if (!bot->HasSkill(SKILL_FISHING))
@@ -2998,7 +2998,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                     if (!pos)
                                         return true;
                                     AreaTableEntry const* area = pos->GetArea();
-                                    uint32_t zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+                                    uint32_t zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
                                     return zoneId != farmZoneId;
                                 }), points.end());
                         }
@@ -3044,7 +3044,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                 if (committed)
                                 {
                                     AreaTableEntry const* area = position->GetArea();
-                                    uint32_t zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+                                    uint32_t zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
                                     if (zoneId != committed)
                                         return true;
                                     return false;
@@ -3367,7 +3367,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
 
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player)
             continue;
@@ -3406,7 +3406,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
                 // hiding same-valley hand-ins that are ready now; the
                 // destination IsPossible gate below re-checks the same rule
                 // with the taker's area once the search runs.
-                if (!ai::QuestTakerTripFits((int)questTemplate->GetQuestLevel(), false,
+                if (!ai::QuestTakerTripFits((int)QuestLevelCompat(questTemplate), false,
                     bot->GetLevel(), sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster()))
                     continue;
 
@@ -3589,7 +3589,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
                 readyToHandIn++;
 
         sLog.outBasic("QUESTPROBE: %s has %u finished and unhanded-in, %u quests in the log; offered %u taker, %u objective, %u giver destinations",
-            bot->GetName(), readyToHandIn, uint32(bot->getQuestStatusMap().size()),
+            CStrCompat(bot->GetName()), readyToHandIn, uint32(bot->getQuestStatusMap().size()),
             takers, objectives, givers);
     }
 

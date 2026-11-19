@@ -35,7 +35,7 @@ bool EligibleBot(Player* bot)
 {
     if (!bot || !bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported() ||
         bot->InBattleGround() || bot->IsTaxiFlying() || !bot->GetSession() ||
-        !bot->GetSession()->IsHeadless())
+        !IsHeadlessCompat(bot->GetSession()))
         return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid()))
         return false;
@@ -54,7 +54,7 @@ bool EligiblePlayer(Player* player, Player* bot)
     if (!player || player == bot || !player->IsInWorld() || !player->IsAlive())
         return false;
     WorldSession* session = player->GetSession();
-    if (!session || !session->HasNetworkTransport())
+    if (!session || !HasNetworkTransportCompat(session))
         return false;
     if (BotManager::Instance().IsBot(player->GetObjectGuid()))
         return false;
@@ -114,7 +114,7 @@ void PassingBuffsService::Update(uint32_t diff)
     for (auto const& entry : sWorld.GetAllSessions())
     {
         WorldSession* session = entry.second;
-        if (!session || !session->HasNetworkTransport())
+        if (!session || !HasNetworkTransportCompat(session))
             continue;
         Player* player = session->GetPlayer();
         if (player && player->IsInWorld())
@@ -158,7 +158,7 @@ void PassingBuffsService::SweepNow(std::vector<Player*> const& realPlayers)
             bots.push_back(bot);
         }
         std::sort(bots.begin(), bots.end(), [](Player* a, Player* b)
-            { return a->GetObjectGuid().GetRawValue() < b->GetObjectGuid().GetRawValue(); });
+            { return GuidKeyCompat(a->GetObjectGuid()) < GuidKeyCompat(b->GetObjectGuid()); });
 
         for (Player* bot : bots)
         {

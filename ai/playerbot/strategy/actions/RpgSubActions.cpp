@@ -49,7 +49,7 @@ void RpgHelper::setFacingTo(GuidPosition guidPosition)
 
     //sServerFacade.SetFacingTo(bot, guidPosition.GetWorldObject());
     MotionMaster& mm = *bot->GetMotionMaster();
-    bot->SetFacingTo(bot->GetAngle(guidPosition.GetWorldObject(bot->GetInstanceId())));
+    bot->SetFacingTo(GetAngleCompat(bot, guidPosition.GetWorldObject(bot->GetInstanceId())));
     bot->m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD));
 }
 
@@ -71,7 +71,7 @@ void RpgHelper::setFacing(GuidPosition guidPosition)
         return;
 
     MotionMaster& mm = *unit->GetMotionMaster();
-    unit->SetFacingTo(unit->GetAngle(bot));
+    unit->SetFacingTo(GetAngleCompat(unit, bot));
     unit->m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD));
 }
 
@@ -208,7 +208,7 @@ bool RpgTaxiAction::Execute(Event& event)
 
     if (nodes.empty())
     {
-        sLog.outError("Bot %s - No flight paths available", bot->GetName());
+        sLog.outError("Bot %s - No flight paths available", CStrCompat(bot->GetName()));
         return false;
     }
 
@@ -234,19 +234,19 @@ bool RpgTaxiAction::Execute(Event& event)
     Creature* flightMaster = bot->GetNPCIfCanInteractWith(guidP, UNIT_NPC_FLAG_FLIGHTMASTER);
     if (!flightMaster)
     {
-        sLog.outError("Bot %s cannot talk to flightmaster (%zu location available)", bot->GetName(), nodes.size());
+        sLog.outError("Bot %s cannot talk to flightmaster (%zu location available)", CStrCompat(bot->GetName()), nodes.size());
         bot->SetMoney(money);
         return false;
     }
     if (!ai::BotTaxiRouteAllowed({ entry->from, entry->to }) || !bot->ActivateTaxiPathTo({ entry->from, entry->to }, flightMaster, 0))
     {
-        sLog.outError("Bot %s cannot fly %u (%zu location available)", bot->GetName(), path, nodes.size());
+        sLog.outError("Bot %s cannot fly %u (%zu location available)", CStrCompat(bot->GetName()), path, nodes.size());
         bot->SetMoney(money);
         return false;
     }
     ai::BotInstantFlightFinish(bot, { entry->from, entry->to });
 
-    sLog.outDetail("Bot #%d <%s> is flying from %s to %s (%zu location available)", bot->GetGUIDLow(), bot->GetName(), nodeFrom->name[LOCALE_enUS], nodeTo->name[LOCALE_enUS], nodes.size());
+    sLog.outDetail("Bot #%d <%s> is flying from %s to %s (%zu location available)", bot->GetGUIDLow(), CStrCompat(bot->GetName()), nodeFrom->name[LOCALE_enUS], nodeTo->name[LOCALE_enUS], nodes.size());
     bot->SetMoney(money);
 
     rpg->AfterExecute();

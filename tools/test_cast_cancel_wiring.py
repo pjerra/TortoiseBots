@@ -69,7 +69,7 @@ class CastCancelWiring(unittest.TestCase):
         self.assertIn("cast->m_targets.getUnitTargetGuid()", fn)
         self.assertIn("ObjectAccessor::GetUnit(*bot,", fn)
         self.assertNotIn("getUnitTarget()", fn)
-        self.assertLess(fn.index("getUnitTargetGuid()"), fn.index("target ? target->GetName()"))
+        self.assertLess(fn.index("getUnitTargetGuid()"), fn.index("target ? CStrCompat(target->GetName())"))
 
     def test_no_diagnostic_row_reads_a_cached_target_pointer(self):
         # The same rule for every writer that ends a row after a possible removal: a cached m_targets pointer is
