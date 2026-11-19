@@ -317,7 +317,7 @@ The match is CACHED per (map, instance id, plan): it is what the run glue's pack
 ```
 plan-begin #p3
 unit leg=0 seq=1 idx=0 entry=11320 role=pack result=matched yd=0.42 spawn=125331 alive=yes #p3
-unit leg=2 seq=4 idx=3 entry=20048642 role=pack result=near yd=8.60 spawn=125402 alive=yes #p3
+unit leg=2 seq=4 idx=3 entry=11320 role=pack result=near yd=8.60 spawn=20048642 alive=yes #p3
 unit leg=2 seq=4 idx=4 entry=8996 role=pack result=missing optional=yes #p3
 plan-end count=3 records=3 verb=check plan=ragefire_chasm bot=Mtank map=389 inst=1 units=101 matched=93 near=1 missing=7 optional=7 steps=55 steps_ok=55 steps_short=0 #p3
 ```
