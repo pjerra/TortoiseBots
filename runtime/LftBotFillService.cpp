@@ -544,7 +544,7 @@ void LftBotFillService::AcceptPartyBotOffers()
         ObjectGuid const hireMaster = hired ? HireLifecycle::Instance().GetMaster(guid) : ObjectGuid();
         Player* candidates[2] = { ai->GetLiveMaster(), nullptr };
         if (Group* group = bot->GetGroup())
-            candidates[1] = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+            candidates[1] = GetPlayerCompat(group->GetLeaderGuid());
         Player* anchor = nullptr;
         for (Player* candidate : candidates)
         {

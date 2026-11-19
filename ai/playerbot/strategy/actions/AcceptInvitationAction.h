@@ -24,7 +24,7 @@ namespace ai
                 return false;
             }
 
-            Player* inviter = sObjectMgr.GetPlayer(grp->GetLeaderGuid());
+            Player* inviter = GetPlayerCompat(grp->GetLeaderGuid());
             if (!inviter)
             {
                 sLog.outDebug("TortoiseBots: AcceptInvitationAction %s cannot resolve inviter guid %s",

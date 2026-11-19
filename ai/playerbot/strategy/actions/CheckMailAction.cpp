@@ -96,7 +96,7 @@ Player* CheckMailAction::GetProcessableOwner(Mail* mail, Player* bot)
     if (mail->stationery == MAIL_STATIONERY_AUCTION || mail->messageType != MAIL_NORMAL)
         return nullptr;
 
-    Player* owner = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, mail->sender));
+    Player* owner = GetPlayerCompat(ObjectGuid(HIGHGUID_PLAYER, mail->sender));
     if (!owner)
         return nullptr;
 

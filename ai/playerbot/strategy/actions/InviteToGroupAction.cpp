@@ -186,13 +186,13 @@ namespace ai
             return allowedClassNr;
         }
 
-        Player* groupMaster = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+        Player* groupMaster = GetPlayerCompat(group->GetLeaderGuid());
 
         Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
             // Only add group member targets that are alive and near the player
-            Player* player = sObjectMgr.GetPlayer(itr->guid);
+            Player* player = GetPlayerCompat(itr->guid);
 
             if (!PlayerbotAI::IsSafe(groupMaster, player))
                 continue;
@@ -316,7 +316,7 @@ namespace ai
         std::list<ObjectGuid> nearGuids = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest friendly players")->Get();
         for (auto& i : nearGuids)
         {
-            Player* player = sObjectMgr.GetPlayer(i);
+            Player* player = GetPlayerCompat(i);
 
             if (!player)
                 continue;

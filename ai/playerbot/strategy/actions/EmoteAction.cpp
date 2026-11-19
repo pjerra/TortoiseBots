@@ -620,7 +620,7 @@ bool EmoteAction::Execute(Event& event)
 
         isTarget = nam.find(bot->GetName()) != std::string::npos;
 
-        pSource = sObjectMgr.GetPlayer(source);
+        pSource = GetPlayerCompat(source);
 
         bool allowEmote = true;
 
@@ -652,7 +652,7 @@ bool EmoteAction::Execute(Event& event)
         p.rpos(0);
         p >> emoteId >> source;
 
-        pSource = sObjectMgr.GetPlayer(source);
+        pSource = GetPlayerCompat(source);
         // A pool bot emoting is not something to react to: with hundreds of
         // bots close together that is a permanent emote conversation nobody
         // reads. Real players still get a reaction.

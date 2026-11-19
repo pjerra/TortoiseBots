@@ -1949,7 +1949,7 @@ bool ChooseGroupTravelTargetAction::Execute(Event& event)
     //Find targets of the group.
     for (auto& member : groupPlayers)
     {
-        Player* player = sObjectMgr.GetPlayer(member);
+        Player* player = GetPlayerCompat(member);
 
         if (!player)
             continue;
@@ -3367,7 +3367,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
 
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player)
             continue;

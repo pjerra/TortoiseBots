@@ -152,7 +152,7 @@ bool HandleInvite(ChatHandler* handler, char const* args)
         requesterGroup = requester->GetOriginalGroup();
     if (requesterGroup && !requesterGroup->IsLeader(requester->GetObjectGuid()))
     {
-        Player* currentLeader = sObjectMgr.GetPlayer(requesterGroup->GetLeaderGuid());
+        Player* currentLeader = GetPlayerCompat(requesterGroup->GetLeaderGuid());
         if (currentLeader && currentLeader->GetSession() && currentLeader->GetSession()->IsHeadless())
             requesterGroup->ChangeLeader(requester->GetObjectGuid());
     }
@@ -210,7 +210,7 @@ bool HandleUninvite(ChatHandler* handler, char const* args)
         requesterGroup = requester->GetOriginalGroup();
     if (requesterGroup && !requesterGroup->IsLeader(requester->GetObjectGuid()))
     {
-        Player* currentLeader = sObjectMgr.GetPlayer(requesterGroup->GetLeaderGuid());
+        Player* currentLeader = GetPlayerCompat(requesterGroup->GetLeaderGuid());
         if (currentLeader && currentLeader->GetSession() && currentLeader->GetSession()->IsHeadless())
             requesterGroup->ChangeLeader(requester->GetObjectGuid());
     }

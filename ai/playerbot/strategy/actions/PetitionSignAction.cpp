@@ -56,7 +56,7 @@ bool PetitionSignAction::Execute(Event& event)
         delete result;*/
     }
 
-    Player* _inviter = sObjectMgr.GetPlayer(inviter);
+    Player* _inviter = GetPlayerCompat(inviter);
     if (!_inviter)
         return false;
 

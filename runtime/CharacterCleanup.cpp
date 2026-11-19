@@ -41,7 +41,7 @@ namespace
 bool RefundBidder(AuctionEntry* auction, std::string& error)
 {
     ObjectGuid bidderGuid(HIGHGUID_PLAYER, auction->bidder);
-    Player* bidder = sObjectMgr.GetPlayer(bidderGuid);
+    Player* bidder = GetPlayerCompat(bidderGuid);
     uint32 bidderAccountId = 0;
     if (!bidder)
         bidderAccountId = sObjectMgr.GetPlayerAccountIdByGUID(bidderGuid);

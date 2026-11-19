@@ -6893,7 +6893,7 @@ bool ai::AoeTauntStillNeeded(PlayerbotAI* ai, Player* bot)
     members.push_back(bot);
     for (Group::member_citerator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
     {
-        if (Player* member = sObjectMgr.GetPlayer(itr->guid))
+        if (Player* member = GetPlayerCompat(itr->guid))
             members.push_back(member);
     }
     for (Unit* member : members)
@@ -7825,7 +7825,7 @@ bool SweepDispelCures(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, 
             if (types.empty())
                 continue;
             ObjectGuid const casterGuid = aura->GetCasterGuid();
-            Player* caster = sObjectMgr.GetPlayer(casterGuid);
+            Player* caster = GetPlayerCompat(casterGuid);
             if (!caster || !GET_PLAYERBOT_AI(caster))
                 continue;
             for (uint32 type : types)
@@ -7917,7 +7917,7 @@ bool ai::DispelCastBlocked(PlayerbotAI* ai, Unit* target, uint32 spellId)
     {
         targetKind = DispelTargetKind::Self;
     }
-    else if (Player* member = sObjectMgr.GetPlayer(target->GetObjectGuid()))
+    else if (Player* member = GetPlayerCompat(target->GetObjectGuid()))
     {
         if (member->GetGroup() && member->GetGroup() == bot->GetGroup())
             targetKind = DispelTargetKind::GroupMember;
@@ -12314,7 +12314,7 @@ ai::TankPostHealDuty ai::FindTankPostHealDuty(PlayerbotAI* ai, Player* bot)
     }
     if (holderGuid == 0)
         return duty;
-    Player* const holder = sObjectMgr.GetPlayer(ObjectGuid(holderGuid));
+    Player* const holder = GetPlayerCompat(ObjectGuid(holderGuid));
     if (!holder || !holder->IsInWorld() || holder->GetMapId() != bot->GetMapId() ||
         !sServerFacade.IsAlive(holder))
         return duty;
@@ -12411,7 +12411,7 @@ bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)
     }
     for (std::uint64_t const key : others)
     {
-        Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(key));
+        Player* const tank = GetPlayerCompat(ObjectGuid(key));
         if (!tank || tank->GetInstanceId() != bot->GetInstanceId() || !TankPostTankCanAct(tank))
             continue;
         float const ownerYd = TankPostDistanceYd(tank->GetPositionX(), tank->GetPositionY(), tank->GetPositionZ(),
@@ -12536,7 +12536,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     {
         if (other.second.done)
             continue;
-        Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(other.first));
+        Player* const tank = GetPlayerCompat(ObjectGuid(other.first));
         if (!tank || tank->GetInstanceId() != bot->GetInstanceId() ||
             !TankPostRowHeldByOther(true, TankPostTankCanAct(tank)))
             continue;
@@ -12620,7 +12620,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
                     ++it;
                     continue;
                 }
-                Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(it->first));
+                Player* const tank = GetPlayerCompat(ObjectGuid(it->first));
                 if (tank && !TankPostTankCanAct(tank))
                 {
                     if (!it->second.done)
@@ -12634,7 +12634,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
         }
         for (const std::pair<std::uint64_t, TankPostRecord>& dead : ended)
         {
-            Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(dead.first));
+            Player* const tank = GetPlayerCompat(ObjectGuid(dead.first));
             PlayerbotAI* const tankAi = tank ? GET_PLAYERBOT_AI(tank) : nullptr;
             BossTacticRow endedRow;
             endedRow.map = dead.second.map;
@@ -12938,7 +12938,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
                 used = sizeof(info2) - 1;
             for (std::size_t i = 0; i < picked.size() && i < record.healers.size(); ++i)
             {
-                Player* const healer = sObjectMgr.GetPlayer(ObjectGuid(picked[i]));
+                Player* const healer = GetPlayerCompat(ObjectGuid(picked[i]));
                 const int written = std::snprintf(info2 + used, sizeof(info2) - used, ",h%u=%s",
                     static_cast<unsigned>(i + 1), healer ? CStrCompat(healer->GetName()) : "gone");
                 if (written > 0)

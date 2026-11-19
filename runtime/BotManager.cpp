@@ -1646,7 +1646,7 @@ void BotManager::RebindOwnedBots(::Player* master)
     if (masterGroup && !masterGroup->IsLeader(masterGuid))
     {
         // If the current leader is a headless bot, transfer leadership to the live human player.
-        Player* currentLeader = sObjectMgr.GetPlayer(masterGroup->GetLeaderGuid());
+        Player* currentLeader = GetPlayerCompat(masterGroup->GetLeaderGuid());
         if (currentLeader && currentLeader->GetSession() && currentLeader->GetSession()->IsHeadless())
         {
             masterGroup->ChangeLeader(masterGuid);

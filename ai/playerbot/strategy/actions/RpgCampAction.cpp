@@ -106,7 +106,7 @@ namespace
         Player* target = nullptr;
         for (ObjectGuid const& guid : players)
         {
-            Player* candidate = sObjectMgr.GetPlayer(guid);
+            Player* candidate = GetPlayerCompat(guid);
             if (!candidate || !candidate->IsInWorld() || !candidate->IsAlive())
                 continue;
             if (!ai->IsRealPlayer(candidate))

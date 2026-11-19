@@ -1732,7 +1732,7 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
                 startStub->currentGold = 9999999;
                 for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
                 {
-                    Player* player = sObjectMgr.GetPlayer(guid);
+                    Player* player = GetPlayerCompat(guid);
 
                     if (!player)
                         continue;

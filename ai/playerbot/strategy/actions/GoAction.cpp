@@ -325,7 +325,7 @@ inline bool TellGrouped(PlayerbotAI* ai, Player* requester)
     else
         out << "Grouped with ";
 
-    Player* groupLeader = sObjectMgr.GetPlayer(bot->GetGroup()->GetLeaderGuid());
+    Player* groupLeader = GetPlayerCompat(bot->GetGroup()->GetLeaderGuid());
 
     if (groupLeader)
     {

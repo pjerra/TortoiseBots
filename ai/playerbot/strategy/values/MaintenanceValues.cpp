@@ -670,7 +670,7 @@ bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI* ai)
 
     for (ObjectGuid guid : AI_VALUE(std::list<ObjectGuid>, "group members"))
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player || !ai->IsSafe(player))
             continue;
