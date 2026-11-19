@@ -3,6 +3,7 @@
 #include "Define.h"
 
 class Creature;
+class Item;
 class Player;
 
 // Feeds the TortoiseBots dashboard (tools/observability) on ForeverCore in the dashboard's own datagram format, over UDP:
@@ -17,4 +18,5 @@ void WriteItemsFile();
 void OnKill(Player* killer, Creature* killed);
 void OnKilledByCreature(Creature* killer, Player* killed);
 void OnQuestStatusChange(Player* player, uint32 questId);
+void OnLootItem(Player* player, Item* item);
 }

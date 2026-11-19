@@ -163,6 +163,7 @@ public:
     void OnCreatureKill(Player* killer, Creature* killed) override { TortoiseBots::Dashboard::OnKill(killer, killed); }
     void OnPlayerKilledByCreature(Creature* killer, Player* killed) override { TortoiseBots::Dashboard::OnKilledByCreature(killer, killed); }
     void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
+    void OnLootItem(Player* player, Item* item) override { TortoiseBots::Dashboard::OnLootItem(player, item); }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {
