@@ -18,7 +18,9 @@
 #include <bitset>
 #include <chrono>
 #include <list>
+#include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include "ChatCommand.h"
 #include "Log.h"
@@ -32,6 +34,13 @@
 #include "Timer.h"
 #include "DB2Stores.h"
 #include "UpdateTime.h"
+#include "Trainer.h"
+#include "Item.h"
+#include "ItemTemplate.h"
+#include "SpellHistory.h"
+#include "SpellPackets.h"
+#include "TbBotSession.h"
+#include "host/TbEngineBrain.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -185,6 +194,15 @@ public:
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spell",  HandleSpell,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "ranks",  HandleRanks,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "castfail", HandleCastFail, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "level",  HandleLevel,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "train",  HandleTrain,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "hurt",   HandleHurt,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "power",  HandlePower,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "use",    HandleUse,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -309,14 +327,22 @@ public:
     // .tb where <character>: where the bot is and what it is doing.
     static bool HandleWhere(ChatHandler* handler, std::string name)
     {
-        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        Player* bot = RequireBot(handler, name);
         if (!bot)
-            return Fail(handler, name + " is not a logged-in bot.");
+            return false;
         Unit* victim = bot->GetVictim();
         handler->PSendSysMessage("TortoiseBots: %s level %u map %u at %.1f %.1f %.1f, health %u/%u, %s, victim %s (health %u).",
             name.c_str(), uint32(bot->GetLevel()), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
             uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->IsInCombat() ? "in combat" : "out of combat",
             victim ? victim->GetName().c_str() : "none", victim ? uint32(victim->GetHealth()) : 0u);
+        {
+            uint64 const money = bot->GetMoney();
+            handler->PSendSysMessage("TortoiseBots: loot: UNIT_FLAG_LOOTING %s, %u window(s) in the area loot view.", bot->HasUnitFlag(UNIT_FLAG_LOOTING) ? "set" : "clear",
+                uint32(bot->GetAELootView().size()));
+            handler->PSendSysMessage("TortoiseBots: money: %llu copper (%llug %llus %lluc), mana %d/%d.", (unsigned long long)money,
+                (unsigned long long)(money / 10000), (unsigned long long)((money / 100) % 100), (unsigned long long)(money % 100),
+                bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA));
+        }
         for (std::string const& line : BotMgr::Instance().DescribeBrain(bot->GetGUID()))
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 
@@ -324,9 +350,15 @@ public:
         std::list<Creature*> creatures;
         bot->GetCreatureListWithEntryInGrid(creatures, 0, 60.0f);
         Creature* nearest = nullptr;
+        uint32 corpses = 0;
         for (Creature* creature : creatures)
+        {
+            if (!creature->IsAlive())
+                ++corpses;
             if (creature->IsAlive() && (!nearest || bot->GetDistance(creature) < bot->GetDistance(nearest)))
                 nearest = creature;
+        }
+        handler->PSendSysMessage("TortoiseBots: corpses within 60 yd: %u.", corpses);
         if (nearest)
         {
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, nearest alive %s at %.1f yd (may attack: %s, friendly: %s).",
@@ -345,11 +377,300 @@ public:
     // (which needs a selected target): a level 1 warrior's short fights never reach the 40 rage the heroic strike trigger asks for.
     static bool HandleRage(ChatHandler* handler, std::string name, uint32 points)
     {
-        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        Player* bot = RequireBot(handler, name);
         if (!bot)
-            return Fail(handler, name + " is not a logged-in bot.");
+            return false;
         bot->SetPower(POWER_RAGE, int32(std::min<uint32>(points, 100) * 10));
         handler->PSendSysMessage("TortoiseBots: %s rage is %d/%d (core units).", name.c_str(), bot->GetPower(POWER_RAGE), bot->GetMaxPower(POWER_RAGE));
+        return true;
+    }
+
+    // .tb castfail <character> <spell id> <reason> [interrupt]: sends the bot a real SMSG_CAST_FAILED (with `interrupt`: a
+    // SMSG_SPELL_FAILURE of its own cast) so the cast-result path can be tested without a fight: session reader, bounded queue,
+    // drain at the next engine tick (SLICE2-R0-NOTES.md). `reason` is the core's SpellCastResult number (SharedDefines.h:
+    // 63 interrupted, 75 moving, 87 not known, 118 out of range, 130 targets dead).
+    static bool HandleCastFail(ChatHandler* handler, std::string name, uint32 spellId, uint32 reason, Optional<std::string> mode)
+    {
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        bool const interrupted = mode && *mode == "interrupt";
+        if (mode && !interrupted)
+            return Fail(handler, "the optional last word is `interrupt` (an SMSG_SPELL_FAILURE); without it an SMSG_CAST_FAILED is sent.");
+        std::string const error = TortoiseBots::engine::InjectCastResult(bot, spellId, reason, interrupted);
+        if (!error.empty())
+            return Fail(handler, name + ": no result sent: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s: sent %s spell %u reason %u; the engine hears it on its next tick (`.tb where` shows the counts).",
+            name.c_str(), interrupted ? "SMSG_SPELL_FAILURE" : "SMSG_CAST_FAILED", spellId, reason);
+        return true;
+    }
+
+
+    // ---- Slice 2 test commands (FOREVER-SLICE2-SPEC section 7, R3). They exist for the live test of the engine's priest, so each refuses
+    // in a build without the engine (the option TORTOISEBOTS_SLICE1 is off). `<name>` is a character that is logged in through `.tb login`.
+    static bool RequireEngine(ChatHandler* handler)
+    {
+        if (TortoiseBots::engine::Built())
+            return true;
+        return Fail(handler, "the engine is not built in (this build has no test commands for it).");
+    }
+
+    // The character of a module bot or of a master that is a bot session (logged in with `.tb login`), or a clear refusal. The commands that CHANGE a
+    // character (hurt, power, level, train, additem, use, rage, cast, castlog sink...) go through here: a real player's character is refused with a message
+    // (a GM has the core's own commands for that), R5 item 6.
+    static Player* RequireBot(ChatHandler* handler, std::string const& name)
+    {
+        ObjectGuid const guid = GuidByName(name);
+        if (Player* bot = BotMgr::Instance().FindBot(guid))
+            return bot;
+        if (!guid.IsEmpty() && BotMgr::Instance().IsBot(guid))
+            Fail(handler, name + " is a module bot that is not in the world yet.");
+        else if (!guid.IsEmpty() && ObjectAccessor::FindPlayer(guid))
+            Fail(handler, name + " is a real player's character: the .tb test commands change module bots and their bot-session masters only (the core's own GM commands are for real players).");
+        else
+            Fail(handler, name + " is not a logged-in bot.");
+        return nullptr;
+    }
+
+    // .tb level <bot> <n>: the core's own level-up path, the one `.character level` takes (cs_character.cpp:914-917): GiveLevel (stats, health and
+    // mana, and what the core grants on a level), then InitTalentForLevel (the talent points of the level) and the experience bar to 0.
+    static bool HandleLevel(ChatHandler* handler, std::string name, uint8 level)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        if (level < 1 || level > 60)
+            return Fail(handler, "the level must be 1 to 60.");
+        bot->GiveLevel(level);
+        bot->InitTalentForLevel();
+        bot->SetXP(0);
+        handler->PSendSysMessage("TortoiseBots: %s is level %u: health %u/%u, mana %d/%d.", name.c_str(), uint32(bot->GetLevel()),
+            uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA));
+        return true;
+    }
+
+    // The 1.12-era spell ids of the class skill lines end at 28382 for priest and warrior (the highest id below 100000 in their lines); every id the lines
+    // hold above that is retail-era (the lowest is 401859: Renew 425268, Mind Spike, Shadowfiend, Circle of Healing...). The bound below sits in that gap.
+    static constexpr uint32 kClassicSpellIdEnd = 100000;
+
+    // .tb train <bot>: teaches the bot, free and without an NPC, the class spells it may know at its level, from the core's own data, in two passes
+    // (no spell id is written in this module):
+    //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1628, the world database's trainer and trainer_spell tables) and the core's own
+    //     per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A trainer is
+    //     used when its type is a class trainer and its class mask (Trainer::GetClassMask) IS the bot's class (a mask of several classes is a trainer whose
+    //     data names no class: riding, recipes; the first boot of R3 taught a priest riding passives and a tailoring recipe through them). The type of a class trainer in this
+    //     core's data is `Trainer::Type::None` (trainer.Type 0: 254 of 716 trainers, the priests' trainers 7 and 8 among them); `Trainer::Type::Talent` (1)
+    //     is another set of 8 whose spells all need a skill line (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading).
+    //  2. the class's own skill-line abilities (ClassLineSpells above; the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181): a spell of
+    //     the class's spell family (ChrClasses SpellClassSet) that fits the class and race (Player::IsSpellFitByClassAndRace), whose spell level the bot has
+    //     reached, that is valid (SpellMgr::IsSpellValid), AND (R5 item 1) either belongs to a verified rank chain (tbcompat::SpellRankOf: the core's chain,
+    //     the SkillLineAbility links or the trainers' required-ability links; every rank up to the bot's level is taught, the chain is verified data) or is a
+    //     chainless ability with a 1.12-era id (below kClassicSpellIdEnd: the retail-era ids of the class lines are all far above it). This gives what no
+    //     trainer teaches: the spells a new character starts with (a priest's Smite and Lesser Heal are in no trainer table). The core's command has no level
+    //     test; this one has (SpellInfo::SpellLevel <= level). A retail-era spell the TRAINER pass taught (the class trainers' tables carry them: Mind Spike,
+    //     Shadowfiend, Circle of Healing...) and that is in no verified chain is taken away again at the end (the core teaches every trainer row of the class
+    //     and cannot be told to skip one); the printout counts them.
+    // Passes repeat while one teaches something (a spell can be the prerequisite of the next). Prints the counts and the tally of the trainer pass.
+    static bool HandleTrain(ChatHandler* handler, std::string name)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        uint32 const classMask = 1u << (bot->GetClass() - 1);
+        ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(bot->GetClass());
+        uint32 trainerTaught = 0, lineTaught = 0, trainers = 0, passes = 0, retailSkipped = 0;
+        std::set<uint32> const lineSpells = tbcompat::ClassLineSpells(bot->GetClass());
+        std::set<uint32> knownBefore;
+        for (auto const& [spellId, spell] : bot->GetSpellMap())
+            knownBefore.insert(spellId);
+        Trainer::Trainer::FreeTeachTally tally;
+        for (; passes < 8; ++passes)
+        {
+            uint32 passTaught = 0;
+            trainers = 0;
+            for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
+            {
+                if (trainer.GetType() != Trainer::Type::None || trainer.GetClassMask() != classMask)
+                    continue;
+                ++trainers;
+                passTaught += trainer.TeachAvailableSpellsFree(bot, &tally);
+            }
+            trainerTaught += passTaught;
+
+            uint32 lineThisPass = 0;
+            if (classEntry)
+                for (uint32 spellId : lineSpells)
+                {
+                    if (bot->HasSpell(spellId))
+                        continue;
+                    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
+                    if (!info || info->SpellLevel == 0 || info->SpellLevel > bot->GetLevel() || info->SpellFamilyName != classEntry->SpellClassSet)
+                        continue;
+                    if (!tbcompat::SpellRankOf(spellId) && spellId >= kClassicSpellIdEnd)
+                    {
+                        ++retailSkipped;
+                        continue;
+                    }
+                    if (!bot->IsSpellFitByClassAndRace(info->Id) || !SpellMgr::IsSpellValid(info, bot, false))
+                        continue;
+                    bot->LearnSpell(info->Id, false);
+                    ++lineThisPass;
+                }
+            lineTaught += lineThisPass;
+            if (!passTaught && !lineThisPass)
+                break;
+        }
+        // A retail-era spell of a trainer row (id from kClassicSpellIdEnd up) that is in no verified chain is not taught by this command: taken away again.
+        std::string removed;
+        uint32 removedCount = 0;
+        {
+            std::vector<uint32> taken;
+            for (auto const& [spellId, spell] : bot->GetSpellMap())
+                if (!knownBefore.count(spellId) && spellId >= kClassicSpellIdEnd && !tbcompat::SpellRankOf(spellId))
+                    taken.push_back(spellId);
+            for (uint32 spellId : taken)
+            {
+                SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
+                removed += std::to_string(spellId) + ":" + (info && info->SpellName ? info->SpellName->Str[LOCALE_enUS] : "?") + " ";
+                bot->RemoveSpell(spellId, false, false);
+                ++removedCount;
+            }
+        }
+        handler->PSendSysMessage("TortoiseBots: train: %u retail-era chainless class-line spell(s) not taught, %u retail-era trainer spell(s) taken away again: %s", retailSkipped, removedCount, removed.c_str());
+        handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) and %u from the class skill lines, in %u pass(es); trainer pass not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
+            name.c_str(), trainerTaught, trainers, lineTaught, passes + 1, tally.known, tally.class_race, tally.level, tally.ability, tally.skill_line, tally.other);
+        return true;
+    }
+
+    // .tb hurt <name> <percent>: sets the character's health to that percent of its maximum (1 at least). A module bot or a bot-session master only (R5 item 6).
+    static bool HandleHurt(ChatHandler* handler, std::string name, uint32 percent)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* player = RequireBot(handler, name);
+        if (!player)
+            return false;
+        if (percent > 100)
+            return Fail(handler, "the percent must be 0 to 100.");
+        if (!player->IsAlive())
+            return Fail(handler, name + " is dead.");
+        player->SetHealth(std::max<uint32>(1u, uint32(uint64(player->GetMaxHealth()) * percent / 100)));
+        handler->PSendSysMessage("TortoiseBots: %s health is %u/%u.", name.c_str(), uint32(player->GetHealth()), uint32(player->GetMaxHealth()));
+        return true;
+    }
+
+    // .tb power <bot> mana|rage|energy <value>: sets that power to <value> percent of its maximum (rage: percent of 100 = rage points, the
+    // unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten; SetPower takes core units (Unit.h:839).
+    static bool HandlePower(ChatHandler* handler, std::string name, std::string kind, uint32 value)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        Powers power;
+        if (kind == "mana")
+            power = POWER_MANA;
+        else if (kind == "rage")
+            power = POWER_RAGE;
+        else if (kind == "energy")
+            power = POWER_ENERGY;
+        else
+            return Fail(handler, "usage: .tb power <character> mana|rage|energy <percent>.");
+        int32 const max = bot->GetMaxPower(power);
+        if (max <= 0)
+            return Fail(handler, name + " has no " + kind + ".");
+        bot->SetPower(power, int32(int64(max) * std::min<uint32>(value, 100) / 100));
+        handler->PSendSysMessage("TortoiseBots: %s %s is %d/%d (core units).", name.c_str(), kind.c_str(), bot->GetPower(power), max);
+        return true;
+    }
+
+    // .tb additem <bot> <item id> [count]: a new item into the bags (Player::StoreNewItemInBestSlots, Player.h:1626). The id is looked up
+    // with `.tb item <id>` first: no id is known from memory.
+    static bool HandleAddItem(ChatHandler* handler, std::string name, uint32 entry, Optional<uint32> count)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        if (!sObjectMgr->GetItemTemplate(entry))
+            return Fail(handler, "item " + std::to_string(entry) + " does not exist.");
+        uint32 const n = std::max<uint32>(1u, count.value_or(1u));
+        if (!bot->StoreNewItemInBestSlots(entry, n, ItemContext::NONE))
+            return Fail(handler, name + ": the item was not stored (bags full?).");
+        handler->PSendSysMessage("TortoiseBots: %s now has %u of item %u.", name.c_str(), bot->GetItemCount(entry), entry);
+        return true;
+    }
+
+    // .tb castlog <bot> [on|off]: with a word, turns the bot's cast-result sink on or off (a bot without an engine has it off); without,
+    // prints a copy of the queued cast results of the bot, never draining the engine's queue (R5 item 6; spike U3 and U1, SLICE2-R0-NOTES.md section 5).
+    static bool HandleCastLog(ChatHandler* handler, std::string name, Optional<std::string> mode)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        auto* session = dynamic_cast<TortoiseBots::BotSession*>(bot->GetSession());
+        if (!session)
+            return Fail(handler, name + " has no bot session.");
+        if (mode)
+        {
+            if (*mode != "on" && *mode != "off")
+                return Fail(handler, "usage: .tb castlog <character> [on|off].");
+            session->SetCastResultSink(*mode == "on");
+            handler->PSendSysMessage("TortoiseBots: %s cast-result sink %s.", name.c_str(), mode->c_str());
+            return true;
+        }
+        std::vector<TortoiseBots::CastResult> results;
+        session->PeekCastResults(results);
+        for (TortoiseBots::CastResult const& r : results)
+            handler->PSendSysMessage("TortoiseBots: kind=%s spell=%u reason=%u cast=%s%s", r.kind == TortoiseBots::CastResult::Kind::SpellFailure ? "SpellFailure" : "CastFailed",
+                r.spellId, r.reason, r.castId.ToString().c_str(), r.injected ? " injected" : "");
+        handler->PSendSysMessage("TortoiseBots: %s: %u queued result(s) (a copy, the queue keeps them); sink %s; moving now %s; casting now %s.", name.c_str(), uint32(results.size()),
+            session->CastResultSink() ? "on" : "off", bot->isMoving() ? "yes" : "no",
+            bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ? "yes" : "no");
+        return true;
+    }
+
+    // .tb use <bot> <item id> [self]: the bot uses an item from its bags through the core's own item cast (Player::CastItemUseSpell, Player.h:2683:
+    // the call a client's use-item packet ends in, Player.cpp:33833), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
+    // flag, effects, on-use spell: a legacy item's effect is ignored by the core, Player.cpp:9718-9744), then mana, current cast and auras.
+    // With the word `self` the cast carries the bot as its unit target; without, an empty target list (what a client sends for a self spell).
+    static bool HandleUse(ChatHandler* handler, std::string name, uint32 entry, Optional<std::string> mode)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        if (entry)
+        {
+            Item* item = bot->GetItemByEntry(entry, ItemSearchLocation::Inventory);
+            if (!item)
+                return Fail(handler, "item " + std::to_string(entry) + " is not in the bags.");
+            uint32 spellId = 0;
+            for (ItemEffectEntry const* effect : item->GetEffects())
+                if (effect->TriggerType == ITEM_SPELLTRIGGER_ON_USE) { spellId = effect->SpellID; break; }
+            handler->PSendSysMessage("TortoiseBots: item %u: legacy %s, %u effect(s), on-use spell %u, count %u.", entry,
+                item->GetTemplate()->HasFlag(ITEM_FLAG_LEGACY) ? "yes" : "no", uint32(item->GetEffects().size()), spellId, bot->GetItemCount(entry));
+            if (!spellId)
+                return Fail(handler, "the item has no on-use effect.");
+            SpellCastTargets targets;
+            if (mode && *mode == "self")
+                targets.SetUnitTarget(bot);
+            bot->CastItemUseSpell(item, spellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
+        }
+        std::string auras;
+        for (auto const& [id, app] : bot->GetAppliedAuras())
+            auras += std::to_string(id) + " ";
+        handler->PSendSysMessage("TortoiseBots: %s mana %d/%d, casting: %s, moving: %s, auras: %s", name.c_str(), bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA),
+            bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ? "yes" : "no", bot->isMoving() ? "yes" : "no", auras.c_str());
         return true;
     }
 
@@ -372,9 +693,9 @@ public:
     // .tb spells <character>: the spells the bot's spell map holds (id and name), what the engine's "spell id" value searches.
     static bool HandleSpells(ChatHandler* handler, std::string name)
     {
-        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        Player* bot = RequireBot(handler, name);
         if (!bot)
-            return Fail(handler, name + " is not a logged-in bot.");
+            return false;
         std::string line;
         uint32 count = 0;
         for (auto const& [spellId, spell] : bot->GetSpellMap())
@@ -390,6 +711,149 @@ public:
         }
         handler->PSendSysMessage("TortoiseBots: spells: %s", line.c_str());
         handler->PSendSysMessage("TortoiseBots: %s knows %u spell(s).", name.c_str(), count);
+        return true;
+    }
+
+    // .tb ranks <class name|id>: the spell rank chains of the class's skill lines, as the chain table (TbSpellEntry.cpp ChainTable) holds them: for each
+    // class skill line (skill category 7 with a SkillRaceClassInfo row for the class) the abilities whose ClassMask fits the class, grouped by chain
+    // (`chain <line> <source> <name>: id:rank:level ...`, source core = the core's own chain entry, links = SkillLineAbility supersedes links, trainer = trainer_spell required-ability links of the same ability) and the
+    // abilities of the line that are in no chain (`single <line>: id:level[:t<trainer level>]:name:family`, rank 0). It prints facts only; nothing is changed.
+    static bool HandleRanks(ChatHandler* handler, std::string classText)
+    {
+        if (classText == "selftest")
+        {
+            uint32 failed = 0;
+            for (std::string const& line : tbcompat::SpellChainSelfTest())
+            {
+                failed += line.rfind("FAIL", 0) == 0;
+                handler->PSendSysMessage("TortoiseBots: ranks selftest: %s", line.c_str());
+            }
+            handler->PSendSysMessage("TortoiseBots: ranks selftest: %s", failed ? "FAILED" : "all cases PASS");
+            return failed == 0;
+        }
+        if (classText == "lost")
+        {
+            uint32 n = 0;
+            tbcompat::ForEachLostChain([&](std::vector<uint32> const& ids)
+            {
+                std::string text = "lost " + std::to_string(++n) + " " + (sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE) && sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE)->SpellName &&
+                    (*sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE)->SpellName)[LOCALE_enUS] ? (*sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE)->SpellName)[LOCALE_enUS] : "?") + ":";
+                for (uint32 id : ids)
+                    text += " " + std::to_string(id);
+                handler->PSendSysMessage("TortoiseBots: ranks: %s", text.c_str());
+            });
+            handler->PSendSysMessage("TortoiseBots: ranks: %u chain(s) of the loose trainer rule are not in the table.", n);
+            return true;
+        }
+        static char const* const names[] = { "", "warrior", "paladin", "hunter", "rogue", "priest", "deathknight", "shaman", "mage", "warlock", "monk", "druid", "demonhunter", "evoker" };
+        uint32 classId = 0;
+        for (uint32 i = 1; i < std::size(names); ++i)
+            if (classText == names[i] || classText == std::to_string(i))
+                classId = i;
+        if (!classId)
+            return Fail(handler, "usage: .tb ranks <class name or id> (warrior, priest, ...).");
+        uint32 const classBit = 1u << (classId - 1);
+        auto onLine = [&](std::string const& text) { handler->PSendSysMessage("TortoiseBots: ranks: %s", text.c_str()); };
+        // The level at which a class trainer teaches each spell (the lowest ReqLevel over the class's trainers): printed as `t<level>` next to the spell
+        // level, because the data collaborator's lists give the level a spell is learned at.
+        std::unordered_map<uint32, uint32> trainerLevel;
+        for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
+            if (trainer.GetType() == Trainer::Type::None && trainer.GetClassMask() == classBit)
+                for (Trainer::Spell const& spell : trainer.GetSpells())
+                {
+                    auto const found = trainerLevel.find(spell.SpellId);
+                    if (found == trainerLevel.end() || spell.ReqLevel < found->second)
+                        trainerLevel[spell.SpellId] = spell.ReqLevel;
+                }
+        auto levelText = [&](uint32 id, SpellInfo const* info) { auto const found = trainerLevel.find(id); return std::to_string(info ? info->SpellLevel : 0) + (found == trainerLevel.end() ? std::string() : ":t" + std::to_string(found->second)); };
+        onLine("class " + std::to_string(classId) + " " + names[classId] + "; " + tbcompat::SpellChainSummary());
+        auto sourceText = [](uint8 bits)
+        {
+            std::string text;
+            if (bits & tbcompat::SpellChainSource::Core)
+                text += "core";
+            if (bits & tbcompat::SpellChainSource::SkillLine)
+                text += std::string(text.empty() ? "" : "+") + "links";
+            if (bits & tbcompat::SpellChainSource::Trainer)
+                text += std::string(text.empty() ? "" : "+") + "trainer";
+            return text;
+        };
+        for (SkillLineEntry const* line : sSkillLineStore)
+        {
+            if (!line || line->CategoryID != SKILL_CATEGORY_CLASS)
+                continue;
+            bool classLine = false;
+            for (SkillRaceClassInfoEntry const* info : sDB2Manager.GetSkillRaceClassInfo(line->ID))
+                if (info->ClassMask && (uint32(info->ClassMask) & classBit))
+                    classLine = true;
+            if (!classLine)
+                continue;
+            std::vector<SkillLineAbilityEntry const*> const* abilities = sDB2Manager.GetSkillLineAbilitiesBySkill(line->ID);
+            if (!abilities)
+                continue;
+            std::string const lineName = std::string(line->DisplayName[LOCALE_enUS] ? line->DisplayName[LOCALE_enUS] : "?");
+            std::set<uint32> inLine;
+            for (SkillLineAbilityEntry const* row : *abilities)
+                if (row->Spell > 0 && (!row->ClassMask || (uint32(row->ClassMask) & classBit)))
+                    inLine.insert(uint32(row->Spell));
+            onLine("skill line " + std::to_string(line->ID) + " " + lineName + ": " + std::to_string(inLine.size()) + " abilities");
+            std::set<uint32> chained;
+            tbcompat::ForEachSpellChain([&](tbcompat::SpellChainList const& chain)
+            {
+                bool any = false;
+                for (uint32 id : chain.ids)
+                    if (inLine.count(id))
+                        any = true;
+                if (!any)
+                    return;
+                SpellInfo const* first = sSpellMgr->GetSpellInfo(chain.ids.front(), DIFFICULTY_NONE);
+                std::string text = "chain " + lineName + " " + sourceText(chain.sources) + " " +
+                    (first && first->SpellName && (*first->SpellName)[LOCALE_enUS] ? (*first->SpellName)[LOCALE_enUS] : "?") + ":";
+                for (uint32 id : chain.ids)
+                {
+                    SpellInfo const* info = sSpellMgr->GetSpellInfo(id, DIFFICULTY_NONE);
+                    chained.insert(id);
+                    text += " " + std::to_string(id) + ":" + std::to_string(tbcompat::SpellRankOf(id)) + ":" + levelText(id, info) + (inLine.count(id) ? "" : "(not in line)");
+                    if (text.size() > 600)
+                    {
+                        onLine(text);
+                        text = "chain-cont:";
+                    }
+                }
+                onLine(text);
+            });
+            for (uint32 id : inLine)
+            {
+                if (chained.count(id))
+                    continue;
+                SpellInfo const* info = sSpellMgr->GetSpellInfo(id, DIFFICULTY_NONE);
+                if (!info)
+                    continue;
+                onLine("single " + lineName + ": " + std::to_string(id) + ":" + levelText(id, info) + ":" +
+                    (info->SpellName && (*info->SpellName)[LOCALE_enUS] ? (*info->SpellName)[LOCALE_enUS] : "?") + ":" + std::to_string(info->SpellFamilyName));
+            }
+        }
+        // The trainer links that were prerequisites and not ranks, for the abilities of this class.
+        std::set<uint32> const classSpells = tbcompat::ClassLineSpells(classId);
+        tbcompat::ForEachRejectedTrainerLink([&](uint32 required, uint32 taught, char const* why)
+        {
+            if (classSpells.count(taught))
+                onLine("prerequisite (not a rank): " + std::to_string(taught) + " requires " + std::to_string(required) + " [" + why + "]");
+        });
+        tbcompat::ForEachQuarantinedComponent([&](std::vector<uint32> const& ids)
+        {
+            bool inClass = false;
+            for (uint32 id : ids)
+                inClass = inClass || classSpells.count(id);
+            if (inClass)
+            {
+                std::string text = "quarantined component:";
+                for (uint32 id : ids)
+                    text += " " + std::to_string(id);
+                onLine(text);
+            }
+        });
+        onLine("done");
         return true;
     }
 
@@ -446,9 +910,9 @@ public:
     // .tb cast <character> <spell id>: the bot casts the spell on the caller's target (on the caller with no target).
     static bool HandleCast(ChatHandler* handler, std::string name, uint32 spellId)
     {
-        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        Player* bot = RequireBot(handler, name);
         if (!bot)
-            return Fail(handler, name + " is not a logged-in bot.");
+            return false;
         if (!sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE))
         {
             handler->PSendSysMessage("TortoiseBots: spell %u does not exist.", spellId);

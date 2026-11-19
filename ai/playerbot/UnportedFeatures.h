@@ -18,7 +18,7 @@
     X(ItemSlotOfPrototype, "equip slot of an item prototype", "Player::FindEquipSlot on a prototype; ForeverCore asks about an Item") \
     X(Companions, "companions", "spells with the summon critter effect (1.12 SPELL_EFFECT_SUMMON_CRITTER); ForeverCore has no such effect") \
     X(Auction, "auction (type only)", "AuctionEntry named in the declarations of the auction code (RandomBotFacade.h, ItemUsageValue.h); the slice never reaches that code and ForeverCore has AuctionPosting instead") \
-    X(IncomingLoot, "incoming: loot", "loot roll, loot start, loot response packets (1.12 layouts)") \
+    X(IncomingLoot, "incoming: loot roll", "loot roll, loot start roll, loot vote and loot roll won packets (1.12 layouts); loot rolls time out on ForeverCore, the bot never rolls. The loot window itself is read from the core's Loot object after the open (slice 2), so the 'loot response' event is raised by the open, not by a packet") \
     X(IncomingQuest, "incoming: quest", "quest accept, complete, confirm, share, details and update packets (1.12 layouts)") \
     X(IncomingTaxi, "incoming: taxi", "activate taxi and taxi node packets") \
     X(IncomingGroup, "incoming: group and party", "group invite, uninvite, set leader, party command, ready check, summon request and duel request packets") \
@@ -29,11 +29,11 @@
     X(IncomingEmotes, "incoming: emotes", "text emote and emote packets") \
     X(IncomingObjectUse, "incoming: gossip, game object and area trigger", "gossip hello, game object use and area trigger packets") \
     X(IncomingDeath, "incoming: release spirit and resurrect", "repop, reclaim corpse and resurrect request packets") \
-    X(IncomingCastFailed, "incoming: cast failed", "SMSG_CAST_RESULT, the asynchronous failure of a cast (findings item 9); the bot never hears that a cast failed after it started") \
+    X(IncomingCastFailed, "incoming: cast failed trigger", "the 'cast failed' world-packet trigger is not fed (no strategy maps it); the result itself is heard through the host's cast-result queue (CAST_FAILED_ASYNC, SpellInterrupted)") \
     X(IncomingSpeedChange, "incoming: forced speed change", "the six forced-speed packets and the client acks the bot answers them with (findings item 9)") \
     X(IncomingKnockBack, "incoming: knock back", "the knock-back packet and the jump the bot answers it with") \
     X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout): party and whisper commands typed to a bot") \
-    X(IncomingSpellState, "incoming: spell failure and delay", "spell failure and spell delayed packets (1.12 layouts)") \
+    X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); the failure half is the host's cast-result queue") \
     X(JumpFall, "jump, fall and knockback", "jumping, fall damage bookkeeping and knock-back handling by 1.12 movement packets (MSG_MOVE_JUMP, SetFallInformation, forced movement acks); ForeverCore moves by spline and movement generators") \
     X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
     X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
@@ -44,7 +44,6 @@
     X(Pets, "pets and guardians", "pet spell learning and autocast, pet command packets, the controlled-guardian walk (1.12 Pet, CallForAllControlledUnits)") \
     X(GameObjectUse, "game object use", "using a game object by the use packet (lightwell, party portal, ritual objects); ForeverCore uses typed packets and a different interact check") \
     X(ItemCasts, "item and totem casts", "casting an item spell with a hand-built Spell (SpellCastTargets setters, triggered flags, SetCastItem, item cooldowns); ForeverCore constructs a Spell from SpellInfo") \
-    X(HealEstimate, "heal estimate (spell damage bonus)", "Player::CalculateSpellDamage and SpellHealingBonusDone on a SpellEntry; the mirror entry is not a SpellInfo") \
     X(CustomStrategyStore, "custom strategy store", "reading custom strategy lines from ai_playerbot_custom_strategy; that table does not exist in ForeverCore characters schema") \
     X(StrategyStoreTransactions, "strategy store transactions", "BeginTransaction(serial) / CommitTransaction() around saving strategies; ForeverCore transactions are objects and the ai_playerbot tables do not exist") \
     X(Skills, "skills", "skill lines ForeverCore does not name (thrown) and skill writes (SetSkill with the 1.12 argument list)") \
@@ -67,7 +66,6 @@
     X(SpellData, "spell data (icon ids, item charges)", "SpellEntry::SpellIconID and Item::GetSpellCharges(index) on the mirror spell entry; ForeverCore reads them from SpellInfo / ItemEffectEntry") \
     X(BossTactics, "boss and raid tactics", "boss-specific hold, taunt, heal, position and spawn rules (BossTacticsActions, Fankriss, Patchwerk, Viscidus, Solnius, meet-and-heal holds, boss stands, boss tactics and dungeon plan tables); the link stand-ins answer: no boss rule applies (R6B)") \
     X(TravelMgr, "travel and exploration", "TravelMgr, the travel node map, paths, travel targets and destinations, area levels, quest travel table, taxi node zones; nothing is loaded and every query answers: no route, no target (R6B)") \
-    X(LootStack, "loot object stack", "ai::LootObject and LootObjectStack, the bot's list of corpses and objects to loot; the stack stays empty (R6B)") \
     X(RandomItems, "random item tables", "RandomItemMgr (stat weights, food picks), the item usage reagent and vendor tables; no table is built (R6B)") \
     X(BotTexts, "bot texts and help", "PlayerbotTextMgr and PlayerbotHelpMgr (ai_playerbot_texts, help topics); the text lookups answer the text name itself (R6B)") \
     X(TalentSpecs, "talent spec tables", "TalentSpec and ClassSpecs, the premade talent specs and their checks; no spec is read (R6B)") \
@@ -78,7 +76,13 @@
     X(ChatFilters, "chat filter chain", "CompositeChatFilter, the filters that rewrite a command line before the bot reads it; the line is used as it comes (R6B)") \
     X(FleeManager, "flee manager", "FleeManager and IdleMobVeto, the flee destination search; no destination is found (R6B)") \
     X(CampSpots, "camp spots table", "CampMgr, the table of camp spots (ai_playerbot_camp) and the active camp list; empty (R6B)") \
-    X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)")
+    X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)") \
+    /* --- slice 2, packages V2 and I2 (merged: one row per feature) --- */ \
+    X(LootItems, "loot: items, quest items and rolls", "taking items out of a loot window (the autostore packet), the 1.12 per-slot loot view rights and personal copies, quest items in loot, loot rolls and the bot-only drop boost; lead decision D2 = money only, ForeverCore loot is read from its Loot object and only the money is taken (slice 2, I2)") \
+    X(LootTables, "loot tables (drop maps)", "the creature, game object, item, skinning and pickpocket loot templates and the drop maps built from them (entry loot list, item drop list, loot chance, item usage of drops); ForeverCore keeps the rows of a loot template private") \
+    X(GatheringLoot, "loot: gathering, skinning and game objects", "opening a game object (chest, herb, ore) or skinning a corpse by a cast and the loot window that follows; the bot does not gather, skin or open objects on ForeverCore yet (slice 2, V2 and I2: looting a game object, its lock, tool and skill tests, skinning; lead decision D2: money from corpses only)") \
+    X(ItemUseOther, "item use except food and drink", "using an item on a target, an item, a game object or a lock, potions, scrolls, gems, quest-giver items, hearthstone, bandages, mounts: only food and drink on the bot itself go through the core's own item cast (slice 2, I2)") \
+    X(ItemUsage, "item usage", "ai::ItemUsageValue and its helpers (is this item needed for a quest, a future upgrade, an equip use, a recipe): the item-usage value is a later slice (lead decision D2: loot money only); the `item usage` key is not registered and the missing-key stand-in answers ITEM_USAGE_NONE (slice 2, R3)")
 
 namespace tbcompat
 {

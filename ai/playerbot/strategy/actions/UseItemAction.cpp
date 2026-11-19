@@ -34,160 +34,89 @@ constexpr std::string_view LOS_GOS_PARAM = "los gos";
 
 SpellCastResult BotUseItemSpell::ForceSpellStart(SpellCastTargets const* targets, Aura* triggeredByAura)
 {
-    // USE-AFTER-FREE FIX.
-    //
-    // Original bug: this method pre-queued a `SpellEvent` (lines 37-38 in
-    // the prior code) and then called `Prepare()`, which calls
-    // `Spell::prepare()`, which queues a SECOND SpellEvent for the same
-    // Spell*. When the cast finished, the first SpellEvent's destructor
-    // called `m_Spell->Delete()` (frees the Spell). The second SpellEvent
-    // remained in the EventProcessor queue with a dangling m_Spell —
-    // next tick its Execute() crashed reading m_spellState (offset 0x268)
-    // on freed memory.
-    //
-    // Symptom: ~1-2 min into bot combat with consumable use (Dark Rune
-    // mana potion / healthstone / dispel trinket) → ACCESS_VIOLATION READ
-    // at +0x268 from a freed Spell. Repro 100% under PageHeap.
-    //
-    // Fix: drop the manual SpellEvent queue. Let `prepare()` be the sole
-    // owner of the Spell + SpellEvent lifecycle. The `m_targets` assignment
-    // is kept BEFORE the pre-cast check because lock-check / reagent-check read
-    // m_targets. On the failure path we must `Delete()` ourselves since no
-    // SpellEvent owns this Spell yet.
-    m_targets = *targets;
-
-    if (triggeredByAura)
-        m_triggeredByAuraSpell = triggeredByAura->GetSpellProto();
-
-    // The pinned core exposes its real pre-cast validation publicly as
-    // CheckCast(). The inherited PreCastCheck compatibility method is a
-    // donor-only always-success stub and would let invalid item casts reach
-    // prepare() before the core rejected them a tick later.
-    SpellCastResult result = CheckCast(true);
-    bool failed = result != SPELL_CAST_OK;
-    if (result == SPELL_FAILED_BAD_TARGETS && OpenLockCheck())
+    // The cast of a hand-built Spell subclass (T). ForeverCore builds a Spell from a SpellInfo and has no such class: the item cast of
+    // food and drink goes through the core's own call (CastItemSpellCompat, TbCompat_I2.h) and never reaches this method; any other
+    // caller counts the feature and gets "not cast". The body is a generic lambda over `self` (this class), so the Spell internals it
+    // reads are only looked at on T.
+    return UnportedBlockResultCompat(tbcompat::Feature::ItemCasts, SPELL_FAILED_ERROR, [&](auto* self, auto const* targets) -> SpellCastResult
     {
-        failed = false;
-        m_IsTriggeredSpell = true;
-    }
+        // USE-AFTER-FREE FIX.
+        //
+        // Original bug: this method pre-queued a `SpellEvent` (lines 37-38 in
+        // the prior code) and then called `Prepare()`, which calls
+        // `Spell::prepare()`, which queues a SECOND SpellEvent for the same
+        // Spell*. When the cast finished, the first SpellEvent's destructor
+        // called `m_Spell->Delete()` (frees the Spell). The second SpellEvent
+        // remained in the EventProcessor queue with a dangling m_Spell —
+        // next tick its Execute() crashed reading m_spellState (offset 0x268)
+        // on freed memory.
+        //
+        // Symptom: ~1-2 min into bot combat with consumable use (Dark Rune
+        // mana potion / healthstone / dispel trinket) → ACCESS_VIOLATION READ
+        // at +0x268 from a freed Spell. Repro 100% under PageHeap.
+        //
+        // Fix: drop the manual SpellEvent queue. Let `prepare()` be the sole
+        // owner of the Spell + SpellEvent lifecycle. The `m_targets` assignment
+        // is kept BEFORE the pre-cast check because lock-check / reagent-check read
+        // m_targets. On the failure path we must `Delete()` ourselves since no
+        // SpellEvent owns this Spell yet.
+        self->m_targets = *targets;
 
-    if (result == SPELL_FAILED_REAGENTS && itemCheats)
-    {
-        failed = false;
-    }
+        if (triggeredByAura)
+            self->m_triggeredByAuraSpell = triggeredByAura->GetSpellProto();
 
-    if (failed)
-    {
-        // Trail: item casts queue silently (no CAST_START line, unlike the
-        // CastSpell path), so a pre-cast refusal (GCD, cooldown, missing
-        // item) was invisible next to the engine's bare FAILED verdict.
-        // Log spell + result code; the prepare path below logs its own.
-        if (Player* botPlayer = m_caster ? m_caster->ToPlayer() : nullptr)
+        // The pinned core exposes its real pre-cast validation publicly as
+        // CheckCast(). The inherited PreCastCheck compatibility method is a
+        // donor-only always-success stub and would let invalid item casts reach
+        // prepare() before the core rejected them a tick later.
+        SpellCastResult result = self->CheckCast(true);
+        bool failed = result != SPELL_CAST_OK;
+        if (result == SPELL_FAILED_BAD_TARGETS && self->OpenLockCheck())
+        {
+            failed = false;
+            self->m_IsTriggeredSpell = true;
+        }
+
+        if (result == SPELL_FAILED_REAGENTS && self->itemCheats)
+        {
+            failed = false;
+        }
+
+        if (failed)
+        {
+            // Trail: item casts queue silently (no CAST_START line, unlike the
+            // CastSpell path), so a pre-cast refusal (GCD, cooldown, missing
+            // item) was invisible next to the engine's bare FAILED verdict.
+            // Log spell + result code; the prepare path below logs its own.
+            if (Player* botPlayer = self->m_caster ? self->m_caster->ToPlayer() : nullptr)
+                if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(botPlayer))
+                    botdiag::BotActionLog::LogCastResult(botAi, GetSpellEntryCompat(self->m_spellInfo)->Id, result, "ITEM-PREPARE");
+            self->SendCastResult(result);
+            self->finish(false);
+            // No SpellEvent owns this Spell, so the standard destruction path
+            // (~SpellEvent → m_Spell->Delete()) won't fire. Delete ourselves.
+            self->Delete();
+            return result;
+        }
+
+        // Trail: the queued cast runs a tick later in Spell::cast(), where the
+        // core re-validates (power, cooldown, items) with no module-visible
+        // signal. Record the queue so a later silent fizzle is attributable.
+        if (Player* botPlayer = self->m_caster ? self->m_caster->ToPlayer() : nullptr)
             if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(botPlayer))
-                botdiag::BotActionLog::LogCastResult(botAi, GetSpellEntryCompat(m_spellInfo)->Id, result, "ITEM-PREPARE");
-        SendCastResult(result);
-        finish(false);
-        // No SpellEvent owns this Spell, so the standard destruction path
-        // (~SpellEvent → m_Spell->Delete()) won't fire. Delete ourselves.
-        Delete();
-        return result;
-    }
-
-    // Trail: the queued cast runs a tick later in Spell::cast(), where the
-    // core re-validates (power, cooldown, items) with no module-visible
-    // signal. Record the queue so a later silent fizzle is attributable.
-    if (Player* botPlayer = m_caster ? m_caster->ToPlayer() : nullptr)
-        if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(botPlayer))
-            botdiag::BotActionLog::LogCastStart(botAi, GetSpellEntryCompat(m_spellInfo)->Id,
-                targets ? targets->getUnitTargetGuid() : ObjectGuid(), 0);
-    // Hand off to Spell::prepare which creates exactly one SpellEvent and
-    // becomes the sole owner of this Spell.
-    return prepare(*targets, triggeredByAura);
-
+                botdiag::BotActionLog::LogCastStart(botAi, GetSpellEntryCompat(self->m_spellInfo)->Id,
+                    targets ? targets->getUnitTargetGuid() : ObjectGuid(), 0);
+        // Hand off to Spell::prepare which creates exactly one SpellEvent and
+        // becomes the sole owner of this Spell.
+        return self->prepare(*targets, triggeredByAura);
+    }, this, targets);
 }
 
 bool BotUseItemSpell::OpenLockCheck()
 {
-    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-    {
-        // for effects of spells that have only one target
-        switch (GetSpellEntryCompat(m_spellInfo)->Effect[i])
-        {
-            case SPELL_EFFECT_OPEN_LOCK_ITEM:
-            case SPELL_EFFECT_OPEN_LOCK:
-            {
-                if (m_caster->GetTypeId() != TYPEID_PLAYER) // only players can open locks, gather etc.
-                    return false;
-
-                // we need a go target in case of TARGET_GAMEOBJECT (for other targets acceptable GO and items)
-                // cached-target-allow: this is this spell's own cast target, read while its own prepare/cast validates
-                // it and the core reads the same pointer in the same pass (Spell::EffectOpenLock); it is not a
-                // current-spell pointer left over from an earlier tick.
-                GameObject* const go = m_targets.getGOTarget();
-                if (GetSpellEntryCompat(m_spellInfo)->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT && !go)
-                    return false;
-
-                // get the lock entry
-                uint32 lockId;
-                if (go)
-                {
-                    // In BattleGround players can use only flags and banners
-                    if (((Player*)m_caster)->InBattleGround() &&
-                        !((Player*)m_caster)->CanUseBattleGroundObject())
-                        return false;
-
-                    lockId = go->GetGOInfo()->GetLockId();
-                    if (!lockId)
-                        return false;
-
-                    // check if its in use only when cast is finished (called from spell::cast() with strict = false)
-                    if (go->getLootState() == GO_ACTIVATED)
-                        return false;
-
-                    if (go->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE))
-                        return false;
-
-                    // done in client but we need to recheck anyway
-                    if (go->GetGOInfo()->CannotBeUsedUnderImmunity() && m_caster->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE))
-                        return false;
-                }
-                else if (Item* item = m_targets.getItemTarget())
-                {
-                    // not own (trade?)
-                    if (item->GetOwner() != m_caster)
-                        return false;
-
-                    lockId = GetItemProtoCompat(item)->LockID;
-
-                    // if already unlocked
-                    if (!lockId || item->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED))
-                        return false;
-                }
-                else
-                    return false;
-
-                if (!lockId)                                            // possible case for GO and maybe for items.
-                    return false;
-
-                // Get LockInfo
-                LockEntry const* lockInfo = sLockStore.LookupEntry(lockId);
-
-                if (!lockInfo)
-                    return false;
-
-                // check lock compatibility
-                SpellEffectIndex effIdx = SpellEffectIndex(i);
-                SkillType skillId = SKILL_NONE;
-                int32 reqSkillValue = 0;
-                int32 skillValue = 0;
-                SpellCastResult res = CanOpenLock(effIdx, lockId, skillId, reqSkillValue, skillValue);
-                if (res == SPELL_FAILED_BAD_TARGETS)
-                    return true;
-            }
-        }
-    }
-
-    return false;
+    // Reads the Spell's lock target internals (T). The body lives in a friend template of the class (cmangos-compat-s2i.h); F counts
+    // the feature and answers false.
+    return BotUseItemOpenLockCheckCompat(this);
 }
 
 bool IsFoodOrDrink(const ItemPrototype* proto, uint32 spellCategory)
@@ -205,28 +134,6 @@ bool IsFood(const ItemPrototype* proto)
 bool IsDrink(const ItemPrototype* proto)
 {
     return IsFoodOrDrink(proto, 59);
-}
-
-bool IsTargetValidForItemUse(uint32 itemID, Unit* target)
-{
-    ItemRequiredTargetMapBounds bounds = sObjectMgr.GetItemRequiredTargetMapBounds(itemID);
-    if (bounds.first == bounds.second)
-    {
-        return true;
-    }
-
-    if (target)
-    {
-        for (ItemRequiredTargetMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
-        {
-            if (itr->second.IsFitToRequirements(target))
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
 
 bool RequiresItemToUse(const ItemPrototype* itemProto, PlayerbotAI* ai, Player* bot)
@@ -433,7 +340,7 @@ bool UseAction::Execute(Event& event)
             else
             {
                 Unit* target = nullptr;
-                if (requester && ai->HasActivePlayerMaster() && requester->GetSelectionGuid())
+                if (requester && ai->HasActivePlayerMaster() && !requester->GetSelectionGuid().IsEmpty())
                 {
                     target = ai->GetUnit(requester->GetSelectionGuid());
                 }
@@ -449,6 +356,10 @@ bool UseAction::Execute(Event& event)
 
 GameObject* UseAction::NearestLockFor(uint32 keyItemId)
 {
+    // Opening a lock with a key means using a game object: not ported on ForeverCore ("game object use"), so there is no lock to walk to.
+    if (GameObjectUseUnportedCompat())
+        return nullptr;
+
     GameObject* nearest = nullptr;
     float closest = 30.0f;
     for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest game objects no los"))
@@ -485,7 +396,7 @@ bool CommanderUseAction::Execute(Event& event)
         return false;
 
     MakeVerbose(false);
-    ObjectGuid const guid(raw);
+    ObjectGuid const guid = GuidFromRawCompat(raw);
     if (kind == "go")
     {
         GameObject* go = ai->GetGameObject(guid);
@@ -527,6 +438,21 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
             std::map<std::string, std::string> replyArgs;
             replyArgs["%item"] = itemId;
             ai->TellPlayerNoFacing(requester, BOT_TEXT2("use_command_invalid_item", replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+        }
+
+        return false;
+    }
+
+    // ForeverCore uses only food and drink (on the bot itself, through the core's own item cast); every other use of an item is not
+    // ported ("item use except food and drink"): opening, quest-giver items, hearthstone, potions, bandages, keys, scrolls, gems.
+    // T: always false. The refusal reads like any other that the action reports (use_command_item_error).
+    if (ItemUseUnportedCompat(IsFood(proto) || IsDrink(proto)))
+    {
+        if (verbose)
+        {
+            std::map<std::string, std::string> replyArgs;
+            replyArgs["%item"] = chat->formatItem(proto);
+            ai->TellPlayerNoFacing(requester, BOT_TEXT2("use_command_item_error", replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
 
         return false;
@@ -657,189 +583,44 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
             continue;
         }
 
-        // Check if valid targets
-        bool validTarget = false;
-        SpellCastTargets targets;
+        // One on-use spell of the item. T builds the targets and a BotUseItemSpell of its own for every kind of target (the loop body,
+        // moved word for word into cmangos-compat-s2i.h); F casts food and drink on the bot itself through the core's own item cast and
+        // answers "did not start" for every other use (TbCompat_I2.h, feature "item use except food and drink").
+        ItemSpellUseCompat use = CastItemSpellCompat<BotUseItemSpell>(ai, bot, proto, spellData, spellInfo, itemId, successCasts,
+            itemUsed, unit, gameObject, item,
+            [&](uint32 forSpellId) -> Item* { return AI_VALUE2(Item*, "item for spell", forSpellId); },
+            IsFood(proto) || IsDrink(proto));
 
-        // Try to figure out which targets are allowed if the spell doesn't provide it
-        uint32 spellTargets = spellInfo->Targets;
-        if (spellTargets == 0)
+        if (use.unit)
+            unitTarget = use.unit;
+        if (use.item)
+            itemTarget = use.item;
+        if (use.gameObject)
+            gameObjectTarget = use.gameObject;
+
+        if (use.skipped)
+            continue;
+
+        if (use.cast)
         {
-            // Unit target
-            if ((spellInfo->EffectImplicitTargetA[0] == TARGET_UNIT || spellInfo->EffectImplicitTargetA[0] == TARGET_UNIT_ENEMY) || // Unit Target
-                (proto->Class == ITEM_CLASS_CONSUMABLE && proto->SubClass == ITEM_SUBCLASS_SCROLL) || // Scrolls
-                (proto->Class == ITEM_CLASS_TRADE_GOODS && proto->SubClass == ITEM_SUBCLASS_EXPLOSIVES) || // Explosives
-                (spellData.SpellCategory == 150) || // First aid
-                (spellData.SpellCategory == 831)) // Soulstone
-            {
-                spellTargets |= TARGET_FLAG_UNIT;
-            }
+            // NOTE: no manual cooldown on the item-cheat path. The core
+            // applies spell + category cooldowns itself in
+            // Spell::SendSpellCooldown, after the cast passes validation.
+            // Pre-applying them here poisoned the deferred SpellEvent:
+            // prepare() only queues it, and the re-validation in cast()
+            // then saw our own cooldown (NOT_READY) and cancelled the cast
+            // it had just started (e.g. every healthstone use failed).
+            // Our own record (HasItemCooldown) is not read by the core.
+            if (!itemUsed && successCasts == 0)
+                StartCheatItemCooldowns(context, proto);
 
-            // Location target
-            if ((spellInfo->EffectImplicitTargetA[0] == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC) || // Hostile Aoe Spell
-                (proto->Class == ITEM_CLASS_TRADE_GOODS && proto->SubClass == ITEM_SUBCLASS_EXPLOSIVES)) // Explosives
-            {
-                spellTargets |= TARGET_FLAG_DEST_LOCATION;
-            }
+            SetDuration(use.castDuration);
 
-            // No target
-            if (spellTargets == 0 &&
-                (spellInfo->EffectImplicitTargetA[0] == TARGET_NONE || // No target
-                 spellInfo->EffectImplicitTargetA[0] == TARGET_UNIT_CASTER)) // Self Target
-            {
-                validTarget = true;
-            }
+            ++successCasts;
         }
-
-        if (spellTargets & TARGET_FLAG_DEST_LOCATION)
+        else
         {
-            if (unit)
-            {
-                unitTarget = unit;
-                targets.setDestination(unit->getPositionX(), unit->getPositionY(), unit->getPositionZ());
-                validTarget = true;
-            }
-            else if (gameObject && gameObject->isSpawned())
-            {
-                gameObjectTarget = gameObject;
-                targets.setDestination(gameObject->getPositionX(), gameObject->getPositionY(), gameObject->getPositionZ());
-                validTarget = true;
-            }
-        }
-
-        if (spellTargets & TARGET_FLAG_UNIT && !validTarget)
-        {
-            if (unit && IsTargetValidForItemUse(itemId, unit))
-            {
-                unitTarget = unit;
-                targets.setUnitTarget(unit);
-                validTarget = true;
-            }
-        }
-
-        // A key item on a locked object: Targets carries TARGET_FLAG_LOCKED (0x4000), and the effect
-        // targets a game object; either one, given a game object, takes this branch.
-        bool goEffect = false;
-        for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
-        {
-            if (spellInfo->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT)
-            {
-                goEffect = true;
-            }
-        }
-
-        if ((spellTargets & TARGET_FLAG_GAMEOBJECT || spellTargets & TARGET_FLAG_LOCKED || (goEffect && gameObject)) && !validTarget)
-        {
-            if (gameObject && gameObject->isSpawned())
-            {
-                gameObjectTarget = gameObject;
-                targets.setGOTarget(gameObject);
-                targets.m_targetMask = TARGET_FLAG_GAMEOBJECT;
-                validTarget = true;
-            }
-        }
-
-        if (spellTargets & TARGET_FLAG_ITEM && !validTarget)
-        {
-            if (item)
-            {
-                itemTarget = item;
-                targets.setItemTarget(item);
-                validTarget = true;
-            }
-            else
-            {
-                // Try to figure out the item target
-                Item* itemForSpell = AI_VALUE2(Item*, "item for spell", spellInfo->Id);
-                if (itemForSpell)
-                {
-                    if (!itemForSpell->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT))
-                    {
-                        validTarget = true;
-                        itemTarget = itemForSpell;
-
-                        if (bot->GetTrader())
-                        {
-                            targets.setTradeItemTarget(bot);
-                        }
-                        else
-                        {
-                            targets.setItemTarget(itemForSpell);
-                        }
-                    }
-                }
-            }
-        }
-
-        if (!validTarget)
-        {
-            targets.setUnitTarget(bot);
-            targets.m_targetMask = TARGET_FLAG_SELF;
-            validTarget = true;
-        }
-
-        if (validTarget)
-        {
-            // Validate spellInfo is a proper sSpellTemplate entry before constructing (mirrors MANGOS_ASSERT in Spell::Spell)
-            if (!spellInfo || spellInfo != GetSpellEntryCompat(spellInfo->Id))
-            {
-                continue;
-            }
-
-            // Use triggered flag only for items with many spell casts and for not first cast
-            BotUseItemSpell* spell = new BotUseItemSpell(bot, spellInfo, (successCasts > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
-            // Spend the item if used in the spell
-            if (itemUsed)
-            {
-                spell->SetCastItem(itemUsed);
-                    }
-
-            // Stop the movement for casted items
-            const bool isCastedSpell = spell->GetCastedTime() > 0 || IsChanneledSpell(spellInfo);
-            if (isCastedSpell)
-            {
-                ai->StopMoving();
-            }
-
-            const SpellCastResult result = spell->ForceSpellStart(&targets);
-
-            // Check for using item on trade item
-            bool successCast = result == SPELL_CAST_OK;
-            if (result == SPELL_FAILED_DONT_REPORT && (targets.m_targetMask & TARGET_FLAG_TRADE_ITEM))
-            {
-                successCast = true;
-            }
-            if (!successCast)
-                ai->NoteCastCheckFail(result);
-
-            if (successCast)
-            {
-                // NOTE: no manual cooldown on the item-cheat path. The core
-                // applies spell + category cooldowns itself in
-                // Spell::SendSpellCooldown, after the cast passes validation.
-                // Pre-applying them here poisoned the deferred SpellEvent:
-                // prepare() only queues it, and the re-validation in cast()
-                // then saw our own cooldown (NOT_READY) and cancelled the cast
-                // it had just started (e.g. every healthstone use failed).
-                // Our own record (HasItemCooldown) is not read by the core.
-                if (!itemUsed && successCasts == 0)
-                    StartCheatItemCooldowns(context, proto);
-
-                if (IsFood(proto) || IsDrink(proto))
-                {
-                    SetDuration(24000);
-                }
-                else
-                {
-                    SetDuration(ai->GetSpellCastDuration(spell));
-                }
-
-                ++successCasts;
-            }
-            else
-            {
-                break;
-            }
+            break;
         }
     }
 
@@ -874,7 +655,7 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
 
             if (itemUsed && proto->Stackable > 1)
             {
-                uint32 count = itemUsed->GetCount();
+                uint32 count = ItemCountAfterUseCompat(bot, itemUsed, itemId);
                 if (count > 1)
                 {
                     replyArgs["%amount"] = count;
@@ -914,6 +695,14 @@ bool UseAction::UseGameObject(Player* requester, Event& event, GameObject* gameO
         return false;
     }
 
+    // Using a game object (a door, a lock, a chest, a quest giver object) is not ported on ForeverCore ("game object use"); T: false.
+    if (GameObjectUseUnportedCompat())
+    {
+        std::ostringstream out; out << "I can't use " << chat->formatGameobject(gameObject);
+        ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+        return false;
+    }
+
     ObjectGuid guid = gameObject->getObjectGuid();
     if (!sServerFacade.isSpawned(gameObject) || gameObject->getLootState() == GO_ACTIVATED || gameObject->GetGoState() != GO_STATE_READY)
     {
@@ -923,7 +712,7 @@ bool UseAction::UseGameObject(Player* requester, Event& event, GameObject* gameO
     }
 
     // The core refuses a use of a no-interact object too (SpellHandler); the key branch below calls Use() directly.
-    if (gameObject->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT))
+    if (GameObjectNoInteractCompat(gameObject))
     {
         std::ostringstream out; out << "I can't interact with " << chat->formatGameobject(gameObject);
         ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
@@ -1069,9 +858,13 @@ bool UseAction::UseGameObject(Player* requester, Event& event, GameObject* gameO
         }
     }
 
-    std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_GAMEOBJ_USE));
-    *packet << guid;
-    bot->GetSession()->QueuePacket(packet.release());
+    // The use packet (T). F does not use game objects by a plain use yet ("game object use"): nothing was done, so no "Using".
+    if (!QueueGameObjectUseCompat(bot, gameObject))
+    {
+        std::ostringstream out; out << "I can't use " << chat->formatGameobject(gameObject);
+        ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+        return false;
+    }
 
     std::ostringstream out; out << "Using " << chat->formatGameobject(gameObject);
     ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
@@ -1146,11 +939,8 @@ bool UseAction::OpenItem(Player* requester, Item* item)
         return false;
 
         // Open quest item in inventory, containing related items (e.g Gnarlpine necklace, containing Tallonkai's Jewel)
-        std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_OPEN_ITEM, 2));
-        *packet << item->GetBagSlot();
-        *packet << item->GetSlot();
-        bot->GetSession()->QueuePacket(packet.release());
-        return true;
+        // (the packet: T. F does not open items: "item use except food and drink")
+        return OpenItemCompat(bot, item);
 }
 
 
@@ -1191,7 +981,7 @@ bool UseAction::HasItemCooldown(uint32 itemId) const
                 // (healthstone, mana gem and Dark Rune share one), which an
                 // item-free use starts instead of the item's.
                 SpellEntry const* spellInfo = GetSpellEntryCompat(proto->Spells[i].SpellId);
-                if (spellInfo && spellInfo->Category && bot->HasSpellCategoryCooldown(spellInfo->Category))
+                if (spellInfo && spellInfo->Category && HasSpellCategoryCooldownCompat(bot, spellInfo->Category))
                     return true;
             }
         }
@@ -1444,7 +1234,7 @@ bool UseHearthStoneAction::Execute(Event& event)
     const bool used = UseAction::Execute(event);
     if (used)
     {
-        sPlayerbotAIConfig.logEvent(ai, "UseHearthStoneAction", event.GetParam(), event.GetSource());
+        sPlayerbotAIConfig.logEvent(ai, "UseHearthStoneAction", event.GetParam(), event.getSource());
         RESET_AI_VALUE(bool, "combat::self target");
 
         // Do NOT reset "current position" here. This line runs when the cast *starts*;

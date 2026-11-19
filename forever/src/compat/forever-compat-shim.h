@@ -120,6 +120,7 @@ struct CmangosObjectAccessorProxy
 #define GetGameObjectInfo GetGameObjectTemplate      // ObjectMgr's game object template by entry
 #define GetGOData GetGameObjectData                  // ObjectMgr's spawn record by spawn id
 #define GetHealthPercent GetHealthPct                // health as a percentage of max, 0..100
+#define GetPowerPercent GetPowerPct                  // a power (mana, rage, energy) as a percentage of its max, 0..100 (slice 2, R3: MaintenanceValues.h)
 #define GetLeaderGuid GetLeaderGUID                   // the group's leader
 #define GetObjectBoundingRadius GetBoundingRadius    // the unit's size, added to reach computations
 #define GetObjectGuid GetGUID                        // the object's guid
@@ -563,4 +564,6 @@ private:
 #include "TbCompat_P.h"           // slice 1, round R4P: the PlayerbotAI class
 #include "TbCompat_C.h"           // slice 1, round R4C: engine core, config, log, positions
 #include "TbCompat_Unported.h"    // slice 1, round R6A: features that do not work on ForeverCore yet (counted, logged once)
+#include "TbCompat_V2.h"          // slice 2, package V2: loot values, corpses, dispel target, the loot object stack
+#include "TbCompat_I2.h"          // slice 2, package I2: loot, add loot and use item actions
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

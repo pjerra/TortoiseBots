@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Slice 1 registry check (FOREVER-SLICE1-SPEC section 4, package R2).
+"""Slice registry check (FOREVER-SLICE1-SPEC section 4, package R2; slice 2: the list is forever/SLICE2.txt and the priest's context counts as registered, R3).
 
     python3 forever/tools/slice_registry_check.py [--list] [--quiet]
 
@@ -10,7 +10,7 @@ compiles as it is), then reports:
 
   (a) slice keys that are not keys of the full build, or whose creator text differs from the full build's.
       Must be empty: the script exits 1 otherwise.
-  (b) keys that the slice's own source files (forever/SLICE1.txt, each .cpp and the .h of the same name) reference by
+  (b) keys that the slice's own source files (forever/SLICE2.txt, each .cpp and the .h of the same name) reference by
       string and the slice does not register. This is the to-do list for later packages, not a failure.
       Values come with the C++ types they are read as (the missing-value stand-in in SliceMissingKeyGuard.h
       covers the types listed there).
@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 STRAT = os.path.join(ROOT, "ai", "playerbot", "strategy")
 SLICE_CTX = os.path.join(ROOT, "forever", "src", "slice", "SliceAiObjectContext.cpp")
-SLICE_LIST = os.path.join(ROOT, "forever", "SLICE1.txt")
+SLICE_LIST = os.path.join(ROOT, "forever", "SLICE2.txt")
 SLICE_GUARD = os.path.join(ROOT, "forever", "src", "slice", "SliceMissingKeyGuard.h")
 
 # Full-build registries, in the order AiObjectContext::AiObjectContext adds them (first context wins a lookup).
@@ -35,6 +35,8 @@ FULL = {
 }
 # The class context the slice compiles unchanged: it registers its own keys on top of the slice's generic ones.
 WARRIOR = os.path.join(STRAT, "warrior", "WarriorAiObjectContext.cpp")
+PRIEST = os.path.join(STRAT, "priest", "PriestAiObjectContext.cpp")   # slice 2 (R3): the second class context, compiled as it is
+CLASS_CONTEXTS = (WARRIOR, PRIEST)
 KINDS = ("strategy", "action", "trigger", "value")
 CTX_TYPE = {"Strategy": "strategy", "Action": "action", "Trigger": "trigger", "UntypedValue": "value"}
 
@@ -143,8 +145,9 @@ def full_registry():
 
 def warrior_keys():
     keys = {k: set() for k in KINDS}
-    for e in parse_creators(WARRIOR):
-        keys[e["kind"]].add(e["key"])
+    for ctx in CLASS_CONTEXTS:
+        for e in parse_creators(ctx):
+            keys[e["kind"]].add(e["key"])
     return keys
 
 
@@ -250,7 +253,7 @@ def referenced():
     for rel in slice_sources():
         base_path = os.path.join(ROOT, rel)
         for p in (base_path, os.path.splitext(base_path)[0] + ".h"):
-            if not os.path.isfile(p) or os.path.abspath(p) == os.path.abspath(WARRIOR):
+            if not os.path.isfile(p) or os.path.abspath(p) in [os.path.abspath(c) for c in CLASS_CONTEXTS]:
                 continue
             text = strip_comments(read(p))
             for kind, name, typ, has_only in refs_in(p, text):

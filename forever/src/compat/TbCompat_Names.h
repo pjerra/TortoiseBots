@@ -168,6 +168,10 @@ public:
 // Player.cpp:6478 says "First Aid 129" for the same line).
 inline constexpr uint32 SKILL_FIRST_AID = 129;
 
+// Resurrection Sickness: T SharedDefines.h:1342 constexpr 15007; F has no name for it (the number is the Classic spell, checked live with `.tb spell 15007`
+// in the R3 boot). Read by CanFightEqualValue (MaintenanceValues.h), which only decides whether the bot may take an equal-level fight.
+inline constexpr uint32 SPELL_ID_PASSIVE_RESURRECTION_SICKNESS = 15007;
+
 // Text emotes by their Turtle names. Both cores name the same emotes, but the ids differ (T nod 78, no 77, open fire 101; F
 // TEXT_EMOTE_NOD 67, TEXT_EMOTE_NO 66, TEXT_EMOTE_OPENFIRE 327, SharedDefines.h:3366): the F name of the same emote.
 #define TEXTEMOTE_NOD TEXT_EMOTE_NOD

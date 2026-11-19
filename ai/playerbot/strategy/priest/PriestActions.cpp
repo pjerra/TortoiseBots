@@ -27,7 +27,7 @@ bool ai::PriestShadowformHealGateOpen(PlayerbotAI* ai, std::string const& spell,
 
     bool blocked = false;
     if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE &&
-        (bot->GetUInt32Value(UNIT_FIELD_FLAGS) & UNIT_FLAG_SILENCED) != 0)
+        UnitSilencedCompat(bot))
         blocked = true;
     if (ai->SpellGlobalCooldownRemainingMs() > 0)
         blocked = true;

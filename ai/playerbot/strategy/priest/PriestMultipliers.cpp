@@ -30,7 +30,7 @@ bool ai::PriestShouldSuppressLesserHeal(PlayerbotAI* ai)
     SpellEntry const* spellInfo = probedId ? sServerFacade.LookupSpellInfo(probedId) : nullptr;
     if (!spellInfo)
         return false;
-    uint32 const cost = Spell::CalculatePowerCost(spellInfo, bot, nullptr, nullptr);
+    uint32 const cost = SpellPowerCostCompat(spellInfo, bot);
     return PriestSuppressLesserHeal(true, PriestProbedHealAffordable(cost, bot->GetPower(POWER_MANA)));
 }
 

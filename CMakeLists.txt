@@ -63,7 +63,9 @@ set_target_properties(tortoisebots
     FOLDER "src/modules/TortoiseBots")
 
 if(TORTOISEBOTS_SLICE1)
-  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE1.txt)
+  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-2 list,
+  # which holds every file of forever/SLICE1.txt plus the priest, loot and item-use files (forever/docs/SLICE2-R3-NOTES.md).
+  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE2.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TB_SLICE_LIST})
@@ -86,7 +88,7 @@ if(TORTOISEBOTS_SLICE1)
       continue()
     endif()
     if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${line})
-      message(FATAL_ERROR "TortoiseBots: forever/SLICE1.txt names ${line}, which does not exist")
+      message(FATAL_ERROR "TortoiseBots: forever/SLICE2.txt names ${line}, which does not exist")
     endif()
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()

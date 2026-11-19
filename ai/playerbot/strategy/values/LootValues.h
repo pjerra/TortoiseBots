@@ -17,8 +17,8 @@ namespace ai
     class LootLootGroupAccess                               // A set of loot definitions for items (refs are not allowed)
     {
     public:
-        LootStoreItemList ExplicitlyChanced;                // Entries with chances defined in DB
-        LootStoreItemList EqualChanced;                     // Zero chances - every entry takes the same chance
+        LootStoreItemListCompat ExplicitlyChanced;                // Entries with chances defined in DB
+        LootStoreItemListCompat EqualChanced;                     // Zero chances - every entry takes the same chance
         bool hasConditionalEqualChancedItem;                // layout-match LootTemplate::LootGroup (LootMgr.cpp)
     };
 
@@ -26,7 +26,7 @@ namespace ai
     {
     public:
         typedef std::vector<LootLootGroupAccess> LootGroups;
-        LootStoreItemList Entries;                          // not grouped only
+        LootStoreItemListCompat Entries;                          // not grouped only
         LootGroups        Groups;                           // groups have own (optimized) processing, grouped entries go there
     };
 

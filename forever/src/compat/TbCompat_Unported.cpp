@@ -83,7 +83,7 @@ void UnportedPacketHandler(std::string const& name)
 {
     struct Group { Feature feature; std::initializer_list<char const*> handlers; };
     static Group const groups[] = {
-        { Feature::IncomingLoot, { "loot roll", "loot response", "loot start roll", "loot vote", "loot roll won" } },
+        { Feature::IncomingLoot, { "loot roll", "loot start roll", "loot vote", "loot roll won" } },
         { Feature::IncomingQuest, { "complete quest", "accept quest", "confirm quest", "quest share", "quest details",
             "quest update add kill", "quest update add item", "quest update failed", "quest update failed timer", "quest update complete" } },
         { Feature::IncomingTaxi, { "activate taxi", "taxi done" } },
