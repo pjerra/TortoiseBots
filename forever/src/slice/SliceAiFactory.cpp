@@ -131,7 +131,12 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
 void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* combatEngine)
 {
     if (player && player->GetClass() == CLASS_PRIEST)
-        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", NULL);
+    {
+        // "heal interrupt": the overheal cancel (a heal in its cast bar is cancelled when the patient no longer needs it), added by the full factory
+        // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3 of slice 2. The priest falls through to the `threat` block below
+        // (slice 3: a commanded healer backs off the tank's threat).
+        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", "heal interrupt", NULL);
+    }
     else if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.

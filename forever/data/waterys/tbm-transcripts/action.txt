@@ -1,0 +1,28 @@
+# action: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## action-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:29.4165439-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+action stay Yonder
+REPLIES BEGIN
+TBM:ACTION_ERR|stay|invalid|Usage: .bot action attack/interrupt/stop/pull [seconds] [ranged body]/pullback [seconds] [ranged body]/end pull/come/stay/hold/follow/flee/guard/free/stance <near tank turnback behind>/rebuff/focus skull/cc <mark> [bot]/cc clear [bot]/auto cc [on/off/status]/autocc [on/off/status]/sap [on/off] [bot]/aoe [on/off/status]/loot [on/off/status]/repair/sell/rest/drink/eat/release/corpse run/learn/trade/ready/bombspot [status/clear]/raid [status/tankface/douse/custom status/custom on/custom off]
+REPLIES END
+
+## action-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:32.651135257-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot action stay Yonder
+REPLIES BEGIN
+TBM:ACTION_ERR|stay|invalid|Usage: .bot action attack/interrupt/stop/pull [seconds] [ranged body]/pullback [seconds] [ranged body]/end pull/come/stay/hold/follow/flee/guard/free/stance <near tank turnback behind>/rebuff/focus skull/cc <mark> [bot]/cc clear [bot]/auto cc [on/off/status]/autocc [on/off/status]/sap [on/off] [bot]/aoe [on/off/status]/loot [on/off/status]/repair/sell/rest/drink/eat/release/corpse run/learn/trade/ready/bombspot [status/clear]/raid [status/tankface/douse/custom status/custom on/custom off]
+REPLIES END
+

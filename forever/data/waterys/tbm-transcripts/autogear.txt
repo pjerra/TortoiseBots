@@ -1,0 +1,28 @@
+# autogear: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## autogear-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:53.027859915-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+autogear Yonder
+REPLIES BEGIN
+Owned-bot autogear is disabled (AiPlayerbot.OwnedBotAutogearEnabled = 0).
+REPLIES END
+
+## autogear-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:56.1906898-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot autogear Yonder
+REPLIES BEGIN
+Owned-bot autogear is disabled (AiPlayerbot.OwnedBotAutogearEnabled = 0).
+REPLIES END
+

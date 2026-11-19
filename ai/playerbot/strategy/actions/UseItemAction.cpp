@@ -655,7 +655,7 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
 
             if (itemUsed && proto->Stackable > 1)
             {
-                uint32 count = itemUsed->GetCount();
+                uint32 count = ItemCountAfterUseCompat(bot, itemUsed, itemId);
                 if (count > 1)
                 {
                     replyArgs["%amount"] = count;

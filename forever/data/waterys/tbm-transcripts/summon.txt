@@ -1,0 +1,30 @@
+# summon: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## summon-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:18.975560688-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon, chat
+Observed addon channel labels (client decoder): guild
+REQUEST
+summon Yonder
+REPLIES BEGIN
+Summoning Yonder to a safe position near you (3s); it will follow on arrival.
+is following Labbytres.
+REPLIES END
+
+## summon-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:24.200617837-06:00
+Transport: chat (.bot)
+Observed reply event kinds: chat, system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot summon Yonder
+REPLIES BEGIN
+Summoning Yonder to a safe position near you (3s); it will follow on arrival.
+is following Labbytres.
+REPLIES END
+

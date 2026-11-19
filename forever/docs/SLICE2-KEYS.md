@@ -140,4 +140,3 @@ and the engine skips it. Options for the generator package: keep `default` and l
 of the factory (then `WorldPacketHandlerStrategy.cpp`, 187 lines, drops out of the list as well; `loot response` and `store loot` are then reached only if another strategy maps them, which is the lead's call, since section 5 reads loot from the core's Loot object after the open).
 The stand-in `SliceInertValue` (SliceMissingKeyGuard.h) must cover two more value types for the unregistered value keys: `ItemUsage` (`item usage`, as the spec says) and `std::set<uint32>&` (`skip go loot list`, read at `LootObjectStack.cpp`).
 The types of registered keys need nothing from the guard.
-

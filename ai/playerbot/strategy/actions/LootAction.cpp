@@ -784,8 +784,8 @@ bool StoreLootAction::Execute(Event& event)
     sLog.outDebug("[BOT LOOT] %s: StoreLoot done guid=%lu items_taken=%u gold=%u, release sent",
         CStrCompat(bot->GetName()), GuidKeyCompat(guid), itemsTaken, gold);
 
-    // release loot
-    LootReleaseCompat(bot, guid);
+    // release loot (every window of the loot view: an area-loot core opened the neighbours' windows with this one)
+    LootReleaseAllCompat(bot, guid);
 
     ai->AccelerateRespawn(guid);
 

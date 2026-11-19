@@ -132,7 +132,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (10 of its keys)
+    // the registry of StrategyContext (11 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -144,6 +144,7 @@ namespace slice
             creators["loot"] = [](PlayerbotAI* ai) { return new LootNonCombatStrategy(ai); };
             creators["cast time"] = [](PlayerbotAI* ai) { return new CastTimeStrategy(ai); };
             creators["default"] = [](PlayerbotAI* ai) { return new WorldPacketHandlerStrategy(ai); };
+            creators["heal interrupt"] = [](PlayerbotAI* ai) { return new HealInterruptStrategy(ai); };
             creators["threat"] = [](PlayerbotAI* ai) { return new ThreatStrategy(ai); };
             creators["passive"] = [](PlayerbotAI* ai) { return new PassiveStrategy(ai); };
             creators["tank face"] = [](PlayerbotAI* ai) { return new TankFaceStrategy(ai); };
@@ -245,7 +246,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (71 of its keys)
+    // the registry of TriggerContext (72 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -306,6 +307,7 @@ namespace slice
             creators["can loot"] = [](PlayerbotAI* ai) { return new CanLootTrigger(ai); };
             creators["far from loot target"] = [](PlayerbotAI* ai) { return new FarFromCurrentLootTrigger(ai); };
             creators["timer"] = [](PlayerbotAI* ai) { return new TimerTrigger(ai); };
+            creators["heal target full health"] = [](PlayerbotAI* ai) { return new HealTargetFullHealthTrigger(ai); };
             creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistTrigger(ai); };
             creators["lose aggro"] = [](PlayerbotAI* ai) { return new LoseAggroTrigger(ai); };
             creators["has aggro"] = [](PlayerbotAI* ai) { return new HasAggroTrigger(ai); };
@@ -335,7 +337,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (168 of its keys)
+    // the registry of ValueContext (169 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -508,12 +510,13 @@ namespace slice
             creators["loot strategy"] = [](PlayerbotAI* ai) { return new LootStrategyValue(ai); };
             creators["should get money"] = [](PlayerbotAI* ai) { return new ShouldGetMoneyValue(ai); };
             creators["inventory item ids"] = [](PlayerbotAI* ai) { return new InventoryItemIdValue(ai); };
+            creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
             creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 15, kActions = 44, kTriggers = 72, kValues = 168;
+    constexpr unsigned kStrategies = 16, kActions = 44, kTriggers = 73, kValues = 169;
 }
 }
 

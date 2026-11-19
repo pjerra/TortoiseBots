@@ -3,6 +3,38 @@
 Target: `Karrz1/TrinityCore`, branch `forever`, pinned at the commit in `forever/PINNED_CORE`.
 Rule: **no change to the core.** Everything is in this repository, loaded as `src/modules/TortoiseBots`.
 
+## Status
+
+This document describes the first proof, the spike. The hand-written "think" logic it describes is still in the module,
+for bots without the engine. A bot switched on with `.tb engine <character> on` runs the real engine (`PlayerbotAI`)
+instead, in a build with `-DTORTOISEBOTS_SLICE1=ON`; `.tb engine <character> off` returns it to the spike behaviour.
+The config key `TortoiseBots.Slice.EngineByDefault = 1` makes every bot that logs in run the engine
+(`forever/conf/tortoisebots.conf.dist`, `SLICE1-R8-NOTES.md` sections 3e and 9).
+
+Console commands in the module (`forever/src/TbScripts.cpp`; GM only; console as `tb ...`, in game as `.tb ...`):
+
+- `create <account> <name> <race> <class> [gender]`: make a character for a bot.
+- `login <character> [master]`: log a bot in; with a master, it joins the master's party and follows.
+- `logout <character>`: log a bot out.
+- `group <character> <master>`: put a logged-in bot in its master's party and make the master its leader.
+- `ungroup <character>`: take a bot out of its party.
+- `go <character> <dx> <dy>`: walk a bot by an offset.
+- `hop <character> <dx> <dy>`: same-map teleport of a bot by an offset (test helper).
+- `enter <character> <map id>`: report the core's entry check for a map.
+- `raid <master>`: convert the master's party to a raid (test helper).
+- `attack <character>`: make a bot attack its master's target.
+- `cast <character> <spell id>`: cast one spell.
+- `where <character>`: state, master, target reach, chase gates, rage and ground of a bot.
+- `status`: whether the module is enabled, and the bot session count.
+- `engine <character> on|off`: run a bot on the real engine, or back on the spike behaviour.
+- `rage <character> <value>`: set a bot's rage (test helper).
+- `spells <character>`: the spells a bot knows.
+- `perf`: the world's update time and the module's share, average and worst.
+- `unported`: calls to features that are not ported yet, since the boot.
+- `item <entry>`: the item mirror's filled fields.
+- `spell <spell id>`: one spell's filled fields.
+- `spellscan`: build the spell mirror for every spell and print the counts and the time.
+
 ## What the spike is
 
 A small module (`forever/src`) that proves the seams the whole port stands on:
@@ -99,7 +131,12 @@ cmake --build build --target worldserver
 ## Open
 
 1. The same steps with five bots in a party, and a master who is a real player on a game client.
-2. Pathfinding: the run used `mmap.enablePathFinding = 0` (no `mmaps` extracted yet), so bots walk straight lines.
+2. Pathfinding: the spike run used `mmap.enablePathFinding = 0` ("no `mmaps` extracted yet"), so bots walked
+   straight lines.
+   The engine asks the navmesh for tiles on each path query; a missing tile is remembered until the next restart
+   (`SLICE1-R10-NOTES.md`, S5 and R10-3). The notes do not say whether `mmaps` are extracted on the test server, or
+   whether an engine bot paths on a live run: the slice 1 live test reports follow and chase moves only
+   (`SLICE1-R8-NOTES.md`).
 
 ## Licence
 

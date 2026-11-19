@@ -55,13 +55,22 @@ kept holy out of "+all resistances", converted `BagFamily` from the core mask to
 
 ## Slice 1 (bot engine + warrior)
 
-Measured on the 127 files of `forever/SLICE1.txt` only (`FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14`).
+Measured on the files of `forever/SLICE1.txt` only
+(`FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14`): 127 files at the baseline,
+133 at the end of R9 (`SLICE1-R9-NOTES.md`).
 The whole-tree number above is no longer the target; this one is.
 
 | Date | State | Files | Compile clean | Error places |
 |---|---|---|---|---|
 | 2026-11-18 | baseline, at round 3 (spell mirror) | 127 | 3 | 2,504 (in 140 files incl. headers) |
 | 2026-11-18 | round 3 fix round 1 (6f6bce297; no slice file changed at 0a7f82604 either) | 127 | 3 | 2,504 (in 140 files incl. headers) |
+| 2026-11-18 | round 3, registry move applied in a VM copy (`SLICE1-R3-NOTES.md`) | 127 | not stated | 1,570 (in 73 files) |
+| 2026-11-18 | four R4 packages merged, final (`SLICE1-R4M-NOTES.md`) | 127 | 4 | 460 (in 27 files) |
+| 2026-11-18 | R6A: the 460 places answered by the not-ported table (`SLICE1-R6A-NOTES.md`) | 127 | 127 | 0 |
+| 2026-11-18 | R6B: linked and booted (`SLICE1-R6B-NOTES.md`) | 131 | 131 | 0 |
+| 2026-11-18 | R9 to R11: review fix rounds and the engine live test (`SLICE1-R11-NOTES.md`) | 133 | 133 | 0 |
+
+Slice 1 error places in order: 2,504 -> 1,570 -> 460 -> 0 (the rows above).
 
 Where they are: `PlayerbotAI.cpp` 348, `MovementActions.cpp` 317, `WorldPosition.cpp` 258 and `WorldPosition.h` 225,
 `PlayerbotAISpells.cpp` 128, `PlayerbotAIPackets.cpp` 74, `GenericTriggers.cpp` 51.

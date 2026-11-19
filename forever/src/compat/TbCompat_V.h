@@ -177,12 +177,19 @@ inline bool SpellDestinationCompat(Spell const* spell, float& x, float& y, float
 }
 // Is the cast still being prepared (the cast time runs). Both cores name the state the same (T Spell.h, F Spell.h:257).
 inline bool SpellIsPreparingCompat(Spell* spell) { return spell->getState() == SPELL_STATE_PREPARING; }
-// Is `spellId` a higher rank of the same spell than `otherId`. T SpellMgr::IsHighRankOfSpell, F SpellInfo.h:593.
+// Is `spellId` a higher rank of the same spell than `otherId`. T SpellMgr::IsHighRankOfSpell. F: the module's chain table (tbcompat::SpellIsHigherRank,
+// TbSpellEntry.cpp: the core's own chain or the SkillLineAbility supersedes links), NOT SpellInfo::IsHighRankOf (SpellInfo.cpp:4835-4843), which reads only
+// the core's own ChainEntry and so answers false for every spell the core has no chain for (R5 item 9).
 inline bool IsHighRankOfSpellCompat(uint32 spellId, uint32 otherId)
 {
-    SpellInfo const* a = GetSpellInfoCompat(GetSpellEntryCompat(spellId));
-    SpellInfo const* b = GetSpellInfoCompat(GetSpellEntryCompat(otherId));
-    return a && b && a->IsHighRankOf(b);
+    return tbcompat::SpellIsHigherRank(spellId, otherId);
+}
+// Do two spells belong to the same rank line (the legacy downrank code's "same spell line": same name, family and icon on Turtle). T: always true (the caller's
+// own name, family and icon tests decide, as before). F: the two are the same spell or in the same chain of the chain table, so a spell of the same name that is no
+// rank of the top spell (a retail-era variant, an NPC or talent version) is never offered as a lower rank (R5 item 9).
+inline bool SameRankLineCompat(SpellEntry const* a, SpellEntry const* b)
+{
+    return a && b && (a->Id == b->Id || tbcompat::SpellsShareChain(a->Id, b->Id));
 }
 // Does the item fit what the spell asks of its target item (T takes the spell entry, F the core's spell info).
 inline bool ItemFitsSpellCompat(Item* item, SpellEntry const* spell) { return item->IsFitToSpellRequirements(GetSpellInfoCompat(spell)); }

@@ -1,0 +1,104 @@
+# commander: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## commander-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:53.740396003-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+commander status
+REPLIES BEGIN
+TBM:ACTION_ERR|commander status|not-bound|You command no group. Use .bot commander bind <LeadBot> first.
+REPLIES END
+
+## commander-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:56.941425962-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot commander status
+REPLIES BEGIN
+TBM:ACTION_ERR|commander status|not-bound|You command no group. Use .bot commander bind <LeadBot> first.
+REPLIES END
+
+## commander-bind-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:23:30.957900571-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+commander bind Yonder inparty
+REPLIES BEGIN
+You command Yonder's group: Yonder. You stay in the party: the run leader orders the bots only. Orders: .bot cmd <order>.
+TBM:ACTION_ACK|commander bind|party|1|Yonder
+REPLIES END
+
+## commander-bind-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:23:34.189520788-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot commander bind Yonder inparty
+REPLIES BEGIN
+TBM:ACTION_ERR|commander bind|already-bound|You already command a group. Use .bot commander unbind first.
+REPLIES END
+
+## commander-bound-status-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:23:37.388279742-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+commander status
+REPLIES BEGIN
+You command Yonder's group: Yonder.
+TBM:ACTION_ACK|commander status|party|1|Yonder
+REPLIES END
+
+## commander-bound-status-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:23:40.602312097-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot commander status
+REPLIES BEGIN
+You command Yonder's group: Yonder.
+TBM:ACTION_ACK|commander status|party|1|Yonder
+REPLIES END
+
+## commander-unbind-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:23:56.645604482-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+commander unbind
+REPLIES BEGIN
+You no longer command Yonder's group. Your 1 hired companions rejoin your party; any other bots stay grouped.
+TBM:ACTION_ACK|commander unbind|party|0|Yonder
+REPLIES END
+
+## commander-unbind-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:23:59.892581674-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot commander unbind
+REPLIES BEGIN
+TBM:ACTION_ERR|commander unbind|not-bound|You command no group. Use .bot commander bind <LeadBot> first.
+REPLIES END
+
