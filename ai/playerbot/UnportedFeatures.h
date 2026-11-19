@@ -84,7 +84,10 @@
     X(ItemUseOther, "item use except food and drink", "using an item on a target, an item, a game object or a lock, potions, scrolls, gems, quest-giver items, hearthstone, bandages, mounts: only food and drink on the bot itself go through the core's own item cast (slice 2, I2)") \
     X(ItemUsage, "item usage", "ai::ItemUsageValue and its helpers (is this item needed for a quest, a future upgrade, an equip use, a recipe): the item-usage value is a later slice (lead decision D2: loot money only); the `item usage` key is not registered and the missing-key stand-in answers ITEM_USAGE_NONE (slice 2, R3)") \
     /* --- slice 3, porting worker (threat/tank, pull, orders) --- */ \
-    X(DebugVisuals, "debug spell visuals", "the spell visuals the `debug threat` strategy plays on a bot (Unit::SendPlaySpellVisual(kit id) on T plays a SpellVisualKit.dbc index; ForeverCore sends a spell visual with a target and its own numbering); debug aid only, nothing is shown (slice 3)")
+    X(DebugVisuals, "debug spell visuals", "the spell visuals the `debug threat` strategy plays on a bot (Unit::SendPlaySpellVisual(kit id) on T plays a SpellVisualKit.dbc index; ForeverCore sends a spell visual with a target and its own numbering); debug aid only, nothing is shown (slice 3)") \
+    /* --- slice 4, porting worker P4 (instance and death) --- */ \
+    X(BattlegroundRelease, "battleground release aura", "the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground (ReleaseSpiritAction); ForeverCore puts it on a player when its spirit guide is chosen (Player::SetAreaSpiritHealer), battlegrounds are a later slice; nothing is cast (slice 4)") \
+    X(SelfResurrection, "self resurrection", "the self-resurrection action (soulstone, ankh: PLAYER_SELF_RES_SPELL and CMSG_SELF_RES); ForeverCore keeps the spells in its own list and takes the spell in a typed packet; the `self resurrect` key is not registered, the helper answers: not possible (slice 4)")
 
 namespace tbcompat
 {

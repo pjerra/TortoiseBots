@@ -30,7 +30,7 @@ namespace ai
             if (sServerFacade.IsAlive(bot))
                 return false;
 
-            if (bot->GetCorpse() && bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (bot->GetCorpse() && HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
             {
                 ai->TellPlayerNoFacing(requester, "I am already a spirit", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
                 return false;
@@ -42,17 +42,18 @@ namespace ai
             else
                 ai->TellPlayerNoFacing(requester, "Meet me at the graveyard", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
 
-            sLog.outDetail("Bot #%d %s:%d <%s> released", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+            sLog.outDetail("Bot #%d %s:%d <%s> released", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
 
-            WorldPacket packet(CMSG_REPOP_REQUEST);
-            packet << uint8(0);
-            bot->GetSession()->HandleRepopRequestOpcode(packet);
+            // Both cores: the core's own release handler (RepopRequestCompat). Turtle: always true, as before; ForeverCore: false when the
+            // handler did nothing (not dead, already a ghost, a teleport under way), so the action never reports a release that did not happen.
+            if (!RepopRequestCompat(bot))
+                return false;
 
             // add waiting for ress aura
             if (bot->InBattleGround() && !ai->HasAura(2584, bot))
             {
                 // cast Waiting for Resurrect
-                bot->CastSpell(bot, 2584, TRIGGERED_OLD_TRIGGERED);
+                WaitingForResurrectAuraCompat(bot);
             }
 
             return true;
@@ -101,24 +102,24 @@ namespace ai
 
         virtual bool Execute(Event& event) override
         {
-            sLog.outDetail("Bot #%d %s:%d <%s> auto released", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+            sLog.outDetail("Bot #%d %s:%d <%s> auto released", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
             // Diagnosis: a dungeon crew member that releases costs its party a corpse run
             // from the instance entrance. Name what the predicates read when it happened.
             if (bot->FindMap() && bot->FindMap()->IsDungeon())
                 sLog.outDetail("[AUTO-RELEASE] %s map=%u lease=%s group=%d livingRezzer=%d crewInCombat=%d",
-                    bot->GetName(), bot->GetMapId(),
+                    CStrCompat(bot->GetName()), bot->GetMapId(),
                     TortoiseBots::BotActivityName(TortoiseBots::BotActivityLeaseManager::Instance().GetActivity(bot->GetGUIDLow())),
                     bot->GetGroup() ? 1 : 0, DungeonCrewHasLivingResurrecter() ? 1 : 0, DungeonCrewInCombat() ? 1 : 0);
 
-            WorldPacket packet(CMSG_REPOP_REQUEST);
-            packet << uint8(0);
-            bot->GetSession()->HandleRepopRequestOpcode(packet);
+            // See ReleaseSpiritAction::Execute: false on ForeverCore when the core did not release (nothing is logged as a release then).
+            if (!RepopRequestCompat(bot))
+                return false;
 
             // add waiting for ress aura
             if (bot->InBattleGround() && !ai->HasAura(2584, bot))
             {
                 // cast Waiting for Resurrect
-                bot->CastSpell(bot, 2584, TRIGGERED_OLD_TRIGGERED);
+                WaitingForResurrectAuraCompat(bot);
             }
 
             sPlayerbotAIConfig.logEvent(ai, "AutoReleaseSpiritAction");
@@ -136,9 +137,9 @@ namespace ai
 
 
             if (bot->InBattleGround())
-                return !bot->GetCorpse() || !bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+                return !bot->GetCorpse() || !HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST);
 
-            if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
                 return false;
             // A dungeon crew (another module holds the Dungeon activity lease) waits for
             // its own resurrection while a living group member of a resurrecting class is
@@ -200,7 +201,7 @@ namespace ai
             }
 
             SET_AI_VALUE(bool, "corpse run", true);
-            sLog.outString("[BOT CORPSE] %s: corpse run command received - overriding wait-for-master, running to corpse", bot->GetName());
+            sLog.outString("[BOT CORPSE] %s: corpse run command received - overriding wait-for-master, running to corpse", CStrCompat(bot->GetName()));
             ai->TellPlayerNoFacing(requester, "Running to my corpse", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
             return true;
         }
@@ -216,7 +217,7 @@ namespace ai
         {
             Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
 
-            sLog.outDetail("Repop bot #%d %s:%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+            sLog.outDetail("Repop bot #%d %s:%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
 
             SET_AI_VALUE(uint32, "death count", 0);
 
@@ -234,8 +235,8 @@ namespace ai
             {
                 if (Group* group = bot->GetGroup())
                 {
-                    sLog.outDetail("Repop: Removing bot #%d %s:%d <%s> from group", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
-                    group->RemoveMember(bot->getObjectGuid(), 0);
+                    sLog.outDetail("Repop: Removing bot #%d %s:%d <%s> from group", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
+                    GroupRemoveMemberCompat(group, bot->getObjectGuid());
                 }
             }
 
@@ -269,18 +270,19 @@ namespace ai
                 // up in Booty Bay. Only follow the pick when it shares the
                 // bot's map and is reasonably near (GraveyardTeleportPolicy.h);
                 // otherwise fall through to the spawn/homebind path below.
-                WorldSafeLocsEntry const* grave = sObjectMgr.GetClosestGraveYard(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId(), bot->GetTeam());
+                WorldSafeLocsEntry const* grave = ClosestGraveyardCompat(bot);
                 if (grave)
                 {
                     WorldPosition gravePos(grave);
+                    uint32 const graveMapId = gravePos.getMapId();
                     float const graveDist = WorldPosition(bot).fDist(gravePos);
                     // A bot already standing on its graveyard (revived there,
                     // then nopath-trapped) would teleport onto itself and loop;
                     // send it to spawn/homebind below instead.
-                    if (graveDist > 30.0f && IsUsableGraveyardTarget(true, grave->map_id == bot->GetMapId(), graveDist))
+                    if (graveDist > 30.0f && IsUsableGraveyardTarget(true, graveMapId == bot->GetMapId(), graveDist))
                     {
-                        sLog.outDetail("Repop: Teleporting bot #%d %s:%d <%s> to the nearest graveyard", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
-                        bot->TeleportTo(grave->map_id, grave->x, grave->y, grave->z, bot->GetOrientation());
+                        sLog.outDetail("Repop: Teleporting bot #%d %s:%d <%s> to the nearest graveyard", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
+                        bot->TeleportTo(graveMapId, gravePos.getX(), gravePos.getY(), gravePos.getZ(), bot->GetOrientation());
                         sPlayerbotAIConfig.logEvent(ai, "RepopAction", "graveyard");
                         // A sub-10 pool bot landed above its level (valley GY in
                         // the next town) goes straight home (LowbieGraveyardPolicy.h).
@@ -288,26 +290,27 @@ namespace ai
                         return true;
                     }
                     sLog.outDetail("Repop: nearest graveyard for bot #%d %s:%d <%s> is off-map/far (map %u), using spawn/homebind instead",
-                        bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), grave->map_id);
+                        bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), graveMapId);
                 }
             }
 
-            bool useHomebindOverride = bot->GetRace() == RACE_GOBLIN || bot->GetRace() == RACE_HIGH_ELF;
+            bool useHomebindOverride = RepopUsesHomebindCompat(bot);
             PlayerInfo const* defaultPlayerInfo = useHomebindOverride ? nullptr : sObjectMgr.GetPlayerInfo(bot->GetRace(), bot->GetClass());
             if (defaultPlayerInfo)
             {
-                sLog.outDetail("Repop: Teleporting bot #%d %s:%d <%s> to spawn", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+                sLog.outDetail("Repop: Teleporting bot #%d %s:%d <%s> to spawn", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
                 //teleport bot to spawn
-                bot->TeleportTo(defaultPlayerInfo->mapId, defaultPlayerInfo->positionX, defaultPlayerInfo->positionY, defaultPlayerInfo->positionZ, defaultPlayerInfo->orientation);
+                WorldPosition const spawnPos(defaultPlayerInfo);
+                bot->TeleportTo(spawnPos.getMapId(), spawnPos.getX(), spawnPos.getY(), spawnPos.getZ(), spawnPos.getO());
                 if (isRealPlayer_Helper(bot))
-                    bot->SendHeartBeat();
+                    SendHeartBeatCompat(bot);
             }
             else
             {
-                sLog.outDetail("Repop: Teleporting bot #%d %s:%d <%s> to homebind", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+                sLog.outDetail("Repop: Teleporting bot #%d %s:%d <%s> to homebind", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
                 //teleport bot to homebind
-                bot->TeleportToHomebind();
-                bot->SendHeartBeat();
+                TeleportToHomebindCompat(bot);
+                SendHeartBeatCompat(bot);
             }
 
             sPlayerbotAIConfig.logEvent(ai, "RepopAction");
@@ -335,14 +338,12 @@ namespace ai
     public:
         bool Execute(Event& event) override
         {
-            WorldPacket packet(CMSG_SELF_RES);
-            bot->GetSession()->HandleSelfResOpcode(packet);
-            return true;
+            return SelfResurrectCompat(bot);
         }
 
         bool isPossible() override
         {
-            return ai->IsStateActive(BotState::BOT_STATE_DEAD) && bot->GetUInt32Value(PLAYER_SELF_RES_SPELL);
+            return ai->IsStateActive(BotState::BOT_STATE_DEAD) && SelfResurrectPossibleCompat(bot);
         }
     };
 }

@@ -14,16 +14,18 @@ namespace ai
         {
             if (!sServerFacade.IsAlive(bot))
             {
-                WorldPacket p(event.GetPacket());
-                p.rpos(0);
-                ObjectGuid guid;
-                p >> guid;
+                ObjectGuid const guid = ResurrectOffererCompat(event);
 
-                WorldPacket packet(CMSG_RESURRECT_RESPONSE, 8+1);
-                packet << guid;
-                packet << uint8(1);                                       // accept
-                bot->GetSession()->HandleResurrectResponseOpcode(packet); // queue the packet to get around race condition
-                return true;
+                // Turtle: everybody's offer is taken (the helper is always true). ForeverCore: only a group member's or the commander's; the
+                // request of anybody else is declined (spec section 3). Both helpers answer false when the core had no such request.
+                if (!ResurrectOffererAcceptableCompat(ai, guid))
+                {
+                    DeclineResurrectCompat(bot, guid);
+                    return false;
+                }
+
+                // queue the packet to get around race condition (Turtle); ForeverCore: the core's typed handler, Response 0 = accept
+                return AcceptResurrectCompat(bot, guid);
             }
 
             return false;
