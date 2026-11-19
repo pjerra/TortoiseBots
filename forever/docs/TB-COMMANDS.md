@@ -372,11 +372,60 @@ error code=wrong-map cmd=plan msg=Mtank%20is%20not%20on%20map%20389%20%28the%20p
 error code=no-units cmd=plan msg=the%20plan%20has%20no%20ai_dungeon_step_unit%20rows%20%28a%20plan%20exported%20without%20--forever%2C%20or%20the%20rows%20were%20not%20read%29 #p9
 ```
 
-### The run header (no command yet)
-`forever/src/host/run/TbRun.h`: one `RunRec` per run, keyed by the leader's guid (leader, plan, the Turtle `DungeonRun::Run` as the progress, `startedMs`/`endedMs`, `pauses`, `deaths`, `wipes`, the event ring of 200, `stopped`/`stopReason`, the known boss states). **Nothing creates or ticks a run in S5**; the S6 glue (`.tb run start|stop|pause|resume|status|events`) will, and writes these records:
+### The run header (`.tb run`, section 10)
+`forever/src/host/run/TbRun.h`: one `RunRec` per run, keyed by the leader's guid (leader, plan, the Turtle `DungeonRun::Run` as the progress, `startedMs`/`endedMs`, `pauses`, `deaths`, `wipes`, the event ring of 200, `stopped`/`stopReason`, the known boss states). **Nothing created or ticked a run in S5**; the S6 glue (section 10) does, and writes these records:
 `run lead= plan= state=running|paused|done|stopped step= steps= [leg= legname= kind=] phase= note= pull= pulls= boss= deaths= wipes= pauses= elapsed= [why=] [ev=]`
 * `step` = the index of the step the run is on (`steps` once it is past the last one); `leg`, `legname` and `kind` describe that step and are absent past the last step. `phase` is the Turtle run's phase (`begin gather walk pull task rest wait hold`), `note` what it does now or why it paused (free text, cut to 400 bytes, then `trunc=yes`).
 * `pull` = the plan's pull steps the run has passed that it did not record as skipped, deferred or given up (its own lists); `pulls` = the plan's pull steps. `boss` = `<entry>:alive|dead` for each plan boss the glue has READ; a boss it never read is not listed (a boss is never reported alive by default).
 * `elapsed` seconds since the start, frozen at the end of the run; `why` exactly when the run is paused (the run's own note) or stopped (the reason it was given); `ev` = the seq of the newest event, absent when there is none.
 * `event seq= t= kind= [step=] [leg=] [unit=] why=`: `t` seconds since the start, `kind` = start step pull fight-end rest death wipe revive pause resume done stop, `unit` a creature entry; `step`, `leg` and `unit` are absent when the event has none.
 * `.tb state`: the end line of a party whose leader has a run gains `run=<lead name> runstate=<state>` (addendum A8 allows new keys; absent when there is no run).
+
+## 10. Slice 6: the tank bot leads a dungeon run (package C6)
+
+`.tb run` starts, watches and stops a run of the Turtle dungeon-run policy (`runtime/DungeonRunPolicy.h`, unchanged) on a plan of section 9. The **tank bot is the run's leader** (decision D1, a "system run"): `start` binds every other member of the tank's party to the tank as its commander (`.tb master` binding, the same host calls), and from then on nobody orders a bot from outside. Once a second the module reads the party and the step (`ReadFacts`, package F6), asks the policy for its one order, and hands that order to the executor (package O6: `move`, `pull`, `rest`, `revive party` ...). The fights stay the bots' own combat AI. All replies follow the grammar of section 3: markers `run-begin` / `run-end` (the verb is the end line's `verb=`), `error` on one line, the token last. In the default build (option OFF) every `.tb run` form answers `error code=engine-not-built`.
+
+```
+.tb run start <leader> <plan> [#token]
+.tb run stop <leader> [reason words] [#token]
+.tb run pause <leader> [#token]
+.tb run resume <leader> [#token]
+.tb run status <leader|all> [#token]
+.tb run events <leader> [since=<seq>] [#token]
+```
+
+**`start`** checks, in this order, and changes nothing when it refuses: the leader is a host bot in the world (`not-bot`); the plan is loaded (`not-loaded`, `no-plan`); the executor's own check (`no-engine`, `not-leader`, `no-tank`: the leader leads its party, has the tank role (`.tb role <leader> tank`, which the facts' `leadIsTank` reads) and every member is a host bot with a running engine); the party is not a raid (`group-raid`); no live run of this leader (`already-running`; an ended run is replaced); leader and members stand in the same instance of the plan's map (`wrong-map`); every member is a host bot in the world (`not-bot`, `player-in-group`); **every other member is already commanded** (`not-commanded`: bind the party first, `.tb master party <leader> <commander>`; a run does not rebuild an engine kit); the host accepts the binding (`bind-failed`, everything given back). The reply is one `run` record (`state=running`) and `run-end verb=start`.
+
+**`stop`** is the run's end for good: out of combat the executor's `stay` goes to the leader and every member, the old commander of each member is restored (`master`/`commander` as they were before `start`, unless somebody rebound the bot meanwhile), the run is `state=stopped` with `why=` the reason (default `stopped: by .tb run stop`), and the end line says `pending=no stayed=<n>` (`n` = bots whose `stay` action ran). **A stop never interrupts a fight:** with any living member or pet in combat the reply is `pending=yes` (no `stayed=`), the run gives no new order from then on, and the stop takes effect, with the same `stay` and release, on the first second without combat (`.tb run status` then shows `state=stopped`). A repeated `stop` while one is pending answers `pending=yes` again. Errors: `not-running` (already ended).
+
+**`pause`** pauses a running run at once (`state=paused why=paused by .tb run pause`): it is a player's pause, so the run never resumes by itself from it. **`resume`** is the policy's own checked resume (`ResumeChecked`): the party regroups and goes on. It refuses `not-paused`, `stopping`, `player-in-group` (a real player is in the group; a system run waits until it is bots only again) and `refused` (the policy's reason, e.g. the leader is still in another part of the instance). Errors for both: `not-running`.
+
+**`status <leader>`** is one `run` record; **`status all`** one per run (by leader name, ended runs included until the leader starts another), and its end line adds the tick cost: `runs= ticks= tick_avg_us= tick_max_us=` (run ticks since boot) and `facts_reads= facts_avg_us= facts_max_us= facts_unreadable=`.
+**`events <leader> [since=<seq>]`**: the ring of the last 200 events with `seq` above `since` (default all), oldest first, one `event` record each (section 9 lists the keys); the end line has `lead=` and `last=` (the newest seq, absent with none), so a watchdog asks `since=<last>` and sees "no new event for N minutes". Kinds: `start`, `step` (the run moved to a step; `why=not-cleared: ...` when a pull step none of whose members matched a spawn was skipped), `pull`, `fight-end`, `rest`, `death` (`why=` the bot), `wipe` (every member dead), `revive`, `pause` (`why=` a code or the run's note: `outside-order`, `player-in-group`, `lead-off-map`, `command`, or the policy's own reason), `resume`, `done`, `stop`. Errors: `no-run` (no run of that leader), `bad-argument`, `unexpected-argument`, `missing-argument`, `unknown-verb`.
+
+**Pauses that end by themselves:** the leader off the plan's map or not in the world (`why=lead-off-map`, back for a few seconds: resumes), a fight that held the run past the policy's ceiling (resumes when the party is out of combat). **Pauses that wait for `resume`:** `pause`, a refused order (`why` names the order and the executor's answer; an order of the policy the module cannot carry out, such as `summon` (decision D3), `escape`, `rescue`, `fetch`, `return`, `rejoin`, `cc`, `loot`, `open`, `use`, `ritual`, `gossip`, is refused `unsupported` and pauses the run with that verb in the note), **a `.tb order` typed for a bot of the run** (`why=outside-order`: the run pauses at its next second, the note names the bot and the verb, and the order itself is carried out as typed) and a real player joining the group (`why=player-in-group`, resumes by itself when the group is bots only again).
+The run ends by itself when the plan is done (`state=done`) or at `AiPlayerbot.DungeonRunMaxMinutes` (a stop with that reason).
+A leader that does not lead the party any more (disbanded, handed over) ends the run: `state=stopped`.
+`state-end` of `.tb state` carries `run=<leader name> runstate=<state>` for a party that has a run (section 9).
+The server log gets one line per event: `TortoiseBots run: <leader> #<seq> <kind> step=<n> leg=<n> unit=<entry> <why>`.
+
+```
+run-begin #r1
+run lead=Mtank plan=ragefire_chasm state=running step=0 steps=84 leg=0 legname=tunnel kind=move phase=begin note=started pull=0 pulls=51 boss= deaths=0 wipes=0 pauses=0 elapsed=0 ev=1 #r1
+run-end count=1 records=1 verb=start #r1
+```
+```
+run-begin #r2
+run lead=Mtank plan=ragefire_chasm state=stopped step=17 steps=84 leg=2 legname=cave kind=pull phase=wait note=stopped%3A%20by%20.tb%20run%20stop pull=6 pulls=51 boss= deaths=0 wipes=0 pauses=1 elapsed=312 why=stopped%3A%20by%20.tb%20run%20stop ev=31 #r2
+run-end count=1 records=1 verb=stop pending=no stayed=5 #r2
+```
+```
+run-begin #r3
+event seq=30 t=309 kind=fight-end step=17 leg=2 why= #r3
+event seq=31 t=312 kind=stop step=17 leg=2 why=stopped%3A%20by%20.tb%20run%20stop #r3
+run-end count=2 records=2 verb=events lead=Mtank last=31 #r3
+```
+```
+error code=not-commanded cmd=run msg=Mdpsb%20has%20no%20commander%20yet%3A%20bind%20the%20party%20first%20%28.tb%20master%20party%20Mtank%20%3Ccommander%3E%29 #r4
+```
+**The samples above were built by hand from the encoder's rules, as section 9's were; the first boot replaces them with real output.**
