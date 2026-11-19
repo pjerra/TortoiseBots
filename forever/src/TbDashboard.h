@@ -2,10 +2,19 @@
 
 #include "Define.h"
 
-// Feeds the TortoiseBots dashboard (tools/observability) on ForeverCore: a HEARTBEAT and one BOT_BATCH of every logged-in bot,
-// over UDP, in the dashboard's own datagram format. Runs on the world thread (WorldScript::OnBeforeMapsUpdate).
+class Creature;
+class Player;
+
+// Feeds the TortoiseBots dashboard (tools/observability) on ForeverCore in the dashboard's own datagram format, over UDP:
+// HEARTBEAT + BOT_BATCH (the roster), SERVER_INFO, BOT_EVENTS and the BOT_DEATH / STUCK anomalies. Runs on the world thread.
 namespace TortoiseBots::Dashboard
 {
 void LoadConfig();
 void Update(uint32 diff);
+// The item table the dashboard reads instead of world.item_template (ForeverCore keeps items in the DB2 stores).
+void WriteItemsFile();
+
+void OnKill(Player* killer, Creature* killed);
+void OnKilledByCreature(Creature* killer, Player* killed);
+void OnQuestStatusChange(Player* player, uint32 questId);
 }
