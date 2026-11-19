@@ -276,7 +276,7 @@ bool PatchwerkMainEngageAction::Execute(Event& event)
     context->GetValue<bool>("invalid target", "current target")->Reset();
     if (!bot->CanReachWithMeleeAutoAttack(boss) || !bot->IsWithinLOSInMap(boss, true))
     {
-        ChaseTo(boss, 0.0f, bot->GetAngle(boss));
+        ChaseTo(boss, 0.0f, GetAngleCompat(bot, boss));
         bot->Attack(boss, true); // ChaseTo's fallback may use Attack(false).
     }
     // Do not charge another pull-end/movement action delay before the normal
@@ -363,7 +363,7 @@ bool PatchwerkSoakEngageAction::Execute(Event& event)
     }
     if (!bot->CanReachWithMeleeAutoAttack(boss) || !bot->IsWithinLOSInMap(boss, true))
     {
-        bool const moved = ChaseTo(boss, 0.0f, bot->GetAngle(boss));
+        bool const moved = ChaseTo(boss, 0.0f, GetAngleCompat(bot, boss));
         // ChaseTo's core fallback arms a chase with Attack(false). Restore
         // melee swings so arrival never needs another attack command.
         bot->Attack(boss, true);

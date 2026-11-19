@@ -49,7 +49,7 @@ void RpgHelper::setFacingTo(GuidPosition guidPosition)
 
     //sServerFacade.SetFacingTo(bot, guidPosition.GetWorldObject());
     MotionMaster& mm = *bot->GetMotionMaster();
-    bot->SetFacingTo(bot->GetAngle(guidPosition.GetWorldObject(bot->GetInstanceId())));
+    bot->SetFacingTo(GetAngleCompat(bot, guidPosition.GetWorldObject(bot->GetInstanceId())));
     bot->m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD));
 }
 
@@ -71,7 +71,7 @@ void RpgHelper::setFacing(GuidPosition guidPosition)
         return;
 
     MotionMaster& mm = *unit->GetMotionMaster();
-    unit->SetFacingTo(unit->GetAngle(bot));
+    unit->SetFacingTo(GetAngleCompat(unit, bot));
     unit->m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD));
 }
 

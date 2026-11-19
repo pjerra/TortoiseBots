@@ -93,7 +93,7 @@ void FleeManager::calculatePossibleDestinations(std::list<FleePoint*> &points)
         if (!unit)
             continue;
 
-        float ori = bot->GetAngle(unit);
+        float ori = GetAngleCompat(bot, unit);
         enemyOri.push_back(ori);
     }
 

@@ -127,7 +127,7 @@ int FacingDegrees(Player* bot, Unit* unit)
 {
     constexpr float kTwoPi = 6.28318530718f;
     constexpr float kPi = 3.14159265359f;
-    float d = std::fabs(bot->GetAngle(unit) - bot->GetOrientation());
+    float d = std::fabs(GetAngleCompat(bot, unit) - bot->GetOrientation());
     while (d > kTwoPi)
         d -= kTwoPi;
     if (d > kPi)

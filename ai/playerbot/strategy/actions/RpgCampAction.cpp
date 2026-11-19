@@ -133,7 +133,7 @@ namespace
         }
 
         state.lastGreetMs = now;
-        bot->SetFacingTo(bot->GetAngle(target));
+        bot->SetFacingTo(GetAngleCompat(bot, target));
         bot->HandleEmoteCommand(urand(0, 1) ? EMOTE_ONESHOT_WAVE : EMOTE_ONESHOT_BOW);
         if (TortoiseBots::ShouldSayCampLine(sPlayerbotAIConfig.campGreetChancePct, urand(0, 99)))
             ai->Say(TortoiseBots::PickCampGreetingLine(urand(0, 999)));
