@@ -81,15 +81,34 @@ struct PrefixState
     bool seenDry = false;
     bool lastWet = false;
     bool bad = false;
-    void Sample(bool wet)
+    bool hasAt = false;                 // the first sample that decided the refusal (a wet sample after a dry one, else the wet last sample): for the refusal text
+    float atX = 0.0f, atY = 0.0f, atZ = 0.0f;
+    float lastX = 0.0f, lastY = 0.0f, lastZ = 0.0f;
+    void Sample(bool wet, float x = 0.0f, float y = 0.0f, float z = 0.0f)
     {
         lastWet = wet;
+        lastX = x;
+        lastY = y;
+        lastZ = z;
         if (!wet)
             seenDry = true;
-        else if (seenDry)
+        else if (seenDry && !bad)
+        {
             bad = true;
+            hasAt = true;
+            atX = x;
+            atY = y;
+            atZ = z;
+        }
     }
     bool Refused() const { return bad || lastWet; }
+    // Where it was refused: the first wet-after-dry sample, else the (wet) end of the route.
+    void Where(float& x, float& y, float& z) const
+    {
+        x = hasAt ? atX : lastX;
+        y = hasAt ? atY : lastY;
+        z = hasAt ? atZ : lastZ;
+    }
 };
 
 // A straight line a -> b, sampled like SegmentRefused (every <= kSegmentSampleYd, both ends), in order from a.
@@ -102,29 +121,34 @@ inline void SegmentSamples(PrefixState& state, float ax, float ay, float az, flo
     for (std::size_t i = 0; i <= steps; ++i)
     {
         float const t = static_cast<float>(i) / static_cast<float>(steps);
-        state.Sample(refused(ax + t * dx, ay + t * dy, az + t * dz));
+        float const px = ax + t * dx, py = ay + t * dy, pz = az + t * dz;
+        state.Sample(refused(px, py, pz), px, py, pz);
     }
 }
 
 template <class Refused>
-inline bool SegmentPrefixRefused(float ax, float ay, float az, float bx, float by, float bz, Refused&& refused)
+inline bool SegmentPrefixRefused(float ax, float ay, float az, float bx, float by, float bz, Refused&& refused, PrefixState* where = nullptr)
 {
     PrefixState state;
     SegmentSamples(state, ax, ay, az, bx, by, bz, refused);
+    if (where)
+        *where = state;
     return state.Refused();
 }
 
 // A path p[0..n) walked in order (vertices and legs).
 template <class Points, class Refused>
-inline bool PathPrefixRefused(Points const& p, std::size_t n, Refused&& refused)
+inline bool PathPrefixRefused(Points const& p, std::size_t n, Refused&& refused, PrefixState* where = nullptr)
 {
     PrefixState state;
     if (n == 0)
         return false;
     if (n == 1)
-        state.Sample(refused(p[0].x, p[0].y, p[0].z));
+        state.Sample(refused(p[0].x, p[0].y, p[0].z), p[0].x, p[0].y, p[0].z);
     for (std::size_t i = 1; i < n; ++i)
         SegmentSamples(state, p[i - 1].x, p[i - 1].y, p[i - 1].z, p[i].x, p[i].y, p[i].z, refused);
+    if (where)
+        *where = state;
     return state.Refused();
 }
 

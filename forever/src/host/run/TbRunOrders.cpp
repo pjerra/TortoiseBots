@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <strings.h>
@@ -142,6 +143,7 @@ struct MoveCheck
     MoveFacts facts;
     bool pathRead = false;
     bool liquidOnWay = false;       // R6: the point, or the walked route to it, is in or on liquid (TbRunLiquid.h rule)
+    std::string liquidAt;           // where the route was refused ("x y z"), for the answer's text
 };
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
@@ -181,7 +183,16 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         // points: no route at all) falls back to the straight line, which is what a shortcut walks.
         Movement::PointsArray const& way = PathPointsCompat(path);
         auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
-        check.liquidOnWay = way.size() >= 2 ? liquid::PathPrefixRefused(way, way.size(), wet) : liquid::SegmentPrefixRefused(ox, oy, oz, point.x, point.y, point.z, wet);
+        liquid::PrefixState where;
+        check.liquidOnWay = way.size() >= 2 ? liquid::PathPrefixRefused(way, way.size(), wet, &where) : liquid::SegmentPrefixRefused(ox, oy, oz, point.x, point.y, point.z, wet, &where);
+        if (check.liquidOnWay)
+        {
+            float wx, wy, wz;
+            where.Where(wx, wy, wz);
+            char buffer[80];
+            std::snprintf(buffer, sizeof buffer, "%.1f %.1f %.1f", wx, wy, wz);
+            check.liquidAt = buffer;
+        }
     }
     else
         check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);      // already at the point: it must not be liquid
@@ -429,7 +440,8 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     }
     if (check.liquidOnWay)
     {
-        OrderAnswer refusal = Refuse("unreachable", "The lead bot's way to that point crosses or ends in liquid (lava or water): no walkable path avoids it.");
+        OrderAnswer refusal = Refuse("unreachable", "The lead bot's way to that point crosses or ends in liquid (lava or water)" +
+            (check.liquidAt.empty() ? std::string() : " at " + check.liquidAt) + ": no walkable path avoids it.");
         refusal.movePathRead = answer.movePathRead;
         refusal.movePathType = answer.movePathType;
         return refusal;
