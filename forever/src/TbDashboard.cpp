@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
+#include "GameTime.h"
 #include "Item.h"
 #include "Map.h"
 #include "Spell.h"
@@ -31,6 +32,7 @@
 #include <unordered_map>
 #include <list>
 #include <map>
+#include <set>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -544,6 +546,145 @@ void SendRaids(std::vector<Player*> const& bots, uint64 seq, time_t now)
     Send(ss.str());
 }
 
+// COMBAT_FIGHT: one fight of the bots in a dungeon or raid copy, from the first bot entering combat until none is in combat:
+// per bot damage done and taken, healing and overhealing, casts per spell and deaths with their last hits. The dashboard
+// files it under the copy's run ("dgn:<map>:<instance>") and judges it with its own rules.
+struct FightHitRec { std::string attacker; uint32 amount; uint32 tMs; };
+struct FightBotAcc
+{
+    uint64 dmg = 0, heal = 0, over = 0, taken = 0;
+    uint32 casts = 0, healCasts = 0, deaths = 0;
+    std::map<std::string, uint32> spells;
+    std::vector<FightHitRec> lastHits; // newest last, at most 5
+};
+struct FightDeathRec { std::string name, killer; uint32 tMs; float x, y, z; std::vector<FightHitRec> hits; };
+struct FightAcc
+{
+    uint32 startMs = 0;
+    time_t start = 0;
+    uint32 seq = 0;
+    std::map<ObjectGuid, FightBotAcc> bots;
+    std::map<uint32, std::pair<std::string, std::set<ObjectGuid>>> engaged; // entry -> name, units
+    std::vector<FightDeathRec> deaths;
+    uint32 boss = 0;
+    std::string bossName;
+};
+std::map<std::pair<uint32, uint32>, FightAcc> g_fights;
+uint32 g_fightCounter = 0;
+
+FightAcc* FightOf(Unit const* unit)
+{
+    if (!unit || !unit->GetMap() || !unit->GetMap()->IsDungeon())
+        return nullptr;
+    auto itr = g_fights.find({ unit->GetMapId(), unit->GetInstanceId() });
+    return itr == g_fights.end() ? nullptr : &itr->second;
+}
+
+uint32 FightMs(FightAcc const& fight) { return GameTime::GetGameTimeMS() - fight.startMs; }
+
+void NoteEnemy(FightAcc& fight, Unit const* unit)
+{
+    Creature const* creature = unit ? unit->ToCreature() : nullptr;
+    if (!creature)
+        return;
+    auto& entry = fight.engaged[creature->GetEntry()];
+    entry.first = creature->GetName();
+    entry.second.insert(creature->GetGUID());
+    if (creature->IsDungeonBoss() && !fight.boss)
+    {
+        fight.boss = creature->GetEntry();
+        fight.bossName = creature->GetName();
+    }
+}
+
+void FileFight(std::pair<uint32, uint32> const& key, FightAcc& fight, std::vector<Player*> const& bots, uint64 seq, time_t now)
+{
+    Sender& s = Get();
+    bool anyAlive = false;
+    for (Player* bot : bots)
+        if (bot->GetMapId() == key.first && bot->GetInstanceId() == key.second && bot->IsAlive())
+            anyAlive = true;
+    std::string const commander = "dgn:" + std::to_string(key.first) + ":" + std::to_string(key.second);
+    std::ostringstream ss;
+    ss << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
+       << ",\"type\":\"COMBAT_FIGHT\",\"fight\":{\"id\":\"f" << fight.seq << "\",\"commander\":\"" << commander
+       << "\",\"commander_guid\":0,\"group\":0,\"map\":" << key.first << ",\"plan\":\"\",\"leg\":\"\",\"step\":0,\"kind\":\""
+       << (fight.boss ? "boss" : "trash") << "\",\"start\":" << fight.start << ",\"dur_ms\":" << FightMs(fight) << ",\"outcome\":\""
+       << (anyAlive ? "win" : "wipe") << "\",\"boss\":" << fight.boss << ",\"boss_name\":\"" << Escape(fight.bossName)
+       << "\",\"boss_phase\":0,\"boss_phase_entry\":0,\"planned\":[],\"engaged\":[";
+    bool first = true;
+    for (auto const& [entry, info] : fight.engaged)
+    {
+        ss << (first ? "" : ",") << "{\"e\":" << entry << ",\"n\":\"" << Escape(info.first) << "\",\"c\":" << info.second.size() << "}";
+        first = false;
+    }
+    ss << "],\"bots\":[";
+    first = true;
+    for (auto const& [guid, acc] : fight.bots)
+    {
+        Player* bot = ObjectAccessor::FindConnectedPlayer(guid);
+        if (!bot)
+            continue;
+        Group* group = bot->GetGroup();
+        auto brain = s.brains.find(guid);
+        ss << (first ? "" : ",") << "{\"name\":\"" << Escape(bot->GetName()) << "\",\"guid\":" << guid.GetCounter() << ",\"class\":\""
+           << ClassName(bot->GetClass()) << "\",\"role\":\"" << (brain != s.brains.end() && !brain->second.role.empty() ? brain->second.role : "dps")
+           << "\",\"sub\":" << (group && group->isRaidGroup() ? int32(group->GetMemberGroup(guid)) : -1) << ",\"dmg\":" << acc.dmg << ",\"heal\":"
+           << acc.heal << ",\"over\":" << acc.over << ",\"taken\":" << acc.taken << ",\"casts\":" << acc.casts << ",\"heal_casts\":" << acc.healCasts
+           << ",\"deaths\":" << acc.deaths << ",\"spells\":[";
+        bool firstSpell = true;
+        for (auto const& [name, count] : acc.spells)
+        {
+            ss << (firstSpell ? "" : ",") << "{\"n\":\"" << Escape(name) << "\",\"c\":" << count << "}";
+            firstSpell = false;
+        }
+        ss << "],\"tail_spells\":[]}";
+        first = false;
+    }
+    ss << "],\"debuffs\":{\"sampled_s\":0,\"up_s\":{}},\"deaths\":[";
+    first = true;
+    for (FightDeathRec const& death : fight.deaths)
+    {
+        ss << (first ? "" : ",") << "{\"name\":\"" << Escape(death.name) << "\",\"t_ms\":" << death.tMs << ",\"x\":" << death.x << ",\"y\":" << death.y
+           << ",\"z\":" << death.z << ",\"killer\":\"" << Escape(death.killer) << "\",\"hits\":[";
+        for (size_t i = 0; i < death.hits.size(); ++i)
+            ss << (i ? "," : "") << "{\"a\":\"" << Escape(death.hits[i].attacker) << "\",\"d\":" << death.hits[i].amount << ",\"t_ms\":" << death.hits[i].tMs << "}";
+        ss << "]}";
+        first = false;
+    }
+    ss << "]}}";
+    Send(ss.str());
+}
+
+// Starts a fight in a copy when one of its bots enters combat; files it once none of them is in combat any more.
+void UpdateFights(std::vector<Player*> const& bots, uint64 seq, time_t now)
+{
+    std::map<std::pair<uint32, uint32>, bool> inCombat;
+    for (Player* bot : bots)
+        if (Map* map = bot->GetMap(); map && map->IsDungeon())
+            inCombat[{ bot->GetMapId(), bot->GetInstanceId() }] |= bot->IsInCombat();
+    for (auto const& [key, combat] : inCombat)
+        if (combat && !g_fights.count(key))
+        {
+            FightAcc& fight = g_fights[key];
+            fight.startMs = GameTime::GetGameTimeMS();
+            fight.start = now;
+            fight.seq = ++g_fightCounter;
+        }
+    for (auto itr = g_fights.begin(); itr != g_fights.end();)
+    {
+        auto combat = inCombat.find(itr->first);
+        if (combat != inCombat.end() && combat->second)
+        {
+            ++itr;
+            continue;
+        }
+        if (!itr->second.bots.empty())
+            FileFight(itr->first, itr->second, bots, seq, now);
+        itr = g_fights.erase(itr);
+    }
+}
+
 void SendCycle()
 {
     Sender& s = Get();
@@ -626,6 +767,7 @@ void SendCycle()
 
     SendDungeonMobs(bots, seq, now);
     SendRaids(bots, seq, now);
+    UpdateFights(bots, seq, now);
 
     s.statsSinceMs += s.intervalMs;
     if (s.statsSinceMs >= StatsIntervalMs)
@@ -992,8 +1134,68 @@ void OnKilledByCreature(Creature* killer, Player* killed)
     std::string const name = killer ? killer->GetName() : "";
     SendAnomaly(killed, "BOT_DEATH", "WARN", name, killer ? "killed by " + name + " (level " + std::to_string(killer->GetLevel()) + ")" : "died");
     QueueEvent(killed, "BotDeath", name, "");
+    if (FightAcc* fight = FightOf(killed))
+    {
+        FightBotAcc& acc = fight->bots[killed->GetGUID()];
+        ++acc.deaths;
+        fight->deaths.push_back({ killed->GetName(), name, FightMs(*fight), killed->GetPositionX(), killed->GetPositionY(), killed->GetPositionZ(), acc.lastHits });
+    }
     if (auto itr = Get().track.find(killed->GetGUID()); itr != Get().track.end())
         itr->second.alive = false;
+}
+
+void OnDamage(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spell)
+{
+    if (!damage || !Get().enabled)
+        return;
+    Player* atk = attacker ? attacker->ToPlayer() : nullptr;
+    Player* vic = victim ? victim->ToPlayer() : nullptr;
+    if (atk && IsBot(atk))
+        if (FightAcc* fight = FightOf(atk))
+        {
+            fight->bots[atk->GetGUID()].dmg += damage;
+            NoteEnemy(*fight, victim);
+        }
+    if (vic && IsBot(vic))
+        if (FightAcc* fight = FightOf(vic))
+        {
+            FightBotAcc& acc = fight->bots[vic->GetGUID()];
+            acc.taken += damage;
+            std::string name = attacker ? attacker->GetName() : "";
+            if (spell)
+                name += std::string(" (") + (*spell->SpellName)[sWorld->GetDefaultDbcLocale()] + ")";
+            acc.lastHits.push_back({ name, damage, FightMs(*fight) });
+            if (acc.lastHits.size() > 5)
+                acc.lastHits.erase(acc.lastHits.begin());
+            NoteEnemy(*fight, attacker);
+        }
+}
+
+void OnHealOutcome(Unit* healer, uint32 raw, uint32 effective)
+{
+    Player* bot = healer ? healer->ToPlayer() : nullptr;
+    if (!bot || !IsBot(bot) || !Get().enabled)
+        return;
+    if (FightAcc* fight = FightOf(bot))
+    {
+        FightBotAcc& acc = fight->bots[bot->GetGUID()];
+        acc.heal += effective;
+        acc.over += raw > effective ? raw - effective : 0;
+    }
+}
+
+void OnSpellCast(Player* player, SpellInfo const* spell)
+{
+    if (!spell || !IsBot(player) || !Get().enabled)
+        return;
+    if (FightAcc* fight = FightOf(player))
+    {
+        FightBotAcc& acc = fight->bots[player->GetGUID()];
+        ++acc.casts;
+        if (spell->IsPositive() && spell->HasEffect(SPELL_EFFECT_HEAL))
+            ++acc.healCasts;
+        ++acc.spells[(*spell->SpellName)[sWorld->GetDefaultDbcLocale()]];
+    }
 }
 
 // A money change (corpse money, vendor, repairs, trainers): the event carries the new balance, from which the

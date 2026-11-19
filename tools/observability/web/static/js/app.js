@@ -14092,6 +14092,12 @@
         `<div class="raid-fights"><a class="btn" href="${esc(raidFightHash(fightCmd, null))}">Fights</a>`
         + (fbind && fbind.combat ? ` <a class="btn" href="${esc(raidFightHash(fightCmd, 'live'))}">Open live</a>` : '') + '</div>');
     }
+    // ForeverCore has no bound commanders: the module files the copy's fights under its run key, listed in the card itself.
+    else if (isForever) {
+      // No live fight stream for these keys: the list is fetched again at most every 15 s while the card is open.
+      if (Date.now() - Number(card.dataset.fightAt || 0) > 15000) { card.dataset.fightState = ''; card.dataset.fightAt = String(Date.now()); }
+      mountFightPanel(card, { commander: 'dgn:' + open.key });
+    }
     dgnPinsSync(open, fightCmd);
     drawCmdMap(key);
     cmdLiveSync();
