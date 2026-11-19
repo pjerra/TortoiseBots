@@ -322,6 +322,8 @@ void FillUnitReloadHost(ai::PlanReloadHost& host)
         TC_LOG_INFO("server.loading", ">> Reloaded {} dungeon step units for {} plans (0 rows refused)", kept, plans);
     };
 }
+}
+}
 
 namespace ai
 {
