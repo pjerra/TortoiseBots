@@ -4,6 +4,7 @@
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/run/TbRunHooks.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -373,6 +374,7 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // leader (same map, within 40 yd).
     uint32 const total = uint32(who.bots.size());
     end.N("alive", aliveCount).N("dead", deadCount).N("ghost", ghostCount).B("wipe", total > 0 && aliveCount == 0).B("whole", total > 0 && togetherCount == total);
+    run::AnnotateStateEnd(end, who.bots.empty() ? nullptr : who.bots.front());     // S5 (H5): run=<lead> runstate=<state> for a party in a run
     reply.End(end);
     return true;
 }

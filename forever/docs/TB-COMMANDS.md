@@ -304,3 +304,75 @@ Razor Hill, OUTSIDE. The host therefore gives every dungeon instance an entrance
 or no trigger leading into it gets none, and then a release is HELD (`relhold=no-entrance`, `.tb order release` is refused with `no-entrance`): the bot waits at its body, never a graveyard revive outside.
 Commanded bots (`.tb master`) answer the engine's lease question as `Dungeon` (the legacy dungeon-crew rule of `RunReleaseHold::Decide`): on an instance map a dead bot waits while a living priest, paladin, shaman or druid of its party is on the map or a member fights (`relhold=rezzer`/`combat`, `life=awaiting-res`), and releases only on a wipe (`relhold=wipe`);
 a resurrection offered by a party member or the commander is accepted at once (`accept resurrect` with the offerer as the event's object; a stranger's offer is not answered); `.tb state` reports `resreq=`. After a release the bot is `life=running-back` until it is within 20 yd of its commander (or leader). No host teleport ever moves a dead bot or a commanded bot into or inside an instance (the open-world catch-up is unchanged and counted in `catchup=`).
+
+## 9. Slice 5: dungeon plans and the run header (package H5)
+
+`.tb plan` reads the dungeon plan tables the module loads at boot (`ai_dungeon_plan`, `_leg`, `_step`, `_leg_need`, `_boss`, `ai_boss_tactic` and the ForeverCore-only `ai_dungeon_step_unit`, SQL in `forever/sql/world`, delivery in `forever/sql/README.md`).
+It follows the grammar of section 3: markers `plan-begin` / `plan-end` (addendum A2: named after the COMMAND, the verb is the end line's `verb=`), `count=`/`records=`, `error` on one line, the token last.
+**The sample lines below were built by hand from the encoder's rules (`Enc`/`Rec` in `host/TbH3.cpp`, a literal re-implementation, the numbers are example values) and are what the writers produce: `.tb grammar selftest` now also prints one `plan`, `leg`, `unit`, `run` and `event` record built by the real writers (fixed example values). The first boot replaces these samples with its real output.**
+In the default build (option OFF) `.tb plan` answers `error code=engine-not-built`.
+
+`list`, `info` and `check` are read only; `reload` re-reads the plan tables into the module's memory (no bot, world or database row changes). Errors (`code=`): `missing-argument`, `missing-verb`, `unknown-verb`, `unexpected-argument` (words), `not-loaded` (the plan table was never loaded or sealed: the loader did not run, the module is off, or the plan loader is not merged),
+`no-plan` (the name is not a loaded plan), `no-bot` (`check`: the character is not in the world), `not-allowed` (`check`: the character is neither a host bot nor the sender's own: `MayLeadBots`), `wrong-map` (`check`: the character is not on the plan's map), `no-units` (`check`: the plan has no step unit rows).
+
+### `.tb plan list [#token]`
+One `plan` record per loaded plan (by name): `plan= map= legs= steps=` and `units=` (the unit rows kept for it; absent when the unit rows were not read). End: `verb=list plans=`.
+```
+plan-begin #p1
+plan plan=ragefire_chasm map=389 legs=9 steps=84 units=101 #p1
+plan-end count=1 records=1 verb=list plans=1 #p1
+```
+
+### `.tb plan <plan> info [#token]`
+`plan plan= map= legs= steps= moves= pulls= bosses= [units=] cc_priority= kill_first= [source=]`: `moves` = move and move_direct steps, `pulls`, `bosses` = boss steps; `cc_priority`/`kill_first` are lists of creature entries; `source` is the plan row's `source` column (the loader does not keep it, the command reads it again; absent when that read failed).
+Then one `leg leg= name= steps=` per leg a leg row or a step names. End: `verb=info plan= skipped=`: `skipped` = the plan's rows in the database (steps, legs, leg needs) that the loaded table does not hold, i.e. what the loader refused (the server log names each); absent when a count could not be read (unknown is not zero).
+```
+plan-begin #p2
+plan plan=ragefire_chasm map=389 legs=9 steps=84 moves=29 pulls=51 bosses=4 units=101 cc_priority=11319;11324;11322 kill_first=11319 source=turtle-agent%205c7b6ca%20dungeons%2Fragefire_chasm.json #p2
+leg leg=0 name=tunnel steps=6 #p2
+leg leg=1 name=tunnel_end steps=4 #p2
+plan-end count=3 records=3 verb=info plan=ragefire_chasm skipped=0 #p2
+```
+
+### `.tb plan <plan> check <character> [#token]`
+`<character>` is a host bot (or the sender's own character) standing on the plan's map, usually after `.tb enter`. For every unit row of the plan the check finds the creature SPAWN of that entry on the character's map (the instance's difficulty) nearest to the row's position, within 5 yd (`result=matched`), else within 15 yd (`result=near`), else `result=missing`;
+one-to-one (greedy by distance: every pair within 15 yd, nearest first, a row and a spawn each used once; ties by leg, seq, idx, then spawn id). The distance is the 3D distance between the row and the spawn point of the creature data (`CreatureData::spawnPoint`), so it does not depend on which creatures are loaded;
+`alive` says whether the creature of that spawn lives now (its loaded creature is alive, or, when it is not loaded, the map holds no future respawn time for it: a fresh instance says `yes` for all).
+`yd=`, `spawn=` (the ForeverCore spawn id) and `alive=` are written for matched and near only; a missing unit carries none of them (nothing is known), and `optional=yes` when its entry has NO spawn at all on the plan's map (decision D4: a summoned pet such as entry 8996 is optional; a step does not need it).
+A step is `ok` when every non-optional member of it is matched or near and at least one member was found; `steps_short` counts the steps with unit rows that are not ok. End: `verb=check plan= bot= map= inst= units= matched= near= missing= optional= steps= steps_ok= steps_short=` (`optional` counts the missing units that are optional; they are also in `missing`).
+The match is CACHED per (map, instance id, plan): it is what the run glue's pack lookup (S6) reads; the command recomputes it each time. The spec named the end line `check-end`; addendum A2 (markers named after the command) wins, so it is `plan-end ... verb=check`.
+```
+plan-begin #p3
+unit leg=0 seq=1 idx=0 entry=11320 role=pack result=matched yd=0.42 spawn=125331 alive=yes #p3
+unit leg=2 seq=4 idx=3 entry=11320 role=pack result=near yd=8.60 spawn=20048642 alive=yes #p3
+unit leg=2 seq=4 idx=4 entry=8996 role=pack result=missing optional=yes #p3
+plan-end count=3 records=3 verb=check plan=ragefire_chasm bot=Mtank map=389 inst=1 units=101 matched=93 near=1 missing=7 optional=7 steps=55 steps_ok=55 steps_short=0 #p3
+```
+
+### `.tb plan reload [#token]`
+Reads the plan tables again through the loader (`ReloadDungeonPlans`) with every running run's plan pointer as `inUse`, and swaps them in only when every row passes (the loader's own rules). When the swap happened the unit rows are read again against the new table and the cached matches are dropped. No record lines: the end line says it. End: `verb=reload swapped=yes|no`, `why=` exactly when `swapped=no` (the loader's reason, free text), `changes=` (when swapped: how many plan changes the loader listed), `plans= steps=` of the table now in use, and `units= units_refused=` (the last unit-row read; absent when it was not read).
+```
+plan-begin #p4
+plan-end count=0 records=0 verb=reload swapped=yes changes=0 plans=1 steps=84 units=101 units_refused=0 #p4
+```
+```
+plan-begin #p5
+plan-end count=0 records=0 verb=reload swapped=no why=1%20plan%2C%200%20leg%2C%202%20step%2C%200%20boss%20and%200%20boss%20tactic%20rows%20refused%2C%200%20plans%20with%20bad%20unit%20lists%20%28the%20server%20log%20names%20every%20row%29 plans=1 steps=84 units=99 units_refused=2 #p5
+```
+
+Error examples:
+```
+error code=not-loaded cmd=plan msg=the%20dungeon%20plans%20are%20not%20loaded%20%28the%20plan%20loader%20has%20not%20run%2C%20or%20the%20module%20is%20off%29 #p9
+error code=no-plan cmd=plan msg=nope%20is%20not%20a%20loaded%20dungeon%20plan%20%28.tb%20plan%20list%29 #p9
+error code=wrong-map cmd=plan msg=Mtank%20is%20not%20on%20map%20389%20%28the%20plan%27s%20map%29 #p9
+error code=no-units cmd=plan msg=the%20plan%20has%20no%20ai_dungeon_step_unit%20rows%20%28a%20plan%20exported%20without%20--forever%2C%20or%20the%20rows%20were%20not%20read%29 #p9
+```
+
+### The run header (no command yet)
+`forever/src/host/run/TbRun.h`: one `RunRec` per run, keyed by the leader's guid (leader, plan, the Turtle `DungeonRun::Run` as the progress, `startedMs`/`endedMs`, `pauses`, `deaths`, `wipes`, the event ring of 200, `stopped`/`stopReason`, the known boss states). **Nothing creates or ticks a run in S5**; the S6 glue (`.tb run start|stop|pause|resume|status|events`) will, and writes these records:
+`run lead= plan= state=running|paused|done|stopped step= steps= [leg= legname= kind=] phase= note= pull= pulls= boss= deaths= wipes= pauses= elapsed= [why=] [ev=]`
+* `step` = the index of the step the run is on (`steps` once it is past the last one); `leg`, `legname` and `kind` describe that step and are absent past the last step. `phase` is the Turtle run's phase (`begin gather walk pull task rest wait hold`), `note` what it does now or why it paused (free text, cut to 400 bytes, then `trunc=yes`).
+* `pull` = the plan's pull steps the run has passed that it did not record as skipped, deferred or given up (its own lists); `pulls` = the plan's pull steps. `boss` = `<entry>:alive|dead` for each plan boss the glue has READ; a boss it never read is not listed (a boss is never reported alive by default).
+* `elapsed` seconds since the start, frozen at the end of the run; `why` exactly when the run is paused (the run's own note) or stopped (the reason it was given); `ev` = the seq of the newest event, absent when there is none.
+* `event seq= t= kind= [step=] [leg=] [unit=] why=`: `t` seconds since the start, `kind` = start step pull fight-end rest death wipe revive pause resume done stop, `unit` a creature entry; `step`, `leg` and `unit` are absent when the event has none.
+* `.tb state`: the end line of a party whose leader has a run gains `run=<lead name> runstate=<state>` (addendum A8 allows new keys; absent when there is no run).

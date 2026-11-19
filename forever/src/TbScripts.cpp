@@ -1,9 +1,11 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
+#include "host/run/TbPlanCommands.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#include "host/run/TbRunHooks.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -123,7 +125,10 @@ public:
             // The engine's own config (the 720-key read and the spell and talent tables) now, not on the first bot: it stalled the world
             // for 1.09 s at the first engine start (R8). Only when the module is on, as nothing builds an engine otherwise.
             if (BotMgr::Instance().Enabled())
+            {
                 LoadEngineConfig();
+                TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
+            }
         }
 #endif
     }
@@ -225,6 +230,7 @@ public:
             { "revive", TortoiseBots::h4::HandleRevive, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "kill",   TortoiseBots::h4::HandleKill,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
