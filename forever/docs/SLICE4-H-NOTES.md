@@ -81,5 +81,13 @@ The samples in TB-COMMANDS.md section 8 were produced from the encoder's rules (
 4. U2/U3: `.tb kill` + `.tb order release` inside the dungeon: revived at (0.80, -8.23) in the SAME instance; the priest's resurrection accepted at once (`resreq=`, log `answers the resurrection`) once P4's action exists.
 5. Reset after leave (`.tb instance Mtank leave` then `reset`), and the refusals with a bot / the leader inside.
 
-## 6. Gates
-See the end of this file (filled in last).
+## 6. Gates (final tree; the commits after the last code commit are documentation only)
+| Gate | Result |
+|---|---|
+| option-ON `worldserver` (slot 2, `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`, links, 0 `undefined`, no warning in the files of this package |
+| option-OFF module build (`FOREVER_SLOT=2 build.sh 12 tortoisebots`, `-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0`; `ar t libtortoisebots.a`: `TbBotMgr TbBotSession TbScripts TbItemPrototype TbSpellEntry TbEngineBrain TbH3Off TbH4` = 8 objects (7 + `TbH4.cpp`, which gives the `engine-not-built` answers there) |
+| census SLICE3 / SLICE2 / SLICE1 (`FOREVER_SLOT=2`) | `files 170 / 160 / 133  compile clean = files  error places 0`, includes of a missing header 0 (this package adds no legacy file) |
+| generator `--check`, registry check | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=207` |
+| `grep PlayerCannotEnter forever/src` | one call: TbBotMgr.cpp:141 (the rest are comments and one answer text) |
+| Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed |
+| server | none started; no SQL applied |
