@@ -7,6 +7,7 @@
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/run/TbRunHooks.h"
+#include "host/run/TbRunLiquid.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -411,6 +412,11 @@ public:
         }
         for (std::string const& line : BotMgr::Instance().DescribeBrain(bot->GetGUID()))
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+#ifdef TORTOISEBOTS_SLICE1
+        // R6 live check: the liquid at the bot's feet and the nearest wet floor cells within 40 yd (the run's own liquid rule, TbRunLiquid.h).
+        for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(bot->GetMap(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
+            handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+#endif
 
         // What the bot has around it: proves its part of the map is loaded and populated.
         std::list<Creature*> creatures;

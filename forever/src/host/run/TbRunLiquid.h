@@ -13,6 +13,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 class Map;
 
@@ -129,6 +131,9 @@ inline bool PathPrefixRefused(Points const& p, std::size_t n, Refused&& refused)
 // ---- the core half (TbRunLiquid.cpp, TORTOISEBOTS_SLICE1 only): the same rules over the map's terrain ----
 bool PointRefusedOnMap(Map* map, float x, float y, float z);
 bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);
+// A diagnostic for `.tb where`: the liquid at (x, y, z) itself and the nearest wet floor cells on a grid of `step` yd within `radius` (the floor under each cell asked
+// with the run rule): one line each, at most `maxLines`. For live checks near lava; no state, one terrain read per cell.
+std::vector<std::string> DescribeAround(Map* map, float x, float y, float z, float radius, float step, std::size_t maxLines);
 bool SegmentPrefixRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);   // the move rule above
 }
 }
