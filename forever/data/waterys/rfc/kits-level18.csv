@@ -54,3 +54,41 @@ arms warrior,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely st
 arms warrior,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
 priest,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
 priest,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
+mage,head,208424,Sun Shades,"armory (req 0, ilvl 100)","best armory match for mage head at <=18; source armory row, verify vendor/quest origin on live"
+mage,neck,20250,90 Green Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+mage,shoulder,22968,Glacial Mantle,"armory (req 0, ilvl 83)","best armory match for mage shoulder at <=18; source armory row, verify vendor/quest origin on live"
+mage,back,21187,Earthweave Cloak,"armory (req 0, ilvl 62)","best armory match for mage back at <=18; source armory row, verify vendor/quest origin on live"
+mage,chest,21183,Earthpower Vest,"armory (req 0, ilvl 66)","best armory match for mage chest/robe at <=18; source armory row, verify vendor/quest origin on live"
+mage,waist,20217,Belt of Tiny Heads,"armory (req 0, ilvl 70)","best armory match for mage waist at <=18; source armory row, verify vendor/quest origin on live"
+mage,legs,22700,Glacial Leggings,"armory (req 0, ilvl 80)","best armory match for mage legs at <=18; source armory row, verify vendor/quest origin on live"
+mage,feet,226959,Virtuous Slippers,"armory (req 0, ilvl 60)","best armory match for mage feet at <=18; source armory row, verify vendor/quest origin on live"
+mage,wrist,226953,Virtuous Wraps,"armory (req 0, ilvl 65)","best armory match for mage wrist at <=18; source armory row, verify vendor/quest origin on live"
+mage,hands,23084,Gloves of Undead Cleansing,"armory (req 0, ilvl 63)","best armory match for mage hands at <=18; source armory row, verify vendor/quest origin on live"
+mage,finger,20144,90 Epic Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+mage,finger,20143,90 Epic Warrior Neck,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+mage,trinket,23207,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+mage,trinket,23206,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+mage,main_hand,24071,Bland Dagger,"armory (req 0, ilvl 69)","best armory match for mage weapon at <=18; source armory row, verify vendor/quest origin on live"
+mage,off_hand,3865,Test Offhand Weapon,"armory (req 1, ilvl 2)","best armory match for mage held at <=18; source armory row, verify vendor/quest origin on live"
+mage,ranged,19108,Wand of Biting Cold,"armory (req 0, ilvl 63)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,head,22689,Sanctified Leather Helm,"armory (req 0, ilvl 66)","best armory match for rogue head at <=18; source armory row, verify vendor/quest origin on live"
+rogue,neck,20250,90 Green Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,shoulder,226826,Darkmantle Spaulders,"armory (req 0, ilvl 65)","best armory match for rogue shoulder at <=18; source armory row, verify vendor/quest origin on live"
+rogue,back,20144,90 Epic Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,chest,275708,Ghansurok Hide Tunic,"armory (req 0, ilvl 61)","best armory match for rogue chest/robe at <=18; source armory row, verify vendor/quest origin on live"
+rogue,waist,20216,Belt of Preserved Heads,"armory (req 0, ilvl 70)","best armory match for rogue waist at <=18; source armory row, verify vendor/quest origin on live"
+rogue,legs,22701,Polar Leggings,"armory (req 0, ilvl 80)","best armory match for rogue legs at <=18; source armory row, verify vendor/quest origin on live"
+rogue,feet,20714,Sandstorm Boots,"armory (req 0, ilvl 63)","best armory match for rogue feet at <=18; source armory row, verify vendor/quest origin on live"
+rogue,wrist,226830,Darkmantle Bracers,"armory (req 0, ilvl 65)","best armory match for rogue wrist at <=18; source armory row, verify vendor/quest origin on live"
+rogue,hands,23081,Handwraps of Undead Slaying,"armory (req 0, ilvl 63)","best armory match for rogue hands at <=18; source armory row, verify vendor/quest origin on live"
+rogue,finger,20143,90 Epic Warrior Neck,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,finger,22725,Band of Cenarius,"armory (req 0, ilvl 70)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,trinket,23207,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,trinket,23206,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
+rogue,main_hand,24071,Bland Dagger,"armory (req 0, ilvl 69)","best armory match for rogue weapon at <=18; source armory row, verify vendor/quest origin on live"
+rogue,off_hand,22378,Ravenholdt Slicer,"armory (req 0, ilvl 65)","best armory match for rogue weapon at <=18; source armory row, verify vendor/quest origin on live"
+rogue,ranged,20086,Dusksteel Throwing Knife,"armory (req 0, ilvl 52)","best armory match for rogue thrown at <=18; source armory row, verify vendor/quest origin on live"
+mage,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
+mage,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
+rogue,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
+rogue,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
