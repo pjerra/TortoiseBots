@@ -30,9 +30,9 @@ inline bool RepopRequestCompat(Player* bot)
 }
 
 // Does a release inside this bot's dungeon come back at the dungeon's entrance? F: RepopAtGraveyard (Player.cpp:5211-5262) revives every
-// released player of a dungeon or raid map at once (`shouldResurrect`, :5220-5224) and teleports it to the world safe location the
-// INSTANCE SCRIPT names (`GetWorldSafeLoc(instance->GetEntranceLocation())`, :5227-5228); with none set it falls back to the nearest
-// graveyard of the player's zone (:5231-5232), which for Ragefire Chasm is Razor Hill (Durotar: outside, spec section 1). RFC's script never
+// released player of a dungeon or raid map at once (`shouldResurrect`, :5218-5224) and teleports it to the world safe location the
+// INSTANCE SCRIPT names (`GetWorldSafeLoc(instance->GetEntranceLocation())`, :5230); with none set it falls back to the nearest
+// graveyard of the player's zone (:5233), which for Ragefire Chasm is Razor Hill (Durotar: outside, spec section 1). RFC's script never
 // sets one: the host does, once, from the trigger's own target (spec section 6). Until then the answer is false and `auto release` waits at
 // the body (relhold=no-entrance): never a graveyard revive in another zone. The entrance must be a real row (`ObjectMgr::GetWorldSafeLoc`,
 // ObjectMgr.h:1199), as the core's own lookup is. Anything that is not a dungeon or raid map has no entrance: true. A read, no state changed.
