@@ -451,30 +451,6 @@ public:
         return true;
     }
 
-    // The spells of a class's own skill lines: the abilities (SkillLineAbility rows) of every class skill line (skill category 7 with a SkillRaceClassInfo row
-    // for the class) whose ClassMask names the class or none (R5; the same set `.tb ranks` prints and `.tb train` pass 2 teaches from).
-    static std::set<uint32> ClassLineSpells(uint32 classId)
-    {
-        std::set<uint32> spells;
-        uint32 const classBit = 1u << (classId - 1);
-        for (SkillLineEntry const* line : sSkillLineStore)
-        {
-            if (!line || line->CategoryID != SKILL_CATEGORY_CLASS)
-                continue;
-            bool classLine = false;
-            for (SkillRaceClassInfoEntry const* info : sDB2Manager.GetSkillRaceClassInfo(line->ID))
-                if (info->ClassMask && (uint32(info->ClassMask) & classBit))
-                    classLine = true;
-            if (!classLine)
-                continue;
-            if (std::vector<SkillLineAbilityEntry const*> const* abilities = sDB2Manager.GetSkillLineAbilitiesBySkill(line->ID))
-                for (SkillLineAbilityEntry const* row : *abilities)
-                    if (row->Spell > 0 && (!row->ClassMask || (uint32(row->ClassMask) & classBit)))
-                        spells.insert(uint32(row->Spell));
-        }
-        return spells;
-    }
-
     // The 1.12-era spell ids of the class skill lines end at 28382 for priest and warrior (the highest id below 100000 in their lines); every id the lines
     // hold above that is retail-era (the lowest is 401859: Renew 425268, Mind Spike, Shadowfiend, Circle of Healing...). The bound below sits in that gap.
     static constexpr uint32 kClassicSpellIdEnd = 100000;
@@ -507,7 +483,7 @@ public:
         uint32 const classMask = 1u << (bot->GetClass() - 1);
         ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(bot->GetClass());
         uint32 trainerTaught = 0, lineTaught = 0, trainers = 0, passes = 0, retailSkipped = 0;
-        std::set<uint32> const lineSpells = ClassLineSpells(bot->GetClass());
+        std::set<uint32> const lineSpells = tbcompat::ClassLineSpells(bot->GetClass());
         std::set<uint32> knownBefore;
         for (auto const& [spellId, spell] : bot->GetSpellMap())
             knownBefore.insert(spellId);
@@ -744,6 +720,31 @@ public:
     // abilities of the line that are in no chain (`single <line>: id:level[:t<trainer level>]:name:family`, rank 0). It prints facts only; nothing is changed.
     static bool HandleRanks(ChatHandler* handler, std::string classText)
     {
+        if (classText == "selftest")
+        {
+            uint32 failed = 0;
+            for (std::string const& line : tbcompat::SpellChainSelfTest())
+            {
+                failed += line.rfind("FAIL", 0) == 0;
+                handler->PSendSysMessage("TortoiseBots: ranks selftest: %s", line.c_str());
+            }
+            handler->PSendSysMessage("TortoiseBots: ranks selftest: %s", failed ? "FAILED" : "all cases PASS");
+            return failed == 0;
+        }
+        if (classText == "lost")
+        {
+            uint32 n = 0;
+            tbcompat::ForEachLostChain([&](std::vector<uint32> const& ids)
+            {
+                std::string text = "lost " + std::to_string(++n) + " " + (sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE) && sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE)->SpellName &&
+                    (*sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE)->SpellName)[LOCALE_enUS] ? (*sSpellMgr->GetSpellInfo(ids.front(), DIFFICULTY_NONE)->SpellName)[LOCALE_enUS] : "?") + ":";
+                for (uint32 id : ids)
+                    text += " " + std::to_string(id);
+                handler->PSendSysMessage("TortoiseBots: ranks: %s", text.c_str());
+            });
+            handler->PSendSysMessage("TortoiseBots: ranks: %u chain(s) of the loose trainer rule are not in the table.", n);
+            return true;
+        }
         static char const* const names[] = { "", "warrior", "paladin", "hunter", "rogue", "priest", "deathknight", "shaman", "mage", "warlock", "monk", "druid", "demonhunter", "evoker" };
         uint32 classId = 0;
         for (uint32 i = 1; i < std::size(names); ++i)
@@ -765,7 +766,18 @@ public:
                         trainerLevel[spell.SpellId] = spell.ReqLevel;
                 }
         auto levelText = [&](uint32 id, SpellInfo const* info) { auto const found = trainerLevel.find(id); return std::to_string(info ? info->SpellLevel : 0) + (found == trainerLevel.end() ? std::string() : ":t" + std::to_string(found->second)); };
-        onLine("class " + std::to_string(classId) + " " + names[classId] + "; chains in the table: " + std::to_string(tbcompat::SpellChainCount()));
+        onLine("class " + std::to_string(classId) + " " + names[classId] + "; " + tbcompat::SpellChainSummary());
+        auto sourceText = [](uint8 bits)
+        {
+            std::string text;
+            if (bits & tbcompat::SpellChainSource::Core)
+                text += "core";
+            if (bits & tbcompat::SpellChainSource::SkillLine)
+                text += std::string(text.empty() ? "" : "+") + "links";
+            if (bits & tbcompat::SpellChainSource::Trainer)
+                text += std::string(text.empty() ? "" : "+") + "trainer";
+            return text;
+        };
         for (SkillLineEntry const* line : sSkillLineStore)
         {
             if (!line || line->CategoryID != SKILL_CATEGORY_CLASS)
@@ -795,7 +807,7 @@ public:
                 if (!any)
                     return;
                 SpellInfo const* first = sSpellMgr->GetSpellInfo(chain.ids.front(), DIFFICULTY_NONE);
-                std::string text = "chain " + lineName + " " + (chain.source == tbcompat::SpellChainSource::Core ? "core" : chain.source == tbcompat::SpellChainSource::SkillLine ? "links" : "trainer") + " " +
+                std::string text = "chain " + lineName + " " + sourceText(chain.sources) + " " +
                     (first && first->SpellName && (*first->SpellName)[LOCALE_enUS] ? (*first->SpellName)[LOCALE_enUS] : "?") + ":";
                 for (uint32 id : chain.ids)
                 {
@@ -822,11 +834,24 @@ public:
             }
         }
         // The trainer links that were prerequisites and not ranks, for the abilities of this class.
-        std::set<uint32> const classSpells = ClassLineSpells(classId);
-        tbcompat::ForEachNonRankPrerequisite([&](uint32 required, uint32 taught)
+        std::set<uint32> const classSpells = tbcompat::ClassLineSpells(classId);
+        tbcompat::ForEachRejectedTrainerLink([&](uint32 required, uint32 taught, char const* why)
         {
             if (classSpells.count(taught))
-                onLine("prerequisite (not a rank): " + std::to_string(taught) + " requires " + std::to_string(required));
+                onLine("prerequisite (not a rank): " + std::to_string(taught) + " requires " + std::to_string(required) + " [" + why + "]");
+        });
+        tbcompat::ForEachQuarantinedComponent([&](std::vector<uint32> const& ids)
+        {
+            bool inClass = false;
+            for (uint32 id : ids)
+                inClass = inClass || classSpells.count(id);
+            if (inClass)
+            {
+                std::string text = "quarantined component:";
+                for (uint32 id : ids)
+                    text += " " + std::to_string(id);
+                onLine(text);
+            }
         });
         onLine("done");
         return true;

@@ -140,3 +140,31 @@ interval) so the engine does not tick again until the chase can have changed som
 2. `.tb train` still teaches talents and the triggered `Execute 20647` (see above).
 3. Items 4, 5 and the real-player refusal of item 6 were not triggered live (code reading, same helpers as the live paths).
 4. The overheal cancel did not fire in the live runs; only its registration and the incoming-heal skip (60 %) were observed.
+
+## Round 2 (lead's re-check of the chain table)
+Files: `forever/src/compat/TbSpellEntry.cpp`, `TbSpellEntry.h`, `forever/src/TbScripts.cpp`; no file outside forever/ changed, so no Turtle gate. Raw output: `SLICE2-R5-RANKS-priest.txt`, `-warrior.txt`,
+`-compare.txt`, `-selftest-lost.txt`.
+1. **Same-line evidence for trainer links** (`TrainerLinks`, TbSpellEntry.cpp, tests in this order; first failing test counted): class trainer of one class (`Trainer::Type::None` and a one-bit `GetClassMask`);
+   both spells exist; the spell has family flags (zero flags never chain by this source); BOTH spells have a SkillLineAbility row in the SAME class skill line of THAT class; same family; same 128-bit flags; same effect
+   shape; required spell has the lower level. How the core marks a class skill line (`ClassSkillLines`): `SkillLineEntry::CategoryID == SKILL_CATEGORY_CLASS` (SharedDefines.h:6385, DB2Structure.h:3702) plus a
+   `SkillRaceClassInfo` row of the line whose `ClassMask` names the class (DB2Structure.h:3748-3757); the abilities are the `SkillLineAbility` rows whose `ClassMask` is 0 or names the class (:3723).
+   Boot summary / `.tb ranks`: trainer links seen 1135, **accepted 978**, rejected: not a class trainer 15, no family flags 72, not in one class skill line 28, family differs 3, flags differ 32, effect shape differs 6,
+   level not lower 1 (spell missing 0). `.tb ranks <class>` also lists each rejected link of the class with its test.
+   **32/32 on ranks still**: priest 12/14, warrior 16/18, the same four level-definition disagreements as in round 1 (`-compare.txt`).
+   **Chains that disappeared because of the tighter rule** (`.tb ranks lost`, 13; first-round loose rule minus this one): Purge 370/8012; Disengage 781/14272/14273; Deadly Poison 2835/2837/11357/11358; Crippling Poison
+   3420/3421; Mind-numbing Poison 5763/8694/11400; Windfury Weapon 8232/8235/10486/16362; Instant Poison 8681/8687/8691/11341/11342/11343; Wound Poison 13220/13228/13229/13230; Aspect of the Wild 20043/20190;
+   Binding Heal 401937/1240770-1240774; Lava Burst 408490/1238299/1238300/1326047; Dark Sacrifice 1277324-1277328 (a priest chain: custom spells with zero family flags, now "no flags", no rank); Frost Blast
+   1326053-1326055. Priest and warrior lose only Dark Sacrifice (and it is not in the data files).
+2. **One graph** (`MaterializeSpellChains`, TbSpellEntry.cpp): the core's ChainEntry links, the SkillLineAbility links and the accepted trainer links go into one graph; a component that is a straight path becomes a chain
+   whichever sources gave its links (a trainer link extends a partial core chain; `sources` is a bit set core/links/trainer, printed `core+links+trainer`); a fork, a join, a cycle or sources that disagree on the order
+   quarantine the WHOLE component: no rank for its spells, logged once with ids and names, counted in the boot summary. Live: 2 quarantined components, 10 spells: the druid Swipe ids (769, 779, 780, 9754, 9908, 411128)
+   and hunter Counterattack (19306, 20909, 20910, 1242634); neither class is priest or warrior.
+3. **Cycles**: a component with no start node (a closed cycle, a self link) is quarantined like any other; after materialising, every link endpoint is in a chain or in a quarantined component (checked in the selftest).
+   `.tb ranks selftest` feeds the materialiser 10 hand-made link sets (straight chain from two sources, extension below a core chain, same link twice, fork, join, 3-cycle, order conflict, self link, good chain next to a
+   cycle, conflict inside a longer chain) plus the source-bit check: **all 11 PASS** (`-selftest-lost.txt`). The repository has no C++ test target for forever/ code, hence the console command.
+Live (one boot, binary of this round): `.tb ranks priest`, `.tb ranks warrior`, selftest, lost; heal on `Tbbeta` 40 %: Power Word: Shield(600) then Heal(2054); warrior 30 % wounds: Lesser Heal(2053) eight times; Renew(6074),
+Shadow Word: Pain(970). Smite(598) was seen in the previous boot (00:46:01.846, same rank rule for that chain) and did not recur in this boot's fights (the priest spent them on heals and shields).
+
+## Known behaviour (same on Turtle, no change)
+The `incoming heals` value is a calculated value with a one-second cache: after a cast was cancelled (the overheal cancel, a failure) the value can still credit that heal for up to a second. This is the legacy engine's own
+behaviour on both cores.

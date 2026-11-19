@@ -1,14 +1,14 @@
-# .tb ranks warrior (build of 2026-11-19, option ON, slot 1): chain <skill line> <source> <first rank name>: id:rank:spell level[:t<trainer level>]; single = in no chain (rank 0); prerequisite = trainer link kept out of the chains
-TC>     TortoiseBots: ranks: class 1 warrior; chains in the table: 349
+# .tb ranks warrior (round 2 build, option ON, slot 1): chain <skill line> <sources> <first rank name>: id:rank:spell level[:t<trainer level>]; single = in no chain (rank 0); prerequisite = trainer link kept out, with the first failing test
+TC>     TortoiseBots: ranks: class 1 warrior; 334 chains, 1578 ranked spells; links 476 core + 664 skill-line + 978 trainer; trainer links seen 1135, accepted 978, rejected: not a class trainer 15, no family flags 72, not in one class skill line 28, family differs 3, flags differ 32, effect shape differs 6, level not lower 1 (spell missing 0); quarantined components 2 (10 spells); rank differences 0; chains lost by the same-line rule 13
 TC>     TortoiseBots: ranks: skill line 26 Arms: 116 abilities
-TC>     TortoiseBots: ranks: chain Arms core Heroic Strike: 78:1:1 284:2:8:t8 285:3:16:t16 1608:4:24:t24 11564:5:32:t32 11565:6:40:t40 11566:7:48:t48 11567:8:56:t56 25286:9:60
-TC>     TortoiseBots: ranks: chain Arms core Charge: 100:1:4:t4 6178:2:26:t26 11578:3:46:t46
-TC>     TortoiseBots: ranks: chain Arms core Mocking Blow: 694:1:16:t16 7400:2:26:t26 7402:3:36:t36 20559:4:46:t46 20560:5:56:t56
-TC>     TortoiseBots: ranks: chain Arms core Rend: 772:1:4:t4 6546:2:10:t10 6547:3:20:t20 6548:4:30:t30 11572:5:40:t40 11573:6:50:t50 11574:7:60:t60
-TC>     TortoiseBots: ranks: chain Arms core Hamstring: 1715:1:8:t8 7372:2:32:t32 7373:3:54:t54
-TC>     TortoiseBots: ranks: chain Arms core Thunder Clap: 6343:1:6:t6 8198:2:18:t18 8204:3:28:t28 8205:4:38:t38 11580:5:48:t48 11581:6:58:t58
-TC>     TortoiseBots: ranks: chain Arms core Overpower: 7384:1:12:t12 7887:2:28:t28 11584:3:44:t44 11585:4:60:t60
-TC>     TortoiseBots: ranks: chain Arms core Mortal Strike: 12294:1:40 21551:2:48:t48 21552:3:54:t54 21553:4:60:t60
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Heroic Strike: 78:1:1 284:2:8:t8 285:3:16:t16 1608:4:24:t24 11564:5:32:t32 11565:6:40:t40 11566:7:48:t48 11567:8:56:t56 25286:9:60
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Charge: 100:1:4:t4 6178:2:26:t26 11578:3:46:t46
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Mocking Blow: 694:1:16:t16 7400:2:26:t26 7402:3:36:t36 20559:4:46:t46 20560:5:56:t56
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Rend: 772:1:4:t4 6546:2:10:t10 6547:3:20:t20 6548:4:30:t30 11572:5:40:t40 11573:6:50:t50 11574:7:60:t60
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Hamstring: 1715:1:8:t8 7372:2:32:t32 7373:3:54:t54
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Thunder Clap: 6343:1:6:t6 8198:2:18:t18 8204:3:28:t28 8205:4:38:t38 11580:5:48:t48 11581:6:58:t58
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Overpower: 7384:1:12:t12 7887:2:28:t28 11584:3:44:t44 11585:4:60:t60
+TC>     TortoiseBots: ranks: chain Arms core+links+trainer Mortal Strike: 12294:1:40 21551:2:48:t48 21552:3:54:t54 21553:4:60:t60
 TC>     TortoiseBots: ranks: single Arms: 2457:1:Battle Stance:4
 TC>     TortoiseBots: ranks: single Arms: 12163:1:Two-Handed Weapon Specialization:0
 TC>     TortoiseBots: ranks: single Arms: 12281:1:Weaponmaster:0
@@ -43,14 +43,14 @@ TC>     TortoiseBots: ranks: single Arms: 440488:1:Shockwave:4
 TC>     TortoiseBots: ranks: single Arms: 1310185:14:t14:Tactical Mastery:4
 TC>     TortoiseBots: ranks: single Arms: 1310222:1:Spearing Strike:4
 TC>     TortoiseBots: ranks: skill line 256 Fury: 124 abilities
-TC>     TortoiseBots: ranks: chain Fury core Cleave: 845:1:20:t20 7369:2:30:t30 11608:3:40:t40 11609:4:50:t50 20569:5:60:t60
-TC>     TortoiseBots: ranks: chain Fury core Demoralizing Shout: 1160:1:14:t14 6190:2:24:t24 11554:3:34:t34 11555:4:44:t44 11556:5:54:t54
-TC>     TortoiseBots: ranks: chain Fury core Execute: 5308:1:24:t24 20658:2:32:t32 20660:3:40:t40 20661:4:48:t48 20662:5:56:t56
-TC>     TortoiseBots: ranks: chain Fury core Pummel: 6552:1:38:t38 6554:2:58:t58
-TC>     TortoiseBots: ranks: chain Fury core Battle Shout: 6673:1:1:t1 5242:2:12:t12 6192:3:22:t22 11549:4:32:t32 11550:5:42:t42 11551:6:52:t52 25289:7:60
-TC>     TortoiseBots: ranks: chain Fury core Intercept: 20252:1:30 20616:2:42:t42 20617:3:52:t52
-TC>     TortoiseBots: ranks: chain Fury core Bloodthirst: 23881:1:40 23892:2:48:t48 23893:3:54:t54 23894:4:60:t60
-TC>     TortoiseBots: ranks: chain Fury core Slam: 1240193:1:20:t20 1464:2:30:t30 8820:3:38:t38 11604:4:46:t46 11605:5:54:t54
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Cleave: 845:1:20:t20 7369:2:30:t30 11608:3:40:t40 11609:4:50:t50 20569:5:60:t60
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Demoralizing Shout: 1160:1:14:t14 6190:2:24:t24 11554:3:34:t34 11555:4:44:t44 11556:5:54:t54
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Execute: 5308:1:24:t24 20658:2:32:t32 20660:3:40:t40 20661:4:48:t48 20662:5:56:t56
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Pummel: 6552:1:38:t38 6554:2:58:t58
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Battle Shout: 6673:1:1:t1 5242:2:12:t12 6192:3:22:t22 11549:4:32:t32 11550:5:42:t42 11551:6:52:t52 25289:7:60
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Intercept: 20252:1:30 20616:2:42:t42 20617:3:52:t52
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Bloodthirst: 23881:1:40 23892:2:48:t48 23893:3:54:t54 23894:4:60:t60
+TC>     TortoiseBots: ranks: chain Fury core+links+trainer Slam: 1240193:1:20:t20 1464:2:30:t30 8820:3:38:t38 11604:4:46:t46 11605:5:54:t54
 TC>     TortoiseBots: ranks: single Fury: 1161:26:t26:Challenging Shout:4
 TC>     TortoiseBots: ranks: single Fury: 1680:36:t36:Whirlwind:4
 TC>     TortoiseBots: ranks: single Fury: 1719:50:t50:Recklessness:4
@@ -93,10 +93,10 @@ TC>     TortoiseBots: ranks: single Fury: 402911:1:Raging Blow:4
 TC>     TortoiseBots: ranks: single Fury: 402913:1:Enraged Regeneration:4
 TC>     TortoiseBots: ranks: single Fury: 1329555:0:Reckless Swings:4
 TC>     TortoiseBots: ranks: skill line 257 Protection: 84 abilities
-TC>     TortoiseBots: ranks: chain Protection core Shield Bash: 72:1:12:t12 1671:2:32:t32 1672:3:52:t52
-TC>     TortoiseBots: ranks: chain Protection core Revenge: 6572:1:14:t14 6574:2:24:t24 7379:3:34:t34 11600:4:44:t44 11601:5:54:t54 25288:6:60
-TC>     TortoiseBots: ranks: chain Protection core Sunder Armor: 7386:1:10 7405:2:22:t22 8380:3:34:t34 11596:4:46:t46 11597:5:58:t58
-TC>     TortoiseBots: ranks: chain Protection core Shield Slam: 23922:1:40 23923:2:48:t48 23924:3:54:t54 23925:4:60:t60
+TC>     TortoiseBots: ranks: chain Protection core+links+trainer Shield Bash: 72:1:12:t12 1671:2:32:t32 1672:3:52:t52
+TC>     TortoiseBots: ranks: chain Protection core+links+trainer Revenge: 6572:1:14:t14 6574:2:24:t24 7379:3:34:t34 11600:4:44:t44 11601:5:54:t54 25288:6:60
+TC>     TortoiseBots: ranks: chain Protection core+links+trainer Sunder Armor: 7386:1:10 7405:2:22:t22 8380:3:34:t34 11596:4:46:t46 11597:5:58:t58
+TC>     TortoiseBots: ranks: chain Protection core+links+trainer Shield Slam: 23922:1:40 23923:2:48:t48 23924:3:54:t54 23925:4:60:t60
 TC>     TortoiseBots: ranks: single Protection: 71:10:Defensive Stance:4
 TC>     TortoiseBots: ranks: single Protection: 355:10:Taunt:4
 TC>     TortoiseBots: ranks: single Protection: 676:18:t18:Disarm:4
@@ -512,12 +512,12 @@ TC>     TortoiseBots: ranks: single Runes: 417347:1:Cloak Rune Ability:0
 TC>     TortoiseBots: ranks: single Runes: 417348:1:Shoulder Rune Ability:0
 TC>     TortoiseBots: ranks: single Runes: 453593:1:S03 - PvP - Damage Reduction Aura:0
 TC>     TortoiseBots: ranks: single Runes: 1219955:1:Soul Engraving:0
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 676 requires 71
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 871 requires 71
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 1680 requires 2458
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 1719 requires 2458
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 2565 requires 71
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 6552 requires 2458
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 6572 requires 71
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 18499 requires 2458
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 676 requires 71 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 871 requires 71 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1680 requires 2458 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1719 requires 2458 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 2565 requires 71 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 6552 requires 2458 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 6572 requires 71 [family flags differ]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 18499 requires 2458 [family flags differ]
 TC>     TortoiseBots: ranks: done

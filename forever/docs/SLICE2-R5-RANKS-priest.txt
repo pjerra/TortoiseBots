@@ -1,6 +1,5 @@
-# .tb ranks priest (build of 2026-11-19, option ON, slot 1): chain <skill line> <source> <first rank name>: id:rank:spell level[:t<trainer level>]; single = in no chain (rank 0); prerequisite = trainer link kept out of the chains
-TC> tb ranks priest
-TC>     TortoiseBots: ranks: class 5 priest; chains in the table: 349
+# .tb ranks priest (round 2 build, option ON, slot 1): chain <skill line> <sources> <first rank name>: id:rank:spell level[:t<trainer level>]; single = in no chain (rank 0); prerequisite = trainer link kept out, with the first failing test
+TC>     TortoiseBots: ranks: class 5 priest; 334 chains, 1578 ranked spells; links 476 core + 664 skill-line + 978 trainer; trainer links seen 1135, accepted 978, rejected: not a class trainer 15, no family flags 72, not in one class skill line 28, family differs 3, flags differ 32, effect shape differs 6, level not lower 1 (spell missing 0); quarantined components 2 (10 spells); rank differences 0; chains lost by the same-line rule 13
 TC>     TortoiseBots: ranks: skill line 56 Holy: 161 abilities
 TC>     TortoiseBots: ranks: chain Holy trainer Renew: 139:1:8:t8 6074:2:14:t14 6075:3:20:t20 6076:4:26:t26 6077:5:32:t32 6078:6:38:t38 10927:7:44:t44 10928:8:50:t50 10929:9:56:t56
 TC>     TortoiseBots: ranks: chain Holy trainer Smite: 585:1:1 591:2:6:t6 598:3:14:t14 984:4:22:t22 1004:5:30:t30 6060:6:38:t38 10933:7:46:t46 10934:8:54:t54
@@ -73,7 +72,6 @@ TC>     TortoiseBots: ranks: chain Shadow Magic trainer Psychic Scream: 8122:1
 TC>     TortoiseBots: ranks: chain Shadow Magic trainer Hex of Weakness: 9035:1:10 19281:2:20:t20 19282:3:30:t30 19283:4:40:t40 19284:5:50:t50 19285:6:60:t60
 TC>     TortoiseBots: ranks: chain Shadow Magic trainer Mind Flay: 15407:1:20 17311:2:28:t28 17312:3:36:t36 17313:4:44:t44 17314:5:52:t52 18807:6:60:t60
 TC>     TortoiseBots: ranks: chain Shadow Magic trainer Shadowguard: 18137:1:20 19308:2:28:t28 19309:3:36:t36 19310:4:44:t44 19311:5:52:t52 19312:6:60:t60
-TC>     TortoiseBots: ranks: chain Shadow Magic trainer Dark Sacrifice: 1277324:1:20 1277325:2:30:t30 1277326:3:40:t40 1277327:4:50:t50 1277328:5:60:t60
 TC>     TortoiseBots: ranks: chain Shadow Magic trainer Shadow Word: Death: 1309595:1:32:t32 1309633:2:40:t40 1309635:3:48:t48 1309636:4:56:t56
 TC>     TortoiseBots: ranks: single Shadow Magic: 2943:10:Touch of Weakness:6
 TC>     TortoiseBots: ranks: single Shadow Magic: 15257:0:Shadow Weaving:6
@@ -117,6 +115,11 @@ TC>     TortoiseBots: ranks: single Shadow Magic: 413260:1:Mind Sear:6
 TC>     TortoiseBots: ranks: single Shadow Magic: 425204:1:Void Plague:6
 TC>     TortoiseBots: ranks: single Shadow Magic: 425294:1:Dispersion:6
 TC>     TortoiseBots: ranks: single Shadow Magic: 431655:1:Mind Spike:6
+TC>     TortoiseBots: ranks: single Shadow Magic: 1277324:20:Dark Sacrifice:6
+TC>     TortoiseBots: ranks: single Shadow Magic: 1277325:30:t30:Dark Sacrifice:6
+TC>     TortoiseBots: ranks: single Shadow Magic: 1277326:40:t40:Dark Sacrifice:6
+TC>     TortoiseBots: ranks: single Shadow Magic: 1277327:50:t50:Dark Sacrifice:6
+TC>     TortoiseBots: ranks: single Shadow Magic: 1277328:60:t60:Dark Sacrifice:6
 TC>     TortoiseBots: ranks: skill line 613 Discipline: 123 abilities
 TC>     TortoiseBots: ranks: chain Discipline trainer Power Word: Shield: 17:1:6:t6 592:2:12:t12 600:3:18:t18 3747:4:24:t24 6065:5:30:t30 6066:6:36:t36 10898:7:42:t42 10899:8:48:t48 10900:9:54:t54 10901:10:60:t60
 TC>     TortoiseBots: ranks: chain Discipline trainer Dispel Magic: 527:1:18:t18 988:2:36:t36
@@ -556,6 +559,10 @@ TC>     TortoiseBots: ranks: single Meditation: 424035:0:Secrets of the Light:
 TC>     TortoiseBots: ranks: single Meditation: 424036:0:Secrets of Elune:0
 TC>     TortoiseBots: ranks: single Meditation: 424037:0:Secrets of the Loa:0
 TC>     TortoiseBots: ranks: single Meditation: 424041:0:Secrets of Undeath:0
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 27681 requires 14752
-TC>     TortoiseBots: ranks: prerequisite (not a rank): 27681 requires 27841
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 27681 requires 14752 [effect shape differs]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1277325 requires 1277324 [no family flags]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1277326 requires 1277325 [no family flags]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1277327 requires 1277326 [no family flags]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1277328 requires 1277327 [no family flags]
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 27681 requires 27841 [effect shape differs]
 TC>     TortoiseBots: ranks: done

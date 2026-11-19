@@ -22,6 +22,7 @@
 #include <functional>
 #include <vector>
 #include <mutex>
+#include <set>
 #include <string>
 
 // The old core's effect slot limit (DBCEnums.h:159-163 on the Turtle core: EFFECT_INDEX_0..2). ForeverCore spells may carry
@@ -170,8 +171,17 @@ namespace tbcompat
 
     // ---- Spell rank chains (R5, TbSpellEntry.cpp ChainTable). One table, every rank question: nothing is ranked by name, family or level.
     struct SpellChainNode { uint32 rank = 0, first = 0, prev = 0, next = 0, last = 0; };
-    enum class SpellChainSource : uint8 { Core, SkillLine, Trainer };   // the core's own chain entry; SkillLineAbility supersedes links; trainer_spell required-ability links
-    struct SpellChainList { std::vector<uint32> ids; SpellChainSource source = SpellChainSource::Core; };   // ids in rank order
+    namespace SpellChainSource { constexpr uint8 Core = 1, SkillLine = 2, Trainer = 4; }   // bits: the core's own chain entry; SkillLineAbility supersedes links; trainer required-ability links (same-line evidence)
+    struct SpellChainList { std::vector<uint32> ids; uint8 sources = 0; };   // ids in rank order; sources: the bits of every source that gave one of its links
+    struct SpellChainLink { uint32 lower, higher; uint8 source; };             // `lower` is the previous rank of `higher`
+    struct SpellChainResult { std::vector<SpellChainList> chains; std::vector<std::vector<uint32>> quarantined; };
+    // The graph step on its own (no core types, used by the table and by `.tb ranks selftest`): all links in ONE graph, a component that is a straight path
+    // becomes a chain (a link of any source extends it), any other component (a fork, a join, a cycle, two sources that disagree on the order) is quarantined
+    // whole. Every link endpoint ends in a chain or in a quarantined component.
+    SpellChainResult MaterializeSpellChains(std::vector<SpellChainLink> const& links);
+    std::vector<std::string> SpellChainSelfTest();            // one "PASS|FAIL <case>" line per hand-made link set
+    std::string SpellChainSummary();                          // the boot summary line: link counts, accepted/rejected trainer links per test, quarantine
+    std::set<uint32> ClassLineSpells(uint32 classId);         // the abilities of the class skill lines of a class (category 7, SkillRaceClassInfo of the class)
     SpellChainNode const* SpellChainNodeOf(uint32 spellId);   // nullptr: the spell has no chain (rank 0)
     uint32 SpellRankOf(uint32 spellId);                       // 1.. in a chain, 0 without
     uint32 SpellFirstRank(uint32 spellId);                    // 0 without a chain
@@ -181,7 +191,9 @@ namespace tbcompat
     bool SpellsShareChain(uint32 a, uint32 b);                // both in a chain and the same one (a == b counts)
     bool SpellIsHigherRank(uint32 spellId, uint32 otherId);   // same chain and a higher rank number
     void ForEachSpellChain(std::function<void(SpellChainList const&)> const& fn);
-    void ForEachNonRankPrerequisite(std::function<void(uint32 required, uint32 taught)> const& fn);   // trainer links that were rejected as ranks
+    void ForEachRejectedTrainerLink(std::function<void(uint32 required, uint32 taught, char const* why)> const& fn);   // trainer links kept out, with the first failing test
+    void ForEachQuarantinedComponent(std::function<void(std::vector<uint32> const&)> const& fn);
+    void ForEachLostChain(std::function<void(std::vector<uint32> const&)> const& fn);   // chains of the first round's loose trainer rule that the same-line rule does not make
     uint32 SpellChainCount();
 
     // Lookups that asked for an id the core has only with a non-NONE difficulty (answered nullptr).
