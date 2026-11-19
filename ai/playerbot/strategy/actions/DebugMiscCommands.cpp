@@ -551,7 +551,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
         std::ostringstream out;
         out << "=== Quest: " << questId << " ===";
         out << "\n" << pQuest->GetTitle();
-        out << "\nLevel: " << pQuest->GetQuestLevel();
+        out << "\nLevel: " << QuestLevelCompat(pQuest);
         out << "\nStatus: ";
         if (!inLog)
             out << "NOT IN LOG";

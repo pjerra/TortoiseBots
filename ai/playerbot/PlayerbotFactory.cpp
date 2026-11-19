@@ -1457,7 +1457,7 @@ static bool PassesSeedProvenance(Player* bot, uint32 newItemId)
         Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
         if (!quest)
             continue;
-        uint32 questLevel = quest->GetQuestLevel();
+        uint32 questLevel = QuestLevelCompat(quest);
         if (!questLevel)
             questLevel = quest->GetMinLevel();
         if (!questLevel || questLevel <= (uint32)bot->GetLevel())

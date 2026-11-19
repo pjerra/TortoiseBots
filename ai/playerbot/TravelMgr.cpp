@@ -157,7 +157,7 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
 
     if (GetRelation() == 0)
     {
-        if (!forceThisQuest && (int32)quest->GetQuestLevel() >= (int32)info.GetLevel() + (int32)5)
+        if (!forceThisQuest && (int32)QuestLevelCompat(quest) >= (int32)info.GetLevel() + (int32)5)
             return false;
 
         // No trip back for a grey quest: the same XP grey rule the grind and
@@ -166,8 +166,8 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
         // mobs are grey too, so the walk only parks the bot among no-XP mobs.
         // QuestLevel 0 is scaling (GetQuestLevelForPlayer falls back to bot
         // level): never grey. Scoped to givers; hand-ins always pay out.
-        if (!forceThisQuest && quest->GetQuestLevel() > 0 &&
-            (int32)quest->GetQuestLevel() <= (int32)MaNGOS::XP::GetGrayLevel(info.GetLevel()))
+        if (!forceThisQuest && QuestLevelCompat(quest) > 0 &&
+            (int32)QuestLevelCompat(quest) <= (int32)MaNGOS::XP::GetGrayLevel(info.GetLevel()))
             return false;
 
         // MaxLevel 0 is "no upper bound" in this core, not "level 0": the take
@@ -229,7 +229,7 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
             AreaTableEntry const* takerArea = takerPoint->GetArea();
             AreaTableEntry const* botArea = info.getPosition().GetArea();
             bool const takerElsewhere = takerArea && botArea && takerArea->Id != botArea->Id;
-            if (!ai::QuestTakerTripFits((int)quest->GetQuestLevel(),
+            if (!ai::QuestTakerTripFits((int)QuestLevelCompat(quest),
                 takerElsewhere, info.GetLevel(), info.IsMasterlessRandom()))
                 return false;
         }
@@ -371,10 +371,10 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
 
     if (!forceThisQuest)
     {
-        if ((int32)GetQuestTemplate()->GetQuestLevel() > (int32)info.GetLevel() + (int32)1)
+        if ((int32)QuestLevelCompat(GetQuestTemplate()) > (int32)info.GetLevel() + (int32)1)
             return false;
 
-        if (!skipShouldGrindCheck && GetQuestTemplate()->GetQuestLevel() + 5 > (int)info.GetLevel() && !info.GetBoolValue("can fight equal"))
+        if (!skipShouldGrindCheck && QuestLevelCompat(GetQuestTemplate()) + 5 > (int)info.GetLevel() && !info.GetBoolValue("can fight equal"))
             return false;
     }
 
