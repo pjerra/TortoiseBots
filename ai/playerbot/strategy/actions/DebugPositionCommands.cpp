@@ -125,9 +125,9 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
         if (area)
         {
             out << " (" << area->Name << ")";
-            if (area->ZoneId)
+            if (AreaZoneIdCompat(area))
             {
-                const AreaTableEntry* zone = GetAreaEntryByAreaID(area->ZoneId);
+                const AreaTableEntry* zone = GetAreaEntryByAreaID(AreaZoneIdCompat(area));
                 if (zone)
                     out << " Zone: " << zone->Name;
             }
@@ -691,7 +691,7 @@ bool DebugAction::HandlePosition(Event& event, Player* requester, const std::str
         uint32 area = sServerFacade.GetAreaId(bot);
         if (const AreaTableEntry* areaEntry = GetAreaEntryByAreaID(area))
         {
-            if (AreaTableEntry const* zoneEntry = areaEntry->ZoneId ? GetAreaEntryByAreaID(areaEntry->ZoneId) : areaEntry)
+            if (AreaTableEntry const* zoneEntry = AreaZoneIdCompat(areaEntry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry)) : areaEntry)
                 out << " |" << zoneEntry->Name << "|";
         }
         ai->TellPlayer(requester, out.str());

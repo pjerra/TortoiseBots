@@ -206,7 +206,7 @@ std::string PreviewZoneName(uint32_t zoneId)
     AreaTableEntry const* entry = GetAreaEntryByAreaID(zoneId);
     if (!entry)
         return "-";
-    AreaTableEntry const* zone = entry->ZoneId ? GetAreaEntryByAreaID(entry->ZoneId) : entry;
+    AreaTableEntry const* zone = AreaZoneIdCompat(entry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(entry)) : entry;
     if (!zone || !zone->Name)
         return "-";
     return zone->Name;

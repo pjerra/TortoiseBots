@@ -1582,8 +1582,8 @@ bool CanBuyTabard::Calculate()
 	AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot));
 	if (areaEntry)
 	{
-		if (areaEntry->ZoneId)
-			areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+		if (AreaZoneIdCompat(areaEntry))
+			areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
 		if (areaEntry && areaEntry->Flags & AREA_FLAG_CAPITAL)
 			inCity = true;

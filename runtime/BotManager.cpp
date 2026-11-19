@@ -240,7 +240,7 @@ ai::WorldPosition const* PickLevelFittingPoint(::Player* bot)
             AreaTableEntry const* area = point->GetArea();
             if (!area)
                 continue;
-            uint32 zoneId = area->ZoneId ? area->ZoneId : area->Id;
+            uint32 zoneId = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
             if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
                 (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || PlayerbotAIConfig::IsIsolatedCustomZone(area->Id)))
                 continue;

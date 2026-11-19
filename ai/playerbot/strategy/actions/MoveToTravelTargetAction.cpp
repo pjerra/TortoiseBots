@@ -866,7 +866,7 @@ bool MoveToTravelTargetAction::TryMesaLift(WorldPosition const& location, float&
     uint32 goalZone = 0;
     if (botZone == ai::kBarrensZone || botZone == ai::kThousandNeedlesZone)
         if (AreaTableEntry const* area = location.GetArea())
-            goalZone = area->ZoneId ? area->ZoneId : area->Id;
+            goalZone = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
     ai::MesaLiftPick const pick = ai::MesaLiftFor(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), botZone,
         location.GetMapId(), location.getX(), location.getY(), location.getZ(), goalZone);
     if (pick.dir == ai::MesaLiftDir::None || !MayRideLift(ai, bot))
@@ -1329,7 +1329,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             if (purpose == "guild order" && TortoiseBots::GuildOrders::TravelPathUnreachable(pathTag))
             {
                 AreaTableEntry const* area = location.GetArea();
-                uint32_t const zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+                uint32_t const zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
                 if (zoneId)
                     TortoiseBots::GuildOrders::NoteFarmZoneTargetFailed(bot->GetGUIDLow(), zoneId,
                         location.GetMapId(), location.getX(), location.getY(), location.getZ());
