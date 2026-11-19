@@ -53,6 +53,9 @@ Needs a worldserver built option ON from the merged tree, a free test server (`d
 5. Expected in `world.out`, in this order: `LootRoll` start for the owner corpse (the core's `LogTable`/`LogGiven` lines of `playerbot.v2` at INFO), a `[BOT LOOT]`/`LootRoll` event row per bot (`bot_events.csv`, event `LootRoll`, vote `greed`), then the core's `roll winner takes it` line (`playerbot.v2` `LogGiven`) and the item in the winner's bags (a bag listing of the character). PASS = every bot voted greed once, one winner, no roll timed out (no `all passed`/60 s gap), no crash.
 6. FAIL signatures and what each means: no `LootRoll` row at all -> the poll did not see the roll (check `Player::GetLootRolls()` non-empty with `.tb where`, the `roll` strategy on the bot, `slice: missing trigger loot start roll`); a vote row but the roll times out -> `HandleLootRoll` did not reach the roll (the session has no Player, or the loot guid differs: compare `Loot::GetGUID` with the owner); a crash in `LootRoll::PlayerVote` -> the session lacks something `SendRoll` needs (note the stack and stop). `stop` afterwards.
 
+### 5a. Cross-check against the ForeverCore team's own module (read only, nothing copied; `~/ref-wfb`, `PlayerbotAPI.cpp` `loot_roll` and `loot_corpse`)
+Their roll vote is `p->GetLootRoll(loot_object, loot_list_id)` then `roll->PlayerVote(p, vote)`; `WorldSession::HandleLootRoll` (LootHandler.cpp:507) is exactly those two calls on `GetPlayer()`, so our `RollVoteCompat` is the same path. It confirms: (1) the vote needs only the Player and the roll in its own list, no client and no socket state (their bots have no client either); (2) `loot_object` is the Loot's own GUID (`IsLootItem` compares `m_loot->GetGUID()`), which is what we pass; (3) the roll list holds a roll for a player that never opened the corpse, and the rolls an open started stay alive after the opener releases the window (their party-loot path does `SendLoot` + `DoLootRelease` at once): our release after the take does not cancel rolls. Nothing to add for session state or looter status. It does NOT replace U4: their code path is a read, we still need one boot to see a vote accepted end to end. Two things we do that they do not: the method gate (GROUP_LOOT only) and the bag floor before a vote.
+
 ## 6. Gates
 
 All in build slot 2 of `yulon-ubuntu2`; Turtle gates ran with `docker ps | grep -c forever-world` = 0.
@@ -66,6 +69,7 @@ All in build slot 2 of `yulon-ubuntu2`; Turtle gates ran with `docker ps | grep 
 | option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0` |
 | policy tests (`policy-tests.sh` copy, 476+ tests) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: identical to the same run on the unchanged `port/forever` tree (the 6 are `test_combat_monitor_service*`, `test_decision_capture_*`, `test_log_file_rotation`, `test_run_trace_writer`) |
 | python wiring pins | `forever/tools/test_slice9_l9_wiring.py` 9 tests OK (mutation: `GreedOnlyVoteCompat` returning the vote fails 2); the 23 `tools/` and `forever/tools/` wiring tests that name an edited file all pass (one re-pinned, see section 2) |
+| round 2 (Codex fixes: rolls only in GROUP_LOOT, no vote past the bag floor) | pins `test_rolls_are_announced_and_voted_only_in_group_loot`, `test_a_roll_vote_respects_the_bag_floor` fail on the previous TbCompat_S9.h and pass now; ON, OFF, census, generator, registry, policy tests: see the final report |
 | Turtle `vm-build` | `RC=0`, `QUEUE_RC=0` (sha 6fb3e2431) |
 | Turtle `vm-test tb` | `RESULT: PASS  kind=tb wt=wt-s9-l sha=6fb3e2431` |
 
