@@ -209,7 +209,10 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.Coord("pos", bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
     rec.N("map", bot->GetMapId()).N("inst", bot->GetInstanceId());
     rec.S("dl", DistanceTo(bot, leader)).S("dm", DistanceTo(bot, master));
-    rec.P("ord", {std::to_string(order.seq), orderResult});
+    if (order.seq)
+        rec.P("ord", {std::to_string(order.seq), orderResult});
+    else
+        rec.S("ord", "");                                    // no order yet: no value (addendum A6), never `0:none`
     rec.S("lastorder", order.verb == "none" ? std::string() : order.verb);
     if (ai)
         rec.L("co", Names(ai, BotState::BOT_STATE_COMBAT)).L("nc", Names(ai, BotState::BOT_STATE_NON_COMBAT));

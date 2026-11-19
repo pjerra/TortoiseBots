@@ -199,7 +199,9 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.B("replaced", true);
         if (note)
             rec.S("note", note);
-        reply.Single(rec);
+        reply.Begin();
+        reply.Line(rec);
+        reply.End(Rec("equip").S("bot", bot->GetName()));
     };
     if (!proto)
     {

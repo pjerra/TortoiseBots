@@ -52,18 +52,19 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src/host/TbH3.cpp`, and `.tb grammar selftest` prints fixed records so a client can test its parser against the module.
 
 * **Lines.** A reply line is words separated by ONE space. The first word is the record kind (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `error`). Every other word is `key=value`.
-  The LAST word of every line of a tokened command is `#<token>` (the caller's last word of the command, `#` and 1 to 32 characters of `A-Za-z0-9_.:-`; a malformed one is refused with `token=rejected` on the error line).
-* **Multi-line replies** start with `<kind>-begin #token` and end with `<kind>-end count=<lines between> ... #token` (`count` counts every record line, continuation lines included).
-  A one-line reply has neither: an `error` line, `.tb equip`, and the answer of `order`, `role` and `master` addressed to ONE bot. A party-addressed order is `order-begin`, one `order` line per bot, `order-end`.
+  The LAST word of every line of a tokened command is `#<token>` (the caller's last word of the command, `#` and 1 to 32 characters of `A-Za-z0-9_.:-`; a malformed one is refused with a note in the error's `msg=`).
+* **Markers.** ONLY `error` is a one-line reply. Every other tokened reply, an order's answer to one bot included, starts with `<command>-begin #token` and ends with `<command>-end count=<lines between> records=<records> ... #token`;
+  the markers are named after the COMMAND (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `grammar`), the data lines between them carry their own record kind as first word. `count=` counts every line between the markers, continuation lines included; `records=` counts the lines that are not continuations. Other totals on an end line (`bots=`, `resting=`) count records.
 * **Keys** are `[a-z][a-z0-9_]{0,23}`; a key appears at most once per line.
 * **Values are percent-encoded**: every byte outside `[A-Za-z0-9._-]` is written `%XX` (upper-case hex): space `%20`, `=` `%3D`, `:` `%3A`, `;` `%3B`, `,` `%2C`, `#` `%23`, `|` `%7C`, `%` `%25`, `+` `%2B`; `_` stays literal.
-  **An empty value is the empty string** (`tgt=`); the word `none` is never written to mean empty. A missing optional key means "not known" (for example `manapct` is absent for a bot that has no mana), never zero.
+  **An empty value is the empty string** (`tgt=`); `none` has no special meaning anywhere and the module never writes `none`, `-1` or `0` for "no value" or "unknown". An unknown number is an omitted key (for example `manapct` is absent for a bot that has no mana). Hex is upper-case only.
+  An empty list is the empty value; an empty ITEM (`a;;b`, a trailing `;`) is never written.
 * **Structure** inside a value uses characters the encoding never produces for data: `;` separates list items, `:` separates the parts of one item, `,` separates coordinates. Each part is encoded on its own:
-  `co=close;protection;tank%20assist`, `top=Mtank:343;Mdpsb:338`, `pos=-9100.8,-2005.3,132.9`, `ord=41:ok`, `target=party:Mtank`, `class=2:8`.
+  `co=close;protection;tank%20assist`, `top=Mtank:343;Mdpsb:338`, `pos=-9100.80,-2005.30,132.90`, `ord=41:ok`, `target=party:Mtank`, `class=2:8`.
 * **Numbers** are decimal, **booleans** `yes`/`no`.
-* **Length.** A line is at most 3,000 bytes (the token included). A record that is longer continues on `<kind>+ <first key=value of the record> <more keys> #token` lines. A single value longer than a line (a very long strategy list) is cut at a list item.
+* **Length.** A line is at most 3,000 bytes (the token included). A record that is longer continues on `<kind>+ <identity key=value, `bot=` for a bot record> <more keys> #token` lines that follow their base line immediately. A single value longer than a line (a very long strategy list) is cut at a list item.
   Free text (`msg=`) is cut to 400 bytes before encoding.
-* **Errors**: `error code=<word> cmd=<word> msg=<encoded text> #token`, one line, nothing else for that command. A per-bot refusal inside an accepted command is the same words on the bot's own line: `order bot=.. verb=.. status=refused code=.. msg=..`.
+* **Errors**: `error code=<word> cmd=<word> [msg=<encoded text>] #token`, exactly those keys, one line, nothing else for that command. A per-bot refusal inside an accepted command is the same words on the bot's own line: `order bot=.. verb=.. status=refused code=.. msg=..`.
   Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
   `no-engine`, `queue-full`, `not-in-group`, `needs-player-sender`, `no-selection`, `mark-empty`, `no-such-spawn`, `target-not-found`, `target-dead`, `not-attackable`, `no-pull-strategy`, `no-commander`, `other-map`, `too-far`, `nothing-to-assist`, `self-master`, `missing-commander`,
   `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.

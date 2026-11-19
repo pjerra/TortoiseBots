@@ -117,9 +117,11 @@ Rec& Rec::F(std::string_view key, double value, int decimals)
 Rec& Rec::B(std::string_view key, bool value) { return Put(key, value ? "yes" : "no"); }
 Rec& Rec::L(std::string_view key, std::vector<std::string> const& items)
 {
+    // An empty ITEM is never written (addendum A9): an empty list is the empty value.
     std::string joined;
     for (std::string const& item : items)
-        joined += (joined.empty() ? "" : ";") + Enc(item);
+        if (!item.empty())
+            joined += (joined.empty() ? "" : ";") + Enc(item);
     return Put(key, std::move(joined));
 }
 Rec& Rec::P(std::string_view key, std::vector<std::string> const& parts)
@@ -132,19 +134,24 @@ Rec& Rec::P(std::string_view key, std::vector<std::string> const& parts)
 Rec& Rec::LP(std::string_view key, std::vector<std::vector<std::string>> const& items)
 {
     std::string joined;
-    for (size_t i = 0; i < items.size(); ++i)
+    for (auto const& parts : items)
     {
-        if (i)
-            joined += ';';
-        for (size_t j = 0; j < items[i].size(); ++j)
-            joined += (j ? ":" : "") + Enc(items[i][j]);
+        std::string item;
+        for (size_t j = 0; j < parts.size(); ++j)
+            item += (j ? ":" : "") + Enc(parts[j]);
+        bool empty = true;
+        for (std::string const& part : parts)
+            empty = empty && part.empty();
+        if (empty)
+            continue;                                    // an empty ITEM is never written (addendum A9)
+        joined += (joined.empty() ? "" : ";") + item;
     }
     return Put(key, std::move(joined));
 }
 Rec& Rec::Coord(std::string_view key, double x, double y, double z)
 {
     char buffer[96];
-    std::snprintf(buffer, sizeof(buffer), "%.1f,%.1f,%.1f", x, y, z);
+    std::snprintf(buffer, sizeof(buffer), "%.2f,%.2f,%.2f", x, y, z);
     return Put(key, buffer);
 }
 
@@ -161,6 +168,7 @@ void Reply::Line(Rec const& rec)
 {
     // The token and the separating space are part of the 3,000 bytes.
     size_t const room = MaxLineBytes - (_args.token.empty() ? 0 : _args.token.size() + 1);
+    ++_records;
     auto const& pairs = rec.Pairs();
     std::string const head = pairs.empty() ? std::string() : " " + pairs.front().first + "=" + pairs.front().second;
     std::string line = rec.Kind();
@@ -196,16 +204,17 @@ void Reply::Line(Rec const& rec)
 
 void Reply::Single(Rec const& rec)
 {
-    uint32 const before = _lines;
+    uint32 const before = _lines, beforeRecords = _records;
     Line(rec);
     _lines = before;
+    _records = beforeRecords;
 }
 
 void Reply::End(Rec extra)
 {
-    std::string line = _kind + "-end count=" + std::to_string(_lines);
+    std::string line = _kind + "-end count=" + std::to_string(_lines) + " records=" + std::to_string(_records);
     for (auto const& [key, value] : extra.Pairs())
-        if (key != "count")
+        if (key != "count" && key != "records")
             line += " " + key + "=" + value;
     Send(line);
 }
@@ -227,13 +236,14 @@ std::vector<std::string> LabelParts(std::string const& label)
 
 bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::string_view code, std::string_view detail)
 {
-    std::string_view const text = detail.substr(0, 400);
+    // `error` has exactly `code=`, `cmd=`, an optional `msg=` and the token (addendum A11); a refused `#` word is said in the message.
+    std::string text(detail.substr(0, 400));
+    if (args.badToken)
+        text += (text.empty() ? "" : " ") + std::string("(the # word was refused: a token is # and 1 to 32 of A-Za-z0-9_.:-)");
     Rec rec("error");
     rec.S("code", code).S("cmd", cmd);
     if (!text.empty())
-        rec.S("msg", text);
-    if (args.badToken)
-        rec.S("token", "rejected");
+        rec.S("msg", std::string_view(text).substr(0, 400));
     Reply(handler, args, "error").Single(rec);
     handler->SetSentErrorMessage(true);
     return false;
@@ -244,18 +254,25 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Words const args = Split(tail);
     if (args.w.empty() || Lower(args.w[0]) != "selftest")
         return Fail(handler, args, "grammar", "missing-argument", ".tb grammar selftest");
-    Reply reply(handler, args, "selftest");
+    Reply reply(handler, args, "grammar");
     reply.Begin();
-    // Every special byte in one value: space = : ; # % _ , + | and a non-ASCII byte pair.
+    // Every special byte in one value: space = : ; # % _ , + | and a non-ASCII byte pair; an empty value.
     reply.Line(Rec("selftest").S("case", "specials").S("value", "a b=c:d;e#f%g_h,i+j|k\xC3\xA9").S("empty", ""));
-    reply.Line(Rec("selftest").S("case", "list").L("items", {"x y", "a;b", "", "50%"}).LP("pairs", {{"Mtank", "343"}, {"a:b", "1"}}));
-    reply.Line(Rec("selftest").S("case", "coords").Coord("pos", -601.25, -4250.1, 38.94).B("flag", true).N("number", -17).F("fraction", 12.345, 2));
+    // Lists: an empty ITEM is dropped (never `;;` or a trailing `;`), an empty list is the empty value.
+    reply.Line(Rec("selftest").S("case", "list").L("items", {"x y", "a;b", "", "50%"}).LP("pairs", {{"Mtank", "343"}, {"a:b", "1"}, {"", ""}}).L("none", {}));
+    // A position is ONE key with at most two fraction digits, next to map=; an unknown number is an omitted key (no `unknown` here).
+    reply.Line(Rec("selftest").S("case", "coords").Coord("pos", -601.256, -4250.1, 38.944).N("map", 389).B("flag", true).N("number", -17).F("fraction", 12.345, 2));
     reply.Line(Rec("selftest").S("case", "once").S("key", "first").S("key", "second"));          // a key appears at most once: the second value replaces
     std::vector<std::string> many;
     for (int i = 0; i < 320; ++i)
         many.push_back("strategy number " + std::to_string(i));
-    reply.Line(Rec("selftest").S("case", "overlong").L("list", many).S("tail", "x"));            // longer than 3,000 bytes: continuation lines
-    reply.End(Rec("selftest").S("note", "fixed records"));
+    reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "overlong").L("list", many).S("tail", "x"));   // over 3,000 bytes: `selftest+ bot=Mtank ...` continuation lines
+    Rec end("selftest");
+    end.S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
+    reply.End(end);
+    // The refusal, the only one-line reply: exactly code=, cmd= and an optional msg=.
+    Reply error(handler, args, "error");
+    error.Single(Rec("error").S("code", "selftest").S("cmd", "grammar").S("msg", "a b=c;d"));
     return true;
 }
 

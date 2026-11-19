@@ -473,12 +473,10 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 return Fail(handler, args, "order", "bad-argument", "strategy changes use letters, digits, space, + - , _");
 
     uint32 queued = 0, refused = 0;
-    // One bot: the answer is one line. Several: `order-begin`, one line per bot, `order-end` (grammar version 2).
-    bool const multi = who.bots.size() > 1;
+    // `order-begin`, one line per bot, `order-end` (grammar version 2: only `error` is a one-line reply).
     Reply reply(handler, args, "order");
-    if (multi)
-        reply.Begin();
-    auto const emit = [&](Rec const& rec) { if (multi) reply.Line(rec); else reply.Single(rec); };
+    reply.Begin();
+    auto const emit = [&](Rec const& rec) { reply.Line(rec); };
     for (Player* bot : who.bots)
     {
         auto const refuse = [&](std::string const& code, std::string const& detail, char const* name = nullptr)
@@ -617,12 +615,9 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         rec.S("bot", bot->GetName()).S("verb", verb).N("seq", seq).S("status", "queued");
         emit(rec);
     }
-    if (multi)
-    {
-        Rec end("order");
-        end.S("verb", verb).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued).N("refused", refused);
-        reply.End(end);
-    }
+    Rec end("order");
+    end.S("verb", verb).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued).N("refused", refused);
+    reply.End(end);
     return true;
 }
 
@@ -655,11 +650,9 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
     char const* const roleName = role == RoleTank ? "tank" : role == RoleHealer ? "healer" : role == RoleDps ? "dps" : "none";
     uint32 queued = 0;
-    bool const multi = who.bots.size() > 1;
     Reply reply(handler, args, "role");
-    if (multi)
-        reply.Begin();
-    auto const emit = [&](Rec const& rec) { if (multi) reply.Line(rec); else reply.Single(rec); };
+    reply.Begin();
+    auto const emit = [&](Rec const& rec) { reply.Line(rec); };
     for (Player* bot : who.bots)
     {
         // The stored role (what PlayerbotAI::IsTank/IsHeal and AiFactory::GetPlayerRoles read first, whatever the master is) is written now; the AI's own
@@ -696,12 +689,9 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         rec.N("seq", seq).S("status", "queued");
         emit(rec);
     }
-    if (multi)
-    {
-        Rec end("role");
-        end.S("role", roleName).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued);
-        reply.End(end);
-    }
+    Rec end("role");
+    end.S("role", roleName).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued);
+    reply.End(end);
     return true;
 }
 
@@ -730,11 +720,9 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");
 
     uint32 done = 0, queued = 0;
-    bool const multi = who.bots.size() > 1;
     Reply reply(handler, args, "master");
-    if (multi)
-        reply.Begin();
-    auto const emit = [&](Rec const& rec) { if (multi) reply.Line(rec); else reply.Single(rec); };
+    reply.Begin();
+    auto const emit = [&](Rec const& rec) { reply.Line(rec); };
     for (Player* bot : who.bots)
     {
         ObjectGuid const guid = bot->GetGUID();
@@ -776,12 +764,9 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("status", "bound");
         emit(rec);
     }
-    if (multi)
-    {
-        Rec end("master");
-        end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", done).N("queued", queued);
-        reply.End(end);
-    }
+    Rec end("master");
+    end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", done).N("queued", queued);
+    reply.End(end);
     return true;
 }
 }

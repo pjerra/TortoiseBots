@@ -70,7 +70,7 @@ Words Split(std::string_view tail);
 // percent-encoded (every byte outside [A-Za-z0-9._-] as %XX, upper-case hex; `_` stays literal); structure is `;` between list items, `:` between the
 // parts of an item (each part encoded on its own), `,` between coordinates; an empty value is the empty string; a key appears once per line.
 // A line holds at most 3,000 bytes: a record that is longer continues on `<kind>+ <first key=value> <more keys> #token` lines. A multi-line reply is
-// `<kind>-begin #token`, the record lines, `<kind>-end count=<lines between> ... #token`; a one-line reply (an order's answer, an error) has neither.
+// `<command>-begin #token`, the record lines, `<command>-end count=<lines between> records=<lines that are not continuations> ... #token`; only `error` is a one-line reply (addendum 1).
 constexpr size_t MaxLineBytes = 3000;
 std::string Enc(std::string_view bytes);
 
@@ -101,15 +101,17 @@ public:
     Reply(ChatHandler* handler, Words const& args, std::string_view kind) : _handler(handler), _args(args), _kind(kind) {}
     void Begin();                         // `<kind>-begin #token`
     void Line(Rec const& rec);            // a record line (split into continuation lines when over MaxLineBytes); counts the lines
-    void Single(Rec const& rec);          // a one-line reply: the record and nothing else
+    void Single(Rec const& rec);          // the ONE one-line reply, `error` (addendum A1): the record and nothing else
     void End(Rec extra);                  // `<kind>-end count=<lines> <extra keys> #token`; `extra` is a Rec of the extra keys (its kind is ignored)
     uint32 Lines() const { return _lines; }
+    uint32 Records() const { return _records; }
 private:
     void Send(std::string line);
     ChatHandler* _handler;
     Words const& _args;
     std::string _kind;
     uint32 _lines = 0;
+    uint32 _records = 0;
 };
 
 // A reply's target label ("Mtank", "party:Mtank", "party:commander:Mcmd") as the parts of one value (`P`).
