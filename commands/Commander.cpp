@@ -8642,7 +8642,7 @@ float RunHomeYd(Unit* unit)
     if (!creature->HasStaticDBSpawnData())
         return -1.0f;
     float homeX = 0.0f, homeY = 0.0f, homeZ = 0.0f;
-    creature->GetRespawnCoord(homeX, homeY, homeZ);
+    GetRespawnCoordCompat(creature, homeX, homeY, homeZ);
     float const dx = unit->GetPositionX() - homeX;
     float const dy = unit->GetPositionY() - homeY;
     float const dz = unit->GetPositionZ() - homeZ;
@@ -16953,7 +16953,7 @@ void SampleFightTimeline(uint32 groupId, Player* anchor)
     if (creature)
     {
         float homeX = 0.0f, homeY = 0.0f, homeZ = 0.0f;
-        creature->GetRespawnCoord(homeX, homeY, homeZ);
+        GetRespawnCoordCompat(creature, homeX, homeY, homeZ);
         atHome = boss->GetDistance2d(homeX, homeY) <= CombatMonitor::kBossHomeYd;
     }
     monitor.NoteBossState(groupId, boss->IsAlive(), boss->IsInCombat(), creature && creature->IsInEvadeMode(),
