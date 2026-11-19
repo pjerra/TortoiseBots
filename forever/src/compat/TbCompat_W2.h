@@ -322,7 +322,10 @@ inline bool FirstTime(std::atomic<uint32>& seen, uint32 key)
 }
 inline void NoteDefault(char const* turtleKey, char const* turtleValue)
 {
-    TC_LOG_WARN("server.loading", "TortoiseBots: server setting {} has no ForeverCore equivalent; the bot uses the Turtle default {}", turtleKey, turtleValue);
+    // Through the core logger directly, as CmangosLogProxy does (forever-compat-shim.h:495): the shim renames `sLog`, which TC_LOG_WARN
+    // expands, so the macro does not compile in a file that includes the shim.
+    Log::instance()->OutMessage("server.loading", LOG_LEVEL_WARN, "{}", std::string("TortoiseBots: server setting ") + turtleKey +
+        " has no ForeverCore equivalent; the bot uses the Turtle default " + turtleValue);
 }
 }
 
