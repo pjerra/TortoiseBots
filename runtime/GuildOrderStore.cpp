@@ -3123,7 +3123,7 @@ std::string BotName(uint32_t botGuidLow)
     if (Player* bot = sObjectAccessor.FindPlayer(guid))
         return bot->GetName();
     std::string name;
-    if (sObjectMgr.GetPlayerNameByGUID(guid, name))
+    if (PlayerNameByGuidCompat(guid, name))
         return name;
     return "?";
 }

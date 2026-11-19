@@ -2470,7 +2470,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             SET_AI_VALUE2(time_t, "manual time", "order request log::" + travelName, time(0) + MINUTE);
             std::string parentName;
             if (logged && logged->parentBotGuidLow &&
-                !sObjectMgr.GetPlayerNameByGUID(
+                !PlayerNameByGuidCompat(
                     ObjectGuid(HIGHGUID_PLAYER, logged->parentBotGuidLow), parentName))
                 parentName.clear();
             sPlayerbotAIConfig.logEvent(ai, "GuildOrderRequest", travelName, leg,

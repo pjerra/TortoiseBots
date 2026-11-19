@@ -337,7 +337,7 @@ inline bool TellGrouped(PlayerbotAI* ai, Player* requester)
     else
     {
         std::string leaderName;
-        if (sObjectMgr.GetPlayerNameByGUID(bot->GetGroup()->GetLeaderGuid(), leaderName))
+        if (PlayerNameByGuidCompat(bot->GetGroup()->GetLeaderGuid(), leaderName))
             out << "offline player " << leaderName;
         else
             out << "unknown player " << bot->GetGroup()->GetLeaderGuid();

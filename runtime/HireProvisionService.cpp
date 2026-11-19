@@ -1522,7 +1522,7 @@ void HireProvisionService::CancelBoundSeatHire(PendingProvision const& pending, 
     cancel.masterGuid = pending.masterGuid;
     cancel.cost = pending.cost;
     cancel.why = why;
-    if (!sObjectMgr.GetPlayerNameByGUID(pending.botGuid, cancel.name))
+    if (!PlayerNameByGuidCompat(pending.botGuid, cancel.name))
         cancel.name = "your companion";
     // The hire ends now (as `.bot remove`: master cleared, logged off). As on Hire()'s failed paths the fee goes
     // back only once the hire is undone: here once the character's deletion is recorded (ledger 'dismissed').

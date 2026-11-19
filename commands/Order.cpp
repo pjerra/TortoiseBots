@@ -421,7 +421,7 @@ bool HandleOrderEnchantGive(ChatHandler* handler, Player* requester, std::string
                 GuildOrders::EnchantReplaceVerdict::Busy)
             {
                 std::string giverName = "?";
-                sObjectMgr.GetPlayerNameByGUID(
+                PlayerNameByGuidCompat(
                     ObjectGuid(HIGHGUID_PLAYER, existing->giverGuidLow), giverName);
                 OrderError(handler, "busy", ((bot ? bot->GetName() : botName) +
                     std::string(" is busy with an enchant order for ") + giverName + ".").c_str());
@@ -687,7 +687,7 @@ bool HandleOrderGive(ChatHandler* handler, Player* requester, std::string const&
                 GuildOrders::EnchantReplaceVerdict::Busy)
             {
                 std::string giverName = "?";
-                sObjectMgr.GetPlayerNameByGUID(
+                PlayerNameByGuidCompat(
                     ObjectGuid(HIGHGUID_PLAYER, existing->giverGuidLow), giverName);
                 OrderError(handler, "busy", ((bot ? bot->GetName() : botName) +
                     std::string(" is busy with an enchant order for ") + giverName + ".").c_str());
@@ -1033,7 +1033,7 @@ bool HandleOrderSteps(ChatHandler* handler, Player* requester, std::string const
     else
     {
         std::string stored;
-        name = sObjectMgr.GetPlayerNameByGUID(guid, stored) ? stored : botName;
+        name = PlayerNameByGuidCompat(guid, stored) ? stored : botName;
     }
     name = ProtocolSafe(name);
     std::optional<GuildOrders::OrderStepHistory> h = GuildOrders::FindStepHistory(guid.GetCounter());

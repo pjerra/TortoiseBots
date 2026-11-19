@@ -312,7 +312,7 @@ void HireLifecycle::DismissSurplusAfterBinding(ObjectGuid commanderGuid)
     {
         ObjectGuid const guid = owned[index];
         std::string name;
-        if (!sObjectMgr.GetPlayerNameByGUID(guid, name))
+        if (!PlayerNameByGuidCompat(guid, name))
             name = guid.GetString();
         names += (names.empty() ? "" : ", ") + name;
         // The normal dismiss (`.bot remove`): the hire ends, its character is deleted, no refund.
