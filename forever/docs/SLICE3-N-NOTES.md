@@ -20,3 +20,14 @@ Branch `slice3/integ`, slot 2. The build VM's Forever folders had moved to a new
 
 ## Gates
 See the end of this file.
+
+| Gate | Result |
+|---|---|
+| option-ON `worldserver` / option-OFF module build | `CMAKE_RC=0 MAKE_RC=0` both; OFF = 7 objects (`TbBotMgr TbBotSession TbScripts TbItemPrototype TbSpellEntry TbEngineBrain TbH3Off`) |
+| census SLICE3 / SLICE2 / SLICE1 | `files 170 / 160 / 133  compile clean = files  error places 0` |
+| generator `--check`, registry check | up to date; `(a)=0  (b)=207` |
+| policy tests | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL` = baseline |
+| Turtle `vm-build` | `COMPILE_SECONDS=2354 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb` on ea48fc10e | `RESULT: PASS ... rc=0` (914 s). Two earlier attempts failed only because `/mnt/tb` on the build VM was full (`only 1G free ... need >= 8G`, then `No space left on device`: the other worker's disk move and 36 GB of other workers' kept `vm-test` dirs); I removed only my own kept dir and retried when the space came back |
+| files outside `forever/` changed | `ai/playerbot/strategy/actions/PullActions.cpp`, `UseItemAction.cpp`, `ai/cmangos-compat-s3.h`, `tools/test_pull_lead_release_wiring.py` |
+| the test server | stopped after every boot; the other binary restored (`cmp` identical); `aiplayerbot.conf` untouched (no NOLOG boot); `game_tele` rows deleted |
