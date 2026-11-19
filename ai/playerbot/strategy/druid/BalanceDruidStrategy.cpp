@@ -3,6 +3,7 @@
 #include "DruidMultipliers.h"
 #include "BalanceDruidStrategy.h"
 #include "BalanceDruidMana.h"
+#include "playerbot/TbCompatS10.h"
 
 using namespace ai;
 
@@ -50,7 +51,7 @@ void OomMeleeStrategy::OnStrategyRemoved(BotState state)
     if (state == BotState::BOT_STATE_COMBAT && BalanceManaForm(ai) &&
         ai->HasStrategy("close", state))
     {
-        ai->GetBot()->AttackStop(true);
+        AttackStopCompat(ai->GetBot(), true);
         ai->ChangeStrategy("-close,+ranged", state);
     }
 }
