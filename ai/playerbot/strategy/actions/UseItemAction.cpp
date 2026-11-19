@@ -259,13 +259,7 @@ bool UseAction::Execute(Event& event)
         if (items.empty())
         {
             std::list<Item*> inventoryItems = AI_VALUE2(std::list<Item*>, "inventory items", useName);
-            for (Item* inventoryItem : inventoryItems)
-            {
-                if (inventoryItem)
-                {
-                    items.push_back(inventoryItem->GetEntry());
-                }
-            }
+            AppendInventoryUseItemsCompat(items, inventoryItems);
         }
 
         if (!items.empty())

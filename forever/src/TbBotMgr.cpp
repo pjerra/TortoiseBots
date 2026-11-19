@@ -819,7 +819,8 @@ void BotMgr::Think(Bot& bot, Player* me)
         {
             // The core's own entry check, behind the one guarded host function (N1).
             uint32 const masterMap = master->GetMapId();
-            std::string const denied = CanEnterMap(me, masterMap);
+            // The same continent needs no entry check (and the guard would answer "already on that map"); another non-instance map is asked.
+            std::string const denied = sameMapId ? std::string() : CanEnterMap(me, masterMap);
             if (!denied.empty())
                 reason = denied;
             else

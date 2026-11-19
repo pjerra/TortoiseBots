@@ -38,3 +38,13 @@ inline Unit* MasterTargetCompat(AI* ai) { return ai->GetGroupMaster(); }
 // Does the landing of a BODY pull (the `reach pull` branch of PullAction) restamp the held party bots' clock? T: never (the legacy body pull did not).
 template <class B>
 inline bool BodyPullRestampCompat(B* /*bot*/) { return false; }
+
+// The items a keyword like `food` / `drink` resolves to in the bags, as the ids `UseAction::Execute` uses (the first is the item, a SECOND one is the item
+// it is used ON). T: every stack, as it always was.
+template <class Items, class ItemIds>
+inline void AppendInventoryUseItemsCompat(ItemIds& ids, Items const& inventoryItems)
+{
+    for (auto* inventoryItem : inventoryItems)
+        if (inventoryItem)
+            ids.push_back(inventoryItem->GetEntry());
+}

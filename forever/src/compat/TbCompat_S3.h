@@ -87,3 +87,17 @@ inline Unit* MasterTargetCompat(AI* ai)
 // F: yes, for a bot of a commanded party (the host's `pull` order places that hold); every other pull is as it was. T: never (ai/cmangos-compat-s3.h).
 template <class B>
 inline bool BodyPullRestampCompat(B* bot) { return bot && TortoiseBots::BotCommands::IsInCommandedGroup(bot); }
+
+// The items a keyword like `food` / `drink` resolves to in the bags, as the ids `UseAction::Execute` uses (the first is the item, a SECOND one is the item
+// it is used ON). F: only the FIRST: a bot with two stacks of the same bread (or two kinds of food) otherwise asked to use the bread ON the bread, which the
+// core refuses (package N, N9: `A:food - FAILED` for a tank with two stacks, one stack worked). Turtle: every stack (ai/cmangos-compat-s3.h).
+template <class Items, class ItemIds>
+inline void AppendInventoryUseItemsCompat(ItemIds& ids, Items const& inventoryItems)
+{
+    for (auto* inventoryItem : inventoryItems)
+        if (inventoryItem)
+        {
+            ids.push_back(inventoryItem->GetEntry());
+            return;
+        }
+}
