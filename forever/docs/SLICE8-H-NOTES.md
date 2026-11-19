@@ -6,7 +6,7 @@ Branch `s8/h` (worktree `~/wt-s8-h`), default build slot (no `FOREVER_SLOT`), ba
 
 | Area | Files | Note |
 |---|---|---|
-| list | `forever/SLICE8.txt` (198 paths), `CMakeLists.txt` (`TB_SLICE_LIST` and its error text), `forever/tools/slice_registry_check.py` (`SLICE_LIST`) | section 2 |
+| list | `forever/SLICE8.txt` (199 paths), `CMakeLists.txt` (`TB_SLICE_LIST` and its error text), `forever/tools/slice_registry_check.py` (`SLICE_LIST`) | section 2 |
 | registry keys | `forever/tools/slice_gen_context.py` (`SLICE8_KEYS`), regenerated `forever/src/slice/SliceAiObjectContext.cpp` | section 3 |
 | factory | `forever/src/slice/SliceAiFactory.cpp` | section 4 |
 | commands | NEW `forever/src/host/TbCc.h`, `TbCc.cpp`; one-line registrations in `forever/src/TbScripts.cpp` (include + 2 rows), `forever/src/host/TbPartyState.cpp` (include + 1 call), `forever/src/host/TbH3.cpp` (include + 1 selftest call) | section 5 |
@@ -14,7 +14,7 @@ Branch `s8/h` (worktree `~/wt-s8-h`), default build slot (no `FOREVER_SLOT`), ba
 
 ## 2. SLICE8.txt rebuilt
 
-K8's `SLICE8.txt` was `SLICE4.txt` + 22 (it did not hold the S5 loader files). Rebuilt here: **SLICE5.txt (176 paths: SLICE4's 174 + `DungeonPlanMgr.cpp`, `BossTacticsMgr.cpp`) + the 22 K8 `.cpp`** (10 `strategy/mage/`, 10 `strategy/rogue/`, `strategy/actions/GiveItemAction.cpp`, `strategy/values/PartyMemberWithoutItemValue.cpp`) = **198 paths**, no duplicates, every path exists, the 22 are exactly K8's (checked with a set difference against K8's file and SLICE5). `CMakeLists.txt` reads it; `slice_registry_check.py` closes the keys against it and now counts `MageAiObjectContext.cpp` and `RogueAiObjectContext.cpp` as registered class contexts (as warrior and priest already were): without that the check reported 407 (K8's number: both contexts' own keys counted as missing).
+K8's `SLICE8.txt` was `SLICE4.txt` + 22 (it did not hold the S5 loader files). Rebuilt here: **SLICE5.txt (176 lines: SLICE4's 174 paths + `DungeonPlanMgr.cpp`, `BossTacticsMgr.cpp`) + the 22 K8 `.cpp`** (10 `strategy/mage/`, 10 `strategy/rogue/`, `strategy/actions/GiveItemAction.cpp`, `strategy/values/PartyMemberWithoutItemValue.cpp`) + **`ai/playerbot/strategy/actions/CancelChannelAction.cpp`** = **199 paths**, no duplicates, every path exists, the 22 are exactly K8's (checked with a set difference against K8's file and SLICE5). The 23rd is a gap of the spec's file table: the registered key `cancel channel` (spec section 3) builds `CancelChannelAction`, whose only definition is that `.cpp`; without it the option-ON link failed with `undefined vtable for CancelChannelAction` (the only undefined symbol). The census compiles it clean. `CMakeLists.txt` reads it; `slice_registry_check.py` closes the keys against it and now counts `MageAiObjectContext.cpp` and `RogueAiObjectContext.cpp` as registered class contexts (as warrior and priest already were): without that the check reported 407 (K8's number: both contexts' own keys counted as missing).
 
 ## 3. Registry keys
 
@@ -92,3 +92,18 @@ K8's notes (section 4 and "Needs at merge" 4) propose it and the spec does not m
 * G8: call `h8::ApplyCcOrder` / `h8::ClearCcOrder` (`forever/src/host/TbCc.h`) from `run::Issue`; both exist in the option-OFF build too (they answer `engine-not-built`).
 * Boot: `slice: registered 19/53/86/173`; no `slice: missing` line for any key of the two kits. Then spec gates a, b, c (give water to the priest: `give water` trigger and `party member without water`), then f with `.tb cc Mmage moon <Cultist guid>` and `.tb state Mmage` (`rticc=moon`, `held=` once the sheep landed).
 * Gate h needs `.tb strategy Mrogue nc +stealth`.
+
+## 8. Gates (default slot, final code tree; commits after it change docs only)
+
+| Gate | Result |
+|---|---|
+| census `SLICE8.txt` | `files 199  compile clean 199  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census SLICE5 / 4 / 3 / 2 / 1 | every path of each list is a path of SLICE8.txt (`comm -23`: 0 each) and the census compiles each file on its own, so each list is 0 by the SLICE8 run (not five separate runs) |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` (19/53/86/173) |
+| `slice_registry_check.py` | `(a)=0  (b)=212` (SLICE5: 215) |
+| option ON `worldserver` | `CMAKE_RC=0 MAKE_RC=0`, 0 `undefined reference`; `h8::ApplyCcOrder`, `ClearCcOrder`, `HandleCc`, `HandleStrategy`, `AppendCcState`, `SelfTestRecords` and `CancelChannelAction::Execute` strong in `worldserver` |
+| option OFF `tortoisebots` and `worldserver` | `CMAKE_RC=0 MAKE_RC=0` both |
+| tests (VM, g++) | `test_run_orders` PASS 128, `test_run_c6` PASS 28, `test_run_facts` PASS, `test_dungeon_run_policy: ok`, system run policy 109, `test_mage_aoe_safety_policy` 14, `test_rogue_sap_approach_policy` passed, `test_rogue_threat_policy` passed, `test_cc_mark_hold_policy` 79, `test_cc_area_guard_policy` all checks passed (6 scans) |
+| Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed (root `CMakeLists.txt` is read by ForeverCore only) |
+
+Nothing in this package was run against a live server (no boot): `.tb cc`, `.tb strategy`, the state keys and the kits are proven to compile, link and register, not to behave.
