@@ -15,7 +15,7 @@ namespace h3 { class Rec; class Reply; }
 namespace run
 {
 // OnWorldInitialized: loads the dungeon plan tables and the step unit rows (`ai::LoadDungeonPlans`, `ai::LoadDungeonStepUnits`), once the module is
-// enabled and the engine built. The plan loader is the P5 package's; until it merges a stand-in does nothing and says so (TbPlanLoaderStandIn.cpp).
+// enabled and the engine built. The plan loader is ai/playerbot/DungeonPlanMgr.cpp (slice 5, package P5).
 void LoadPlans();
 
 // Every run's plan pointer (`.tb plan reload` passes them as `inUse`, so a replaced table a run still reads is kept alive).

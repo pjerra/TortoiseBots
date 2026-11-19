@@ -1,7 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "DungeonPlanMgr.h"
 #include "BossTacticsMgr.h"
-#include "cmangos-compat-s5.h" // WorldQueryCompat, FieldTextCompat (both cores; until the shims include the pair, RUN-S5-P-NOTES.md)
 
 #include <functional>
 #include <memory>

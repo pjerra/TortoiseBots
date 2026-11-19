@@ -1,7 +1,6 @@
-# Slice 5 (plan + run core): SLICE3.txt plus the plan loader of FOREVER-RUN-S5S6-SPEC section 4.2 (DungeonPlanMgr.cpp, BossTacticsMgr.cpp;
+# Slice 5 (plan + run core): SLICE4.txt plus the plan loader of FOREVER-RUN-S5S6-SPEC section 4.2 (DungeonPlanMgr.cpp, BossTacticsMgr.cpp;
 # their headers DungeonPlanPolicy.h, DungeonPlanReloadPolicy.h, BossTacticsPolicy.h, BossTacticsMgr.h come with them).
-# NEEDS AT MERGE: the slice-4 lines (forever/SLICE4.txt of port/forever) are not here yet; append them (see forever/docs/RUN-S5-P-NOTES.md).
-# One path per line. Used by: FOREVER_SLOT=3 FOREVER_CENSUS_LIST=forever/SLICE5.txt forever/tools/vm-census.sh "" 14
+# One path per line. Used by: FOREVER_SLOT=1 FOREVER_CENSUS_LIST=forever/SLICE5.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
 ai/playerbot/BotLog.cpp
@@ -172,5 +171,9 @@ ai/playerbot/strategy/actions/PullActions.cpp
 ai/playerbot/strategy/triggers/PullTriggers.cpp
 ai/playerbot/strategy/actions/ChatShortcutActions.cpp
 ai/playerbot/strategy/actions/ValueActions.cpp
+ai/playerbot/strategy/generic/DeadStrategy.cpp
+ai/playerbot/strategy/actions/ReleaseSpiritAction.cpp
+ai/playerbot/strategy/actions/AcceptResurrectAction.cpp
+ai/playerbot/strategy/values/PartyMemberToResurrect.cpp
 ai/playerbot/DungeonPlanMgr.cpp
 ai/playerbot/BossTacticsMgr.cpp

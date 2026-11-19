@@ -187,7 +187,11 @@ class LoaderPortWiring(unittest.TestCase):
             self.assertNotIn("WorldDatabase.", text, name)
             self.assertNotIn("GetCppString", text, name)
             self.assertNotIn("unique_ptr<QueryResult>", text, name)
-            self.assertIn('#include "cmangos-compat-s5.h"', text, name)
+            self.assertNotIn('#include "cmangos-compat-s5.h"', text, name)  # the shims carry the pair
+
+    def test_both_shims_include_the_pair(self):
+        self.assertIn('#include "cmangos-compat-s5.h"', (ROOT / "ai/cmangos-compat-shim.h").read_text())
+        self.assertIn('#include "TbCompat_S5.h"', (ROOT / "forever/src/compat/forever-compat-shim.h").read_text())
 
     def test_the_loader_does_not_include_the_boss_tactics_actions(self):
         self.assertNotIn("BossTacticsActions.h", MGR)
