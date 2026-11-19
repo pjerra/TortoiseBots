@@ -567,4 +567,5 @@ private:
 #include "TbCompat_V2.h"          // slice 2, package V2: loot values, corpses, dispel target, the loot object stack
 #include "TbCompat_I2.h"          // slice 2, package I2: loot, add loot and use item actions
 #include "TbCompat_S3.h"          // slice 3: group fight on orders (threat/tank, pull, orders)
+#include "TbCompat_D4.h"          // slice 4, package P4: death and resurrection (dead strategy, release spirit, accept resurrect)
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

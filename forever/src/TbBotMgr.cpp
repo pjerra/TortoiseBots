@@ -17,6 +17,7 @@
 #include "StringFormat.h"
 #include "DB2Stores.h"
 #include "Map.h"
+#include "MiscPackets.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
@@ -42,6 +43,9 @@ constexpr uint32 FollowRetryMs = 30000;
 constexpr uint32 CatchUpCooldownMs = 30000;
 // H4: an entry (a walk to the area trigger, the leader's wait, the teleport) that has not ended after this long is refused with `block=timeout`.
 constexpr uint32 EntryTimeoutMs = 120000;
+// N2/N3: a commanded bot's body that has lain this long (TortoiseBots.Slice.DeadBackstopSeconds, 180 s) in a dungeon releases itself (at the entrance, the normal rule) whatever holds it: no rezzer able to
+// resurrect, a commander on another map or a hold that never ends must not strand it (and keep the instance from resetting).
+constexpr uint32 DeadBackstopDefaultMs = 180000;   // TortoiseBots.Slice.DeadBackstopSeconds
 // H4: the walk to the trigger makes no progress (the best distance does not shrink by a yard) for this long: `block=stuck`.
 constexpr uint32 EntryNoProgressMs = 20000;
 
@@ -168,6 +172,7 @@ void BotMgr::LoadConfig()
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
     int32 const graceSeconds = sConfigMgr->GetIntDefault("TortoiseBots.Slice.MasterGraceSeconds", 300);
     _masterGraceMs = uint32(std::clamp<int32>(graceSeconds, 0, 3600)) * 1000;
+    _deadBackstopMs = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", DeadBackstopDefaultMs / 1000), 10, 3600)) * 1000;
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
@@ -722,6 +727,12 @@ bool BotMgr::SetMaster(ObjectGuid characterGuid, ObjectGuid master)
 void BotMgr::FailEntry(Bot& bot, std::string code, std::string text)
 {
     TC_LOG_INFO("tortoisebots", "BotMgr: the entry of {} (trigger {}) ended: {} ({})", bot.session->GetCharacterGuid().ToString(), bot.entry.triggerId, code, text);
+    // N6: every exit of an entry stops the walk (the MovePoint generator would otherwise keep going, as M4-1 showed after a landing).
+    if (Player* walker = bot.session->GetPlayer(); walker && walker->IsInWorld() && !walker->IsBeingTeleported())
+    {
+        walker->GetMotionMaster()->Clear();
+        walker->StopMoving();
+    }
     bot.entry = Entry();
     bot.landing.pending = false;
     bot.block = std::move(code);
@@ -783,12 +794,18 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
     // Landed: the bot stands on the trigger's target map. (The caller made sure the bot is in the world and not being teleported.)
     if (me->GetMapId() == e.targetMap)
     {
-        bot.entered = e.direct ? "order" : "trigger";
+        me->GetMotionMaster()->Clear();   // nothing of the walk may carry over into the dungeon
+        me->StopMoving();
+        // N6: only a landing the entry job itself started (its handler or direct teleport) is `entered=trigger|order`; any other way onto the map is `other`.
+        bot.entered = e.teleporting ? (e.direct ? "order" : "trigger") : "other";
         bot.block.clear();
         bot.blockText.clear();
         uint32 const instanceId = me->GetInstanceId();
-        if (instanceId && !_entryTriggerByInstance.count(instanceId))
-            _entryTriggerByInstance[instanceId] = e.triggerId;
+        // N1: keyed by (map, instance); the entry that opened a fresh instance (entrance still 0) names the trigger, an older entry's name is kept otherwise.
+        InstanceScript const* const landedScript = me->GetMap() && me->GetMap()->ToInstanceMap() ? me->GetMap()->ToInstanceMap()->GetInstanceScript() : nullptr;
+        std::pair<uint32, uint32> const landedKey{ me->GetMapId(), instanceId };
+        if (instanceId && (!_entryTriggerByInstance.count(landedKey) || (landedScript && landedScript->GetEntranceLocation() == 0)))
+            _entryTriggerByInstance[landedKey] = e.triggerId;
         TC_LOG_INFO("tortoisebots", "BotMgr: {} entered map {} (instance {}) through area trigger {}", me->GetName(), e.targetMap, instanceId, e.triggerId);
         bot.entry = Entry();
         return;
@@ -870,6 +887,11 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
         return;
     }
 
+    // M4 live finding: the walk's MovePoint generator survived the teleport and the bot kept walking toward the BOX'S map-1 coordinates inside the dungeon
+    // (a straight line, 200+ yd in 30 s). Stop it before the handler runs.
+    me->GetMotionMaster()->Clear();
+    me->StopMoving();
+
     // The entry check, behind the one guarded function (C1), then the core's own path.
     if (EntryCheck const check = CheckEntry(me, e.targetMap); !check.code.empty())
     {
@@ -950,45 +972,63 @@ void BotMgr::MarkPractice(ObjectGuid botGuid)
 // non-raid dungeon, :5220; without an entrance it falls to the closest graveyard, which for Ragefire Chasm and an Alliance bot is Razor Hill).
 // InstanceScript::SetEntranceLocation is a public member (InstanceScript.h:289). Once per instance; the trigger the first entry used is the source, else
 // ObjectMgr::GetMapEntranceTrigger(map) (the first areatrigger_teleport row that leads into the map; a dungeon with several entrances needs the entry's own).
-void BotMgr::EnsureEntrance(Player* me)
+// N5: the host's own "commanded" test, engine-free (this file is in both builds): the bot's host master is a character OUTSIDE the bot's party (the commander,
+// `.tb master`). A bot led by its own party's leader is not commanded.
+bool BotMgr::IsCommandedHere(Bot const& bot, Player* me) const
+{
+    if (bot.master.IsEmpty() || !me)
+        return false;
+    Group* const group = me->GetGroup();
+    return group && !group->IsMember(bot.master);
+}
+
+// N1 (package N): `EnsureEntrance` keeps no decision by instance id alone. Every think of a commanded bot that stands in a dungeon of ITS OWN group (N5: never a
+// real player's instance), the instance script's entrance is read; when it is 0 the entrance for THIS (map, instance) is worked out and set, and a failure is
+// retried at the next think (the log line is once per (map, instance)). The trigger of the last entry into the instance is used only when its target is this
+// map (a stale RFC trigger must not name an entrance for Deadmines); otherwise the first trigger that leads into the map (ObjectMgr::GetMapEntranceTrigger).
+// InstanceScript::SetEntranceLocation is public (InstanceScript.h:289). D2: the bot then revives at the entrance inside the instance after a release
+// (Player::RepopAtGraveyard, Player.cpp:5227-5228) instead of at the zone's graveyard (Razor Hill for Ragefire Chasm).
+void BotMgr::EnsureEntrance(Bot const& bot, Player* me)
 {
     Map* map = me->GetMap();
     InstanceMap* instanceMap = map ? map->ToInstanceMap() : nullptr;
     if (!instanceMap || !instanceMap->IsDungeon())
         return;
-    uint32 const instanceId = instanceMap->GetInstanceId();
-    if (_entranceByInstance.count(instanceId))
+    if (!IsCommandedHere(bot, me) || !instanceMap->GetOwningGroup() || instanceMap->GetOwningGroup() != me->GetGroup())
         return;
+    uint32 const mapId = instanceMap->GetId();
+    uint32 const instanceId = instanceMap->GetInstanceId();
+    std::pair<uint32, uint32> const key{ mapId, instanceId };
     InstanceScript* script = instanceMap->GetInstanceScript();
     if (!script)
     {
-        _entranceByInstance[instanceId] = 0;
-        TC_LOG_WARN("tortoisebots", "BotMgr: map {} (instance {}) has no instance script: the host cannot give it an entrance, a release there is held (relhold=no-entrance)", instanceMap->GetId(), instanceId);
+        if (_entranceFailLogged.insert(key).second)
+            TC_LOG_WARN("tortoisebots", "BotMgr: map {} (instance {}) has no instance script: the host cannot give it an entrance, a release there is held (relhold=no-entrance)", mapId, instanceId);
         return;
     }
-    if (uint32 const existing = script->GetEntranceLocation())
+    if (script->GetEntranceLocation())
     {
-        _entranceByInstance[instanceId] = existing;
+        _entranceFailLogged.erase(key);
         return;
     }
     uint32 safeLocId = 0;
-    if (auto const itr = _entryTriggerByInstance.find(instanceId); itr != _entryTriggerByInstance.end())
-        if (AreaTriggerTeleport const* used = sObjectMgr->GetAreaTrigger(itr->second))
+    if (auto const itr = _entryTriggerByInstance.find(key); itr != _entryTriggerByInstance.end())
+        if (AreaTriggerTeleport const* used = sObjectMgr->GetAreaTrigger(itr->second); used && used->Loc.GetMapId() == mapId)
             safeLocId = used->ID;
     if (!safeLocId)
-        if (AreaTriggerTeleport const* first = sObjectMgr->GetMapEntranceTrigger(instanceMap->GetId()))
+        if (AreaTriggerTeleport const* first = sObjectMgr->GetMapEntranceTrigger(mapId); first && first->Loc.GetMapId() == mapId)
             safeLocId = first->ID;
     WorldSafeLocsEntry const* loc = safeLocId ? sObjectMgr->GetWorldSafeLoc(safeLocId) : nullptr;
-    if (!loc || loc->Loc.GetMapId() != instanceMap->GetId())
+    if (!loc || loc->Loc.GetMapId() != mapId)
     {
-        _entranceByInstance[instanceId] = 0;
-        TC_LOG_WARN("tortoisebots", "BotMgr: map {} (instance {}): no area trigger leads into it, so no entrance is set (a release there is held, relhold=no-entrance)", instanceMap->GetId(), instanceId);
+        if (_entranceFailLogged.insert(key).second)
+            TC_LOG_WARN("tortoisebots", "BotMgr: map {} (instance {}): no area trigger leads into it, so no entrance is set (a release there is held, relhold=no-entrance; retried at every think)", mapId, instanceId);
         return;
     }
     script->SetEntranceLocation(safeLocId);
-    _entranceByInstance[instanceId] = safeLocId;
+    _entranceFailLogged.erase(key);
     TC_LOG_INFO("tortoisebots", "BotMgr: map {} (instance {}) got entrance world_safe_locs {} ({:.1f}, {:.1f}, {:.1f}): a release inside revives there",
-        instanceMap->GetId(), instanceId, safeLocId, loc->Loc.GetPositionX(), loc->Loc.GetPositionY(), loc->Loc.GetPositionZ());
+        mapId, instanceId, safeLocId, loc->Loc.GetPositionX(), loc->Loc.GetPositionY(), loc->Loc.GetPositionZ());
 }
 
 uint32 BotMgr::InstanceEntrance(Player* player) const
@@ -1008,7 +1048,37 @@ bool BotMgr::ReleaseHasEntrance(Player* bot) const
     Map* map = bot->GetMap();
     if (!map || !map->ToInstanceMap() || !map->IsDungeon())
         return true;                      // not inside a dungeon: the stock rules (a graveyard is where the core sends a ghost)
-    return InstanceEntrance(bot) != 0;
+    // The stricter of the two entrance checks (P4's InstanceEntranceKnownCompat names a real world_safe_locs row, H4's was only non-zero): the core's own
+    // lookup (RepopAtGraveyard, Player.cpp:5230) uses the row, so an id with no row would fall back to the zone's graveyard outside.
+    uint32 const entrance = InstanceEntrance(bot);
+    return entrance != 0 && sObjectMgr->GetWorldSafeLoc(entrance) != nullptr;
+}
+
+// N2/N3 (package N): the bounded wait. A dead commanded bot in a dungeon of its group that has lain for DeadBackstopMs releases itself through the core's own
+// repop handler (the typed RepopRequest, MiscHandler.cpp:63-93, what the engine's release action sends), but only when the instance has its entrance (the
+// release then revives it at the entrance INSIDE the instance; with none it would revive at a graveyard outside: held, retried). Not when a resurrection is
+// pending (the priest is casting) or the bot is already a ghost. It does not depend on the engine's brain or on where the commander is.
+void BotMgr::DeadBackstop(Bot& bot, Player* me)
+{
+    if (me->IsAlive())
+    {
+        bot.deadMs = 0;
+        bot.deadEngineFailed = false;
+        return;
+    }
+    bot.deadMs += ThinkIntervalMs;
+    if (bot.deadMs < _deadBackstopMs)
+        return;
+    Map* map = me->GetMap();
+    if (!map || !map->ToInstanceMap() || !map->IsDungeon() || !IsCommandedHere(bot, me))
+        return;
+    if (me->HasPlayerFlag(PLAYER_FLAGS_GHOST) || me->IsResurrectRequested() || me->IsBeingTeleported() || !me->GetSession() || !ReleaseHasEntrance(me))
+        return;
+    TC_LOG_INFO("tortoisebots", "BotMgr: {} has lain dead for {} s in map {} (instance {}) with nothing raising it: it releases (the bounded wait); it comes back at the entrance",
+        me->GetName(), bot.deadMs / 1000, map->GetId(), me->GetInstanceId());
+    WorldPackets::Misc::RepopRequest packet{ WorldPacket(CMSG_REPOP_REQUEST) };
+    me->GetSession()->HandleRepopRequest(packet);
+    bot.deadMs = 0;     // one try per bound
 }
 
 // What `.tb state` keeps between two reads: a bot that was dead and is alive again is `running-back` until it is within 20 yd of its commander (its
@@ -1109,7 +1179,8 @@ void BotMgr::Update(uint32 diff)
         {
             bot.thinkMs = 0;
             TrackLife(bot, me);
-            EnsureEntrance(me);
+            EnsureEntrance(bot, me);
+            DeadBackstop(bot, me);
             Think(bot, me);
         }
 
@@ -1259,8 +1330,36 @@ void BotMgr::Think(Bot& bot, Player* me)
             bot.followBlockedWhy = reason;
             // A bot that is on another map than its master cannot follow by path: its engine goes (live: 395 "[BOT PATH BUG]" lines a minute), and comes
             // back below once it stands on the master's map. A bot on the master's map keeps its engine (it is fighting or walking).
+            // N2 (package N): a DEAD commanded bot keeps (or gets) its engine while its commander is on another map: the dead kit holds only the release and
+            // the acceptance of a resurrection (no follow, no path), which are the lifecycle that must run so the body can come back. The bounded wait
+            // (DeadBackstop) covers a brain that cannot be built. An alive bot still loses its engine here and waits where it stands (no follow across maps).
             if (!sameMap)
-                DropBrain(bot);
+            {
+                if (!me->IsAlive() && IsCommandedHere(bot, me))
+                {
+                    if (bot.useEngine && !bot.engineFailed && !bot.brain && !bot.deadEngineFailed)
+                    {
+                        std::string error;
+                        bot.brain.reset(engine::Create(me, master, error));
+                        if (!bot.brain)
+                        {
+                            bot.deadEngineFailed = true;       // once per death
+                            TC_LOG_WARN("tortoisebots", "BotMgr: a dead engine for {} could not be built while its commander is away: {} (the bounded wait releases it)", me->GetName(), error);
+                        }
+                    }
+                }
+                else
+                {
+                    // An alive bot (or a bot that is not commanded) loses its engine here. Live (N4 boot): a bot raised by its engine while the commander was away
+                    // kept the follow generator the engine had set and walked 60 yd through the first room: stop what the dropped engine started.
+                    if (bot.brain && me->IsAlive())
+                    {
+                        me->GetMotionMaster()->Clear();
+                        me->StopMoving();
+                    }
+                    DropBrain(bot);
+                }
+            }
             if (changed)
                 TC_LOG_INFO("tortoisebots", "BotMgr: {} is not put next to its master {} (map {}, instance {}): {}", me->GetName(), master->GetName(), masterMap, masterInstance, reason);
             if (!sameMap)

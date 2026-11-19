@@ -83,7 +83,17 @@ SLICE3_KEYS = {
                "wait for attack safe distance, successor white cap, threat reset white stop",
     "value": "master position",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# Slice 4 (package P4, FOREVER-SLICE4-SPEC section 3, listed with creator file:line in forever/docs/SLICE4-P-NOTES.md section 4): death and resurrection. Left out on
+# purpose (each one does less): repop, self resurrect, spirit healer, should spirit healer, find corpse, revive from corpse, corpse near, dead (trigger),
+# falling far, move long stuck, bg reset objective force, corpse run, resurrect request (the host calls the action), area trigger, reach area trigger,
+# within area trigger, use meeting stone, summon.
+SLICE4_KEYS = {
+    "strategy": "dead",
+    "action": "auto release, accept resurrect, release, reach party member to resurrect",
+    "trigger": "party member dead, resurrect",
+    "value": "party member to resurrect",
+}
+KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k]).split(",")] for k in SLICE_KEYS}
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

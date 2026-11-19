@@ -8,6 +8,7 @@
 #include "ai/playerbot/FollowTrailPolicy.h"   // shared with the Turtle build, no core includes
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -174,6 +175,8 @@ private:
         std::string blockText;
         uint32 catchups = 0;
         bool wasDead = false;
+        bool deadEngineFailed = false;  // N2: the dead engine could not be built while the commander is away (logged once per death)
+        uint32 deadMs = 0;              // N2/N3: how long the body has lain (reset when alive): the bound after which a commanded bot releases itself
         bool runBack = false;
         bool practice = false;
         bool practiceSawCombat = false;
@@ -189,7 +192,9 @@ private:
     void UpdateEntry(Bot& bot, Player* me, uint32 diff);
     void FailEntry(Bot& bot, std::string code, std::string text);
     void TrackLife(Bot& bot, Player* me);
-    void EnsureEntrance(Player* me);
+    void EnsureEntrance(Bot const& bot, Player* me);
+    bool IsCommandedHere(Bot const& bot, Player* me) const;
+    void DeadBackstop(Bot& bot, Player* me);
     void DropBrain(Bot& bot);
     // R10 (S2): the master is gone: take the brain down and wait out the grace (or log the bot out at once when the grace is 0).
     void DetachFromMaster(Bot& bot);
@@ -200,8 +205,11 @@ private:
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
-    std::map<uint32, uint32> _entranceByInstance;   // H4: instance id -> world_safe_locs id the host gave its script (D2), logged once
-    std::map<uint32, uint32> _entryTriggerByInstance;   // H4: instance id -> the area trigger the first entry used
+    // N1 (package N): NO decision is cached by instance id alone (the core hands out ids from one pool for all maps and reuses them): what is kept is keyed by
+    // (map id, instance id), and a cached trigger is used only when its target is that map. The entrance itself is read from the instance script every time.
+    std::map<std::pair<uint32, uint32>, uint32> _entryTriggerByInstance;   // (map, instance) -> the area trigger the last entry into it used
+    std::set<std::pair<uint32, uint32>> _entranceFailLogged;                // (map, instance) whose "no entrance" was logged (cleared on success): the log is bounded, the retry is not
 };
 }

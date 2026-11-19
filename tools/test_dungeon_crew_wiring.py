@@ -66,8 +66,9 @@ class DungeonCrewWiringTest(unittest.TestCase):
         rep = body(ACTION, "class RepopAction", "class SelfResurrectAction")
         ex = body(rep, "virtual bool Execute(Event& event) override", "virtual bool isUseful() override")
         guard = ex.index("ai::RepopLeavesGroup(")
-        self.assertIn("TortoiseBots::BotActivity::Dungeon", ex[guard:ex.index("RemoveMember(", guard)])
-        self.assertLess(guard, ex.index("group->RemoveMember("))
+        # slice 4 (P4): the removal goes through GroupRemoveMemberCompat (Turtle twin: group->RemoveMember(guid, 0)); the guard still comes first
+        self.assertIn("TortoiseBots::BotActivity::Dungeon", ex[guard:ex.index("GroupRemoveMemberCompat(", guard)])
+        self.assertLess(guard, ex.index("GroupRemoveMemberCompat(group"))
         self.assertIn('#include "playerbot/policy/rpg/GroupHygienePolicy.h"', ACTION)
 
 

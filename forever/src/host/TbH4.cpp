@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <set>
 #include <vector>
 
 namespace TortoiseBots
@@ -107,7 +108,7 @@ void SelfTestRecords(Reply& reply)
     reply.Line(Rec("enter").S("bot", "Mtank").N("trigger", 2230).N("map", 389).S("status", "started").B("inbox", true).B("direct", false));
     reply.Line(Rec("enter").S("bot", "Mlow").N("trigger", 2230).N("map", 389).S("leader", "Mtank").S("status", "refused").S("code", "level").T("msg", "level too low for this instance (needs 10)"));
     reply.Line(Rec("instance").S("leader", "Mtank").N("map", 389).S("name", "Ragefire Chasm").N("inst", 1).N("diff", 1).N("players", 5).N("gms", 1).N("mobs_alive", 88).N("mobs_total", 91).N("mobs_loaded", 91)
-        .LP("boss", {{"11517", "alive"}, {"11518", "dead"}}).N("entrance", 1102230).N("recent", 1).S("owner", "Mtank"));
+        .LP("boss", {{"2732", "alive"}, {"2734", "dead"}}).N("entrance", 1102230).N("recent", 1).S("owner", "Mtank"));
     reply.Line(Rec("leave").S("bot", "Mtank").N("map", 1).S("status", "started"));
     reply.Line(Rec("reset").N("map", 389).N("inst", 1).S("status", "ok"));
     reply.Line(Rec("tele").S("bot", "Mcmd").S("to", "Mtank").S("status", "started").N("map", 389).N("inst", 1).S("tag", "SETUP"));
@@ -306,7 +307,7 @@ InstanceMap* FindInstance(Player* leader, uint32 mapId, std::string& why)
 struct SpawnCounts
 {
     uint32 total = 0, alive = 0, loaded = 0;
-    std::vector<std::vector<std::string>> bosses;   // {entry, alive|dead}
+    std::vector<std::vector<std::string>> bosses;   // {dungeon encounter id (the boss index when the script names none), alive|dead}
 };
 
 // Creatures of the instance: every creature spawn of the map (and difficulty) in the world database is "total"; a spawn is alive when its loaded creature
@@ -338,9 +339,6 @@ SpawnCounts CountSpawns(InstanceMap* map)
             alive = false;
         if (alive)
             ++counts.alive;
-        if (CreatureTemplate const* tpl = sObjectMgr->GetCreatureTemplate(data.id))
-            if (tpl->flags_extra & CREATURE_FLAG_EXTRA_DUNGEON_BOSS)
-                counts.bosses.push_back({ std::to_string(data.id), alive ? "alive" : "dead" });
     }
     return counts;
 }
@@ -361,6 +359,10 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     std::string const verb = Lower(args.w[1]);
     if (verb != "info" && verb != "reset" && verb != "leave")
         return Fail(handler, args, "instance", "unknown-verb", verb);
+    // N4 (package N): the same rule as every command that names a leader (C3): a host bot, or the sender's own character. `info` no longer shows a stranger's
+    // instance, `leave` no longer moves a stranger's bots.
+    if (!MayLeadBots(handler, leader->GetGUID()))
+        return Fail(handler, args, "instance", "not-allowed", args.w[0] + " is neither a host bot nor your own character");
     uint32 mapId = 0;
     if (args.w.size() > 2)
     {
@@ -387,12 +389,22 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 ++gms;
         Group* group = leader->GetGroup();
         InstanceScript const* script = map->GetInstanceScript();
+        // M4 live finding: the bosses are NOT found through the creature template: the core strips CREATURE_FLAG_EXTRA_DUNGEON_BOSS from the database
+        // value (CREATURE_FLAG_EXTRA_DB_ALLOWED, CreatureData.h:382), so the old spawn scan listed none. The instance script's own boss table is the truth:
+        // one entry per boss, named by its DungeonEncounter id (the boss index when the script names none), dead = the boss state is DONE.
+        SpawnCounts counts2 = counts;
+        counts2.bosses.clear();
+        for (uint32 boss = 0; script && boss < script->GetEncounterCount(); ++boss)
+        {
+            DungeonEncounterEntry const* encounter = script->GetBossDungeonEncounter(boss);
+            counts2.bosses.push_back({ std::to_string(encounter ? encounter->ID : boss), script->GetBossState(boss) == DONE ? "dead" : "alive" });
+        }
         Reply reply(handler, args, "instance");
         reply.Begin();
         Rec rec("instance");
         rec.S("leader", leader->GetName()).N("map", map->GetId()).S("name", map->GetMapName()).N("inst", map->GetInstanceId()).N("diff", uint32(map->GetDifficultyID()));
         rec.N("players", map->GetPlayersCountExceptGMs()).N("gms", gms);
-        rec.N("mobs_alive", counts.alive).N("mobs_total", counts.total).N("mobs_loaded", counts.loaded).LP("boss", counts.bosses);
+        rec.N("mobs_alive", counts.alive).N("mobs_total", counts.total).N("mobs_loaded", counts.loaded).LP("boss", counts2.bosses);
         rec.N("entrance", script ? script->GetEntranceLocation() : 0);
         rec.N("recent", group ? group->GetRecentInstanceId(map->GetId()) : leader->GetRecentInstanceId(map->GetId()));
         rec.S("owner", map->GetOwningGroup() ? std::string(map->GetOwningGroup()->GetLeaderName()) : std::string());
@@ -413,10 +425,25 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (!exitTrigger)
             return Fail(handler, args, "instance", "no-trigger", "no area trigger leads out of that map (GetGoBackTrigger found none)");
         // Every host bot on that instance (the party and the commander), each through the exit trigger's own target.
+        // N4: only the leader's own people: the leader, the members of its party, the commander of any of them and the bots the leader commands. A host bot of
+        // another party or another commander that happens to stand on the same map stays where it is.
+        std::set<ObjectGuid> mine;
+        mine.insert(leader->GetGUID());
+        if (Group* leaderGroup = leader->GetGroup())
+            for (Group::MemberSlot const& slot : leaderGroup->GetMemberSlots())
+                mine.insert(slot.guid);
         std::vector<Player*> inside;
         for (MapReference const& ref : map->GetPlayers())
             if (Player* player = ref.GetSource(); player && IsHostBot(player))
-                inside.push_back(player);
+            {
+                ObjectGuid const commander = CommanderGuid(player->GetGUID());
+                if (mine.count(player->GetGUID()) || (!commander.IsEmpty() && (commander == leader->GetGUID() || mine.count(commander))))
+                    inside.push_back(player);
+            }
+        // the commander of a party member (outside the party) is one of ours as well
+        for (Player* member : std::vector<Player*>(inside))
+            if (Player* commander = CommanderOf(member); commander && commander->GetMap() == map && IsHostBot(commander) && std::find(inside.begin(), inside.end(), commander) == inside.end())
+                inside.push_back(commander);
         std::sort(inside.begin(), inside.end(), [](Player const* a, Player const* b) { return a->GetName() < b->GetName(); });
         Reply reply(handler, args, "instance");
         reply.Begin();
@@ -425,7 +452,14 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         {
             Rec rec("leave");
             rec.S("bot", bot->GetName()).N("map", exitTrigger->Loc.GetMapId());
-            if (bot->IsBeingTeleported())
+            if (!bot->IsAlive())
+            {
+                // M4 live finding: a dead bot that was moved out by `leave` was released OUTSIDE by its engine and became a ghost at Razor Hill. A body stays in
+                // the dungeon until it is raised (the priest, `.tb revive`) or released inside (the entrance rule): the leave does less, and says why.
+                ++refused;
+                rec.S("status", "refused").S("code", "dead").T("msg", "the bot is dead: its body stays in the dungeon until it is raised or released (`.tb revive` first)");
+            }
+            else if (bot->IsBeingTeleported())
             {
                 ++refused;
                 rec.S("status", "refused").S("code", "teleporting").T("msg", "the bot is being teleported");
@@ -539,6 +573,14 @@ bool TeleportNextTo(Player* source, Player* dest, bool revive, Rec& rec)
         // The core's group bind rule: a GM may join any instance (InstanceMap::CannotEnter, Map.cpp:2972-2973); anyone else only the instance its own group owns.
         if (!source->IsGameMaster() && (!source->GetGroup() || source->GetGroup() != dest->GetGroup()))
             return refuse("not-in-group", source->GetName() + " is neither a GM nor in the party of " + dest->GetName() + ": the core would refuse it the instance");
+        // N8 (package N): being in the same party is not enough: the instance must be the one that party OWNS (Map.cpp:2972-2973, the owning-group test), or the core
+        // refuses at the worldport ack and sends the bot HOME (which does more than asked). Read with the public InstanceMap::GetOwningGroup.
+        if (!source->IsGameMaster())
+        {
+            InstanceMap* const destInstance = destMap->ToInstanceMap();
+            if (!destInstance || destInstance->GetOwningGroup() != source->GetGroup())
+                return refuse("not-in-group", "the instance " + dest->GetName() + " stands in is not owned by " + source->GetName() + "'s party: the core would refuse it and send it home");
+        }
         if (source->GetMapId() != dest->GetMapId())
             if (BotMgr::EntryCheck const check = BotMgr::CheckEntry(source, dest->GetMapId()); !check.code.empty())
                 return refuse(check.code.c_str(), check.text);

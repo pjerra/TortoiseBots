@@ -6,6 +6,7 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "MiscPackets.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 
@@ -436,6 +437,18 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
                 sLog.outString("TortoiseBots: %s answers the resurrection offered by %s: %s", bot->GetName().c_str(), offerer->GetName().c_str(), done ? "accepted" : "the action did not accept");
             }
         }
+
+    // N7 (package N): a resurrection request that is NOT from the bot's party or its commander (a GM or a player outside) is DECLINED, not left pending: the core
+    // keeps one request per player and refuses a second caster's while one is stored (Spell::EffectResurrect, SpellEffects.cpp:3825), so a stranger's request
+    // would block the party priest and the body would wait. The core's own decline: ResurrectResponse with Response != 0 clears the request whoever sent it
+    // (WorldSession::HandleResurrectResponse, MiscHandler.cpp:511-515).
+    if (!bot->IsAlive() && bot->IsResurrectRequested() && !ResurrectOffererOf(bot) && bot->GetSession())
+    {
+        WorldPackets::Misc::ResurrectResponse decline{ WorldPacket(CMSG_RESURRECT_RESPONSE) };
+        decline.Response = 1;
+        bot->GetSession()->HandleResurrectResponse(decline);
+        sLog.outString("TortoiseBots: %s declined a resurrection request from outside its party and commander", bot->GetName().c_str());
+    }
 
     // A brain that was built after `.tb role` (the engine was off, or it was rebuilt) starts with no forced role: the stored role is applied
     // before its first tick, so the kit it runs is the one the role asks for.
