@@ -143,6 +143,7 @@ Player* SenderPlayer(ChatHandler* handler);            // the GM's character for
 Player* FindOnline(std::string_view name);             // an in-world character by name (bot or not)
 bool IsHostBot(Player const* player);                  // BotMgr::IsBot
 Player* CommanderOf(Player* bot);
+bool MemberKnowsOocResurrection(Player* member);      // N3: the party member knows an out-of-combat resurrection (TbPartyState.cpp; the engine side asks it through MemberKnowsOocResurrectionCompat)
 // N5 (package N): who may be made the leader or master of host bots: a host bot, or the character of the GM who typed the command. A real player's
 // character is never taken over (from the console only host bots qualify). Used by `.tb party`, `.tb master`, `.tb login <bot> <master>`, `.tb group`.
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character);                      // the in-world player the bot's host master guid names, or null

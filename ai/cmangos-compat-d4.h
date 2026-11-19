@@ -20,6 +20,9 @@ inline bool RepopRequestCompat(Player* bot)
 // AutoReleaseSpiritAction::isUseful: T has no entrance concept to wait for, the release was never held for one (always true).
 inline bool InstanceEntranceKnownCompat(Player* /*bot*/) { return true; }
 
+// N3 (package N): a living party member counts as a rezzer when it KNOWS an out-of-combat resurrection. T: always true (the legacy class test stands alone).
+inline bool MemberKnowsOocResurrectionCompat(Player* /*member*/) { return true; }
+
 // `bot->CastSpell(bot, 2584, TRIGGERED_OLD_TRIGGERED);` (Waiting to Resurrect, in a battleground).
 inline void WaitingForResurrectAuraCompat(Player* bot) { bot->CastSpell(bot, 2584, TRIGGERED_OLD_TRIGGERED); }
 

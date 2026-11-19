@@ -76,7 +76,9 @@ namespace ai
                 switch (member->GetClass())
                 {
                     case CLASS_PRIEST: case CLASS_PALADIN: case CLASS_SHAMAN: case CLASS_DRUID:
-                        return true;
+                        if (MemberKnowsOocResurrectionCompat(member))   // N3: T always true; F asks the spell book
+                            return true;
+                        break;
                     default:
                         break;
                 }

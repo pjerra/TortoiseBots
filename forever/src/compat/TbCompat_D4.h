@@ -46,6 +46,13 @@ inline bool InstanceEntranceKnownCompat(Player* bot)
     return script && sObjectMgr.GetWorldSafeLoc(script->GetEntranceLocation()) != nullptr;
 }
 
+// N3 (package N): does this living party member KNOW an out-of-combat resurrection? T: always true, the legacy rule counted every priest, paladin, shaman and
+// druid (the class switch stays at the call site, so the Turtle behaviour is unchanged). F: the host answers from the member's own spell book through the
+// legacy names (priest "resurrection", paladin "redemption", shaman "ancestral spirit", druid "revive": the action names PriestActions.h:214,
+// PaladinActions.h:712, ShamanActions.h:504, DruidActions.h:110); a real player is counted by class (nothing to ask), a host bot with no engine cannot raise.
+namespace TortoiseBots { namespace h3 { bool MemberKnowsOocResurrection(Player* member); } }
+inline bool MemberKnowsOocResurrectionCompat(Player* member) { return TortoiseBots::h3::MemberKnowsOocResurrection(member); }
+
 // "Waiting to Resurrect" (spell 2584) on a bot that released inside a battleground. T: the original self cast with the old triggered flag.
 // F: the core puts the aura on a player itself when its spirit guide is chosen (Player::SetAreaSpiritHealer, Player.cpp:33468) and the bot
 // cannot choose one: battlegrounds are out of the port (a later slice), counted and not cast: the bot does LESS.

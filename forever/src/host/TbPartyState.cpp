@@ -117,7 +117,7 @@ void CrewFacts(Player* bot, bool& rezzer, bool& fighting)
             continue;
         switch (member->GetClass())
         {
-            case CLASS_PRIEST: case CLASS_PALADIN: case CLASS_SHAMAN: case CLASS_DRUID: rezzer = true; break;
+            case CLASS_PRIEST: case CLASS_PALADIN: case CLASS_SHAMAN: case CLASS_DRUID: if (MemberKnowsOocResurrection(member)) rezzer = true; break;
             default: break;
         }
         if (member->IsInCombat())
@@ -532,6 +532,28 @@ namespace TortoiseBots
 {
 namespace h3
 {
+// N3 (package N): does this party member KNOW an out-of-combat resurrection (the legacy action names: priest "resurrection", paladin "redemption", shaman
+// "ancestral spirit", druid "revive"; a druid's battle resurrection "rebirth" is not one)? A host bot is asked through its own spell book; a host bot with no
+// engine cannot cast, so it does not count; a real player is counted by class (nothing to ask, the legacy rule). Shared with the engine side through
+// MemberKnowsOocResurrectionCompat (compat/TbCompat_D4.h), so the engine's hold and `relhold` agree.
+bool MemberKnowsOocResurrection(Player* member)
+{
+    if (!member)
+        return false;
+    PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(member);
+    if (!ai)
+        return !IsHostBot(member);
+    switch (member->GetClass())
+    {
+        case CLASS_PRIEST: return ai->HasSpell("resurrection");
+        case CLASS_PALADIN: return ai->HasSpell("redemption");
+        case CLASS_SHAMAN: return ai->HasSpell("ancestral spirit");
+        case CLASS_DRUID: return ai->HasSpell("revive");
+        default: return false;
+    }
+}
+
+
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
     Words const args = Split(tail);

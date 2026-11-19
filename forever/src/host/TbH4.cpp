@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <set>
 #include <vector>
 
 namespace TortoiseBots
@@ -358,6 +359,10 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     std::string const verb = Lower(args.w[1]);
     if (verb != "info" && verb != "reset" && verb != "leave")
         return Fail(handler, args, "instance", "unknown-verb", verb);
+    // N4 (package N): the same rule as every command that names a leader (C3): a host bot, or the sender's own character. `info` no longer shows a stranger's
+    // instance, `leave` no longer moves a stranger's bots.
+    if (!MayLeadBots(handler, leader->GetGUID()))
+        return Fail(handler, args, "instance", "not-allowed", args.w[0] + " is neither a host bot nor your own character");
     uint32 mapId = 0;
     if (args.w.size() > 2)
     {
@@ -420,10 +425,25 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (!exitTrigger)
             return Fail(handler, args, "instance", "no-trigger", "no area trigger leads out of that map (GetGoBackTrigger found none)");
         // Every host bot on that instance (the party and the commander), each through the exit trigger's own target.
+        // N4: only the leader's own people: the leader, the members of its party, the commander of any of them and the bots the leader commands. A host bot of
+        // another party or another commander that happens to stand on the same map stays where it is.
+        std::set<ObjectGuid> mine;
+        mine.insert(leader->GetGUID());
+        if (Group* leaderGroup = leader->GetGroup())
+            for (Group::MemberSlot const& slot : leaderGroup->GetMemberSlots())
+                mine.insert(slot.guid);
         std::vector<Player*> inside;
         for (MapReference const& ref : map->GetPlayers())
             if (Player* player = ref.GetSource(); player && IsHostBot(player))
-                inside.push_back(player);
+            {
+                ObjectGuid const commander = CommanderGuid(player->GetGUID());
+                if (mine.count(player->GetGUID()) || (!commander.IsEmpty() && (commander == leader->GetGUID() || mine.count(commander))))
+                    inside.push_back(player);
+            }
+        // the commander of a party member (outside the party) is one of ours as well
+        for (Player* member : std::vector<Player*>(inside))
+            if (Player* commander = CommanderOf(member); commander && commander->GetMap() == map && IsHostBot(commander) && std::find(inside.begin(), inside.end(), commander) == inside.end())
+                inside.push_back(commander);
         std::sort(inside.begin(), inside.end(), [](Player const* a, Player const* b) { return a->GetName() < b->GetName(); });
         Reply reply(handler, args, "instance");
         reply.Begin();
@@ -553,6 +573,14 @@ bool TeleportNextTo(Player* source, Player* dest, bool revive, Rec& rec)
         // The core's group bind rule: a GM may join any instance (InstanceMap::CannotEnter, Map.cpp:2972-2973); anyone else only the instance its own group owns.
         if (!source->IsGameMaster() && (!source->GetGroup() || source->GetGroup() != dest->GetGroup()))
             return refuse("not-in-group", source->GetName() + " is neither a GM nor in the party of " + dest->GetName() + ": the core would refuse it the instance");
+        // N8 (package N): being in the same party is not enough: the instance must be the one that party OWNS (Map.cpp:2972-2973, the owning-group test), or the core
+        // refuses at the worldport ack and sends the bot HOME (which does more than asked). Read with the public InstanceMap::GetOwningGroup.
+        if (!source->IsGameMaster())
+        {
+            InstanceMap* const destInstance = destMap->ToInstanceMap();
+            if (!destInstance || destInstance->GetOwningGroup() != source->GetGroup())
+                return refuse("not-in-group", "the instance " + dest->GetName() + " stands in is not owned by " + source->GetName() + "'s party: the core would refuse it and send it home");
+        }
         if (source->GetMapId() != dest->GetMapId())
             if (BotMgr::EntryCheck const check = BotMgr::CheckEntry(source, dest->GetMapId()); !check.code.empty())
                 return refuse(check.code.c_str(), check.text);
