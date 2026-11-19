@@ -169,7 +169,8 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     else if (player && player->GetClass() == CLASS_MAGE)
         combatEngine->addStrategies("fire", "dps assist", "ranged", "cc", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_ROGUE)
-        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "buff", "boost", NULL);
+        // "cc" gives the rogue Kick (RogueCcStrategy: kick, kick on enemy healer; its Sap rows need a real player master and stay silent): M8 live test.
+        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", NULL);
     else if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.
