@@ -19,4 +19,5 @@ void OnKill(Player* killer, Creature* killed);
 void OnKilledByCreature(Creature* killer, Player* killed);
 void OnQuestStatusChange(Player* player, uint32 questId);
 void OnLootItem(Player* player, Item* item);
+void OnMoneyChanged(Player* player, int64 amount);
 }

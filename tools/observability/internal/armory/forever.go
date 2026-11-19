@@ -727,7 +727,7 @@ func (s *Service) foreverSpellEntry(spellID uint32, active, disabled uint8) Spel
 	if cat == nil {
 		return se
 	}
-	if sp, ok := cat.Spells[spellID]; ok {
+	if sp, ok := cat.Lookups.GetSpell(spellID); ok {
 		if sp.Name != "" {
 			se.Name = sp.Name
 		}
@@ -748,7 +748,7 @@ func (s *Service) foreverSpellEntry(spellID uint32, active, disabled uint8) Spel
 			se.Passive = true
 		}
 	}
-	if st, ok := cat.SpellText[spellID]; ok {
+	if st, ok := cat.Lookups.GetSpellText(spellID); ok {
 		se.Subtext = st.Subtext
 		if st.Desc != "" {
 			se.Description = st.Desc
@@ -780,7 +780,7 @@ func (s *Service) enrichForeverSkill(se *SkillEntry) {
 	if s.cfg.ForeverData == nil || se == nil {
 		return
 	}
-	if meta, ok := s.cfg.ForeverData.Skills[se.Skill]; ok {
+	if meta, ok := s.cfg.ForeverData.Lookups.GetSkill(se.Skill); ok {
 		se.Name = meta.Name
 		se.Category = meta.Category
 		if meta.Icon > 0 {
@@ -869,7 +869,7 @@ func buildForeverTalents(cat *ForeverCatalog, classID uint8, knownSpells map[uin
 			continue
 		}
 		// Talent.db2 keeps rows whose spells this client no longer has (no spell name anywhere): the client shows no such talent.
-		if _, exists := cat.Spells[t.Ranks[0]]; !exists && len(cat.Spells) > 0 {
+		if _, exists := cat.Lookups.GetSpell(t.Ranks[0]); !exists && cat.Lookups.HasSpells() {
 			continue
 		}
 		maxRank := uint32(len(t.Ranks))
@@ -886,7 +886,7 @@ func buildForeverTalents(cat *ForeverCatalog, classID uint8, knownSpells map[uin
 		}
 		name := fmt.Sprintf("Talent #%d", t.ID)
 		icon := ""
-		if sp, ok := cat.Spells[spellID]; ok {
+		if sp, ok := cat.Lookups.GetSpell(spellID); ok {
 			if sp.Name != "" {
 				name = sp.Name
 			}
@@ -895,7 +895,7 @@ func buildForeverTalents(cat *ForeverCatalog, classID uint8, knownSpells map[uin
 			}
 		}
 		desc := ""
-		if st, ok := cat.SpellText[spellID]; ok {
+		if st, ok := cat.Lookups.GetSpellText(spellID); ok {
 			desc = st.Desc
 		}
 		trees[idx].Talents = append(trees[idx].Talents, TalentNode{
@@ -1105,7 +1105,7 @@ func (s *Service) loadReputationForever(guid uint32) ([]ReputationEntry, error) 
 		}
 		r.Name = fmt.Sprintf("Faction #%d", r.Faction)
 		if s.cfg.ForeverData != nil {
-			if meta, ok := s.cfg.ForeverData.Factions[r.Faction]; ok && meta.Name != "" {
+			if meta, ok := s.cfg.ForeverData.Lookups.GetFaction(r.Faction); ok && meta.Name != "" {
 				r.Name = meta.Name
 			}
 		}
@@ -1211,7 +1211,7 @@ func (s *Service) loadAurasForever(guid uint32) []AuraEntry {
 			Positive:    row[3] != 0,
 		}
 		if s.cfg.ForeverData != nil {
-			if sp, ok := s.cfg.ForeverData.Spells[spellID]; ok {
+			if sp, ok := s.cfg.ForeverData.Lookups.GetSpell(spellID); ok {
 				if sp.Name != "" {
 					au.Name = sp.Name
 				}

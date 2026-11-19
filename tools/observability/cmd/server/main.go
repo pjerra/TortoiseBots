@@ -279,8 +279,8 @@ func main() {
 	var foreverCatalog *armory.ForeverCatalog
 	var foreverLookups *foreveritems.Lookups
 	if *core == "forever" {
-		foreverCatalog = armory.LoadForeverCatalog(effectiveDataDir, *artDir)
 		foreverLookups = foreveritems.NewLookups(effectiveDataDir, *artDir)
+		foreverCatalog = armory.LoadForeverCatalog(effectiveDataDir, *artDir, foreverLookups)
 	}
 
 	armoryService, err := armory.NewService(armory.Config{

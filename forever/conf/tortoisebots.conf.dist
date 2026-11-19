@@ -99,3 +99,21 @@ TortoiseBots.Dashboard.Port = 9195
 #
 
 TortoiseBots.Dashboard.IntervalMs = 2000
+
+#
+#    TortoiseBots.Dashboard.ItemsFile
+#    TortoiseBots.Dashboard.UiMapsFile
+#    TortoiseBots.Dashboard.SpellsFile
+#    TortoiseBots.Dashboard.TalentsFile
+#    TortoiseBots.Dashboard.NamesFile
+#        Description: Where the module writes the data tables the dashboard reads (items, world maps, spells, talents,
+#                     names), at world start. Empty = <LogsDir>/tortoisebots-items.json, -uimaps.json, -spells.json,
+#                     -talents.json, -names.json. Point the dashboard's -data-dir at that folder.
+#        Default:     ""
+#
+
+TortoiseBots.Dashboard.ItemsFile = ""
+TortoiseBots.Dashboard.UiMapsFile = ""
+TortoiseBots.Dashboard.SpellsFile = ""
+TortoiseBots.Dashboard.TalentsFile = ""
+TortoiseBots.Dashboard.NamesFile = ""

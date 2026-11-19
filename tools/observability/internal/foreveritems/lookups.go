@@ -38,6 +38,7 @@ type SpellText struct {
 	Values  []float64 `json:"values"`
 	Periods []float64 `json:"periods"`
 	Radius  []float64 `json:"radius"`
+	Passive bool      `json:"passive,omitempty"`
 }
 
 type NamedEntry struct {
@@ -101,6 +102,41 @@ func (l *Lookups) GetSpellText(id uint32) (SpellText, bool) {
 	defer l.mu.RUnlock()
 	st, ok := l.spellText[id]
 	return st, ok
+}
+
+// GetSkill is a SkillLine's name, category and icon.
+func (l *Lookups) GetSkill(id uint32) (NamedEntry, bool) {
+	if l == nil {
+		return NamedEntry{}, false
+	}
+	l.refreshNames()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	e, ok := l.names.Skills[id]
+	return e, ok
+}
+
+// GetFaction is a faction's name and parent.
+func (l *Lookups) GetFaction(id uint32) (NamedEntry, bool) {
+	if l == nil {
+		return NamedEntry{}, false
+	}
+	l.refreshNames()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	e, ok := l.names.Factions[id]
+	return e, ok
+}
+
+// HasSpells reports whether the spell file is loaded (an absent file must not hide every talent).
+func (l *Lookups) HasSpells() bool {
+	if l == nil {
+		return false
+	}
+	l.refreshSpells()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return len(l.spells) > 0
 }
 
 func (l *Lookups) GetSkillName(id uint32) string {
