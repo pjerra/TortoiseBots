@@ -35,7 +35,8 @@ namespace h8
 bool ApplyCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGuid unit, std::string const& family, std::string& code, std::string* detail = nullptr);
 
 // Reset the bot's `rti cc` and `run cc family` to "none". When `mark` and `unit` are given (non-empty) the party's icon `mark` is removed, but ONLY while it
-// still holds `unit` (a later order may have moved it); `iconRemoved` says whether it was. Codes as above (engine-not-built no-engine bad-mark no-party failed).
+// still holds `unit` (a later order may have moved it); `iconRemoved` says whether it was. With neither (G8) the icon of the bot's OWN crowd-control mark
+// (`rti cc`, read before the reset) is removed whatever it holds, so a bare `clear` leaves no icon behind. Codes as above (engine-not-built no-engine bad-mark no-party failed).
 bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGuid unit, std::string& code, std::string* detail = nullptr, bool* iconRemoved = nullptr);
 
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail args);         // .tb cc <bot> <mark> <unit guid|target> [family] | .tb cc <bot> clear [<mark> <unit guid>] [#token]

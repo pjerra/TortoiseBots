@@ -27,9 +27,10 @@
 // Slice 8 (FOREVER-SLICE-MAGE-ROGUE-SPEC sections 2 and 6, lead decisions D1-D5; forever/docs/SLICE8-H-NOTES.md): a mage and a rogue get their own contexts
 // (MageAiObjectContext, RogueAiObjectContext, compiled as they are), the talent tab 1 the full factory gives them without talents (AiFactory.cpp:169-185: mage fire,
 // rogue combat), a damage role, and these kits. Mage: combat "fire", "dps assist", "ranged", "cc", "buff", "boost" (+ "threat" where KeepsPartyThreatBackoff says so);
-// non-combat "fire", "dps assist", "follow", "buff", "food", "default"; reaction "fire". Rogue: combat "combat", "dps assist", "close", "behind", "buff", "boost" (+ "threat");
+// non-combat "fire", "dps assist", "follow", "buff", "food", "default"; reaction "fire". Rogue: combat "combat", "dps assist", "close", "behind", "cc", "buff", "boost" (+ "threat");
 // non-combat "combat", "dps assist", "follow", "buff", "food", "default"; reaction "combat". Left out on purpose (the spec's list): the full kits' "flee", "cure", "aoe" (both),
-// the mage's "loot", and for the rogue "cc" (Sap: D3), "stealth", "poisons" (D4: stealth is measured by a toggle, poisons need level 20).
+// the mage's "loot", and for the rogue "stealth", "poisons" (D4: stealth is measured by a toggle, poisons need level 20). The rogue KEEPS "cc" (G8 kit decision, M8 live test e): Kick and
+// Kick on enemy healer live in RogueCcStrategy; its Sap rows need a real player master (D3: no Sap in this slice) and stay silent in a bot-led run.
 #include "compat/botpch_forever.h"
 #include "playerbot/playerbot.h"
 #include "playerbot/AiFactory.h"

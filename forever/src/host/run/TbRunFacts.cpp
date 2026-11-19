@@ -30,6 +30,8 @@
 #include "ObjectMgr.h"
 #include "Pet.h"
 #include "Spell.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "Player.h"
 #include "PathGenerator.h"
 #include "Unit.h"
@@ -152,6 +154,53 @@ fx::Config ReadConfig()
     return c;
 }
 
+// ---- crowd control (G8; Commander.cpp RunCcHeld / RunCcRemainingMs / RunCcImmune, Polymorph only) ----
+// The run's crowd control on this host is the mage's Polymorph (D1: the plan's lists; the mage is the only class whose cc row is in a kit): the other families
+// are never READ as held and no bot carries them (MemberFact::cc stays 0), so the policy never picks them (do less).
+// A unit holds the run's crowd control when the core says it is polymorphed (transform aura of the polymorph spell family) or carries a rank of Polymorph.
+bool RunCcHeld(Unit const* unit)
+{
+    if (unit->IsPolymorphed())
+        return true;
+    for (uint32 spell : DungeonRun::kPolymorphSpells)
+        if (unit->HasAura(spell))
+            return true;
+    return false;
+}
+
+// The soonest-ending Polymorph aura's remaining time in ms (0: none, or a permanent one): RunCcBreakTick breaks the hold that ends first.
+uint32 RunCcRemainingMs(Unit const* unit)
+{
+    uint32 remain = 0;
+    for (uint32 spell : DungeonRun::kPolymorphSpells)
+        if (Aura const* aura = unit->GetAura(spell))
+        {
+            int32 const ms = aura->GetDuration();
+            if (ms > 0 && (!remain || uint32(ms) < remain))
+                remain = uint32(ms);
+        }
+    return remain;
+}
+
+// CcBit of every run family the unit is immune to: the first rank of Polymorph's mechanic against the unit's live mechanic immunities (the creature's template
+// immunities are in it: Unit::GetMechanicImmunityMask).
+uint32 RunCcImmune(Unit const* unit)
+{
+    SpellInfo const* info = sSpellMgr->GetSpellInfo(DungeonRun::kPolymorphSpells[0], DIFFICULTY_NONE);
+    if (info && (unit->GetMechanicImmunityMask() & info->GetAllEffectsMechanicMask()))
+        return DungeonRun::CcBit(DungeonRun::CcFamily::Polymorph);
+    return 0;
+}
+
+// What a Polymorph order needs from a mage: it knows a rank (kPolymorphSpells).
+bool KnowsPolymorph(Player const* bot)
+{
+    for (uint32 spell : DungeonRun::kPolymorphSpells)
+        if (bot->HasSpell(spell))
+            return true;
+    return false;
+}
+
 // ---- paths: one PathGenerator query on the lead (or another member), the result as plain data ----
 // PathGenerator.h:76/86 CalculatePath, :102 GetPathType, :100 GetPathLength; the type bits NOPATH 8, INCOMPLETE 4, SHORTCUT 2, NOT_USING_PATH 0x10
 // are the Turtle ones (TbCompat_Unit.h section 6).
@@ -216,6 +265,9 @@ fx::CreatureObs ObserveCreature(Ctx& c, Creature* creature)
     o.normalRank = CreatureRankCompat(creature) == 0;
     o.level = creature->GetLevel();
     o.creatureType = creature->GetCreatureType();
+    o.polymorphed = RunCcHeld(creature);
+    o.ccRemainMs = o.polymorphed ? RunCcRemainingMs(creature) : 0;
+    o.ccImmune = RunCcImmune(creature);
     o.healthPct = creature->GetHealthPct();
     return o;
 }
@@ -299,6 +351,11 @@ void ReadParty(Ctx& c, Facts& f, bool& playerInGroup)
         m.tank = PlayerbotAI::IsTank(bot);
         m.core = m.tank || m.healer;
         m.level = bot->GetLevel();
+        // G8: the run's crowd control is a mage's Polymorph only (see RunCcHeld). No other class carries a family and no Sap is ordered (canSap stays false: a
+        // rogue's pre-pull Sap trigger needs a real player master, which a bot-led run does not have).
+        m.polymorph = cls == CLASS_MAGE && KnowsPolymorph(bot);
+        m.cc = 0;
+        m.canSap = false;
         m.offPlanMap = plan && bot->GetMapId() != plan->map;
         m.otherCopy = bot->GetMapId() == lead->GetMapId() && bot->GetInstanceId() != lead->GetInstanceId();
         m.offMapReturnable = false;         // no return teleports on ForeverCore (GM power, forced off): "not returnable" is the do-less answer
@@ -464,6 +521,9 @@ void AddEngaged(Ctx& c, Unit* other, std::unordered_set<ObjectGuid>& seen, std::
     e.creatureType = other->GetCreatureType();
     e.normalRank = other->IsCreature() && CreatureRankCompat(static_cast<Creature*>(other)) == 0;
     e.level = other->GetLevel();
+    e.polymorphed = RunCcHeld(other);
+    e.ccRemainMs = e.polymorphed ? RunCcRemainingMs(other) : 0;
+    e.ccImmune = RunCcImmune(other);
     out.push_back(e);
 }
 
@@ -667,6 +727,9 @@ void ReadGuard(Ctx& c, Facts& f)
             u.normalRank = attacker->IsCreature() && CreatureRankCompat(static_cast<Creature*>(attacker)) == 0;
             u.caster = attacker->GetMaxPower(POWER_MANA) > 0;
             u.level = attacker->GetLevel();
+            u.polymorphed = RunCcHeld(attacker);
+            u.ccRemainMs = u.polymorphed ? RunCcRemainingMs(attacker) : 0;
+            u.ccImmune = RunCcImmune(attacker);
             u.partyHits = partyVictims.count(attacker->GetGUID()) != 0;
             u.engaged = true;
             bool const melee = attacker->CanReachWithMeleeAutoAttack(victim);

@@ -102,7 +102,7 @@ SLICE4_KEYS = {
 # (PvP); grind target (the stealth trigger then reads `dps target` only); manual saved string; no blink instance; hemorrhage back/front (no context defines them).
 SLICE8_KEYS = {
     "strategy": "hold position, behind",
-    "action": "give food, give water, cancel channel, set behind, rear flank",
+    "action": "give food, give water, cancel channel, set behind, rear flank, reach cc",
     "trigger": "give food, give water, low mana, enemy ten yards, enemy is close, behind target, not behind target, high energy available, "
                "no energy available, has aggro in raid group, rear flank needed",
     "value": "party member without item, party member without food, party member without water",

@@ -244,10 +244,33 @@ bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
         if (!group)
             return Refuse(code, detail, "no-party", "the bot is in no party, so it has no raid mark to take down");
     }
+    // `clear` with no mark and no unit (G8): the bot's own crowd-control mark names the icon. The icon of that mark goes too, whichever unit it holds: it is
+    // this bot's mark by `rti cc` (a later order of ANOTHER bot would have taken `rti cc` off this one: exclusive ownership), so no other work uses it.
+    if (mark.empty() && unit.IsEmpty())
+    {
+        int const own = MarkIndex(Lower(ownCc->Get()));
+        if (own >= 0 && own != SkullIndex && bot->GetGroup())
+        {
+            group = bot->GetGroup();
+            index = own;
+        }
+    }
     ownCc->Set("none");
     ownFamily->Set("none");
-    // The icon goes only while it still holds THIS unit (a later order may have moved it to another).
-    if (group && !unit.IsEmpty() && group->GetTargetIcon(uint8(index)) == unit)
+    // The icon goes only while it still holds THIS unit (a later order may have moved it to another); with no unit named, the bot's own mark's icon.
+    if (group && unit.IsEmpty() && mark.empty())
+    {
+        ObjectGuid const held = group->GetTargetIcon(uint8(index));
+        if (!held.IsEmpty())
+        {
+            group->SetTargetIcon(uint8(index), ObjectGuid::Empty, ChangedBy(leader, bot));
+            if (group->GetTargetIcon(uint8(index)) == held)
+                return Refuse(code, detail, "failed", "the raid mark is still on the unit");
+            if (iconRemoved)
+                *iconRemoved = true;
+        }
+    }
+    else if (group && !unit.IsEmpty() && group->GetTargetIcon(uint8(index)) == unit)
     {
         group->SetTargetIcon(uint8(index), ObjectGuid::Empty, ChangedBy(leader, bot));
         if (group->GetTargetIcon(uint8(index)) == unit)
@@ -369,6 +392,8 @@ bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 return Fail(handler, args, "cc", code, detail);
         }
         bool iconRemoved = false;
+        // A bare `clear` takes the icon of the bot's own crowd-control mark (G8): remember which one it was before it is reset.
+        std::string const ownMark = mark.empty() ? ValueText(AiOf(bot), "rti cc") : std::string();
         if (!ClearCcOrder(leader, bot, mark, unit, code, &detail, &iconRemoved))
             return Fail(handler, args, "cc", code, detail);
         PlayerbotAI* ai = AiOf(bot);
@@ -378,6 +403,8 @@ bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         rec.S("bot", bot->GetName()).S("verb", "clear").S("status", "ok").S("rticc", ValueText(ai, "rti cc")).S("ccfam", ValueText(ai, "run cc family"));
         if (!mark.empty())
             rec.S("mark", mark).B("icon_removed", iconRemoved);
+        else if (!ownMark.empty() && ownMark != "none")
+            rec.S("mark", ownMark).B("icon_removed", iconRemoved);
         reply.Line(rec);
         Rec end("cc");
         end.S("verb", "clear").S("target", bot->GetName()).N("ok", 1).N("refused", 0);

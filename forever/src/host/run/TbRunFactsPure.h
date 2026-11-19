@@ -254,6 +254,10 @@ struct CreatureObs
     bool normalRank = false;
     std::uint32_t level = 0;
     std::uint32_t creatureType = 0;
+    // G8 crowd control: a run crowd-control aura on it (polymorph family), its soonest-ending remaining time (0: none or not read) and the families it is immune to (CcBit).
+    bool polymorphed = false;
+    std::uint32_t ccRemainMs = 0;
+    std::uint32_t ccImmune = 0;
     float healthPct = -1.0f;        // -1: not read
 };
 
@@ -432,6 +436,9 @@ inline void ReadStepCreatures(Facts& f, DungeonRun::Run const& run, ai::PlanStep
         u.normalRank = c.normalRank;
         u.caster = c.caster;
         u.level = c.level;
+        u.polymorphed = c.polymorphed;
+        u.ccRemainMs = c.ccRemainMs;
+        u.ccImmune = c.ccImmune;
         u.attackable = c.attackable;
         if (residue)
         {
@@ -739,6 +746,9 @@ struct EngagedObs
     std::uint32_t creatureType = 0;
     bool normalRank = false;
     std::uint32_t level = 0;
+    bool polymorphed = false;       // G8: see CreatureObs
+    std::uint32_t ccRemainMs = 0;
+    std::uint32_t ccImmune = 0;
 };
 
 inline UnitFact EngagedFact(EngagedObs const& e)
@@ -761,6 +771,9 @@ inline UnitFact EngagedFact(EngagedObs const& e)
     u.creatureType = e.creatureType;
     u.normalRank = e.normalRank;
     u.level = e.level;
+    u.polymorphed = e.polymorphed;
+    u.ccRemainMs = e.ccRemainMs;
+    u.ccImmune = e.ccImmune;
     return u;
 }
 

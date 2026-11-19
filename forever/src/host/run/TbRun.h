@@ -8,6 +8,7 @@
 #pragma once
 
 #include "host/TbH3.h"
+#include "host/run/TbRunGatherPure.h"
 #include "host/run/TbRunHooks.h"
 #include "runtime/DungeonRunPolicy.h"
 
@@ -25,7 +26,7 @@ namespace run
 {
 constexpr size_t kEventRing = 200;
 
-// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | fight-end | rest | death | wipe | revive | pause | resume | done | stop.
+// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop.
 // `step`, `leg` and `unit` are -1 when the event has none (the record then omits the key: an unknown number is never written as a number).
 struct RunEvent
 {
@@ -85,6 +86,7 @@ struct RunRec
     bool seenCombat = false;
     bool seenWipe = false;
     std::set<std::string> seenDead;
+    gather::Extension gatherExt;                 // G8: the regroup gather's bounded extensions at the current step (TbRunGatherPure.h)
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
 };

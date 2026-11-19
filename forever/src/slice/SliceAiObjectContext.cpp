@@ -186,7 +186,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (44 of its keys)
+    // the registry of ActionContext (45 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -236,6 +236,7 @@ namespace slice
             creators["cancel channel"] = [](PlayerbotAI* ai) { return new CancelChannelAction(ai); };
             creators["set behind"] = [](PlayerbotAI* ai) { return new SetBehindTargetAction(ai); };
             creators["rear flank"] = [](PlayerbotAI* ai) { return new RearFlankAction(ai); };
+            creators["reach cc"] = [](PlayerbotAI* ai) { return new ReachCcAction(ai); };
         }
     };
 
@@ -553,7 +554,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 19, kActions = 53, kTriggers = 86, kValues = 173;
+    constexpr unsigned kStrategies = 19, kActions = 54, kTriggers = 86, kValues = 173;
 }
 }
 

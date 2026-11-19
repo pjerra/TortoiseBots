@@ -7,6 +7,7 @@
 
 #include "ai/playerbot/BossTacticsMgr.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
+#include "host/TbCc.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
@@ -281,6 +282,36 @@ void DropFocusMark(RunRec const& rec, uint64 handle)
         group->SetTargetIcon(icon, ObjectGuid::Empty, rec.leader);
 }
 
+// G8: the crowd control the run set comes off when the run ends (T: ClearRunCcIcons): each raid icon of Run::ccIcons only while it is still on the unit the run
+// put it on (an icon a player moved since stays), and every bot that still holds a run mark gets its `rti cc` and `run cc family` back to none.
+void ClearRunCc(RunRec& rec)
+{
+    Player* lead = InWorld(rec.leader);
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    if (group)
+        for (auto const& icon : DungeonRun::CcIconsToClear(rec.run))
+        {
+            ObjectGuid unit;
+            if (icon.first >= 0 && icon.first < 8 && ResolveHandle(rec.leader, icon.second, unit) && group->GetTargetIcon(uint8(icon.first)) == unit)
+                group->SetTargetIcon(uint8(icon.first), ObjectGuid::Empty, rec.leader);
+        }
+    std::set<std::string> done;
+    for (auto const& hold : rec.run.ccHolds)
+    {
+        if (!done.insert(hold.second.bot).second)
+            continue;
+        for (ObjectGuid guid : PartyGuids(rec))
+        {
+            Player* bot = InWorld(guid);
+            if (!bot || bot->GetName() != hold.second.bot)
+                continue;
+            // The mark is named so that only the bot's own values reset: the icon was settled above (an empty unit takes no icon down).
+            std::string code;
+            h8::ClearCcOrder(lead, bot, hold.second.mark, ObjectGuid::Empty, code);
+        }
+    }
+}
+
 int32 UnitOfStep(ai::PlanStep const& step)
 {
     if (step.entry)
@@ -476,6 +507,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
         DropFocusMark(rec, rec.run.focusIconClear);
         rec.run.focusIconClear = 0;
     }
+    ClearRunCc(rec);
     ReleaseAll(rec);
     rec.stopPending = false;
     rec.stopped = stopped;
@@ -660,6 +692,17 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     std::string const order = DungeonRun::Tick(run, facts, dt);
+    // G8 (item 5): the regroup's gather ceiling ended in a pause. A revived member that is still walking back (or drinking first) is waited for a bounded time more
+    // by the policy's own checked resume, instead of a pause nobody asked for; the host has no `summon` (decision D3), this is the choice that does less.
+    if (run.state == State::Paused && gather::IsRegroupGatherPause(run.note))
+    {
+        gather::Decision const verdict = gather::Decide(rec.gatherExt, run.step, run.note, facts.maxMemberYd, facts.leadAlive);
+        int32 const at = run.step < plan->steps.size() ? int32(run.step) : -1;
+        if (verdict.extend && DungeonRun::Resume(run))
+            Note(rec, nowMs, "gather-wait", at, verdict.why);
+        else if (!verdict.why.empty())
+            Note(rec, nowMs, "gather-stop", at, verdict.why);
+    }
     // The searches the policy asks the glue for after its tick (Commander.cpp:13941-13971), once per request, here and never per tick (N6: ported in
     // TbRunStands.cpp; before N6 both answered "found nothing"). A stalled walk asks for a dry stand-in near the step's point, an approach whose hops
     // got no nearer to a pack or boss asks for a stand with sight of it.
@@ -703,6 +746,8 @@ void TickRun(RunRec& rec, uint32 nowMs)
     if (!order.empty())
     {
         OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
+        // G8: a refused automatic cc order assigned nothing: the unit, bot, mark and budget go back for the next pick (the Turtle glue calls it after every order).
+        DungeonRun::CcOrderTaken(run, order, answer.accepted);
         if (answer.accepted)
         {
             if (answer.movePathRead)
@@ -712,6 +757,8 @@ void TickRun(RunRec& rec, uint32 nowMs)
                 Note(rec, nowMs, "pull", at);
             else if (order.compare(0, 6, "revive") == 0)
                 Note(rec, nowMs, "revive", at, order);
+            else if (order.compare(0, 3, "cc ") == 0)
+                Note(rec, nowMs, "cc", at, order);
         }
         else if (!DungeonRun::StallDirectRefused(run, order, answer.text))
             DungeonRun::OrderRefused(run, order, answer.text);
