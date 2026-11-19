@@ -104,24 +104,9 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 // =====================================================================================================================
 namespace ai
 {
-// BossTacticsMgr.cpp / DungeonPlanMgr.cpp: the tables stay empty (their Load* functions are stand-ins below).
-BossTacticTable& GetBossTactics()
-{
-    NoteBoss();
-    static BossTacticTable table;
-    return table;
-}
-
-DungeonPlanTable& GetDungeonPlans()
-{
-    NoteBoss();
-    static DungeonPlanTable table;
-    return table;
-}
-
-void LoadBossTactics() { NoteBoss(); }
+// BossTacticsMgr.cpp / DungeonPlanMgr.cpp are real files now (slice 5): GetBossTactics, GetDungeonPlans, LoadBossTactics and LoadDungeonPlans
+// are theirs. BossStandMgr.cpp is not in the slice: its loader stays a stand-in.
 void LoadBossStands() { NoteBoss(); }
-void LoadDungeonPlans() { NoteBoss(); }
 
 // BossTacticsActions.cpp
 // The per-update bracket PlayerbotAI::UpdateAI opens around the scan (PlayerbotAI.cpp:383): it opens no scan slot here, so it is not counted

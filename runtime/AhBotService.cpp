@@ -49,6 +49,7 @@
 #include <set>
 #include <sstream>
 #include <unordered_set>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -208,7 +209,7 @@ AhBotService& AhBotService::Instance()
 
 std::vector<uint32_t> AhBotService::EnabledHouseIds() const
 {
-    if (sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION))
+    if (WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION))
         return { 7 };
     return { 1, 6, 7 };
 }

@@ -269,16 +269,43 @@ namespace ai
         std::size_t keptOld = 0;            // replaced plan tables kept alive for runs in progress
     };
 
+    // A host's own table that must change together with the plan tables (ForeverCore: ai_dungeon_step_unit, read by the
+    // host's `.tb plan reload`). The host reads and validates it into ITS temporaries before the commit and says in
+    // `refusal` why it may not be installed ("" = it may); `before`/`after`/`rowsRead` are the table's revision and rows
+    // read, judged like the six tables; `install` moves the staged rows in, once, after every check passed and just
+    // before the plan tables are replaced (it cannot fail). The Turtle core passes none.
+    struct PlanReloadExtra
+    {
+        std::string table;
+        TableFingerprint before;
+        TableFingerprint after;
+        std::uint64_t rowsRead = 0;
+        std::string refusal;
+        std::function<void()> install;
+    };
+
     // Replaces both tables when JudgeTableReads and JudgePlanReload allow it, else changes nothing. `reads`: the six
     // tables' revisions and rows read. `inUse`: every run's plan pointer. `beforeInstall`: called with the new tactic
     // table just before the old one is retired, so the seek_aura fight records can be reconciled against the rows that
-    // replace the ones they were keyed from (and the old table may then be freed).
+    // replace the ones they were keyed from (and the old table may then be freed). `extra`: see PlanReloadExtra: with it
+    // the reload is all or nothing across the plan tables, the tactics and the host's table.
     inline PlanReloadOutcome CommitPlanReload(ReloadableTable<DungeonPlanTable>& plans, std::shared_ptr<DungeonPlanTable> next,
         const PlanLoadCounts& counts, ReloadableTable<BossTacticTable>& tactics, std::shared_ptr<BossTacticTable> nextTactics,
-        std::uint32_t skippedTactics, const std::vector<TableRead>& reads, const std::vector<const DungeonPlan*>& inUse,
-        const std::function<void(const BossTacticTable&)>& beforeInstall = std::function<void(const BossTacticTable&)>())
+        std::uint32_t skippedTactics, const std::vector<TableRead>& readsIn, const std::vector<const DungeonPlan*>& inUse,
+        const std::function<void(const BossTacticTable&)>& beforeInstall = std::function<void(const BossTacticTable&)>(),
+        PlanReloadExtra* extra = nullptr)
     {
         PlanReloadOutcome out;
+        std::vector<TableRead> reads = readsIn;
+        if (extra)
+        {
+            TableRead r;
+            r.table = extra->table;
+            r.before = extra->before;
+            r.after = extra->after;
+            r.rowsRead = extra->rowsRead;
+            reads.push_back(r);
+        }
         if (!next || !nextTactics)
         {
             out.reason = "no new table";
@@ -287,6 +314,11 @@ namespace ai
         if (!plans.Current().Sealed())
         {
             out.reason = "the dungeon plans were not loaded at startup (the AI is off): nothing to reload";
+            return out;
+        }
+        if (extra && !extra->refusal.empty())
+        {
+            out.reason = extra->refusal;
             return out;
         }
         out.reason = JudgeTableReads(reads);
@@ -301,6 +333,8 @@ namespace ai
         out.tacticsBefore = tactics.Current().Size();
         if (beforeInstall)
             beforeInstall(*nextTactics);
+        if (extra && extra->install)
+            extra->install();
         plans.Install(std::move(next));
         tactics.Install(std::move(nextTactics));
         out.keptOld = plans.Prune([&inUse](const DungeonPlanTable& table)

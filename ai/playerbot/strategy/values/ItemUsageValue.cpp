@@ -16,6 +16,7 @@
 #include "../../../../runtime/policy/provision/ClassConsumablePolicy.h"
 #include "../../../../runtime/policy/ah/AhReadModelPolicy.h"
 #include "../../../../runtime/policy/ah/AhSellPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -1293,12 +1294,12 @@ uint32 ItemUsageValue::GetAhDepositCost(ItemPrototype const* proto, uint32 count
 
     deposit = deposit * 15 * 3.0f / 100.0f;
 
-    float min_deposit = AhDepositMinCompat();
+    float min_deposit = float(WorldU32ConfigW2(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
 
     if (deposit < min_deposit)
         deposit = min_deposit;
 
-    deposit *= AhDepositRateCompat();
+    deposit *= WorldFloatConfigW2(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
 
     return deposit;
 }

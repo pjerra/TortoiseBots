@@ -14,6 +14,7 @@
 #include "playerbot/GroupMembers.h"
 #include "Group/Group.h"
 #include "Maps/Map.h"
+#include "playerbot/TbCompatW2.h"
 using namespace ai;
 
 namespace

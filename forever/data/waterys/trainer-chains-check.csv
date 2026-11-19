@@ -1,0 +1,38 @@
+ability,spell_id,required_level,trainer_ids,present_in_client,status,client_build,source
+Instant Poison I,6947,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Instant Poison II,6949,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Instant Poison III,6950,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Instant Poison IV,8926,22,17;1003033;1003034,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Instant Poison V,8927,28,17;1003033;1003034,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Instant Poison VI,8928,34,17;1003033;1003034,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Instant Poison VII,21927,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison I,2892,,,NO (absent from 70959 SpellName.db2),MISSING-SPELL,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison II,2893,26,17;1003033;1003034,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison III,8984,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison IV,8985,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison V,20844,,,NO (absent from 70959 SpellName.db2),MISSING-SPELL,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison VI,22053,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Deadly Poison VII,22054,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Crippling Poison I,3775,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Crippling Poison II,3776,0,"56;1003007;1004212;1011097;1011098 (ReqSkillLine 165=Leatherworking@180 / 2532@180, ReqLevel 0)",yes,OK,70959 (db2-70959 extraction),"TDB 2026-10-14 trainer_spell + 70959 SpellName.db2; NOTE: taught on leatherworking-type trainers, not a rogue trainer - verify intended (LW recipe vs data quirk)"
+Mind-numbing Poison I,5237,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Mind-numbing Poison II,6951,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Mind-numbing Poison III,9186,,,NO (absent from 70959 SpellName.db2),MISSING-SPELL,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Wound Poison I,10918,,,NO (absent from 70959 SpellName.db2),MISSING-SPELL,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Wound Poison II,10920,,,NO (absent from 70959 SpellName.db2),MISSING-SPELL,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Wound Poison III,10921,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Wound Poison IV,10922,,,NO (absent from 70959 SpellName.db2),MISSING-SPELL,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Purge rank 1,370,12,10;1000986;1003030,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Purge rank 2,8012,32,10;1000986;1003030,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Windfury Weapon rank 1,8232,30,10;1000986;1003030,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Windfury Weapon rank 2,8233,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Windfury Weapon rank 3,10486,50,10;1000986;1003030,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Windfury Weapon rank 4,16362,60,10;1000986;1003030,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Tame Beast,1515,13,40,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Call Pet,883,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Dismiss Pet,2641,10,40,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Beast Training,5149,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Feed Pet,6991,13,40,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Revive Pet,982,,,yes,MISSING-TRAINER,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Mend Pet,136,12,20;40;1000987,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2
+Eyes of the Beast,1002,14,20;1000987;1001231,yes,OK,70959 (db2-70959 extraction),TDB 2026-10-14 trainer_spell + 70959 SpellName.db2

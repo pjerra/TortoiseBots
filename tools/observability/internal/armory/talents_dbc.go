@@ -578,16 +578,19 @@ func (s *Service) parseEnchantments(raw string) []ItemEnchantmentInfo {
 	if s.cfg.DBCDir != "" {
 		enchMap, _ = loadDBCEnchantments(s.cfg.DBCDir)
 	}
+	enchName := func(id uint32) string {
+		if enchMap != nil && enchMap[id] != "" {
+			return enchMap[id]
+		}
+		return s.cfg.Lookups.GetEnchant(id)
+	}
 
 	var result []ItemEnchantmentInfo
 
 	// Slot 0: Permanent enchantment / armor kit (tokens 0, 1, 2)
 	permID, _ := strconv.ParseUint(tokens[0], 10, 32)
 	if permID > 0 {
-		desc := ""
-		if enchMap != nil {
-			desc = enchMap[uint32(permID)]
-		}
+		desc := enchName(uint32(permID))
 		if desc == "" {
 			desc = fmt.Sprintf("Enchantment #%d", permID)
 		}
@@ -604,10 +607,7 @@ func (s *Service) parseEnchantments(raw string) []ItemEnchantmentInfo {
 		if tempID > 0 {
 			durationMs, _ := strconv.ParseUint(tokens[4], 10, 32)
 			charges, _ := strconv.ParseUint(tokens[5], 10, 32)
-			desc := ""
-			if enchMap != nil {
-				desc = enchMap[uint32(tempID)]
-			}
+			desc := enchName(uint32(tempID))
 			if desc == "" {
 				desc = fmt.Sprintf("Enhancement #%d", tempID)
 			}

@@ -18,6 +18,8 @@
 //    findings item 2 still holds: nothing here proves a map thread cannot touch the same corpse while a tick runs).
 #pragma once
 
+#include "TbCompat_S5.h"           // WorldQueryCompat (slice 5): the guarded world database read the loot table copy uses
+
 #include <algorithm>
 #include <sstream>
 #include <vector>
@@ -254,9 +256,8 @@ inline uint32 LootStatusForCompat(Loot const* loot, Player const* player, Conten
 // Loot templates (the drop maps). F keeps the rows of a LootTemplate private (LootMgr.h:150-151), so since slice 9 (package L9) the module COPIES the
 // rows it needs from the world database, once per table, the first time a template of that table is asked for (a boot-time call of
 // LootTablePreloadCompat() does the same earlier; the readers that ask are the chest check of the loot object stack and, where the shared context is
-// built, the drop maps). The reader is guarded: ForeverCore's connection ABORTS THE SERVER on a query naming a missing table or column
-// (MySQLConnection.cpp:596-601), so information_schema is asked first (the rule of WorldQueryCompat of slice 5, which this branch does not have yet; at
-// the merge this reader may call it instead) and a table that is not as expected reads as EMPTY (one warning line, the templates then answer nullptr).
+// built, the drop maps). The reader is `WorldQueryCompat` (slice 5, TbCompat_S5.h): ForeverCore's connection ABORTS THE SERVER on a query naming a missing table or
+// column (MySQLConnection.cpp:596-601), so it asks information_schema first; a table that is not as expected reads as EMPTY (one warning line, the templates then answer nullptr).
 // The row type has the names of T's LootStoreItem fields the readers use (itemid, chance, mincountOrRef; needs_quest for the boost block); the layout
 // classes the readers fill are ai::LootTemplateAccess / LootLootGroupAccess (LootValues.h): rows with a group id go into Groups[group - 1], ExplicitlyChanced
 // when they carry a chance and EqualChanced when the chance is 0, exactly as the core's own LootTemplate::AddEntry sorts them (LootMgr.cpp).
@@ -294,15 +295,6 @@ struct LootTableCopy
     std::unordered_map<uint32, std::vector<LootTableRow>> byEntry;
 };
 
-// Does the table exist with every column the read names (the guard of the file header).
-inline bool LootTableReadable(std::string const& table)
-{
-    std::string const sql = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + table +
-        "' AND COLUMN_NAME IN ('Entry', 'ItemType', 'Item', 'Chance', 'QuestRequired', 'GroupId', 'MinCount')";
-    QueryResult count = WorldDatabase.Query(sql.c_str());
-    return count && count->Fetch()[0].GetUInt64() == 7;
-}
-
 // The copy of one table, read once (a table that is not readable stays empty and is not asked again).
 inline LootTableCopy const& LootTableOf(std::string const& table)
 {
@@ -312,13 +304,15 @@ inline LootTableCopy const& LootTableOf(std::string const& table)
         return copy;
     copy.loaded = true;
 
-    if (!LootTableReadable(table))
+    // The guarded world read of slice 5 (TbCompat_S5.h): information_schema first, a missing table or column reads as no result, never an abort.
+    std::string const sql = "SELECT `Entry`, `ItemType`, `Item`, `Chance`, `QuestRequired`, `GroupId`, `MinCount` FROM `" + table + "`";
+    bool schemaMissing = false;
+    QueryResult result = WorldQueryCompat(sql.c_str(), &schemaMissing);
+    if (schemaMissing)
     {
         ai::slice::LogWarn("TortoiseBots: loot table `" + table + "` is missing or lacks a column: not copied (its templates answer nothing)");
         return copy;
     }
-    std::string const sql = "SELECT Entry, ItemType, Item, Chance, QuestRequired, GroupId, MinCount FROM `" + table + "`";
-    QueryResult result = WorldDatabase.Query(sql.c_str());
     if (!result)
         return copy;
     uint64 rows = 0;

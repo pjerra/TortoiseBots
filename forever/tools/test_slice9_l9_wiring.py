@@ -123,8 +123,8 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("LootBagFloorCompat(bot, itemid, itemcount)", LOOT)
 
     def test_loot_tables_are_read_through_the_guard(self):
-        self.assertIn("information_schema.COLUMNS", V2)
-        self.assertLess(V2.index("LootTableReadable(table)"), V2.index("SELECT Entry, ItemType, Item"))
+        self.assertIn("WorldQueryCompat(sql.c_str(), &schemaMissing)", V2)
+        self.assertNotIn("WorldDatabase.Query(", V2)
         self.assertNotIn("Unported(tbcompat::Feature::LootTables)", body(V2, "ReferenceLootTemplateCompat"))
 
     def test_the_slice_list_and_the_build(self):

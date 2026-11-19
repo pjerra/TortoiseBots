@@ -309,8 +309,6 @@ inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count)
 // The auction code reads a listing's fields. Nothing creates an AuctionEntry on F (TbCompat_Unported.h), so the containers stay empty and none of
 // these runs for a real listing; the helpers answer the "no listing" value: an item count of 0 and a deposit from F's own rate.
 inline uint32 AuctionItemCountCompat(AuctionEntry const& /*auction*/) { return 0; }
-inline float AhDepositMinCompat() { return 0.0f; }
-inline float AhDepositRateCompat() { return sWorld.getRate(RATE_AUCTION_DEPOSIT); }
 
 // Is the quest in the bot's log still incomplete (T `getQuestStatusMap()[id].m_status == QUEST_STATUS_INCOMPLETE`, F `GetQuestStatus`, Player.h:1811).
 inline bool QuestIncompleteCompat(Player* player, Quest const* quest) { return player->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_INCOMPLETE; }

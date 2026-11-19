@@ -68,9 +68,8 @@ set_target_properties(tortoisebots
     FOLDER "src/modules/TortoiseBots")
 
 if(TORTOISEBOTS_SLICE1)
-  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-4 list (forever/SLICE4.txt),
-  # which holds every file of SLICE1.txt, SLICE2.txt and SLICE3.txt plus the dead-strategy, release and resurrection files (forever/docs/SLICE4-P-NOTES.md).
-  # Slice 9 (L9): forever/SLICE9.txt = the slice-4 list plus LootRollAction.cpp and ItemUsageValue.cpp (the merge worker combines it with SLICE8).
+  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-9 list (forever/SLICE9.txt),
+  # which holds every file of the slice-5 list (SLICE1.txt .. SLICE4.txt plus the plan loader, forever/docs/RUN-S5-P-NOTES.md) plus the L9 files (LootRollAction.cpp, ItemUsageValue.cpp).
   set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE9.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
@@ -133,6 +132,12 @@ if(TORTOISEBOTS_SLICE1)
   option(TORTOISEBOTS_DEBUG_INFO "Compile the module with -g (gdb backtraces with arguments)" OFF)
   if(TORTOISEBOTS_DEBUG_INFO AND NOT MSVC)
     target_compile_options(tortoisebots PRIVATE -g -fno-omit-frame-pointer)
+  endif()
+
+  # The legacy packet tables put ForeverCore's 32-bit opcodes into 16-bit fields (they are never registered there). The core
+  # gives clang -Wno-narrowing but not GCC, so a GCC build stops on them: give GCC the same.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(tortoisebots PRIVATE -Wno-narrowing)
   endif()
 
   target_compile_definitions(tortoisebots

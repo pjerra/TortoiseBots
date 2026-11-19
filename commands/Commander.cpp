@@ -78,6 +78,7 @@
 #include "../runtime/CombatMonitorPolicy.h"
 #include "../runtime/BoundFightPolicy.h"
 #include "../runtime/ObservabilityEmitter.h"
+#include "playerbot/TbCompatW2.h"
 #include "../runtime/PlayerUseObjectPolicy.h"
 #include "../runtime/RunItemNeedPolicy.h" // item-leg skip (spec C1/D): needs + ledger, namespace TortoiseBots::RunItemNeed
 #include "../runtime/RunItemNeedFacts.h" // the leg's need facts from the party's bags (item-leg skip review round 2)
@@ -3684,8 +3685,8 @@ bool HandleScout(ChatHandler* handler, char const* args)
     if (request.form == RemoteCommander::ScoutForm::Cfg)
     {
         handler->PSendSysMessage("%s", RemoteCommander::ScoutCfgLine(request.id,
-            sPlayerbotAIConfig.reactDistance, sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO),
-            sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS)).c_str());
+            sPlayerbotAIConfig.reactDistance, WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO),
+            WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS)).c_str());
         return true;
     }
     if (request.form == RemoteCommander::ScoutForm::Where)
@@ -5248,7 +5249,7 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, Area
     facts.phaseOpen = tele->requiredPhase <= sWorld.GetContentPhase();
     facts.level = bot->GetLevel();
     facts.requiredLevel = tele->requiredLevel;
-    facts.ignoreLevel = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL);
+    facts.ignoreLevel = WorldBoolConfigW2(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL);
     // The maps where a Lunatic challenger enters below the level (the same list as the core's handler).
     static constexpr uint32 kLunaticMaps[] = { 36, 43, 389, 822 };
     for (uint32 mapId : kLunaticMaps)
@@ -5279,7 +5280,7 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, Area
         facts.conditionWaived = RemoteCommander::WaiveCondition(sPlayerbotAIConfig.raidEntryByCommander,
             facts.raidMap, unscriptedTrigger, commanderIsRealPlayer, commanderOfRaid, commanderMeets);
     }
-    facts.ignoreRaid = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
+    facts.ignoreRaid = WorldBoolConfigW2(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
     Group* group = bot->GetGroup();
     facts.inRaidGroup = group && group->isRaidGroup();
     auto* bound = bot->GetBoundInstanceSaveForSelfOrGroup(targetMap->id);
@@ -9964,7 +9965,7 @@ std::vector<uint32> const& BossSpawnLowGuids(uint32 mapId, uint32 entry)
     auto worker = [&](CreatureDataPair const& pair) -> bool
     {
         CreatureData const& data = pair.second;
-        if (data.position.mapId != mapId)
+        if (SpawnMapIdW2(data) != mapId)
             return false;
         for (uint32 id : data.creature_id)
             if (id == entry)
@@ -10031,7 +10032,7 @@ uint32 OwnBossSpawnLow(uint32 mapId, ai::PlanStep const& step)
     for (uint32 low : BossSpawnLowGuids(mapId, step.entry))
         if (CreatureData const* data = sObjectMgr.GetCreatureData(low))
         {
-            float const yd = ai::PlanDistance(data->position.x, data->position.y, data->position.z,
+            float const yd = ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data),
                 step.x, step.y, step.z);
             if (!own || yd < ownYd)
             {
@@ -10129,7 +10130,7 @@ void ReadBossInInstance(ai::PlanStep const& step, Player* lead, TortoiseBots::Du
         Creature* creature = map->GetCreature(data->GetObjectGuid(low));
         // Not in the map and its spawn point in a grid nobody has loaded: that area was not searched, and the note
         // says so (no grid is loaded for the search). A creature that walked off its spawn grid is found by guid.
-        if (!creature && !map->IsLoaded(data->position.x, data->position.y))
+        if (!creature && !map->IsLoaded(SpawnXW2(*data), SpawnYW2(*data)))
         {
             f.bossSearchUnloaded = true;
             continue;
@@ -10326,11 +10327,11 @@ void ReadPullJoiners(Player* lead, std::vector<Player*> const& bots, ai::PlanSte
             params.lowestPartyLevel = std::min<uint32>(params.lowestPartyLevel, bot->GetLevel());
     if (params.lowestPartyLevel == 255)
         params.lowestPartyLevel = lead->GetLevel();
-    params.aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    params.aggroRate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     // The estimate never uses less than the observed cross-pack ring (the ZG terrace's spawn pairs 11.0-19.5 yd
     // apart): the server's 10 yd setting is read, and the policy's floor applies to it.
     params.familyAssistYd = std::max(ai::kAggroFamilyAssistMinYd,
-        sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
+        WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
     // creature_linking: a master's aggro wakes its slave (FLAG_AGGRO_ON_AGGRO), and with FLAG_TO_AGGRO_ON_AGGRO a
     // slave's aggro wakes its master. The master is the row's guid when it has one, else any creature of its entry in range.
     for (std::size_t i = 0; i < creatures.size(); ++i)
@@ -10934,7 +10935,7 @@ static void ReadStandClearance(Player* lead, std::vector<Player*> const& bots,
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::vector<Creature*> scanned;
     std::vector<uint64> formations;
     std::vector<bool> inPack;
@@ -11146,9 +11147,9 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
             if (own->IsAlive() && TortoiseBots::DungeonRun::ScriptChangedFrom(own) == next->entry)
             {
                 CreatureData const* const row = own->GetCreatureData();
-                float const rowX = row ? row->position.x : own->GetPositionX();
-                float const rowY = row ? row->position.y : own->GetPositionY();
-                float const rowZ = row ? row->position.z : own->GetPositionZ();
+                float const rowX = row ? SpawnXW2(*row) : own->GetPositionX();
+                float const rowY = row ? SpawnYW2(*row) : own->GetPositionY();
+                float const rowZ = row ? SpawnZW2(*row) : own->GetPositionZ();
                 if (ai::PlanDistance(rowX, rowY, rowZ, next->x, next->y, next->z) <= next->radius + kSpawnOwnTolYd)
                 {
                     pack.insert(RunFormationOf(own));
@@ -11160,7 +11161,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
         for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))
         {
             CreatureData const* const data = sObjectMgr.GetCreatureData(low);
-            if (!data || ai::PlanDistance(data->position.x, data->position.y, data->position.z, next->x, next->y,
+            if (!data || ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data), next->x, next->y,
                     next->z) > next->radius + kSpawnOwnTolYd)
                 continue;
             if (Creature* const member = map->GetCreature(data->GetObjectGuid(low)))
@@ -11173,7 +11174,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     HostileCreaturesAround(lead, kStandClearScanYd, found);
     for (Unit* unit : found)
@@ -11316,8 +11317,8 @@ static void ReadPullAhead(DungeonRunSlot const& slot, Player* lead, std::vector<
                     params.lowestPartyLevel = std::min<uint32>(params.lowestPartyLevel, bot->GetLevel());
             if (params.lowestPartyLevel == 255)
                 params.lowestPartyLevel = lead->GetLevel();
-            params.aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
-            params.familyAssistYd = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
+            params.aggroRate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+            params.familyAssistYd = WorldFloatConfigW2(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
             params.ringYd = ringYd;
             params.ringHops = ai::kAggroRingHops;
             params.floorDz = ai::kAggroFloorDz;
@@ -11570,7 +11571,7 @@ static void ReadRescueFacts(Player* lead, std::vector<Player*> const& bots, floa
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMap() == map && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     RescueHostileNear check{ lead, x, y, z, kRescueScanYd };
     MaNGOS::UnitListSearcher<RescueHostileNear> searcher(found, check);
@@ -11615,7 +11616,7 @@ static void ReadFetchFacts(Player* lead, std::vector<Player*> const& bots, Torto
     for (Player* bot : bots)
         if (bot && bot->IsAlive() && bot->GetMap() == map && bot->GetLevel() < lowest)
             lowest = bot->GetLevel();
-    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    float const rate = WorldFloatConfigW2(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
     std::list<Unit*> found;
     HostileCreaturesAround(lead, kFetchScanYd, found);
     for (Unit* unit : found)
@@ -12231,8 +12232,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     // The gate reads the spawn row's place, not the creature's: a dragged boss dies far from
                     // his row, while a far row's creature may die near the step.
                     CreatureData const* row = own->GetCreatureData();
-                    float const rowX = row ? row->position.x : own->GetPositionX();
-                    float const rowY = row ? row->position.y : own->GetPositionY();
+                    float const rowX = row ? SpawnXW2(*row) : own->GetPositionX();
+                    float const rowY = row ? SpawnYW2(*row) : own->GetPositionY();
                     float const ownFromSpot2d = std::sqrt(
                         (rowX - step->x) * (rowX - step->x) +
                         (rowY - step->y) * (rowY - step->y));
@@ -12378,7 +12379,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         if (CreatureData const* data = creature->GetCreatureData())
                         {
                             read.hasSpawn = true;
-                            read.spawnYd = ai::PlanDistance(data->position.x, data->position.y, data->position.z,
+                            read.spawnYd = ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data),
                                 step->x, step->y, step->z);
                         }
                         read.ownWaypoint = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
@@ -12498,7 +12499,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                                     if (member->GetEntry() != entry)
                                         continue;
                                     spawned.emplace_back(RunFormationOf(member), member->IsAlive());
-                                    if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x,
+                                    if (ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data), step->x,
                                             step->y, step->z) <= step->radius + kSpawnOwnTolYd)
                                         f.standPullOwnRead.push_back(spawned.back().first);
                                 }
@@ -15902,19 +15903,19 @@ void BuildBossSpawnCache()
         if (!entry)
             return false;
         CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-        bool const boss = plans.IsBossEntry(data.position.mapId, entry) ||
+        bool const boss = plans.IsBossEntry(SpawnMapIdW2(data), entry) ||
             (info && (info->rank == CREATURE_ELITE_WORLDBOSS || (info->flags_extra & CREATURE_FLAG_EXTRA_INSTANCE_BIND)));
         if (!boss)
             return false;
-        uint64 const key = (static_cast<uint64>(data.position.mapId) << 32) | entry;
+        uint64 const key = (static_cast<uint64>(SpawnMapIdW2(data)) << 32) | entry;
         CommanderTelemetry::BossSpawnRow row;
         row.dbGuid = pair.first;
         row.info.entry = entry;
         row.info.name = info ? info->name : std::string();
-        row.info.x = data.position.x;
-        row.info.y = data.position.y;
+        row.info.x = SpawnXW2(data);
+        row.info.y = SpawnYW2(data);
         row.info.inPlan = planOrder.count(key) != 0;
-        rowsByMap[data.position.mapId].push_back(std::move(row));
+        rowsByMap[SpawnMapIdW2(data)].push_back(std::move(row));
         spawned.insert(key);
         return false; // keep going
     };

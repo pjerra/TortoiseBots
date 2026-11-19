@@ -1,9 +1,14 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
+#include "TbDashboard.h"
+#include "host/run/TbPlanCommands.h"
+#include "host/run/TbRunCommands.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#include "host/run/TbRunHooks.h"
+#include "host/run/TbRunLiquid.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -20,6 +25,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <chrono>
+#include "Loot.h"
 #include <list>
 #include <set>
 #include <string>
@@ -33,6 +39,7 @@
 #include "RBAC.h"
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
+#include "Spell.h"
 #include "SpellInfo.h"
 #include "SpellAuraDefines.h"
 #include "Timer.h"
@@ -97,6 +104,7 @@ public:
     void OnConfigLoad(bool reload) override
     {
         BotMgr::Instance().LoadConfig();
+        TortoiseBots::Dashboard::LoadConfig();
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -106,9 +114,11 @@ public:
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
+        TortoiseBots::Dashboard::LoadConfig();
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
+        TortoiseBots::Dashboard::WriteItemsFile();
         // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
         // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
         // store into a table that is never rebuilt.
@@ -123,7 +133,10 @@ public:
             // The engine's own config (the 720-key read and the spell and talent tables) now, not on the first bot: it stalled the world
             // for 1.09 s at the first engine start (R8). Only when the module is on, as nothing builds an engine otherwise.
             if (BotMgr::Instance().Enabled())
+            {
                 LoadEngineConfig();
+                TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
+            }
         }
 #endif
     }
@@ -132,6 +145,7 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        TortoiseBots::Dashboard::Update(diff);
         uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
         uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
         PerfWindow& perf = Perf();
@@ -140,6 +154,9 @@ public:
         perf.worldMaxMs = std::max(perf.worldMaxMs, worldMs);
         perf.botSumUs += us;
         perf.botMaxUs = std::max(perf.botMaxUs, us);
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
+#endif
     }
 
     void OnShutdown() override
@@ -150,10 +167,26 @@ public:
     }
 };
 
+// The dashboard's fight numbers: damage dealt and taken, healing and overhealing.
+class tortoisebots_unit : public UnitScript
+{
+public:
+    tortoisebots_unit() : UnitScript("tortoisebots_unit") { }
+    void OnDamageSpell(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spellInfo) override { TortoiseBots::Dashboard::OnDamage(attacker, victim, damage, spellInfo); }
+    void OnHealOutcome(Unit* healer, Unit* /*target*/, uint32 /*spellId*/, uint32 raw, uint32 effective) override { TortoiseBots::Dashboard::OnHealOutcome(healer, raw, effective); }
+};
+
 class tortoisebots_player : public PlayerScript
 {
 public:
     tortoisebots_player() : PlayerScript("tortoisebots_player") { }
+
+    void OnCreatureKill(Player* killer, Creature* killed) override { TortoiseBots::Dashboard::OnKill(killer, killed); }
+    void OnPlayerKilledByCreature(Creature* killer, Player* killed) override { TortoiseBots::Dashboard::OnKilledByCreature(killer, killed); }
+    void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
+    void OnLootItem(Player* player, Item* item) override { TortoiseBots::Dashboard::OnLootItem(player, item); }
+    void OnMoneyChanged(Player* player, int64& amount) override { TortoiseBots::Dashboard::OnMoneyChanged(player, amount); }
+    void OnSpellCast(Player* player, Spell* spell, bool /*skipCheck*/) override { TortoiseBots::Dashboard::OnSpellCast(player, spell && !spell->IsTriggered() ? spell->GetSpellInfo() : nullptr); }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {
@@ -190,6 +223,7 @@ public:
             { "raid",   HandleRaid,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "enter",  HandleEnter,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H4: `.tb enter <bot|party> ...` is TortoiseBots::h4::HandleEnter (below)
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "lootnear", HandleLootNear, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -225,6 +259,8 @@ public:
             { "revive", TortoiseBots::h4::HandleRevive, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "kill",   TortoiseBots::h4::HandleKill,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -379,6 +415,37 @@ public:
         return true;
     }
 
+    // .tb lootnear <bot>: test helper; the bot takes every item it may take from the dead creatures within 10 yd through the
+    // core's own Player::StoreLootItem (what a client's loot-item request runs), so the item-loot path and its hooks run without
+    // the engine (whose item looting is not ported yet).
+    static bool HandleLootNear(ChatHandler* handler, std::string name)
+    {
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        FindCreatureOptions options;
+        options.IsAlive = FindCreatureAliveState::Dead;
+        std::list<Creature*> corpses;
+        bot->GetCreatureListWithOptionsInGrid(corpses, 10.0f, options);
+        uint32 stored = 0, seen = 0;
+        for (Creature* corpse : corpses)
+        {
+            Loot* loot = corpse->GetLootForPlayer(bot);
+            if (!loot)
+                continue;
+            ++seen;
+            for (uint8 slot = 0; slot < loot->items.size(); ++slot)
+            {
+                uint8 const before = loot->unlootedCount;
+                bot->StoreLootItem(corpse->GetGUID(), slot, loot);
+                if (loot->unlootedCount < before)
+                    ++stored;
+            }
+        }
+        handler->PSendSysMessage("TortoiseBots: %s: %u corpse(s) with loot within 10 yd, %u item(s) stored.", name.c_str(), seen, stored);
+        return true;
+    }
+
     // .tb where <character>: where the bot is and what it is doing.
     static bool HandleWhere(ChatHandler* handler, std::string name)
     {
@@ -400,6 +467,11 @@ public:
         }
         for (std::string const& line : BotMgr::Instance().DescribeBrain(bot->GetGUID()))
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+#ifdef TORTOISEBOTS_SLICE1
+        // R6 live check: the liquid at the bot's feet and the nearest wet floor cells within 40 yd (the run's own liquid rule, TbRunLiquid.h).
+        for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(bot->GetMap(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
+            handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+#endif
 
         // What the bot has around it: proves its part of the map is loaded and populated.
         std::list<Creature*> creatures;
@@ -1163,5 +1235,6 @@ void AddSC_tortoisebots()
 {
     new tortoisebots_world();
     new tortoisebots_player();
+    new tortoisebots_unit();
     new tortoisebots_commands();
 }

@@ -135,7 +135,7 @@ class RowGateWiring(unittest.TestCase):
         self.assertIn("return TacticMode::Invalid;", POLICY)
         add = body(POLICY, "bool Add(const BossTacticRow& row)", "\n        }\n")
         self.assertIn("if (row.mode == TacticMode::Invalid)", add)
-        self.assertIn("row.mode = ParseTacticMode(row.kind, fields[11].GetCppString());", LOADER)
+        self.assertIn("row.mode = ParseTacticMode(row.kind, FieldTextCompat(fields[11]));", LOADER)
 
     def test_the_map_flags_exist(self):
         self.assertIn("bool HasAuraTacticMap(std::uint32_t map) const", POLICY)

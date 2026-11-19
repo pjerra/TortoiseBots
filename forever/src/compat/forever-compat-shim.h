@@ -568,5 +568,6 @@ private:
 #include "TbCompat_I2.h"          // slice 2, package I2: loot, add loot and use item actions
 #include "TbCompat_S3.h"          // slice 3: group fight on orders (threat/tank, pull, orders)
 #include "TbCompat_D4.h"          // slice 4, package P4: death and resurrection (dead strategy, release spirit, accept resurrect)
+#include "TbCompat_S5.h"          // slice 5: the plan loader (world query, field text)
 #include "TbCompat_S9.h"          // slice 9, package L9: item loot, group loot rolls (greed only), the item usage value
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

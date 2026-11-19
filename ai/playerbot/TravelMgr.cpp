@@ -24,6 +24,7 @@
 #include "runtime/GuildOrderGiveUpPolicy.h"
 #include "ObjectAccessor.h"
 #include "Formulas.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -2133,7 +2134,7 @@ void TravelMgr::LoadQuestTravelTable()
             if (!cInfo)
                 continue;
 
-            WorldPosition point = WorldPosition(cData.position.mapId, cData.position.x, cData.position.y, cData.position.z, cData.position.o);
+            WorldPosition point = WorldPosition(SpawnMapIdW2(cData), SpawnXW2(cData), SpawnYW2(cData), SpawnZW2(cData), SpawnOW2(cData));
 
             std::string name = cInfo->name;
             name.erase(remove(name.begin(), name.end(), ','), name.end());
@@ -2605,7 +2606,7 @@ void TravelMgr::LoadQuestTravelTable()
             if (!data)
                 continue;
 
-            WorldPosition point = WorldPosition(gData.position.mapId, gData.position.x, gData.position.y, gData.position.z, gData.position.o);
+            WorldPosition point = WorldPosition(SpawnMapIdW2(gData), SpawnXW2(gData), SpawnYW2(gData), SpawnZW2(gData), SpawnOW2(gData));
 
             std::string name = data->name;
             name.erase(remove(name.begin(), name.end(), ','), name.end());

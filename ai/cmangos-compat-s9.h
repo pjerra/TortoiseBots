@@ -107,8 +107,6 @@ inline uint32 AuctionItemCountCompat(AuctionEntry const& auction)
     Item* item = sAuctionMgr.GetAItem(auction.itemGuidLow);
     return item ? item->GetCount() : 0;
 }
-inline float AhDepositMinCompat() { return float(sWorld.getConfig(CONFIG_UINT32_AUCTION_DEPOSIT_MIN)); }
-inline float AhDepositRateCompat() { return sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT); }
 
 // `QuestStatusData& qData = player->getQuestStatusMap()[quest->GetQuestId()]; qData.m_status == QUEST_STATUS_INCOMPLETE`.
 inline bool QuestIncompleteCompat(Player* player, Quest const* quest)

@@ -2,6 +2,7 @@
 #include "BudgetValues.h"
 #include "ItemUsageValue.h"
 #include "MountValues.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -177,12 +178,12 @@ uint32 MoneyNeededForValue::Calculate()
 
             deposit = deposit * 15 * 3.0f / 100.0f;
 
-            float min_deposit = float(sWorld.getConfig(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
+            float min_deposit = float(WorldU32ConfigW2(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
 
             if (deposit < min_deposit)
                 deposit = min_deposit;
 
-            deposit *= sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
+            deposit *= WorldFloatConfigW2(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
 
             totalDeposit += deposit;
         }
@@ -193,12 +194,12 @@ uint32 MoneyNeededForValue::Calculate()
 
             deposit = deposit * 15 * 3.0f / 100.0f;
 
-            float min_deposit = float(sWorld.getConfig(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
+            float min_deposit = float(WorldU32ConfigW2(CONFIG_UINT32_AUCTION_DEPOSIT_MIN));
 
             if (deposit < min_deposit)
                 deposit = min_deposit;
 
-            deposit *= sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
+            deposit *= WorldFloatConfigW2(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT);
 
             totalDeposit += deposit;
 
