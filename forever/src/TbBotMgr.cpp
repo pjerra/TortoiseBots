@@ -1008,7 +1008,10 @@ bool BotMgr::ReleaseHasEntrance(Player* bot) const
     Map* map = bot->GetMap();
     if (!map || !map->ToInstanceMap() || !map->IsDungeon())
         return true;                      // not inside a dungeon: the stock rules (a graveyard is where the core sends a ghost)
-    return InstanceEntrance(bot) != 0;
+    // The stricter of the two entrance checks (P4's InstanceEntranceKnownCompat names a real world_safe_locs row, H4's was only non-zero): the core's own
+    // lookup (RepopAtGraveyard, Player.cpp:5230) uses the row, so an id with no row would fall back to the zone's graveyard outside.
+    uint32 const entrance = InstanceEntrance(bot);
+    return entrance != 0 && sObjectMgr->GetWorldSafeLoc(entrance) != nullptr;
 }
 
 // What `.tb state` keeps between two reads: a bot that was dead and is alive again is `running-back` until it is within 20 yd of its commander (its
