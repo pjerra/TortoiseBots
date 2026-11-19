@@ -103,5 +103,12 @@ Made real: the dead engine's strategy (`dead`); release and acceptance; `party m
 
 CMakeLists.txt (not mine) still reads `forever/SLICE3.txt` (line 73): the merge package switches it to `SLICE4.txt`; until then an option-ON build that has this branch's `SliceAiObjectContext.cpp` fails to link (`DeadStrategy` and friends are not compiled). The measured result with the list switched on the VM copy only: see section 9.
 
+## 8b. Fit with H4 (read from `~/wt-slice4-h/forever/docs/SLICE4-H-NOTES.md` section 3 and its sources, read only)
+
+* The host calls `release` and `accept resurrect` BY KEY (`GetAction` first): both registered (section 4). H4 does not capture the packet: it polls `IsResurrectRequested()` and builds `Event("resurrect request", offerer->GetGUID(), bot)` (TbOrders.cpp:435); `ResurrectOffererCompat` reads the event's FIRST guid, so it matches. Its pre-filter (party member or commander) is the same rule as `ResurrectOffererAcceptableCompat`; a request from anyone else is declined by the action, which clears it.
+* `AcceptResurrectCompat` writes the CORE's accept (Response 0); `RepopRequestCompat` -> `HandleRepopRequest`.
+* Lease: H4 answers `PlayerMaster` while no entrance is known and registers a run-hold query that makes `Decide` answer Wait, otherwise `Dungeon`. P4 did not change `RunReleaseHold::Decide` or any `GetActivity` reader. DIFFERENCE (harmless, stricter): P4's own `InstanceEntranceKnownCompat` also requires the entrance id to name a real `world_safe_locs` row (`GetWorldSafeLoc`), H4's `ReleaseHasEntrance` only `!= 0`; the host sets a trigger's real `PortLocID`, so they agree; if they ever differ the bot waits (less). `relhold` is computed by the host from core facts; `AutoReleaseSpiritAction::ReleaseHoldReason()` (this package) says the same from the engine's side and is available if the host wants to read the engine's own answer.
+* NOT done (not in the brief): an engine-side leash rule (do not chase a fleeing mob into the next pack). The host exposes `pos=` and `flee=`; a rule would need a both-core helper under `forever/src/compat` for the pack facts (`Creature::HasSearchedAssistance`, `UNIT_STATE_FLEEING`, `ASSISTANCE_MOTION_TYPE`) and a change to the legacy runner/leash policy: left for the live test (observation l) to show whether it is needed.
+
 ## 9. Gates
 (filled in last)
