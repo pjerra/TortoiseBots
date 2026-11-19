@@ -16,7 +16,7 @@ COMMANDS = (ROOT / "commands/Commander.cpp").read_text()
 class PlanStepLabelWiringTest(unittest.TestCase):
     def test_loader_selects_the_comment_and_sets_the_label(self):
         self.assertIn("`timeout_s`, `entries`, `comment` FROM `ai_dungeon_step`", LOADER)
-        self.assertIn("step.label = fields[14].GetCppString();", LOADER)
+        self.assertIn("step.label = FieldTextCompat(fields[14]);", LOADER)
 
     def test_the_label_is_clipped_on_load(self):
         self.assertIn("step.label = PlanStepLabel(step.label);", POLICY)

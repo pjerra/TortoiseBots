@@ -17,16 +17,32 @@ BossTacticTable& ai::GetBossTactics()
     return BossTacticsHolder().Current();
 }
 
+// The seek_aura reconciler (BossTacticsActions.cpp registers ReconcileSeekFightState at startup; a build without boss tactics registers
+// none). A plain pointer, constant-initialised, so a registration in another translation unit's static initialiser is never
+// overwritten by this one's.
+static SeekFightReconciler g_seekFightReconciler = nullptr;
+
+void ai::SetSeekFightReconciler(SeekFightReconciler reconciler)
+{
+    g_seekFightReconciler = reconciler;
+}
+
+SeekFightReconciler ai::GetSeekFightReconciler()
+{
+    return g_seekFightReconciler;
+}
+
 // One pass over `ai_boss_tactic` into `table` (empty, not sealed), then the seal; returns the rows skipped. The startup
 // load and `.bot run reloadplans` both read through here.
 std::uint32_t ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rowsRead)
 {
     uint32 skipped = 0;
-    // The core's Query hands over a raw QueryResult* the caller frees (src/shared/Database/Database.h).
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(
+    // WorldQueryCompat (cmangos-compat-s5.h): the Turtle core's Query hands over a raw QueryResult* the caller frees
+    // (src/shared/Database/Database.h), held in a unique_ptr as before; ForeverCore's returns a shared QueryResult.
+    auto result = WorldQueryCompat(
         "SELECT `map`, `boss_entry`, `kind`, `target_entry`, `spell_id`, `priority`, `param`, `burn_order`, "
         "`hp_min`, `hp_max`, `bot_aura`, `tactic_mode`, `window_s`, `cycle_spell`, `cycle_s`, `spot_x`, `spot_y`, "
-        "`spot_z`, `healers` FROM `ai_boss_tactic`"));
+        "`spot_z`, `healers` FROM `ai_boss_tactic`");
     if (result)
     {
         do
@@ -37,7 +53,7 @@ std::uint32_t ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rows
             BossTacticRow row;
             row.map = fields[0].GetUInt32();
             row.bossEntry = fields[1].GetUInt32();
-            row.kind = ParseBossTacticKind(fields[2].GetCppString());
+            row.kind = ParseBossTacticKind(FieldTextCompat(fields[2]));
             row.targetEntry = fields[3].GetUInt32();
             row.spellId = fields[4].GetUInt32();
             row.priority = fields[5].GetUInt8();
@@ -45,7 +61,7 @@ std::uint32_t ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rows
             row.hpMin = fields[8].GetUInt8();
             row.hpMax = fields[9].GetUInt8();
             row.botAura = fields[10].GetUInt32();
-            row.mode = ParseTacticMode(row.kind, fields[11].GetCppString());
+            row.mode = ParseTacticMode(row.kind, FieldTextCompat(fields[11]));
             row.windowSec = fields[12].GetFloat();
             row.cycleSpell = fields[13].GetUInt32();
             row.cycleSec = fields[14].GetFloat();
@@ -57,7 +73,7 @@ std::uint32_t ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rows
             // Every other kind leaves the column empty (the shipped default).
             if (row.kind == BossTacticKind::LinkedDeath)
             {
-                std::string const text = fields[7].GetCppString();
+                std::string const text = FieldTextCompat(fields[7]);
                 std::size_t at = 0;
                 while (at < text.size())
                 {
@@ -91,7 +107,7 @@ std::uint32_t ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rows
                     "cannot use, a tank_post row it cannot use, an add_crew row it cannot use, "
                     "a gate_hold row whose blocker is its own boss, a cycle or spot column on another kind, a healers "
                     "count on another kind, or a second row of the key)", row.map,
-                    row.bossEntry, fields[2].GetCppString().c_str(), row.targetEntry, row.spellId);
+                    row.bossEntry, FieldTextCompat(fields[2]).c_str(), row.targetEntry, row.spellId);
             }
         } while (result->NextRow());
     }
