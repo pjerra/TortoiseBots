@@ -14,11 +14,11 @@
 // MiscHandler.cpp:63-93; THREADUNSAFE, Opcodes.cpp:957: it runs here on the world thread, where those handlers normally run: engine and host
 // commands run with the maps idle, World.cpp:2465-2475). The typed packet carries one bit (CheckInstance) the handler never reads.
 // T: the 1.12 packet, `CMSG_REPOP_REQUEST` + uint8(0), HandleRepopRequestOpcode (MiscHandler.cpp:61), and `true`: the original never looked
-// at the outcome. F: the handler returns without doing anything when the player is alive or already a ghost (:65), is being teleported (:73:
-// a second release while the first one's teleport runs) or carries SPELL_AURA_PREVENT_RESURRECTION (:76); so the answer is what the player
-// is afterwards: a ghost (BuildPlayerRepop casts the Ghost aura 8326, Player.cpp:4686, which sets PLAYER_FLAGS_GHOST) or alive again (a dungeon
-// release revives at the entrance in the same call chain once the teleport lands: TELE_REVIVE_AT_TELEPORT, Player.cpp:5254). A caller that
-// gets false knows nothing changed.
+// at the outcome. F: the handler returns without doing anything when the player is alive or already a ghost (:65), is being teleported (:71:
+// a second release while the first one's teleport runs) or carries SPELL_AURA_PREVENT_RESURRECTION (:74); so the answer is what the player
+// is afterwards: a ghost (BuildPlayerRepop casts the Ghost aura 8326, Player.cpp:4688, which sets PLAYER_FLAGS_GHOST) or alive again (inside a
+// dungeon RepopAtGraveyard teleports with TELE_REVIVE_AT_TELEPORT, Player.cpp:5254, and a same-map teleport revives the player at once at 50 %:
+// Player.cpp:1396; a far teleport revives it when the worldport lands, MovementHandler.cpp:333). A caller that gets false knows nothing changed.
 inline bool RepopRequestCompat(Player* bot)
 {
     WorldSession* const session = bot->GetSession();
@@ -74,7 +74,7 @@ inline bool ResurrectOffererAcceptableCompat(AI* ai, ObjectGuid const& offerer)
 // pending (:517), and if the offerer is in the world looks at its instance's combat-resurrection charges (:519-529: only when the config
 // asks for them AND an encounter is in progress; the RFC script has none), then ResurrectUsingRequestData (Player.cpp:28079): TeleportTo the
 // caster's position at cast time, and when that is a near teleport (the same map) the resurrect is DELAYED to the teleport's acknowledgement
-// (DELAYED_RESURRECT_PLAYER, :28085-28089, run by ProcessDelayedOperations, Player.cpp:1567): the host session acknowledges near teleports
+// (DELAYED_RESURRECT_PLAYER, :28084-28087, run by ProcessDelayedOperations, Player.cpp:1566, which the teleport ack calls, MovementHandler.cpp:479): the host session acknowledges near teleports
 // by itself (TbBotSession.cpp AcknowledgeTeleports), so the bot is alive one tick later at the offerer's position. The return value says
 // whether the answer was GIVEN: T `true` as it always was; F `false` (nothing done) when the bot is not dead or has no request from that
 // offerer, so the caller never reports an acceptance the core did not take. "Alive" is not known yet at return (delayed), the action's
@@ -109,7 +109,7 @@ inline bool DeclineResurrectCompat(Player* bot, ObjectGuid const& offerer)
 // ===============================================================================================================
 
 // T: PLAYER_SELF_RES_SPELL != 0 (soulstone, ankh); the packet CMSG_SELF_RES. F keeps its self-resurrection spells in the player's own list
-// (InitializeSelfResurrectionSpells, Player.cpp:1235) and takes the spell in the typed packet: a later slice. Not possible, not done, counted.
+// (InitializeSelfResurrectionSpells, Player.cpp:1234) and takes the spell in the typed packet: a later slice. Not possible, not done, counted.
 inline bool SelfResurrectPossibleCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SelfResurrection); return false; }
 inline bool SelfResurrectCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SelfResurrection); return false; }
 
@@ -134,5 +134,5 @@ inline WorldSafeLocsEntry const* ClosestGraveyardCompat(Player* bot)
 inline bool RepopUsesHomebindCompat(Player* /*bot*/) { return false; }
 
 // Teleport to the homebind. T `TeleportToHomebind()` then `SendHeartBeat()` (the caller sends the beat through SendHeartBeatCompat). F: the
-// core's own homebind field, the target RepopAtGraveyard uses itself for a ghost under the map (Player.cpp:5258).
+// core's own homebind field, the target RepopAtGraveyard uses itself for a ghost under the map (Player.cpp:5264).
 inline bool TeleportToHomebindCompat(Player* bot) { return bot->TeleportTo(bot->m_homebind); }
