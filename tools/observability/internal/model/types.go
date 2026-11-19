@@ -109,6 +109,22 @@ type BotSnapshot struct {
 	UICX   float64 `json:"ui_cx,omitempty"`
 	UICY   float64 `json:"ui_cy,omitempty"`
 
+	// ForeverCore bot-driver rows: the engine (on/off, its state, combat and non-combat strategies), the master
+	// (character guid counter, distance in yards, line of sight), movement (generator name, seconds since the
+	// position last changed), life (ghost, resurrection offered) and upkeep (free bag slots, lowest durability %).
+	Engine           string   `json:"engine,omitempty"`
+	EngineState      string   `json:"engine_state,omitempty"`
+	StrategiesNC     string   `json:"strategies_nc,omitempty"`
+	Master           uint32   `json:"master,omitempty"`
+	DistMaster       *float64 `json:"dist_master,omitempty"`
+	LosMaster        *int     `json:"los_master,omitempty"`
+	Move             string   `json:"move,omitempty"`
+	StillSec         *uint32  `json:"still_s,omitempty"`
+	Ghost            int      `json:"ghost,omitempty"`
+	RezPending       int      `json:"rez_pending,omitempty"`
+	FreeSlots        *uint32  `json:"free_slots,omitempty"`
+	DurabilityMinPct *uint32  `json:"durability_min_pct,omitempty"`
+
 	// Calculated 2D projection percentages on the active zone map. Projected
 	// distinguishes a real (0,0) edge coordinate from "no mapping available".
 	Projected bool    `json:"projected"`

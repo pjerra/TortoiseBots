@@ -337,8 +337,11 @@ Sender::BrainInfo ReadBrain(Player* bot)
         else if (auto v = after(line, "non-combat strategies: "))
             info.nonCombat = *v;
     }
-    auto has = [&](char const* word) { return (" " + info.combat + ",").find(word) != std::string::npos; };
-    info.role = info.engine != "on" ? "" : has("tank") ? "tank" : has("heal") ? "healer" : "dps";
+    // Whole strategy names only ("heal interrupt" is not the heal strategy).
+    auto has = [&](char const* name) { return (", " + info.combat + ",").find(std::string(", ") + name + ",") != std::string::npos; };
+    // The engine's role strategies (AiFactory): tanks get "tank assist"/"tank face"/"tank feral", healers "holy"/"discipline"/"restoration".
+    info.role = info.engine != "on" ? "" : has("tank assist") || has("tank face") || has("tank feral") ? "tank"
+        : has("holy") || has("discipline") || has("restoration") ? "healer" : "dps";
     return info;
 }
 

@@ -520,6 +520,8 @@ func (s *Service) loadPetForever(guid uint32) (*PetInfo, error) {
 		return nil, err
 	}
 	pet.Hunter = petType == 1
+	// Pet family (wolf, cat, ...) from the creature template, as the page names it.
+	_ = s.db.QueryRow(fmt.Sprintf(`SELECT family FROM %s.creature_template WHERE entry = ?`, s.cfg.WorldDB), pet.Entry).Scan(&pet.Family)
 
 	rows, err := s.db.Query("SELECT ps.spell, ps.active FROM pet_spell ps WHERE ps.guid = ? ORDER BY ps.spell", id)
 	if err != nil {
@@ -866,6 +868,10 @@ func buildForeverTalents(cat *ForeverCatalog, classID uint8, knownSpells map[uin
 		if !ok || len(t.Ranks) == 0 {
 			continue
 		}
+		// Talent.db2 keeps rows whose spells this client no longer has (no spell name anywhere): the client shows no such talent.
+		if _, exists := cat.Spells[t.Ranks[0]]; !exists && len(cat.Spells) > 0 {
+			continue
+		}
 		maxRank := uint32(len(t.Ranks))
 		rank := uint32(0)
 		spellID := t.Ranks[0]
@@ -978,15 +984,71 @@ func (s *Service) resolveForeverSpecs(bots []BotSummary) {
 		}
 		ptsByBot[guid][tab]++
 	}
+	// Bots without character_talent rows: the talent rank spells they know (the profile reads them the same way).
+	rankOf := map[uint32][2]uint32{} // rank spell -> {talent tab, points at that rank}
+	for _, t := range s.cfg.ForeverData.Talents {
+		for i, rs := range t.Ranks {
+			if rs != 0 {
+				rankOf[rs] = [2]uint32{t.Tab, uint32(i + 1)}
+			}
+		}
+	}
+	var missing []uint32
+	for _, g := range guids {
+		if ptsByBot[g] == nil {
+			missing = append(missing, g)
+		}
+	}
+	if len(missing) > 0 && len(rankOf) > 0 {
+		mph, margs := inList(missing)
+		if srows, err := s.db.Query(fmt.Sprintf(`SELECT guid, spell FROM character_spell WHERE guid IN (%s)`, mph), margs...); err == nil {
+			best := map[uint32]map[uint32]uint32{} // guid -> first rank spell of a talent -> highest points known
+			first := map[uint32]uint32{}
+			for _, t := range s.cfg.ForeverData.Talents {
+				for _, rs := range t.Ranks {
+					if rs != 0 && len(t.Ranks) > 0 {
+						first[rs] = t.Ranks[0]
+					}
+				}
+			}
+			for srows.Next() {
+				var guid, spell uint32
+				if srows.Scan(&guid, &spell) != nil {
+					break
+				}
+				r, ok := rankOf[spell]
+				if !ok {
+					continue
+				}
+				if best[guid] == nil {
+					best[guid] = map[uint32]uint32{}
+				}
+				if r[1] > best[guid][first[spell]] {
+					best[guid][first[spell]] = r[1]
+				}
+			}
+			srows.Close()
+			for guid, talents := range best {
+				for firstRank, pts := range talents {
+					tab := rankOf[firstRank][0]
+					if ptsByBot[guid] == nil {
+						ptsByBot[guid] = map[uint32]uint32{}
+					}
+					ptsByBot[guid][tab] += pts
+				}
+			}
+		}
+	}
 	for guid, tabPts := range ptsByBot {
 		idx, ok := byGUID[guid]
 		if !ok {
 			continue
 		}
+		// Ties go to the tree shown first (the profile walks the trees in that order).
 		var bestTab uint32
 		var bestPts uint32
 		for tab, pts := range tabPts {
-			if pts > bestPts {
+			if pts > bestPts || (pts == bestPts && pts > 0 && s.cfg.ForeverData.TalentTabs[tab].Order < s.cfg.ForeverData.TalentTabs[bestTab].Order) {
 				bestPts = pts
 				bestTab = tab
 			}
@@ -1117,7 +1179,9 @@ func (s *Service) loadQuestsForever(guid uint32) ([]QuestEntry, uint32, error) {
 					break
 				}
 				if pos, ok := byID[qid]; ok {
-					quests[pos].Objectives = append(quests[pos].Objectives, QuestObjective{Index: idx, Count: cnt})
+					obj := QuestObjective{Index: idx, Count: cnt}
+					s.describeQuestObjective(qid, &obj)
+					quests[pos].Objectives = append(quests[pos].Objectives, obj)
 				}
 			}
 		}
@@ -1185,4 +1249,31 @@ func clampInt32s(in []float64) []int32 {
 		}
 	}
 	return out
+}
+
+// describeQuestObjective names a quest objective the way the quest log does: its own text, else the creature (kill,
+// type 0) or item (collect, type 1) it counts, and the amount needed.
+func (s *Service) describeQuestObjective(quest uint32, obj *QuestObjective) {
+	var typ, objectID uint32
+	var desc string
+	err := s.db.QueryRow(fmt.Sprintf(`SELECT Type, ObjectID, Amount, Description FROM %s.quest_objectives WHERE QuestID = ? AND StorageIndex = ? LIMIT 1`, s.cfg.WorldDB),
+		quest, obj.Index).Scan(&typ, &objectID, &obj.Amount, &desc)
+	if err != nil {
+		return
+	}
+	obj.Name = desc
+	if obj.Name != "" {
+		return
+	}
+	switch typ {
+	case 0:
+		_ = s.db.QueryRow(fmt.Sprintf(`SELECT name FROM %s.creature_template WHERE entry = ?`, s.cfg.WorldDB), objectID).Scan(&obj.Name)
+		if obj.Name != "" {
+			obj.Name += " slain"
+		}
+	case 1:
+		if it, ok := s.cfg.Items.Get(objectID); ok {
+			obj.Name = it.Name
+		}
+	}
 }
