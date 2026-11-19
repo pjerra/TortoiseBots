@@ -175,6 +175,10 @@ void Reply::Line(Rec const& rec)
                 keep = value.size();
             while (keep > 0 && (value[keep - 1] == '%' || (keep >= 2 && value[keep - 2] == '%')))
                 --keep;
+            // A value longer than a whole line (a long strategy list) is cut at an item boundary (`;`), else on a %XX boundary.
+            size_t cut = value.rfind(';', keep ? keep - 1 : 0);
+            if (cut != std::string::npos && cut > 0 && cut < keep)
+                keep = cut;
             word = " " + key + "=" + value.substr(0, keep);
         }
         if (!first && line.size() + word.size() > room)
@@ -450,7 +454,7 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
                     result.bots.push_back(bot);
         if (!result.bots.empty())
         {
-            result.label = "party:commander=" + sender->GetName();
+            result.label = "party:commander:" + sender->GetName();
             return result;
         }
     }
@@ -465,7 +469,7 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
         if (!result.bots.empty())
         {
             if (Player* commander = ObjectAccessor::FindPlayer(*commanders.begin()))
-                result.label = "party:commander=" + commander->GetName();
+                result.label = "party:commander:" + commander->GetName();
             else
                 result.label = "party";
             return result;
