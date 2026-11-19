@@ -24,7 +24,22 @@ Census command: `FOREVER_SLOT=2 forever/tools/vm-census.sh "" 10`. Tables of the
 
 ## Numbers (whole tree, slot 2)
 
-@@NUMBERS@@
+| step | summary line (`forever/tools/vm-census.sh "" 10`, slot 2) | change |
+|---|---|---|
+| baseline (`port/forever` + first pass) | `files 649  compile clean 354  with errors 295  error places 6505 (in 315 files)  includes of a header ForeverCore does not have 40` | |
+| after family 1 (names) | `files 649  compile clean 356  with errors 293  error places 6145 (in 313 files)  includes ... 40` | -360 (2 files clean: `GreetAction.cpp`, `DruidAiObjectContext.cpp`) |
+| after family 2 (getConfig) | `files 649  compile clean 354  with errors 295  error places 6040 (in 313 files)  includes ... 40` | -105; **but 2 files lost their clean state**: see "Bug found by the census" |
+| after family 3 (group id) | `files 649  compile clean 354  with errors 295  error places 6030 (in 313 files)  includes ... 40` | -10 (exactly the 10 sites) |
+| after family 4 (spawn position) | `files 649  compile clean 354  with errors 295  error places 5997 (in 313 files)  includes ... 40` | -33 (exactly the 33 census places) |
+| final (log line fixed) | `files 649  compile clean 356  with errors 293  error places 5995 (in 312 files)  includes of a header ForeverCore does not have 40` | -2; **510 places closed in all**, 2 files clean, none gained a place |
+
+Family 1 closed 360 places, more than the 304 name uses it rewrote: an undeclared name drags the types of the expression it is in (`invalid argument type`, `no matching function`) with it.
+
+Bug found by the census (fixed in the last code commit): the first version of `NoteDefault` in `TbCompat_W2.h` used `TC_LOG_WARN`, which expands `sLog->...`;
+the shim renames `sLog` to its printf proxy, so every file that includes the wrapper AFTER the shim failed with "no viable conversion from 'BotLog' to 'Log *'" at that line.
+Only 2 files were affected on the surface (the two that family 1 had just made clean); the other including files already had errors of their own. It now calls
+`Log::instance()->OutMessage(...)`, as `CmangosLogProxy` does (`forever-compat-shim.h:495`). A one-file census of `GreetAction.cpp` is clean again and the final census above has no error in `TbCompat_W2.h`.
+
 
 ## Family 1: `TEXTEMOTE_*` and the other name-level identifiers
 
@@ -187,4 +202,27 @@ Places: `TravelMgr.cpp:2137,2609` (2 lines, 10 reads), `RpgSubActions.cpp:96` (1
 
 ## Gates
 
-@@GATES@@
+| gate | command | result |
+|---|---|---|
+| whole-tree census, before | see Numbers | `files 649  compile clean 354  with errors 295  error places 6505 (in 315 files)  includes of a header ForeverCore does not have 40` |
+| whole-tree census, after | `FOREVER_SLOT=2 forever/tools/vm-census.sh "" 10` | `files 649  compile clean 356  with errors 293  error places 5995 (in 312 files)  includes of a header ForeverCore does not have 40` |
+| slice 4 | `FOREVER_SLOT=2 FOREVER_CENSUS_LIST=forever/SLICE4.txt forever/tools/vm-census.sh "" 10` | `files 174  compile clean 174  with errors 0  error places 0` |
+| slice 3 | same with SLICE3.txt | `files 170  compile clean 170  with errors 0  error places 0` |
+| slice 2 | same with SLICE2.txt | `files 160  compile clean 160  with errors 0  error places 0` |
+| slice 1 | same with SLICE1.txt | `files 133  compile clean 133  with errors 0  error places 0` |
+| ForeverCore module, slice option OFF | `ssh yulon-ubuntu2 'FOREVER_SLOT=2 ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` (3 s: the default module build does not compile the files of this pass; the census is the compile check for them) |
+| Turtle build | `vm-build ~/wt-wide2 --wait` | `COMPILE_SECONDS=395 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, rc=0 (module-tree-hash cdfebf8f7d8bee1a, tip 0da0254a8) |
+| Turtle tests | `vm-test tb ~/wt-wide2` | `RESULT: PASS  kind=tb wt=wt-wide2 sha=0da0254a8`, rc=0, `vm_duration=1201s` |
+| helper files | `git diff --stat port/forever HEAD -- forever/src/compat 'ai/cmangos-compat*'` | only `ai/cmangos-compat-w2.h` (+27) and `forever/src/compat/TbCompat_W2.h` (+401); `forever/src/slice` empty |
+
+The Turtle build and test ran on tip `0da0254a8` (code of all four families). The two later commits change only `forever/src/compat/TbCompat_W2.h` (the ForeverCore-only
+log call; the Turtle build never sees that file) and `forever/docs`, so the Turtle result stands for the final commit. The Turtle gates were run before the lead's note about the live test on the VM (one `forever-world`
+container was up while they ran); no further Turtle job was started after it.
+
+## Left for later (all four families)
+
+* Family 1: `TEXTEMOTE_MOUNTSPECIAL`; the other names above (BG_*, update-field indexes, hooks, GOSSIP_*, renumbered EQUIP_ERR_*, quest/trainer names).
+* Family 2: nothing.
+* Family 3: 34 places (Commander 31, ObservedRaids 1, ObservabilityEmitter 1 + the coupling note); decision for the lead on the dashboard id.
+* Family 4: nothing of the 33. `sObjectMgr.GetGroupById` and the rest of the spawn-record API (`creature_id[0]`, ...) are separate families.
+
