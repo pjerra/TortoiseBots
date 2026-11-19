@@ -93,7 +93,21 @@ SLICE4_KEYS = {
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# `behind` (the rogue kit's strategy, SetBehindCombatStrategy) and the three keys it fires (`set behind`, `rear flank`, `rear flank needed`) are NOT in the spec's table
+# (its closure read only the mage and rogue folders, not the kit): H8 adds them because the spec's rogue kit names `behind` (section 2) and section 5 relies on it.
+# Slice 8 (package H8, FOREVER-SLICE-MAGE-ROGUE-SPEC section 3 "Registry keys", forever/docs/SLICE8-K-NOTES.md "Needs from H8"; listed with creator file:line in
+# forever/docs/SLICE8-H-NOTES.md): the keys the compiled mage and rogue contexts and their kits name that the slice did not register yet. The give-item values
+# (`party member without item/food/water`) are not in the spec's table but `give food`/`give water` read them (K8 notes). Left unregistered on purpose (each one does
+# less): apply oil, throw grenade, oil of immolation, thistle tea (item casts); enemy flagcarrier near, player has flag, enemy player target, has enemy player targets
+# (PvP); grind target (the stealth trigger then reads `dps target` only); manual saved string; no blink instance; hemorrhage back/front (no context defines them).
+SLICE8_KEYS = {
+    "strategy": "hold position, behind",
+    "action": "give food, give water, cancel channel, set behind, rear flank",
+    "trigger": "give food, give water, low mana, enemy ten yards, enemy is close, behind target, not behind target, high energy available, "
+               "no energy available, has aggro in raid group, rear flank needed",
+    "value": "party member without item, party member without food, party member without water",
+}
+KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k] + ", " + SLICE8_KEYS[k]).split(",")] for k in SLICE_KEYS}
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

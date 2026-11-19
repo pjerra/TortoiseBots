@@ -39,7 +39,7 @@ bool ReachSapAction::ApproachAroundPack(Unit* target, float standDist)
         if (unit == target || !unit->IsAlive())
             continue;
         // A stunned unit (a Sapped mate) detects nothing (CanDetectStealthOf).
-        if (unit->HasUnitState(UNIT_STAT_STUNNED | UNIT_STAT_PENDING_STUNNED))
+        if (StunnedOrPendingStunCompat(unit))
             continue;
 
         int32 const detectorLevel = static_cast<int32>(unit->GetLevelForTarget(bot));

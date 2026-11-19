@@ -4,6 +4,7 @@
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbCc.h"
 #include "host/run/TbRunHooks.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -313,6 +314,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     if (!entry.blockText.empty())
         rec.T("blockmsg", entry.blockText);
     rec.N("catchup", entry.catchups).B("practice", BotMgr::Instance().Practice(guid));
+    h8::AppendCcState(rec, bot);                              // H8 (slice 8): rticc, ccfam, held, combo (appended: the older keys are unchanged)
     return rec;
 }
 

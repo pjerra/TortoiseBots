@@ -17,11 +17,13 @@
 #include "playerbot/strategy/actions/AddLootAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
+#include "playerbot/strategy/actions/GiveItemAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
@@ -36,6 +38,7 @@
 #include "playerbot/strategy/generic/CombatStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
+#include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
@@ -107,6 +110,7 @@
 #include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "playerbot/strategy/values/PartyMemberToResurrect.h"
 #include "playerbot/strategy/values/PartyMemberWithoutAuraValue.h"
+#include "playerbot/strategy/values/PartyMemberWithoutItemValue.h"
 #include "playerbot/strategy/values/PetTargetValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
@@ -136,7 +140,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (12 of its keys)
+    // the registry of StrategyContext (14 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -154,6 +158,8 @@ namespace slice
             creators["tank face"] = [](PlayerbotAI* ai) { return new TankFaceStrategy(ai); };
             creators["wait for attack"] = [](PlayerbotAI* ai) { return new WaitForAttackStrategy(ai); };
             creators["dead"] = [](PlayerbotAI* ai) { return new DeadStrategy(ai); };
+            creators["hold position"] = [](PlayerbotAI* ai) { return new HoldPositionStrategy(ai); };
+            creators["behind"] = [](PlayerbotAI* ai) { return new SetBehindCombatStrategy(ai); };
         }
     };
 
@@ -180,7 +186,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (39 of its keys)
+    // the registry of ActionContext (44 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -225,6 +231,11 @@ namespace slice
             creators["threat reset white stop noop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopNoopAction(ai); };
             creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
             creators["reach party member to resurrect"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToResurrectAction(ai); };
+            creators["give food"] = [](PlayerbotAI* ai) { return new GiveFoodAction(ai); };
+            creators["give water"] = [](PlayerbotAI* ai) { return new GiveWaterAction(ai); };
+            creators["cancel channel"] = [](PlayerbotAI* ai) { return new CancelChannelAction(ai); };
+            creators["set behind"] = [](PlayerbotAI* ai) { return new SetBehindTargetAction(ai); };
+            creators["rear flank"] = [](PlayerbotAI* ai) { return new RearFlankAction(ai); };
         }
     };
 
@@ -255,7 +266,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (74 of its keys)
+    // the registry of TriggerContext (85 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -335,6 +346,17 @@ namespace slice
             creators["threat reset white stop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopTrigger(ai); };
             creators["party member dead"] = [](PlayerbotAI* ai) { return new PartyMemberDeadTrigger(ai); };
             creators["resurrect"] = [](PlayerbotAI* ai) { return new ResurrectTrigger(ai); };
+            creators["give food"] = [](PlayerbotAI* ai) { return new GiveFoodTrigger(ai); };
+            creators["give water"] = [](PlayerbotAI* ai) { return new GiveWaterTrigger(ai); };
+            creators["low mana"] = [](PlayerbotAI* ai) { return new LowManaTrigger(ai); };
+            creators["enemy ten yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy ten yards", 10.0f); };
+            creators["enemy is close"] = [](PlayerbotAI* ai) { return new EnemyIsCloseTrigger(ai); };
+            creators["behind target"] = [](PlayerbotAI* ai) { return new IsBehindTargetTrigger(ai); };
+            creators["not behind target"] = [](PlayerbotAI* ai) { return new IsNotBehindTargetTrigger(ai); };
+            creators["high energy available"] = [](PlayerbotAI* ai) { return new HighEnergyAvailableTrigger(ai); };
+            creators["no energy available"] = [](PlayerbotAI* ai) { return new NoEnergyAvailableTrigger(ai); };
+            creators["has aggro in raid group"] = [](PlayerbotAI* ai) { return new HasAggroInRaidGroupTrigger(ai); };
+            creators["rear flank needed"] = [](PlayerbotAI* ai) { return new RearFlankNeededTrigger(ai); };
         }
     };
 
@@ -348,7 +370,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (170 of its keys)
+    // the registry of ValueContext (173 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -524,11 +546,14 @@ namespace slice
             creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
             creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
             creators["party member to resurrect"] = [](PlayerbotAI* ai) { return new PartyMemberToResurrect(ai); };
+            creators["party member without item"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutItemValue(ai); };
+            creators["party member without food"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutFoodValue(ai); };
+            creators["party member without water"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutWaterValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 17, kActions = 48, kTriggers = 75, kValues = 170;
+    constexpr unsigned kStrategies = 19, kActions = 53, kTriggers = 86, kValues = 173;
 }
 }
 
