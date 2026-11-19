@@ -29,6 +29,20 @@ GROUPID_SITES = {
 GROUPID = re.compile(r"((?:[A-Za-z_]\w*(?:\(\))?->)*[A-Za-z_]\w*(?:\(\))?)->GetId\(\)")
 
 
+# Family 4 (spawn record position): `<creature or game object data>.position.<mapId|x|y|z|o>`. T: CreatureData/GameObjectData hold a
+# WorldLocation `position`; F: SpawnMetadata::mapId and SpawnData::spawnPoint (Maps/SpawnData.h:121, :136). The files are the ones the census
+# names for "no member named 'position' in 'CreatureData'/'GameObjectData'" outside the slices; every match in them was read.
+SPAWN_FILES = {"ai/playerbot/TravelMgr.cpp", "ai/playerbot/strategy/actions/RpgSubActions.cpp",
+               "ai/playerbot/strategy/actions/WorldBuffTravelActions.cpp", "commands/Commander.cpp"}
+SPAWN_HELPER = {"mapId": "SpawnMapIdW2", "x": "SpawnXW2", "y": "SpawnYW2", "z": "SpawnZW2", "o": "SpawnOW2"}
+SPAWN = re.compile(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)(->|\.)position\.(mapId|x|y|z|o)\b")
+
+
+def spawn_repl(m):
+    recv = m.group(1) if m.group(2) == "." else "*" + m.group(1)
+    return SPAWN_HELPER[m.group(3)] + "(" + recv + ")"
+
+
 def files():
     ex = w2_names.excluded()
     for top in ("ai", "commands", "runtime", "host", "behavior"):
@@ -79,6 +93,10 @@ def main():
                 continue
             n = rewrite(rel, GROUPID, lambda m: "GroupIdW2(" + m.group(1) + ")", check,
                         keep=lambda ln, text, rel=rel: ln not in GROUPID_SITES[rel])
+        elif fam == "position":
+            if rel not in SPAWN_FILES:
+                continue
+            n = rewrite(rel, SPAWN, spawn_repl, check)
         else:
             sys.exit("unknown family " + fam)
         total += n

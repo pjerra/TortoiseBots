@@ -383,3 +383,16 @@ inline float WorldFloatConfigW2(TbW2FloatKey key)
 // (GroupMgr.cpp:124, GroupStore keyed by the counter), the lookup a later `GetGroupById` helper needs.
 // =====================================================================================================================
 inline uint32 GroupIdW2(Group const* group) { return uint32(group->GetGUID().GetCounter()); }
+
+// =====================================================================================================================
+// Family 4: one component of a spawn record's position. T: CreatureData and GameObjectData hold `WorldLocation position`
+// (Creature.h:286) and the sites read one field of it. F: the record is a SpawnData (Maps/SpawnData.h:132-149): the map is
+// SpawnMetadata::mapId (:121), the point `Position spawnPoint` (:136) read through GetPositionX/Y/Z and GetOrientation. The whole
+// record has LocationOfCompat (TbCompat_Position.h:87); these answer the sites that read one number. The map id is the fifth
+// component the same sites read (`position.mapId`).
+// =====================================================================================================================
+inline uint32 SpawnMapIdW2(SpawnData const& data) { return data.mapId; }
+inline float SpawnXW2(SpawnData const& data) { return data.spawnPoint.GetPositionX(); }
+inline float SpawnYW2(SpawnData const& data) { return data.spawnPoint.GetPositionY(); }
+inline float SpawnZW2(SpawnData const& data) { return data.spawnPoint.GetPositionZ(); }
+inline float SpawnOW2(SpawnData const& data) { return data.spawnPoint.GetOrientation(); }

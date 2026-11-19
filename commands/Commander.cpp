@@ -9965,7 +9965,7 @@ std::vector<uint32> const& BossSpawnLowGuids(uint32 mapId, uint32 entry)
     auto worker = [&](CreatureDataPair const& pair) -> bool
     {
         CreatureData const& data = pair.second;
-        if (data.position.mapId != mapId)
+        if (SpawnMapIdW2(data) != mapId)
             return false;
         for (uint32 id : data.creature_id)
             if (id == entry)
@@ -10032,7 +10032,7 @@ uint32 OwnBossSpawnLow(uint32 mapId, ai::PlanStep const& step)
     for (uint32 low : BossSpawnLowGuids(mapId, step.entry))
         if (CreatureData const* data = sObjectMgr.GetCreatureData(low))
         {
-            float const yd = ai::PlanDistance(data->position.x, data->position.y, data->position.z,
+            float const yd = ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data),
                 step.x, step.y, step.z);
             if (!own || yd < ownYd)
             {
@@ -10130,7 +10130,7 @@ void ReadBossInInstance(ai::PlanStep const& step, Player* lead, TortoiseBots::Du
         Creature* creature = map->GetCreature(data->GetObjectGuid(low));
         // Not in the map and its spawn point in a grid nobody has loaded: that area was not searched, and the note
         // says so (no grid is loaded for the search). A creature that walked off its spawn grid is found by guid.
-        if (!creature && !map->IsLoaded(data->position.x, data->position.y))
+        if (!creature && !map->IsLoaded(SpawnXW2(*data), SpawnYW2(*data)))
         {
             f.bossSearchUnloaded = true;
             continue;
@@ -11147,9 +11147,9 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
             if (own->IsAlive() && TortoiseBots::DungeonRun::ScriptChangedFrom(own) == next->entry)
             {
                 CreatureData const* const row = own->GetCreatureData();
-                float const rowX = row ? row->position.x : own->GetPositionX();
-                float const rowY = row ? row->position.y : own->GetPositionY();
-                float const rowZ = row ? row->position.z : own->GetPositionZ();
+                float const rowX = row ? SpawnXW2(*row) : own->GetPositionX();
+                float const rowY = row ? SpawnYW2(*row) : own->GetPositionY();
+                float const rowZ = row ? SpawnZW2(*row) : own->GetPositionZ();
                 if (ai::PlanDistance(rowX, rowY, rowZ, next->x, next->y, next->z) <= next->radius + kSpawnOwnTolYd)
                 {
                     pack.insert(RunFormationOf(own));
@@ -11161,7 +11161,7 @@ static void ReadStandPullHold(DungeonRunSlot const& slot, Player* lead, std::vec
         for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))
         {
             CreatureData const* const data = sObjectMgr.GetCreatureData(low);
-            if (!data || ai::PlanDistance(data->position.x, data->position.y, data->position.z, next->x, next->y,
+            if (!data || ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data), next->x, next->y,
                     next->z) > next->radius + kSpawnOwnTolYd)
                 continue;
             if (Creature* const member = map->GetCreature(data->GetObjectGuid(low)))
@@ -12232,8 +12232,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     // The gate reads the spawn row's place, not the creature's: a dragged boss dies far from
                     // his row, while a far row's creature may die near the step.
                     CreatureData const* row = own->GetCreatureData();
-                    float const rowX = row ? row->position.x : own->GetPositionX();
-                    float const rowY = row ? row->position.y : own->GetPositionY();
+                    float const rowX = row ? SpawnXW2(*row) : own->GetPositionX();
+                    float const rowY = row ? SpawnYW2(*row) : own->GetPositionY();
                     float const ownFromSpot2d = std::sqrt(
                         (rowX - step->x) * (rowX - step->x) +
                         (rowY - step->y) * (rowY - step->y));
@@ -12379,7 +12379,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         if (CreatureData const* data = creature->GetCreatureData())
                         {
                             read.hasSpawn = true;
-                            read.spawnYd = ai::PlanDistance(data->position.x, data->position.y, data->position.z,
+                            read.spawnYd = ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data),
                                 step->x, step->y, step->z);
                         }
                         read.ownWaypoint = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
@@ -12499,7 +12499,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                                     if (member->GetEntry() != entry)
                                         continue;
                                     spawned.emplace_back(RunFormationOf(member), member->IsAlive());
-                                    if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x,
+                                    if (ai::PlanDistance(SpawnXW2(*data), SpawnYW2(*data), SpawnZW2(*data), step->x,
                                             step->y, step->z) <= step->radius + kSpawnOwnTolYd)
                                         f.standPullOwnRead.push_back(spawned.back().first);
                                 }
@@ -15903,19 +15903,19 @@ void BuildBossSpawnCache()
         if (!entry)
             return false;
         CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-        bool const boss = plans.IsBossEntry(data.position.mapId, entry) ||
+        bool const boss = plans.IsBossEntry(SpawnMapIdW2(data), entry) ||
             (info && (info->rank == CREATURE_ELITE_WORLDBOSS || (info->flags_extra & CREATURE_FLAG_EXTRA_INSTANCE_BIND)));
         if (!boss)
             return false;
-        uint64 const key = (static_cast<uint64>(data.position.mapId) << 32) | entry;
+        uint64 const key = (static_cast<uint64>(SpawnMapIdW2(data)) << 32) | entry;
         CommanderTelemetry::BossSpawnRow row;
         row.dbGuid = pair.first;
         row.info.entry = entry;
         row.info.name = info ? info->name : std::string();
-        row.info.x = data.position.x;
-        row.info.y = data.position.y;
+        row.info.x = SpawnXW2(data);
+        row.info.y = SpawnYW2(data);
         row.info.inPlan = planOrder.count(key) != 0;
-        rowsByMap[data.position.mapId].push_back(std::move(row));
+        rowsByMap[SpawnMapIdW2(data)].push_back(std::move(row));
         spawned.insert(key);
         return false; // keep going
     };
