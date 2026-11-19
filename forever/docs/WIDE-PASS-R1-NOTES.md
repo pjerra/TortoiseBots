@@ -118,8 +118,10 @@ ListQuestsActions.cpp, TellLosAction.cpp, ThaddiusDungeonActions.cpp, ThaddiusDu
 | Census, after | same | `files 649 compile clean 332 with errors 317 error places 6841 (in 338 files)` — 807 places closed, no file gained one, 11 files clean |
 | Census, slice 1 | `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 10` | see the gate at the end of the file |
 | Helper files unchanged | `git diff --stat 37434278c HEAD -- forever/src ai/cmangos-compat*` (37434278c = the merge base with `port/forever` when this branch started) | empty |
-| ForeverCore module, slice option off | `ssh yulon-ubuntu2 '~/forever-build/build.sh 12 tortoisebots'` | see the gate at the end of the file |
-| Turtle build / tests | `vm-build ~/wt-wide-pass --wait`, `vm-test tb ~/wt-wide-pass` | see the gate at the end of the file |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 '~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` |
+| Turtle build | `vm-build ~/wt-wide-pass --wait` | `COMPILE_SECONDS=290 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, rc=0 |
+| Turtle tests | `vm-test tb ~/wt-wide-pass` | `RESULT: PASS`, `rc=0`, `vm_duration=1360s` |
+| Repo suite | `bash tools/verify_all.sh ../tortoise-wow-f3` | `ALL TORTOISEBOTS CHECKS PASSED CLEANLY`, rc=0 (2657 engine tests, 479 policy tests) |
 
 ## Wiring tests
 
