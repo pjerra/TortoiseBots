@@ -49,7 +49,7 @@ std::vector<std::string> DescribeAround(Map* map, float x, float y, float z, flo
         out.push_back(buffer);
     }
     struct Cell { float d, x, y, z, level; std::uint32_t status; };
-    std::vector<Cell> wet;
+    std::vector<Cell> wet, dry;
     for (float dx = -radius; dx <= radius; dx += step)
         for (float dy = -radius; dy <= radius; dy += step)
         {
@@ -61,6 +61,8 @@ std::vector<std::string> DescribeAround(Map* map, float x, float y, float z, flo
             std::uint32_t const status = read(px, py, floorZ, data);
             if (PointRefused(status, data.level, floorZ))
                 wet.push_back(Cell{ std::sqrt(dx * dx + dy * dy), px, py, floorZ, data.level, status });
+            else if (std::fabs(floorZ - z) <= 3.0f)
+                dry.push_back(Cell{ std::sqrt(dx * dx + dy * dy), px, py, floorZ, 0.0f, status });      // dry floor on the bot's own level (a way out of the pool)
         }
     std::sort(wet.begin(), wet.end(), [](Cell const& a, Cell const& b) { return a.d < b.d; });
     std::snprintf(buffer, sizeof buffer, "liquid scan: %u wet floor cells of the grid (radius %.0f, step %.0f)", unsigned(wet.size()), radius, step);
@@ -68,6 +70,12 @@ std::vector<std::string> DescribeAround(Map* map, float x, float y, float z, flo
     for (std::size_t i = 0; i < wet.size() && i < maxLines; ++i)
     {
         std::snprintf(buffer, sizeof buffer, "liquid wet: %.1f %.1f %.1f status=0x%02x level=%.1f d=%.1f", wet[i].x, wet[i].y, wet[i].z, wet[i].status, wet[i].level, wet[i].d);
+        out.push_back(buffer);
+    }
+    std::sort(dry.begin(), dry.end(), [](Cell const& a, Cell const& b) { return a.d < b.d; });
+    for (std::size_t i = 0; i < dry.size() && i < 8; ++i)
+    {
+        std::snprintf(buffer, sizeof buffer, "liquid dry: %.1f %.1f %.1f d=%.1f", dry[i].x, dry[i].y, dry[i].z, dry[i].d);
         out.push_back(buffer);
     }
     return out;
