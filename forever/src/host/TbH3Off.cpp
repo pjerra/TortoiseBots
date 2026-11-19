@@ -61,6 +61,7 @@ bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const
     handler->SetSentErrorMessage(true);
     return false;
 }
+}
 
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "order"); }
 bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "role"); }
