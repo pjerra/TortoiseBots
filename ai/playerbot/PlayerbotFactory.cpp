@@ -454,7 +454,7 @@ void PlayerbotFactory::InitBandages()
         return;
     Item* stored = StoreItem(itemId, halfStack - have, true);
     if (stored)
-        sLog.outDetail("Bot %d got bandage %s x%d", bot->GetGUIDLow(), CStrCompat(proto->Name1), halfStack - have);
+        sLog.outDetail("Bot %d got bandage %s x%d", bot->GetGUIDLow(), proto->Name1, halfStack - have);
 }
 
 // Fresh-seed money: a sensible level-scaled amount on first seed only.
@@ -1956,7 +1956,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             set->spells, set->items_to_triggerspell, 8))
                     {
                         sLog.outDetail("Player autogear: %s slot %u keeps <%s>, item set %u is active",
-                            CStrCompat(bot->GetName()), slot, CStrCompat(oldProto->Name1), oldProto->ItemSet);
+                            CStrCompat(bot->GetName()), slot, oldProto->Name1, oldProto->ItemSet);
                         continue;
                     }
                 }
@@ -2287,8 +2287,8 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                         if (found && incremental)
                         {
                             if (oldItem)
-                                sLog.outDetail("Bot #%d %s:%d <%s>: Old Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, oldProto->ItemId, oldStatValue, CStrCompat(oldProto->Name1));
-                            sLog.outDetail("Bot #%d %s:%d <%s>: New Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, proto->ItemId, newStatValue, CStrCompat(proto->Name1));
+                                sLog.outDetail("Bot #%d %s:%d <%s>: Old Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, oldProto->ItemId, oldStatValue, oldProto->Name1);
+                            sLog.outDetail("Bot #%d %s:%d <%s>: New Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, proto->ItemId, newStatValue, proto->Name1);
                         }
                     }
                 }
@@ -2571,7 +2571,7 @@ void PlayerbotFactory::InitLevelBags()
         bot->DestroyItem(INVENTORY_SLOT_BAG_0, slot, true);
         Item* pItem = bot->EquipNewItem(eDest, tierBag, true);
         if (pItem)
-            sLog.outDetail("Bot %d got level-tier bag %s (%u slots)", bot->GetGUIDLow(), CStrCompat(tierProto->Name1), tierSlots);
+            sLog.outDetail("Bot %d got level-tier bag %s (%u slots)", bot->GetGUIDLow(), tierProto->Name1, tierSlots);
     }
 }
 
@@ -4449,7 +4449,7 @@ void PlayerbotFactory::InitReagents()
 
         Item* newItem = bot->StoreNewItemInInventorySlot(*i, addCount);
 
-        sLog.outDetail("Bot %d got reagent %s x%d", bot->GetGUIDLow(), CStrCompat(proto->Name1), addCount);
+        sLog.outDetail("Bot %d got reagent %s x%d", bot->GetGUIDLow(), proto->Name1, addCount);
     }
 
     for (PlayerSpellMap::iterator itr = bot->GetSpellMap().begin(); itr != bot->GetSpellMap().end(); ++itr)
@@ -4479,7 +4479,7 @@ void PlayerbotFactory::InitReagents()
 
                 Item* newItem = bot->StoreNewItemInInventorySlot(totem, 1);
 
-                sLog.outDetail("Bot %d got totem %s x%d", bot->GetGUIDLow(), CStrCompat(proto->Name1), 1);
+                sLog.outDetail("Bot %d got totem %s x%d", bot->GetGUIDLow(), proto->Name1, 1);
             }
         }
     }

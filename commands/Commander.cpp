@@ -3538,7 +3538,7 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
         // climb it, else the strict answer stands.
         PathFinder permissive(mover);
         PathFinder* active = &path;
-        if (ai::WorldPosition::FellBackToPermissive(PathTypeCompat(path)))
+        if (ai::WorldPosition::FellBackToPermissive(PathType(PathTypeCompat(path))))
         {
             PathCalculateCompat(permissive, origin, Vector3(point.x, point.y, point.z), false);
             if (ai::WorldPosition::PermissivePathWalkable(PathPointsCompat(permissive)))
@@ -3768,7 +3768,7 @@ static RemoteCommander::DirectJoin DirectFollowerJoin(Player* bot, Map* map, flo
         PathCalculateCompat(path, leadX, leadY, leadZ, false);
         PathFinder permissive(bot);
         PathFinder* active = &path;
-        if (ai::WorldPosition::FellBackToPermissive(PathTypeCompat(path)))
+        if (ai::WorldPosition::FellBackToPermissive(PathType(PathTypeCompat(path))))
         {
             PathCalculateCompat(permissive, leadX, leadY, leadZ, false);
             if (ai::WorldPosition::PermissivePathWalkable(PathPointsCompat(permissive)))
@@ -7720,7 +7720,7 @@ bool RunBotWalk(Player* commander, std::string const& order, std::string& answer
     PathCalculateCompat(path, x, y, z, false);
     PathFinder permissive(bot);
     PathFinder* active = &path;
-    if (ai::WorldPosition::FellBackToPermissive(PathTypeCompat(path)))
+    if (ai::WorldPosition::FellBackToPermissive(PathType(PathTypeCompat(path))))
     {
         PathCalculateCompat(permissive, x, y, z, false);
         if (ai::WorldPosition::PermissivePathWalkable(PathPointsCompat(permissive)))

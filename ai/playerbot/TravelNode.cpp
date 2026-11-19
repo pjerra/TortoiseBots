@@ -2624,7 +2624,7 @@ void TravelNodeMap::generatePortalNodes()
 
         if (outPos.isOverworld() && outPos.currentHeight() > 0.5f && outPos.currentHeight() < 50.0f)
         {
-            sLog.outError("%s adjusting height down from %f", CStrCompat(pSpellInfo->SpellName[0]), outPos.currentHeight());
+            sLog.outError("%s adjusting height down from %f", pSpellInfo->SpellName[0], outPos.currentHeight());
             outPos.setZ(outPos.getZ() - outPos.currentHeight() + 0.5f);
         }
 
@@ -3832,7 +3832,7 @@ TravelNodeMap::PathFindResult TravelNodeMap::testPathToLoop(const WorldPosition&
     for (uint8 i = 0; i < 40; i++)
     {
         PathCalculateCompat(*strictFinder, currentPos.GetVector3(), endPos.GetVector3(), false);
-        pathType = PathTypeCompat(*strictFinder);
+        pathType = PathType(PathTypeCompat(*strictFinder));
         points = PathPointsCompat(*strictFinder);
         // The flag over-marks stairs a player walks: when strict does not
         // reach, the permissive answer is graded and a climb a player could
@@ -3842,7 +3842,7 @@ TravelNodeMap::PathFindResult TravelNodeMap::testPathToLoop(const WorldPosition&
             PathCalculateCompat(*pathfinder, currentPos.GetVector3(), endPos.GetVector3(), false);
             if (WorldPosition::PermissivePathWalkable(PathPointsCompat(*pathfinder)))
             {
-                pathType = PathTypeCompat(*pathfinder);
+                pathType = PathType(PathTypeCompat(*pathfinder));
                 points = PathPointsCompat(*pathfinder);
             }
         }

@@ -88,7 +88,9 @@ def wrap_call(pattern, repl, line, repetitions=1):
 def transform_cstr(line):
     """`sLog.outDetail("%s", bot->GetName())`: the Turtle core's GetName() is a char*, ForeverCore's a std::string."""
     total = 0
-    for pattern in (RECV + r"->GetName\(\)", RECV + r"->Name1\b", RECV + r"->SpellName\[0\]"):
+    # `GetName()` is a char* on Turtle, a std::string on ForeverCore: the helper covers it. `Name1` and `SpellName[0]`
+    # are std::string on BOTH cores, and the Turtle-side helper has no std::string overload, so they are left.
+    for pattern in (RECV + r"->GetName\(\)",):
         rx = re.compile(pattern)
         spans = comment_spans(line)
         for m in reversed(list(rx.finditer(line))):
