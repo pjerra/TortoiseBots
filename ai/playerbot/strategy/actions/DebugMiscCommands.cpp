@@ -23,6 +23,7 @@
 #include <typeindex>
 #include "Maps/MoveMap.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -221,7 +222,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
                 continue;
 
             Quest const* pQuest = sObjectMgr.GetQuestTemplate(questId);
-            std::string name = pQuest ? pQuest->GetTitle() : "Unknown";
+            std::string name = pQuest ? QuestTitleW3(pQuest) : "Unknown";
             QuestStatus status = bot->GetQuestStatus(questId);
             std::string statusStr = (status == QUEST_STATUS_COMPLETE) ? "[COMPLETE]" : "[INCOMPLETE]";
 
@@ -467,7 +468,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
             SetQuestSlotStateCompat(bot, slot, QUEST_STATE_NONE);
 
             std::ostringstream out;
-            out << "Quest " << questId << " (" << pQuest->GetTitle() << ") added.";
+            out << "Quest " << questId << " (" << QuestTitleW3(pQuest) << ") added.";
             ai->TellPlayer(requester, out.str());
             return true;
         }
@@ -496,7 +497,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
 
         std::ostringstream out;
         out << "=== Quest: " << questId << " ===";
-        out << "\n" << pQuest->GetTitle();
+        out << "\n" << QuestTitleW3(pQuest);
 
         // Show objectives
         out << "\n--- Objectives ---";
@@ -551,7 +552,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
 
         std::ostringstream out;
         out << "=== Quest: " << questId << " ===";
-        out << "\n" << pQuest->GetTitle();
+        out << "\n" << QuestTitleW3(pQuest);
         out << "\nLevel: " << QuestLevelCompat(pQuest);
         out << "\nStatus: ";
         if (!inLog)

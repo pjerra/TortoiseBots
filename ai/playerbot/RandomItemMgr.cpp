@@ -2211,10 +2211,10 @@ uint32 RandomItemMgr::GetQuestIdForItem(uint32 itemId)
         uint32 rewItemCount = quest->GetRewItemsCount();
         for (uint32 i = 0; i < rewItemCount; ++i)
         {
-            if (!quest->RewItemId[i])
+            if (!QuestRewItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewItemId[i] == itemId)
+            if (QuestRewItemIdsW3(quest)[i] == itemId)
             {
                 isQuest = true;
                 questId = quest->GetQuestId();
@@ -2225,10 +2225,10 @@ uint32 RandomItemMgr::GetQuestIdForItem(uint32 itemId)
         uint32 rewChocieItemCount = quest->GetRewChoiceItemsCount();
         for (uint32 i = 0; i < rewChocieItemCount; ++i)
         {
-            if (!quest->RewChoiceItemId[i])
+            if (!QuestRewChoiceItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewChoiceItemId[i] == itemId)
+            if (QuestRewChoiceItemIdsW3(quest)[i] == itemId)
             {
                 isQuest = true;
                 questId = quest->GetQuestId();
@@ -2258,10 +2258,10 @@ std::vector<uint32> RandomItemMgr::GetQuestIdsForItem(uint32 itemId)
         uint32 rewItemCount = quest->GetRewItemsCount();
         for (uint32 i = 0; i < rewItemCount; ++i)
         {
-            if (!quest->RewItemId[i])
+            if (!QuestRewItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewItemId[i] == itemId)
+            if (QuestRewItemIdsW3(quest)[i] == itemId)
             {
                 questIds.push_back(quest->GetQuestId());
                 break;
@@ -2271,10 +2271,10 @@ std::vector<uint32> RandomItemMgr::GetQuestIdsForItem(uint32 itemId)
         uint32 rewChocieItemCount = quest->GetRewChoiceItemsCount();
         for (uint32 i = 0; i < rewChocieItemCount; ++i)
         {
-            if (!quest->RewChoiceItemId[i])
+            if (!QuestRewChoiceItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewChoiceItemId[i] == itemId)
+            if (QuestRewChoiceItemIdsW3(quest)[i] == itemId)
             {
                 questIds.push_back(quest->GetQuestId());
                 break;
@@ -2724,11 +2724,11 @@ void RandomItemMgr::BuildKnownSourceIndex()
     {
         Quest const* quest = entry.second.get();
         for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
-            if (quest->RewItemId[i])
-                knownSourceItems.insert(quest->RewItemId[i]);
+            if (QuestRewItemIdsW3(quest)[i])
+                knownSourceItems.insert(QuestRewItemIdsW3(quest)[i]);
         for (uint32 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
-            if (quest->RewChoiceItemId[i])
-                knownSourceItems.insert(quest->RewChoiceItemId[i]);
+            if (QuestRewChoiceItemIdsW3(quest)[i])
+                knownSourceItems.insert(QuestRewChoiceItemIdsW3(quest)[i]);
     }
 
     knownSourceItems.erase(0);
@@ -3546,20 +3546,20 @@ bool RandomItemMgr::HasSameQuestRewards(Player *player, uint32 itemId)
         uint32 rewItemCount = quest->GetRewItemsCount();
         for (uint32 i = 0; i < rewItemCount; ++i)
         {
-            if (!quest->RewItemId[i])
+            if (!QuestRewItemIdsW3(quest)[i])
                 continue;
 
-            if (player->HasItemCount(quest->RewItemId[i], 1, true))
+            if (player->HasItemCount(QuestRewItemIdsW3(quest)[i], 1, true))
                 return true;
         }
 
         uint32 rewChoiceItemCount = quest->GetRewChoiceItemsCount();
         for (uint32 i = 0; i < rewChoiceItemCount; ++i)
         {
-            if (!quest->RewChoiceItemId[i])
+            if (!QuestRewChoiceItemIdsW3(quest)[i])
                 continue;
 
-            if (player->HasItemCount(quest->RewChoiceItemId[i], 1, true))
+            if (player->HasItemCount(QuestRewChoiceItemIdsW3(quest)[i], 1, true))
                 return true;
         }
     }

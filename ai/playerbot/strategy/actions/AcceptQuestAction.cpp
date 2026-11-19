@@ -8,13 +8,14 @@
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 using namespace ai;
 
 static bool IsFixedRewardUpgrade(AiObjectContext* context, Quest const* quest)
 {
     for (uint8 i = 0; i < quest->GetRewItemsCount(); ++i)
     {
-        ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", quest->RewItemId[i]);
+        ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", QuestRewItemIdsW3(quest)[i]);
         if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
             return true;
     }
@@ -239,7 +240,7 @@ bool AcceptQuestAction::Execute(Event& event)
     hasAccept |= AcceptQuest(requester, qInfo, guid);
 
     if (hasAccept)
-        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", qInfo->GetTitle(), std::to_string(qInfo->GetQuestId()));
+        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", QuestTitleW3(qInfo), std::to_string(qInfo->GetQuestId()));
 
     return hasAccept;
 }
@@ -290,7 +291,7 @@ bool AcceptQuestShareAction::Execute(Event& event)
         // Issue #872: remember quests the autonomous alt took itself.
         TortoiseBots::AltBotService::Instance().AddTakenQuest(bot, quest);
 
-        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestShareAction", qInfo->GetTitle(), std::to_string(qInfo->GetQuestId()));
+        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestShareAction", QuestTitleW3(qInfo), std::to_string(qInfo->GetQuestId()));
 
         if( bot->CanCompleteQuest( quest ) )
             bot->CompleteQuest( quest );
@@ -399,7 +400,7 @@ bool QuestDetailsAction::Execute(Event& event)
         // invisible in bot_events.csv (the emote-time hello makes the core send
         // the details page for a single-entry quest menu). Log it under the same
         // name QuestAction::AcceptQuest uses so the quest ledger counts it.
-        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", qInfo->GetTitle(), std::to_string(qInfo->GetQuestId()));
+        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", QuestTitleW3(qInfo), std::to_string(qInfo->GetQuestId()));
 
         if (bot->CanCompleteQuest(quest))
             bot->CompleteQuest(quest);

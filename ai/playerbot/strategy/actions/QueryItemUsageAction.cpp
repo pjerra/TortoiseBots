@@ -5,6 +5,7 @@
 #include "playerbot/RandomBotFacade.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -76,7 +77,7 @@ bool QueryItemUsageAction::Execute(Event& event)
                             if (!required)
                                 continue;
 
-                            sPlayerbotAIConfig.logEvent(ai, "QueryItemUsageAction", questTemplate->GetTitle(), std::to_string((float)available / (float)required));
+                            sPlayerbotAIConfig.logEvent(ai, "QueryItemUsageAction", QuestTitleW3(questTemplate), std::to_string((float)available / (float)required));
                         }
                     }
                 }

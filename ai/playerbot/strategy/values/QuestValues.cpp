@@ -6,6 +6,7 @@
 #include "MaintenanceValues.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -558,7 +559,7 @@ bool NeedQuestRewardValue::Calculate()
 
 	for (uint8 i = 0; i < pQuest->GetRewChoiceItemsCount(); ++i)
 	{
-		ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", pQuest->RewChoiceItemId[i]);
+		ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", QuestRewChoiceItemIdsW3(pQuest)[i]);
 		if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
 			return true;
 	}

@@ -43,6 +43,7 @@
 #include "Guild/GuildMgr.h"
 #include <iomanip>
 #include <mutex>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -927,7 +928,7 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
         std::string condition = "group or::{following party,need quest objective::{" + std::to_string(dest->GetQuestId()) + "," + std::to_string((uint8)dest->getObjective()) + "}}";
         oldTarget->AddCondition(condition);
         if (Quest const* q = sObjectMgr.GetQuestTemplate(dest->GetQuestId()))
-            sPlayerbotAIConfig.logEvent(ai, "QuestTravelToObjective", q->GetTitle(), std::to_string(dest->GetQuestId()));
+            sPlayerbotAIConfig.logEvent(ai, "QuestTravelToObjective", QuestTitleW3(q), std::to_string(dest->GetQuestId()));
     }
     else if (QuestRelationTravelDestination* dest = dynamic_cast<QuestRelationTravelDestination*>(oldTarget->GetDestination()))
     {
@@ -943,7 +944,7 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
         if (Quest const* q = sObjectMgr.GetQuestTemplate(dest->GetQuestId()))
         {
             std::string eventName = (dest->GetPurpose() == TravelDestinationPurpose::QuestGiver) ? "QuestTravelToGiver" : "QuestTravelToTaker";
-            sPlayerbotAIConfig.logEvent(ai, eventName, q->GetTitle(), std::to_string(dest->GetQuestId()));
+            sPlayerbotAIConfig.logEvent(ai, eventName, QuestTitleW3(q), std::to_string(dest->GetQuestId()));
         }
 
         // Picking the same hand-in taker again while still stuck near it (the
