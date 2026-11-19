@@ -158,7 +158,7 @@ void PassingBuffsService::SweepNow(std::vector<Player*> const& realPlayers)
             bots.push_back(bot);
         }
         std::sort(bots.begin(), bots.end(), [](Player* a, Player* b)
-            { return a->GetObjectGuid().GetRawValue() < b->GetObjectGuid().GetRawValue(); });
+            { return GuidKeyCompat(a->GetObjectGuid()) < GuidKeyCompat(b->GetObjectGuid()); });
 
         for (Player* bot : bots)
         {

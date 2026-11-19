@@ -462,7 +462,7 @@ HireOutcome HireProvisionService::Hire(Player* requester, HireSelection const& s
     pending.queuedAt = time(nullptr);
     // C6: the authorization this hire was charged under; a bound-raid seat is rechecked before it joins.
     pending.seatMode = HireSeatModeFor(intoBoundRaid);
-    pending.seatGrant.commanderGuid = masterGuid.GetRawValue();
+    pending.seatGrant.commanderGuid = GuidKeyCompat(masterGuid);
     pending.seatGrant.leadGuid = boundRaid.leadGuid;
     pending.seatGrant.groupId = boundRaid.groupId;
     pending.cost = cost;
@@ -1473,7 +1473,7 @@ bool HireProvisionService::SeatHireCancelled(Player* bot, Player* master, Pendin
         return false;
     BotCommands::BoundRaidFacts const boundRaid = BotCommands::BoundRaidOf(master);
     BoundSeatNow now;
-    now.commanderGuid = master->GetObjectGuid().GetRawValue();
+    now.commanderGuid = GuidKeyCompat(master->GetObjectGuid());
     now.commanderOnline = true;
     now.bound = boundRaid.bound;
     now.leadGuid = boundRaid.leadGuid;

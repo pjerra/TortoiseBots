@@ -262,7 +262,7 @@ bool HunterStepOutAction::Execute(Event& event)
     if (!target || !state)
         return false;
 
-    uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
+    uint64 const targetRaw = GuidKeyCompat(target->GetObjectGuid());
     uint32 const nowMs = WorldTimer::getMSTime();
 
     // A step is already under way for this mob: let it finish. A finished

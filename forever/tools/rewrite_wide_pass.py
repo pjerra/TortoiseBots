@@ -133,7 +133,16 @@ GUIDKEY = re.compile(r"(?<![\w.):>])([A-Za-z_]\w*(?:(?:->|\.)[A-Za-z_]\w*(?:\(\)
 NONKEY = (re.compile(r"<<"),
           re.compile(r"\bWorldPacket\b|QueuePacket|\bEnqueue\(|\bWrite\(|AppendPackedGuid|appendPackGUID|\bByteBuffer\b"),
           re.compile(r"(?<!get)(?<!Get)ObjectGuid\(|GuidPosition\(|GuidFromRawCompat\(|guidStr|printf|SetFacingGUID\("),
-          re.compile(r" \? "))
+          re.compile(r"\bPQuery\(|\bPExecute\("))
+# A key whose reader this pass leaves raw, so the writer must stay raw too: (file, line, why). The reader is in a file the
+# guid model above cannot be applied to, or in one outside this pass.
+GUIDKEY_KEEP_RAW = {
+    ("ai/playerbot/strategy/actions/ResetAiAction.cpp", "37"): "ai_playerbot_db_store guid column, shared with the other table writers",
+    ("ai/playerbot/strategy/actions/ResetAiAction.cpp", "115"): "ai_playerbot_db_store guid column, shared with the other table writers",
+    ("ai/playerbot/strategy/actions/ServiceNearbyNpcAction.cpp", "51"): "NearbyServiceFailParks is read with GetRawValue in MaintenanceValues.cpp",
+    ("ai/playerbot/strategy/actions/VictimEscapeActions.cpp", "160"): "SeekMeetHealPuller is produced in BossTacticsActions.cpp, left raw",
+    ("host/RangedShotAdapter.cpp", "25"): "RangedShotLedger::Count is read in commands/Commander.cpp, left raw",
+}
 
 
 def transform_guidkey(line):
@@ -236,6 +245,30 @@ def transform_summon(line):
     return sub_all(RECV + r"->SummonCreature\(", lambda m: "SummonCreatureCompat(" + m.group(1) + ", ", line)
 
 
+def transform_accountid(line):
+    return sub_all(r"\bsObjectMgr\.GetPlayerAccountIdByGUID\(", lambda m: "AccountIdOfCharacterCompat(", line)
+
+
+def transform_playername(line):
+    return sub_all(r"\bsObjectMgr\.GetPlayerNameByGUID\(", lambda m: "PlayerNameByGuidCompat(", line)
+
+
+def transform_playerguid(line):
+    return sub_all(r"\bsObjectMgr\.GetPlayerGuidByName\(", lambda m: "PlayerGuidByNameCompat(", line)
+
+
+def transform_underwater(line):
+    return sub_all(RECV + r"->IsUnderwater\(\)", lambda m: "IsUnderwaterCompat(" + m.group(1) + ")", line)
+
+
+def transform_respawn(line):
+    return sub_all(RECV + r"->GetRespawnCoord\(", lambda m: "GetRespawnCoordCompat(" + m.group(1) + ", ", line)
+
+
+def transform_holder(line):
+    return sub_all(RECV + r"->GetHolder\(\)", lambda m: "AuraHolderCompat(" + m.group(1) + ")", line)
+
+
 def transform_questlevel(line):
     return sub_all(RECV + r"->GetQuestLevel\(\)", lambda m: "QuestLevelCompat(" + m.group(1) + ")", line)
 
@@ -259,6 +292,12 @@ FAMILIES = {
     "bgmap": (lambda msg, line: "'IsBattleGround' in 'Map'" in msg, transform_bgmap, False),
     "summon": (lambda msg, line: "call to 'SummonCreature'" in msg, transform_summon, False),
     "questlevel": (lambda msg, line: "'GetQuestLevel' in 'Quest'" in msg, transform_questlevel, False),
+    "accountid": (lambda msg, line: "'GetPlayerAccountIdByGUID'" in msg, transform_accountid, False),
+    "playername": (lambda msg, line: "'GetPlayerNameByGUID'" in msg, transform_playername, False),
+    "playerguid": (lambda msg, line: "'GetPlayerGuidByName'" in msg, transform_playerguid, False),
+    "underwater": (lambda msg, line: "'IsUnderwater'" in msg, transform_underwater, False),
+    "respawn": (lambda msg, line: "'GetRespawnCoord'" in msg, transform_respawn, False),
+    "holder": (lambda msg, line: "'GetHolder'" in msg, transform_holder, False),
 }
 
 # A file that turns a number back into a guid or an online player: the key and the object must agree, and a hash cannot be
@@ -326,6 +365,7 @@ def main():
         lines = open(full, encoding="utf-8").read().split("\n")
         before = list(lines)
         touched = 0
+        raw_lines = sorted({i + 1 for i, text in enumerate(lines) if "GetRawValue()" in text})
         for line_no, msg in rows:
             line = lines[line_no - 1]
             for family in families:
@@ -333,6 +373,9 @@ def main():
                 if not predicate(msg, line):
                     continue
                 if family == "guidkey" and RECONSTRUCTS.search("\n".join(lines)):
+                    left[family] += 1
+                    continue
+                if family == "guidkey" and (path, str(line_no)) in GUIDKEY_KEEP_RAW:
                     left[family] += 1
                     continue
                 new, n = transform(line)
@@ -345,6 +388,18 @@ def main():
                         print(f"{path}:{line_no}: {new.strip()[:160]}")
                 else:
                     left[family] += 1
+        if "guidkey" in families and not RECONSTRUCTS.search("\n".join(lines)):
+            for line_no in raw_lines:
+                if (path, str(line_no)) in GUIDKEY_KEEP_RAW:
+                    continue
+                line = lines[line_no - 1]
+                new, n = transform_guidkey(line)
+                if n and new != line:
+                    lines[line_no - 1] = new
+                    totals["guidkey"] += n
+                    touched += 1
+                    if check:
+                        print(f"{path}:{line_no}: {new.strip()[:160]}")
         if lines != before:
             changed += 1
             if not check:

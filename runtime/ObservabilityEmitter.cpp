@@ -1214,7 +1214,7 @@ void ObservabilityEmitter::Update(uint32 diff)
         }
         // A new target starts its own clock: the reported duration belongs to
         // the unit named in the event, not to the fight as a whole.
-        uint64 const combatTargetGuid = combatTarget ? combatTarget->GetObjectGuid().GetRawValue() : 0;
+        uint64 const combatTargetGuid = combatTarget ? GuidKeyCompat(combatTarget->GetObjectGuid()) : 0;
         if (combatTargetGuid != track.unreachableTargetGuid)
         {
             track.unreachableTargetGuid = combatTargetGuid;
@@ -1724,13 +1724,13 @@ void ObservabilityEmitter::EmitDungeonMobs(std::vector<Player*> const& bots, std
             ++group.bots;
         DMT::MemberInfo info;
         info.guid = unit->GetGUIDLow();
-        info.id = unit->GetObjectGuid().GetRawValue();
+        info.id = GuidKeyCompat(unit->GetObjectGuid());
         // What it has selected, else what it fights: two field reads.
         ::ObjectGuid target = unit->GetTargetGuid();
         if (target.IsEmpty())
             if (Unit* victim = unit->GetVictim())
                 target = victim->GetObjectGuid();
-        info.target = target.GetRawValue();
+        info.target = GuidKeyCompat(target);
         info.x = unit->GetPositionX();
         info.y = unit->GetPositionY();
         info.bot = isBot;
@@ -1959,14 +1959,14 @@ void ObservabilityEmitter::EmitCommanders()
             b.x = bot->GetPositionX();
             b.y = bot->GetPositionY();
             b.z = bot->GetPositionZ();
-            b.id = bot->GetObjectGuid().GetRawValue();
-            b.away = ref.awayBots.count(bot->GetObjectGuid().GetRawValue()) != 0;
+            b.id = GuidKeyCompat(bot->GetObjectGuid());
+            b.away = ref.awayBots.count(GuidKeyCompat(bot->GetObjectGuid())) != 0;
             // What it has selected, else what it fights: two field reads.
             ::ObjectGuid target = bot->GetTargetGuid();
             if (target.IsEmpty())
                 if (Unit* victim = bot->GetVictim())
                     target = victim->GetObjectGuid();
-            b.target = target.GetRawValue();
+            b.target = GuidKeyCompat(target);
             for (CommanderTelemetry::BotExtra const& extra : ref.botExtras) // at most kMaxBotsPerBinding of them
                 if (extra.id == b.id)
                 {

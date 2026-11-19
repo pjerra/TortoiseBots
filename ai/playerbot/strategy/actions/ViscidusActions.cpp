@@ -108,8 +108,8 @@ Unit* ViscidusCombatAction::Target()
         // Urgency comes from distance to the merge point. Within one short
         // tier, prefer the bot's local lane instead of sending the entire ring
         // across the room after a tiny difference in spawn coordinates.
-        if (!best || ViscidusGlobBefore(glob->GetDistance(boss), bot->GetDistance(glob), glob->GetObjectGuid().GetRawValue(),
-            best->GetDistance(boss), bot->GetDistance(best), best->GetObjectGuid().GetRawValue())) best = glob;
+        if (!best || ViscidusGlobBefore(glob->GetDistance(boss), bot->GetDistance(glob), GuidKeyCompat(glob->GetObjectGuid()),
+            best->GetDistance(boss), bot->GetDistance(best), GuidKeyCompat(best->GetObjectGuid()))) best = glob;
     }
     if (best && retained && ViscidusMergeTier(retained->GetDistance(boss)) == ViscidusMergeTier(best->GetDistance(boss))) return retained;
     if (best) return best;
@@ -184,11 +184,11 @@ bool ViscidusCombatAction::RingPoint(WorldPosition& point)
             PlayerbotAI* memberAi = GET_PLAYERBOT_AI(player);
             if (memberAi && player->IsAlive() && player->IsInMap(bot) && ViscidusEnabled(memberAi) &&
                 !memberAi->IsHeal(player) && !memberAi->IsTank(player) && !memberAi->IsRanged(player))
-                members.push_back(player->GetObjectGuid().GetRawValue());
+                members.push_back(GuidKeyCompat(player->GetObjectGuid()));
         }
-    if (members.empty()) members.push_back(bot->GetObjectGuid().GetRawValue());
+    if (members.empty()) members.push_back(GuidKeyCompat(bot->GetObjectGuid()));
     std::sort(members.begin(), members.end());
-    auto slot = std::find(members.begin(), members.end(), bot->GetObjectGuid().GetRawValue());
+    auto slot = std::find(members.begin(), members.end(), GuidKeyCompat(bot->GetObjectGuid()));
     if (slot == members.end()) return false;
     float angle = ViscidusRingAngle(unsigned(slot - members.begin()), unsigned(members.size()));
     // Keep swings in reach throughout the 150-hit frozen window. The ring
@@ -354,7 +354,7 @@ bool ViscidusCombatAction::TankRecovery(Unit* boss)
             std::lock_guard<std::mutex> lock(retakeMutex);
             for (auto it = retakeClaims.begin(); it != retakeClaims.end();)
                 if (uint32(now - it->second) > 60000) it = retakeClaims.erase(it); else ++it;
-            auto key = std::make_pair(bot->GetInstanceId(), boss->GetObjectGuid().GetRawValue());
+            auto key = std::make_pair(bot->GetInstanceId(), GuidKeyCompat(boss->GetObjectGuid()));
             auto previous = retakeClaims.find(key);
             if (previous != retakeClaims.end() && uint32(now - previous->second) < 2000) return false;
             retakeClaims[key] = now;
@@ -386,7 +386,7 @@ bool ViscidusCombatAction::GlobBurst(Unit* target)
             !ai->CanCastSpell(id, recipient) || !ai->CastSpell(id, recipient)) return false;
         sPlayerbotAIConfig.logEvent(ai, "ViscidusGlobBurst", name,
             "instance=" + std::to_string(bot->GetInstanceId()) + "|spell=" + std::to_string(id) +
-            "|glob=" + std::to_string(target->GetObjectGuid().GetRawValue()));
+            "|glob=" + std::to_string(GuidKeyCompat(target->GetObjectGuid())));
         return true;
     };
     if (bot->GetClass() == CLASS_MAGE)
@@ -453,7 +453,7 @@ bool ViscidusCombatAction::Execute(Event&)
         RESET_AI_VALUE(Unit*, "dps target");
         sPlayerbotAIConfig.logEvent(ai, "ViscidusTarget", "encounter handoff",
             "instance=" + std::to_string(bot->GetInstanceId()) + "|entry=" + std::to_string(target->GetEntry()) +
-            "|guid=" + std::to_string(target->GetObjectGuid().GetRawValue()));
+            "|guid=" + std::to_string(GuidKeyCompat(target->GetObjectGuid())));
     }
     if (target->GetEntry() == 15299 && TankRecovery(target)) return true;
     if (target->GetEntry() == 15667 && GlobBurst(target)) return true;
@@ -537,7 +537,7 @@ void ViscidusCombatAction::Update()
         ai->SetActionDuration(uint32(0));
         sPlayerbotAIConfig.logEvent(ai, "ViscidusTarget", "prompt encounter handoff",
             "instance=" + std::to_string(bot->GetInstanceId()) + "|entry=" + std::to_string(target->GetEntry()) +
-            "|guid=" + std::to_string(target->GetObjectGuid().GetRawValue()));
+            "|guid=" + std::to_string(GuidKeyCompat(target->GetObjectGuid())));
     }
 }
 void ai::UpdateViscidus(PlayerbotAI* ai)

@@ -173,7 +173,7 @@ VictimEscapeGuards GuardsFor(Unit* boss, Player* victim, std::uint32_t nowMs)
     VictimEscapeGuards guards;
     {
         std::lock_guard<std::mutex> lock(g_victimEscapeMutex);
-        auto it = g_victimEscapeLast.find(victim->GetObjectGuid().GetRawValue());
+        auto it = g_victimEscapeLast.find(GuidKeyCompat(victim->GetObjectGuid()));
         if (it != g_victimEscapeLast.end())
         {
             EscapeRecord& record = it->second;
@@ -204,7 +204,7 @@ VictimEscape DecideFor(Unit* boss, Player* victim, std::uint32_t nowMs, VictimEs
 void NoteEscape(Player* victim, std::uint32_t nowMs)
 {
     std::lock_guard<std::mutex> lock(g_victimEscapeMutex);
-    const std::uint64_t key = victim->GetObjectGuid().GetRawValue();
+    const std::uint64_t key = GuidKeyCompat(victim->GetObjectGuid());
     if (g_victimEscapeLast.find(key) == g_victimEscapeLast.end())
         EvictOldest(g_victimEscapeLast, [](const EscapeRecord& r) { return r.castMs; });
     EscapeRecord& record = g_victimEscapeLast[key];
@@ -239,7 +239,7 @@ void LogVictimEscape(PlayerbotAI* ai, Unit* boss, Player* victim, uint32 spellId
     if (!ok)
     {
         std::lock_guard<std::mutex> lock(g_victimEscapeMutex);
-        const auto key = std::make_pair(victim->GetObjectGuid().GetRawValue(), ai->GetBot()->GetObjectGuid().GetRawValue());
+        const auto key = std::make_pair(GuidKeyCompat(victim->GetObjectGuid()), GuidKeyCompat(ai->GetBot()->GetObjectGuid()));
         if (g_victimEscapeRefusedLog.find(key) == g_victimEscapeRefusedLog.end())
             EvictOldest(g_victimEscapeRefusedLog, [](std::uint32_t ms) { return ms; });
         std::uint32_t& last = g_victimEscapeRefusedLog[key];

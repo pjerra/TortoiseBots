@@ -36,7 +36,7 @@ namespace
         char stamp[20]; std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tm);
         std::ostringstream pos; ai::WorldPosition(unit).printWKT(pos);
         detail = "map=531|instance=" + std::to_string(unit->GetInstanceId()) + "|guid=" +
-            std::to_string(unit->GetObjectGuid().GetRawValue()) + "|" + detail;
+            std::to_string(GuidKeyCompat(unit->GetObjectGuid())) + "|" + detail;
         auto row = RaidBossLog::Row(stamp, unit->GetName(), event, pos.str(), 0, 0, float(unit->GetLevel()), "Viscidus", detail);
         sPlayerbotAIConfig.log("bot_events.csv", row.c_str());
     }
@@ -58,8 +58,8 @@ void ViscidusDiagnostics::OnUnitUpdate(Unit* unit, uint32)
     Cycle& cycle = cycles[unit->GetInstanceId()]; cycle.seen = now;
     if (unit->GetEntry() == 15667)
     {
-        if (!cycle.globs.insert(unit->GetObjectGuid().GetRawValue()).second) return;
-        cycle.born[unit->GetObjectGuid().GetRawValue()] = now;
+        if (!cycle.globs.insert(GuidKeyCompat(unit->GetObjectGuid())).second) return;
+        cycle.born[GuidKeyCompat(unit->GetObjectGuid())] = now;
         if (!cycle.shattered)
         {
             cycle.shattered = true; ++cycle.wave; cycle.kills = 0; cycle.splitAt = now;
@@ -117,10 +117,10 @@ void ViscidusDiagnostics::OnUnitDeath(Unit* unit, Unit* killer)
     if (unit->GetEntry() == 15667)
     {
         ++cycle.kills;
-        auto born = cycle.born.find(unit->GetObjectGuid().GetRawValue());
+        auto born = cycle.born.find(GuidKeyCompat(unit->GetObjectGuid()));
         std::string ttk = born == cycle.born.end() ? "unknown" : std::to_string(uint32(WorldTimer::getMSTime() - born->second));
         Write(unit, "ViscidusGlobDeath", "ttk_ms=" + ttk + "|" + "wave=" + std::to_string(cycle.wave) + "|kills=" + std::to_string(cycle.kills) +
-            "|glob_count=" + std::to_string(cycle.globs.size()) + "|killer_guid=" + std::to_string(killer ? killer->GetObjectGuid().GetRawValue() : 0));
+            "|glob_count=" + std::to_string(cycle.globs.size()) + "|killer_guid=" + std::to_string(killer ? GuidKeyCompat(killer->GetObjectGuid()) : 0));
     }
     else
     {

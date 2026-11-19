@@ -87,7 +87,7 @@ bool ServiceNearbyNpcAction::TryVerb(Event& event, GuidPosition target, NearbySe
 {
     AiObjectContext* context = ai->GetAiObjectContext();
     NearbyServiceFailParks parks = AI_VALUE(NearbyServiceFailParks, "nearby service fail parks");
-    uint64_t const npcGuid = target.GetRawValue();
+    uint64_t const npcGuid = GuidKeyCompat(target);
     int const verbId = NearbyServiceRankOf(kind);
     time_t const now = time(0);
 

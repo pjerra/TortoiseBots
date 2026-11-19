@@ -696,7 +696,7 @@ bool RaidSpreadAction::Execute(Event& event)
     const WorldPosition nearPos(nearest);
     float away = nearPos.GetAngleTo(botPos);
     uint32 const nowMs = WorldTimer::getMSTime();
-    lastMove.spreadFailures.Observe(nearest->GetObjectGuid().GetRawValue(),
+    lastMove.spreadFailures.Observe(GuidKeyCompat(nearest->GetObjectGuid()),
         bot->GetMapId(), nearestDist, nowMs, bot->movespline->GetId());
     // Prefer headings that have not failed to gain spacing. A second pass
     // allows remembered failures so the cache can never block every route.
@@ -732,7 +732,7 @@ bool RaidSpreadAction::Execute(Event& event)
             {
                 if (logSpread)
                     LogBossSpread(ai, bot, "stepped", -1, -1.0f, -1);
-                lastMove.spreadFailures.BeginAttempt(nearest->GetObjectGuid().GetRawValue(),
+                lastMove.spreadFailures.BeginAttempt(GuidKeyCompat(nearest->GetObjectGuid()),
                     bot->GetMapId(), botPos.GetAngleTo(out), nearestDist, nowMs, bot->movespline->GetId());
                 lastMove.lastSpreadStepMs = WorldTimer::getMSTime();
                 // The landing becomes the stay spot: the return-to-stay keeps the spacing the row asked for instead of
