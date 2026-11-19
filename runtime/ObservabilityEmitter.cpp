@@ -1228,7 +1228,7 @@ void ObservabilityEmitter::Update(uint32 diff)
             bool unreachable = (dist > 45.0f);
             if (!unreachable && (track.unreachableDurationMs > 0 || track.lastSampleMs == nowMs))
             {
-                inLos = bot->IsWithinLOSInMap(combatTarget, true);
+                inLos = IsWithinLOSInMapCompat(bot, combatTarget, true);
                 unreachable = !inLos;
             }
 

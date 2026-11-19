@@ -398,7 +398,7 @@ bool ViscidusCombatAction::GlobBurst(Unit* target)
             if (SpellRadiusEntry const* entry = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
                 radius = std::max(radius, entry->Radius);
         if (radius <= 0) return false;
-        if (bot->GetDistance(target) > radius - 1.0f || !bot->IsWithinLOSInMap(target, true))
+        if (bot->GetDistance(target) > radius - 1.0f || !IsWithinLOSInMapCompat(bot, target, true))
             return MoveNear(target, std::max(1.0f, radius - 3.0f));
         Unit* boss = Boss();
         if (boss && target->GetDistance(boss) < 20.0f && !target->HasAuraType(SPELL_AURA_MOD_ROOT))
@@ -467,7 +467,7 @@ bool ViscidusCombatAction::Execute(Event&)
     if (target->GetEntry() == 15299 && bot->GetClass() == CLASS_MAGE && bot->HasSpell(116))
     {
         if (bot->IsNonMeleeSpellCasted(true)) return selected;
-        if (bot->GetDistance(target) > 28.0f || !bot->IsWithinLOSInMap(target, true)) return MoveNear(target, 25.0f);
+        if (bot->GetDistance(target) > 28.0f || !IsWithinLOSInMapCompat(bot, target, true)) return MoveNear(target, 25.0f);
         return ai->CastSpell(116, target); // Hits, not rank damage, advance the core frost counter.
     }
     return selected;

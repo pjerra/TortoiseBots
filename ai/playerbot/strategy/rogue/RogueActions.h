@@ -285,7 +285,7 @@ namespace ai
         bool isUseful() override
         {
             Unit* target = GetTarget();
-            if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
+            if (target && bot->CanReachWithMeleeAutoAttack(target) && IsWithinLOSInMapCompat(bot, target, true))
                 return false;
 
             return ReachTargetAction::isUseful();

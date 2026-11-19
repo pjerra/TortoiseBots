@@ -28,9 +28,51 @@ SKIP_FILES = {"ai/cmangos-compat-shim.h", "ai/cmangos-compat-r3.h", "ai/cmangos-
 RECV = r"(?<![A-Za-z0-9_.>])([A-Za-z_]\w*(?:\(\))?(?:\[[^\]]*\])?(?:(?:->|\.)[A-Za-z_]\w*(?:\(\))?(?:\[[^\]]*\])?)*)"
 
 
+def comment_spans(line):
+    """(start, end) of every comment and string literal on the line, so a rewrite never lands inside one."""
+    spans = []
+    i, n = 0, len(line)
+    while i < n:
+        two = line[i:i + 2]
+        if two == "//":
+            spans.append((i, n))
+            break
+        if two == "/*":
+            end = line.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            spans.append((i, end))
+            i = end
+        elif line[i] in "\"'":
+            quote = line[i]
+            j = i + 1
+            while j < n:
+                if line[j] == "\\":
+                    j += 2
+                    continue
+                if line[j] == quote:
+                    j += 1
+                    break
+                j += 1
+            spans.append((i, j))
+            i = j
+        else:
+            i += 1
+    return spans
+
+
 def sub_all(pattern, repl, line):
-    new, n = re.subn(pattern, repl, line)
-    return new, n
+    """re.subn over the code outside comments and string literals only."""
+    spans = comment_spans(line)
+    out, pos, n = [], 0, 0
+    for m in re.finditer(pattern, line):
+        if any(a <= m.start() < b for a, b in spans):
+            continue
+        out.append(line[pos:m.start()])
+        out.append(repl(m) if callable(repl) else m.expand(repl))
+        pos = m.end()
+        n += 1
+    out.append(line[pos:])
+    return "".join(out), n
 
 
 def wrap_call(pattern, repl, line, repetitions=1):
@@ -48,8 +90,11 @@ def transform_cstr(line):
     total = 0
     for pattern in (RECV + r"->GetName\(\)", RECV + r"->Name1\b", RECV + r"->SpellName\[0\]"):
         rx = re.compile(pattern)
+        spans = comment_spans(line)
         for m in reversed(list(rx.finditer(line))):
             if line[max(0, m.start() - 11):m.start()] == "CStrCompat(":
+                continue
+            if any(a <= m.start() < b for a, b in spans):
                 continue
             line = line[:m.start()] + "CStrCompat(" + m.group(0) + ")" + line[m.end():]
             total += 1
@@ -60,9 +105,10 @@ def transform_player(line):
     """`sObjectMgr.GetPlayer(guid)` -> `GetPlayerCompat(guid)`; a name lookup is left (it needs a name helper)."""
     total = 0
     start = 0
+    spans = comment_spans(line)
     while True:
         pos = line.find("sObjectMgr.GetPlayer(", start)
-        if pos < 0:
+        if pos < 0 or any(a <= pos < b for a, b in spans):
             break
         open_paren = pos + len("sObjectMgr.GetPlayer(")
         depth, i = 1, open_paren
@@ -93,14 +139,16 @@ NONKEY = (re.compile(r"<<"),
 def transform_guidkey(line):
     if any(p.search(line) for p in NONKEY):
         return line, 0
-    return sub_all(GUIDKEY.pattern.replace(r"\.GetRawValue\(\)", r"\.GetRawValue\(\)"),
-                   lambda m: "GuidKeyCompat(" + m.group(1) + ")", line)
+    return sub_all(GUIDKEY.pattern, lambda m: "GuidKeyCompat(" + m.group(1) + ")", line)
 
 
 def transform_flag(field, helper):
     def run(line):
         total = 0
+        spans = comment_spans(line)
         for m in reversed(list(re.finditer(RECV + r"->HasFlag\(\s*" + field + r"\s*,\s*", line))):
+            if any(a <= m.start() < b for a, b in spans):
+                continue
             separator = ", " if line[m.end():].strip() else ","
             line = line[:m.start()] + helper + "(" + m.group(1) + separator + line[m.end():]
             total += 1
@@ -134,7 +182,10 @@ def transform_los(line):
     total = 0
     line, n = sub_all(RECV + r"->IsWithinLOSInMap\(", lambda m: "IsWithinLOSInMapCompat(" + m.group(1) + ", ", line)
     total += n
+    spans = comment_spans(line)
     for m in reversed(list(re.finditer(RECV + r"->IsWithinLOS\(", line))):
+        if any(a <= m.start() < b for a, b in spans):
+            continue
         if args_of(line, m.end()) != 4:
             continue  # the helper has no fifth argument (the Turtle core's optional extra distance)
         line = line[:m.start()] + "IsWithinLOSCompat(" + m.group(1) + ", " + line[m.end():]

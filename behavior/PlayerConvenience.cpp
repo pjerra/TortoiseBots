@@ -101,7 +101,7 @@ bool PlayerConvenience::RequestSummon(Player* requester, Player* bot, Player* an
     float const ground = GetHeightCompat(origin->GetMap(), destX, destY, originZ, true);
     bool const groundFound = ground > INVALID_HEIGHT;
     float destZ = groundFound ? ground + 0.05f : originZ;   // + 0.05f as UpdateGroundPositionZ
-    bool const inLos = groundFound && origin->IsWithinLOS(destX, destY, destZ + bot->GetCollisionHeight(), true);
+    bool const inLos = groundFound && IsWithinLOSCompat(origin, destX, destY, destZ + bot->GetCollisionHeight(), true);
 
     // The visual portal used by the first implementation was not part of the
     // Tortoise data contract. Reuse the mature summon action's conservative

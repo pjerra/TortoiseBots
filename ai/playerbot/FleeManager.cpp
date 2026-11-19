@@ -54,7 +54,7 @@ void FleeManager::calculateDistanceToCreatures(FleePoint *point)
 		    continue;
 
         // do not count non-LOS mobs
-        if (!unit->IsWithinLOS(point->x, point->y, point->z + unit->GetCollisionHeight(), true))
+        if (!IsWithinLOSCompat(unit, point->x, point->y, point->z + unit->GetCollisionHeight(), true))
             continue;
 
 		float d = sServerFacade.getDistance2d(unit, point->x, point->y);
@@ -119,7 +119,7 @@ void FleeManager::calculatePossibleDestinations(std::list<FleePoint*> &points)
                 if (terrain && terrain->IsInWater(x, y, z))
                     continue;
 
-                if (/*!bot->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true) || */(target && !target->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true)))
+                if (/*!bot->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true) || */(target && !IsWithinLOSCompat(target, x, y, z + bot->GetCollisionHeight(), true)))
                     continue;
 
                 if (idleMobVeto && idleMobVeto->Wakes(x, y))

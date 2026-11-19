@@ -48,7 +48,7 @@ bool HealInRange(PlayerbotAI* ai, Unit* target, char const* name)
     Player* bot = ai->GetBot();
     float range = 0;
     return ai->GetSpellRange(name, &range) && range > 0 &&
-        bot->GetDistance(target, SizeFactor::CombatReach) <= range && bot->IsWithinLOSInMap(target, true);
+        bot->GetDistance(target, SizeFactor::CombatReach) <= range && IsWithinLOSInMapCompat(bot, target, true);
 }
 bool ReadyHealHere(PlayerbotAI* ai)
 {

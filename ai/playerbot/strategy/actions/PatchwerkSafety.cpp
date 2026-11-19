@@ -237,7 +237,7 @@ bool ai::UpdatePatchwerkSafety(PlayerbotAI* ai)
         previous->Set(patient);
         if (bot->IsNonMeleeSpellCasted(true, false, true)) return true;
         if (HealerSupport(ai)) return true;
-        if (!bot->IsWithinLOSInMap(patient, true) || bot->GetDistance(patient) > ai->GetRange("heal"))
+        if (!IsWithinLOSInMapCompat(bot, patient, true) || bot->GetDistance(patient) > ai->GetRange("heal"))
         {
             Event event("patchwerk tank healing reach");
             return ai->DoSpecificAction("reach party member to heal", event, true);

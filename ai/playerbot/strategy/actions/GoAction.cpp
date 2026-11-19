@@ -758,7 +758,7 @@ bool GoAction::MoveToGps(std::string& param, Player* requester)
             ai->TellPlayer(requester, out);
         }
 
-        if (bot->IsWithinLOS(x, y, z, true))
+        if (IsWithinLOSCompat(bot, x, y, z, true))
             return MoveNear(bot->GetMapId(), x, y, z, 0);
         else
             return MoveTo(bot->GetMapId(), x, y, z, false, false);

@@ -580,7 +580,7 @@ RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()
     bool const hovering = HoverReachApplies(true, bot->GetMap()->IsDungeon(), sServerFacade.IsHostileTo(bot, target),
         bot->GetDistance(target), ATTACK_DISTANCE, groundValid, tz, groundZ);
     bool const inRange = bot->GetDistance(target, SizeFactor::CombatReach) <= ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance &&
-        bot->IsWithinLOSInMap(target, true);
+        IsWithinLOSInMapCompat(bot, target, true);
     bool const spreadRowLive = BossSpreadLive(ai, bot);
     float const radius = SpreadRadiusYd();
     // No ally is the far end of the distance scale: the first read asks whether the hold would apply if the bot stood
