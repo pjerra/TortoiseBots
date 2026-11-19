@@ -79,3 +79,15 @@ Five engines (four in the instance, the priest outside, a damage warrior was add
 
 ## 11. Gates
 See the end of this file (filled in last).
+
+| Gate | Result |
+|---|---|
+| option-ON `worldserver` (slot 2) on the final tree | `CMAKE_RC=0 MAKE_RC=0` |
+| option-OFF module build | `CMAKE_RC=0 MAKE_RC=0`; 7 objects: `TbBotMgr TbBotSession TbScripts TbItemPrototype TbSpellEntry TbEngineBrain TbH3Off` |
+| census SLICE3 / SLICE2 / SLICE1 | `files 170 / 160 / 133  compile clean = files  error places 0` |
+| generator `--check`, registry check | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=207` |
+| Turtle `vm-build ~/wt-slice3-integ --wait` (sha f15461666, the last commit that touched a file outside `forever/` except the test pin below) | `COMPILE_SECONDS=2537 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb` on the final commit 2772e7bb5 | `RESULT: PASS ... rc=0` (1724 s). The first run (4646647cd) FAILED one test: `tools/test_pull_lead_release_wiring.py::test_chat_pullback_hold_stays_plain_timer` pinned the old two-argument signature of `PausePartyPullHold`; re-pinned to the new defaulted signature (it now asserts the default `leadKeyed = false`, that the window is lead-keyed only through the parameter, and that the chat pullback still calls `PausePartyPullHold(bot, joinDelay);`); no assertion deleted |
+| `policy-tests.sh` | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL` = baseline |
+| files outside `forever/` changed in this package | `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/strategy/actions/PullActions.cpp`, `PullActions.h`, `ai/playerbot/strategy/values/MasterTargetValue.h`, `ai/cmangos-compat-s3.h`, `tools/test_pull_lead_release_wiring.py`, `CMakeLists.txt` (ForeverCore only) |
+| the test server | stopped after every boot (`docker ps`: `forever-bnet`, `forever-db`); the other binary and `aiplayerbot.conf` restored by hand after the two crashes (`cmp` identical); the `game_tele` rows deleted; `tortoisebots.conf` keeps the three keys added for L7 |
