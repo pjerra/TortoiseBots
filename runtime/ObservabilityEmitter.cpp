@@ -287,7 +287,7 @@ uint8 BaseMacroState(Player* bot, PlayerbotAI* ai)
     // Standing still but doing something: looting, casting, sitting to
     // eat/drink, or an active travel destination being worked. Member reads
     // only; the work-target flag is refreshed at snapshot cadence.
-    if (bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_LOOTING))
+    if (HasUnitFlagCompat(bot, UNIT_FLAG_LOOTING))
         return STATE_BUSY;
     if (bot->IsNonMeleeSpellCasted(false))
         return STATE_BUSY;
@@ -331,7 +331,7 @@ Activity NoteActivity(Player* bot, bool hasWorkTarget, ObservabilityEmitter::Bot
     float dy = bot->GetPositionY() - track.lastY;
     if (dx * dx + dy * dy >= 0.25f)
         act.progress = true;
-    if (bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_LOOTING))
+    if (HasUnitFlagCompat(bot, UNIT_FLAG_LOOTING))
         act.progress = true;
     if (bot->IsNonMeleeSpellCasted(false))
         act.progress = true;

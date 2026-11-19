@@ -1607,7 +1607,7 @@ void AddViewHostile(RemoteCommander::View::Snapshot& snapshot, RemoteCommander::
     hostile->critter = unit->GetCreatureType() == CREATURE_TYPE_CRITTER;
     hostile->civilian = creature && creature->IsCivilian();
     hostile->guard = creature && creature->IsGuard();
-    hostile->unattackable = unit->HasFlag(UNIT_FIELD_FLAGS,
+    hostile->unattackable = HasUnitFlagCompat(unit,
         UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NON_ATTACKABLE_2);
 
     // Engaged: the top of its own threat list, in % of the top entry.
@@ -9826,7 +9826,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
                 fact.victimName = victim->GetName(); // RaidGuardTick: never the off-tank holding the boss; the trash
                                                      // round robin keeps an off-tank on its own add (RaidTrashOffTankHolds)
             fact.attackable = GroupCanAttack(anchor, attacker); // never picked up when it cannot be attacked
-            fact.selectable = !attacker->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            fact.selectable = !HasUnitFlagCompat(attacker, UNIT_FLAG_NOT_SELECTABLE);
             if (hold)
                 fact.distSpot = DistanceTo(attacker, hold->x, hold->y, hold->z);
             if (inParty)
@@ -13340,7 +13340,7 @@ void AddPlayerAttackers(Player* lead, std::vector<Player*> const& bots, std::vec
                 fact.victimTank = PlayerbotAI::IsTank(player);
             }
             fact.attackable = GroupCanAttack(anchor, attacker);
-            fact.selectable = !attacker->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            fact.selectable = !HasUnitFlagCompat(attacker, UNIT_FLAG_NOT_SELECTABLE);
             if (hold)
                 fact.distSpot = DistanceTo(attacker, hold->x, hold->y, hold->z);
             f.partyAttackers.push_back(fact);
@@ -15788,8 +15788,8 @@ static void FillMobState(Unit* unit, CommanderTelemetry::MobInfo& mob)
             immuneMasks.push_back(aura->GetModifier()->m_miscvalue);
     uint32 const immuneMask = CommanderTelemetry::FoldImmuneSchools(immuneMasks);
     mob.flags = CommanderTelemetry::UnitFlags(
-        unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE),
-        unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE_2 | UNIT_FLAG_IMMUNE_TO_PLAYER) || CommanderTelemetry::ImmuneToAllSchools(immuneMask),
+        HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE),
+        HasUnitFlagCompat(unit, UNIT_FLAG_NON_ATTACKABLE_2 | UNIT_FLAG_IMMUNE_TO_PLAYER) || CommanderTelemetry::ImmuneToAllSchools(immuneMask),
         unit->IsHovering() || unit->IsFlying(),
         unit->GetStandState() == UNIT_STAND_STATE_DEAD,
         creature && creature->IsInEvadeMode());
@@ -16612,7 +16612,7 @@ static void FillDungeonMob(Player* seer, Unit* unit, CommanderTelemetry::MobInfo
     ReputationRank const reaction = seer->GetReactionTo(unit);
     mob.reaction = reaction <= REP_HOSTILE ? 'h' : (reaction >= REP_FRIENDLY ? 'f' : 'n');
     Creature* creature = unit->ToCreature();
-    bool const unattackable = unit->HasFlag(UNIT_FIELD_FLAGS,
+    bool const unattackable = HasUnitFlagCompat(unit,
         UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NON_ATTACKABLE_2);
     mob.kind = unit->GetCreatureType() == CREATURE_TYPE_CRITTER ? 'k'
         : creature && creature->IsCivilian() ? 'v'

@@ -113,7 +113,7 @@ Unit* ViscidusCombatAction::Target()
     }
     if (best && retained && ViscidusMergeTier(retained->GetDistance(boss)) == ViscidusMergeTier(best->GetDistance(boss))) return retained;
     if (best) return best;
-    if (boss->GetVisibility() == VISIBILITY_OFF || boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING) ||
+    if (boss->GetVisibility() == VISIBILITY_OFF || HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING) ||
         !bot->IsValidAttackTarget(boss)) return nullptr;
     return boss;
 }
@@ -267,7 +267,7 @@ bool ViscidusCombatAction::KeepDistance()
 {
     Unit* boss = Boss();
     if (!boss || ai->IsTank(bot) || !(ai->IsHeal(bot) || ai->IsRanged(bot)) ||
-        boss->GetVisibility() == VISIBILITY_OFF || boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING)) return false;
+        boss->GetVisibility() == VISIBILITY_OFF || HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING)) return false;
     return WorldPosition(bot).distance(WorldPosition(boss)) < boss->GetCombatReach(bot, false, 0.0f) + 5.0f;
 }
 bool ai::NeedsViscidusDistance(PlayerbotAI* ai)
@@ -334,7 +334,7 @@ namespace
 bool ViscidusCombatAction::TankRecovery(Unit* boss)
 {
     if (!boss || !ai->IsTank(bot) || boss->GetVisibility() == VISIBILITY_OFF ||
-        boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING) || TankVictim(ai, boss)) return false;
+        HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING) || TankVictim(ai, boss)) return false;
     Player* chosen = nullptr;
     uint32 spell = 0;
     for (Player* member : LiveGroupMembers(bot->GetGroup()))
@@ -476,7 +476,7 @@ void ViscidusCombatAction::Update()
 {
     Unit* boss = Boss();
     if (!boss) return;
-    bool split = boss->GetVisibility() == VISIBILITY_OFF || boss->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+    bool split = boss->GetVisibility() == VISIBILITY_OFF || HasUnitFlagCompat(boss, UNIT_FLAG_SPAWNING);
     if (split) wasSplit = true;
     else if (wasSplit)
     {

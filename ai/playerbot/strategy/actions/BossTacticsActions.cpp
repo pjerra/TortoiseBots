@@ -12434,7 +12434,7 @@ bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)
             std::uint32_t const nowMs = WorldTimer::getMSTime();
             TankPostLooseClockState const loose = TankPostLooseClock(it->second.looseSinceMs,
                 it->second.unhittableSinceMs, onOwner,
-                !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE), tank->IsValidAttackTarget(target),
+                !HasUnitFlagCompat(target, UNIT_FLAG_NOT_SELECTABLE), tank->IsValidAttackTarget(target),
                 nowMs);
             it->second.looseSinceMs = loose.looseSinceMs;
             it->second.unhittableSinceMs = loose.unhittableSinceMs;
@@ -13059,7 +13059,7 @@ bool BossTacticsTankPostAction::TakeSubject(const BossTankPost& task, Unit* curr
     in.keyOn = sPlayerbotAIConfig.dungeonRunTankPostTaunts;
     in.engage = true;
     in.subjectOnTank = victim == bot;
-    in.subjectSelectable = !subject->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    in.subjectSelectable = !HasUnitFlagCompat(subject, UNIT_FLAG_NOT_SELECTABLE);
     in.victimIsTank = victim && victim->GetTypeId() == TYPEID_PLAYER &&
         PlayerbotAI::IsTank(static_cast<Player*>(victim));
     in.ownsSubjectOn = sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject;

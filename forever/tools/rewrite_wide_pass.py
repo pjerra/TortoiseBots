@@ -99,7 +99,12 @@ def transform_guidkey(line):
 
 def transform_flag(field, helper):
     def run(line):
-        return sub_all(RECV + r"->HasFlag\(\s*" + field + r"\s*,\s*", lambda m: helper + "(" + m.group(1) + ", ", line)
+        total = 0
+        for m in reversed(list(re.finditer(RECV + r"->HasFlag\(\s*" + field + r"\s*,\s*", line))):
+            separator = ", " if line[m.end():].strip() else ","
+            line = line[:m.start()] + helper + "(" + m.group(1) + separator + line[m.end():]
+            total += 1
+        return line, total
     return run
 
 
