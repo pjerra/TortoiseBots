@@ -67,7 +67,7 @@ priest,16975,Warsong Sash,waist,0,27,quest,6571 Warsong Supplies,27,TDB 2026-10-
 priest,1974,Mindthrust Bracers,wrist,17,22,drop,3855 Shadowfang Darksoul,21,TDB 2026-10-14 creature_loot_template,3,"5:5,7:1,43:3",17,0,0,0,70938 (db2-70938 extraction 2026-11-18); name from TDB armory_item (no ItemSparse name)
 priest,271096,Aetherwisp Bracers,wrist,13,18,drop,261306 Faldrim Anvilmar,16,TDB 2026-10-14 creature_loot_template,3,"45:3,7:3",15,0,0,0,70938 (db2-70938 extraction 2026-11-18); name from TDB armory_item (no ItemSparse name)
 priest,4545,Radiant Silver Bracers,wrist,0,40,quest,673 Foul Magics,40,TDB 2026-10-14 quest_template,2,"45:4,5:8",23,0,0,0,70938 (db2-70938 extraction 2026-11-18)
-priest,251486,Tabitha's Cuffs,wrist,0,24,quest,92401 A Frightened Request,22,TDB 2026-10-14 quest_template,3,"7:3,5:6",18,0,0,0,70938 (db2-70938 extraction 2026-11-18)
+priest,251486,Tabitha's Cuffs,wrist,0,24,quest,92401 A Frightened Request,22,TDB 2026-10-14 quest_template,2,"7:3,5:6",18,0,0,0,70938 (db2-70938 extraction 2026-11-18)
 priest,15452,Featherbead Bracers,wrist,0,18,quest,5724 Returning the Lost Satchel,16,TDB 2026-10-14 quest_template,3,5:5,15,0,0,0,70938 (db2-70938 extraction 2026-11-18); name from TDB armory_item (no ItemSparse name)
 warrior_2h,4643,Grimsteel Cape,back,0,35,quest,1051 Vorrel's Revenge,33,TDB 2026-10-14 quest_template,3,"7:9,3:3",26,0,0,0,70938 (db2-70938 extraction 2026-11-18); name from TDB armory_item (no ItemSparse name)
 warrior_2h,271719,Furs of the Earthen Ring,back,0,33,quest,98823 Earthen Echo,31,TDB 2026-10-14 quest_template,3,"5:5,7:3,4:4,6:4",25,0,0,0,70938 (db2-70938 extraction 2026-11-18)
