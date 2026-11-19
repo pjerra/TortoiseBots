@@ -101,6 +101,14 @@ type BotSnapshot struct {
 	XpPerHour    float64 `json:"xp_per_hour"`
 	XpGainAgeSec float64 `json:"xp_gain_age_sec"`
 
+	// ForeverCore client UiMap placement (ui_map/ui_x/ui_y for zone, ui_cont/ui_cx/ui_cy for continent).
+	UIMap  uint32  `json:"ui_map,omitempty"`
+	UIX    float64 `json:"ui_x,omitempty"`
+	UIY    float64 `json:"ui_y,omitempty"`
+	UICont uint32  `json:"ui_cont,omitempty"`
+	UICX   float64 `json:"ui_cx,omitempty"`
+	UICY   float64 `json:"ui_cy,omitempty"`
+
 	// Calculated 2D projection percentages on the active zone map. Projected
 	// distinguishes a real (0,0) edge coordinate from "no mapping available".
 	Projected bool    `json:"projected"`
@@ -345,10 +353,12 @@ type ActivityResponse struct {
 }
 
 type Coordinate struct {
-	X    float64 `json:"x"`
-	Y    float64 `json:"y"`
-	PctX float64 `json:"pct_x"`
-	PctY float64 `json:"pct_y"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	PctX  float64 `json:"pct_x"`
+	PctY  float64 `json:"pct_y"`
+	PctCX float64 `json:"pct_cx,omitempty"`
+	PctCY float64 `json:"pct_cy,omitempty"`
 }
 
 // StateRatios holds the share of time spent across bot macro states. Values

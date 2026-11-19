@@ -14,6 +14,10 @@
 (function() {
   'use strict';
 
+  const isForever = !!document.querySelector('.brand-version[data-core="forever"]');
+  let FOREVER_MAP_INDEX = {};
+  let FOREVER_UIMAPS = {};
+
   // Fallback zone dictionary (loaded dynamically from /data/zone_maps.json)
   let ZONE_CONFIG = {
     12: { name: 'Elwynn Forest', map: 0, file: 'elwynn.webp' },
@@ -691,6 +695,14 @@
   // zone_maps.json only covers zones with artwork, so custom zones like
   // Moonwhisper (5642) would otherwise render as "Zone 5642".
 
+  function getUiMapName(uiMapId) {
+    if (uiMapId === null || uiMapId === undefined) return '-';
+    const id = Number(uiMapId);
+    const m = FOREVER_UIMAPS[id];
+    if (m && m.name) return m.name;
+    return `UiMap ${uiMapId}`;
+  }
+
   function getZoneName(zoneId, mapId) {
     if (zoneId === null || zoneId === undefined) return '-';
     const zid = Number(zoneId);
@@ -1209,6 +1221,22 @@
   // (e.g. Moonwhisper 5642) has no <option>, so the select cannot hold it
   // and a later filter keystroke ejects the user to the first artwork zone.
   function zoneSelectEntries() {
+    if (isForever) {
+      const entries = new Map();
+      Object.keys(FOREVER_MAP_INDEX).forEach(k => {
+        const id = Number(k);
+        if (!Number.isFinite(id) || id <= 0) return;
+        const m = FOREVER_UIMAPS[id];
+        entries.set(id, { name: getUiMapName(id), type: m ? m.type : 3 });
+      });
+      state.bots.forEach(b => {
+        const id = Number(b.ui_map);
+        if (!Number.isFinite(id) || id <= 0 || entries.has(id)) return;
+        const m = FOREVER_UIMAPS[id];
+        entries.set(id, { name: getUiMapName(id), type: m ? m.type : 3 });
+      });
+      return [...entries.entries()].map(([id, z]) => [String(id), z]);
+    }
     const entries = new Map();
     Object.entries(ZONE_CONFIG).forEach(([id, z]) => {
       entries.set(Number(id), z);
@@ -1232,6 +1260,49 @@
     if (!el.zoneSelect) return;
     const q = filter.trim().toLowerCase();
     el.zoneSelect.innerHTML = '';
+    if (isForever) {
+      const worldOpt = document.createElement('option');
+      worldOpt.value = 'world';
+      worldOpt.textContent = '🌍 World (one continent at a time)';
+      el.zoneSelect.appendChild(worldOpt);
+      const sorted = zoneSelectEntries().sort((a, b) => a[1].name.localeCompare(b[1].name));
+      const matching = sorted.filter(([, z]) => !q || z.name.toLowerCase().includes(q));
+      const typeOrder = [[2, 'Continents'], [3, 'Zones'], [4, 'Dungeons'], [5, 'Micro'], [1, 'World'], [0, 'Cosmic'], [6, 'Other']];
+      const byType = new Map(typeOrder.map(([t]) => [t, []]));
+      matching.forEach(([id, z]) => {
+        const bucket = byType.get(z.type) || byType.get(6);
+        bucket.push([id, z]);
+      });
+      typeOrder.forEach(([t, label]) => {
+        const list = byType.get(t);
+        if (!list || !list.length) return;
+        const og = document.createElement('optgroup');
+        og.label = label;
+        list.forEach(([id, z]) => {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = z.name;
+          og.appendChild(opt);
+        });
+        el.zoneSelect.appendChild(og);
+      });
+      if (el.zoneFilterCount) {
+        el.zoneFilterCount.textContent = q ? `${matching.length}/${sorted.length} maps` : `${sorted.length} maps`;
+      }
+      if (state.mapView === 'world') {
+        el.zoneSelect.value = 'world';
+        return;
+      }
+      const current = String(state.currentZoneId);
+      if (![...el.zoneSelect.options].some(o => o.value === current)) {
+        const opt = document.createElement('option');
+        opt.value = current;
+        opt.textContent = getUiMapName(state.currentZoneId);
+        el.zoneSelect.appendChild(opt);
+      }
+      el.zoneSelect.value = current;
+      return;
+    }
     const worldOpt = document.createElement('option');
     worldOpt.value = 'world';
     worldOpt.textContent = '🌍 World (one continent at a time)';
@@ -1276,16 +1347,41 @@
   }
 
   function initZoneSelector() {
-    fetch('/data/zone_maps.json')
-      .then(r => r.json())
-      .then(cfg => {
-        if (!cfg || Object.keys(cfg).length === 0) return;
-        ZONE_CONFIG = cfg;
+    if (isForever) {
+      Promise.all([
+        fetch('/forever-art/maps/index.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+        fetch('/api/v1/uimaps').then(r => (r.ok ? r.json() : { maps: [] })).catch(() => ({ maps: [] }))
+      ]).then(([idx, ui]) => {
+        FOREVER_MAP_INDEX = (idx && typeof idx === 'object') ? idx : {};
+        FOREVER_UIMAPS = {};
+        if (ui && Array.isArray(ui.maps)) {
+          ui.maps.forEach(m => { if (m && m.id) FOREVER_UIMAPS[m.id] = m; });
+        }
+        if (!FOREVER_MAP_INDEX[state.currentZoneId] && !FOREVER_UIMAPS[state.currentZoneId]) {
+          const liveBotWithMap = state.bots.find(b => b.ui_map > 0);
+          const firstIdx = Object.keys(FOREVER_MAP_INDEX).map(Number).find(n => n > 0);
+          const firstUi = Object.keys(FOREVER_UIMAPS).map(Number).find(n => n > 0);
+          const fallback = (liveBotWithMap && liveBotWithMap.ui_map) || firstIdx || firstUi;
+          if (fallback) state.currentZoneId = fallback;
+        }
         populateZoneSelect(el.zoneFilterInput ? el.zoneFilterInput.value : '');
-        loadZoneMap(state.currentZoneId);
-        if (state.activeTab === 'commanders') renderCommanders();
-      })
-      .catch(() => {});
+        if (state.mapView === 'zone') {
+          loadZoneMap(state.currentZoneId);
+        }
+        if (state.activeTab === 'map') renderMap();
+      });
+    } else {
+      fetch('/data/zone_maps.json')
+        .then(r => r.json())
+        .then(cfg => {
+          if (!cfg || Object.keys(cfg).length === 0) return;
+          ZONE_CONFIG = cfg;
+          populateZoneSelect(el.zoneFilterInput ? el.zoneFilterInput.value : '');
+          loadZoneMap(state.currentZoneId);
+          if (state.activeTab === 'commanders') renderCommanders();
+        })
+        .catch(() => {});
+    }
 
     if (el.zoneFilterInput) {
       el.zoneFilterInput.addEventListener('input', (e) => populateZoneSelect(e.target.value));
@@ -1325,6 +1421,16 @@
   // The zone's client art, asked for only while the Map tab shows that zone: the element starts with no source, so a load on
   // any other tab (a Commanders reload) asks the daemon for no picture at all.
   function paintZoneArt() {
+    if (isForever) {
+      if (!el.mapImg) return;
+      const zid = state.currentZoneId;
+      if (zid > 0 && state.activeTab === 'map' && state.mapView === 'zone') {
+        const src = `/forever-art/maps/${zid}.webp`;
+        if (el.mapImg.getAttribute('src') !== src) el.mapImg.src = src;
+        el.mapImg.style.display = 'block';
+      }
+      return;
+    }
     const zone = ZONE_CONFIG[state.currentZoneId];
     const art = zone && zone.file;
     if (!el.mapImg) return;
@@ -1335,6 +1441,27 @@
   }
 
   function loadZoneMap(zoneId) {
+    if (isForever) {
+      const dim = FOREVER_MAP_INDEX[zoneId];
+      const hasArt = !!(zoneId > 0 && (dim || Object.keys(FOREVER_MAP_INDEX).length === 0));
+      if (el.mapImg && !hasArt) {
+        el.mapImg.removeAttribute('src');
+        el.mapImg.style.display = 'none';
+        resetZoneArt();
+      }
+      if (el.zoneViewport) {
+        el.zoneViewport.style.aspectRatio = (dim && dim.w > 0 && dim.h > 0) ? `${dim.w} / ${dim.h}` : '1002 / 668';
+      }
+      if (el.zoneNoart) {
+        if (hasArt) {
+          el.zoneNoart.style.display = 'none';
+        } else {
+          el.zoneNoart.style.display = 'block';
+          el.zoneNoart.innerHTML = `No map artwork for <strong style="color: #fff;">${esc(getUiMapName(zoneId))}</strong>.`;
+        }
+      }
+      return;
+    }
     const zone = ZONE_CONFIG[zoneId];
     const art = zone && zone.file;
     if (el.mapImg) {
@@ -1414,6 +1541,11 @@
   function fitZoneArt() {
     const img = el.mapImg, vp = el.zoneViewport;
     if (!img || !vp || !img.naturalWidth) return;
+    if (isForever) {
+      resetZoneArt();
+      vp.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+      return;
+    }
     const art = artRegion(img);
     resetZoneArt();
     if (!art) {
@@ -1522,7 +1654,15 @@
   }
 
 
+  function foreverContId(mapId) {
+    return mapId === 1 ? 1414 : 1415;
+  }
+
   function worldBots(mapId) {
+    if (isForever) {
+      const contId = foreverContId(mapId);
+      return state.bots.filter(b => b.ui_cont === contId);
+    }
     return state.bots.filter(b => b.map === mapId);
   }
 
@@ -1548,6 +1688,9 @@
   // The client's continent pictures. The page requests one only when the world view draws it (the element starts with no
   // source), so loading any other tab asks for no map file.
   function worldArtFile(mapId) {
+    if (isForever) {
+      return `/forever-art/maps/${foreverContId(mapId)}.webp`;
+    }
     return mapId === 1 ? '/maps/kalimdor.webp' : '/maps/azeroth.webp';
   }
 
@@ -1564,7 +1707,9 @@
     const file = worldArtFile(mapId);
     if (el.worldImg && el.worldImg.getAttribute('src') !== file) el.worldImg.src = file;
     const bots = renderWorldPanel(mapId);
-    const off = state.bots.filter(b => b.map !== 0 && b.map !== 1);
+    const off = isForever
+      ? state.bots.filter(b => b.ui_cont !== 1414 && b.ui_cont !== 1415)
+      : state.bots.filter(b => b.map !== 0 && b.map !== 1);
     if (el.worldOffmap) {
       el.worldOffmap.innerHTML = off.length
         ? `${off.length} in instances or other maps — the live ones on the <a href="#/dungeons">Dungeons</a> and <a href="#/raids">Raids</a> tabs, the rest in the <a href="#/bots">Bots</a> list.`
@@ -1579,6 +1724,27 @@
   function renderWorldZones(mapId) {
     if (!el.worldZones) return;
     el.worldZones.innerHTML = '';
+    if (isForever) {
+      const contId = foreverContId(mapId);
+      const counts = new Map();
+      state.bots.forEach(b => {
+        if (!b.ui_map || b.ui_map <= 0) return;
+        if (b.ui_cont && b.ui_cont !== contId) return;
+        counts.set(b.ui_map, (counts.get(b.ui_map) || 0) + 1);
+      });
+      if (el.zoneChipsCount) {
+        el.zoneChipsCount.textContent = counts.size;
+      }
+      [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([uiMapId, n]) => {
+        const chip = document.createElement('button');
+        chip.className = 'btn';
+        chip.style.cssText = 'padding: 4px 10px; font-size: 0.78rem; font-weight: 600; cursor: pointer;';
+        chip.innerHTML = `${esc(getUiMapName(uiMapId))} <span style="opacity: 0.6;">${n}</span>`;
+        chip.addEventListener('click', () => openZone(uiMapId));
+        el.worldZones.appendChild(chip);
+      });
+      return;
+    }
     const counts = new Map();
     state.bots.forEach(b => {
       if (b.map !== mapId) return;
@@ -1606,6 +1772,47 @@
     if (!canvas || !overlay) return [];
     overlay.innerHTML = '';
     const bots = worldBots(mapId);
+    if (isForever) {
+      const contId = foreverContId(mapId);
+      const dim = FOREVER_MAP_INDEX[contId];
+      if (viewport) {
+        viewport.style.aspectRatio = (dim && dim.w > 0 && dim.h > 0) ? `${dim.w} / ${dim.h}` : '1002 / 668';
+      }
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return bots;
+      if (canvas.width !== Math.floor(rect.width) || canvas.height !== Math.floor(rect.height)) {
+        canvas.width = Math.floor(rect.width);
+        canvas.height = Math.floor(rect.height);
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return bots;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (state.showTrails) {
+        bots.forEach(b => {
+          if (!b.trail || b.trail.length < 2) return;
+          ctx.beginPath();
+          let started = false;
+          b.trail.forEach(pt => {
+            if (pt.pct_cx === undefined || pt.pct_cy === undefined) return;
+            const px = (pt.pct_cx / 100) * canvas.width, py = (pt.pct_cy / 100) * canvas.height;
+            if (!started) { ctx.moveTo(px, py); started = true; }
+            else ctx.lineTo(px, py);
+          });
+          if (started) {
+            ctx.strokeStyle = hexToRgba(classColor(b.class), 0.45);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        });
+      }
+      const issuesByGuid = issueSet();
+      bots.forEach(b => {
+        if (b.ui_cx === undefined || b.ui_cy === undefined) return;
+        overlay.appendChild(makeBotDot(b, issuesByGuid[b.guid], b.ui_cx, b.ui_cy));
+        if (b.guid === state.profileGuid) overlay.appendChild(makeSelectRing(b.ui_cx, b.ui_cy));
+      });
+      return bots;
+    }
     const c = continentBounds(mapId);
     if (!c) return bots;
     const w = c.left - c.right, h = c.top - c.bottom;
@@ -2467,7 +2674,9 @@
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const zoneBots = state.bots.filter(b => b.zone === state.currentZoneId && b.projected);
+    const zoneBots = isForever
+      ? state.bots.filter(b => b.ui_map === state.currentZoneId && b.projected)
+      : state.bots.filter(b => b.zone === state.currentZoneId && b.projected);
 
     if (state.showTrails) {
       zoneBots.forEach(b => {
@@ -4471,7 +4680,7 @@
 
   function showOnMap() {
     const b = liveBot(state.profileGuid);
-    if (b) openZone(b.zone, b.guid);
+    if (b) openZone(isForever ? b.ui_map : b.zone, b.guid);
   }
 
   function initProfile() {
@@ -4529,6 +4738,9 @@
     if (!icon) return null;
     const name = String(icon).toLowerCase().trim();
     if (!name) return null;
+    if (isForever && /^\d+$/.test(name)) {
+      return `/forever-art/icons/${name}.png`;
+    }
     return `/static/icons/${name}.jpg`;
   }
 
@@ -4974,6 +5186,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 3px 0; margin-top: 4px; border-top: 1px dashed rgba(255,255,255,0.1);"><span style="color: var(--text-main); font-weight: 600;">Total Healing Power</span><strong class="mono" style="color: #3fb950;">+${healingPower}</strong></div>
     `;
 
+    const showManaRegen = !isForever || (st.maxpower1 || 0) > 0;
     const spellCard = `
       <div class="armory-stat-card">
         <div class="stat-card-title"><span class="stat-icon">✨</span> Spell</div>
@@ -4987,7 +5200,8 @@
         </div>
         <div class="stat-card-row"><span>Spell Crit</span><strong class="mono">${esc(fmtNum(st.spell_crit_pct))}%</strong></div>
         <div class="stat-card-row"><span>Spell Hit</span><strong class="mono">${esc(fmtNum(st.spell_hit))}%</strong></div>
-        <div class="stat-card-row"><span>Mana Regen</span><strong class="mono">${esc(st.mana_regen || 0)} MP5</strong></div>
+        ${isForever ? `<div class="stat-card-row"><span>Spell Haste</span><strong class="mono">${esc(fmtNum(st.cast_speed))}%</strong></div>` : ''}
+        ${showManaRegen ? `<div class="stat-card-row"><span>Mana Regen</span><strong class="mono">${esc(st.mana_regen || 0)} MP5</strong></div>` : ''}
       </div>`;
 
     const defenseCard = `

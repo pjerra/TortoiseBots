@@ -69,7 +69,7 @@ func (s *Service) listBotsForever(query string) ([]BotSummary, error) {
 	return bots, nil
 }
 
-func (s *Service) foreverItemMeta(entry uint32) (name string, quality uint8, ilvl uint32, invType uint32, detail ItemDetail) {
+func (s *Service) foreverItemMeta(entry uint32) (name string, quality uint8, ilvl uint32, invType uint32, icon string, detail ItemDetail) {
 	if s.cfg.Items != nil {
 		if it, ok := s.cfg.Items.Get(entry); ok {
 			name = it.Name
@@ -79,6 +79,9 @@ func (s *Service) foreverItemMeta(entry uint32) (name string, quality uint8, ilv
 			quality = uint8(it.Quality)
 			ilvl = it.ItemLvl
 			invType = it.InvType
+			if it.Icon > 0 {
+				icon = fmt.Sprintf("%d", it.Icon)
+			}
 			detail = ItemDetail{
 				Class:         uint8(it.Class),
 				SubClass:      uint8(it.SubClass),
@@ -88,7 +91,7 @@ func (s *Service) foreverItemMeta(entry uint32) (name string, quality uint8, ilv
 			return
 		}
 	}
-	return fmt.Sprintf("Item #%d", entry), 1, 0, 0, ItemDetail{}
+	return fmt.Sprintf("Item #%d", entry), 1, 0, 0, "", ItemDetail{}
 }
 
 func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
@@ -135,7 +138,7 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 			eqRows.Close()
 			return nil, err
 		}
-		eq.Name, eq.Quality, eq.ItemLevel, eq.InventoryType, eq.Detail = s.foreverItemMeta(eq.ItemTemplate)
+		eq.Name, eq.Quality, eq.ItemLevel, eq.InventoryType, eq.Icon, eq.Detail = s.foreverItemMeta(eq.ItemTemplate)
 		profile.Equipment = append(profile.Equipment, eq)
 	}
 	eqRows.Close()
@@ -161,7 +164,7 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 			bagRows.Close()
 			return nil, err
 		}
-		b.Name, b.Quality, _, _, b.Detail = s.foreverItemMeta(b.ItemTemplate)
+		b.Name, b.Quality, _, _, b.Icon, b.Detail = s.foreverItemMeta(b.ItemTemplate)
 		b.Items = []BagItem{}
 		profile.Bags = append(profile.Bags, b)
 	}
@@ -193,7 +196,7 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 				cRows.Close()
 				return nil, err
 			}
-			bi.Name, bi.Quality, _, _, bi.Detail = s.foreverItemMeta(bi.ItemTemplate)
+			bi.Name, bi.Quality, _, _, bi.Icon, bi.Detail = s.foreverItemMeta(bi.ItemTemplate)
 			profile.Bags[i].Items = append(profile.Bags[i].Items, bi)
 		}
 		cRows.Close()
@@ -300,13 +303,21 @@ func (s *Service) scanForeverSlotItems(guid uint32, startSlot, endSlot int) ([]B
 		if err := rows.Scan(&bi.Slot, &bi.ItemTemplate, &bi.Count); err != nil {
 			return nil, err
 		}
-		bi.Name, bi.Quality, _, _, bi.Detail = s.foreverItemMeta(bi.ItemTemplate)
+		bi.Name, bi.Quality, _, _, bi.Icon, bi.Detail = s.foreverItemMeta(bi.ItemTemplate)
 		items = append(items, bi)
 	}
 	return items, rows.Err()
 }
 
 func (s *Service) loadStatsForever(guid uint32, st *CharacterStats) {
+	if s.cfg.LiveStats != nil {
+		if live, ok := s.cfg.LiveStats(guid); ok {
+			*st = live
+			st.Source = "live"
+			return
+		}
+	}
+
 	err := s.db.QueryRow(`
 		SELECT maxhealth, maxpower1, maxpower2, maxpower3, maxpower4, maxpower5,
 		       strength, agility, stamina, intellect, spirit, armor,
@@ -323,6 +334,10 @@ func (s *Service) loadStatsForever(guid uint32, st *CharacterStats) {
 	if err == nil && st.MaxHealth > 0 {
 		st.HealingPower = st.SpellDamage
 		st.Source = "character_stats"
+		var class uint32
+		if s.db.QueryRow(`SELECT class FROM characters WHERE guid = ?`, guid).Scan(&class) == nil {
+			foreverPowerOrder(class, st)
+		}
 		return
 	}
 
@@ -336,6 +351,7 @@ func (s *Service) loadStatsForever(guid uint32, st *CharacterStats) {
 		return
 	}
 	st.MaxPower1, st.MaxPower2, st.MaxPower3, st.MaxPower4, st.MaxPower5 = p1, p2, p3, p4, p5
+	foreverPowerOrder(class, st)
 
 	var rStr, rAgi, rSta, rInt, rSpi float64
 	_ = s.db.QueryRow(fmt.Sprintf(`
@@ -552,4 +568,25 @@ func (s *Service) openQuestsRollupForever() (map[uint32][]uint32, error) {
 		out[guid] = append(out[guid], quest)
 	}
 	return out, rows.Err()
+}
+
+// foreverClassPowerSlots lists, per class, the power type held in each of the core's power slots (the class's power types in
+// ascending order: 0 mana, 1 rage, 2 focus, 3 energy); character_stats.maxpowerN and characters.powerN are slot-ordered.
+var foreverClassPowerSlots = map[uint32][]int{
+	1: {1}, 2: {0}, 3: {0, 2}, 4: {3}, 5: {0}, 7: {0}, 8: {0}, 9: {0}, 11: {0, 1, 3},
+}
+
+// foreverPowerOrder turns the slot-ordered values into the page's order (maxpower1..5 = mana, rage, focus, energy, happiness),
+// rage shown as the client shows it (the core keeps it times ten).
+func foreverPowerOrder(class uint32, st *CharacterStats) {
+	slots := []uint32{st.MaxPower1, st.MaxPower2, st.MaxPower3, st.MaxPower4, st.MaxPower5}
+	var byType [4]uint32
+	for i, typ := range foreverClassPowerSlots[class] {
+		v := slots[i]
+		if typ == 1 {
+			v /= 10
+		}
+		byType[typ] = v
+	}
+	st.MaxPower1, st.MaxPower2, st.MaxPower3, st.MaxPower4, st.MaxPower5 = byType[0], byType[1], byType[2], byType[3], 0
 }

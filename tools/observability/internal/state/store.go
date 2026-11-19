@@ -158,6 +158,8 @@ type Store struct {
 	// session state), so it stays bounded by the pool that sweep saw.
 	gear map[uint32]model.BotGear
 
+	botStats map[uint32]botStatsRecord
+
 	// history is the rolling chart seed behind GET /api/v1/history: one
 	// sample per heartbeat, oldest first, capped at historyMaxSamples
 	// (~10 min). Cleared on session change so a restarted game server
@@ -198,6 +200,7 @@ func New(cfg Config, anomalies *ringbuf.RingBuffer) *Store {
 		xpTracks:     make(map[uint32]*xpTrack),
 		activity:     make(map[uint32]*botActivityState),
 		gear:         make(map[uint32]model.BotGear),
+		botStats:     make(map[uint32]botStatsRecord),
 		dungeonMobs:  dungeonMobsState{runs: make(map[string]dungeonMobsEntry)},
 	}
 }
@@ -348,6 +351,7 @@ func (s *Store) Evict() bool {
 	if s.lastSnapshotAt.IsZero() || now.Sub(s.lastSnapshotAt) > s.cfg.RosterTTL {
 		s.bots = make(map[uint32]*botEntry)
 		s.xpTracks = make(map[uint32]*xpTrack)
+		s.botStats = make(map[uint32]botStatsRecord)
 		s.resetAnomalyTotalsLocked()
 		s.issues.Reset()
 		return true
@@ -733,6 +737,7 @@ func (s *Store) publishLocked(seq uint64, bots []model.BotSnapshot, now time.Tim
 		if !snap.Player {
 			if prev, ok := s.bots[snap.GUID]; ok &&
 				prev.snap.MapID == snap.MapID && prev.snap.ZoneID == snap.ZoneID &&
+				prev.snap.UIMap == snap.UIMap &&
 				!trailJump(prev.snap, snap, now.Sub(s.lastSnapshotAt)) {
 				trail = prev.trail
 			}
@@ -746,6 +751,11 @@ func (s *Store) publishLocked(seq uint64, bots []model.BotSnapshot, now time.Tim
 	}
 
 	s.bots = next
+	for guid := range s.botStats {
+		if _, ok := next[guid]; !ok {
+			delete(s.botStats, guid)
+		}
+	}
 	s.lastSeq = seq
 	s.lastSnapshotAt = now
 	s.snapshotsPublished++
@@ -779,6 +789,10 @@ func appendTrail(trail []model.Coordinate, snap model.BotSnapshot, limit int) []
 	}
 
 	point := model.Coordinate{X: snap.X, Y: snap.Y, PctX: snap.PctX, PctY: snap.PctY}
+	if snap.UICont > 0 {
+		point.PctCX = snap.UICX
+		point.PctCY = snap.UICY
+	}
 
 	if n := len(trail); n > 0 {
 		last := trail[n-1]
@@ -871,6 +885,7 @@ func (s *Store) beginSessionLocked(session uint64) {
 	s.lastSeq = 0
 	s.pending = make(map[uint64]*pendingCycle)
 	s.bots = make(map[uint32]*botEntry)
+	s.botStats = make(map[uint32]botStatsRecord)
 	s.heartbeat = nil
 	s.heartbeatAt = time.Time{}
 	s.lastSnapshotAt = time.Time{}
