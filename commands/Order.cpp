@@ -106,7 +106,7 @@ bool ResolveOrderBot(std::string const& name, Player*& bot, ObjectGuid& guid)
         guid = bot->getObjectGuid();
         return true;
     }
-    guid = sObjectMgr.GetPlayerGuidByName(fixed);
+    guid = PlayerGuidByNameCompat(fixed);
     return !guid.IsEmpty();
 }
 

@@ -241,7 +241,7 @@ bool HandleOrderPreview(ChatHandler* handler, Player* requester, std::string con
     if (!bot)
         bot = sObjectAccessor.FindPlayerByName(fixed.c_str());
     if (!bot)
-        guid = sObjectMgr.GetPlayerGuidByName(fixed);
+        guid = PlayerGuidByNameCompat(fixed);
     else
         guid = bot->getObjectGuid();
     if (guid.IsEmpty())
