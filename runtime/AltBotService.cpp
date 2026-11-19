@@ -125,7 +125,7 @@ std::string AwayActivity(Player* bot)
     if (!bot->IsAlive())
         return AltBotAwayActivityWord(true, false, false, false, false, false);
     bool const fighting = bot->IsInCombat();
-    bool const resting = bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || bot->IsTaxiFlying();
+    bool const resting = HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING) || bot->IsTaxiFlying();
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     bool questTravel = false;
     bool anyTravel = false;

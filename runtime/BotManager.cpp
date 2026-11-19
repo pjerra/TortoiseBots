@@ -613,7 +613,7 @@ void BotManager::SweepDeadBots(uint32_t diff)
                         "pos=%.0f,%.0f dest=%u:%.0f,%.0f)", p->GetName(),
                         static_cast<long>(now - since->second), p->IsBeingTeleportedNear() ? 1 : 0,
                         p->IsBeingTeleportedFar() ? 1 : 0, p->IsAlive() ? 1 : 0,
-                        p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) ? 1 : 0, p->GetMapId(),
+                        HasPlayerFlagCompat(p, PLAYER_FLAGS_GHOST) ? 1 : 0, p->GetMapId(),
                         entry.teleportAcks, entry.teleportAcksIgnored, p->GetPositionX(), p->GetPositionY(),
                         dest.mapId, dest.x, dest.y);
                     stuckSamples.push_back(buf);
@@ -671,7 +671,7 @@ void BotManager::SweepDeadBots(uint32_t diff)
             continue;
         }
         ++watched;
-        bool const isGhost = p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+        bool const isGhost = HasPlayerFlagCompat(p, PLAYER_FLAGS_GHOST);
         // Stuck corpse (ghost or not): the AI release never ran, e.g. its tick
         // was starved by the pool budget. HandleRepopRequestOpcode needs only
         // "dead and not a ghost", a corpse object may well exist, so no
@@ -688,7 +688,7 @@ void BotManager::SweepDeadBots(uint32_t diff)
             WorldPacket packet(CMSG_REPOP_REQUEST);
             packet << uint8(0);
             p->GetSession()->HandleRepopRequestOpcode(packet);
-            if (p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (HasPlayerFlagCompat(p, PLAYER_FLAGS_GHOST))
                 ++released;
             continue;
         }
@@ -1548,7 +1548,7 @@ void BotManager::OnPlayerLogin(::Player* player)
     if (record.random && ::sPlayerbotAIConfig.randomBotForcePvp &&
         PoolBotInPvpFlaggedShare(player->GetGUIDLow(), ::sPlayerbotAIConfig.randomBotForcePvpPercent) &&
         !HireLifecycle::Instance().IsHired(player->GetObjectGuid()) &&
-        !player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_PVP_DESIRED))
+        !HasPlayerFlagCompat(player, PLAYER_FLAGS_PVP_DESIRED))
     {
         player->SetFlag(PLAYER_FLAGS, PLAYER_FLAGS_PVP_DESIRED);
         player->UpdatePvP(true);

@@ -281,7 +281,7 @@ uint8 BaseMacroState(Player* bot, PlayerbotAI* ai)
           bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE)))
         return STATE_MOVING;
 
-    if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING))
+    if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING))
         return STATE_RESTING;
 
     // Standing still but doing something: looting, casting, sitting to

@@ -33,7 +33,7 @@ public:
 
         if (player)
         {
-			if (player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) && player->InBattleGround())
+			if (HasPlayerFlagCompat(player, PLAYER_FLAGS_GHOST) && player->InBattleGround())
 				return false;
 		}
 

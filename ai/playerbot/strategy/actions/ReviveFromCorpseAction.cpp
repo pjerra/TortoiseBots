@@ -343,7 +343,7 @@ bool FindCorpseAction::Execute(Event& event)
     }
     if (master && !manualCorpseRun && !waitForMasterTimedOut && master->GetMapId() == bot->GetMapId() && !corpseInDungeon)
     {
-        bool masterCanResurrect = sServerFacade.IsAlive(master) && !master->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) &&
+        bool masterCanResurrect = sServerFacade.IsAlive(master) && !HasPlayerFlagCompat(master, PLAYER_FLAGS_GHOST) &&
                                   (PlayerbotAI::IsHeal(master) || master->GetClass() == CLASS_PRIEST || master->GetClass() == CLASS_PALADIN ||
                                    master->GetClass() == CLASS_SHAMAN || master->GetClass() == CLASS_DRUID);
 
@@ -603,7 +603,7 @@ bool FindCorpseAction::Execute(Event& event)
     // counts. Owned/hired bots (active player master) keep today's handling.
     // Only pool ghosts hop, and only while the corpse is on the same map
     // (cross-map legs are portal walks handled above).
-    if (!ai->HasActivePlayerMaster() && bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) &&
+    if (!ai->HasActivePlayerMaster() && HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST) &&
         botPos.GetMapId() == corpsePos.GetMapId() &&
         !corpse->IsWithinDistInMap(bot, (float)CORPSE_RECLAIM_RADIUS, true))
     {
@@ -681,7 +681,7 @@ bool FindCorpseAction::Execute(Event& event)
             // riding instead. Owned/hired bots keep today's handling.
             int32 keepMovegen = bot->GetMotionMaster() ? (int32)bot->GetMotionMaster()->GetCurrentMovementGeneratorType() : -1;
             if (ShouldKeepRidingCorpseRun(ai->HasActivePlayerMaster(),
-                bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST),
+                HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST),
                 keepMovegen, (int32)POINT_MOTION_TYPE, WorldPosition(bot).distance(moveToPos)))
             {
                 sLog.outDetail("[BOT CORPSE] %s: find corpse - POINT spline still in flight, keeping it instead of re-dispatching",
@@ -767,7 +767,7 @@ bool SpiritHealerAction::Execute(Event& event)
         // A ghost whose corpse the core already removed has nothing to reclaim, and every
         // graveyard lookup below is corpse-based: it used to fail here silently forever.
         // Do what a player would: resurrect at the nearest spirit healer.
-        if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+        if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
         {
             sLog.outDetail("Bot #%d <%s> is a ghost without a corpse, reviving at the nearest graveyard", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
             bot->RepopAtGraveyard();
@@ -1011,5 +1011,5 @@ bool SpiritHealerAction::isUseful()
     if (bot->InBattleGround())
         return false;
 
-    return bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    return HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST);
 }

@@ -13384,7 +13384,7 @@ void ReadRunPlayers(DungeonRunSlot const& slot, uint64 commanderRaw, Player* lea
         p.name = member->GetName();
         p.onMap = member->IsInWorld() && member->GetMapId() == slot.run.plan->map;
         p.alive = member->IsAlive();
-        p.ghost = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+        p.ghost = HasPlayerFlagCompat(member, PLAYER_FLAGS_GHOST);
         p.yd = p.onMap && lead->IsInWorld() && member->GetMap() == lead->GetMap() ? member->GetDistance(lead) : 1000.0f;
         p.healthPct = member->GetMaxHealth() ? member->GetHealth() * 100 / member->GetMaxHealth() : 100;
         p.gm = IsBotAdministrator(member); // the hp clamp (DungeonRun::OnlyGmFightOverDeadBots)
@@ -13443,7 +13443,7 @@ TortoiseBots::PlayerLed::Anchor ReadPlayerLedAnchor(Player* commander, std::vect
     a.z = commander->GetPositionZ();
     a.onMap = commander->GetMapId() == planMap;
     a.alive = commander->IsAlive();
-    a.ghost = commander->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    a.ghost = HasPlayerFlagCompat(commander, PLAYER_FLAGS_GHOST);
     bool const moved = TortoiseBots::PlayerLed::MovedSince(pl, a.x, a.y, a.z);
     a.moving = moved || IsMovingCompat(commander);
     a.partyInCombat = a.alive && commander->IsInCombat();

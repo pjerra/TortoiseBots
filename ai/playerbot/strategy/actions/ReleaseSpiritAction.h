@@ -30,7 +30,7 @@ namespace ai
             if (sServerFacade.IsAlive(bot))
                 return false;
 
-            if (bot->GetCorpse() && bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (bot->GetCorpse() && HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
             {
                 ai->TellPlayerNoFacing(requester, "I am already a spirit", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
                 return false;
@@ -136,9 +136,9 @@ namespace ai
 
 
             if (bot->InBattleGround())
-                return !bot->GetCorpse() || !bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+                return !bot->GetCorpse() || !HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST);
 
-            if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
                 return false;
             // A dungeon crew (another module holds the Dungeon activity lease) waits for
             // its own resurrection while a living group member of a resurrecting class is
