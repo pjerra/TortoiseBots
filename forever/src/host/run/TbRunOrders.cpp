@@ -176,17 +176,18 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         check.facts.endOffset = std::sqrt((end.x - point.x) * (end.x - point.x) + (end.y - point.y) * (end.y - point.y) + (end.z - point.z) * (end.z - point.z));
         check.facts.endFromLead = std::sqrt((end.x - ox) * (end.x - ox) + (end.y - oy) * (end.y - oy) + (end.z - oz) * (end.z - oz));
         check.pathRead = true;
-        // R6 (review item 7): the route the mover will walk is the navmesh path: its vertices and legs are read for liquid (every <= 1.5 yd); a path that is
-        // not a real path (fewer than two points: no route at all) falls back to the straight line, which is what a shortcut walks.
+        // R6 (review item 7, round 2): the route the mover will walk is the navmesh path: its vertices and legs are read in order (every <= 1.5 yd) with the move rule
+        // of TbRunLiquid.h: wet samples only as the contiguous prefix that holds the origin, the destination dry. A path that is not a real path (fewer than two
+        // points: no route at all) falls back to the straight line, which is what a shortcut walks.
         Movement::PointsArray const& way = PathPointsCompat(path);
         auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
-        check.liquidOnWay = way.size() >= 2 ? liquid::PathRefused(way, way.size(), wet) : liquid::SegmentRefused(ox, oy, oz, point.x, point.y, point.z, wet);
+        check.liquidOnWay = way.size() >= 2 ? liquid::PathPrefixRefused(way, way.size(), wet) : liquid::SegmentPrefixRefused(ox, oy, oz, point.x, point.y, point.z, wet);
     }
+    else
+        check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);      // already at the point: it must not be liquid
+    // A wet destination always refuses (also when no path was read).
     if (!check.liquidOnWay)
         check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);
-    // A mover that already stands in liquid must be able to walk out of it (the dry walk's rule: the leading wet samples are the mover's own pool): no refusal then.
-    if (check.liquidOnWay && liquid::PointRefusedOnMap(map, ox, oy, oz))
-        check.liquidOnWay = false;
     return check;
 }
 
@@ -392,8 +393,8 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         if (!judged.ok)
             return Refuse(judged);
         // R6 (review item 7): a direct step walks the straight line, so the whole line is read, not its end: any liquid on it (lava, water: TbRunLiquid.h rule,
-        // sampled every <= 1.5 yd, both ends) refuses the step with the code a point with no safe ground gets.
-        if (liquid::SegmentRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground))
+        // sampled every <= 1.5 yd, both ends; wet only as the prefix that holds the lead's own spot, the end dry) refuses the step with the code a point with no safe ground gets.
+        if (liquid::SegmentPrefixRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground))
             return Refuse("no-ground", "The straight line to the point crosses or ends in liquid (lava or water): a direct step does not walk through it.");
         Batch batch;
         batch.Add(lead, "move-direct", true, true);

@@ -79,11 +79,14 @@ class Review(unittest.TestCase):
         self.assertIn("PointRefused(static_cast<std::uint32_t>(status), data.level, z)", self.liquid)
 
     def test_straight_moves_read_the_line(self):
-        self.assertIn("liquid::SegmentRefusedOnMap(lead->GetMap()", self.runorders)
+        self.assertIn("liquid::SegmentPrefixRefusedOnMap(lead->GetMap()", self.runorders)
         check = function_body(self.runorders, r"MoveCheck CheckLeadMove\(Player\* mover, MovePoint point, bool fromRun, bool gather\)\s*\{")
-        self.assertIn("liquid::PathRefused", check)
+        self.assertIn("liquid::PathPrefixRefused", check)
         self.assertIn("liquidOnWay", check)
-        self.assertIn("run::liquid::SegmentRefusedOnMap", self.orders)
+        # round 2: no blanket exemption for a wet origin, validation and execution use the same prefix rule
+        self.assertNotIn("liquidOnWay = false", check)
+        self.assertIn("run::liquid::SegmentPrefixRefusedOnMap", self.orders)
+        self.assertNotIn("!run::liquid::PointRefusedOnMap(map, bot->GetPositionX()", self.orders)
 
     # 4
     def test_instance_is_remembered(self):

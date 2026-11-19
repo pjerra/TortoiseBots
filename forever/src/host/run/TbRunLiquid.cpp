@@ -28,6 +28,11 @@ bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float
 {
     return SegmentRefused(ax, ay, az, bx, by, bz, [map](float x, float y, float z) { return PointRefusedOnMap(map, x, y, z); });
 }
+
+bool SegmentPrefixRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz)
+{
+    return SegmentPrefixRefused(ax, ay, az, bx, by, bz, [map](float x, float y, float z) { return PointRefusedOnMap(map, x, y, z); });
+}
 }
 }
 }

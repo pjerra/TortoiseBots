@@ -56,6 +56,32 @@ int main()
     std::vector<P> single = { {1, 2, 3} };
     CHECK(L::PathRefused(single, 1, [](float, float, float) { return true; }));
 
+    // round 2: the move rule. A mover that starts in liquid may leave it, only as one contiguous wet prefix; the destination is always dry.
+    // Lines along x at z 0; "wet" is a predicate on x.
+    auto wetUntil = [](float edge) { return [edge](float x, float, float) { return x < edge; }; };          // wet for x < edge
+    // wet -> dry: starts in a pool 0..6, walks out to 20: accepted
+    CHECK(!L::SegmentPrefixRefused(0, 0, 0, 20, 0, 0, wetUntil(6.0f)));
+    // wet -> wet: the whole line submerged (pool 0..30), the end in liquid: refused
+    CHECK(L::SegmentPrefixRefused(0, 0, 0, 20, 0, 0, wetUntil(30.0f)));
+    // wet -> dry -> wet: out of the pool, then across another lava area 12..14: refused
+    auto twoPools = [](float x, float, float) { return x < 6.0f || (x >= 12.0f && x <= 14.0f); };
+    CHECK(L::SegmentPrefixRefused(0, 0, 0, 20, 0, 0, twoPools));
+    // wet destination from a dry origin: refused (the end sample is wet)
+    auto endWet = [](float x, float, float) { return x >= 18.0f; };
+    CHECK(L::SegmentPrefixRefused(0, 0, 0, 20, 0, 0, endWet));
+    // dry -> dry stays accepted; dry origin crossing a strip refused (empty prefix)
+    CHECK(!L::SegmentPrefixRefused(0, 0, 0, 20, 0, 0, [](float, float, float) { return false; }));
+    CHECK(L::SegmentPrefixRefused(0, 0, 0, 20, 0, 0, strip));
+    // the same rule over a path (vertices and legs in order)
+    std::vector<P> out = { {0, 0, 0}, {8, 0, 0}, {20, 0, 0} };
+    CHECK(!L::PathPrefixRefused(out, out.size(), wetUntil(6.0f)));
+    CHECK(L::PathPrefixRefused(out, out.size(), wetUntil(30.0f)));
+    CHECK(L::PathPrefixRefused(out, out.size(), twoPools));
+    CHECK(L::PathPrefixRefused(out, out.size(), endWet));
+    // the OLD exemption (clear everything when the origin is wet) would have accepted the three refused cases
+    auto oldExempt = [](bool originWet, bool refusedOnWay) { return originWet ? false : refusedOnWay; };
+    CHECK(!oldExempt(true, true));
+
     if (failures)
         return 1;
     std::printf("RESULT: PASS (test_run_liquid)\n");

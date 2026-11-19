@@ -447,10 +447,9 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         // CommanderMoveDirect for the lead (Commander.cpp:3810): a straight walk (no path) to the point; the AI would re-plan it on the navmesh at its next
         // step (the stay spot is ahead), so it sleeps for the walk, at most 4 s (RemoteCommander::kDirectMaxSleepMs), and not in a fight. The followers get
         // a plain `follow` from the executor. The point's z is the floor the judge read under it.
-        // R6 (review item 7): the straight line is read again where it is walked (the judge read it when the order was made; the bot may have moved since).
-        // A bot already standing in liquid may walk out of it.
-        if (Map* map = bot->GetMap(); map && !run::liquid::PointRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()) &&
-            run::liquid::SegmentRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
+        // R6 (review item 7, round 2): the straight line is read again where it is walked (the judge read it when the order was made; the bot may have moved since),
+        // with the same move rule as the judge (TbRunLiquid.h): wet samples only as the contiguous prefix that holds the bot's own spot, the end dry.
+        if (Map* map = bot->GetMap(); map && run::liquid::SegmentPrefixRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
             return "fail:liquid";
         ai->DropQueuedMovementOrders();
         ai->Reset();

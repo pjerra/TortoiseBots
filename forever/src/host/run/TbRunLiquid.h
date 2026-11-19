@@ -69,9 +69,67 @@ inline bool PathRefused(Points const& p, std::size_t n, Refused&& refused)
     return false;
 }
 
+// ---- a MOVE of a bot that may start in liquid (R6 round 2) ----
+// A mover that already stands in water or lava must be able to walk out of it, but ONLY out of it: the wet samples of its route are allowed as ONE contiguous
+// prefix from the origin; after the first dry sample every wet sample refuses, and a wet destination (the last sample) always refuses. So: wet -> dry is
+// accepted; wet -> wet (submerged all the way, or ending in liquid) is refused; wet -> dry -> wet is refused; a dry origin is the same rule with an empty prefix.
+// Used at validation (the run executor's judge) and at execution (the move-direct verb): the same samples, the same answer.
+struct PrefixState
+{
+    bool seenDry = false;
+    bool lastWet = false;
+    bool bad = false;
+    void Sample(bool wet)
+    {
+        lastWet = wet;
+        if (!wet)
+            seenDry = true;
+        else if (seenDry)
+            bad = true;
+    }
+    bool Refused() const { return bad || lastWet; }
+};
+
+// A straight line a -> b, sampled like SegmentRefused (every <= kSegmentSampleYd, both ends), in order from a.
+template <class Refused>
+inline void SegmentSamples(PrefixState& state, float ax, float ay, float az, float bx, float by, float bz, Refused&& refused)
+{
+    float const dx = bx - ax, dy = by - ay, dz = bz - az;
+    float const length = std::sqrt(dx * dx + dy * dy + dz * dz);
+    std::size_t const steps = length > kSegmentSampleYd ? static_cast<std::size_t>(std::ceil(length / kSegmentSampleYd)) : 1;
+    for (std::size_t i = 0; i <= steps; ++i)
+    {
+        float const t = static_cast<float>(i) / static_cast<float>(steps);
+        state.Sample(refused(ax + t * dx, ay + t * dy, az + t * dz));
+    }
+}
+
+template <class Refused>
+inline bool SegmentPrefixRefused(float ax, float ay, float az, float bx, float by, float bz, Refused&& refused)
+{
+    PrefixState state;
+    SegmentSamples(state, ax, ay, az, bx, by, bz, refused);
+    return state.Refused();
+}
+
+// A path p[0..n) walked in order (vertices and legs).
+template <class Points, class Refused>
+inline bool PathPrefixRefused(Points const& p, std::size_t n, Refused&& refused)
+{
+    PrefixState state;
+    if (n == 0)
+        return false;
+    if (n == 1)
+        state.Sample(refused(p[0].x, p[0].y, p[0].z));
+    for (std::size_t i = 1; i < n; ++i)
+        SegmentSamples(state, p[i - 1].x, p[i - 1].y, p[i - 1].z, p[i].x, p[i].y, p[i].z, refused);
+    return state.Refused();
+}
+
 // ---- the core half (TbRunLiquid.cpp, TORTOISEBOTS_SLICE1 only): the same rules over the map's terrain ----
 bool PointRefusedOnMap(Map* map, float x, float y, float z);
 bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);
+bool SegmentPrefixRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);   // the move rule above
 }
 }
 }
