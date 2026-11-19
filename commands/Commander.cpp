@@ -2871,7 +2871,7 @@ bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, floa
         if (!TortoiseBots::DungeonRun::HealerBackPoint(leadX, leadY, target->GetPositionX(), target->GetPositionY(),
                 back, px, py) || !MaNGOS::IsValidMapCoord(px, py, leadZ))
             return false;
-        float const ground = map->GetHeight(px, py, leadZ + 3.0f);
+        float const ground = GetHeightCompat(map, px, py, leadZ + 3.0f);
         if (ground <= INVALID_HEIGHT || std::fabs(ground - leadZ) > 3.0f)
             continue;
         if (!map->isInLineOfSight(leadX, leadY, leadZ + 2.0f, px, py, ground + 2.0f))
@@ -3442,7 +3442,7 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
     // is never taken for the floor (RemoteCommander::ChooseFloorZ).
     if (MaNGOS::IsValidMapCoord(point.x, point.y, point.z + RemoteCommander::kFloorSnapRange))
     {
-        float const belowZ = mover->GetMap()->GetHeight(point.x, point.y, point.z, true,
+        float const belowZ = GetHeightCompat(mover->GetMap(), point.x, point.y, point.z, true,
             RemoteCommander::kFloorBelowBand + RemoteCommander::kFloorBelowHeadroom);
         float aboveZ = INVALID_HEIGHT;
         // A point in water is not lifted out of it onto a surface the lead bot cannot reach (Karazhan Crypt
@@ -3458,7 +3458,7 @@ static LeadMoveCheck CheckLeadMove(Unit* mover, Vector3 const& origin, RemoteCom
         uint32 raisedPathType = 0;
         if (!RemoteCommander::FloorBelowUsable(point.z, belowZ, belowZ > INVALID_HEIGHT))
         {
-            aboveZ = mover->GetMap()->GetHeight(point.x, point.y,
+            aboveZ = GetHeightCompat(mover->GetMap(), point.x, point.y,
                 point.z + RemoteCommander::kFloorSnapRange, true,
                 2.0f * RemoteCommander::kFloorSnapRange);
             if (aboveZ > INVALID_HEIGHT)
@@ -3846,7 +3846,7 @@ static bool CommanderMoveDirect(ChatHandler* handler, CommanderOrder const& orde
     Map* const map = lead->GetMap();
     float ground = INVALID_HEIGHT;
     if (MaNGOS::IsValidMapCoord(point.x, point.y, point.z))
-        ground = map->GetHeight(point.x, point.y, point.z, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
+        ground = GetHeightCompat(map, point.x, point.y, point.z, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
     if (RemoteCommander::CheckDirectGround(ground, point.z) != RemoteCommander::DirectVerdict::Ok)
     {
         SendActionError(handler, intent, RemoteCommander::DirectVerdictCode(RemoteCommander::DirectVerdict::NoGround),
@@ -7559,7 +7559,7 @@ bool ApproachStandSearch(Player* lead, TortoiseBots::DungeonRun::Run const& run,
             float const py = step.y + ring * std::sin(angle);
             if (anchored && !ai::InsideAnchor(anchor, px, py))
                 continue;
-            float const ground = map->GetHeight(px, py, step.z + 5.0f);
+            float const ground = GetHeightCompat(map, px, py, step.z + 5.0f);
             if (ground <= INVALID_HEIGHT || std::fabs(ground - step.z) > 10.0f)
                 continue;
             StandCandidate c;
@@ -7608,7 +7608,7 @@ bool NearestReachablePoint(Player* lead, float x, float y, float z, float maxYd,
         return false;
     auto reachable = [&](float px, float py, float pz) -> bool
     {
-        float const ground = map->GetHeight(px, py, pz + 5.0f);
+        float const ground = GetHeightCompat(map, px, py, pz + 5.0f);
         if (ground <= INVALID_HEIGHT || std::fabs(ground - pz) > 10.0f)
             return false;
         if (dryOnly && map->GetTerrain()->getLiquidStatus(px, py, ground + 0.5f, MAP_ALL_LIQUIDS, nullptr) != LIQUID_MAP_NO_WATER)
@@ -7819,7 +7819,7 @@ bool RunIslandEscape(Player* commander, std::string const& order, std::string& a
     {
         if (!MaNGOS::IsValidMapCoord(px, py, lz))
             return false;
-        ground = map->GetHeight(px, py, lz + h, true, kEscapeMaxVertical + h);
+        ground = GetHeightCompat(map, px, py, lz + h, true, kEscapeMaxVertical + h);
         return ground > INVALID_HEIGHT && std::fabs(ground - lz) <= kEscapeMaxVertical &&
             map->isInLineOfSight(lx, ly, lz + h, px, py, ground + h);
     };
@@ -7833,7 +7833,7 @@ bool RunIslandEscape(Player* commander, std::string const& order, std::string& a
         {
             if (!MaNGOS::IsValidMapCoord(sample.x, sample.y, sample.z))
                 continue; // no ground read: NoGround
-            float const floor = map->GetHeight(sample.x, sample.y, sample.z + kSegmentGroundYd, true,
+            float const floor = GetHeightCompat(map, sample.x, sample.y, sample.z + kSegmentGroundYd, true,
                 2.0f * kSegmentGroundYd);
             sample.ground = floor > INVALID_HEIGHT;
             sample.groundZ = floor;
@@ -7974,7 +7974,7 @@ bool RunStrandedTeleport(Player* commander, std::string const& order, std::strin
         return false;
     }
     // The plan's point was reached by walking: its floor, read just above it.
-    float const floor = map->GetHeight(x, y, z + 2.0f, true, 4.0f);
+    float const floor = GetHeightCompat(map, x, y, z + 2.0f, true, 4.0f);
     float const ground = floor > INVALID_HEIGHT ? floor : z;
     // The teleport first: a refused one leaves the lead bot exactly as it was
     // (its AI, movement, tasks and stay anchor untouched), and the run tries again.
@@ -11641,7 +11641,7 @@ static void ReadFetchFacts(Player* lead, std::vector<Player*> const& bots, Torto
             float const angle = 6.2831853f * static_cast<float>(i) / kFetchRingSteps;
             float const px = lx + std::cos(angle) * ring;
             float const py = ly + std::sin(angle) * ring;
-            float const ground = map->GetHeight(px, py, lz + kFetchFloorDzYd, true, 2.0f * kFetchFloorDzYd);
+            float const ground = GetHeightCompat(map, px, py, lz + kFetchFloorDzYd, true, 2.0f * kFetchFloorDzYd);
             if (ground <= INVALID_HEIGHT || std::fabs(ground - lz) > kFetchFloorDzYd ||
                 !lead->IsWithinLOS(px, py, ground + 2.0f))
                 continue;
@@ -11795,7 +11795,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         bool surfaceFound = false;
         if (Map* const surfaceMap = lead->GetMap())
         {
-            float const height = surfaceMap->GetHeight(lead->GetPositionX(), lead->GetPositionY(), leadZ + 0.5f);
+            float const height = GetHeightCompat(surfaceMap, lead->GetPositionX(), lead->GetPositionY(), leadZ + 0.5f);
             surfaceFound = height > INVALID_HEIGHT + 1.0f;
             if (surfaceFound)
                 surfaceZ = height;
@@ -11874,7 +11874,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     float joinGround = joinZ;
     if (joinWanted && MaNGOS::IsValidMapCoord(joinX, joinY, joinZ))
     {
-        float const ground = joinMap->GetHeight(joinX, joinY, joinZ, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
+        float const ground = GetHeightCompat(joinMap, joinX, joinY, joinZ, true, RemoteCommander::kDirectGroundTolerance + 2.0f);
         if (RemoteCommander::CheckDirectGround(ground, joinZ) == RemoteCommander::DirectVerdict::Ok)
             joinGround = ground;
     }
@@ -12392,7 +12392,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         read.airborne = creature->CanFly() || creature->IsFlying() || creature->IsLevitating();
                         if (AirborneFloorAsked(read, step->radius, f.packClearMarginYd))
                         {
-                            float const ground = creature->GetMap()->GetHeight(creature->GetPositionX(),
+                            float const ground = GetHeightCompat(creature->GetMap(), creature->GetPositionX(),
                                 creature->GetPositionY(), creature->GetPositionZ(), true,
                                 std::fabs(read.dz) + kPackResidueZYd + 2.0f);
                             read.airborneSameFloor = SameFloorUnder(ground > INVALID_HEIGHT, ground, step->z);
@@ -13206,7 +13206,7 @@ void SyncHoldStands(Player* commander, Player* lead, std::vector<Player*> const&
             if (!ai)
                 continue;
             float x = lead->GetPositionX(), y = lead->GetPositionY(), z = lead->GetPositionZ();
-            float const ground = lead->GetMap()->GetHeight(stand->x, stand->y, stand->z + 5.0f);
+            float const ground = GetHeightCompat(lead->GetMap(), stand->x, stand->y, stand->z + 5.0f);
             if (ground > INVALID_HEIGHT && std::fabs(ground - stand->z) <= 5.0f)
             {
                 PathFinder path(lead);

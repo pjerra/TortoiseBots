@@ -10,7 +10,7 @@ namespace
 {
     float SapGroundZ(Map* map, float x, float y, float refZ)
     {
-        float const z = map->GetHeight(x, y, refZ + 2.0f, true);
+        float const z = GetHeightCompat(map, x, y, refZ + 2.0f, true);
         return z > INVALID_HEIGHT ? z : refZ;
     }
 }

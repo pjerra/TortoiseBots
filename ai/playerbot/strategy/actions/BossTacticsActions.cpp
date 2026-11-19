@@ -1846,7 +1846,7 @@ bool AnchorShotStandFor(Player* bot, const BossAnchorCircle& c, Unit* son, float
     Map* map = bot->GetMap();
     if (!map)
         return false;
-    float const floor = map->GetHeight(x, y, c.z + 5.0f);
+    float const floor = GetHeightCompat(map, x, y, c.z + 5.0f);
     if (!AnchorFloorOk(c, floor > INVALID_HEIGHT, floor))
         return false;
     z = floor;
@@ -2426,7 +2426,7 @@ bool FindSeekWalkoutStand(Player* bot, const BossAnchorCircle& c, Unit* son, flo
         return false;
     auto const test = [&](float px, float py) -> bool
     {
-        float const floor = map->GetHeight(px, py, c.z + 5.0f);
+        float const floor = GetHeightCompat(map, px, py, c.z + 5.0f);
         bool const found = floor > INVALID_HEIGHT;
         float const dx = son->GetPositionX() - px;
         float const dy = son->GetPositionY() - py;
@@ -2658,7 +2658,7 @@ Player* PickWalkoutPrePlace(PlayerbotAI* ai, Map* map, Unit* boss, const std::ve
         return nullptr;
     if (!WalkoutMeetPrePlacePoint(tank, standX, standY, x, y))
         return nullptr;
-    float const floor = map ? map->GetHeight(x, y, tank.z + 5.0f) : INVALID_HEIGHT;
+    float const floor = map ? GetHeightCompat(map, x, y, tank.z + 5.0f) : INVALID_HEIGHT;
     if (!AnchorFloorOk(tank, floor > INVALID_HEIGHT, floor))
     {
         floorRefused = roles.tanks[static_cast<std::size_t>(pick)];
@@ -9617,7 +9617,7 @@ bool SpreadSlotPointUsable(PlayerbotAI* ai, Player* bot, float centreZ, const Sp
     if (std::fabs(clampX - x) > 0.5f || std::fabs(clampY - y) > 0.5f)
         return false;
     Map* const map = bot->GetMap();
-    const float floor = map ? map->GetHeight(clampX, clampY, centreZ + 5.0f) : INVALID_HEIGHT;
+    const float floor = map ? GetHeightCompat(map, clampX, clampY, centreZ + 5.0f) : INVALID_HEIGHT;
     if (floor <= INVALID_HEIGHT || std::fabs(floor - centreZ) > kBossAnchorFloorYd)
         return false;
     x = clampX;
@@ -10031,7 +10031,7 @@ bool ai::ClampMoveToBossAnchor(PlayerbotAI* ai, Player* bot, float& x, float& y,
         return true;
     // The floor at the clamped point, probed from the centre's level: the platform's top, never a ledge below it.
     Map* map = bot->GetMap();
-    float const floor = map ? map->GetHeight(cx, cy, circle.z + 5.0f) : INVALID_HEIGHT;
+    float const floor = map ? GetHeightCompat(map, cx, cy, circle.z + 5.0f) : INVALID_HEIGHT;
     if (!AnchorFloorOk(circle, floor > INVALID_HEIGHT, floor))
         return false;
     x = cx;
@@ -13179,7 +13179,7 @@ bool BossTacticsTankPostAction::Execute(Event& event)
         {
             // The point is on a floor under the unit's height; one with no ground under it is no walk.
             Map* const map = bot->GetMap();
-            float const floor = map ? map->GetHeight(x, y, z + 5.0f) : INVALID_HEIGHT;
+            float const floor = map ? GetHeightCompat(map, x, y, z + 5.0f) : INVALID_HEIGHT;
             walkPoint = floor > INVALID_HEIGHT;
             if (walkPoint)
                 z = floor + 0.05f;

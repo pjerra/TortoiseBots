@@ -876,7 +876,7 @@ bool SpiritHealerAction::Execute(Event& event)
         }
         if (now - stepStart < 15 && WorldPosition(bot).fDist(stepSpot) > 3.0f &&
             MoveTo(stepSpot.getMapId(), stepSpot.getX(), stepSpot.getY(),
-                bot->GetMap()->GetHeight(stepSpot.getX(), stepSpot.getY(), stepSpot.getZ() + 5.0f), false, false, false,
+                GetHeightCompat(bot->GetMap(), stepSpot.getX(), stepSpot.getY(), stepSpot.getZ() + 5.0f), false, false, false,
                 true, "move_revive"))
             return true;
 

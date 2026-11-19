@@ -83,7 +83,7 @@ float SnapCampGroundZ(Map* map, float x, float y, float z)
 {
     if (!map)
         return INVALID_HEIGHT;
-    return map->GetHeight(x, y, z + 5.0f);
+    return GetHeightCompat(map, x, y, z + 5.0f);
 }
 
 bool IsCampPointReachable(Player* gm, float fromX, float fromY, float fromZ, float toX, float toY, float toZ)

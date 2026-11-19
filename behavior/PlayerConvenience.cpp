@@ -98,7 +98,7 @@ bool PlayerConvenience::RequestSummon(Player* requester, Player* bot, Player* an
     float destX = origin->getPositionX() + std::cos(angle) * distance;
     float destY = origin->getPositionY() + std::sin(angle) * distance;
     float const originZ = origin->getPositionZ();
-    float const ground = origin->GetMap()->GetHeight(destX, destY, originZ, true);
+    float const ground = GetHeightCompat(origin->GetMap(), destX, destY, originZ, true);
     bool const groundFound = ground > INVALID_HEIGHT;
     float destZ = groundFound ? ground + 0.05f : originZ;   // + 0.05f as UpdateGroundPositionZ
     bool const inLos = groundFound && origin->IsWithinLOS(destX, destY, destZ + bot->GetCollisionHeight(), true);

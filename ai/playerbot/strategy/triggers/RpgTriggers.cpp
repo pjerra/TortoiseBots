@@ -976,7 +976,7 @@ bool RpgCampTrigger::IsActive()
     {
         if (Map* map = player->GetMap())
         {
-            float const floor = map->GetHeight(x, y, z + 5.0f);
+            float const floor = GetHeightCompat(map, x, y, z + 5.0f);
             if (floor > INVALID_HEIGHT)
                 return floor;
         }

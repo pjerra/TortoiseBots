@@ -575,7 +575,7 @@ RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()
     float const tx = target->GetPositionX();
     float const ty = target->GetPositionY();
     float const tz = target->GetPositionZ();
-    float const groundZ = bot->GetMap()->GetHeight(tx, ty, tz, true);
+    float const groundZ = GetHeightCompat(bot->GetMap(), tx, ty, tz, true);
     bool const groundValid = groundZ > INVALID_HEIGHT + 1.0f;
     bool const hovering = HoverReachApplies(true, bot->GetMap()->IsDungeon(), sServerFacade.IsHostileTo(bot, target),
         bot->GetDistance(target), ATTACK_DISTANCE, groundValid, tz, groundZ);

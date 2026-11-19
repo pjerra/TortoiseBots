@@ -797,7 +797,7 @@ bool GoAction::MoveToMapGps(std::string& param, Player* requester)
             return false;
         }
 
-        float ground = map->GetHeight(x, y, z + 0.5f);
+        float ground = GetHeightCompat(map, x, y, z + 0.5f);
         if (ground <= INVALID_HEIGHT)
         {
             ai->TellError(requester, BOT_TEXT("error_cant_go"));
