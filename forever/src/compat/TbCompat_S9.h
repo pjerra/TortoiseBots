@@ -103,6 +103,15 @@ inline void NoteWindowAnnounced(Player const* bot, ObjectGuid const& owner)
 // Called by LootOpenCompat when it raises the "loot response" event of a corpse itself (TbCompat_I2.h), so the poll below never raises it a second time.
 inline void NoteLootWindowAnnouncedCompat(Player const* bot, ObjectGuid const& owner) { tbs9::NoteWindowAnnounced(bot, owner); }
 
+// THE METHOD GATE: the bot rolls only in GROUP_LOOT. The core starts a LootRoll in other methods too (Need Before Greed, master loot over the
+// threshold), and a greed vote there would be a vote the policy never allowed (a Need Before Greed greed can win). So for every other method (or no
+// group) NOTHING is announced and NOTHING is voted: the core's own timeout decides. Both the bot's group and the roll's own loot must say GROUP_LOOT.
+inline bool BotRollsInGroupLootCompat(Player const* bot, Loot const* loot)
+{
+    Group const* group = bot ? bot->GetGroup() : nullptr;
+    return group && group->GetLootMethod() == GROUP_LOOT && (!loot || loot->GetLootMethod() == GROUP_LOOT);
+}
+
 // ===============================================================================================================
 // PACKET EVENTS the core never sends to a socketless session (WorldPacketTrigger::Check)
 // ===============================================================================================================
@@ -138,7 +147,7 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     {
         for (::LootRoll const* roll : bot->GetLootRolls())
         {
-            if (!roll || !roll->IsStarted() || !roll->GetLoot() || !roll->GetItem())
+            if (!roll || !roll->IsStarted() || !roll->GetLoot() || !roll->GetItem() || !BotRollsInGroupLootCompat(bot, roll->GetLoot()))
                 continue;
             ObjectGuid const owner = roll->GetLoot()->GetOwnerGUID();
             uint32 const slot = roll->GetItem()->LootListId;
@@ -175,6 +184,9 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
 // ===============================================================================================================
 // ROLLS (LootRollAction.cpp)
 // ===============================================================================================================
+// Defined below with the bag floor of the corpse take.
+inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count);
+
 // The vote. T `Group::CountRollVote(bot, lootGuid, slot, vote)` (the entry point CMSG_LOOT_ROLL ends in). F: the typed packet into
 // WorldSession::HandleLootRoll (LootHandler.cpp:507), which finds the roll in the player's own list (Player::GetLootRoll, Player.cpp:9936) and calls
 // LootRoll::PlayerVote (Loot.cpp:541: refused when the player has already voted or is not a voter of this roll). `lootGuid` is the owner (corpse or
@@ -202,7 +214,17 @@ inline bool RollVoteCompat(Player* bot, Group* /*group*/, ObjectGuid const& owne
             }
     }
     ObjectGuid const lootGuid = loot ? loot->GetGUID() : (roll ? roll->GetLoot()->GetGUID() : ObjectGuid::Empty);
-    if (lootGuid.IsEmpty() || !bot->GetLootRoll(lootGuid, uint8(slot)))
+    if (lootGuid.IsEmpty())
+        return false;
+    ::LootRoll* live = bot->GetLootRoll(lootGuid, uint8(slot));
+    if (!live || !live->GetLoot() || !live->GetItem())
+        return false;
+    // The method gate: no vote outside GROUP_LOOT (the roll was never announced there; a method changed in flight is left to the core's timeout).
+    if (!BotRollsInGroupLootCompat(bot, live->GetLoot()))
+        return false;
+    // The bag floor, before ANY vote: if winning would need a new slot with two or fewer free (or the item does not fit), cast NO vote (not a pass, not a
+    // greed): the core's timeout decides, and the bot cannot win an item it has no room for. The same floor as the corpse take (LootBagFloorCompat).
+    if (LootBagFloorCompat(bot, live->GetItem()->itemid, live->GetItem()->count))
         return false;
 
     WorldPackets::Loot::LootRoll packet{ WorldPacket(CMSG_LOOT_ROLL) };

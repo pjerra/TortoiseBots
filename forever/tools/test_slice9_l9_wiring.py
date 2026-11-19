@@ -96,6 +96,24 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("NoteLootWindowAnnouncedCompat(bot, guid);", I2)
         self.assertIn("PollPacketEventCompat(bot, getName(), *this);", TRIGGER)
 
+    def test_rolls_are_announced_and_voted_only_in_group_loot(self):
+        gate = body(F_HEADER, "BotRollsInGroupLootCompat")
+        self.assertIn("GetLootMethod() == GROUP_LOOT", gate)
+        poll = body(F_HEADER, "PollPacketEventCompat")
+        # the roll event is raised only after the gate says so (Need Before Greed, master loot and no group: nothing is announced)
+        self.assertIn("BotRollsInGroupLootCompat(bot, roll->GetLoot())", poll)
+        self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);"))
+        vote = body(F_HEADER, "RollVoteCompat")
+        self.assertIn("BotRollsInGroupLootCompat(bot, live->GetLoot())", vote)
+        self.assertLess(vote.index("BotRollsInGroupLootCompat("), vote.index("HandleLootRoll(packet)"))
+
+    def test_a_roll_vote_respects_the_bag_floor(self):
+        vote = body(F_HEADER, "RollVoteCompat")
+        floor = vote.index("LootBagFloorCompat(bot, live->GetItem()->itemid, live->GetItem()->count)")
+        self.assertLess(floor, vote.index("HandleLootRoll(packet)"))
+        # a refused floor is NO vote: it returns before the packet is built (not a pass, not a greed)
+        self.assertIn("return false;", vote[floor:vote.index("WorldPackets::Loot::LootRoll packet")])
+
     def test_the_item_take_uses_the_core_handlers(self):
         self.assertIn("HandleAutostoreLootItemOpcode(packet)", body(I2, "LootAutostoreCompat"))
         self.assertIn("GetUiTypeForPlayer", body(I2, "LootSlotFactsCompat"))

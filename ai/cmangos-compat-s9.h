@@ -23,6 +23,9 @@ inline void NoteLootWindowAnnouncedCompat(Player const* /*bot*/, ObjectGuid cons
 // ===============================================================================================================
 // ROLLS (LootRollAction.cpp)
 // ===============================================================================================================
+// The method gate of the roll poll and vote (ForeverCore rolls only in GROUP_LOOT): T has no gate, the rolls of its packets are answered as they were.
+inline bool BotRollsInGroupLootCompat(Player const* /*bot*/, Loot const* /*loot*/) { return true; }
+
 // `group->CountRollVote(bot, lootGuid, slot, vote)`.
 inline bool RollVoteCompat(Player* bot, Group* group, ObjectGuid const& lootGuid, uint32 slot, BotRollVote vote)
 {
