@@ -27,12 +27,19 @@ type Config struct {
 	DBCDir string
 	// Items holds the ForeverCore item catalog exported by TortoiseBots
 	// (tortoisebots-items.json), used when -core forever has no world.item_template.
-	Items *foreveritems.Store
+	Items   *foreveritems.Store
+	Lookups *foreveritems.Lookups
+	DataDir string
+	ArtDir  string
 	// LiveGUIDs returns the GUIDs currently in the daemon's live roster, used on
 	// ForeverCore where there is no pool-account table.
 	LiveGUIDs func() []uint32
 	// LiveStats returns live character stats from BOT_STATS when fresh.
 	LiveStats func(guid uint32) (CharacterStats, bool)
+	// ForeverData holds spells, talents, skills and factions catalogs exported for ForeverCore.
+	ForeverData *ForeverCatalog
+	// LiveAuras returns active auras from BOT_STATS when fresh: [spellId, remaining_ms, stacks, positive].
+	LiveAuras func(guid uint32) [][]int64
 }
 
 type Service struct {

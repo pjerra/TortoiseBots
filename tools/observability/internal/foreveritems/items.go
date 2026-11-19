@@ -12,17 +12,30 @@ import (
 )
 
 type Item struct {
-	ID       uint32 `json:"id"`
-	Name     string `json:"name"`
-	Quality  uint32 `json:"quality"`
-	ItemLvl  uint32 `json:"ilvl"`
-	ReqLevel uint32 `json:"req_level"`
-	Class    uint32 `json:"class"`
-	SubClass uint32 `json:"subclass"`
-	InvType  uint32 `json:"inv_type"`
-	Sell     uint32 `json:"sell"`
-	Buy      uint32 `json:"buy"`
-	Icon     uint32 `json:"icon"`
+	ID           uint32     `json:"id"`
+	Name         string     `json:"name"`
+	Quality      uint32     `json:"quality"`
+	ItemLvl      uint32     `json:"ilvl"`
+	ReqLevel     uint32     `json:"req_level"`
+	Class        uint32     `json:"class"`
+	SubClass     uint32     `json:"subclass"`
+	InvType      uint32     `json:"inv_type"`
+	Sell         uint32     `json:"sell"`
+	Buy          uint32     `json:"buy"`
+	Icon         uint32     `json:"icon"`
+	Stats        [][2]int32 `json:"stats"`
+	Armor        int32      `json:"armor"`
+	DmgMin       float64    `json:"dmg_min"`
+	DmgMax       float64    `json:"dmg_max"`
+	Delay        uint32     `json:"delay"`
+	Bonding      uint32     `json:"bonding"`
+	Set          uint32     `json:"set"`
+	Durability   uint32     `json:"durability"`
+	ReqSkill     uint32     `json:"req_skill"`
+	ReqSkillRank uint32     `json:"req_skill_rank"`
+	Classes      int32      `json:"classes"`
+	Desc         string     `json:"desc"`
+	Spells       [][2]int32 `json:"spells"`
 }
 
 type Store struct {

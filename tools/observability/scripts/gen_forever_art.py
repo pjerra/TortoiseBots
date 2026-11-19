@@ -154,9 +154,7 @@ class DB2Reader:
          self.parent_lookup_count, self.column_meta_size, self.common_data_size,
          self.pallet_data_size, self.section_count) = struct.unpack_from("<IIIIIIIIIHhIIIIIII", self.raw, 136)
 
-        if self.flags & 0x1:
-            raise ValueError(f"{path}: sparse DB2 layout is not supported")
-
+        self.sparse = bool(self.flags & 0x1)
         pos = 204
         self.sections = []
         for _ in range(self.section_count):
@@ -166,7 +164,7 @@ class DB2Reader:
         pos += 4 * self.field_count  # DB2FieldEntry[]
 
         self.col_meta = []
-        if self.column_meta_size:
+        if not self.sparse and self.column_meta_size:
             for _ in range(self.total_field_count):
                 self.col_meta.append(struct.unpack_from("<HHIIIII", self.raw, pos))
                 pos += 24
@@ -192,7 +190,27 @@ class DB2Reader:
                     pos += 8
 
         self.records = []
+        self.sparse_sizes = []
+        self.copies = []
         self.parent_ids = {}
+        if self.sparse:
+            for sec in self.sections:
+                tact, _file_off, _rec_cnt, _str_sz, cat_off, _id_sz, _par_sz, cat_cnt, copy_cnt = sec
+                if tact != 0 or cat_cnt == 0 or cat_off == 0:
+                    continue
+                p = cat_off
+                cat_ids = struct.unpack_from(f"<{cat_cnt}I", self.raw, p)
+                p += 4 * cat_cnt
+                for _ in range(copy_cnt):
+                    self.copies.append(struct.unpack_from("<II", self.raw, p))
+                    p += 8
+                for r in range(cat_cnt):
+                    foff, rsz = struct.unpack_from("<IH", self.raw, p)
+                    p += 6
+                    self.records.append((foff, cat_ids[r]))
+                    self.sparse_sizes.append(rsz)
+            return
+
         global_rec_idx = 0
         for sec in self.sections:
             _tact, file_offset, rec_count, str_size, _cat_off, id_tbl_sz, parent_sz, _cat_cnt, copy_cnt = sec
@@ -273,6 +291,42 @@ class DB2Reader:
         start = field_off + str_off
         end = self.raw.index(b"\x00", start)
         return self.raw[start:end].decode("utf-8", "replace")
+
+    def get_float(self, rec_idx, field):
+        rec_off, rid = self.records[rec_idx]
+        bo, _bs, _ads, ct, d0, d1, _d2 = self.col_meta[field]
+        if ct == 0:
+            return struct.unpack_from("<f", self.raw, rec_off + bo // 8)[0]
+        if ct == 1:
+            val = self._packed(rec_off, d0 // 8 + self.packed_data_offset, d0, d1)
+        elif ct == 2:
+            if rid is None:
+                rid = self.get_id(rec_idx)
+            val = self.common[field].get(rid, d0)
+        elif ct == 3:
+            pidx = self._packed(rec_off, d0 // 8 + self.packed_data_offset, d0, d1)
+            val = self.pallet[field][pidx]
+        else:
+            raise ValueError(f"unsupported float column compression {ct}")
+        return struct.unpack("<f", struct.pack("<I", val))[0]
+
+    def get_int_array(self, rec_idx, field):
+        rec_off, _ = self.records[rec_idx]
+        _bo, _bs, _ads, ct, d0, d1, d2 = self.col_meta[field]
+        if ct != 4:
+            raise ValueError(f"unsupported array column compression {ct}")
+        pidx = self._packed(rec_off, d0 // 8 + self.packed_data_offset, d0, d1)
+        start = pidx * d2
+        return self.pallet_array[field][start:start + d2]
+
+    def get_sparse_strings(self, rec_idx, count):
+        rec_off, _ = self.records[rec_idx]
+        rec_size = self.sparse_sizes[rec_idx]
+        parts = self.raw[rec_off:rec_off + rec_size].split(b"\x00", count)
+        out = [p.decode("utf-8", "replace") for p in parts[:count]]
+        while len(out) < count:
+            out.append("")
+        return out
 
 
 def find_casc_src_dir(start_dir):
@@ -537,7 +591,7 @@ def generate_maps(casc, dbc_dir, out_dir, dry_run=False, force=False):
     return len(specs), written, skipped, failed
 
 
-def collect_icon_ids(items_file, dbc_dir, from_db2):
+def collect_icon_ids(items_file, dbc_dir, from_db2, spells_file=None, names_file=None, include_all=False):
     icon_ids = set()
     item_ids_needing_db2 = set()
 
@@ -571,12 +625,40 @@ def collect_icon_ids(items_file, dbc_dir, from_db2):
         elif not icon_ids:
             icon_ids.update(app_to_icon.values())
 
+    if include_all:
+        if spells_file and os.path.isfile(spells_file):
+            with open(spells_file) as handle:
+                for sp in json.load(handle).get("spells", []):
+                    icon = sp.get("icon", 0)
+                    if icon and icon > 0:
+                        icon_ids.add(int(icon))
+
+        if names_file and os.path.isfile(names_file):
+            with open(names_file) as handle:
+                skills = json.load(handle).get("skills", {})
+            for sk in skills.values():
+                icon = sk.get("icon", 0)
+                if icon and icon > 0:
+                    icon_ids.add(int(icon))
+
+        tt_path = os.path.join(dbc_dir, "TalentTab.db2")
+        if os.path.isfile(tt_path):
+            tt_db = DB2Reader(tt_path)
+            for i in range(len(tt_db.records)):
+                icon = tt_db.get_int(i, 7, signed=True)
+                if icon > 0:
+                    icon_ids.add(icon)
+
     return sorted(icon_ids)
 
 
-def generate_icons(casc, items_file, dbc_dir, out_dir, from_db2=False, dry_run=False, force=False):
+def generate_icons(casc, items_file, dbc_dir, out_dir, from_db2=False, dry_run=False, force=False,
+                   spells_file=None, names_file=None, include_all=False):
     icons_dir = os.path.join(out_dir, "icons")
-    icon_ids = collect_icon_ids(items_file, dbc_dir, from_db2)
+    icon_ids = collect_icon_ids(
+        items_file, dbc_dir, from_db2,
+        spells_file=spells_file, names_file=names_file, include_all=include_all,
+    )
     if not dry_run:
         os.makedirs(icons_dir, exist_ok=True)
 
@@ -603,6 +685,91 @@ def generate_icons(casc, items_file, dbc_dir, out_dir, from_db2=False, dry_run=F
     return len(icon_ids), written, skipped, failed
 
 
+def generate_spells_text(dbc_dir, spells_file, out_dir, dry_run=False):
+    if not spells_file or not os.path.isfile(spells_file):
+        raise FileNotFoundError(f"spells file not found: {spells_file}")
+
+    with open(spells_file) as handle:
+        wanted_ids = {int(s["id"]) for s in json.load(handle).get("spells", [])}
+
+    spell_db = DB2Reader(os.path.join(dbc_dir, "Spell.db2"))
+    spell_texts = {}
+    for i in range(len(spell_db.records)):
+        sid = spell_db.get_id(i)
+        subtext, desc, aura = spell_db.get_sparse_strings(i, 3)
+        spell_texts[sid] = (subtext, desc, aura)
+    for new_id, src_id in spell_db.copies:
+        if new_id not in spell_texts and src_id in spell_texts:
+            spell_texts[new_id] = spell_texts[src_id]
+
+    rad_db = DB2Reader(os.path.join(dbc_dir, "SpellRadius.db2"))
+    radii = {}
+    for i in range(len(rad_db.records)):
+        radii[rad_db.get_id(i)] = rad_db.get_float(i, 0)
+
+    eff_db = DB2Reader(os.path.join(dbc_dir, "SpellEffect.db2"))
+    effects_by_spell = {}
+    for i in range(len(eff_db.records)):
+        sid = eff_db.parent_ids.get(i)
+        if sid not in wanted_ids:
+            continue
+        if eff_db.get_int(i, 1, signed=True) != 0:  # DifficultyID == 0
+            continue
+        eidx = eff_db.get_int(i, 2, signed=True)
+        aperiod = eff_db.get_int(i, 6, signed=True)
+        bp = eff_db.get_float(i, 22)
+        ridxs = eff_db.get_int_array(i, 26)
+        r_id = ridxs[0] if ridxs[0] else (ridxs[1] if len(ridxs) > 1 else 0)
+        rad = radii.get(r_id, 0.0) if r_id else 0.0
+        rad_val = int(rad) if rad == int(rad) else round(rad, 2)
+        effects_by_spell.setdefault(sid, []).append((eidx, int(round(bp)), aperiod, rad_val))
+
+    out = {}
+    for sid in sorted(wanted_ids):
+        subtext, desc, aura = spell_texts.get(sid, ("", "", ""))
+        effs = sorted(effects_by_spell.get(sid, []), key=lambda x: x[0])
+        out[str(sid)] = {
+            "subtext": subtext,
+            "desc": desc,
+            "aura": aura,
+            "values": [e[1] for e in effs],
+            "periods": [e[2] for e in effs],
+            "radius": [e[3] for e in effs],
+        }
+
+    out_path = os.path.join(out_dir, "spells-text.json")
+    if not dry_run:
+        os.makedirs(out_dir, exist_ok=True)
+        with open(out_path, "w") as handle:
+            json.dump(out, handle, separators=(",", ":"))
+
+    return len(out), out_path
+
+
+def generate_talent_tabs(dbc_dir, out_dir, dry_run=False):
+    tt_db = DB2Reader(os.path.join(dbc_dir, "TalentTab.db2"))
+    rows = []
+    for i in range(len(tt_db.records)):
+        tid = tt_db.get_id(i)
+        rows.append((tid, {
+            "name": tt_db.get_str(i, 0),
+            "class_mask": tt_db.get_int(i, 5, signed=True),
+            "order": tt_db.get_int(i, 3, signed=True),
+            "icon": tt_db.get_int(i, 7, signed=True),
+            "background": tt_db.get_str(i, 1),
+        }))
+    rows.sort(key=lambda x: x[0])
+    out = {str(tid): obj for tid, obj in rows}
+
+    out_path = os.path.join(out_dir, "talent-tabs.json")
+    if not dry_run:
+        os.makedirs(out_dir, exist_ok=True)
+        with open(out_path, "w") as handle:
+            json.dump(out, handle, separators=(",", ":"))
+
+    return len(out), out_path
+
+
 def default_forever_local_dir():
     here = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(here, "..", "..", "..", "..", "..", "..", ".."))
@@ -611,15 +778,20 @@ def default_forever_local_dir():
 def main():
     base = default_forever_local_dir()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--client", default=os.environ.get("WOW_CLIENT"), required=not os.environ.get("WOW_CLIENT"),
+    parser.add_argument("--client", default=os.environ.get("WOW_CLIENT"),
                         help="WoW Forever client root (containing .build.info and Data/); env WOW_CLIENT")
     parser.add_argument("--dbc-dir", default=os.path.join(base, "data", "dbc", "enUS"),
                         help="directory containing extracted .db2 files")
     parser.add_argument("--items-file", default=os.path.join(base, "logs", "tortoisebots-items.json"),
                         help="tortoisebots-items.json emitted by the module")
+    parser.add_argument("--spells-file", default=os.path.join(base, "logs", "tortoisebots-spells.json"),
+                        help="tortoisebots-spells.json emitted by the module")
+    parser.add_argument("--names-file", default=os.path.join(base, "logs", "tortoisebots-names.json"),
+                        help="tortoisebots-names.json emitted by the module")
     parser.add_argument("--out", default=os.path.join(base, "data", "forever-art"),
                         help="output directory (default: forever-local/data/forever-art)")
-    parser.add_argument("--only", choices=["maps", "icons"], help="extract only maps or only icons")
+    parser.add_argument("--only", choices=["maps", "icons", "spells", "talents", "icons-all"],
+                        help="extract only one target (default: all)")
     parser.add_argument("--icons-from-db2", action="store_true",
                         help="resolve item icons from ItemModifiedAppearance + ItemAppearance.db2 when items lack 'icon'")
     parser.add_argument("--casc-lib", help="path to prebuilt libcasc_wrap.so (auto-built if omitted)")
@@ -628,35 +800,57 @@ def main():
     parser.add_argument("--force", action="store_true", help="overwrite existing output files")
     args = parser.parse_args()
 
-    t0 = time.monotonic()
-    casc_lib = args.casc_lib
-    if not casc_lib:
-        cached_so = os.path.join(tempfile.gettempdir(), "tortoisebots_libcasc_wrap.so")
-        if not os.path.isfile(cached_so):
-            casc_src = find_casc_src_dir(os.path.dirname(os.path.abspath(__file__)))
-            if not casc_src:
-                sys.exit("could not locate dep/CascLib/src; pass --casc-lib")
-            print(f"Building CascLib wrapper -> {cached_so}")
-            build_casc_wrapper(casc_src, cached_so)
-        casc_lib = cached_so
+    run_maps = args.only in (None, "maps")
+    run_icons = args.only in (None, "icons", "icons-all")
+    run_spells = args.only in (None, "spells")
+    run_talents = args.only in (None, "talents")
+    needs_casc = (run_maps or run_icons) and not args.dry_run
 
+    if needs_casc and not args.client:
+        parser.error("--client is required when extracting maps or icons (or set WOW_CLIENT)")
+
+    t0 = time.monotonic()
     casc = None
-    if not args.dry_run:
+    if needs_casc:
+        casc_lib = args.casc_lib
+        if not casc_lib:
+            cached_so = os.path.join(tempfile.gettempdir(), "tortoisebots_libcasc_wrap.so")
+            if not os.path.isfile(cached_so):
+                casc_src = find_casc_src_dir(os.path.dirname(os.path.abspath(__file__)))
+                if not casc_src:
+                    sys.exit("could not locate dep/CascLib/src; pass --casc-lib")
+                print(f"Building CascLib wrapper -> {cached_so}")
+                build_casc_wrapper(casc_src, cached_so)
+            casc_lib = cached_so
         casc = CascStorage(casc_lib, args.client, product=args.product)
 
     try:
-        if args.only != "icons":
+        if run_maps:
             total, written, skipped, failed = generate_maps(
                 casc, args.dbc_dir, args.out, dry_run=args.dry_run, force=args.force
             )
             print(f"maps:  {total} total, {written} written, {skipped} skipped, {failed} failed")
 
-        if args.only != "maps":
+        if run_icons:
             total, written, skipped, failed = generate_icons(
                 casc, args.items_file, args.dbc_dir, args.out,
-                from_db2=args.icons_from_db2, dry_run=args.dry_run, force=args.force
+                from_db2=args.icons_from_db2, dry_run=args.dry_run, force=args.force,
+                spells_file=args.spells_file, names_file=args.names_file,
+                include_all=(args.only in (None, "icons-all")),
             )
             print(f"icons: {total} total, {written} written, {skipped} skipped, {failed} failed")
+
+        if run_spells:
+            count, path = generate_spells_text(
+                args.dbc_dir, args.spells_file, args.out, dry_run=args.dry_run
+            )
+            print(f"spells: {count} written -> {path}")
+
+        if run_talents:
+            count, path = generate_talent_tabs(
+                args.dbc_dir, args.out, dry_run=args.dry_run
+            )
+            print(f"talents: {count} written -> {path}")
     finally:
         if casc is not None:
             casc.close()

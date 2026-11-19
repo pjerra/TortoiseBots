@@ -578,3 +578,24 @@ func TestBotStatsDatagramForeverOnly(t *testing.T) {
 		t.Fatalf("BOT_STATS must not be recorded as an anomaly, got %d", storeForever.Anomalies().Count())
 	}
 }
+
+func TestBotStatsClassicSheetFieldsRoundTrip(t *testing.T) {
+	pkt := `{"v":12,"session":78,"seq":6,"ts":1791990001,"type":"BOT_STATS","stats":[{"guid":3128,"source":"live","maxhealth":3500,"maxpower2":1000,"mana_regen":12,"mana_regen_casting":4,"defense":300,"defense_max":300,"block_value":85,"spell_penetration":18,"expertise":1.5,"ratings":{"1":40,"5":20,"23":10},"rating_bonus":{"1":16,"5":1.3,"23":1.5}}]}`
+
+	lForever, storeForever, _ := newTestListener()
+	lForever.SetForever(true)
+	lForever.processPacket([]byte(pkt))
+	st, ok := storeForever.BotStats(3128)
+	if !ok {
+		t.Fatal("forever listener did not store BOT_STATS")
+	}
+	if st.ManaRegenCasting != 4 || st.Defense != 300 || st.DefenseMax != 300 || st.BlockValue != 85 || st.SpellPenetration != 18 || st.Expertise != 1.5 {
+		t.Fatalf("unexpected sheet fields: %+v", st)
+	}
+	if st.Ratings["1"] != 40 || st.Ratings["5"] != 20 || st.Ratings["23"] != 10 {
+		t.Fatalf("unexpected ratings: %+v", st.Ratings)
+	}
+	if st.RatingBonus["1"] != 16 || st.RatingBonus["5"] != 1.3 || st.RatingBonus["23"] != 1.5 {
+		t.Fatalf("unexpected rating_bonus: %+v", st.RatingBonus)
+	}
+}
