@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/GroupMembers.h"
+#include "playerbot/TbCompatK8.h"
 #include "playerbot/CastCancelLog.h"
 #include "../../../runtime/policy/class/RogueSapApproachPolicy.h"
 #include "../../../runtime/policy/class/RogueThreatPolicy.h"

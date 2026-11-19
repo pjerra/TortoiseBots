@@ -1,5 +1,6 @@
 #include "playerbot/strategy/actions/ViscidusActions.h"
 #include "playerbot/playerbot.h"
+#include "playerbot/TbCompatK8.h"
 #include "PlayerbotAI.h"
 #include "playerbot/strategy/actions/FankrissFocusActions.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"

@@ -2,6 +2,7 @@
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/playerbot.h"
 #include "GiveItemAction.h"
+#include "playerbot/TbCompatK8.h"
 
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "../../../../runtime/RunGivenItemRegistry.h"
