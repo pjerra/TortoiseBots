@@ -1349,7 +1349,16 @@ void BotMgr::Think(Bot& bot, Player* me)
                     }
                 }
                 else
+                {
+                    // An alive bot (or a bot that is not commanded) loses its engine here. Live (N4 boot): a bot raised by its engine while the commander was away
+                    // kept the follow generator the engine had set and walked 60 yd through the first room: stop what the dropped engine started.
+                    if (bot.brain && me->IsAlive())
+                    {
+                        me->GetMotionMaster()->Clear();
+                        me->StopMoving();
+                    }
                     DropBrain(bot);
+                }
             }
             if (changed)
                 TC_LOG_INFO("tortoisebots", "BotMgr: {} is not put next to its master {} (map {}, instance {}): {}", me->GetName(), master->GetName(), masterMap, masterInstance, reason);
