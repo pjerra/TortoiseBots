@@ -74,17 +74,18 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
 * **GUID text.** `32 uppercase hex digits`: the two 64-bit words of the `ObjectGuid`, high word first, as `tgt=`, `victim=` and `mob=` print them and as `.tb order ... attack|pull` reads them (a leading `0x` is accepted); empty for none. Another way to name a creature: `spawn:<database spawn id>` (a creature of the bot's map).
 
 ### `.tb grammar selftest [#token]`
-Prints `selftest-begin`, six `selftest` records (a value holding space, `=`, `:`, `;`, `#`, `%`, `_`, `,`, `+`, `|` and a two-byte character; a list and a list of parts with an empty item and a `%`; coordinates, a boolean, a number and a fraction; a key given twice (the second wins); an over-long list that
-shows the 3,000-byte cut and its `selftest+` continuation) and `selftest-end count=6`. Real output of boot 5 of package L:
+Prints `grammar-begin`, five `selftest` records (a value holding space, `=`, `:`, `;`, `#`, `%`, `_`, `,`, `+`, `|` and a two-byte character, and an empty value; a list with an empty item that is dropped, a list of parts, an empty list; a position with two fraction digits next to `map=`, a boolean, a number and a fraction;
+a key given twice (the second wins); a record over 3,000 bytes whose long list moves to a `selftest+ bot=...` continuation line that repeats the identity key), `grammar-end count=<lines> records=<records> ... ready=no why=...` (a `why` list present because `ready=no`) and one `error` line. Real output of the final boot of package L:
 ```
-selftest-begin #g1
-selftest case=specials value=a%20b%3Dc%3Ad%3Be%23f%25g_h%2Ci%2Bj%7Ck%C3%A9 empty= #g1
-selftest case=list items=x%20y;a%3Bb;;50%25 pairs=Mtank:343;a%3Ab:1 #g1
-selftest case=coords pos=-601.2,-4250.1,38.9 flag=yes number=-17 fraction=12.35 #g1
-selftest case=once key=second #g1
-selftest case=overlong list=strategy%20number%200;strategy%20number%201;...(cut at 3,000 bytes) #g1
-selftest+ case=overlong tail=x #g1
-selftest-end count=6 note=fixed%20records #g1
+grammar-begin #g2
+selftest case=specials value=a%20b%3Dc%3Ad%3Be%23f%25g_h%2Ci%2Bj%7Ck%C3%A9 empty= #g2
+selftest case=list items=x%20y;a%3Bb;50%25 pairs=Mtank:343;a%3Ab:1 none= #g2
+selftest case=coords pos=-601.26,-4250.10,38.94 map=389 flag=yes number=-17 fraction=12.35 #g2
+selftest case=once key=second #g2
+selftest bot=Mtank case=overlong #g2
+selftest+ bot=Mtank list=strategy%20number%200;strategy%20number%201;...(cut at an item, under 3,000 bytes) #g2
+grammar-end count=6 records=5 note=fixed%20records ready=no why=resting:Mpriest;far:Mdpsb #g2
+error code=selftest cmd=grammar msg=a%20b%3Dc%3Bd #g2
 ```
 
 ## 4. Orders (real output, package L boot 5)
@@ -106,27 +107,31 @@ Each bot of the address gets the order QUEUED at once; the engine runs it right 
 | `assist` | a party member's name | one shot: `attack` on what that member is attacking when the order runs | the member is not in the party, or has no attackable victim now |
 | `co` / `nc` | `+name,-name` | `ChangeStrategy(arg, combat / non-combat)`: a debug switch | characters other than letters, digits, space, `+ - , _` |
 
-One bot (a one-line reply) and a party (begin/end):
+One bot and a party (both have the markers):
 ```
-order bot=Mdpsa verb=follow seq=1 status=queued #o9
+order-begin #o1
+order bot=Mdpsa verb=follow seq=1 status=queued #o1
+order-end count=1 records=1 verb=follow target=Mdpsa bots=1 queued=1 refused=0 #o1
 order-begin #o10
 order bot=Mtank verb=stay seq=2 status=queued #o10
 order bot=Mpriest verb=stay seq=3 status=queued #o10
 order bot=Mdpsa verb=stay seq=4 status=queued #o10
 order bot=Mdpsb verb=stay seq=5 status=queued #o10
 order bot=Mdpsc verb=stay seq=6 status=queued #o10
-order-end count=5 verb=stay target=party:commander:Mcmd bots=5 queued=5 refused=0 #o10
-order bot=Mdpsa verb=assist status=refused code=nothing-to-assist msg=Mtank%20has%20no%20attackable%20victim%20or%20target%20now #o11
+order-end count=5 records=5 verb=stay target=party:commander:Mcmd bots=5 queued=5 refused=0 #o10
+order-begin #o2
+order bot=Mdpsc verb=stay status=refused code=no-engine msg=the%20bot%20has%20no%20running%20engine%20%28%60.tb%20engine%20%3Cbot%3E%20on%60%29 #o2
+order-end count=1 records=1 verb=stay target=Mdpsc bots=1 queued=0 refused=1 #o2
 error code=unknown-verb cmd=order msg=bogus #o12
 ```
 `seq` numbers orders over the whole server; the bot's last one is `ord=` in its state line. An order older than 15 s that the engine could not run is dropped with `fail:expired`.
 
 ### `.tb role <bot|party [leader]> tank|healer|dps|none [#token]`
-Stores the role (`PlayerbotAIStorage::SetPlayerForcedRole`) and in the bot's next engine tick sets the AI's forced role and rebuilds the kit. One bot: `role bot=Mdpsb role=dps seq=7 status=queued #r9` (`status=stored` when it has no engine yet). A party: `role-begin`, the lines, `role-end count=.. role=.. target=.. bots=.. queued=..`.
+Stores the role (`PlayerbotAIStorage::SetPlayerForcedRole`) and in the bot's next engine tick sets the AI's forced role and rebuilds the kit. `role-begin`, `role bot=Mdpsb role=dps seq=7 status=queued` (`status=stored` when it has no engine yet), `role-end count=.. records=.. role=.. target=.. bots=.. queued=..`.
 
 ### `.tb master <bot|party [leader]> <commander|none> [#token]`
 Binds the bots to a commander who stands OUTSIDE their party (decision D2): host master and engine master become the commander, `IsInCommandedGroup` answers true for them, and a commanded bot keeps that master (the engine's adoption step skips it) and follows it. `none` releases them.
-Line: `master bot=Mtank commander=Mcmd commander_in_party=no seq=44 status=queued`; party: begin/end with `master-end count=.. target=.. commander=.. bots=.. queued=..`.
+`master-begin`, `master bot=Mtank commander=Mcmd commander_in_party=no seq=44 status=queued`, `master-end count=.. records=.. target=.. commander=.. bots=.. queued=..`.
 
 ### `.tb party <leader> <member>... [#token]` (forms) and `.tb party <leader> [#token]` (roster)
 Forming: up to four host bots join the leader's party; each bot's HOST master becomes the leader: run `.tb master` afterwards. Replies `party-begin`, `party-join bot=.. leader=.. status=joined|refused [code= msg=]`, `party-end count=.. leader=.. joined=.. asked=.. note=..`.
@@ -155,22 +160,22 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `hold` `mv` | the passive strategy is on; movement `follow` / `stay` or empty |
 | `stuck` | empty; `blocked:<reason>`; `away:<seconds left>`; `noengine` |
 | `engine` | a PlayerbotAI runs the bot |
-| `pos` `map` `inst` | `x,y,z` with one decimal; map id; instance id |
+| `pos` `map` `inst` | ONE key `x,y,z` with two decimals; map id; instance id (no separate x/y/z keys) |
 | `dl` `dm` | yards to the party leader / to the master (`self`, `othermap`, a number, empty when there is none) |
-| `ord` `lastorder` | `<seq>:<ok\|queued\|fail%3A<code>\|none>` of the last order, and its verb (empty for none) |
+| `ord` `lastorder` | `<seq>:<ok\|queued\|fail%3A<code>>` of the last order, and its verb; both empty when the bot has had no order |
 | `co` `nc` | combat and non-combat strategies, a `;` list |
 | `cast_queued` `cast_delivered` `cast_dropped` `cast_pending` | the cast-result queue counters (absent without a bot session) |
 | `eating` `drinking` | a seated food / drink aura is on the bot |
 | `resting` `rest_why` | the rest gate: `resting=no` means out of the old rest conditions; `rest_why` is a `;` list of `dead`, `combat`, `hp`, `mana`, `eating`, `drinking` |
 
-End line: `state-end count=<lines> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
+End line: `state-end count=<lines> records=<records> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
 **ready** = every bot is alive, out of combat, not resting, within follow range of its master (10 yd; 18 yd for a healer) and not blocked or away. `why` lists `<reason>:<bot>` items, reason one of `dead`, `combat`, `resting`, `far`, `blocked`.
 
-Real output (one bot):
+Real output (one bot, final boot of package L; the party was inside Ragefire Chasm):
 ```
-state-begin #t1
-state bot=Tank role=tank rolesrc=forced class=warrior level=18 hp=708 hpmax=708 hppct=100 power=rage pw=0 pwmax=100 st=non-combat incombat=no tgt= tgtentry= tgthp= victim= hold=no mv=follow stuck= engine=yes pos=-9100.0,-2005.0,131.0 map=0 inst=0 dl=self dm=0.0 ord=0: lastorder= co=close;protection;pull;tank%20assist;tank%20face nc=default;follow;food;protection;tank%20assist cast_queued=0 cast_delivered=0 cast_dropped=0 cast_pending=0 eating=no drinking=no resting=no rest_why= #t1
-state-end count=1 bots=1 resting=0 ready=yes marks=0 target=Tank #t1
+state-begin #t2
+state bot=Mtank role=tank rolesrc=forced class=warrior level=18 hp=708 hpmax=708 hppct=100 power=rage pw=0 pwmax=100 st=non-combat incombat=no tgt= tgtentry= tgthp= victim= hold=no mv=stay stuck= engine=yes pos=-3.85,-11.03,-15.83 map=389 inst=1 dl=self dm=2.4 ord=2:ok lastorder=stay co=close;protection;protection%20raid;pull;stay;tank%20assist;tank%20face nc=default;food;protection;protection%20raid;stay;tank%20assist cast_queued=0 cast_delivered=0 cast_dropped=0 cast_pending=0 eating=no drinking=no resting=no rest_why= #t2
+state-end count=1 records=1 bots=1 resting=0 ready=yes marks=0 target=Mtank #t2
 ```
 (names in the sample are the live test's; the structure is exact.)
 
@@ -180,7 +185,7 @@ READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per
 
 ## 6. Test kit
 * `.tb learn <bot> <spell id>...`: `learn-begin`, `learn bot=.. spell=<id> result=<learned|known|unknown|invalid|not-learned> name=..`, `learn-end count=.. bot=.. learned=..`. Core path: `SpellMgr::IsSpellValid`, `Player::LearnSpell`. At most 40 ids.
-* `.tb equip <bot> <item id> [replace]`: ONE line `equip bot=.. item=<id> name=.. result=<equipped|refused> [slot=..] why=<empty|EQUIP_ERR_...|unknown-item|bags-full|swap-failed> [code=..] [replaced=yes] [note=..]`.
+* `.tb equip <bot> <item id> [replace]`: `equip-begin`, ONE record `equip bot=.. item=<id> name=.. result=<equipped|refused> [slot=..] why=<empty|EQUIP_ERR_...|unknown-item|bags-full|swap-failed> [code=..] [replaced=yes] [note=..]`, `equip-end count=1 records=1 bot=..`.
   `Player::CanEquipNewItem` then `Player::EquipNewItem`; a taken slot refuses (`EQUIP_ERR_NOT_EQUIPPABLE` or `EQUIP_ERR_NO_SLOT_AVAILABLE`); with `replace` the item is stored in the bags and the core's `Player::SwapItem` puts it on.
 * `.tb itemscan <bot> <item id>...`: `itemscan-begin`, per id `itemscan bot=.. item=<id> exists=<yes|no> [name= class=<c>:<sc> inv= req= quality= ilvl= canequip=<yes|no> slot=<n, only when yes> why=<empty|EQUIP_ERR_...>]`, `itemscan-end count=.. bot=.. exist=.. canequip=..`.
   `canequip` is the core's check for THIS bot with swap = true. Nothing is created or changed. The ids come from the data collaborator's list; the module holds no id.

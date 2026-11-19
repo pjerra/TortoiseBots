@@ -59,11 +59,16 @@ class PullLeadReleaseWiring(unittest.TestCase):
         self.assertIn("RestampPullParty(bot, strategy->GetCommandJoinDelay(), true, true)", PULL_ACTIONS)
 
     def test_chat_pullback_hold_stays_plain_timer(self):
-        fn = body(PULL_ACTIONS, "void ai::PausePartyPullHold(Player* tank, uint32 joinDelaySeconds)")
+        # Package L added two defaulted parameters to the hold (`bool leadKeyed = false, uint32 windowSecondsOverride = 0`, used by the ForeverCore
+        # host's `pull` order); the chat pullback still calls it with two arguments, so its window stays the plain timer.
+        header = (ROOT / "ai/playerbot/strategy/actions/PullActions.h").read_text()
+        self.assertIn("void PausePartyPullHold(Player* tank, uint32 joinDelaySeconds, bool leadKeyed = false, uint32 windowSecondsOverride = 0);", header)
+        fn = body(PULL_ACTIONS, "void ai::PausePartyPullHold(Player* tank, uint32 joinDelaySeconds, bool leadKeyed, uint32 windowSecondsOverride)")
         start = fn.index("StartPullWindow(")
-        call = fn[start:fn.index(";", start)]
-        self.assertNotIn(",", call)
-
+        call = fn[start:fn.index(");", start)]
+        # the window is lead-keyed only through the parameter, whose default is false; the minimum is the join delay only then
+        self.assertIn("leadKeyed ? static_cast<uint8>", call)
+        self.assertIn("PausePartyPullHold(bot, joinDelay);", PULL_ACTIONS)
 
 class PullLeadReleasePolicy(unittest.TestCase):
     # The three brief cases, straight through the shipped rule: a tick calls
