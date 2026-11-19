@@ -3546,7 +3546,7 @@ bool IsDurableOrderBot(uint32_t guidLow)
         return false;
     if (ClaimLifecycle::Instance().IsClaimed(guidLow))
         return true;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    uint32_t accountId = AccountIdOfCharacterCompat(guid);
     return accountId && RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
 
@@ -3554,7 +3554,7 @@ bool IsOthersAlt(uint32_t guidLow, uint32_t requesterAccountId)
 {
     if (!guidLow || ClaimLifecycle::Instance().IsClaimed(guidLow))
         return false;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, guidLow));
+    uint32_t accountId = AccountIdOfCharacterCompat(ObjectGuid(HIGHGUID_PLAYER, guidLow));
     return accountId && accountId != requesterAccountId &&
         !RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }

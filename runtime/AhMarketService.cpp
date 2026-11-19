@@ -554,7 +554,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
         if (ai::AhBuyerExcluded(auction->owner, auction->ownerAccount, auction->bidder,
                 bot->GetGUIDLow(), bot->GetSession()->GetAccountId()))
             continue;
-        if (auction->bidder && sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, auction->bidder)) == bot->GetSession()->GetAccountId())
+        if (auction->bidder && AccountIdOfCharacterCompat(ObjectGuid(HIGHGUID_PLAYER, auction->bidder)) == bot->GetSession()->GetAccountId())
             continue;
         ::PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(bot);
         if (!botAi)

@@ -87,7 +87,7 @@ void SendBidderRefund(AuctionEntry* auction, MailAuctionAnswers reason)
         return;
     }
 
-    if (!sObjectMgr.GetPlayerAccountIdByGUID(bidderGuid))
+    if (!AccountIdOfCharacterCompat(bidderGuid))
         return;
     if (IsOfflineHardcore(auction->bidder))
         return;

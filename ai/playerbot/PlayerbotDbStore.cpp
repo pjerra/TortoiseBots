@@ -202,7 +202,7 @@ std::string PlayerbotDbStore::FormatStrategies(std::string type, std::list<std::
 void PlayerbotDbStore::Reset(PlayerbotAI *ai, std::string preset)
 {
     uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
-    uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(guid));
+    uint32 account = AccountIdOfCharacterCompat(ObjectGuid(guid));
     CharacterDatabase.escape_string(preset);
 
     CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' AND `preset` = '%s'", guid, preset.c_str());

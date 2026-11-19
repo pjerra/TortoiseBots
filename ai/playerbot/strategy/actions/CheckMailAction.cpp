@@ -100,7 +100,7 @@ Player* CheckMailAction::GetProcessableOwner(Mail* mail, Player* bot)
     if (!owner)
         return nullptr;
 
-    uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(owner->getObjectGuid());
+    uint32 account = AccountIdOfCharacterCompat(owner->getObjectGuid());
     if (sPlayerbotAIConfig.IsInRandomAccountList(account))
         return nullptr;
 

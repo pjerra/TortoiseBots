@@ -120,7 +120,7 @@ bool IsOrderBot(Player* bot, ObjectGuid guid)
         return BotManager::Instance().IsBot(guid);
     if (ClaimLifecycle::Instance().IsClaimed(guid.GetCounter()))
         return true;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    uint32_t accountId = AccountIdOfCharacterCompat(guid);
     return accountId && RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
 

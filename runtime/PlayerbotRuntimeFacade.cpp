@@ -95,7 +95,7 @@ bool GroupHasRealPlayer(PlayerbotAI* ai, Player* bot)
             member.online = true;
             member.hasClient = ai->IsRealPlayer(online);
         }
-        else if (uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(slot.guid))
+        else if (uint32 account = AccountIdOfCharacterCompat(slot.guid))
         {
             member.hasAccount = true;
             member.botAccount = sPlayerbotAIConfig.IsInRandomAccountList(account);
