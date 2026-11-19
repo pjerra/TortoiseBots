@@ -27,3 +27,18 @@ $ rsync -anci --delete --exclude .git --exclude src/modules/TortoiseBots ~/Forev
 
 ## Regression in the same boot
 Ordered pull of spawn 20038042 (14:00): in combat 24 s, 3 mobs dead (`mobs_alive 132 -> 129`), no death, `alive=5 dead=0` at the end. Wipe: `tb kill party Mtank` 14:09:42 -> all five alive at the entrance, `whole=yes`, at 14:09:50 (8 s). The server never aborted (0 ASSERT/ABORT in the log of every boot); the run folder's `tortoisebots.conf` was restored after the bound-30 s test (`diff` against the saved copy empty). Characters added/changed: `Mlowp` (priest, level 10, account 1, in Mtank's party), `Mpriest` logged out and out of the party.
+
+## Gates on the final tree (code commit `09d024620`; the commits after it are notes only)
+| Gate | Result |
+|---|---|
+| option-ON `worldserver` (slot 1) | `CMAKE_RC=0 MAKE_RC=0`, links, `grep -c undefined make.log` = 0 (the binary of the last boot is built from this code) |
+| option-OFF module build | `CMAKE_RC=0 MAKE_RC=0`; `ar t libtortoisebots.a` = 8 objects |
+| census SLICE4 / SLICE3 / SLICE2 / SLICE1 (slot 1) | `files 174 / 170 / 160 / 133  compile clean = files  with errors 0  error places 0  includes of a header ForeverCore does not have 0` |
+| generator `--check`, registry check, `test_slice4_d4_wiring.py` | up to date; `(a)=0  (b)=215`; 10 tests OK |
+| `policy-tests.sh` | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL` = baseline |
+| Turtle `vm-build` (sha 09d024620; `ReleaseSpiritAction.h` and `ai/cmangos-compat-d4.h` changed) | `COMPILE_SECONDS=2277 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb` (same sha) | `RESULT: PASS ... rc=0 vm_duration=875s` |
+| files outside `forever/` changed | `ai/playerbot/strategy/actions/ReleaseSpiritAction.h`, `ai/cmangos-compat-d4.h` (N3: the helper, Turtle side `return true`) |
+## Left
+* N5 on a real player's instance, N7 with a stranger caster, the N4 `not-allowed` refusal and the N8 refusal need a human or a second party standing in a foreign instance: proven by code, not live.
+* The dead engine's first tick can come about 10 s after the death when the commander is away (22 s from death to standing at the entrance in the last boot); the bound is 180 s.
