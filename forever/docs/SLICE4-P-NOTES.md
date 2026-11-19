@@ -121,4 +121,4 @@ Merged `tbf/port/forever` (3b9138052) into `slice4/p` before the final gates. Tw
 | option ON `worldserver` (slot 1, list switched on the VM copy) | `CMAKE_RC=0 MAKE_RC=0`, links, 0 undefined |
 | `forever/tools/test_slice4_d4_wiring.py`, the two re-pinned tests | 10 tests OK; `test_run_release_hold_wiring.py` and `test_dungeon_crew_wiring.py` OK (two pins re-spelled to the helper names, no assertion removed) |
 | Turtle `vm-build` | `COMPILE_SECONDS=1186 CMAKE_RC=0 MAKE_RC=0` |
-| Turtle `vm-test tb` | (see the report) |
+| Turtle `vm-test tb` (sha 356b99309, the merged tree; later commits are notes only) | `RESULT: PASS ... rc=0` (951 s) |
