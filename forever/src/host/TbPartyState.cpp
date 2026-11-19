@@ -526,8 +526,6 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 }
 }
 
-#else   // not built with the slice
-
 namespace TortoiseBots
 {
 namespace h3
@@ -552,8 +550,15 @@ bool MemberKnowsOocResurrection(Player* member)
         default: return false;
     }
 }
+}
+}
 
+#else   // not built with the slice
 
+namespace TortoiseBots
+{
+namespace h3
+{
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
     Words const args = Split(tail);
