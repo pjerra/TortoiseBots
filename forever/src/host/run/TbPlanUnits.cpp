@@ -5,6 +5,7 @@
 
 #include "ai/playerbot/DungeonPlanMgr.h"
 
+#include "Creature.h"
 #include "CreatureData.h"
 #include "DatabaseEnv.h"
 #include "GameTime.h"
