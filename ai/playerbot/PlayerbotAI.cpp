@@ -5035,6 +5035,12 @@ std::string PlayerbotAI::GetDefaultMovementStrategy()
     if (HasActivePlayerMaster())
         return "follow";
 
+    // A commanded bot (bound by `.tb master` to a commander that is a bot session) follows its commander too: "wander" is not a movement mode
+    // the ForeverCore slice registers, so a released pull hold (ReleasePullHold -> EnsureDefaultMovementStrategy) left the held bots with NO
+    // movement strategy and no way back into the fight (package L, live). Turtle: CommandedBotKeepsMasterCompat is always false.
+    if (CommandedBotKeepsMasterCompat(TortoiseBots::BotCommands::IsInCommandedGroup(bot)))
+        return "follow";
+
     // Bot/no master -> wander
     return "wander";
 }
