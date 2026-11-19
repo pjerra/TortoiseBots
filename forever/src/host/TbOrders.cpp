@@ -473,17 +473,23 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 return Fail(handler, args, "order", "bad-argument", "strategy changes use letters, digits, space, + - , _");
 
     uint32 queued = 0, refused = 0;
+    // One bot: the answer is one line. Several: `order-begin`, one line per bot, `order-end` (grammar version 2).
+    bool const multi = who.bots.size() > 1;
+    Reply reply(handler, args, "order");
+    if (multi)
+        reply.Begin();
+    auto const emit = [&](Rec const& rec) { if (multi) reply.Line(rec); else reply.Single(rec); };
     for (Player* bot : who.bots)
     {
-        std::string line = "order bot=" + Esc(bot->GetName()) + " verb=" + verb;
         auto const refuse = [&](std::string const& code, std::string const& detail, char const* name = nullptr)
         {
             ++refused;
-            line += " status=refused error=" + Esc(code);
+            Rec rec("order");
+            rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused").S("code", code);
             if (name)
-                line += std::string(" name=") + Esc(name);
-            line += " msg=" + Esc(detail);
-            Say(handler, line, args);
+                rec.S("name", name);
+            rec.S("msg", std::string_view(detail).substr(0, 400));
+            emit(rec);
         };
 
         PlayerbotAI* ai = AiOf(bot);
@@ -607,10 +613,16 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             continue;
         }
         ++queued;
-        Say(handler, line + " seq=" + std::to_string(seq) + " status=queued", args);
+        Rec rec("order");
+        rec.S("bot", bot->GetName()).S("verb", verb).N("seq", seq).S("status", "queued");
+        emit(rec);
     }
-    Say(handler, "order-end verb=" + verb + " target=" + Esc(who.label) + " count=" + std::to_string(who.bots.size()) + " queued=" + std::to_string(queued) +
-        " refused=" + std::to_string(refused), args);
+    if (multi)
+    {
+        Rec end("order");
+        end.S("verb", verb).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued).N("refused", refused);
+        reply.End(end);
+    }
     return true;
 }
 
@@ -643,6 +655,11 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
     char const* const roleName = role == RoleTank ? "tank" : role == RoleHealer ? "healer" : role == RoleDps ? "dps" : "none";
     uint32 queued = 0;
+    bool const multi = who.bots.size() > 1;
+    Reply reply(handler, args, "role");
+    if (multi)
+        reply.Begin();
+    auto const emit = [&](Rec const& rec) { if (multi) reply.Line(rec); else reply.Single(rec); };
     for (Player* bot : who.bots)
     {
         // The stored role (what PlayerbotAI::IsTank/IsHeal and AiFactory::GetPlayerRoles read first, whatever the master is) is written now; the AI's own
@@ -653,11 +670,13 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         else
             Roles().erase(bot->GetGUID());
 
-        std::string line = "role bot=" + Esc(bot->GetName()) + " role=" + roleName;
+        Rec rec("role");
+        rec.S("bot", bot->GetName()).S("role", roleName);
         PlayerbotAI* ai = AiOf(bot);
         if (!ai)
         {
-            Say(handler, line + " status=stored", args);
+            rec.S("status", "stored");
+            emit(rec);
             continue;
         }
         Order order;
@@ -669,13 +688,20 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         uint32 seq = 0;
         if (!Enqueue(bot, std::move(order), code, detail, seq))
         {
-            Say(handler, line + " status=refused error=" + Esc(code) + " msg=" + Esc(detail), args);
+            rec.S("status", "refused").S("code", code).S("msg", std::string_view(detail).substr(0, 400));
+            emit(rec);
             continue;
         }
         ++queued;
-        Say(handler, line + " seq=" + std::to_string(seq) + " status=queued", args);
+        rec.N("seq", seq).S("status", "queued");
+        emit(rec);
     }
-    Say(handler, "role-end role=" + std::string(roleName) + " target=" + Esc(who.label) + " count=" + std::to_string(who.bots.size()) + " queued=" + std::to_string(queued), args);
+    if (multi)
+    {
+        Rec end("role");
+        end.S("role", roleName).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued);
+        reply.End(end);
+    }
     return true;
 }
 
@@ -704,15 +730,21 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");
 
     uint32 done = 0, queued = 0;
+    bool const multi = who.bots.size() > 1;
+    Reply reply(handler, args, "master");
+    if (multi)
+        reply.Begin();
+    auto const emit = [&](Rec const& rec) { if (multi) reply.Line(rec); else reply.Single(rec); };
     for (Player* bot : who.bots)
     {
         ObjectGuid const guid = bot->GetGUID();
-        std::string line = "master bot=" + Esc(bot->GetName());
+        Rec rec("master");
+        rec.S("bot", bot->GetName());
         if (release)
         {
             TortoiseBots::BotManager::Instance().ClearBotMaster(guid);
             SetCommander(guid, ObjectGuid::Empty);
-            line += " commander=none";
+            rec.S("commander", "");
         }
         else
         {
@@ -721,7 +753,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             TortoiseBots::BotManager::Instance().BindBotMaster(guid, commander->GetGUID());
             SetCommander(guid, commander->GetGUID());
             Group* group = bot->GetGroup();
-            line += " commander=" + Esc(commander->GetName()) + " commander_in_party=" + ((group && group->IsMember(commander->GetGUID())) ? "yes" : "no");
+            rec.S("commander", commander->GetName()).B("commander_in_party", group && group->IsMember(commander->GetGUID()));
         }
         ++done;
         // The kit depends on the binding (the commanded threat back-off, AiFactory.cpp:633-642): a running engine rebuilds it at its next tick.
@@ -735,17 +767,21 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             if (Enqueue(bot, std::move(order), code, detail, seq))
             {
                 ++queued;
-                line += " seq=" + std::to_string(seq) + " status=queued";
+                rec.N("seq", seq).S("status", "queued");
             }
             else
-                line += " status=bound rekit=refused:" + Esc(code);
+                rec.S("status", "bound").S("rekit", "refused").S("code", code);
         }
         else
-            line += " status=bound";
-        Say(handler, line, args);
+            rec.S("status", "bound");
+        emit(rec);
     }
-    Say(handler, "master-end target=" + Esc(who.label) + " commander=" + (release ? std::string("none") : Esc(commander->GetName())) + " count=" + std::to_string(done) +
-        " queued=" + std::to_string(queued), args);
+    if (multi)
+    {
+        Rec end("master");
+        end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", done).N("queued", queued);
+        reply.End(end);
+    }
     return true;
 }
 }

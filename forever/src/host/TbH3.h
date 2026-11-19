@@ -65,15 +65,60 @@ struct Words
 };
 Words Split(std::string_view tail);
 
-// A value for a key=value pair: never contains a space, '=', '|', '#' or a control character. Space -> '_', '=' -> ':', '|' -> '/',
-// '#' -> '+', control characters are dropped, an empty value is "none". UTF-8 bytes are kept.
-std::string Esc(std::string_view value);
+// ---- reply grammar version 2 (TB-STATE-GRAMMAR-V2, lead decision 2026-11-20): the ONE encoder every writer below uses ----
+// A reply line is the record kind, then `key=value` words separated by one space, and the caller's `#token` as the last word. Values are
+// percent-encoded (every byte outside [A-Za-z0-9._-] as %XX, upper-case hex; `_` stays literal); structure is `;` between list items, `:` between the
+// parts of an item (each part encoded on its own), `,` between coordinates; an empty value is the empty string; a key appears once per line.
+// A line holds at most 3,000 bytes: a record that is longer continues on `<kind>+ <first key=value> <more keys> #token` lines. A multi-line reply is
+// `<kind>-begin #token`, the record lines, `<kind>-end count=<lines between> ... #token`; a one-line reply (an order's answer, an error) has neither.
+constexpr size_t MaxLineBytes = 3000;
+std::string Enc(std::string_view bytes);
 
-// One reply line to the sender of the command (the console, or the GM player's session as a system message). The echo token is
-// appended as the last word. `line` never carries a newline.
-void Say(ChatHandler* handler, std::string line, Words const& args);
+class Rec
+{
+public:
+    explicit Rec(std::string_view kind) : _kind(kind) {}
+    Rec& S(std::string_view key, std::string_view text);                                  // text, percent-encoded
+    Rec& N(std::string_view key, int64 value);                                           // a decimal number
+    Rec& F(std::string_view key, double value, int decimals = 1);                        // a decimal fraction
+    Rec& B(std::string_view key, bool value);                                            // yes / no
+    Rec& L(std::string_view key, std::vector<std::string> const& items);                 // `a;b;c`, each item encoded
+    Rec& P(std::string_view key, std::vector<std::string> const& parts);                 // one item of parts: `a:b:c`, each part encoded
+    Rec& LP(std::string_view key, std::vector<std::vector<std::string>> const& items);   // `a:b;c:d`
+    Rec& Coord(std::string_view key, double x, double y, double z);                      // `x,y,z` with one decimal
+    std::string const& Kind() const { return _kind; }
+    std::vector<std::pair<std::string, std::string>> const& Pairs() const { return _kv; }
+private:
+    Rec& Put(std::string_view key, std::string value);
+    std::string _kind;
+    std::vector<std::pair<std::string, std::string>> _kv;
+};
 
-// The refusal: `error=<code> cmd=<cmd> msg=<escaped detail> #token`, and the core is told an error message was sent (no usage text).
+// One reply of one command: counts the record lines between its begin and end markers.
+class Reply
+{
+public:
+    Reply(ChatHandler* handler, Words const& args, std::string_view kind) : _handler(handler), _args(args), _kind(kind) {}
+    void Begin();                         // `<kind>-begin #token`
+    void Line(Rec const& rec);            // a record line (split into continuation lines when over MaxLineBytes); counts the lines
+    void Single(Rec const& rec);          // a one-line reply: the record and nothing else
+    void End(Rec extra);                  // `<kind>-end count=<lines> <extra keys> #token`; `extra` is a Rec of the extra keys (its kind is ignored)
+    uint32 Lines() const { return _lines; }
+private:
+    void Send(std::string line);
+    ChatHandler* _handler;
+    Words const& _args;
+    std::string _kind;
+    uint32 _lines = 0;
+};
+
+// A reply's target label ("Mtank", "party:Mtank", "party:commander:Mcmd") as the parts of one value (`P`).
+std::vector<std::string> LabelParts(std::string const& label);
+
+// `.tb grammar selftest`: encodes and prints fixed records (a value with a space, `=`, `:`, `;`, `#`, `%`, `_`, an empty value, an over-long line).
+bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail args);
+
+// The refusal: `error code=<word> cmd=<word> msg=<encoded text, at most 400 bytes> #token`, and the core is told an error message was sent (no usage text).
 // Always returns false.
 bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::string_view code, std::string_view detail = {});
 
@@ -81,7 +126,7 @@ bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::st
 bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd);
 
 std::string Lower(std::string_view text);
-std::string GuidText(ObjectGuid guid);                 // 32 hex digits: GetRawValue(1) then GetRawValue(0), "none" for the empty guid
+std::string GuidText(ObjectGuid guid);                 // 32 hex digits: GetRawValue(1) then GetRawValue(0), "" for the empty guid
 bool ParseGuidText(std::string_view text, ObjectGuid& out);
 
 Player* SenderPlayer(ChatHandler* handler);            // the GM's character for a chat command, null for the console

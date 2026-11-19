@@ -1,7 +1,7 @@
 // Slice 3 (M): the default (option-OFF) build's answer for the nine group-fight commands. Their real handlers (TbH3.cpp, TbOrders.cpp,
 // TbPartyState.cpp, TbTestKit.cpp) are engine-facing code and belong to the TORTOISEBOTS_SLICE1 build only (CMakeLists.txt filters them
 // out of this one and filters THIS file out of the slice build). Every command answers the same refusal the real handlers give when
-// engine::Built() is false: `error=engine-not-built cmd=<name> msg=... [#token]` (forever/docs/TB-COMMANDS.md section 3).
+// engine::Built() is false: `error code=engine-not-built cmd=<name> msg=<percent-encoded> [#token]` (grammar version 2, forever/docs/TB-COMMANDS.md).
 #include "host/TbH3.h"
 
 #include "Chat.h"
@@ -37,15 +37,29 @@ std::string TokenOf(std::string_view tail)
 
 bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd)
 {
-    std::string line = std::string("error=engine-not-built cmd=") + cmd +
-        " msg=the_engine_is_not_built_in_(this_build_has_no_group-fight_commands)";
+    // The same percent-encoding as the real writers (TbH3.cpp Enc): every byte outside [A-Za-z0-9._-] as %XX.
+    static char const* const text = "the engine is not built in (this build has no group-fight commands)";
+    std::string msg;
+    for (char const* c = text; *c; ++c)
+    {
+        unsigned char const u = static_cast<unsigned char>(*c);
+        if (std::isalnum(u) || u == '.' || u == '_' || u == '-')
+            msg += *c;
+        else
+        {
+            static char const* const hex = "0123456789ABCDEF";
+            msg += '%';
+            msg += hex[u >> 4];
+            msg += hex[u & 15];
+        }
+    }
+    std::string line = std::string("error code=engine-not-built cmd=") + cmd + " msg=" + msg;
     std::string const token = TokenOf(std::string_view(args));
     if (!token.empty())
         line += " " + token;
     handler->SendSysMessage(line);
     handler->SetSentErrorMessage(true);
     return false;
-}
 }
 
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "order"); }
@@ -57,5 +71,6 @@ bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { re
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "learn"); }
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "equip"); }
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "itemscan"); }
+bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail args)  { return NotBuilt(handler, args, "grammar"); }
 }
 }

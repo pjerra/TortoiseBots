@@ -130,6 +130,8 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return false;
 
     uint32 learned = 0;
+    Reply reply(handler, args, "learn");
+    reply.Begin();
     for (uint32 id : ids)
     {
         std::string result;
@@ -147,10 +149,13 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             if (result == "learned")
                 ++learned;
         }
-        Say(handler, "learn bot=" + Esc(bot->GetName()) + " spell=" + std::to_string(id) + " result=" + result +
-            " name=" + Esc(info && info->SpellName ? info->SpellName->Str[LOCALE_enUS] : ""), args);
+        Rec rec("learn");
+        rec.S("bot", bot->GetName()).N("spell", id).S("result", result).S("name", info && info->SpellName ? info->SpellName->Str[LOCALE_enUS] : "");
+        reply.Line(rec);
     }
-    Say(handler, "learn-end bot=" + Esc(bot->GetName()) + " count=" + std::to_string(ids.size()) + " learned=" + std::to_string(learned), args);
+    Rec end("learn");
+    end.S("bot", bot->GetName()).N("learned", learned);
+    reply.End(end);
     return true;
 }
 
@@ -175,21 +180,42 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (args.w.size() > 2 && !replace)
         return Fail(handler, args, "equip", "unexpected-argument", args.w[2]);
 
-    std::string const head = "equip bot=" + Esc(bot->GetName()) + " item=" + std::to_string(item);
     ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item);
+    Reply reply(handler, args, "equip");
+    // One equip record: the item, the core's answer, the slot or the reason; one line.
+    auto const say = [&](char const* result, std::string const& why, int slot = -1, int code = -1, char const* note = nullptr, bool replaced = false)
+    {
+        Rec rec("equip");
+        rec.S("bot", bot->GetName()).N("item", item);
+        if (proto)
+            rec.S("name", proto->GetName(LOCALE_enUS));
+        rec.S("result", result);
+        if (slot >= 0)
+            rec.N("slot", slot);
+        rec.S("why", why);
+        if (code >= 0)
+            rec.N("code", code);
+        if (replaced)
+            rec.B("replaced", true);
+        if (note)
+            rec.S("note", note);
+        reply.Single(rec);
+    };
     if (!proto)
     {
-        Say(handler, head + " result=refused why=unknown-item", args);
+        say("refused", "unknown-item");
         return true;
     }
-    std::string const name = Esc(proto->GetName(LOCALE_enUS));
 
     uint16 dest = 0;
     InventoryResult result = bot->CanEquipNewItem(NULL_SLOT, dest, item, false);
     if (result == EQUIP_ERR_OK)
     {
         Item* worn = bot->EquipNewItem(dest, item, ItemContext::NONE, true);
-        Say(handler, head + " name=" + name + (worn ? " result=equipped slot=" + std::to_string(unsigned(dest & 255)) + " why=none" : " result=refused why=core-returned-no-item"), args);
+        if (worn)
+            say("equipped", "", int(dest & 255));
+        else
+            say("refused", "core-returned-no-item");
         return true;
     }
     // With swap = false the core answers an occupied weapon / shield / ring slot with EQUIP_ERR_NO_SLOT_AVAILABLE (Player.cpp:11831) but FindEquipSlot returns
@@ -197,34 +223,34 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // Both mean "the slot is taken": `replace` asks again with swap = true, which names the real refusal (proficiency, level, class...).
     if (!replace || (result != EQUIP_ERR_NO_SLOT_AVAILABLE && result != EQUIP_ERR_NOT_EQUIPPABLE))
     {
-        Say(handler, head + " name=" + name + " result=refused why=" + ResultName(result) + " code=" + std::to_string(unsigned(result)), args);
+        say("refused", ResultName(result), -1, int(result));
         return true;
     }
 
     result = bot->CanEquipNewItem(NULL_SLOT, dest, item, true);
     if (result != EQUIP_ERR_OK)
     {
-        Say(handler, head + " name=" + name + " result=refused why=" + ResultName(result) + " code=" + std::to_string(unsigned(result)), args);
+        say("refused", ResultName(result), -1, int(result));
         return true;
     }
     if (!bot->StoreNewItemInBestSlots(item, 1, ItemContext::NONE))
     {
-        Say(handler, head + " name=" + name + " result=refused why=bags-full", args);
+        say("refused", "bags-full");
         return true;
     }
     Item* fresh = bot->GetItemByEntry(item, ItemSearchLocation::Inventory);
     uint16 swapDest = 0;
     if (!fresh || (result = bot->CanEquipItem(NULL_SLOT, swapDest, fresh, true)) != EQUIP_ERR_OK)
     {
-        Say(handler, head + " name=" + name + " result=refused why=" + (fresh ? ResultName(result) : std::string("item-not-in-bags")) + " note=item_left_in_bags", args);
+        say("refused", fresh ? ResultName(result) : std::string("item-not-in-bags"), -1, -1, "item left in bags");
         return true;
     }
     bot->SwapItem(fresh->GetPos(), swapDest);
     Item* worn = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
     if (worn && worn->GetEntry() == item)
-        Say(handler, head + " name=" + name + " result=equipped slot=" + std::to_string(unsigned(swapDest & 255)) + " why=none replaced=yes", args);
+        say("equipped", "", int(swapDest & 255), -1, nullptr, true);
     else
-        Say(handler, head + " name=" + name + " result=refused why=swap-failed note=item_left_in_bags", args);
+        say("refused", "swap-failed", -1, -1, "item left in bags");
     return true;
 }
 
@@ -246,13 +272,17 @@ bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return false;
 
     uint32 exist = 0, can = 0;
+    Reply reply(handler, args, "itemscan");
+    reply.Begin();
     for (uint32 id : ids)
     {
-        std::string line = "itemscan bot=" + Esc(bot->GetName()) + " item=" + std::to_string(id);
+        Rec rec("itemscan");
+        rec.S("bot", bot->GetName()).N("item", id);
         ItemTemplate const* proto = sObjectMgr->GetItemTemplate(id);
         if (!proto)
         {
-            Say(handler, line + " exists=no", args);
+            rec.B("exists", false);
+            reply.Line(rec);
             continue;
         }
         ++exist;
@@ -261,14 +291,17 @@ bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         bool const ok = result == EQUIP_ERR_OK;
         if (ok)
             ++can;
-        line += " exists=yes name=" + Esc(proto->GetName(LOCALE_enUS)) + " class=" + std::to_string(proto->GetClass()) + "/" + std::to_string(proto->GetSubClass()) +
-            " inv=" + std::to_string(unsigned(proto->GetInventoryType())) + " req=" + std::to_string(proto->GetBaseRequiredLevel()) +
-            " quality=" + std::to_string(proto->GetQuality()) + " ilvl=" + std::to_string(proto->GetBaseItemLevel()) +
-            std::string(" canequip=") + (ok ? "yes" : "no") + " slot=" + (ok ? std::to_string(unsigned(dest & 255)) : std::string("none")) +
-            " why=" + (ok ? std::string("none") : ResultName(result));
-        Say(handler, line, args);
+        rec.B("exists", true).S("name", proto->GetName(LOCALE_enUS)).P("class", {std::to_string(proto->GetClass()), std::to_string(proto->GetSubClass())});
+        rec.N("inv", unsigned(proto->GetInventoryType())).N("req", proto->GetBaseRequiredLevel()).N("quality", proto->GetQuality()).N("ilvl", proto->GetBaseItemLevel());
+        rec.B("canequip", ok);
+        if (ok)
+            rec.N("slot", unsigned(dest & 255));
+        rec.S("why", ok ? std::string() : ResultName(result));
+        reply.Line(rec);
     }
-    Say(handler, "itemscan-end bot=" + Esc(bot->GetName()) + " count=" + std::to_string(ids.size()) + " exist=" + std::to_string(exist) + " canequip=" + std::to_string(can), args);
+    Rec end("itemscan");
+    end.S("bot", bot->GetName()).N("exist", exist).N("canequip", can);
+    reply.End(end);
     return true;
 }
 }

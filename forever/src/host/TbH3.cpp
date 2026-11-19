@@ -26,7 +26,6 @@ namespace h3
 {
 namespace
 {
-constexpr size_t MaxLine = 3900;     // a system chat message holds up to 4095 bytes (ChatPackets.cpp:214, 12 bits)
 
 std::map<ObjectGuid, ObjectGuid>& Bindings()
 {
@@ -74,48 +73,186 @@ Words Split(std::string_view tail)
     return out;
 }
 
-std::string Esc(std::string_view value)
+std::string Enc(std::string_view bytes)
 {
+    static char const* const hex = "0123456789ABCDEF";
     std::string out;
-    out.reserve(value.size());
-    for (char c : value)
+    out.reserve(bytes.size());
+    for (char c : bytes)
     {
         unsigned char const u = static_cast<unsigned char>(c);
-        if (std::isspace(u))
-            out += '_';
-        else if (c == '=')
-            out += ':';
-        else if (c == '|')
-            out += '/';
-        else if (c == '#')
-            out += '+';
-        else if (u < 0x20 || u == 0x7F)
-            continue;
-        else
+        if ((std::isalnum(u) && u < 0x80) || c == '.' || c == '_' || c == '-')
             out += c;
+        else
+        {
+            out += '%';
+            out += hex[u >> 4];
+            out += hex[u & 15];
+        }
     }
-    return out.empty() ? std::string("none") : out;
+    return out;
 }
 
-void Say(ChatHandler* handler, std::string line, Words const& args)
+Rec& Rec::Put(std::string_view key, std::string value)
 {
-    if (!args.token.empty())
-        line += " " + args.token;
-    if (line.size() > MaxLine)
-        line.resize(MaxLine);
-    handler->SendSysMessage(line);
+    // A key appears at most once per line: a repeated key replaces the earlier value.
+    for (auto& pair : _kv)
+        if (pair.first == key)
+        {
+            pair.second = std::move(value);
+            return *this;
+        }
+    _kv.emplace_back(std::string(key), std::move(value));
+    return *this;
+}
+
+Rec& Rec::S(std::string_view key, std::string_view text) { return Put(key, Enc(text)); }
+Rec& Rec::N(std::string_view key, int64 value) { return Put(key, std::to_string(value)); }
+Rec& Rec::F(std::string_view key, double value, int decimals)
+{
+    char buffer[48];
+    std::snprintf(buffer, sizeof(buffer), "%.*f", decimals, value);
+    return Put(key, buffer);
+}
+Rec& Rec::B(std::string_view key, bool value) { return Put(key, value ? "yes" : "no"); }
+Rec& Rec::L(std::string_view key, std::vector<std::string> const& items)
+{
+    std::string joined;
+    for (std::string const& item : items)
+        joined += (joined.empty() ? "" : ";") + Enc(item);
+    return Put(key, std::move(joined));
+}
+Rec& Rec::P(std::string_view key, std::vector<std::string> const& parts)
+{
+    std::string joined;
+    for (size_t i = 0; i < parts.size(); ++i)
+        joined += (i ? ":" : "") + Enc(parts[i]);
+    return Put(key, std::move(joined));
+}
+Rec& Rec::LP(std::string_view key, std::vector<std::vector<std::string>> const& items)
+{
+    std::string joined;
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        if (i)
+            joined += ';';
+        for (size_t j = 0; j < items[i].size(); ++j)
+            joined += (j ? ":" : "") + Enc(items[i][j]);
+    }
+    return Put(key, std::move(joined));
+}
+Rec& Rec::Coord(std::string_view key, double x, double y, double z)
+{
+    char buffer[96];
+    std::snprintf(buffer, sizeof(buffer), "%.1f,%.1f,%.1f", x, y, z);
+    return Put(key, buffer);
+}
+
+void Reply::Send(std::string line)
+{
+    if (!_args.token.empty())
+        line += " " + _args.token;
+    _handler->SendSysMessage(line);
+}
+
+void Reply::Begin() { Send(_kind + "-begin"); }
+
+void Reply::Line(Rec const& rec)
+{
+    // The token and the separating space are part of the 3,000 bytes.
+    size_t const room = MaxLineBytes - (_args.token.empty() ? 0 : _args.token.size() + 1);
+    auto const& pairs = rec.Pairs();
+    std::string const head = pairs.empty() ? std::string() : " " + pairs.front().first + "=" + pairs.front().second;
+    std::string line = rec.Kind();
+    bool first = true;
+    for (auto const& [key, value] : pairs)
+    {
+        std::string word = " " + key + "=" + value;
+        if (word.size() + rec.Kind().size() + 1 > room)       // one value alone is too long: cut it on a %-escape boundary
+        {
+            size_t keep = room > rec.Kind().size() + 2 + key.size() + 1 + head.size() + 1 ? room - rec.Kind().size() - 2 - key.size() - 1 - head.size() - 1 : 0;
+            if (keep > value.size())
+                keep = value.size();
+            while (keep > 0 && (value[keep - 1] == '%' || (keep >= 2 && value[keep - 2] == '%')))
+                --keep;
+            word = " " + key + "=" + value.substr(0, keep);
+        }
+        if (!first && line.size() + word.size() > room)
+        {
+            Send(line);
+            ++_lines;
+            line = rec.Kind() + "+" + head;           // the continuation repeats the first key (the record's identity)
+        }
+        line += word;
+        first = false;
+    }
+    Send(line);
+    ++_lines;
+}
+
+void Reply::Single(Rec const& rec)
+{
+    uint32 const before = _lines;
+    Line(rec);
+    _lines = before;
+}
+
+void Reply::End(Rec extra)
+{
+    std::string line = _kind + "-end count=" + std::to_string(_lines);
+    for (auto const& [key, value] : extra.Pairs())
+        if (key != "count")
+            line += " " + key + "=" + value;
+    Send(line);
+}
+
+std::vector<std::string> LabelParts(std::string const& label)
+{
+    std::vector<std::string> parts;
+    size_t start = 0;
+    while (true)
+    {
+        size_t const colon = label.find(':', start);
+        parts.push_back(label.substr(start, colon == std::string::npos ? std::string::npos : colon - start));
+        if (colon == std::string::npos)
+            break;
+        start = colon + 1;
+    }
+    return parts;
 }
 
 bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::string_view code, std::string_view detail)
 {
-    std::string line = "error=" + Esc(code) + " cmd=" + Esc(cmd);
-    if (!detail.empty())
-        line += " msg=" + Esc(detail);
+    std::string_view const text = detail.substr(0, 400);
+    Rec rec("error");
+    rec.S("code", code).S("cmd", cmd);
+    if (!text.empty())
+        rec.S("msg", text);
     if (args.badToken)
-        line += " token=rejected";
-    Say(handler, std::move(line), args);
+        rec.S("token", "rejected");
+    Reply(handler, args, "error").Single(rec);
     handler->SetSentErrorMessage(true);
     return false;
+}
+
+bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (args.w.empty() || Lower(args.w[0]) != "selftest")
+        return Fail(handler, args, "grammar", "missing-argument", ".tb grammar selftest");
+    Reply reply(handler, args, "selftest");
+    reply.Begin();
+    // Every special byte in one value: space = : ; # % _ , + | and a non-ASCII byte pair.
+    reply.Line(Rec("selftest").S("case", "specials").S("value", "a b=c:d;e#f%g_h,i+j|k\xC3\xA9").S("empty", ""));
+    reply.Line(Rec("selftest").S("case", "list").L("items", {"x y", "a;b", "", "50%"}).LP("pairs", {{"Mtank", "343"}, {"a:b", "1"}}));
+    reply.Line(Rec("selftest").S("case", "coords").Coord("pos", -601.25, -4250.1, 38.94).B("flag", true).N("number", -17).F("fraction", 12.345, 2));
+    reply.Line(Rec("selftest").S("case", "once").S("key", "first").S("key", "second"));          // a key appears at most once: the second value replaces
+    std::vector<std::string> many;
+    for (int i = 0; i < 320; ++i)
+        many.push_back("strategy number " + std::to_string(i));
+    reply.Line(Rec("selftest").S("case", "overlong").L("list", many).S("tail", "x"));            // longer than 3,000 bytes: continuation lines
+    reply.End(Rec("selftest").S("note", "fixed records"));
+    return true;
 }
 
 bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd)
@@ -136,7 +273,7 @@ std::string Lower(std::string_view text)
 std::string GuidText(ObjectGuid guid)
 {
     if (guid.IsEmpty())
-        return "none";
+        return {};
     char buffer[40];
     std::snprintf(buffer, sizeof(buffer), "%016llX%016llX", static_cast<unsigned long long>(guid.GetRawValue(1)),
         static_cast<unsigned long long>(guid.GetRawValue(0)));
