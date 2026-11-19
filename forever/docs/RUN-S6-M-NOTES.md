@@ -74,3 +74,29 @@ Port of `ApproachStandSearch` (Commander.cpp:7532) and `NearestReachablePoint` (
 
 ## Gates on the final tree
 Tests (VM, g++ -std=c++17 -Wall -Wextra): `test_run_orders` 128 checks, `test_run_c6` 28 checks, `test_run_facts` PASS, `test_forever_plan_match` 38 checks, `test_dungeon_plan_reload_policy` all passed, `test_rez_hold_policy` ok, `test_dungeon_run_policy` ok, `test_system_run_policy` 109 checks; python `test_forever_no_direct_queries`, `test_reload_plans_wiring`, `test_slice4_d4_wiring` OK. Option ON `worldserver` and option OFF `tortoisebots` `CMAKE_RC=0 MAKE_RC=0` (OFF `libtortoisebots.a` holds `TbRunStands.cpp.o`). Census and the Turtle gates: see the report.
+
+# R6: the review fixes (Codex + Opus cold review of run/s6-integ, verdict FIX FIRST)
+
+No live boot in this round (slot 1 and the VM test server belong to another live worker); built in the default slot. Each fix has a test that fails on the code before it: `forever/tools/test_run_liquid.cpp`, `test_run_cancel.cpp` (core-free), `test_run_review_wiring.py` (the order of calls and the rules in the source; 9 cases, all ERROR on the previous commit), and `test_run_orders` / `test_run_c6` stay green.
+
+| # | Fix | Where |
+|---|---|---|
+| 1 | **Queued run orders die with the run.** `h3::CancelRunOrders(bot)` removes the orders the run queued (`fromRun`; a hand-typed order stays; the bot's result reads `fail:cancelled`) through the pure `CancelFromRun` (TbOrderQueuePure.h); `h3::EndRunPull(bot)` ends a pull the run started (the tank's "end pull" action, every member's `EndPullWindow`). `CancelRunWork` (TbRun.cpp) runs in `Finish` BEFORE the final stay, in `PauseRun`, in `Observe` on the transition to paused (so an order issued in the very tick that paused is cancelled too) and, orders only, when a stop is pending. | TbOrders.cpp, TbOrdersApi.h, TbRun.cpp |
+| 2 | **The liquid test reads the core's bits.** `TbRunLiquid.h`: `(status & (IN_WATER|UNDER_WATER)) != 0` as `TerrainInfo::IsInWater` (TerrainMgr.cpp:975), so `0x04|0x10` (OCEAN_FLOOR ORed in on the floor of a pool) is refused. The facts' `pointLiquid` uses it. | TbRunLiquid.h/.cpp, TbRunFacts.cpp |
+| 3 | **Level rule, no lift, sampled legs.** Any liquid present whose level is >= z - 0.6 refuses (the rule of `TerrainIsSwimmableCompat`), asked at the point's own z (the old `+ 0.5f` read a path laid on lava as ABOVE_WATER). The stand search tests the candidate, every path vertex AND every leg between vertices, sampled every <= 1.5 yd (a 100 yd line = 68 reads). | TbRunStands.cpp |
+| 4 | **The run remembers its instance.** `RunRec::instanceId` is set at `StartRun`; a lead on the plan's map in another instance ends the run (`the lead bot is in another instance of the map`) before any pause logic. | TbRun.h/.cpp |
+| 5 | **The leader does not follow its commander.** `RelaxTankForPull(.., fromRun)` takes `follow` off again for run orders; the pull's own end (PullActions.cpp:752 re-adds the default) is covered by an engine-hook hold: `BeforeEngineTick` puts a registered run leader (`HoldRunLead`, set at start, dropped at the end) that follows, out of combat with no pull under way (`ShouldHoldLead`, the commander's distance is no input), on `stay` where it stands. | TbOrders.cpp, TbRun.cpp |
+| 6 | **A pending stop ends after 90 s.** `kStopPendingMaxMs = 90000` (TbRun.h); the run record's `why=` then reads `stopped after 90 s in combat: <the stop's reason>`. | TbRun.h/.cpp |
+| 7 | **Straight moves read their line.** `move-direct`: the executor judge refuses (`no-ground`, text names liquid) when the straight line to the point crosses liquid, and the verb re-reads the line where it is walked (`fail:liquid`); `come`/`walk`: the navmesh path's vertices and legs (the route actually walked; the straight line only when no real path exists) and the end point are read (`unreachable`). A mover that already stands in liquid may walk out of it. | TbRunOrders.cpp, TbOrders.cpp |
+| 8 | **focus is ok only for a live unseen unit.** `FocusMarkWaits(exists, inWorld, alive, sameMap)`: the empty `rti target` value answers ok only when the marked unit exists, is in the world, alive and on the bot's map; a dead, despawned or foreign-map unit is `fail:focus`. | TbOrders.cpp |
+
+Said, not hidden: (a) the bots' `follow` is put back by the pull's own end until the next engine tick (at most one tick of drift toward the commander) before the hold re-stays the leader; (b) the liquid rule treats any liquid (water too) as refused, as the facts always did.
+
+## Live re-check list (for the next boot, RFC; not run in this round)
+1. Lava, molten_cave (leg 5): `.tb run start`, walk to steps 40-45; read `event`s and the log: no bot dies in lava; any `unreachable ... liquid` / `no-ground ... liquid` refusal names the point; `approach stand search` log line shows `found`/`none` and a stand is never on the pool edge.
+2. A bot standing on the floor of a lava pool (`.tb tele` one onto the molten floor): the run must not order it to a point through the pool; `facts` pointLiquid true (pause with the policy's liquid note).
+3. `.tb run stop` right after a `pull` order (same second): no pull walk starts (check `lastorder` of the tank is not `pull`, `pull-release` count unchanged); `.tb run pause` the same with a queued `rest`/`come`.
+4. Commander far away (Mcmd at the entrance, run at step 20+): after a pull that does not land (a pack beyond reach) the tank stays at its spot, `mv=stay`, it does not walk to Mcmd.
+5. `.tb tele Mtank` into another copy of the map mid-run: the run ends `the lead bot is in another instance of the map`.
+6. `.tb run stop` with a stuck combat flag: stops 90 s later with `stopped after 90 s in combat`.
+7. A focus on a pack out of sight: no `fail:focus` in the log; on a dead unit: `fail:focus`.
