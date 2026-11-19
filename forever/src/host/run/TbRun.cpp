@@ -284,7 +284,7 @@ void Note(RunRec& rec, uint32 nowMs, char const* kind, int32 step, std::string w
             unit = UnitOfStep(plan->steps[step]);
     }
     uint32 const seq = AddEvent(rec, nowMs, kind, step, leg, unit, why);
-    TC_LOG_INFO("tortoisebots", "TortoiseBots run: {} #{} {} step={} leg={} unit={} {}", rec.leaderName, seq, kind, step, leg, unit, why);
+    sLog.outString("TortoiseBots run: %s #%u %s step=%d leg=%d unit=%d %s", rec.leaderName.c_str(), seq, kind, step, leg, unit, why.c_str());
 }
 
 // ---- the binding (decision D1): the tank is every other member's commander for the run; `.tb run stop` and the end of the run restore the old one ----
@@ -641,10 +641,10 @@ void TickRun(RunRec& rec, uint32 nowMs)
     // What the policy leaves for the glue to do, and this host does not: dropped with the reason (a flag left set would only repeat).
     (void)DungeonRun::TakeLinkedEvents(run);
     if (std::string const say = DungeonRun::TakeSay(run); !say.empty())
-        TC_LOG_INFO("tortoisebots", "TortoiseBots run: {} says: {}", rec.leaderName, say);
+        sLog.outString("TortoiseBots run: %s says: %s", rec.leaderName.c_str(), say.c_str());
     if (!run.deferLog.empty())
     {
-        TC_LOG_INFO("tortoisebots", "TortoiseBots run: {}: {}", rec.leaderName, run.deferLog);
+        sLog.outString("TortoiseBots run: %s: %s", rec.leaderName.c_str(), run.deferLog.c_str());
         run.deferLog.clear();
     }
     run.leadWalkReset = false;
