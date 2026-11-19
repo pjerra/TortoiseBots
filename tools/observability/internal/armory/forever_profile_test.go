@@ -1,87 +1,44 @@
 package armory
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
 
-func testForeverCatalog() *ForeverCatalog {
-	return &ForeverCatalog{
-		Spells: map[uint32]ForeverSpell{
-			78: {
-				ID:         78,
-				Name:       "Heroic Strike",
-				Icon:       132282,
-				School:     1,
-				CastMs:     0,
-				Range:      5,
-				DurationMs: 0,
-				CooldownMs: 0,
-				Level:      1,
-				BaseLevel:  1,
-				PowerType:  1,
-				Cost:       150,
-			},
-			12282: {
-				ID:        12282,
-				Name:      "Improved Heroic Strike",
-				Icon:      132282,
-				School:    1,
-				BaseLevel: 0,
-			},
-			12286: {
-				ID:        12286,
-				Name:      "Improved Rend",
-				Icon:      132155,
-				School:    1,
-				BaseLevel: 0,
-			},
-			12328: {
-				ID:         12328,
-				Name:       "Death Wish",
-				Icon:       136146,
-				School:     1,
-				CooldownMs: 180000,
-				PowerType:  1,
-				Cost:       100,
-				BaseLevel:  40,
-			},
-			1459: {
-				ID:         1459,
-				Name:       "Arcane Intellect",
-				Icon:       135932,
-				School:     64,
-				DurationMs: 1800000,
-			},
-		},
-		SpellText: map[uint32]ForeverSpellText{
-			78: {
-				Subtext: "Rank 1",
-				Desc:    "A strong attack that increases melee damage by $s1.",
-				Values:  []float64{11},
-			},
-			12282: {
-				Subtext: "Rank 1",
-				Desc:    "Reduces the cost of your Heroic Strike ability by $s1 rage point.",
-				Values:  []float64{1},
-				Passive: true,
-			},
-		},
-		Talents: []ForeverTalent{
-			{ID: 130, Tab: 161, Tier: 0, Col: 0, Ranks: []uint32{12282, 12663, 12664}},
-			{ID: 127, Tab: 161, Tier: 0, Col: 1, Ranks: []uint32{12286, 12658, 12659}},
-			{ID: 165, Tab: 164, Tier: 4, Col: 1, Ranks: []uint32{12328}},
-			{ID: 138, Tab: 163, Tier: 0, Col: 1, Ranks: []uint32{12298}},
-		},
-		TalentTabs: defaultForeverTalentTabs(),
-		Skills: map[uint32]ForeverSkillMeta{
-			43: {Name: "Swords", Category: 6, Icon: 135274},
-		},
-		Factions: map[uint32]ForeverFactionMeta{
-			72: {Name: "Stormwind", Parent: 469},
-		},
+	"tortoise-observability/internal/foreveritems"
+)
+
+// testForeverCatalog writes the fixture data files (spells, names, client spell text) and loads them the way the daemon does.
+func testForeverCatalog(t *testing.T) *ForeverCatalog {
+	t.Helper()
+	dataDir, artDir := t.TempDir(), t.TempDir()
+	write := func(dir, name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
+	write(dataDir, "tortoisebots-spells.json", `{"spells":[
+		{"id":78,"name":"Heroic Strike","icon":132282,"school":1,"range":5,"level":1,"base_level":1,"power_type":1,"cost":150},
+		{"id":12282,"name":"Improved Heroic Strike","icon":132282,"school":1},
+		{"id":12286,"name":"Improved Rend","icon":132155,"school":1},
+		{"id":12328,"name":"Death Wish","icon":136146,"school":1,"cooldown_ms":180000,"power_type":1,"cost":100,"base_level":40},
+		{"id":1459,"name":"Arcane Intellect","icon":135932,"school":64,"duration_ms":1800000}]}`)
+	write(dataDir, "tortoisebots-names.json", `{"skills":{"43":{"name":"Swords","category":6,"icon":135274}},"areas":{},"factions":{"72":{"name":"Stormwind","parent":469}}}`)
+	write(artDir, "spells-text.json", `{
+		"78":{"subtext":"Rank 1","desc":"A strong attack that increases melee damage by $s1.","values":[11]},
+		"12282":{"subtext":"Rank 1","desc":"Reduces the cost of your Heroic Strike ability by $s1 rage point.","values":[1],"passive":true}}`)
+	cat := LoadForeverCatalog(dataDir, artDir, foreveritems.NewLookups(dataDir, artDir))
+	cat.Talents = []ForeverTalent{
+		{ID: 130, Tab: 161, Tier: 0, Col: 0, Ranks: []uint32{12282, 12663, 12664}},
+		{ID: 127, Tab: 161, Tier: 0, Col: 1, Ranks: []uint32{12286, 12658, 12659}},
+		{ID: 165, Tab: 164, Tier: 4, Col: 1, Ranks: []uint32{12328}},
+		{ID: 138, Tab: 163, Tier: 0, Col: 1, Ranks: []uint32{12298}},
+	}
+	return cat
 }
 
 func TestForeverSpellEntry(t *testing.T) {
-	svc := &Service{cfg: Config{Core: "forever", ForeverData: testForeverCatalog()}}
+	svc := &Service{cfg: Config{Core: "forever", ForeverData: testForeverCatalog(t)}}
 
 	hs := svc.foreverSpellEntry(78, 1, 0)
 	if hs.Name != "Heroic Strike" || hs.Subtext != "Rank 1" || hs.Icon != "132282" || hs.Cost != 150 || !hs.ClassSpell || hs.Passive {
@@ -98,7 +55,7 @@ func TestForeverSpellEntry(t *testing.T) {
 }
 
 func TestBuildForeverTalentsFixture(t *testing.T) {
-	cat := testForeverCatalog()
+	cat := testForeverCatalog(t)
 	known := map[uint32]bool{12663: true, 12328: true}
 	activeTalents := map[uint32]bool{130: true, 127: true, 165: true}
 
@@ -121,7 +78,7 @@ func TestBuildForeverTalentsFixture(t *testing.T) {
 }
 
 func TestEnrichForeverSkillAndReputationTier(t *testing.T) {
-	svc := &Service{cfg: Config{Core: "forever", ForeverData: testForeverCatalog()}}
+	svc := &Service{cfg: Config{Core: "forever", ForeverData: testForeverCatalog(t)}}
 	sk := SkillEntry{Skill: 43, Value: 300, Max: 300}
 	svc.enrichForeverSkill(&sk)
 	if sk.Name != "Swords" || sk.Category != 6 || sk.Icon != "135274" {
@@ -153,7 +110,7 @@ func TestLoadAurasForever(t *testing.T) {
 	svc := &Service{
 		cfg: Config{
 			Core:        "forever",
-			ForeverData: testForeverCatalog(),
+			ForeverData: testForeverCatalog(t),
 			LiveAuras: func(guid uint32) [][]int64 {
 				return [][]int64{{1459, 1200000, 1, 1}}
 			},

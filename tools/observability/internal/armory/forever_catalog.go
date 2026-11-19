@@ -6,34 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"tortoise-observability/internal/foreveritems"
 )
-
-type ForeverSpell struct {
-	ID         uint32  `json:"id"`
-	Name       string  `json:"name"`
-	Icon       uint32  `json:"icon"`
-	School     uint32  `json:"school"`
-	CastMs     int32   `json:"cast_ms"`
-	Range      float64 `json:"range"`
-	DurationMs int32   `json:"duration_ms"`
-	CooldownMs int32   `json:"cooldown_ms"`
-	Level      uint32  `json:"level"`
-	BaseLevel  uint32  `json:"base_level"`
-	PowerType  int32   `json:"power_type"`
-	Cost       int32   `json:"cost"`
-	CostPct    float64 `json:"cost_pct"`
-}
-
-type ForeverSpellText struct {
-	Subtext string `json:"subtext"`
-	Desc    string `json:"desc"`
-	Aura    string `json:"aura"`
-	// float64: some client values do not fit 32 bits and some radii are fractional.
-	Values  []float64 `json:"values"`
-	Periods []float64 `json:"periods"`
-	Radius  []float64 `json:"radius"`
-	Passive bool      `json:"passive"`
-}
 
 type ForeverTalent struct {
 	ID    uint32   `json:"id"`
@@ -54,66 +29,23 @@ type ForeverTalentTab struct {
 	Background string `json:"background"`
 }
 
-type ForeverSkillMeta struct {
-	Name     string `json:"name"`
-	Category uint32 `json:"category"`
-	Icon     uint32 `json:"icon"`
-}
-
-type ForeverFactionMeta struct {
-	Name   string `json:"name"`
-	Parent uint32 `json:"parent"`
-}
-
+// ForeverCatalog is the profile's talent data; spells, spell text, skills and factions come from Lookups, the one
+// reader of the module's data files and the client's spell text.
 type ForeverCatalog struct {
-	Spells     map[uint32]ForeverSpell
-	SpellText  map[uint32]ForeverSpellText
 	Talents    []ForeverTalent
 	TalentTabs map[uint32]ForeverTalentTab
-	Skills     map[uint32]ForeverSkillMeta
-	Factions   map[uint32]ForeverFactionMeta
+	Lookups    *foreveritems.Lookups
 }
 
-func LoadForeverCatalog(dataDir, artDir string) *ForeverCatalog {
-	cat := &ForeverCatalog{
-		Spells:     map[uint32]ForeverSpell{},
-		SpellText:  map[uint32]ForeverSpellText{},
-		TalentTabs: defaultForeverTalentTabs(),
-		Skills:     map[uint32]ForeverSkillMeta{},
-		Factions:   map[uint32]ForeverFactionMeta{},
-	}
+func LoadForeverCatalog(dataDir, artDir string, lookups *foreveritems.Lookups) *ForeverCatalog {
+	cat := &ForeverCatalog{TalentTabs: defaultForeverTalentTabs(), Lookups: lookups}
 	if dataDir != "" {
-		cat.loadSpells(filepath.Join(dataDir, "tortoisebots-spells.json"))
 		cat.loadTalents(filepath.Join(dataDir, "tortoisebots-talents.json"))
-		cat.loadNames(filepath.Join(dataDir, "tortoisebots-names.json"))
 	}
 	if artDir != "" {
-		cat.loadSpellText(filepath.Join(artDir, "spells-text.json"))
 		cat.loadTalentTabs(filepath.Join(artDir, "talent-tabs.json"))
 	}
 	return cat
-}
-
-func (c *ForeverCatalog) loadSpells(path string) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("[Armory] forever spells read %s: %v", path, err)
-		}
-		return
-	}
-	var doc struct {
-		Spells []ForeverSpell `json:"spells"`
-	}
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		log.Printf("[Armory] forever spells parse %s: %v", path, err)
-		return
-	}
-	for _, sp := range doc.Spells {
-		if sp.ID != 0 {
-			c.Spells[sp.ID] = sp
-		}
-	}
 }
 
 func (c *ForeverCatalog) loadTalents(path string) {
@@ -132,54 +64,6 @@ func (c *ForeverCatalog) loadTalents(path string) {
 		return
 	}
 	c.Talents = doc.Talents
-}
-
-func (c *ForeverCatalog) loadNames(path string) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("[Armory] forever names read %s: %v", path, err)
-		}
-		return
-	}
-	var doc struct {
-		Skills   map[string]ForeverSkillMeta   `json:"skills"`
-		Factions map[string]ForeverFactionMeta `json:"factions"`
-	}
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		log.Printf("[Armory] forever names parse %s: %v", path, err)
-		return
-	}
-	for k, v := range doc.Skills {
-		if id, err := strconv.ParseUint(k, 10, 32); err == nil {
-			c.Skills[uint32(id)] = v
-		}
-	}
-	for k, v := range doc.Factions {
-		if id, err := strconv.ParseUint(k, 10, 32); err == nil {
-			c.Factions[uint32(id)] = v
-		}
-	}
-}
-
-func (c *ForeverCatalog) loadSpellText(path string) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("[Armory] forever spell-text read %s: %v", path, err)
-		}
-		return
-	}
-	var doc map[string]ForeverSpellText
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		log.Printf("[Armory] forever spell-text parse %s: %v", path, err)
-		return
-	}
-	for k, v := range doc {
-		if id, err := strconv.ParseUint(k, 10, 32); err == nil {
-			c.SpellText[uint32(id)] = v
-		}
-	}
 }
 
 func (c *ForeverCatalog) loadTalentTabs(path string) {
