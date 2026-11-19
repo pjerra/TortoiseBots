@@ -44,7 +44,8 @@ Recorded, per leg, the units that did not match (before the fix): leg 6 seq 4 an
 | `slice_gen_context.py --check`, `slice_registry_check.py` | up to date; `(a)=0 (b)=215` |
 | `test_dungeon_run_policy`, `test_system_run_policy` (g++ -std=c++17 -Wall -Wextra on the VM) | `ok`, `109 checks passed`, no warning |
 | python wiring pins (`test_reload_plans_wiring.py` 16, `test_slice4_d4_wiring.py` 10) | OK |
-| Turtle `vm-build` / `vm-test tb` | see the report (run once, after the live boots) |
+| Turtle `vm-build` (code-final 5c9016038, after the live boots) | `COMPILE_SECONDS=3090 CMAKE_RC=0 MAKE_RC=0` (the VM was at load 30-38 from other workers) |
+| Turtle `vm-test tb` (5ab8790ca) | `RESULT: PASS`, rc=0, vm_duration 1140 s |
 
 ## 7. What the S6 merge must know
 * `LoadDungeonPlans` is called once, from `run::LoadPlans()` in `OnWorldInitialized`; S6 must not add a second load. `GetDungeonPlans()` is sealed after that.
