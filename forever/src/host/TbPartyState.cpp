@@ -342,6 +342,9 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
     if (args.w.size() > 1)
     {
+        // N5: bots join only a bot's party or the sender's own character's party, never a real player's.
+        if (!MayLeadBots(handler, leader->GetGUID()))
+            return Fail(handler, args, "party", "not-allowed", args.w[0] + " is neither a host bot nor your own character: bots do not join a real player's party");
         if (args.w.size() > 5)
             return Fail(handler, args, "party", "too-many", "a party holds five: the leader and four members");
         std::set<ObjectGuid> seen;
@@ -371,7 +374,7 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 rec.S("status", "joined");
             }
             else
-                rec.S("status", "refused").S("code", "party-refused").S("msg", error.substr(0, 400));
+                rec.S("status", "refused").S("code", "party-refused").T("msg", error);
             reply.Line(rec);
         }
         Rec end("party");

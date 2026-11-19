@@ -35,6 +35,7 @@
 #include "../../../runtime/CommandedGroupQuery.h"
 #include "../../../runtime/RemoteCommanderPolicy.h"
 #include "SliceLog.h"
+#include <map>
 #include "SliceMissingKeyGuard.h"
 
 AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* ai)
@@ -99,8 +100,17 @@ bool AiFactory::KeepsPartyThreatBackoff(Player* player, PlayerbotAI* const facad
     if (facade->HasRealPlayerMaster())
         return !isTank;
     bool const commanded = TortoiseBots::BotCommands::IsInCommandedGroup(player);
-    ai::slice::LogInfo(std::string("slice: threat back-off for ") + player->GetName() + ": commanded=" + (commanded ? "yes" : "no") + " tank=" + (isTank ? "yes" : "no"));
-    return TortoiseBots::RemoteCommander::KeepsCommandedThreatBackoff(commanded, isTank);
+    bool const keeps = TortoiseBots::RemoteCommander::KeepsCommandedThreatBackoff(commanded, isTank);
+    // N8: one line per bot per CHANGE of the answer (the kit is rebuilt on every `.tb role`, `.tb master` and `free`), not one per rebuild.
+    static std::map<ObjectGuid, int> logged;
+    int const state = (commanded ? 1 : 0) | (isTank ? 2 : 0);
+    auto itr = logged.find(player->GetObjectGuid());
+    if (itr == logged.end() || itr->second != state)
+    {
+        logged[player->GetObjectGuid()] = state;
+        ai::slice::LogInfo(std::string("slice: threat back-off for ") + player->GetName() + ": commanded=" + (commanded ? "yes" : "no") + " tank=" + (isTank ? "yes" : "no"));
+    }
+    return keeps;
 }
 
 BotRoles AiFactory::GetPlayerRoles(const Player* player)

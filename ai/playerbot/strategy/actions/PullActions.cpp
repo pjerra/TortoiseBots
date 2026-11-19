@@ -489,7 +489,10 @@ bool PullAction::Execute(Event& event)
                 strategy->OnPullActionCompleted();
                 // The body pull has landed: anchor the held bots' join delay to it, as the ranged branch below does (a window that was never
                 // restamped could only end by its own clock, and a lead-keyed one never counts as landed). Bots without a pull window are skipped.
-                RestampPullParty(bot, 0, false, !strategy->IsCommandPullback());
+                // N3 (package N): only where the helper says (ForeverCore: a commanded party); on Turtle it is always false, so a Turtle body pull is
+                // exactly what it was.
+                if (BodyPullRestampCompat(bot))
+                    RestampPullParty(bot, 0, false, !strategy->IsCommandPullback());
                 return true;
             }
             else if (strategy->HasPullActionCast())

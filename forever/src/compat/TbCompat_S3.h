@@ -82,3 +82,8 @@ inline Unit* MasterTargetCompat(AI* ai)
     }
     return ai->GetGroupMaster();
 }
+
+// Does the landing of a BODY pull (the `reach pull` branch of PullAction) restamp the held party bots' clock, so a lead-keyed hold counts as landed?
+// F: yes, for a bot of a commanded party (the host's `pull` order places that hold); every other pull is as it was. T: never (ai/cmangos-compat-s3.h).
+template <class B>
+inline bool BodyPullRestampCompat(B* bot) { return bot && TortoiseBots::BotCommands::IsInCommandedGroup(bot); }

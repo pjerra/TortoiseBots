@@ -105,10 +105,16 @@ private:
         uint32 followBlockedMap = 0;
         uint32 followBlockedInstance = 0;
         uint32 followRetryMs = 0;
+        uint32 outOfSightMs = 0;       // N2: how long the master has been over 100 yd away and out of line of sight
+        uint32 catchUpCooldownMs = 0;  // N2: no second catch-up teleport before this has run out
         std::string followBlockedWhy;
     };
 
     void Think(Bot& bot, Player* me);
+public:
+    // N1: the one guarded call of Map::PlayerCannotEnter: "" = no objection, else the reason (see TbBotMgr.cpp).
+    static std::string CanEnterMap(Player* who, uint32 mapId);
+private:
     static std::string JoinParty(Player* bot, Player* master);
     void DropBrain(Bot& bot);
     // R10 (S2): the master is gone: take the brain down and wait out the grace (or log the bot out at once when the grace is 0).

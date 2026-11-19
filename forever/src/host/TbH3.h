@@ -74,11 +74,15 @@ Words Split(std::string_view tail);
 constexpr size_t MaxLineBytes = 3000;
 std::string Enc(std::string_view bytes);
 
+uint32 LineTooLongCount();   // lines the encoder refused to write because they passed MaxLineBytes (a host bug; `.tb grammar selftest` prints it)
+
 class Rec
 {
 public:
     explicit Rec(std::string_view kind) : _kind(kind) {}
     Rec& S(std::string_view key, std::string_view text);                                  // text, percent-encoded
+    Rec& T(std::string_view key, std::string_view text, size_t cap = 400);               // free text cut to `cap` bytes BEFORE encoding; the record then carries `trunc=yes`
+    bool Truncated() const { return _truncated; }
     Rec& N(std::string_view key, int64 value);                                           // a decimal number
     Rec& F(std::string_view key, double value, int decimals = 1);                        // a decimal fraction
     Rec& B(std::string_view key, bool value);                                            // yes / no
@@ -92,6 +96,7 @@ private:
     Rec& Put(std::string_view key, std::string value);
     std::string _kind;
     std::vector<std::pair<std::string, std::string>> _kv;
+    bool _truncated = false;
 };
 
 // One reply of one command: counts the record lines between its begin and end markers.
@@ -134,7 +139,10 @@ bool ParseGuidText(std::string_view text, ObjectGuid& out);
 Player* SenderPlayer(ChatHandler* handler);            // the GM's character for a chat command, null for the console
 Player* FindOnline(std::string_view name);             // an in-world character by name (bot or not)
 bool IsHostBot(Player const* player);                  // BotMgr::IsBot
-Player* CommanderOf(Player* bot);                      // the in-world player the bot's host master guid names, or null
+Player* CommanderOf(Player* bot);
+// N5 (package N): who may be made the leader or master of host bots: a host bot, or the character of the GM who typed the command. A real player's
+// character is never taken over (from the console only host bots qualify). Used by `.tb party`, `.tb master`, `.tb login <bot> <master>`, `.tb group`.
+bool MayLeadBots(ChatHandler* handler, ObjectGuid character);                      // the in-world player the bot's host master guid names, or null
 
 // "who the command is about": one bot by name, or `party [leader]` (every host bot of that party).
 struct Address

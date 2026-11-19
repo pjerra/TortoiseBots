@@ -335,7 +335,15 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     }
     if (o.verb == "role")
     {
-        ApplyKit(ai, uint8(std::atoi(o.arg.c_str())), true);
+        // N4a: the role is committed HERE, when the queued order runs (the kit rebuild below reads the stored role first), never when the command
+        // is typed: a refused or expired order must not change a role.
+        uint8 const role = uint8(std::atoi(o.arg.c_str()));
+        PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), role);
+        if (role)
+            Roles()[bot->GetGUID()] = role;
+        else
+            Roles().erase(bot->GetGUID());
+        ApplyKit(ai, role, true);
         return "ok";
     }
     if (o.verb == "rekit")
@@ -486,7 +494,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused").S("code", code);
             if (name)
                 rec.S("name", name);
-            rec.S("msg", std::string_view(detail).substr(0, 400));
+            rec.T("msg", detail);
             emit(rec);
         };
 
@@ -655,23 +663,22 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     auto const emit = [&](Rec const& rec) { reply.Line(rec); };
     for (Player* bot : who.bots)
     {
-        // The stored role (what PlayerbotAI::IsTank/IsHeal and AiFactory::GetPlayerRoles read first, whatever the master is) is written now; the AI's own
-        // forced role and the kit rebuild run in the bot's next engine tick, or at the first tick of an engine that is not running yet.
-        PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), role);
-        if (role)
-            Roles()[bot->GetGUID()] = role;
-        else
-            Roles().erase(bot->GetGUID());
-
         Rec rec("role");
         rec.S("bot", bot->GetName()).S("role", roleName);
         PlayerbotAI* ai = AiOf(bot);
         if (!ai)
         {
+            // No engine yet: the role is stored for the brain that is built later (BeforeEngineTick compares it with the AI's), and that is true now.
+            PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), role);
+            if (role)
+                Roles()[bot->GetGUID()] = role;
+            else
+                Roles().erase(bot->GetGUID());
             rec.S("status", "stored");
             emit(rec);
             continue;
         }
+        // An engine runs: the order is queued FIRST and nothing is stored when that is refused; the role is committed when the order runs (Run).
         Order order;
         order.verb = "role";
         order.arg = std::to_string(unsigned(role));
@@ -681,7 +688,7 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         uint32 seq = 0;
         if (!Enqueue(bot, std::move(order), code, detail, seq))
         {
-            rec.S("status", "refused").S("code", code).S("msg", std::string_view(detail).substr(0, 400));
+            rec.S("status", "refused").S("code", code).T("msg", detail);
             emit(rec);
             continue;
         }
@@ -715,11 +722,13 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Player* commander = release ? nullptr : FindOnline(name);
     if (!release && !commander)
         return Fail(handler, args, "master", "no-such-player", name + " is not in the world");
+    if (!release && !MayLeadBots(handler, commander->GetGUID()))   // N5
+        return Fail(handler, args, "master", "not-allowed", name + " is neither a host bot nor your own character: it cannot be made the commander of bots");
     for (Player* bot : who.bots)
         if (bot == commander)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");
 
-    uint32 done = 0, queued = 0;
+    uint32 done = 0, queued = 0, refused = 0;
     Reply reply(handler, args, "master");
     reply.Begin();
     auto const emit = [&](Rec const& rec) { reply.Line(rec); };
@@ -730,7 +739,14 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         rec.S("bot", bot->GetName());
         if (release)
         {
-            TortoiseBots::BotManager::Instance().ClearBotMaster(guid);
+            // N4b: the host's answer is checked; on a failure nothing changes (the binding table is written only after the host accepted it).
+            if (!TortoiseBots::BotManager::Instance().ClearBotMaster(guid))
+            {
+                ++refused;
+                rec.S("status", "refused").S("code", "release-failed").S("msg", "the host could not release the master of this bot (it is not a logged-in host bot)");
+                emit(rec);
+                continue;
+            }
             SetCommander(guid, ObjectGuid::Empty);
             rec.S("commander", "");
         }
@@ -738,7 +754,13 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         {
             // What the engine's own hire flow does with a master (BotManager::BindBotMaster: the host's master guid and the engine's pointer), and the
             // binding `IsInCommandedGroup` answers from. The party is not touched: the commander stays outside it (spec D2).
-            TortoiseBots::BotManager::Instance().BindBotMaster(guid, commander->GetGUID());
+            if (!TortoiseBots::BotManager::Instance().BindBotMaster(guid, commander->GetGUID()))
+            {
+                ++refused;
+                rec.S("status", "refused").S("code", "bind-failed").S("msg", "the host refused to bind this bot to that commander (it is not a logged-in host bot)");
+                emit(rec);
+                continue;
+            }
             SetCommander(guid, commander->GetGUID());
             Group* group = bot->GetGroup();
             rec.S("commander", commander->GetName()).B("commander_in_party", group && group->IsMember(commander->GetGUID()));
@@ -765,7 +787,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         emit(rec);
     }
     Rec end("master");
-    end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", done).N("queued", queued);
+    end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", who.bots.size()).N("bound", done).N("queued", queued).N("refused", refused);
     reply.End(end);
     return true;
 }

@@ -256,6 +256,8 @@ public:
             master = GuidByName(*masterName);
             if (master.IsEmpty())
                 return Fail(handler, "no character named " + *masterName + ".");
+            if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
+                return Fail(handler, *masterName + " is neither a host bot nor your own character: it cannot be the master of a bot.");
         }
         else if (Player* caller = Caller(handler))
             master = caller->GetGUID();
@@ -273,6 +275,8 @@ public:
         ObjectGuid const master = GuidByName(masterName);
         if (master.IsEmpty())
             return Fail(handler, "no character named " + masterName + ".");
+        if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
+            return Fail(handler, masterName + " is neither a host bot nor your own character: bots do not join a real player's party.");
         std::string const error = BotMgr::Instance().GroupWith(GuidByName(name), master);
         if (!error.empty())
             return Fail(handler, name + " not grouped: " + error + ".");

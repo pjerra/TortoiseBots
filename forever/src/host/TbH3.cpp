@@ -155,10 +155,41 @@ Rec& Rec::Coord(std::string_view key, double x, double y, double z)
     return Put(key, buffer);
 }
 
+namespace
+{
+uint32 g_lineTooLong = 0;
+}
+
+uint32 LineTooLongCount() { return g_lineTooLong; }
+
+// Free text, cut to its stated cap BEFORE encoding (N6): the record carries `trunc=yes` (an `error` line, which has only code/cmd/msg, ends its text with "...").
+Rec& Rec::T(std::string_view key, std::string_view text, size_t cap)
+{
+    if (text.size() <= cap)
+        return S(key, text);
+    size_t keep = cap;
+    while (keep > 0 && (static_cast<unsigned char>(text[keep]) & 0xC0) == 0x80)    // not in the middle of a UTF-8 sequence
+        --keep;
+    std::string cut(text.substr(0, keep));
+    if (_kind == "error")
+        cut += "...";
+    else
+        _truncated = true;
+    return S(key, cut);
+}
+
 void Reply::Send(std::string line)
 {
     if (!_args.token.empty())
         line += " " + _args.token;
+    if (line.size() > MaxLineBytes)
+    {
+        // A host bug, never a silent cut (N6): the encoder writes this refusal instead of the over-long line and counts it.
+        ++g_lineTooLong;
+        line = "error code=line-too-long cmd=" + Enc(_kind) + " msg=a%20reply%20line%20would%20pass%203000%20bytes";
+        if (!_args.token.empty())
+            line += " " + _args.token;
+    }
     _handler->SendSysMessage(line);
 }
 
@@ -169,34 +200,91 @@ void Reply::Line(Rec const& rec)
     // The token and the separating space are part of the 3,000 bytes.
     size_t const room = MaxLineBytes - (_args.token.empty() ? 0 : _args.token.size() + 1);
     ++_records;
-    auto const& pairs = rec.Pairs();
-    std::string const head = pairs.empty() ? std::string() : " " + pairs.front().first + "=" + pairs.front().second;
-    std::string line = rec.Kind();
-    bool first = true;
-    for (auto const& [key, value] : pairs)
+    std::vector<std::pair<std::string, std::string>> pairs = rec.Pairs();
+    if (rec.Truncated())
+        pairs.emplace_back("trunc", "yes");
+    auto const tooLong = [&]()
     {
-        std::string word = " " + key + "=" + value;
-        if (word.size() + rec.Kind().size() + 1 > room)       // one value alone is too long: cut it on a %-escape boundary
+        ++g_lineTooLong;
+        std::string line = "error code=line-too-long cmd=" + Enc(_kind) + " msg=a%20value%20of%20the%20record%20cannot%20be%20split%20below%203000%20bytes";
+        if (!_args.token.empty())
+            line += " " + _args.token;
+        _handler->SendSysMessage(line);
+        ++_lines;
+    };
+    if (pairs.empty())
+    {
+        Send(rec.Kind());
+        ++_lines;
+        return;
+    }
+    // The identity key (the first pair) opens the base line and every continuation line (`<kind>+ bot=<name> ...`).
+    std::string const head = " " + pairs.front().first + "=" + pairs.front().second;
+    if (rec.Kind().size() + 1 + head.size() > room / 2)
+    {
+        tooLong();
+        return;
+    }
+    std::string line = rec.Kind() + head;
+    bool lineHasMore = false;                // something besides the identity key is on the current line
+    auto const flush = [&]()
+    {
+        Send(line);
+        ++_lines;
+        line = rec.Kind() + "+" + head;
+        lineHasMore = false;
+    };
+    for (size_t i = 1; i < pairs.size(); ++i)
+    {
+        std::string const& key = pairs[i].first;
+        std::string value = pairs[i].second;
+        // A repeated key on a continuation line APPENDS its items to the key's list (list keys only): lists are split at `;`.
+        while (true)
         {
-            size_t keep = room > rec.Kind().size() + 2 + key.size() + 1 + head.size() + 1 ? room - rec.Kind().size() - 2 - key.size() - 1 - head.size() - 1 : 0;
-            if (keep > value.size())
-                keep = value.size();
-            while (keep > 0 && (value[keep - 1] == '%' || (keep >= 2 && value[keep - 2] == '%')))
-                --keep;
-            // A value longer than a whole line (a long strategy list) is cut at an item boundary (`;`), else on a %XX boundary.
-            size_t cut = value.rfind(';', keep ? keep - 1 : 0);
-            if (cut != std::string::npos && cut > 0 && cut < keep)
-                keep = cut;
-            word = " " + key + "=" + value.substr(0, keep);
+            std::string const word = " " + key + "=" + value;
+            if (line.size() + word.size() <= room)
+            {
+                line += word;
+                lineHasMore = true;
+                break;
+            }
+            // Does it fit on a fresh continuation line, whole? Then break the line first.
+            if (lineHasMore && rec.Kind().size() + 1 + head.size() + word.size() <= room)
+            {
+                flush();
+                continue;
+            }
+            // A list: put as many whole items as fit on this line, the rest goes on.
+            size_t fitEnd = std::string::npos, pos = 0;
+            size_t const budget = room > line.size() + 1 + key.size() + 1 ? room - line.size() - 1 - key.size() - 1 : 0;
+            while (true)
+            {
+                size_t const semi = value.find(';', pos);
+                size_t const end = semi == std::string::npos ? value.size() : semi;
+                if (end > budget)
+                    break;
+                fitEnd = end;
+                if (semi == std::string::npos)
+                    break;
+                pos = semi + 1;
+            }
+            if (value.find(';') == std::string::npos || fitEnd == std::string::npos || fitEnd == 0)
+            {
+                if (lineHasMore)
+                {
+                    flush();
+                    continue;
+                }
+                tooLong();                  // one item (or a plain value) wider than a whole line: a host bug
+                return;
+            }
+            line += " " + key + "=" + value.substr(0, fitEnd);
+            lineHasMore = true;
+            value = value.substr(fitEnd + 1);
+            flush();
+            if (value.empty())
+                break;
         }
-        if (!first && line.size() + word.size() > room)
-        {
-            Send(line);
-            ++_lines;
-            line = rec.Kind() + "+" + head;           // the continuation repeats the first key (the record's identity)
-        }
-        line += word;
-        first = false;
     }
     Send(line);
     ++_lines;
@@ -216,7 +304,9 @@ void Reply::End(Rec extra)
     for (auto const& [key, value] : extra.Pairs())
         if (key != "count" && key != "records")
             line += " " + key + "=" + value;
-    Send(line);
+    if (extra.Truncated())
+        line += " trunc=yes";
+    Send(line);                              // Send checks the cap: an over-long end line becomes `error code=line-too-long`
 }
 
 std::vector<std::string> LabelParts(std::string const& label)
@@ -237,13 +327,10 @@ std::vector<std::string> LabelParts(std::string const& label)
 bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::string_view code, std::string_view detail)
 {
     // `error` has exactly `code=`, `cmd=`, an optional `msg=` and the token (addendum A11); a refused `#` word is said in the message.
-    std::string text(detail.substr(0, 400));
-    if (args.badToken)
-        text += (text.empty() ? "" : " ") + std::string("(the # word was refused: a token is # and 1 to 32 of A-Za-z0-9_.:-)");
     Rec rec("error");
     rec.S("code", code).S("cmd", cmd);
-    if (!text.empty())
-        rec.S("msg", std::string_view(text).substr(0, 400));
+    if (!detail.empty())
+        rec.T("msg", detail);
     Reply(handler, args, "error").Single(rec);
     handler->SetSentErrorMessage(true);
     return false;
@@ -252,6 +339,8 @@ bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::st
 bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
     Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "grammar"))
+        return false;
     if (args.w.empty() || Lower(args.w[0]) != "selftest")
         return Fail(handler, args, "grammar", "missing-argument", ".tb grammar selftest");
     Reply reply(handler, args, "grammar");
@@ -267,8 +356,12 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     for (int i = 0; i < 320; ++i)
         many.push_back("strategy number " + std::to_string(i));
     reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "overlong").L("list", many).S("tail", "x"));   // over 3,000 bytes: `selftest+ bot=Mtank ...` continuation lines
+    // N6: free text over its cap is cut BEFORE encoding and the record says so; a list longer than a line is split at items; a value that cannot be
+    // split below the cap is refused with `error code=line-too-long` (counted), never cut.
+    reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "freetext").T("msg", std::string(450, 'x') + " tail", 400));
+    reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "unsplittable").S("value", std::string(3100, 'y')));
     Rec end("selftest");
-    end.S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
+    end.N("line_too_long", LineTooLongCount()).S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
     reply.End(end);
     // The refusal, the only one-line reply: exactly code=, cmd= and an optional msg=.
     Reply error(handler, args, "error");
@@ -278,9 +371,12 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
 bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd)
 {
-    if (engine::Built())
-        return true;
-    return Fail(handler, args, cmd, "engine-not-built", "the engine is not built in (this build has no group-fight commands)");
+    if (!engine::Built())
+        return Fail(handler, args, cmd, "engine-not-built", "the engine is not built in (this build has no group-fight commands)");
+    // N4c: EVERY handler starts here, so a malformed `#token` word is refused before anything is done (the bad text is not echoed).
+    if (args.badToken)
+        return Fail(handler, args, cmd, "bad-token", "a token is # and 1 to 32 of A-Za-z0-9_.:-; nothing was done");
+    return true;
 }
 
 std::string Lower(std::string_view text)
@@ -336,6 +432,16 @@ Player* FindOnline(std::string_view name)
 bool IsHostBot(Player const* player)
 {
     return player && BotMgr::Instance().IsBot(player->GetGUID());
+}
+
+bool MayLeadBots(ChatHandler* handler, ObjectGuid character)
+{
+    if (character.IsEmpty())
+        return false;
+    if (BotMgr::Instance().IsBot(character))
+        return true;
+    Player* sender = SenderPlayer(handler);
+    return sender && sender->GetGUID() == character;
 }
 
 Player* CommanderOf(Player* bot)

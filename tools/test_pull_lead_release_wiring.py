@@ -58,6 +58,39 @@ class PullLeadReleaseWiring(unittest.TestCase):
         self.assertIn("RestampPullParty(bot, 0, false, !strategy->IsCommandPullback())", PULL_ACTIONS)
         self.assertIn("RestampPullParty(bot, strategy->GetCommandJoinDelay(), true, true)", PULL_ACTIONS)
 
+    def test_body_pull_restamp_is_gated_by_a_helper_that_is_a_noop_on_turtle(self):
+        # N3 (package N): the body-pull landing restamp runs only where BodyPullRestampCompat says; the Turtle twin returns false, so a Turtle
+        # body pull (dungeon-run and chat pulls too) is what it was before package L.
+        i = PULL_ACTIONS.index("strategy->OnPullActionCompleted();")
+        branch = PULL_ACTIONS[i:PULL_ACTIONS.index("return true;", i)]
+        self.assertIn("if (BodyPullRestampCompat(bot))", branch)
+        self.assertIn("RestampPullParty(bot, 0, false, !strategy->IsCommandPullback());", branch)
+        turtle = (ROOT / "ai/cmangos-compat-s3.h").read_text()
+        j = turtle.index("BodyPullRestampCompat")
+        self.assertIn("return false;", turtle[j:j + 160])
+
+    def test_no_turtle_caller_passes_lead_keyed_to_the_party_hold(self):
+        # N7: every PausePartyPullHold( call under ai/ (outside its declaration and definition) has exactly two arguments.
+        calls = []
+        for path in (ROOT / "ai").rglob("*.cpp"):
+            text = path.read_text()
+            start = 0
+            while True:
+                i = text.find("PausePartyPullHold(", start)
+                if i < 0:
+                    break
+                start = i + 1
+                head = text[max(0, i - 12):i]
+                if "ai::" in head and "void" in text[max(0, i - 20):i]:
+                    continue                      # the definition
+                if text[max(0, i - 6):i].strip() == "void":
+                    continue
+                args = text[i + len("PausePartyPullHold("):text.index(");", i)]
+                calls.append((path.name, args))
+        self.assertTrue(calls)
+        for name, args in calls:
+            self.assertEqual(args.count(","), 1, (name, args))
+
     def test_chat_pullback_hold_stays_plain_timer(self):
         # Package L added two defaulted parameters to the hold (`bool leadKeyed = false, uint32 windowSecondsOverride = 0`, used by the ForeverCore
         # host's `pull` order); the chat pullback still calls it with two arguments, so its window stays the plain timer.

@@ -34,3 +34,7 @@ inline bool CommandedBotKeepsMasterCompat(bool /*commanded*/) { return false; }
 // (a template so that PlayerbotAI need not be complete where this header is read)
 template <class AI>
 inline Unit* MasterTargetCompat(AI* ai) { return ai->GetGroupMaster(); }
+
+// Does the landing of a BODY pull (the `reach pull` branch of PullAction) restamp the held party bots' clock? T: never (the legacy body pull did not).
+template <class B>
+inline bool BodyPullRestampCompat(B* /*bot*/) { return false; }

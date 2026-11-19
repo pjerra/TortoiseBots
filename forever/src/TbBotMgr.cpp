@@ -34,6 +34,8 @@ constexpr uint32 ThinkIntervalMs = 500;
 constexpr uint32 OwnerLoadingLimitMs = 2000;
 // R11: how long a bot whose master is on a map it could not enter waits before it asks the core again (it also asks at once when the master changes map).
 constexpr uint32 FollowRetryMs = 30000;
+// N2: the catch-up teleport of one bot happens at most once per this long.
+constexpr uint32 CatchUpCooldownMs = 30000;
 
 // The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1829-1875), in words.
 std::string AbortReasonText(TransferAbortParams const& denied)
@@ -90,6 +92,24 @@ std::string EntryRefusalText(TransferAbortParams const& denied, uint32 mapId, Pl
     }
     return AbortReasonText(denied);
 }
+}
+
+// N1 (package N): the ONE place the module asks the core whether a character may enter a map. Map::PlayerCannotEnter reaches InstanceMap::CannotEnter
+// (Maps/Map.cpp:2965-2971), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
+// question is never asked for a character that is not in the world, is being teleported, or whose map id IS the one asked about. Returns "" when the core has
+// no objection (or the map is not a dungeon), else the reason in words (an entry refusal as EntryRefusalText says it).
+std::string BotMgr::CanEnterMap(Player* who, uint32 mapId)
+{
+    if (!who || !who->IsInWorld())
+        return "the character is not in the world";
+    if (who->IsBeingTeleported())
+        return "the character is being teleported";
+    if (who->GetMapId() == mapId)
+        return "already on that map";
+    if (!sMapStore.LookupEntry(mapId))
+        return Trinity::StringFormat("map {} is not in the map store", mapId);
+    TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
+    return denied ? EntryRefusalText(denied, mapId, who) : std::string();
 }
 
 BotMgr& BotMgr::Instance()
@@ -569,8 +589,8 @@ std::vector<std::string> BotMgr::CanEnter(ObjectGuid characterGuid, uint32 mapId
         lines.push_back(Trinity::StringFormat("refused: map {} is not in the map store", mapId));
         return lines;
     }
-    TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
-    lines.push_back(denied ? "refused: " + EntryRefusalText(denied, mapId, who) : std::string("allowed: Map::PlayerCannotEnter has no objection"));
+    std::string const answer = CanEnterMap(who, mapId);
+    lines.push_back(answer.empty() ? std::string("allowed: Map::PlayerCannotEnter has no objection") : (answer == "already on that map" ? answer : "refused: " + answer));
     Group* group = who->GetGroup();
     lines.push_back(Trinity::StringFormat("map {}: dungeon {}, raid {}; {} difficulty asked for: {}", mapId, entry->IsDungeon() ? "yes" : "no", entry->IsRaid() ? "yes" : "no",
         group ? "the party's" : "the character's own", uint32(group ? group->GetDifficultyID(entry) : who->GetDifficultyID(entry))));
@@ -689,6 +709,7 @@ void BotMgr::Update(uint32 diff)
             continue;
 
         bot.followRetryMs = bot.followRetryMs > diff ? bot.followRetryMs - diff : 0;
+        bot.catchUpCooldownMs = bot.catchUpCooldownMs > diff ? bot.catchUpCooldownMs - diff : 0;
         bot.thinkMs += diff;
         if (bot.thinkMs >= ThinkIntervalMs)
         {
@@ -749,56 +770,95 @@ void BotMgr::Think(Bot& bot, Player* me)
             me->GetGroup() ? me->GetGroup()->GetMembersCount() : 0u);
     }
 
-    // Stand next to the master once after login, and again whenever it is on another map or far away.
+    // N2 (package N): the catch-up teleport has brakes. A bound bot is put next to its master only in the open world: never while the bot or the
+    // master is in combat, dead, being teleported or changing maps; never into or inside an instance map and never between instances (a bot gets into
+    // a dungeon by its own entry in slice 4, or by an explicit console command); on the same continent map only when it is over 100 yd away and has
+    // been out of line of sight for 10 s; on another (non-instance) map at once; at most once per 30 s per bot. A refused catch-up sets the blocked
+    // reason `.tb state` shows (`stuck=blocked:<reason>`); a bot whose master is in sight or close just follows.
     bool const sameMap = me->GetMap() == master->GetMap();
-    if (sameMap)
-        bot.followBlocked = false;
-    if (!bot.placed || !sameMap || !me->IsWithinDist(master, 100.0f))
+    bool const sameMapId = me->GetMapId() == master->GetMapId();
+    bool const far = sameMap && !me->IsWithinDist(master, 100.0f);
+    if (sameMap && !far)
+        bot.outOfSightMs = 0;
+    else if (far)
+        bot.outOfSightMs = me->IsWithinLOSInMap(master) ? 0 : bot.outOfSightMs + ThinkIntervalMs;
+    if (sameMap && !far)
     {
-        // R11: a bot that the core refused to send to the master's map (an instance it cannot enter) stays where it is and does not ask again at
-        // every Think: it asks again when the master is on another map or instance, or after FollowRetryMs. Its engine keeps running where it is.
-        uint32 const masterMap = master->GetMapId();
-        uint32 const masterInstance = master->GetInstanceId();
-        if (!sameMap && bot.followBlocked && bot.followBlockedMap == masterMap && bot.followBlockedInstance == masterInstance && bot.followRetryMs > 0)
-            return;
-
-        // Ask the core first whether this bot may enter that map at all (the same check Player::TeleportTo makes, Entities/Player/Player.cpp:1432),
-        // so the refusal has its reason; an instance is entered by the master's own instance id (the party's, not a new copy).
-        std::string refused;
-        if (!sameMap)
-            if (TransferAbortParams const denied = Map::PlayerCannotEnter(masterMap, me))
-                refused = EntryRefusalText(denied, masterMap, me);
-
-        if (refused.empty())
+        bot.placed = true;
+        bot.followBlocked = false;
+    }
+    else
+    {
+        bool const inInstance = me->GetMap()->Instanceable();
+        bool const masterInInstance = master->GetMap()->Instanceable();
+        std::string reason;
+        bool wanted = true;
+        if (me->IsInCombat() || master->IsInCombat())
+            reason = "in combat";
+        else if (!me->IsAlive() || !master->IsAlive())
+            reason = "dead";
+        else if (me->IsBeingTeleported() || master->IsBeingTeleported() || !master->IsInWorld())
+            reason = "teleporting";
+        else if (sameMapId && (inInstance || masterInInstance))
+            reason = "commander in another instance";
+        else if (masterInInstance)
+            reason = "commander in an instance (a bot enters one by its own entry or a console command)";
+        else if (inInstance)
+            reason = "bot in an instance";
+        else if (sameMap && !bot.placed && !far)
+            wanted = false;
+        else if (far && bot.outOfSightMs < 10000)
         {
-            bot.placed = true;
-            bot.following = false;
-            bot.chasing.Clear();
-            bot.trail.clear();
-            me->AttackStop();
-            me->GetMotionMaster()->Clear();
-            std::optional<uint32> const instanceId = (!sameMap && master->GetMap()->IsDungeon()) ? std::optional<uint32>(masterInstance) : std::nullopt;
-            if (me->TeleportTo(master->GetWorldLocation(), TELE_TO_NONE, instanceId))
+            wanted = false;                     // in sight (or not yet 10 s out of it): the engine's own follow walks
+            bot.followBlocked = false;
+        }
+        else if (bot.catchUpCooldownMs > 0)
+            reason = "catch-up cooldown";
+
+        if (wanted && reason.empty())
+        {
+            // The core's own entry check, behind the one guarded host function (N1).
+            uint32 const masterMap = master->GetMapId();
+            std::string const denied = CanEnterMap(me, masterMap);
+            if (!denied.empty())
+                reason = denied;
+            else
             {
-                bot.followBlocked = false;
-                return;
+                bot.placed = true;
+                bot.following = false;
+                bot.chasing.Clear();
+                bot.trail.clear();
+                bot.outOfSightMs = 0;
+                bot.catchUpCooldownMs = CatchUpCooldownMs;
+                me->AttackStop();
+                me->GetMotionMaster()->Clear();
+                if (me->TeleportTo(master->GetWorldLocation()))
+                {
+                    bot.followBlocked = false;
+                    return;
+                }
+                reason = "Player::TeleportTo refused the teleport";
             }
-            refused = "Player::TeleportTo refused the teleport";
         }
 
-        bool const changed = !bot.followBlocked || bot.followBlockedMap != masterMap || bot.followBlockedInstance != masterInstance || bot.followBlockedWhy != refused;
-        bot.followBlocked = true;
-        bot.followBlockedMap = masterMap;
-        bot.followBlockedInstance = masterInstance;
-        bot.followBlockedWhy = refused;
-        bot.followRetryMs = FollowRetryMs;
-        // The engine goes too: with the master on a map the bot cannot reach, its follow action asks for a path to a point on another map at every
-        // tick (live: 395 "[BOT PATH BUG]" error lines a minute for two bots). It is built again by the code below once the bot stands on the master's map.
-        DropBrain(bot);
-        if (changed)
-            TC_LOG_INFO("tortoisebots", "BotMgr: {} cannot follow its master {} to map {} (instance {}): {}; it stays and asks again in {} s",
-                me->GetName(), master->GetName(), masterMap, masterInstance, refused, FollowRetryMs / 1000);
-        return;
+        if (wanted)
+        {
+            uint32 const masterMap = master->GetMapId();
+            uint32 const masterInstance = master->GetInstanceId();
+            bool const changed = !bot.followBlocked || bot.followBlockedMap != masterMap || bot.followBlockedInstance != masterInstance || bot.followBlockedWhy != reason;
+            bot.followBlocked = true;
+            bot.followBlockedMap = masterMap;
+            bot.followBlockedInstance = masterInstance;
+            bot.followBlockedWhy = reason;
+            // A bot that is on another map than its master cannot follow by path: its engine goes (live: 395 "[BOT PATH BUG]" lines a minute), and comes
+            // back below once it stands on the master's map. A bot on the master's map keeps its engine (it is fighting or walking).
+            if (!sameMap)
+                DropBrain(bot);
+            if (changed)
+                TC_LOG_INFO("tortoisebots", "BotMgr: {} is not put next to its master {} (map {}, instance {}): {}", me->GetName(), master->GetName(), masterMap, masterInstance, reason);
+            if (!sameMap)
+                return;
+        }
     }
 
     // The engine: once the bot is in the world and next to its master (above), build its PlayerbotAI. From then on the
