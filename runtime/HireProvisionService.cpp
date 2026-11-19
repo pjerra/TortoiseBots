@@ -987,7 +987,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
                 snprintf(buf, sizeof(buf), "%06u", suffix);
                 std::string username = safePrefix + buf;
                 AccountMgr::normalizeString(username);
-                if (sAccountMgr.GetId(username) != 0)
+                if (AccountMgrW3().GetId(username) != 0)
                     continue;
                 static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
                 std::string password;
@@ -1004,7 +1004,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
                     for (int i = 0; i < 12; ++i)
                         password.push_back(charset[urand(0, uint32(sizeof(charset) - 2))]);
                 }
-                AccountOpResult created = sAccountMgr.CreateAccount(username, password);
+                AccountOpResult created = AccountMgrW3().CreateAccount(username, password);
                 if (created != AOR_OK)
                 {
                     sLog.outError("TortoiseBots: hire CreateAccount %s failed result %u", username.c_str(), uint32(created));
@@ -1017,7 +1017,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
                 uint32_t freshId = 0;
                 for (int wait = 0; wait < 10 && !freshId; ++wait)
                 {
-                    freshId = sAccountMgr.GetId(username);
+                    freshId = AccountMgrW3().GetId(username);
                     if (!freshId)
                         std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }

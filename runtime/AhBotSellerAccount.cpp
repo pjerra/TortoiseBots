@@ -490,7 +490,7 @@ void AhBotSellerAccount::RunRepairCheck()
         }
 
         std::string pw = GenerateRandomPassword();
-        AccountOpResult res = sAccountMgr.CreateAccount(normalizedName, pw);
+        AccountOpResult res = AccountMgrW3().CreateAccount(normalizedName, pw);
         if (res == AOR_NAME_ALREDY_EXIST)
         {
             // The login DB has no row (checked above), but the core keeps deleted
@@ -500,7 +500,7 @@ void AhBotSellerAccount::RunRepairCheck()
             std::string pass = pw;
             AccountMgr::normalizeString(name);
             AccountMgr::normalizeString(pass);
-            std::string hash = sAccountMgr.CalculateShaPassHash(name, pass);
+            std::string hash = AccountMgrW3().CalculateShaPassHash(name, pass);
             DbEscapeW3(LoginDatabase, name);
             if (LoginDatabase.PExecute("INSERT INTO account(username,sha_pass_hash,joindate) VALUES('%s','%s',NOW())",
                     name.c_str(), hash.c_str()))
@@ -544,7 +544,7 @@ void AhBotSellerAccount::RunRepairCheck()
     if (!m_passwordRotatedThisRun)
     {
         std::string pw = GenerateRandomPassword();
-        sAccountMgr.ChangePassword(accountId, pw, normalizedName);
+        AccountMgrW3().ChangePassword(accountId, pw, normalizedName);
         m_passwordRotatedThisRun = true;
     }
 

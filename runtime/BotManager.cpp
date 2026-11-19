@@ -2935,7 +2935,7 @@ void BotManager::UpdatePacketBridgeTest(uint32_t diff)
 
             WorldSession* originalSession = master->GetSession();
             WorldSession* syntheticNetwork = new WorldSession(
-                m_packetTestAccount, nullptr, sAccountMgr.GetSecurity(m_packetTestAccount),
+                m_packetTestAccount, nullptr, AccountMgrW3().GetSecurity(m_packetTestAccount),
                 time_t(0), LOCALE_enUS, "packet-test", 0, SessionTransport::Network);
             syntheticNetwork->SetPlayer(master);
             master->SetSession(syntheticNetwork);
@@ -2997,7 +2997,7 @@ void BotManager::UpdatePacketBridgeTest(uint32_t diff)
             // ServerScript::CanPacketReceive hook.
             WorldSession* originalSession = master->GetSession();
             WorldSession* syntheticNetwork = new WorldSession(
-                m_packetTestAccount, nullptr, sAccountMgr.GetSecurity(m_packetTestAccount),
+                m_packetTestAccount, nullptr, AccountMgrW3().GetSecurity(m_packetTestAccount),
                 time_t(0), LOCALE_enUS, "packet-test", 0, SessionTransport::Network);
             syntheticNetwork->SetPlayer(master);
             master->SetSession(syntheticNetwork);

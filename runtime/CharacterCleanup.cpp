@@ -91,7 +91,7 @@ void CollectOwnedAuctions(uint32 guidLow, std::vector<OwnedAuction>& out)
         AuctionHouseEntry const* entry = sAuctionHouseStore.LookupEntry(i);
         if (!entry)
             continue;
-        if (AuctionHouseObject* house = sAuctionMgr.GetAuctionsMap(entry))
+        if (AuctionHouseObject* house = AuctionMgrW3().GetAuctionsMap(entry))
             houses.insert(house);
     }
 
@@ -137,10 +137,10 @@ bool SettleCharacterAuctions(uint32 guidLow, uint32& settled, std::string& error
             ++refunded;
         }
 
-        if (Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow))
+        if (Item* item = AuctionMgrW3().GetAItem(auction->itemGuidLow))
         {
             item->DeleteFromDB();
-            sAuctionMgr.RemoveAItem(auction->itemGuidLow);
+            AuctionMgrW3().RemoveAItem(auction->itemGuidLow);
             delete item;
         }
 

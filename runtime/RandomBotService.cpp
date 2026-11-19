@@ -856,7 +856,7 @@ bool RandomBotService::TryAutoCreate(LineageRequest const* lineage)
         bool shouldRetry = !m_pendingNextRetry || now >= m_pendingNextRetry;
         if (shouldRetry)
         {
-            uint32 pendingId = sAccountMgr.GetId(m_pendingAccountName);
+            uint32 pendingId = AccountMgrW3().GetId(m_pendingAccountName);
             if (pendingId)
             {
                 std::string resolvedName = m_pendingAccountName;
@@ -994,13 +994,13 @@ bool RandomBotService::TryAutoCreate(LineageRequest const* lineage)
         std::snprintf(suffixBuf, sizeof(suffixBuf), "%06u", suffix);
         std::string username = safePrefix + suffixBuf;
         AccountMgr::normalizeString(username);
-        if (sAccountMgr.GetId(username) != 0)
+        if (AccountMgrW3().GetId(username) != 0)
             continue;
         std::string password = GenerateRandomPassword();
-        AccountOpResult res = sAccountMgr.CreateAccount(username, password);
+        AccountOpResult res = AccountMgrW3().CreateAccount(username, password);
         if (res == AOR_OK)
         {
-            uint32 id = sAccountMgr.GetId(username);
+            uint32 id = AccountMgrW3().GetId(username);
             if (id)
             {
                 // The account enters the registry before any character is

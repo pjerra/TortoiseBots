@@ -8,6 +8,7 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -18,7 +19,7 @@ uint32 AuctionItemCount(AuctionEntry const* auction)
     if (!auction)
         return 0;
 
-    Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
+    Item* item = AuctionMgrW3().GetAItem(auction->itemGuidLow);
     return item ? item->GetCount() : 0;
 }
 }
@@ -189,7 +190,7 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
         return false;
 
     // always return pointer
-    AuctionHouseObject* auctionHouse = sAuctionMgr.GetAuctionsMap(auctionHouseEntry);
+    AuctionHouseObject* auctionHouse = AuctionMgrW3().GetAuctionsMap(auctionHouseEntry);
 
     if (!auctionHouse)
         return false;
@@ -436,7 +437,7 @@ bool AhBidAction::BidItem(Player* requester, AuctionEntry* auction, uint32 price
         return false;
 
     // always return pointer
-    AuctionHouseObject* auctionHouse = sAuctionMgr.GetAuctionsMap(auctionHouseEntry);
+    AuctionHouseObject* auctionHouse = AuctionMgrW3().GetAuctionsMap(auctionHouseEntry);
 
     if (!auctionHouse)
         return false;
@@ -487,7 +488,7 @@ bool AhCancelAction::ExecuteCommand(Player* requester, std::string text, Unit* a
     if (!auctionHouseEntry)
         return false;
 
-    AuctionHouseObject* auctionHouse = sAuctionMgr.GetAuctionsMap(auctionHouseEntry);
+    AuctionHouseObject* auctionHouse = AuctionMgrW3().GetAuctionsMap(auctionHouseEntry);
     if (!auctionHouse)
         return false;
 
@@ -556,7 +557,7 @@ bool AhCancelAction::CancelAuctionEntry(Player* requester, AuctionEntry* auction
     bot->GetSession()->HandleAuctionRemoveItem(packet);
 
     AuctionHouseEntry const* ahEntry = bot->GetSession()->GetCheckedAuctionHouseForAuctioneer(auctioneer->getObjectGuid());
-    AuctionHouseObject* ahObj = ahEntry ? sAuctionMgr.GetAuctionsMap(ahEntry) : nullptr;
+    AuctionHouseObject* ahObj = ahEntry ? AuctionMgrW3().GetAuctionsMap(ahEntry) : nullptr;
     if (ahObj && !ahObj->GetAuction(auctionId))
     {
         std::string itemName = proto ? proto->Name1 : "Item";
