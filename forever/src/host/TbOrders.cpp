@@ -30,6 +30,7 @@
 
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/PullStartPolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/generic/PullStrategy.h"
@@ -287,6 +288,27 @@ void AnchorPullHoldOnTank(Player* tank)
     }
 }
 
+// N6: what the legacy pull order does once the request is accepted (commands/Action.cpp:930-960, Party.cpp:1152): the tank may break its stay
+// (RelaxTacticalMovement = DropQueuedMovementOrders + EndStayForOrder), its action clock is cleared so the pull does not wait out whatever it was doing, and a
+// casting or seated tank is made ready (PullStartPolicy.h ReadyTankForPull: "reach pull" does not move a casting or sitting bot). Without this the run's
+// `come` (the stand the policy put the tank on) left the stay strategy on, its "return to stay position" trigger walked the tank back every tick, and a pack
+// more than about 30 yd from the stand was never reached (M6 live test: steps 16 and 17, `tgt=` empty, position unchanged for minutes, 175 `pull-release
+// reason=expired`). The legacy order also runs one quiet decision tick (ExecuteQuietNextAction); the engines tick every world update here, so the cleared clock is enough.
+void RelaxTankForPull(Player* tank, PlayerbotAI* ai)
+{
+    ai->DropQueuedMovementOrders();
+    ai->EndStayForOrder();
+    ai->ClearActionClock();
+    ai::PullReadyFacts facts;
+    facts.casting = tank->IsNonMeleeSpellCast(true, false, true);
+    facts.seated = tank->GetStandState() != UNIT_STAND_STATE_STAND;
+    ai::PullReadySteps const steps = ai::ReadyTankForPull(facts);
+    if (steps.interrupt)
+        tank->InterruptNonMeleeSpells(false);
+    if (steps.stand)
+        tank->SetStandState(UNIT_STAND_STATE_STAND);
+}
+
 // Role: the forced role of the AI, then a rebuild of the kit from it (the slice's AiFactory reads it), then the movement mode back as it was.
 void ApplyKit(PlayerbotAI* ai, uint8 role, bool setRole)
 {
@@ -351,6 +373,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         // legacy chat pull, lead-keyed: damage warriors stay on the commander's anchor, every member's window opens only after the pull LANDED
         // (PullActions.cpp RestampPullParty) and ends when the whole pack is on the tank (3 s at the earliest, 10 s at the latest), at once when a
         // mob hits a held bot or the tank is under 60 %, and at the latest 15 s after the order if the pull never lands.
+        RelaxTankForPull(bot, ai);
         ai::PausePartyPullHold(bot, kPullJoinDelaySeconds, true, kPullApproachWindowSeconds);
         if (o.fromRun)
             AnchorPullHoldOnTank(bot);
@@ -456,6 +479,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
                 ai->ChangeStrategy("-pull back", BotState::BOT_STATE_ALL);
             return "fail:pullback";
         }
+        RelaxTankForPull(bot, ai);
         ai::PausePartyPullHold(bot, kPullJoinDelaySeconds, true, kPullApproachWindowSeconds);   // L2: the same lead-keyed hold as `pull`
         if (o.fromRun)
             AnchorPullHoldOnTank(bot);
