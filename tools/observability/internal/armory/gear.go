@@ -24,6 +24,9 @@ const (
 // tick. Hired characters are pool-account rows like any pool bot; player
 // characters join by guid (players are few, characters.online is indexed).
 func (s *Service) GearRollup() (map[uint32]model.BotGear, error) {
+	if s.isForever() {
+		return s.gearRollupForever()
+	}
 	query := fmt.Sprintf(`
 		SELECT ci.guid, it.quality, it.item_level
 		FROM character_inventory ci
@@ -111,6 +114,9 @@ func (s *Service) ExistingCharacters() (map[uint32]struct{}, error) {
 }
 
 func (s *Service) CompletedQuestsRollup() (map[uint32]uint64, error) {
+	if s.isForever() {
+		return s.completedQuestsRollupForever()
+	}
 	query := `
 		SELECT c.guid, COUNT(*)
 		FROM character_queststatus qs
@@ -139,6 +145,9 @@ func (s *Service) CompletedQuestsRollup() (map[uint32]uint64, error) {
 
 // SpellsLearnedRollup returns the lifetime known spell count for every pool bot.
 func (s *Service) SpellsLearnedRollup() (map[uint32]uint64, error) {
+	if s.isForever() {
+		return s.spellsLearnedRollupForever()
+	}
 	query := `
 		SELECT c.guid, COUNT(*)
 		FROM character_spell cs
@@ -167,6 +176,9 @@ func (s *Service) SpellsLearnedRollup() (map[uint32]uint64, error) {
 
 // OpenQuestsRollup returns the currently active (in progress or ready to hand in) quests for every pool bot.
 func (s *Service) OpenQuestsRollup() (map[uint32][]uint32, error) {
+	if s.isForever() {
+		return s.openQuestsRollupForever()
+	}
 	query := `
 		SELECT c.guid, qs.quest
 		FROM character_queststatus qs

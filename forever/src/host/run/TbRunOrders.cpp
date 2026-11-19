@@ -3,6 +3,7 @@
 // ONE path for every order the run leader emits: parse (TbRunOrdersPure.h) -> read the party -> judge with the facts of the core -> pre-flight every bot's
 // queue (h3::PreflightOrder, TbOrders.cpp) -> queue (h3::QueueOrder) -> answer. Nothing is queued unless the whole order passed, so a refusal changes no bot.
 #include "host/run/TbRunOrders.h"
+#include "host/run/TbRunLiquid.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <strings.h>
@@ -140,6 +142,8 @@ struct MoveCheck
     MovePoint point;                // after the floor snap
     MoveFacts facts;
     bool pathRead = false;
+    bool liquidOnWay = false;       // R6: the point, or the walked route to it, is in or on liquid (TbRunLiquid.h rule)
+    std::string liquidAt;           // where the route was refused ("x y z"), for the answer's text
 };
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
@@ -174,7 +178,27 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         check.facts.endOffset = std::sqrt((end.x - point.x) * (end.x - point.x) + (end.y - point.y) * (end.y - point.y) + (end.z - point.z) * (end.z - point.z));
         check.facts.endFromLead = std::sqrt((end.x - ox) * (end.x - ox) + (end.y - oy) * (end.y - oy) + (end.z - oz) * (end.z - oz));
         check.pathRead = true;
+        // R6 (review item 7, round 2): the route the mover will walk is the navmesh path: its vertices and legs are read in order (every <= 1.5 yd) with the move rule
+        // of TbRunLiquid.h: wet samples only as the contiguous prefix that holds the origin, the destination dry. A path that is not a real path (fewer than two
+        // points: no route at all) falls back to the straight line, which is what a shortcut walks.
+        Movement::PointsArray const& way = PathPointsCompat(path);
+        auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
+        liquid::PrefixState where;
+        check.liquidOnWay = way.size() >= 2 ? liquid::PathPrefixRefused(way, way.size(), wet, &where) : liquid::SegmentPrefixRefused(ox, oy, oz, point.x, point.y, point.z, wet, &where);
+        if (check.liquidOnWay)
+        {
+            float wx, wy, wz;
+            where.Where(wx, wy, wz);
+            char buffer[80];
+            std::snprintf(buffer, sizeof buffer, "%.1f %.1f %.1f", wx, wy, wz);
+            check.liquidAt = buffer;
+        }
     }
+    else
+        check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);      // already at the point: it must not be liquid
+    // A wet destination always refuses (also when no path was read).
+    if (!check.liquidOnWay)
+        check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);
     return check;
 }
 
@@ -379,6 +403,10 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         od::Judged const judged = od::JudgeDirect(NameOf(lead), std::sqrt(dx * dx + dy * dy), p.z - lead->GetPositionZ(), ground > INVALID_HEIGHT, ground, p.z, leadSees, followers);
         if (!judged.ok)
             return Refuse(judged);
+        // R6 (review item 7): a direct step walks the straight line, so the whole line is read, not its end: any liquid on it (lava, water: TbRunLiquid.h rule,
+        // sampled every <= 1.5 yd, both ends; wet only as the prefix that holds the lead's own spot, the end dry) refuses the step with the code a point with no safe ground gets.
+        if (liquid::SegmentPrefixRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground))
+            return Refuse("no-ground", "The straight line to the point crosses or ends in liquid (lava or water): a direct step does not walk through it.");
         Batch batch;
         batch.Add(lead, "move-direct", true, true);
         batch.Back().x = p.x;
@@ -406,6 +434,14 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     if (!judged.ok)
     {
         OrderAnswer refusal = Refuse(judged);
+        refusal.movePathRead = answer.movePathRead;
+        refusal.movePathType = answer.movePathType;
+        return refusal;
+    }
+    if (check.liquidOnWay)
+    {
+        OrderAnswer refusal = Refuse("unreachable", "The lead bot's way to that point crosses or ends in liquid (lava or water)" +
+            (check.liquidAt.empty() ? std::string() : " at " + check.liquidAt) + ": no walkable path avoids it.");
         refusal.movePathRead = answer.movePathRead;
         refusal.movePathType = answer.movePathType;
         return refusal;
@@ -448,6 +484,8 @@ OrderAnswer DoWalk(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     od::Judged const judged = od::JudgeMove(check.facts);
     if (!judged.ok)
         return Refuse(judged);
+    if (check.liquidOnWay)
+        return Refuse("unreachable", NameOf(bot) + "'s way to that point crosses or ends in liquid (lava or water): no walkable path avoids it.");
     Batch batch;
     batch.Add(bot, "come", true, true);
     batch.Back().x = check.point.x;

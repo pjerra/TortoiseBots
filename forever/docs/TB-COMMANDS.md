@@ -39,6 +39,7 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 | `.tb where <character>` | position, health, money, brain, strategies, target, cast-result counters |
 | `.tb go <bot> <dx> <dy>` / `.tb hop <bot> <dx> <dy>` | a bot without a master walks / is teleported that many yards east and north |
 | `.tb attack <bot>` | the spike's attack of the nearest hostile within 40 yd |
+| `.tb lootnear <bot>` | test helper: the bot takes every item it may take from dead creatures within 10 yd through the core's `Player::StoreLootItem` (the item-loot path and its hooks, without the engine) |
 | `.tb enter <character> <map id>` | what `Map::PlayerCannotEnter` says |
 | `.tb cast <bot> <spell id>` | the core's own cast on the sender's target |
 | `.tb castfail <bot> <spell> <reason> [interrupt]`, `.tb castlog <bot> [on\|off]` | inject / read cast results |

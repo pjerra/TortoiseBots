@@ -38,6 +38,10 @@ struct RunEvent
     std::string why;            // empty when there is none
 };
 
+// R6 (review item 6): a `.tb run stop` that came in a fight waits for the fight to end, but at most this long: a stuck combat flag (a mob that cannot reach the
+// party, an evading mob) must not keep a run the owner stopped alive for good. After it the stop takes effect and the run record says so (`why=`).
+constexpr uint32 kStopPendingMaxMs = 90000;
+
 struct RunRec
 {
     ObjectGuid leader;
@@ -68,6 +72,8 @@ struct RunRec
     uint32 lastTickMs = 0;                       // GameTime::GetGameTimeMS() of the last tick (the dt the policy is given)
     uint32 ticks = 0;
     bool stopPending = false;                    // `.tb run stop` came in a fight: no new order, the stop takes effect when the fight is over
+    uint32 stopPendingSinceMs = 0;               // R6 (review item 6): the clock of that request; kStopPendingMaxMs later the stop takes effect whatever the fight does
+    uint32 instanceId = 0;                       // R6 (review item 4): the leader's instance of the plan's map at the start; the lead in another instance ends the run
     std::string stopWhy;
     std::string pauseCode;                       // the machine word of the next pause event's `why=` (outside-order, player-in-group, lead-off-map, command); empty: the run's own note
     bool pausedForPlayer = false;                // the system run's join flag (SystemRun::JoinFlagAfterScan)

@@ -56,6 +56,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {

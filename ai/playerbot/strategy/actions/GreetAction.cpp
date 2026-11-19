@@ -4,6 +4,7 @@
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TbCompatW2.h"
 using namespace ai;
 
 GreetAction::GreetAction(PlayerbotAI* ai) : Action(ai, "greet")

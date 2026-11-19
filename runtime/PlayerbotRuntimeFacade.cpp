@@ -51,6 +51,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace
 {
@@ -449,7 +450,7 @@ std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32 itemId, uint32 hou
     if (it == ahMirror.end())
         return result;
 
-    bool twoSide = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION);
+    bool twoSide = WorldBoolConfigW2(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION);
     for (auto const& entry : it->second)
     {
         if (twoSide)

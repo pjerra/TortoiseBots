@@ -78,6 +78,7 @@
 #include "World.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Group.h"
+#include "playerbot/TbCompatW2.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "WorldSession.h"
 // pi-lens-ignore: clang:pp_file_not_found
@@ -383,7 +384,7 @@ static char const* AddonCommandChannel(Player* requester)
 {
     // A server can disable the addon channel outright; the chat handler drops
     // every LANG_ADDON message before any module sees it.
-    if (!sWorld.getConfig(CONFIG_BOOL_ADDON_CHANNEL))
+    if (!WorldBoolConfigW2(CONFIG_BOOL_ADDON_CHANNEL))
         return "none";
 
     Group* group = requester ? requester->GetOriginalGroup() : nullptr;

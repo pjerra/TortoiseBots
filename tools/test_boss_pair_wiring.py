@@ -71,7 +71,7 @@ class BossPairWiringTest(unittest.TestCase):
         self.assertIn("f.bossSearchDead = true;", search)
         self.assertNotIn("GetCreatureListWithEntryInGrid", search)
         # A spawn not in the map whose grid is not loaded is noted, never loaded for the search.
-        self.assertIn("if (!creature && !map->IsLoaded(data->position.x, data->position.y))\n        {\n"
+        self.assertIn("if (!creature && !map->IsLoaded(SpawnXW2(*data), SpawnYW2(*data)))\n        {\n"
                       "            f.bossSearchUnloaded = true;", search)
         self.assertNotIn("LoadGrid", search)
         # The step's own spawn (the row nearest to the step's point) lying dead is boss down whatever another row does.

@@ -52,6 +52,7 @@ type Listener struct {
 	// recording that reached a production daemon would shadow the real roster
 	// until the module restarts. Off unless the operator asked for replays.
 	acceptReplay  atomic.Bool
+	forever       bool
 	replayDropped atomic.Int64
 	replayLogAt   atomic.Int64 // unix nanoseconds of the last drop log line
 }
@@ -74,6 +75,10 @@ func (l *Listener) SetHistory(h HistorySink) { l.history = h }
 // SetAcceptReplay lets replayed datagrams into the store (the dashboard's
 // -accept-replay flag); call it before Start.
 func (l *Listener) SetAcceptReplay(on bool) { l.acceptReplay.Store(on) }
+
+// SetForever switches position projection to ForeverCore's client UiMap
+// coordinates (ui_map/ui_x/ui_y) instead of Turtle's DBC zone bounds.
+func (l *Listener) SetForever(on bool) { l.forever = on }
 
 func NewListener(host string, port int, store *state.Store, mr *metrics.Registry, zp *zoneproject.Engine, hub Hub) *Listener {
 	return &Listener{
@@ -408,6 +413,16 @@ func (l *Listener) processPacket(data []byte) {
 				}
 			}
 		}
+	case "BOT_STATS":
+		if !l.forever {
+			return
+		}
+		var bs state.BotStatsPayload
+		if err := json.Unmarshal(data, &bs); err != nil {
+			return
+		}
+		l.store.ApplyBotStats(&bs)
+
 	default:
 		var anomaly model.AnomalyPayload
 		if err := json.Unmarshal(data, &anomaly); err != nil {
@@ -438,6 +453,18 @@ type liveEventsFrame struct {
 }
 
 func (l *Listener) project(bot *model.BotSnapshot) {
+	if l.forever {
+		if bot.UIMap > 0 {
+			bot.Projected = true
+			bot.PctX = bot.UIX
+			bot.PctY = bot.UIY
+		} else {
+			bot.Projected = false
+			bot.PctX = 0
+			bot.PctY = 0
+		}
+		return
+	}
 	px, py, ok := l.zoneProj.Project(bot.MapID, bot.ZoneID, bot.X, bot.Y)
 	bot.Projected = ok
 	if ok {

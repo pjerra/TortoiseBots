@@ -305,3 +305,43 @@ func TestMechanicsRouteIsBehindTheSession(t *testing.T) {
 		t.Fatalf("dev no-auth: %d", ok.Code)
 	}
 }
+
+func TestServeArtSubdir(t *testing.T) {
+	dir := t.TempDir()
+	mapsDir := dir + "/maps"
+	if err := os.MkdirAll(mapsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mapsDir+"/1429.webp", []byte("RIFF"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h := serveArtSubdir(dir, "maps", "/forever-art/maps/")
+
+	rec := httptest.NewRecorder()
+	h(rec, httptest.NewRequest(http.MethodGet, "/forever-art/maps/1429.webp", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "RIFF" {
+		t.Fatalf("valid file: %d %q", rec.Code, rec.Body.String())
+	}
+
+	for _, bad := range []string{
+		"/forever-art/maps/",
+		"/forever-art/maps/.",
+		"/forever-art/maps/..",
+		"/forever-art/maps/../secret",
+		"/forever-art/maps/sub/file",
+		"/forever-art/maps/missing.webp",
+	} {
+		rec = httptest.NewRecorder()
+		h(rec, httptest.NewRequest(http.MethodGet, bad, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s = %d, want 404", bad, rec.Code)
+		}
+	}
+
+	empty := serveArtSubdir("", "maps", "/forever-art/maps/")
+	rec = httptest.NewRecorder()
+	empty(rec, httptest.NewRequest(http.MethodGet, "/forever-art/maps/1429.webp", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("empty artDir = %d, want 404", rec.Code)
+	}
+}

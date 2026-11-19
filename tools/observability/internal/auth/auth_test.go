@@ -199,3 +199,21 @@ func TestLoginBackoffHardCap(t *testing.T) {
 		t.Error("a new address must be tracked once room has freed up")
 	}
 }
+
+func TestForeverVerifier(t *testing.T) {
+	salt, err := hex.DecodeString("D05CA43A1B53349840827652DC55D432BEEE8828D18127135528B015CE76168B")
+	if err != nil {
+		t.Fatalf("decode salt: %v", err)
+	}
+	want, err := hex.DecodeString("7266E020147EDD082F30B27A5D0918E71777672471EFBA1D58E2282E4B886A72A8C68B45DC26D694CAD04861CD65DB237DCAC8102375462DF3B2CC718F2630599751C0AEC784B31FDD6B20DC823600C4BB03E9DB543A1914B54DDE8016DFAAD316893A2D737D166E63E19E82555B719540DB6301937BCAE06B70C993086257A8024168D3CE10CB585E537E6365ACC8E2A0E52DE0786A4E914DF2A9DC72F3762403AEA111591AE6357349BB1B75C6C5BBB31E86916B1B4FE5A39B178EBB17A214E0A7BFD6E923345B213A941D7DF91C70D82CF63664B26FEE139D915A1BE9AE5D98BA2AEFB414EC8C2ED147A8CA2E3E632187C8CCF733BBD89E786677C3F5DE7B")
+	if err != nil {
+		t.Fatalf("decode verifier: %v", err)
+	}
+
+	if got := foreverVerifier("admin@forever", "admin", salt); !hmac.Equal(trimZeros(got), trimZeros(want)) {
+		t.Errorf("foreverVerifier(admin@forever, admin) did not match stored verifier")
+	}
+	if got := foreverVerifier("ADMIN@FOREVER", "ADMIN", salt); hmac.Equal(trimZeros(got), trimZeros(want)) {
+		t.Errorf("foreverVerifier(ADMIN@FOREVER, ADMIN) must not match (password is case-sensitive)")
+	}
+}

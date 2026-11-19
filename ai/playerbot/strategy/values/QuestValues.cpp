@@ -5,6 +5,7 @@
 #include "ItemUsageValue.h"
 #include "MaintenanceValues.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -517,7 +518,7 @@ uint32 DialogStatusValue::getDialogStatus(Player* bot, int32 questgiver, uint32 
 			{
 				if (bot->SatisfyQuestLevel(pQuest, false))
 				{
-					int32 lowLevelDiff = sWorld.getConfig(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF);
+					int32 lowLevelDiff = WorldI32ConfigW2(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF);
 						if (pQuest->IsAutoComplete() || (pQuest->IsRepeatable() && bot->getQuestStatusMap()[itr->second].m_rewarded))
 					{
 						dialogStatusNew = DIALOG_STATUS_REWARD_REP;
