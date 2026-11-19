@@ -199,7 +199,7 @@ bool DebugAction::HandlePointOnTrans(Event& event, Player* requester, const std:
     GenericTransport* botTrans = bot->GetTransport();
     bot->SetTransport(nullptr);
 
-    Creature* wpCreature = bot->SummonCreature(2334, pointOnTrans.getX(), pointOnTrans.getY(), pointOnTrans.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+    Creature* wpCreature = SummonCreatureCompat(bot, 2334, pointOnTrans.getX(), pointOnTrans.getY(), pointOnTrans.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
     if (wpCreature)
     {
         transport->AddPassenger(wpCreature);
@@ -391,7 +391,7 @@ bool DebugAction::HandleOnTrans(Event& event, Player* requester, const std::stri
     {
         for (auto& p : path)
         {
-            Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
 
@@ -504,7 +504,7 @@ bool DebugAction::HandlePathable(Event& event, Player* requester, const std::str
             else //Generate wp off transport so it doesn't spawn on transport.
                 bot->SetTransport(nullptr);
 
-            Creature* wpCreature = bot->SummonCreature(2334, pos.getX(), pos.getY(), pos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, pos.getX(), pos.getY(), pos.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
             {
                 bot->SetTransport(botTrans);
@@ -761,7 +761,7 @@ bool DebugAction::HandlePatharound(Event& event, Player* requester, const std::s
             //if (bot->GetTransport())
             //    p.CalculatePassengerPosition(bot->GetTransport());
 
-            Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
 
