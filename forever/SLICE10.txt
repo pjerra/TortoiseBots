@@ -1,5 +1,5 @@
-# Slice 10 (druid, paladin, shaman): SLICE4.txt (tbf/main's newest slice list, 174 paths; SLICE8.txt is not on tbf/main yet) plus the 40 .cpp of FOREVER-SLICE10-HYBRIDS-SPEC section 3.
 # One path per line. Used by: FOREVER_SLOT=5 FOREVER_CENSUS_LIST=forever/SLICE10.txt forever/tools/vm-census.sh "" 14
+# Slice 10 (druid, paladin, shaman): SLICE5.txt (tbf/main's newest list: the S4 files plus DungeonPlanMgr.cpp and BossTacticsMgr.cpp) plus the 40 .cpp of FOREVER-SLICE10-HYBRIDS-SPEC section 3.
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
 ai/playerbot/BotLog.cpp
@@ -174,6 +174,8 @@ ai/playerbot/strategy/generic/DeadStrategy.cpp
 ai/playerbot/strategy/actions/ReleaseSpiritAction.cpp
 ai/playerbot/strategy/actions/AcceptResurrectAction.cpp
 ai/playerbot/strategy/values/PartyMemberToResurrect.cpp
+ai/playerbot/DungeonPlanMgr.cpp
+ai/playerbot/BossTacticsMgr.cpp
 ai/playerbot/strategy/druid/BalanceDruidStrategy.cpp
 ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp
 ai/playerbot/strategy/druid/DruidActions.cpp
