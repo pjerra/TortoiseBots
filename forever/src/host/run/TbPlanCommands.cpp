@@ -8,8 +8,6 @@
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
-#include "compat/botpch_forever.h"            // the schema guard WorldQueryCompat (compat/TbCompat_S5.h)
-
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/TbH3.h"
 #include "host/run/TbPlanUnits.h"
@@ -19,6 +17,8 @@
 #include "Map.h"
 #include "Player.h"
 #include "StringFormat.h"
+
+#include "compat/TbCompat_S5.h"      // the schema guard WorldQueryCompat and FieldTextCompat
 
 #include <algorithm>
 
@@ -51,7 +51,7 @@ bool ReadPlanSource(std::string plan, std::string& out)
     QueryResult result = WorldQueryCompat(Trinity::StringFormat("SELECT `source` FROM `ai_dungeon_plan` WHERE `plan` = '{}'", plan).c_str(), &missing);
     if (missing || !result)
         return false;
-    out = FieldTextCompat((*result)[0]);
+    out = FieldTextCompat(result->Fetch()[0]);
     return true;
 }
 

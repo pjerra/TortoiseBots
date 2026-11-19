@@ -3,8 +3,6 @@
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
-#include "compat/botpch_forever.h"            // the legacy names and the schema guard WorldQueryCompat (compat/TbCompat_S5.h)
-
 #include "ai/playerbot/DungeonPlanMgr.h"
 
 #include "Creature.h"
@@ -14,6 +12,8 @@
 #include "Log.h"
 #include "Map.h"
 #include "ObjectMgr.h"
+
+#include "compat/TbCompat_S5.h"      // the schema guard WorldQueryCompat and FieldTextCompat
 
 #include <algorithm>
 #include <chrono>

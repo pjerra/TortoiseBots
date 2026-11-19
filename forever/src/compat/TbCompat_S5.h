@@ -8,6 +8,10 @@
 
 #include "TbSqlNames.h"
 
+// Core headers (a host file includes this header on its own, without the legacy shim and its renaming macros; the shim path has them already).
+#include "DatabaseEnv.h"
+#include "Log.h"
+
 #include <set>
 #include <string>
 #include <vector>
@@ -62,14 +66,14 @@ inline QueryResult WorldQueryCompat(char const* sql, bool* schemaMissing = nullp
     std::set<std::string> columns;
     if (!WorldQueryNamesCompat(text, table, columns))
     {
-        LegacyLogCompat().outError("TortoiseBots: world query refused (not a single-table SELECT ... FROM `table`): %s", text.c_str());
+        TC_LOG_ERROR("tortoisebots", "TortoiseBots: world query refused (not a single-table SELECT ... FROM `table`): {}", text);
         if (schemaMissing)
             *schemaMissing = true;
         return QueryResult();
     }
     if (!WorldSchemaHasCompat(table, columns))
     {
-        LegacyLogCompat().outError("TortoiseBots: world table `%s` is missing, or lacks a column this query names: not read", table.c_str());
+        TC_LOG_ERROR("tortoisebots", "TortoiseBots: world table `{}` is missing, or lacks a column this query names: not read", table);
         if (schemaMissing)
             *schemaMissing = true;
         return QueryResult();
