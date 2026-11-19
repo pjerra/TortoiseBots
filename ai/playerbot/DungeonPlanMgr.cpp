@@ -1,8 +1,9 @@
 #include "playerbot/playerbot.h"
 #include "DungeonPlanMgr.h"
 #include "BossTacticsMgr.h"
-#include "playerbot/strategy/actions/BossTacticsActions.h"
+#include "cmangos-compat-s5.h" // WorldQueryCompat, FieldTextCompat (both cores; until the shims include the pair, RUN-S5-P-NOTES.md)
 
+#include <functional>
 #include <memory>
 
 using namespace ai;
@@ -28,21 +29,22 @@ namespace
 
 // One pass over each table into `table` (empty, not sealed), then the seal: the startup load and `.bot run reloadplans`
 // both read through here, so a reload checks every row as the startup did.
-// The core's Query hands over a raw QueryResult* the caller frees (src/shared/Database/Database.h): each is held by a
-// unique_ptr, as in the rest of the module.
+// Every read goes through WorldQueryCompat (cmangos-compat-s5.h): the Turtle core's Query hands over a raw QueryResult* the
+// caller frees (src/shared/Database/Database.h), which the helper holds in a unique_ptr as before; ForeverCore's already
+// returns a shared QueryResult.
 // `tactics` (sealed, read first): the boss steps take the subjects of their `ai_boss_tactic` rows before the seal
 // (DungeonPlanTable::JoinBossTactics), so the run leader's deferral gate sees them (PullMayBeDeferred).
 static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts, const BossTacticTable& tactics)
 {
     std::uint32_t& skippedPlans = counts.skippedPlans;
-    if (std::unique_ptr<QueryResult> result{WorldDatabase.Query(
-        "SELECT `plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `cc_never` FROM `ai_dungeon_plan`")})
+    if (auto result = WorldQueryCompat(
+        "SELECT `plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `cc_never` FROM `ai_dungeon_plan`"))
     {
         do
         {
             Field* fields = result->Fetch();
             ++counts.planRows;
-            std::string const plan = fields[0].GetCppString();
+            std::string const plan = FieldTextCompat(fields[0]);
             if (!table.AddPlan(plan, fields[1].GetUInt32()))
             {
                 ++skippedPlans;
@@ -52,8 +54,8 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
             else
             {
                 std::string unitsError;
-                if (!table.SetUnits(plan, fields[2].GetCppString(), fields[3].GetCppString(), fields[4].GetCppString(),
-                        fields[5].GetCppString(), unitsError))
+                if (!table.SetUnits(plan, FieldTextCompat(fields[2]), FieldTextCompat(fields[3]), FieldTextCompat(fields[4]),
+                        FieldTextCompat(fields[5]), unitsError))
                 {
                     ++counts.badUnits;
                     counts.Note("ai_dungeon_plan '" + plan + "': " + unitsError);
@@ -63,14 +65,14 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
         } while (result->NextRow());
     }
 
-    if (std::unique_ptr<QueryResult> result{WorldDatabase.Query("SELECT `plan`, `leg`, `name` FROM `ai_dungeon_leg`")})
+    if (auto result = WorldQueryCompat("SELECT `plan`, `leg`, `name` FROM `ai_dungeon_leg`"))
     {
         do
         {
             Field* fields = result->Fetch();
             ++counts.legRows;
-            std::string const plan = fields[0].GetCppString();
-            if (!table.AddLeg(plan, fields[1].GetUInt8(), fields[2].GetCppString()))
+            std::string const plan = FieldTextCompat(fields[0]);
+            if (!table.AddLeg(plan, fields[1].GetUInt8(), FieldTextCompat(fields[2])))
             {
                 // Skipped at startup as before (the plan runs without that leg's name); a reload refuses on it.
                 ++counts.skippedLegs;
@@ -83,19 +85,19 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
     }
 
     std::uint32_t& skippedSteps = counts.skippedSteps;
-    if (std::unique_ptr<QueryResult> result{WorldDatabase.Query(
+    if (auto result = WorldQueryCompat(
         "SELECT `plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, `z`, `radius`, `item`, `param`, `flags`, "
-        "`timeout_s`, `entries`, `comment` FROM `ai_dungeon_step`")})
+        "`timeout_s`, `entries`, `comment` FROM `ai_dungeon_step`"))
     {
         do
         {
             Field* fields = result->Fetch();
             ++counts.stepRows;
-            std::string const plan = fields[0].GetCppString();
+            std::string const plan = FieldTextCompat(fields[0]);
             PlanStep step;
             step.leg = fields[1].GetUInt8();
             step.seq = fields[2].GetUInt16();
-            ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);
+            ParsePlanStepRowKind(FieldTextCompat(fields[3]), step.kind, step.exactLaunch, step.openProof);
             step.entry = fields[4].GetUInt32();
             step.x = fields[5].GetFloat();
             step.y = fields[6].GetFloat();
@@ -105,16 +107,16 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
             step.param = fields[10].GetUInt32();
             step.flags = fields[11].GetUInt32();
             step.timeoutS = fields[12].GetUInt16();
-            step.label = fields[14].GetCppString();
-            PlanStepRefusal refusal = ParsePlanEntries(fields[13].GetCppString(), step.entries)
+            step.label = FieldTextCompat(fields[14]);
+            PlanStepRefusal refusal = ParsePlanEntries(FieldTextCompat(fields[13]), step.entries)
                 ? table.AddStep(plan, step) : PlanStepRefusal::BadEntries;
             if (refusal != PlanStepRefusal::None)
             {
                 ++skippedSteps;
                 counts.Note("ai_dungeon_step '" + plan + "' leg " + std::to_string(uint32(step.leg)) + " seq " +
-                    std::to_string(uint32(step.seq)) + " (" + fields[3].GetCppString() + "): " + PlanStepRefusalName(refusal));
+                    std::to_string(uint32(step.seq)) + " (" + FieldTextCompat(fields[3]) + "): " + PlanStepRefusalName(refusal));
                 sLog.outError("ai_dungeon_step: plan '%s' leg %u seq %u (%s) skipped (%s)", plan.c_str(),
-                    uint32(step.leg), uint32(step.seq), fields[3].GetCppString().c_str(), PlanStepRefusalName(refusal));
+                    uint32(step.leg), uint32(step.seq), FieldTextCompat(fields[3]).c_str(), PlanStepRefusalName(refusal));
             }
         } while (result->NextRow());
     }
@@ -122,22 +124,22 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
     // Leg needs after the steps (AddLegNeed checks the leg against the step rows). A null result
     // (an old database without the table) is no needs and no error: the startup must not lose every plan.
     std::uint32_t& skippedNeeds = counts.skippedNeeds;
-    if (std::unique_ptr<QueryResult> result{WorldDatabase.Query(
-        "SELECT `plan`, `leg`, `item`, `mode`, `pick`, `object`, `name`, `how` FROM `ai_dungeon_leg_need`")})
+    if (auto result = WorldQueryCompat(
+        "SELECT `plan`, `leg`, `item`, `mode`, `pick`, `object`, `name`, `how` FROM `ai_dungeon_leg_need`"))
     {
         do
         {
             Field* fields = result->Fetch();
             ++counts.needRows;
-            std::string const plan = fields[0].GetCppString();
+            std::string const plan = FieldTextCompat(fields[0]);
             PlanLegNeed need;
             need.leg = fields[1].GetUInt8();
             need.item = fields[2].GetUInt32();
             need.mode = static_cast<LegNeedMode>(fields[3].GetUInt8());
             need.pick = fields[4].GetUInt16();
             need.object = fields[5].GetUInt32();
-            need.name = fields[6].GetCppString();
-            need.how = fields[7].GetCppString();
+            need.name = FieldTextCompat(fields[6]);
+            need.how = FieldTextCompat(fields[7]);
             PlanNeedRefusal refusal = table.AddLegNeed(plan, need);
             if (refusal != PlanNeedRefusal::None)
             {
@@ -152,7 +154,7 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
 
     // Bosses no boss step names (the telemetry's boss rank, DungeonPlanTable::IsBossEntry).
     std::uint32_t& skippedBosses = counts.skippedBosses;
-    if (std::unique_ptr<QueryResult> result{WorldDatabase.Query("SELECT `map`, `entry` FROM `ai_dungeon_boss`")})
+    if (auto result = WorldQueryCompat("SELECT `map`, `entry` FROM `ai_dungeon_boss`"))
     {
         do
         {
@@ -198,7 +200,7 @@ static TableFingerprint ReadTableFingerprint(char const* table, char const* colu
 {
     TableFingerprint fp;
     std::string const sql = TableFingerprintSql(table, columns);
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(sql.c_str()));
+    auto result = WorldQueryCompat(sql.c_str());
     if (!result)
         return fp;
     Field* fields = result->Fetch();
@@ -259,8 +261,12 @@ PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& i
     }
     report.summary = PlanLoadSummary(*next, counts);
     report.tacticRows = uint32(nextTactics->Size());
+    // The seek_aura fight records live in the boss-tactics module (BossTacticsActions.cpp): it registers its reconciler at startup
+    // (SetSeekFightReconciler), and CommitPlanReload calls it before the old tactics table is retired. A build with no boss tactics
+    // registers none: there are no records to re-key, and the empty function is skipped (CommitPlanReload: `if (beforeInstall)`).
+    SeekFightReconciler const reconcile = GetSeekFightReconciler();
     report.outcome = CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), std::move(nextTactics),
-        skippedTactics, reads, inUse, &ai::ReconcileSeekFightState);
+        skippedTactics, reads, inUse, reconcile ? std::function<void(const BossTacticTable&)>(reconcile) : std::function<void(const BossTacticTable&)>());
     if (report.outcome.swapped)
         sLog.outString(">> %s, %u boss tactic rows (reloaded by .bot run reloadplans)", report.summary.c_str(), report.tacticRows);
     else
