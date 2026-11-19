@@ -67,16 +67,14 @@ inline ObjectGuid CorpseRoundRobinGuidCompat(Creature const* creature, Player co
 inline ObjectGuid GroupMasterLooterGuidCompat(Group const* group) { return group->GetMasterLooterGuid(); }
 
 // "Another member's turn: does the corpse show a personal item (quest, free-for-all, conditional) to this bot". T asks
-// ai::HasVisiblePersonalItemFor(creature->loot, bot) (policy/loot/CorpseLootPolicy.h, passed in as `visible`). F: money only (D2), so
-// no personal item is ever claimed: false, which keeps the bot away from another member's corpse (LESS). Counted when the corpse holds
-// items the bot did not weigh.
+// ai::HasVisiblePersonalItemFor(creature->loot, bot) (policy/loot/CorpseLootPolicy.h, passed in as `visible`). F (slice 9): Loot::hasItemFor
+// (Loot.cpp:1197: the player's quest items and free-for-all items), the very test Player::isAllowedToLoot ends in for a member whose turn it is not
+// (Player.cpp:20284). The policy's own T algorithm is not run.
 template <class VisibleFn>
 inline bool CorpseHasVisiblePersonalItemForCompat(Creature* creature, Player* bot, VisibleFn&& /*visible*/)
 {
     Loot const* loot = creature->GetLootForPlayer(bot);
-    if (loot && loot->unlootedCount)
-        tbcompat::Unported(tbcompat::Feature::LootItems);
-    return false;
+    return loot && loot->hasItemFor(bot);
 }
 
 // The five facts the corpse-refusal text (policy/loot/CorpseRefusalReasonPolicy.h, a debug line) is built from. T builds them from the
@@ -122,9 +120,9 @@ inline bool CorpseInLootRangeCompat(Player* bot, Creature* creature)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Skinning a looted corpse and game object loot: not in this slice (D2). Failure value: false ("not skinnable by this bot", "may not
-// be looted"). Counted (feature "game object loot, gathering and skinning") only when something was actually refused: a corpse that
-// carries the skinnable flag, a game object the bot was asked to consider.
+// Skinning a looted corpse and game object loot. Skinning and gathering (herb, ore) stay the named feature "loot: gathering and skinning" (failure
+// value: false = "not skinnable by this bot", counted when something was refused). A CHEST is ported since slice 9: it may be looted when it is a chest
+// in its ready state; the opening cast and the window are read like a corpse's (TbCompat_I2.h LootGatherUnportedCompat, TbCompat_S9.h poll).
 // ---------------------------------------------------------------------------------------------------------------------
 // T: the corpse is skinnable by the bot: flagged, its body loot gone, and the core's own IsSkinnableBy (Creature.h). F: false.
 inline bool CorpseSkinnableByCompat(Player* /*bot*/, Creature* creature)
@@ -134,28 +132,31 @@ inline bool CorpseSkinnableByCompat(Player* /*bot*/, Creature* creature)
     return false;
 }
 
-// T: true (a spawned game object in the ready state may be looted: the legacy code checks locks and skills next). F: false, so no game
-// object ever becomes a loot target; the object stays where it is.
-inline bool GameObjectLootAllowedCompat(GameObject const* /*object*/)
+// T: true (a spawned game object in the ready state may be looted: the legacy code checks locks and skills next). F: only a chest; a node (herb, ore,
+// fishing hole) or any other object is not a loot target (counted).
+inline bool GameObjectLootAllowedCompat(GameObject const* object)
 {
+    if (object && object->GetGoType() == GAMEOBJECT_TYPE_CHEST)
+        return true;
     tbcompat::Unported(tbcompat::Feature::GatheringLoot);
     return false;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The loot an object carries, for "should loot object". T `&creature->loot` / `&gameobject->loot`, nullptr for anything else. F: a
-// creature's loot FOR THIS BOT (nullptr when it has none); a game object's loot is not read (GatheringLoot), nullptr.
+// The loot an object carries, for "should loot object". T `&creature->loot` / `&gameobject->loot`, nullptr for anything else. F: the loot FOR THIS BOT
+// (WorldObject::GetLootForPlayer, Object.h:167, virtual: a creature's, a game object's); nullptr when it has none (a chest not opened yet).
 // ---------------------------------------------------------------------------------------------------------------------
 inline Loot* LootOfObjectCompat(WorldObject* object, Player* bot)
 {
-    if (Creature* creature = object->ToCreature())
-        return creature->GetLootForPlayer(bot);
+    if (object->IsCreature() || object->IsGameObject())
+        return object->GetLootForPlayer(bot);
     return nullptr;
 }
 
-// What "no loot object" means for the caller. T: nothing (a creature always has its Loot; a game object without one falls to the goober
-// test). F: true, "nothing to take": for a creature that is "this bot has no loot here" (T's `return true` for a non-game-object would
-// send the bot to a corpse the core refuses); for a game object, game object loot is not ported (LESS), counted.
+// What "no loot object" means for the caller. T: nothing (a creature always has its Loot; a game object without one falls to the goober test). F: true,
+// "nothing to take": for a creature that is "this bot has no loot here"; for a game object it is a chest or other object that was not opened yet (no loot
+// is generated before the first use, GameObject.cpp:2749), and the caller's goober test is not ported: LESS. A chest is looted through the loot object
+// stack (the opening cast), not through this value.
 inline bool AbsentLootMeansNothingToTakeCompat(WorldObject* object)
 {
     if (object->IsGameObject())
@@ -163,19 +164,28 @@ inline bool AbsentLootMeansNothingToTakeCompat(WorldObject* object)
     return true;
 }
 
-// The loot a guid names, for a player. T sLootMgr.GetLoot(player, guid): the loot of the object the guid names (an empty guid means the
-// loot window the player has open). F: a creature's loot for this player, or the open window's creature when the guid is empty; every
-// other kind of object (game object, item, corpse of a player) is not read (nullptr). Needs the player in the world and its map.
+// The loot a guid names, for a player. T sLootMgr.GetLoot(player, guid): the loot of the object the guid names (an empty guid means the loot window the
+// player has open). F: a creature's or a game object's loot for this player (WorldObject::GetLootForPlayer), or the open window's object when the guid is
+// empty; an item or the corpse of a player is not read (nullptr). Needs the player in the world and its map.
 inline Loot* LootOfGuidCompat(Player* player, ObjectGuid guid)
 {
     if (!player || !player->IsInWorld())
         return nullptr;
     if (guid.IsEmpty())
         guid = player->GetLootGUID();
-    if (guid.IsEmpty() || !guid.IsCreatureOrVehicle())
+    if (guid.IsEmpty())
         return nullptr;
-    Creature* creature = player->GetMap()->GetCreature(guid);
-    return creature ? creature->GetLootForPlayer(player) : nullptr;
+    if (guid.IsCreatureOrVehicle())
+    {
+        Creature* creature = player->GetMap()->GetCreature(guid);
+        return creature ? creature->GetLootForPlayer(player) : nullptr;
+    }
+    if (guid.IsGameObject())
+    {
+        GameObject* object = player->GetMap()->GetGameObject(guid);
+        return object ? object->GetLootForPlayer(player) : nullptr;
+    }
+    return nullptr;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -191,69 +201,241 @@ enum LootStatusFlags : uint32
     LOOT_STATUS_CONTAIN_RELEASED_ITEMS = 0x10
 };
 
-// The items of a loot this player could take (T: the unlooted shared items plus the player's quest / free-for-all / conditional copies;
-// `visible` is ai::PersonalCopyVisible). F: none (feature "loot: items", D2: money only), counted when the loot still holds items.
+// The items of a loot this player could take now. T: the unlooted shared items plus the player's quest / free-for-all / conditional copies (`visible` is
+// ai::PersonalCopyVisible). F (slice 9): the items the core's loot window shows this player as takeable (LootItem::GetUiTypeForPlayer, Loot.cpp:212:
+// ALLOW_LOOT or OWNER). It already folds in looted flags, the allowed-looter list, the personal quest / free-for-all copies (Loot::PlayerFFAItems), the
+// round-robin turn of an item under the threshold and a roll winner's right. An item under a roll, locked or for the master looter is not takeable.
 template <class VisibleFn>
-inline std::vector<LootItem*> LootContentForCompat(Loot const* loot, Player* /*player*/, VisibleFn&& /*visible*/)
+inline std::vector<LootItem*> LootContentForCompat(Loot const* loot, Player* player, VisibleFn&& /*visible*/)
 {
-    if (loot && loot->unlootedCount)
-        tbcompat::Unported(tbcompat::Feature::LootItems);
-    return {};
+    std::vector<LootItem*> content;
+    if (!loot || !player)
+        return content;
+    for (LootItem const& item : loot->items)
+    {
+        if (item.type != LootItemType::Item)
+            continue;
+        Optional<LootSlotType> const uiType = item.GetUiTypeForPlayer(player, *loot);
+        if (uiType && (*uiType == LOOT_SLOT_TYPE_ALLOW_LOOT || *uiType == LOOT_SLOT_TYPE_OWNER))
+            content.push_back(const_cast<LootItem*>(&item));
+    }
+    return content;
 }
 
-// The status bits of a loot for a player. T: gold, items left, free-for-all items. F: the gold bit only (the money is real and known);
-// the item bits are not set (feature "loot: items"), so a corpse with items only reads as "looted" for this bot, which is what D2 asks
-// ("not looted": the bot does not take items). `content` is T's item walk and is not called here.
+// The status bits of a loot for a player. T: gold, items left, free-for-all items. F: the gold bit, NOT_FULLY_LOOTED for an item the bot could take now
+// or one that is still under a roll ("an active roll is unfinished loot for everyone", as on T), FFA for a free-for-all copy. `content` is
+// LootAccess::GetLootContentFor. RELEASED_ITEMS (T's "the round robin owner released the turn") is not set: the core folds the turn into the UI type.
 template <class ContentFn>
-inline uint32 LootStatusForCompat(Loot const* loot, Player const* player, ContentFn&& /*content*/)
+inline uint32 LootStatusForCompat(Loot const* loot, Player const* player, ContentFn&& content)
 {
     if (!loot || !player)
         return 0;
     uint32 status = 0;
     if (loot->gold != 0)
         status |= LOOT_STATUS_CONTAIN_GOLD;
-    if (loot->unlootedCount)
-        tbcompat::Unported(tbcompat::Feature::LootItems);
+    for (LootItem* item : content(const_cast<Player*>(player)))
+    {
+        status |= LOOT_STATUS_NOT_FULLY_LOOTED;
+        if (item->freeforall)
+            status |= LOOT_STATUS_CONTAIN_FFA;
+    }
+    for (LootItem const& item : loot->items)
+    {
+        if (item.type != LootItemType::Item)
+            continue;
+        Optional<LootSlotType> const uiType = item.GetUiTypeForPlayer(player, *loot);
+        if (uiType && *uiType == LOOT_SLOT_TYPE_ROLL_ONGOING)
+            status |= LOOT_STATUS_NOT_FULLY_LOOTED;
+    }
     return status;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Loot templates (the drop maps). F keeps the rows of a LootTemplate private (LootMgr.h:150-151), so no drop can be read: feature "loot
-// tables (drop maps)", failure value nullptr / no row. The reader code (DropMapValue, ItemDropMapValue, LootChanceValue, the chest
-// check in LootObjectStack.cpp) is compiled with the row type below and never runs on F: every template lookup answers nullptr.
-// The row type has the names of T's LootStoreItem fields the readers use (itemid, chance, mincountOrRef); it is never filled.
+// Loot templates (the drop maps). F keeps the rows of a LootTemplate private (LootMgr.h:150-151), so since slice 9 (package L9) the module COPIES the
+// rows it needs from the world database, once per table, the first time a template of that table is asked for (a boot-time call of
+// LootTablePreloadCompat() does the same earlier; the readers that ask are the chest check of the loot object stack and, where the shared context is
+// built, the drop maps). The reader is guarded: ForeverCore's connection ABORTS THE SERVER on a query naming a missing table or column
+// (MySQLConnection.cpp:596-601), so information_schema is asked first (the rule of WorldQueryCompat of slice 5, which this branch does not have yet; at
+// the merge this reader may call it instead) and a table that is not as expected reads as EMPTY (one warning line, the templates then answer nullptr).
+// The row type has the names of T's LootStoreItem fields the readers use (itemid, chance, mincountOrRef; needs_quest for the boost block); the layout
+// classes the readers fill are ai::LootTemplateAccess / LootLootGroupAccess (LootValues.h): rows with a group id go into Groups[group - 1], ExplicitlyChanced
+// when they carry a chance and EqualChanced when the chance is 0, exactly as the core's own LootTemplate::AddEntry sorts them (LootMgr.cpp).
+// What the core folds in at loot generation and the copy does not know: loot modes, conditions, the per-player quest-required test. Currency and
+// tracking-quest rows are skipped (a Classic table holds none).
 // ---------------------------------------------------------------------------------------------------------------------
 struct LootStoreItemCompat
 {
     uint32 itemid = 0;
     float chance = 0.0f;
     int32 mincountOrRef = 0;
+    bool needs_quest = false;
 };
 using LootStoreItemListCompat = std::vector<LootStoreItemCompat>;
 
-// The template of a loot table for an object a guid names, by loot type. Failure value: nullptr. T walks the creature / game object / item
-// templates and casts the core's template to the module's layout class (`Access`).
-template <class Access>
-inline Access const* LootTemplateOfGuidCompat(ObjectGuid const& /*guid*/, LootType /*type*/)
+namespace ai
 {
-    tbcompat::Unported(tbcompat::Feature::LootTables);
+namespace slice
+{
+void LogWarn(std::string const& message);
+}
+}
+
+namespace tbs9
+{
+struct LootTableRow
+{
+    uint32 entry = 0;
+    LootStoreItemCompat item;
+    uint8 group = 0;
+};
+struct LootTableCopy
+{
+    bool loaded = false;
+    std::unordered_map<uint32, std::vector<LootTableRow>> byEntry;
+};
+
+// Does the table exist with every column the read names (the guard of the file header).
+inline bool LootTableReadable(std::string const& table)
+{
+    std::string const sql = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + table +
+        "' AND COLUMN_NAME IN ('Entry', 'ItemType', 'Item', 'Chance', 'QuestRequired', 'GroupId', 'MinCount')";
+    QueryResult count = WorldDatabase.Query(sql.c_str());
+    return count && count->Fetch()[0].GetUInt64() == 7;
+}
+
+// The copy of one table, read once (a table that is not readable stays empty and is not asked again).
+inline LootTableCopy const& LootTableOf(std::string const& table)
+{
+    static std::map<std::string, LootTableCopy> copies;
+    LootTableCopy& copy = copies[table];
+    if (copy.loaded)
+        return copy;
+    copy.loaded = true;
+
+    if (!LootTableReadable(table))
+    {
+        ai::slice::LogWarn("TortoiseBots: loot table `" + table + "` is missing or lacks a column: not copied (its templates answer nothing)");
+        return copy;
+    }
+    std::string const sql = "SELECT Entry, ItemType, Item, Chance, QuestRequired, GroupId, MinCount FROM `" + table + "`";
+    QueryResult result = WorldDatabase.Query(sql.c_str());
+    if (!result)
+        return copy;
+    uint64 rows = 0;
+    do
+    {
+        Field* fields = result->Fetch();
+        int32 const itemType = fields[1].GetInt8();
+        if (itemType != 0 && itemType != 1)
+            continue;                                       // currency and tracking quests are not read
+        LootTableRow row;
+        row.entry = fields[0].GetUInt32();
+        row.item.itemid = fields[2].GetUInt32();
+        row.item.chance = fields[3].GetFloat();
+        row.item.needs_quest = fields[4].GetBool();
+        row.group = fields[5].GetUInt8();
+        row.item.mincountOrRef = itemType == 1 ? -int32(fields[2].GetUInt32()) : int32(fields[6].GetUInt8());
+        copy.byEntry[row.entry].push_back(row);
+        ++rows;
+    } while (result->NextRow());
+    ai::slice::LogWarn("TortoiseBots: loot table `" + table + "` copied: " + std::to_string(rows) + " rows, " + std::to_string(copy.byEntry.size()) + " entries");
+    return copy;
+}
+
+// The template of one entry of a table in the module's layout class; nullptr when the entry has no rows (T: no template).
+template <class Access>
+inline Access const* LootTemplateOf(std::string const& table, uint32 entry)
+{
+    static std::map<std::pair<std::string, uint32>, Access> built;
+    auto found = built.find({ table, entry });
+    if (found != built.end())
+        return &found->second;
+
+    LootTableCopy const& copy = LootTableOf(table);
+    auto rows = copy.byEntry.find(entry);
+    if (rows == copy.byEntry.end())
+        return nullptr;
+
+    Access access;
+    for (LootTableRow const& row : rows->second)
+    {
+        if (!row.group)
+        {
+            access.Entries.push_back(row.item);
+            continue;
+        }
+        if (access.Groups.size() < row.group)
+            access.Groups.resize(row.group);
+        typename decltype(access.Groups)::value_type& group = access.Groups[row.group - 1];
+        if (row.item.chance != 0.0f)
+            group.ExplicitlyChanced.push_back(row.item);
+        else
+            group.EqualChanced.push_back(row.item);
+    }
+    return &built.emplace(std::make_pair(table, entry), std::move(access)).first->second;
+}
+}
+
+// Copies the four tables the readers use now (the call a boot-time hook may make; the readers copy on first use otherwise).
+inline void LootTablePreloadCompat()
+{
+    tbs9::LootTableOf("gameobject_loot_template");
+    tbs9::LootTableOf("reference_loot_template");
+    tbs9::LootTableOf("creature_loot_template");
+    tbs9::LootTableOf("item_loot_template");
+}
+
+// The template of a loot table for the object a guid names, by loot type. T walks the creature / game object / item templates by the object's template
+// and casts the core's template to the module's layout class (`Access`). F: a corpse's table (the template's LootID of the normal difficulty,
+// CreatureData.h), a game object's (GameObjectTemplate::GetLootId), an item's container table, copied as above. Skinning, pickpocketing, fishing and
+// disenchanting are the named feature "loot: gathering and skinning": nullptr.
+template <class Access>
+inline Access const* LootTemplateOfGuidCompat(ObjectGuid const& guid, LootType type)
+{
+    if (guid.IsCreature())
+    {
+        if (type != LOOT_CORPSE)
+        {
+            tbcompat::Unported(tbcompat::Feature::GatheringLoot);
+            return nullptr;
+        }
+        CreatureTemplate const* info = sObjectMgr.GetCreatureTemplate(guid.GetEntry());
+        CreatureDifficulty const* difficulty = info ? info->GetDifficulty(DIFFICULTY_NONE) : nullptr;
+        return difficulty && difficulty->LootID ? tbs9::LootTemplateOf<Access>("creature_loot_template", difficulty->LootID) : nullptr;
+    }
+    if (guid.IsGameObject())
+    {
+        if (type != LOOT_CORPSE && type != LOOT_CHEST)
+        {
+            tbcompat::Unported(tbcompat::Feature::GatheringLoot);
+            return nullptr;
+        }
+        GameObjectTemplate const* info = sObjectMgr.GetGameObjectTemplate(guid.GetEntry());
+        return info && info->GetLootId() ? tbs9::LootTemplateOf<Access>("gameobject_loot_template", info->GetLootId()) : nullptr;
+    }
+    if (guid.IsItem())
+    {
+        if (type != LOOT_CORPSE)
+        {
+            tbcompat::Unported(tbcompat::Feature::GatheringLoot);
+            return nullptr;
+        }
+        return tbs9::LootTemplateOf<Access>("item_loot_template", guid.GetEntry());
+    }
     return nullptr;
 }
 
-// The game object chest's template (T LootTemplates_Gameobject.GetLootFor(lootId)) and a reference template
-// (LootTemplates_Reference.GetLootFor(id)). Failure value: nullptr.
+// The game object chest's template (T LootTemplates_Gameobject.GetLootFor(lootId)) and a reference template (LootTemplates_Reference.GetLootFor(id)).
 template <class Access, class Info>
-inline Access const* GameObjectLootTemplateCompat(Info const* /*info*/)
+inline Access const* GameObjectLootTemplateCompat(Info const* info)
 {
-    tbcompat::Unported(tbcompat::Feature::LootTables);
-    return nullptr;
+    return info && info->GetLootId() ? tbs9::LootTemplateOf<Access>("gameobject_loot_template", info->GetLootId()) : nullptr;
 }
 
 template <class Access>
-inline Access const* ReferenceLootTemplateCompat(uint32 /*referenceId*/)
+inline Access const* ReferenceLootTemplateCompat(uint32 referenceId)
 {
-    tbcompat::Unported(tbcompat::Feature::LootTables);
-    return nullptr;
+    return tbs9::LootTemplateOf<Access>("reference_loot_template", referenceId);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

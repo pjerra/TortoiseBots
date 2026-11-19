@@ -275,7 +275,7 @@ inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count)
         if (!bot->GetItemByPos(position.pos))
             needsNewSlot = true;
     }
-    return needsNewSlot && bot->GetFreeInventorySpace() <= 2;
+    return needsNewSlot && bot->GetFreeInventorySlotCount() <= 2;
 }
 
 // ===============================================================================================================
@@ -285,7 +285,7 @@ inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count)
 // these runs for a real listing; the helpers answer the "no listing" value: an item count of 0 and a deposit from F's own rate.
 inline uint32 AuctionItemCountCompat(AuctionEntry const& /*auction*/) { return 0; }
 inline float AhDepositMinCompat() { return 0.0f; }
-inline float AhDepositRateCompat() { return sWorld->getRate(RATE_AUCTION_DEPOSIT); }
+inline float AhDepositRateCompat() { return sWorld.getRate(RATE_AUCTION_DEPOSIT); }
 
 // Is the quest in the bot's log still incomplete (T `getQuestStatusMap()[id].m_status == QUEST_STATUS_INCOMPLETE`, F `GetQuestStatus`, Player.h:1811).
 inline bool QuestIncompleteCompat(Player* player, Quest const* quest) { return player->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_INCOMPLETE; }
