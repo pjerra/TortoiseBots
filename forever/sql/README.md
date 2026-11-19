@@ -11,9 +11,9 @@ not a module's. A file here is applied BY HAND, once, to the `world` database of
 ## Applying it on the build VM's test server (`~/forever-run`, containers `forever-db`)
 
 ```
-docker exec -i forever-db sh -c 'mysql -utrinity -p"$MYSQL_PASSWORD" world' < forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql
+docker exec -i forever-db mysql -utrinity -p"$(cat ~/forever-run/.db_pass)" world < forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql
 ```
 
-(The database user and password are the ones `~/forever-run/setup.sh` wrote into `worldserver.conf` as `WorldDatabaseInfo`; the password is in `~/forever-run/.db_pass`: use the file, never type or print it.)
+(Run on the build VM, from the module folder. The user `trinity` and the password in `~/forever-run/.db_pass` are the ones `~/forever-run/setup.sh` writes into `WorldDatabaseInfo` (`forever-db;3306;trinity;<password>;world`): use the file, never type or print the password. The command was not run: no server was touched in this package.)
 Then restart the worldserver (the trainer table is read at start), and check one trainer: `.tb learn <warrior bot> 355` after `.tb train <bot>` at level 10 or more.
 The file names the database in every statement (`world`.`trainer_spell`), so it can also be piped into any client already connected to the server's MySQL.
