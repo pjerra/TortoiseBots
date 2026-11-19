@@ -8,7 +8,10 @@
 
 #include "TbSqlNames.h"
 
-// Needs DatabaseEnv.h and Log.h before it: botpch_forever.h has them on the shim path, the host files (TbPlanUnits.cpp, TbPlanCommands.cpp) include them first.
+// Needs DatabaseEnv.h before it (botpch_forever.h has it on the shim path; the host files TbPlanUnits.cpp and TbPlanCommands.cpp include it first).
+// The guard cannot use the core's log macros: under the shim `sLog` is the legacy printf proxy. It reports through this one function, defined in
+// forever/src/host/run/TbPlanUnits.cpp (a TU that sees the core's logger).
+void WorldGuardLogCompat(std::string const& message);
 
 #include <set>
 #include <string>
@@ -64,14 +67,14 @@ inline QueryResult WorldQueryCompat(char const* sql, bool* schemaMissing = nullp
     std::set<std::string> columns;
     if (!WorldQueryNamesCompat(text, table, columns))
     {
-        TC_LOG_ERROR("tortoisebots", "TortoiseBots: world query refused (not a single-table SELECT ... FROM `table`): {}", text);
+        WorldGuardLogCompat("TortoiseBots: world query refused (not a single-table SELECT ... FROM `table`): " + text);
         if (schemaMissing)
             *schemaMissing = true;
         return QueryResult();
     }
     if (!WorldSchemaHasCompat(table, columns))
     {
-        TC_LOG_ERROR("tortoisebots", "TortoiseBots: world table `{}` is missing, or lacks a column this query names: not read", table);
+        WorldGuardLogCompat("TortoiseBots: world table `" + table + "` is missing, or lacks a column this query names: not read");
         if (schemaMissing)
             *schemaMissing = true;
         return QueryResult();

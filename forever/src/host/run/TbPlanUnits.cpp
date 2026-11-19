@@ -21,6 +21,12 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// The schema guard's log line (compat/TbCompat_S5.h declares it; the guard cannot use the core's log macros under the legacy shim).
+void WorldGuardLogCompat(std::string const& message)
+{
+    TC_LOG_ERROR("tortoisebots", "{}", message);
+}
+
 namespace TortoiseBots
 {
 namespace run
