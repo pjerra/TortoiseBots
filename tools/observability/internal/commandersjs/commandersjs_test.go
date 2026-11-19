@@ -26,6 +26,12 @@ func TestCommandersJS(t *testing.T) {
 	runCheck(t, "commanders_check.js", "../../web/static/js/commanders.js")
 }
 
+// TestCoreNoticeUIJS runs core_notice_ui_check.js: the Raids, Raid coverage and Commanders tabs say so when GET /api/v1/core reports a core that
+// does not feed them (ForeverCore), and say nothing on the Turtle core or without the route.
+func TestCoreNoticeUIJS(t *testing.T) {
+	runCheck(t, "core_notice_ui_check.js", "../../web/static/js/app.js", "../../web/static/js/commanders.js")
+}
+
 // TestReadyCheckJS runs readycheck_check.js: the ready check's pure rules on the attempt-2 bind of Onyxia's plan (the
 // buff, consumable and key-cooldown facts, the dead, mana and stand rules) and on a party.
 func TestReadyCheckJS(t *testing.T) {
