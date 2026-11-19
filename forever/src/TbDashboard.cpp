@@ -281,11 +281,36 @@ void AppendStats(std::ostringstream& ss, Player* bot)
     int32 minSchool = 0;
     for (uint8 school = SPELL_SCHOOL_HOLY; school < MAX_SPELL_SCHOOL; ++school)
         minSchool = school == SPELL_SCHOOL_HOLY ? ap->ModDamageDonePos[school] : std::min<int32>(minSchool, ap->ModDamageDonePos[school]);
-    ss << ",\"spell_damage\":" << std::max(0, minSchool) << ",\"healing_power\":" << std::max<int32>(0, ap->ModHealingDonePos)
-       << ",\"spell_dmg_holy\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_HOLY]) << ",\"spell_dmg_fire\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_FIRE])
-       << ",\"spell_dmg_nature\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_NATURE]) << ",\"spell_dmg_frost\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_FROST])
-       << ",\"spell_dmg_shadow\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_SHADOW]) << ",\"spell_dmg_arcane\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_ARCANE])
-       << ",\"mana_regen\":" << uint32(std::max(0.0f, float(ud->PowerRegenFlatModifier[0])) * 5.0f) << "}";
+    // spell_dmg_<school> = what that school has above the base (the page shows base + that); spell_damage = the base (lowest school).
+    int32 const base = std::max(0, minSchool);
+    auto above = [&](SpellSchools school) { return std::max<int32>(0, ap->ModDamageDonePos[school] - base); };
+    ss << ",\"spell_damage\":" << base << ",\"healing_power\":" << std::max<int32>(0, ap->ModHealingDonePos)
+       << ",\"spell_dmg_holy\":" << above(SPELL_SCHOOL_HOLY) << ",\"spell_dmg_fire\":" << above(SPELL_SCHOOL_FIRE)
+       << ",\"spell_dmg_nature\":" << above(SPELL_SCHOOL_NATURE) << ",\"spell_dmg_frost\":" << above(SPELL_SCHOOL_FROST)
+       << ",\"spell_dmg_shadow\":" << above(SPELL_SCHOOL_SHADOW) << ",\"spell_dmg_arcane\":" << above(SPELL_SCHOOL_ARCANE)
+       << ",\"mana_regen\":" << uint32(std::max(0.0f, float(ud->PowerRegenFlatModifier[0])) * 5.0f)
+       << ",\"mana_regen_casting\":" << uint32(std::max(0.0f, float(ud->PowerRegenInterruptedFlatModifier[0])) * 5.0f)
+       // The Classic character sheet's other lines: defense (skill and the level's maximum), shield block value, spell penetration, expertise.
+       << ",\"defense\":" << bot->GetSkillValue(SKILL_DEFENSE) << ",\"defense_max\":" << bot->GetMaxSkillValueForLevel()
+       << ",\"block_value\":" << int32(ap->ShieldBlock) << ",\"spell_penetration\":" << -int32(ap->ModTargetResistance)
+       << ",\"expertise\":" << float(ap->MainhandExpertise) << ",\"ratings\":{";
+    bool first = true;
+    for (uint32 cr = 0; cr < MAX_COMBAT_RATING; ++cr)
+        if (int32 const value = ap->CombatRatings[cr])
+        {
+            ss << (first ? "" : ",") << "\"" << cr << "\":" << value;
+            first = false;
+        }
+    // What each rating is worth, as the core converts it (percent, or skill points for defense and expertise).
+    ss << "},\"rating_bonus\":{";
+    first = true;
+    for (uint32 cr = 0; cr < MAX_COMBAT_RATING; ++cr)
+        if (ap->CombatRatings[cr])
+        {
+            ss << (first ? "" : ",") << "\"" << cr << "\":" << bot->GetRatingBonusValue(CombatRating(cr));
+            first = false;
+        }
+    ss << "}}";
 }
 
 void SendStats(std::vector<Player*> const& bots)
