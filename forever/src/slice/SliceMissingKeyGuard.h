@@ -27,6 +27,7 @@
 #include "playerbot/policy/combat/RunnerFinishPolicy.h"
 #include "playerbot/strategy/values/GuildValues.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+#include "playerbot/strategy/values/MountValues.h"
 #include "playerbot/strategy/values/TravelValues.h"
 
 #include <list>
@@ -89,6 +90,8 @@ namespace slice
     // one type per line and no duplicates, a reference type and its value type are two entries).
     // Slice 2 (R3) adds ItemUsage (`item usage`, read by LootStrategyValue.cpp:25; T{} = ITEM_USAGE_NONE = "not looted", the answer that
     // makes the bot do less, decision D2) and std::set<uint32>& (`skip go loot list`, read in LootObjectStack.cpp: an empty list).
+    // Slice 9 (L9) adds std::vector<uint32> (`craft spells`) and std::vector<MountValue> (`mount list`), read by ItemUsageValue.cpp: an empty list,
+    // so no craft and no mount is planned (the usage then falls to the item's other classes: LESS). `item usage` itself is registered since slice 9.
     using SliceInertValue = InertValues<
         bool,
         uint8,
@@ -108,7 +111,9 @@ namespace slice
         std::list<std::string>&,
         std::set<ObjectGuid>&,
         std::set<uint32>&,
-        ItemUsage>;
+        ItemUsage,
+        std::vector<uint32>,
+        std::vector<MountValue>>;
 
     // Each missing name is reported once per process (every bot has its own context, the names repeat).
     class MissingKeyLog
