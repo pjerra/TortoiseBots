@@ -101,7 +101,7 @@ namespace ai
             {
                 for (int32 i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2; ++i)
                 {
-                    if (target->IsImmuneToSpellEffect(spellInfo, (SpellEffectIndex)i, false))
+                    if (IsImmuneToSpellEffectCompat(target, spellInfo, i, false, bot))
                         return false;
                 }
             }
