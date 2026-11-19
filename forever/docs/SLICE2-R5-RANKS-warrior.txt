@@ -1,0 +1,523 @@
+# .tb ranks warrior (build of 2026-11-19, option ON, slot 1): chain <skill line> <source> <first rank name>: id:rank:spell level[:t<trainer level>]; single = in no chain (rank 0); prerequisite = trainer link kept out of the chains
+TC>     TortoiseBots: ranks: class 1 warrior; chains in the table: 349
+TC>     TortoiseBots: ranks: skill line 26 Arms: 116 abilities
+TC>     TortoiseBots: ranks: chain Arms core Heroic Strike: 78:1:1 284:2:8:t8 285:3:16:t16 1608:4:24:t24 11564:5:32:t32 11565:6:40:t40 11566:7:48:t48 11567:8:56:t56 25286:9:60
+TC>     TortoiseBots: ranks: chain Arms core Charge: 100:1:4:t4 6178:2:26:t26 11578:3:46:t46
+TC>     TortoiseBots: ranks: chain Arms core Mocking Blow: 694:1:16:t16 7400:2:26:t26 7402:3:36:t36 20559:4:46:t46 20560:5:56:t56
+TC>     TortoiseBots: ranks: chain Arms core Rend: 772:1:4:t4 6546:2:10:t10 6547:3:20:t20 6548:4:30:t30 11572:5:40:t40 11573:6:50:t50 11574:7:60:t60
+TC>     TortoiseBots: ranks: chain Arms core Hamstring: 1715:1:8:t8 7372:2:32:t32 7373:3:54:t54
+TC>     TortoiseBots: ranks: chain Arms core Thunder Clap: 6343:1:6:t6 8198:2:18:t18 8204:3:28:t28 8205:4:38:t38 11580:5:48:t48 11581:6:58:t58
+TC>     TortoiseBots: ranks: chain Arms core Overpower: 7384:1:12:t12 7887:2:28:t28 11584:3:44:t44 11585:4:60:t60
+TC>     TortoiseBots: ranks: chain Arms core Mortal Strike: 12294:1:40 21551:2:48:t48 21552:3:54:t54 21553:4:60:t60
+TC>     TortoiseBots: ranks: single Arms: 2457:1:Battle Stance:4
+TC>     TortoiseBots: ranks: single Arms: 12163:1:Two-Handed Weapon Specialization:0
+TC>     TortoiseBots: ranks: single Arms: 12281:1:Weaponmaster:0
+TC>     TortoiseBots: ranks: single Arms: 12282:1:Improved Heroic Strike:4
+TC>     TortoiseBots: ranks: single Arms: 12284:1:Weaponmaster:0
+TC>     TortoiseBots: ranks: single Arms: 12285:1:Improved Charge:4
+TC>     TortoiseBots: ranks: single Arms: 12286:1:Improved Rend:4
+TC>     TortoiseBots: ranks: single Arms: 12287:1:Improved Thunder Clap:4
+TC>     TortoiseBots: ranks: single Arms: 12288:1:Improved Pummel:4
+TC>     TortoiseBots: ranks: single Arms: 12289:1:Improved Hamstring:4
+TC>     TortoiseBots: ranks: single Arms: 12290:1:Improved Overpower:4
+TC>     TortoiseBots: ranks: single Arms: 12292:30:Sweeping Strikes:4
+TC>     TortoiseBots: ranks: single Arms: 12295:1:Improved Tactical Mastery:4
+TC>     TortoiseBots: ranks: single Arms: 12296:1:Anger Management:0
+TC>     TortoiseBots: ranks: single Arms: 12695:1:Charge Rage Bonus Effect:0
+TC>     TortoiseBots: ranks: single Arms: 12696:1:Charge Rage Bonus Effect:0
+TC>     TortoiseBots: ranks: single Arms: 12700:1:Weaponmaster:0
+TC>     TortoiseBots: ranks: single Arms: 12705:0:Long Daze:0
+TC>     TortoiseBots: ranks: single Arms: 12707:1:Improved Pummel:4
+TC>     TortoiseBots: ranks: single Arms: 12708:1:Improved Pummel:4
+TC>     TortoiseBots: ranks: single Arms: 12723:1:Sweeping Strikes:0
+TC>     TortoiseBots: ranks: single Arms: 12834:1:Deep Wounds:4
+TC>     TortoiseBots: ranks: single Arms: 12963:1:Improved Overpower:4
+TC>     TortoiseBots: ranks: single Arms: 16462:0:Deflection:0
+TC>     TortoiseBots: ranks: single Arms: 16493:0:Impale:4
+TC>     TortoiseBots: ranks: single Arms: 20230:20:t20:Retaliation:4
+TC>     TortoiseBots: ranks: single Arms: 21156:1:Battle Stance Passive:0
+TC>     TortoiseBots: ranks: single Arms: 402927:20:t20:Victory Rush:4
+TC>     TortoiseBots: ranks: single Arms: 403228:1:Meathook:4
+TC>     TortoiseBots: ranks: single Arms: 429765:1:Quick Strike:4
+TC>     TortoiseBots: ranks: single Arms: 440488:1:Shockwave:4
+TC>     TortoiseBots: ranks: single Arms: 1310185:14:t14:Tactical Mastery:4
+TC>     TortoiseBots: ranks: single Arms: 1310222:1:Spearing Strike:4
+TC>     TortoiseBots: ranks: skill line 256 Fury: 124 abilities
+TC>     TortoiseBots: ranks: chain Fury core Cleave: 845:1:20:t20 7369:2:30:t30 11608:3:40:t40 11609:4:50:t50 20569:5:60:t60
+TC>     TortoiseBots: ranks: chain Fury core Demoralizing Shout: 1160:1:14:t14 6190:2:24:t24 11554:3:34:t34 11555:4:44:t44 11556:5:54:t54
+TC>     TortoiseBots: ranks: chain Fury core Execute: 5308:1:24:t24 20658:2:32:t32 20660:3:40:t40 20661:4:48:t48 20662:5:56:t56
+TC>     TortoiseBots: ranks: chain Fury core Pummel: 6552:1:38:t38 6554:2:58:t58
+TC>     TortoiseBots: ranks: chain Fury core Battle Shout: 6673:1:1:t1 5242:2:12:t12 6192:3:22:t22 11549:4:32:t32 11550:5:42:t42 11551:6:52:t52 25289:7:60
+TC>     TortoiseBots: ranks: chain Fury core Intercept: 20252:1:30 20616:2:42:t42 20617:3:52:t52
+TC>     TortoiseBots: ranks: chain Fury core Bloodthirst: 23881:1:40 23892:2:48:t48 23893:3:54:t54 23894:4:60:t60
+TC>     TortoiseBots: ranks: chain Fury core Slam: 1240193:1:20:t20 1464:2:30:t30 8820:3:38:t38 11604:4:46:t46 11605:5:54:t54
+TC>     TortoiseBots: ranks: single Fury: 1161:26:t26:Challenging Shout:4
+TC>     TortoiseBots: ranks: single Fury: 1680:36:t36:Whirlwind:4
+TC>     TortoiseBots: ranks: single Fury: 1719:50:t50:Recklessness:4
+TC>     TortoiseBots: ranks: single Fury: 2458:30:Berserker Stance:4
+TC>     TortoiseBots: ranks: single Fury: 5246:22:t22:Intimidating Shout:4
+TC>     TortoiseBots: ranks: single Fury: 7381:30:Berserker Stance Passive:4
+TC>     TortoiseBots: ranks: single Fury: 12317:1:Enrage:0
+TC>     TortoiseBots: ranks: single Fury: 12318:1:Improved Battle Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12319:1:Flurry:0
+TC>     TortoiseBots: ranks: single Fury: 12320:1:Cruelty:0
+TC>     TortoiseBots: ranks: single Fury: 12321:1:Booming Voice:4
+TC>     TortoiseBots: ranks: single Fury: 12322:1:Unbridled Wrath:0
+TC>     TortoiseBots: ranks: single Fury: 12323:20:Piercing Howl:4
+TC>     TortoiseBots: ranks: single Fury: 12324:1:Improved Demoralizing Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12327:1:Improved Challenging Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12328:1:Death Wish:4
+TC>     TortoiseBots: ranks: single Fury: 12329:1:Improved Cleave:4
+TC>     TortoiseBots: ranks: single Fury: 12857:1:Improved Battle Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12858:1:Improved Battle Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12860:1:Improved Battle Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12861:1:Improved Battle Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12862:1:Improved Slam:4
+TC>     TortoiseBots: ranks: single Fury: 12876:1:Improved Demoralizing Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12877:1:Improved Demoralizing Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12878:1:Improved Demoralizing Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12879:1:Improved Demoralizing Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12886:1:Improved Challenging Shout:4
+TC>     TortoiseBots: ranks: single Fury: 12964:1:Unbridled Wrath:0
+TC>     TortoiseBots: ranks: single Fury: 12966:1:Flurry:0
+TC>     TortoiseBots: ranks: single Fury: 16487:0:Blood Craze:0
+TC>     TortoiseBots: ranks: single Fury: 18499:30:t30:Berserker Rage:4
+TC>     TortoiseBots: ranks: single Fury: 19870:0:Improved Intimidating Shout:4
+TC>     TortoiseBots: ranks: single Fury: 19871:0:Improved Intimidating Shout:4
+TC>     TortoiseBots: ranks: single Fury: 20500:0:Improved Berserker Rage:4
+TC>     TortoiseBots: ranks: single Fury: 20502:0:Improved Execute:4
+TC>     TortoiseBots: ranks: single Fury: 20504:0:Improved Intercept:4
+TC>     TortoiseBots: ranks: single Fury: 20647:1:Execute:4
+TC>     TortoiseBots: ranks: single Fury: 23584:0:Dual Wield Specialization:4
+TC>     TortoiseBots: ranks: single Fury: 402911:1:Raging Blow:4
+TC>     TortoiseBots: ranks: single Fury: 402913:1:Enraged Regeneration:4
+TC>     TortoiseBots: ranks: single Fury: 1329555:0:Reckless Swings:4
+TC>     TortoiseBots: ranks: skill line 257 Protection: 84 abilities
+TC>     TortoiseBots: ranks: chain Protection core Shield Bash: 72:1:12:t12 1671:2:32:t32 1672:3:52:t52
+TC>     TortoiseBots: ranks: chain Protection core Revenge: 6572:1:14:t14 6574:2:24:t24 7379:3:34:t34 11600:4:44:t44 11601:5:54:t54 25288:6:60
+TC>     TortoiseBots: ranks: chain Protection core Sunder Armor: 7386:1:10 7405:2:22:t22 8380:3:34:t34 11596:4:46:t46 11597:5:58:t58
+TC>     TortoiseBots: ranks: chain Protection core Shield Slam: 23922:1:40 23923:2:48:t48 23924:3:54:t54 23925:4:60:t60
+TC>     TortoiseBots: ranks: single Protection: 71:10:Defensive Stance:4
+TC>     TortoiseBots: ranks: single Protection: 355:10:Taunt:4
+TC>     TortoiseBots: ranks: single Protection: 676:18:t18:Disarm:4
+TC>     TortoiseBots: ranks: single Protection: 871:28:t28:Shield Wall:4
+TC>     TortoiseBots: ranks: single Protection: 2565:16:t16:Shield Block:4
+TC>     TortoiseBots: ranks: single Protection: 2687:10:t10:Bloodrage:4
+TC>     TortoiseBots: ranks: single Protection: 7376:10:Defensive Stance Passive:4
+TC>     TortoiseBots: ranks: single Protection: 12297:1:Anticipation:0
+TC>     TortoiseBots: ranks: single Protection: 12298:1:Shield Specialization:0
+TC>     TortoiseBots: ranks: single Protection: 12299:1:Toughness:0
+TC>     TortoiseBots: ranks: single Protection: 12301:1:Improved Bloodrage:4
+TC>     TortoiseBots: ranks: single Protection: 12302:1:Improved Taunt:4
+TC>     TortoiseBots: ranks: single Protection: 12307:1:Improved Shield Block:4
+TC>     TortoiseBots: ranks: single Protection: 12308:1:Improved Sunder Armor:4
+TC>     TortoiseBots: ranks: single Protection: 12311:1:Improved Shield Bash:4
+TC>     TortoiseBots: ranks: single Protection: 12312:1:Improved Shield Wall:4
+TC>     TortoiseBots: ranks: single Protection: 12313:1:Improved Disarm:4
+TC>     TortoiseBots: ranks: single Protection: 12765:1:Improved Taunt:4
+TC>     TortoiseBots: ranks: single Protection: 12792:1:Defiance:0
+TC>     TortoiseBots: ranks: single Protection: 12797:1:Improved Revenge:4
+TC>     TortoiseBots: ranks: single Protection: 12809:30:Concussion Blow:4
+TC>     TortoiseBots: ranks: single Protection: 12944:1:Improved Shield Block:4
+TC>     TortoiseBots: ranks: single Protection: 12945:1:Improved Shield Block:4
+TC>     TortoiseBots: ranks: single Protection: 12962:1:Iron Will:0
+TC>     TortoiseBots: ranks: single Protection: 12975:1:Last Stand:4
+TC>     TortoiseBots: ranks: single Protection: 12976:1:Last Stand:0
+TC>     TortoiseBots: ranks: single Protection: 16538:1:Bastion:0
+TC>     TortoiseBots: ranks: single Protection: 403196:1:Devastate:4
+TC>     TortoiseBots: ranks: single Protection: 403215:1:Commanding Shout:4
+TC>     TortoiseBots: ranks: single Protection: 426490:1:Rallying Cry:4
+TC>     TortoiseBots: ranks: single Protection: 461475:2:Valor of Azeroth:0
+TC>     TortoiseBots: ranks: skill line 777 Mounts: 214 abilities
+TC>     TortoiseBots: ranks: single Mounts: 458:1:Brown Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 459:1:Gray Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 468:1:White Stallion:0
+TC>     TortoiseBots: ranks: single Mounts: 470:1:Black Stallion:0
+TC>     TortoiseBots: ranks: single Mounts: 471:1:Palomino Stallion:0
+TC>     TortoiseBots: ranks: single Mounts: 472:1:Pinto Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 578:1:Black Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 579:1:Red Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 580:1:Large Timber Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 581:1:Winter Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 5784:40:Summon Felsteed:0
+TC>     TortoiseBots: ranks: single Mounts: 6648:1:Chestnut Mare:0
+TC>     TortoiseBots: ranks: single Mounts: 6653:1:Dire Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 6654:1:Brown Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 6777:1:Gray Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 6896:1:Black Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 6897:1:Blue Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 6898:1:White Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 6899:1:Brown Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 8394:1:Striped Frostsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 8395:1:Emerald Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 8980:1:Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 10787:1:Panther:0
+TC>     TortoiseBots: ranks: single Mounts: 10788:1:Leopard:0
+TC>     TortoiseBots: ranks: single Mounts: 10789:1:Spotted Frostsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 10790:1:Tiger:0
+TC>     TortoiseBots: ranks: single Mounts: 10792:1:Spotted Panther:0
+TC>     TortoiseBots: ranks: single Mounts: 10793:1:Striped Nightsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 10795:1:Ivory Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 10796:1:Turquoise Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 10798:1:Obsidian Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 10799:1:Violet Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 10873:1:Red Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 10969:1:Blue Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 15779:1:White Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 15780:1:Green Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 15781:1:Steel Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 16055:1:Nightsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 16056:1:Frostsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 16058:1:Primal Leopard:0
+TC>     TortoiseBots: ranks: single Mounts: 16059:1:Tawny Sabercat:0
+TC>     TortoiseBots: ranks: single Mounts: 16060:1:Golden Sabercat:0
+TC>     TortoiseBots: ranks: single Mounts: 16080:1:Red Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 16081:1:Arctic Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 16082:1:Palomino Stallion:0
+TC>     TortoiseBots: ranks: single Mounts: 16083:1:White Stallion:0
+TC>     TortoiseBots: ranks: single Mounts: 16084:1:Mottled Red Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 17229:1:Winterspring Frostsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 17450:1:Ivory Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 17453:1:Green Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 17454:1:Unpainted Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 17455:1:Purple Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 17456:1:Red & Blue Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 17458:1:Fluorescent Green Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 17459:1:Icy Blue Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 17460:1:Frost Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 17461:1:Black Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 17462:1:Red Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 17463:1:Blue Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 17464:1:Brown Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 17465:1:Green Skeletal Warhorse:0
+TC>     TortoiseBots: ranks: single Mounts: 17481:1:Rivendare's Deathcharger:0
+TC>     TortoiseBots: ranks: single Mounts: 18363:1:Riding Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 18989:1:Gray Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 18990:1:Brown Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 18991:1:Green Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 18992:1:Teal Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 22717:1:Black War Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 22718:1:Black War Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 22719:1:Black Battlestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 22720:1:Black War Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 22721:1:Black War Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 22722:1:Red Skeletal Warhorse:0
+TC>     TortoiseBots: ranks: single Mounts: 22723:1:Black War Tiger:0
+TC>     TortoiseBots: ranks: single Mounts: 22724:1:Black War Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 23161:60:Summon Dreadsteed:0
+TC>     TortoiseBots: ranks: single Mounts: 23219:1:Swift Mistsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 23220:1:Swift Dawnsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 23221:1:Swift Frostsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 23222:1:Swift Yellow Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 23223:1:Swift White Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 23225:1:Swift Green Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 23227:1:Swift Palomino:0
+TC>     TortoiseBots: ranks: single Mounts: 23228:1:Swift White Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 23229:1:Swift Brown Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 23238:1:Swift Brown Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 23239:1:Swift Gray Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 23240:1:Swift White Ram:0
+TC>     TortoiseBots: ranks: single Mounts: 23241:1:Swift Blue Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 23242:1:Swift Olive Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 23243:1:Swift Orange Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 23246:1:Purple Skeletal Warhorse:0
+TC>     TortoiseBots: ranks: single Mounts: 23247:1:Great White Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 23248:1:Great Gray Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 23249:1:Great Brown Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 23250:1:Swift Brown Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 23251:1:Swift Timber Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 23252:1:Swift Gray Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 23338:1:Swift Stormsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 23509:1:Frostwolf Howler:0
+TC>     TortoiseBots: ranks: single Mounts: 23510:1:Stormpike Battle Charger:0
+TC>     TortoiseBots: ranks: single Mounts: 24242:1:Swift Razzashi Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 24252:1:Swift Zulian Tiger:0
+TC>     TortoiseBots: ranks: single Mounts: 24576:1:Chromatic Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 25675:1:Reindeer:0
+TC>     TortoiseBots: ranks: single Mounts: 25858:1:Reindeer:0
+TC>     TortoiseBots: ranks: single Mounts: 25859:1:Reindeer:0
+TC>     TortoiseBots: ranks: single Mounts: 25863:1:Summon Black Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 25953:1:Summon Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 26054:1:Summon Red Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 26055:1:Summon Yellow Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 26056:1:Summon Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 26332:0:Summon Mouth Tentacle:0
+TC>     TortoiseBots: ranks: single Mounts: 26655:1:Summon Black Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 29059:1:Skeletal Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 30174:1:Riding Turtle:0
+TC>     TortoiseBots: ranks: single Mounts: 64659:0:Venomhide Ravasaur:0
+TC>     TortoiseBots: ranks: single Mounts: 370637:1:Summon Skeletal Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 381598:1:Summon Skeletal Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 406634:1:Animated Lobster Molt:0
+TC>     TortoiseBots: ranks: single Mounts: 429856:1:Summon Sentinel Nightsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 429857:1:Summon Outrider Wolf:0
+TC>     TortoiseBots: ranks: single Mounts: 434508:1:Reindeer:0
+TC>     TortoiseBots: ranks: single Mounts: 436288:1:Mottled Blood Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 436289:1:Ivory Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 436327:1:Bengal Tiger:0
+TC>     TortoiseBots: ranks: single Mounts: 436329:1:Golden Sabercat:0
+TC>     TortoiseBots: ranks: single Mounts: 446685:1:Blood-crazed Spirit:0
+TC>     TortoiseBots: ranks: single Mounts: 461607:45:Divine Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 463005:1:Fluorescent Green Mechanostrider:0
+TC>     TortoiseBots: ranks: single Mounts: 463006:1:Golden Sabercat:0
+TC>     TortoiseBots: ranks: single Mounts: 463007:1:Mottled Blood Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 473848:1:Summon Light Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473853:1:Summon Light Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473855:1:Summon Light Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473858:1:Summon Dark Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473859:1:Summon Dark Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473860:1:Summon Dark Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473869:1:Summon Light Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473870:1:Summon Light Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473871:1:Summon Light Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473874:1:Summon Orange Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473875:1:Summon Orange Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473877:1:Summon Orange Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473882:1:Summon Twilight Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473886:1:Summon Twilight Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473887:1:Summon Twilight Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 473900:1:Summon Tamed Silithid Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1214283:1:Swift Spectral Tiger:0
+TC>     TortoiseBots: ranks: single Mounts: 1215378:1:Blood-Caked Tiger:0
+TC>     TortoiseBots: ranks: single Mounts: 1215380:1:Blood-Caked Raptor:0
+TC>     TortoiseBots: ranks: single Mounts: 1217142:1:Summon Flawless Yellow Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217143:1:Summon Flawless Yellow Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217144:1:Summon Flawless Yellow Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217146:1:Summon Flawless Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217147:1:Summon Flawless Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217148:1:Summon Flawless Green Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217150:1:Summon Flawless Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217151:1:Summon Flawless Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217152:1:Summon Flawless Blue Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217154:1:Summon Flawless Red Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217155:1:Summon Flawless Red Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1217156:1:Summon Flawless Red Qiraji Battle Tank:0
+TC>     TortoiseBots: ranks: single Mounts: 1220565:1:War:0
+TC>     TortoiseBots: ranks: single Mounts: 1220566:1:Conquest:0
+TC>     TortoiseBots: ranks: single Mounts: 1220567:1:Death:0
+TC>     TortoiseBots: ranks: single Mounts: 1220568:1:Famine:0
+TC>     TortoiseBots: ranks: single Mounts: 1229305:0:Climhazzard:0
+TC>     TortoiseBots: ranks: single Mounts: 1229308:0:Scarlet Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 1237632:0:Divine Steed:0
+TC>     TortoiseBots: ranks: single Mounts: 1277329:1:Green Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 1277330:1:Dark Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 1277336:1:Purple Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 1286011:1:Swift Empyrean Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1286021:1:Swift Regal Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1286022:1:Swift Stormy Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1286024:1:Empyrean Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1286025:1:Regal Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1286026:1:Stormy Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1294897:1:Striped Dawnsaber:0
+TC>     TortoiseBots: ranks: single Mounts: 1295387:1:Ochre Skeletal Warhorse:0
+TC>     TortoiseBots: ranks: single Mounts: 1295678:1:Umber Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1295683:1:Swift Umber Galestrider:0
+TC>     TortoiseBots: ranks: single Mounts: 1296534:60:Summon Forsaken Charger:0
+TC>     TortoiseBots: ranks: single Mounts: 1298450:1:White Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 1298496:1:Black Skeletal Horse:0
+TC>     TortoiseBots: ranks: single Mounts: 1301636:1:Pack Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 1302661:1:Spectral Bear:0
+TC>     TortoiseBots: ranks: single Mounts: 1303075:1:Lavender Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 1303215:1:Caravan Kodo:0
+TC>     TortoiseBots: ranks: single Mounts: 1309208:1:Cerulean Prideclaw:0
+TC>     TortoiseBots: ranks: single Mounts: 1309268:1:Black Warden Saber Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309270:1:Brown Warden Saber Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309271:1:Gray Warden Saber Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309272:1:White Warden Saber Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309346:1:Black Devilsaur Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309347:1:Blue Devilsaur Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309348:1:Green Devilsaur Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309349:1:Purple Devilsaur Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309350:1:White Devilsaur Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309377:1:Black Druid Moose Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309379:1:White Druid Moose Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309380:1:Green Druid Moose Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309381:1:Gray Druid Moose Mount:0
+TC>     TortoiseBots: ranks: single Mounts: 1309405:1:Veteran Adventurer's Loyal Companion:0
+TC>     TortoiseBots: ranks: single Mounts: 1321200:1:Verdant Sea Turtle:0
+TC>     TortoiseBots: ranks: single Mounts: 1321221:1:Crimson Rooster:0
+TC>     TortoiseBots: ranks: single Mounts: 1321233:1:Spectral Wolf Pack:0
+TC>     TortoiseBots: ranks: skill line 778 Companions: 123 abilities
+TC>     TortoiseBots: ranks: single Companions: 4055:0:Mechanical Squirrel:0
+TC>     TortoiseBots: ranks: single Companions: 10673:0:Summon Bombay:0
+TC>     TortoiseBots: ranks: single Companions: 10674:0:Summon Cornish Rex:0
+TC>     TortoiseBots: ranks: single Companions: 10675:0:Summon Maine Coon:0
+TC>     TortoiseBots: ranks: single Companions: 10676:0:Summon Orange Tabby:0
+TC>     TortoiseBots: ranks: single Companions: 10677:0:Summon Siamese:0
+TC>     TortoiseBots: ranks: single Companions: 10678:0:Summon Silver Tabby:0
+TC>     TortoiseBots: ranks: single Companions: 10679:0:Summon White Kitten:0
+TC>     TortoiseBots: ranks: single Companions: 10680:0:Summon Cockatiel:0
+TC>     TortoiseBots: ranks: single Companions: 10681:0:Summon Cockatoo:0
+TC>     TortoiseBots: ranks: single Companions: 10682:0:Summon Hyacinth Macaw:0
+TC>     TortoiseBots: ranks: single Companions: 10683:0:Summon Green Wing Macaw:0
+TC>     TortoiseBots: ranks: single Companions: 10684:0:Summon Senegal:0
+TC>     TortoiseBots: ranks: single Companions: 10685:0:Summon Ancona:0
+TC>     TortoiseBots: ranks: single Companions: 10688:0:Summon Cockroach:0
+TC>     TortoiseBots: ranks: single Companions: 10695:0:Summon Dark Whelpling:0
+TC>     TortoiseBots: ranks: single Companions: 10696:0:Summon Azure Whelpling:0
+TC>     TortoiseBots: ranks: single Companions: 10697:0:Summon Crimson Whelpling:0
+TC>     TortoiseBots: ranks: single Companions: 10698:0:Summon Emerald Whelpling:0
+TC>     TortoiseBots: ranks: single Companions: 10699:0:Summon Bronze Whelpling:0
+TC>     TortoiseBots: ranks: single Companions: 10703:0:Summon Wood Frog:0
+TC>     TortoiseBots: ranks: single Companions: 10704:0:Summon Tree Frog:0
+TC>     TortoiseBots: ranks: single Companions: 10705:0:Summon Eagle Owl:0
+TC>     TortoiseBots: ranks: single Companions: 10706:0:Summon Hawk Owl:0
+TC>     TortoiseBots: ranks: single Companions: 10707:0:Summon Great Horned Owl:0
+TC>     TortoiseBots: ranks: single Companions: 10708:0:Summon Snowy Owl:0
+TC>     TortoiseBots: ranks: single Companions: 10709:0:Summon Prairie Dog:0
+TC>     TortoiseBots: ranks: single Companions: 10711:0:Summon Snowshoe Rabbit:0
+TC>     TortoiseBots: ranks: single Companions: 10712:0:Summon Arctic Hare:0
+TC>     TortoiseBots: ranks: single Companions: 10713:0:Summon Albino Snake:0
+TC>     TortoiseBots: ranks: single Companions: 10714:0:Summon Black Kingsnake:0
+TC>     TortoiseBots: ranks: single Companions: 10716:0:Summon Brown Snake:0
+TC>     TortoiseBots: ranks: single Companions: 10717:0:Summon Crimson Snake:0
+TC>     TortoiseBots: ranks: single Companions: 10718:0:Summon Green Water Snake:0
+TC>     TortoiseBots: ranks: single Companions: 10719:0:Summon Ribbon Snake:0
+TC>     TortoiseBots: ranks: single Companions: 10720:0:Summon Scarlet Snake:0
+TC>     TortoiseBots: ranks: single Companions: 10721:0:Summon Elven Wisp:0
+TC>     TortoiseBots: ranks: single Companions: 12243:0:Summon Mechanical Chicken:0
+TC>     TortoiseBots: ranks: single Companions: 13548:0:Summon Farm Chicken:0
+TC>     TortoiseBots: ranks: single Companions: 15048:0:Summon Bomb:0
+TC>     TortoiseBots: ranks: single Companions: 15049:0:Summon Robot:0
+TC>     TortoiseBots: ranks: single Companions: 15067:0:Summon Sprite Darter Hatchling:0
+TC>     TortoiseBots: ranks: single Companions: 15648:0:Summon Corrupted Kitten:0
+TC>     TortoiseBots: ranks: single Companions: 15999:0:Summon Worg Pup:0
+TC>     TortoiseBots: ranks: single Companions: 16450:0:Summon Smolderweb:0
+TC>     TortoiseBots: ranks: single Companions: 17707:0:Summon Panda:0
+TC>     TortoiseBots: ranks: single Companions: 17708:0:Summon Diablo:0
+TC>     TortoiseBots: ranks: single Companions: 17709:0:Summon Zergling:0
+TC>     TortoiseBots: ranks: single Companions: 19772:0:Summon Lifelike Toad:0
+TC>     TortoiseBots: ranks: single Companions: 23530:0:Summon Tiny Red Dragon:0
+TC>     TortoiseBots: ranks: single Companions: 23531:0:Summon Tiny Green Dragon:0
+TC>     TortoiseBots: ranks: single Companions: 23811:0:Summon Jubling:0
+TC>     TortoiseBots: ranks: single Companions: 24696:0:Summon Murky:0
+TC>     TortoiseBots: ranks: single Companions: 24987:0:Summon Baby Murloc (Orange):0
+TC>     TortoiseBots: ranks: single Companions: 24988:0:Summon Baby Murloc (White):0
+TC>     TortoiseBots: ranks: single Companions: 25162:0:Summon Disgusting Oozeling:0
+TC>     TortoiseBots: ranks: single Companions: 26010:0:Summon Tranquil Mechanical Yeti:0
+TC>     TortoiseBots: ranks: single Companions: 26469:0:Summon Snowman:0
+TC>     TortoiseBots: ranks: single Companions: 26529:0:Summon Reindeer:0
+TC>     TortoiseBots: ranks: single Companions: 26533:0:Summon Helper:0
+TC>     TortoiseBots: ranks: single Companions: 26541:0:Summon Helper:0
+TC>     TortoiseBots: ranks: single Companions: 27241:0:Summon Gurky:0
+TC>     TortoiseBots: ranks: single Companions: 27570:0:Summon Peddlefeet:0
+TC>     TortoiseBots: ranks: single Companions: 28487:0:Summon Terky:0
+TC>     TortoiseBots: ranks: single Companions: 28505:0:Summon Poley:0
+TC>     TortoiseBots: ranks: single Companions: 28738:0:Summon Speedy:0
+TC>     TortoiseBots: ranks: single Companions: 28739:0:Summon Mr. Wiggles:0
+TC>     TortoiseBots: ranks: single Companions: 28740:0:Summon Whiskers:0
+TC>     TortoiseBots: ranks: single Companions: 28871:0:Summon Spirit of Summer:0
+TC>     TortoiseBots: ranks: single Companions: 30152:0:Summon White Tiger Cub:0
+TC>     TortoiseBots: ranks: single Companions: 30156:0:Summon Hippogryph Hatchling:0
+TC>     TortoiseBots: ranks: single Companions: 42609:0:Sinister Squashling:0
+TC>     TortoiseBots: ranks: single Companions: 104047:0:Lunar Lantern:0
+TC>     TortoiseBots: ranks: single Companions: 104049:0:Festival Lantern:0
+TC>     TortoiseBots: ranks: single Companions: 142880:0:Blossoming Ancient:0
+TC>     TortoiseBots: ranks: single Companions: 464808:0:Gill'el:0
+TC>     TortoiseBots: ranks: single Companions: 1250013:0:Summon Lashling:0
+TC>     TortoiseBots: ranks: single Companions: 1250014:0:Summon Lashling:0
+TC>     TortoiseBots: ranks: single Companions: 1250015:0:Summon Lashling:0
+TC>     TortoiseBots: ranks: single Companions: 1250016:0:Summon Lashling:0
+TC>     TortoiseBots: ranks: single Companions: 1281641:0:Summon Musical Gustjumper:0
+TC>     TortoiseBots: ranks: single Companions: 1283932:0:Summon Uber Diablo:0
+TC>     TortoiseBots: ranks: single Companions: 1286629:0:Summon Snowy Wolf Pup:0
+TC>     TortoiseBots: ranks: single Companions: 1290131:0:Summon Child of By'zaali:0
+TC>     TortoiseBots: ranks: single Companions: 1295738:0:Summon Wild Chicken:0
+TC>     TortoiseBots: ranks: single Companions: 1297608:0:Summon Excitable Slime:0
+TC>     TortoiseBots: ranks: single Companions: 1297823:0:Pinky:0
+TC>     TortoiseBots: ranks: single Companions: 1299341:15:Summon Bitter Baitling:0
+TC>     TortoiseBots: ranks: single Companions: 1302196:0:Summon Prairie Wolf Pup:0
+TC>     TortoiseBots: ranks: single Companions: 1302650:0:Summon Spectral Bear Cub:0
+TC>     TortoiseBots: ranks: single Companions: 1308283:0:Summon Shadowgale Squirrel:0
+TC>     TortoiseBots: ranks: single Companions: 1308870:0:Summon Weevil K. Neevil:0
+TC>     TortoiseBots: ranks: single Companions: 1309420:0:Summon Pachimari:0
+TC>     TortoiseBots: ranks: single Companions: 1309423:0:Galestrider Chick:0
+TC>     TortoiseBots: ranks: single Companions: 1309436:0:Summon Black Furbolg Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309437:0:Summon Brown Furbolg Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309438:0:Summon Gray Furbolg Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309439:0:Summon Tan Furbolg Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309440:0:Summon White Furbolg Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309501:0:Summon Purple Ent Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309503:0:Summon Red Ent Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309504:0:Summon Blue Ent Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309505:0:Summon Gray Ent Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309506:0:Summon Orange Ent Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309507:0:Summon Yellow Ent Pet:0
+TC>     TortoiseBots: ranks: single Companions: 1309545:0:Summon Plagued Cockroach:0
+TC>     TortoiseBots: ranks: single Companions: 1309546:0:Summon Undercity Cockroach:0
+TC>     TortoiseBots: ranks: single Companions: 1309547:0:Summon Jungle Boa:0
+TC>     TortoiseBots: ranks: single Companions: 1309730:0:Summon Brown Ground Squirrel:0
+TC>     TortoiseBots: ranks: single Companions: 1309736:0:Summon Red Ground Squirrel:0
+TC>     TortoiseBots: ranks: single Companions: 1309752:0:Summon Brown Rabbit:0
+TC>     TortoiseBots: ranks: single Companions: 1310329:0:Summon Diablo:0
+TC>     TortoiseBots: ranks: single Companions: 1310330:0:Summon Zergling:0
+TC>     TortoiseBots: ranks: single Companions: 1310331:0:Summon Panda:0
+TC>     TortoiseBots: ranks: single Companions: 1312880:0:Summon Baby Crocolisk:0
+TC>     TortoiseBots: ranks: single Companions: 1313392:0:Summon Shen'dorei Wisp:0
+TC>     TortoiseBots: ranks: single Companions: 1314120:0:Summon Condor Hatchling:0
+TC>     TortoiseBots: ranks: single Companions: 1315267:0:Summon Tallstrider Hatchling:0
+TC>     TortoiseBots: ranks: single Companions: 1315451:0:Summon Minfernal:0
+TC>     TortoiseBots: ranks: single Companions: 1316778:0:Summon Minimule:0
+TC>     TortoiseBots: ranks: single Companions: 1318286:0:Summon Azurky:0
+TC>     TortoiseBots: ranks: single Companions: 1320758:0:Summon Spawn of Grubthor:0
+TC>     TortoiseBots: ranks: skill line 2851 Engraving: 51 abilities
+TC>     TortoiseBots: ranks: single Engraving: 398603:0:Runecarving:0
+TC>     TortoiseBots: ranks: single Engraving: 401488:1:Engrave Pants - Cutty's Rune:8
+TC>     TortoiseBots: ranks: single Engraving: 403446:1:Engrave Pants - Commanding Shout:0
+TC>     TortoiseBots: ranks: single Engraving: 403467:1:Engrave Boots - Enraged Regeneration:0
+TC>     TortoiseBots: ranks: single Engraving: 403470:1:Engrave Gloves - Victory Rush:0
+TC>     TortoiseBots: ranks: single Engraving: 403472:1:Engrave Boots - Intervene:0
+TC>     TortoiseBots: ranks: single Engraving: 403474:1:Engrave Chest - Blood Frenzy:0
+TC>     TortoiseBots: ranks: single Engraving: 403475:1:Engrave Gloves - Devastate:0
+TC>     TortoiseBots: ranks: single Engraving: 403476:1:Engrave Pants - Furious Thunder:0
+TC>     TortoiseBots: ranks: single Engraving: 403480:1:Engrave Chest - Flagellation:0
+TC>     TortoiseBots: ranks: single Engraving: 403489:1:Engrave Helm - Endless Rage:0
+TC>     TortoiseBots: ranks: single Engraving: 409163:1:Engrave Belt - Focused Rage:0
+TC>     TortoiseBots: ranks: single Engraving: 416002:1:Engrave Boots - Gladiator Stance:0
+TC>     TortoiseBots: ranks: single Engraving: 416003:1:Engrave Gloves - Single-Minded Fury:0
+TC>     TortoiseBots: ranks: single Engraving: 416004:1:Engrave Belt - Blood Surge:0
+TC>     TortoiseBots: ranks: single Engraving: 416005:1:Engrave Belt - Precise Timing:0
+TC>     TortoiseBots: ranks: single Engraving: 425443:1:Engrave Gloves - Quick Strike:0
+TC>     TortoiseBots: ranks: single Engraving: 425444:1:Engrave Chest - Raging Blow:0
+TC>     TortoiseBots: ranks: single Engraving: 425445:1:Engrave Chest - Warbringer:0
+TC>     TortoiseBots: ranks: single Engraving: 425446:1:Engrave Pants - Consumed by Rage:0
+TC>     TortoiseBots: ranks: single Engraving: 425447:1:Engrave Pants - Frenzied Assault:0
+TC>     TortoiseBots: ranks: single Engraving: 426491:1:Engrave Boots - Rallying Cry:0
+TC>     TortoiseBots: ranks: single Engraving: 427076:1:Engrave Helm - Taste for Blood:4
+TC>     TortoiseBots: ranks: single Engraving: 427078:1:Engrave Helm - Vigilance:4
+TC>     TortoiseBots: ranks: single Engraving: 427080:1:Engrave Helm - Shield Mastery:4
+TC>     TortoiseBots: ranks: single Engraving: 427081:1:Engrave Bracers - Rampage:4
+TC>     TortoiseBots: ranks: single Engraving: 427082:1:Engrave Bracers - Sword and Board:4
+TC>     TortoiseBots: ranks: single Engraving: 427084:1:Engrave Bracers - Wrecking Crew:4
+TC>     TortoiseBots: ranks: single Engraving: 440492:1:Engrave Cloak - Fresh Meat:0
+TC>     TortoiseBots: ranks: single Engraving: 440494:1:Engrave Cloak - Sudden Death:0
+TC>     TortoiseBots: ranks: single Engraving: 440496:1:Engrave Cloak - Shockwave:0
+TC>     TortoiseBots: ranks: single Engraving: 453635:1:Engrave Ring - Sword Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 453688:1:Engrave Ring - Axe Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 453689:1:Engrave Ring - Mace Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 453690:1:Engrave Ring - Dagger Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 453691:1:Engrave Ring - Fist Weapon Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 453692:1:Engrave Ring - Ranged Weapon Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 453694:1:Engrave Ring - Pole Weapon Specialization:0
+TC>     TortoiseBots: ranks: single Engraving: 459313:1:Engrave Ring - Defense Specialization:0
+TC>     TortoiseBots: ranks: skill line 2853 Runes: 11 abilities
+TC>     TortoiseBots: ranks: single Runes: 399954:1:Chest Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 399966:1:Legs Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 399967:1:Hands Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 415449:1:Waist Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 415450:1:Feet Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 417345:1:Helm Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 417346:1:Bracer Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 417347:1:Cloak Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 417348:1:Shoulder Rune Ability:0
+TC>     TortoiseBots: ranks: single Runes: 453593:1:S03 - PvP - Damage Reduction Aura:0
+TC>     TortoiseBots: ranks: single Runes: 1219955:1:Soul Engraving:0
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 676 requires 71
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 871 requires 71
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1680 requires 2458
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 1719 requires 2458
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 2565 requires 71
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 6552 requires 2458
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 6572 requires 71
+TC>     TortoiseBots: ranks: prerequisite (not a rank): 18499 requires 2458
+TC>     TortoiseBots: ranks: done
