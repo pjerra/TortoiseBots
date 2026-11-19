@@ -3,6 +3,11 @@
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
+#include "Item.h"
+#include "GameTables.h"
+#include "ItemEnchantmentMgr.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "TransmogMgr.h"
 #include "GitRevision.h"
 #include "ObjectMgr.h"
@@ -485,6 +490,63 @@ void Update(uint32 diff)
     SendCycle();
 }
 
+std::string LocName(LocalizedString const& str)
+{
+    char const* text = str[sWorld->GetDefaultDbcLocale()];
+    return Escape(text ? text : "");
+}
+
+// What an item tooltip shows: stats (this version keeps them as a share of the item level's budget; the value is the core's
+// Item::GetItemStatValue formula for the item as it drops), armour, weapon damage and speed, binding, set, durability,
+// required skill and classes, description and the spells it casts (trigger: 0 use, 1 equip, 2 chance on hit).
+std::string ItemDetails(ItemTemplate const& item)
+{
+    std::ostringstream ss;
+    BonusData bonus;
+    bonus.Initialize(&item);
+    uint32 const level = item.GetBaseItemLevel();
+    float const points = GetRandomPropertyPoints(level, item.GetQuality(), item.GetInventoryType(), item.GetSubClass());
+    GtItemSocketCostPerLevelEntry const* socketCost = sItemSocketCostPerLevelGameTable.GetRow(level);
+    ss << ",\"stats\":[";
+    bool first = true;
+    for (uint32 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+    {
+        int32 const type = bonus.ItemStatType[i];
+        if (type < 0 || !bonus.StatPercentEditor[i])
+            continue;
+        float value = type == ITEM_MOD_CORRUPTION || type == ITEM_MOD_CORRUPTION_RESISTANCE ? float(bonus.StatPercentEditor[i])
+            : float(bonus.StatPercentEditor[i]) * points * 0.0001f;
+        if (socketCost)
+            value -= float(bonus.ItemStatSocketCostMultiplier[i] * socketCost->SocketCost);
+        int32 const shown = int32(std::lround(value));
+        if (!shown)
+            continue;
+        ss << (first ? "" : ",") << "[" << type << "," << shown << "]";
+        first = false;
+    }
+    ss << "]";
+    if (uint32 armor = item.GetArmor(level))
+        ss << ",\"armor\":" << armor;
+    if (item.GetClass() == ITEM_CLASS_WEAPON)
+    {
+        float lo = 0.0f, hi = 0.0f;
+        item.GetDamage(level, lo, hi);
+        ss << ",\"dmg_min\":" << uint32(lo) << ",\"dmg_max\":" << uint32(hi) << ",\"delay\":" << item.GetDelay();
+    }
+    ss << ",\"bonding\":" << uint32(item.GetBonding()) << ",\"set\":" << item.GetItemSet() << ",\"durability\":" << item.MaxDurability
+       << ",\"req_skill\":" << item.GetRequiredSkill() << ",\"req_skill_rank\":" << item.GetRequiredSkillRank()
+       << ",\"classes\":" << item.GetAllowableClass() << ",\"desc\":\"" << LocName(item.ExtendedData->Description) << "\",\"spells\":[";
+    first = true;
+    for (ItemEffectEntry const* effect : item.Effects)
+        if (effect->SpellID > 0)
+        {
+            ss << (first ? "" : ",") << "[" << effect->SpellID << "," << uint32(effect->TriggerType) << "]";
+            first = false;
+        }
+    ss << "]";
+    return ss.str();
+}
+
 uint32 IconOf(uint32 itemId)
 {
     if (ItemModifiedAppearanceEntry const* modified = TransmogMgr::GetDefaultItemModifiedAppearance(itemId))
@@ -495,6 +557,121 @@ uint32 IconOf(uint32 itemId)
     if (ItemEntry const* item = sItemStore.LookupEntry(itemId))
         return uint32(std::max(0, item->IconFileDataID));
     return 0;
+}
+
+std::string DataFilePath(char const* key, char const* name)
+{
+    std::string path = sConfigMgr->GetStringDefault(key, "");
+    return path.empty() ? sConfigMgr->GetStringDefault("LogsDir", ".") + "/" + name : path;
+}
+
+bool WriteJsonFile(std::string const& path, std::string const& body, char const* what, size_t count)
+{
+    std::string const tmp = path + ".tmp";
+    std::ofstream out(tmp, std::ios::trunc);
+    if (!out)
+    {
+        TC_LOG_ERROR("server.loading", "TortoiseBots: cannot write the dashboard {} file {}", what, tmp);
+        return false;
+    }
+    out << body;
+    out.close();
+    std::rename(tmp.c_str(), path.c_str());
+    TC_LOG_INFO("server.loading", "TortoiseBots: dashboard {} file {} ({} rows)", what, path, count);
+    return true;
+}
+
+// Every spell with a name: what a spell tooltip and the bot's spell book need, from the core's own SpellInfo.
+void WriteSpellsFile()
+{
+    std::ostringstream ss;
+    ss << "{\"spells\":[";
+    size_t n = 0;
+    for (SpellNameEntry const* name : sSpellNameStore)
+    {
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(name->ID, DIFFICULTY_NONE);
+        if (!info)
+            continue;
+        ss << (n++ ? "," : "") << "{\"id\":" << info->Id << ",\"name\":\"" << LocName(name->Name) << "\",\"icon\":" << info->IconFileDataId
+           << ",\"school\":" << info->SchoolMask << ",\"cast_ms\":" << info->CalcCastTime() << ",\"range\":" << info->GetMaxRange()
+           << ",\"duration_ms\":" << info->GetDuration() << ",\"cooldown_ms\":" << info->RecoveryTime << ",\"level\":" << info->SpellLevel
+           << ",\"base_level\":" << info->BaseLevel;
+        for (SpellPowerEntry const* power : info->PowerCosts)
+            if (power && (power->ManaCost || power->PowerCostPct > 0.0f))
+            {
+                ss << ",\"power_type\":" << int32(power->PowerType) << ",\"cost\":" << power->ManaCost << ",\"cost_pct\":" << power->PowerCostPct;
+                break;
+            }
+        ss << "}";
+    }
+    ss << "]}";
+    WriteJsonFile(DataFilePath("TortoiseBots.Dashboard.SpellsFile", "tortoisebots-spells.json"), ss.str(), "spell", n);
+}
+
+// The talent grid of every class (tab, tier, column, the spell of each rank, prerequisites).
+void WriteTalentsFile()
+{
+    std::ostringstream ss;
+    ss << "{\"talents\":[";
+    size_t n = 0;
+    for (TalentEntry const* t : sTalentStore)
+    {
+        ss << (n++ ? "," : "") << "{\"id\":" << t->ID << ",\"class\":" << int32(t->ClassID) << ",\"tab\":" << t->TabID << ",\"tier\":" << uint32(t->TierID)
+           << ",\"col\":" << uint32(t->ColumnIndex) << ",\"spell\":" << t->SpellID << ",\"ranks\":[";
+        bool first = true;
+        for (uint32 rank : t->SpellRank)
+            if (rank)
+            {
+                ss << (first ? "" : ",") << rank;
+                first = false;
+            }
+        ss << "],\"prereq\":[";
+        first = true;
+        for (size_t i = 0; i < t->PrereqTalent.size(); ++i)
+            if (t->PrereqTalent[i])
+            {
+                ss << (first ? "" : ",") << "[" << t->PrereqTalent[i] << "," << uint32(t->PrereqRank[i]) << "]";
+                first = false;
+            }
+        ss << "]}";
+    }
+    ss << "]}";
+    WriteJsonFile(DataFilePath("TortoiseBots.Dashboard.TalentsFile", "tortoisebots-talents.json"), ss.str(), "talent", n);
+}
+
+// Names the page shows by id: skills (professions, weapons), areas (zones), factions (reputation).
+void WriteNamesFile()
+{
+    std::ostringstream ss;
+    size_t n = 0;
+    ss << "{\"skills\":{";
+    bool first = true;
+    for (SkillLineEntry const* skill : sSkillLineStore)
+    {
+        ss << (first ? "" : ",") << "\"" << skill->ID << "\":{\"name\":\"" << LocName(skill->DisplayName) << "\",\"category\":" << int32(skill->CategoryID)
+           << ",\"icon\":" << skill->SpellIconFileID << "}";
+        first = false;
+        ++n;
+    }
+    ss << "},\"areas\":{";
+    first = true;
+    for (AreaTableEntry const* area : sAreaTableStore)
+    {
+        ss << (first ? "" : ",") << "\"" << area->ID << "\":{\"name\":\"" << LocName(area->AreaName) << "\",\"map\":" << area->ContinentID
+           << ",\"parent\":" << area->ParentAreaID << "}";
+        first = false;
+        ++n;
+    }
+    ss << "},\"factions\":{";
+    first = true;
+    for (FactionEntry const* faction : sFactionStore)
+    {
+        ss << (first ? "" : ",") << "\"" << faction->ID << "\":{\"name\":\"" << LocName(faction->Name) << "\",\"parent\":" << faction->ParentFactionID << "}";
+        first = false;
+        ++n;
+    }
+    ss << "}}";
+    WriteJsonFile(DataFilePath("TortoiseBots.Dashboard.NamesFile", "tortoisebots-names.json"), ss.str(), "names", n);
 }
 
 void WriteUiMapsFile()
@@ -534,13 +711,16 @@ void WriteItemsFile()
         out << (n++ ? "," : "") << "{\"id\":" << id << ",\"name\":\"" << Escape(item.GetDefaultLocaleName()) << "\",\"quality\":" << item.GetQuality()
             << ",\"ilvl\":" << item.GetBaseItemLevel() << ",\"req_level\":" << item.GetBaseRequiredLevel() << ",\"class\":" << item.GetClass()
             << ",\"subclass\":" << item.GetSubClass() << ",\"inv_type\":" << uint32(item.GetInventoryType()) << ",\"sell\":" << item.GetSellPrice()
-            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << "}";
+            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << ItemDetails(item) << "}";
     }
     out << "]}";
     out.close();
     std::rename(tmp.c_str(), s.itemsFile.c_str());
     TC_LOG_INFO("server.loading", "TortoiseBots: dashboard item file {} ({} items)", s.itemsFile, n);
     WriteUiMapsFile();
+    WriteSpellsFile();
+    WriteTalentsFile();
+    WriteNamesFile();
 }
 
 void OnKill(Player* killer, Creature* killed)
