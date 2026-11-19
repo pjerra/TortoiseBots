@@ -95,7 +95,7 @@ public:
     // What `.tb state` shows: the way of the last map change and its refusal. `entering` is true while a walk or a teleport of an entry is running.
     struct EntryInfo
     {
-        std::string entered = "none";     // trigger | order | setup | none
+        std::string entered;              // trigger | order | setup | empty (none yet: the grammar never writes the word none)
         std::string block;                // empty = none; else the code of the last refusal (see CheckEntry)
         std::string blockText;
         uint32 catchups = 0;              // open-world catch-up teleports (BotMgr::Think); never into or inside an instance
@@ -169,7 +169,7 @@ private:
         // Slice 4 (H4)
         Entry entry;
         Landing landing;
-        std::string entered = "none";   // trigger | order | setup | none: the way of the last map change this host started
+        std::string entered;            // trigger | order | setup | empty: the way of the last map change this host started
         std::string block;              // the code of the last refused entry or lost teleport (empty = none)
         std::string blockText;
         uint32 catchups = 0;

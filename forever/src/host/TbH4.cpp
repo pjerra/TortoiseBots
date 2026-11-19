@@ -97,7 +97,7 @@ void SelfTestRecords(Reply& reply)
     // The state keys (appended to every bot record; `corpse`/`corpsemap` only for a dead bot), the end-line keys and the threat keys.
     reply.Line(Rec("selftest").S("case", "state-h4").S("bot", "Mdpsa").S("life", "awaiting-res").S("relhold", "rezzer").S("resreq", "Mpriest").Coord("corpse", -3.85, -11.03, -15.83).N("corpsemap", 389)
         .B("outside", false).S("entered", "trigger").S("entry", "").S("block", "").N("catchup", 0).B("practice", false));
-    reply.Line(Rec("selftest").S("case", "state-h4-refused").S("bot", "Mlow").S("life", "alive").S("relhold", "none").S("resreq", "").B("outside", true).S("entered", "none").S("entry", "").S("block", "level")
+    reply.Line(Rec("selftest").S("case", "state-h4-refused").S("bot", "Mlow").S("life", "alive").S("relhold", "").S("resreq", "").B("outside", true).S("entered", "").S("entry", "").S("block", "level")
         .T("blockmsg", "level too low for this instance (needs 10) (TransferAbortReason 8, MapDifficultyXCondition 4172, PlayerCondition 159263)").N("catchup", 0).B("practice", false));
     reply.Line(Rec("selftest").S("case", "state-end-h4").N("alive", 3).N("dead", 1).N("ghost", 1).B("wipe", false).B("whole", false));
     reply.Line(Rec("selftest").S("case", "threat-h4").S("mob", "000000000000000000000000000000AB").Coord("pos", 12.5, -40.25, -19.1).B("flee", true));

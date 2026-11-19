@@ -255,10 +255,10 @@ Rec StateRec(Player* bot, Readiness& ready)
     // life: alive | dead (a body that will release) | awaiting-res (a body held by the crew rule or by a pending resurrection) | ghost | running-back
     // (alive again, more than 30 yd from its commander or leader, until it is within 20 yd). relhold says why a body waits: rezzer (a living resurrecter on
     // the map), combat (a member fights), wipe (nobody left: it releases now), no-entrance (the instance has none: the release is held, never a graveyard
-    // outside), none (not a body on an instance map, or alive).
+    // outside), empty (not a body on an instance map, or alive).
     bool const alive = bot->IsAlive();
     bool const ghost = !alive && bot->HasPlayerFlag(PLAYER_FLAGS_GHOST);
-    std::string relhold = "none";
+    std::string relhold;                  // empty = not a body on an instance map (the grammar never writes the word none)
     std::string life = "alive";
     if (!alive)
     {
