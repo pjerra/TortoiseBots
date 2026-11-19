@@ -2041,6 +2041,13 @@
   }
 
   function renderServerPanel() {
+    const bv = document.querySelector('.brand-version[data-core="forever"]');
+    if (bv) {
+      const info = state.serverInfo;
+      const rev = info && info.core_revision ? String(info.core_revision).trim() : '';
+      const dt = info && info.core_date ? String(info.core_date).trim() : '';
+      bv.textContent = [rev, dt].filter(Boolean).join(' ');
+    }
     const host = document.getElementById('server-panel');
     if (!host) return;
     const info = state.serverInfo;

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -32,6 +33,7 @@ import (
 	"tortoise-observability/internal/combat"
 	"tortoise-observability/internal/control"
 	"tortoise-observability/internal/dungeons"
+	"tortoise-observability/internal/foreveritems"
 	"tortoise-observability/internal/history"
 	"tortoise-observability/internal/lanes"
 	"tortoise-observability/internal/live"
@@ -103,6 +105,7 @@ func main() {
 	dbChar := flag.String("db-char", getEnv("DB_CHAR", "tw_char"), "MariaDB / MySQL characters database name")
 	dbWorld := flag.String("db-world", getEnv("DB_WORLD", "tw_world"), "MariaDB / MySQL world database name")
 	dbcDir := flag.String("dbc-dir", getEnv("DBC_DIR", ""), "Optional operator DBC directory (same files mangosd reads); enables talent trees when world talent mirrors are empty")
+	itemsFile := flag.String("items-file", getEnv("TBDASH_ITEMS_FILE", ""), "Optional ForeverCore item catalog JSON (tortoisebots-items.json) for item names, quality and item level (env TBDASH_ITEMS_FILE)")
 	issueMinAgeSec := flag.Int("issue-min-age-sec", getEnvInt("ISSUE_MIN_AGE_SEC", 300), "Only surface bot issues that persist at least this many seconds")
 	minGMLevel := flag.Int("min-gm-level", getEnvInt("MIN_GM_LEVEL", 2), "Minimum GM rank required for dashboard login (2 = gamemaster)")
 	// An optional external commander dashboard (for example turtle-agent's
@@ -248,7 +251,13 @@ func main() {
 	}
 	log.Printf("[Auth] %s MySQL authentication ready against %s:%d/%s", *core, *dbHost, *dbPort, *dbName)
 
+	var itemCatalog *foreveritems.Store
+	if *itemsFile != "" {
+		itemCatalog = foreveritems.New(*itemsFile)
+	}
+
 	armoryService, err := armory.NewService(armory.Config{
+		Core:       *core,
 		DBHost:     *dbHost,
 		DBPort:     *dbPort,
 		DBUser:     *dbUser,
@@ -257,6 +266,15 @@ func main() {
 		WorldDB:    *dbWorld,
 		LogonDB:    *dbName,
 		DBCDir:     *dbcDir,
+		Items:      itemCatalog,
+		LiveGUIDs: func() []uint32 {
+			snap := store.Snapshot()
+			out := make([]uint32, 0, len(snap.Bots))
+			for _, b := range snap.Bots {
+				out = append(out, b.GUID)
+			}
+			return out
+		},
 	})
 	if err != nil {
 		log.Fatalf("Failed to initialize armory service: %v", err)
@@ -515,6 +533,9 @@ func main() {
 
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		loginHTML, _ := web.FS.ReadFile("login.html")
+		if *core == "forever" {
+			loginHTML = bytes.ReplaceAll(loginHTML, []byte("Tortoise WoW"), []byte("ForeverCore"))
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(loginHTML)
 	})
@@ -585,6 +606,13 @@ func main() {
 	}
 
 	indexHTML, _ := web.FS.ReadFile("index.html")
+	if *core == "forever" {
+		s := string(indexHTML)
+		s = strings.Replace(s, "<title>TortoiseBots — Server & Bot Observability</title>", "<title>ForeverCore — Server & Bot Observability</title>", 1)
+		s = strings.Replace(s, `<span class="brand-title">Tortoise WoW</span>`, `<span class="brand-title">ForeverCore</span>`, 1)
+		s = strings.Replace(s, `<span class="brand-version">1.18.1</span>`, `<span class="brand-version" data-core="forever"></span>`, 1)
+		indexHTML = []byte(s)
+	}
 	dashboardHandler := requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
@@ -930,7 +958,7 @@ func main() {
 		if v, err := strconv.Atoi(q.Get("quality")); err == nil {
 			quality = v
 		}
-		page, err := armoryService.ListAuctions(armory.AuctionFilter{
+		filter := armory.AuctionFilter{
 			Query:    q.Get("q"),
 			Quality:  quality,
 			MinLevel: qUint(q.Get("min_level")),
@@ -941,7 +969,16 @@ func main() {
 			Sort:     q.Get("sort"),
 			Desc:     q.Get("dir") != "asc",
 			Page:     qUint(q.Get("page")),
-		})
+		}
+		var (
+			page *armory.AuctionPage
+			err  error
+		)
+		if *core == "forever" {
+			page, err = armoryService.ListAuctionsForever(filter, itemCatalog)
+		} else {
+			page, err = armoryService.ListAuctions(filter)
+		}
 		if err != nil {
 			log.Printf("[Auctions] list failed: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)

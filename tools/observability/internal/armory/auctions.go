@@ -4,10 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"tortoise-observability/internal/foreveritems"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -294,6 +297,28 @@ func (s *Service) ListAuctions(f AuctionFilter) (*AuctionPage, error) {
 		return nil, err
 	}
 	return page, nil
+}
+
+// ListAuctionsForever returns one page of the auction house on ForeverCore
+// (TrinityCore schema: auctionhouse, auction_items, item_instance, characters)
+// with item metadata from foreveritems.
+func (s *Service) ListAuctionsForever(f AuctionFilter, items *foreveritems.Store) (*AuctionPage, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("armory database is not initialized")
+	}
+	ahbot, err := s.loadAhBotData()
+	if err != nil {
+		return nil, err
+	}
+	sellerSet := make(map[uint32]bool, len(ahbot.Sellers))
+	for _, sr := range ahbot.Sellers {
+		sellerSet[sr.GUID] = true
+	}
+	all, err := s.loadAuctionsForever(sellerSet, items)
+	if err != nil {
+		return nil, err
+	}
+	return buildAuctionPage(all, f, ahbot), nil
 }
 
 func buildAuctionPage(all []AuctionRow, f AuctionFilter, ahbot ahBotData) *AuctionPage {
@@ -742,12 +767,7 @@ func (s *Service) loadAuctions(ahbotSellers map[uint32]bool) ([]AuctionRow, erro
 	// A seller is a pool bot when its account is in tortoise_bots_pool_account,
 	// an AH bot when its guid is registered in tortoise_bots_ahbot_seller, and
 	// owner 0 is the module's legacy ownerless market listing.
-	type sellerInfo struct {
-		name  string
-		class uint8
-		bot   bool
-	}
-	sellers := map[uint32]sellerInfo{}
+	sellers := map[uint32]auctionSellerInfo{}
 	srows, err := s.db.Query(`
 		SELECT c.guid, c.name, c.class, p.account_id IS NOT NULL
 		FROM characters c
@@ -760,7 +780,7 @@ func (s *Service) loadAuctions(ahbotSellers map[uint32]bool) ([]AuctionRow, erro
 	defer srows.Close()
 	for srows.Next() {
 		var guid uint32
-		var si sellerInfo
+		var si auctionSellerInfo
 		if err := srows.Scan(&guid, &si.name, &si.class, &si.bot); err != nil {
 			return nil, err
 		}
@@ -770,6 +790,17 @@ func (s *Service) loadAuctions(ahbotSellers map[uint32]bool) ([]AuctionRow, erro
 		return nil, err
 	}
 
+	assignAuctionSellers(all, sellers, ahbotSellers)
+	return all, nil
+}
+
+type auctionSellerInfo struct {
+	name  string
+	class uint8
+	bot   bool
+}
+
+func assignAuctionSellers(all []AuctionRow, sellers map[uint32]auctionSellerInfo, ahbotSellers map[uint32]bool) {
 	for i := range all {
 		r := &all[i]
 		si, ok := sellers[r.SellerGUID]
@@ -785,7 +816,115 @@ func (s *Service) loadAuctions(ahbotSellers map[uint32]bool) ([]AuctionRow, erro
 		}
 		r.SellerName, r.SellerClass = si.name, si.class
 	}
+}
+
+func clampUint32(v uint64) uint32 {
+	if v > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(v)
+}
+
+func (s *Service) loadAuctionsForever(ahbotSellers map[uint32]bool, items *foreveritems.Store) ([]AuctionRow, error) {
+	rows, err := s.db.Query(`
+		SELECT a.id, a.auctionHouseId, ai.itemGuid, ii.itemEntry, ii.count,
+		       a.owner, a.bidder, a.minBid, a.bidAmount, a.buyoutOrUnitPrice, a.endTime
+		FROM auctionhouse a
+		JOIN auction_items ai ON ai.auctionId = a.id
+		JOIN item_instance ii ON ii.guid = ai.itemGuid
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	all := []AuctionRow{}
+	for rows.Next() {
+		var r AuctionRow
+		var houseID, count uint32
+		var itemGUID, owner, bidder, minBid, bidAmt, buyout uint64
+		if err := rows.Scan(&r.ID, &houseID, &itemGUID, &r.ItemTemplate, &count,
+			&owner, &bidder, &minBid, &bidAmt, &buyout, &r.ExpireAt); err != nil {
+			return nil, err
+		}
+		r.House = auctionHouse(houseID)
+		r.itemGUID = clampUint32(itemGUID)
+		r.SellerGUID = clampUint32(owner)
+		r.buyGUID = clampUint32(bidder)
+		r.StartBid = clampUint32(minBid)
+		r.Bid = clampUint32(bidAmt)
+		r.Buyout = clampUint32(buyout)
+		if count == 0 {
+			count = 1
+		}
+		r.Count = count
+		if items != nil {
+			if it, ok := items.Get(r.ItemTemplate); ok {
+				r.Name = it.Name
+				r.Quality = uint8(it.Quality)
+				r.ItemClass = uint8(it.Class)
+				r.RequiredLevel = it.ReqLevel
+				r.ItemLevel = it.ItemLvl
+			}
+		}
+		if r.Name == "" {
+			r.Name = fmt.Sprintf("Item #%d", r.ItemTemplate)
+		}
+		all = append(all, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	sellers, err := s.loadForeverSellers()
+	if err != nil {
+		return nil, err
+	}
+	assignAuctionSellers(all, sellers, ahbotSellers)
 	return all, nil
+}
+
+func (s *Service) loadForeverSellers() (map[uint32]auctionSellerInfo, error) {
+	sellers := map[uint32]auctionSellerInfo{}
+	srows, err := s.db.Query(`
+		SELECT c.guid, c.name, c.class, p.account_id IS NOT NULL
+		FROM characters c
+		LEFT JOIN tortoise_bots_pool_account p ON p.account_id = c.account
+		WHERE c.guid IN (SELECT DISTINCT owner FROM auctionhouse)
+	`)
+	if err != nil {
+		if !isMissingTableErr(err) {
+			return nil, err
+		}
+		srows, err = s.db.Query(`
+			SELECT c.guid, c.name, c.class
+			FROM characters c
+			WHERE c.guid IN (SELECT DISTINCT owner FROM auctionhouse)
+		`)
+		if err != nil {
+			return nil, err
+		}
+		defer srows.Close()
+		for srows.Next() {
+			var guid uint64
+			var si auctionSellerInfo
+			if err := srows.Scan(&guid, &si.name, &si.class); err != nil {
+				return nil, err
+			}
+			sellers[clampUint32(guid)] = si
+		}
+		return sellers, srows.Err()
+	}
+	defer srows.Close()
+	for srows.Next() {
+		var guid uint64
+		var si auctionSellerInfo
+		if err := srows.Scan(&guid, &si.name, &si.class, &si.bot); err != nil {
+			return nil, err
+		}
+		sellers[clampUint32(guid)] = si
+	}
+	return sellers, srows.Err()
 }
 
 // fillPageDetails adds stack counts and icons for one page only.

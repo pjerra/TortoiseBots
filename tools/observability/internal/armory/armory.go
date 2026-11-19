@@ -7,9 +7,12 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"tortoise-observability/internal/foreveritems"
 )
 
 type Config struct {
+	Core       string
 	DBHost     string
 	DBPort     int
 	DBUser     string
@@ -22,6 +25,12 @@ type Config struct {
 	// TalentTab.dbc are present, talents resolve from them; otherwise the
 	// backend falls back to the world talent/talenttab mirror tables.
 	DBCDir string
+	// Items holds the ForeverCore item catalog exported by TortoiseBots
+	// (tortoisebots-items.json), used when -core forever has no world.item_template.
+	Items *foreveritems.Store
+	// LiveGUIDs returns the GUIDs currently in the daemon's live roster, used on
+	// ForeverCore where there is no pool-account table.
+	LiveGUIDs func() []uint32
 }
 
 type Service struct {
@@ -63,6 +72,9 @@ func likeEscape(s string) string {
 }
 
 func (s *Service) ListBots(query string) ([]BotSummary, error) {
+	if s.isForever() {
+		return s.listBotsForever(query)
+	}
 	// Bot identity is the module's managed-account registry
 	// (tortoise_bots_pool_account), never a username prefix: a personal account
 	// whose name merely looks like a bot account is not a bot.
@@ -200,6 +212,9 @@ func (s *Service) resolveBotGuilds(bots []BotSummary) {
 }
 
 func (s *Service) GetBotProfile(guid uint32) (*BotProfile, error) {
+	if s.isForever() {
+		return s.getBotProfileForever(guid)
+	}
 	var profile BotProfile
 
 	// 1. Identity: same columns the login query holder already loads. Pool
