@@ -10,18 +10,22 @@
 
 #include "Define.h"
 #include "host/TbH3.h"
+#include "host/run/TbPlanMatch.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 class Map;
 
-namespace ai { struct DungeonPlan; }
+namespace ai { struct DungeonPlan; struct PlanReloadHost; }
 
 namespace ai
 {
-// Reads `ai_dungeon_step_unit` (once at boot, and again after a successful `.tb plan reload`): a row whose plan or step is not in the loaded plan table is
-// refused (counted, the first ten logged). Does nothing (and says so) while the plan table is not loaded. One boot line: `>> Loaded <n> dungeon step units`.
+// Reads `ai_dungeon_step_unit` once at boot, through the schema guard (`WorldQueryCompat`): a missing table or column is logged and means "units not known"
+// (`LastStepUnitLoad().read` false, `.tableMissing` true), never an abort. A row whose plan or step is not in the loaded plan table is refused (counted, the
+// first ten logged). Does nothing (and says so) while the plan table is not loaded. Builds the spawn index (below). Two boot lines: `>> Loaded <n> dungeon step
+// units` and the index line. The reload does NOT call this: `.tb plan reload` goes through FillUnitReloadHost (all or nothing with the plan tables).
 void LoadDungeonStepUnits();
 }
 
@@ -29,65 +33,28 @@ namespace TortoiseBots
 {
 namespace run
 {
-// One row of `ai_dungeon_step_unit`: the member number `idx` of the step (plan, leg, seq); role = pack | boss | first (boss.first) | patrol.
-struct StepUnit
-{
-    uint8 leg = 0;
-    uint16 seq = 0;
-    uint8 idx = 0;
-    uint32 entry = 0;
-    float x = 0.0f, y = 0.0f, z = 0.0f;
-    std::string role;
-};
-
-// What the last LoadDungeonStepUnits saw.
-struct StepUnitLoad
-{
-    bool read = false;          // false: the plan table was not loaded, nothing was read (every count below is then unknown, not zero)
-    uint32 rows = 0;            // rows the query handed over
-    uint32 kept = 0;
-    uint32 refused = 0;         // unknown plan, step missing from the plan, a bad role, a zero entry or a non-finite position
-};
+// StepUnit, StepUnitLoad, UnitResult, UnitCheck, PlanCheck: TbPlanMatch.h (the pure part).
 StepUnitLoad const& LastStepUnitLoad();
 
 // The unit rows of a plan, in (leg, seq, idx) order; empty when the plan has none or the rows were not read.
 std::vector<StepUnit> const& UnitsOfPlan(std::string const& plan);
 
-// ---- `.tb plan <plan> check`: the match of every unit row against the spawns of a map ----
-enum class UnitResult : uint8 { Matched, Near, Missing };
-
-constexpr float kMatchYd = 5.0f;        // a spawn within this of the row is `matched`
-constexpr float kNearYd = 15.0f;        // ... within this `near`; farther, or none: `missing`
-
-struct UnitCheck
-{
-    uint8 leg = 0;
-    uint16 seq = 0;
-    uint8 idx = 0;
-    uint32 entry = 0;
-    std::string role;
-    UnitResult result = UnitResult::Missing;
-    float yd = 0.0f;            // the distance to the spawn (matched / near only)
-    uint32 spawnId = 0;         // the ForeverCore spawn id (matched / near only)
-    bool optional = false;      // D4: the entry has no spawn at all on the plan's map, so a step does not need this member (a summoned pet, entry 8996)
-};
-
-struct PlanCheck
-{
-    std::string plan;
-    uint32 mapId = 0;
-    uint32 instanceId = 0;
-    std::vector<UnitCheck> units;           // (leg, seq, idx) order
-    uint32 matchedCount = 0, nearCount = 0, missingCount = 0, optionalCount = 0;   // `optionalCount` counts the missing units that are optional (they are also in `missingCount`)
-    uint32 steps = 0, stepsOk = 0, stepsShort = 0;             // steps that have at least one unit row
-};
-
-// The match of the plan's unit rows against the creature spawns of `map` (its id and difficulty): one-to-one, greedy by distance (every pair within kNearYd,
-// nearest first, a row and a spawn each used once; ties by (leg, seq, idx) then spawn id). A step is `ok` when every non-optional member is matched or near
-// and at least one member was found. The result is CACHED per (map id, instance id, plan) and is what S6's pack lookup reads; `refresh` recomputes it.
-// Spawn data is static after boot, so the cache never goes stale except through `ClearPlanChecks` (called after a plan reload).
-PlanCheck const& CheckPlanOnMap(std::string const& plan, Map const* map, bool refresh);
+// ---- `.tb plan <plan> check`: the match of every unit row against the spawns of a map (the rules: MatchPlanUnits in TbPlanMatch.h) ----
+// The match of the plan's unit rows against the creature spawns of `map` (its id and difficulty), MatchPlanUnits' rules. Cost: proportional to the plan's rows and to
+// the spawns of THEIR entries (an index (map, entry) -> spawns, built once from the core's creature data at boot and again by every successful `.tb plan reload`;
+// it holds only the entries some unit row names), not to the creature spawns of the world.
+// The result is a shared_ptr to a const check: the cache (newest 16 per (map id, instance id, plan)) and a reload drop only their own reference, so a holder (S6
+// reads one across ticks) keeps its copy. `refresh` recomputes it, but at most once per kPlanCheckMinRefreshMs per key: a forced refresh inside that time is
+// answered from the cache (the spawn data is static after boot, so the answer is the same; the bound keeps a command loop from re-matching every tick).
+// ASSUMPTION: the creature spawn data does not change while the server runs (no `.npc add`/delete of a spawn is followed); a reload refreshes the index.
+constexpr long long kPlanCheckMinRefreshMs = 1000;
+std::shared_ptr<PlanCheck const> CheckPlanOnMap(std::string const& plan, Map const* map, bool refresh);
 void ClearPlanChecks();
+
+// For `.tb plan reload`: fills `host` (ai::ReloadDungeonPlans) so the unit rows are read, checked against the NEW plan table and indexed into temporaries, and
+// installed (with the cache cleared) only when the plan tables, the tactics and the units all pass: otherwise nothing changes. host.table stays empty when
+// there is nothing to do (the unit table was never read and still does not exist).
+void FillUnitReloadHost(ai::PlanReloadHost& host);
 
 // The records of `.tb plan` (one writer each, so the command and `.tb grammar selftest` cannot disagree).
 // `plan plan= map= legs= steps= moves= pulls= bosses= [units=] cc_priority= kill_first= [source=]`: `units` (the unit rows the plan has) and `source` are omitted when -1 / null

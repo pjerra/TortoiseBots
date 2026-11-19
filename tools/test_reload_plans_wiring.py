@@ -99,8 +99,11 @@ class ReloadPlansWiring(unittest.TestCase):
         # the decision is the tested commit, into the holders the getters read
         self.assertIn("CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), "
                       "std::move(nextTactics),\n        skippedTactics, reads, inUse, reconcile ? std::function<void(const BossTacticTable&)>(reconcile) : "
-                      "std::function<void(const BossTacticTable&)>());",
+                      "std::function<void(const BossTacticTable&)>(),\n        haveHost ? &extra : nullptr);",
                       reload)
+        # N5: a host table (ForeverCore's unit rows) is read and checked before the commit and installed by it; the Turtle call passes none
+        self.assertIn("host->prepare(*next, extra.rowsRead)", reload)
+        self.assertIn("PlanReloadHost const* host = nullptr", (ROOT / "ai/playerbot/DungeonPlanMgr.h").read_text())
         self.assertIn("return DungeonPlanHolder().Current();", body(MGR, "DungeonPlanTable& ai::GetDungeonPlans()"))
         self.assertIn("return BossTacticsHolder().Current();", body(TACTICS, "BossTacticTable& ai::GetBossTactics()"))
         # never reloads before the startup load sealed the set
@@ -192,6 +195,12 @@ class LoaderPortWiring(unittest.TestCase):
     def test_both_shims_include_the_pair(self):
         self.assertIn('#include "cmangos-compat-s5.h"', (ROOT / "ai/cmangos-compat-shim.h").read_text())
         self.assertIn('#include "TbCompat_S5.h"', (ROOT / "forever/src/compat/forever-compat-shim.h").read_text())
+
+    def test_a_missing_reconciler_is_reported_on_turtle(self):
+        # N5: the Turtle core always registers the seek_aura reconciler, so a null pointer at reload is logged there (ForeverCore has no boss tactics: silent)
+        self.assertIn("if (!reconcile)\n        SeekReconcilerMissingCompat();", MGR)
+        self.assertIn("sLog.outError(", self.COMPAT_T.split("SeekReconcilerMissingCompat()")[1])
+        self.assertIn("inline void SeekReconcilerMissingCompat() {}", (ROOT / "forever/src/compat/TbCompat_S5.h").read_text())
 
     def test_the_loader_does_not_include_the_boss_tactics_actions(self):
         self.assertNotIn("BossTacticsActions.h", MGR)
