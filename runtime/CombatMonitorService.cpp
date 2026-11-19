@@ -18,6 +18,7 @@
 #endif
 
 #include <memory>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
@@ -244,7 +245,7 @@ void CombatMonitorService::LoadTimelineWatch()
 {
     // One pass at startup: the watch list is data (world table ai_combat_aura_watch), never a spell id in code.
     std::vector<uint32_t> ids;
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `spell_id` FROM `ai_combat_aura_watch`"));
+    auto result = QueryGuardCompat(WorldDatabase.Query("SELECT `spell_id` FROM `ai_combat_aura_watch`"));
     if (result)
     {
         do

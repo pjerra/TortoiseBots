@@ -29,6 +29,7 @@
 #include <random>
 #include <sstream>
 #include <utility>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -87,12 +88,11 @@ bool QueryLoginAccountId(std::string const& normalizedName, uint32_t& outAccount
         return false;
 
     std::string escaped = normalizedName;
-    LoginDatabase.escape_string(escaped);
+    DbEscapeW3(LoginDatabase, escaped);
     // COUNT(*) + MAX(id) always yields 1 row when the DB answers, separating
     // "missing account" from a failed query. Also bypasses AccountMgr's
     // m_accountNameToId cache, which DeleteAccount does not invalidate.
-    std::unique_ptr<QueryResult> res(LoginDatabase.PQuery(
-        "SELECT COUNT(*), COALESCE(MAX(`id`), 0) FROM `account` WHERE `username` = '%s'",
+    auto res = QueryGuardCompat(DbPQueryW3(LoginDatabase, "SELECT COUNT(*), COALESCE(MAX(`id`), 0) FROM `account` WHERE `username` = '%s'",
         escaped.c_str()));
     if (!res)
         return false;
@@ -180,7 +180,7 @@ void AhBotSellerAccount::EnsureLoadedLocked() const
         m_accountName = ai::NormalizeAccountNameUpper(configuredName);
     }
 
-    std::unique_ptr<QueryResult> countRes(CharacterDatabase.PQuery(
+    auto countRes = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `tortoise_bots_ahbot_seller`"));
     if (!countRes)
     {
@@ -193,7 +193,7 @@ void AhBotSellerAccount::EnsureLoadedLocked() const
     uint32_t rowCount = countRes->Fetch()[0].GetUInt32();
     if (rowCount > 0)
     {
-        std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+        auto rows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT `guid`, `account_id`, `faction` FROM `tortoise_bots_ahbot_seller` ORDER BY `guid`"));
         if (rows)
         {
@@ -212,7 +212,7 @@ void AhBotSellerAccount::EnsureLoadedLocked() const
 
     if (m_accountId != 0)
     {
-        std::unique_ptr<QueryResult> liveRows(CharacterDatabase.PQuery(
+        auto liveRows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT c.`guid`, c.`race` FROM `characters` c "
             "INNER JOIN `tortoise_bots_ahbot_seller` s ON s.`guid` = c.`guid` "
             "WHERE c.`account` = '%u' AND c.`deleteDate` IS NULL ORDER BY c.`guid`",
@@ -453,7 +453,7 @@ void AhBotSellerAccount::RunRepairCheck()
 
     // Count existing registry rows first so we detect stale rows even if the
     // account was deleted and recreated.
-    std::unique_ptr<QueryResult> regCountRes(CharacterDatabase.PQuery(
+    auto regCountRes = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `tortoise_bots_ahbot_seller`"));
     if (!regCountRes)
     {
@@ -469,7 +469,7 @@ void AhBotSellerAccount::RunRepairCheck()
         // registry rows from the vanished account before creating the new one.
         if (regTotal > 0)
         {
-            std::unique_ptr<QueryResult> oldRows(CharacterDatabase.PQuery("SELECT `guid` FROM `tortoise_bots_ahbot_seller`"));
+            auto oldRows = QueryGuardCompat(CharacterPQueryCompat("SELECT `guid` FROM `tortoise_bots_ahbot_seller`"));
             if (oldRows)
             {
                 do
@@ -501,7 +501,7 @@ void AhBotSellerAccount::RunRepairCheck()
             AccountMgr::normalizeString(name);
             AccountMgr::normalizeString(pass);
             std::string hash = sAccountMgr.CalculateShaPassHash(name, pass);
-            LoginDatabase.escape_string(name);
+            DbEscapeW3(LoginDatabase, name);
             if (LoginDatabase.PExecute("INSERT INTO account(username,sha_pass_hash,joindate) VALUES('%s','%s',NOW())",
                     name.c_str(), hash.c_str()))
             {
@@ -549,7 +549,7 @@ void AhBotSellerAccount::RunRepairCheck()
     }
 
     // Verify active non-deleted characters on this account.
-    std::unique_ptr<QueryResult> charCountRes(CharacterDatabase.PQuery(
+    auto charCountRes = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `characters` WHERE `account` = '%u' AND `deleteDate` IS NULL", accountId));
     if (!charCountRes)
     {
@@ -567,7 +567,7 @@ void AhBotSellerAccount::RunRepairCheck()
 
     if (charTotal > 0)
     {
-        std::unique_ptr<QueryResult> charRows(CharacterDatabase.PQuery(
+        auto charRows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT c.`guid`, c.`race`, s.`account_id`, s.`faction` "
             "FROM `characters` c "
             "LEFT JOIN `tortoise_bots_ahbot_seller` s ON s.`guid` = c.`guid` "
@@ -595,9 +595,9 @@ void AhBotSellerAccount::RunRepairCheck()
             else
                 liveHorde.push_back(guid);
 
-            bool hasRow = !fields[2].IsNULL();
+            bool hasRow = !FieldIsNullW3(fields[2]);
             uint32_t rowAccount = hasRow ? fields[2].GetUInt32() : 0;
-            std::string rowFaction = fields[3].IsNULL() ? std::string() : fields[3].GetCppString();
+            std::string rowFaction = FieldIsNullW3(fields[3]) ? std::string() : FieldTextW3(fields[3]);
             if (!hasRow || rowAccount != accountId || rowFaction != ai::SellerFactionName(faction))
             {
                 needRegistryBackfill.push_back(guid);
@@ -618,7 +618,7 @@ void AhBotSellerAccount::RunRepairCheck()
     std::vector<uint32_t> staleGuids;
     if (regTotal > 0)
     {
-        std::unique_ptr<QueryResult> regRows(CharacterDatabase.PQuery(
+        auto regRows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT `guid`, `account_id` FROM `tortoise_bots_ahbot_seller`"));
         if (regRows)
         {
@@ -743,7 +743,7 @@ uint32_t AhBotSellerAccount::PurgeSellerMail(uint32_t maxMails)
         return 0;
 
     std::string receiverList = JoinUintList(sellers, 0, sellers.size());
-    std::unique_ptr<QueryResult> mails(CharacterDatabase.PQuery(
+    auto mails = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `id`, `itemTextId`, `has_items` FROM `mail` WHERE `receiver` IN (%s) LIMIT %u",
         receiverList.c_str(), maxMails));
     if (!mails)
@@ -777,7 +777,7 @@ uint32_t AhBotSellerAccount::PurgeSellerMail(uint32_t maxMails)
         {
             size_t end = std::min(offset + kMailDeleteChunkSize, mailIdsWithItems.size());
             std::string idList = JoinUintList(mailIdsWithItems, offset, end);
-            std::unique_ptr<QueryResult> items(CharacterDatabase.PQuery(
+            auto items = QueryGuardCompat(CharacterPQueryCompat(
                 "SELECT `item_guid` FROM `mail_items` WHERE `mail_id` IN (%s)",
                 idList.c_str()));
             if (items)

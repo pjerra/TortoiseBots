@@ -147,7 +147,7 @@ bool HireLifecycle::EnsureDeletionIntent(ObjectGuid botGuid, char const* reason)
     // No ledger row: the deletion already finished (ProcessDeletion clears the row last), or the row is missing.
     // Only a character that is provably gone counts; COUNT(*) always returns a row, so a null result is a read
     // error, not "gone".
-    std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+    auto count = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `characters` WHERE `guid` = '%u'", botGuid.GetCounter()));
     return count && count->Fetch()[0].GetUInt32() == 0;
 }
@@ -908,7 +908,7 @@ void HireLifecycle::SweepGracePeriod(time_t now)
 
 bool HireLifecycle::LedgerRow(ObjectGuid botGuid, uint32_t& characterAccountId) const
 {
-    std::unique_ptr<QueryResult> row(CharacterDatabase.PQuery(
+    auto row = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `character_account_id` FROM `tortoise_bots_hire` WHERE `character_guid` = '%u'",
         botGuid.GetCounter()));
     if (!row)
@@ -962,13 +962,13 @@ bool HireLifecycle::RecoverStaleHires()
         return false;
     }
 
-    std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+    auto rows = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `character_guid`, `character_account_id` FROM `tortoise_bots_hire`"));
     if (!rows)
     {
         // A null result may mean "no rows" or "the table could not be read";
         // COUNT(*) cannot return an empty row set, so it tells them apart.
-        std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+        auto count = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT COUNT(*) FROM `tortoise_bots_hire`"));
         if (!count)
         {
@@ -1048,13 +1048,13 @@ bool HireLifecycle::ProcessDeletion(PendingDeletion& entry, time_t now)
 
     // Offline: revalidate every durable fact before touching anything.
     uint32_t ledgerAccountId = 0;
-    std::unique_ptr<QueryResult> ledger(CharacterDatabase.PQuery(
+    auto ledger = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `character_account_id` FROM `tortoise_bots_hire` WHERE `character_guid` = '%u'", guidLow));
     bool hasLedger = ledger != nullptr;
     if (hasLedger)
         ledgerAccountId = ledger->Fetch()[0].GetUInt32();
 
-    std::unique_ptr<QueryResult> character(CharacterDatabase.PQuery(
+    auto character = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `account` FROM `characters` WHERE `guid` = '%u'", guidLow));
     bool characterExists = character != nullptr;
     uint32_t accountId = characterExists ? character->Fetch()[0].GetUInt32() : 0;

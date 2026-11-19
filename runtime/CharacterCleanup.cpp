@@ -18,6 +18,7 @@
 #include <set>
 #include <sstream>
 #include <vector>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -174,7 +175,7 @@ namespace
 // the core's own pet sweep afterwards finds nothing left to prune.
 void DeleteCharacterPets(uint32 guidLow)
 {
-    std::unique_ptr<QueryResult> pets(CharacterDatabase.PQuery(
+    auto pets = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT id FROM `character_pet` WHERE `owner` = '%u'", guidLow));
     if (!pets)
         return;

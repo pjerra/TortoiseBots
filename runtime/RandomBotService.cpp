@@ -321,7 +321,7 @@ void RandomBotService::LoadCandidates()
     // pool.
     std::set<uint32> hiredCharacters;
     {
-        std::unique_ptr<QueryResult> ledger(CharacterDatabase.PQuery(
+        auto ledger = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT `character_guid` FROM `tortoise_bots_hire`"));
         if (ledger)
         {
@@ -335,7 +335,7 @@ void RandomBotService::LoadCandidates()
     std::set<uint32> characterIds;
     for (uint32 accountId : accountIds)
     {
-        std::unique_ptr<QueryResult> characters(CharacterDatabase.PQuery(
+        auto characters = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT guid, level, race, logout_time FROM characters WHERE account = '%u' ORDER BY guid", accountId));
         if (!characters)
             continue;
@@ -1091,8 +1091,8 @@ void RandomBotService::ResolvePinnedBots()
         if (rawName.empty())
             continue;
         std::string escaped = rawName;
-        CharacterDatabase.escape_string(escaped);
-        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT guid FROM characters WHERE name = '%s' LIMIT 1", escaped.c_str()));
+        DbEscapeW3(CharacterDatabase, escaped);
+        auto result = QueryGuardCompat(CharacterPQueryCompat("SELECT guid FROM characters WHERE name = '%s' LIMIT 1", escaped.c_str()));
         if (!result)
         {
             TB_LOG_DETAIL("TortoiseBots: pinned bot '%s' was not found or the lookup failed (no retry until restart)", rawName.c_str());
@@ -1792,7 +1792,7 @@ void RandomBotService::UpdateLineage(uint32_t diff)
     h.characterDbBytes = m_poolHealth.characterDbBytes;
     if (m_lineagePasses++ % 10 == 0)
     {
-        std::unique_ptr<QueryResult> size(CharacterDatabase.Query(
+        auto size = QueryGuardCompat(CharacterDatabase.Query(
             "SELECT COALESCE(SUM(`data_length` + `index_length`), 0) FROM `information_schema`.`TABLES` WHERE `table_schema` = DATABASE()"));
         if (size)
             h.characterDbBytes = size->Fetch()[0].GetUInt64();

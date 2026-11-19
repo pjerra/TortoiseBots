@@ -27,6 +27,7 @@
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -52,7 +53,7 @@ public:
         if (m_initialized)
             return;
         m_ranks.clear();
-        std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
+        auto result = QueryGuardCompat(CharacterDatabase.Query(
             "SELECT `guild_id`, `bot_rank` FROM `tortoise_bots_guild_bot_rank`"));
         if (result)
         {
@@ -159,7 +160,7 @@ bool GuildHasRealPlayerMember(uint32_t guildId, uint32_t excludeGuidLow)
 {
     if (!guildId)
         return false;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `guid` FROM `guild_member` WHERE `guildid` = '%u'", guildId));
     if (!result)
         return false;
@@ -182,7 +183,7 @@ std::optional<std::vector<uint32_t>> BankTabMinRanks(uint32_t guildId)
 {
     if (!guildId)
         return std::nullopt;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `tabs`, `minrank1`, `minrank2`, `minrank3`, `minrank4`, `minrank5` "
         "FROM `guild_bank_tabs` WHERE `guildid` = '%u' AND `isInferno` = '0'",
         guildId));
@@ -255,7 +256,7 @@ void ApplyBotRankToGuild(uint32_t guildId)
         return;
     uint32_t rank = WantedBotRank(guildId, guild->GetRanksSize());
     // One member query feeds both the scope check and the moves.
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `guid` FROM `guild_member` WHERE `guildid` = '%u'", guildId));
     std::vector<uint32_t> members;
     if (result)
@@ -306,7 +307,7 @@ void LoadBotRankManagementAtStartup()
     // One pass over the whole member table, grouped per guild in memory, to
     // warm the management verdict. Members are not moved: a rank a player
     // gave a bot stays; only joins and `.bot order rank` move bots.
-    std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
+    auto result = QueryGuardCompat(CharacterDatabase.Query(
         "SELECT `guildid`, `guid` FROM `guild_member` ORDER BY `guildid`"));
     if (!result)
         return;
@@ -340,7 +341,7 @@ void OpenBotBankTabForNextStart()
 {
     if (!sPlayerbotAIConfig.guildOrderBotRank)
         return;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
+    auto result = QueryGuardCompat(CharacterDatabase.Query(
         "SELECT `guildid`, `minrank1` FROM `guild_bank_tabs` WHERE `isInferno` = '0' AND `tabs` > '0'"));
     if (!result)
         return;
@@ -464,7 +465,7 @@ uint32_t GuildBankItemCount(uint32_t guildId, uint32_t itemId)
         }
     }
     Stock stock;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `item_template`, SUM(`count`) FROM `guild_bank` "
         "WHERE `guildid` = '%u' AND `isInferno` = '0' GROUP BY `item_template`", guildId));
     if (result)

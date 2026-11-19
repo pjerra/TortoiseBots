@@ -20,6 +20,7 @@
 #include "Maps/MoveMap.h"
 #include "strategy/values/HazardsValue.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -3523,7 +3524,7 @@ void TravelNodeMap::loadNodeStore()
                 Field* fields = result->Fetch();
                 bar.step();
 
-                TravelNode* node = addNode(WorldPosition(fields[2].GetUInt32(), fields[3].GetFloat(), fields[4].GetFloat(), fields[5].GetFloat()), fields[1].GetCppString(), true);
+                TravelNode* node = addNode(WorldPosition(fields[2].GetUInt32(), fields[3].GetFloat(), fields[4].GetFloat(), fields[5].GetFloat()), FieldTextW3(fields[1]), true);
 
                 if (fields[6].GetBool())
                     node->setLinked(true);

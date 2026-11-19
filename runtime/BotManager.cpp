@@ -1365,7 +1365,7 @@ void BotManager::OnPlayerLogin(::Player* player)
         // dead current pet is saved as NOT_IN_SLOT, and login loads only the
         // current slot. So "owns a pet" is a row question, not an
         // IsLoaded question. Stabled pets stay: they are not in play.
-        std::unique_ptr<QueryResult> petRows(CharacterDatabase.PQuery(
+        auto petRows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT id FROM character_pet WHERE owner = '%u' AND (slot = '%u' OR slot > '%u')",
             player->GetGUIDLow(), uint32(PET_SAVE_AS_CURRENT), uint32(PET_SAVE_LAST_STABLE_SLOT)));
 
@@ -1859,7 +1859,7 @@ bool BotManager::RegisterOwnedCharacter(uint32_t ownerAccountId, uint32_t charac
 
 bool BotManager::GetOwnedCharacter(::ObjectGuid characterGuid, OwnedCharacter& result)
 {
-    std::unique_ptr<QueryResult> query(CharacterDatabase.PQuery(
+    auto query = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `owner_account_id`, `character_account_id`, `character_guid`, `master_guid` "
         "FROM `tortoise_bots_owned_character` WHERE `character_guid` = '%u' LIMIT 1",
         characterGuid.GetCounter()));
@@ -1882,7 +1882,7 @@ std::vector<OwnedCharacter> BotManager::GetOwnedCharacters(uint32_t ownerAccount
 
     // Same-account characters are owned candidates even before their first
     // Headless login; explicit rows extend the roster to GM-owned accounts.
-    std::unique_ptr<QueryResult> query(CharacterDatabase.PQuery(
+    auto query = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COALESCE(o.`owner_account_id`, c.`account`), c.`account`, c.`guid`, "
         "COALESCE(o.`master_guid`, 0), c.`name`, c.`class`, c.`online`, c.`map`, "
         "c.`zone`, c.`position_x`, c.`position_y`, c.`position_z` "

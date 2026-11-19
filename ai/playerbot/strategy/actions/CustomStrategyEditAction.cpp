@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "CustomStrategyEditAction.h"
 #include "playerbot/strategy/CustomStrategy.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -48,7 +49,7 @@ bool CustomStrategyEditAction::Print(std::string name, Player* requester)
         return false;
 
     std::string safeName = name;
-    CharacterDatabase.escape_string(safeName);
+    DbEscapeW3(CharacterDatabase, safeName);
 
     std::ostringstream out; out << "=== " << name << " ===";
     ai->TellPlayer(requester, out.str());
@@ -77,8 +78,8 @@ bool CustomStrategyEditAction::Edit(std::string name, uint32 idx, std::string co
 
     std::string safeName = name;
     std::string safeCommand = command;
-    CharacterDatabase.escape_string(safeName);
-    CharacterDatabase.escape_string(safeCommand);
+    DbEscapeW3(CharacterDatabase, safeName);
+    DbEscapeW3(CharacterDatabase, safeCommand);
 
     uint32 owner = (uint32)ai->GetBot()->GetGUIDLow();
     auto results = CharacterDatabase.PQuery("SELECT action_line FROM ai_playerbot_custom_strategy WHERE name = '%s' and owner = '%u' and idx = '%u'", safeName.c_str(), owner, idx);

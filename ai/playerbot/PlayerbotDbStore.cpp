@@ -15,6 +15,7 @@
 #include "../../runtime/RemoteCommanderPolicy.h"
 #include "strategy/values/Formations.h"
 #include "strategy/values/PositionValue.h"
+#include "playerbot/TbCompatW3.h"
 INSTANTIATE_SINGLETON_1(PlayerbotDbStore);
 
 using namespace ai;
@@ -22,7 +23,7 @@ using namespace ai;
 void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
 {
     uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
-    CharacterDatabase.escape_string(preset);
+    DbEscapeW3(CharacterDatabase, preset);
 
     // No pull survives a reload (relog, reset, preset). Ended before the
     // replay: its own copies of "wait for attack" go and the player's delay
@@ -203,7 +204,7 @@ void PlayerbotDbStore::Reset(PlayerbotAI *ai, std::string preset)
 {
     uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
     uint32 account = AccountIdOfCharacterCompat(ObjectGuid(guid));
-    CharacterDatabase.escape_string(preset);
+    DbEscapeW3(CharacterDatabase, preset);
 
     CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' AND `preset` = '%s'", guid, preset.c_str());
 }
@@ -224,8 +225,8 @@ void PlayerbotDbStore::InvalidateStrategySnapshots(PlayerbotAI *ai)
 
 void PlayerbotDbStore::SaveValue(uint64 guid, std::string preset, std::string key, std::string value)
 {
-    CharacterDatabase.escape_string(preset);
-    CharacterDatabase.escape_string(key);
-    CharacterDatabase.escape_string(value);
+    DbEscapeW3(CharacterDatabase, preset);
+    DbEscapeW3(CharacterDatabase, key);
+    DbEscapeW3(CharacterDatabase, value);
     CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%lu', '%s', '%s', '%s')", guid, preset.c_str(), key.c_str(), value.c_str());
 }

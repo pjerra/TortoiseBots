@@ -896,7 +896,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
     {
         if (AhBotSellerAccount::Instance().IsSellerAccount(id))
             return false;
-        std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+        auto rows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT guid, race, account FROM characters WHERE account = '%u' AND deleteDate IS NULL", id));
         uint32_t count = 0;
         bool hasAlliance = false;
@@ -1848,7 +1848,7 @@ uint8_t HireProvisionService::HighestUnlockedHireTierFor(Player* player)
         uint32_t accountId = player->GetSession() ? player->GetSession()->GetAccountId() : 0;
         if (accountId)
         {
-            std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+            auto rows = QueryGuardCompat(CharacterPQueryCompat(
                 "SELECT q.quest FROM character_queststatus q INNER JOIN characters c ON c.guid = q.guid "
                 "WHERE c.account = '%u' AND q.rewarded <> 0 AND q.quest BETWEEN %u AND %u",
                 accountId, kHireUnlockQuestFirst, kHireUnlockQuestLast));

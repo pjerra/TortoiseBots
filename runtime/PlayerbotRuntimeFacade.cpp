@@ -332,7 +332,7 @@ void RandomBotFacade::LoadNamedLocationCache()
             point.y = fields[3].GetFloat();
             point.z = fields[4].GetFloat();
             point.orientation = fields[5].GetFloat();
-            sNamedLocations.Add(fields[0].GetCppString(), point);
+            sNamedLocations.Add(FieldTextW3(fields[0]), point);
         } while (result->NextRow());
     }
 

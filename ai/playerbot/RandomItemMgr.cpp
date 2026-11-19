@@ -17,6 +17,7 @@
 #include "policy/gear/FeralSpecPolicy.h"
 #include "../../runtime/policy/provision/AmmoCachePolicy.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 char * strstri (const char* str1, const char* str2);
 
@@ -2397,7 +2398,7 @@ void RandomItemMgr::BuildRaidSourceIndex()
     // Classify every spawn-table map through the DBC once.
     std::set<uint32> raidMaps;
     {
-        std::unique_ptr<QueryResult> rows(WorldDatabase.Query("SELECT DISTINCT map FROM creature UNION SELECT DISTINCT map FROM gameobject"));
+        auto rows = QueryGuardCompat(WorldDatabase.Query("SELECT DISTINCT map FROM creature UNION SELECT DISTINCT map FROM gameobject"));
         if (rows)
         {
             do
@@ -2421,8 +2422,7 @@ void RandomItemMgr::BuildRaidSourceIndex()
 
         auto collect = [&mapList](char const* table, std::set<uint32>& out)
         {
-            std::unique_ptr<QueryResult> rows(WorldDatabase.PQuery(
-                "SELECT DISTINCT id FROM %s WHERE map IN (%s)", table, mapList.c_str()));
+            auto rows = QueryGuardCompat(DbPQueryW3(WorldDatabase, "SELECT DISTINCT id FROM %s WHERE map IN (%s)", table, mapList.c_str()));
             if (!rows)
                 return;
             do
@@ -2489,7 +2489,7 @@ void RandomItemMgr::BuildSourceTierIndex()
 
     // Creature template -> min tier over its spawns (id..id4 columns).
     {
-        std::unique_ptr<QueryResult> rows(WorldDatabase.Query(
+        auto rows = QueryGuardCompat(WorldDatabase.Query(
             "SELECT id, id2, id3, id4, map FROM creature"));
         if (rows)
         {
@@ -2512,7 +2512,7 @@ void RandomItemMgr::BuildSourceTierIndex()
 
     // GameObject template -> min tier over its spawns.
     {
-        std::unique_ptr<QueryResult> rows(WorldDatabase.Query("SELECT id, map FROM gameobject"));
+        auto rows = QueryGuardCompat(WorldDatabase.Query("SELECT id, map FROM gameobject"));
         if (rows)
         {
             do
@@ -2566,7 +2566,7 @@ void RandomItemMgr::BuildSourceTierIndex()
     // The in-memory SpellEntry store carries the merged DBC+DB rows, so the
     // chain walks without world-DB spell queries.
     {
-        std::unique_ptr<QueryResult> recipes(WorldDatabase.Query(
+        auto recipes = QueryGuardCompat(WorldDatabase.Query(
             "SELECT entry, spellid_1 FROM item_template WHERE class = 9 AND spellid_1 <> 0"));
         if (recipes)
         {
