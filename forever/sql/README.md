@@ -6,7 +6,7 @@ not a module's. A file here is applied BY HAND, once, to the `world` database of
 
 | File | What | Rows |
 |---|---|---|
-| `world/2026_11_19_00_warrior_trainer_spells.sql` | the warrior trainers (27: the ones that already teach Bloodrage and Shield Block) get Defensive Stance 71, Taunt 355, Sunder Armor 7386 and Intercept 20252, which the data lacked (a level 18 tank could not learn them); from the data collaborator (`forever-warrior-trainer-fix.sql`, 2026-11-19) | 4 `trainer_spell` rows per trainer, 106 in all |
+| `world/2026_11_19_00_warrior_trainer_spells.sql` | the warrior trainers (27: the ones that already teach Bloodrage and Shield Block) get Defensive Stance 71, Taunt 355, Sunder Armor 7386 and Intercept 20252, which the data lacked (a level 18 tank could not learn them); from the data collaborator (`forever-warrior-trainer-fix.sql`, 2026-11-19) | 4 `trainer_spell` rows per trainer, 108 in all (27 trainers) |
 
 ## Applying it on the build VM's test server (`~/forever-run`, containers `forever-db`)
 
