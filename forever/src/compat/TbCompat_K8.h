@@ -10,7 +10,7 @@
 // (Sap itself is out of slice 8 (decision D3); the rule is compiled and unreachable.)
 inline bool StunnedOrPendingStunCompat(Unit const* unit) { return unit->HasUnitState(UNIT_STATE_STUNNED); }
 
-// Hand a stack over: the item's owner field becomes the receiver. T `Item::SetOwnerGuid(ObjectGuid)`; F `Item::SetOwnerGUID(ObjectGuid)` (Item.h:206),
+// Hand a stack over: the item's owner field becomes the receiver. T `Item::SetOwnerGuid(ObjectGuid)`; F `Item::SetOwnerGUID(ObjectGuid)` (Item.h:205),
 // the same field (UF::ItemData::Owner). F's `Player::MoveItemToInventory` sets it again when the owner differs (Player.cpp:13096-13097), so the
 // call is redundant there and harmless.
 inline void ItemSetOwnerCompat(Item* item, Unit const* owner) { item->SetOwnerGUID(owner->GetGUID()); }
@@ -19,7 +19,7 @@ inline void ItemSetOwnerCompat(Item* item, Unit const* owner) { item->SetOwnerGU
 // and CASTING = 2 (Turtle: SPELL_STATE_CASTING is a CHANNEL in progress, Spell.cpp:3999; a missile in flight is DELAYED = 3). F numbers
 // PREPARING 1, LAUNCHED 2, CHANNELING 3 (Spell.h:254-262); the raw F state would turn a missile in flight (LAUNCHED, Spell.cpp:3945: the bar is
 // over, the effects are on their way) into "casting", and a real channel (3) into nothing. So: PREPARING -> 1, CHANNELING -> 2, every other state
-// -> 0 (not on a bar: not interruptible), which is also the core's own gate for Interrupt Cast (SpellEffects.cpp:3123-3126: CHANNELING, or
+// -> 0 (not on a bar: not interruptible), which is also the core's own gate for Interrupt Cast (SpellEffects.cpp:3128-3129: CHANNELING, or
 // PREPARING with a cast time).
 inline uint32 InterruptSpellStateCompat(Spell const* spell)
 {
