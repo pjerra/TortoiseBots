@@ -72,6 +72,9 @@ public:
     bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
     std::size_t Count() const { return _bots.size(); }
+    // H3 (slice 3): the host master guid of a bot (empty = none or not a bot), and what `.tb state` shows of its follow state.
+    ObjectGuid MasterOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? ObjectGuid::Empty : itr->second.master; }
+    bool FollowStatus(ObjectGuid characterGuid, bool& away, uint32& awaySeconds, bool& blocked, std::string& blockedWhy, bool& hasBrain) const { auto itr = _bots.find(characterGuid); if (itr == _bots.end()) return false; Bot const& b = itr->second; away = b.masterAway; awaySeconds = (b.graceLeftMs + 999) / 1000; blocked = b.followBlocked; blockedWhy = b.followBlockedWhy; hasBrain = b.brain != nullptr; return true; }
 
     void Update(uint32 diff);
 
@@ -102,10 +105,16 @@ private:
         uint32 followBlockedMap = 0;
         uint32 followBlockedInstance = 0;
         uint32 followRetryMs = 0;
+        uint32 outOfSightMs = 0;       // N2: how long the master has been over 100 yd away and out of line of sight
+        uint32 catchUpCooldownMs = 0;  // N2: no second catch-up teleport before this has run out
         std::string followBlockedWhy;
     };
 
     void Think(Bot& bot, Player* me);
+public:
+    // N1: the one guarded call of Map::PlayerCannotEnter: "" = no objection, else the reason (see TbBotMgr.cpp).
+    static std::string CanEnterMap(Player* who, uint32 mapId);
+private:
     static std::string JoinParty(Player* bot, Player* master);
     void DropBrain(Bot& bot);
     // R10 (S2): the master is gone: take the brain down and wait out the grace (or log the bot out at once when the grace is 0).

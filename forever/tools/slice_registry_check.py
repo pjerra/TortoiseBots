@@ -10,7 +10,7 @@ compiles as it is), then reports:
 
   (a) slice keys that are not keys of the full build, or whose creator text differs from the full build's.
       Must be empty: the script exits 1 otherwise.
-  (b) keys that the slice's own source files (forever/SLICE2.txt, each .cpp and the .h of the same name) reference by
+  (b) keys that the slice's own source files (forever/SLICE3.txt (slice 3; SLICE2.txt before), each .cpp and the .h of the same name) reference by
       string and the slice does not register. This is the to-do list for later packages, not a failure.
       Values come with the C++ types they are read as (the missing-value stand-in in SliceMissingKeyGuard.h
       covers the types listed there).
@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 STRAT = os.path.join(ROOT, "ai", "playerbot", "strategy")
 SLICE_CTX = os.path.join(ROOT, "forever", "src", "slice", "SliceAiObjectContext.cpp")
-SLICE_LIST = os.path.join(ROOT, "forever", "SLICE2.txt")
+SLICE_LIST = os.path.join(ROOT, "forever", "SLICE3.txt")   # slice 3: the list the keys are closed against (CMake still reads SLICE2.txt until the merge package)
 SLICE_GUARD = os.path.join(ROOT, "forever", "src", "slice", "SliceMissingKeyGuard.h")
 
 # Full-build registries, in the order AiObjectContext::AiObjectContext adds them (first context wins a lookup).

@@ -18,6 +18,7 @@
 #include "runtime/GuildOrderStore.h"
 #include "runtime/HireLifecycle.h"
 #include "runtime/RandomBotAccountRegistry.h"
+#include "host/TbH3.h"
 
 namespace TortoiseBots
 {
@@ -156,9 +157,10 @@ void NoteEnchantReplaceConfirmed(uint32_t /*botGuidLow*/)
 namespace BotCommands
 {
 // The bot is in no commander-bound group. (Findings: the host's masters are plain players.)
-bool IsInCommandedGroup(Player* /*bot*/)
+// H3 (slice 3): except a bot that `.tb master` bound to a commander (host/TbOrders.cpp).
+bool IsInCommandedGroup(Player* bot)
 {
-    return false;
+    return TortoiseBots::h3::IsCommandedBot(bot);
 }
 
 bool IsInRunningDungeonRun(Player* /*bot*/)

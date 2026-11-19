@@ -41,6 +41,7 @@
 #include "SpellPackets.h"
 #include "TbBotSession.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbH3.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -203,6 +204,16 @@ public:
             { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "use",    HandleUse,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "order",  TortoiseBots::h3::HandleOrder,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "role",   TortoiseBots::h3::HandleRole,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "master", TortoiseBots::h3::HandleMaster, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "party",  TortoiseBots::h3::HandleParty,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "state",  TortoiseBots::h3::HandleState,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "threat", TortoiseBots::h3::HandleThreat, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "learn",  TortoiseBots::h3::HandleLearn,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "equip",  TortoiseBots::h3::HandleEquip,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "itemscan", TortoiseBots::h3::HandleItemScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "grammar", TortoiseBots::h3::HandleGrammar, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -245,6 +256,8 @@ public:
             master = GuidByName(*masterName);
             if (master.IsEmpty())
                 return Fail(handler, "no character named " + *masterName + ".");
+            if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
+                return Fail(handler, *masterName + " is neither a host bot nor your own character: it cannot be the master of a bot.");
         }
         else if (Player* caller = Caller(handler))
             master = caller->GetGUID();
@@ -262,6 +275,8 @@ public:
         ObjectGuid const master = GuidByName(masterName);
         if (master.IsEmpty())
             return Fail(handler, "no character named " + masterName + ".");
+        if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
+            return Fail(handler, masterName + " is neither a host bot nor your own character: bots do not join a real player's party.");
         std::string const error = BotMgr::Instance().GroupWith(GuidByName(name), master);
         if (!error.empty())
             return Fail(handler, name + " not grouped: " + error + ".");
@@ -1093,7 +1108,7 @@ public:
         for (uint32 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
             if (proto->Spells[i].SpellId)
                 spells += (spells.empty() ? "" : ", ") + std::to_string(proto->Spells[i].SpellId) +
-                    " (trigger " + std::to_string(proto->Spells[i].SpellTrigger) + ", charges " + std::to_string(proto->Spells[i].SpellCharges) + ")";
+                    " (trigger " + std::to_string(proto->Spells[i].SpellTrigger) + ", charges " + std::to_string(proto->Spells[i].SpellCharges) + ", category " + std::to_string(proto->Spells[i].SpellCategory) + ")";
 
         handler->PSendSysMessage("TortoiseBots: stats %s; spells %s; resistances %u/%u/%u/%u/%u/%u.",
             stats.empty() ? "none" : stats.c_str(), spells.empty() ? "none" : spells.c_str(),

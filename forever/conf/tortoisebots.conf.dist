@@ -46,3 +46,21 @@ TortoiseBots.Slice.MasterGraceSeconds = 300
 #
 
 Logger.tortoisebots = 3,Console Server
+
+#
+#    TortoiseBots.Slice.RestHealthPct
+#        Description: The rest gate of `.tb state` (resting=no): a bot is rested when its health is at or above this percent of its maximum
+#                     (and, for a bot that uses mana, its mana is at or above TortoiseBots.Slice.RestManaPct, and it is not in combat,
+#                     eating or drinking). Read on every `.tb state`, so a change by a config reload counts at once. 0 to 100.
+#        Default:     90
+#
+
+TortoiseBots.Slice.RestHealthPct = 90
+
+#
+#    TortoiseBots.Slice.RestManaPct
+#        Description: The mana part of the rest gate (see TortoiseBots.Slice.RestHealthPct). Bots that do not use mana ignore it. 0 to 100.
+#        Default:     80
+#
+
+TortoiseBots.Slice.RestManaPct = 80

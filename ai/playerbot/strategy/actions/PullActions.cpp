@@ -103,7 +103,7 @@ void RestampPullParty(Player* tank, uint32 waitSeconds, bool narrowWindow, bool 
 // PullStartAction already pins its own pet and PullEndAction restores it.
 // The tank is skipped here (its own pull drives it), and other tanks are
 // left alone so an off-tank can still pick up loose mobs.
-void ai::PausePartyPullHold(Player* tank, uint32 joinDelaySeconds)
+void ai::PausePartyPullHold(Player* tank, uint32 joinDelaySeconds, bool leadKeyed, uint32 windowSecondsOverride)
 {
     if (!tank || !tank->GetGroup())
         return;
@@ -111,7 +111,7 @@ void ai::PausePartyPullHold(Player* tank, uint32 joinDelaySeconds)
     Player* requester = (tankAi && tankAi->GetMaster()) ? tankAi->GetMaster() : tank;
     WorldPosition anchor((requester && requester->IsInWorld() &&
         requester->GetMapId() == tank->GetMapId()) ? requester : tank);
-    uint32 windowSeconds = std::min<uint32>(255,
+    uint32 windowSeconds = windowSecondsOverride ? std::min<uint32>(255, windowSecondsOverride) : std::min<uint32>(255,
         sPlayerbotAIConfig.pullBackMaxReturnTime + joinDelaySeconds);
     for (Player* member : LiveGroupMembers(tank->GetGroup()))
     {
@@ -134,7 +134,7 @@ void ai::PausePartyPullHold(Player* tank, uint32 joinDelaySeconds)
             holdPos.Set(anchor.getX(), anchor.getY(), anchor.getZ(), anchor.GetMapId());
             posMap["pull hold"] = holdPos;
         }
-        memberAi->StartPullWindow(static_cast<uint8>(windowSeconds));
+        memberAi->StartPullWindow(static_cast<uint8>(windowSeconds), leadKeyed, leadKeyed ? static_cast<uint8>(std::min<uint32>(joinDelaySeconds, 255)) : 0);
         memberAi->GetAiObjectContext()->GetValue<time_t>("combat start time")->Set(time(0));
         // Member-owned stance (PlayerbotAI::ParkPetForPullHold): saved on the
         // member's own AI and restored by its own EndPullWindow, so a member
@@ -340,7 +340,7 @@ Unit* PullMyTargetAction::GetTarget(Event& event)
     Unit* target = nullptr;
 
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
-    if (event.GetSource() == "attack anything")
+    if (event.getSource() == "attack anything")
     {
         ObjectGuid guid = event.getObject();
         target = ai->GetCreature(guid);
@@ -437,7 +437,7 @@ bool PullAction::Execute(Event& event)
                 strategy->NotePullApproach(distanceToTarget, sServerFacade.isMoving(bot));
                 // Retry the reach pull action
                 strategy->RequestPull(target, false);
-                ai::Event reachEvent(event.GetSource(), "", event.GetOwner());
+                ai::Event reachEvent(event.getSource(), "", event.GetOwner());
                 ai->DoSpecificAction("reach pull", reachEvent, true);
                 return false;
             }
@@ -487,6 +487,12 @@ bool PullAction::Execute(Event& event)
                 bot->Attack(target, true);
                 bot->SetSelectionGuid(target->getObjectGuid());
                 strategy->OnPullActionCompleted();
+                // The body pull has landed: anchor the held bots' join delay to it, as the ranged branch below does (a window that was never
+                // restamped could only end by its own clock, and a lead-keyed one never counts as landed). Bots without a pull window are skipped.
+                // N3 (package N): only where the helper says (ForeverCore: a commanded party); on Turtle it is always false, so a Turtle body pull is
+                // exactly what it was.
+                if (BodyPullRestampCompat(bot))
+                    RestampPullParty(bot, 0, false, !strategy->IsCommandPullback());
                 return true;
             }
             else if (strategy->HasPullActionCast())

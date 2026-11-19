@@ -115,3 +115,34 @@ Top 15 of `where.tsv` (error places per file; 14 files have any):
 resolves on Turtle (its include path holds `strategy/generic`); it costs the 2 `GenericPriestStrategy` places (fix: the path form
 `generic/RangedCombatStrategy.h`, as `StrategyContext.h:41` writes it, or the include directory). Full tables on the VM:
 `yulon-ubuntu2:~/forever-build/census-1/`.
+
+## Slice 3 (group fight on orders: threat/tank, pull, orders)
+
+Measured on the 170 files of `forever/SLICE3.txt` (SLICE2.txt's 160 plus the 10 files of FOREVER-SLICE3-SPEC section 3; the spec text says
+"173", that is the line count of the list file with its two comment lines and the sum of SLICE2.txt's 163 lines: the list holds 170 paths)
+with `FOREVER_SLOT=2 FOREVER_CENSUS_LIST=forever/SLICE3.txt forever/tools/vm-census.sh "" 10`, at the commit that adds the list file
+(no source file changed). The spec's estimate was 20-60 places.
+
+| Date | State | Files | Compile clean | Error places |
+|---|---|---|---|---|
+| 2026-11-18 | baseline N0, slice 3 list | 170 | 165 | 17 (in 5 files); 0 includes of a header ForeverCore does not have |
+| 2026-11-18 | after the porting worker (slice3/p) | 170 | 170 | 0 (SLICE2.txt 160 files: 0; SLICE1.txt 133 files: 0) |
+
+Summary line: `files 170  compile clean 165  with errors 5  error places 17 (in 5 files)  includes of a header ForeverCore does not have 0`.
+All 160 slice-2 files and 5 of the 10 new ones are clean at once; the 17 places are all in new files (no header holds any).
+
+`where.tsv` (error places per file):
+
+| Places | File |
+|---|---|
+| 7 | `ai/playerbot/strategy/generic/ThreatStrategy.cpp` |
+| 5 | `ai/playerbot/strategy/actions/WaitForAttackAction.cpp` |
+| 2 | `ai/playerbot/strategy/actions/PullActions.cpp` |
+| 2 | `ai/playerbot/strategy/triggers/PullTriggers.cpp` |
+| 1 | `ai/playerbot/strategy/actions/ValueActions.cpp` |
+
+The ten files with 0 places: `TankAssistStrategy.cpp`, `StayStrategy.cpp`, `PassiveStrategy.cpp`, `StayActions.cpp`, `ChatShortcutActions.cpp` (the
+spec expected 3-8 in the last two: `PlayerConvenience.h`, `Formations.h` and the position values were already ported by slice 1 and 2).
+Names (`names.tsv`): `SummonCreature` 3, `GetSource` 2, `GetPlayer` 2, `SendPlaySpellVisual` 2, and one each of `find`, two `unordered_map`
+operator[] on a raw guid, `SeekCycleSnapshot`, `threat` (the field of `SpellThreatEntry`), `uint64_t`. Full tables:
+`yulon-ubuntu2:~/forever-build/census-2/`.

@@ -282,6 +282,10 @@ bool PlayerbotAI::TellPlayerNoFacing(Player* player, std::string text, Playerbot
     if(!player)
         return false;
 
+    // An empty text says nothing (ForeverCore has no bot text table: BOT_TEXT answers ""): skip it like the other Tell/Say/Whisper functions do.
+    if (text.empty())
+        return false;
+
     if (!ignoreSilent && HasStrategy("silent", BotState::BOT_STATE_NON_COMBAT))
         return false;
 

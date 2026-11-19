@@ -70,7 +70,20 @@ SLICE2_KEYS = {
              "skip loot list, should loot object, stack space for item, force item usage, nearest corpses, "
              "loot strategy, should get money, inventory item ids, incoming heals",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# Slice 3 (porting worker, FOREVER-SLICE3-SPEC section 3, listed with creator file:line in forever/docs/SLICE3-KEYS.md): the tank, the pull, the stay
+# and wait strategies and the order actions. Keys the spec deliberately leaves out: `should pull`, `pull nearest target`, `chat`, `pull back`.
+SLICE3_KEYS = {
+    "strategy": "tank assist, threat, stay, free, passive, tank face, wait for attack",
+    "action": "tank assist, stay, return to stay position, pull my target, end pull, pull start, pull action, pull end, reach pull, "
+              "release pull hold, return to pull position, wait for attack keep safe distance, tank face away, set facing, "
+              "successor white cap noop, threat reset white stop noop, attack my target, attack rti target, follow chat shortcut, "
+              "stay chat shortcut, follow target",
+    "trigger": "tank assist, lose aggro, has aggro, party member attacked, protect party member, tank face needed, high threat, "
+               "return to stay position, pull start, pull end, pull hold expired, pull anchor done, return to pull position, "
+               "wait for attack safe distance, successor white cap, threat reset white stop",
+    "value": "master position",
+}
+KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k]).split(",")] for k in SLICE_KEYS}
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
@@ -80,6 +93,12 @@ LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "
          "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
          "TriggerContext": "SliceTriggerContext", "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
          "ValueContext": "SliceValueContext"}
+
+
+# Headers nothing includes (forward-ported from the donor module, never wired in): the class they define is the same name as a live one in
+# another header, so the class finder must not see them. strategy/triggers/WaitForAttackTriggers.h repeats WaitForAttackSafeDistanceTrigger
+# of RangeTriggers.h (grep over ai/: no #include of it; slice 3).
+DONOR_ONLY_HEADERS = {"strategy/triggers/WaitForAttackTriggers.h"}
 
 
 def find_class_headers():
@@ -92,6 +111,8 @@ def find_class_headers():
             if not n.endswith(".h"):
                 continue
             p = os.path.join(d, n)
+            if os.path.relpath(p, base).replace(os.sep, "/") in DONOR_ONLY_HEADERS:
+                continue
             text = chk.strip_comments(chk.read(p))
             for m in re.finditer(r'^[ \t]*(?:class|struct)\s+(\w+)\b([^;{]*)(\{|$)', text, re.M):
                 if m.group(3) == "{" or ":" in m.group(2):

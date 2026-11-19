@@ -186,7 +186,7 @@ bool PullHoldExpiredTrigger::IsActive()
         facts.timeoutSeconds = ai->EngageTimeoutSeconds();
         facts.elapsedSinceOrder = ai->PullWindowElapsed();
 
-        Player* requester = sObjectMgr.GetPlayer(ObjectGuid(ai->EngageRequesterGuid()));
+        Player* requester = PlayerOfGuidKeyCompat(ai->EngageRequesterGuid());
         if (requester && requester->IsInWorld() && requester->IsAlive() && requester->GetMapId() == bot->GetMapId())
         {
             facts.requesterAlive = true;

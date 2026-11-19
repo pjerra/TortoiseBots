@@ -16,6 +16,7 @@
 #include "compat/botpch_forever.h"
 
 #include "playerbot/playerbot.h"
+#include "../../../behavior/PlayerConvenience.h"
 #include "playerbot/BossStandMgr.h"
 #include "playerbot/BossTacticsMgr.h"
 #include "playerbot/BossTacticsStand.h"
@@ -93,7 +94,7 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 
 // =====================================================================================================================
 // Boss and raid tactics. Owner files: ai/playerbot/strategy/actions/BossTacticsActions.cpp, Fankriss*Actions.cpp,
-// PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp, ViscidusActions.cpp, EmeraldSanctumDungeon*.cpp, ThreatStrategy.cpp,
+// PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp, ViscidusActions.cpp, EmeraldSanctumDungeon*.cpp,
 // FankrissGauntletPolicy (header), BossTacticsMgr.cpp, BossStandMgr.cpp, DungeonPlanMgr.cpp.
 // Answer: no boss rule applies (false / null / 0 / empty); the table getters return an empty table.
 // =====================================================================================================================
@@ -225,9 +226,9 @@ bool ViscidusBlocksSpell(PlayerbotAI*, uint32, Unit*) { NoteBoss(); return false
 Unit* FindSolniusAdd(PlayerbotAI*) { NoteBoss(); return nullptr; }
 bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 
-// ThreatStrategy.cpp, PositionAction.cpp
-bool ThreatResetHolds(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
-// StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in (R9): PositionAction.cpp is in the slice.
+// ThreatResetHolds is the real function now (slice 3: ThreatStrategy.cpp is in the slice; its stand-in answered "never held" and is removed). Its
+// readers of the boss table still end in the stand-ins above (GetBossTactics: no row for any map and entry), so on a target without a row it answers
+// false exactly as before. StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in either (R9): PositionAction.cpp is in the slice.
 
 // =====================================================================================================================
 // Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
@@ -477,3 +478,28 @@ void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
 void RandomBotFacade::LoadBattleMastersCache() { NotePool(); }
 void RandomBotFacade::LoadAuctionPrices() { NotePool(); }
+
+// =====================================================================================================================
+// Slice 3 (porting worker): the three symbols the ten new files (SLICE3.txt) reference that no slice file defines. Found by the option-ON
+// module build of the slice-3 list in slot 2 (`nm -u` of the module objects minus every symbol a module object defines; the rest of the
+// undefined names are the core's). Each is the real function's answer when its feature is absent, read in the owner file.
+// =====================================================================================================================
+namespace ai
+{
+// PatchwerkSoakerActions.cpp:212 (read by PullAction::Execute, PullActions.cpp:455): "may the puller fire?". The real body is
+// `if (!PatchwerkMainPull(puller)) return true;` and PatchwerkMainPull needs map 533, the strategy `patchwerk main` (unregistered here) and an
+// active command pull: on every other pull the answer is true, which is also the value here ("no soaker to wait for"; the pull window still ends
+// the pull). A Patchwerk fight is not in the slice, so there is nothing a `false` could protect.
+bool PatchwerkSoakersReadyForPull(PlayerbotAI*) { NoteBoss(); return true; }
+
+// BossTacticsActions.cpp:10085 (read by ThreatResetHolds, behind AiPlayerbot.DungeonRunThreatResetWindow = off and a boss-table row that never
+// exists here): the real function empties `out` and returns false when it holds no record of the fight, which is always the case without the
+// seek-cycle bookkeeping of the boss tactics. Same value, same effect ("no snapshot": the reset hold clears its latch and holds nothing).
+bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteBoss(); out = SeekCycleView(); return false; }
+}
+
+// behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the
+// summon's restore does not put it back on follow. The real function returns false when the bot has no summon record, which is always
+// the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
+// PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
+bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }
