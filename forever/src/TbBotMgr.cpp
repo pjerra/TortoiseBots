@@ -43,9 +43,9 @@ constexpr uint32 FollowRetryMs = 30000;
 constexpr uint32 CatchUpCooldownMs = 30000;
 // H4: an entry (a walk to the area trigger, the leader's wait, the teleport) that has not ended after this long is refused with `block=timeout`.
 constexpr uint32 EntryTimeoutMs = 120000;
-// N2/N3: a commanded bot's body that has lain this long in a dungeon releases itself (at the entrance, the normal rule) whatever holds it: no rezzer able to
+// N2/N3: a commanded bot's body that has lain this long (TortoiseBots.Slice.DeadBackstopSeconds, 180 s) in a dungeon releases itself (at the entrance, the normal rule) whatever holds it: no rezzer able to
 // resurrect, a commander on another map or a hold that never ends must not strand it (and keep the instance from resetting).
-constexpr uint32 DeadBackstopMs = 180000;
+constexpr uint32 DeadBackstopDefaultMs = 180000;   // TortoiseBots.Slice.DeadBackstopSeconds
 // H4: the walk to the trigger makes no progress (the best distance does not shrink by a yard) for this long: `block=stuck`.
 constexpr uint32 EntryNoProgressMs = 20000;
 
@@ -172,6 +172,7 @@ void BotMgr::LoadConfig()
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
     int32 const graceSeconds = sConfigMgr->GetIntDefault("TortoiseBots.Slice.MasterGraceSeconds", 300);
     _masterGraceMs = uint32(std::clamp<int32>(graceSeconds, 0, 3600)) * 1000;
+    _deadBackstopMs = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", DeadBackstopDefaultMs / 1000), 10, 3600)) * 1000;
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
@@ -1066,7 +1067,7 @@ void BotMgr::DeadBackstop(Bot& bot, Player* me)
         return;
     }
     bot.deadMs += ThinkIntervalMs;
-    if (bot.deadMs < DeadBackstopMs)
+    if (bot.deadMs < _deadBackstopMs)
         return;
     Map* map = me->GetMap();
     if (!map || !map->ToInstanceMap() || !map->IsDungeon() || !IsCommandedHere(bot, me))

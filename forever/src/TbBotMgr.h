@@ -205,6 +205,7 @@ private:
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
     // N1 (package N): NO decision is cached by instance id alone (the core hands out ids from one pool for all maps and reuses them): what is kept is keyed by
     // (map id, instance id), and a cached trigger is used only when its target is that map. The entrance itself is read from the instance script every time.
