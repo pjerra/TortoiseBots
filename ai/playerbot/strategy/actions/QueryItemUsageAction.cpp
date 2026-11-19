@@ -4,6 +4,7 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/RandomBotFacade.h"
 #include "playerbot/RandomItemMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 

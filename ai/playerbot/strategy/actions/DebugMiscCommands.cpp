@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <typeindex>
 #include "Maps/MoveMap.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;

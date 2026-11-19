@@ -40,6 +40,7 @@
 #include <cstddef>
 #include <ctime>
 #include <memory>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {

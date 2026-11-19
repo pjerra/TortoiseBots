@@ -19,6 +19,7 @@
 #include "playerbot/RandomBotFacade.h"
 #include "Maps/MoveMap.h"
 #include "strategy/values/HazardsValue.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 using namespace MaNGOS;

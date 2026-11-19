@@ -2,6 +2,7 @@
 #include "playerbot/strategy/Trigger.h"
 #include "playerbot/strategy/Multiplier.h"
 #include "playerbot/strategy/Action.h"
+#include "playerbot/TbCompatW2.h"
 
 namespace ai
 {

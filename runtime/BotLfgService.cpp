@@ -55,6 +55,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots
 {
@@ -298,7 +299,7 @@ void BotLfgService::End(BotLfgGroup& group, BotLfgLifecycle::EndReason reason, b
     {
         Player* bot = ObjectAccessor::FindPlayer(member.guid);
         if (!release)
-            if (bot && bot->GetGroup() && bot->GetGroup()->GetId() == group.groupId)
+            if (bot && bot->GetGroup() && GroupIdW2(bot->GetGroup()) == group.groupId)
                 bot->GetGroup()->RemoveMember(member.guid, 0);
         BotActivityLeaseManager::Instance().Release(member.guid.GetCounter(), BotActivity::Dungeon);
         if (member.forcedRole)
@@ -505,7 +506,7 @@ bool BotLfgService::TryForm(PlanRow const* only, uint8 onlyTeam, bool gm, std::s
         message = "The picked bots could not be invited into one group.";
         return false;
     }
-    g.groupId = grp->GetId();
+    g.groupId = GroupIdW2(grp);
     m_groups.push_back(g);
     ++m_formedCount;
     m_lastFormedMs[key] = FormStamp{m_nowMs, true};
@@ -718,7 +719,7 @@ void BotLfgService::TickGroup(BotLfgGroup& group, bool enabled)
         return;
     Player* leader = ObjectAccessor::FindPlayer(group.leader);
     Group* grp = leader ? leader->GetGroup() : nullptr;
-    bool const ours = grp && grp->GetId() == group.groupId;
+    bool const ours = grp && GroupIdW2(grp) == group.groupId;
     BotLfgLifecycle::Facts facts;
     facts.state = group.state;
     facts.elapsedMs = m_nowMs - group.stateSinceMs;
@@ -866,7 +867,7 @@ void BotLfgService::TickGroup(BotLfgGroup& group, bool enabled)
     {
         Player* waiting = ObjectAccessor::FindPlayer(group.invitee);
         Group* pending = waiting ? waiting->GetGroupInvite() : nullptr;
-        if (pending && pending->GetId() == group.groupId)
+        if (pending && GroupIdW2(pending) == group.groupId)
             pending->RemoveInvite(waiting);
         if (waiting)
             Log(group, std::string("invite to ") + waiting->GetName() + " lapsed");
@@ -949,7 +950,7 @@ void BotLfgService::StopAdvertising(BotLfgGroup& group)
     BotLfgWhisperInbox::Instance().WithdrawLeader(group.leader.GetRawValue());
     Player* invitee = group.invitee.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(group.invitee);
     Group* invited = invitee ? invitee->GetGroupInvite() : nullptr;
-    if (invited && invited->GetId() == group.groupId)
+    if (invited && GroupIdW2(invited) == group.groupId)
         invited->RemoveInvite(invitee);
     group.invitee = ObjectGuid();
     group.inviteAtMs = 0;
@@ -1000,7 +1001,7 @@ bool BotLfgService::InviteHeld(BotLfgGroup const& group) const
 {
     Player* invitee = group.invitee.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(group.invitee);
     Group* invited = invitee ? invitee->GetGroupInvite() : nullptr;
-    return BotLfgAdvert::InvitePending(!group.invitee.IsEmpty(), invited && invited->GetId() == group.groupId,
+    return BotLfgAdvert::InvitePending(!group.invitee.IsEmpty(), invited && GroupIdW2(invited) == group.groupId,
         m_nowMs, group.inviteAtMs);
 }
 
@@ -1014,7 +1015,7 @@ void BotLfgService::HandleWhisper(LfgWhisper const& whisper)
     if (!(sender->GetSession() && HasNetworkTransportCompat(sender->GetSession()) &&
             !BotManager::Instance().IsBot(sender->GetObjectGuid())))
         return;
-    if (sender->GetGroup() && sender->GetGroup()->GetId() == group->groupId)
+    if (sender->GetGroup() && GroupIdW2(sender->GetGroup()) == group->groupId)
         return;
     BotLfgAdvert::WhisperFacts facts;
     facts.sameTeam = (sender->GetTeam() == ALLIANCE ? BotLfg::kAlliance : BotLfg::kHorde) == group->team;
@@ -1051,7 +1052,7 @@ void BotLfgService::HandleWhisper(LfgWhisper const& whisper)
         invite << uint32(0);
         leader->GetSession()->HandleGroupInviteOpcode(invite);
         Group* pending = sender->GetGroupInvite();
-        if (pending && pending->GetId() == group->groupId)
+        if (pending && GroupIdW2(pending) == group->groupId)
         {
             group->invitee = sender->GetObjectGuid();
             group->inviteAtMs = m_nowMs;

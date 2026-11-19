@@ -3,6 +3,7 @@
 #include "WorldBuffTravelActions.h"
 #include "ChooseTravelTargetAction.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW2.h"
 
 
 using namespace ai;
@@ -83,12 +84,12 @@ static const GameObjectData* FindClosestSongflowerSpawn(Player* bot)
             if (!IsSongflowerEntry(data.id))
                 return false;
 
-            if (data.position.mapId != mapId)
+            if (SpawnMapIdW2(data) != mapId)
                 return false;
 
-            float dx = data.position.x - x;
-            float dy = data.position.y - y;
-            float dz = data.position.z - z;
+            float dx = SpawnXW2(data) - x;
+            float dy = SpawnYW2(data) - y;
+            float dz = SpawnZW2(data) - z;
             float distSq = dx * dx + dy * dy + dz * dz;
 
             if (distSq < bestDistSq)
@@ -538,7 +539,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
             }
 
             ai->TellPlayer(GetMaster(), "Regrouping at Dire Maul North for portal...");
-            return MoveTo(goData->position.mapId, goData->position.x, goData->position.y, goData->position.z);
+            return MoveTo(SpawnMapIdW2(*goData), SpawnXW2(*goData), SpawnYW2(*goData), SpawnZW2(*goData));
         }
 
         // PORTAL_HOME: regroup at the nearest Songflower
@@ -557,7 +558,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
 
             const char* portalName = GetHomePortalKeyword(bot);
             ai->TellPlayer(GetMaster(), std::string("Regrouping at Songflower waiting for Portal: ") + portalName + "...");
-            return MoveTo(goData->position.mapId, goData->position.x, goData->position.y, goData->position.z);
+            return MoveTo(SpawnMapIdW2(*goData), SpawnXW2(*goData), SpawnYW2(*goData), SpawnZW2(*goData));
         }
 
         return false;
@@ -580,7 +581,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
         }
 
         ai->TellPlayer(GetMaster(), "Traveling to Dire Maul North for world buffs");
-        return MoveTo(goData->position.mapId, goData->position.x, goData->position.y, goData->position.z);
+        return MoveTo(SpawnMapIdW2(*goData), SpawnXW2(*goData), SpawnYW2(*goData), SpawnZW2(*goData));
     }
 
     if (step == WorldBuffTravelStep::STEP_SONGFLOWER)
@@ -593,7 +594,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
         }
 
         ai->TellPlayer(GetMaster(), "Traveling to nearest Songflower for world buffs");
-        return MoveTo(goData->position.mapId, goData->position.x, goData->position.y, goData->position.z);
+        return MoveTo(SpawnMapIdW2(*goData), SpawnXW2(*goData), SpawnYW2(*goData), SpawnZW2(*goData));
     }
 
     if (step == WorldBuffTravelStep::STEP_FORGOTTEN_COAST && horde)
@@ -614,12 +615,12 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
                 if (data.id != GO_BONFIRE_FERALAS)
                     return false;
 
-                if (data.position.mapId != mapId)
+                if (SpawnMapIdW2(data) != mapId)
                     return false;
 
-                float dx = data.position.x - x;
-                float dy = data.position.y - y;
-                float dz = data.position.z - z;
+                float dx = SpawnXW2(data) - x;
+                float dy = SpawnYW2(data) - y;
+                float dz = SpawnZW2(data) - z;
                 float distSq = dx * dx + dy * dy + dz * dz;
 
                 if (distSq < bestDistSq)
@@ -642,7 +643,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
         }
 
         ai->TellPlayer(GetMaster(), "Traveling to the Dire Maul in Feralas");
-        return MoveTo(finder.best->position.mapId, finder.best->position.x, finder.best->position.y, finder.best->position.z);
+        return MoveTo(SpawnMapIdW2(*finder.best), SpawnXW2(*finder.best), SpawnYW2(*finder.best), SpawnZW2(*finder.best));
     }
 
     if (step == WorldBuffTravelStep::STEP_FELWOOD)
@@ -664,7 +665,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
 
             const char* portalName = horde ? "Orgrimmar" : "Darnassus";
             ai->TellPlayer(GetMaster(), std::string("Regrouping at Dire Maul North before portal to ") + portalName + "...");
-            return MoveTo(goData->position.mapId, goData->position.x, goData->position.y, goData->position.z);
+            return MoveTo(SpawnMapIdW2(*goData), SpawnXW2(*goData), SpawnYW2(*goData), SpawnZW2(*goData));
         }
     }
 

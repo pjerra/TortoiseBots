@@ -78,6 +78,7 @@
 #include "Player.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "World.h"
+#include "playerbot/TbCompatW2.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Group.h"
 // pi-lens-ignore: clang:pp_file_not_found
