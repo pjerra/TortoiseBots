@@ -725,13 +725,13 @@ bool GoAction::MoveToGps(std::string& param, Player* requester)
         {
             PathFinder path(bot);
 
-            path.calculate(x, y, z, false);
+            PathCalculateCompat(path, x, y, z, false);
 
             Vector3 end = path.getEndPosition();
-            Vector3 aend = path.getActualEndPosition();
+            Vector3 aend = PathActualEndCompat(path);
 
-            PointsArray const& points = path.getPath();
-            PathType type = path.getPathType();
+            PointsArray const& points = PathPointsCompat(path);
+            PathType type = PathType(PathTypeCompat(path));
 
             std::ostringstream out;
 

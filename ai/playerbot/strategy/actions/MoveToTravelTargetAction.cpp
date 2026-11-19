@@ -120,16 +120,16 @@ static bool TakerUnwalkable(Player* bot, Creature* taker)
 {
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(taker->GetPositionX(), taker->GetPositionY(), taker->GetPositionZ(), false);
+    PathCalculateCompat(path, taker->GetPositionX(), taker->GetPositionY(), taker->GetPositionZ(), false);
 
-    PathType const type = path.getPathType();
+    PathType const type = PathType(PathTypeCompat(path));
     if (type & PATHFIND_NOT_USING_PATH)
         return false;
 
     if (type & PATHFIND_NOPATH)
         return true;
 
-    Vector3 const end = path.getActualEndPosition();
+    Vector3 const end = PathActualEndCompat(path);
     return taker->GetDistance(end.x, end.y, end.z) > INTERACTION_DISTANCE;
 }
 
@@ -1319,8 +1319,8 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             {
                 PathFinder probe(bot);
                 WorldPosition::ExcludeSteepSlopes(probe);
-                probe.calculate(location.getX(), location.getY(), location.getZ(), false);
-                pathTag = TravelMoveFailPathTag((uint32_t)probe.getPathType());
+                PathCalculateCompat(probe, location.getX(), location.getY(), location.getZ(), false);
+                pathTag = TravelMoveFailPathTag((uint32_t)PathTypeCompat(probe));
             }
             // A guild-order farm trip the mesh cannot reach says so about that
             // target point: the planner leaves the zone out once another point

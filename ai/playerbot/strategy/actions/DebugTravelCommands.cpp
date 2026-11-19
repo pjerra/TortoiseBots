@@ -387,9 +387,9 @@ bool DebugAction::HandleNodes(Event& event, Player* requester, const std::string
         float dist = pos.distance(*startNode->getPosition());
 
         std::unique_ptr<PathFinder> pathfinder = std::make_unique<PathFinder>(bot);
-        pathfinder->calculate(pos.GetVector3(), startNode->getPosition()->GetVector3(), false);
+        PathCalculateCompat(*pathfinder, pos.GetVector3(), startNode->getPosition()->GetVector3(), false);
 
-        PointsArray points = pathfinder->getPath();
+        PointsArray points = PathPointsCompat(*pathfinder);
         bool hasFullPath = false;
         if (!points.empty())
         {

@@ -2393,11 +2393,11 @@ bool SeekWalkoutPathOk(Player* member, float x, float y, float z)
 {
     PathFinder path(member);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
-    uint32 const type = static_cast<uint32>(path.getPathType());
+    PathCalculateCompat(path, x, y, z, false);
+    uint32 const type = static_cast<uint32>(PathTypeCompat(path));
     if (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH))
         return false;
-    Vector3 const end = path.getActualEndPosition();
+    Vector3 const end = PathActualEndCompat(path);
     float const dx = end.x - x;
     float const dy = end.y - y;
     float const dz = end.z - z;
@@ -2409,9 +2409,9 @@ void SeekWalkoutPathProbe(Player* bot, float x, float y, float z, std::uint32_t&
 {
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(x, y, z, false);
-    type = static_cast<std::uint32_t>(path.getPathType());
-    yd = path.Length();
+    PathCalculateCompat(path, x, y, z, false);
+    type = static_cast<std::uint32_t>(PathTypeCompat(path));
+    yd = PathLengthCompat(path);
 }
 
 // The walk-out stand for `son`: the first point out from the anchor's edge toward it (WalkoutStandCandidates, 2 yd

@@ -738,14 +738,14 @@ bool DebugAction::HandlePatharound(Event& event, Player* requester, const std::s
             target.CalculatePassengerOffset(bot->GetTransport());
 
         PathFinder pathfinder(bot);
-        pathfinder.calculate(botPos.GetVector3(), target.GetVector3(), false);
+        PathCalculateCompat(pathfinder, botPos.GetVector3(), target.GetVector3(), false);
 
-        if (!(pathfinder.getPathType() & PATHFIND_NORMAL))
+        if (!(PathTypeCompat(pathfinder) & PATHFIND_NORMAL))
         {
             continue;
         }
 
-        std::vector<WorldPosition> path = botPos.fromPointsArray(pathfinder.getPath());
+        std::vector<WorldPosition> path = botPos.fromPointsArray(PathPointsCompat(pathfinder));
 
         if (path.size() < 2 || path.front().distance(path[1]) > 10.0f)
         {

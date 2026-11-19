@@ -91,8 +91,8 @@ bool IsCampPointReachable(Player* gm, float fromX, float fromY, float fromZ, flo
     if (toZ <= INVALID_HEIGHT || fromZ <= INVALID_HEIGHT)
         return false;
     PathFinder path(gm);
-    path.calculate(Vector3(fromX, fromY, fromZ), Vector3(toX, toY, toZ), false);
-    uint32 const pt = static_cast<uint32>(path.getPathType());
+    PathCalculateCompat(path, Vector3(fromX, fromY, fromZ), Vector3(toX, toY, toZ), false);
+    uint32 const pt = static_cast<uint32>(PathTypeCompat(path));
     return (pt & PATHFIND_NORMAL) != 0 &&
            (pt & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_NOT_USING_PATH)) == 0;
 }
