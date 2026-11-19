@@ -98,6 +98,28 @@ namespace ai
             return false;
         }
 
+        // Why this dead bot is not releasing, for the host's `relhold` state key: "no-entrance" (inside a dungeon whose instance script has no
+        // entrance set, ForeverCore only), "rezzer" (a living priest/paladin/shaman/druid is on the map), "combat" (a living member fights),
+        // "wipe" (the dungeon-crew rule says release: nobody is left to resurrect), "none" (not held by the dungeon rule). Reads the same
+        // predicates isUseful() reads; a host that wants the key finds this action with GetAction("auto release") and calls it.
+        char const* ReleaseHoldReason() const
+        {
+            if (!sServerFacade.UnitIsDead(bot) || bot->GetCorpse())
+                return "none";
+            if (!InstanceEntranceKnownCompat(bot))
+                return "no-entrance";
+            if (TortoiseBots::BotActivityLeaseManager::Instance().GetActivity(bot->GetGUIDLow()) == TortoiseBots::BotActivity::Dungeon &&
+                bot->GetMap() && bot->GetMap()->Instanceable())
+            {
+                if (DungeonCrewHasLivingResurrecter())
+                    return "rezzer";
+                if (DungeonCrewInCombat())
+                    return "combat";
+                return "wipe";
+            }
+            return "none";
+        }
+
         AutoReleaseSpiritAction(PlayerbotAI* ai, std::string name = "auto release") : ReleaseSpiritAction(ai, name) {}
 
         virtual bool Execute(Event& event) override
@@ -140,6 +162,11 @@ namespace ai
                 return !bot->GetCorpse() || !HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST);
 
             if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
+                return false;
+            // ForeverCore: a player released inside a dungeon is revived at the instance script's entrance and, with none set, at the nearest
+            // graveyard OUTSIDE (Player::RepopAtGraveyard); until the host has set the entrance the bot waits at its body (relhold=no-entrance).
+            // Turtle: always known (ai/cmangos-compat-d4.h), nothing changes.
+            if (!InstanceEntranceKnownCompat(bot))
                 return false;
             // A dungeon crew (another module holds the Dungeon activity lease) waits for
             // its own resurrection while a living group member of a resurrecting class is

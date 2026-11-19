@@ -17,6 +17,9 @@ inline bool RepopRequestCompat(Player* bot)
     return true;
 }
 
+// AutoReleaseSpiritAction::isUseful: T has no entrance concept to wait for, the release was never held for one (always true).
+inline bool InstanceEntranceKnownCompat(Player* /*bot*/) { return true; }
+
 // `bot->CastSpell(bot, 2584, TRIGGERED_OLD_TRIGGERED);` (Waiting to Resurrect, in a battleground).
 inline void WaitingForResurrectAuraCompat(Player* bot) { bot->CastSpell(bot, 2584, TRIGGERED_OLD_TRIGGERED); }
 

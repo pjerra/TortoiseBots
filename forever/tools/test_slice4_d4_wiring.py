@@ -96,6 +96,18 @@ class D4Wiring(unittest.TestCase):
         self.assertIn("Feature::BattlegroundRelease", F_HEADER)
         self.assertIn("Feature::SelfResurrection", F_HEADER)
 
+    def test_a_dungeon_release_waits_for_an_entrance_on_forever_only(self):
+        self.assertIn("return true;", body(T_HEADER, "InstanceEntranceKnownCompat"))
+        fn = body(F_HEADER, "InstanceEntranceKnownCompat")
+        self.assertIn("map->IsDungeon()", fn)
+        self.assertIn("script->GetEntranceLocation()", fn)
+        self.assertIn("GetWorldSafeLoc(", fn)                    # a real row, as the core's own lookup needs
+        i = RELEASE.index("virtual bool isUseful() override", RELEASE.index("class AutoReleaseSpiritAction"))
+        useful = RELEASE[i:RELEASE.index("RunReleaseHold::Decide", i)]
+        self.assertIn("if (!InstanceEntranceKnownCompat(bot))\n                return false;", useful)   # waits: does less
+        self.assertIn('return "no-entrance";', RELEASE)
+        self.assertIn("char const* ReleaseHoldReason() const", RELEASE)
+
     def test_ported_files_name_no_core_specific_spelling(self):
         for text in (RELEASE, ACCEPT, TO_RES):
             for spelling in ("HandleRepopRequestOpcode", "HandleResurrectResponseOpcode", "HandleSelfResOpcode", "IsRessurectRequested",
