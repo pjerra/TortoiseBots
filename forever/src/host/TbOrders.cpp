@@ -478,7 +478,17 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
             return "fail:focus-rti";
         if (ai::Value<Unit*>* value = ai->GetAiObjectContext()->GetValue<Unit*>("rti target"))
             value->Reset();
-        return act("attack rti target", Event("focus skull", std::string(), owner)) ? "ok" : "fail:focus";
+        if (act("attack rti target", Event("focus skull", std::string(), owner)))
+            return "ok";
+        // N6: "attack rti target" refuses when the marked unit is not in the bot's sight yet: the value `rti target` (RtiTargetValue.h CalculateMark) needs the unit
+        // within AiPlayerbot.SightDistance AND in line of sight, and a pack is marked before the pull, usually out of both. The order is the MARK, and it is
+        // set (group icon + `rti` value above): the tank's and the damage bots' own target picks read it every tick (CalculateFocus) as soon as the unit is
+        // seen. So when the value says "not visible yet" the order did what it can do now and the answer is ok; any other refusal (the unit is visible and the
+        // attack is still refused: evading, dead, charmed, out of the order range) stays fail:focus.
+        ai::Value<Unit*>* seen = ai->GetAiObjectContext()->GetValue<Unit*>("rti target");
+        if (seen && !seen->Get())
+            return "ok";
+        return "fail:focus";
     }
     if (o.verb == "rest")
     {
@@ -499,10 +509,18 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         if (needHealth && act("food", Event("tb order", std::string(), owner)))
             rested = true;
         if (rested)
+        {
             ai->SetActionDuration(30000);
-        else if (restToFull)
+            return "ok";
+        }
+        if (restToFull)
             restToFull->Set(false);
-        return rested ? "ok" : "fail:rest";
+        // N6: no meal was started. In a fight that is a real refusal (the actions refuse in combat). Out of combat the bot has nothing to eat or drink (no item,
+        // or below the bot's own "should drink/eat" floors): it rests by regeneration, which the engine does for a bot that stands out of combat, and the order
+        // is "ok" (it ends by the policy's own health and mana floors or its rest cap, not by an action). Before N6 this was fail:rest and the run logged a
+        // late failure for every rest of a bot without food.
+        bool const fighting = bot->IsInCombat() || ai->IsGroupMemberNearInCombat() || ai->GetAiObjectContext()->GetValue<bool>("has attackers")->Get();
+        return fighting ? "fail:rest" : "ok";
     }
     return "fail:unknown-verb";
 }
