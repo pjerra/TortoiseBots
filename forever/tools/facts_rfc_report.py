@@ -164,8 +164,8 @@ def dynamic(outdir):
             for a in frames:
                 loc = syms.get(a, ("?", "?"))[1]
                 if loc.split(":")[0].endswith(pol):
-                    site = os.path.relpath(loc.split(":")[0].split("wt" + os.sep, 1)[-1] if "wt" + os.sep in loc else loc, "/") + ":" + loc.split(":")[1]
-                    site = loc.split("wt/", 1)[-1]
+                    path_part = loc.split(":")[0].split("wt" + os.sep, 1)[-1]
+                    site = os.path.normpath(path_part) + ":" + loc.split(":")[1].split()[0]
                     break
             if site is None:
                 other[(field, syms.get(frames[0], ("?", "?"))[1] if frames else "?")] += 1
