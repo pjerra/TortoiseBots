@@ -666,7 +666,10 @@ StepSpawns SpawnsOfStep(Ctx& c, ai::PlanStep const& step)
     ai::DungeonPlan const* plan = c.rec->run.plan;
     if (!plan || !c.map || c.map->GetId() != plan->map)
         return out;
-    PlanCheck const& check = CheckPlanOnMap(plan->name, c.map, false);
+    std::shared_ptr<PlanCheck const> const held = CheckPlanOnMap(plan->name, c.map, false);       // a shared copy: nothing here keeps a reference into the cache
+    if (!held)
+        return out;
+    PlanCheck const& check = *held;
     for (UnitCheck const& u : check.units)
     {
         if (u.leg != step.leg || u.seq != step.seq || u.result == UnitResult::Missing || !u.spawnId)
@@ -960,7 +963,10 @@ int StepMatchedMembers(RunRec const& rec, size_t stepIndex)
             ++total;
     if (!total)
         return -1;
-    PlanCheck const& check = CheckPlanOnMap(plan->name, lead->GetMap(), false);
+    std::shared_ptr<PlanCheck const> const held = CheckPlanOnMap(plan->name, lead->GetMap(), false);
+    if (!held)
+        return -1;
+    PlanCheck const& check = *held;
     int matched = 0;
     for (UnitCheck const& u : check.units)
         if (u.leg == step.leg && u.seq == step.seq && u.result != UnitResult::Missing)
