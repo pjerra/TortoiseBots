@@ -94,4 +94,17 @@ No link stand-in is added by K8 (option-ON link is the merge package's gate). Un
 
 ## 9. Gates (final commit)
 
-(filled in below)
+Tested tree: `6b2eba616` (all code commits are before it; the notes commit after it changes docs only).
+
+| Gate | Result |
+|---|---|
+| census, `SLICE8.txt`, slot 2 | `files 196  compile clean 196  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (baseline: 17 places in 10 files) |
+| census, SLICE4 / 3 / 2 / 1 lists | every path of SLICE4.txt (174), SLICE3.txt (170), SLICE2.txt (160), SLICE1.txt (133) is a path of SLICE8.txt (checked with `comm`), and each file compiles independently: 0 error places for each list (not four separate runs) |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` (SLICE4.txt as committed) | `(a)=0  (b)=215`, unchanged |
+| module build, slice option OFF, slot 2 | `CMAKE_RC=0 MAKE_RC=0` (10 objects, ccache) |
+| Turtle `vm-build ~/wt-s8-k --wait` | `COMPILE_SECONDS=99 CMAKE_RC=0 MAKE_RC=0`, `/mnt/tb` had 15 GB free |
+| Turtle `vm-test tb ~/wt-s8-k` | `RESULT: PASS  kind=tb wt=wt-s8-k sha=6b2eba616 dirty=0` (log `~/TortoiseBots-audit/vm-test-logs/wt-s8-k-20261119-163422-2922923-6381.log`) |
+| option-ON `worldserver` link | not a K8 gate (merge package) |
+
+Commits: `b23b4f736` R0 list; `ac217d267` K8 port + compat pair; `56be667b2` wrapper header, no edit of the shims, interrupt-state helper; `98a2a11d0` notes; `6b2eba616` UNPORTED.md.
