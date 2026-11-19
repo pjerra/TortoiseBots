@@ -1,0 +1,34 @@
+OK      585 csv: Smite                        rank 1 level  1 | mine: chain(trainer) Smite rank 1 level 1
+OK     2050 csv: Lesser Heal                  rank 1 level  1 | mine: chain(trainer) Lesser Heal rank 1 level 1
+DIFF   5019 csv: Shoot (wand) [DB2 name: Shoo rank 1 level  1 | mine: NOT FOUND in the class skill lines
+OK      589 csv: Shadow Word: Pain            rank 1 level  4 | mine: chain(trainer) Shadow Word rank 1 level 4
+OK       17 csv: Power Word: Shield           rank 1 level  6 | mine: chain(trainer) Power Word rank 1 level 6
+OK      139 csv: Renew                        rank 1 level  8 | mine: chain(trainer) Renew rank 1 level 8
+OK      586 csv: Fade                         rank 1 level  8 | mine: chain(trainer) Fade rank 1 level 8
+OK     1243 csv: Power Word: Fortitude        rank 1 level  1 | mine: chain(trainer) Power Word rank 1 level 1
+OK     2006 csv: Resurrection                 rank 1 level 10 | mine: chain(trainer) Resurrection rank 1 level 10
+OK     8092 csv: Mind Blast                   rank 1 level 10 | mine: chain(trainer) Mind Blast rank 1 level 10
+OK      588 csv: Inner Fire                   rank 1 level 12 | mine: chain(trainer) Inner Fire rank 1 level 12
+OK     8122 csv: Psychic Scream               rank 1 level 14 | mine: chain(trainer) Psychic Scream rank 1 level 14
+OK     2054 csv: Heal                         rank 1 level 16 | mine: chain(trainer) Heal rank 1 level 16
+DIFF  21562 csv: Prayer of Fortitude          rank 1 level 30 | mine: single (no chain, rank 0) Prayer of Fortitude level 48
+rows 14, agree 12, disagree 2
+OK       78 csv: Heroic Strike                rank 1 level  1 | mine: chain(core+links+trainer) Heroic Strike rank 1 level 1
+OK     2457 csv: Battle Stance                rank 1 level  1 | mine: single (no chain, rank 0) Battle Stance level 1
+OK     6673 csv: Battle Shout                 rank 1 level  1 | mine: chain(core+links+trainer) Battle Shout rank 1 level 1
+OK      100 csv: Charge                       rank 1 level  4 | mine: chain(core+links+trainer) Charge rank 1 level 4
+OK      772 csv: Rend                         rank 1 level  4 | mine: chain(core+links+trainer) Rend rank 1 level 4
+OK     6343 csv: Thunder Clap                 rank 1 level  6 | mine: chain(core+links+trainer) Thunder Clap rank 1 level 6
+OK     1715 csv: Hamstring                    rank 1 level  8 | mine: chain(core+links+trainer) Hamstring rank 1 level 8
+OK     2687 csv: Bloodrage                    rank 1 level 10 | mine: single (no chain, rank 0) Bloodrage level 10
+OK       72 csv: Shield Bash                  rank 1 level 12 | mine: chain(core+links+trainer) Shield Bash rank 1 level 12
+OK     7384 csv: Overpower                    rank 1 level 12 | mine: chain(core+links+trainer) Overpower rank 1 level 12
+OK     1160 csv: Demoralizing Shout           rank 1 level 14 | mine: chain(core+links+trainer) Demoralizing Shout rank 1 level 14
+OK     6572 csv: Revenge                      rank 1 level 14 | mine: chain(core+links+trainer) Revenge rank 1 level 14
+OK     2565 csv: Shield Block                 rank 1 level 16 | mine: single (no chain, rank 0) Shield Block level 16
+OK      694 csv: Mocking Blow                 rank 1 level 16 | mine: chain(core+links+trainer) Mocking Blow rank 1 level 16
+DIFF  20252 csv: Intercept                    rank 1 level 10 | mine: chain(core+links+trainer) Intercept rank 1 level 30
+OK       71 csv: Defensive Stance             rank 1 level 10 | mine: single (no chain, rank 0) Defensive Stance level 10
+OK      355 csv: Taunt                        rank 1 level 10 | mine: single (no chain, rank 0) Taunt level 10
+DIFF   7386 csv: Sunder Armor                 rank 1 level 12 | mine: chain(core+links+trainer) Sunder Armor rank 1 level 10
+rows 18, agree 16, disagree 2

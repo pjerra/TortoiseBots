@@ -22,6 +22,8 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-18 | 6517af05 | shim round 3 (AFTER, spell mirror + fetch helpers, 6cbc923cd) | 648 | 11 | 11,065 |
 | 2026-11-18 | 6517af05 | shim round 3 fix round 1 (difficulty-NONE slot, sparse index, faithful casts, usable-item gate, 0a7f82604) | 648 | 11 | 11,063 |
 
+| 2026-11-18 | 6517af05 | whole tree at c88084785 (slice 1 after R8), measured by the lead | 649 | 322 | 7,650 (in 350 files) |
+
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 
 The fix-round row is two places below the round-3 AFTER (11,065); the slice — whose 127 files this round did not touch —
@@ -53,13 +55,94 @@ kept holy out of "+all resistances", converted `BagFamily` from the core mask to
 
 ## Slice 1 (bot engine + warrior)
 
-Measured on the 127 files of `forever/SLICE1.txt` only (`FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14`).
+Measured on the files of `forever/SLICE1.txt` only
+(`FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14`): 127 files at the baseline,
+133 at the end of R9 (`SLICE1-R9-NOTES.md`).
 The whole-tree number above is no longer the target; this one is.
 
 | Date | State | Files | Compile clean | Error places |
 |---|---|---|---|---|
 | 2026-11-18 | baseline, at round 3 (spell mirror) | 127 | 3 | 2,504 (in 140 files incl. headers) |
 | 2026-11-18 | round 3 fix round 1 (6f6bce297; no slice file changed at 0a7f82604 either) | 127 | 3 | 2,504 (in 140 files incl. headers) |
+| 2026-11-18 | round 3, registry move applied in a VM copy (`SLICE1-R3-NOTES.md`) | 127 | not stated | 1,570 (in 73 files) |
+| 2026-11-18 | four R4 packages merged, final (`SLICE1-R4M-NOTES.md`) | 127 | 4 | 460 (in 27 files) |
+| 2026-11-18 | R6A: the 460 places answered by the not-ported table (`SLICE1-R6A-NOTES.md`) | 127 | 127 | 0 |
+| 2026-11-18 | R6B: linked and booted (`SLICE1-R6B-NOTES.md`) | 131 | 131 | 0 |
+| 2026-11-18 | R9 to R11: review fix rounds and the engine live test (`SLICE1-R11-NOTES.md`) | 133 | 133 | 0 |
+
+Slice 1 error places in order: 2,504 -> 1,570 -> 460 -> 0 (the rows above).
 
 Where they are: `PlayerbotAI.cpp` 348, `MovementActions.cpp` 317, `WorldPosition.cpp` 258 and `WorldPosition.h` 225,
 `PlayerbotAISpells.cpp` 128, `PlayerbotAIPackets.cpp` 74, `GenericTriggers.cpp` 51.
+
+## Slice 2 (priest, cast results, money looting)
+
+Measured on the 159 files of `forever/SLICE2.txt` (SLICE1.txt's 132 plus the 27 files of FOREVER-SLICE2-SPEC section 3; the spec
+text says "158", the sum is 159) with `FOREVER_SLOT=1 FOREVER_CENSUS_LIST=forever/SLICE2.txt forever/tools/vm-census.sh "" 10`, at c88084785
+plus the list file only (no source file changed).
+
+| Date | State | Files | Compile clean | Error places |
+|---|---|---|---|---|
+| 2026-11-18 | baseline N0, slice 2 list at c88084785 | 159 | 148 | 260 (in 14 files); 1 include of a header ForeverCore does not have |
+
+Summary line: `files 159  compile clean 148  with errors 11  error places 260 (in 14 files)  includes of a header ForeverCore does not have 1`.
+The 132 slice-1 files are clean (slice-1 census, same build: `files 132 ... error places 0`); all 260 places are in the new files and
+the headers they pull in.
+
+Top 15 of `where.tsv` (error places per file; 14 files have any):
+
+| Places | File |
+|---|---|
+| 76 | `ai/playerbot/strategy/actions/LootAction.cpp` |
+| 63 | `ai/playerbot/strategy/actions/UseItemAction.cpp` |
+| 48 | `ai/playerbot/strategy/values/LootValues.cpp` |
+| 22 | `ai/playerbot/LootObjectStack.cpp` |
+| 16 | `ai/playerbot/strategy/values/QuestValues.h` |
+| 13 | `ai/playerbot/policy/loot/CorpseLootPolicy.h` |
+| 12 | `ai/playerbot/strategy/actions/AddLootAction.cpp` |
+| 3 | `ai/playerbot/strategy/priest/PriestActions.cpp` |
+| 2 | `ai/playerbot/strategy/triggers/LootTriggers.cpp` |
+| 1 | `ai/playerbot/strategy/priest/GenericPriestStrategy.h` |
+| 1 | `ai/playerbot/strategy/priest/GenericPriestStrategy.cpp` |
+| 1 | `ai/playerbot/strategy/priest/PriestMultipliers.cpp` |
+| 1 | `ai/playerbot/strategy/values/NearestCorpsesValue.cpp` |
+| 1 | `ai/playerbot/strategy/values/PartyMemberToDispel.cpp` |
+
+(The list has only 14 files with errors.) Against the spec's 231 places in the 27 files: the 27 `.cpp` files hold 231 as predicted
+(76+63+48+22+12+3+2+1+1+1+1+1 = 231) and the other 29 are in two headers they pull in, `QuestValues.h` (16, quest-item types
+`LootAction.cpp` / `LootValues.cpp` read) and `CorpseLootPolicy.h` (13, loot-table internals: `LootStoreItem`, `mincountOrRef`,
+`QuestItem`). The one missing include is `GenericPriestStrategy.h:12` `#include "RangedCombatStrategy.h"`, a bare name that only
+resolves on Turtle (its include path holds `strategy/generic`); it costs the 2 `GenericPriestStrategy` places (fix: the path form
+`generic/RangedCombatStrategy.h`, as `StrategyContext.h:41` writes it, or the include directory). Full tables on the VM:
+`yulon-ubuntu2:~/forever-build/census-1/`.
+
+## Slice 3 (group fight on orders: threat/tank, pull, orders)
+
+Measured on the 170 files of `forever/SLICE3.txt` (SLICE2.txt's 160 plus the 10 files of FOREVER-SLICE3-SPEC section 3; the spec text says
+"173", that is the line count of the list file with its two comment lines and the sum of SLICE2.txt's 163 lines: the list holds 170 paths)
+with `FOREVER_SLOT=2 FOREVER_CENSUS_LIST=forever/SLICE3.txt forever/tools/vm-census.sh "" 10`, at the commit that adds the list file
+(no source file changed). The spec's estimate was 20-60 places.
+
+| Date | State | Files | Compile clean | Error places |
+|---|---|---|---|---|
+| 2026-11-18 | baseline N0, slice 3 list | 170 | 165 | 17 (in 5 files); 0 includes of a header ForeverCore does not have |
+| 2026-11-18 | after the porting worker (slice3/p) | 170 | 170 | 0 (SLICE2.txt 160 files: 0; SLICE1.txt 133 files: 0) |
+
+Summary line: `files 170  compile clean 165  with errors 5  error places 17 (in 5 files)  includes of a header ForeverCore does not have 0`.
+All 160 slice-2 files and 5 of the 10 new ones are clean at once; the 17 places are all in new files (no header holds any).
+
+`where.tsv` (error places per file):
+
+| Places | File |
+|---|---|
+| 7 | `ai/playerbot/strategy/generic/ThreatStrategy.cpp` |
+| 5 | `ai/playerbot/strategy/actions/WaitForAttackAction.cpp` |
+| 2 | `ai/playerbot/strategy/actions/PullActions.cpp` |
+| 2 | `ai/playerbot/strategy/triggers/PullTriggers.cpp` |
+| 1 | `ai/playerbot/strategy/actions/ValueActions.cpp` |
+
+The ten files with 0 places: `TankAssistStrategy.cpp`, `StayStrategy.cpp`, `PassiveStrategy.cpp`, `StayActions.cpp`, `ChatShortcutActions.cpp` (the
+spec expected 3-8 in the last two: `PlayerConvenience.h`, `Formations.h` and the position values were already ported by slice 1 and 2).
+Names (`names.tsv`): `SummonCreature` 3, `GetSource` 2, `GetPlayer` 2, `SendPlaySpellVisual` 2, and one each of `find`, two `unordered_map`
+operator[] on a raw guid, `SeekCycleSnapshot`, `threat` (the field of `SpellThreatEntry`), `uint64_t`. Full tables:
+`yulon-ubuntu2:~/forever-build/census-2/`.

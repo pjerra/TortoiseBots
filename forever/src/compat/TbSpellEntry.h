@@ -19,7 +19,10 @@
 #include "ClassicSpellValue.h"
 #include <array>
 #include <atomic>
+#include <functional>
+#include <vector>
 #include <mutex>
+#include <set>
 #include <string>
 
 // The old core's effect slot limit (DBCEnums.h:159-163 on the Turtle core: EFFECT_INDEX_0..2). ForeverCore spells may carry
@@ -91,7 +94,7 @@ struct SpellEntry
     uint32    EffectTriggerSpell[MAX_EFFECT_INDEX] = {};  // T :611  triggered spell id          F TriggerSpell                SpellInfo.h:260
     float     EffectPointsPerComboPoint[MAX_EFFECT_INDEX] = {}; // T :614  T :614 F classic row points_per_combo (else PointsPerResource)
     std::array<std::string, MAX_DBC_LOCALE> SpellName{};  // T :630  the name, per locale        F SpellName->Str[locale]      SpellInfo.h:420
-    std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F derived from ChainEntry->rank (see Fill)
+    std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F ChainEntry->rank, else the chain table (R5: the core's chain or the SkillLineAbility links; none = empty)
     uint32    ManaCostPercentage = 0;                     // T :666  percent of the caster's base mana  F see Fill (classic cost row, else PowerCosts[0]->PowerCostPct)
     uint32    StartRecoveryCategory = 0;                  // T :667  GCD category                F StartRecoveryCategory       SpellInfo.h:418
     uint32    StartRecoveryTime = 0;                      // T :668  GCD in ms                  F StartRecoveryTime           SpellInfo.h:419
@@ -109,7 +112,9 @@ struct SpellEntry
     std::string IncompleteReason;
 
     // The old struct's helpers, answered by the core wherever the core asks the same question (SHIM-R3-NOTES.md).
-    int32 CalculateSimpleValue(SpellEffectIndex eff) const { return EffectBasePoints[eff] + int32(EffectBaseDice[eff]); }
+    // The arrays hold the first MAX_EFFECT_INDEX effects; SpellEffectIndex is the core's enum and can be 0..31 (R5 item 11): a slot beyond the mirrored
+    // three has no value here (0), as for a spell with fewer effects.
+    int32 CalculateSimpleValue(SpellEffectIndex eff) const { return uint32(eff) < MAX_EFFECT_INDEX ? EffectBasePoints[eff] + int32(EffectBaseDice[eff]) : 0; }
     bool IsPositiveSpell() const;
     bool IsPositiveEffect(SpellEffectIndex effIndex) const;
     bool IsPassiveSpell() const;
@@ -163,6 +168,33 @@ namespace tbcompat
     // Bytes held by the immutable id index and by the mirror slot array; 0 when not built.
     uint64 SpellIndexBytes();
     uint64 SpellSlotBytes();
+
+    // ---- Spell rank chains (R5, TbSpellEntry.cpp ChainTable). One table, every rank question: nothing is ranked by name, family or level.
+    struct SpellChainNode { uint32 rank = 0, first = 0, prev = 0, next = 0, last = 0; };
+    namespace SpellChainSource { constexpr uint8 Core = 1, SkillLine = 2, Trainer = 4; }   // bits: the core's own chain entry; SkillLineAbility supersedes links; trainer required-ability links (same-line evidence)
+    struct SpellChainList { std::vector<uint32> ids; uint8 sources = 0; };   // ids in rank order; sources: the bits of every source that gave one of its links
+    struct SpellChainLink { uint32 lower, higher; uint8 source; };             // `lower` is the previous rank of `higher`
+    struct SpellChainResult { std::vector<SpellChainList> chains; std::vector<std::vector<uint32>> quarantined; };
+    // The graph step on its own (no core types, used by the table and by `.tb ranks selftest`): all links in ONE graph, a component that is a straight path
+    // becomes a chain (a link of any source extends it), any other component (a fork, a join, a cycle, two sources that disagree on the order) is quarantined
+    // whole. Every link endpoint ends in a chain or in a quarantined component.
+    SpellChainResult MaterializeSpellChains(std::vector<SpellChainLink> const& links);
+    std::vector<std::string> SpellChainSelfTest();            // one "PASS|FAIL <case>" line per hand-made link set
+    std::string SpellChainSummary();                          // the boot summary line: link counts, accepted/rejected trainer links per test, quarantine
+    std::set<uint32> ClassLineSpells(uint32 classId);         // the abilities of the class skill lines of a class (category 7, SkillRaceClassInfo of the class)
+    SpellChainNode const* SpellChainNodeOf(uint32 spellId);   // nullptr: the spell has no chain (rank 0)
+    uint32 SpellRankOf(uint32 spellId);                       // 1.. in a chain, 0 without
+    uint32 SpellFirstRank(uint32 spellId);                    // 0 without a chain
+    uint32 SpellNextRank(uint32 spellId);                     // 0 at the end or without a chain
+    uint32 SpellPrevRank(uint32 spellId);
+    uint32 SpellLastRank(uint32 spellId);
+    bool SpellsShareChain(uint32 a, uint32 b);                // both in a chain and the same one (a == b counts)
+    bool SpellIsHigherRank(uint32 spellId, uint32 otherId);   // same chain and a higher rank number
+    void ForEachSpellChain(std::function<void(SpellChainList const&)> const& fn);
+    void ForEachRejectedTrainerLink(std::function<void(uint32 required, uint32 taught, char const* why)> const& fn);   // trainer links kept out, with the first failing test
+    void ForEachQuarantinedComponent(std::function<void(std::vector<uint32> const&)> const& fn);
+    void ForEachLostChain(std::function<void(std::vector<uint32> const&)> const& fn);   // chains of the first round's loose trainer rule that the same-line rule does not make
+    uint32 SpellChainCount();
 
     // Lookups that asked for an id the core has only with a non-NONE difficulty (answered nullptr).
     uint32 NonNoneOnlyLookups();

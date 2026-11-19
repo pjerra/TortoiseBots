@@ -35,7 +35,7 @@ Player* FindGroupPlayerByName(Player* player, const std::string& playerName)
             Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
             for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
             {
-                Player* member = sObjectMgr.GetPlayer(itr->guid);
+                Player* member = GetPlayerCompat(itr->guid);
                 if (member)
                 {
                     const std::string memberName = LowercaseString(member->GetName());

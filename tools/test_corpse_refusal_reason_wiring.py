@@ -14,6 +14,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 STACK = (ROOT / "ai/playerbot/LootObjectStack.cpp").read_text()
+# Slice 2 (V2): the facts of the refusal line are built by a both-core helper; the Turtle side holds the original expressions
+# word for word (the same corpse facts, now read as `facts.<name>`).
+S2V = (ROOT / "ai/cmangos-compat-s2v.h").read_text()
 
 
 def body(text, start, end):
@@ -34,19 +37,28 @@ class CorpseRefusalReasonWiringTest(unittest.TestCase):
 
     def test_the_presence_argument_skips_the_personal_shortcut(self):
         args = self.refresh[self.call:self.refresh.index('"debug loot");', self.call)]
-        self.assertIn("ai::CorpseRefusalReason(loot.IsAllowedLooter(bot->GetObjectGuid(), false),", args)
-        self.assertNotIn("IsAllowedLooter(bot->GetObjectGuid())", args)
+        self.assertIn("ai::CorpseRefusalReason(facts.allowedLooter,", args)
+        facts = body(S2V, "inline CorpseRefusalFactsCompat CorpseRefusalFactsOfCompat(", "\n}\n")
+        self.assertIn("facts.allowedLooter = loot.IsAllowedLooter(bot->GetObjectGuid(), false);", facts)
+        self.assertNotIn("IsAllowedLooter(bot->GetObjectGuid())", facts)
 
     def test_the_corpse_facts_are_passed(self):
         args = self.refresh[self.call:self.refresh.index('"debug loot");', self.call)]
-        self.assertIn("!loot.m_questItems.empty()", args)
-        self.assertIn("loot.hasItemFor(bot)", args)
+        self.assertIn("facts.hasQuestItems", args)
+        self.assertIn("facts.hasItemFor", args)
+        facts = body(S2V, "inline CorpseRefusalFactsCompat CorpseRefusalFactsOfCompat(", "\n}\n")
+        self.assertIn("facts.hasQuestItems = !loot.m_questItems.empty();", facts)
+        self.assertIn("facts.hasItemFor = loot.hasItemFor(bot);", facts)
 
     def test_the_reservation_flag_compares_visible_copies(self):
-        self.assertIn("bool const reserved = loot.hasItemFor(bot) && !ai::HasVisiblePersonalItemFor(loot, bot);",
-                      self.refresh)
+        facts = body(S2V, "inline CorpseRefusalFactsCompat CorpseRefusalFactsOfCompat(", "\n}\n")
+        self.assertIn("facts.reserved = loot.hasItemFor(bot) && !visible(loot, bot);", facts)
+        # `visible` is the module's own rule, handed in by the call site.
+        self.assertIn("CorpseRefusalFactsOfCompat(creature, bot, VisiblePersonalItemRule())", self.refresh)
+        self.assertIn("return ai::HasVisiblePersonalItemFor(loot, viewer);", STACK)
         args = self.refresh[self.call:self.refresh.index('"debug loot");', self.call)]
-        self.assertIn("otherTurn, reserved", args)
+        self.assertIn("facts.otherTurn, facts.reserved", args)
+        self.assertIn("facts.otherTurn = loot.roundRobinPlayer != 0 && loot.roundRobinPlayer != bot->GetObjectGuid();", facts)
 
     def test_the_report_stays_behind_the_loot_gate(self):
         self.assertLess(self.gate, self.call)

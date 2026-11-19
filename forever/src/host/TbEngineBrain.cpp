@@ -8,6 +8,8 @@
 //   Destroy = PlayerbotAIAdapter::Shutdown         (runtime/PlayerbotAIAdapter.cpp:149-158)
 // See forever/docs/SLICE1-R5-NOTES.md.
 #include "TbEngineBrain.h"
+#include "TbBotSession.h"
+#include "host/TbH3.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -29,9 +31,12 @@
 #include "playerbot/BotState.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/ServerFacade.h"
 #include "playerbot/WorldPosition.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/values/LastSpellCastValue.h"
+#include "playerbot/strategy/values/TargetValue.h"
 #include "PlayerbotAIStorage.h"
 
 namespace TortoiseBots
@@ -43,7 +48,9 @@ struct Brain
     Player* bot = nullptr;       // only compared and passed back to the registry after the Player is gone, never dereferenced then
     uint32 guidLow = 0;          // the bot's low guid: the action log is closed by it (the Player may be gone)
     PlayerbotAI* ai = nullptr;
+    BotSession* session = nullptr;   // the bot's session (owned by BotMgr, which drops the brain before the session); its cast-result queue is on while the brain lives
     uint32 teleportAcks = 0;     // R10 (S3): how many teleports the host handed to PlayerbotAI::HandleTeleportAck (`.tb where`)
+    uint32 pendingMs = 0;        // R4: world time the engine has not been given yet (Tick hands it over in steps of kMinEngineStepMs)
 };
 
 namespace
@@ -56,8 +63,61 @@ bool Usable(Brain const* brain)
         PlayerbotAIStorage::Instance().GetAI(brain->bot) == brain->ai;
 }
 
+BotSession* BotSessionOf(Player* bot)
+{
+    WorldSession* session = bot ? bot->GetSession() : nullptr;
+    return session && session->IsBot() ? dynamic_cast<BotSession*>(session) : nullptr;
+}
+
+// One cast result, handed to the engine the way the Turtle packet handlers do (PlayerbotAIPackets.cpp:187-199 and :554-591).
+void DeliverCastResult(Brain* brain, CastResult const& result)
+{
+    PlayerbotAI* pai = brain->ai;
+    if (result.kind == CastResult::Kind::SpellFailure)
+    {
+        // SMSG_SPELL_FAILURE of the bot's own cast -> PlayerbotAI::SpellInterrupted (PlayerbotAIPackets.cpp:187-199): the engine
+        // clears "last spell cast" and shortens its wait to the remaining global cooldown (PlayerbotAI.cpp:3172-3194).
+        ai::botdiag::BotActionLog::Write(pai, "SPELL_FAILURE", "spell=%u reason=%u%s", result.spellId, result.reason, result.injected ? " injected=1" : "");
+        pai->SpellInterrupted(result.spellId);
+        return;
+    }
+
+    // SMSG_CAST_FAILED that the engine did not get as the return value of its own call: the cast bar ended badly (out of range,
+    // line of sight, target dead, interrupted by movement or damage). Turtle's core sends none of these for a bot, and the Turtle
+    // handler (:554-591) only logs crowd-control casts and feeds the "cast failed" trigger, which no strategy maps; both are kept:
+    // the log line (shape of CC_CAST_FAILED: result, target, distance, moving) and the new CAST_FAILED_ASYNC line.
+    ai::botdiag::BotActionLog::Write(pai, "CAST_FAILED_ASYNC", "spell=%u reason=%u%s", result.spellId, result.reason, result.injected ? " injected=1" : "");
+    if (ai::botdiag::BotActionLog::GetHandle(pai))
+    {
+        SpellEntry const* info = sServerFacade.LookupSpellInfo(result.spellId);
+        if (info && ai::FindNonCcTargetStrategy::IsCcSpell(info))
+        {
+            ai::LastSpellCast const& last = pai->GetAiObjectContext()->GetValue<ai::LastSpellCast&>("last spell cast")->Get();
+            Unit* ccTarget = last.id == result.spellId ? pai->GetUnit(last.target) : nullptr;
+            ai::botdiag::BotActionLog::Write(pai, "CC_CAST_FAILED", "spell=%u result=%u target=%s dist=%.1f moving=%u",
+                result.spellId, result.reason, ccTarget ? ccTarget->GetGUID().ToString().c_str() : "none",
+                ccTarget ? pai->GetBot()->GetDistance(ccTarget) : -1.0f, pai->GetBot()->isMoving() ? 1u : 0u);
+        }
+    }
+}
+
+// World thread, before UpdateAI: the results the core queued since the last tick (any thread put them there).
+void DeliverCastResults(Brain* brain)
+{
+    if (!brain->session)
+        return;
+    std::vector<CastResult> results;
+    if (brain->session->DrainCastResults(results) == 0)
+        return;
+    for (CastResult const& result : results)
+        DeliverCastResult(brain, result);
+}
+
 void Dispose(Brain* brain)
 {
+    // The session's queue is only filled while the brain lives (no consumer afterwards).
+    if (brain->session)
+        brain->session->SetCastResultSink(false);
     // PlayerbotAIAdapter::Shutdown (:149-158): RemoveAI first (hooks resolve the AI through the registry, so none can
     // reach it afterwards), then the action log, then the AI itself.
     if (brain->bot)
@@ -189,6 +249,7 @@ Brain* Create(Player* bot, Player* master, std::string& error)
     brain->bot = bot;
     brain->guidLow = bot->GetGUID().GetCounter();
     brain->ai = pai;
+    brain->session = BotSessionOf(bot);
 
     ai::botdiag::BotActionLog::NoteLogin(brain->guidLow);
     PlayerbotAIStorage::Instance().SetAI(bot, pai);
@@ -201,19 +262,41 @@ Brain* Create(Player* bot, Player* master, std::string& error)
         return nullptr;
     }
 
+    // From here on the core's cast failures for this bot are queued (TbBotSession.cpp SendPacket) and drained by Tick.
+    if (brain->session)
+        brain->session->SetCastResultSink(true);
+
     sLog.outString("TortoiseBots engine: PlayerbotAI attached for %s (%s) master %s", bot->GetName().c_str(),
         bot->GetGUID().ToString().c_str(), master->GetName().c_str());
     return brain.release();
 }
 
+// R4 (slice 2): the engine is stepped at most once per kMinEngineStepMs of world time, with the time collected since its last step. Why: the
+// engine was written for a world loop that runs every ~50 ms (Turtle); ForeverCore's runs every millisecond (`.tb perf`: ~870 updates a
+// second on an idle server). Legacy code that answers "done" without setting a next-check delay (ReachTargetAction -> ChaseTo, "already
+// chasing this target": MovementActions.cpp:3622-3628) then ran the whole engine tick every millisecond for as long as the walk lasted (seen
+// live: a healer walking to a patient 35 yd away ticked 1,000 times a second for 4.6 s). A step of 50 ms is the cadence the engine had on Turtle;
+// the engine keeps its own delays on top (PlayerbotAIBase.cpp:16-31) and receives the real elapsed time, so nothing it counts in
+// milliseconds changes. Cast results are delivered in the same step.
+constexpr uint32 kMinEngineStepMs = 50;
+
 void Tick(Brain* brain, uint32 diff)
 {
     // World thread, from BotMgr::Update (WorldScript::OnBeforeMapsUpdate): the maps are not updating at this moment.
-    // PlayerbotAIBase::UpdateAI keeps its own delay (PlayerbotAIBase.cpp:16-31), so calling every tick is right.
     if (!Usable(brain))
         return;
+    brain->pendingMs += diff;
+    if (brain->pendingMs < kMinEngineStepMs)
+        return;
+    diff = brain->pendingMs;
+    brain->pendingMs = 0;
     try
     {
+        // A CAST_FAILED the core sends during this call is the refusal of the engine's own cast (the call returns the same
+        // result): the session counts it and does not queue it (BotSession::EngineTickScope).
+        BotSession::EngineTickScope tickScope(brain->session);
+        DeliverCastResults(brain);
+        TortoiseBots::h3::BeforeEngineTick(brain->bot, brain->ai);   // H3: the bot's queued orders, before its tick
         brain->ai->UpdateAI(diff);
     }
     catch (ByteBufferException const&)
@@ -259,6 +342,14 @@ std::string JoinStrategies(PlayerbotAI* pai, BotState state)
     }
     return text.empty() ? "(none)" : text;
 }
+}
+
+std::string InjectCastResult(Player* bot, uint32 spellId, uint32 reason, bool interrupted)
+{
+    BotSession* session = BotSessionOf(bot);
+    if (!session)
+        return "not a bot session";
+    return session->InjectCastResult(spellId, reason, interrupted);
 }
 
 std::vector<std::string> Describe(Brain const* brain)
@@ -330,6 +421,25 @@ std::vector<std::string> Describe(Brain const* brain)
     lines.push_back(std::string("follow target: ") + (followTarget ? followTarget->GetName() : "none") + ", safe: " +
         (followTarget && pai->IsSafe(followTarget) ? "yes" : "no") + ", distance to master target: " + std::to_string(masterDistance) +
         ", motion type: " + std::to_string(int(pai->GetBot()->GetMotionMaster()->GetCurrentMovementGeneratorType())));
+
+    // R4 (observations f and j): the engine's "last spell cast" (cleared by SpellInterrupted when the core reports a failed cast, so a
+    // bot that heard it shows id 0 here) and the core's stand state of the bot (a drinking bot sits: 1 = sit, 0 = stand).
+    if (ai::Value<ai::LastSpellCast&>* value = context->GetValue<ai::LastSpellCast&>("last spell cast"))
+    {
+        ai::LastSpellCast const& last = value->Get();
+        lines.push_back("last spell cast: id " + std::to_string(last.id) + ", seconds since " + (last.id ? std::to_string(long(time(nullptr) - last.time)) : std::string("n/a")));
+    }
+    lines.push_back("stand state: " + std::to_string(int(pai->GetBot()->GetStandState())));
+
+    // The cast-result queue (TbBotSession.h): what the core told the bot about its own casts since the engine started.
+    if (brain->session)
+    {
+        CastResultCounts const counts = brain->session->GetCastResultCounts();
+        lines.push_back("cast results: queued " + std::to_string(counts.queued) + ", delivered " + std::to_string(counts.delivered) +
+            ", dropped " + std::to_string(counts.dropped) + " (queue holds " + std::to_string(BotSession::CastResultCapacity) + "), pending " +
+            std::to_string(counts.pending) + "; refused during the engine's own tick (not queued) " + std::to_string(counts.refusedInTick) +
+            ", unreadable " + std::to_string(counts.malformed));
+    }
     return lines;
 }
 }
@@ -351,6 +461,7 @@ Brain* Create(Player*, Player*, std::string& error)
 void Tick(Brain*, uint32) {}
 void HandleTeleportAck(Brain*) {}
 void Destroy(Brain*) {}
+std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
 }
 }

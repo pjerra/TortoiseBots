@@ -16,6 +16,7 @@
 #include "compat/botpch_forever.h"
 
 #include "playerbot/playerbot.h"
+#include "../../../behavior/PlayerConvenience.h"
 #include "playerbot/BossStandMgr.h"
 #include "playerbot/BossTacticsMgr.h"
 #include "playerbot/BossTacticsStand.h"
@@ -46,7 +47,9 @@
 #include "playerbot/strategy/actions/PatchwerkSafety.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
+#include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
+#include "playerbot/strategy/actions/WorldBuffAction.h"
 #include "playerbot/strategy/actions/ViscidusActions.h"
 #include "playerbot/strategy/generic/ThreatStrategy.h"
 #include "playerbot/strategy/triggers/EmeraldSanctumDungeonTriggers.h"
@@ -61,6 +64,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cfloat>
+#include <limits>
 #include <cmath>
 #include "GameTime.h"
 
@@ -78,7 +82,6 @@ inline void NoteBoss()
         tbcompat::Unported(tbcompat::Feature::BossTactics);
 }
 inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
-inline void NoteLoot()      { tbcompat::Unported(tbcompat::Feature::LootStack); }
 inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
 inline void NoteTexts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
 inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
@@ -91,7 +94,7 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 
 // =====================================================================================================================
 // Boss and raid tactics. Owner files: ai/playerbot/strategy/actions/BossTacticsActions.cpp, Fankriss*Actions.cpp,
-// PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp, ViscidusActions.cpp, EmeraldSanctumDungeon*.cpp, ThreatStrategy.cpp,
+// PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp, ViscidusActions.cpp, EmeraldSanctumDungeon*.cpp,
 // FankrissGauntletPolicy (header), BossTacticsMgr.cpp, BossStandMgr.cpp, DungeonPlanMgr.cpp.
 // Answer: no boss rule applies (false / null / 0 / empty); the table getters return an empty table.
 // =====================================================================================================================
@@ -223,9 +226,9 @@ bool ViscidusBlocksSpell(PlayerbotAI*, uint32, Unit*) { NoteBoss(); return false
 Unit* FindSolniusAdd(PlayerbotAI*) { NoteBoss(); return nullptr; }
 bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 
-// ThreatStrategy.cpp, PositionAction.cpp
-bool ThreatResetHolds(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
-// StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in (R9): PositionAction.cpp is in the slice.
+// ThreatResetHolds is the real function now (slice 3: ThreatStrategy.cpp is in the slice; its stand-in answered "never held" and is removed). Its
+// readers of the boss table still end in the stand-ins above (GetBossTactics: no row for any map and entry), so on a target without a row it answers
+// false exactly as before. StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in either (R9): PositionAction.cpp is in the slice.
 
 // =====================================================================================================================
 // Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
@@ -307,14 +310,60 @@ bool IdleMobVeto::Wakes(float, float) const { NoteFlee(); return false; }
 bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory const*, uint32) { NoteFlee(); return false; }
 bool FleeManager::isUseful() { NoteFlee(); return false; }
 
-// LootObjectStack.cpp: an empty stack that never loots.
-LootObject::LootObject(const LootObject&) = default;
-bool LootObject::IsLootPossible(Player*) { NoteLoot(); return false; }
-WorldObject* LootObject::GetWorldObject(Player*) { NoteLoot(); return nullptr; }
-bool LootObjectStack::Add(ObjectGuid, bool) { NoteLoot(); return false; }
-void LootObjectStack::Remove(ObjectGuid) { NoteLoot(); }
-void LootObjectStack::NoteApproachFailure(ObjectGuid) { NoteLoot(); }
-bool LootObjectStack::IsAbandoned(ObjectGuid) { NoteLoot(); return false; }
+// LootObjectStack.cpp (slice 2): the real file is in the slice now; its seven stand-ins and the `loot object stack` row are gone (R3).
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Slice 2 (R3), link stand-ins of the priest, loot and item-use files. Each one names: the real function's "absent" answer, the value given here, and the
+// effect at its callers (the findings rule: a fallback makes the bot do LESS).
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+
+// BossTacticsActions.cpp (feature "boss and raid tactics": counted once per second, like the slice-1 stand-ins above).
+// ScanBossTactics: absent = a fight with no boss row. Value: no units, no rows. Effect (PartyMemberToDispel.cpp): `rows` is empty, so the dispel pick is the
+// plain tier search (`ranked` false); CollectDispelAuras / NearestGroupMemberYd / LogDispel* below are only reached when rows exist, so never.
+BossTacticsFight ScanBossTactics(PlayerbotAI*, Player*) { NoteBoss(); return BossTacticsFight{}; }
+// Absent = the unit carries no dispellable aura. Value: `out` left as the caller passed it (empty). Effect: no aura is offered to the dispel verdict (LESS).
+void CollectDispelAuras(Unit*, uint32, std::vector<AuraOnMember>&) { NoteBoss(); }
+// Absent = "a large value when the unit has none" (BossTacticsActions.h:55): the carrier counts as alone, i.e. clear. Value: the largest float, the same
+// "no group member near" the caller's own non-ranked branch uses. Effect: unreachable without rows; if reached, a `clear` row would release the dispel
+// (the only case where this is MORE than the real answer, and it needs a boss row, which the slice never has).
+float NearestGroupMemberYd(Unit*) { NoteBoss(); return std::numeric_limits<float>::max(); }
+// Absent = nothing to log. Value: nothing. Effect: one bot_events.csv row not written.
+void LogDispelPick(PlayerbotAI*, Player*, DispelVerdict const&, Unit*, float) {}
+void LogDispelExcluded(PlayerbotAI*, Player*, DispelVerdict const&, Unit*, float) {}
+// Absent = no live spread row names a potion for this bot (BossTacticsActions.h:743: "Nothing unless ... the map has a spread row"). Value: kNoProtectionPotion
+// (item 0). Effect (UseItemAction.cpp:1171): no boss protection potion is chosen or drunk (LESS).
+ProtectionPotion BossRowProtectionPotion(PlayerbotAI*, Player*) { NoteBoss(); return kNoProtectionPotion; }
+
+// WorldBuffAction.cpp (feature "other legacy services"): absent = the unit needs no world buff. Value: empty list. Effect: NeedWorldBuffTrigger (CureTriggers.cpp)
+// is never active; the trigger key itself is not registered in the slice either (LESS: no buff is asked for).
+std::vector<uint32> WorldBuffAction::NeedWorldBuffs(Unit*) { NoteMisc(); return {}; }
+
+// TellLosAction.cpp (feature "game object use"): the "use gos <modifiers>" form of the use command finds game objects by line-of-sight modifiers. Absent =
+// no game object matches. Value: empty modifier list / empty object list. Effect (UseItemAction.cpp:244): `gos` is empty, no target game object is set,
+// and the use command does nothing (game object use is refused on ForeverCore anyway, `GameObjectUseUnportedCompat`) (LESS).
+std::vector<LosModifierStruct> TellLosAction::ParseLosModifiers(const std::string&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
+std::list<GameObject*> TellLosAction::GoGuidListToObjList(PlayerbotAI*, const std::list<ObjectGuid>&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
+std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list<GameObject*>&, const std::vector<LosModifierStruct>&)
+{
+    tbcompat::Unported(tbcompat::Feature::GameObjectUse);
+    return {};
+}
+
+// ItemUsageValue.cpp (feature "item usage", lead decision D2: the item-usage value is a later slice; the `item usage` key is not registered, the
+// missing-key stand-in answers ITEM_USAGE_NONE).
+// IsNeededForQuest: absent = "no quest needs this item". Value: false. Effect (LootObjectStack.cpp:187): the corpse-refusal facts do not name a quest item
+// (a debug text), the game object branch (:521) is not reached on ForeverCore. No item is looted for a quest either way (items are not looted).
+bool ItemUsageValue::IsNeededForQuest(Player*, uint32, bool) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
+// IsFutureUpgrade: absent = "not an upgrade". Value: false. Effect (LootStrategyValue.cpp:25): a CanLoot answer that would wait for an upgrade is "no" (LESS).
+bool ItemUsageValue::IsFutureUpgrade(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
+// QueryItemUsageForEquip: absent = the item has no equip use. Value: ITEM_USAGE_NONE. Effect (LootValues.cpp HasUpgradeValue, not registered): no upgrade is found.
+ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return ItemUsage::ITEM_USAGE_NONE; }
+// GetRecipeSpell: absent = the item teaches no recipe. Value: 0. Effect (UseItemAction.cpp UseRandomRecipe): no recipe is picked, the action finds nothing to use (LESS).
+uint32 ItemUsageValue::GetRecipeSpell(ItemPrototype const*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return 0; }
+
+// GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
+// Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
+bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
 // =====================================================================================================================
@@ -429,3 +478,28 @@ void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
 void RandomBotFacade::LoadBattleMastersCache() { NotePool(); }
 void RandomBotFacade::LoadAuctionPrices() { NotePool(); }
+
+// =====================================================================================================================
+// Slice 3 (porting worker): the three symbols the ten new files (SLICE3.txt) reference that no slice file defines. Found by the option-ON
+// module build of the slice-3 list in slot 2 (`nm -u` of the module objects minus every symbol a module object defines; the rest of the
+// undefined names are the core's). Each is the real function's answer when its feature is absent, read in the owner file.
+// =====================================================================================================================
+namespace ai
+{
+// PatchwerkSoakerActions.cpp:212 (read by PullAction::Execute, PullActions.cpp:455): "may the puller fire?". The real body is
+// `if (!PatchwerkMainPull(puller)) return true;` and PatchwerkMainPull needs map 533, the strategy `patchwerk main` (unregistered here) and an
+// active command pull: on every other pull the answer is true, which is also the value here ("no soaker to wait for"; the pull window still ends
+// the pull). A Patchwerk fight is not in the slice, so there is nothing a `false` could protect.
+bool PatchwerkSoakersReadyForPull(PlayerbotAI*) { NoteBoss(); return true; }
+
+// BossTacticsActions.cpp:10085 (read by ThreatResetHolds, behind AiPlayerbot.DungeonRunThreatResetWindow = off and a boss-table row that never
+// exists here): the real function empties `out` and returns false when it holds no record of the fight, which is always the case without the
+// seek-cycle bookkeeping of the boss tactics. Same value, same effect ("no snapshot": the reset hold clears its latch and holds nothing).
+bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteBoss(); out = SeekCycleView(); return false; }
+}
+
+// behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the
+// summon's restore does not put it back on follow. The real function returns false when the bot has no summon record, which is always
+// the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
+// PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
+bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }

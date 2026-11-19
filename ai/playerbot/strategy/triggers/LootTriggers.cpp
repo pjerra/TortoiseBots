@@ -23,7 +23,7 @@ namespace
             Unit* unit = ai->GetUnit(guid);
             if (!unit || !unit->IsAlive() || !bot->IsHostileTo(unit))
                 continue;
-            if (unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NOT_ATTACKABLE_1))
+            if (HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NOT_ATTACKABLE_1))
                 continue;
             return true;
         }

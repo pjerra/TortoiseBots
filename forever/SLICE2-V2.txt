@@ -1,0 +1,7 @@
+# Slice 2, package V2: the .cpp files this package owns (census list).
+ai/playerbot/strategy/values/LootValues.cpp
+ai/playerbot/strategy/values/AlwaysLootListValue.cpp
+ai/playerbot/strategy/values/PartyMemberToDispel.cpp
+ai/playerbot/strategy/values/NearestCorpsesValue.cpp
+ai/playerbot/strategy/values/LootStrategyValue.cpp
+ai/playerbot/LootObjectStack.cpp

@@ -45,10 +45,10 @@ void LogThreatResetHold(PlayerbotAI* ai, Player* bot, std::uint8_t pct, float re
     const std::uint64_t windowKey = (static_cast<std::uint64_t>(lastResetMs) << 8) | windowIndex;
     {
         std::lock_guard<std::mutex> lock(g_threatResetLogMutex);
-        auto const it = g_threatResetLog.find(bot->GetObjectGuid().GetRawValue());
+        auto const it = g_threatResetLog.find(GuidKeyCompat(bot->GetObjectGuid()));
         if (it != g_threatResetLog.end() && it->second == windowKey)
             return;
-        g_threatResetLog[bot->GetObjectGuid().GetRawValue()] = windowKey;
+        g_threatResetLog[GuidKeyCompat(bot->GetObjectGuid())] = windowKey;
         if (g_threatResetLog.size() > 4096)
             g_threatResetLog.clear();
     }
@@ -72,7 +72,7 @@ void LogInterruptVeto(PlayerbotAI* ai, Player* bot, CastInterruptSpellAction con
     uint32 const nowMs = WorldTimer::getMSTime();
     {
         std::lock_guard<std::mutex> lock(g_interruptVetoLogMutex);
-        uint32& last = g_interruptVetoLog[bot->GetObjectGuid().GetRawValue()];
+        uint32& last = g_interruptVetoLog[GuidKeyCompat(bot->GetObjectGuid())];
         if (last != 0 && nowMs - last < kInterruptVetoLogGapMs)
             return;
         last = nowMs;
@@ -108,7 +108,7 @@ bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
         return false;
     }
     SeekCycleView view;
-    if (!SeekCycleSnapshot(bot->GetInstanceId(), target->GetObjectGuid().GetRawValue(), view) || !view.valid)
+    if (!SeekCycleSnapshot(bot->GetInstanceId(), GuidKeyCompat(target->GetObjectGuid()), view) || !view.valid)
     {
         ai->ThreatResetCap().Update(false, false, 0.0f, 0.0f, 0);
         return false;
@@ -214,7 +214,7 @@ float ThreatMultiplier::GetValue(Action* action)
         interruptBotThreat = ThreatValue::GetThreat(bot, interruptTarget);
         interruptTankThreat = ThreatValue::GetTankThreat(ai, interruptTarget);
         if (SpellThreatEntry const* threatEntry = sSpellMgr.GetSpellThreatEntry(interruptAction->GetSpellID()))
-            interruptFlatThreat = threatEntry->threat;
+            interruptFlatThreat = SpellFlatThreatCompat(*threatEntry);
         // The core's own test for the 110 % rule: can the mob reach this attacker with a melee swing.
         interruptRanged = !interruptTarget || !interruptTarget->CanReachWithMeleeAutoAttack(bot);
     }
@@ -240,11 +240,11 @@ float ThreatMultiplier::GetValue(Action* action)
         {
             if (AI_VALUE2(bool, "trigger active", "high threat"))
             {
-                ai->GetBot()->SendPlaySpellVisual(6372);
+                DebugSpellVisualCompat(ai->GetBot(), 6372);
             }
             else if (AI_VALUE2(bool, "trigger active", "medium threat"))
             {
-                ai->GetBot()->SendPlaySpellVisual(5036);
+                DebugSpellVisualCompat(ai->GetBot(), 5036);
             }
         }
     }

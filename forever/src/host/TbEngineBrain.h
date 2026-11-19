@@ -35,7 +35,9 @@ std::string EnsureConfig();
 // caller then keeps the spike behaviour for that bot.
 Brain* Create(Player* bot, Player* master, std::string& error);
 
-// One tick of the engine. `diff` is the world tick's elapsed milliseconds.
+// One tick of the engine. `diff` is the world tick's elapsed milliseconds. Before the engine's UpdateAI the bot's queued cast
+// results (BotSession, TbBotSession.h) are handed to the engine: SPELL_FAILURE -> PlayerbotAI::SpellInterrupted, CAST_FAILED ->
+// the action log's CAST_FAILED_ASYNC line. The queue is filled only while the bot has a brain (SLICE2-R0-NOTES.md).
 void Tick(Brain* brain, uint32 diff);
 
 // R10 (S3): the bot's teleport is being acknowledged by the host session: PlayerbotAI::HandleTeleportAck (transition generation, teleport grace, stale
@@ -46,7 +48,12 @@ void HandleTeleportAck(Brain* brain);
 // Unregisters and deletes the brain. Must run before the bot's Player is deleted (see the logout paths in BotMgr).
 void Destroy(Brain* brain);
 
-// What `.tb where` prints for an engine bot: one line each for state, strategies and current target.
+// `.tb castfail <bot> <spell> <reason> [interrupt]`: sends the bot's session a real SMSG_CAST_FAILED (or, with `interrupt`, an
+// SMSG_SPELL_FAILURE of its own cast) through Player::SendDirectMessage, so it travels the path of a core failure: the session's
+// packet reader, the bounded queue, and the drain at the start of the next engine tick. Empty string = sent, else why not.
+std::string InjectCastResult(Player* bot, uint32 spellId, uint32 reason, bool interrupted);
+
+// What `.tb where` prints for an engine bot: one line each for state, strategies and current target, and the cast-result counts.
 std::vector<std::string> Describe(Brain const* brain);
 
 struct BrainDeleter

@@ -27,8 +27,7 @@ private:
 void NearestCorpsesValue::FindUnits(std::list<Unit*> &targets)
 {
     AnyDeadUnitInObjectRangeCheck u_check(bot,  range);
-    UnitListSearcher<AnyDeadUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, range);
+    VisitUnitsCompat(bot, targets, u_check, range);
 }
 
 bool NearestCorpsesValue::AcceptUnit(Unit* unit)

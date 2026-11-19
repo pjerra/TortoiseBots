@@ -9,7 +9,7 @@
 #define PLAYERBOTS_GENERICPRIESTSTRATEGY_H
 
 #include "CombatStrategy.h"
-#include "RangedCombatStrategy.h"
+#include "playerbot/strategy/generic/RangedCombatStrategy.h"
 
 class PlayerbotAI;
 

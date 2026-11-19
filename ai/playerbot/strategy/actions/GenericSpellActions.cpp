@@ -959,7 +959,7 @@ uint32 HealPartyMemberAction::DownrankSpellId(Unit* target)
         std::string rankName = info->SpellName[0];
         strToLower(rankName);
         if (rankName != name || info->SpellFamilyName != topInfo->SpellFamilyName ||
-            SpellIconIdCompat(info) != SpellIconIdCompat(topInfo))
+            SpellIconIdCompat(info) != SpellIconIdCompat(topInfo) || !SameRankLineCompat(info, topInfo))
             continue;
         uint32 heal = 0;
         for (uint32 effect = 0; effect < MAX_EFFECT_INDEX; ++effect)

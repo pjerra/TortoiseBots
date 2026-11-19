@@ -3479,7 +3479,7 @@ void PlayerbotAI::DoNextAction(bool min, bool forceActivity)
         // is only between maps.
         // A commanded bot never takes a real player of its group as master (see `commanded`).
         if (newMaster && (!master || master != newMaster) && bot != newMaster &&
-            !(commanded && IsRealPlayer(newMaster)) &&
+            !(commanded && IsRealPlayer(newMaster)) && !CommandedBotKeepsMasterCompat(commanded) &&
             TortoiseBots::HireAllowsMasterAdoption(hired, hirerBetweenMaps, IsRealPlayer(newMaster)))
         {
             bool masterChanged = true;
@@ -5033,6 +5033,12 @@ std::string PlayerbotAI::GetDefaultMovementStrategy()
 {
     // Player master -> follow
     if (HasActivePlayerMaster())
+        return "follow";
+
+    // A commanded bot (bound by `.tb master` to a commander that is a bot session) follows its commander too: "wander" is not a movement mode
+    // the ForeverCore slice registers, so a released pull hold (ReleasePullHold -> EnsureDefaultMovementStrategy) left the held bots with NO
+    // movement strategy and no way back into the fight (package L, live). Turtle: CommandedBotKeepsMasterCompat is always false.
+    if (CommandedBotKeepsMasterCompat(TortoiseBots::BotCommands::IsInCommandedGroup(bot)))
         return "follow";
 
     // Bot/no master -> wander

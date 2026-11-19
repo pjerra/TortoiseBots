@@ -1,0 +1,170 @@
+// Slice 3, host package H3: the ORDER and STATE surface of the `.tb` commands (forever/docs/TB-COMMANDS.md is the interface a
+// network client is written against; forever/docs/SLICE3-H-NOTES.md says how it was built).
+//
+// This header names no legacy type: the command handlers and the engine hooks are implemented in TbOrders.cpp, TbPartyState.cpp
+// and TbTestKit.cpp, which hold the engine-facing parts behind TORTOISEBOTS_SLICE1 exactly as TbEngineBrain.cpp does. Without the
+// option every handler answers "the engine is not built in".
+//
+// Threading: every function here runs on the world thread (a console command: World::ProcessCliCommands, World.cpp:3166, called at
+// World.cpp:2592; a GM chat command: World::UpdateSessions, World.cpp:3119, called at World.cpp:2421, the chat opcodes are
+// PROCESS_THREADUNSAFE, Opcodes.cpp:334-338; the engine tick: WorldScript::OnBeforeMapsUpdate, World.cpp:2470). The order queue is
+// therefore plain data with no lock.
+#pragma once
+
+#include "ChatCommand.h"
+#include "Define.h"
+#include "ObjectGuid.h"
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+class ChatHandler;
+class Player;
+class PlayerbotAI;
+
+namespace TortoiseBots
+{
+namespace h3
+{
+// ---- command handlers (rows of the `.tb` table in TbScripts.cpp) ----
+bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb order <bot|party [leader]> <verb> [arg] [#token]
+bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role <bot|party [leader]> tank|healer|dps|none [#token]
+bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb master <bot|party [leader]> <commander|none> [#token]
+bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb party <leader> | .tb party <leader> <member>... [#token]
+bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb state <bot|party [leader]> [#token]
+bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb threat <bot|party [leader]> [#token]
+bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]
+bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb equip <bot> <item id> [replace] [#token]
+bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb itemscan <bot> <item id>... [#token]
+
+// ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
+// Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.
+void BeforeEngineTick(Player* bot, PlayerbotAI* ai);
+// TbHostOwnership.cpp BotCommands::IsInCommandedGroup: true for a bot that `.tb master` bound to a commander outside its group.
+bool IsCommandedBot(Player* bot);
+
+// What `.tb state` shows of the bot's last order, and the role `.tb role` asked for (0 = none). Defined with the slice only.
+struct OrderStatus
+{
+    uint32 seq = 0;
+    std::string verb = "none";
+    std::string result = "none";    // none | queued | ok | fail:<code>
+};
+OrderStatus LastOrder(ObjectGuid bot);
+uint8 WantedRole(ObjectGuid bot);
+
+// ---- helpers shared by the three files (TbH3.cpp) ----
+// A command's words (whitespace separated) and its echo token: the last word that starts with '#' is taken out of the words and
+// kept, with the '#', in `token` ("" when there is none). A token is at most 32 characters of [A-Za-z0-9_.:-] after the '#'.
+struct Words
+{
+    std::vector<std::string> w;
+    std::string token;
+    bool badToken = false;     // a '#' word that is longer or has other characters: the command refuses it
+};
+Words Split(std::string_view tail);
+
+// ---- reply grammar version 2 (TB-STATE-GRAMMAR-V2, lead decision 2026-11-20): the ONE encoder every writer below uses ----
+// A reply line is the record kind, then `key=value` words separated by one space, and the caller's `#token` as the last word. Values are
+// percent-encoded (every byte outside [A-Za-z0-9._-] as %XX, upper-case hex; `_` stays literal); structure is `;` between list items, `:` between the
+// parts of an item (each part encoded on its own), `,` between coordinates; an empty value is the empty string; a key appears once per line.
+// A line holds at most 3,000 bytes: a record that is longer continues on `<kind>+ <first key=value> <more keys> #token` lines. A multi-line reply is
+// `<command>-begin #token`, the record lines, `<command>-end count=<lines between> records=<lines that are not continuations> ... #token`; only `error` is a one-line reply (addendum 1).
+constexpr size_t MaxLineBytes = 3000;
+std::string Enc(std::string_view bytes);
+
+uint32 LineTooLongCount();   // lines the encoder refused to write because they passed MaxLineBytes (a host bug; `.tb grammar selftest` prints it)
+
+class Rec
+{
+public:
+    explicit Rec(std::string_view kind) : _kind(kind) {}
+    Rec& S(std::string_view key, std::string_view text);                                  // text, percent-encoded
+    Rec& T(std::string_view key, std::string_view text, size_t cap = 400);               // free text cut to `cap` bytes BEFORE encoding; the record then carries `trunc=yes`
+    bool Truncated() const { return _truncated; }
+    Rec& N(std::string_view key, int64 value);                                           // a decimal number
+    Rec& F(std::string_view key, double value, int decimals = 1);                        // a decimal fraction
+    Rec& B(std::string_view key, bool value);                                            // yes / no
+    Rec& L(std::string_view key, std::vector<std::string> const& items);                 // `a;b;c`, each item encoded
+    Rec& P(std::string_view key, std::vector<std::string> const& parts);                 // one item of parts: `a:b:c`, each part encoded
+    Rec& LP(std::string_view key, std::vector<std::vector<std::string>> const& items);   // `a:b;c:d`
+    Rec& Coord(std::string_view key, double x, double y, double z);                      // `x,y,z` with one decimal
+    std::string const& Kind() const { return _kind; }
+    std::vector<std::pair<std::string, std::string>> const& Pairs() const { return _kv; }
+private:
+    Rec& Put(std::string_view key, std::string value);
+    std::string _kind;
+    std::vector<std::pair<std::string, std::string>> _kv;
+    bool _truncated = false;
+};
+
+// One reply of one command: counts the record lines between its begin and end markers.
+class Reply
+{
+public:
+    Reply(ChatHandler* handler, Words const& args, std::string_view kind) : _handler(handler), _args(args), _kind(kind) {}
+    void Begin();                         // `<kind>-begin #token`
+    void Line(Rec const& rec);            // a record line (split into continuation lines when over MaxLineBytes); counts the lines
+    void Single(Rec const& rec);          // the ONE one-line reply, `error` (addendum A1): the record and nothing else
+    void End(Rec extra);                  // `<kind>-end count=<lines> <extra keys> #token`; `extra` is a Rec of the extra keys (its kind is ignored)
+    uint32 Lines() const { return _lines; }
+    uint32 Records() const { return _records; }
+private:
+    void Send(std::string line);
+    ChatHandler* _handler;
+    Words const& _args;
+    std::string _kind;
+    uint32 _lines = 0;
+    uint32 _records = 0;
+};
+
+// A reply's target label ("Mtank", "party:Mtank", "party:commander:Mcmd") as the parts of one value (`P`).
+std::vector<std::string> LabelParts(std::string const& label);
+
+// `.tb grammar selftest`: encodes and prints fixed records (a value with a space, `=`, `:`, `;`, `#`, `%`, `_`, an empty value, an over-long line).
+bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail args);
+
+// The refusal: `error code=<word> cmd=<word> msg=<encoded text, at most 400 bytes> #token`, and the core is told an error message was sent (no usage text).
+// Always returns false.
+bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::string_view code, std::string_view detail = {});
+
+// True when the engine is built in; otherwise says `error ... code=engine-not-built` and returns false.
+bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd);
+
+std::string Lower(std::string_view text);
+std::string GuidText(ObjectGuid guid);                 // 32 hex digits: GetRawValue(1) then GetRawValue(0), "" for the empty guid
+bool ParseGuidText(std::string_view text, ObjectGuid& out);
+
+Player* SenderPlayer(ChatHandler* handler);            // the GM's character for a chat command, null for the console
+Player* FindOnline(std::string_view name);             // an in-world character by name (bot or not)
+bool IsHostBot(Player const* player);                  // BotMgr::IsBot
+Player* CommanderOf(Player* bot);
+// N5 (package N): who may be made the leader or master of host bots: a host bot, or the character of the GM who typed the command. A real player's
+// character is never taken over (from the console only host bots qualify). Used by `.tb party`, `.tb master`, `.tb login <bot> <master>`, `.tb group`.
+bool MayLeadBots(ChatHandler* handler, ObjectGuid character);                      // the in-world player the bot's host master guid names, or null
+
+// "who the command is about": one bot by name, or `party [leader]` (every host bot of that party).
+struct Address
+{
+    std::vector<Player*> bots;
+    std::string label;          // for replies: the bot's name, or "party:<leader>"
+    Player* leader = nullptr;   // the party leader, when the address was a party
+    std::string code;           // set when it could not be resolved
+    std::string detail;
+    bool ok() const { return code.empty(); }
+};
+// Reads the address at words[pos] and advances pos past it. `party` takes the next word as the leader's name when `leaderFollows` says
+// so (the caller knows whether the word after `party` could be the leader or is already the next argument).
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows);
+
+// Every in-world host bot (for `party` with no leader).
+std::vector<Player*> AllHostBots();
+
+// The `.tb master` bindings (bot guid -> commander guid). Plain data, world thread. A binding counts only while BotMgr still names the
+// same commander as the bot's host master (IsCommandedBot checks it), so a re-login or `.tb group` makes it lapse by itself.
+void SetCommander(ObjectGuid bot, ObjectGuid commander);   // an empty commander removes the binding
+ObjectGuid CommanderGuid(ObjectGuid bot);
+std::vector<std::pair<ObjectGuid, ObjectGuid>> CommanderBindings();
+}
+}

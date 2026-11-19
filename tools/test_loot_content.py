@@ -14,6 +14,12 @@ class LootContentTest(unittest.TestCase):
         start = text.index("std::vector<LootItem*> LootAccess::GetLootContentFor(")
         end = text.index("// Get loot status for a specified player.", start)
         method = text[start:end]
+        # Slice 2 (V2): the walk itself is the Turtle-side helper LootContentForCompat (the original body, word for word); the accessor
+        # hands it ai::PersonalCopyVisible. Both are run here.
+        header = (root / "ai/cmangos-compat-s2v.h").read_text()
+        hstart = header.index("template <class VisibleFn>\ninline std::vector<LootItem*> LootContentForCompat(")
+        hend = header.index("template <class ContentFn>", hstart)
+        helper = header[hstart:hend]
         fixture = r'''
 #include <cassert>
 #include <cstdint>
@@ -48,7 +54,7 @@ struct LootAccess {
 '''
         # The production rule the accessor asks (no core headers, so it builds here).
         fixture += '#include "' + str(root / "ai/playerbot/policy/loot/LootViewRulePolicy.h") + '"\n'
-        fixture += method + r'''
+        fixture += helper + method + r'''
 int main() {
     Player first{1}, second{2}, absent{3};
     Loot loot;

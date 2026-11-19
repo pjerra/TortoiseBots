@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generates forever/src/slice/SliceAiObjectContext.cpp (FOREVER-SLICE1-SPEC section 4, package R2).
+"""Generates forever/src/slice/SliceAiObjectContext.cpp (FOREVER-SLICE1-SPEC section 4, package R2; slice 2 keys added in R3).
 
     python3 forever/tools/slice_gen_context.py            # rewrite the file
     python3 forever/tools/slice_gen_context.py --check    # exit 1 when the file on disk differs from what would be written
-    python3 forever/tools/slice_gen_context.py --report   # also list registered classes whose .cpp is not in SLICE1.txt
+    python3 forever/tools/slice_gen_context.py --report   # also list registered classes whose .cpp is not in SLICE2.txt
 
 The key lists are SLICE_KEYS below (the spec's lists, corrected against the code). For each key the creator text is
 copied byte for byte from the full build's context header, inside a context class of the same shape (same
@@ -21,6 +21,7 @@ OUT = chk.SLICE_CTX
 
 # The spec's lists (FOREVER-SLICE1-SPEC section 4). Differences from the spec are recorded in
 # forever/docs/SLICE1-R2-NOTES.md; at the time of writing there are none.
+# Slice 2 (R3, decision D6): SLICE2_KEYS below are the 69 keys of forever/docs/SLICE2-KEYS.md, added to the slice-1 lists.
 SLICE_KEYS = {
     "strategy": "dps assist, close, follow",
     "action": "melee, reach melee, follow, stop follow, dps assist, select new target, set combat state, "
@@ -53,14 +54,51 @@ SLICE_KEYS = {
              "talent spec, tank target, tank threat, tank to remove roots, threat, travel target, trigger active, "
              "trinkets on use, wait for attack time",
 }
-KEYS = {k: [x.strip() for x in v.split(",")] for k, v in SLICE_KEYS.items()}
+SLICE2_KEYS = {
+    "strategy": "ranged, food, loot, cast time, default, heal interrupt",
+    "action": "reach spell, reach party member to heal, flee, shoot, drink, food, use, loot, open loot, move to loot, "
+              "add all loot, store loot",
+    "trigger": "enemy out of spell, enemy too close for spell, enemy five yards, medium mana, no mana, high mana, "
+               "medium health, healer should attack, healer should wand, melee medium aoe and healer should attack, "
+               "medium threat, target of attacker, party member critical health, party member low health, "
+               "party member medium health, party member almost full health, party member to heal out of spell range, "
+               "group heal setting, medium group heal setting, resume drink, resume eat, loot available, can loot, "
+               "far from loot target, timer, loot response, heal target full health",
+    "value": "party member to heal, party member to dispel, buff targets, patchwerk soaker to shield, drink duration, "
+             "eat duration, drink unfinished, rest to full, should drink, should eat, spell ready, custom position, "
+             "nearest npcs no los, loot target, available loot, has available loot, can loot, always loot list, "
+             "skip loot list, should loot object, stack space for item, force item usage, nearest corpses, "
+             "loot strategy, should get money, inventory item ids, incoming heals",
+}
+# Slice 3 (porting worker, FOREVER-SLICE3-SPEC section 3, listed with creator file:line in forever/docs/SLICE3-KEYS.md): the tank, the pull, the stay
+# and wait strategies and the order actions. Keys the spec deliberately leaves out: `should pull`, `pull nearest target`, `chat`, `pull back`.
+SLICE3_KEYS = {
+    "strategy": "tank assist, threat, stay, free, passive, tank face, wait for attack",
+    "action": "tank assist, stay, return to stay position, pull my target, end pull, pull start, pull action, pull end, reach pull, "
+              "release pull hold, return to pull position, wait for attack keep safe distance, tank face away, set facing, "
+              "successor white cap noop, threat reset white stop noop, attack my target, attack rti target, follow chat shortcut, "
+              "stay chat shortcut, follow target",
+    "trigger": "tank assist, lose aggro, has aggro, party member attacked, protect party member, tank face needed, high threat, "
+               "return to stay position, pull start, pull end, pull hold expired, pull anchor done, return to pull position, "
+               "wait for attack safe distance, successor white cap, threat reset white stop",
+    "value": "master position",
+}
+KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k]).split(",")] for k in SLICE_KEYS}
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
 BASE_T = {"strategy": "Strategy", "action": "Action", "trigger": "Trigger", "value": "UntypedValue"}
 LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "SliceMovementStrategyContext",
          "AssistStrategyContext": "SliceAssistStrategyContext", "ActionContext": "SliceActionContext",
-         "TriggerContext": "SliceTriggerContext", "ValueContext": "SliceValueContext"}
+         "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
+         "TriggerContext": "SliceTriggerContext", "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
+         "ValueContext": "SliceValueContext"}
+
+
+# Headers nothing includes (forward-ported from the donor module, never wired in): the class they define is the same name as a live one in
+# another header, so the class finder must not see them. strategy/triggers/WaitForAttackTriggers.h repeats WaitForAttackSafeDistanceTrigger
+# of RangeTriggers.h (grep over ai/: no #include of it; slice 3).
+DONOR_ONLY_HEADERS = {"strategy/triggers/WaitForAttackTriggers.h"}
 
 
 def find_class_headers():
@@ -73,6 +111,8 @@ def find_class_headers():
             if not n.endswith(".h"):
                 continue
             p = os.path.join(d, n)
+            if os.path.relpath(p, base).replace(os.sep, "/") in DONOR_ONLY_HEADERS:
+                continue
             text = chk.strip_comments(chk.read(p))
             for m in re.finditer(r'^[ \t]*(?:class|struct)\s+(\w+)\b([^;{]*)(\{|$)', text, re.M):
                 if m.group(3) == "{" or ":" in m.group(2):
