@@ -13452,6 +13452,10 @@
   // zone there), else any zone name recorded for the map, else "Map <id>".
   function dgnRunName(run) {
     const first = (run.members || [])[0];
+    if (isForever) {
+      const area = (first && FOREVER_AREAS[first.zone]) || Object.values(FOREVER_AREAS).find(a => a && a.map === run.map && !a.parent);
+      if (area && area.name) return area.name;
+    }
     const byZone = first ? ZONE_CONFIG[first.zone] : null;
     if (byZone && byZone.name) return displayZoneName(byZone.name);
     for (const key in ZONE_BOUNDS) {
