@@ -101,3 +101,15 @@ No `hotfixes.map_difficulty` row was added. `.tb enter <char> 389` and then `tel
 * The condition ids (3059, 4172, 4257) and what each PlayerCondition requires were NOT read: `hotfixes.map_difficulty`, `map_difficulty_x_condition` and `player_condition` hold no rows for them on this server (the data is DB2 only), so only the level boundary (9 refused, 10 allowed) is measured. Whether a party of bots follows the master into the instance was not run.
 
 ## 9. Gates (final commit)
+
+| Gate | Result |
+|---|---|
+| option-ON `worldserver` (slot 2, `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`), last code commit | `CMAKE_RC=0 MAKE_RC=0`, 0 undefined symbols (last full pass 471 s, VM loaded) |
+| option-OFF module build (`-DTORTOISEBOTS_SLICE1=OFF build.sh 12 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; `ar t libtortoisebots.a`: `TbBotMgr TbBotSession TbScripts TbItemPrototype TbSpellEntry TbEngineBrain TbH3Off` = 7 objects |
+| census `forever/SLICE3.txt` | `files 170  compile clean 170  with errors 0  error places 0  includes of a header ForeverCore does not have 0` |
+| census `forever/SLICE2.txt` / `SLICE1.txt` | `files 160 ... error places 0` / `files 133 ... error places 0` |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=209` |
+| Turtle `vm-build ~/wt-slice3-integ --wait` (sha c6a486a50, the last code commit) | `CMAKE_RC=0 MAKE_RC=0`, 2795 s |
+| Turtle `vm-test tb ~/wt-slice3-integ` (sha 648b7be60: c6a486a50 plus notes) | `RESULT: PASS ... rc=0` (896 s). Files outside `forever/` changed since the porting worker's gate: `ai/playerbot/PlayerbotAI.cpp` (adoption condition), `ai/playerbot/PlayerbotAIChat.cpp` (empty text), `ai/cmangos-compat-s3.h`, root `CMakeLists.txt` (ForeverCore only) |
+| `forever-build/policy-tests.sh` | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL` = baseline of slice 1 R9 (same names) |
+| the test server | stopped after each boot (`docker ps`: `forever-bnet`, `forever-db`); the other worker's binary restored (`cmp` identical); `forever-test1` untouched; the two `game_tele` rows deleted; the characters `Mtank Mpriest Mdpsa Mdpsb Mdpsc Mcmd Mlearn` stay in the characters database of the shared server (account 1) |
