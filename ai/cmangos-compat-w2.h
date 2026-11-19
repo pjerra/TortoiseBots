@@ -11,3 +11,6 @@ inline uint32 WorldU32ConfigW2(eConfigUInt32Values key) { return sWorld.getConfi
 inline int32 WorldI32ConfigW2(eConfigInt32Values key) { return sWorld.getConfig(key); }
 inline bool WorldBoolConfigW2(eConfigBoolValues key) { return sWorld.getConfig(key); }
 inline float WorldFloatConfigW2(eConfigFloatValues key) { return sWorld.getConfig(key); }
+
+// Family 3 (a group's id as an in-memory identity): the original call.
+inline uint32 GroupIdW2(Group const* group) { return group->GetId(); }

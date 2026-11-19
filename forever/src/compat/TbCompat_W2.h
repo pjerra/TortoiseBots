@@ -372,3 +372,14 @@ inline float WorldFloatConfigW2(TbW2FloatKey key)
         tbw2::NoteDefault("Rate.XP.Kill.Elite", "1");
     return 1.0f;   // the Turtle default of Rate.XP.Kill.Elite
 }
+
+// =====================================================================================================================
+// Family 3: a group's id as an in-memory identity. T `Group::GetId()` is the groups-table id (persisted, reused across restarts);
+// F has no such member. F's group guid (Group.h:312 GetGUID(), HighGuid::Party, set in Group.cpp:150 and :224 from
+// GroupMgr::GenerateGroupId, GroupMgr.cpp:91-98: starts at 1, counts up, never reused in a process, not stored) is the same kind of
+// number for the lifetime of the session: one per live group, unique, non-zero. Offered ONLY to sites that compare it, keep it in a
+// struct or use it as a map key and never write it to a database, a text, a log or a packet; the dashboard JSON and the telemetry
+// keep the sites that do (not rewritten). The counter round-trips through GroupMgr::GetGroupByGUID(ObjectGuid::Create<HighGuid::Party>(id))
+// (GroupMgr.cpp:124, GroupStore keyed by the counter), the lookup a later `GetGroupById` helper needs.
+// =====================================================================================================================
+inline uint32 GroupIdW2(Group const* group) { return uint32(group->GetGUID().GetCounter()); }

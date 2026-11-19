@@ -17,6 +17,18 @@ HELPER = {"UINT32": "WorldU32ConfigW2", "INT32": "WorldI32ConfigW2", "BOOL": "Wo
 CONFIG = re.compile(r"\bsWorld\.getConfig\(\s*(CONFIG_(UINT32|INT32|BOOL|FLOAT)_[A-Z0-9_]+)\s*\)")
 
 
+# Family 3 (Group::GetId): the sites whose id is an in-memory identity for the session (compared, stored in a struct or used as a map
+# key, never written to a database, a log, a text or a packet). The census lists 44 sites; the other 34 are left (WIDE-PASS-R2-NOTES.md):
+# commands/Commander.cpp (31: the id is a Binding field, and bindings reach the dashboard in the combat-monitor JSON), commands/ObservedRaids.cpp:174
+# (copied into the raid telemetry GroupInfo) and runtime/ObservabilityEmitter.cpp:463 (written into the snapshot).
+GROUPID_SITES = {
+    "ai/playerbot/strategy/actions/PatchwerkSafety.cpp": {63},
+    "runtime/BotLfgService.cpp": {301, 508, 721, 869, 952, 1003, 1017, 1054},
+    "runtime/HireProvisionService.cpp": {1485}   # 1484 before family 2 put the include above it,
+}
+GROUPID = re.compile(r"((?:[A-Za-z_]\w*(?:\(\))?->)*[A-Za-z_]\w*(?:\(\))?)->GetId\(\)")
+
+
 def files():
     ex = w2_names.excluded()
     for top in ("ai", "commands", "runtime", "host", "behavior"):
@@ -62,6 +74,11 @@ def main():
     for rel in sorted(files()):
         if fam == "config":
             n = rewrite(rel, CONFIG, lambda m: HELPER[m.group(2)] + "(" + m.group(1) + ")", check)
+        elif fam == "groupid":
+            if rel not in GROUPID_SITES:
+                continue
+            n = rewrite(rel, GROUPID, lambda m: "GroupIdW2(" + m.group(1) + ")", check,
+                        keep=lambda ln, text, rel=rel: ln not in GROUPID_SITES[rel])
         else:
             sys.exit("unknown family " + fam)
         total += n
