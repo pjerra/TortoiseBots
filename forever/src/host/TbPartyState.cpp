@@ -236,7 +236,13 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (rest)
             ++resting;
     }
-    Say(handler, "state-end count=" + std::to_string(who.bots.size()) + " resting=" + std::to_string(resting) + " target=" + Esc(who.label), args);
+    // L (package L): how many of the first bot's group's eight raid marks are set (an `attack` order puts one on and must leave none behind).
+    uint32 marks = 0;
+    if (!who.bots.empty() && who.bots.front()->GetGroup())
+        for (uint8 i = 0; i < 8; ++i)
+            if (!who.bots.front()->GetGroup()->GetTargetIcon(i).IsEmpty())
+                ++marks;
+    Say(handler, "state-end count=" + std::to_string(who.bots.size()) + " resting=" + std::to_string(resting) + " marks=" + std::to_string(marks) + " target=" + Esc(who.label), args);
     return true;
 }
 
