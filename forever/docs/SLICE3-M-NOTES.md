@@ -93,5 +93,11 @@ A log line `slice: threat back-off for <bot>: commanded=.. tank=..` stays in `Sl
 7. The spec's `stuck=nomove` and the 250-character state line cap were not built (host notes section 7).
 8. The world-thread hang of boot 2 (section 5): re-run a boot at low VM load.
 
+## 8a. Ragefire Chasm entry with no data change (lead's extra observation; boot 4, boot count 4 of 8)
+No `hotfixes.map_difficulty` row was added. `.tb enter <char> 389` and then `tele name <char> RFC`, everyone at the data as shipped:
+* the six level-18 characters (the five bots and the commander `Mcmd`) all got `allowed: Map::PlayerCannotEnter has no objection` and all six arrived on map 389 at (3.8, -14.8, -17.8) (`.tb where`: `map 389`), as separate characters (not as a party);
+* a level-1 control (`Mlearn`) was refused (`TransferAbortReason 8`) and stayed on map 0; at level 9 refused, at level 10 allowed. So the refusal is the level-10 rule (MapDifficulty 33's "You must be at least level 10" condition), not missing data.
+* The host's refusal text for reason 8 ("no map difficulty data for the dungeon difficulty asked for (GetDownscaledMapDifficultyData found none)") is wrong for this case: reason 8 also comes from a failed MapDifficultyXCondition. The text should say "difficulty data missing or a map-difficulty condition failed" (`TbBotMgr.cpp` `CanEnter`, slice-1 text; not changed here).
+* The condition ids (3059, 4172, 4257) and what each PlayerCondition requires were NOT read: `hotfixes.map_difficulty`, `map_difficulty_x_condition` and `player_condition` hold no rows for them on this server (the data is DB2 only), so only the level boundary (9 refused, 10 allowed) is measured. Whether a party of bots follows the master into the instance was not run.
+
 ## 9. Gates (final commit)
-Filled in at the end of this file.
