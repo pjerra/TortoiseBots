@@ -20,6 +20,7 @@
 #include "runtime/RandomBotAccountRegistry.h"
 #include "runtime/RunReleaseHold.h"
 #include "host/TbH3.h"
+#include "host/run/TbRunHooks.h"
 #include "TbBotMgr.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
@@ -197,26 +198,27 @@ bool IsInCommandedGroup(Player* bot)
     return TortoiseBots::h3::IsCommandedBot(bot);
 }
 
-bool IsInRunningDungeonRun(Player* /*bot*/)
+// S6: these four answer from the run of the bot's party (host/run/TbRunHooks.h); "no run" (false / null / 0) when it has none or it is not running.
+bool IsInRunningDungeonRun(Player* bot)
 {
-    return false;
+    return run::BotInRunningRun(bot);
 }
 
-bool IsRunKillFirst(Player* /*bot*/, uint32_t /*entry*/)
+bool IsRunKillFirst(Player* bot, uint32_t entry)
 {
-    return false;
+    return run::BotRunKillFirst(bot, entry);
 }
 
 // Null = "no armed area triggers".
-std::vector<uint32_t> const* RunArmedAreaTriggers(Player* /*bot*/)
+std::vector<uint32_t> const* RunArmedAreaTriggers(Player* bot)
 {
-    return nullptr;
+    return run::BotRunArmedTriggers(bot);
 }
 
 // 0 = "no bound run plan".
-uint32_t BoundRunPlanMap(Player* /*bot*/)
+uint32_t BoundRunPlanMap(Player* bot)
 {
-    return 0;
+    return run::BotRunPlanMap(bot);
 }
 
 // "Always true while no run exists" (runtime/CommandedGroupQuery.h): a chat order is never held back.
