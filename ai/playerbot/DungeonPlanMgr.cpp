@@ -229,7 +229,7 @@ namespace
 // gone: the old set stays, nothing changes). The core's world database hands each Query to a connection of its pool and
 // has no read transaction, so the six reads cannot share one snapshot: each table's revision is read before the first
 // data query and after the last one, and any difference refuses the reload (JudgeTableReads).
-PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& inUse)
+PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& inUse, PlanReloadHost const* host)
 {
     PlanReloadReport report;
     if (!GetDungeonPlans().Sealed())
@@ -245,6 +245,13 @@ PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& i
         r.before = ReadTableFingerprint(t.table, t.columns);
         reads.push_back(r);
     }
+    PlanReloadExtra extra;
+    bool const haveHost = host && !host->table.empty();
+    if (haveHost)
+    {
+        extra.table = host->table;
+        extra.before = ReadTableFingerprint(host->table.c_str(), host->columns.c_str());
+    }
     // The tactics first: the new plans' boss steps join the new tactic rows (JoinBossTactics).
     auto nextTactics = std::make_shared<BossTacticTable>();
     std::uint64_t tacticRowsRead = 0;
@@ -258,14 +265,25 @@ PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& i
         reads[i].after = ReadTableFingerprint(kReloadTables[i].table, kReloadTables[i].columns);
         reads[i].rowsRead = rowsRead[i];
     }
+    if (haveHost)
+    {
+        // The host's rows are read and checked against the NEW plan table now, into the host's temporaries: nothing is installed yet.
+        if (host->prepare)
+            extra.refusal = host->prepare(*next, extra.rowsRead);
+        extra.after = ReadTableFingerprint(host->table.c_str(), host->columns.c_str());
+        extra.install = host->install;
+    }
     report.summary = PlanLoadSummary(*next, counts);
     report.tacticRows = uint32(nextTactics->Size());
     // The seek_aura fight records live in the boss-tactics module (BossTacticsActions.cpp): it registers its reconciler at startup
     // (SetSeekFightReconciler), and CommitPlanReload calls it before the old tactics table is retired. A build with no boss tactics
     // registers none: there are no records to re-key, and the empty function is skipped (CommitPlanReload: `if (beforeInstall)`).
     SeekFightReconciler const reconcile = GetSeekFightReconciler();
+    if (!reconcile)
+        SeekReconcilerMissingCompat(); // the Turtle core always registers it (an error is logged there); ForeverCore has no boss tactics
     report.outcome = CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), std::move(nextTactics),
-        skippedTactics, reads, inUse, reconcile ? std::function<void(const BossTacticTable&)>(reconcile) : std::function<void(const BossTacticTable&)>());
+        skippedTactics, reads, inUse, reconcile ? std::function<void(const BossTacticTable&)>(reconcile) : std::function<void(const BossTacticTable&)>(),
+        haveHost ? &extra : nullptr);
     if (report.outcome.swapped)
         sLog.outString(">> %s, %u boss tactic rows (reloaded by .bot run reloadplans)", report.summary.c_str(), report.tacticRows);
     else

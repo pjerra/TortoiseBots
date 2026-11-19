@@ -3,10 +3,15 @@
 // signatures, each is the call the loader always made). Notes: forever/docs/RUN-S5-P-NOTES.md (every helper, with the file:line
 // of the core call it makes).
 //
-// Until the two shims include this pair (forever-compat-shim.h / ai/cmangos-compat-shim.h, see "Needs at merge" in the notes), the
-// two loader files include it themselves through the one name both cores have: `cmangos-compat-s5.h` (here: the forwarder
-// forever/src/compat/cmangos-compat-s5.h, which comes first on the include path; on the Turtle core: ai/cmangos-compat-s5.h).
+// The two shims include this pair (forever-compat-shim.h / ai/cmangos-compat-shim.h); the loader files need no include of their own.
 #pragma once
+
+#include "TbSqlNames.h"
+
+// Needs DatabaseEnv.h before it (botpch_forever.h has it on the shim path; the host files TbPlanUnits.cpp and TbPlanCommands.cpp include it first).
+// The guard cannot use the core's log macros: under the shim `sLog` is the legacy printf proxy. It reports through this one function, defined in
+// forever/src/host/run/TbPlanUnits.cpp (a TU that sees the core's logger).
+void WorldGuardLogCompat(std::string const& message);
 
 #include <set>
 #include <string>
@@ -50,36 +55,35 @@ inline bool WorldSchemaHasCompat(std::string const& table, std::set<std::string>
     return columns.empty() ? found > 0 : found == columns.size();
 }
 
-inline QueryResult WorldQueryCompat(char const* sql)
+// `schemaMissing` (optional): set true when the guard refused the query because the table or a named column does not exist (or the query form is not
+// the single-table one), false otherwise; a null result with `*schemaMissing == false` is an empty or failed query. The message does not say what to
+// apply: whether a missing table is fatal is the caller's rule (the loader tolerates a missing ai_dungeon_leg_need, the host's unit table is optional).
+inline QueryResult WorldQueryCompat(char const* sql, bool* schemaMissing = nullptr)
 {
+    if (schemaMissing)
+        *schemaMissing = false;
     std::string const text(sql ? sql : "");
-    std::size_t const from = text.find(" FROM `");
-    std::size_t const tableEnd = from == std::string::npos ? std::string::npos : text.find('`', from + 7);
-    if (from == std::string::npos || tableEnd == std::string::npos || text.compare(0, 7, "SELECT ") != 0)
-    {
-        LegacyLogCompat().outError("TortoiseBots: world query refused (not a single-table SELECT ... FROM `table`): %s", text.c_str());
-        return QueryResult();
-    }
-    std::string const table = text.substr(from + 7, tableEnd - (from + 7));
+    std::string table;
     std::set<std::string> columns;
-    for (std::size_t at = 0; at < from;)
+    if (!WorldQueryNamesCompat(text, table, columns))
     {
-        std::size_t const open = text.find('`', at);
-        if (open == std::string::npos || open >= from)
-            break;
-        std::size_t const close = text.find('`', open + 1);
-        if (close == std::string::npos || close >= from)
-            break;
-        columns.insert(text.substr(open + 1, close - open - 1));
-        at = close + 1;
+        WorldGuardLogCompat("TortoiseBots: world query refused (not a single-table SELECT ... FROM `table`): " + text);
+        if (schemaMissing)
+            *schemaMissing = true;
+        return QueryResult();
     }
     if (!WorldSchemaHasCompat(table, columns))
     {
-        LegacyLogCompat().outError("TortoiseBots: world table `%s` is missing or lacks a column the plan loader reads: not read (the module's world SQL is not applied)", table.c_str());
+        WorldGuardLogCompat("TortoiseBots: world table `" + table + "` is missing, or lacks a column this query names: not read");
+        if (schemaMissing)
+            *schemaMissing = true;
         return QueryResult();
     }
     return WorldDatabase.Query(sql);
 }
+
+// The seek_aura reconciler of a plan reload is not registered. Turtle logs it (the boss tactics always register it there); ForeverCore has no boss tactics: nothing to say.
+inline void SeekReconcilerMissingCompat() {}
 
 // The text of a VARCHAR/TEXT field as a std::string. T `Field::GetCppString()` (the 1.12 core's name), F `Field::GetString()` (Field.h:119).
 // GetUInt8/16/32/64 and GetFloat exist under the same names on both cores, so they are not wrapped.

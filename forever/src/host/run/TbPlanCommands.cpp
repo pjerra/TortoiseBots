@@ -18,6 +18,8 @@
 #include "Player.h"
 #include "StringFormat.h"
 
+#include "compat/TbCompat_S5.h"      // the schema guard WorldQueryCompat and FieldTextCompat
+
 #include <algorithm>
 
 namespace TortoiseBots
@@ -28,25 +30,28 @@ using namespace h3;
 
 namespace
 {
-// `SELECT COUNT(*) FROM <table> WHERE plan = <plan>`; false when the query failed (the core's Query answers null for an error too).
+// `SELECT COUNT(*) FROM <table> WHERE plan = <plan>` through the schema guard (WorldQueryCompat: a missing table or column is "not known", never a core abort);
+// false when the count is not known (the table or the column is missing, or the query failed): the caller omits the key.
 bool CountPlanRows(char const* table, std::string plan, uint64& out)
 {
     WorldDatabase.EscapeString(plan);
-    QueryResult result = WorldDatabase.Query(Trinity::StringFormat("SELECT COUNT(*) FROM `{}` WHERE `plan` = '{}'", table, plan).c_str());
-    if (!result)
+    bool missing = false;
+    QueryResult result = WorldQueryCompat(Trinity::StringFormat("SELECT COUNT(*) FROM `{}` WHERE `plan` = '{}'", table, plan).c_str(), &missing);
+    if (missing || !result)
         return false;
     out = (*result)[0].GetUInt64();
     return true;
 }
 
-// The plan row's `source` column (the loader does not keep it); false when the row could not be read.
+// The plan row's `source` column (the loader does not keep it); false when it is not known (an older ai_dungeon_plan without the column, or no row): the key is omitted.
 bool ReadPlanSource(std::string plan, std::string& out)
 {
     WorldDatabase.EscapeString(plan);
-    QueryResult result = WorldDatabase.Query(Trinity::StringFormat("SELECT `source` FROM `ai_dungeon_plan` WHERE `plan` = '{}'", plan).c_str());
-    if (!result)
+    bool missing = false;
+    QueryResult result = WorldQueryCompat(Trinity::StringFormat("SELECT `source` FROM `ai_dungeon_plan` WHERE `plan` = '{}'", plan).c_str(), &missing);
+    if (missing || !result)
         return false;
-    out = (*result)[0].GetString();
+    out = FieldTextCompat(result->Fetch()[0]);
     return true;
 }
 
@@ -132,13 +137,11 @@ bool HandlePlan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // ---- reload ----
     if (verb == Verb::Reload)
     {
-        ai::PlanReloadReport const report = ai::ReloadDungeonPlans(PlansInUse());
-        // A successful swap replaced the plan rows: the unit rows are read again against the new table and every cached match is dropped.
-        if (report.outcome.swapped)
-        {
-            ai::LoadDungeonStepUnits();
-            ClearPlanChecks();
-        }
+        // All or nothing: the plan tables, the boss tactics AND the unit rows are read and checked first (the unit rows against the NEW plan table); only when
+        // every one passes are they installed together (and the check cache cleared by the unit install). Otherwise nothing changes and `why=` says why.
+        ai::PlanReloadHost host;
+        FillUnitReloadHost(host);
+        ai::PlanReloadReport const report = ai::ReloadDungeonPlans(PlansInUse(), &host);
         Reply reply(handler, args, "plan");
         reply.Begin();
         Rec end("plan");
@@ -192,9 +195,12 @@ bool HandlePlan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!bot->IsInWorld() || !map || map->GetId() != plan->map)
         return Fail(handler, args, "plan", "wrong-map", Trinity::StringFormat("{} is not on map {} (the plan's map)", bot->GetName(), plan->map));
     if (UnitsOfPlan(plan->name).empty())
-        return Fail(handler, args, "plan", "no-units", "the plan has no ai_dungeon_step_unit rows (a plan exported without --forever, or the rows were not read)");
+        return Fail(handler, args, "plan", "no-units", LastStepUnitLoad().tableMissing
+            ? "ai_dungeon_step_unit is missing in the world database (or lacks a column the module reads): no unit rows were read"
+            : "the plan has no ai_dungeon_step_unit rows (a plan exported without --forever, or the rows were not read)");
 
-    PlanCheck const& check = CheckPlanOnMap(plan->name, map, true);
+    std::shared_ptr<PlanCheck const> const held = CheckPlanOnMap(plan->name, map, true);
+    PlanCheck const& check = *held;
     Reply reply(handler, args, "plan");
     reply.Begin();
     for (UnitCheck const& unit : check.units)
