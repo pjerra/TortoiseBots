@@ -8,9 +8,7 @@
 
 #include "TbSqlNames.h"
 
-// Core headers (a host file includes this header on its own, without the legacy shim and its renaming macros; the shim path has them already).
-#include "DatabaseEnv.h"
-#include "Log.h"
+// Needs DatabaseEnv.h and Log.h before it: botpch_forever.h has them on the shim path, the host files (TbPlanUnits.cpp, TbPlanCommands.cpp) include them first.
 
 #include <set>
 #include <string>
