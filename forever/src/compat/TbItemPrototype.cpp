@@ -8,6 +8,8 @@
 #include "ItemEnchantmentMgr.h"
 #include "Log.h"
 #include "ObjectMgr.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 #include "World.h"
 
@@ -327,6 +329,12 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
         slot.SpellPPMRate = tpl->SpellPPMRate;
         slot.SpellCooldown = effect->CoolDownMSec;
         slot.SpellCategory = effect->SpellCategoryID;
+        // L5 (package L): a food item whose ItemEffect row carries no category (0) read as "not food" to FindFoodVisitor (category 11) while the
+        // same bread worked through `.tb use`. cmangos' item_template.spellcategory_1 was the spell's own category for food and drink, so a missing
+        // value takes the spell's (SpellInfo::GetCategory); a stated category is kept as it is.
+        if (!slot.SpellCategory && slot.SpellId)
+            if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(slot.SpellId, DIFFICULTY_NONE))
+                slot.SpellCategory = spellInfo->GetCategory();
         slot.SpellCategoryCooldown = effect->CategoryCoolDownMSec;
     }
 

@@ -47,7 +47,8 @@ std::string AbortReasonText(TransferAbortParams const& denied)
         case TRANSFER_ABORT_TOO_MANY_INSTANCES: what = "too many instances entered recently"; break;
         case TRANSFER_ABORT_ZONE_IN_COMBAT: what = "an encounter is in progress"; break;
         case TRANSFER_ABORT_INSUF_EXPAN_LVL: what = "the expansion is not available"; break;
-        case TRANSFER_ABORT_DIFFICULTY: what = "no map difficulty data for the dungeon difficulty asked for (GetDownscaledMapDifficultyData found none)"; break;
+        case TRANSFER_ABORT_DIFFICULTY: what = denied.MapDifficultyXConditionId ? "refused by an entry condition (a MapDifficultyXCondition failed)" :
+            "no map difficulty data for the dungeon difficulty asked for (GetDownscaledMapDifficultyData found none)"; break;
         case TRANSFER_ABORT_NEED_GROUP: what = "a raid group is needed"; break;
         case TRANSFER_ABORT_MAP_NOT_ALLOWED: what = "map not allowed"; break;
         case TRANSFER_ABORT_LOCKED_TO_DIFFERENT_INSTANCE: what = "locked to a different instance"; break;
@@ -56,6 +57,38 @@ std::string AbortReasonText(TransferAbortParams const& denied)
     }
     return what ? Trinity::StringFormat("{} (TransferAbortReason {})", what, uint32(denied.Reason))
                 : Trinity::StringFormat("TransferAbortReason {}", uint32(denied.Reason));
+}
+}
+
+namespace
+{
+// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1843: no MapDifficulty row, id 0; Player::Satisfy,
+// Entities/Player/Player.cpp:21463: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
+// minimum level the player is under is "level too low for this instance (needs N)" (measured live: level 9 refused, 10 allowed for Ragefire
+// Chasm); any other condition is "refused by an entry condition". The text of the other reasons is AbortReasonText's.
+std::string EntryRefusalText(TransferAbortParams const& denied, uint32 mapId, Player* who)
+{
+    if (denied.Reason == TRANSFER_ABORT_DIFFICULTY && denied.MapDifficultyXConditionId && who)
+    {
+        if (MapEntry const* entry = sMapStore.LookupEntry(mapId))
+        {
+            Group* group = who->GetGroup();
+            Difficulty const difficulty = group ? group->GetDifficultyID(entry) : who->GetDifficultyID(entry);
+            if (MapDifficultyEntry const* mapDiff = sDB2Manager.GetDownscaledMapDifficultyData(mapId, difficulty))
+                if (DB2Manager::MapDifficultyConditionsContainer const* conditions = sDB2Manager.GetMapDifficultyConditions(mapDiff->ID))
+                    for (auto const& [order, condition] : *conditions)
+                        if (int32(order) == denied.MapDifficultyXConditionId && condition)
+                        {
+                            if (condition->MinLevel && who->GetLevel() < condition->MinLevel)
+                                return Trinity::StringFormat("level too low for this instance (needs {}) (TransferAbortReason {}, MapDifficultyXCondition {}, PlayerCondition {})",
+                                    uint32(condition->MinLevel), uint32(denied.Reason), order, condition->ID);
+                            return Trinity::StringFormat("refused by an entry condition (TransferAbortReason {}, MapDifficultyXCondition {}, PlayerCondition {})",
+                                uint32(denied.Reason), order, condition->ID);
+                        }
+        }
+        return Trinity::StringFormat("refused by an entry condition (TransferAbortReason {})", uint32(denied.Reason));
+    }
+    return AbortReasonText(denied);
 }
 }
 
@@ -537,7 +570,7 @@ std::vector<std::string> BotMgr::CanEnter(ObjectGuid characterGuid, uint32 mapId
         return lines;
     }
     TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
-    lines.push_back(denied ? "refused: " + AbortReasonText(denied) : std::string("allowed: Map::PlayerCannotEnter has no objection"));
+    lines.push_back(denied ? "refused: " + EntryRefusalText(denied, mapId, who) : std::string("allowed: Map::PlayerCannotEnter has no objection"));
     Group* group = who->GetGroup();
     lines.push_back(Trinity::StringFormat("map {}: dungeon {}, raid {}; {} difficulty asked for: {}", mapId, entry->IsDungeon() ? "yes" : "no", entry->IsRaid() ? "yes" : "no",
         group ? "the party's" : "the character's own", uint32(group ? group->GetDifficultyID(entry) : who->GetDifficultyID(entry))));
@@ -734,7 +767,7 @@ void BotMgr::Think(Bot& bot, Player* me)
         std::string refused;
         if (!sameMap)
             if (TransferAbortParams const denied = Map::PlayerCannotEnter(masterMap, me))
-                refused = AbortReasonText(denied);
+                refused = EntryRefusalText(denied, masterMap, me);
 
         if (refused.empty())
         {

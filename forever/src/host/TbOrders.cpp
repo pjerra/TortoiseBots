@@ -29,6 +29,7 @@
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
+#include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/values/RtiTargetValue.h"
 #include "PlayerbotAIStorage.h"
 #include "runtime/BotManager.h"
@@ -41,6 +42,8 @@ namespace
 {
 constexpr uint32 OrderMaxAgeMs = 15000;     // an order the engine could not run within this long (no tick: the bot is teleporting, away) expires
 constexpr size_t OrderQueueMax = 16;
+constexpr uint32 kPullJoinDelaySeconds = 3;       // L2: the held bots' minimum wait after the pull landed (lead decision: 3 s)
+constexpr uint32 kPullApproachWindowSeconds = 15; // L2: how long the hold lasts when the pull never lands (AiPlayerbot.PullBackMaxReturnTime's default)
 
 uint32 NowMs()
 {
@@ -296,7 +299,17 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         return AttackThroughMark(bot, ai, owner, unit, "attack rti target") ? "ok" : "fail:attack";
     }
     if (o.verb == "pull")
-        return act("pull my target", Event("tb order", o.unit, owner)) ? "ok" : "fail:pull";
+    {
+        if (!act("pull my target", Event("tb order", o.unit, owner)))
+            return "fail:pull";
+        // L2 (package L): `pull my target` places no hold (only the chat `pullback` and the command layer's PausePartyDpsForPull do), so the damage
+        // bots and the healer's damage spells opened on a mob the tank had not reached (M package, observation d). The same party hold as the
+        // legacy chat pull, lead-keyed: damage warriors stay on the commander's anchor, every member's window opens only after the pull LANDED
+        // (PullActions.cpp RestampPullParty) and ends when the whole pack is on the tank (3 s at the earliest, 10 s at the latest), at once when a
+        // mob hits a held bot or the tank is under 60 %, and at the latest 15 s after the order if the pull never lands.
+        ai::PausePartyPullHold(bot, kPullJoinDelaySeconds, true, kPullApproachWindowSeconds);
+        return "ok";
+    }
     if (o.verb == "endpull")
         return act("end pull", Event("tb order", std::string(), owner)) ? "ok" : "fail:end-pull";
     if (o.verb == "hold")

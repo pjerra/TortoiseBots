@@ -905,7 +905,7 @@ public:
         for (uint32 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
             if (proto->Spells[i].SpellId)
                 spells += (spells.empty() ? "" : ", ") + std::to_string(proto->Spells[i].SpellId) +
-                    " (trigger " + std::to_string(proto->Spells[i].SpellTrigger) + ", charges " + std::to_string(proto->Spells[i].SpellCharges) + ")";
+                    " (trigger " + std::to_string(proto->Spells[i].SpellTrigger) + ", charges " + std::to_string(proto->Spells[i].SpellCharges) + ", category " + std::to_string(proto->Spells[i].SpellCategory) + ")";
 
         handler->PSendSysMessage("TortoiseBots: stats %s; spells %s; resistances %u/%u/%u/%u/%u/%u.",
             stats.empty() ? "none" : stats.c_str(), spells.empty() ? "none" : spells.c_str(),

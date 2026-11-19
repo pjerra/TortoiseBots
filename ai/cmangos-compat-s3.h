@@ -29,3 +29,8 @@ inline Player* PlayerOfGuidKeyCompat(uint64 key) { return sObjectMgr.GetPlayer(O
 // Does a commanded bot (BotCommands::IsInCommandedGroup) keep the master it was bound to instead of adopting the group leader? T: no helper effect,
 // the step reads exactly what it always read (a commander there is a network player, which HasActivePlayerMaster() counts, so the step does not run).
 inline bool CommandedBotKeepsMasterCompat(bool /*commanded*/) { return false; }
+
+// The unit a bot follows and measures "distance to master" from (the value `master target`): T: the group master, as it always was.
+// (a template so that PlayerbotAI need not be complete where this header is read)
+template <class AI>
+inline Unit* MasterTargetCompat(AI* ai) { return ai->GetGroupMaster(); }

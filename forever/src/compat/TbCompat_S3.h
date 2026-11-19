@@ -63,3 +63,22 @@ inline Player* PlayerOfGuidKeyCompat(uint64 key)
 // led by the tank lost the commander on the first tick). The strip rule is already skipped for a commanded bot; the adoption must be too.
 // "Different answer": T keeps the original expression (always false here), so Turtle behaviour is unchanged.
 inline bool CommandedBotKeepsMasterCompat(bool commanded) { return commanded; }
+
+// L1 (package L): the unit a bot follows and measures "distance to master" from (the value `master target`, which `follow target` reads).
+// T: GetGroupMaster(), which is the group LEADER when no real player is in the group. For a COMMANDED bot (bound by `.tb master`, the commander
+// stands outside the party and is a bot session or a GM player) the leader is the tank, so the tank followed itself and nobody walked to the
+// commander (M package, observation b). F: a commanded bot follows its master, the commander, when the commander is in the world on the bot's
+// map; otherwise the original answer (the group master). The bot walks to a player that it already treats as its master (BindBotMaster).
+namespace TortoiseBots { namespace BotCommands { bool IsInCommandedGroup(Player* bot); } }
+template <class AI>
+inline Unit* MasterTargetCompat(AI* ai)
+{
+    Player* const bot = ai->GetBot();
+    if (bot && TortoiseBots::BotCommands::IsInCommandedGroup(bot))
+    {
+        Player* const commander = ai->GetMaster();
+        if (commander && commander != bot && commander->IsInWorld() && commander->GetMapId() == bot->GetMapId())
+            return commander;
+    }
+    return ai->GetGroupMaster();
+}
