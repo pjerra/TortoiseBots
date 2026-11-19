@@ -278,9 +278,6 @@ bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI* ai, Unit* target)
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
-void ItemUsageValue::PopulateProfessionReagentIds() { NoteItems(); }
-void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds() { NoteItems(); }
-void ItemUsageValue::PopulateSoldByVendorItemIds() { NoteItems(); }
 // EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
 // The real answer outside a battleground is 60 yd (EnemyPlayerValue.cpp:276). In one the real values are 40 (10 late in Alterac Valley); battlegrounds are
 // not ported, so the shortest of them answers (less).

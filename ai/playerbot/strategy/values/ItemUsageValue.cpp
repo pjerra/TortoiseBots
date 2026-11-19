@@ -1852,6 +1852,11 @@ void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds()
 
 void ItemUsageValue::PopulateSoldByVendorItemIds()
 {
+    // F: the three queries below name `npc_vendor_template` (a 1.12 table ForeverCore does not have: its connection ABORTS the server on a missing table)
+    // and use printf placeholders its PQuery drops (findings item 18). The vendor lists stay empty, so no item counts as "sold by a vendor" (LESS).
+    if (VendorItemListsUnportedCompat())
+        return;
+
     if (auto result = WorldDatabase.PQuery("%s", "SELECT distinct item FROM npc_vendor UNION SELECT distinct item FROM npc_vendor_template"))
     {
         BarGoLink bar(result->GetRowCount());

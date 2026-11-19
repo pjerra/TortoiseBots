@@ -133,3 +133,6 @@ inline uint32 ItemRequiredHonorRankCompat(ItemPrototype const* proto) { return p
 inline uint32 ItemDisenchantIdCompat(ItemPrototype const* proto) { return proto->DisenchantID; }
 inline uint32 PlayerAmmoIdCompat(Player* player) { return player->GetUInt32Value(PLAYER_AMMO_ID); }
 inline uint8 EquipSlotOfProtoCompat(Player* bot, ItemPrototype const* proto) { return bot->FindEquipSlot(proto, NULL_SLOT, true); }
+
+// The vendor item lists (ItemUsageValue::PopulateSoldByVendorItemIds): T reads them.
+inline bool VendorItemListsUnportedCompat() { return false; }

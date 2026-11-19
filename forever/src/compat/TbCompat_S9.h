@@ -327,3 +327,7 @@ inline uint8 EquipSlotOfProtoCompat(Player* /*bot*/, ItemPrototype const* /*prot
     tbcompat::Unported(tbcompat::Feature::ItemSlotOfPrototype);
     return NULL_SLOT;
 }
+
+// The vendor item lists (ItemUsageValue::PopulateSoldByVendorItemIds, called at config load): the legacy queries name a 1.12 table that does not exist here,
+// which would abort the server. True = the caller returns with the lists empty (counted under "random item tables").
+inline bool VendorItemListsUnportedCompat() { tbcompat::Unported(tbcompat::Feature::RandomItems); return true; }
