@@ -1833,7 +1833,7 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
             return nullptr;
         out.spell = current;
         out.channeledSlot = channeledSlot;
-        out.state = current->getState();
+        out.state = InterruptSpellStateCompat(current);
         out.castTime = current->GetCastTime();
         out.preventionType = GetSpellEntryCompat(current->m_spellInfo)->PreventionType;
         out.interruptFlags = GetSpellEntryCompat(current->m_spellInfo)->InterruptFlags;

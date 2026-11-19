@@ -50,7 +50,7 @@ bool GiveItemAction::Execute(Event& event)
             // The link first: a stack that merges into the receiver's is freed by the move.
             std::string const link = chat->formatItem(item, item->GetCount());
             bot->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
-            item->SetOwnerGuid(target->getObjectGuid());
+            ItemSetOwnerCompat(item, target);
             // Same flags as a trade (TradeHandler.cpp): a stack the giver already saved keeps its
             // character_inventory row, so the receiver's save updates it instead of inserting a second one.
             receiver->MoveItemToInventory(dest, item, true, true);
