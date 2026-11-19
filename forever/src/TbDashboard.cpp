@@ -206,7 +206,7 @@ bool IsBot(Player* player)
     return player && TortoiseBots::BotMgr::Instance().IsBot(player->GetGUID());
 }
 
-void QueueEvent(Player* bot, char const* event, std::string const& info1, std::string const& info2)
+void QueueEvent(Player* bot, char const* event, std::string const& info1, std::string const& info2, std::string const& extra = "")
 {
     Sender& s = Get();
     if (!s.enabled || s.events.size() >= 500)
@@ -215,7 +215,7 @@ void QueueEvent(Player* bot, char const* event, std::string const& info1, std::s
     ev << "{\"event\":\"" << event << "\",\"info1\":\"" << Escape(info1) << "\",\"info2\":\"" << Escape(info2) << "\",\"bot\":\""
        << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter() << ",\"class\":\"" << ClassName(bot->GetClass())
        << "\",\"level\":" << uint32(bot->GetLevel()) << ",\"map\":" << bot->GetMapId() << ",\"zone\":" << bot->GetZoneId()
-       << ",\"money\":" << bot->GetMoney() << "}";
+       << ",\"money\":" << bot->GetMoney() << extra << "}";
     s.events.push_back(ev.str());
 }
 
@@ -882,6 +882,18 @@ void OnKilledByCreature(Creature* killer, Player* killed)
     QueueEvent(killed, "BotDeath", name, "");
     if (auto itr = Get().track.find(killed->GetGUID()); itr != Get().track.end())
         itr->second.alive = false;
+}
+
+// A looted item stored in the bot's bags: the loot feed and the loot counters (item, quality, vendor value of the stack).
+void OnLootItem(Player* player, Item* item)
+{
+    if (!IsBot(player) || !item)
+        return;
+    ItemTemplate const* proto = item->GetTemplate();
+    std::ostringstream extra;
+    extra << ",\"item_id\":" << item->GetEntry() << ",\"quality\":" << proto->GetQuality() << ",\"sell\":" << proto->GetSellPrice() * item->GetCount()
+          << ",\"buy\":" << proto->GetBuyPrice();
+    QueueEvent(player, "StoreLootAction", proto->GetDefaultLocaleName(), std::to_string(item->GetEntry()), extra.str());
 }
 
 void OnQuestStatusChange(Player* player, uint32 questId)
