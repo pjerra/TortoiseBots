@@ -1482,7 +1482,7 @@ bool HireProvisionService::SeatHireCancelled(Player* bot, Player* master, Pendin
     now.commanderInGroup = boundRaid.commanderInGroup;
     now.members = boundRaid.members;
     Group* const botGroup = bot->GetGroup();
-    now.botInGroup = boundRaid.bound && botGroup && GroupIdW2(botGroup) == boundRaid.groupId;
+    now.botInGroup = boundRaid.bound && botGroup && botGroup->GetId() == boundRaid.groupId;
     now.owned = CountHired(master);
     now.configMax = sPlayerbotAIConfig.hireMaxBotsPerPlayer;
     BoundSeatCheck const check = RecheckBoundSeat(pending.seatGrant, now);

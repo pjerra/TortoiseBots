@@ -23,9 +23,10 @@ CONFIG = re.compile(r"\bsWorld\.getConfig\(\s*(CONFIG_(UINT32|INT32|BOOL|FLOAT)_
 # (copied into the raid telemetry GroupInfo) and runtime/ObservabilityEmitter.cpp:463 (written into the snapshot).
 GROUPID_SITES = {
     "ai/playerbot/strategy/actions/PatchwerkSafety.cpp": {63},
-    "runtime/BotLfgService.cpp": {301, 508, 721, 869, 952, 1003, 1017, 1054},
-    "runtime/HireProvisionService.cpp": {1485}   # 1484 before family 2 put the include above it,
 }
+# Reverted after review: runtime/BotLfgService.cpp (8) and runtime/HireProvisionService.cpp:1485. Their ids are looked up in, or compared with,
+# the Commander binding table (`GroupBindingKey(group.groupId)`, `boundRaid.groupId`), which still carries Group::GetId(): two id domains. They go
+# with the Commander port, which switches the binding's writers and readers together.
 GROUPID = re.compile(r"((?:[A-Za-z_]\w*(?:\(\))?->)*[A-Za-z_]\w*(?:\(\))?)->GetId\(\)")
 
 

@@ -160,7 +160,7 @@ ForeverCore side, three kinds of key:
 Places: 75 (U32 33, I32 2, Bool 9, Float 31; files `RandomItemMgr.cpp`, `Talentspec.cpp`, `BudgetValues.cpp`, `CraftValues.cpp`, `ItemUsageValue.cpp`, `XpGainAction.cpp`, `Commander.cpp`, `ObservabilityEmitter.cpp`, the runtime services and others). None left.
 Watch live: the three defaults that differ between the cores in the table are the operator's setting on ForeverCore (CharactersPer* 60, MinPetitionSigns 4, TwoSide.Auction true). The `Rate.XP.Kill.Elite` row means the observability emitter reports 1.0 for the elite rate on ForeverCore with one log line.
 
-## Family 3: `Group::GetId()` (44 census places: 10 rewritten, 34 left)
+## Family 3: `Group::GetId()` (44 census places: 1 rewritten, 43 left; 9 sites reverted after review)
 
 Helper: `GroupIdW2(Group const*)`. Turtle side: `group->GetId()` (`Group.h:215`, the groups-table id). ForeverCore side: `uint32(group->GetGUID().GetCounter())`
 (`Group.h:312`; the guid is `ObjectGuid::Create<HighGuid::Party>(sGroupMgr->GenerateGroupId())`, `Group.cpp:150` and `:224`; `GenerateGroupId` is `NextGroupId++` starting at 1,
@@ -172,15 +172,19 @@ What each site does with the id (read one by one):
 | site | use of the id | persisted or sent? | done |
 |---|---|---|---|
 | `PatchwerkSafety.cpp:63` | half of the key of the in-memory `openings` map (instance id, group id) | no | rewritten |
-| `BotLfgService.cpp:301,508,721,869,952,1003,1017,1054` | `BotLfgGroup::groupId`: stored in the struct when the group is formed (508) and compared with the live group's id (301, 721, 869, 952, 1003, 1017, 1054) | no (not in a log line, text, packet or the database) | rewritten |
-| `HireProvisionService.cpp:1485` | compare of the bot's group with the bound raid's group id | no | rewritten |
+| `BotLfgService.cpp:301,508,721,869,952,1003,1017,1054` | `BotLfgGroup::groupId`, stored when the group is formed (508), compared with live groups, AND looked up in the Commander binding table (`:728` `GroupBindingKey(group.groupId)`) | not sent, but the id meets the binding table's id | **reverted** (first rewritten, then reverted by the review) |
+| `HireProvisionService.cpp:1485` | compare of the bot's group with `boundRaid.groupId`, which `BoundRaidOf` copies from the binding (written by `group->GetId()` at `Commander.cpp` 2054, 2690, 14792) | not sent, but the other operand is the binding's id | **reverted** (two id domains on ForeverCore: a bot in the bound raid would read as outside and its seat hire would be cancelled) |
 | `Commander.cpp` (31 sites: 921, 965, 1167, 1174, 1640, 1882, 2054, 2244, 2281, 2576, 2611, 2631, 2661, 2671, 2690, 5269, 5275, 12968, 14754, 14792, 16447, 16538, 17002, 17133, 17184, 17197, 17266, 17282, 17297, 17344, 17365, 17386) | `Binding::groupId` (`RemoteCommanderPolicy.h:63`) and the maps keyed by it. The binding's id is handed on as `ref.groupId` (`Commander.cpp:16435`) to `CombatMonitorService`, which prints it as `"group":<id>` and as the fight id `<group>-<n>` in the combat-monitor JSON (`CombatMonitorPolicy.h:378,383,1262-1264`) | **sent** (dashboard JSON) | left |
 | `ObservedRaids.cpp:174` | candidate-group set, then `info.groupId = groupId` in the raid telemetry `GroupInfo` | **sent** (telemetry) | left |
 | `ObservabilityEmitter.cpp:463` | `snap.groupId`, written into the snapshot | **sent** | left |
 
-Coupling to carry into the Commander port (not done here): `BotLfgService.cpp:728` asks `BotCommands::GroupBindingKey(group.groupId)`, a lookup in the Commander binding table by the SAME number; and
-`HireProvisionService.cpp:1485` compares with `boundRaid.groupId`, which `BoundRaidOf` reads from the binding. When Commander.cpp is ported its writers (`binding.groupId = group->GetId()`: lines 2054, 2690, 14792) MUST use `GroupIdW2`,
-or those lookups miss on ForeverCore (a miss reads as "not bound", i.e. the LFG group would not yield to a commander). The decision the lead has to take there: whether the JSON `group` field and the fight id may carry the counter (an opaque id of one session) or the emit sites need a separate number.
+Audit of every `GroupIdW2` call left (one): `PatchwerkSafety.cpp:64` `KeyFor`. All four uses of the `openings` map (`:68`, `:104`, `:229` and the type at `:63`) build their key by `KeyFor(...)`, so
+both halves of every comparison and every key come from `GroupIdW2`; `tools/test_group_id_identity_wiring.py` pins that.
+
+For the Commander port: BotLfgService (8 sites above) and `HireProvisionService.cpp:1485` must be switched TOGETHER with the binding's writers (`binding.groupId = group->GetId()` at `Commander.cpp` 2054, 2690, 14792)
+and every reader of `Binding::groupId`, all to `GroupIdW2`, or the lookups miss on ForeverCore (a miss reads as "not bound"). The decision for the lead there: whether the JSON `group` field and the fight id may carry the counter
+(an opaque id of one session) or the emit sites need a separate number. `tools/test_group_id_identity_wiring.py` pins the current state: the seat check and the LFG service keep `GetId()`, the binding writers keep `group->GetId()`,
+and a file that uses `GroupIdW2` never touches the binding table.
 
 ## Family 4: spawn record `position` (33 census places, 68 field reads, 4 files)
 
@@ -197,6 +201,8 @@ Places: `TravelMgr.cpp:2137,2609` (2 lines, 10 reads), `RpgSubActions.cpp:96` (1
 |---|---|---|
 | `tools/test_boss_pair_wiring.py` | `if (!creature && !map->IsLoaded(data->position.x, data->position.y))` | `if (!creature && !map->IsLoaded(SpawnXW2(*data), SpawnYW2(*data)))` (same following lines) |
 | `tools/test_pack_clear_gate_wiring.py` | `data->position.x` | `SpawnXW2(*data)` |
+
+New test: `tools/test_group_id_identity_wiring.py` (5 tests; the bound-raid comparison, the binding writers, the LFG service and `GroupIdW2` users never share an id source with the binding table).
 
 127 python wiring tests that name one of the changed files were run: these two were the only failures, both fixed as above; every other one passes unchanged. No test pinned `sWorld.getConfig(` or a `GetId()` of the rewritten sites.
 
@@ -223,6 +229,6 @@ container was up while they ran); no further Turtle job was started after it.
 
 * Family 1: `TEXTEMOTE_MOUNTSPECIAL`; the other names above (BG_*, update-field indexes, hooks, GOSSIP_*, renumbered EQUIP_ERR_*, quest/trainer names).
 * Family 2: nothing.
-* Family 3: 34 places (Commander 31, ObservedRaids 1, ObservabilityEmitter 1 + the coupling note); decision for the lead on the dashboard id.
+* Family 3: 43 places (Commander 31, BotLfgService 8, HireProvisionService 1, ObservedRaids 1, ObservabilityEmitter 1, PatchwerkSafety closed); all wait for the Commander port.
 * Family 4: nothing of the 33. `sObjectMgr.GetGroupById` and the rest of the spawn-record API (`creature_id[0]`, ...) are separate families.
 
