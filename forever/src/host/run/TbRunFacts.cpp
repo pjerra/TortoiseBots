@@ -129,7 +129,7 @@ bool MemberInCombat(Player* bot)
 // A player the engine runs: a host bot with a brain (BotMgr), in the world and on a map.
 bool InWorldPlayer(Player* player)
 {
-    return player && player->IsInWorld() && !player->IsBeingTeleported() && player->GetMap();
+    return player && player->IsInWorld() && !player->IsBeingTeleported() && player->FindMap();   // GetMap() ASSERTs on a player with no map (Object.h:411)
 }
 
 fx::Config ReadConfig()
