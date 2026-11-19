@@ -100,8 +100,7 @@ Made real: the dead engine's strategy (`dead`); release and acceptance; `party m
 5. The engine tick must not run for a bot in the middle of the accept's teleport (`UpdateAIInternal` already returns while `IsBeingTeleported`), and the S3 `HandleTeleportAck` call is still the host's.
 
 ## 8. Option-ON link
-
-CMakeLists.txt (not mine) still reads `forever/SLICE3.txt` (line 73): the merge package switches it to `SLICE4.txt`; until then an option-ON build that has this branch's `SliceAiObjectContext.cpp` fails to link (`DeadStrategy` and friends are not compiled). The measured result with the list switched on the VM copy only: see section 9.
+CMakeLists.txt (not mine) still reads `forever/SLICE3.txt` (line 73): the merge package must switch it to `SLICE4.txt`; until then an option-ON build that has this branch's `SliceAiObjectContext.cpp` fails to link (`DeadStrategy` and friends are not compiled). Measured with the list switched on the VM copy only (slot 1, `-DTORTOISEBOTS_SLICE1=1`, `-k 0`): `CMAKE_RC=0 MAKE_RC=0`, `worldserver` links, 0 `undefined`. So **nothing is expected to be undefined at the merge** from this package: the only needed edit is that one CMake line (and the wide-pass merge below changed nothing in it).
 
 ## 8b. Fit with H4 (read from `~/wt-slice4-h/forever/docs/SLICE4-H-NOTES.md` section 3 and its sources, read only)
 
@@ -110,5 +109,16 @@ CMakeLists.txt (not mine) still reads `forever/SLICE3.txt` (line 73): the merge 
 * Lease: H4 answers `PlayerMaster` while no entrance is known and registers a run-hold query that makes `Decide` answer Wait, otherwise `Dungeon`. P4 did not change `RunReleaseHold::Decide` or any `GetActivity` reader. DIFFERENCE (harmless, stricter): P4's own `InstanceEntranceKnownCompat` also requires the entrance id to name a real `world_safe_locs` row (`GetWorldSafeLoc`), H4's `ReleaseHasEntrance` only `!= 0`; the host sets a trigger's real `PortLocID`, so they agree; if they ever differ the bot waits (less). `relhold` is computed by the host from core facts; `AutoReleaseSpiritAction::ReleaseHoldReason()` (this package) says the same from the engine's side and is available if the host wants to read the engine's own answer.
 * NOT done (not in the brief): an engine-side leash rule (do not chase a fleeing mob into the next pack). The host exposes `pos=` and `flee=`; a rule would need a both-core helper under `forever/src/compat` for the pack facts (`Creature::HasSearchedAssistance`, `UNIT_STATE_FLEEING`, `ASSISTANCE_MOTION_TYPE`) and a change to the legacy runner/leash policy: left for the live test (observation l) to show whether it is needed.
 
-## 9. Gates
-(filled in last)
+## 9. Merge of `tbf/port/forever` (the wide pass) and gates
+Merged `tbf/port/forever` (3b9138052) into `slice4/p` before the final gates. Two conflicted files, both resolved to THIS package's version (the slice-4 port of the same lines; where the wide pass had made the same helper substitution the auto-merge kept one: `HasPlayerFlagCompat` and `CStrCompat` in `ReleaseSpiritAction.h` and `PartyMemberToResurrect.cpp`): `ai/playerbot/strategy/actions/ReleaseSpiritAction.h` (kept `GroupRemoveMemberCompat`, `graveMapId` / `gravePos` for the graveyard teleport, the entrance gate) and `tools/test_run_release_hold_wiring.py` (a comment only). No helper name of the wide pass collides with a D4 name (checked by grep); `slice_gen_context.py --check` and the registry check unchanged by the merge.
+
+| Gate (final merged tree, sha in the report) | Result |
+|---|---|
+| census SLICE4 | `files 174  compile clean 174  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (baseline: 171 / 3 / 43) |
+| census SLICE3 / SLICE2 / SLICE1 | `files 170 / 160 / 133  compile clean = files  error places 0` |
+| generator `--check`, registry check | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=215`; `slice: registered 17/48/75/170` |
+| module build, option OFF (slot 1) | `CMAKE_RC=0 MAKE_RC=0`; 7 objects `TbBotMgr TbBotSession TbScripts TbItemPrototype TbSpellEntry TbEngineBrain TbH3Off` (this branch has no H4 files) |
+| option ON `worldserver` (slot 1, list switched on the VM copy) | `CMAKE_RC=0 MAKE_RC=0`, links, 0 undefined |
+| `forever/tools/test_slice4_d4_wiring.py`, the two re-pinned tests | 10 tests OK; `test_run_release_hold_wiring.py` and `test_dungeon_crew_wiring.py` OK (two pins re-spelled to the helper names, no assertion removed) |
+| Turtle `vm-build` | `COMPILE_SECONDS=1186 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb` | (see the report) |
