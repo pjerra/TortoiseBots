@@ -5120,10 +5120,47 @@
     return `<div style="overflow-x: auto;"><table class="data-table"><thead><tr><th>Slot</th><th>Item</th><th>Count</th><th>Entry</th></tr></thead><tbody>${items.map(bagItemRow).join('')}</tbody></table></div>`;
   }
 
+  const COMBAT_RATING_META = {
+    1:  { name: 'Defense Skill', unit: ' skill' },
+    2:  { name: 'Dodge', unit: '%' },
+    3:  { name: 'Parry', unit: '%' },
+    4:  { name: 'Block', unit: '%' },
+    5:  { name: 'Melee Hit', unit: '%' },
+    6:  { name: 'Ranged Hit', unit: '%' },
+    7:  { name: 'Spell Hit', unit: '%' },
+    8:  { name: 'Melee Crit', unit: '%' },
+    9:  { name: 'Ranged Crit', unit: '%' },
+    10: { name: 'Spell Crit', unit: '%' },
+    13: { name: 'Speed', unit: '%' },
+    16: { name: 'Lifesteal', unit: '%' },
+    17: { name: 'Melee Haste', unit: '%' },
+    18: { name: 'Ranged Haste', unit: '%' },
+    19: { name: 'Spell Haste', unit: '%' },
+    20: { name: 'Avoidance', unit: '%' },
+    23: { name: 'Expertise', unit: ' skill' },
+    24: { name: 'Armor Penetration', unit: '%' },
+    25: { name: 'Mastery', unit: '' },
+    28: { name: 'Versatility (Damage)', unit: '%' },
+    29: { name: 'Versatility (Healing)', unit: '%' },
+    30: { name: 'Versatility (Mitigation)', unit: '%' },
+  };
+
   function renderArmoryStats(p) {
     const host = document.getElementById('armory-content-stats');
     if (!host) return;
     const st = p.stats || {};
+    const ratings = st.ratings || {};
+    const ratingBonus = st.rating_bonus || {};
+    const fmtPctRating = (pct, idx) => {
+      const r = ratings[idx] || 0;
+      const base = `${esc(fmtNum(pct))}%`;
+      return isForever && r > 0 ? `${base} (+rating ${esc(r)})` : base;
+    };
+    const fmtValRating = (val, idx) => {
+      const r = ratings[idx] || 0;
+      const base = esc(fmtNum(val));
+      return isForever && r > 0 ? `${base} (+rating ${esc(r)})` : base;
+    };
 
     const attrsCard = `
       <div class="armory-stat-card">
@@ -5141,8 +5178,10 @@
         <div class="stat-card-row"><span>Attack Power</span><strong class="mono">${esc(fmtNum(st.attack_power))}</strong></div>
         <div class="stat-card-row"><span>Damage</span><strong class="mono" style="color: #fff;">${esc(st.melee_damage || '–')}</strong></div>
         <div class="stat-card-row"><span>Speed</span><strong class="mono">${st.melee_speed ? esc(fmtNum(st.melee_speed) + 's') : '–'}</strong></div>
-        <div class="stat-card-row"><span>Crit Chance</span><strong class="mono">${esc(fmtNum(st.melee_crit_pct))}%</strong></div>
-        <div class="stat-card-row"><span>Hit Chance</span><strong class="mono">${esc(fmtNum(st.melee_hit))}%</strong></div>
+        <div class="stat-card-row"><span>Crit Chance</span><strong class="mono">${fmtPctRating(st.melee_crit_pct, '8')}</strong></div>
+        <div class="stat-card-row"><span>Hit Chance</span><strong class="mono">${fmtPctRating(st.melee_hit, '5')}</strong></div>
+        ${isForever ? `<div class="stat-card-row"><span>Haste</span><strong class="mono">${fmtPctRating(ratingBonus['17'] || 0, '17')}</strong></div>` : ''}
+        ${isForever ? `<div class="stat-card-row"><span>Expertise</span><strong class="mono">${fmtValRating(st.expertise || 0, '23')}</strong></div>` : ''}
       </div>`;
 
     const rangedCard = `
@@ -5151,8 +5190,9 @@
         <div class="stat-card-row"><span>Ranged AP</span><strong class="mono">${esc(fmtNum(st.ranged_attack_power))}</strong></div>
         <div class="stat-card-row"><span>Damage</span><strong class="mono" style="color: #fff;">${esc(st.ranged_damage || '–')}</strong></div>
         <div class="stat-card-row"><span>Speed</span><strong class="mono">${st.ranged_speed ? esc(fmtNum(st.ranged_speed) + 's') : '–'}</strong></div>
-        <div class="stat-card-row"><span>Crit Chance</span><strong class="mono">${esc(fmtNum(st.ranged_crit_pct))}%</strong></div>
-        <div class="stat-card-row"><span>Hit Chance</span><strong class="mono">${esc(fmtNum(st.ranged_hit))}%</strong></div>
+        <div class="stat-card-row"><span>Crit Chance</span><strong class="mono">${fmtPctRating(st.ranged_crit_pct, '9')}</strong></div>
+        <div class="stat-card-row"><span>Hit Chance</span><strong class="mono">${fmtPctRating(st.ranged_hit, '6')}</strong></div>
+        ${isForever ? `<div class="stat-card-row"><span>Haste</span><strong class="mono">${fmtPctRating(ratingBonus['18'] || 0, '18')}</strong></div>` : ''}
       </div>`;
 
     const baseSp = st.spell_damage || 0;
@@ -5187,6 +5227,9 @@
     `;
 
     const showManaRegen = !isForever || (st.maxpower1 || 0) > 0;
+    const manaRegenVal = isForever
+      ? `${esc(st.mana_regen || 0)} MP5 (${esc(st.mana_regen_casting || 0)} while casting)`
+      : `${esc(st.mana_regen || 0)} MP5`;
     const spellCard = `
       <div class="armory-stat-card">
         <div class="stat-card-title"><span class="stat-icon">✨</span> Spell</div>
@@ -5198,20 +5241,44 @@
           <span style="border-bottom: 1px dotted var(--text-dim); display: inline-flex; align-items: center; gap: 4px;">Healing <span style="font-size: 0.72rem; color: var(--text-muted);">ℹ️</span></span>
           <strong class="mono" style="color: #3fb950;">+${esc(healingPower)}</strong>
         </div>
-        <div class="stat-card-row"><span>Spell Crit</span><strong class="mono">${esc(fmtNum(st.spell_crit_pct))}%</strong></div>
-        <div class="stat-card-row"><span>Spell Hit</span><strong class="mono">${esc(fmtNum(st.spell_hit))}%</strong></div>
-        ${isForever ? `<div class="stat-card-row"><span>Spell Haste</span><strong class="mono">${esc(fmtNum(st.cast_speed))}%</strong></div>` : ''}
-        ${showManaRegen ? `<div class="stat-card-row"><span>Mana Regen</span><strong class="mono">${esc(st.mana_regen || 0)} MP5</strong></div>` : ''}
+        <div class="stat-card-row"><span>Spell Hit</span><strong class="mono">${fmtPctRating(st.spell_hit, '7')}</strong></div>
+        <div class="stat-card-row"><span>Spell Crit</span><strong class="mono">${fmtPctRating(st.spell_crit_pct, '10')}</strong></div>
+        ${isForever ? `<div class="stat-card-row"><span>Spell Haste</span><strong class="mono">${fmtPctRating(st.cast_speed, '19')}</strong></div>` : ''}
+        ${isForever ? `<div class="stat-card-row"><span>Spell Penetration</span><strong class="mono">${esc(st.spell_penetration || 0)}</strong></div>` : ''}
+        ${showManaRegen ? `<div class="stat-card-row"><span>Mana Regen</span><strong class="mono">${manaRegenVal}</strong></div>` : ''}
       </div>`;
 
+    const hasShield = (p.equipment || []).some(e => e && (e.inventory_type === 14 || (e.detail && e.detail.class === 4 && e.detail.subclass === 6)));
+    const defRating = ratings['1'] || 0;
+    const defBonus = ratingBonus['1'] || 0;
+    const showParry = !isForever || (st.parry_pct || 0) > 0 || (ratings['3'] || 0) > 0;
+    const showBlock = !isForever || (st.block_pct || 0) > 0 || (ratings['4'] || 0) > 0 || hasShield;
+    const showBlockVal = isForever && ((st.block_value || 0) > 0 || hasShield);
     const defenseCard = `
       <div class="armory-stat-card">
         <div class="stat-card-title"><span class="stat-icon">🛡️</span> Defense</div>
         <div class="stat-card-row"><span>Armor</span><strong class="mono">${esc(fmtNum(st.armor))}</strong></div>
-        <div class="stat-card-row"><span>Dodge</span><strong class="mono">${esc(fmtNum(st.dodge_pct))}%</strong></div>
-        <div class="stat-card-row"><span>Parry</span><strong class="mono">${esc(fmtNum(st.parry_pct))}%</strong></div>
-        <div class="stat-card-row"><span>Block</span><strong class="mono">${esc(fmtNum(st.block_pct))}%</strong></div>
+        ${isForever ? `<div class="stat-card-row"><span>Defense</span><strong class="mono">${esc(st.defense || 0)} / ${esc(st.defense_max || 0)}</strong></div>` : ''}
+        ${isForever && defRating > 0 ? `<div class="stat-card-row" style="font-size: 0.72rem; color: var(--text-muted); padding-top: 0;"><span></span><span>+${esc(defRating)} rating (= +${esc(fmtNum(defBonus))} skill, not applied by the core)</span></div>` : ''}
+        <div class="stat-card-row"><span>Dodge</span><strong class="mono">${fmtPctRating(st.dodge_pct, '2')}</strong></div>
+        ${showParry ? `<div class="stat-card-row"><span>Parry</span><strong class="mono">${fmtPctRating(st.parry_pct, '3')}</strong></div>` : ''}
+        ${showBlock ? `<div class="stat-card-row"><span>Block</span><strong class="mono">${fmtPctRating(st.block_pct, '4')}</strong></div>` : ''}
+        ${showBlockVal ? `<div class="stat-card-row"><span>Block Value</span><strong class="mono">${esc(st.block_value || 0)}</strong></div>` : ''}
       </div>`;
+
+    const ratingEntries = isForever
+      ? Object.entries(ratings).filter(([, v]) => v > 0).sort((a, b) => Number(a[0]) - Number(b[0]))
+      : [];
+    const ratingsCard = ratingEntries.length ? `
+      <div class="armory-stat-card">
+        <div class="stat-card-title"><span class="stat-icon">📊</span> Ratings</div>
+        ${ratingEntries.map(([idx, val]) => {
+          const meta = COMBAT_RATING_META[idx] || { name: `Rating ${idx}`, unit: '' };
+          const bonus = ratingBonus[idx];
+          const bonusText = bonus !== undefined ? ` (+${esc(fmtNum(bonus))}${esc(meta.unit)})` : '';
+          return `<div class="stat-card-row"><span>${esc(meta.name)}</span><strong class="mono">${esc(val)}${bonusText}</strong></div>`;
+        }).join('')}
+      </div>` : '';
 
     const resistCard = `
       <div class="armory-stat-card">
@@ -5231,6 +5298,7 @@
         ${rangedCard}
         ${spellCard}
         ${defenseCard}
+        ${ratingsCard}
         ${resistCard}
       </div>`;
     bindSpellTooltips(host);

@@ -53,9 +53,17 @@ type BotStatsEntry struct {
 	SpellDmgFire      uint32  `json:"spell_dmg_fire"`
 	SpellDmgFrost     uint32  `json:"spell_dmg_frost"`
 	SpellDmgShadow    uint32  `json:"spell_dmg_shadow"`
-	SpellDmgNature    uint32  `json:"spell_dmg_nature"`
-	SpellDmgArcane    uint32  `json:"spell_dmg_arcane"`
-	SpellDmgHoly      uint32  `json:"spell_dmg_holy"`
+	SpellDmgNature    uint32             `json:"spell_dmg_nature"`
+	SpellDmgArcane    uint32             `json:"spell_dmg_arcane"`
+	SpellDmgHoly      uint32             `json:"spell_dmg_holy"`
+	ManaRegenCasting  uint32             `json:"mana_regen_casting,omitempty"`
+	Defense           uint32             `json:"defense,omitempty"`
+	DefenseMax        uint32             `json:"defense_max,omitempty"`
+	BlockValue        int32              `json:"block_value,omitempty"`
+	SpellPenetration  int32              `json:"spell_penetration,omitempty"`
+	Expertise         float64            `json:"expertise,omitempty"`
+	Ratings           map[string]int32   `json:"ratings,omitempty"`
+	RatingBonus       map[string]float64 `json:"rating_bonus,omitempty"`
 }
 
 // BotStatsPayload is the UDP BOT_STATS datagram.

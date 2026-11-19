@@ -185,9 +185,17 @@ type CharacterStats struct {
 	SpellDmgFire      uint32  `json:"spell_dmg_fire,omitempty"`
 	SpellDmgFrost     uint32  `json:"spell_dmg_frost,omitempty"`
 	SpellDmgShadow    uint32  `json:"spell_dmg_shadow,omitempty"`
-	SpellDmgNature    uint32  `json:"spell_dmg_nature,omitempty"`
-	SpellDmgArcane    uint32  `json:"spell_dmg_arcane,omitempty"`
-	SpellDmgHoly      uint32  `json:"spell_dmg_holy,omitempty"`
+	SpellDmgNature    uint32             `json:"spell_dmg_nature,omitempty"`
+	SpellDmgArcane    uint32             `json:"spell_dmg_arcane,omitempty"`
+	SpellDmgHoly      uint32             `json:"spell_dmg_holy,omitempty"`
+	ManaRegenCasting  uint32             `json:"mana_regen_casting,omitempty"`
+	Defense           uint32             `json:"defense,omitempty"`
+	DefenseMax        uint32             `json:"defense_max,omitempty"`
+	BlockValue        int32              `json:"block_value,omitempty"`
+	SpellPenetration  int32              `json:"spell_penetration,omitempty"`
+	Expertise         float64            `json:"expertise,omitempty"`
+	Ratings           map[string]int32   `json:"ratings,omitempty"`
+	RatingBonus       map[string]float64 `json:"rating_bonus,omitempty"`
 }
 
 type SpellEntry struct {

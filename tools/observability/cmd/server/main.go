@@ -330,6 +330,14 @@ func main() {
 				SpellDmgNature:    bs.SpellDmgNature,
 				SpellDmgArcane:    bs.SpellDmgArcane,
 				SpellDmgHoly:      bs.SpellDmgHoly,
+				ManaRegenCasting:  bs.ManaRegenCasting,
+				Defense:           bs.Defense,
+				DefenseMax:        bs.DefenseMax,
+				BlockValue:        bs.BlockValue,
+				SpellPenetration:  bs.SpellPenetration,
+				Expertise:         bs.Expertise,
+				Ratings:           bs.Ratings,
+				RatingBonus:       bs.RatingBonus,
 			}, true
 		},
 	})
