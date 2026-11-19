@@ -26,6 +26,8 @@
 #include "Log.h"
 #include "TbBotMgr.h"
 #include "DB2Stores.h"
+#include "ObjectMgr.h"
+#include "Trainer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -65,17 +67,20 @@ std::atomic<bool> g_disabledLogged{false};
 // first/next/previous rank, `.tb ranks`, `.tb train`). It holds only spells that belong to a chain proved by the data; a spell with no chain has no rank
 // (Rank text empty, rank 0: the engine treats it as a single spell), and nothing is ever chained by name, family or level (R4's by-name derivation chained
 // a retail-era Renew 425268 above the classic ranks and was removed).
-// Sources, in this order:
+// Sources, in this order (a spell takes the first source that has it):
 //  (a) the core's own chain, SpellMgr::LoadSpellRanks (SpellMgr.cpp:837-905: SkillLineAbility rows with a SupercedesSpell, both spells present at
 //      DIFFICULTY_NONE), read through SpellInfo::ChainEntry (SpellMgr.h:518-525: prev/next/first/last/rank);
 //  (b) the same client table read here for the links the core did not turn into a chain entry: SkillLineAbilityEntry::SupercedesSpell (DB2Structure.h:3724).
 //      Links are followed only; a spell with two different successors or two different predecessors is ambiguous and none of its links is used.
+//  (c) the trainers' required-ability links (trainer_spell.ReqAbility), kept as rank links only where both spells are the same ability by the spell data
+//      (family, family flags): the live data showed (b) has no link for the 1.12 class spells; see the comment in BuildChainTable.
 // Built once with the index (published before it), immutable afterwards.
 struct ChainTable
 {
     std::unordered_map<uint32, tbcompat::SpellChainNode> nodes;
     std::vector<tbcompat::SpellChainList> chains;  // every chain as ids in rank order, ordered by its first id
-    uint32 coreSpells = 0, linkSpells = 0, ambiguous = 0, cyclic = 0, disagree = 0;
+    std::vector<std::pair<uint32, uint32>> prerequisites;   // trainer links (required, taught) that are not rank links
+    uint32 coreSpells = 0, linkSpells = 0, trainerSpells = 0, ambiguous = 0, cyclic = 0, disagree = 0;
 };
 std::atomic<ChainTable const*> g_chains{nullptr};
 
@@ -157,82 +162,123 @@ ChainTable const* BuildChainTable()
             table->nodes[ids[i]] = node;
         }
         table->coreSpells += uint32(ids.size());
-        table->chains.push_back({ std::move(ids), true });
+        table->chains.push_back({ std::move(ids), tbcompat::SpellChainSource::Core });
     });
 
-    // (b) the SkillLineAbility links the core did not make a chain of.
-    std::unordered_map<uint32, std::set<uint32>> succ, pred;   // supersedes -> spell, spell -> supersedes
-    for (SkillLineAbilityEntry const* row : sSkillLineAbilityStore)
+    // Links -> chains, one routine for the two link sources below. A link is (lower rank, higher rank). A spell already in the table (from a source
+    // earlier in the list) is left alone; a spell with two different successors or two different predecessors is ambiguous and none of its links is used.
+    struct Link { uint32 lower, higher; };
+    auto buildFromLinks = [&](std::vector<Link> const& links, tbcompat::SpellChainSource source, uint32& spellCount)
     {
-        if (!row || row->SupercedesSpell <= 0 || row->Spell <= 0)
-            continue;
-        uint32 const lower = uint32(row->SupercedesSpell), higher = uint32(row->Spell);
-        if (lower == higher || table->nodes.count(lower) || table->nodes.count(higher))
-            continue;
-        if (!sSpellMgr->GetSpellInfo(lower, DIFFICULTY_NONE) || !sSpellMgr->GetSpellInfo(higher, DIFFICULTY_NONE))
-            continue;
-        succ[lower].insert(higher);
-        pred[higher].insert(lower);
-    }
-    std::set<uint32> bad;   // spells whose links are ambiguous
-    for (auto const& [id, set] : succ)
-        if (set.size() > 1)
+        std::unordered_map<uint32, std::set<uint32>> succ, pred;
+        for (Link const& link : links)
         {
-            bad.insert(id);
-            for (uint32 other : set)
-                bad.insert(other);
+            if (link.lower == link.higher || table->nodes.count(link.lower) || table->nodes.count(link.higher))
+                continue;
+            succ[link.lower].insert(link.higher);
+            pred[link.higher].insert(link.lower);
         }
-    for (auto const& [id, set] : pred)
-        if (set.size() > 1)
+        std::set<uint32> bad;
+        for (auto const* map : { &succ, &pred })
+            for (auto const& [id, set] : *map)
+                if (set.size() > 1)
+                {
+                    bad.insert(id);
+                    bad.insert(set.begin(), set.end());
+                }
+        table->ambiguous += uint32(bad.size());
+        for (uint32 id : bad)
+            TC_LOG_INFO("server.loading", "TortoiseBots: spell chains: spell {} has two different rank links (source {}); none of its links is used", id, uint32(source));
+        std::set<uint32> visited;
+        for (auto const& [start, set] : succ)
         {
-            bad.insert(id);
-            for (uint32 other : set)
-                bad.insert(other);
-        }
-    table->ambiguous = uint32(bad.size());
-    std::set<uint32> visited;
-    for (auto const& [start, set] : succ)
-    {
-        if (bad.count(start) || pred.count(start))
-            continue;   // not a first rank
-        std::vector<uint32> ids{ start };
-        bool broken = false;
-        for (uint32 cur = start; ;)
-        {
-            auto const next = succ.find(cur);
-            if (next == succ.end())
-                break;
-            uint32 const higher = *next->second.begin();
-            if (bad.count(higher) || visited.count(higher) || ids.size() >= 64)
+            if (bad.count(start) || pred.count(start))
+                continue;   // not a first rank
+            std::vector<uint32> ids{ start };
+            bool broken = false;
+            for (uint32 cur = start; ;)
             {
-                broken = true;
-                break;
+                auto const next = succ.find(cur);
+                if (next == succ.end())
+                    break;
+                uint32 const higher = *next->second.begin();
+                if (bad.count(higher) || visited.count(higher) || ids.size() >= 64)
+                {
+                    broken = true;
+                    break;
+                }
+                ids.push_back(higher);
+                visited.insert(higher);
+                cur = higher;
             }
-            ids.push_back(higher);
-            visited.insert(higher);
-            cur = higher;
+            if (broken)
+            {
+                ++table->cyclic;
+                continue;
+            }
+            for (uint32 i = 0; i < ids.size(); ++i)
+            {
+                tbcompat::SpellChainNode node;
+                node.rank = i + 1;
+                node.first = ids.front();
+                node.last = ids.back();
+                node.prev = i ? ids[i - 1] : 0;
+                node.next = i + 1 < ids.size() ? ids[i + 1] : 0;
+                table->nodes[ids[i]] = node;
+            }
+            spellCount += uint32(ids.size());
+            table->chains.push_back({ std::move(ids), source });
         }
-        if (broken)
+    };
+
+    // (b) the SkillLineAbility links the core did not make a chain of.
+    {
+        std::vector<Link> links;
+        for (SkillLineAbilityEntry const* row : sSkillLineAbilityStore)
         {
-            ++table->cyclic;
-            continue;
+            if (!row || row->SupercedesSpell <= 0 || row->Spell <= 0)
+                continue;
+            if (!sSpellMgr->GetSpellInfo(uint32(row->SupercedesSpell), DIFFICULTY_NONE) || !sSpellMgr->GetSpellInfo(uint32(row->Spell), DIFFICULTY_NONE))
+                continue;
+            links.push_back({ uint32(row->SupercedesSpell), uint32(row->Spell) });
         }
-        for (uint32 i = 0; i < ids.size(); ++i)
-        {
-            tbcompat::SpellChainNode node;
-            node.rank = i + 1;
-            node.first = ids.front();
-            node.last = ids.back();
-            node.prev = i ? ids[i - 1] : 0;
-            node.next = i + 1 < ids.size() ? ids[i + 1] : 0;
-            table->nodes[ids[i]] = node;
-        }
-        table->linkSpells += uint32(ids.size());
-        table->chains.push_back({ std::move(ids), false });
+        buildFromLinks(links, tbcompat::SpellChainSource::SkillLine, table->linkSpells);
+    }
+
+    // (c) the trainers' required-ability links (R5, found necessary by the live data: the client's SkillLineAbility table has NO supercedes link for the
+    // 1.12 class spells, `.tb ranks priest` printed Smite 585/591/598 as single spells). The world database's trainer_spell rows name for each spell the
+    // ability it requires (Trainer::Spell::ReqAbility, Trainer.h:59; the core's own gate in Trainer::GetSpellState, Trainer.cpp:431-433): 591 Smite
+    // requires 585, 2052 Lesser Heal requires 2050. That is the game's own prerequisite data, but a prerequisite is not always a rank (Whirlwind requires
+    // Berserker Stance, Revenge requires Defensive Stance), so a link counts as a rank link only when both spells are the same ability by the spell
+    // data itself: the same spell family and the same family flag mask, the required one with the lower spell level (the icon is NOT compared: Heal changes its icon between rank 2 and rank 3, 2055 -> 6063). Everything else
+    // is counted as "prerequisite, not a rank" (listed by `.tb ranks`). The name of a spell is never read.
+    {
+        std::set<std::pair<uint32, uint32>> seen;
+        std::vector<Link> links;
+        for (auto const& [trainerId, trainer] : sObjectMgr->GetTrainers())
+            for (Trainer::Spell const& spell : trainer.GetSpells())
+                for (uint32 required : spell.ReqAbility)
+                {
+                    if (!required || !seen.insert({ required, spell.SpellId }).second)
+                        continue;
+                    SpellInfo const* const lower = sSpellMgr->GetSpellInfo(required, DIFFICULTY_NONE);
+                    SpellInfo const* const higher = sSpellMgr->GetSpellInfo(spell.SpellId, DIFFICULTY_NONE);
+                    if (!lower || !higher)
+                        continue;
+                    bool const sameAbility = lower->SpellFamilyName != 0 && lower->SpellFamilyName == higher->SpellFamilyName &&
+                        lower->SpellFamilyFlags[0] == higher->SpellFamilyFlags[0] && lower->SpellFamilyFlags[1] == higher->SpellFamilyFlags[1] &&
+                        lower->SpellFamilyFlags[2] == higher->SpellFamilyFlags[2] && lower->SpellFamilyFlags[3] == higher->SpellFamilyFlags[3] &&
+                        lower->SpellLevel < higher->SpellLevel;
+                    if (sameAbility)
+                        links.push_back({ required, spell.SpellId });
+                    else
+                        table->prerequisites.push_back({ required, spell.SpellId });
+                }
+        buildFromLinks(links, tbcompat::SpellChainSource::Trainer, table->trainerSpells);
     }
     std::sort(table->chains.begin(), table->chains.end(), [](tbcompat::SpellChainList const& a, tbcompat::SpellChainList const& b) { return a.ids.front() < b.ids.front(); });
-    TC_LOG_INFO("server.loading", "TortoiseBots: spell chains: {} chains, {} spells ({} from the core's own chain, {} from skill-line links), {} ambiguous, {} broken, {} rank differences",
-        uint32(table->chains.size()), uint32(table->nodes.size()), table->coreSpells, table->linkSpells, table->ambiguous, table->cyclic, table->disagree);
+    TC_LOG_INFO("server.loading", "TortoiseBots: spell chains: {} chains, {} spells ({} from the core's own chain, {} from skill-line links, {} from trainer required-ability links; {} trainer links are prerequisites, not ranks), {} ambiguous, {} broken, {} rank differences",
+        uint32(table->chains.size()), uint32(table->nodes.size()), table->coreSpells, table->linkSpells, table->trainerSpells, uint32(table->prerequisites.size()), table->ambiguous, table->cyclic, table->disagree);
     return table;
 }
 
@@ -382,6 +428,15 @@ void ForEachSpellChain(std::function<void(SpellChainList const&)> const& fn)
         return;
     for (SpellChainList const& chain : table->chains)
         fn(chain);
+}
+
+void ForEachNonRankPrerequisite(std::function<void(uint32, uint32)> const& fn)
+{
+    ChainTable const* const table = g_chains.load(std::memory_order_acquire);
+    if (!table)
+        return;
+    for (auto const& [required, taught] : table->prerequisites)
+        fn(required, taught);
 }
 
 uint32 SpellChainCount()

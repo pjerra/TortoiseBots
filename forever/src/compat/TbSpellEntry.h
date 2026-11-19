@@ -170,7 +170,8 @@ namespace tbcompat
 
     // ---- Spell rank chains (R5, TbSpellEntry.cpp ChainTable). One table, every rank question: nothing is ranked by name, family or level.
     struct SpellChainNode { uint32 rank = 0, first = 0, prev = 0, next = 0, last = 0; };
-    struct SpellChainList { std::vector<uint32> ids; bool fromCore = false; };   // ids in rank order; fromCore: the core's own chain entry
+    enum class SpellChainSource : uint8 { Core, SkillLine, Trainer };   // the core's own chain entry; SkillLineAbility supersedes links; trainer_spell required-ability links
+    struct SpellChainList { std::vector<uint32> ids; SpellChainSource source = SpellChainSource::Core; };   // ids in rank order
     SpellChainNode const* SpellChainNodeOf(uint32 spellId);   // nullptr: the spell has no chain (rank 0)
     uint32 SpellRankOf(uint32 spellId);                       // 1.. in a chain, 0 without
     uint32 SpellFirstRank(uint32 spellId);                    // 0 without a chain
@@ -180,6 +181,7 @@ namespace tbcompat
     bool SpellsShareChain(uint32 a, uint32 b);                // both in a chain and the same one (a == b counts)
     bool SpellIsHigherRank(uint32 spellId, uint32 otherId);   // same chain and a higher rank number
     void ForEachSpellChain(std::function<void(SpellChainList const&)> const& fn);
+    void ForEachNonRankPrerequisite(std::function<void(uint32 required, uint32 taught)> const& fn);   // trainer links that were rejected as ranks
     uint32 SpellChainCount();
 
     // Lookups that asked for an id the core has only with a non-NONE difficulty (answered nullptr).

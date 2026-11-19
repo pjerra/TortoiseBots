@@ -20,6 +20,7 @@
 #include <list>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include "ChatCommand.h"
 #include "Log.h"
@@ -444,6 +445,34 @@ public:
         return true;
     }
 
+    // The spells of a class's own skill lines: the abilities (SkillLineAbility rows) of every class skill line (skill category 7 with a SkillRaceClassInfo row
+    // for the class) whose ClassMask names the class or none (R5; the same set `.tb ranks` prints and `.tb train` pass 2 teaches from).
+    static std::set<uint32> ClassLineSpells(uint32 classId)
+    {
+        std::set<uint32> spells;
+        uint32 const classBit = 1u << (classId - 1);
+        for (SkillLineEntry const* line : sSkillLineStore)
+        {
+            if (!line || line->CategoryID != SKILL_CATEGORY_CLASS)
+                continue;
+            bool classLine = false;
+            for (SkillRaceClassInfoEntry const* info : sDB2Manager.GetSkillRaceClassInfo(line->ID))
+                if (info->ClassMask && (uint32(info->ClassMask) & classBit))
+                    classLine = true;
+            if (!classLine)
+                continue;
+            if (std::vector<SkillLineAbilityEntry const*> const* abilities = sDB2Manager.GetSkillLineAbilitiesBySkill(line->ID))
+                for (SkillLineAbilityEntry const* row : *abilities)
+                    if (row->Spell > 0 && (!row->ClassMask || (uint32(row->ClassMask) & classBit)))
+                        spells.insert(uint32(row->Spell));
+        }
+        return spells;
+    }
+
+    // The 1.12-era spell ids of the class skill lines end at 28382 for priest and warrior (the highest id below 100000 in their lines); every id the lines
+    // hold above that is retail-era (the lowest is 401859: Renew 425268, Mind Spike, Shadowfiend, Circle of Healing...). The bound below sits in that gap.
+    static constexpr uint32 kClassicSpellIdEnd = 100000;
+
     // .tb train <bot>: teaches the bot, free and without an NPC, the class spells it may know at its level, from the core's own data, in two passes
     // (no spell id is written in this module):
     //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1628, the world database's trainer and trainer_spell tables) and the core's own
@@ -452,10 +481,15 @@ public:
     //     data names no class: riding, recipes; the first boot of R3 taught a priest riding passives and a tailoring recipe through them). The type of a class trainer in this
     //     core's data is `Trainer::Type::None` (trainer.Type 0: 254 of 716 trainers, the priests' trainers 7 and 8 among them); `Trainer::Type::Talent` (1)
     //     is another set of 8 whose spells all need a skill line (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading).
-    //  2. the class skill-line abilities (sSkillLineAbilityStore, the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181): a spell of
-    //     the class's spell family (ChrClasses SpellClassSet) that fits the class and race (Player::IsSpellFitByClassAndRace), whose spell level the bot
-    //     has reached, and that is valid (SpellMgr::IsSpellValid). This gives what no trainer teaches: the spells a new character of the class starts with
-    //     (a priest's Smite and Lesser Heal are in no trainer table). The core's command has no level test; this one has (SpellInfo::SpellLevel <= level).
+    //  2. the class's own skill-line abilities (ClassLineSpells above; the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181): a spell of
+    //     the class's spell family (ChrClasses SpellClassSet) that fits the class and race (Player::IsSpellFitByClassAndRace), whose spell level the bot has
+    //     reached, that is valid (SpellMgr::IsSpellValid), AND (R5 item 1) either belongs to a verified rank chain (tbcompat::SpellRankOf: the core's chain,
+    //     the SkillLineAbility links or the trainers' required-ability links; every rank up to the bot's level is taught, the chain is verified data) or is a
+    //     chainless ability with a 1.12-era id (below kClassicSpellIdEnd: the retail-era ids of the class lines are all far above it). This gives what no
+    //     trainer teaches: the spells a new character starts with (a priest's Smite and Lesser Heal are in no trainer table). The core's command has no level
+    //     test; this one has (SpellInfo::SpellLevel <= level). A retail-era spell the TRAINER pass taught (the class trainers' tables carry them: Mind Spike,
+    //     Shadowfiend, Circle of Healing...) and that is in no verified chain is taken away again at the end (the core teaches every trainer row of the class
+    //     and cannot be told to skip one); the printout counts them.
     // Passes repeat while one teaches something (a spell can be the prerequisite of the next). Prints the counts and the tally of the trainer pass.
     static bool HandleTrain(ChatHandler* handler, std::string name)
     {
@@ -466,7 +500,11 @@ public:
             return false;
         uint32 const classMask = 1u << (bot->GetClass() - 1);
         ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(bot->GetClass());
-        uint32 trainerTaught = 0, lineTaught = 0, trainers = 0, passes = 0;
+        uint32 trainerTaught = 0, lineTaught = 0, trainers = 0, passes = 0, retailSkipped = 0;
+        std::set<uint32> const lineSpells = ClassLineSpells(bot->GetClass());
+        std::set<uint32> knownBefore;
+        for (auto const& [spellId, spell] : bot->GetSpellMap())
+            knownBefore.insert(spellId);
         Trainer::Trainer::FreeTeachTally tally;
         for (; passes < 8; ++passes)
         {
@@ -483,14 +521,18 @@ public:
 
             uint32 lineThisPass = 0;
             if (classEntry)
-                for (uint32 row = 0; row < sSkillLineAbilityStore.GetNumRows(); ++row)
+                for (uint32 spellId : lineSpells)
                 {
-                    SkillLineAbilityEntry const* entry = sSkillLineAbilityStore.LookupEntry(row);
-                    if (!entry || bot->HasSpell(entry->Spell))
+                    if (bot->HasSpell(spellId))
                         continue;
-                    SpellInfo const* info = sSpellMgr->GetSpellInfo(entry->Spell, DIFFICULTY_NONE);
+                    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
                     if (!info || info->SpellLevel == 0 || info->SpellLevel > bot->GetLevel() || info->SpellFamilyName != classEntry->SpellClassSet)
                         continue;
+                    if (!tbcompat::SpellRankOf(spellId) && spellId >= kClassicSpellIdEnd)
+                    {
+                        ++retailSkipped;
+                        continue;
+                    }
                     if (!bot->IsSpellFitByClassAndRace(info->Id) || !SpellMgr::IsSpellValid(info, bot, false))
                         continue;
                     bot->LearnSpell(info->Id, false);
@@ -500,6 +542,23 @@ public:
             if (!passTaught && !lineThisPass)
                 break;
         }
+        // A retail-era spell of a trainer row (id from kClassicSpellIdEnd up) that is in no verified chain is not taught by this command: taken away again.
+        std::string removed;
+        uint32 removedCount = 0;
+        {
+            std::vector<uint32> taken;
+            for (auto const& [spellId, spell] : bot->GetSpellMap())
+                if (!knownBefore.count(spellId) && spellId >= kClassicSpellIdEnd && !tbcompat::SpellRankOf(spellId))
+                    taken.push_back(spellId);
+            for (uint32 spellId : taken)
+            {
+                SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
+                removed += std::to_string(spellId) + ":" + (info && info->SpellName ? info->SpellName->Str[LOCALE_enUS] : "?") + " ";
+                bot->RemoveSpell(spellId, false, false);
+                ++removedCount;
+            }
+        }
+        handler->PSendSysMessage("TortoiseBots: train: %u retail-era chainless class-line spell(s) not taught, %u retail-era trainer spell(s) taken away again: %s", retailSkipped, removedCount, removed.c_str());
         handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) and %u from the class skill lines, in %u pass(es); trainer pass not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
             name.c_str(), trainerTaught, trainers, lineTaught, passes + 1, tally.known, tally.class_race, tally.level, tally.ability, tally.skill_line, tally.other);
         return true;
@@ -675,8 +734,8 @@ public:
 
     // .tb ranks <class name|id>: the spell rank chains of the class's skill lines, as the chain table (TbSpellEntry.cpp ChainTable) holds them: for each
     // class skill line (skill category 7 with a SkillRaceClassInfo row for the class) the abilities whose ClassMask fits the class, grouped by chain
-    // (`chain <line> <source> <name>: id:rank:level ...`, source core = the core's own chain entry, links = SkillLineAbility supersedes links) and the
-    // abilities of the line that are in no chain (`single <line>: id:level:name:family`, rank 0). It prints facts only; nothing is changed.
+    // (`chain <line> <source> <name>: id:rank:level ...`, source core = the core's own chain entry, links = SkillLineAbility supersedes links, trainer = trainer_spell required-ability links of the same ability) and the
+    // abilities of the line that are in no chain (`single <line>: id:level[:t<trainer level>]:name:family`, rank 0). It prints facts only; nothing is changed.
     static bool HandleRanks(ChatHandler* handler, std::string classText)
     {
         static char const* const names[] = { "", "warrior", "paladin", "hunter", "rogue", "priest", "deathknight", "shaman", "mage", "warlock", "monk", "druid", "demonhunter", "evoker" };
@@ -688,6 +747,18 @@ public:
             return Fail(handler, "usage: .tb ranks <class name or id> (warrior, priest, ...).");
         uint32 const classBit = 1u << (classId - 1);
         auto onLine = [&](std::string const& text) { handler->PSendSysMessage("TortoiseBots: ranks: %s", text.c_str()); };
+        // The level at which a class trainer teaches each spell (the lowest ReqLevel over the class's trainers): printed as `t<level>` next to the spell
+        // level, because the data collaborator's lists give the level a spell is learned at.
+        std::unordered_map<uint32, uint32> trainerLevel;
+        for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
+            if (trainer.GetType() == Trainer::Type::None && trainer.GetClassMask() == classBit)
+                for (Trainer::Spell const& spell : trainer.GetSpells())
+                {
+                    auto const found = trainerLevel.find(spell.SpellId);
+                    if (found == trainerLevel.end() || spell.ReqLevel < found->second)
+                        trainerLevel[spell.SpellId] = spell.ReqLevel;
+                }
+        auto levelText = [&](uint32 id, SpellInfo const* info) { auto const found = trainerLevel.find(id); return std::to_string(info ? info->SpellLevel : 0) + (found == trainerLevel.end() ? std::string() : ":t" + std::to_string(found->second)); };
         onLine("class " + std::to_string(classId) + " " + names[classId] + "; chains in the table: " + std::to_string(tbcompat::SpellChainCount()));
         for (SkillLineEntry const* line : sSkillLineStore)
         {
@@ -718,13 +789,13 @@ public:
                 if (!any)
                     return;
                 SpellInfo const* first = sSpellMgr->GetSpellInfo(chain.ids.front(), DIFFICULTY_NONE);
-                std::string text = "chain " + lineName + " " + (chain.fromCore ? "core" : "links") + " " +
+                std::string text = "chain " + lineName + " " + (chain.source == tbcompat::SpellChainSource::Core ? "core" : chain.source == tbcompat::SpellChainSource::SkillLine ? "links" : "trainer") + " " +
                     (first && first->SpellName && (*first->SpellName)[LOCALE_enUS] ? (*first->SpellName)[LOCALE_enUS] : "?") + ":";
                 for (uint32 id : chain.ids)
                 {
                     SpellInfo const* info = sSpellMgr->GetSpellInfo(id, DIFFICULTY_NONE);
                     chained.insert(id);
-                    text += " " + std::to_string(id) + ":" + std::to_string(tbcompat::SpellRankOf(id)) + ":" + std::to_string(info ? info->SpellLevel : 0) + (inLine.count(id) ? "" : "(not in line)");
+                    text += " " + std::to_string(id) + ":" + std::to_string(tbcompat::SpellRankOf(id)) + ":" + levelText(id, info) + (inLine.count(id) ? "" : "(not in line)");
                     if (text.size() > 600)
                     {
                         onLine(text);
@@ -740,10 +811,17 @@ public:
                 SpellInfo const* info = sSpellMgr->GetSpellInfo(id, DIFFICULTY_NONE);
                 if (!info)
                     continue;
-                onLine("single " + lineName + ": " + std::to_string(id) + ":" + std::to_string(info->SpellLevel) + ":" +
+                onLine("single " + lineName + ": " + std::to_string(id) + ":" + levelText(id, info) + ":" +
                     (info->SpellName && (*info->SpellName)[LOCALE_enUS] ? (*info->SpellName)[LOCALE_enUS] : "?") + ":" + std::to_string(info->SpellFamilyName));
             }
         }
+        // The trainer links that were prerequisites and not ranks, for the abilities of this class.
+        std::set<uint32> const classSpells = ClassLineSpells(classId);
+        tbcompat::ForEachNonRankPrerequisite([&](uint32 required, uint32 taught)
+        {
+            if (classSpells.count(taught))
+                onLine("prerequisite (not a rank): " + std::to_string(taught) + " requires " + std::to_string(required));
+        });
         onLine("done");
         return true;
     }
