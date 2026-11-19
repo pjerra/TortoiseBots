@@ -12,6 +12,7 @@
 #include "host/TbH3.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
+#include "host/run/TbRunStands.h"
 
 #include "GameTime.h"
 #include "Player.h"
@@ -151,6 +152,9 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         end.N("ticks", int64(tick.ticks)).N("tick_avg_us", tick.ticks ? int64(tick.totalUs / tick.ticks) : 0).N("tick_max_us", tick.maxUs);
         end.N("facts_reads", int64(facts.reads)).N("facts_avg_us", facts.reads ? int64(facts.totalUs / facts.reads) : 0).N("facts_max_us", facts.maxUs)
             .N("facts_unreadable", int64(facts.unreadable));
+        // N6: the stand searches (once per request of the policy): ring points tested, navmesh queries, the worst single search.
+        StandCost const& stands = StandTotals();
+        end.N("stand_candidates", int64(stands.candidates)).N("stand_paths", int64(stands.pathQueries)).N("stand_max_us", stands.costUs);
         reply.End(end);
         return true;
     }

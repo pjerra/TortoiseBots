@@ -10,6 +10,7 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
+#include "host/run/TbRunStands.h"
 #include "runtime/SystemRunPolicy.h"
 
 #include "GameTime.h"
@@ -631,12 +632,27 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     std::string const order = DungeonRun::Tick(run, facts, dt);
-    // The searches the policy asks the glue for after its tick. Neither search is ported (a stand-in search is a legacy NearestReachablePoint / ring search):
-    // "found nothing" is the do-less answer, the policy then hops, retries or pauses by its own rules.
+    // The searches the policy asks the glue for after its tick (Commander.cpp:13941-13971), once per request, here and never per tick (N6: ported in
+    // TbRunStands.cpp; before N6 both answered "found nothing"). A stalled walk asks for a dry stand-in near the step's point, an approach whose hops
+    // got no nearer to a pack or boss asks for a stand with sight of it.
     if (run.stallStandInWanted)
-        DungeonRun::StallStandIn(run, false, 0.0f, 0.0f, 0.0f);
+    {
+        float dx = 0.0f, dy = 0.0f, dz = 0.0f;
+        StandCost cost;
+        bool const found = lead->IsAlive() && SearchStallStand(rec, dx, dy, dz, &cost);
+        sLog.outString("TortoiseBots run: %s stall stand-in search: %s (%u points, %u paths, %u us)", rec.leaderName.c_str(), found ? "found" : "none", cost.candidates,
+            cost.pathQueries, cost.costUs);
+        DungeonRun::StallStandIn(run, found, dx, dy, dz);
+    }
     if (run.approachStandWanted)
-        DungeonRun::ApproachStandFound(run, facts, false, 0.0f, 0.0f, 0.0f);
+    {
+        float sx = 0.0f, sy = 0.0f, sz = 0.0f;
+        StandCost cost;
+        bool const found = lead->IsAlive() && SearchApproachStand(rec, facts.team, sx, sy, sz, &cost);
+        sLog.outString("TortoiseBots run: %s approach stand search: %s (%u points, %u paths, %u rays, %u us)", rec.leaderName.c_str(),
+            found ? "found" : "none", cost.candidates, cost.pathQueries, cost.losQueries, cost.costUs);
+        DungeonRun::ApproachStandFound(run, facts, found, sx, sy, sz);
+    }
     (void)DungeonRun::SpeedRateNow(run, facts, dt);     // test speed is off (1.0): this touches nothing, the policy keeps its own clock
     // What the policy leaves for the glue to do, and this host does not: dropped with the reason (a flag left set would only repeat).
     (void)DungeonRun::TakeLinkedEvents(run);
