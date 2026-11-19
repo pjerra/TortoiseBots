@@ -1,6 +1,9 @@
 package armory
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestLoadStatsForeverPrefersLiveStats(t *testing.T) {
 	svc := &Service{
@@ -9,10 +12,18 @@ func TestLoadStatsForeverPrefersLiveStats(t *testing.T) {
 			LiveStats: func(guid uint32) (CharacterStats, bool) {
 				if guid == 3125 {
 					return CharacterStats{
-						Source:    "character_stats", // overwritten to "live"
-						MaxHealth: 60,
-						MaxPower2: 100,
-						Strength:  23,
+						Source:           "character_stats", // overwritten to "live"
+						MaxHealth:        60,
+						MaxPower2:        100,
+						Strength:         23,
+						ManaRegenCasting: 4,
+						Defense:          300,
+						DefenseMax:       300,
+						BlockValue:       85,
+						SpellPenetration: 18,
+						Expertise:        1.5,
+						Ratings:          map[string]int32{"1": 40, "5": 20},
+						RatingBonus:      map[string]float64{"1": 16, "5": 1.3},
 					}, true
 				}
 				return CharacterStats{}, false
@@ -24,6 +35,24 @@ func TestLoadStatsForeverPrefersLiveStats(t *testing.T) {
 	svc.loadStatsForever(3125, &st)
 	if st.Source != "live" || st.MaxHealth != 60 || st.MaxPower2 != 100 || st.Strength != 23 {
 		t.Fatalf("unexpected live stats: %+v", st)
+	}
+	if st.ManaRegenCasting != 4 || st.Defense != 300 || st.DefenseMax != 300 || st.BlockValue != 85 || st.SpellPenetration != 18 || st.Expertise != 1.5 {
+		t.Fatalf("unexpected sheet fields: %+v", st)
+	}
+	if st.Ratings["1"] != 40 || st.RatingBonus["5"] != 1.3 {
+		t.Fatalf("unexpected ratings: %+v / %+v", st.Ratings, st.RatingBonus)
+	}
+
+	raw, err := json.Marshal(BotProfile{Stats: st})
+	if err != nil {
+		t.Fatalf("json.Marshal(BotProfile): %v", err)
+	}
+	var decoded BotProfile
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal(BotProfile): %v", err)
+	}
+	if decoded.Stats.Defense != 300 || decoded.Stats.Ratings["5"] != 20 || decoded.Stats.RatingBonus["1"] != 16 {
+		t.Fatalf("profile JSON round-trip lost fields: %+v", decoded.Stats)
 	}
 }
 

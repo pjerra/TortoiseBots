@@ -100,6 +100,7 @@ type GuildOrdersView struct {
 	Orders  []GuildOrder  `json:"orders"`
 	Relists []GuildRelist `json:"relists"`
 	Polled  int64         `json:"polled"`
+	Note    string        `json:"note,omitempty"`
 	Error   string        `json:"error,omitempty"`
 }
 
@@ -194,12 +195,22 @@ func orderKey(guid uint32, created int64) string {
 
 // Poll reads the table once and records the changes.
 func (t *GuildOrderTracker) Poll() {
-	orders, err := t.load()
 	now := time.Now()
+	if t.svc != nil && t.svc.isForever() {
+		t.mu.Lock()
+		t.view = GuildOrdersView{Orders: []GuildOrder{}, Relists: []GuildRelist{}, Polled: now.Unix(), Note: "not available on ForeverCore"}
+		t.mu.Unlock()
+		return
+	}
+	orders, err := t.load()
 	if err != nil {
 		t.mu.Lock()
-		t.view.Error = err.Error()
-		t.view.Polled = now.Unix()
+		if isMissingTableErr(err) {
+			t.view = GuildOrdersView{Orders: []GuildOrder{}, Relists: []GuildRelist{}, Polled: now.Unix(), Note: "not available on ForeverCore"}
+		} else {
+			t.view.Error = err.Error()
+			t.view.Polled = now.Unix()
+		}
 		t.mu.Unlock()
 		return
 	}

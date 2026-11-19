@@ -35,28 +35,33 @@ type AuctionFilter struct {
 }
 
 type AuctionRow struct {
-	ID            uint32 `json:"id"`
-	House         string `json:"house"`
-	ItemTemplate  uint32 `json:"item_template"`
-	Name          string `json:"name"`
-	Quality       uint8  `json:"quality"`
-	ItemClass     uint8  `json:"item_class"`
-	RequiredLevel uint32 `json:"required_level"`
-	ItemLevel     uint32 `json:"item_level"`
-	Icon          string `json:"icon"`
-	Count         uint32 `json:"count"`
-	SellerGUID    uint32 `json:"seller_guid"`
-	SellerName    string `json:"seller_name"`
-	SellerClass   uint8  `json:"seller_class"`
-	SellerKind    string `json:"seller_kind"` // ahbot, bot, player, market (module's ownerless market listing)
-	StartBid      uint32 `json:"start_bid"`
-	Bid           uint32 `json:"bid"`
-	Buyout        uint32 `json:"buyout"`
-	ExpireAt      int64  `json:"expire_at"`
+	ID            uint32                `json:"id"`
+	House         string                `json:"house"`
+	ItemTemplate  uint32                `json:"item_template"`
+	Name          string                `json:"name"`
+	Quality       uint8                 `json:"quality"`
+	ItemClass     uint8                 `json:"item_class"`
+	InventoryType uint32                `json:"inventory_type,omitempty"`
+	RequiredLevel uint32                `json:"required_level"`
+	ItemLevel     uint32                `json:"item_level"`
+	Icon          string                `json:"icon"`
+	Count         uint32                `json:"count"`
+	SellerGUID    uint32                `json:"seller_guid"`
+	SellerName    string                `json:"seller_name"`
+	SellerClass   uint8                 `json:"seller_class"`
+	SellerKind    string                `json:"seller_kind"` // ahbot, bot, player, market (module's ownerless market listing)
+	StartBid      uint32                `json:"start_bid"`
+	Bid           uint32                `json:"bid"`
+	Buyout        uint32                `json:"buyout"`
+	ExpireAt      int64                 `json:"expire_at"`
+	Enchantments  []ItemEnchantmentInfo `json:"enchantments,omitempty"`
+	Detail        *ItemDetail           `json:"detail,omitempty"`
 
-	buyGUID   uint32
-	itemGUID  uint32
-	displayID uint32
+	buyGUID     uint32
+	itemGUID    uint32
+	displayID   uint32
+	durability  uint32
+	rawEnchants string
 }
 
 type AuctionSummary struct {
@@ -318,7 +323,21 @@ func (s *Service) ListAuctionsForever(f AuctionFilter, items *foreveritems.Store
 	if err != nil {
 		return nil, err
 	}
-	return buildAuctionPage(all, f, ahbot), nil
+	page := buildAuctionPage(all, f, ahbot)
+	if !ahbot.TablePresent {
+		page.AhBot.Health.Note = "AH bot is not available on ForeverCore"
+	}
+	for i := range page.Rows {
+		r := &page.Rows[i]
+		r.Enchantments = s.parseEnchantments(r.rawEnchants)
+		if s.cfg.Items != nil {
+			dur := r.durability
+			var detail ItemDetail
+			_, _, _, r.InventoryType, _, detail = s.foreverItemMeta(r.ItemTemplate, &dur)
+			r.Detail = &detail
+		}
+	}
+	return page, nil
 }
 
 func buildAuctionPage(all []AuctionRow, f AuctionFilter, ahbot ahBotData) *AuctionPage {
@@ -828,6 +847,7 @@ func clampUint32(v uint64) uint32 {
 func (s *Service) loadAuctionsForever(ahbotSellers map[uint32]bool, items *foreveritems.Store) ([]AuctionRow, error) {
 	rows, err := s.db.Query(`
 		SELECT a.id, a.auctionHouseId, ai.itemGuid, ii.itemEntry, ii.count,
+		       COALESCE(ii.durability, 0), COALESCE(ii.enchantments, ''),
 		       a.owner, a.bidder, a.minBid, a.bidAmount, a.buyoutOrUnitPrice, a.endTime
 		FROM auctionhouse a
 		JOIN auction_items ai ON ai.auctionId = a.id
@@ -841,9 +861,11 @@ func (s *Service) loadAuctionsForever(ahbotSellers map[uint32]bool, items *forev
 	all := []AuctionRow{}
 	for rows.Next() {
 		var r AuctionRow
-		var houseID, count uint32
+		var houseID, count, durability uint32
+		var rawEnchants string
 		var itemGUID, owner, bidder, minBid, bidAmt, buyout uint64
 		if err := rows.Scan(&r.ID, &houseID, &itemGUID, &r.ItemTemplate, &count,
+			&durability, &rawEnchants,
 			&owner, &bidder, &minBid, &bidAmt, &buyout, &r.ExpireAt); err != nil {
 			return nil, err
 		}
@@ -858,11 +880,17 @@ func (s *Service) loadAuctionsForever(ahbotSellers map[uint32]bool, items *forev
 			count = 1
 		}
 		r.Count = count
+		r.durability = durability
+		r.rawEnchants = rawEnchants
+		if items == nil {
+			items = s.cfg.Items
+		}
 		if items != nil {
 			if it, ok := items.Get(r.ItemTemplate); ok {
 				r.Name = it.Name
 				r.Quality = uint8(it.Quality)
 				r.ItemClass = uint8(it.Class)
+				r.InventoryType = it.InvType
 				r.RequiredLevel = it.ReqLevel
 				r.ItemLevel = it.ItemLvl
 				if it.Icon > 0 {

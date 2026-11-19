@@ -3,6 +3,13 @@
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
+#include "Item.h"
+#include "MotionMaster.h"
+#include "GameTables.h"
+#include "ItemEnchantmentMgr.h"
+#include "SpellAuras.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "TransmogMgr.h"
 #include "GitRevision.h"
 #include "ObjectMgr.h"
@@ -21,6 +28,7 @@
 #include <fstream>
 #include <unordered_map>
 #include <memory>
+#include <optional>
 #include <sstream>
 
 namespace
@@ -48,6 +56,8 @@ struct Sender
     std::vector<std::string> events;   // BOT_EVENTS rows waiting for the next cycle
     struct Track { float x = 0, y = 0; uint32 map = 0; time_t since = 0; time_t lastStuck = 0; bool alive = true; };
     std::unordered_map<ObjectGuid, Track> track;
+    struct BrainInfo { std::string role, combat, nonCombat, engine, state; };
+    std::unordered_map<ObjectGuid, BrainInfo> brains;   // refreshed with BOT_STATS, read by every roster row
 };
 
 // A bot whose position has not changed for this long while its master is far (same map) is reported STUCK, at most once per StuckRepeatSecs.
@@ -147,6 +157,44 @@ std::string UiMapFields(Player* bot)
     return ss.str();
 }
 
+char const* MoveName(MovementGeneratorType type)
+{
+    switch (type)
+    {
+        case IDLE_MOTION_TYPE: return "idle";
+        case RANDOM_MOTION_TYPE: return "random";
+        case WAYPOINT_MOTION_TYPE: return "waypoint";
+        case CONFUSED_MOTION_TYPE: return "confused";
+        case CHASE_MOTION_TYPE: return "chase";
+        case HOME_MOTION_TYPE: return "home";
+        case FLIGHT_MOTION_TYPE: return "flight";
+        case POINT_MOTION_TYPE: return "point";
+        case FLEEING_MOTION_TYPE: case TIMED_FLEEING_MOTION_TYPE: return "flee";
+        case FOLLOW_MOTION_TYPE: return "follow";
+        default: return "other";
+    }
+}
+
+// The rows a bot driver needs (master and distance, movement and how long it has not moved, life, bags and repairs).
+std::string DriverFields(Player* bot, time_t stillSince, time_t now)
+{
+    std::ostringstream ss;
+    ObjectGuid const masterGuid = TortoiseBots::BotMgr::Instance().MasterOf(bot->GetGUID());
+    ss << ",\"master\":" << masterGuid.GetCounter();
+    if (Player* master = ObjectAccessor::FindConnectedPlayer(masterGuid); master && master->IsInWorld() && master->GetMap() == bot->GetMap())
+        ss << ",\"dist_master\":" << bot->GetDistance(master) << ",\"los_master\":" << (bot->IsWithinLOSInMap(master) ? 1 : 0);
+    ss << ",\"move\":\"" << MoveName(bot->GetMotionMaster()->GetCurrentMovementGeneratorType()) << "\",\"still_s\":" << (now - stillSince)
+       << ",\"ghost\":" << (bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? 1 : 0) << ",\"rez_pending\":" << (bot->IsResurrectRequested() ? 1 : 0)
+       << ",\"free_slots\":" << bot->GetFreeInventorySlotCount();
+    uint32 lowest = 100;
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            if (uint32 const max = item->m_itemData->MaxDurability)
+                lowest = std::min<uint32>(lowest, uint32(item->m_itemData->Durability) * 100 / max);
+    ss << ",\"durability_min_pct\":" << lowest;
+    return ss.str();
+}
+
 // The core keeps rage (and runic power) times ten; the client shows a tenth.
 int32 ShownPower(Player* bot, Powers power, int32 value)
 {
@@ -201,8 +249,15 @@ void SendServerInfo()
        << "\",\"core_date\":\"" << Escape(GitRevision::GetDate()) << "\",\"uptime\":" << GameTime::GetUptime()
        << ",\"max_level\":" << sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL)
        << ",\"rates\":{\"xp_kill\":" << sWorld->getRate(RATE_XP_KILL) << ",\"xp_quest\":" << sWorld->getRate(RATE_XP_QUEST)
-       << ",\"drop_money\":" << sWorld->getRate(RATE_DROP_MONEY) << ",\"reputation\":" << sWorld->getRate(RATE_REPUTATION_GAIN) << "}"
-       << ",\"bots\":{\"enabled\":\"" << (mgr.Enabled() ? 1 : 0) << "\",\"online\":" << mgr.Count() << "}"
+       << ",\"drop_money\":" << sWorld->getRate(RATE_DROP_MONEY) << ",\"reputation\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
+       << ",\"xp_explore\":" << sWorld->getRate(RATE_XP_EXPLORE) << ",\"xp_bg_kill\":" << sWorld->getRate(RATE_XP_BG_KILL) << ",\"honor\":" << sWorld->getRate(RATE_HONOR)
+       << ",\"drop_item_normal\":" << sWorld->getRate(RATE_DROP_ITEM_NORMAL) << ",\"drop_item_rare\":" << sWorld->getRate(RATE_DROP_ITEM_RARE)
+       << ",\"drop_item_epic\":" << sWorld->getRate(RATE_DROP_ITEM_EPIC) << ",\"rest_ingame\":" << sWorld->getRate(RATE_REST_INGAME)
+       << ",\"skill_discovery\":" << sWorld->getRate(RATE_SKILL_DISCOVERY) << "}"
+       << ",\"bots\":{\"enabled\":\"" << (mgr.Enabled() ? 1 : 0) << "\",\"online\":" << mgr.Count()
+       << ",\"engine_by_default\":\"" << (sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false) ? 1 : 0)
+       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dead_backstop_s\":" << sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", 180)
+       << ",\"dashboard_interval_ms\":" << s.intervalMs << "}"
        << ",\"diagnostics\":{\"core\":\"ForeverCore\",\"core_branch\":\"" << Escape(GitRevision::GetBranch()) << "\"}}";
     Send(ss.str());
 }
@@ -246,12 +301,46 @@ void TrackBots(std::vector<Player*> const& bots)
         next[bot->GetGUID()] = t;
     }
     s.track.swap(next);
+    for (auto itr = s.brains.begin(); itr != s.brains.end();)
+        itr = s.track.count(itr->first) ? std::next(itr) : s.brains.erase(itr);
 }
 
 // BOT_STATS: the live character sheet of every bot, the values the core itself computes for this client version (the profile's
 // stats; character_stats in the database is only written at logout on a default realm). Field names = the dashboard's CharacterStats.
 constexpr size_t StatsPerDatagram = 20;
 constexpr uint32 StatsIntervalMs = 10000;
+
+// The engine's view of the bot, from the lines `.tb where` prints (BotMgr::DescribeBrain): engine on/off, its state and its
+// combat / non-combat strategies; the role is read off the strategies (tank / heal).
+Sender::BrainInfo ReadBrain(Player* bot)
+{
+    Sender::BrainInfo info;
+    std::vector<std::string> const lines = TortoiseBots::BotMgr::Instance().DescribeBrain(bot->GetGUID());
+    // First line: "brain: engine" when the engine runs, else "brain: spike (why the engine is not running)".
+    std::string const first = lines.empty() ? "" : lines.front();
+    info.engine = first.compare(0, 13, "brain: engine") == 0 ? "on" : "off";
+    if (info.engine == "off" && first.size() > 7)
+        info.state = first.substr(7);
+    auto after = [](std::string const& line, char const* prefix) -> std::optional<std::string>
+    {
+        std::string const p = prefix;
+        if (line.compare(0, p.size(), p) != 0)
+            return std::nullopt;
+        return line.substr(p.size());
+    };
+    for (std::string const& line : lines)
+    {
+        if (auto v = after(line, "state: "))
+            info.state = *v;
+        else if (auto v = after(line, "combat strategies: "))
+            info.combat = *v;
+        else if (auto v = after(line, "non-combat strategies: "))
+            info.nonCombat = *v;
+    }
+    auto has = [&](char const* word) { return (" " + info.combat + ",").find(word) != std::string::npos; };
+    info.role = info.engine != "on" ? "" : has("tank") ? "tank" : has("heal") ? "healer" : "dps";
+    return info;
+}
 
 void AppendStats(std::ostringstream& ss, Player* bot)
 {
@@ -281,11 +370,48 @@ void AppendStats(std::ostringstream& ss, Player* bot)
     int32 minSchool = 0;
     for (uint8 school = SPELL_SCHOOL_HOLY; school < MAX_SPELL_SCHOOL; ++school)
         minSchool = school == SPELL_SCHOOL_HOLY ? ap->ModDamageDonePos[school] : std::min<int32>(minSchool, ap->ModDamageDonePos[school]);
-    ss << ",\"spell_damage\":" << std::max(0, minSchool) << ",\"healing_power\":" << std::max<int32>(0, ap->ModHealingDonePos)
-       << ",\"spell_dmg_holy\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_HOLY]) << ",\"spell_dmg_fire\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_FIRE])
-       << ",\"spell_dmg_nature\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_NATURE]) << ",\"spell_dmg_frost\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_FROST])
-       << ",\"spell_dmg_shadow\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_SHADOW]) << ",\"spell_dmg_arcane\":" << std::max<int32>(0, ap->ModDamageDonePos[SPELL_SCHOOL_ARCANE])
-       << ",\"mana_regen\":" << uint32(std::max(0.0f, float(ud->PowerRegenFlatModifier[0])) * 5.0f) << "}";
+    // spell_dmg_<school> = what that school has above the base (the page shows base + that); spell_damage = the base (lowest school).
+    int32 const base = std::max(0, minSchool);
+    auto above = [&](SpellSchools school) { return std::max<int32>(0, ap->ModDamageDonePos[school] - base); };
+    ss << ",\"spell_damage\":" << base << ",\"healing_power\":" << std::max<int32>(0, ap->ModHealingDonePos)
+       << ",\"spell_dmg_holy\":" << above(SPELL_SCHOOL_HOLY) << ",\"spell_dmg_fire\":" << above(SPELL_SCHOOL_FIRE)
+       << ",\"spell_dmg_nature\":" << above(SPELL_SCHOOL_NATURE) << ",\"spell_dmg_frost\":" << above(SPELL_SCHOOL_FROST)
+       << ",\"spell_dmg_shadow\":" << above(SPELL_SCHOOL_SHADOW) << ",\"spell_dmg_arcane\":" << above(SPELL_SCHOOL_ARCANE)
+       << ",\"mana_regen\":" << uint32(std::max(0.0f, float(ud->PowerRegenFlatModifier[0])) * 5.0f)
+       << ",\"mana_regen_casting\":" << uint32(std::max(0.0f, float(ud->PowerRegenInterruptedFlatModifier[0])) * 5.0f)
+       // The Classic character sheet's other lines: defense (skill and the level's maximum), shield block value, spell penetration, expertise.
+       << ",\"defense\":" << bot->GetSkillValue(SKILL_DEFENSE) << ",\"defense_max\":" << bot->GetMaxSkillValueForLevel()
+       << ",\"block_value\":" << int32(ap->ShieldBlock) << ",\"spell_penetration\":" << -int32(ap->ModTargetResistance)
+       << ",\"expertise\":" << float(ap->MainhandExpertise) << ",\"ratings\":{";
+    bool first = true;
+    for (uint32 cr = 0; cr < MAX_COMBAT_RATING; ++cr)
+        if (int32 const value = ap->CombatRatings[cr])
+        {
+            ss << (first ? "" : ",") << "\"" << cr << "\":" << value;
+            first = false;
+        }
+    // What each rating is worth, as the core converts it (percent, or skill points for defense and expertise).
+    ss << "},\"rating_bonus\":{";
+    first = true;
+    for (uint32 cr = 0; cr < MAX_COMBAT_RATING; ++cr)
+        if (ap->CombatRatings[cr])
+        {
+            ss << (first ? "" : ",") << "\"" << cr << "\":" << bot->GetRatingBonusValue(CombatRating(cr));
+            first = false;
+        }
+    // The auras on the bot now: spell, remaining ms (-1 permanent), stacks, positive.
+    ss << "},\"auras\":[";
+    first = true;
+    size_t shown = 0;
+    for (auto const& [spellId, app] : bot->GetAppliedAuras())
+    {
+        if (++shown > 40)
+            break;
+        Aura const* aura = app->GetBase();
+        ss << (first ? "" : ",") << "[" << spellId << "," << aura->GetDuration() << "," << uint32(aura->GetStackAmount()) << "," << (app->IsPositive() ? 1 : 0) << "]";
+        first = false;
+    }
+    ss << "]}";
 }
 
 void SendStats(std::vector<Player*> const& bots)
@@ -301,6 +427,7 @@ void SendStats(std::vector<Player*> const& bots)
             if (i != first)
                 ss << ',';
             AppendStats(ss, bots[i]);
+            s.brains[bots[i]->GetGUID()] = ReadBrain(bots[i]);
         }
         ss << "]}";
         Send(ss.str());
@@ -361,11 +488,12 @@ void SendCycle()
             if (Unit* unit = ObjectAccessor::GetUnit(*bot, bot->GetTarget()))
                 target = unit->GetName();
             Group* group = bot->GetGroup();
+            Sender::BrainInfo const& brain = s.brains[bot->GetGUID()];
             if (i != batch * BotsPerBatch)
                 ss << ',';
             ss << "{\"name\":\"" << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter()
                << ",\"kind\":\"" << (mgr.MasterOf(bot->GetGUID()).IsEmpty() ? "pool" : "hired") << "\""
-               << ",\"class\":\"" << ClassName(bot->GetClass()) << "\",\"role\":\"\""
+               << ",\"class\":\"" << ClassName(bot->GetClass()) << "\",\"role\":\"" << Escape(brain.role) << "\""
                << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
                << ",\"level\":" << uint32(bot->GetLevel())
                << ",\"hp\":" << bot->GetHealth() << ",\"max_hp\":" << bot->GetMaxHealth()
@@ -374,9 +502,11 @@ void SendCycle()
                << ",\"map\":" << bot->GetMapId() << ",\"zone\":" << bot->GetZoneId() << ",\"instance\":" << bot->GetInstanceId()
                << ",\"x\":" << bot->GetPositionX() << ",\"y\":" << bot->GetPositionY() << ",\"z\":" << bot->GetPositionZ()
                << ",\"o\":" << bot->GetOrientation()
-               << ",\"target\":\"" << Escape(target) << "\",\"strategy\":\"\",\"state\":\"" << StateOf(bot) << "\""
+               << ",\"target\":\"" << Escape(target) << "\",\"strategy\":\"" << Escape(brain.combat) << "\",\"strategies_nc\":\"" << Escape(brain.nonCombat)
+               << "\",\"engine\":\"" << brain.engine << "\",\"engine_state\":\"" << Escape(brain.state) << "\",\"state\":\"" << StateOf(bot) << "\""
                << ",\"xp\":" << bot->GetXP() << ",\"next_xp\":" << bot->GetXPForNextLevel()
-               << ",\"guild\":\"" << Escape(bot->GetGuildName()) << "\"" << UiMapFields(bot) << "}";
+               << ",\"guild\":\"" << Escape(bot->GetGuildName()) << "\"" << UiMapFields(bot)
+               << DriverFields(bot, s.track.count(bot->GetGUID()) ? s.track[bot->GetGUID()].since : now, now) << "}";
         }
         ss << "]}";
         Send(ss.str());
@@ -460,6 +590,66 @@ void Update(uint32 diff)
     SendCycle();
 }
 
+std::string LocName(LocalizedString const& str)
+{
+    char const* text = str[sWorld->GetDefaultDbcLocale()];
+    return Escape(text ? text : "");
+}
+
+// What an item tooltip shows: stats (this version keeps them as a share of the item level's budget; the value is the core's
+// Item::GetItemStatValue formula for the item as it drops), armour, weapon damage and speed, binding, set, durability,
+// required skill and classes, description and the spells it casts (trigger: 0 use, 1 equip, 2 chance on hit).
+std::string ItemDetails(ItemTemplate const& item)
+{
+    std::ostringstream ss;
+    BonusData bonus;
+    bonus.Initialize(&item);
+    uint32 const level = item.GetBaseItemLevel();
+    float const points = GetRandomPropertyPoints(level, item.GetQuality(), item.GetInventoryType(), item.GetSubClass());
+    GtItemSocketCostPerLevelEntry const* socketCost = sItemSocketCostPerLevelGameTable.GetRow(level);
+    ss << ",\"stats\":[";
+    bool first = true;
+    for (uint32 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+    {
+        int32 const type = bonus.ItemStatType[i];
+        if (type < 0 || !bonus.StatPercentEditor[i])
+            continue;
+        float value = type == ITEM_MOD_CORRUPTION || type == ITEM_MOD_CORRUPTION_RESISTANCE ? float(bonus.StatPercentEditor[i])
+            : float(bonus.StatPercentEditor[i]) * points * 0.0001f;
+        if (socketCost)
+            value -= float(bonus.ItemStatSocketCostMultiplier[i] * socketCost->SocketCost);
+        int32 const shown = int32(std::lround(value));
+        if (!shown)
+            continue;
+        ss << (first ? "" : ",") << "[" << type << "," << shown << "]";
+        first = false;
+    }
+    ss << "]";
+    if (uint32 armor = item.GetArmor(level))
+        ss << ",\"armor\":" << armor;
+    // ItemTemplate::GetDamage asserts a row for the item level in every weapon damage store; some items have levels past them.
+    bool const damageRows = sItemDamageAmmoStore.LookupEntry(level) && sItemDamageOneHandStore.LookupEntry(level) && sItemDamageTwoHandStore.LookupEntry(level)
+        && sItemDamageOneHandCasterStore.LookupEntry(level) && sItemDamageTwoHandCasterStore.LookupEntry(level);
+    if (item.GetClass() == ITEM_CLASS_WEAPON && damageRows)
+    {
+        float lo = 0.0f, hi = 0.0f;
+        item.GetDamage(level, lo, hi);
+        ss << ",\"dmg_min\":" << uint32(lo) << ",\"dmg_max\":" << uint32(hi) << ",\"delay\":" << item.GetDelay();
+    }
+    ss << ",\"bonding\":" << uint32(item.GetBonding()) << ",\"set\":" << item.GetItemSet() << ",\"durability\":" << item.MaxDurability
+       << ",\"req_skill\":" << item.GetRequiredSkill() << ",\"req_skill_rank\":" << item.GetRequiredSkillRank()
+       << ",\"classes\":" << item.GetAllowableClass() << ",\"desc\":\"" << LocName(item.ExtendedData->Description) << "\",\"spells\":[";
+    first = true;
+    for (ItemEffectEntry const* effect : item.Effects)
+        if (effect->SpellID > 0)
+        {
+            ss << (first ? "" : ",") << "[" << effect->SpellID << "," << uint32(effect->TriggerType) << "]";
+            first = false;
+        }
+    ss << "]";
+    return ss.str();
+}
+
 uint32 IconOf(uint32 itemId)
 {
     if (ItemModifiedAppearanceEntry const* modified = TransmogMgr::GetDefaultItemModifiedAppearance(itemId))
@@ -470,6 +660,159 @@ uint32 IconOf(uint32 itemId)
     if (ItemEntry const* item = sItemStore.LookupEntry(itemId))
         return uint32(std::max(0, item->IconFileDataID));
     return 0;
+}
+
+std::string DataFilePath(char const* key, char const* name)
+{
+    std::string path = sConfigMgr->GetStringDefault(key, "");
+    return path.empty() ? sConfigMgr->GetStringDefault("LogsDir", ".") + "/" + name : path;
+}
+
+bool WriteJsonFile(std::string const& path, std::string const& body, char const* what, size_t count)
+{
+    std::string const tmp = path + ".tmp";
+    std::ofstream out(tmp, std::ios::trunc);
+    if (!out)
+    {
+        TC_LOG_ERROR("server.loading", "TortoiseBots: cannot write the dashboard {} file {}", what, tmp);
+        return false;
+    }
+    out << body;
+    out.close();
+    std::rename(tmp.c_str(), path.c_str());
+    TC_LOG_INFO("server.loading", "TortoiseBots: dashboard {} file {} ({} rows)", what, path, count);
+    return true;
+}
+
+// Every spell with a name: what a spell tooltip and the bot's spell book need, from the core's own SpellInfo.
+void WriteSpellsFile()
+{
+    std::ostringstream ss;
+    ss << "{\"spells\":[";
+    size_t n = 0;
+    for (SpellNameEntry const* name : sSpellNameStore)
+    {
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(name->ID, DIFFICULTY_NONE);
+        if (!info)
+        {
+            // A spell the core does not load (e.g. a talent of the old trees): its name still labels the talent.
+            ss << (n++ ? "," : "") << "{\"id\":" << name->ID << ",\"name\":\"" << LocName(name->Name) << "\"}";
+            continue;
+        }
+        ss << (n++ ? "," : "") << "{\"id\":" << info->Id << ",\"name\":\"" << LocName(name->Name) << "\",\"icon\":" << info->IconFileDataId
+           << ",\"school\":" << info->SchoolMask << ",\"cast_ms\":" << info->CalcCastTime() << ",\"range\":" << info->GetMaxRange()
+           << ",\"duration_ms\":" << info->GetDuration() << ",\"cooldown_ms\":" << info->RecoveryTime << ",\"level\":" << info->SpellLevel
+           << ",\"base_level\":" << info->BaseLevel;
+        for (SpellPowerEntry const* power : info->PowerCosts)
+            if (power && (power->ManaCost || power->PowerCostPct > 0.0f))
+            {
+                ss << ",\"power_type\":" << int32(power->PowerType) << ",\"cost\":" << power->ManaCost << ",\"cost_pct\":" << power->PowerCostPct;
+                break;
+            }
+        ss << "}";
+    }
+    ss << "]}";
+    WriteJsonFile(DataFilePath("TortoiseBots.Dashboard.SpellsFile", "tortoisebots-spells.json"), ss.str(), "spell", n);
+}
+
+// The talent grid of every class (tab, tier, column, the spell of each rank, prerequisites).
+void WriteTalentsFile()
+{
+    std::ostringstream ss;
+    ss << "{\"talents\":[";
+    size_t n = 0;
+    for (TalentEntry const* t : sTalentStore)
+    {
+        ss << (n++ ? "," : "") << "{\"id\":" << t->ID << ",\"class\":" << int32(t->ClassID) << ",\"tab\":" << t->TabID << ",\"tier\":" << uint32(t->TierID)
+           << ",\"col\":" << uint32(t->ColumnIndex) << ",\"spell\":" << t->SpellID << ",\"ranks\":[";
+        bool first = true;
+        for (uint32 rank : t->SpellRank)
+            if (rank)
+            {
+                ss << (first ? "" : ",") << rank;
+                first = false;
+            }
+        ss << "],\"prereq\":[";
+        first = true;
+        for (size_t i = 0; i < t->PrereqTalent.size(); ++i)
+            if (t->PrereqTalent[i])
+            {
+                ss << (first ? "" : ",") << "[" << t->PrereqTalent[i] << "," << uint32(t->PrereqRank[i]) << "]";
+                first = false;
+            }
+        ss << "]}";
+    }
+    ss << "]}";
+    WriteJsonFile(DataFilePath("TortoiseBots.Dashboard.TalentsFile", "tortoisebots-talents.json"), ss.str(), "talent", n);
+}
+
+// Names the page shows by id: skills (professions, weapons), areas (zones), factions (reputation).
+void WriteNamesFile()
+{
+    std::ostringstream ss;
+    size_t n = 0;
+    ss << "{\"skills\":{";
+    bool first = true;
+    for (SkillLineEntry const* skill : sSkillLineStore)
+    {
+        ss << (first ? "" : ",") << "\"" << skill->ID << "\":{\"name\":\"" << LocName(skill->DisplayName) << "\",\"category\":" << int32(skill->CategoryID)
+           << ",\"icon\":" << skill->SpellIconFileID << "}";
+        first = false;
+        ++n;
+    }
+    ss << "},\"areas\":{";
+    first = true;
+    for (AreaTableEntry const* area : sAreaTableStore)
+    {
+        ss << (first ? "" : ",") << "\"" << area->ID << "\":{\"name\":\"" << LocName(area->AreaName) << "\",\"map\":" << area->ContinentID
+           << ",\"parent\":" << area->ParentAreaID << "}";
+        first = false;
+        ++n;
+    }
+    ss << "},\"factions\":{";
+    first = true;
+    for (FactionEntry const* faction : sFactionStore)
+    {
+        ss << (first ? "" : ",") << "\"" << faction->ID << "\":{\"name\":\"" << LocName(faction->Name) << "\",\"parent\":" << faction->ParentFactionID << "}";
+        first = false;
+        ++n;
+    }
+    ss << "},\"item_sets\":{";
+    first = true;
+    std::unordered_map<uint32, std::vector<std::pair<uint32, uint32>>> setBonuses;
+    for (ItemSetSpellEntry const* bonus : sItemSetSpellStore)
+        setBonuses[bonus->ItemSetID].emplace_back(bonus->Threshold, bonus->SpellID);
+    for (ItemSetEntry const* set : sItemSetStore)
+    {
+        ss << (first ? "" : ",") << "\"" << set->ID << "\":{\"name\":\"" << LocName(set->Name) << "\",\"items\":[";
+        bool firstItem = true;
+        for (uint32 item : set->ItemID)
+            if (item)
+            {
+                ss << (firstItem ? "" : ",") << item;
+                firstItem = false;
+            }
+        ss << "],\"bonuses\":[";
+        bool firstBonus = true;
+        for (auto const& [pieces, spell] : setBonuses[set->ID])
+        {
+            ss << (firstBonus ? "" : ",") << "[" << pieces << "," << spell << "]";
+            firstBonus = false;
+        }
+        ss << "]}";
+        first = false;
+        ++n;
+    }
+    ss << "},\"enchants\":{";
+    first = true;
+    for (SpellItemEnchantmentEntry const* enchant : sSpellItemEnchantmentStore)
+    {
+        ss << (first ? "" : ",") << "\"" << enchant->ID << "\":\"" << LocName(enchant->Name) << "\"";
+        first = false;
+        ++n;
+    }
+    ss << "}}";
+    WriteJsonFile(DataFilePath("TortoiseBots.Dashboard.NamesFile", "tortoisebots-names.json"), ss.str(), "names", n);
 }
 
 void WriteUiMapsFile()
@@ -509,13 +852,16 @@ void WriteItemsFile()
         out << (n++ ? "," : "") << "{\"id\":" << id << ",\"name\":\"" << Escape(item.GetDefaultLocaleName()) << "\",\"quality\":" << item.GetQuality()
             << ",\"ilvl\":" << item.GetBaseItemLevel() << ",\"req_level\":" << item.GetBaseRequiredLevel() << ",\"class\":" << item.GetClass()
             << ",\"subclass\":" << item.GetSubClass() << ",\"inv_type\":" << uint32(item.GetInventoryType()) << ",\"sell\":" << item.GetSellPrice()
-            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << "}";
+            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << ItemDetails(item) << "}";
     }
     out << "]}";
     out.close();
     std::rename(tmp.c_str(), s.itemsFile.c_str());
     TC_LOG_INFO("server.loading", "TortoiseBots: dashboard item file {} ({} items)", s.itemsFile, n);
     WriteUiMapsFile();
+    WriteSpellsFile();
+    WriteTalentsFile();
+    WriteNamesFile();
 }
 
 void OnKill(Player* killer, Creature* killed)
