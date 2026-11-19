@@ -25,8 +25,8 @@ Start with [first-verbs.md](first-verbs.md) for companion-UI implementation orde
 
 ## Provenance and validation
 
-- Source specification: `/home/waterys/addons/TortoiseBotsManagerForever/PROTOCOL.md` (its digest is in `provenance.json`).
+- Source specification: `PROTOCOL.md` in TortoiseBots/TortoiseBotsManagerForever (its digest is in `provenance.json`).
 - Captured server image: `sha256:de89e2cbe3bf9538a66ba0b96e5ba8b1de836facfbc17deecc03a5fcbf93e94f`; container started `2026-11-18T04:15:36.023346081Z`.
 - Branch base: latest fetched `origin/port/forever`, `fe4c6dce2b7c702e25b1ae5809e48bbd30daef39`. Local branch `waterys/tbm-transcripts`; no push.
-- Operator evidence and capture scripts remain at `/home/waterys/tbots-dev/out/tbm-transcripts-evidence/`; reply texts are self-contained here. No credentials or account configuration files are included.
+- Operator evidence and capture scripts are kept locally by Waterys; reply texts are self-contained here. No credentials or account configuration files are included.
 - Validation: both transports for every required verb; no event-buffer overrun or capture deadline; matching counted stream lengths and complete END markers; exact ownership/cleanup and unchanged Labby raid/STOP checks. No module/core code or host hook changed, so no native build or gameplay test was run. Agent-assisted capture and documentation.
