@@ -10,6 +10,7 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "runtime/SystemRunPolicy.h"
@@ -703,6 +704,7 @@ void TickRun(RunRec& rec, uint32 nowMs)
     if (!order.empty())
     {
         OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
+        cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);   // P1: the commander card's order log
         if (answer.accepted)
         {
             if (answer.movePathRead)
