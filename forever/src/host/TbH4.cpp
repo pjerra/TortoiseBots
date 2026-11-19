@@ -432,7 +432,14 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         {
             Rec rec("leave");
             rec.S("bot", bot->GetName()).N("map", exitTrigger->Loc.GetMapId());
-            if (bot->IsBeingTeleported())
+            if (!bot->IsAlive())
+            {
+                // M4 live finding: a dead bot that was moved out by `leave` was released OUTSIDE by its engine and became a ghost at Razor Hill. A body stays in
+                // the dungeon until it is raised (the priest, `.tb revive`) or released inside (the entrance rule): the leave does less, and says why.
+                ++refused;
+                rec.S("status", "refused").S("code", "dead").T("msg", "the bot is dead: its body stays in the dungeon until it is raised or released (`.tb revive` first)");
+            }
+            else if (bot->IsBeingTeleported())
             {
                 ++refused;
                 rec.S("status", "refused").S("code", "teleporting").T("msg", "the bot is being teleported");
