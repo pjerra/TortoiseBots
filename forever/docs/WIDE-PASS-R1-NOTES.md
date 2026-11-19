@@ -37,14 +37,14 @@ Turtle side in `ai/cmangos-compat-r3.h` or the `-r4*.h` file named).
 
 | family | pattern | helper (Turtle body) | places | files |
 |---|---|---|---|---|
-| cstr | `sLog.outDetail("... %s", bot->GetName())` / `proto->Name1` / `pSpellInfo->SpellName[0]` into a printf-style call | `CStrCompat(x)` (`char const*`/`text.c_str()`) | 187 | 26 |
+| cstr | `sLog.outDetail("... %s", bot->GetName())` into a printf-style call | `CStrCompat(x)` (`char const*`, and `text.c_str()` on ForeverCore) | 177 | 25 |
 | player | `sObjectMgr.GetPlayer(guid)` | `GetPlayerCompat` (`sObjectMgr.GetPlayer(guid)`) | 55 | 31 |
 | unitflags | `u->HasFlag(UNIT_FIELD_FLAGS, f)` | `HasUnitFlagCompat` (`u->HasFlag(UNIT_FIELD_FLAGS, f)`) | 23 | 9 |
 | playerflags | `p->HasFlag(PLAYER_FLAGS, f)` | `HasPlayerFlagCompat` (`p->HasFlag(PLAYER_FLAGS, f)`) | 20 | 8 |
 | height | `map->GetHeight(x, y, z[, vmap, dist])` | `GetHeightCompat` (`map->GetHeight(...)`) | 31 | 12 |
 | angle | `w->GetAngle(t)` | `GetAngleCompat` (`w->GetAngle(t)`) | 15 | 11 |
 | los | `w->IsWithinLOSInMap(t, dyn)`, `w->IsWithinLOS(x, y, z, dyn)` | `IsWithinLOSInMapCompat` / `IsWithinLOSCompat` (the same members) | 26 | 17 |
-| path | `p->calculate(...)`, `getPathType`, `getPath`, `getActualEndPosition`, `Length` | `PathCalculateCompat`, `PathTypeCompat`, `PathPointsCompat`, `PathActualEndCompat`, `PathLengthCompat` (`p.calculate(...)`, ...) | 133 | 9 |
+| path | `p->calculate(...)`, `getPathType`, `getPath`, `getActualEndPosition`, `Length` | `PathCalculateCompat`, `PathTypeCompat`, `PathPointsCompat`, `PathActualEndCompat`, `PathLengthCompat` (`p.calculate(...)`, ...); the 5 sites that hand the uint32 to a `PathType` parameter wrap it as `PathType(...)`, as slice 1's own sites do | 133 | 9 |
 | headless | `session->IsHeadless()` | `IsHeadlessCompat` (`session->IsHeadless()`) | 64 | 19 |
 | transport | `session->HasNetworkTransport()` | `HasNetworkTransportCompat` (`session->HasNetworkTransport()`) | 39 | 13 |
 | zoneid | `area->ZoneId` | `AreaZoneIdCompat` (`area->ZoneId`) | 89 | 13 |
@@ -59,7 +59,7 @@ Turtle side in `ai/cmangos-compat-r3.h` or the `-r4*.h` file named).
 | respawn | `c->GetRespawnCoord(x, y, z)` | `GetRespawnCoordCompat` (`c->GetRespawnCoord(...)`) | 2 | 1 |
 | holder | `aura->GetHolder()` | `AuraHolderCompat` (`aura->GetHolder()`) | 2 | 1 |
 
-826 replacements in 135 files; the census counts 809 error places closed (a place is one file, line and message, and
+816 replacements in 135 files; the census counts 809 error places closed (a place is one file, line and message, and
 some lines carried two). The guid-key family is the one with a ForeverCore-side behaviour note: the key is a hash of
 the 128 bits, which is the model slice 1 already uses (`SLICE1-R4M-NOTES.md` section 3); on Turtle the value is the raw
 guid, unchanged. It was applied only to files that never turn such a number back into a guid or a player.
@@ -94,6 +94,7 @@ not ported. Places are counted in the after-census on the files this pass may to
 | player lookup by name | 12 | `sObjectMgr.GetPlayer(name)` has no both-core helper (`GetPlayerCompat` takes a guid) | `commands/BotCommands.cpp:267`, `commands/Order.cpp:101` |
 | `IsImmuneToSpell*` | 12 | the helper takes a caster argument the sites do not pass | `ai/playerbot/PlayerbotAISpells.cpp` |
 | `GetVisibility` | 11 | no helper | `ai/playerbot/strategy/actions/ViscidusActions.cpp:116` |
+| a printf argument that is a `std::string` on Turtle too (item `Name1`, spell `SpellName[0]`) | 10 | the Turtle-side `CStrCompat` has only the `char*` overload and the helper files may not change, so wrapping one would not compile on Turtle | `ai/playerbot/PlayerbotFactory.cpp:457`, `:1959`, `ai/playerbot/TravelNode.cpp:2627` |
 | `IsWithinLOS` with the fifth distance | 4 | the helper has no such parameter | `commands/Commander.cpp:10412`, `:10446`, `:7381`, `:11373` |
 | `GetQuestLevelForPlayer` | 3 | another question than `QuestLevelCompat` | — |
 | `PathGenerator::getEndPosition` | 1 | no helper | `ai/playerbot/strategy/actions/GoAction.cpp:730` |
