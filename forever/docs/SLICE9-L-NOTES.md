@@ -55,4 +55,20 @@ Needs a worldserver built option ON from the merged tree, a free test server (`d
 
 ## 6. Gates
 
-(filled at the end of the work: see the final report and the commit list)
+All in build slot 2 of `yulon-ubuntu2`; Turtle gates ran with `docker ps | grep -c forever-world` = 0.
+
+| Gate | Result |
+|---|---|
+| census, list `forever/SLICE9.txt` (176 files = the slice-4 list + `LootRollAction.cpp` + `ItemUsageValue.cpp`) | `files 176  compile clean 176  with errors 0  error places 0` (before: the two L9 files alone had 121 error places: 67 + 53 + 2) |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` | `(a)=0` (every registered key is a key of the full build with the same creator) |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`, `grep -c "undefined reference\|multiple definition"` = 0 (the first link had 61 undefined: `RandomItemMgr` rules and weights, `MountValue`, `RandomBotFacade` price calls, `GuildOrders`, `QueryItemUsageAction` vtable; each is now a stand-in in `SliceLinkStubs.cpp`, "slice 9" block, with the LESS value) |
+| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0` |
+| policy tests (`policy-tests.sh` copy, 476+ tests) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: identical to the same run on the unchanged `port/forever` tree (the 6 are `test_combat_monitor_service*`, `test_decision_capture_*`, `test_log_file_rotation`, `test_run_trace_writer`) |
+| python wiring pins | `forever/tools/test_slice9_l9_wiring.py` 9 tests OK (mutation: `GreedOnlyVoteCompat` returning the vote fails 2); the 23 `tools/` and `forever/tools/` wiring tests that name an edited file all pass (one re-pinned, see section 2) |
+| Turtle `vm-build` | `RC=0`, `QUEUE_RC=0` (sha 6fb3e2431) |
+| Turtle `vm-test tb` | `RESULT: PASS  kind=tb wt=wt-s9-l sha=6fb3e2431` |
+
+Fixes the first link found, kept for the merge worker: `ItemUsageValue::PopulateSoldByVendorItemIds` (called at config load, `PlayerbotAIConfig.cpp:1575`) names the 1.12 table `npc_vendor_template` and uses printf placeholders in a `PQuery`: on F that aborts the server, so `VendorItemListsUnportedCompat()` returns early there (T: unchanged). The two reagent populators were stand-ins and are the real code now (DB2 reads only, never called at boot).
+
+Not proven (no server was started): U4 (section 5), that the opening cast of a chest works for a bot (spec U3), the real roll-start-to-vote path, the chest window poll, and the bag floor under live bags.
