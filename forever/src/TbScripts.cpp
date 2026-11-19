@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <chrono>
+#include "Loot.h"
 #include <list>
 #include <set>
 #include <string>
@@ -201,6 +202,7 @@ public:
             { "raid",   HandleRaid,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "enter",  HandleEnter,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H4: `.tb enter <bot|party> ...` is TortoiseBots::h4::HandleEnter (below)
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "lootnear", HandleLootNear, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -387,6 +389,37 @@ public:
     {
         std::string const result = BotMgr::Instance().AttackNearest(GuidByName(name), 40.0f);
         handler->PSendSysMessage("TortoiseBots: %s: %s.", name.c_str(), result.c_str());
+        return true;
+    }
+
+    // .tb lootnear <bot>: test helper; the bot takes every item it may take from the dead creatures within 10 yd through the
+    // core's own Player::StoreLootItem (what a client's loot-item request runs), so the item-loot path and its hooks run without
+    // the engine (whose item looting is not ported yet).
+    static bool HandleLootNear(ChatHandler* handler, std::string name)
+    {
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        FindCreatureOptions options;
+        options.IsAlive = FindCreatureAliveState::Dead;
+        std::list<Creature*> corpses;
+        bot->GetCreatureListWithOptionsInGrid(corpses, 10.0f, options);
+        uint32 stored = 0, seen = 0;
+        for (Creature* corpse : corpses)
+        {
+            Loot* loot = corpse->GetLootForPlayer(bot);
+            if (!loot)
+                continue;
+            ++seen;
+            for (uint8 slot = 0; slot < loot->items.size(); ++slot)
+            {
+                uint8 const before = loot->unlootedCount;
+                bot->StoreLootItem(corpse->GetGUID(), slot, loot);
+                if (loot->unlootedCount < before)
+                    ++stored;
+            }
+        }
+        handler->PSendSysMessage("TortoiseBots: %s: %u corpse(s) with loot within 10 yd, %u item(s) stored.", name.c_str(), seen, stored);
         return true;
     }
 
