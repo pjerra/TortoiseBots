@@ -1,0 +1,30 @@
+# formation: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## formation-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:48.716792573-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon, whisper
+Observed addon channel labels (client decoder): guild
+REQUEST
+formation Yonder near
+REPLIES BEGIN
+Formation set to: near
+Bot Yonder formation set to near.
+REPLIES END
+
+## formation-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:51.916991931-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system, whisper
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot formation Yonder near
+REPLIES BEGIN
+Formation set to: near
+Bot Yonder formation set to near.
+REPLIES END
+

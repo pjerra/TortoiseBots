@@ -1,0 +1,148 @@
+# order: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## order-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:08.738088183-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+order list
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|You are not in a guild.
+REPLIES END
+
+## order-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:11.941123237-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot order list
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|You are not in a guild.
+REPLIES END
+
+## order-access-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:15.219877398-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+order access
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|You are not in a guild.
+REPLIES END
+
+## order-access-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:18.395009963-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot order access
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|You are not in a guild.
+REPLIES END
+
+## order-steps-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:21.598694437-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+order Quasar steps
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-steps-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:24.81444461-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot order Quasar steps
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-search-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:28.029865759-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+order search Quasar farm Linen Cloth
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-search-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:31.249735106-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot order search Quasar farm Linen Cloth
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-preview-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:22:12.287962044-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+order Yonder preview farm 2589 1
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-preview-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:22:15.519129175-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot order Yonder preview farm 2589 1
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-cancel-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:22:18.759770421-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+order Yonder cancel
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+
+## order-cancel-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:22:21.964441459-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot order Yonder cancel
+REPLIES BEGIN
+TBM:ACTION_ERR|order|not-guild|The bot is not in your guild.
+REPLIES END
+

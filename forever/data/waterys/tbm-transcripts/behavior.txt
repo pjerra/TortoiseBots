@@ -1,0 +1,78 @@
+# behavior: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## behavior-addon
+Requester: Labby
+Observed at: 2026-11-18T02:18:05.217852656-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+behavior Quasar
+REPLIES BEGIN
+TBM:ACTION_ERR|behavior ?|invalid|Usage: .bot behavior <bot party raid> <loot aoe autocc savemana boost threat potions mimic spread> <on off>
+REPLIES END
+
+## behavior-chat
+Requester: Labby
+Observed at: 2026-11-18T02:18:08.450016602-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot behavior Quasar
+REPLIES BEGIN
+TBM:ACTION_ERR|behavior ?|invalid|Usage: .bot behavior <bot party raid> <loot aoe autocc savemana boost threat potions mimic spread> <on off>
+REPLIES END
+
+## throwaway-behavior-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:19:59.730686405-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+behavior Yonder
+REPLIES BEGIN
+TBM:ACTION_ERR|behavior ?|invalid|Usage: .bot behavior <bot party raid> <loot aoe autocc savemana boost threat potions mimic spread> <on off>
+REPLIES END
+
+## throwaway-behavior-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:02.929470239-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot behavior Yonder
+REPLIES BEGIN
+TBM:ACTION_ERR|behavior ?|invalid|Usage: .bot behavior <bot party raid> <loot aoe autocc savemana boost threat potions mimic spread> <on off>
+REPLIES END
+
+## behavior-set-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:35.886932713-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+behavior party loot off
+REPLIES BEGIN
+TBM:BOTSTATE|Yonder|move=follow,loot=off,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=off,spread=off,sap=on,specs=arcane
+TBM:ACTION_ACK|behavior loot|party|1|off
+REPLIES END
+
+## behavior-set-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:39.049962178-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot behavior party loot off
+REPLIES BEGIN
+TBM:BOTSTATE|Yonder|move=follow,loot=off,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=off,spread=off,sap=on,specs=arcane
+TBM:ACTION_ACK|behavior loot|party|1|off
+REPLIES END
+
