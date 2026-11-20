@@ -46,8 +46,7 @@ struct Meta
 struct State
 {
     std::map<ObjectGuid, Meta> metas;               // by commander
-    CT::OrderLog log;                               // the commanders' last orders, by the commander's guid counter
-    std::map<uint64, std::string> lastLogged;       // commander -> the last order noted, to drop an exact repeat (a run's 1 Hz `move`)
+    P::OrderStore log;                              // the cards' last orders, by card key; no whole-store commander cap
     struct Role { std::string role; uint32 atMs = 0; };
     std::map<ObjectGuid, Role> roles;
 };
@@ -223,8 +222,6 @@ void PruneToStanding(State& s)
     for (auto it = s.metas.begin(); it != s.metas.end();)
         it = keep.count(Ctr(it->first)) ? std::next(it) : s.metas.erase(it);
     s.log.Retain(keep);
-    for (auto it = s.lastLogged.begin(); it != s.lastLogged.end();)
-        it = keep.count(it->first) ? std::next(it) : s.lastLogged.erase(it);
 }
 
 std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
@@ -327,14 +324,7 @@ void NoteLog(ObjectGuid commander, CT::OrderRecord rec)
 {
     if (commander.IsEmpty())
         return;
-    State& s = Get();
-    uint64 const key = Ctr(commander);
-    std::string const sig = rec.verb + "|" + rec.detail + "|" + (rec.ok ? "1" : "0") + "|" + rec.result;
-    std::string& last = s.lastLogged[key];
-    if (last == sig)
-        return;
-    last = sig;
-    s.log.Note(key, std::move(rec));
+    Get().log.Note(Ctr(commander), std::move(rec));
 }
 }
 

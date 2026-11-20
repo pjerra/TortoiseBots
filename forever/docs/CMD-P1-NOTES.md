@@ -13,7 +13,7 @@ subgroup), the commander (online, map, position), the lead, the party counter, `
 
 | File | What |
 |---|---|
-| `forever/src/host/cmd/TbCmdBindingPure.h` | pure: `BuildCards` (pairs + runs + metas -> cards), `MakeOrder`, `SplitRunOrder`, `RoleOfBrainLines`, `BindingOf` (card -> `CT::BindingInfo`). Standard library + `runtime/CommanderTelemetry.h` only |
+| `forever/src/host/cmd/TbCmdBindingPure.h` | pure: `BuildCards` (pairs + runs + metas -> cards), `RunMembers`, `TallyByCard`, `MakeOrder`, `OrderStore` (per-card history, no whole-store card cap), `SplitRunOrder`, `RoleOfBrainLines`, `BindingOf` (card -> `CT::BindingInfo`). Standard library + `runtime/CommanderTelemetry.h` only |
 | `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | reads h3's table, the run table and the live players; `.tb commander status`; the three hooks; `AppendBindings`. With the option OFF the command answers `engine-not-built` and the hooks do nothing |
 | `forever/tools/cmd_binding_check.cpp` | the standalone check (incl. the golden COMMANDERS datagram) |
 | `forever/tools/test_cmd_p1_wiring.py` | wiring pins; with `CMD_P1_MUTATE=1` (run on the VM) three mutations of the pure half must FAIL the check |
@@ -45,9 +45,10 @@ subgroup), the commander (online, map, position), the lead, the party counter, `
 * **D2: guids only.** Nothing stores a group number. `group` in the reply and the JSON is `group->GetGUID().GetCounter()` (the value `GroupIdW2` returns; the
   helper is inlined here because `TbCompat_W2.h` is not reachable from host files without the wide-pass wrapper) read from the LEAD's live group at each
   read; the lead is found by guid. `GetDbStoreId` does not occur (pinned). No database call.
-* **What is kept beside the table:** per commander `{lead guid, boundAt}`, the order log (T `OrderLog`, 8 per commander, 20 commanders; an exact repeat of
-  the last order is not noted), a role cache (10 s). A release or a rebind that leaves a commander no bot prunes all three at once (`NoteMaster` ->
-  `PruneToStanding`), not only at the next read; the prune reads the whole card collection.
+* **What is kept beside the table:** per commander `{lead guid, boundAt}`, the order log (the module's `OrderStore`: 8 per card, one entry per standing
+  card, no whole-store commander cap, so noting a new card never evicts another card's history; an exact repeat of the card's last order is not noted),
+  a role cache (10 s). A release or a rebind that leaves a commander no bot prunes all three at once (`NoteMaster` -> `PruneToStanding`); the store retires
+  a card's history and its repeat signature together. The prune reads the whole card collection.
 * **The lead:** the one `.tb master party <leader> <commander>` named and still bound, else the leader of the first bound bot's party, else the first bot.
   A named lead is never overwritten by the party fallback, even when it is the lowest bound guid.
 * **Orders logged:** `.tb order` once per card the addressed bots stand on (a bot of a run counts for the run's card: the tank's own commander, else the
@@ -80,6 +81,7 @@ No other change: the format is the Turtle one (golden datagram in the check).
 | Gemini 2: an order to a system run's tank alone is not logged | fix | `CardKeyOfBot` falls back to the running run's leader; wiring pin added. |
 | Gemini 3: release/rebind leaves log and repeat suppression until the next read | fix | `PruneToStanding` runs in `NoteMaster` on both paths; wiring pin added. |
 | Gemini 4: an off-world run leader empties the card | fix | the run's `bound` members are candidates too, and `RunMembers` filters them like the live party; check added. |
+| Codex, last round: the 20-commander `OrderLog` evicts a standing card and its repeat suppression hides it | fix | `State::log` is the module's `OrderStore` (8 per card, no whole-store cap); history and the repeat signature live and are pruned together; a 25-card check repeats the oldest card's order and finds its history intact; wiring pin added. |
 
 ## Gates (slot 7 on the build VM, core pin 6517af05)
 
@@ -88,8 +90,8 @@ No other change: the format is the Turtle one (golden datagram in the check).
 | census, list `forever/SLICE5.txt` (P1 adds no legacy file: its code is under `forever/src`) | `files 176  compile clean 176  with errors 0  error places 0` |
 | option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`; `nm`: `cmd::HandleCommander`, `NoteMaster`, `NoteOrder`, `NoteRunOrder`, `AppendBindings` defined in `libtortoisebots.a` |
 | option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` |
-| `forever/tools/cmd_binding_check.cpp` (VM, g++) | `cmd_binding_check: 47 checks, 0 failed` |
-| `test_cmd_p1_wiring.py` | 11 tests OK; with `CMD_P1_MUTATE=1` (VM): the unmutated check passes and the three mutations (`key`, `skiprun`, `twice`) each FAIL it |
+| `forever/tools/cmd_binding_check.cpp` (VM, g++) | `cmd_binding_check: 57 checks, 0 failed` |
+| `test_cmd_p1_wiring.py` | 12 tests OK; with `CMD_P1_MUTATE=1` (VM): the unmutated check passes and the three mutations (`key`, `skiprun`, `twice`) each FAIL it |
 | `test_run_review_wiring.py` (names TbRun.cpp, TbOrders.cpp), `test_slice4_d4_wiring.py` | OK |
 | `slice_registry_check.py`, `slice_gen_context.py --check` | `summary: (a)=0`; `SliceAiObjectContext.cpp is up to date` |
 | `tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent).` |

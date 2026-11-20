@@ -105,6 +105,21 @@ class Wiring(unittest.TestCase):
         master = function_body(self.cpp, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
         self.assertEqual(master.count("PruneToStanding(s)"), 2)               # release and rebind, not only the next read
 
+    def test_the_order_store_has_no_whole_card_cap(self):
+        state = code(re.search(r"struct State\s*\{.*?\};", self.cpp, re.S).group(0))
+        self.assertIn("P::OrderStore log;", state)                          # the module's per-card store, not the 20-commander telemetry ring
+        self.assertNotIn("OrderLog", state)
+        self.assertNotIn("lastLogged", state)                               # repeat suppression lives in the store and is pruned with it
+        self.assertNotIn("kMaxTrackedCommanders", self.cpp)
+        note_log = function_body(self.cpp, r"void NoteLog\(ObjectGuid commander, CT::OrderRecord rec\)\s*\{")
+        self.assertIn("log.Note(Ctr(commander), std::move(rec))", note_log)
+        prune = function_body(self.cpp, r"void PruneToStanding\(State& s\)\s*\{")
+        self.assertIn("s.log.Retain(keep)", prune)
+        self.assertNotIn("lastLogged", prune)
+        store = self.pure.split("class OrderStore")[1].split("private:")[0]
+        self.assertIn("kMaxOrdersPerCommander", store)                      # per-card ring kept
+        self.assertNotIn("kMaxTrackedCommanders", store)                    # no whole-store card cap
+
     def test_the_command_is_registered_and_the_off_build_answers(self):
         self.assertIn('{ "commander", TortoiseBots::cmd::HandleCommander', self.scripts)
         self.assertIn('#include "host/cmd/TbCmdBinding.h"', self.scripts)

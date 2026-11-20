@@ -3,7 +3,8 @@
 //
 // A commander CARD is read from h3's table (bot -> commander, host/TbH3.h) and the run table (host/run/TbRun.h): one per commander, one per run (a run's
 // own binding is a card with system=true, never a second one). Beside the table the module keeps only what the table cannot: when a card was first seen,
-// the lead `.tb master party <lead> <commander>` named, and the log of the commander's last orders (T CommanderTelemetry::OrderLog, as is).
+// the lead `.tb master party <lead> <commander>` named, and the log of the commander's last orders (the module's per-card OrderStore; the Turtle
+// OrderLog's twenty-commander ring is not used here).
 //
 //   .tb commander status [<commander>] [#token]     every card (or the one commander's): binding, member and order records, and the run record of a card that runs
 //

@@ -165,6 +165,34 @@ void TestTally()
     CHECK(mixed.at(Cmd).queued == 1 && mixed.at(Cmd).refused == 1 && mixed.at(Cmd).firstRefusal == "no-pull-strategy");
 }
 
+// ---- the per-card order store (no whole-store commander cap) ----
+void TestOrderStore()
+{
+    // 25 simultaneously standing cards: noting a newer card never evicts the oldest card's history (the Turtle OrderLog ring stops at 20).
+    P::OrderStore store;
+    for (uint64_t card = 1; card <= 25; ++card)
+        store.Note(card, P::MakeOrder(1000 + int64_t(card), "stay", "", true, "", "queued 1 of 1"));
+    CHECK(store.Cards() == 25);
+    CHECK(store.Recent(1).size() == 1);
+    CHECK(store.Recent(25).size() == 1);
+    // The oldest card's exact repeat is suppressed by its own last order; its history is still there, not blanked by the 24 newer cards.
+    store.Note(1, P::MakeOrder(2000, "stay", "", true, "", "queued 1 of 1"));
+    CHECK(store.Recent(1).size() == 1);
+    // A different result is recorded on the oldest card.
+    store.Note(1, P::MakeOrder(2001, "stay", "", false, "no-engine", ""));
+    CHECK(store.Recent(1).size() == 2);
+    // Each card keeps its own last orders only (the per-card ring, oldest first).
+    for (int i = 0; i < 10; ++i)
+        store.Note(25, P::MakeOrder(3000 + i, "move", std::to_string(i), true, "", "party"));
+    CHECK(store.Recent(25).size() == CT::kMaxOrdersPerCommander);
+    CHECK(store.Recent(25).front().detail == "2" && store.Recent(25).back().detail == "9");
+    // Retain drops history and repeat suppression together: a released card cannot come back with hidden orders.
+    store.Retain({ 1, 2 });
+    CHECK(store.Cards() == 2);
+    CHECK(store.Recent(25).empty());
+    CHECK(store.Recent(20).empty());
+}
+
 // ---- the order log ----
 void TestOrders()
 {
@@ -267,6 +295,7 @@ int main()
 {
     TestCards();
     TestTally();
+    TestOrderStore();
     TestOrders();
     TestRole();
     TestGolden();

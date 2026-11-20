@@ -13,8 +13,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <deque>
+#include <iterator>
 #include <map>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace TortoiseBots
@@ -180,7 +183,7 @@ inline std::vector<Card> BuildCards(std::vector<Pair> const& pairs, std::vector<
     return out;
 }
 
-// ---- the order log (T CommanderTelemetry::OrderLog, as is) ----
+// ---- the order log (the module's OrderStore: per card, no whole-store commander cap) ----
 
 // One addressed bot's outcome of one order: refusal empty = the bot queued it.
 struct OrderOutcome
@@ -233,6 +236,54 @@ inline CT::OrderRecord MakeOrder(int64_t at, std::string verb, std::string detai
         rec.result = code.empty() ? text : (text.empty() ? code : code + ": " + text);
     return rec;
 }
+
+// The module's per-card order history: the last kMaxOrdersPerCommander orders of every standing card, an exact repeat of a card's own last order dropped.
+// There is no whole-store commander cap: noting a newer card never evicts another card's history (the Turtle OrderLog's twenty-commander ring does). The
+// history and the repeat signature are pruned together by Retain.
+class OrderStore
+{
+public:
+    void Note(uint64_t card, CT::OrderRecord rec)
+    {
+        if (!card)
+            return;
+        rec.detail = CT::Clip(rec.detail, CT::kMaxOrderDetail);
+        rec.result = CT::Clip(rec.result, CT::kMaxOrderResult);
+        std::string const sig = rec.verb + "|" + rec.detail + "|" + (rec.ok ? "1" : "0") + "|" + rec.result;
+        std::string& last = m_last[card];
+        if (last == sig)
+            return;
+        last = sig;
+        std::deque<CT::OrderRecord>& orders = m_orders[card];
+        orders.push_back(std::move(rec));
+        while (orders.size() > CT::kMaxOrdersPerCommander)
+            orders.pop_front();
+    }
+
+    // Oldest first.
+    std::vector<CT::OrderRecord> Recent(uint64_t card) const
+    {
+        auto it = m_orders.find(card);
+        if (it == m_orders.end())
+            return {};
+        return std::vector<CT::OrderRecord>(it->second.begin(), it->second.end());
+    }
+
+    // Forget every card that is not in keep (a released or rebound-away card): its history and its repeat signature go at once.
+    void Retain(std::unordered_set<uint64_t> const& keep)
+    {
+        for (auto it = m_orders.begin(); it != m_orders.end();)
+            it = keep.count(it->first) ? std::next(it) : m_orders.erase(it);
+        for (auto it = m_last.begin(); it != m_last.end();)
+            it = keep.count(it->first) ? std::next(it) : m_last.erase(it);
+    }
+
+    size_t Cards() const { return m_orders.size(); }
+
+private:
+    std::map<uint64_t, std::deque<CT::OrderRecord>> m_orders;
+    std::map<uint64_t, std::string> m_last;
+};
 
 // The verb of a run order string: its first word ("pull 12 body" -> "pull", "revive party" -> "revive"), the detail the rest.
 inline void SplitRunOrder(std::string const& order, std::string& verb, std::string& detail)
