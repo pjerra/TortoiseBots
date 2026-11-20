@@ -1112,7 +1112,8 @@ public:
     // script answers "not known" (eventData -1: the policy pauses and says the map has none).
     bool InstanceData(std::uint32_t id, long long& out) override
     {
-        InstanceScript* script = _c.map ? _c.map->GetInstanceScript() : nullptr;
+        InstanceMap* instance = _c.map ? _c.map->ToInstanceMap() : nullptr;
+        InstanceScript* script = instance ? instance->GetInstanceScript() : nullptr;
         if (!script)
             return false;
         out = static_cast<long long>(script->GetData(id));
