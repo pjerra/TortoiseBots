@@ -40,6 +40,17 @@ Spec: `~/TortoiseBots-audit/FOREVER-COMMANDER-PORT-SPEC.md` (P2 row in section 5
 
 ## U6: do `GroupScript` hooks fire for the module's bot groups?
 
-Answer (live, see the live section): **yes**. `BotMgr::JoinParty` forms a bot party through the public `Group` API (`Group::AddMember`), and the core
-calls `sScriptMgr->OnGroupAddMember` from inside it (Group.cpp:506, the same for removal :565, leader :690, disband :724). The module's GroupScript row
-sees `.tb party`, `.tb group`, `.tb ungroup`, a kick and a disband.
+Answer (live, 2026-11-20, forever-test2): **yes**. `BotMgr::JoinParty` forms a bot party through the public `Group` API (`Group::AddMember`), and the
+core calls `sScriptMgr->OnGroupAddMember` from inside it (Group.cpp:506, the same for removal :565, leader :690, disband :724).
+
+Experiment: four host bots were logged in and bound (`.tb party Mtank Mpriest Mdpsa`, `.tb master party Mtank Mcmd`), then `.tb ungroup Mtank` (the
+lead leaves its party) logged `TortoiseBots: the commander binding of Mcmd was released: the group was disbanded or the lead bot left it
+(group-changed)` and `.tb commander status` answered `commander-end count=0 bindings=0`. The GroupScript row sees the module's own bot groups, so the
+release does not need the Turtle 1 Hz sweep (a `Maintain` timer stays only for the two graces and the pending restores).
+
+Two things the live run taught, both fixed here:
+* the group hooks must be as silent during a shutdown as `NoteLogout` is: the bots leave their groups while the world stops, and a release there would
+  delete the row the next start restores (`World::IsStopped()` guards all four);
+* a saved group can hold bot characters that are not logged in, and `BotMgr::IsBot` only knows the ones that are: "a real player joined" counts a
+  member that is in the world and no host bot, and a real player logging into an already saved bound party is caught in `NoteLogin` (the core attaches
+  saved members at login without an AddMember event).
