@@ -27,7 +27,7 @@
     X(IncomingExperience, "incoming: experience and honor", "level up, xp gain and honor gain packets") \
     X(IncomingEmotes, "incoming: emotes", "text emote and emote packets") \
     X(IncomingObjectUse, "incoming: gossip, game object and area trigger", "gossip hello, game object use and area trigger packets") \
-    X(IncomingDeath, "incoming: reclaim corpse", "the release-spirit, reclaim-corpse and resurrect-request rows of the packet tables (1.12 layouts); slice 4: the bot's own release (`release`, `auto release`) and its acceptance of a resurrection (`accept resurrect`, raised by the host from the core's request) are real, the corpse run (`find corpse`, `revive from corpse`) and a master's release or reclaim packet are not") \
+    X(IncomingDeath, "incoming: reclaim corpse", "the release-spirit, reclaim-corpse and resurrect-request rows of the packet tables (1.12 layouts) a MASTER sends; the bot's own release (`release`, `auto release`), its corpse run (`find corpse`, `revive from corpse` through the core's HandleReclaimCorpse) and its spirit-healer revive (through HandleSpiritHealerActivate) are real since W1, its acceptance of a resurrection (`accept resurrect`) since slice 4") \
     X(IncomingCastFailed, "incoming: cast failed trigger", "the 'cast failed' world-packet trigger is not fed (no strategy maps it); the result itself is heard through the host's cast-result queue (CAST_FAILED_ASYNC, SpellInterrupted)") \
     X(IncomingSpeedChange, "incoming: forced speed change", "the six forced-speed packets and the client acks the bot answers them with (findings item 9)") \
     X(IncomingKnockBack, "incoming: knock back", "the knock-back packet and the jump the bot answers it with") \
@@ -72,7 +72,6 @@
     X(PlayerSummon, "player summon request", "PlayerConvenience::RequestSummon, the meeting-stone style summon of a bot to its master; the host's own placement (BotMgr::Think teleports a far bot next to its master) does that job (R6B)") \
     X(BotFactory, "bot factory (ammo, pets)", "PlayerbotFactory ammo and hunter pet set-up and pet training; nothing is created (R6B)") \
     X(ChatFilters, "chat filter chain", "CompositeChatFilter, the filters that rewrite a command line before the bot reads it; the line is used as it comes (R6B)") \
-    X(FleeManager, "flee manager", "FleeManager and IdleMobVeto, the flee destination search; no destination is found (R6B)") \
     X(CampSpots, "camp spots table", "CampMgr, the table of camp spots (ai_playerbot_camp) and the active camp list; empty (R6B)") \
     X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)") \
     /* --- slice 2, packages V2 and I2 (merged: one row per feature) --- */ \

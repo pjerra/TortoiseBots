@@ -4,6 +4,7 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LowbieGraveyardPolicy.h"
 #include "playerbot/policy/death/SafeRevivePolicy.h"
+#include "playerbot/TbCompatW1.h"
 
 using namespace ai;
 
@@ -59,15 +60,16 @@ GuidPosition GraveyardValue::Calculate()
         //just get ANOTHER nearest appropriate for level (neutral or same team zone)
         if (auto anotherAppropriate = GetAnotherAppropriateClosestGraveyard())
         {
-            return GuidPosition(0, anotherAppropriate);
+            return GuidPosition(ObjectGuid(), WorldPosition(anotherAppropriate));
         }
     }
 
-    WorldSafeLocsEntry const* ClosestGrave = sObjectMgr.GetClosestGraveYard(
+    WorldSafeLocsEntry const* ClosestGrave = ClosestGraveyardCompat(
+        bot,
+        refPosition.getMapId(),
         refPosition.getX(),
         refPosition.getY(),
         refPosition.getZ(),
-        refPosition.GetMapId(),
         bot->GetTeam()
     );
 
@@ -83,7 +85,7 @@ GuidPosition GraveyardValue::Calculate()
         return GuidPosition();
     }
 
-    return GuidPosition(0, ClosestGrave);
+    return GuidPosition(ObjectGuid(), WorldPosition(ClosestGrave));
 }
 
 WorldSafeLocsEntry const* GraveyardValue::GetAnotherAppropriateClosestGraveyard() const
@@ -205,11 +207,8 @@ bool ShouldSpiritHealerValue::Calculate()
     }
 
     // Never revive at spirit healer when corpse is in an instance (dungeon/raid)
-    if (MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(corpse->GetMapId()))
-    {
-        if (mapEntry->IsDungeon())
-            return false;
-    }
+    if (MapIsDungeonCompat(corpse->GetMapId()))
+        return false;
 
     // The body has stayed among hostile mobs too long: revive at the healer
     // instead of dying again on the corpse.

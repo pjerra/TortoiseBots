@@ -69,9 +69,11 @@
 #include "../../../runtime/PlayerbotAIStorage.h"
 #include "../../../runtime/CommandedGroupQuery.h"
 #include "../../../runtime/RemoteCommanderPolicy.h"
+#include "playerbot/RandomBotFacade.h"
 #include "SliceLog.h"
 #include <map>
 #include "SliceHybridPolicy.h"
+#include "playerbot/policy/world/FreeKitPolicy.h"
 #include "SliceMissingKeyGuard.h"
 
 // Slice 10: the role policy (SliceHybridPolicy.h) names the core's classes by number so it stays core-free; these are the ids it means.
@@ -338,10 +340,31 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         combatEngine->addStrategy("threat");
 }
 
+// W1 (spec D4): a free bot's non-combat kit is its class spec strategy plus the world kit, both from the pure policy
+// (policy/world/FreeKitPolicy.h; forever/tools/test_free_kit_policy.cpp). No follow, no wander, no rpg, travel, quests, vendors,
+// or group/guild strategy.
+static_assert(TortoiseBots::world::ClassWarrior == CLASS_WARRIOR, "FreeKitPolicy.h: warrior id");
+static_assert(TortoiseBots::world::ClassPaladin == CLASS_PALADIN, "FreeKitPolicy.h: paladin id");
+static_assert(TortoiseBots::world::ClassHunter == CLASS_HUNTER, "FreeKitPolicy.h: hunter id");
+static_assert(TortoiseBots::world::ClassRogue == CLASS_ROGUE, "FreeKitPolicy.h: rogue id");
+static_assert(TortoiseBots::world::ClassPriest == CLASS_PRIEST, "FreeKitPolicy.h: priest id");
+static_assert(TortoiseBots::world::ClassShaman == CLASS_SHAMAN, "FreeKitPolicy.h: shaman id");
+static_assert(TortoiseBots::world::ClassMage == CLASS_MAGE, "FreeKitPolicy.h: mage id");
+static_assert(TortoiseBots::world::ClassWarlock == CLASS_WARLOCK, "FreeKitPolicy.h: warlock id");
+static_assert(TortoiseBots::world::ClassDruid == CLASS_DRUID, "FreeKitPolicy.h: druid id");
+
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
     if (nonCombatEngine)
         nonCombatEngine->addStrategy("maintenance");
+    // A free bot plays the world on its own: grind targets, food, loot, rolls, the class spec and the engine's default handler.
+    if (player && sRandomBotFacade.IsFreeBot(player) && !facade->HasRealPlayerMaster())
+    {
+        nonCombatEngine->addStrategy(TortoiseBots::world::FreeSpecStrategy(player->GetClass()));
+        for (char const* const* kit = TortoiseBots::world::FreeWorldKit(); *kit; ++kit)
+            nonCombatEngine->addStrategy(*kit);
+        return;
+    }
     if (player && player->GetClass() == CLASS_PRIEST)
     {
         nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "roll", "default", NULL);

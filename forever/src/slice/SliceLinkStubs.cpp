@@ -25,7 +25,6 @@
 #include "playerbot/ChatFilter.h"
 #include "playerbot/DungeonPlanMgr.h"
 #include "playerbot/FankrissGauntletPolicy.h"
-#include "playerbot/FleeManager.h"
 #include "playerbot/GuildOrderEnchants.h"
 #include "playerbot/GuildOrderSources.h"
 #include "playerbot/LootObjectStack.h"
@@ -50,6 +49,7 @@
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/QueryItemUsageAction.h"
 #include "playerbot/RandomBotFacade.h"
+#include "playerbot/strategy/values/MaintenanceValues.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "../../../runtime/GuildOrderStore.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
@@ -93,7 +93,6 @@ inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs)
 inline void NotePool()      { tbcompat::Unported(tbcompat::Feature::PoolServices); }
 inline void NoteFactory()   { tbcompat::Unported(tbcompat::Feature::BotFactory); }
 inline void NoteFilters()   { tbcompat::Unported(tbcompat::Feature::ChatFilters); }
-inline void NoteFlee()      { tbcompat::Unported(tbcompat::Feature::FleeManager); }
 inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacyServices); }
 }
 
@@ -245,22 +244,6 @@ BotCheatMask CheatAction::GetCheatMask(std::string) { NoteMisc(); return BotChea
 uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { NoteMisc(); return 1; }
 // MountValues.cpp
 bool MountValue::IsMountSpell(uint32) { NoteMisc(); return false; }
-// GrindTargetValue.cpp: "an instance target may be ground": no.
-// The real rule (GrindTargetValue.cpp:39): outside a grouped dungeon with a real player master every target is allowed. Inside one only a target the group
-// ordered (explicit attack target) is; the real rest (marked targets, the group's own threat and victim links) is not ported, so it answers "no" (less).
-bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI* ai, Unit* target)
-{
-    NoteMisc();
-    if (!target)
-        return false;
-    Player* bot = ai->GetBot();
-    Group* group = bot->GetGroup();
-    Player* master = ai->GetMaster();
-    if (!group || !ai->HasRealPlayerMaster() || !master || master->GetGroup() != group || !bot->IsInWorld() || !bot->GetMap()->IsDungeon())
-        return true;
-    AiObjectContext* context = ai->GetAiObjectContext();
-    return AI_VALUE(ObjectGuid, "explicit attack target") == target->GetObjectGuid();
-}
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
@@ -291,11 +274,6 @@ std::string CompositeChatFilter::Filter(std::string message)
     return !message.empty() && message[0] == '@' ? std::string() : message;
 }
 
-// FleeManager.cpp: no destination is found, no mob veto.
-IdleMobVeto::IdleMobVeto(PlayerbotAI*, Player*, std::list<ObjectGuid> const&, Unit*, float) { NoteFlee(); }
-bool IdleMobVeto::Wakes(float, float) const { NoteFlee(); return false; }
-bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory const*, uint32) { NoteFlee(); return false; }
-bool FleeManager::isUseful() { NoteFlee(); return false; }
 
 // LootObjectStack.cpp (slice 2): the real file is in the slice now; its seven stand-ins and the `loot object stack` row are gone (R3).
 
@@ -501,6 +479,18 @@ bool PatchwerkSoakersReadyForPull(PlayerbotAI*) { NoteBoss(); return true; }
 // exists here): the real function empties `out` and returns false when it holds no record of the fight, which is always the case without the
 // seek-cycle bookkeeping of the boss tactics. Same value, same effect ("no snapshot": the reset hold clears its latch and holds nothing).
 bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteBoss(); out = SeekCycleView(); return false; }
+
+}
+
+// =====================================================================================================================
+// W1 (world life, grind and live). Owned by W1: no other package edits this block (the slice-9 item stand-ins above belong to W6a).
+// =====================================================================================================================
+namespace ai
+{
+// `can fight elite` is MaintenanceValues.h's inline CanFightEliteValue; its Calculate names ShouldSellValue::GroupMemberLeavingForVendor,
+// which lives in MaintenanceValues.cpp (17 places, not in the slice). A free bot has no group, so the call is never reached; for any other
+// bot the answer "a group member is leaving" makes the value false, so no elite is ever picked (LESS).
+bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI*) { NoteMisc(); return true; }
 }
 
 // behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the

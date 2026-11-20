@@ -23,6 +23,7 @@
 #include "Item.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "Corpse.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ThreatManager.h"
@@ -30,6 +31,7 @@
 
 #include "TbBotSession.h"
 #include "compat/TbCompat_Unit.h"
+#include "compat/TbCompat_P.h"
 #include "compat/TbCompat_V.h"
 #include "compat/TbCompat_W6.h"
 #include "playerbot/PlayerbotAI.h"
@@ -37,6 +39,7 @@
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+#include "playerbot/policy/death/SafeRevivePolicy.h"
 #include "PlayerbotAIStorage.h"
 
 namespace TortoiseBots
@@ -141,6 +144,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     AiObjectContext* context = ai ? ai->GetAiObjectContext() : nullptr;
     ObjectGuid const guid = bot->GetGUID();
+    BotMgr::LifeInfo const lifeInfo = BotMgr::Instance().GetLifeInfo(guid);
 
     uint32 const hp = uint32(bot->GetHealth());
     uint32 const hpMax = uint32(bot->GetMaxHealth());
@@ -337,7 +341,52 @@ Rec StateRec(Player* bot, Readiness& ready)
         if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
             gear.push_back({std::to_string(slot), std::to_string(item->GetEntry())});
     rec.LP("gear", gear);
-    rec.N("dur", tbhost::town::CalcInventoryDurabilityPct(bot)).N("mail", tbhost::town::GetUnreadMailCount(bot));
+    rec.N("mail", tbhost::town::GetUnreadMailCount(bot));
+
+    // ---- W1 (world life): the free flag and what the bot has done since login ----
+    rec.B("free", lifeInfo.free).N("kills", lifeInfo.kills).N("deaths", lifeInfo.deaths);
+    rec.N("xp", PlayerXPCompat(bot)).N("xpnext", PlayerNextLevelXPCompat(bot));
+    rec.N("bags", bot->GetFreeInventorySlotCount());
+    rec.B("sick", bot->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS));
+    if (ai)
+        rec.N("dur", AI_VALUE(uint8, "lowest durability"));
+    rec.N("rescue", lifeInfo.rescues).N("tele", lifeInfo.teleports);
+    if (ai && context && context->GetValue<Unit*>("grind target"))
+        if (Unit* grind = context->GetValue<Unit*>("grind target")->Get())
+            rec.S("grind", std::to_string(grind->GetEntry()) + ":" + std::to_string(grind->GetLevel()) + ":" + Fixed(bot->GetDistance(grind), 1));
+    // corpserun: release (a body that will release) | walk | delay | safe-spot | reclaim | healer | rescue; empty while alive.
+    std::string phase;
+    float ghostYd = -1.0f;
+    if (!alive)
+    {
+        if (!ghost)
+            phase = "release";
+        else
+        {
+            phase = "walk";
+            Corpse* corpse = bot->GetCorpse();
+            bool const corpseHere = corpse && corpse->GetMapId() == bot->GetMapId();
+            if (corpseHere)
+            {
+                ghostYd = bot->GetDistance(corpse);
+                bool const unsafe = ai && ai->safeReviveUnsafeSinceMs_ && ai->safeReviveCorpseGhostTime_ == corpse->GetGhostTime();
+                if (unsafe && !TortoiseBots::SafeReviveWaitExpired(ai->safeReviveUnsafeSinceMs_, WorldTimer::getMSTime()))
+                    phase = "safe-spot";
+                else if (corpse->IsWithinDistInMap(bot, (float)CORPSE_RECLAIM_RADIUS, true))
+                {
+                    int64 const wait = int64(corpse->GetGhostTime()) + int64(bot->GetCorpseReclaimDelay(corpse->GetType() == CORPSE_RESURRECTABLE_PVP)) - int64(time(nullptr));
+                    phase = wait > 0 ? "delay" : "reclaim";
+                }
+            }
+            if (ai && AI_VALUE2(int32, "manual int", "w1 ghost leg") == 1)
+                phase = "healer";
+            if (lifeInfo.rescuedThisDeath)
+                phase = "rescue";
+        }
+    }
+    rec.S("corpserun", phase);
+    if (ghostYd >= 0.0f)
+        rec.N("ghostyd", static_cast<int32>(ghostYd + 0.5f));
     return rec;
 }
 
@@ -498,6 +547,28 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             if (!seen.insert(member->GetGUID()).second)
                 return Fail(handler, args, "party", "duplicate", args.w[i]);
         }
+        // A member that is in another party (the core keeps an old group with its offline members: a persisted group blocks the join) refuses the command
+        // before anything is changed, and the error names the member and the party to break up: `.tb ungroup <member>` is the one way out.
+        for (size_t i = 1; i < args.w.size(); ++i)
+        {
+            Player* member = FindOnline(args.w[i]);
+            Group* other = member->GetGroup() == leader->GetGroup() ? nullptr : member->GetGroup();
+            if (other)
+            {
+                std::string names;
+                for (Group::MemberSlot const& slot : other->GetMemberSlots())
+                {
+                    Player* holder = ObjectAccessor::FindPlayer(slot.guid);
+                    if (!names.empty())
+                        names += ", ";
+                    names += slot.name + (holder && holder->IsInWorld() ? "" : " (offline)");
+                }
+                return Fail(handler, args, "party", "party-refused", member->GetName() + " is already in another party (" + names +
+                    "): .tb ungroup " + member->GetName() + " first");
+            }
+            if (member->GetGroupInvite())
+                return Fail(handler, args, "party", "party-refused", member->GetName() + " has a pending party invite: cancel it, then form the party");
+        }
         Reply reply(handler, args, "party");
         reply.Begin();
         uint32 joined = 0;
@@ -546,7 +617,9 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("master", commander ? std::string(commander->GetName()) : std::string()).B("commanded", bound);
             if (bot)
                 ++bots;
-            if (bound && commander)
+            // The party's commander is the one its MEMBERS obey: the leader's own binding is on its line, and a run binds the members to the leader, so the
+            // party reads the run's commander (one name) instead of "mixed" (the leader still bound to its own commander).
+            if (bound && commander && !group->IsLeader(slot.guid))
                 commanders.insert(commander->GetName());
         }
         reply.Line(rec);

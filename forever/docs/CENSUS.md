@@ -153,3 +153,18 @@ spec expected 3-8 in the last two: `PlayerConvenience.h`, `Formations.h` and the
 Names (`names.tsv`): `SummonCreature` 3, `GetSource` 2, `GetPlayer` 2, `SendPlaySpellVisual` 2, and one each of `find`, two `unordered_map`
 operator[] on a raw guid, `SeekCycleSnapshot`, `threat` (the field of `SpellThreatEntry`), `uint64_t`. Full tables:
 `yulon-ubuntu2:~/forever-build/census-2/`.
+
+## W1 (world life, grind and live), 2026-11-20
+
+List `forever/SLICE-W1.txt` = the slice-9 list plus `strategy/generic/GrindingStrategy.cpp`, `strategy/values/GrindTargetValue.cpp`,
+`strategy/actions/ReviveFromCorpseAction.cpp`, `strategy/values/DeadValues.cpp` and `FleeManager.cpp` (270 files; the list CMake and
+`slice_registry_check.py` now read). Summary: `files 270  compile clean 270  with errors 0  error places 0  includes of a header
+ForeverCore does not have 0` (run folder `yulon-ubuntu2:~/forever-build/census-runs/wt-w1-s8-SLICE-W1-20261120T125238Z-2669463/`).
+The first pass had 13 places in 3 files (the `%s`/`GetName()` format, the `ObjectMgr` pointer, the duplicated `MapEntryCompat` and
+`TerrainIsInWaterCompat`); all closed in `forever/src/compat/TbCompat_W1.h`. `FleeManager` is no longer an unported feature (it is
+compiled now), so the boot line counts 74, one less than before.
+
+Integration batch 6 (the merge of `tbf/main` 6e8e0494a into W1) re-read the same list on the core pin 25fc7ca (slot 32, module tree
+`integ/batch-6`): `files 270  compile clean 270  with errors 0  error places 0  includes of a header ForeverCore does not have 0`
+(run folder `yulon-ubuntu2:~/forever-build/census-runs/integ6-32-SLICE-W1`). `SLICE11.txt` on the same tree: `files 263  compile
+clean 263  with errors 0  error places 0` (`census-runs/integ6-32-SLICE11`). Nothing in the module needed a change for the pin move.

@@ -2,6 +2,7 @@
 #include "playerbot.h"
 #include "../../runtime/PlayerbotAIStorage.h" // Headless storage, not Player::GetPlayerbotAI
 #include "FleeManager.h"
+#include "playerbot/TbCompatW1.h"
 #include "CombatSpreadPolicy.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "Group/Group.h"
@@ -116,7 +117,7 @@ void FleeManager::calculatePossibleDestinations(std::list<FleePoint*> &points)
                 bot->UpdateAllowedPositionZ(x, y, z);
 
                 const TerrainInfo* terrain = startPosition.getTerrain();
-                if (terrain && terrain->IsInWater(x, y, z))
+                if (TerrainIsInWaterCompat(terrain, x, y, z))
                     continue;
 
                 if (/*!bot->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true) || */(target && !IsWithinLOSCompat(target, x, y, z + bot->GetCollisionHeight(), true)))
@@ -149,7 +150,7 @@ bool FleeManager::isTooCloseToEdge(float x, float y, float z, float angle)
         float tz = z;
         bot->UpdateAllowedPositionZ(tx, ty, tz);
 
-        if (terrain && terrain->IsInWater(tx, ty, tz))
+        if (TerrainIsInWaterCompat(terrain, tx, ty, tz))
             return true;
 
         if (!bot->IsWithinLOS(tx, ty, tz))

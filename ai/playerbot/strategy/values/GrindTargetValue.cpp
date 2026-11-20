@@ -12,7 +12,9 @@
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/policy/pull/PullRegenPolicy.h"
+#include "playerbot/TbCompatW1.h"
 #include "playerbot/policy/travel/PointDangerPolicy.h"
+#include "playerbot/policy/world/FreeGrindPolicy.h"
 #include "playerbot/GrindSpotPolicy.h"
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
@@ -33,6 +35,40 @@ namespace
 int MaxGrindLevelOverBot(Player* bot, PlayerbotAI* ai)
 {
     return ai::PullGrindLevelCap(bot->GetLevel(), ai->HasRealPlayerMaster());
+}
+
+// W1 (review): the facts of a candidate as far as a free bot's choice to START a fight goes, read from the unit once (FreeGrindPolicy.h
+// holds the rule itself). Self-defence is not this question: the attackers loop of FindTargetForGrinding answers what already fights the
+// bot or its group before the possible targets are read.
+TortoiseBots::world::FreeGrindFacts FreeGrindFactsOf(Unit* unit, Player* bot)
+{
+    TortoiseBots::world::FreeGrindFacts facts;
+    facts.player = unit->IsPlayer();
+    facts.friendly = sServerFacade.IsFriendlyTo(bot, unit);
+    facts.playerControlled = !facts.player && unit->GetCharmerOrOwnerPlayerOrPlayerItself() != nullptr;
+    if (!facts.player)
+    {
+        facts.serviceNpc = UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_QUESTGIVER) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_VENDOR) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_TRAINER) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_FLIGHTMASTER) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_INNKEEPER);
+    }
+    if (Creature* creature = dynamic_cast<Creature*>(unit))
+    {
+        CreatureInfo const* info = creature->GetCreatureInfo();
+        facts.guard = info && CreatureIsGuardFlagCompat(info);
+        facts.civilian = info && CreatureIsCivilianCompat(info);
+        facts.killLowersReputation = KillLowersReputationCompat(creature->GetEntry());
+        facts.tappedByAnotherPlayer = CreatureHasLootRecipientCompat(creature) && !CreatureIsTappedByCompat(creature, bot);
+    }
+    return facts;
+}
+
+// The refusal of the free rule in words for the grind log, empty when there is none.
+std::string FreeGrindRefusalReason(TortoiseBots::world::FreeGrindFacts const& facts)
+{
+    return TortoiseBots::world::FreeGrindRefusalText(TortoiseBots::world::FreeGrindRefusalOf(facts));
 }
 }
 
@@ -247,6 +283,21 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             continue;
         }
 
+        // W1 (review): a free bot starts only the fights the world allows it to start - an ordinary hostile or neutral NPC, not a
+        // player, a player-controlled unit, a quest giver, vendor, trainer, flight master, innkeeper, guard or civilian, not a kill
+        // that lowers a standing, not a friendly unit and not a mob another player tapped. Self-defence is the attackers loop above,
+        // which has already answered anything fighting the bot or its group. ForeverCore only: on Turtle `IsFreeBot` is also every pool
+        // random bot, whose pick stays as it was (the compat pair answers false there).
+        if (FreeBotStartFightRuleCompat() && sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster())
+        {
+            auto const facts = FreeGrindFactsOf(unit, bot);
+            if (!TortoiseBots::world::FreeBotMayStartFight(facts))
+            {
+                logGrind(unit, "ignored (free bot: " + FreeGrindRefusalReason(facts) + ").");
+                continue;
+            }
+        }
+
         // No player pull while either side is fresh from a revive: pool bots of
         // both factions revived at one shared spirit healer and killed each
         // other in a loop. Self-defence (the attackers loop above) still fights.
@@ -262,7 +313,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         }
 
         Creature* creature = dynamic_cast<Creature*>(unit);
-        if (creature && creature->GetCreatureInfo() && creature->GetCreatureInfo()->rank > CREATURE_ELITE_NORMAL && !AI_VALUE(bool, "can fight elite"))
+        if (creature && creature->GetCreatureInfo() && CreatureRankCompat(creature) > CREATURE_ELITE_NORMAL && !AI_VALUE(bool, "can fight elite"))
         {
             logGrind(unit, "ignored (can not fight elites currently).");
             continue;
@@ -282,8 +333,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             unit->IsCreature())
         {
             Creature const* creature = static_cast<Creature const*>(unit);
-            ReputationOnKillEntry const* rep = sObjectMgr.GetReputationOnKillEntry(creature->GetEntry());
-            bool killLowersRep = rep && (rep->repvalue1 < 0 || rep->repvalue2 < 0);
+            bool killLowersRep = KillLowersReputationCompat(creature->GetEntry());
             if (!TortoiseBots::AltBotMayPickTarget(killLowersRep))
             {
                 logGrind(unit, "ignored (kill lowers reputation).");
@@ -306,7 +356,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         // Wild XP-granting type-8 beasts (Deer/Cow) are fair game, not critter
         // skips: gate the skip on the grey-level/no-XP verdict. Pre-attack
         // MaNGOS::XP::Gain is 0 for any creature nobody has damaged yet.
-        if (creature && creature->GetCreatureType() == CREATURE_TYPE_CRITTER && !bot->IsHonorOrXPTarget(unit) && urand(0, 10))
+        if (creature && creature->GetCreatureType() == CREATURE_TYPE_CRITTER && !IsHonorOrXPTargetCompat(bot, unit) && urand(0, 10))
         {
             logGrind(unit, "ignored (ignore critters).");
             continue;
@@ -353,7 +403,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             // applies (the attackers loop above returns before this), quest-objective
             // kills stay allowed (needForQuest branch), and bots with a real-player
             // master keep the old probabilistic lean so explicit orders are unchanged.
-            else if (creature && !bot->IsHonorOrXPTarget(unit))
+            else if (creature && !IsHonorOrXPTargetCompat(bot, unit))
             {
                 if (!ai->HasRealPlayerMaster() && !bot->InBattleGround())
                 {
@@ -493,9 +543,7 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
     // path check per candidate so the order never becomes the 50 yd stare
     // the reach action then has to give up on.
     std::list<Unit*> units;
-    MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(bot, bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(units, u_check);
-    Cell::VisitAllObjects(bot, searcher, ai::GRIND_IDLE_FALLBACK_RANGE_YD);
+    VisitUnfriendlyUnitsCompat(bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD, units);
 
     int const maxLevelOver = MaxGrindLevelOverBot(bot, ai);
     Unit* best = nullptr;
@@ -518,11 +566,17 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
         if ((int)unit->GetLevel() - (int)bot->GetLevel() > maxLevelOver)
             continue;
 
-        if (creature->GetCreatureInfo() && creature->GetCreatureInfo()->rank > CREATURE_ELITE_NORMAL &&
+        if (creature->GetCreatureInfo() && CreatureRankCompat(creature) > CREATURE_ELITE_NORMAL &&
             !AI_VALUE(bool, "can fight elite"))
             continue;
 
         if (!AttackersValue::IsValid(unit, bot, nullptr, false, false))
+            continue;
+
+        // W1 (review): the same rule as the normal pick - the fallback is another way to START a fight - and the same gate (ForeverCore
+        // only; the Turtle pick is unchanged).
+        if (FreeBotStartFightRuleCompat() && sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
+            !TortoiseBots::world::FreeBotMayStartFight(FreeGrindFactsOf(unit, bot)))
             continue;
 
         if (!PossibleAttackTargetsValue::IsPossibleTarget(unit, bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD, false))
@@ -531,7 +585,7 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
         // Grey (no-XP) creatures are never worth starting a fight over, and
         // critters only when they pay XP (issue #396). Revenge still applies
         // through the attackers loop, which runs before this.
-        if (!bot->IsHonorOrXPTarget(unit))
+        if (!IsHonorOrXPTargetCompat(bot, unit))
             continue;
 
         float const dist = sServerFacade.GetDistance2d(bot, unit);
@@ -614,7 +668,7 @@ Unit* DangerousEliteValue::Calculate()
         Creature* creature = dynamic_cast<Creature*>(ai->GetUnit(guid));
         if (!creature || !creature->IsAlive() || !creature->GetCreatureInfo())
             continue;
-        uint32 const rank = creature->GetCreatureInfo()->rank;
+        uint32 const rank = CreatureRankCompat(creature);
         if (rank != CREATURE_ELITE_ELITE && rank != CREATURE_ELITE_RAREELITE && rank != CREATURE_ELITE_WORLDBOSS)
             continue;
         if (!ai::EliteCampDangerous(true, (int)creature->GetLevel(), bot->GetLevel()))

@@ -189,6 +189,9 @@ std::vector<Player*> AllHostBots();
 // same commander as the bot's host master (IsCommandedBot checks it), so a re-login or `.tb group` makes it lapse by itself.
 void SetCommander(ObjectGuid bot, ObjectGuid commander);   // an empty commander removes the binding
 ObjectGuid CommanderGuid(ObjectGuid bot);
+// The binding as the table holds it, WITHOUT the "the host master still names it" check CommanderGuid makes: the entry a re-login or a move of
+// the host master has lapsed, which is how the run's tick tells "the engine moved the master under the run's entry" from "somebody else bound it".
+ObjectGuid StoredCommander(ObjectGuid bot);
 std::vector<std::pair<ObjectGuid, ObjectGuid>> CommanderBindings();
 }
 }

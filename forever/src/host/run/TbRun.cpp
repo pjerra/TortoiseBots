@@ -10,6 +10,7 @@
 #include "host/TbCc.h"
 #include "host/TbCcPure.h"
 #include "host/run/TbPlanUnits.h"
+#include "host/run/TbRunBindingPure.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
 #include "host/TbOrdersApi.h"
@@ -497,13 +498,39 @@ void ReleaseAll(RunRec& rec)
 }
 
 // A bot that joined the party mid-run is bound too (only when it is commanded already: its kit needs no rebuild); one that left is given back.
+// A member the run bound keeps its binding through a pause and a regroup: the engine's own master logic can drop the commander entry or move the host
+// master under the run's entry (SyncBindingAction), and the run puts its binding back; a commander somebody else set (`.tb master`) stays their decision.
+BindingEntry BindingEntryOf(ObjectGuid stored, ObjectGuid lead)
+{
+    if (stored.IsEmpty())
+        return BindingEntry::Missing;
+    return stored == lead ? BindingEntry::Lead : BindingEntry::Other;
+}
+
 void SyncBinding(RunRec& rec, Group* group, Player* lead)
 {
     std::set<ObjectGuid> inGroup;
     for (Group::MemberSlot const& slot : group->GetMemberSlots())
     {
         inGroup.insert(slot.guid);
-        if (slot.guid == rec.leader || rec.bound.count(slot.guid) || !BotMgr::Instance().IsBot(slot.guid))
+        if (slot.guid == rec.leader || !BotMgr::Instance().IsBot(slot.guid))
+            continue;
+        bool const boundByRun = rec.bound.count(slot.guid) != 0;
+        // A member whose master is away is waiting out its grace (BotMgr's detach): binding it again would clear that wait.
+        bool away = false, blocked = false, hasBrain = false;
+        uint32 awaySeconds = 0;
+        std::string blockedWhy;
+        BotMgr::Instance().FollowStatus(slot.guid, away, awaySeconds, blocked, blockedWhy, hasBrain);
+        bool const masterIsLead = BotMgr::Instance().MasterOf(slot.guid) == rec.leader;
+        if (SyncBindingAction(boundByRun, away, masterIsLead, BindingEntryOf(h3::StoredCommander(slot.guid), rec.leader)) == BindingSync::Reassert)
+        {
+            // The same host call BindMember makes (the host master and the engine's pointer), then the entry itself: the bind first, so a refused bind
+            // leaves the commander table alone. Both agree afterwards, so the next tick is Keep and a member's away mark is not reset every tick.
+            RepairBinding([&] { return BotManager::Instance().BindBotMaster(slot.guid, rec.leader); },
+                          [&] { h3::SetCommander(slot.guid, rec.leader); });
+            continue;
+        }
+        if (boundByRun)
             continue;
         if (Player* bot = InWorld(slot.guid))
             if (!h3::CommanderGuid(slot.guid).IsEmpty())
@@ -1142,7 +1169,8 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
     {
         Player* member = InWorld(slot.guid);
         if (!member)
-            return refuse("not-bot", slot.name + " is not in the world");
+            return refuse("not-bot", slot.name + " is not in the world (an offline member left by an old group keeps the run from starting: `.tb ungroup " + slot.name +
+                "` it once it is online, then form the party again)");
         if (!BotMgr::Instance().IsBot(slot.guid))
             return refuse("player-in-group", slot.name + " is not a host bot: a run is for bots only");
         if (member->GetMapId() != plan->map || member->GetInstanceId() != leader->GetInstanceId())

@@ -33,7 +33,15 @@ std::string EnsureConfig();
 // Builds the brain for a bot that is in the world and placed next to `master`: PlayerbotAI, master, default strategies,
 // registration where the legacy code looks a bot's AI up. Null (with `error` set) when it could not be built; the
 // caller then keeps the spike behaviour for that bot.
-Brain* Create(Player* bot, Player* master, std::string& error);
+Brain* Create(Player* bot, Player* master, std::string& error, bool free = false);
+
+// W1: `.tb free <bot> on|off` on a live brain: rebuild the strategy kit for the new mode and set the movement mode ("free" for a
+// free bot, "follow" otherwise). No-op without a brain.
+void ReapplyStrategies(Brain* brain, bool free);
+
+// W1 (review): a master was bound to a live brain (the host ends free mode first). The engine takes the master pointer, then the full
+// reset the adoption path does (travel and grind targets purged, the current path stopped) and the commanded kit. No-op without a brain.
+void BindMaster(Brain* brain, Player* master);
 
 // One tick of the engine. `diff` is the world tick's elapsed milliseconds. Before the engine's UpdateAI the bot's queued cast
 // results (BotSession, TbBotSession.h) are handed to the engine: SPELL_FAILURE -> PlayerbotAI::SpellInterrupted, CAST_FAILED ->

@@ -175,14 +175,14 @@ std::string EnsureConfig()
     return result;
 }
 
-Brain* Create(Player* bot, Player* master, std::string& error)
+Brain* Create(Player* bot, Player* master, std::string& error, bool free)
 {
     if (!bot || !bot->IsInWorld())
     {
         error = "the bot is not in the world";
         return nullptr;
     }
-    if (!master)
+    if (!master && !free)
     {
         error = "the bot has no master";
         return nullptr;
@@ -227,7 +227,9 @@ Brain* Create(Player* bot, Player* master, std::string& error)
         // a bot session when no client drives it, and the default would then pick "wander" (a free-roaming mode the slice does
         // not register). The host bound this master on purpose, so the bot follows it: the same strategy change the chat
         // order "follow" makes (SetMovementStrategy("follow")).
-        pai->SetMovementStrategy("follow");
+        // W1: a free bot is masterless; it owns the ground it stands on. "free" is the engine's own movement marker (not "wander",
+        // which this slice does not register, and not "follow"): it drops passive and leaves the grind kit's movement alone.
+        pai->SetMovementStrategy(free && !master ? "free" : "follow");
         // How long the world thread was held (the `.tb perf` worst tick of an engine start): the constructor builds the context and the four engines,
         // ResetStrategies applies the default strategies.
         sLog.outString("TortoiseBots engine: brain of %s built in %lld ms (PlayerbotAI constructor %lld, strategies %lld, movement %lld)", bot->GetName().c_str(),
@@ -271,7 +273,7 @@ Brain* Create(Player* bot, Player* master, std::string& error)
         brain->session->SetCastResultSink(true);
 
     sLog.outString("TortoiseBots engine: PlayerbotAI attached for %s (%s) master %s", bot->GetName().c_str(),
-        bot->GetGUID().ToString().c_str(), master->GetName().c_str());
+        bot->GetGUID().ToString().c_str(), master ? master->GetName().c_str() : "none (free)");
     return brain.release();
 }
 
@@ -313,6 +315,26 @@ void Tick(Brain* brain, uint32 diff)
         // update (the Turtle adapter does the same, runtime/PlayerbotAIAdapter.cpp:68-76).
         sLog.outError("TortoiseBots engine: dropped a malformed packet while updating bot %s", brain->bot->GetName().c_str());
     }
+}
+
+void ReapplyStrategies(Brain* brain, bool free)
+{
+    if (!brain || !brain->ai)
+        return;
+    brain->ai->ResetStrategies();
+    brain->ai->SetMovementStrategy(free ? "free" : "follow");
+}
+
+void BindMaster(Brain* brain, Player* master)
+{
+    if (!brain || !brain->ai)
+        return;
+    brain->ai->SetMaster(master);
+    // The engine's own adoption path ("remove bot masters not in our group", PlayerbotAI.cpp): a full reset purges the travel and grind
+    // targets and stops the path the free kit had started, so the bot is the commanded one from this tick on, not the one it was.
+    brain->ai->Reset(true);
+    brain->ai->StopMoving();
+    ReapplyStrategies(brain, false);
 }
 
 void HandleTeleportAck(Brain* brain)
@@ -461,11 +483,13 @@ namespace engine
 {
 bool Built() { return false; }
 std::string EnsureConfig() { return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)"; }
-Brain* Create(Player*, Player*, std::string& error)
+Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
 {
     error = "the engine is not built in (TORTOISEBOTS_SLICE1 is off)";
     return nullptr;
 }
+void ReapplyStrategies(Brain*, bool) {}
+void BindMaster(Brain*, Player*) {}
 void Tick(Brain*, uint32) {}
 void HandleTeleportAck(Brain*) {}
 void Destroy(Brain*) {}

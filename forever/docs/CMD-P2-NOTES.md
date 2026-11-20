@@ -26,10 +26,12 @@ Spec: `~/TortoiseBots-audit/FOREVER-COMMANDER-PORT-SPEC.md` (P2 row in section 5
   whenever the lead's group holds a bound follower, so a group re-created around the lead keeps the binding and the card reports the new counter.
 * **A fallback does less.** With the key off nothing is written or read. With the key on but the table missing (no privilege, no migration) one error
   line is logged and every read/write is skipped: persistence is off for the session, the in-memory binding is unaffected.
-* **Every characters statement is guarded, including the writes.** `CharacterQueryCompat` (TbCmdBindingStore.cpp) is `WorldQueryCompat`'s characters
-  twin: it asks information_schema for the table and the columns first, because a statement naming a missing table aborts this core
-  (MySQLConnection.cpp). The same five-column check runs before EVERY write (`Writable`/`CheckSchema`): a cached "the table is there" is never trusted,
-  so a table dropped or altered after the load disables persistence instead of reaching the core. The guard also refuses any table but this store's own.
+* **Every characters statement is guarded, including the writes.** `CharacterQueryCompat` (TbCmdBindingStore.cpp) parses the query form and the table
+  (the world guard's own parser, `compat/TbSqlNames.h`), refuses any table but this store's own, and asks information_schema for the table and its columns
+  first, because a statement naming a missing table aborts this core (MySQLConnection.cpp). The raw statements themselves are `compat/TbCompat_CharStore.h`'s
+  (the characters twin of the world guard in `compat/TbCompat_S5.h`; the repo's schema-guard test names that file and pins its three calls), so no module
+  file outside the guards makes a pool call. The same five-column check runs before EVERY write (`Writable`/`CheckSchema`): a cached "the table is there" is
+  never trusted, so a table dropped or altered after the load disables persistence instead of reaching the core.
 * **One atomic write.** A save is one `INSERT ... ON DUPLICATE KEY UPDATE` on a synchronous connection (the module's row has no prepared statement of its
   own on this core), so there is no DELETE-then-INSERT window: a crash, a disconnect or a refused INSERT can never leave the binding deleted. The
   in-memory view changes only after the row is read back; a write that did not land logs one line.
@@ -77,7 +79,8 @@ Two things the live run taught, both fixed here:
 | File | What |
 |---|---|
 | `forever/src/host/cmd/TbCmdBindingLifePure.h` | pure: the stored row's five fields and `Valid`, the release verdict `Decide` (the shared `CheckBinding`'s reasons plus the two graces), the party reason mapping, `Departed`, and the restore gate `PlanRestore` (commander AND lead in the world). Tested standalone |
-| `forever/src/host/cmd/TbCmdBindingStore.{h,cpp}` | the characters-database row: config (re-read on every reload), the guard `CharacterQueryCompat` (WorldQueryCompat's characters twin), the five-column check before every write, the CREATE TABLE IF NOT EXISTS once per config, one atomic upsert / one DELETE with a read-back, a failed DELETE kept pending (never offered to a restore, retried every second, replaced by a newer save), load once per load |
+| `forever/src/host/cmd/TbCmdBindingStore.{h,cpp}` | the characters-database row: config (re-read on every reload), the guard `CharacterQueryCompat` (query form, its own table, the five-column check before every write; the raw statements are `forever/src/compat/TbCompat_CharStore.h`'s), the CREATE TABLE IF NOT EXISTS once per config, one atomic upsert / one DELETE with a read-back, a failed DELETE kept pending (never offered to a restore, retried every second, replaced by a newer save), load once per load |
+| `forever/src/compat/TbCompat_CharStore.h` | the characters-database side of the schema guard: the information_schema probe, the guarded SELECT and the guarded synchronous statement (`forever/src/compat/TbCompat_S5.h` is the world twin) |
 | `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | the record beside h3's table (flags, members, followers and their saved follow targets, the in-memory group counter, the two timers), the release, the party action, the restore, the P1 card and the P2 hooks |
 | `forever/src/TbScripts.cpp` | the `GroupScript` row (`OnAddMember`/`OnRemoveMember`/`OnChangeLeader`/`OnDisband`), `PlayerScript` OnLogin/OnLogout, `UnitScript::OnUnitDeath`, `Maintain` in the tick, `LoadBindings` at world start and on a config reload |
 | `forever/src/host/TbHostOwnership.cpp` | `IsCommandedBy` / `IsInOwnBindingGroup` answer from the record |
