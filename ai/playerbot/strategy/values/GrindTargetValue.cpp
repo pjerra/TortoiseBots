@@ -296,6 +296,12 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             logGrind(unit, "ignored (tapped, cced or out of range).");
             continue;
         }
+        // `.tb ignore`: a listed mob is never a new pull (nor a hostile pick above: the list never reaches "possible attack targets").
+        if (IsIgnoredMobCompat(bot, unit->getObjectGuid()))
+        {
+            logGrind(unit, "ignored (on the commander's ignore list).");
+            continue;
+        }
 
         // Wild XP-granting type-8 beasts (Deer/Cow) are fair game, not critter
         // skips: gate the skip on the grey-level/no-XP verdict. Pre-attack
