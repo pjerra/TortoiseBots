@@ -5,9 +5,9 @@
 // and TbTestKit.cpp, which hold the engine-facing parts behind TORTOISEBOTS_SLICE1 exactly as TbEngineBrain.cpp does. Without the
 // option every handler answers "the engine is not built in".
 //
-// Threading: every function here runs on the world thread (a console command: World::ProcessCliCommands, World.cpp:3166, called at
-// World.cpp:2592; a GM chat command: World::UpdateSessions, World.cpp:3119, called at World.cpp:2421, the chat opcodes are
-// PROCESS_THREADUNSAFE, Opcodes.cpp:334-338; the engine tick: WorldScript::OnBeforeMapsUpdate, World.cpp:2470). The order queue is
+// Threading: every function here runs on the world thread (a console command: World::ProcessCliCommands, World.cpp:3182, called at
+// World.cpp:2608; a GM chat command: World::UpdateSessions, World.cpp:3135, called at World.cpp:2437, the chat opcodes are
+// PROCESS_THREADUNSAFE, Opcodes.cpp:334-338; the engine tick: WorldScript::OnBeforeMapsUpdate, World.cpp:2481). The order queue is
 // therefore plain data with no lock.
 #pragma once
 

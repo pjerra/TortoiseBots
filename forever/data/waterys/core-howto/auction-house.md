@@ -63,5 +63,5 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
 - **Bot hooks only**: `AuctionHouseMgr.cpp:21` includes `AuctionHouseBot.h`, and every "should this
   character receive mail/notification" branch is guarded by `sAuctionBotConfig->IsBotChar(...)`
   (`AuctionHouseMgr.cpp:1800`, `:1856`, `:1903`, `:1928`, `:1975`, `:1987`); the module is initialised in
-  `World.cpp:2148` with `AuctionHouseBot.Update.Interval` (`World.cpp:925`). Bots post through their own
+  `World.cpp:2162` with `AuctionHouseBot.Update.Interval` (`World.cpp:937`). Bots post through their own
   module, not through the handlers above.

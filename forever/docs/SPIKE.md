@@ -74,18 +74,19 @@ need to be. What his session reaches through friendship, and what we do instead:
 
 So the "name our class `Playerbot::BotSession`" trick from the head start note is **not** needed.
 
-### The one gap: a kick is invisible
+### The one gap: a kick is invisible (closed at pin d02645dd21)
 
-For a bot session the core's `KickPlayer` only sets the private `forceExit`. Nothing public reads it. Cases:
+For a bot session the core's `KickPlayer` only sets `forceExit`. Up to core 25fc7ca nothing public read it. Cases:
 
 - The account owner logs in to the character that is in the world as a bot. The core kicks the bot and waits up to
   30 s for it to leave. **Workaround in the module:** `BotMgr::Update` watches the account's real session; if it has
-  been loading a character for more than 2 s, the account's bots log out.
+  been loading a character for more than 2 s, the account's bots log out. **Kept** (it leaves before the core's kick is
+  seen, and does not depend on it).
 - A failed character load: seen by `GetPlayer() == nullptr` after the callback.
-- A GM `.kick` / ban of a bot: **not seen.** The bot stays. Use `.tb logout`.
+- A GM `.kick` / ban of a bot: **seen since pin d02645dd21.** The core's `WorldSession::IsKickRequested()` (#370) reads
+  `forceExit`; `BotSession::Tick` polls it and requests the same logout a console `.tb logout` does, so the bot leaves
+  and the manager reaps it on the next tick. Before that pin the bot stayed and only `.tb logout` worked.
 
-A one-line public getter in the core (`bool IsKickRequested() const { return forceExit; }`) would close this. It is a
-request for Karrz, not something we patch.
 
 ## Things found on the way
 

@@ -13,7 +13,7 @@
 //  * the loot tables (creature / game object / reference / item) are copied from the world database through the guarded reader below
 //    (LootTemplate::Entries and ::Groups are private, LootMgr.h:150-151).
 //
-// Threading: the engine ticks on the world thread outside the map update (World.cpp:2462-2475, findings item 2). Everything here that
+// Threading: the engine ticks on the world thread outside the map update (World.cpp:2478-2491, findings item 2). Everything here that
 // reads a Loot, a LootRoll or a bot's roll list is a READ made on that thread; the memo below is touched only there.
 #pragma once
 
