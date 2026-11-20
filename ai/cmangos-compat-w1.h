@@ -36,6 +36,13 @@ inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)
     return unit && unit->HasFlag(UNIT_NPC_FLAGS, flag);
 }
 
+// W1: `FreeGrindPolicy.h` is a ForeverCore rule. Here `IsFreeBot` is also true for every pool random bot, and those bots may today fight
+// opposing-faction players and other NPCs; applying the rule would change the Turtle target pick. False leaves the scan's original answer.
+inline bool FreeBotStartFightRuleCompat()
+{
+    return false;
+}
+
 
 // ===============================================================================================================
 // GRAVEYARDS AND MAPS
@@ -43,7 +50,7 @@ inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)
 
 inline WorldSafeLocsEntry const* ClosestGraveyardCompat(WorldObject* /*who*/, uint32 mapId, float x, float y, float z, uint32 team)
 {
-    return sObjectMgr.GetClosestGraveYard(x, y, z, mapId, team);
+    return sObjectMgr.GetClosestGraveYard(x, y, z, mapId, Team(team));
 }
 
 inline uint32 SafeLocMapIdCompat(WorldSafeLocsEntry const* entry)
@@ -64,11 +71,6 @@ inline float SafeLocYCompat(WorldSafeLocsEntry const* entry)
 inline float SafeLocZCompat(WorldSafeLocsEntry const* entry)
 {
     return entry ? entry->z : 0.0f;
-}
-
-inline uint32 SafeLocIdCompat(WorldSafeLocsEntry const* entry)
-{
-    return entry ? entry->id : 0;
 }
 
 inline MapEntry const* MapEntryW1Compat(uint32 mapId)
@@ -145,6 +147,11 @@ inline void AreaTeleportPosCompat(AreaTriggerTeleport const* at, float& x, float
     x = at ? at->destination.x : 0.0f;
     y = at ? at->destination.y : 0.0f;
     z = at ? at->destination.z : 0.0f;
+}
+
+inline float AreaTeleportOrientationCompat(AreaTriggerTeleport const* at)
+{
+    return at ? at->destination.o : 0.0f;
 }
 
 // ===============================================================================================================

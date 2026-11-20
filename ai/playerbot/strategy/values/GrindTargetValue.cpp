@@ -286,8 +286,9 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         // W1 (review): a free bot starts only the fights the world allows it to start - an ordinary hostile or neutral NPC, not a
         // player, a player-controlled unit, a quest giver, vendor, trainer, flight master, innkeeper, guard or civilian, not a kill
         // that lowers a standing, not a friendly unit and not a mob another player tapped. Self-defence is the attackers loop above,
-        // which has already answered anything fighting the bot or its group.
-        if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster())
+        // which has already answered anything fighting the bot or its group. ForeverCore only: on Turtle `IsFreeBot` is also every pool
+        // random bot, whose pick stays as it was (the compat pair answers false there).
+        if (FreeBotStartFightRuleCompat() && sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster())
         {
             auto const facts = FreeGrindFactsOf(unit, bot);
             if (!TortoiseBots::world::FreeBotMayStartFight(facts))
@@ -566,8 +567,9 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
         if (!AttackersValue::IsValid(unit, bot, nullptr, false, false))
             continue;
 
-        // W1 (review): the same rule as the normal pick - the fallback is another way to START a fight.
-        if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
+        // W1 (review): the same rule as the normal pick - the fallback is another way to START a fight - and the same gate (ForeverCore
+        // only; the Turtle pick is unchanged).
+        if (FreeBotStartFightRuleCompat() && sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
             !TortoiseBots::world::FreeBotMayStartFight(FreeGrindFactsOf(unit, bot)))
             continue;
 

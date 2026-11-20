@@ -34,6 +34,7 @@ ADAPTER = (ROOT / "host/BotPlayerAdapter.cpp").read_text()
 ACTION = (ROOT / "ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp").read_text()
 ACTION_H = (ROOT / "ai/playerbot/strategy/actions/ReviveFromCorpseAction.h").read_text()
 POLICY = (ROOT / "ai/playerbot/CorpseEntrancePolicy.h").read_text()
+COMPAT_T = (ROOT / "ai/cmangos-compat-w1.h").read_text()
 GATE = (ROOT / "tools/verify_all.sh").read_text()
 
 
@@ -63,12 +64,15 @@ class BotReviveDoorWiringTest(unittest.TestCase):
         # Validated maps only, before any lookup.
         gate = fn.index("if (!bot || !RepopDoorMapValidated(dungeonMapId))")
         self.assertLess(gate, fn.index("FindEntranceTriggerByRules("))
-        self.assertIn("return atEntry->id;", fn)
+        # The id comes through the both-core pair; the Turtle side answers the field the hook always answered.
+        self.assertIn("return AreaTriggerIdCompat(atEntry);", fn)
+        self.assertIn("return entry ? entry->id : 0;", COMPAT_T)
         allow = body(POLICY, "inline bool RepopDoorMapValidated(", "\n    }\n")
         self.assertIn("return dungeonMap == 189 || dungeonMap == 70;", allow)
         self.assertIn("WorldPosition const corpsePos(dungeonMapId, corpseX, corpseY, corpseZ);", fn)
         self.assertRegex(fn, r"FindEntranceTriggerByRules\(dungeonMapId, WorldPosition\(bot\), corpsePos,\s*"
-                             r"RepopEntranceRules\(dungeonMapId, dungeonMap->ghostEntranceMap\), atEntry, at\)")
+                             r"RepopEntranceRules\(dungeonMapId, MapGhostEntranceMapCompat\(dungeonMapId\)\), atEntry, at\)")
+        self.assertIn("return entry ? entry->ghostEntranceMap : 0;", COMPAT_T)
         # No eligible door: 0.
         self.assertRegex(fn, r"if \(!FindEntranceTriggerByRules\([^;]*\)\)\s*return 0;")
         self.assertIn("[BOT REPOP]", fn)

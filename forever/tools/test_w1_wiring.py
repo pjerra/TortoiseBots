@@ -258,9 +258,10 @@ class FreeGrindTargets(unittest.TestCase):
         self.assertIn("inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)", COMPAT_T)
         self.assertIn("unit->HasNpcFlag(static_cast<NPCFlags>(flag))", COMPAT_F)
         self.assertIn("unit->HasFlag(UNIT_NPC_FLAGS, flag)", COMPAT_T)
-        # And only for a free bot: a commanded bot keeps its player's own rules.
+        # And only for a free bot: a commanded bot keeps its player's own rules. ForeverCore only - the gate itself (the Turtle side
+        # answers false) is pinned in tools/test_free_grind_target_wiring.py.
         grind = func(GRIND, "Unit* GrindTargetValue::FindTargetForGrinding(")
-        self.assertIn("if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster())", grind)
+        self.assertIn("FreeBotStartFightRuleCompat()", grind)
 
 
 if __name__ == "__main__":

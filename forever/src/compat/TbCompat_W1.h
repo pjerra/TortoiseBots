@@ -50,6 +50,13 @@ inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)
     return unit && unit->HasNpcFlag(static_cast<NPCFlags>(flag));
 }
 
+// W1: `FreeGrindPolicy.h` is this core's rule only. On Turtle `IsFreeBot` is also true for every pool random bot, which today may fight
+// opposing-faction players and other NPCs; the Turtle side of the pair answers false and keeps its original pick.
+inline bool FreeBotStartFightRuleCompat()
+{
+    return true;
+}
+
 
 // ===============================================================================================================
 // GRAVEYARDS AND MAPS (DeadValues.cpp, ReviveFromCorpseAction.cpp)
@@ -79,11 +86,6 @@ inline float SafeLocYCompat(WorldSafeLocsEntry const* entry)
 inline float SafeLocZCompat(WorldSafeLocsEntry const* entry)
 {
     return entry ? entry->Loc.GetPositionZ() : 0.0f;
-}
-
-inline uint32 SafeLocIdCompat(WorldSafeLocsEntry const* entry)
-{
-    return entry ? entry->ID : 0;
 }
 
 inline MapEntry const* MapEntryW1Compat(uint32 mapId)
@@ -161,6 +163,11 @@ inline void AreaTeleportPosCompat(AreaTriggerTeleport const* at, float& x, float
     x = at ? at->Loc.GetPositionX() : 0.0f;
     y = at ? at->Loc.GetPositionY() : 0.0f;
     z = at ? at->Loc.GetPositionZ() : 0.0f;
+}
+
+inline float AreaTeleportOrientationCompat(AreaTriggerTeleport const* at)
+{
+    return at ? at->Loc.GetOrientation() : 0.0f;
 }
 
 // ===============================================================================================================

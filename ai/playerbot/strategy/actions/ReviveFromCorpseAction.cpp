@@ -382,7 +382,8 @@ bool FindCorpseAction::Execute(Event& event)
             bot->SpawnCorpseBones();
             float exitX = 0.0f, exitY = 0.0f, exitZ = 0.0f;
             AreaTeleportPosCompat(entranceTeleport, exitX, exitY, exitZ);
-            bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport), exitX, exitY, exitZ, 0.0f);
+            bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport), exitX, exitY, exitZ,
+                AreaTeleportOrientationCompat(entranceTeleport));
             bot->SaveToDB();
             SET_AI_VALUE(bool, "corpse run", false);
             return true;
@@ -417,7 +418,8 @@ bool FindCorpseAction::Execute(Event& event)
                 bot->GetMotionMaster()->Clear();
                 float enterX = 0.0f, enterY = 0.0f, enterZ = 0.0f;
                 AreaTeleportPosCompat(entranceTeleport, enterX, enterY, enterZ);
-                bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport), enterX, enterY, enterZ, 0.0f);
+                bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport), enterX, enterY, enterZ,
+                    AreaTeleportOrientationCompat(entranceTeleport));
                 return true;
             }
 
@@ -808,7 +810,7 @@ bool SpiritHealerAction::Execute(Event& event)
                 }
                 if (healer)
                     return MoveTo(healer->GetMapId(), healer->GetPositionX(), healer->GetPositionY(), healer->GetPositionZ(),
-                        false, false, false, false, "move_revive");
+                        false, false, false, false, "move_healer");
                 sLog.outDetail("Bot #%d <%s> is a ghost without a corpse and no spirit healer is near", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
                 return false;
             }
@@ -922,7 +924,7 @@ bool SpiritHealerAction::Execute(Event& event)
             }
             if (spiritHealer)
                 return MoveTo(spiritHealer->GetMapId(), spiritHealer->GetPositionX(), spiritHealer->GetPositionY(),
-                    spiritHealer->GetPositionZ(), false, false, false, false, "move_revive");
+                    spiritHealer->GetPositionZ(), false, false, false, false, "move_healer");
             // No healer near the graveyard: wait where the ghost stands; the host's rescue covers a ghost that cannot get
             // anywhere (it still walks to the graveyard below only when one is in sight).
             return false;

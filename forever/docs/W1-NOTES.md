@@ -165,3 +165,44 @@ Tests (all fail on the W1 code before this round):
 
 The scene in the standalone policy test includes a player and a quest giver in range next to an ordinary mob: only the mob is
 picked.
+
+## 8. Fix round 2 (the free rule stays ForeverCore's; the Turtle corpse run keeps its own answers)
+
+Two points from the lead.
+
+**The free-bot target rule is ForeverCore's.** On Turtle `RandomBotFacade::IsFreeBot` is true for every pool random bot and every
+free alt (`runtime/PlayerbotRuntimeFacade.cpp`), and those bots may today pick an opposing-faction player or another NPC. Asking
+`FreeGrindPolicy.h` for them would change what the pool fights. The W1 compat pair therefore carries the gate,
+`FreeBotStartFightRuleCompat()`: `ai/cmangos-compat-w1.h` answers false (the scan's original answer; no fact is read), the
+ForeverCore side answers true. Both new-pull paths test it first, before `FreeBotMayStartFight`. Proof:
+`tools/test_free_grind_target_wiring.py` pins the Turtle false, the Forever true and the gate-before-rule order in both paths,
+and runs in the default `verify_all` unit-test discovery.
+
+**The four `verify_all` failures and the one error were W1's.** A throwaway detached worktree of `tbf/main` (6e8e0494a) runs the
+same three modules green (`Ran 30 tests ... OK (skipped=4)`), so W1 broke them:
+
+| Failing pin | Cause | Fix |
+|---|---|---|
+| `test_cast_cancel_wiring` (`"move_revive"` 5 != 3) | W1 added two healer walks labelled `move_revive` | the two new walks are `move_healer`; the three legacy sites keep their label |
+| `test_bot_revive_door_wiring` (`return atEntry->id;`, `dungeonMap->ghostEntranceMap`) | W1 reads the trigger id and the entrance map through the compat pair | the pin now asserts `AreaTriggerIdCompat` / `MapGhostEntranceMapCompat` and the Turtle shim answering `entry->id` / `entry->ghostEntranceMap` |
+| `test_corpse_entrance_wiring` (`at->destination.mapId/.x/.y/.z`, `atEntry->mapid`, `corpseMap->ghostEntranceMap`, the timeout's first line) | the same move behind the pair, including the ForeverCore-only timeout gate | the pins assert the compat-mediated source and the Turtle shim's `destination.*` / `ghostEntranceMap` / `CorpseRunTeleportsEnabledCompat` true |
+
+Both entrance teleports also passed orientation 0 where the Turtle code passed `destination.o` (a genuine port slip): new
+`AreaTeleportOrientationCompat` (Turtle `destination.o`, ForeverCore `Loc.GetOrientation()`) feeds `TeleportTo`.
+
+**The Turtle build was failing on W1's own helpers.** `vm-build ~/wt-w1 --wait` at b2fd98ec3 failed in five translation units:
+`ai/cmangos-compat-w1.h` passed the graveyard team as `uint32` where the Turtle core's `GetClosestGraveYard` takes `Team` (now
+`Team(team)`), the same pair read `WorldSafeLocsEntry::id` (the core spells it `ID`; the helper had no caller, so it is gone),
+and `DeadValues.cpp` built `GuidPosition(ObjectGuid::Empty, ...)` (the Turtle core has no `ObjectGuid::Empty`; both cores have
+the default constructor, now `ObjectGuid()`). The Turtle module then compiles: `COMPILE_SECONDS=146 CMAKE_RC=0 MAKE_RC=0`,
+`mangosd` and `realmd` written.
+
+| Gate | Result |
+|---|---|
+| Census `forever/SLICE-W1.txt`, slot 8 | `files 270  compile clean 270  with errors 0  error places 0  includes of a header ForeverCore does not have 0` |
+| Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` (a) = 0 |
+| Policy tests | `test_free_grind_policy` 50 checks PASS |
+| Wiring | `forever/tools/test_w1_wiring.py` 22 tests OK; `tools/test_free_grind_target_wiring.py` 2 OK; the three Turtle pins above green |
+| `tools/verify_all.sh` | unit discovery `Ran 2673 tests ... OK (skipped=19)`; the local host-contract step fails on `../tortoise-wow` (that checkout is on another branch and has no `src/game/SessionTransport.h`) exactly as on `tbf/main`, and the DBC step is skipped (no `../tortoise-docker/data/dbc` here); the same script on the VM is `vm-test tb` below |
+| Module ON / OFF (`FOREVER_SLOT=8`, `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` both (slot 8; build.sh's trailing error grep exits 1 when it finds none) |
+| Turtle `vm-build` / `vm-test tb` | `vm-build ~/wt-w1 --wait`: `COMPILE_SECONDS=146 CMAKE_RC=0 MAKE_RC=0`, `mangosd` and `realmd` written, job rc=0; `vm-test tb ~/wt-w1`: `RESULT: PASS kind=tb dirty=11` |

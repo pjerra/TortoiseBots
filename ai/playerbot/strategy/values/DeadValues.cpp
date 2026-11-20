@@ -60,7 +60,7 @@ GuidPosition GraveyardValue::Calculate()
         //just get ANOTHER nearest appropriate for level (neutral or same team zone)
         if (auto anotherAppropriate = GetAnotherAppropriateClosestGraveyard())
         {
-            return GuidPosition(ObjectGuid::Empty, WorldPosition(anotherAppropriate));
+            return GuidPosition(ObjectGuid(), WorldPosition(anotherAppropriate));
         }
     }
 
@@ -85,7 +85,7 @@ GuidPosition GraveyardValue::Calculate()
         return GuidPosition();
     }
 
-    return GuidPosition(ObjectGuid::Empty, WorldPosition(ClosestGrave));
+    return GuidPosition(ObjectGuid(), WorldPosition(ClosestGrave));
 }
 
 WorldSafeLocsEntry const* GraveyardValue::GetAnotherAppropriateClosestGraveyard() const
