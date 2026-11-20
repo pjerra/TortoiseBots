@@ -7,4 +7,4 @@
 inline bool AddItemCompat(Player* bot, uint32 itemId, uint32 count) { bot->StoreNewItemInInventorySlot(itemId, count); return true; }
 
 // WarlockBossTarget: the instance-bind flag, as `creature->HasExtraFlag` always read it.
-inline bool CreatureExtraFlagCompat(Creature const* creature, uint32 flag) { return const_cast<Creature*>(creature)->HasExtraFlag(flag); }
+inline bool CreatureExtraFlagCompat(Creature const* creature, CreatureFlagsExtra flag) { return const_cast<Creature*>(creature)->HasExtraFlag(flag); }

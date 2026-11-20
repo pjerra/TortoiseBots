@@ -12,7 +12,7 @@ inline bool AddItemCompat(Player* bot, uint32 itemId, uint32 count) { return bot
 
 // Does the creature's template carry this extra flag. T `Creature::HasExtraFlag(flag)`; F keeps the flags on the template
 // (`CreatureTemplate::flags_extra`, the field Creature.h:126-175 and TbCompat_V.h:136 read).
-inline bool CreatureExtraFlagCompat(Creature const* creature, uint32 flag)
+inline bool CreatureExtraFlagCompat(Creature const* creature, CreatureFlagsExtra flag)
 {
     return (creature->GetCreatureTemplate()->flags_extra & flag) != 0;
 }
