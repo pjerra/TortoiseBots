@@ -204,6 +204,9 @@ int AiFactory::GetPlayerSpecTab(const Player* player)
         return 1;
     if (player && player->GetClass() == CLASS_HUNTER)
         return 1;
+    // A warrior ordered to tank is protection (tab 2), so the item scoring picks the protection scale and keeps the shield.
+    if (player && player->GetClass() == CLASS_WARRIOR && OrderedRoleNoFacade(player) == static_cast<uint8>(BOT_ROLE_TANK))
+        return 2;
     if (player)
     {
         switch (HybridKitOf(player, OrderedRoleNoFacade(player)))
