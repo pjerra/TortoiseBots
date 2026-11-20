@@ -449,12 +449,7 @@ bool TalentSpec::CheckTalentLink(std::string, std::ostringstream*) { NoteSpecs()
 uint32 TalentSpec::LeveltoPoints(uint32) { NoteSpecs(); return 0; }
 void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
-// PlayerbotFactory.cpp: no ammo and no pet set-up.
-void PlayerbotFactory::InitAmmo() { NoteFactory(); }
-void PlayerbotFactory::InitPet(bool) { NoteFactory(); }
-void PlayerbotFactory::InitPetSpells() { NoteFactory(); }
-bool PlayerbotFactory::PetAutoTrainAllowed(Player*) { NoteFactory(); return false; }
-bool PlayerbotFactory::TrainHunterPet(Player*, Pet*, bool, std::function<bool(uint32)> const&) { NoteFactory(); return false; }
+// PlayerbotFactory.cpp: the five pet and ammo members are real since slice 11 (forever/src/host/TbHostPetFactory.cpp).
 
 // PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load finds nothing.
 void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }

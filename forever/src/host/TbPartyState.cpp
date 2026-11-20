@@ -2,6 +2,7 @@
 // (`.tb party <leader> <member>...`). The line grammar is in forever/docs/TB-COMMANDS.md; every reply goes to the sender of the command
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
+#include "host/TbPet.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/run/TbRunHooks.h"
@@ -313,6 +314,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     if (!entry.blockText.empty())
         rec.T("blockmsg", entry.blockText);
     rec.N("catchup", entry.catchups).B("practice", BotMgr::Instance().Practice(guid));
+    p11::AppendPetState(rec, bot);                  // P11: pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
     return rec;
 }
 

@@ -3,6 +3,7 @@
 #include "TbDashboard.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
+#include "host/TbPet.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
@@ -191,7 +192,12 @@ public:
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
+        {
             TC_LOG_INFO("tortoisebots", "bot {} entered the world on map {}", player->GetName(), player->GetMapId());
+            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1527). Only the preference:
+            // nothing is added to the bags and the ammo slot is untouched.
+            player->SetPreferDrawableAmmo(true);
+        }
     }
 
     void OnLogout(Player* player) override
@@ -261,6 +267,7 @@ public:
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "pet",    TortoiseBots::p11::HandlePet,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
         };
         static ChatCommandTable commandTable =
         {
