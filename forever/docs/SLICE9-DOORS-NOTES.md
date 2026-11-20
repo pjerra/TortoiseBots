@@ -77,7 +77,7 @@ Decisions made here (the spec leaves them open):
 |---|---|
 | census `FOREVER_CENSUS_LIST=forever/SLICE9.txt` | `files 178  compile clean 178  with errors 0  error places 0  includes of a header ForeverCore does not have 0` (SLICE5..1 are subsets of that list; none of this package's files is a legacy file) |
 | option ON `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (first build, and again after the two live fixes); `nm`: `tasks::Begin`, `tasks::Update`, `tasks::SetLootMethod` strong in `worldserver` |
-| option OFF `tortoisebots` | `CMAKE_RC=0 MAKE_RC=0` (before the live fixes; the final-commit run: see the report) |
+| option OFF `tortoisebots` | `CMAKE_RC=0 MAKE_RC=0` (first build, and again on the final commit) |
 | `slice_gen_context.py --check`, `slice_registry_check.py` | `up to date`, `(a)=0` |
 | policy tests (`policy-tests.sh` copy, 476+ tests) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: the same six as on the unchanged `port/forever` tree (`test_combat_monitor_service*`, `test_decision_capture_*`, `test_log_file_rotation`, `test_run_trace_writer`) |
 | `test_run_tasks` | 141 checks, 0 failed |
