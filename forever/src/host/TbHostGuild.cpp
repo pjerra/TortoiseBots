@@ -16,6 +16,7 @@
 #include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
+#include "playerbot/policy/town/TownErrandPolicy.h"
 
 namespace tbhost
 {
@@ -281,6 +282,18 @@ bool SendMail(Player* sender, ObjectGuid const& mailboxGuid, std::string const& 
     if (!sender->HasEnoughMoney(copper + postage))
         return SetFail(failReason, "not-enough-money");
 
+    uint64_t const beforeMoney = sender->GetMoney();
+    uint32_t trackEntry = 0;
+    uint32_t beforeItemCount = 0;
+    if (!attachmentGuids.empty())
+    {
+        if (Item* firstAtt = sender->GetItemByGuid(attachmentGuids[0]))
+        {
+            trackEntry = firstAtt->GetEntry();
+            beforeItemCount = trackEntry ? sender->GetItemCount(trackEntry, false) : 0;
+        }
+    }
+
     WorldPackets::Mail::SendMail packet{ WorldPacket(CMSG_SEND_MAIL) };
     packet.Info.Mailbox = mailboxGuid;
     packet.Info.StationeryID = MAIL_STATIONERY_DEFAULT;
@@ -298,6 +311,10 @@ bool SendMail(Player* sender, ObjectGuid const& mailboxGuid, std::string const& 
     }
 
     sender->GetSession()->HandleSendMail(packet);
+    uint32_t const afterItemCount = trackEntry ? sender->GetItemCount(trackEntry, false) : 0;
+    if (!ai::MailSendConfirmed(trackEntry, beforeItemCount, afterItemCount, copper + postage, beforeMoney, sender->GetMoney()))
+        return SetFail(failReason, "mail-refused");
+
     TC_LOG_INFO("tortoisebots", "[W9] mail-send bot={} to={} items={} copper={}",
         sender->GetName(), targetName, uint32_t(attachmentGuids.size()), copper);
     return true;

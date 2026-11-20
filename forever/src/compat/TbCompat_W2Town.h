@@ -199,16 +199,22 @@ inline std::string MailBodyTextCompat(Mail const* mail)
     return mail ? mail->body : std::string();
 }
 
-inline void MailTakeMoneyCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail)
+inline ObjectGuid FindNearestMailboxCompat(Player* bot, bool* handled = nullptr)
 {
-    if (mail)
-        tbhost::town::TakeMailMoney(bot, mailbox, mail->messageID, mail->money);
+    if (handled)
+        *handled = true;
+    GameObject* go = tbhost::town::FindNearestMailbox(bot);
+    return go ? go->GetGUID() : ObjectGuid::Empty;
 }
 
-inline void MailTakeItemCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail, uint64 itemGuid)
+inline bool MailTakeMoneyCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail)
 {
-    if (mail)
-        tbhost::town::TakeMailItem(bot, mailbox, mail->messageID, itemGuid);
+    return mail && tbhost::town::TakeMailMoney(bot, mailbox, mail->messageID, mail->money);
+}
+
+inline bool MailTakeItemCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail, uint64 itemGuid)
+{
+    return mail && tbhost::town::TakeMailItem(bot, mailbox, mail->messageID, itemGuid);
 }
 
 inline void MailDeleteCompat(Player* bot, ObjectGuid const& /*mailbox*/, uint64 mailId)

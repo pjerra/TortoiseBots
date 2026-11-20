@@ -61,6 +61,18 @@ class TestW2TownWiring(unittest.TestCase):
         self.assertIn("TeachSpell", host)
         self.assertIn("HandleMailTakeMoney", host)
         self.assertIn("HandleMailTakeItem", host)
+        self.assertIn("FindNearestMailbox", host)
+        self.assertIn("GetGameObjectIfCanInteractWith", host)
+        self.assertIn("MailTakeMoneyConfirmed", host)
+        self.assertIn("MailTakeItemConfirmed", host)
+
+    def test_mail_order_honest_and_refuses_no_mailbox(self):
+        orders = read("forever/src/host/TbOrders.cpp")
+        if MUTATE:
+            orders = orders.replace('"no-mailbox"', '"mail-ok"')
+        self.assertIn('"no-mailbox"', orders)
+        self.assertIn("FindNearestMailbox", orders)
+        self.assertIn('"fail:mail-none-taken"', orders)
 
 
 if __name__ == "__main__":
