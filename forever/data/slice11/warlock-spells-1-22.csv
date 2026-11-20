@@ -1,0 +1,38 @@
+spell_id,name,rank,level_learned,how_learned,trainer_or_quest,source,client_build
+348,immolate,,1,trainer,trainer 14 (10 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+686,(name: .tb spells),,1,starting,playercreateinfo_action dwarf/gnome warlock,starting; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+687,demon skin,,1,starting,playercreateinfo_action gnome warlock,starting; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+688,summon imp,,3,quest,Summon Imp: quests 1598/1599/1470/1485 @3-4,quest; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+172,corruption,,4,trainer,trainer 14 (100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+702,Curse of Weakness (hotfixes.spell_name),,4,trainer,trainer 14 (100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+695,(name: .tb spells),,6,trainer,trainer 14 (100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1454,life tap,,6,trainer,trainer 14 (100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+980,Bane of Agony (hotfixes.spell_name),,8,trainer,trainer 14 (200 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5782,fear,,8,trainer,trainer 14 (200 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+696,demon skin,,10,trainer,trainer 14 (300 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+697,summon voidwalker,,10,quest,"Summon Voidwalker: 'The Binding' 1471/1504/1689 @10-11, 9619",quest; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+707,immolate,,10,trainer,trainer 14 (300 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1120,drain soul,,10,trainer,trainer 14 (300 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+6201,(name: .tb spells),,10,trainer,trainer 14 (300 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+705,(name: .tb spells),,12,trainer,trainer 14 (800 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+755,health funnel,,12,trainer,trainer 14 (800 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1108,Curse of Weakness (hotfixes.spell_name),,12,trainer,trainer 14 (800 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+689,Drain Life (hotfixes.spell_name),,14,trainer,trainer 14 (1000 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+704,(name: .tb spells),,14,trainer,trainer 14 (1000 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+6222,corruption,,14,trainer,trainer 14 (1000 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1455,life tap,,16,trainer,trainer 14 (1600 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5697,unending breath,,16,trainer,trainer 14 (1600 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+693,(name: .tb spells),,18,trainer,trainer 14 (1700 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1014,Bane of Agony (hotfixes.spell_name),,18,trainer,trainer 14 (1700 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5676,(name: .tb spells),,18,trainer,trainer 14 (1700 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+698,(name: .tb spells),,20,trainer,trainer 14 (2500 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+706,demon armor,,20,trainer,trainer 14 (2500 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1088,(name: .tb spells),,20,trainer,trainer 14 (2500 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1094,immolate,,20,trainer,trainer 14 (2500 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+3698,health funnel,,20,trainer,trainer 14 (2500 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5740,rain of fire,,20,trainer,trainer 14 (2500 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+440892,(name: .tb spells),,20,trainer,trainer 14 (2500 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+126,(name: .tb spells),,22,trainer,trainer 14 (3800 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+699,Drain Life (hotfixes.spell_name),,22,trainer,trainer 14 (3800 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+6202,(name: .tb spells),,22,trainer,trainer 14 (3800 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+6205,Curse of Weakness (hotfixes.spell_name),,22,trainer,trainer 14 (3800 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14

@@ -122,6 +122,7 @@
 #endif
 #include "strategy/values/GuildValues.h"
 #include "PlayerbotAIPackets.h"
+#include "playerbot/TbCompatP11.h"
 
 using namespace ai;
 

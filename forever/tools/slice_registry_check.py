@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 STRAT = os.path.join(ROOT, "ai", "playerbot", "strategy")
 SLICE_CTX = os.path.join(ROOT, "forever", "src", "slice", "SliceAiObjectContext.cpp")
-SLICE_LIST = os.path.join(ROOT, "forever", "SLICE10.txt")   # slice 10: the list the keys are closed against (CMake reads the same file)
+SLICE_LIST = os.path.join(ROOT, "forever", "SLICE11.txt")   # slice 11: the list the keys are closed against (CMake reads the same file)
 SLICE_GUARD = os.path.join(ROOT, "forever", "src", "slice", "SliceMissingKeyGuard.h")
 
 # Full-build registries, in the order AiObjectContext::AiObjectContext adds them (first context wins a lookup).
@@ -41,7 +41,9 @@ ROGUE = os.path.join(STRAT, "rogue", "RogueAiObjectContext.cpp")
 DRUID = os.path.join(STRAT, "druid", "DruidAiObjectContext.cpp")     # slice 10 (H10): the druid, paladin and shaman contexts, compiled as they are
 PALADIN = os.path.join(STRAT, "paladin", "PaladinAiObjectContext.cpp")
 SHAMAN = os.path.join(STRAT, "shaman", "ShamanAiObjectContext.cpp")
-CLASS_CONTEXTS = (WARRIOR, PRIEST, MAGE, ROGUE, DRUID, PALADIN, SHAMAN)
+HUNTER = os.path.join(STRAT, "hunter", "HunterAiObjectContext.cpp")     # slice 11 (H11): the hunter and warlock contexts, compiled as they are
+WARLOCK = os.path.join(STRAT, "warlock", "WarlockAiObjectContext.cpp")
+CLASS_CONTEXTS = (WARRIOR, PRIEST, MAGE, ROGUE, DRUID, PALADIN, SHAMAN, HUNTER, WARLOCK)
 KINDS = ("strategy", "action", "trigger", "value")
 CTX_TYPE = {"Strategy": "strategy", "Action": "action", "Trigger": "trigger", "UntypedValue": "value"}
 

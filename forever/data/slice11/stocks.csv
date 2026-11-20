@@ -1,0 +1,5 @@
+item_id,name,use,count_level18,count_level22,vendor_entry,vendor_name,vendor_count,source
+2512,Rough Arrow,hunter ammo (bow kit),1000,1000,1285,Thurman Mullby,77,"armory_item (class 6 subclass 2, requiredLevel 1) + npc_vendor ExtendedCost 0: 77 vendors, vendor 1285 sells it (TDB 2026-10-14)"
+2516,Light Shot,hunter ammo (gun kit only),1000,1000,1285,Thurman Mullby,61,"armory_item (class 6 subclass 3, requiredLevel 1) + npc_vendor ExtendedCost 0: 61 vendors, vendor 1285 sells it; the bow kit shoots 2512"
+117,Tough Jerky,hunter pet food (not stocked: lead decision D2),0,0,982,Thultash,91,"armory_item (class 0 subclass 5) + npc_vendor ExtendedCost 0: 91 vendors; the bot-session pet happiness rule (Pet.cpp:724-727) makes feeding unneeded"
+6265,Soul Shard,warlock reagent (real shards: lead decision D3),3,3,,(no vendor),0,"armory_item (class 15 subclass 1): no vendor row; Drain Soul gives one from a unit that gives XP or honour (SpellAuraEffects.cpp:5192-5200); `.tb additem Mlock 6265 3` seeds the test"

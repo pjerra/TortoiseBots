@@ -20,6 +20,7 @@
 #include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
+#include "playerbot/strategy/actions/CombatActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
@@ -50,12 +51,14 @@
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
+#include "playerbot/strategy/triggers/ChatCommandTrigger.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
 #include "playerbot/strategy/triggers/LootTriggers.h"
 #include "playerbot/strategy/triggers/PullTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
 #include "playerbot/strategy/triggers/WorldPacketTrigger.h"
+#include "playerbot/strategy/values/ActiveSpellValue.h"
 #include "playerbot/strategy/values/AlwaysLootListValue.h"
 #include "playerbot/strategy/values/AoeHealValues.h"
 #include "playerbot/strategy/values/AoeValues.h"
@@ -187,7 +190,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (46 of its keys)
+    // the registry of ActionContext (52 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -239,10 +242,16 @@ namespace slice
             creators["rear flank"] = [](PlayerbotAI* ai) { return new RearFlankAction(ai); };
             creators["reach cc"] = [](PlayerbotAI* ai) { return new ReachCcAction(ai); };
             creators["move out of enemy contact"] = [](PlayerbotAI* ai) { return new MoveOutOfEnemyContactAction(ai); };
+            creators["initialize pet"] = [](PlayerbotAI* ai) { return new InitializePetAction(ai); };
+            creators["toggle pet spell"] = [](PlayerbotAI* ai) { return new TogglePetSpellAutoCastAction(ai); };
+            creators["set pet stance"] = [](PlayerbotAI* ai) { return new SetPetStanceAction(ai); };
+            creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackAction(ai); };
+            creators["switch to melee"] = [](PlayerbotAI* ai) { return new SwitchToMeleeAction(ai); };
+            creators["switch to ranged"] = [](PlayerbotAI* ai) { return new SwitchToRangedAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (6 of its keys)
+    // the registry of ChatActionContext (7 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -254,6 +263,7 @@ namespace slice
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
+            creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
         }
     };
 
@@ -269,7 +279,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (96 of its keys)
+    // the registry of TriggerContext (101 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -371,6 +381,21 @@ namespace slice
             creators["ranged medium aoe and healer should attack"] = [](PlayerbotAI* ai) { return new TwoTriggers(ai, "ranged medium aoe", "healer should attack"); };
             creators["target of attacker close"] = [](PlayerbotAI* ai) { return new TargetOfAttackerClose(ai); };
             creators["loose adds near"] = [](PlayerbotAI* ai) { return new LooseAddsNearTrigger(ai); };
+            creators["no pet"] = [](PlayerbotAI* ai) { return new NoPetTrigger(ai); };
+            creators["has pet"] = [](PlayerbotAI* ai) { return new HasPetTrigger(ai); };
+            creators["new pet"] = [](PlayerbotAI* ai) { return new NewPetTrigger(ai); };
+            creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackTrigger(ai); };
+            creators["enemy fifteen yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy fifteen yards", 15.0f); };
+        }
+    };
+
+    // the registry of ChatTriggerContext (1 of its keys)
+    class SliceChatTriggerContext : public NamedObjectContext<Trigger>
+    {
+    public:
+        SliceChatTriggerContext()
+        {
+            creators["pet"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "pet"); };
         }
     };
 
@@ -384,7 +409,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (179 of its keys)
+    // the registry of ValueContext (182 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -569,11 +594,14 @@ namespace slice
             creators["revive targets"] = [](PlayerbotAI* ai) { return new ReviveTargetsValue(ai); };
             creators["boost targets"] = [](PlayerbotAI* ai) { return new BoostTargetsValue(ai); };
             creators["healer low mana"] = [](PlayerbotAI* ai) { return new HealerLowMana(ai); };
+            creators["pet dead"] = [](PlayerbotAI* ai) { return new PetIsDeadValue(ai); };
+            creators["pet happy"] = [](PlayerbotAI* ai) { return new PetIsHappyValue(ai); };
+            creators["active spell"] = [](PlayerbotAI* ai) { return new ActiveSpellValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 19, kActions = 55, kTriggers = 97, kValues = 179;
+    constexpr unsigned kStrategies = 19, kActions = 62, kTriggers = 103, kValues = 182;
 }
 }
 
@@ -587,6 +615,7 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     actionContexts.Add(new slice::SliceChatActionContext());
     actionContexts.Add(new slice::SliceWorldPacketActionContext());
     triggerContexts.Add(new slice::SliceTriggerContext());
+    triggerContexts.Add(new slice::SliceChatTriggerContext());
     triggerContexts.Add(new slice::SliceWorldPacketTriggerContext());
     valueContexts.Add(new slice::SliceValueContext());
 

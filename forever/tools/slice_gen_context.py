@@ -124,6 +124,17 @@ SLICE10_KEYS = {
                "ranged medium aoe and healer should attack, target of attacker close, loose adds near, low mana, enemy is close",
     "value": "has own totem, have any own totem, possible attack targets count, revive targets, boost targets, healer low mana",
 }
+# Slice 11 (package H11, FOREVER-SLICE11-PETS-SPEC sections 3 and 10, listed with creator file:line in forever/docs/SLICE11-NOTES.md section 5): the generic pet keys the hunter and
+# warlock kits fire, and the hunter's dead-zone and range keys. Left unregistered on purpose (each one makes the bot do less, spec section 3): the chat `tame` action and
+# trigger (TameAction.cpp stays out), `flee with pet`, `boss tactics seek pet`, `thaddius *`, `manual saved string` (so `choice pet`, `choice sting`, `choice aspect` and
+# `.bot choice` stay off, as S10 D5), `apply oil`, `apply stone`, `equip upgrades`, `dispel enrage` (Tranquilizing Shot is level 60), `player has flag`, `nearest stealthed unit`,
+# `warlock spread attacker my aura` (the raid DoT spread), `aoe fear`. `pet target` is registered since slice 1.
+SLICE11_KEYS = {
+    "strategy": "",
+    "action": "initialize pet, toggle pet spell, set pet stance, pet attack, pet, cancel channel, switch to melee, switch to ranged",
+    "trigger": "no pet, has pet, new pet, pet attack, pet, enemy ten yards, enemy fifteen yards, low mana, target of attacker close, has aggro in raid group",
+    "value": "pet dead, pet happy, active spell",
+}
 def _join(*ds):
     # One entry per key and kind: a key two slice lists both name (slice 8's and slice 10's `low mana`, `enemy is close`) is
     # registered once, in the order of the first list that names it.
@@ -137,7 +148,7 @@ def _join(*ds):
                     seen.append(x)
         out[k] = seen
     return out
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
@@ -145,7 +156,8 @@ BASE_T = {"strategy": "Strategy", "action": "Action", "trigger": "Trigger", "val
 LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "SliceMovementStrategyContext",
          "AssistStrategyContext": "SliceAssistStrategyContext", "ActionContext": "SliceActionContext",
          "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
-         "TriggerContext": "SliceTriggerContext", "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
+         "TriggerContext": "SliceTriggerContext", "ChatTriggerContext": "SliceChatTriggerContext",
+         "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
          "ValueContext": "SliceValueContext"}
 
 
