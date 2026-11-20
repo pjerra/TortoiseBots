@@ -3731,10 +3731,8 @@ void TravelNodeMap::loadNodeStore()
 
                 TravelNodePath* path = startNode->GetPathTo(endNode);
 
-                std::vector<WorldPosition> ppath = path->GetPath();
-                ppath.push_back(WorldPosition(fields[3].GetUInt32(), fields[4].GetFloat(), fields[5].GetFloat(), fields[6].GetFloat()));
-
-                path->setPath(ppath);
+                // The rows arrive ordered by `nr`, so each is appended once: no per-point copy of the path grown so far.
+                path->appendPathPoint(WorldPosition(fields[3].GetUInt32(), fields[4].GetFloat(), fields[5].GetFloat(), fields[6].GetFloat()));
 
                 if (path->GetCalculated())
                     path->setComplete(true);

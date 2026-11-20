@@ -2,6 +2,7 @@
 # plus the files of the W4 rounds of FOREVER-W0-W4-SPEC part 2.2 as each round lands. This is the list the ForeverCore build reads.
 #
 # Round W4-A1 (the node graph): ai/playerbot/TravelNode.cpp.
+# Round W4-A2 (destinations and zone levels): TravelMgr.cpp, TravelValues.cpp.
 # One path per line. Used by: FOREVER_SLOT=7 FOREVER_CENSUS_LIST=forever/SLICE-W4.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
@@ -273,4 +274,6 @@ ai/playerbot/strategy/values/GrindTargetValue.cpp
 ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp
 ai/playerbot/strategy/values/DeadValues.cpp
 ai/playerbot/FleeManager.cpp
+ai/playerbot/TravelMgr.cpp
+ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/TravelNode.cpp

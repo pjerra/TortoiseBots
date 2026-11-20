@@ -7,6 +7,7 @@
 #include "strategy/values/TravelValues.h"
 #include "WorldSquare.h"
 #include "UnreachablePointPolicy.h"
+#include "TravelPointKey.h"
 #include <unordered_set>
 
 namespace ai
@@ -591,7 +592,8 @@ namespace ai
 		WorldPosition* nullWorldPosition = new WorldPosition();
 		PurposeDestinationMap destinationMap;
 
-		std::unordered_map<uint64, AsyncGuidPosition> pointsMap;
+		// Keyed by the whole spawn identity: see TravelPointKey.h (the bare guid number collides across guid types).
+		std::unordered_map<TravelPointKey, AsyncGuidPosition, TravelPointKeyHash> pointsMap;
 
 		GatherTravelDestination fishMap;
 		std::list<AsyncGuidPosition> fishPoints;
