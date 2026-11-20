@@ -1,4 +1,4 @@
-#include "ai/playerbot/policy/item/ClassicItemStatPolicy.h"
+#include "../ai/playerbot/policy/item/ClassicItemStatPolicy.h"
 
 #include <cstdlib>
 #include <cstring>

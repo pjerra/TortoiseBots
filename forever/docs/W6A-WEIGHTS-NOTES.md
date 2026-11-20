@@ -15,7 +15,7 @@
   `[1/1] cd /src && /usr/bin/cmake -DBUILDDIR="/build" -DEMBED_BUILD_PATHS=ON -P /src/cmake/genrev.cmake /build` (exit 0)
 - **Census (`tbf-build.sh ... census:forever/SLICE9.txt`):**
   `files 266  compile clean 0  with errors 266  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (exit 0)
-- **Pure policy test (`g++ -std=c++17 -O1 -Wall -Wextra -I. tools/test_classic_item_stat_policy.cpp`):**
+- **Pure policy test (`g++ -std=c++17 -O1 -Wall -Wextra tools/test_classic_item_stat_policy.cpp`):**
   `0 failed` (exit 0); mutation test (dropping classic-id map) failed as expected: `Assertion failed at line 56: SameName(ai::ClassicItemStatWeightName(12), "defrtng")` (exit 1).
 - **Slice registry & context check (`slice_registry_check.py`, `slice_gen_context.py --check`):**
   `summary: (a)=0  (b)=224 keys to register or stub later`
