@@ -85,7 +85,10 @@ public:
                            std::function<uint64_t()> const& nextSeq, int64_t tsUnix, int64_t tsMs, uint32_t nowMs,
                            uint32_t minGapMs);
     std::string WindowJson(uint32_t groupId);
-    void NoteBinding(uint32_t groupId, std::string const& commander, uint32_t commanderGuid, uint32_t mapId);
+    // The book's metadata for its payloads: the commander (name and guid), the map, and the WoW group the fights report. `worldGroup` 0
+    // reports the book's own key, which is what a caller that keys books by the group counter passes.
+    void NoteBinding(uint32_t groupId, std::string const& commander, uint32_t commanderGuid, uint32_t mapId,
+                     uint32_t worldGroup = 0);
 #ifdef COMBAT_MONITOR_TEST_CONFIG
     static uint64_t TestHookLockCount();                    // hook-path mutex takes since process start (tests only)
     static uint64_t TestSnapshotLoadCount();                // hook-path snapshot loads (bitset hits) since process start
@@ -117,6 +120,7 @@ private:
         std::string commander;
         uint32_t commanderGuid = 0;
         uint32_t mapId = 0;
+        uint32_t worldGroup = 0;   // the group the payload reports, 0: the book's key
     };
     std::unordered_map<uint32_t, CombatMonitor::Book> m_retired;
     std::unordered_map<uint32_t, RetiredMeta> m_retiredMeta;
@@ -132,6 +136,7 @@ private:
     std::unordered_map<uint32_t, std::string> m_commander;       // group id -> commander name (+ guid, map) for the payload
     std::unordered_map<uint32_t, uint32_t> m_commanderGuid;      // group id -> commander guid low
     std::unordered_map<uint32_t, uint32_t> m_mapId;               // group id -> the lead's map
+    std::unordered_map<uint32_t, uint32_t> m_worldGroup;          // group id -> the WoW group its payloads report (absent: the key)
     uint32_t m_lastNowMs = 0;
     int64_t m_lastUnixNow = 0;
     std::atomic<uint32_t> m_inFightCount{0};   // books in a fight, maintained under m_mutex

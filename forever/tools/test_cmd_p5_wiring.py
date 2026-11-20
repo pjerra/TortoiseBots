@@ -2,9 +2,11 @@
 """Wiring pins and mutations for the fight debugger (package P5, forever/docs/CMD-P5-NOTES.md).
 
 The core calls cannot run without a server, so the wiring tests pin where the hooks stand, what the monitor may never do, and the two option
-builds. The mutation tests (CMD_P5_MUTATE=1) compile forever/tools/cmd_combat_check.cpp with the pure half broken four ways and expect the
+builds. The mutation tests (CMD_P5_MUTATE=1) compile forever/tools/cmd_combat_check.cpp with the pure half broken six ways and expect the
 check to FAIL each time:
   feed0      a card with no live group is fed (every party-less binding lands on one book)
+  bookkey    a card's fight is keyed by its WoW group (two commanders in one group overwrite each other's members and fight)
+  rankorder  the engaged units are ordered by arrival instead of rank (the newest mob is kept ahead of the boss met before it)
   focus      the raced boss entry is ignored (the debuff sample reads the biggest mob instead of the boss being fought)
   applyonly  the aura diff never reports a removal (the timeline keeps auras that fell off, forever)
   alwaysdue  every pass runs on every world tick (the 1 Hz sample, the 250 ms poll and the 100 ms drain stop being clocks)
@@ -100,11 +102,36 @@ class Wiring(unittest.TestCase):
         # The cast poll is bounded and reads the two ranks only.
         poll = combat[combat.index("void PollEnemyCasts()"):]
         poll = poll[:poll.index("\n}")]
-        self.assertIn("P::kWatchCap", poll)
-        self.assertIn("true)", poll)
+        self.assertIn("CollectEngaged(feed, lead, watch, true)", poll)
         self.assertNotIn("for (Player*", poll)
         # The sampler's cost is logged, as the Turtle sampler's was.
         self.assertIn("bound fights 60s", combat)
+
+    def test_the_engaged_walk_is_bounded(self):
+        # The cap bounds the work: the pure scan visits at most kScanRefs references, keeps at most kWatchCap, and the feed resolves only
+        # what it kept. No set of every guid and no sort of the whole pull may come back.
+        combat = code(self.combat)
+        self.assertIn("P::EngagedScan<ObjectGuid> scan(watchedOnly);", combat)
+        self.assertIn("scan.Keep(guid, RankOfEntry(mapId, guid.GetEntry()));", combat)
+        for forbidden in ("std::set<ObjectGuid>", "stable_sort", "refs.push_back"):
+            self.assertNotIn(forbidden, combat, f"the walk keeps at most kWatchCap units ({forbidden})")
+        pure = code(self.pure)
+        self.assertIn("constexpr size_t kScanRefs = 128;", pure)
+        self.assertIn("bool Over() const { return m_visited >= kScanRefs || Saturated(); }", pure)
+
+    def test_two_cards_in_one_group_are_two_books(self):
+        # A card's fight is keyed by its commander binding: the group counter is metadata the payload reports, never the key.
+        combat = code(self.combat)
+        self.assertIn("P::BookRef const book = P::BookOf(card.commanderGuid, card.groupId);", combat)
+        self.assertIn("Feed& feed = Feeds()[book.key];", combat)
+        self.assertIn("service.Refresh(book.key,", combat)
+        self.assertIn("service.NoteBinding(book.key, card.commanderName, card.commanderGuid, lead->GetMapId(), book.group);",
+                      combat)
+        self.assertIn("standing.insert(book.key);", combat)
+        self.assertIn("WindowJson(binding.commanderGuid)", combat)
+        for forbidden in ("Feeds()[card.groupId]", "service.Refresh(card.groupId", "WindowJson(binding.groupId)",
+                          "service.NoteBinding(card.groupId"):
+            self.assertNotIn(forbidden, combat, f"the group counter is never the book key ({forbidden})")
 
     def test_the_payloads_go_through_the_dashboard_link(self):
         combat = code(self.combat)
@@ -145,7 +172,10 @@ class Wiring(unittest.TestCase):
 
 
 MUTATIONS = {
-    "feed0": ("    return groupId != 0;", "    return true;"),
+    "feed0": ("    return bookKey != 0 && groupId != 0;", "    return groupId != 0;"),
+    "bookkey": ("    return BookRef{ commanderGuid, groupId };", "    return BookRef{ groupId, groupId };"),
+    "rankorder": ("        while (at < m_kept && static_cast<uint8_t>(m_keys[at].rank) >= static_cast<uint8_t>(rank))",
+                  "        while (at < m_kept && static_cast<uint8_t>(m_keys[at].rank) > static_cast<uint8_t>(rank))"),
     "focus": ("    if (bossEntry)\n        for (size_t i = 0; i < engaged.size(); ++i)", "    if (false)\n        for (size_t i = 0; i < engaged.size(); ++i)"),
     "applyonly": ("            edges.emplace_back(before[a], false);", "            (void)before[a];"),
     "alwaysdue": ("    return sinceMs == 0 || nowMs - sinceMs >= everyMs;", "    return true;"),

@@ -144,8 +144,9 @@ static std::string FightId(std::string const& payload)
 
 static void TestPure()
 {
-    CHECK(!P::Feedable(0));
-    CHECK(P::Feedable(3));
+    CHECK(!P::Feedable(0, 3));   // no identity to key the book with
+    CHECK(!P::Feedable(5, 0));   // no live group to read the fight against
+    CHECK(P::Feedable(5, 3));
     CHECK(P::Due(1000, 0, P::kSampleMs));            // the first pass after a start
     CHECK(!P::Due(1999, 1000, P::kSampleMs));
     CHECK(P::Due(2000, 1000, P::kSampleMs));
@@ -180,6 +181,74 @@ static void TestPure()
     std::vector<uint32_t> ids = { 5, 1, 5, 3 };
     P::SortUnique(ids);
     CHECK(ids == std::vector<uint32_t>({ 1, 3, 5 }));
+    // The book is the commander binding: two cards leading parties in one group are two fights that report one group.
+    P::BookRef const bookA = P::BookOf(5, 90);
+    P::BookRef const bookB = P::BookOf(6, 90);
+    CHECK_EQ(bookA.key, 5u);
+    CHECK_EQ(bookB.key, 6u);
+    CHECK(bookA.key != bookB.key);
+    CHECK_EQ(bookA.group, bookB.group);
+    CHECK_EQ(bookA.group, 90u);
+}
+
+// ---- the engaged walk is bounded by the pass, never by the pull ----
+static void TestEngagedScan()
+{
+    // A full kept set of plain mobs, then an elite and a boss much later in the pull: rank outranks arrival, and the sort is the insert.
+    P::EngagedScan<uint32_t> scan;
+    for (uint32_t i = 0; i < 16; ++i)
+        if (scan.Visit(i))
+            scan.Keep(i, P::Rank::None);
+    CHECK(scan.Visit(100));
+    scan.Keep(100, P::Rank::Elite);
+    CHECK(scan.Visit(200));
+    scan.Keep(200, P::Rank::Boss);
+    CHECK_EQ(scan.size(), P::kWatchCap);
+    CHECK(scan.key(0) == 200u);   // the boss first
+    CHECK(scan.key(1) == 100u);   // then the elite
+    CHECK(scan.key(2) == 0u);     // the earliest mob, never the newest one to arrive
+    CHECK(scan.key(7) == 5u);     // the two worst mobs made room for the two ranks that matter
+    CHECK(!scan.Visit(3));        // a visited guid: no second look, no second row
+    CHECK(!scan.Visit(200));
+
+    // The cost: a hundred thousand references (a raid pull) cost the budget and nothing more.
+    P::EngagedScan<uint32_t> big;
+    size_t offered = 0;
+    for (uint32_t guid = 1000; guid < 101000; ++guid)
+        if (big.Visit(guid))
+        {
+            big.Keep(guid, guid == 1005 ? P::Rank::Boss : guid == 1003 ? P::Rank::Elite : P::Rank::None);
+            ++offered;
+        }
+    CHECK_EQ(offered, P::kScanRefs);              // the walk stopped at the budget, not at the end of the pull
+    CHECK_EQ(big.visited(), P::kScanRefs);
+    CHECK_EQ(big.size(), P::kWatchCap);           // the mobs met first, the boss and the elite ahead of them
+    CHECK(big.key(0) == 1005u);
+    CHECK(big.key(1) == 1003u);
+
+    // The walk also ends early when nothing left can displace what it holds: eight bosses are final.
+    P::EngagedScan<uint32_t> bosses;
+    size_t seen = 0;
+    for (uint32_t guid = 5000; guid < 6000; ++guid)
+    {
+        if (!bosses.Visit(guid))
+            break;
+        bosses.Keep(guid, P::Rank::Boss);
+        ++seen;
+    }
+    CHECK_EQ(seen, P::kWatchCap);
+    CHECK(bosses.Over());
+
+    // The cast poll reads elites and bosses only: a mob costs its visit, never a kept row.
+    P::EngagedScan<uint32_t> poll(true);
+    CHECK(poll.Visit(1));
+    poll.Keep(1, P::Rank::None);
+    CHECK_EQ(poll.size(), size_t(0));
+    CHECK(poll.Visit(2));
+    poll.Keep(2, P::Rank::Elite);
+    CHECK_EQ(poll.size(), size_t(1));
+    CHECK(poll.key(0) == 2u);
+    CHECK_EQ(poll.visited(), size_t(2));
 }
 
 // ---- the fight the golden pins: one boss fight, a kill ----
@@ -263,6 +332,87 @@ static void TestWipeEndsFight()
     svc.Forget(group);
 }
 
+// ---- two commander cards leading parties in one group: two books, two fights, one group ----
+static std::vector<std::string> FightsOfCommander(CombatMonitorService& svc, std::string const& commander, int64_t ts)
+{
+    std::vector<std::string> out;
+    svc.TakePayloads(out, 12, 77, NextSeq, ts);
+    std::vector<std::string> mine;
+    for (std::string const& payload : out)
+        if (payload.find("\"type\":\"COMBAT_FIGHT\"") != std::string::npos &&
+            payload.find("\"commander\":\"" + commander + "\",") != std::string::npos)
+            mine.push_back(payload);
+    return mine;
+}
+
+static void TestTwoCardsOneGroup()
+{
+    CombatMonitorService& svc = CombatMonitorService::Instance();
+    sPlayerbotAIConfig.combatMonitor = true;
+    sPlayerbotAIConfig.combatTimeline = false;
+    svc.SyncConfig(true);
+    P::BookRef const a = P::BookOf(5, 90);
+    P::BookRef const b = P::BookOf(6, 90);
+    CHECK(a.key != b.key);        // two cards of one group: two books, so neither overwrites the other
+    CHECK_EQ(a.group, b.group);   // ... and one group both report
+
+    std::vector<MemberInfo> const aMembers = { MemberInfo{ 7, "Tanky", "warrior", Role::Tank, -1 } };
+    std::vector<MemberInfo> const bMembers = { MemberInfo{ 11, "Bulwark", "warrior", Role::Tank, -1 } };
+    svc.Refresh(a.key, aMembers, true, false, Ctx(), {}, 1000);
+    svc.NoteBinding(a.key, "McmdA", 5, 389, a.group);
+    svc.Refresh(b.key, bMembers, true, false, Ctx(), {}, 1000);
+    svc.NoteBinding(b.key, "McmdB", 6, 389, b.group);
+    svc.OnDamage(7, 0, 100, "Tanky", 11517, 4242, "Oggleflint");
+    svc.OnDamage(11, 0, 40, "Bulwark", 11517, 4242, "Oggleflint");
+    // Each card's window holds its own member and its own numbers, never the other card's.
+    std::string const wa = svc.WindowJson(a.key);
+    std::string const wb = svc.WindowJson(b.key);
+    CHECK(!wa.empty() && !wb.empty());
+    CHECK(wa != wb);
+    CHECK(wa.find("\"g\":7,") != std::string::npos);
+    CHECK(wa.find("\"g\":11,") == std::string::npos);
+    CHECK(wb.find("\"g\":11,") != std::string::npos);
+    CHECK(wb.find("\"g\":7,") == std::string::npos);
+    CHECK(wa.find("\"dps\":10,") != std::string::npos);   // 100 damage over the 10 s window
+    CHECK(wb.find("\"dps\":4,") != std::string::npos);    // 40 damage over the same window
+
+    // Card A's first fight, then card B's first, then card A's second: each book numbers its own fights, and every fight reports the group.
+    svc.Refresh(a.key, aMembers, false, false, Ctx(), {}, 6000);
+    svc.Refresh(a.key, aMembers, false, false, Ctx(), {}, 10000);
+    std::vector<std::string> aFights = FightsOfCommander(svc, "McmdA", 1700040000);
+    CHECK_EQ(aFights.size(), size_t(1));
+    if (!aFights.empty())
+    {
+        CHECK_EQ(FightId(aFights.front()), std::string("90-1"));
+        CHECK(aFights.front().find("\"group\":90,") != std::string::npos);
+        CHECK(aFights.front().find("\"commander_guid\":5,") != std::string::npos);
+        CHECK(aFights.front().find("\"guid\":7,") != std::string::npos);
+        CHECK(aFights.front().find("\"guid\":11,") == std::string::npos);
+    }
+    svc.Refresh(b.key, bMembers, false, false, Ctx(), {}, 6000);
+    svc.Refresh(b.key, bMembers, false, false, Ctx(), {}, 10000);
+    std::vector<std::string> bFights = FightsOfCommander(svc, "McmdB", 1700041000);
+    CHECK_EQ(bFights.size(), size_t(1));
+    if (!bFights.empty())
+    {
+        CHECK_EQ(FightId(bFights.front()), std::string("90-1"));   // its own first fight, not a continuation of A's
+        CHECK(bFights.front().find("\"group\":90,") != std::string::npos);
+        CHECK(bFights.front().find("\"commander_guid\":6,") != std::string::npos);
+        CHECK(bFights.front().find("\"guid\":11,") != std::string::npos);
+        CHECK(bFights.front().find("\"guid\":7,") == std::string::npos);
+    }
+    svc.Refresh(a.key, aMembers, true, false, Ctx(), {}, 11000);
+    svc.OnDamage(7, 0, 60, "Tanky", 11517, 4242, "Oggleflint");
+    svc.Refresh(a.key, aMembers, false, false, Ctx(), {}, 16000);
+    svc.Refresh(a.key, aMembers, false, false, Ctx(), {}, 20000);
+    aFights = FightsOfCommander(svc, "McmdA", 1700042000);
+    CHECK_EQ(aFights.size(), size_t(1));
+    if (!aFights.empty())
+        CHECK_EQ(FightId(aFights.front()), std::string("90-2"));   // A's own counter, untouched by B's fight
+    svc.Forget(a.key);
+    svc.Forget(b.key);
+}
+
 // ---- leaving combat ends it, with no death on either side ----
 static void TestLeavingCombatEndsFight()
 {
@@ -326,8 +476,10 @@ int main(int argc, char** argv)
         return fight.empty() ? 1 : 0;
     }
     TestPure();
+    TestEngagedScan();
     TestGoldenFight();
     TestWipeEndsFight();
+    TestTwoCardsOneGroup();
     TestLeavingCombatEndsFight();
     TestEventsAndTimeline();
     std::printf("cmd_combat_check: %d checks, %d failed\n", checks, failed);

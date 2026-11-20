@@ -62,7 +62,8 @@ namespace CT = ::TortoiseBots::CommanderTelemetry;
 
 constexpr int kProtocolVersion = 12;   // the dashboard's model version (the roster sender and the dash-runs collector write the same)
 
-// One group's feed state between ticks: guids and plain data only.
+// One card's feed state between ticks: guids and plain data only. The map is keyed by the card's book (its commander binding), never by the
+// WoW group: two commander cards can lead parties inside one group, and each keeps its own members, boss and fight.
 struct Feed
 {
     ObjectGuid lead;                                    // the card's lead at the last usable sample
@@ -183,24 +184,21 @@ std::vector<AuraNow> AppliedAuras(Unit const* unit)
 }
 
 // The units the party fights: every member's attackers and every unit it is in combat with (the core's own combat references: a boss the
-// party only attacks is in them too). Bosses first, then elites, then the rest, and a guid is looked at once.
-void CollectEngaged(Feed const& feed, Player* lead, std::vector<Unit*>& out, size_t cap, bool watchedOnly)
+// party only attacks is in them too). Bosses first, then elites, then the rest. The walk is the pure scan: one visit per reference, at most
+// kScanRefs of them and at most kWatchCap kept, so a raid pull costs this thread what a party pull does and only the kept units are resolved.
+void CollectEngaged(Feed const& feed, Player* lead, std::vector<Unit*>& out, bool watchedOnly)
 {
-    struct Ref
-    {
-        ObjectGuid guid;
-        P::Rank rank = P::Rank::None;
-    };
-    std::set<ObjectGuid> seen;
-    std::vector<Ref> refs;
+    P::EngagedScan<ObjectGuid> scan(watchedOnly);
+    uint32 const mapId = lead->GetMapId();
     auto consider = [&](ObjectGuid const& guid)
     {
-        if (guid.IsEmpty() || !seen.insert(guid).second)
-            return;
-        refs.push_back({ guid, P::Rank::None });
+        if (!guid.IsEmpty() && scan.Visit(guid))
+            scan.Keep(guid, RankOfEntry(mapId, guid.GetEntry()));
     };
     for (uint32 member : feed.members)
     {
+        if (scan.Over())
+            break;
         Player* bot = InWorld(PlayerGuid(member));
         if (!bot || !bot->GetMap())
             continue;
@@ -210,20 +208,10 @@ void CollectEngaged(Feed const& feed, Player* lead, std::vector<Unit*>& out, siz
         for (auto const& ref : bot->GetCombatManager().GetPvECombatRefs())
             consider(ref.first);
     }
-    uint32 const mapId = lead->GetMapId();
-    for (Ref& ref : refs)
-        ref.rank = RankOfEntry(mapId, ref.guid.GetEntry());
-    std::stable_sort(refs.begin(), refs.end(), [](Ref const& a, Ref const& b) { return uint8(a.rank) > uint8(b.rank); });
     out.clear();
-    for (Ref const& ref : refs)
-    {
-        if (out.size() >= cap)
-            break;
-        if (watchedOnly && !P::CastWatched(ref.rank))
-            break;   // sorted: nothing the poll reads is left
-        if (Unit* unit = ObjectAccessor::GetUnit(*lead, ref.guid))
+    for (size_t i = 0; i < scan.size(); ++i)
+        if (Unit* unit = ObjectAccessor::GetUnit(*lead, scan.key(i)))
             out.push_back(unit);
-    }
 }
 
 // The timeline's aura edges: ForeverCore's UnitScript has no apply/remove hook, so each member's watched-by-id aura set is sampled once a
@@ -289,7 +277,7 @@ CM::FightContext ContextOf(Player* lead)
 // The fight's boss: the run's plan boss when he is among the units being fought (a move-step pull and the walk back), else the boss-flagged
 // engaged creature with the most maximum health. The first pick of a fight wins (the service keeps it), and the unit's guid is remembered
 // here to sample his health and victim; a script-changed entry is a phase the next sample reports.
-void PickBoss(Feed& feed, uint32 group, Player* lead, std::vector<Unit*> const& engaged, CM::FightContext const& ctx)
+void PickBoss(Feed& feed, uint32 book, Player* lead, std::vector<Unit*> const& engaged, CM::FightContext const& ctx)
 {
     CombatMonitorService& service = CombatMonitorService::Instance();
     if (ctx.bossEntry)
@@ -300,9 +288,9 @@ void PickBoss(Feed& feed, uint32 group, Player* lead, std::vector<Unit*> const& 
                 continue;
             if (creature->GetEntry() != ctx.bossEntry && ScriptChangedFrom(creature) != ctx.bossEntry)
                 continue;
-            service.AdoptBoss(group, ctx.bossEntry, ctx.bossName.c_str());
+            service.AdoptBoss(book, ctx.bossEntry, ctx.bossName.c_str());
             feed.boss = creature->GetGUID();
-            service.NoteBossGuid(group, GuidKey(feed.boss));
+            service.NoteBossGuid(book, GuidKey(feed.boss));
             return;
         }
     uint32 const mapId = lead->GetMapId();
@@ -325,13 +313,13 @@ void PickBoss(Feed& feed, uint32 group, Player* lead, std::vector<Unit*> const& 
     int const picked = BoundFight::PickBoss(candidates);
     if (picked < 0)
         return;
-    service.NoteBoss(group, candidates[size_t(picked)].entry, candidates[size_t(picked)].name.c_str(),
+    service.NoteBoss(book, candidates[size_t(picked)].entry, candidates[size_t(picked)].name.c_str(),
                      candidates[size_t(picked)].guid);
     feed.boss = guids[size_t(picked)];
 }
 
 // The boss's state for the fight's outcome (an evade ends it with him alive and home) and, with the timeline on, his health and victim.
-void SampleBoss(Feed& feed, uint32 group, Player* lead, uint32 nowMs)
+void SampleBoss(Feed& feed, uint32 book, Player* lead, uint32 nowMs)
 {
     if (feed.boss.IsEmpty())
         return;
@@ -347,14 +335,14 @@ void SampleBoss(Feed& feed, uint32 group, Player* lead, uint32 nowMs)
         GetRespawnCoordCompat(creature, x, y, z);
         atHome = boss->GetDistance2d(x, y) <= CM::kBossHomeYd;
     }
-    service.NoteBossState(group, boss->IsAlive(), boss->IsInCombat(), creature && creature->IsInEvadeMode(),
+    service.NoteBossState(book, boss->IsAlive(), boss->IsInCombat(), creature && creature->IsInEvadeMode(),
                           boss->IsAlive() && boss->GetHealth() >= boss->GetMaxHealth(), atHome);
-    if (boss->GetEntry() != service.BossEntry(group))
-        service.NoteBossForm(group, boss->GetEntry());
+    if (boss->GetEntry() != service.BossEntry(book))
+        service.NoteBossForm(book, boss->GetEntry());
     if (!service.TimelineEnabled())
         return;
     Unit* victim = boss->GetVictim();
-    service.SampleTimeline(group, boss->IsAlive() ? uint32(boss->GetHealth()) : 0, uint32(boss->GetMaxHealth()),
+    service.SampleTimeline(book, boss->IsAlive() ? uint32(boss->GetHealth()) : 0, uint32(boss->GetMaxHealth()),
                            victim ? GuidLow(victim->GetGUID()) : 0, victim ? victim->GetName().c_str() : "", nowMs);
 }
 
@@ -363,14 +351,15 @@ void SampleBoss(Feed& feed, uint32 group, Player* lead, uint32 nowMs)
 void SampleCard(C::CardView const& card, uint32 nowMs)
 {
     CombatMonitorService& service = CombatMonitorService::Instance();
-    Feed& feed = Feeds()[card.groupId];
+    P::BookRef const book = P::BookOf(card.commanderGuid, card.groupId);
+    Feed& feed = Feeds()[book.key];
     uint32 const leadGuid = card.bots.empty() ? 0 : card.bots.front().guid;
     Player* lead = leadGuid ? InWorld(PlayerGuid(leadGuid)) : nullptr;
     Group* group = lead ? lead->GetGroup() : nullptr;
     bool const usable = BoundFight::LeadUsable(lead != nullptr, lead && lead->IsInWorld(), GroupKey(group), card.groupId);
     if (feed.away.Overdue(usable, nowMs))
     {
-        service.CloseUnfinished(card.groupId, nowMs);
+        service.CloseUnfinished(book.key, nowMs);
         feed.NewFight();
         feed.inFight = false;
     }
@@ -404,7 +393,7 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
     }
     CM::FightContext const ctx = ContextOf(lead);
     std::vector<Unit*> engaged;
-    CollectEngaged(feed, lead, engaged, P::kWatchCap, false);
+    CollectEngaged(feed, lead, engaged, false);
     // The tracked debuffs of one focus unit: the run's boss among the engaged when he is there, else the one with the most health.
     std::vector<std::string> debuffKeys;
     std::vector<P::FocusCandidate> focusCandidates;
@@ -422,10 +411,10 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
                 debuffKeys.push_back(key);
         }
     bool const wasInFight = feed.inFight;
-    service.NoteBinding(card.groupId, card.commanderName, card.commanderGuid, lead->GetMapId());
-    service.Refresh(card.groupId, std::move(members), anyInCombat, P::AllDead(card.bots.size(), alive), ctx, debuffKeys,
+    service.NoteBinding(book.key, card.commanderName, card.commanderGuid, lead->GetMapId(), book.group);
+    service.Refresh(book.key, std::move(members), anyInCombat, P::AllDead(card.bots.size(), alive), ctx, debuffKeys,
                     nowMs);
-    feed.inFight = service.InFight(card.groupId);
+    feed.inFight = service.InFight(book.key);
     if (!feed.inFight)
     {
         if (wasInFight)
@@ -435,9 +424,9 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
     if (!wasInFight)
         feed.NewFight();
     SampleAuras(feed, nowMs);
-    if (service.BossEntry(card.groupId) == 0)
-        PickBoss(feed, card.groupId, lead, engaged, ctx);
-    SampleBoss(feed, card.groupId, lead, nowMs);
+    if (service.BossEntry(book.key) == 0)
+        PickBoss(feed, book.key, lead, engaged, ctx);
+    SampleBoss(feed, book.key, lead, nowMs);
 }
 
 // The 1 Hz pass: every standing card, then the books of the cards that are gone (a released binding, a dismissed party).
@@ -450,9 +439,10 @@ void Sample()
     std::set<uint32> standing;
     for (C::CardView const& card : cards)
     {
-        if (!P::Feedable(card.groupId))
+        P::BookRef const book = P::BookOf(card.commanderGuid, card.groupId);
+        if (!P::Feedable(book.key, book.group))
             continue;
-        standing.insert(card.groupId);
+        standing.insert(book.key);
         SampleCard(card, nowMs);
     }
     for (auto it = Feeds().begin(); it != Feeds().end();)
@@ -474,7 +464,7 @@ void Sample()
     if (nowMs - g_loggedAtMs >= 60000)
     {
         if (!Feeds().empty())
-            sLog.outString("TortoiseBots: bound fights 60s: %llu samples, avg %llu us max %llu us, %u group(s)",
+            sLog.outString("TortoiseBots: bound fights 60s: %llu samples, avg %llu us max %llu us, %u card(s)",
                            (unsigned long long)g_samples, (unsigned long long)(g_samples ? g_sumUs / g_samples : 0),
                            (unsigned long long)g_maxUs, (uint32)Feeds().size());
         g_loggedAtMs = nowMs;
@@ -482,8 +472,9 @@ void Sample()
     }
 }
 
-// The elite and boss cast starts of the groups in a fight, once per kCastPollMs: at most kWatchCap units per group, ranked from the guid's
-// entry (no unit resolved for what is not read), and one event per cast that started (the last spell read is remembered per unit).
+// The elite and boss cast starts of the cards in a fight, once per kCastPollMs: at most kWatchCap units per card, ranked from the guid's entry
+// within the scan budget (no unit resolved for what is not read), and one event per cast that started (the last spell read is remembered per
+// unit).
 void PollEnemyCasts()
 {
     CombatMonitorService& service = CombatMonitorService::Instance();
@@ -491,15 +482,15 @@ void PollEnemyCasts()
         return;
     for (auto& entry : Feeds())
     {
-        uint32 const group = entry.first;
+        uint32 const book = entry.first;
         Feed& feed = entry.second;
-        if (!service.InFight(group))
+        if (!service.InFight(book))
             continue;
         Player* lead = InWorld(feed.lead);
         if (!lead || !lead->IsInWorld())
             continue;
         std::vector<Unit*> watch;
-        CollectEngaged(feed, lead, watch, P::kWatchCap, true);
+        CollectEngaged(feed, lead, watch, true);
         uint32 const mapId = lead->GetMapId();
         std::set<uint32> current;
         for (Unit* unit : watch)
@@ -519,7 +510,7 @@ void PollEnemyCasts()
             }
             feed.lastCast[key] = spellId;
             Unit* target = spell->m_targets.GetUnitTarget();
-            service.NoteEnemyCast(group, unit->GetEntry(), GuidKey(unit->GetGUID()), unit->GetName().c_str(), SpellName(info).c_str(),
+            service.NoteEnemyCast(book, unit->GetEntry(), GuidKey(unit->GetGUID()), unit->GetName().c_str(), SpellName(info).c_str(),
                                   P::CastRank(RankOfUnit(mapId, unit)), spellId, target ? GuidKey(target->GetGUID()) : 0,
                                   target ? target->GetName().c_str() : "");
         }
@@ -694,9 +685,10 @@ void Update(uint32 /*diff*/)
 
 void FillWindow(CommanderTelemetry::BindingInfo& binding)
 {
-    if (!CombatMonitorService::Instance().Enabled() || !binding.groupId)
+    // The card's own book: keyed by the commander binding, the same key the sampler feeds, so two cards sharing a group read their own fight.
+    if (!CombatMonitorService::Instance().Enabled() || !binding.groupId || !binding.commanderGuid)
         return;
-    binding.combatJson = CombatMonitorService::Instance().WindowJson(binding.groupId);
+    binding.combatJson = CombatMonitorService::Instance().WindowJson(binding.commanderGuid);
 }
 
 void RegisterScripts()

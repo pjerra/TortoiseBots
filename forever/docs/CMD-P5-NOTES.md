@@ -13,8 +13,11 @@ commander cards, and sends what it builds (`COMBAT_FIGHT`, `COMBAT_EVENTS`, and 
 the dash-runs collector already uses.
 
 * A **commander card** (P1/P2) is fed once a second while its lead stands in a live group: the members, their combat state, the run's plan
-  context, the focus unit's tracked debuffs. A card with no live group (a party-less binding, group counter 0) is not fed: the books are keyed
-  by the group's session counter and there is no counter to key it with.
+  context, the focus unit's tracked debuffs. A card with no live group (a party-less binding, group counter 0) is not fed: the sample's lead
+  check compares that counter and a party-less binding has nothing to feed a book for.
+* **A book is the card, not the group** (`BookOf(commanderGuid, groupId)`): the fight, the members, the boss and the window are keyed by the
+  commander binding, and the group counter is metadata the payload reports. Two commander cards can lead parties standing in one WoW group;
+  keyed by the group they would overwrite each other's members and fight, and both dashboard cards would read the same window.
 * The **hooks** are the three of ForeverCore's `UnitScript` an aggregate needs (damage, heal outcome, death) and the `PlayerScript` cast hook,
   registered beside the module's other scripts. There is no enter-combat hook and no aura hook on this core: the sample's in-combat state starts
   a fight, and the timeline's aura edges come from a 1 Hz diff of each member's applied auras.
@@ -23,6 +26,9 @@ the dash-runs collector already uses.
   party only attacks is in it, and no grid or world scan runs.
 * **Enemy casts** are polled at 250 ms from the engaged units of the two ranks the dashboard draws apart (boss `b`, elite `e`), at most eight per
   card, ranked from the guid's own entry before any unit is resolved.
+* **The engaged walk is bounded by the pass, not by the pull.** `pure::EngagedScan` visits at most `kScanRefs` (128) references per card per
+  pass, keeps at most `kWatchCap` (8) units in a fixed array ordered best rank first, and ends early once eight bosses are held; nothing of
+  the pull is materialised, nothing is sorted, and only the kept units are resolved to objects. A raid pull costs what a party pull costs.
 * The **fight window** (`combat` in `COMMANDERS`) is attached to every card `AppendBindings` appends; nothing else in the card changed.
 * **Nothing keeps an object pointer across a tick.** A card's bots are guid counters, the fight's boss is an `ObjectGuid`, and units are
   resolved afresh per pass.
@@ -31,12 +37,12 @@ the dash-runs collector already uses.
 
 | File | What |
 |---|---|
-| `forever/src/host/cmd/TbCmdCombatPure.h` | pure (stdlib + `runtime/CombatMonitorPolicy.h`): `Feedable`, `Due`, `Rank`/`CastRank`/`CastWatched`, `PickFocus`, `AuraEdges`, `AllDead`, `RoleOf`, `SortUnique`, the pass cadences (1 Hz sample, 250 ms cast poll, 100 ms event drain, 250 ms event gap, 8 units per poll) |
+| `forever/src/host/cmd/TbCmdCombatPure.h` | pure (stdlib + `runtime/CombatMonitorPolicy.h`): `BookOf`/`BookRef` (the card's book), `Feedable`, `Due`, `Rank`/`CastRank`/`CastWatched`, `EngagedScan` (the bounded best-k walk), `PickFocus`, `AuraEdges`, `AllDead`, `RoleOf`, `SortUnique`, the pass cadences and bounds (1 Hz sample, 250 ms cast poll, 100 ms event drain, 250 ms event gap, 8 units kept, 128 references visited) |
 | `forever/src/host/cmd/TbCmdCombat.{h,cpp}` | the ForeverCore side: the two script objects, the sampler, the boss pick and timeline sample, the cast poll, `COMBAT_FIGHT`/`COMBAT_EVENTS` through `DashRuns::link`, `FillWindow`, the cost line. Engine-only; without `TORTOISEBOTS_SLICE1` the file is three no-ops |
 | `forever/src/compat/TbCompat_C5.h`, `ai/cmangos-compat-c5.h`, `ai/playerbot/TbCompatC5.h` | the monitor's one world read (`ai_combat_aura_watch`, through `WorldQueryCompat`) and its two log lines, one pair of helpers for both cores |
-| `forever/tools/cmd_combat_check.cpp` | the standalone check: the pure half, the golden fight JSON, a wipe and a leaving-combat end that each file a fight and change the id, the live stream's fight id, the timeline sample |
-| `forever/tools/test_cmd_p5_wiring.py` | wiring pins; with `CMD_P5_MUTATE=1` four mutations of the pure half must FAIL the check |
-| `runtime/CombatMonitorService.cpp` (shared) | the guarded watch read and the two log lines; nothing else |
+| `forever/tools/cmd_combat_check.cpp` | the standalone check: the pure half, the bounded engaged walk (a 100,000-reference pull costs the budget), two commander cards in one group (two books, two windows, their own fight numbering, one reported group), the golden fight JSON, a wipe and a leaving-combat end that each file a fight and change the id, the live stream's fight id, the timeline sample |
+| `forever/tools/test_cmd_p5_wiring.py` | wiring pins; with `CMD_P5_MUTATE=1` six mutations of the pure half must FAIL the check |
+| `runtime/CombatMonitorService.{h,cpp}` (shared) | the guarded watch read and the two log lines, and the book's reported group (`NoteBinding`'s optional `worldGroup`, one map of it and its use in the two payload drains); nothing else |
 | `forever/docs/CMD-P5-NOTES.md` | this file |
 
 ## Shared lines touched (the brief asked for every one)
@@ -49,6 +55,7 @@ the dash-runs collector already uses.
 | `forever/src/host/cmd/TbCmdBinding.h` | +5 (one declaration, `StandingCards`) | the sampler reads the same cards `.tb commander status` shows; no other change to P1/P2's files |
 | `forever/src/host/cmd/TbCmdBinding.cpp` | +1 include, +1 call in `AppendBindings` (`combat::FillWindow(out.back())`), +46 (the `StandingCards` projection), +1 stub in the option-OFF section | the window and the card read. `Read()` itself is untouched: `StandingCards` repeats its assembly without the view work and writes no state |
 | `runtime/CombatMonitorService.cpp` | 1 include swapped (`TbCompatC5.h`), 1 query call (`AuraWatchRowsCompat()`), 2 log calls (`CombatMonitorLogCompat`) | the file is shared with Turtle; its payloads and books are unchanged |
+| `runtime/CombatMonitorService.{h,cpp}` | `NoteBinding` takes an optional `worldGroup` (default 0 = the book's key), one `m_worldGroup` map erased beside `m_mapId`, and both payload drains pass it as the payload's `group` (and the fight id's prefix) instead of the book key | a book can now be keyed by something that is not the group (the commander binding) while the payload still reports the group a player recognises; a caller that keys by the group passes nothing and reads exactly as before |
 | `ai/playerbot/UnportedFeatures.h` | 1 row's text | `Tracing` no longer names the combat monitor as switched off |
 
 No line of another package's files (`forever/src/dash/`, `forever/src/TbDashboard.*`, `tools/observability/`, `host/run/*`) was edited.
@@ -76,24 +83,28 @@ No line of another package's files (`forever/src/dash/`, `forever/src/TbDashboar
   Turtle hook derived the overheal from the health before and after).
 * **Threads.** The hooks run on map threads and take no lock of this file's: the service's member table (one atomic bitset load) routes them.
   The sampler, the cast poll and the drains run on the world thread.
-* **Two commanders, one group.** If two cards resolve to one group counter, they share one book and the later sample's member list wins. P1's
-  cards cannot make that happen from `.tb master` (one commander per bot), and the run rebinds its members to the tank; it is named here as a
-  limit, not handled.
+* **Two commanders, one group.** Handled by the key: each card's fight lives in its own book (`BookOf`), so two commander cards whose leads
+  stand in one group keep their own members, boss, window and fight numbering, and each payload reports the shared group counter.
+* **What the engaged bound gives up.** Past `kScanRefs` references a pass stops looking, so a pull with more than that many distinct combat
+  references can leave a boss it never reached out of the engaged set (the run's plan boss is then not adopted, and the boss is unbilled). The
+  walk keeps the best rank it met, which is the same choice the full sort made, over the references it visited.
 
 ## What the dashboard needs
 
 Nothing edited on the dashboard side. Three facts for its owner:
 
 1. `COMBAT_FIGHT` and `COMBAT_EVENTS` now come from the module's commander books with `commander` = the card's commander, `group` = the
-   group's session counter, and the fight id `<group>-<n>`. The roster sender's own `COMBAT_FIGHT` (the dungeon copy feed, commander
-   `dgn:<map>:<instance>`) is untouched; the store keys fights by (commander, session, id), so both lists coexist.
+   live group's session counter (metadata: the book itself is keyed by the commander binding), and the fight id `<group>-<n>`, numbered per
+   card. The roster sender's own `COMBAT_FIGHT` (the dungeon copy feed, commander `dgn:<map>:<instance>`) is untouched; the store keys fights
+   by (commander, session, id), so both lists coexist and two cards in one group can both file `<group>-1` without colliding.
 2. `COMBAT_EVENTS` arrives from the dash-runs link's session, at most one datagram per group per 250 ms, with the service's 5 s keepalive while a
    fight is open.
 3. The `combat` object of `COMMANDERS` is filled for every card whose group has a book; a fight that ended clears it on the next cycle.
 
 ## Limits (each makes the tab show less)
 
-* A party-less binding (group counter 0) has no fight record: nothing to key a book with.
+* A party-less binding (group counter 0) has no fight record: the lead check needs a live group.
+* A pull with more than 128 distinct combat references is walked up to that budget: a unit beyond it is not met, so a boss there is missed.
 * The timeline's aura rows are sampled at 1 Hz, so a short aura is missed.
 * The aura watch table is not shipped: `CombatTimeline` on this core records health, victims and phases, and no aura rows.
 * A harvested `ScriptChangedFrom` sees one spawn entry (ForeverCore's spawn data has one), not Turtle's alternative list.
@@ -102,15 +113,21 @@ Nothing edited on the dashboard side. Three facts for its owner:
 
 ## Tests
 
-`forever/tools/cmd_combat_check.cpp` (g++, on the build VM): the pure half; the golden fight; a wipe; leaving combat; the live stream's fight id
-and the timeline sample. `forever/tools/test_cmd_p5_wiring.py` pins the stub's removal, the compiled TU and its option gating, the tick and the
-script registration, the window call, the no-database rule, the gate and the three clocks, the payload path, the guid-only state, the
-non-mutating card read and the option-OFF answers; with `CMD_P5_MUTATE=1` its four mutations (`feed0`, `focus`, `applyonly`, `alwaysdue`) must
-each FAIL the check.
+`forever/tools/cmd_combat_check.cpp` (g++, on the build VM): the pure half; the bounded engaged walk, including a 100,000-reference pull that
+must stop at the budget; two commander cards in one group (their own windows, their own members, their own fight numbers, the one group they
+report); the golden fight; a wipe; leaving combat; the live stream's fight id and the timeline sample.
+`forever/tools/test_cmd_p5_wiring.py` pins the stub's removal, the compiled TU and its option gating, the tick and the script registration, the
+book key (never the group counter), the bounded walk, the window call, the no-database rule, the gate and the three clocks, the payload path,
+the guid-only state, the non-mutating card read and the option-OFF answers; with `CMD_P5_MUTATE=1` its six mutations (`feed0`, `bookkey`,
+`rankorder`, `focus`, `applyonly`, `alwaysdue`) must each FAIL the check.
 
 ## Gates (slot 6, core pin 25fc7ca)
 
-| Gate | Result |
+The first table is the package build (as shipped). The second is the review round that added the card-keyed book and the bounded engaged
+walk; that round ran on a WSL box without the forever-builder image, so its two whole-tree gates (`build.sh`, the census container) were
+replaced by a local configure of the same pinned core (`-DBUILD_TORTOISEBOTS=1`, `-DTORTOISEBOTS_SLICE1=1/0`) and are marked as such.
+
+| Gate (package P5) | Result |
 |---|---|
 | census, `forever/SLICE9.txt` (P5 adds no legacy file) | `files 265  compile clean 265  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
 | option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (72,294,016-byte binary); `nm` on `libtortoisebots.a`: `cmd::combat::{Update,FillWindow,RegisterScripts}` and `CombatMonitorService::{Instance,Refresh,LoadTimelineWatch}` are defined (`T`) and the archive holds `CombatMonitorService.cpp.o` |
@@ -122,6 +139,19 @@ each FAIL the check.
 | `tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent).` |
 | `git diff --check` | clean |
 | Turtle `vm-build` / `vm-test tb` | `MAKE_RC=0` (compile 148 s, 52 module files changed); `RESULT: PASS` (`tools/verify_all.sh`, rc=0, 908 s) |
+
+| Gate (review round) | Result |
+|---|---|
+| option-ON module, local configure of 25fc7ca (`cmake -DBUILD_TORTOISEBOTS=1 -DTORTOISEBOTS_SLICE1=1 -DUSE_COREPCH=0`, gcc) | `make tortoisebots` rc=0, 0 `error:`, 307 objects; `libtortoisebots.a` holds `TbCmdCombat.cpp.o` and `CombatMonitorService.cpp.o`, and `nm` names `cmd::combat::{Update,FillWindow,RegisterScripts}` as defined |
+| option-OFF module (same configure, `TORTOISEBOTS_SLICE1=0`) | `make tortoisebots` rc=0, 27 objects; the archive holds `TbCmdCombat.cpp.o` (the three no-ops) and no `CombatMonitorService.cpp.o` |
+| `forever/tools/cmd_combat_check.cpp` (local g++, service TU linked) | `cmd_combat_check: 108 checks, 0 failed` (was 56) |
+| `forever/tools/test_cmd_p5_wiring.py` with `CMD_P5_MUTATE=1` (local) | 14 tests OK; all six mutations (`feed0`, `bookkey`, `rankorder`, `focus`, `applyonly`, `alwaysdue`) FAIL the check (`bookkey` 12 failed checks, `rankorder` 2) |
+| `tools/test_combat_monitor_service.cpp` (Turtle-side service test, 4-arg `NoteBinding` unchanged) | `combat monitor service: 250 checks passed` |
+| `test_cmd_p1_wiring.py`, `test_cmd_p2_wiring.py`, `test_dash_runs_wiring.py`, `test_run_review_wiring.py`, `test_run_revfix1_wiring.py`, `test_run_revfix2_wiring.py`, `test_slice4_d4_wiring.py` | OK |
+| `slice_registry_check.py`, `slice_gen_context.py --check`, `gen_aiplayerbot_conf.py --check` | `summary: (a)=0  (b)=224`; `SliceAiObjectContext.cpp is up to date`; `aiplayerbot.conf.dist matches (696 keys)` |
+| `tools/verify_okf.py`, `git diff --check` | PASSED; clean |
+| `bash tools/verify_all.sh` (local) | sections 1-6 PASS (`Ran 2671 tests … OK (skipped=19)`, `combat monitor race test: clean` under TSan, `482 standalone policy tests verified`, decision trail OK, config defaults/usage OK); section 7 (host contract) stopped it: `../tortoise-wow` here is a core checkout without `src/game/SessionTransport.h`, so the Turtle core seam cannot be read on this box (this diff touches no host seam) |
+| not run here | `~/forever-build/build.sh` slot 6 ON/OFF (no docker), the census container, the Turtle `vm-build`, and the live run: no worldserver is reachable from this box |
 
 ## Live (forever-test2, run2, 2026-11-20)
 

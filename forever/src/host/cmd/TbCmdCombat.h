@@ -20,8 +20,9 @@ namespace combat
 {
 // The world tick (TbScripts.cpp, after the run tick): the 1 Hz sample, the 250 ms cast poll, the 100 ms event drain.
 void Update(uint32 diff);
-// `.tb commander status` and the dash-runs COMMANDERS datagram: the live fight window (`combat` object) of the binding's group, empty
-// outside a fight (cmd::AppendBindings calls this per card).
+// `.tb commander status` and the dash-runs COMMANDERS datagram: the live fight window (`combat` object) of the binding's card, empty
+// outside a fight (cmd::AppendBindings calls this per card). The book is the card's commander binding, never its group: two cards in one
+// group read their own fight.
 void FillWindow(CommanderTelemetry::BindingInfo& binding);
 // The two script objects (AddSC_tortoisebots). A no-op build without the engine registers nothing.
 void RegisterScripts();
