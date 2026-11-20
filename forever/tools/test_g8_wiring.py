@@ -9,6 +9,7 @@ assertion fails on the code before G8.
   3 the party-buff search and the group-buff count skip rage/energy users for a mana buff
   4 the rogue's combat kit keeps `cc`
   5 the regroup gather's pause is extended by the glue (bounded), the policy header is untouched
+  6 a clear is atomic (ClearCcState writes, reads back and restores) and the run's end resets every bot a run `cc` order marked, not only Run::ccHolds
 """
 import re
 import unittest
