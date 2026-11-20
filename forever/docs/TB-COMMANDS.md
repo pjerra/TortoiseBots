@@ -69,7 +69,7 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
   Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-character`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
   `no-engine`, `queue-full`, `not-in-group`, `needs-player-sender`, `no-selection`, `mark-empty`, `no-such-spawn`, `target-not-found`, `target-dead`, `not-attackable`, `no-pull-strategy`, `no-commander`, `other-map`, `too-far`, `nothing-to-assist`, `self-master`, `missing-commander`,
   `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). Slice 4 adds (section 8): `no-trigger`, `not-allowed`, `leader-refused`, `leader-inside`, `not-leader`, `lfg-group`, `not-empty`, `locked`, `no-entrance`,
-`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`. A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
+`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`, and `ignored` (`.tb cc` names a `.tb ignore` mob, section 14). A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
 * **Addressing.** `<bot>` is a character name (a logged-in host bot). `party <leader>` is every host bot in the party of that character. `party` with no leader is, in this order: the bots bound (`.tb master`) to the sender, or to the one commander there is, or the members of the one bot-led party there is;
   anything else needs the leader's name (`error code=ambiguous-party`). Names are case-insensitive. The `target=` of a reply is `<name>`, `party:<leader>` or `party:commander:<name>` as parts.
   `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt` and `.tb power` also accept the character of the sender (the GM who typed the command), by name; another real player's
@@ -556,3 +556,29 @@ One host bot. Replies `quest-begin`, `quest` record(s), `quest-end` (grammar v2;
 * `share <questId>`: shares a quest with the bot's party (`WorldPackets::Quest::PushQuestToParty`, `status=shared|refused`).
 * `drop <questId|all>`: abandons the quest (`Player::AbandonQuest`, `status=dropped|refused`).
 * `reward <auto|list|ask|reset|?>`: sets or queries the bot's `quest reward` option (`mode=auto|list|ask|config`).
+
+## 16. The leave-it-alone list: `.tb ignore`
+
+`.tb ignore <bot|party [leader]> add <guid> | remove <guid> | list | clear [#token]`
+
+The player marks a mob "leave it alone" (a beast to tame, an escort, a mob that must stay alive): none of the commander's bots picks it (dps, tank, assist, pull, defence, grind and guard picks all skip it, even while it attacks), and no area spell goes out near it: none while it stands within ~30 yd of a bot, and no blast whose centre plus its radius reaches within ~30 yd of it. Sweeping Strikes and Blade Flurry are cancelled beside it too. Memory only: up to 8 mobs per commander, each forgotten after 30 min or when it dies on a commanded bot's map.
+
+The owner is the bots' bound commander (`.tb master`), never the bots: every addressed bot must answer to the same commander (`no-commander`, `ambiguous-party`). `guid` is the 32 hex digits `.tb state` (`tgt=`) and `.tb threat` (`mob=`) print.
+
+An explicit attack, pull, assist (resolving onto it) or focus order on a listed mob takes it off the list and then runs (explicit order wins). `.tb cc` on one is refused (`ignored`).
+
+Replies are `ignore-begin`, one `ignore` record per entry (or per op), `ignore-end count=<lines> records=<records> verb= target= commander= ok= refused=`. `expires=` is the seconds left on the 30 min. In a build without the engine every form answers `error code=engine-not-built`.
+```
+ignore-begin #i1
+ignore commander=Mcmd verb=add status=ok guid=0000000000000000F130002C4A000001 name=Ashenvale%20Bear expires=1800 msg=Bots%20will%20leave%20Ashenvale%20Bear%20alone. #i1
+ignore-end count=1 records=1 verb=add target=party:Mtank commander=Mcmd ok=1 refused=0 #i1
+```
+```
+ignore-begin #i2
+ignore commander=Mcmd verb=list status=ok guid=0000000000000000F130002C4A000001 name=Ashenvale%20Bear expires=1710 #i2
+ignore-end count=1 records=1 verb=list target=Mtank commander=Mcmd ok=1 refused=0 #i2
+```
+```
+error code=duplicate cmd=ignore msg=the%20list%20already%20names%20that%20mob #i3
+```
+(The samples are specified, not yet live output: the first boot replaces them.)

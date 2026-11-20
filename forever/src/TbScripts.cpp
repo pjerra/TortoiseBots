@@ -60,6 +60,7 @@
 #include "host/TbH4.h"
 #include "host/TbCc.h"
 #include "host/cmd/TbTestTargetPure.h"
+#include "host/TbIgnore.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -332,6 +333,7 @@ public:
             { "gear",   TortoiseBots::h3::HandleGear,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "cmd",      TortoiseBots::cmd::HandleCmd,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {

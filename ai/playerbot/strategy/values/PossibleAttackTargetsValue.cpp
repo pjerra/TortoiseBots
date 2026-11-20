@@ -305,6 +305,11 @@ bool PossibleAttackTargetsValue::IsValid(Unit* target, Player* player, float ran
     if (target && player && AttackersValue::CharmedAllyOffLimits(target, player))
         return false;
 
+    // `.tb ignore`: a mob the bot's commander listed is no pick of any target tournament (dps, tank, assist, pull,
+    // defence). An explicit order on it takes it off the list before it runs, so this never refuses one.
+    if (target && player && IsIgnoredMobCompat(player, target->getObjectGuid()))
+        return false;
+
     // A needs_aura entry (BossTacticsPolicy.h) is for the carriers of the row's aura alone: a Shade of Jin'do takes no
     // damage from anyone else, and a taunt would only move its damage onto another tank. No explicit-order exception:
     // such a hit does nothing. With the key off, or no row, the target is as valid as before. Read once for both

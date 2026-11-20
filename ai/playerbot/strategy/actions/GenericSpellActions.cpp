@@ -56,9 +56,14 @@ bool BreaksCcInArea(PlayerbotAI* ai, Player* bot, SpellEntry const* info, Unit* 
 
     // Instant areas and chains spare a held mark too (CcAreaSpellBlocked):
     // build 13 had the tank on the Moon mob inside its hold.
+    WorldObject* const center = atTarget ? static_cast<WorldObject*>(spellTarget) : bot;
+    // `.tb ignore`: no area spell goes out near a listed mob: within the
+    // ignore radius of the bot, or within the blast plus that radius of it.
     CcGuard ccGuard(ai);
+    if (ccGuard.IgnoredMobNear(center, radius))
+        return true;
     return ccGuard.BreakableCcInArea(info, spellTarget) ||
-        ccGuard.ProtectedEnemyNear(atTarget ? static_cast<WorldObject*>(spellTarget) : bot, radius, true);
+        ccGuard.ProtectedEnemyNear(center, radius, true);
 }
 
 bool CanInterruptCurrentSpell(Spell const* spell)
