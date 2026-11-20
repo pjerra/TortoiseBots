@@ -191,6 +191,11 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
         PollItemPush(bot, tbs9::Memo()[bot->GetGUID()], trigger);
         return;
     }
+    if (name == "quest share")
+    {
+        PollQuestShareCompat(bot, trigger);
+        return;
+    }
     if (name != "loot start roll" && name != "loot response")
         return;
 

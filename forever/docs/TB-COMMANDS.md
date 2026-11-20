@@ -544,3 +544,15 @@ Bound commanders issue task orders on the shared `TbRunTasks` engine (`forever/s
 * **`.tb cmd lootmethod <ffa|group|rr> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; `master` and `nbg` are refused `unsupported`.
 * **`.tb cmd state [<bot>] [#token]`**: reports each bound bot's active or last task (`task bot= busy= status=none|running|done|failed [verb=] [entry=] [text=]`).
 * **`.tb cmd ritual|scout ...`**: refused `unsupported` (decision D5).
+
+## 15. W3: Quests
+
+### `.tb quest <bot> status|accept <questId|*>|turnin [questId]|share <questId>|drop <questId|all>|reward <auto|list|ask|reset|?> [#token]`
+One host bot. Replies `quest-begin`, `quest` record(s), `quest-end` (grammar v2; `error code=engine-not-built` when `TORTOISEBOTS_SLICE1=OFF`).
+
+* `status`: lists the bot's quest log (`id=`, `title=`, `status=incomplete|complete|failed|none|rewarded`, `objectives=<done>/<amount>;...`).
+* `accept <questId|*>`: accepts a vanilla-eligible quest (`Expansion == 0` or `91xxx`/`99xxx` with spawned giver & ender) from a nearby giver (`status=accepted|refused`, `code=filtered` when refused by the vanilla filter).
+* `turnin [questId]`: turns in completed quests to a nearby quest taker (`status=ok|no-turnin`), picking multi-item rewards via `ItemUsageValue` + `RandomItemMgr::ItemStatWeight`.
+* `share <questId>`: shares a quest with the bot's party (`WorldPackets::Quest::PushQuestToParty`, `status=shared|refused`).
+* `drop <questId|all>`: abandons the quest (`Player::AbandonQuest`, `status=dropped|refused`).
+* `reward <auto|list|ask|reset|?>`: sets or queries the bot's `quest reward` option (`mode=auto|list|ask|config`).

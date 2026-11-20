@@ -279,3 +279,10 @@ ai/playerbot/strategy/actions/RepairAllAction.cpp
 ai/playerbot/strategy/actions/TrainerAction.cpp
 ai/playerbot/strategy/actions/MailAction.cpp
 ai/playerbot/strategy/values/BudgetValues.cpp
+ai/playerbot/strategy/generic/QuestStrategies.cpp
+ai/playerbot/strategy/actions/QuestAction.cpp
+ai/playerbot/strategy/actions/AcceptQuestAction.cpp
+ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
+ai/playerbot/strategy/actions/DropQuestAction.cpp
+ai/playerbot/strategy/actions/ShareQuestAction.cpp
+ai/playerbot/strategy/actions/QuestRewardActions.cpp

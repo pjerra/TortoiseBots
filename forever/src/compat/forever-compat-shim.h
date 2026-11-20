@@ -571,4 +571,5 @@ private:
 #include "TbCompat_S5.h"          // slice 5: the plan loader (world query, field text)
 #include "TbCompat_S9.h"          // slice 9, package L9: item loot, group loot rolls (greed only), the item usage value
 #include "TbCompat_W6.h"          // W6a: item weight scales and auto-equip
+#include "TbCompat_Quest.h"       // W3: quests (objectives, direct accept/reward/abandon/share, vanilla filter)
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

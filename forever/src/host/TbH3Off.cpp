@@ -74,6 +74,7 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { re
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "itemscan"); }
 bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "statcensus"); }
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "gear"); }
+bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "quest"); }
 bool MayLeadBots(ChatHandler* /*handler*/, ObjectGuid /*character*/) { return true; }   // N5 is an engine-build rule: the default build keeps the older commands as they were
 // TB-1: `.tb hurt` and `.tb power` (TbScripts.cpp, compiled in both builds) stop at RequireEngine before they ask who the target is, and
 // `.tb role`, `.tb equip` and `.tb learn` are the NotBuilt stubs above, so this rule is never reached here. The symbol has to exist for the
