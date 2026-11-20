@@ -441,12 +441,26 @@ error code=not-commanded cmd=run msg=Mdpsb%20has%20no%20commander%20yet%3A%20bin
 * **Errors.** `missing-verb`, `unknown-verb`, `unexpected-argument`, `no-binding` (the named commander commands no bots), `engine-not-built`.
 * **The dashboard.** The COMMANDERS datagram for these cards is built by the Turtle builder (`runtime/CommanderTelemetry.h`) from `cmd::AppendBindings` (forever/src/host/cmd/TbCmdBinding.h); the dash-runs collector calls it (forever/docs/CMD-P1-NOTES.md).
 
+Real output (run2 boot, five bots bound by `.tb master party Mtank Mcmd`, a run going; the member records of the second reply are cut here):
 ```
-commander-begin #c1
-binding cmd=Mcmd cguid=21 online=yes lead=Mtank group=3 bound=5 bots=5 system=no inparty=no raid=no playerled=no boundat=1763600000 orders=1 map=389 pos=3.5,-7.3,0.0 #c1
-member cmd=Mcmd bot=Mtank guid=10 class=warrior role=tank level=18 hp=900 maxhp=1000 power=20 maxpower=100 ptype=rage alive=yes lead=yes map=389 zone=2437 pos=1.0,2.0,3.0 #c1
+commander-begin #c6
+binding cmd=Mcmd cguid=15 online=yes lead=Mtank group=1 bound=5 bots=5 system=no inparty=no raid=no playerled=no boundat=1795138681 orders=1 map=389 pos=0.80,-8.23,-15.53 #c6
+member cmd=Mcmd bot=Mtank guid=10 class=warrior role=tank level=18 hp=498 maxhp=498 power=0 maxpower=100 ptype=rage alive=yes lead=yes map=389 zone=2437 pos=0.80,-8.23,-15.53 #c6
 (... four more member records ...)
-order cmd=Mcmd at=1763600100 verb=stay detail= ok=yes result=queued%205%20of%205 #c1
-commander-end count=7 records=7 bindings=1 #c1
+order cmd=Mcmd at=1795138725 verb=stay detail= ok=yes result=queued%205%20of%205 #c6
+commander-end count=7 records=7 bindings=1 #c6
 ```
-**The sample is built by hand from the encoder's rules; the live boot replaces it.**
+```
+commander-begin #c7
+binding cmd=Mcmd cguid=15 online=yes lead=Mtank group=1 bound=5 bots=5 system=no inparty=no raid=no playerled=no boundat=1795138681 orders=5 map=389 pos=0.80,-8.23,-15.53 #c7
+(... five member records ...)
+order cmd=Mcmd at=1795138725 verb=stay detail= ok=yes result=queued%205%20of%205 #c7
+order cmd=Mcmd at=1795138737 verb=move detail=0.8%20-8.2%20-15.5 ok=yes result=party%205 #c7
+order cmd=Mcmd at=1795138741 verb=pullback detail=5 ok=yes result=bot%3AMtank%201 #c7
+order cmd=Mcmd at=1795138748 verb=focus detail=5 ok=yes result=party%205 #c7
+order cmd=Mcmd at=1795138762 verb=attack detail=5%20Mtank ok=yes result=bot%3AMtank%201 #c7
+run lead=Mtank plan=ragefire_chasm state=running step=1 steps=80 leg=0 legname=tunnel kind=pull phase=pull note=fighting pull=0 pulls=51 boss= deaths=0 wipes=0 pauses=0 elapsed=39 ev=3 cmd=Mcmd #c7
+commander-end count=12 records=12 bindings=1 #c7
+```
+One card while the run goes: the run's own orders (`move`, `pullback`, `focus`, `attack`) are in the same log. Without the engine a `stay` is logged `ok=no result=no-engine`. `.tb master party Mtank none` ends the card (`commander-begin` / `commander-end count=0 bindings=0`); `status Nobody` answers `error code=no-binding cmd=commander msg=Nobody%20commands%20no%20bots`.
+A run whose tank nobody commands is a system card: `binding cmd=Mtank ... system=yes inparty=no`, the run record after it.

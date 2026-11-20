@@ -279,9 +279,9 @@ std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
         v.groupId = GroupKey(group);
         v.leadName = NameOf(PlayerGuid(c.lead));
         v.boundAt = c.boundAt;
-        h.inParty = group && group->IsMember(commanderGuid);
+        h.inParty = !c.system && group && group->IsMember(commanderGuid);   // a system card's commander IS the lead: T never marks it in-party
         h.raid = group && group->isRaidGroup();
-        h.playerLed = !BotMgr::Instance().IsBot(commanderGuid);
+        h.playerLed = !c.system && !BotMgr::Instance().IsBot(commanderGuid);
         for (uint32 guid : c.bots)
             if (Player* bot = InWorld(PlayerGuid(guid)))
                 v.bots.push_back(BotOf(bot, bot->GetGroup(), guid == c.lead, nowMs));
