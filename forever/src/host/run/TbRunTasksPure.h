@@ -11,6 +11,7 @@
 // voted by the greed-only roll code, so they would time out), a lock whose key the bot does not carry (the core's `Use` would not look: the host does).
 #pragma once
 
+#include "runtime/GossipOrderPolicy.h"
 #include "runtime/RemoteCommanderPolicy.h"
 #include "runtime/RemoteCommanderTasks.h"
 
@@ -40,18 +41,49 @@ inline char const* LootRightsText() { return "nothing this bot may loot"; }
 inline char const* LootEmptyText() { return "Nothing is left to loot"; }
 
 // ---- the grammar ----
-enum class Verb : uint8_t { None, Open, Loot, LootMethod, Use };
+enum class Verb : uint8_t { None, Open, Loot, LootMethod, Use, Gossip };
+enum class OwnerKind : uint8_t { Run, Commander };
 
 struct TaskOrder
 {
     Verb verb = Verb::None;
-    RC::TargetSpec spec;            // open, loot: the target as the policy typed it (a handle of ReadFacts, or entry:id@x,y,z)
-    std::string bot;                // open, loot, use
+    RC::TargetSpec spec;            // open, loot, use, gossip: the target as the policy typed it (a handle of ReadFacts, or entry:id@x,y,z)
+    std::string bot;                // open, loot, use, gossip
     uint32_t itemId = 0;            // loot: only this item (0 = everything); use: the item
     int method = -1;                // lootmethod: RC::kLoot*
     int threshold = 0;
     bool hasThreshold = false;
+    bool gossipHasOption = false;   // gossip: false = list menu options; true = pick option
+    bool gossipByIndex = false;
+    uint32_t gossipIndex = 0;       // 1-based menu option index
+    std::string gossipText;         // option text
 };
+
+// Convert a ForeverCore GossipOptionNpc value to GossipOrder::Option (0 = GossipOptionNpc::None is plain gossip; any other is a service option).
+inline ::TortoiseBots::GossipOrder::Option MakeGossipOption(std::string const& text, uint32_t optionNpc, bool coded)
+{
+    ::TortoiseBots::GossipOrder::Option opt;
+    opt.text = text;
+    opt.coded = coded;
+    if (optionNpc != 0)
+        opt.icon = 1; // GossipOrder::kIconVendor: marks as service option so IsPlainOption refuses it
+    else
+        opt.sender = 1;
+    return opt;
+}
+
+inline char const* VerbName(Verb v)
+{
+    switch (v)
+    {
+        case Verb::Open: return "open";
+        case Verb::Loot: return "loot";
+        case Verb::LootMethod: return "lootmethod";
+        case Verb::Use: return "use";
+        case Verb::Gossip: return "gossip";
+        default: return "none";
+    }
+}
 
 // `words` = the order split by RC::SplitOrderArgs, the verb word first and lower case. False with a code and a message in the legacy words.
 inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> const& args, TaskOrder& out, std::string& code, std::string& message)
@@ -208,7 +240,7 @@ inline uint32_t PackState(uint32_t lootState, uint32_t goState) { return (lootSt
 inline bool AlreadyUsed(uint32_t goState) { return goState != 1u; }
 
 // ---- the task clock ----
-enum class Kind : uint8_t { Open, Loot };
+enum class Kind : uint8_t { Open, Loot, Gossip };
 
 struct TaskRec
 {
@@ -225,8 +257,23 @@ struct TaskRec
     uint32_t totalMs = 0;
     bool scriptUse = false;         // a goober: its script handles the use (GameObject::Use, GOOBER case: `OnGossipHello` / the linked event), so the object's own state may never change
     uint32_t actMs = 0;             // since the use was delivered
+    bool gossipHasOption = false;
+    bool gossipByIndex = false;
+    uint32_t gossipIndex = 0;
+    std::string gossipText;
     std::string lastCode, lastMessage;
 };
+
+inline RC::TaskKind ToRcKind(Kind kind)
+{
+    switch (kind)
+    {
+        case Kind::Open: return RC::TaskKind::Open;
+        case Kind::Loot: return RC::TaskKind::Loot;
+        case Kind::Gossip: return RC::TaskKind::Gossip;
+    }
+    return RC::TaskKind::Open;
+}
 
 inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, float startDistance, bool scriptUse = false)
 {
@@ -236,7 +283,7 @@ inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, f
     r.lootLike = lootLike;
     r.corpse = corpse;
     r.itemId = itemId;
-    r.state = RC::MakeTask(kind == Kind::Open ? RC::TaskKind::Open : RC::TaskKind::Loot, startDistance, true, lootLike);
+    r.state = RC::MakeTask(ToRcKind(kind), startDistance, true, lootLike);
     return r;
 }
 

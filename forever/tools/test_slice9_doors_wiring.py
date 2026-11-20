@@ -55,7 +55,7 @@ class TaskModule(unittest.TestCase):
             self.assertNotIn("HandleGameObjectUseOpcode", path.read_text(), path.name)
 
     def test_the_order_judges_the_lock_before_it_queues_a_task(self):
-        body = func(TASKS, "OrderAnswer Begin(")
+        body = func(TASKS, "OrderAnswer BeginTask(")
         self.assertLess(body.index("JudgeLock("), body.index("rt.byBot[task.bot] = task"))
         self.assertLess(body.index("FindByEntry("), body.index("rt.byBot[task.bot] = task"))
         # every refusal path returns before the table is written: the only write is the line above
@@ -106,14 +106,14 @@ class TaskModule(unittest.TestCase):
         self.assertIn('Refuse("unsupported", tasks::UseUnsupportedText())', ORDERS)
 
     def test_the_loot_method_is_read_back_from_the_group(self):
-        body = func(TASKS, "OrderAnswer SetLootMethod(")
+        body = func(TASKS, "OrderAnswer SetLootMethodForParty(")
         self.assertLess(body.index("HandleSetLootMethodOpcode("), body.index("group->GetLootMethod()"))
         self.assertLess(body.index("JudgeLootMethod("), body.index("HandleSetLootMethodOpcode("))
 
 
 class Hooks(unittest.TestCase):
     def test_the_executor_hands_the_task_verbs_to_the_task_module(self):
-        for token in ("tasks::Begin(rec, party.lead, party.bots, p.task, nowMs)", "tasks::SetLootMethod(rec, party.lead, party.bots, p.task)"):
+        for token in ("tasks::Begin(*ctx.runRec, party.lead, party.bots, p.task, nowMs)", "tasks::SetLootMethod(*ctx.runRec, party.lead, party.bots, p.task)"):
             self.assertIn(token, ORDERS)
 
     def test_the_four_verbs_are_not_in_the_unsupported_list(self):

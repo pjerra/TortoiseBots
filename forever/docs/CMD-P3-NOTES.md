@@ -67,3 +67,50 @@ Setup: 5-bot party (`Mtank`, `Mpriest`, `Mdpsa`, `Mdpsb`, `Mdpsc`) in Ragefire C
 6. **Commander card log:**
    - Run `.tb commander status Mcmd #c7`
    - Expect: `order cmd=Mcmd ... verb=pull ...`, `verb=move ...`, `verb=rest ...`, `verb=stay ...` in the card's `order` lines.
+
+## Integration A+B (P3 + P6)
+
+Merged `feat/cmd-p6-interact` into `feat/cmd-p3-orders`:
+
+- Resolved conflicts in `forever/src/TbScripts.cpp` (single `.tb cmd` row -> `TortoiseBots::cmd::HandleCmd`), `forever/src/host/run/TbRun.cpp` (kept `Issue` owning `NoteRunOrder` and `tasks::Update(diffMs)` before `Table().empty()`), and `forever/docs/TB-COMMANDS.md` (unified section 14 covering order and task verbs).
+- Wired `TbCmdOrders.cpp::HandleCmd` to dispatch P6 task verbs (`loot`, `open`, `use`, `gossip`, `state`, `lootmethod`, `ritual`, `scout`) through `TbCmdTasks.cpp::TryHandleTaskVerb(..., &taskOk)` after `SenderPlayer` + `ResolveBinding` and before `run::Issue`, removing the duplicate `HandleCmd` from `TbCmdTasks.cpp`.
+- Rewired `TbCmdTasks.cpp::ResolveCommanderParty` to use P3's `cmd::ResolveBinding`.
+- Updated `forever/tools/test_cmd_p2_wiring.py` (`test_the_order_log_lives_in_the_executor` checks lifted `Issue(Party const&, ...)`) and `forever/tools/test_slice9_doors_wiring.py` (`*ctx.runRec`).
+
+### Gate lines (post-integration)
+
+- `test_run_orders`: `RESULT: PASS (259 checks)`
+- `test_run_tasks`: `test_run_tasks: 160 checks, 0 failed`
+- `test_run_c6`: `RESULT: PASS: 28 checks, 0 failed`
+- `test_run_cancel`: `RESULT: PASS (test_run_cancel)`
+- `cmd_binding_check`: `cmd_binding_check: 57 checks, 0 failed`
+- `cmd_binding_life_check`: `cmd_binding_life_check: 73 checks, 0 failed`
+- `python3 forever/tools/test_cmd_p2_wiring.py`: `Ran 17 tests in 0.070s` / `OK (skipped=4)`
+- `python3 forever/tools/test_cmd_p3_wiring.py`: `Ran 5 tests in 0.009s` / `OK`
+- `CMD_P3_MUTATE=1 python3 forever/tools/test_cmd_p3_wiring.py`: `MUTATION FAILED AS EXPECTED: TbCmdOrders.cpp does not route orders through run::Issue`
+- `python3 forever/tools/test_cmd_p6_wiring.py --mutate`: `PASS: test_cmd_p6_wiring (all 3 mutations caught)`
+- `python3 forever/tools/test_slice9_doors_wiring.py`: `Ran 24 tests in 0.203s` / `OK`
+- `python3 forever/tools/slice_registry_check.py`: `summary: (a)=0  (b)=224 keys to register or stub later`
+- `python3 forever/tools/slice_gen_context.py --check`: `SliceAiObjectContext.cpp is up to date`
+- `tbf-build.sh <wt> tortoisebots` (`TORTOISEBOTS_SLICE1=ON`): `[309/309] Linking CXX static library src/server/modules/TortoiseBots/libtortoisebots.a`
+- `TB_SLICE=OFF tbf-build.sh <wt> tortoisebots` (`TORTOISEBOTS_SLICE1=OFF`): `[30/30] Linking CXX static library src/server/modules/TortoiseBots/libtortoisebots.a`
+- `tbf-build.sh <wt> census:forever/SLICE9.txt`: `files 265  compile clean 265  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0`
+
+### Combined live steps (P3 + P6)
+
+Setup: 5-bot party (`Mtank`, `Mpriest`, `Mdpsa`, `Mdpsb`, `Mdpsc`) in Ragefire Chasm (map 389), engines on, bound to GM character `Mcmd` via `.tb master party Mtank Mcmd`.
+
+1. **Pull, move, lava refusal, rest, hold (P3):**
+   - `.tb cmd pull <32-hex-mob-guid> #c1` -> `cmd verb=pull status=accepted ...`, target gets `skull` raid icon, `Mtank` pulls.
+   - `.tb cmd move <safe_x> <safe_y> <safe_z> #c2` -> `cmd verb=move status=accepted bots=5 ...`.
+   - `.tb cmd move <lava_x> <lava_y> <lava_z> #c3` -> `error code=unreachable cmd=cmd ...` (bots do not move).
+   - `.tb cmd rest #c4` and `.tb cmd hold #c5` -> `status=accepted`.
+2. **Loot, open, use, gossip, lootmethod, unsupported (P6):**
+   - Kill a mob, `.tb cmd loot my Mtank #p6_1` -> `status=accepted`; `.tb cmd state Mtank #p6_2` -> `status=done verb=loot ...`.
+   - Repeat `.tb cmd loot my Mtank #p6_3` on same corpse -> `.tb cmd state Mtank` reports `status=failed ... Nothing is left to loot`.
+   - `.tb cmd open entry:<chest_entry> Mtank #p6_4` and `.tb cmd use entry:<door_entry> Mtank #p6_5` -> `status=accepted`, `.tb cmd state` -> `status=done`.
+   - `.tb cmd gossip my Mtank #p6_6` -> lists menu; `.tb cmd gossip my Mtank 99 #p6_7` -> `status=failed ... No option 99`; `.tb cmd gossip my Mtank 1 #p6_8` -> `status=done`.
+   - `.tb cmd lootmethod ffa #p6_9` -> `status=ok method=ffa`; `.tb cmd ritual #p6_10` -> `error code=unsupported`.
+3. **Run interaction (`outside-order` pause) & card log:**
+   - Start `.tb run start Mtank ragefire_chasm`, then `.tb cmd stay #c6` (or a task walk) -> run pauses with `why=outside-order` on next tick.
+   - `.tb commander status Mcmd #c7` shows the issued orders in the card's `order` lines.

@@ -267,9 +267,11 @@ class Wiring(unittest.TestCase):
             self.assertNotIn(word, self.ownership)
 
     def test_the_order_log_lives_in_the_executor(self):
-        issue = function_body(self.orders, r"OrderAnswer Issue\(RunRec& rec, std::string const& order, uint32 nowMs, bool gather\)\s*\{")
-        self.assertIn("cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);", issue)
-        self.assertIn("IssueOrder(rec, order, nowMs, gather)", issue)
+        issue = function_body(self.orders, r"OrderAnswer Issue\(Party const& party, std::string const& order, uint32 nowMs, bool gather\)\s*\{")
+        self.assertIn("cmd::NoteRunOrder(party.leader, order, answer.accepted, answer.code, answer.text);", issue)
+        self.assertIn("IssueOrder(party, order, nowMs, gather)", issue)
+        run_issue = function_body(self.orders, r"OrderAnswer Issue\(RunRec& rec, std::string const& order, uint32 nowMs, bool gather\)\s*\{")
+        self.assertIn("Issue(party, order, nowMs, gather)", run_issue)
         self.assertNotIn("NoteRunOrder", code(text(HOST / "run" / "TbRun.cpp")))
 
     def test_the_command_line_and_the_off_build(self):

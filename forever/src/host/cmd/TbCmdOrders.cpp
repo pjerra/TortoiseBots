@@ -1,6 +1,7 @@
 // Commander port, package P3: `.tb cmd <verb> ... [#token]`. Resolves the caller's commander binding into a `run::Party` and delegates
 // every order to the lifted judge (`run::Issue`) so commander orders and dungeon-run orders share one validator, one executor and one card log.
 #include "host/cmd/TbCmdOrders.h"
+#include "host/cmd/TbCmdTasks.h"
 #include "host/TbH3.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -27,7 +28,7 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (args.badToken)
         return h3::Fail(handler, args, "cmd", "bad-token", "a token starts with # and holds 1-32 characters of [A-Za-z0-9_.:-]");
     if (args.w.empty())
-        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, focus, rest, revive party, stay, follow, hold");
+        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, focus, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod");
 
     Player* sender = h3::SenderPlayer(handler);
     if (!sender)
@@ -37,6 +38,11 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     std::vector<ObjectGuid> members;
     if (!ResolveBinding(sender->GetGUID(), lead, members) || lead.IsEmpty())
         return h3::Fail(handler, args, "cmd", "not-bound", "you have no bound bots (`.tb master <bot|party> <commander>`)");
+
+    std::string const verb = h3::Lower(args.w[0]);
+    bool taskOk = false;
+    if (TryHandleTaskVerb(handler, args, verb, 1, &taskOk))
+        return taskOk;
 
     std::string order;
     for (size_t i = 0; i < args.w.size(); ++i)
@@ -60,7 +66,6 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return h3::Fail(handler, args, "cmd", code, answer.text);
     }
 
-    std::string const verb = h3::Lower(args.w[0]);
     Player* leadPlayer = ObjectAccessor::FindPlayer(lead);
     std::string const leadName = leadPlayer ? std::string(leadPlayer->GetName()) : h3::GuidText(lead);
 
