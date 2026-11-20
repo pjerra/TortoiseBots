@@ -30,6 +30,7 @@
 #include "runtime/GuildOrderSupplyPolicy.h"
 #include "runtime/GuildOrderTelemetryPolicy.h"
 #include "runtime/GuildOrderWhoSearchPolicy.h"
+#include "runtime/GuildOrderWorkPolicy.h"
 #include "runtime/GuildOrderDeliveryQueue.h"
 #include "runtime/GuildOrderRefundQueue.h"
 #include "runtime/GuildOrderRelistQueue.h"

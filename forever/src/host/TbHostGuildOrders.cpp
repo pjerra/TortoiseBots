@@ -4,25 +4,44 @@
 #include "compat/TbItemPrototype.h"
 #include "compat/TbSqlNames.h"
 #include "host/TbH3.h"
+#include "host/TbHostAuction.h"
 #include "host/TbHostGuild.h"
+#include "host/TbHostProfession.h"
 
+#include "Bag.h"
+#include "CellImpl.h"
+#include "CharacterCache.h"
 #include "Chat.h"
+#include "Creature.h"
 #include "DatabaseEnv.h"
+#include "GameObject.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
+#include "Item.h"
 #include "Log.h"
+#include "Map.h"
+#include "MotionMaster.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "StringFormat.h"
 
+#include "playerbot/policy/ah/AhBuyPolicy.h"
 #include "runtime/GuildOrderBringPolicy.h"
 #include "runtime/GuildOrderContract.h"
+#include "runtime/GuildOrderDeliveryPolicy.h"
 #include "runtime/GuildOrderGiveUpPolicy.h"
 #include "runtime/GuildOrderNeedPolicy.h"
 #include "runtime/GuildOrderStoreColumns.h"
+#include "runtime/GuildOrderWorkPolicy.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <list>
 #include <mutex>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace tbhost
 {
@@ -42,6 +61,7 @@ struct StoreState
     bool available = false;
     bool warned = false;
     std::unordered_map<uint32_t, OrderRecord> orders;
+    std::unordered_set<uint32_t> workingBots;
 };
 
 StoreState& State()
@@ -99,48 +119,341 @@ std::string EscapeSql(std::string value)
     return value;
 }
 
-class NullGatherCraftProvider final : public IGatherCraftProvider
+constexpr float kW2MaxVisitDistYd = 300.0f;
+
+Player* FindOnlineBot(uint32_t botGuidLow)
+{
+    if (!botGuidLow)
+        return nullptr;
+    Player* bot = ObjectAccessor::FindPlayer(ObjectGuid::Create<HighGuid::Player>(botGuidLow));
+    if (!bot || !bot->IsInWorld() || !bot->FindMap())
+        return nullptr;
+    return bot;
+}
+
+GameObject* FindNearestGameObjectByType(Player* bot, GameobjectTypes type, float maxDistYd)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap())
+        return nullptr;
+    std::list<GameObject*> objects;
+    Trinity::GameObjectInRangeCheck check(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), maxDistYd, 0);
+    Trinity::GameObjectListSearcher<Trinity::GameObjectInRangeCheck> searcher(bot, objects, check);
+    Cell::VisitGridObjects(bot, searcher, maxDistYd);
+
+    GameObject* best = nullptr;
+    float bestDist = maxDistYd + 1.0f;
+    uint32 const botZone = bot->GetZoneId();
+    for (GameObject* go : objects)
+    {
+        if (!go || !go->isSpawned() || go->GetGoType() != type)
+            continue;
+        if (go->GetZoneId() != botZone)
+            continue;
+        float const d = bot->GetDistance(go);
+        if (d <= maxDistYd && d < bestDist)
+        {
+            bestDist = d;
+            best = go;
+        }
+    }
+    return best;
+}
+
+Item* FindBagItemByEntry(Player* bot, uint32_t itemId)
+{
+    if (!bot || !itemId)
+        return nullptr;
+    Item* best = nullptr;
+    auto checkItem = [&](Item* item)
+    {
+        if (!item || item->GetEntry() != itemId)
+            return;
+        if (!best || item->GetCount() < best->GetCount())
+            best = item;
+    };
+    for (uint8_t slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        checkItem(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+    for (uint8_t bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+    {
+        if (Bag* pBag = bot->GetBagByPos(bag))
+        {
+            for (uint32_t slot = 0; slot < pBag->GetBagSize(); ++slot)
+                checkItem(pBag->GetItemByPos(slot));
+        }
+    }
+    return best;
+}
+
+class HostGatherCraftProvider final : public IGatherCraftProvider
 {
 public:
-    bool CanGather(uint32_t, uint32_t) const override { return false; }
-    bool CanCraft(uint32_t, uint32_t) const override { return false; }
-    bool StepGatherOrCraft(uint32_t, uint32_t, uint32_t, std::string& outReason) override
+    bool CanGather(uint32_t botGuidLow, uint32_t /*itemId*/) const override
     {
-        outReason = "w7-not-wired";
+        Player* bot = FindOnlineBot(botGuidLow);
+        return bot && tbhost::prof::HasGatherableNodeInSight(bot, 150.0f);
+    }
+
+    bool CanCraft(uint32_t botGuidLow, uint32_t itemId) const override
+    {
+        Player* bot = FindOnlineBot(botGuidLow);
+        return bot && tbhost::prof::FindCraftSpellForItem(bot, itemId) != 0;
+    }
+
+    bool StepGatherOrCraft(uint32_t botGuidLow, uint32_t itemId, uint32_t /*wantCount*/, std::string& outReason) override
+    {
+        Player* bot = FindOnlineBot(botGuidLow);
+        if (!bot)
+        {
+            outReason = "not-in-world";
+            return false;
+        }
+
+        if (uint32_t const spellId = tbhost::prof::FindCraftSpellForItem(bot, itemId))
+        {
+            uint32_t const beforeCount = bot->GetItemCount(itemId, false);
+            std::string code, detail;
+            if (tbhost::prof::Craft(bot, spellId, 1, code, detail))
+            {
+                if (bot->GetItemCount(itemId, false) > beforeCount)
+                {
+                    outReason = "crafted";
+                    return true;
+                }
+                outReason = "craft-no-gain";
+                return false;
+            }
+            outReason = code.empty() ? "craft-failed" : code;
+            return false;
+        }
+
+        uint32_t const beforeCount = bot->GetItemCount(itemId, false);
+        std::string code, detail;
+        if (tbhost::prof::GatherNearestInSight(bot, 150.0f, code, detail))
+        {
+            if (code == "walking")
+            {
+                outReason = "walking";
+                return false;
+            }
+            if (bot->GetItemCount(itemId, false) > beforeCount)
+            {
+                outReason = "gathered";
+                return true;
+            }
+            outReason = "gather-no-item";
+            return false;
+        }
+
+        outReason = "cannot: travel";
         return false;
     }
 };
 
-class NullAuctionBuyProvider final : public IAuctionBuyProvider
+class HostAuctionBuyProvider final : public IAuctionBuyProvider
 {
 public:
-    bool CanBuyOnAuction(uint32_t, uint32_t, uint32_t) const override { return false; }
-    bool StepBuyOnAuction(uint32_t, uint32_t, uint32_t, uint32_t, std::string& outReason) override
+    bool CanBuyOnAuction(uint32_t botGuidLow, uint32_t itemId, uint32_t maxCopper) const override
     {
-        outReason = "w8-not-wired";
+        Player* bot = FindOnlineBot(botGuidLow);
+        if (!bot)
+            return false;
+        Creature* auctioneer = tbhost::ah::FindNearestFactionAuctioneer(bot, kW2MaxVisitDistYd);
+        if (!auctioneer)
+            return false;
+        uint64_t const budget = (maxCopper > 0 && maxCopper < bot->GetMoney()) ? uint64_t(maxCopper) : bot->GetMoney();
+        if (budget == 0)
+            return false;
+        auto const listings = tbhost::ah::QueryMarketByItemId(bot, auctioneer, itemId);
+        for (auto const& l : listings)
+        {
+            if (l.isOwn || l.unitPrice == 0)
+                continue;
+            ai::AhBuyInput in;
+            in.auctionId = l.auctionId;
+            in.itemId = l.itemId;
+            in.isCommodity = l.isCommodity;
+            in.isOwnAuction = l.isOwn;
+            in.buyoutOrUnitPrice = l.isCommodity ? l.unitPrice : l.buyoutPrice;
+            in.isNeededMatOrExplicit = true;
+            in.budgetCopper = budget;
+            in.count = l.isCommodity ? ai::AhClampCommodityBuyQty(1, l.count, l.unitPrice, budget) : (l.count ? l.count : 1);
+            if (ai::DecideAhBuy(in).shouldBuy)
+                return true;
+        }
+        return false;
+    }
+
+    bool StepBuyOnAuction(uint32_t botGuidLow, uint32_t itemId, uint32_t wantCount, uint32_t maxCopper, std::string& outReason) override
+    {
+        Player* bot = FindOnlineBot(botGuidLow);
+        if (!bot)
+        {
+            outReason = "not-in-world";
+            return false;
+        }
+        Creature* auctioneer = tbhost::ah::FindNearestFactionAuctioneer(bot, kW2MaxVisitDistYd);
+        if (!auctioneer)
+        {
+            outReason = "cannot: travel";
+            return false;
+        }
+        if (!tbhost::ah::NpcIfCanInteract(bot, auctioneer->GetGUID()))
+        {
+            bot->GetMotionMaster()->MovePoint(0, auctioneer->GetPositionX(), auctioneer->GetPositionY(), auctioneer->GetPositionZ());
+            outReason = "walking";
+            return false;
+        }
+
+        auto listings = tbhost::ah::QueryMarketByItemId(bot, auctioneer, itemId);
+        if (listings.empty())
+        {
+            outReason = "no-listing";
+            return false;
+        }
+        std::sort(listings.begin(), listings.end(), [](tbhost::ah::AhListingView const& a, tbhost::ah::AhListingView const& b)
+        {
+            return a.unitPrice < b.unitPrice;
+        });
+
+        uint64_t const budget = (maxCopper > 0 && maxCopper < bot->GetMoney()) ? uint64_t(maxCopper) : bot->GetMoney();
+        for (auto const& l : listings)
+        {
+            if (l.isOwn || l.unitPrice == 0)
+                continue;
+            ai::AhBuyInput in;
+            in.auctionId = l.auctionId;
+            in.itemId = l.itemId;
+            in.isCommodity = l.isCommodity;
+            in.isOwnAuction = l.isOwn;
+            in.buyoutOrUnitPrice = l.isCommodity ? l.unitPrice : l.buyoutPrice;
+            in.isNeededMatOrExplicit = true;
+            in.budgetCopper = budget;
+            in.count = l.isCommodity
+                ? ai::AhClampCommodityBuyQty(std::max<uint32_t>(1, wantCount), l.count, l.unitPrice, budget)
+                : (l.count ? l.count : 1);
+
+            ai::AhBuyDecision const decision = ai::DecideAhBuy(in);
+            if (!decision.shouldBuy)
+                continue;
+
+            std::string failReason;
+            bool const ok = decision.isCommodity
+                ? tbhost::ah::BuyCommodity(bot, auctioneer, l.itemId, decision.buyQuantity, &failReason)
+                : tbhost::ah::BuyItem(bot, auctioneer, l.auctionId, decision.totalPrice, &failReason);
+            if (ok)
+            {
+                outReason = "bought";
+                return true;
+            }
+        }
+
+        outReason = "no-affordable-listing";
         return false;
     }
 };
 
-class NullDeliveryProvider final : public IDeliveryProvider
+class HostDeliveryProvider final : public IDeliveryProvider
 {
 public:
-    bool CanDeliverToBank(uint32_t, uint64_t) const override { return false; }
-    bool CanDeliverByMail(uint32_t, uint32_t) const override { return false; }
-    bool Deliver(uint32_t, uint64_t, uint32_t, uint32_t, uint32_t, std::string& outReason) override
+    bool CanDeliverToBank(uint32_t botGuidLow, uint64_t guildId) const override
     {
-        outReason = "w4-travel-not-wired";
-        return false;
+        Player* bot = FindOnlineBot(botGuidLow);
+        if (!bot || !guildId || tbhost::guild::GetGuildId(bot) != guildId)
+            return false;
+        return FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_GUILD_BANK, kW2MaxVisitDistYd) != nullptr;
+    }
+
+    bool CanDeliverByMail(uint32_t botGuidLow, uint32_t recipientGuidLow) const override
+    {
+        Player* bot = FindOnlineBot(botGuidLow);
+        if (!bot || !recipientGuidLow)
+            return false;
+        return FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_MAILBOX, kW2MaxVisitDistYd) != nullptr;
+    }
+
+    bool Deliver(uint32_t botGuidLow, uint64_t guildId, uint32_t recipientGuidLow, uint32_t itemId, uint32_t /*count*/, std::string& outReason) override
+    {
+        Player* bot = FindOnlineBot(botGuidLow);
+        if (!bot)
+        {
+            outReason = "not-in-world";
+            return false;
+        }
+        Item* item = FindBagItemByEntry(bot, itemId);
+        if (!item)
+        {
+            outReason = "no-items";
+            return false;
+        }
+
+        if (GameObject* banker = FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_GUILD_BANK, kW2MaxVisitDistYd))
+        {
+            if (!bot->GetGameObjectIfCanInteractWith(banker->GetGUID(), GAMEOBJECT_TYPE_GUILD_BANK))
+            {
+                bot->GetMotionMaster()->MovePoint(0, banker->GetPositionX(), banker->GetPositionY(), banker->GetPositionZ());
+                outReason = "walking";
+                return false;
+            }
+            for (uint8_t tab = 0; tab < kDeliveryTabCount; ++tab)
+            {
+                std::string failReason;
+                if (tbhost::guild::DepositItem(bot, banker->GetGUID(), tab, item, &failReason))
+                {
+                    outReason = "bank";
+                    return true;
+                }
+            }
+        }
+
+        GameObject* mailbox = FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_MAILBOX, kW2MaxVisitDistYd);
+        if (!mailbox)
+        {
+            outReason = "cannot: travel";
+            return false;
+        }
+        if (!bot->GetGameObjectIfCanInteractWith(mailbox->GetGUID(), GAMEOBJECT_TYPE_MAILBOX))
+        {
+            bot->GetMotionMaster()->MovePoint(0, mailbox->GetPositionX(), mailbox->GetPositionY(), mailbox->GetPositionZ());
+            outReason = "walking";
+            return false;
+        }
+
+        uint32_t targetLow = recipientGuidLow;
+        if (!targetLow || targetLow == botGuidLow)
+            targetLow = tbhost::guild::GetLeaderGuid(guildId).GetCounter();
+        std::string targetName;
+        if (!targetLow || !sCharacterCache->GetCharacterNameByGuid(ObjectGuid::Create<HighGuid::Player>(targetLow), targetName))
+        {
+            outReason = "no-recipient";
+            return false;
+        }
+
+        uint32_t const beforeCount = bot->GetItemCount(itemId, false);
+        std::vector<ObjectGuid> attachments;
+        attachments.push_back(item->GetGUID());
+        std::string failReason;
+        if (!tbhost::guild::SendMail(bot, mailbox->GetGUID(), targetName, "Guild Order", "", 0, attachments, &failReason))
+        {
+            outReason = failReason.empty() ? "mail-failed" : failReason;
+            return false;
+        }
+        if (bot->GetItemCount(itemId, false) >= beforeCount)
+        {
+            outReason = "mail-refused";
+            return false;
+        }
+        outReason = "mailed";
+        return true;
     }
 };
 
-NullGatherCraftProvider g_nullGatherCraft;
-NullAuctionBuyProvider g_nullAuctionBuy;
-NullDeliveryProvider g_nullDelivery;
+HostGatherCraftProvider g_hostGatherCraft;
+HostAuctionBuyProvider g_hostAuctionBuy;
+HostDeliveryProvider g_hostDelivery;
 
-IGatherCraftProvider* g_gatherCraft = &g_nullGatherCraft;
-IAuctionBuyProvider* g_auctionBuy = &g_nullAuctionBuy;
-IDeliveryProvider* g_delivery = &g_nullDelivery;
+IGatherCraftProvider* g_gatherCraft = &g_hostGatherCraft;
+IAuctionBuyProvider* g_auctionBuy = &g_hostAuctionBuy;
+IDeliveryProvider* g_delivery = &g_hostDelivery;
 
 } // namespace
 
@@ -320,9 +633,178 @@ IGatherCraftProvider& GatherCraft() { return *g_gatherCraft; }
 IAuctionBuyProvider& AuctionBuy() { return *g_auctionBuy; }
 IDeliveryProvider& Delivery() { return *g_delivery; }
 
-void SetGatherCraftProvider(IGatherCraftProvider* provider) { g_gatherCraft = provider ? provider : &g_nullGatherCraft; }
-void SetAuctionBuyProvider(IAuctionBuyProvider* provider) { g_auctionBuy = provider ? provider : &g_nullAuctionBuy; }
-void SetDeliveryProvider(IDeliveryProvider* provider) { g_delivery = provider ? provider : &g_nullDelivery; }
+void SetGatherCraftProvider(IGatherCraftProvider* provider) { g_gatherCraft = provider ? provider : &g_hostGatherCraft; }
+void SetAuctionBuyProvider(IAuctionBuyProvider* provider) { g_auctionBuy = provider ? provider : &g_hostAuctionBuy; }
+void SetDeliveryProvider(IDeliveryProvider* provider) { g_delivery = provider ? provider : &g_hostDelivery; }
+
+void SetOrderWorking(uint32_t botGuidLow, bool working)
+{
+    if (!botGuidLow)
+        return;
+    StoreState& s = State();
+    std::lock_guard<std::mutex> lock(s.mutex);
+    if (working)
+        s.workingBots.insert(botGuidLow);
+    else
+        s.workingBots.erase(botGuidLow);
+}
+
+bool IsOrderWorking(uint32_t botGuidLow)
+{
+    StoreState& s = State();
+    std::lock_guard<std::mutex> lock(s.mutex);
+    return s.workingBots.count(botGuidLow) > 0;
+}
+
+bool IsItemNeededByGuildOrder(uint64_t guildId, uint32_t itemId)
+{
+    if (!guildId || !itemId)
+        return false;
+    auto const orders = ListOrdersForGuild(uint32_t(guildId));
+    for (auto const& o : orders)
+    {
+        if (o.cancelled || o.state == OrderState::Done || o.state == OrderState::Mailed)
+            continue;
+        if (o.itemId == itemId)
+            return true;
+        if (o.type == OrderType::Craft && tbhost::prof::IsReagentForItem(o.itemId, itemId))
+            return true;
+        for (auto const& ni : o.needItems)
+        {
+            if (ni.itemId == itemId)
+                return true;
+        }
+    }
+    return false;
+}
+
+void TickBotOrder(Player* bot)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap())
+        return;
+    uint32_t const botGuidLow = bot->GetGUID().GetCounter();
+    if (!IsOrderWorking(botGuidLow))
+        return;
+
+    auto ordOpt = FindOrder(botGuidLow);
+    if (!ordOpt || ordOpt->cancelled || ordOpt->state == OrderState::Done || ordOpt->state == OrderState::Mailed)
+    {
+        SetOrderWorking(botGuidLow, false);
+        return;
+    }
+
+    OrderRecord rec = *ordOpt;
+    uint32_t const inBagsBefore = bot->GetItemCount(rec.itemId, false);
+    uint32_t const recipientLow = rec.giverGuidLow ? rec.giverGuidLow : tbhost::guild::GetLeaderGuid(rec.guildId).GetCounter();
+
+    OrderStepInput in;
+    in.type = rec.type;
+    in.delivered = rec.delivered;
+    in.want = rec.amount;
+    in.inBags = inBagsBefore;
+    in.canCraft = GatherCraft().CanCraft(botGuidLow, rec.itemId);
+    in.canGather = GatherCraft().CanGather(botGuidLow, rec.itemId);
+    in.canBuyAh = AuctionBuy().CanBuyOnAuction(botGuidLow, rec.itemId, rec.hasGoldCap ? rec.goldCap : 0);
+    in.canDeliverBank = Delivery().CanDeliverToBank(botGuidLow, rec.guildId);
+    in.canDeliverMail = Delivery().CanDeliverByMail(botGuidLow, recipientLow);
+
+    OrderStepDecision const dec = DecideOrderStep(in);
+    std::string reason;
+
+    switch (dec.action)
+    {
+        case OrderStepAction::Complete:
+            rec.state = OrderState::Done;
+            rec.reason = OrderReason::None;
+            GiveOrder(rec);
+            SetOrderWorking(botGuidLow, false);
+            TC_LOG_INFO("tortoisebots", "[W9] order id={} bot={} item={} have={} want={} state=done",
+                rec.itemId, bot->GetName(), rec.itemId, rec.delivered, rec.amount);
+            return;
+
+        case OrderStepAction::DeliverBank:
+        case OrderStepAction::DeliverMail:
+        {
+            rec.state = OrderState::Delivering;
+            bool const ok = Delivery().Deliver(botGuidLow, rec.guildId, recipientLow, rec.itemId, rec.amount - rec.delivered, reason);
+            if (!ok)
+            {
+                if (reason == "cannot: travel")
+                {
+                    rec.state = OrderState::Cant;
+                    rec.reason = OrderReason::NoBanker;
+                    GiveOrder(rec);
+                    SetOrderWorking(botGuidLow, false);
+                    TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason={}",
+                        rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, reason);
+                }
+                else if (reason != "walking")
+                {
+                    TC_LOG_INFO("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode=none result={}",
+                        rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, reason);
+                }
+                return;
+            }
+            uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
+            uint32_t const moved = (inBagsBefore > inBagsAfter) ? (inBagsBefore - inBagsAfter) : 0;
+            if (moved > 0)
+            {
+                rec.delivered += moved;
+                rec.reportedHave = rec.delivered + inBagsAfter;
+                if (rec.delivered >= rec.amount)
+                {
+                    rec.state = (reason == "mailed") ? OrderState::Mailed : OrderState::Done;
+                    rec.reason = OrderReason::None;
+                    SetOrderWorking(botGuidLow, false);
+                }
+                GiveOrder(rec);
+            }
+            TC_LOG_INFO("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode={} result={}",
+                rec.itemId, bot->GetName(), rec.itemId, rec.delivered, rec.amount, reason,
+                (rec.delivered >= rec.amount) ? "done" : "ok");
+            return;
+        }
+
+        case OrderStepAction::Craft:
+        case OrderStepAction::Gather:
+        {
+            bool const ok = GatherCraft().StepGatherOrCraft(botGuidLow, rec.itemId, dec.remaining, reason);
+            uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
+            uint32_t const haveAfter = rec.delivered + inBagsAfter;
+            if (ok)
+            {
+                rec.reportedHave = haveAfter;
+                GiveOrder(rec);
+            }
+            TC_LOG_INFO("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action={} result={}",
+                rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount,
+                dec.action == OrderStepAction::Craft ? "craft" : "gather",
+                ok ? reason : (reason.empty() ? "fail" : reason));
+            return;
+        }
+
+        case OrderStepAction::BuyAh:
+        {
+            bool const ok = AuctionBuy().StepBuyOnAuction(botGuidLow, rec.itemId, dec.remaining, rec.hasGoldCap ? rec.goldCap : 0, reason);
+            uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
+            uint32_t const haveAfter = rec.delivered + inBagsAfter;
+            TC_LOG_INFO("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action=buy result={}",
+                rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount,
+                ok ? reason : (reason.empty() ? "fail" : reason));
+            return;
+        }
+
+        case OrderStepAction::CannotTravel:
+        default:
+            rec.state = OrderState::Cant;
+            rec.reason = OrderReason::NoSource;
+            GiveOrder(rec);
+            SetOrderWorking(botGuidLow, false);
+            TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason=cannot:%20travel",
+                rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount);
+            return;
+    }
+}
 
 } // namespace guild_orders
 } // namespace tbhost
@@ -340,7 +822,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     if (!RequireBuilt(handler, words, "guildorder"))
         return false;
     if (words.w.empty())
-        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status");
+        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
 
     std::string const sub = Lower(words.w[0]);
     Player* sender = SenderPlayer(handler);
@@ -398,6 +880,9 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         if (!tbhost::guild_orders::GiveOrder(rec))
             return Fail(handler, words, "guildorder", "store-write-failed", bot->GetName());
 
+        TC_LOG_INFO("tortoisebots", "[W9] order id={} bot={} item={} have=0 want={} type={}",
+            itemId, bot->GetName(), itemId, amount, GuildOrders::TypeToken(orderType));
+
         Reply reply(handler, words, "guildorder");
         reply.Begin();
         Rec r("guildorder");
@@ -453,6 +938,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
             return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
         if (!tbhost::guild_orders::CancelOrder(bot->GetGUID().GetCounter()))
             return Fail(handler, words, "guildorder", "not-found", bot->GetName());
+        tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), false);
 
         Reply reply(handler, words, "guildorder");
         reply.Begin();
@@ -489,7 +975,44 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         return true;
     }
 
-    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status");
+    if (sub == "work")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "guildorder", "usage", "work <bot> [id]");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
+        uint64_t const guildId = tbhost::guild::GetGuildId(bot);
+        if (sender && guildId && !tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
+            return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+
+        auto const ord = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
+        if (!ord)
+            return Fail(handler, words, "guildorder", "not-found", bot->GetName());
+        if (words.w.size() >= 3)
+        {
+            uint32_t const reqId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
+            if (reqId && reqId != ord->itemId)
+                return Fail(handler, words, "guildorder", "order-mismatch", words.w[2]);
+        }
+
+        tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), true);
+        uint32_t const have = ord->delivered + bot->GetItemCount(ord->itemId, false);
+        TC_LOG_INFO("tortoisebots", "[W9] order id={} bot={} item={} have={} want={} type={}",
+            ord->itemId, bot->GetName(), ord->itemId, have, ord->amount, GuildOrders::TypeToken(ord->type));
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "work").S("bot", bot->GetName()).N("item", ord->itemId)
+            .N("have", have).N("want", ord->amount)
+            .S("state", GuildOrders::StateToken(ord->state));
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
 }
 
 } // namespace h3

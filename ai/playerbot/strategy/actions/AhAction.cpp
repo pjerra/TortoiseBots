@@ -149,6 +149,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         in.nonEmptyBag = item->IsNotEmptyBag();
         in.isW6aUpgrade = isUpgrade;
         in.blacklisted = AhItemSellBlacklisted(proto->ItemId, sPlayerbotAIConfig.ahSellBlacklist);
+        in.reservedTradeGood = AhIsTradeGoodReservedCompat(bot, proto->ItemId, proto->Class);
 
         AhSellDecision const decision = DecideAhSell(in);
         if (!decision.shouldPost)
