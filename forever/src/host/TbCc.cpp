@@ -209,7 +209,9 @@ bool ApplyCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
         return Refuse(code, detail, "target-dead", "the target is dead");
     if (!bot->IsValidAttackTarget(target))
         return Refuse(code, detail, "not-attackable", "the core says this bot may not attack that unit");
-
+    // I13: a listed mob is left alone, not crowd-controlled either: take it off the list first (`.tb ignore ... remove ...`).
+    if (IsIgnoredMobCompat(bot, unit))
+        return Refuse(code, detail, "ignored", "the commander's ignore list names that mob");
     std::string const wantedFamily = NormalFamily(family);
     ObjectGuid const by = ChangedBy(leader, bot);
     Undo undo;

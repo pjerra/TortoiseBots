@@ -6,6 +6,7 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "host/TbIgnore.h"   // I13: explicit orders take a listed mob off the commander's ignore list
 #include "MiscPackets.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -383,10 +384,14 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         }
         if (!bot->GetGroup())
             return "fail:no-party";
+        // I13: an explicit order wins over `.tb ignore`: the mob leaves the commander's list before the attack runs.
+        TortoiseBots::i13::NoteExplicitTarget(bot, unit);
         return AttackThroughMark(bot, ai, owner, unit, "attack rti target") ? "ok" : "fail:attack";
     }
     if (o.verb == "pull")
     {
+        // I13: an explicit order wins over `.tb ignore`, as for attack above.
+        TortoiseBots::i13::NoteExplicitTarget(bot, o.unit);
         if (!act("pull my target", Event("tb order", o.unit, owner)))
             return "fail:pull";
         // L2 (package L): `pull my target` places no hold (only the chat `pullback` and the command layer's PausePartyDpsForPull do), so the damage
@@ -523,6 +528,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         Group* group = bot->GetGroup();
         if (!group)
             return "fail:no-party";
+        // I13: a focus is an explicit order too: it takes the mob off the commander's ignore list before the mark goes on.
+        TortoiseBots::i13::NoteExplicitTarget(bot, o.unit);
         group->SetTargetIcon(uint8(MarkIndex("skull")), o.unit, owner->GetGUID());
         ai->DropQueuedMovementOrders();
         ai->EndStayForOrder();
