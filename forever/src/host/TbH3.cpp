@@ -4,6 +4,7 @@
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbH4.h"
+#include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunHooks.h"
 
 #include "CharacterCache.h"
@@ -438,14 +439,46 @@ bool IsHostBot(Player const* player)
     return player && BotMgr::Instance().IsBot(player->GetGUID());
 }
 
+namespace
+{
+target::Guid Identity(ObjectGuid guid)
+{
+    return { guid.GetRawValue(0), guid.GetRawValue(1) };
+}
+}
+
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character)
 {
-    if (character.IsEmpty())
-        return false;
-    if (BotMgr::Instance().IsBot(character))
-        return true;
     Player* sender = SenderPlayer(handler);
-    return sender && sender->GetGUID() == character;
+    return target::MayTarget(Identity(character), sender ? Identity(sender->GetGUID()) : target::Guid(),
+                             BotMgr::Instance().IsBot(character));
+}
+
+Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail)
+{
+    Player* sender = SenderPlayer(handler);
+    if (name.empty())
+    {
+        if (sender)
+            return sender;
+        code = "no-character";
+        detail = "the console has no character: name a host bot";
+        return nullptr;
+    }
+    Player* player = FindOnline(name);
+    if (!player)
+    {
+        code = "no-such-player";
+        detail = std::string(name) + " is not in the world";
+        return nullptr;
+    }
+    if (!MayLeadBots(handler, player->GetGUID()))
+    {
+        code = "not-a-bot";
+        detail = std::string(name) + " is neither a host bot nor your own character";
+        return nullptr;
+    }
+    return player;
 }
 
 Player* CommanderOf(Player* bot)
@@ -509,7 +542,7 @@ std::vector<Player*> BotsOfGroup(Group* group)
 }
 }
 
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows)
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender)
 {
     Address result;
     if (pos >= args.w.size())
@@ -528,10 +561,10 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.code = "no-such-player";
             result.detail = name + " is not in the world";
         }
-        else if (!IsHostBot(bot))
+        else if (!IsHostBot(bot) && !(allowSender && sender && bot->GetGUID() == sender->GetGUID()))
         {
             result.code = "not-a-bot";
-            result.detail = name + " is not a logged-in host bot";
+            result.detail = allowSender ? name + " is neither a host bot nor your own character" : name + " is not a logged-in host bot";
         }
         else
         {

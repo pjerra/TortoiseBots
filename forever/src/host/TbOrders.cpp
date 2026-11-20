@@ -12,6 +12,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -1146,9 +1147,23 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return false;
     bool const leaderFollows = args.w.size() >= 3 && Lower(args.w[0]) == "party";
     size_t pos = 0;
-    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
-    if (!who.ok())
-        return Fail(handler, args, "role", who.code, who.detail);
+    Address who;
+    if (!args.w.empty() && target::IsRoleWord(Lower(args.w[0])))
+    {
+        // TB-1: no name means the sender's own character (the first word is already the role).
+        std::string code, detail;
+        Player* self = ResolveTestTarget(handler, std::string_view(), code, detail);
+        if (!self)
+            return Fail(handler, args, "role", code, detail);
+        who.bots.push_back(self);
+        who.label = self->GetName();
+    }
+    else
+    {
+        who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows, true);
+        if (!who.ok())
+            return Fail(handler, args, "role", who.code, who.detail);
+    }
     if (pos >= args.w.size())
         return Fail(handler, args, "role", "missing-role", "tank, healer (heal), dps or none");
     std::string const word = Lower(args.w[pos]);
