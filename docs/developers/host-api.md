@@ -1081,3 +1081,11 @@ The Forever-only `host/TbOnyxia` observer runs from the existing
 It introduces no core hook. It resolves only an explicitly named map-249
 Onyxia in the bot's instance, and never mutates gameplay during observation.
 See `forever/docs/ONYXIA.md` for the opt-in command, sampling and cleanup.
+
+The optional `host/TbOnyxiaGround` integration installs per-AI strategy/action/
+trigger contexts at engine creation. `ConfigureGround` validates an explicit
+same-instance boss and grouped host tank; `GroundTick` maintains ownership,
+threat holds and checked movement. `ForgetGround` releases owned movement and
+pet state, including followers when the owner leaves control. Successful manual
+orders release control except the owner's explicit pull of the configured boss.
+This is a controller seam, not a replacement for the pending `TbRun` slices.

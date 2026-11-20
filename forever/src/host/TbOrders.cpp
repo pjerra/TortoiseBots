@@ -6,6 +6,7 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "host/TbOnyxiaGround.h"
 #include "MiscPackets.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -674,12 +675,16 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (missing)
             continue;
 
+        bool const ownPull = verb == "pull" && onyxia::GroundBoss(bot->GetGUID()) == order.unit &&
+            onyxia::GroundOwner(bot->GetGUID()) == bot->GetGUID();
         uint32 seq = 0;
         if (!Enqueue(bot, std::move(order), code, detail, seq))
         {
             refuse(code, detail);
             continue;
         }
+        if (!ownPull)
+            onyxia::ForgetGround(bot->GetGUID());
         ++queued;
         Rec rec("order");
         rec.S("bot", bot->GetName()).S("verb", verb).N("seq", seq).S("status", "queued");

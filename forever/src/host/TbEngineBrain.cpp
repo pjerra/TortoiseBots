@@ -11,6 +11,7 @@
 #include "TbBotSession.h"
 #include "host/TbH3.h"
 #include "host/TbOnyxia.h"
+#include "host/TbOnyxiaGround.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -217,6 +218,7 @@ Brain* Create(Player* bot, Player* master, std::string& error)
         auto const lap = [&started]() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count(); };
         pai = new PlayerbotAI(bot);
         auto const constructedMs = lap();
+        onyxia::InstallGround(pai);
         pai->SetMaster(master);
         // The engines were built before the master was known, so saved strategies and values are applied now (:41-44).
         pai->ResetStrategies();

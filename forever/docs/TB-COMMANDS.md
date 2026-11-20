@@ -313,3 +313,9 @@ running. It accepts only entry 10184 in that bot's map-249 instance. Replies
 are `onyxia-begin`, `onyxia` records and `onyxia-end` with the normal counts and
 echo token. The engine-off build returns `engine-not-built`.
 See [ONYXIA.md](ONYXIA.md) for fields, cleanup and sampling limitations.
+
+`.tb onyxia <bot> ground <32-hex-boss-guid> <tank-name> [#token]`
+enables the opt-in ground strategy. Configure the named host tank first, then
+its same-group participants. Explicitly pull using that owner's host order;
+configuration alone does not pull. Other accepted orders release control.
+See [ONYXIA.md](ONYXIA.md) for damage gates, checked routes and live-test limits.
