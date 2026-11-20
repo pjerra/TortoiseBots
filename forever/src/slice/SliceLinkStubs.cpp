@@ -322,39 +322,11 @@ bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
 // =====================================================================================================================
-// Travel (owner files: ai/playerbot/TravelMgr.cpp, TravelNode.cpp). No node map, no destinations, no route.
+// Travel node graph (owner file: ai/playerbot/TravelNode.cpp). TravelMgr.cpp and TravelValues.cpp are in the slice since
+// W4-A2, so their stand-ins are gone; the node graph arrives with W4-A1 and answers "no node" until then.
 // =====================================================================================================================
 namespace ai
 {
-void TravelMgr::Clear() { NoteTravel(); }
-void TravelMgr::LoadAreaLevels() { NoteTravel(); }
-void TravelMgr::LoadQuestTravelTable() { NoteTravel(); }
-void TravelMgr::LoadTaxiNodeZones() { NoteTravel(); }
-int32 TravelMgr::GetAreaLevel(uint32) { NoteTravel(); return 0; }
-void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteTravel(); }
-// The real function clears the out list; on the same map the start itself is the one "portal" at distance 0; otherwise the transfer table answers, and it is empty.
-void TravelMgr::CollectMapTransferPortals(const WorldPosition& start, uint32 endMapId, std::vector<std::pair<WorldPosition, float>>& outPortals) const
-{
-    NoteTravel();
-    outPortals.clear();
-    if (start.GetMapId() == endMapId)
-        outPortals.emplace_back(start, 0.0f);
-}
-// The real distance (TravelMgr.cpp:3644): on one map the flat distance, across maps the distance through the nearest known transfer, FLT_MAX when there is
-// none. No transfer table is built here, so every cross-map distance is FLT_MAX (R9: 0.0f made it read "right here", 53 call sites).
-float TravelMgr::MapTransDistance(const WorldPosition& start, const WorldPosition& end, bool) const
-{
-    NoteTravel();
-    if (start.GetMapId() == end.GetMapId())
-        return std::sqrt(start.sqDistance2d(end));
-    return FLT_MAX;
-}
-
-TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
-TravelTarget::~TravelTarget() {}
-bool TravelTarget::IsActive() { NoteTravel(); return false; }
-void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
-
 // The real answer with no stored offset: the map with a zero position.
 WorldPosition TravelNodeMap::getMapOffset(uint32 mapId) { NoteTravel(); return WorldPosition(mapId, 0, 0, 0, 0); }
 TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
@@ -362,16 +334,6 @@ void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTrav
 bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
 bool TravelPath::cutTo(PathNodePoint, bool) { NoteTravel(); return false; }
 void TravelPath::makeShortCut(WorldPosition, float, Unit*) { NoteTravel(); }
-
-// The vtables of the destination classes TravelMgr's members construct: the key functions, with the "nothing is possible"
-// answers the base TravelDestination gives.
-std::string EntryTravelDestination::GetShortName() const { NoteTravel(); return ""; }
-bool GrindTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GrindTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GrindTravelDestination::GetTitle() const { NoteTravel(); return "grind"; }
-bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
 }
 
 // =====================================================================================================================

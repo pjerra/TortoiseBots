@@ -40,7 +40,7 @@ option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SL
 # Slice 3 (M): the nine group-fight commands (host/TbH3, TbOrders, TbPartyState, TbTestKit) are engine-facing code; the default build compiles ONE stub
 # (host/TbH3Off.cpp) that gives their "the engine is not built in" answers, and the slice build compiles the real four instead.
 if(NOT TORTOISEBOTS_SLICE1)
-  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported)\\.cpp$")
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported|TbCompat_WL4)\\.cpp$")
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit)\\.cpp$")
 else()
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/TbH3Off\\.cpp$")
