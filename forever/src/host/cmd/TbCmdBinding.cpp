@@ -454,11 +454,17 @@ L::Facts FactsFor(ObjectGuid commander, Meta& m, Player* commanderPlayer, Player
             facts.groupIsBg = group->isBGGroup();
             facts.memberCount = group->GetMembersCount();
             facts.commanderInGroup = commanderPlayer && group->IsMember(commanderPlayer->GetGUID());
+            // A real player is a member IN THE WORLD who is no host bot: a saved group can hold a bot character that has not logged in yet
+            // (BotMgr only knows the bots that are in), and that member cannot act in the party either.
             for (Group::MemberSlot const& slot : group->GetMemberSlots())
                 if (slot.guid != commander && !BotMgr::Instance().IsBot(slot.guid))
                 {
-                    facts.realPlayerInGroup = true;
-                    break;
+                    Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                    if (member && member->IsInWorld())
+                    {
+                        facts.realPlayerInGroup = true;
+                        break;
+                    }
                 }
         }
     }
@@ -729,6 +735,23 @@ void NoteLogin(Player* player)
             m.leadDeadSinceMs = 0;
     }
     TryRestore();
+    // A saved party is attached to a character at login without an AddMember event, so a real player coming back into a bound party is caught here
+    // (a classic binding ends; the lead bot's own members are bots).
+    if (!BotMgr::Instance().IsBot(player->GetGUID()))
+    {
+        std::vector<ObjectGuid> releases;
+        for (auto const& [commander, m] : s.metas)
+        {
+            if (!m.restored || (m.flags & L::FlagInParty) || commander == player->GetGUID())
+                continue;
+            Player* lead = InWorld(m.lead);
+            Group* group = lead ? lead->GetGroup() : nullptr;
+            if (group && group->IsMember(player->GetGUID()))
+                releases.push_back(commander);
+        }
+        for (ObjectGuid commander : releases)
+            ReleaseCommander(commander, L::End::PlayerJoined);
+    }
 }
 
 void NoteLogout(Player* player)
