@@ -14,6 +14,8 @@
 #include "SpellInfo.h"
 #include "SpellMgr.h"
 #include "TransmogMgr.h"
+#include "TraitPacketsCommon.h"
+#include "TraitMgr.h"
 #include "GitRevision.h"
 #include "ObjectMgr.h"
 #include "QuestDef.h"
@@ -28,6 +30,8 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/udp.hpp>
 #include <ctime>
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <unordered_map>
 #include <list>
@@ -973,30 +977,83 @@ void WriteSpellsFile()
 }
 
 // The talent grid of every class (tab, tier, column, the spell of each rank, prerequisites).
+// The class talent tabs as the Forever client draws them, from the trait data (Talent.db2 is the old 1.12 table the
+// client no longer uses): a class's three tabs sit side by side in one trait tree, rows 600 apart from the top row,
+// talents 600 apart in a row and a wide gap (1500 or more) between tabs. Nodes far below the seventh row or alone are
+// hidden ones the data keeps. Each talent: trait node and node entry (what character_trait_entry stores), spell, name,
+// icon, max rank, row and column.
 void WriteTalentsFile()
 {
     std::ostringstream ss;
-    ss << "{\"talents\":[";
-    size_t n = 0;
-    for (TalentEntry const* t : sTalentStore)
+    ss << "{\"classes\":[";
+    size_t n = 0, classes = 0;
+    for (uint8 cls = 1; cls < MAX_CLASSES; ++cls)
     {
-        ss << (n++ ? "," : "") << "{\"id\":" << t->ID << ",\"class\":" << int32(t->ClassID) << ",\"tab\":" << t->TabID << ",\"tier\":" << uint32(t->TierID)
-           << ",\"col\":" << uint32(t->ColumnIndex) << ",\"spell\":" << t->SpellID << ",\"ranks\":[";
-        bool first = true;
-        for (uint32 rank : t->SpellRank)
-            if (rank)
+        ChrSpecializationEntry const* spec = sDB2Manager.GetChrSpecializationByIndex(cls, 0);
+        if (!spec)
+            continue;
+        WorldPackets::Traits::TraitConfig config;
+        config.Type = TraitConfigType::Combat;
+        config.ChrSpecializationID = spec->ID;
+        struct Placed { int32 node, entry, max, def, x, row; };
+        std::vector<Placed> placed;
+        std::vector<TraitMgr::NodeEntryInfo> const entries = TraitMgr::GetNodeEntriesForConfig(config);
+        std::vector<int32> ys;
+        for (TraitMgr::NodeEntryInfo const& e : entries)
+            if (TraitNodeEntry const* node = sTraitNodeStore.LookupEntry(e.TraitNodeID))
+                ys.push_back(node->PosY);
+        std::sort(ys.begin(), ys.end());
+        int32 topY = ys.empty() ? 0 : ys.front();
+        for (int32 y : ys)
+            if (std::count_if(ys.begin(), ys.end(), [y](int32 o) { return std::abs(o - y) <= 100; }) >= 3)
             {
-                ss << (first ? "" : ",") << rank;
-                first = false;
+                topY = y;
+                break;
             }
-        ss << "],\"prereq\":[";
-        first = true;
-        for (size_t i = 0; i < t->PrereqTalent.size(); ++i)
-            if (t->PrereqTalent[i])
+        std::set<int32> seen;
+        for (TraitMgr::NodeEntryInfo const& e : entries)
+        {
+            TraitNodeEntry const* node = sTraitNodeStore.LookupEntry(e.TraitNodeID);
+            if (!node || !seen.insert(e.TraitNodeID).second)
+                continue;
+            int32 const row = int32(std::lround(double(node->PosY - topY) / 600.0));
+            if (row < 0 || row > 6)
+                continue;
+            placed.push_back({ e.TraitNodeID, e.TraitNodeEntryID, e.MaxRanks, e.TraitDefinitionID, node->PosX, row });
+        }
+        std::sort(placed.begin(), placed.end(), [](Placed const& a, Placed const& b) { return a.x < b.x; });
+        std::vector<std::vector<Placed>> tabs(1);
+        for (size_t i = 0; i < placed.size(); ++i)
+        {
+            if (i && placed[i].x - placed[i - 1].x >= 1500)
+                tabs.emplace_back();
+            tabs.back().push_back(placed[i]);
+        }
+        tabs.erase(std::remove_if(tabs.begin(), tabs.end(), [](std::vector<Placed> const& t) { return t.size() < 8; }), tabs.end());
+        if (tabs.empty())
+            continue;
+        ss << (classes++ ? "," : "") << "{\"class\":" << uint32(cls) << ",\"tabs\":[";
+        for (size_t t = 0; t < tabs.size(); ++t)
+        {
+            int32 minX = tabs[t].front().x;
+            std::sort(tabs[t].begin(), tabs[t].end(), [](Placed const& a, Placed const& b) { return a.row != b.row ? a.row < b.row : a.x < b.x; });
+            ss << (t ? "," : "") << "[";
+            for (size_t i = 0; i < tabs[t].size(); ++i)
             {
-                ss << (first ? "" : ",") << "[" << t->PrereqTalent[i] << "," << uint32(t->PrereqRank[i]) << "]";
-                first = false;
+                Placed const& p = tabs[t][i];
+                TraitDefinitionEntry const* def = sTraitDefinitionStore.LookupEntry(p.def);
+                uint32 const spellId = def ? uint32(def->SpellID) : 0;
+                std::string name = def ? LocName(def->OverrideName) : "";
+                SpellInfo const* info = spellId ? sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE) : nullptr;
+                if (name.empty() && info)
+                    name = Escape((*info->SpellName)[sWorld->GetDefaultDbcLocale()]);
+                int32 const icon = def && def->OverrideIcon ? def->OverrideIcon : info ? int32(info->IconFileDataId) : 0;
+                ss << (i ? "," : "") << "{\"node\":" << p.node << ",\"entry\":" << p.entry << ",\"spell\":" << spellId << ",\"name\":\"" << name
+                   << "\",\"icon\":" << icon << ",\"max\":" << p.max << ",\"row\":" << p.row << ",\"col\":" << int32(std::lround(double(p.x - minX) / 600.0)) << "}";
+                ++n;
             }
+            ss << "]";
+        }
         ss << "]}";
     }
     ss << "]}";
