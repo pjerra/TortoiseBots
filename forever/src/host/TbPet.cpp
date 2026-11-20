@@ -115,10 +115,18 @@ Player* PartyLeaderOrBot(Player* bot)
     return leader && leader->IsInWorld() ? leader : bot;
 }
 
+// Grammar addendum A6: `none` has no meaning and an unknown number is never written as 0: a bot with no pet has `state=` empty and no `entry` or `hppct`.
 void PutPetFields(Rec& rec, Player* bot)
 {
     PetView const view = ViewOf(bot);
-    rec.N("entry", view.entry).S("state", view.state).N("hppct", view.hppct);
+    bool const any = view.live || view.state[0] != 'n';
+    rec.S("state", any ? view.state : "");
+    if (any)
+    {
+        if (view.entry)
+            rec.N("entry", view.entry);
+        rec.N("hppct", view.hppct);
+    }
     if (view.live)
     {
         rec.S("react", ReactWord(view.live->GetReactState()));
@@ -298,7 +306,11 @@ void AppendPetState(Rec& rec, Player* bot)
     if (cls != CLASS_HUNTER && cls != CLASS_WARLOCK)
         return;
     PetView const view = ViewOf(bot);
-    rec.P("pet", { std::to_string(view.entry), view.state, std::to_string(view.hppct) });
+    // `pet=` is empty with no pet (addendum A6: no `none` word, no 0 for "not there"); a dead pet whose body is gone is `pet=<entry>:dead:0`.
+    if (view.live || view.state[0] != 'n')
+        rec.P("pet", { std::to_string(view.entry), view.state, std::to_string(view.hppct) });
+    else
+        rec.S("pet", "");
     if (view.live)
     {
         rec.S("petreact", ReactWord(view.live->GetReactState()));
@@ -309,7 +321,10 @@ void AppendPetState(Rec& rec, Player* bot)
     if (cls == CLASS_HUNTER)
     {
         uint32 const ammo = AmmoItemIdCompat(bot);
-        rec.P("ammo", { std::to_string(ammo), std::to_string(ammo ? bot->GetItemCount(ammo) : 0) });
+        if (ammo)
+            rec.P("ammo", { std::to_string(ammo), std::to_string(bot->GetItemCount(ammo)) });
+        else
+            rec.S("ammo", "");
     }
     else
         rec.N("shards", bot->GetItemCount(TortoiseBots::WARLOCK_SOUL_SHARD_ITEM));

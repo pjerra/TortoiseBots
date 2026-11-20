@@ -442,7 +442,7 @@ One host bot (a name; `party` is refused `bad-target`). Every reply is `pet-begi
 * `order <autocast <spell name> | aggressive | defensive | passive | follow | stay>`: handed to the engine's chat `pet` action (the words a player types). `autocast torment` is the ordered taunt: the Voidwalker taunts and the engine's tank rule leaves it on (lead decision D4). `abandon` and `dismiss` are not orders (`bad-argument`: nothing deletes a pet by a word, decision D5). Errors: `no-pet` `bad-argument` `no-engine`.
 * `show`: the record with `spells=` (every spell the pet knows) and `tp_used=` `tp_total=` (training points).
 
-The `pet` record: `bot= verb= status=ok|started|refused entry=<creature entry> state=alive|dead|none hppct= [react=passive|defensive|aggressive auto=<spell ids on autocast> [loyal=<1-6>]] [note=...] #token`, end `pet-end count= records= verb= target= ok= refused= #token`.
+The `pet` record: `bot= verb= status=ok|started|refused [entry=<creature entry>] state=alive|dead|(empty: no pet) [hppct=] [react=passive|defensive|aggressive auto=<spell ids on autocast> [loyal=<1-6>]] [note=...] #token`, end `pet-end count= records= verb= target= ok= refused= #token`.
 
 ```
 pet-begin #p1
@@ -451,4 +451,4 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 ```
 
 ### `.tb state` keys for a hunter or a warlock (after `practice=`)
-`pet=<entry>:<alive|dead|none>:<hp pct>` (`dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.
+`pet=<entry>:<alive|dead>:<hp pct>` (empty with no pet: the grammar has no `none` word and no 0 for "not there"; `dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold; empty with no ammo set), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.

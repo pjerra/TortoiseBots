@@ -26,7 +26,7 @@ namespace p11
 bool HandlePet(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb pet <bot> give|call|dismiss|show | order <words> [#token]
 
 // Defined in the slice build only (TbPartyState.cpp / TbH3.cpp call them).
-// `.tb state` keys appended to every bot record of a hunter or a warlock: pet=<entry>:<alive|dead|none>:<hp pct> (dead also when the body is gone and the stable
+// `.tb state` keys appended to every bot record of a hunter or a warlock: pet=<entry>:<alive|dead>:<hp pct> (empty with no pet: grammar addendum A6 allows no `none` word; dead also when the body is gone and the stable
 // row has Health 0), petreact=<passive|defensive|aggressive>, petauto=<spell ids on autocast>, loyal=<loyalty level 1-6> (a hunter's pet), ammo=<item>:<count>
 // (a hunter), shards=<count> (a warlock).
 void AppendPetState(h3::Rec& rec, Player* bot);
