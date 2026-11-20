@@ -1,0 +1,197 @@
+// ForeverCore side of the both-core helpers of the travel slice W4, round A1 (the node graph: TravelNode.cpp).
+// Turtle side: ai/cmangos-compat-wl4n.h (same names and signatures; each is the call the file always made, or the answer that
+// leaves the Turtle behaviour untouched). Both are found through ai/playerbot/TbCompatWL4n.h (`__has_include`).
+//
+// Round A2 owns the WL4 pair (the destination table, zone levels); this is A1's own pair so the two rounds never edit one file.
+// The area-trigger entry helpers TravelNode.cpp uses are the W1 pair's (AreaTriggerAtCompat and friends in TbCompat_W1.h).
+// Notes: forever/docs/W4-A1-NOTES.md.
+#pragma once
+
+#include "TbCompat_S5.h" // WorldQueryCompat: the single-table SELECT guard (backticked table and column names)
+#include "TbCompat_W3.h" // LegacyFormatW3: printf formatting for the saver's INSERT/UPDATE statements
+
+// The old size format of a log line (T `SIZEFMTD`, shared/Util.h). ForeverCore logs through a printf Format, so the size_t
+// conversion is the same one.
+#ifndef SIZEFMTD
+#define SIZEFMTD "%zu"
+#endif
+
+// ===============================================================================================================
+// THE NODE STORE (TravelNodeMap::loadNodeStore, saveNodeStore)
+// ===============================================================================================================
+// A read of ai_playerbot_travelnode, _link or _path. The guard first asks information_schema whether the table and every column
+// the query names exist: ForeverCore's connection ABORTS THE SERVER on a missing table or column (MySQLConnection.cpp:596-601),
+// Turtle logs and answers null. A missing table therefore reads as "no rows" here (schemaMissing), which is what the loader
+// already handles: the travel graph stays empty and travel does nothing.
+inline QueryResult TravelNodeQueryCompat(char const* sql, bool* schemaMissing = nullptr)
+{
+    return WorldQueryCompat(sql, schemaMissing);
+}
+
+// One write of the saver: printf formats (the Turtle rules) sent as text, because ForeverCore's PExecute takes `{}` formats and
+// would silently drop the arguments.
+template <class... Args>
+inline void TravelNodeExecuteCompat(char const* format, Args... args)
+{
+    WorldDatabase.Execute(LegacyFormatW3(format, args...).c_str());
+}
+
+// ForeverCore's one-way statements run on their own, so there is no unbound transaction to open; the DELETE and the INSERTs keep
+// their order. Turtle keeps its transaction.
+inline void TravelDbBeginCompat() {}
+inline void TravelDbCommitCompat() {}
+
+// ===============================================================================================================
+// THE GENERATOR'S PASSES (generateWalkPaths, generateHelperNodes, removeUselessPaths, calculatePathCosts)
+// ===============================================================================================================
+// May the per-map passes of the node generator run on worker threads? On Turtle they always did (std::async), and the navmesh
+// calls are safe there. On ForeverCore a PathGenerator must query its map on that map's update thread (PathGenerator.h: the
+// closed-door and liquid checks read the map's game objects), so every pass runs on the calling (world) thread: false. The
+// graph is generated in the generation boot only (decision D3), so nothing waits on a server with players.
+inline bool TravelGenParallelCompat()
+{
+    return false;
+}
+
+// Load the map data under one grid of a map, the way the core loads it when an object is added to that grid
+// (Map::EnsureGridCreated, Map.cpp:298-299: TerrainInfo::LoadMapAndVMap + LoadMMap). ForeverCore loads it per instance id.
+// Used by the generation boot (round B) for the far ends of the paths it builds: PathGenerator needs the navmesh tile and the
+// terrain grid of both ends. False when the map has no terrain (the caller does less: no path from that tile).
+inline bool MmapTileLoadCompat(uint32 mapId, uint32 instanceId, int x, int y)
+{
+    std::shared_ptr<TerrainInfo> terrain = sTerrainMgr.LoadTerrain(mapId);
+    if (!terrain)
+        return false;
+
+    terrain->LoadMapAndVMap(x, y);
+    terrain->LoadMMap(instanceId, x, y);
+    return true;
+}
+
+// ===============================================================================================================
+// THE LINK TYPES THE ROUTE MAY USE (TravelNodePath::getCost, the A* of TravelNodeMap::getRoute)
+// ===============================================================================================================
+// `pathType` is TravelNodePathType as its number (0 none, 1 walk, 2 areaTrigger, 3 transport, 4 flightPath, 5 teleportSpell,
+// 6 staticPortal). On ForeverCore taxi and transport legs are loaded from the tables but never used: flight paths, boats,
+// zeppelins and the tram are W5, and a route that needs one is refused so the bot picks another target (does less). The other
+// types keep their legacy rules in getCost. On Turtle every type stays usable, as it always was.
+inline bool TravelLinkUsableCompat(uint8 pathType)
+{
+    return pathType != 3 && pathType != 4;
+}
+
+// ===============================================================================================================
+// AREA TRIGGERS (TravelCostContext::canUseAreaTrigger, getAreaTriggerId, LeaveDeeprunTram)
+// ===============================================================================================================
+// The box centre an area trigger teleport is used from: T `box_x/box_y/box_z`, F the DBC `Pos` (DB2Structure.h:166).
+inline void AreaTriggerBoxPosCompat(AreaTriggerEntry const* entry, float& x, float& y, float& z)
+{
+    x = entry ? entry->Pos.X : 0.0f;
+    y = entry ? entry->Pos.Y : 0.0f;
+    z = entry ? entry->Pos.Z : 0.0f;
+}
+
+// May the bot use this area trigger teleport? F's WorldSafeLocsEntry (ObjectMgr.h:886, the transport destination of an area
+// trigger) carries no condition, and the core checks its own conditions when the bot crosses the trigger; nothing is refused
+// here (does less: the route may try a trigger the bot cannot use, and AreaTriggerAction closes that edge then). Turtle keeps
+// the legacy condition check.
+inline bool AreaTriggerConditionAllowsCompat(AreaTriggerTeleport const* /*at*/, Player* /*bot*/, Map* /*map*/)
+{
+    return true;
+}
+
+// Whether a position is inside an area trigger's zone. ForeverCore has no static zone test for a DBC AreaTriggerEntry (the
+// check lives in the world-thread handler), so a trigger is not treated as being at the point: the path keeps walking and the
+// core teleports the bot when it crosses the trigger (does less). Turtle keeps the legacy test.
+inline bool AreaTriggerZoneContainsCompat(AreaTriggerEntry const* /*entry*/, uint32 /*mapId*/, float /*x*/, float /*y*/, float /*z*/, float /*radius*/)
+{
+    return false;
+}
+
+// ===============================================================================================================
+// CREATURES AND THEIR SPAWNS (TravelNodePath::calculateCost, generateNpcNodes, generateStartNodes)
+// ===============================================================================================================
+// The entry of a spawn: T `creature_id[0]`, F SpawnData::id (SpawnData.h:135).
+inline uint32 SpawnEntryCompat(CreatureData const& data) { return data.id; }
+
+// The template's fields the node generator names: T `entry/name/npc_flags/rank`, F `Entry/Name/npcflag/Classification`.
+inline uint32 CreatureTemplateEntryCompat(CreatureInfo const* info) { return info->Entry; }
+inline std::string CreatureTemplateNameCompat(CreatureInfo const* info) { return info->Name; }
+inline uint64 CreatureTemplateNpcFlagsCompat(CreatureInfo const* info) { return info->npcflag; }
+inline uint32 CreatureTemplateRankCompat(CreatureInfo const* info) { return uint32(info->Classification); }
+// The highest level of the template. ForeverCore has no template level (it comes from the spawn's difficulty and the
+// creature_classic_level data, round A2); 0 means "no level": the route cost adds no threat modifier (does less).
+inline uint32 CreatureTemplateMaxLevelCompat(CreatureInfo const* /*info*/) { return 0; }
+
+// The NPC service flags of a template. T `UNIT_NPC_FLAG_SPIRITHEALER/SPIRITGUIDE` (0x20/0x40), F `UNIT_NPC_FLAG_SPIRIT_HEALER`
+// (0x4000) and no guide flag at all.
+inline bool NpcFlagIsInnkeeperCompat(uint64 flags) { return (flags & UNIT_NPC_FLAG_INNKEEPER) != 0; }
+inline bool NpcFlagIsFlightMasterCompat(uint64 flags) { return (flags & UNIT_NPC_FLAG_FLIGHTMASTER) != 0; }
+inline bool NpcFlagIsSpiritHealerCompat(uint64 flags) { return (flags & UNIT_NPC_FLAG_SPIRIT_HEALER) != 0; }
+inline bool NpcFlagIsSpiritGuideCompat(uint64 /*flags*/) { return false; }
+
+// ===============================================================================================================
+// GAME OBJECTS (the static portal and transport generators)
+// ===============================================================================================================
+// Whether a static portal may be used by this bot: T reads the template's faction, F's GameObjectTemplate has no faction (the
+// core checks the use of the game object itself), so nothing is refused (does less). Turtle keeps the legacy check.
+inline bool GameObjectFactionAllowsCompat(GameObjectInfo const* /*data*/, Player* /*bot*/) { return true; }
+
+// The spell of a GAMEOBJECT_TYPE_SPELLCASTER: T `spellcaster.spellId`, F `spellCaster.spell` (GameObjectData.h:412).
+inline uint32 GameObjectSpellcasterSpellCompat(GameObjectInfo const* data) { return data->spellCaster.spell; }
+
+// The taxi path of a transport game object: T `moTransport.taxiPathId`, F `moTransport.taxiPathID` (GameObjectData.h:349).
+inline uint32 GameObjectMoTransportTaxiPathCompat(GameObjectInfo const* data) { return data->moTransport.taxiPathID; }
+
+// The landing position of a spell: T `GetSpellTargetPosition(id)` (the first effect), F takes the effect index too
+// (SpellMgr.h:691); effect 0 is the one the legacy call answered.
+inline SpellTargetPosition const* SpellTargetPositionCompat(uint32 spellId)
+{
+    return sSpellMgr.GetSpellTargetPosition(spellId, EFFECT_0);
+}
+
+// The name of a spell for a log line and a node name: T `SpellName[0]` (a char*), F `SpellName[LOCALE_enUS]` (a std::string).
+inline char const* SpellNameCompat(SpellEntry const* spell)
+{
+    return spell ? spell->SpellName[LOCALE_enUS].c_str() : "";
+}
+
+// ===============================================================================================================
+// TAXI TABLES (getCost, getPrice, generateTaxiPaths)
+// ===============================================================================================================
+inline uint32 TaxiPathFromCompat(TaxiPathEntry const* path) { return path->FromTaxiNode; }
+inline uint32 TaxiPathToCompat(TaxiPathEntry const* path) { return path->ToTaxiNode; }
+inline uint32 TaxiPathPriceCompat(TaxiPathEntry const* path) { return path->Cost; }
+inline uint32 TaxiNodeMapIdCompat(TaxiNodesEntry const* node) { return node->ContinentID; }
+inline float TaxiNodeXCompat(TaxiNodesEntry const* node) { return node->Pos.X; }
+inline float TaxiNodeYCompat(TaxiNodesEntry const* node) { return node->Pos.Y; }
+inline float TaxiNodeZCompat(TaxiNodesEntry const* node) { return node->Pos.Z; }
+inline bool PlayerTaxiMaskKnowsCompat(Player* bot, uint32 node) { return bot->m_taxi.IsTaximaskNodeKnown(node); }
+// F's path node list is a vector of pointers (DB2Stores.h:375), T's a Path of values.
+inline uint32 TaxiPathNodeMapIdCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->ContinentID; }
+inline float TaxiPathNodeXCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.X; }
+inline float TaxiPathNodeYCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.Y; }
+inline float TaxiPathNodeZCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.Z; }
+inline uint32 TaxiPathNodeDelayCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Delay; }
+
+// ===============================================================================================================
+// THE START POSITION OF A RACE AND CLASS (generateStartNodes)
+// ===============================================================================================================
+// T `mapId/positionX/positionY/positionZ/orientation`, F PlayerInfo::createPosition.Loc (ObjectMgr.h:704-712).
+inline uint32 PlayerInfoMapIdCompat(PlayerInfo const* info) { return info->createPosition.Loc.GetMapId(); }
+inline float PlayerInfoXCompat(PlayerInfo const* info) { return info->createPosition.Loc.GetPositionX(); }
+inline float PlayerInfoYCompat(PlayerInfo const* info) { return info->createPosition.Loc.GetPositionY(); }
+inline float PlayerInfoZCompat(PlayerInfo const* info) { return info->createPosition.Loc.GetPositionZ(); }
+inline float PlayerInfoOrientationCompat(PlayerInfo const* info) { return info->createPosition.Loc.GetOrientation(); }
+
+// Turtle's own high-elf race: ForeverCore has no such race, 0xFF is never reached by the MAX_RACES loop and the name is unused.
+inline uint32 TravelHighElfRaceCompat() { return 0xFF; }
+
+// ===============================================================================================================
+// THE FIGHT GATES OF THE DUNGEON-FOLLOW HOLD (TravelPath::ClipBeforePack) AND THE STACK DISTANCES
+// ===============================================================================================================
+// Can this creature start a fight with `target`: T CanInitiateAttack(), F CanStartAttack (Creature.h:334), each core's own rule.
+inline bool CreatureCanInitiateAttackCompat(Creature* creature, Unit* target) { return creature->CanStartAttack(target, false); }
+
+// The combat reach of `from` against `to`: T takes the target (and the extra flags), F reads the unit's own reach (Unit.h).
+inline float CombatReachToCompat(Unit* from, Unit* /*to*/) { return from->GetCombatReach(); }

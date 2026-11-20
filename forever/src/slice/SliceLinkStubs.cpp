@@ -355,13 +355,10 @@ TravelTarget::~TravelTarget() {}
 bool TravelTarget::IsActive() { NoteTravel(); return false; }
 void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
 
-// The real answer with no stored offset: the map with a zero position.
-WorldPosition TravelNodeMap::getMapOffset(uint32 mapId) { NoteTravel(); return WorldPosition(mapId, 0, 0, 0, 0); }
-TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
-void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTravel(); }
-bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
-bool TravelPath::cutTo(PathNodePoint, bool) { NoteTravel(); return false; }
-void TravelPath::makeShortCut(WorldPosition, float, Unit*) { NoteTravel(); }
+// TravelNode.cpp is in the slice (round W4-A1: the node graph). Only the one TravelMgr call its generator makes is still outside
+// the slice (TravelMgr.cpp is round W4-A2): the map transfer table is not built, so the generator skips it (the generation boot
+// of round B cannot use cross-map transfers anyway).
+void TravelMgr::LoadMapTransfers() { NoteTravel(); }
 
 // The vtables of the destination classes TravelMgr's members construct: the key functions, with the "nothing is possible"
 // answers the base TravelDestination gives.
