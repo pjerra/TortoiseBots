@@ -17,6 +17,7 @@
 #include "../ai/playerbot/TravelMgr.h"
 
 #include "../ai/playerbot/strategy/values/TrainerValues.h"
+#include "../ai/playerbot/strategy/values/SharedValueContext.h"
 #include "DowntimePolicy.h"
 #include <sstream>
 #include "Bag.h"
