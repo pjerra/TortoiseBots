@@ -441,14 +441,14 @@ error code=not-commanded cmd=run msg=Mdpsb%20has%20no%20commander%20yet%3A%20bin
 * **Errors.** `missing-verb`, `unknown-verb`, `unexpected-argument`, `no-binding` (the named commander commands no bots), `engine-not-built`.
 * **The dashboard.** The COMMANDERS datagram for these cards is built by the Turtle builder (`runtime/CommanderTelemetry.h`) from `cmd::AppendBindings` (forever/src/host/cmd/TbCmdBinding.h); the dash-runs collector calls it (forever/docs/CMD-P1-NOTES.md).
 
-Real output (run2 boot, five bots bound by `.tb master party Mtank Mcmd`, a run going; the member records of the second reply are cut here):
+Real output (run2 boot, five bots bound by `.tb master party Mtank Mcmd`, engines on, a run in RFC before and after; the last three member records are cut):
 ```
-commander-begin #c6
-binding cmd=Mcmd cguid=15 online=yes lead=Mtank group=1 bound=5 bots=5 system=no inparty=no raid=no playerled=no boundat=1795138681 orders=1 map=389 pos=0.80,-8.23,-15.53 #c6
-member cmd=Mcmd bot=Mtank guid=10 class=warrior role=tank level=18 hp=498 maxhp=498 power=0 maxpower=100 ptype=rage alive=yes lead=yes map=389 zone=2437 pos=0.80,-8.23,-15.53 #c6
-(... four more member records ...)
-order cmd=Mcmd at=1795138725 verb=stay detail= ok=yes result=queued%205%20of%205 #c6
-commander-end count=7 records=7 bindings=1 #c6
+commander-begin #c12
+binding cmd=Mcmd cguid=15 online=yes lead=Mtank group=1 bound=5 bots=5 system=no inparty=no raid=no playerled=no boundat=1795138919 orders=0 map=389 pos=0.80,-8.23,-15.53 #c12
+member cmd=Mcmd bot=Mtank guid=10 class=warrior role=tank level=18 hp=498 maxhp=498 power=54 maxpower=100 ptype=rage alive=yes lead=yes map=389 zone=2437 pos=-18.24,-46.69,-21.85 #c12
+member cmd=Mcmd bot=Mpriest guid=11 class=priest role=healer level=18 hp=407 maxhp=407 power=80 maxpower=764 ptype=mana alive=yes lead=no map=389 zone=2437 pos=3.03,-31.74,-19.26 #c12
+(... three more member records ...)
+commander-end count=6 records=6 bindings=1 #c12
 ```
 ```
 commander-begin #c7
