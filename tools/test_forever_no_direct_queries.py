@@ -28,6 +28,11 @@ GUARD_CALLS = 2
 # `characters.summonedPetNumber` write the pet host makes). Both serve the legacy engine's character database (core tables that always exist), not a plan
 # or module table, and are outside slice 5; the count is named here so it cannot grow unnoticed.
 LEGACY_EXCEPTION = {"forever/src/compat/TbCompat_Unported.h": 2}
+# The characters-database guard of the commander binding store (package P2, forever/docs/CMD-P2-NOTES.md). ForeverCore's abort rule covers every pool,
+# so the store asks information_schema the same way on the characters database; its three raw calls are the probe, one guarded SELECT and one guarded
+# synchronous statement. The store itself makes none, and forever/tools/test_cmd_p2_wiring.py pins where every one of them stands.
+CHAR_GUARD_FILE = "forever/src/compat/TbCompat_CharStore.h"
+CHAR_GUARD_CALLS = 3
 
 
 def strip_comments(text: str) -> str:
@@ -50,7 +55,7 @@ class NoDirectQueries(unittest.TestCase):
 
     def test_scanned_files_exist(self):
         names = {str(p.relative_to(ROOT)) for p in SCANNED}
-        for must in ("forever/src/host/run/TbPlanUnits.cpp", "forever/src/host/run/TbPlanCommands.cpp", GUARD_FILE,
+        for must in ("forever/src/host/run/TbPlanUnits.cpp", "forever/src/host/run/TbPlanCommands.cpp", GUARD_FILE, CHAR_GUARD_FILE,
                      "ai/playerbot/DungeonPlanMgr.cpp", "ai/playerbot/BossTacticsMgr.cpp"):
             self.assertIn(must, names)
 
@@ -62,6 +67,7 @@ class NoDirectQueries(unittest.TestCase):
                 found[str(path.relative_to(ROOT))] = lines
         allowed = dict(LEGACY_EXCEPTION)
         allowed[GUARD_FILE] = GUARD_CALLS
+        allowed[CHAR_GUARD_FILE] = CHAR_GUARD_CALLS
         for name, lines in sorted(found.items()):
             self.assertIn(name, allowed, f"{name}:{lines}: a direct database query: route it through WorldQueryCompat (the schema guard)")
             self.assertEqual(len(lines), allowed[name], f"{name}: {len(lines)} direct calls at lines {lines}, expected {allowed[name]}")

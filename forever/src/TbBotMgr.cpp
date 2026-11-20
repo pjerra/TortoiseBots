@@ -16,6 +16,7 @@
 #include "Log.h"
 #include "StringFormat.h"
 #include "DB2Stores.h"
+#include "host/TbEngineMapPure.h"
 #include "Map.h"
 #include "MiscPackets.h"
 #include "MotionMaster.h"
@@ -1332,9 +1333,29 @@ void BotMgr::Think(Bot& bot, Player* me)
             // back below once it stands on the master's map. A bot on the master's map keeps its engine (it is fighting or walking).
             // N2 (package N): a DEAD commanded bot keeps (or gets) its engine while its commander is on another map: the dead kit holds only the release and
             // the acceptance of a resurrection (no follow, no path), which are the lifecycle that must run so the body can come back. The bounded wait
-            // (DeadBackstop) covers a brain that cannot be built. An alive bot still loses its engine here and waits where it stands (no follow across maps).
+            // (DeadBackstop) covers a brain that cannot be built. An alive bot inside an instance its party stands in keeps its engine too
+            // (EngineKeptOnOtherMap): it follows the group's leader there, and the bots that entered while their commander stayed outside must go on.
+            bool kept = false;
             if (!sameMap)
             {
+                if (me->IsAlive())
+                {
+                    // A party stands beside the bot when one OTHER member is in the world, not between maps, on the bot's exact map (same instance): the
+                    // group's leader is no proxy for that. A bot that leads its own group (a run's leader) still has its party in the instance and keeps
+                    // its engine; a lone leader has nobody to follow and none (PartyMemberOnMap).
+                    bool partyHere = false;
+                    if (Group* group = me->GetGroup())
+                        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                        {
+                            Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                            if (member && PartyMemberOnMap(slot.guid == me->GetGUID(), member->IsInWorld(), member->IsBeingTeleported(), me->GetMap() == member->GetMap()))
+                            {
+                                partyHere = true;
+                                break;
+                            }
+                        }
+                    kept = EngineKeptOnOtherMap(me->IsAlive(), inInstance, partyHere);
+                }
                 if (!me->IsAlive() && IsCommandedHere(bot, me))
                 {
                     if (bot.useEngine && !bot.engineFailed && !bot.brain && !bot.deadEngineFailed)
@@ -1348,7 +1369,7 @@ void BotMgr::Think(Bot& bot, Player* me)
                         }
                     }
                 }
-                else
+                else if (!kept)
                 {
                     // An alive bot (or a bot that is not commanded) loses its engine here. Live (N4 boot): a bot raised by its engine while the commander was away
                     // kept the follow generator the engine had set and walked 60 yd through the first room: stop what the dropped engine started.
@@ -1362,7 +1383,8 @@ void BotMgr::Think(Bot& bot, Player* me)
             }
             if (changed)
                 TC_LOG_INFO("tortoisebots", "BotMgr: {} is not put next to its master {} (map {}, instance {}): {}", me->GetName(), master->GetName(), masterMap, masterInstance, reason);
-            if (!sameMap)
+            // The engine kept for an instance party falls through to the build/keep below (a bot whose brain went with the worldport gets it back at once).
+            if (!sameMap && !kept)
                 return;
         }
     }
@@ -1381,6 +1403,9 @@ void BotMgr::Think(Bot& bot, Player* me)
         }
     }
     if (bot.brain)
+        return;
+    // The bot kept its engine for its instance party but has none now (not marked, or a failed build): the spike does not act across maps either.
+    if (!sameMap)
         return;
 
     if (!me->IsAlive())

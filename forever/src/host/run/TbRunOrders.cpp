@@ -13,6 +13,7 @@
 #include "host/TbCc.h"
 #include "host/TbCcPure.h"
 #include "host/TbOrdersApi.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrdersPure.h"
@@ -701,7 +702,9 @@ OrderAnswer DoReviveParty(RunRec& rec, Party const& party, std::string const& or
 }
 }
 
-OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gather)
+namespace
+{
+OrderAnswer IssueOrder(RunRec& rec, std::string const& order, uint32 nowMs, bool gather)
 {
     od::Parsed p;
     std::string code, message;
@@ -750,6 +753,16 @@ OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gath
             break;
     }
     return Refuse("invalid", "That order is not carried out.");
+}
+}
+
+// The P1/P2 order log of the commander card (host/cmd/TbCmdBinding.cpp): every order the run leader emits is noted with the executor's own answer,
+// here in the ONE executor both the run tick and `.tb run order` go through.
+OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gather)
+{
+    OrderAnswer const answer = IssueOrder(rec, order, nowMs, gather);
+    cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);
+    return answer;
 }
 
 void TakeLateFailures(RunRec& rec, uint32 nowMs, std::vector<LateFailure>& out)

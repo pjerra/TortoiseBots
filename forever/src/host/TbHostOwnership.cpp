@@ -20,6 +20,7 @@
 #include "runtime/RandomBotAccountRegistry.h"
 #include "runtime/RunReleaseHold.h"
 #include "host/TbH3.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRunHooks.h"
 #include "TbBotMgr.h"
 #include "ObjectAccessor.h"
@@ -191,11 +192,24 @@ void NoteEnchantReplaceConfirmed(uint32_t /*botGuidLow*/)
 // ---- BotCommands (commands/Commander.cpp, commands/BotCommands.cpp): the remote commander and `.bot run` are not ported. ----
 namespace BotCommands
 {
-// The bot is in no commander-bound group. (Findings: the host's masters are plain players.)
-// H3 (slice 3): except a bot that `.tb master` bound to a commander (host/TbOrders.cpp).
+// The bot stands in a group a commander bound. (Findings: the host's masters are plain players.)
+// H3 (slice 3): a bot that `.tb master` bound to a commander (host/TbOrders.cpp) answers yes.
+// P2: the binding record's lead's live group, like the two questions below (which read the same record).
 bool IsInCommandedGroup(Player* bot)
 {
     return TortoiseBots::h3::IsCommandedBot(bot);
+}
+
+// P2: the commander's binding holds this bot in its group (the binding record beside h3's table; commands/BotCommands.h's two questions). Both are
+// one guid lookup and one group membership check; a released binding answers no at once.
+bool IsCommandedBy(Player* commander, Player* bot)
+{
+    return TortoiseBots::cmd::IsCommandedBy(commander, bot);
+}
+
+bool IsInOwnBindingGroup(Player* commander, Player* bot)
+{
+    return TortoiseBots::cmd::IsInOwnBindingGroup(commander, bot);
 }
 
 // S6: these four answer from the run of the bot's party (host/run/TbRunHooks.h); "no run" (false / null / 0) when it has none or it is not running.

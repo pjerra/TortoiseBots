@@ -482,6 +482,28 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             if (!seen.insert(member->GetGUID()).second)
                 return Fail(handler, args, "party", "duplicate", args.w[i]);
         }
+        // A member that is in another party (the core keeps an old group with its offline members: a persisted group blocks the join) refuses the command
+        // before anything is changed, and the error names the member and the party to break up: `.tb ungroup <member>` is the one way out.
+        for (size_t i = 1; i < args.w.size(); ++i)
+        {
+            Player* member = FindOnline(args.w[i]);
+            Group* other = member->GetGroup() == leader->GetGroup() ? nullptr : member->GetGroup();
+            if (other)
+            {
+                std::string names;
+                for (Group::MemberSlot const& slot : other->GetMemberSlots())
+                {
+                    Player* holder = ObjectAccessor::FindPlayer(slot.guid);
+                    if (!names.empty())
+                        names += ", ";
+                    names += slot.name + (holder && holder->IsInWorld() ? "" : " (offline)");
+                }
+                return Fail(handler, args, "party", "party-refused", member->GetName() + " is already in another party (" + names +
+                    "): .tb ungroup " + member->GetName() + " first");
+            }
+            if (member->GetGroupInvite())
+                return Fail(handler, args, "party", "party-refused", member->GetName() + " has a pending party invite: cancel it, then form the party");
+        }
         Reply reply(handler, args, "party");
         reply.Begin();
         uint32 joined = 0;
@@ -530,7 +552,9 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("master", commander ? std::string(commander->GetName()) : std::string()).B("commanded", bound);
             if (bot)
                 ++bots;
-            if (bound && commander)
+            // The party's commander is the one its MEMBERS obey: the leader's own binding is on its line, and a run binds the members to the leader, so the
+            // party reads the run's commander (one name) instead of "mixed" (the leader still bound to its own commander).
+            if (bound && commander && !group->IsLeader(slot.guid))
                 commanders.insert(commander->GetName());
         }
         reply.Line(rec);
