@@ -105,6 +105,23 @@ spawn row) and the corpse/grid fields certify the kill.
 | `test_wc_plan_rows.py`, `tools/test_dungeon_plan_sql.py` (Turtle SQL unchanged), the six `forever/tools/test_*_wiring.py` | OK / 104 tests OK / OK |
 | Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed |
 
-## 7. The live run
+## 7. The live run (run 2, core 25fc7ca, this worker's build)
 
-(filled in below after the run)
+State before the run: the test server's databases were dumped (`~/forever-run2/dumps/wc-20261120T212230Z.sql.zst`), this
+worker's `worldserver` installed over the previous one (kept as `bin/worldserver.pre-wc`), `forever/sql/world/2026_11_20_12_*`
+copied into `sqlsrc/sql/tortoisebots/world/` and applied by the boot updater, the bnet certificates copied, and the server
+started. `MaxCoreStuckTime` was set to 0 for the test (the build VM was at load 80-184 from other workers' builds and the
+60 s world-thread watchdog aborted the server once; the value is restored with the config backup `etc/worldserver.conf.pre-wc`).
+
+Party: five new level-22 bots on the pool account (`Mwctank` prot warrior as the run's tank, `Mwcpri` priest, `Mwcdps` arms
+warrior, `Mwcmag` mage, `Mwcrog` rogue), the level-22 kits of `forever/data/waterys/rfc/kits-level22.csv` equipped through
+`.tb equip`, roles set, the commander `Mcmd` (a bot) bound with `.tb master party Mwctank Mcmd`, the party teleported into
+the instance (`map 43, instance 2`) with `.tb tele party Mwctank 43 -158.441 131.601 -74.2552`.
+
+* **Plan check**: `plan-end count=193 records=193 verb=check plan=wailing_caverns bot=Mwctank map=43 inst=1 units=193
+  matched=193 near=0 missing=0 optional=0 steps=91 steps_ok=91 steps_short=0` — every unit row matched its spawn (against
+  Ragefire Chasm's 95/1/7).
+* **The run**: `.tb run start Mwctank wailing_caverns` -> `run lead=Mwctank plan=wailing_caverns state=running step=0
+  steps=490 leg=0 legname=anaconda_a kind=move phase=begin note=started pull=0 pulls=88 boss= deaths=0 wipes=0`.
+
+(the results are below)
