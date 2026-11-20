@@ -25,7 +25,8 @@ namespace run
 {
 constexpr size_t kEventRing = 200;
 
-// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | fight-end | rest | death | wipe | revive | pause | resume | done | stop.
+// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | fight-end | rest | death | wipe | revive | pause | resume | done | stop, and since
+// slice 9 (package C9) open | object | loot | item | clear (a task or a wait step of the plan ended: `unit` = the object's or boss's entry, `why` = what it saw).
 // `step`, `leg` and `unit` are -1 when the event has none (the record then omits the key: an unknown number is never written as a number).
 struct RunEvent
 {
@@ -97,6 +98,10 @@ std::vector<RunRec*> All();                         // by leader name
 
 // Appends an event (the ring drops the oldest past kEventRing) and returns its seq. `tMs` is taken from `nowMs` and the run's start.
 uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step = -1, int32 leg = -1, int32 unit = -1, std::string why = {});
+
+// S9 (C9): a task or wait step of the run ended; an event of `kind` (open | object | loot | item | clear) with the entry it was about and what was seen. It
+// is written into the ring and the server log like every run event, on the run's current step.
+void NoteTaskEvent(RunRec& rec, uint32 nowMs, char const* kind, int32 unit, std::string const& why);
 
 // running | paused | done (the Turtle run's state), or stopped when `stopped` is set.
 std::string StateName(RunRec const& rec);

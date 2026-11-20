@@ -12,6 +12,7 @@
 #include "host/run/TbRunOrders.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
+#include "host/run/TbRunTasks.h"
 #include "runtime/SystemRunPolicy.h"
 
 #include "GameTime.h"
@@ -259,6 +260,7 @@ uint32 StayParty(RunRec const& rec)
 // tank's pull strategy, every member's join window and hold) is ended. Called BEFORE the final stay of a stop, on a pause and when a stop is pending.
 void CancelRunWork(RunRec const& rec, bool endPulls)
 {
+    tasks::Cancel(rec.leader);              // S9 (O9): an open / loot task of the run ends with it (its answer is dropped, its loot watch given back)
     for (ObjectGuid guid : PartyGuids(rec))
     {
         h3::CancelRunOrders(guid);
@@ -484,6 +486,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     rec.endedMs = nowMs ? nowMs : 1;
     ForgetRun(rec.leader);
     ForgetRunOrders(rec.leader);
+    tasks::Forget(rec.leader);              // S9 (O9)
     ai::DungeonPlan const* plan = rec.run.plan;
     int32 const current = plan && rec.run.step < plan->steps.size() ? int32(rec.run.step) : -1;
     Note(rec, nowMs, stopped ? "stop" : "done", current, why);
@@ -729,6 +732,19 @@ bool Ended(RunRec const& rec)
     return rec.endedMs != 0;
 }
 
+void NoteTaskEvent(RunRec& rec, uint32 nowMs, char const* kind, int32 unit, std::string const& why)
+{
+    ai::DungeonPlan const* plan = rec.run.plan;
+    int32 step = -1, leg = -1;
+    if (plan && rec.run.step < plan->steps.size())
+    {
+        step = int32(rec.run.step);
+        leg = plan->steps[rec.run.step].leg;
+    }
+    uint32 const seq = AddEvent(rec, nowMs, kind, step, leg, unit, why);
+    sLog.outString("TortoiseBots run: %s #%u %s step=%d leg=%d unit=%d %s", rec.leaderName.c_str(), seq, kind, step, leg, unit, why.c_str());
+}
+
 TickTotals const& TickCost()
 {
     return TickCostRw();
@@ -738,6 +754,11 @@ void Update(uint32 diffMs)
 {
     if (Table().empty())
         return;
+    // S9 (O9): the tasks (open, loot) look at their bots every 250 ms; the `come` orders they queue are the run's own, so the outside-order baseline moves past them.
+    tasks::Update(diffMs);
+    for (auto const& entry : Table())
+        if (!Ended(*entry.second) && tasks::TakeQueuedOrders(entry.first))
+            BaselineOrders(*entry.second);
     static uint32 accumulatedMs = 0;
     accumulatedMs += diffMs;
     if (accumulatedMs < DungeonRun::kTickMs)
@@ -810,6 +831,7 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
     if (Find(leader->GetGUID()))
     {
         ForgetRun(leader->GetGUID());
+        tasks::Forget(leader->GetGUID());   // S9 (O9)
         Remove(leader->GetGUID());
     }
     RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs);

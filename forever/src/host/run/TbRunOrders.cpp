@@ -14,6 +14,7 @@
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrdersPure.h"
+#include "host/run/TbRunTasks.h"
 
 #include <algorithm>
 #include <cmath>
@@ -682,6 +683,14 @@ OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gath
             return DoPartyWide(rec, party, order, nowMs, [&](Player* bot) { return std::string(bot == party.lead ? "stay" : "follow"); });
         case od::Verb::ReviveParty:
             return DoReviveParty(rec, party, order, nowMs);
+        // S9 (O9): the object, loot and loot-method orders are the task module's (TbRunTasks.cpp); `use <item>` is refused with its reason.
+        case od::Verb::Open:
+        case od::Verb::Loot:
+            return tasks::Begin(rec, party.lead, party.bots, p.task, nowMs);
+        case od::Verb::LootMethod:
+            return tasks::SetLootMethod(rec, party.lead, party.bots, p.task);
+        case od::Verb::Use:
+            return Refuse("unsupported", tasks::UseUnsupportedText());
         default:
             break;
     }
