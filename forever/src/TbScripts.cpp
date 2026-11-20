@@ -421,7 +421,7 @@ public:
     static bool HandleLootNear(ChatHandler* handler, std::string name)
     {
         Player* bot = RequireBot(handler, name);
-        if (!bot)
+        if (!bot || !bot->FindMap() || bot->IsBeingTeleported())
             return false;
         FindCreatureOptions options;
         options.IsAlive = FindCreatureAliveState::Dead;

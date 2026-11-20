@@ -27,14 +27,12 @@ func testForeverCatalog(t *testing.T) *ForeverCatalog {
 	write(artDir, "spells-text.json", `{
 		"78":{"subtext":"Rank 1","desc":"A strong attack that increases melee damage by $s1.","values":[11]},
 		"12282":{"subtext":"Rank 1","desc":"Reduces the cost of your Heroic Strike ability by $s1 rage point.","values":[1],"passive":true}}`)
-	cat := LoadForeverCatalog(dataDir, artDir, foreveritems.NewLookups(dataDir, artDir))
-	cat.Talents = []ForeverTalent{
-		{ID: 130, Tab: 161, Tier: 0, Col: 0, Ranks: []uint32{12282, 12663, 12664}},
-		{ID: 127, Tab: 161, Tier: 0, Col: 1, Ranks: []uint32{12286, 12658, 12659}},
-		{ID: 165, Tab: 164, Tier: 4, Col: 1, Ranks: []uint32{12328}},
-		{ID: 138, Tab: 163, Tier: 0, Col: 1, Ranks: []uint32{12298}},
-	}
-	return cat
+	write(dataDir, "tortoisebots-talents.json", `{"classes":[{"class":1,"tabs":[
+		[{"node":130,"entry":1300,"spell":12282,"name":"Improved Heroic Strike","icon":132282,"max":3,"row":0,"col":0},
+		 {"node":127,"entry":1270,"spell":12286,"name":"Improved Rend","icon":132155,"max":3,"row":0,"col":2}],
+		[{"node":165,"entry":1650,"spell":12328,"name":"Death Wish","icon":136146,"max":1,"row":4,"col":1}],
+		[{"node":138,"entry":1380,"spell":12298,"name":"Shield Specialization","icon":134952,"max":5,"row":0,"col":1}]]}]}`)
+	return LoadForeverCatalog(dataDir, artDir, foreveritems.NewLookups(dataDir, artDir))
 }
 
 func TestForeverSpellEntry(t *testing.T) {
@@ -56,20 +54,18 @@ func TestForeverSpellEntry(t *testing.T) {
 
 func TestBuildForeverTalentsFixture(t *testing.T) {
 	cat := testForeverCatalog(t)
-	known := map[uint32]bool{12663: true, 12328: true}
-	activeTalents := map[uint32]bool{130: true, 127: true, 165: true}
-
-	trees := buildForeverTalents(cat, 1, known, activeTalents)
+	// Ranks by trait node; a rank over the talent's max (stale data) is capped.
+	trees := buildForeverTalents(cat, 1, map[uint32]uint32{130: 2, 127: 1, 165: 4})
 	if len(trees) != 3 {
 		t.Fatalf("want 3 warrior trees, got %d", len(trees))
 	}
-	if trees[0].Name != "Arms" || trees[0].Points != 3 {
+	if trees[0].Name != "Arms" || trees[0].Points != 3 || trees[0].Talents[0].Name != "Improved Heroic Strike" || trees[0].Talents[0].MaxRank != 3 {
 		t.Fatalf("Arms tree mismatch: %+v", trees[0])
 	}
 	if trees[1].Name != "Fury" || trees[1].Points != 1 {
 		t.Fatalf("Fury tree mismatch: %+v", trees[1])
 	}
-	if trees[2].Name != "Protection" || trees[2].Points != 0 {
+	if trees[2].Name != "Protection" || trees[2].Points != 0 || trees[2].Talents[0].Col != 1 {
 		t.Fatalf("Protection tree mismatch: %+v", trees[2])
 	}
 	if spec := foreverSpecFromTrees(trees); spec != "Arms" {
