@@ -71,5 +71,10 @@ bool IsInOwnBindingGroup(Player* commander, Player* bot);
 void AppendBindings(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32> const& runLeadersShown);
 // Fills the `orders` of the run bindings the collector built itself from the card of the same commander (the run feed leaves them empty).
 void FillRunOrders(std::vector<pure::CT::BindingInfo>& out);
+
+// P5: the standing cards as the fight monitor feeds them, world thread, once a second: commander, the lead (bots[0]) and the bots with the class,
+// role and subgroup the card shows. A projection of the same read `.tb commander status` makes, without its view work: the monitor needs the
+// card's group and its members, nothing the card adds for a human reader.
+std::vector<pure::CardView> StandingCards();
 }
 }

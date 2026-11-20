@@ -3,6 +3,7 @@
 #include "TbDashboard.h"
 #include "dash/TbDashRuns.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdCombat.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
@@ -189,6 +190,7 @@ public:
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
         TortoiseBots::cmd::Maintain();         // P2: the binding timers (dead lead, absent commander) and the stored rows whose party is back
+        TortoiseBots::cmd::combat::Update(diff);   // P5: the fight monitor's 1 Hz sample, 250 ms cast poll and COMBAT_FIGHT/EVENTS
 #endif
     }
 
@@ -1311,4 +1313,5 @@ void AddSC_tortoisebots()
     new tortoisebots_unit();
     new tortoisebots_group();
     new tortoisebots_commands();
+    TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
 }

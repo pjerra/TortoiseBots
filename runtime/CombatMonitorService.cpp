@@ -15,7 +15,7 @@
 #include "../ai/playerbot/PlayerbotAIConfig.h"
 #include "Database/DatabaseEnv.h"
 #include "Log.h"
-#include "../ai/playerbot/TbCompatW3.h"
+#include "../ai/playerbot/TbCompatC5.h"
 #endif
 
 #include <memory>
@@ -245,7 +245,7 @@ void CombatMonitorService::LoadTimelineWatch()
 {
     // One pass at startup: the watch list is data (world table ai_combat_aura_watch), never a spell id in code.
     std::vector<uint32_t> ids;
-    auto result = QueryGuardCompat(WorldDatabase.Query("SELECT `spell_id` FROM `ai_combat_aura_watch`"));
+    auto result = AuraWatchRowsCompat();
     if (result)
     {
         do
@@ -256,8 +256,8 @@ void CombatMonitorService::LoadTimelineWatch()
         } while (result->NextRow());
     }
     SetTimelineWatch(std::move(ids));
-    sLog.outString(">> Loaded %u combat timeline aura watch rows", static_cast<uint32_t>(
-        std::atomic_load(&m_watchedAuras)->size()));
+    CombatMonitorLogCompat(false, ">> Loaded " + std::to_string(static_cast<uint32_t>(
+        std::atomic_load(&m_watchedAuras)->size())) + " combat timeline aura watch rows");
 }
 #endif
 
@@ -629,8 +629,8 @@ void CombatMonitorService::TakePayloads(std::vector<std::string>& out, int proto
         (void)id;
         g_oversizeDrops.fetch_add(1, std::memory_order_relaxed);
 #else
-        sLog.outError("TortoiseBots: combat monitor dropped fight %s: no payload form fits %zu bytes", id.c_str(),
-                      CombatMonitor::kPayloadByteBudget);
+        CombatMonitorLogCompat(true, "TortoiseBots: combat monitor dropped fight " + id + ": no payload form fits " +
+            std::to_string(CombatMonitor::kPayloadByteBudget) + " bytes");
 #endif
     }
 }
