@@ -61,6 +61,37 @@ No other change: the format is the Turtle one (golden datagram in the check).
 * `view` is false (the TBM addon view is cut, D5); raid layout is empty (P7).
 * An offline commander is named `offline #<guid>` (or its real name from the character cache); an offline bot is not listed in `bots` (`bound` counts it).
 
-## Gates
+## Gates (slot 7 on the build VM, core pin 6517af05)
 
-See the report of the worker; lines are in the commit message of the notes commit.
+| Gate | Result |
+|---|---|
+| census, list `forever/SLICE5.txt` (P1 adds no legacy file: its code is under `forever/src`) | `files 176  compile clean 176  with errors 0  error places 0` |
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`; `nm`: `cmd::HandleCommander`, `NoteMaster`, `NoteOrder`, `NoteRunOrder`, `AppendBindings` defined in `libtortoisebots.a` |
+| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` |
+| `forever/tools/cmd_binding_check.cpp` (VM, g++) | `cmd_binding_check: 36 checks, 0 failed` |
+| `test_cmd_p1_wiring.py` | 9 tests OK; with `CMD_P1_MUTATE=1` (VM): the unmutated check passes and the three mutations (`key`, `skiprun`, `twice`) each FAIL it |
+| `test_run_review_wiring.py` (names TbRun.cpp, TbOrders.cpp), `test_slice4_d4_wiring.py` | OK |
+| `slice_registry_check.py`, `slice_gen_context.py --check` | `(a)=0`; `SliceAiObjectContext.cpp is up to date` |
+| `test_run_c6`, `test_run_orders`, `test_run_cancel` (VM) | PASS 28 checks, PASS 128 checks, PASS |
+| Turtle `vm-build` / `vm-test tb` | not run: no file outside `forever/` changed |
+
+## Live (run2, ForeverCore test server 2, `bin/worldserver.pre-cmdp1` is the restored original)
+
+Bots Mtank Mpriest Mdpsa Mdpsb Mdpsc (+ commander Mcmd, GM, outside the party), RFC instance, engines on, `.tb master party Mtank Mcmd`:
+* `.tb commander status` before any binding: `commander-end count=0 bindings=0`.
+* after the bind: ONE `binding` (lead Mtank, `group=1`, `bound=5 bots=5`, `system=no`), five `member` records with `role=tank|healer|dps`, class, level, hp, power, position.
+* `.tb order party Mtank stay`: `order ... ok=yes result=queued 5 of 5` in the card; with no engine the same order is logged `ok=no result=no-engine`.
+* `.tb run start Mtank ragefire_chasm` with the binding standing: STILL ONE card (commander Mcmd), `orders=5` (the stay and the run's own `move`, `pullback`, `focus`, `attack`), then the `run` record (`state=running ... cmd=Mcmd`). After `.tb run stop` the run ended and the list was empty.
+* `.tb master party Mtank none`: `commander-end count=0 bindings=0` (an empty list, once). `.tb commander status Nobody`: `error code=no-binding`.
+* Seen live, fixed in the last commit: a run whose tank lost its commander mid-run showed as a `system=yes` card with `inparty=yes`; a system card is never in-party or player-led now (not re-run live: two flags).
+* The server crashed once (`World Thread hangs for 61102 ms`) while the build VM's load average was 270 and six bots were logging in: the freeze watchdog, not the card code (no command of this package had run). The second boot was clean.
+
+## What P2 needs (not started)
+
+P2 = release reasons and follower restore, the threat-back-off and autonomy ledgers, lead death/leave/logout through hooks, the opt-in persistence row, `IsCommandedBy` / `IsInOwnBindingGroup`.
+* **A stored binding.** The in-memory `Meta` (commander -> lead guid, boundAt) in TbCmdBinding.cpp grows the binding flags (`inParty`, `raid`, `playerLed`, `system`), the followers bound at bind time and each follower's saved follow target (the engine's follow-target value; `NoteMaster` is the one place a bind is seen, and it already ignores a bot the host refused). Guids only (D2); the live group is always found through the lead.
+* **The release rule.** `runtime/RemoteCommanderPolicy.h` `CheckBinding` / `BindingState` / `DecideRelease*` compile on ForeverCore (no core include). The facts come from the lead's live group (`GetLeaderGUID`, `GetMemberSlots`, `isRaidGroup`); the card's session counter (`group=`) must be refreshed when the lead's group changes while the lead and one follower stay together (spec section 4), not compared with a stored number.
+* **Hooks instead of polling.** `GroupScript` (OnAddMember/OnRemoveMember/OnChangeLeader/OnDisband) and `PlayerScript` OnLogin/OnLogout rows in TbScripts.cpp. Unknown U6 of the spec is open: whether `GroupScript` fires for the groups `BotMgr` makes (TbBotMgr.cpp:307-311); a scratch build with a log line answers it. Until then the 1 Hz sweep of T is the fallback.
+* **Persistence (D3).** `forever/sql/characters/<n>_tb_commander_binding.sql` (commander_guid, lead_guid, members, flags, bound_at; the module's first characters-DB table), written and read with prepared statements or `{}` formats (findings item 18: a printf `PQuery` compiles and drops its arguments), behind `TortoiseBots.Commander.KeepBindings` (default 0). Restore when commander and lead are back in the world: `.tb party` forms the group again, `.tb master` binds each bot. A bot-only group does not survive a restart (spec section 4, unknown U1).
+* **Host stand-ins.** `TbHostOwnership.cpp` answers `IsInCommandedGroup` from h3's table already; P2 swaps in `IsCommandedBy` and `IsInOwnBindingGroup` from the stored binding.
+* **Not P1's job but waiting on the merge:** the dashboard collector's two lines (above), and P3 moving the `NoteRunOrder` hook from the run tick into `Issue` when `Issue` takes a `Party`.
