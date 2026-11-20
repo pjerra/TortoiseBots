@@ -157,10 +157,10 @@ Mutanus's `bossOwnDead` stays false (no spawn row) and the corpse/grid fields ce
 
 | gate | result |
 |---|---|
-| build ON (`slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON`) | see the final report: `CMAKE_RC=0`, `MAKE_RC=0`, module objects 0 errors, `worldserver` links |
-| build OFF (`slot-sync-build.sh 4 tortoisebots`) | see the final report: `CMAKE_RC=0`, `MAKE_RC=0` |
-| census (newest slice list) | see the final report: `files ... compile clean ... with errors 0 ... includes of a header ForeverCore does not have 0` |
-| `slice_gen_context.py --check`, `slice_registry_check.py` | see the final report |
+| build ON (`slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON`) | `CMAKE_RC=0`, `MAKE_RC=0`, 170 s (a 309-step recompile after the last header change); the slot log's `make.log`: 0 `FAILED`/`error:` lines, `libtortoisebots.a` linked (one pre-existing `sTerrainMgr` macro warning) |
+| build OFF (`slot-sync-build.sh 4 tortoisebots`) | `CMAKE_RC=0`, `MAKE_RC=0`, 28 s; `[18/18] Linking CXX static library .../libtortoisebots.a`, 0 errors |
+| census (`FOREVER_CENSUS_LIST=forever/SLICE11.txt`, slot 4, core d02645dd21) | `files 263  compile clean 263  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `summary: (a)=0  (b)=228 keys to register or stub later` |
 | the run/policy/wiring tests incl. the WC ones and RFC's unchanged | PASS (section 5) |
 
 ## 7. The live run (run 2, core 25fc7ca, the previous worker's build) and this round
