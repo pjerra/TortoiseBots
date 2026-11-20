@@ -58,6 +58,7 @@
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
+#include "host/TbIgnore.h"   // I13: `.tb ignore`
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -279,6 +280,7 @@ public:
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
             { "gear",   TortoiseBots::h3::HandleGear,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // I13: `.tb ignore <bot|party> add|remove|list|clear` (host/TbIgnore.cpp)
         };
         static ChatCommandTable commandTable =
         {
