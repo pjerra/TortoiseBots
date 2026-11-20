@@ -9,6 +9,10 @@ break the pure half four ways and expect the standalone check to FAIL each time:
   seconds  the cooldown is passed through as milliseconds (a 90 s cooldown reads 90000)
   boss     the instance's DONE encounter no longer marks an unseen boss dead
   window   the position report always starts at the first binding (bindings past the cap never get a turn)
+  nearest  the hostile selector never replaces a kept row (the first 24 met, not the nearest 24)
+  bossrow  a boss is kept in the ordinary heap (a far boss is crowded out)
+  wireid   the wire id is the counter alone (a creature and a pet with the same counter collide)
+  standing an empty list leaves the watched state in place (the stale position report)
 """
 import os
 import re
@@ -72,21 +76,56 @@ class Wiring(unittest.TestCase):
         # manager call returns without touching a ref, so the caps bound the work (not only the rows). The old shape is gone: no list of every
         # match, no per-match map, no sort of everything in range.
         body = function_body(self.cpp, r"void FillBinding\(Player\* lead, CT::BindingInfo& binding")
-        self.assertIn("FD::Sweep<Unit*> sweep(FD::kMobCap);", body)
+        self.assertIn("FD::NearestSelector<Unit*> sweep(FD::kMobCap, FD::kMobVisitBound);", body)
         self.assertIn("Cell::VisitAllObjects(lead, visit, Get().mobRange);", body)
         self.assertLess(body.index("CappedUnitVisit visit("), body.index("Cell::VisitAllObjects"))
         objs = function_body(self.cpp, r"void FillObjects\(Player\* lead, CT::BindingInfo& binding")
         self.assertIn("FD::Sweep<GameObject*> sweep(FD::kObjectCap);", objs)
         self.assertIn("Cell::VisitGridObjects(lead, visit, Get().objectRange);", objs)
-        for name in ("CappedUnitVisit", "CappedObjectVisit"):
+        for name, done in (("CappedUnitVisit", "sweep.Exhausted()"), ("CappedObjectVisit", "sweep.Full()")):
             visit = function_body(self.cpp, "struct " + name + r"\s*\{")
             self.assertIn("if (stopped)", visit)                      # the rest of the visit is skipped once the cap is reached
             self.assertGreater(visit.index("stopped = true;"), visit.index("sweep.Offer("))
-            self.assertIn("sweep.Full()", visit)
+            self.assertIn(done, visit)
         self.assertNotIn("FD::KeepNearest", self.cpp)
         self.assertNotIn("FD::KeepNearest", self.pure)
         self.assertNotIn("UnitListSearcher", self.cpp)
         self.assertNotIn("GameObjectListSearcher", self.cpp)
+
+    def test_the_last_binding_released_leaves_nothing_to_send(self):
+        # Cold review finding 1: FillFeeds used to return on an empty list before it forgot the watched bindings and the ready cache, so the
+        # position clock kept sending the stale bots and mobs of a released binding. The cleanup now runs first, for an empty list too.
+        fill = function_body(self.cpp, r"void FillFeeds\(std::vector<CT::BindingInfo>& out\)")
+        self.assertNotIn("out.empty()) return", fill.replace("\n", " ").replace("  ", " "))
+        early = fill[:fill.index("FD::KeepStanding(s.watched, standing);")]
+        self.assertNotRegex(early, r"if \(!FeedsActive\(\) \|\| out\.empty\(\)\)")
+        self.assertIn("FD::KeepStanding(s.watched, standing);", fill)
+        self.assertIn("FD::KeepStanding(s.ready, bots);", fill)
+        # whatever returns on an empty list does so only after both cleanups
+        for m in re.finditer(r"if \(out\.empty\(\)\)", fill):
+            self.assertGreater(m.start(), fill.index("FD::KeepStanding(s.ready, bots);"))
+
+    def test_the_hostile_rows_are_the_nearest_and_the_bosses_always_there(self):
+        # Cold review finding 2: a bounded visit keeping the nearest 24 (not the first 24 of the grid order), critters and neutrals that cannot be
+        # attacked skipped before the offer, and every boss of the map's roster added from the boss cache even when the visit never met it.
+        body = function_body(self.cpp, r"void FillBinding\(Player\* lead, CT::BindingInfo& binding")
+        visit = function_body(self.cpp, r"struct CappedUnitVisit\s*\{")
+        self.assertIn("IsCritter()", visit)
+        self.assertIn("IsValidAttackTarget(unit)", visit)
+        self.assertLess(visit.index("IsCritter()"), visit.index("sweep.Offer("))
+        self.assertIn("bossEntries.count(unit->GetEntry())", visit)
+        self.assertIn("BossRoster(lead->GetMapId())", body)
+        self.assertIn("GetCreatureBySpawnId(dbGuid)", body)
+        self.assertIn("sweep.AddBoss(", body)
+        self.assertGreater(body.index("sweep.AddBoss("), body.index("Cell::VisitAllObjects"))
+        self.assertLess(body.index("sweep.AddBoss("), body.index("sweep.Take()"))
+        self.assertIn("constexpr size_t kMobVisitBound = 512;", self.pure)
+
+    def test_the_wire_id_is_the_type_and_the_counter(self):
+        # Cold review finding 3: the id is no longer the counter alone.
+        raw = function_body(self.cpp, r"uint64 RawOf\(ObjectGuid guid\)")
+        self.assertIn("FD::WireId(uint32(guid.GetHigh()), uint64(guid.GetCounter()))", raw)
+        self.assertNotIn("GetRawValue", code(self.cpp))
 
     def test_the_cooldowns_go_out_in_seconds(self):
         # SpellHistory::Duration counts milliseconds; the wire's cl is whole seconds, so the collector converts through the pure half's
@@ -166,6 +205,10 @@ MUTATIONS = {
     "seconds": ("    return remainingMs > 0 ? uint32_t(remainingMs / 1000) : 0;", "    return remainingMs > 0 ? uint32_t(remainingMs) : 0;"),
     "boss": ("    return encounterDone ? 'd' : 'u';", "    return 'u';"),
     "window": ("    w.first = start % bindings;", "    w.first = 0;"),
+    "nearest": ("        if (!Less(entry, heap.front()))\n            return;\n", "        return;\n"),
+    "bossrow": ("Keep(boss ? bosses_ : others_,", "Keep(others_,"),
+    "wireid": ("    return (uint64_t(guidType & 0x3F) << 40) | (counter & 0xFFFFFFFFFFULL);", "    return counter & 0xFFFFFFFFFFULL;"),
+    "standing": ("void KeepStanding(Map& state, Set const& standing)\n{\n", "void KeepStanding(Map& state, Set const& standing)\n{\n    if (standing.empty())\n        return;\n"),
 }
 
 

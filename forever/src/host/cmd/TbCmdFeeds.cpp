@@ -72,11 +72,12 @@ namespace DashLink = ::TortoiseBots::DashRuns::link;
 
 constexpr uint32 kCostLogMs = 60000;
 
-// The 64-bit id the wire carries for a unit or object (the Turtle raw guid's place): the low word of ForeverCore's 128-bit guid. It is opaque to the
-// dashboard; the module resolves it back with ObjectGuid's own bytes only while the guid is in its hands.
+// The 64-bit id the wire carries for a unit or object (the Turtle raw guid's place): the guid's type over its counter (FD::WireId), so a Creature, a
+// Pet or Vehicle and a Player holding the same counter never share an id. It is opaque to the dashboard; the module never resolves it back (every
+// unit it keeps is an ObjectGuid, and a guid that left the world resolves to null).
 uint64 RawOf(ObjectGuid guid)
 {
-    return guid.GetRawValue(0);
+    return FD::WireId(uint32(guid.GetHigh()), uint64(guid.GetCounter()));
 }
 
 uint32 Ctr(ObjectGuid guid)
@@ -618,12 +619,13 @@ void FillBosses(Player* lead, CT::BindingInfo& binding)
     }
 }
 
-// The capped grid visits. `Cell::VisitAllObjects` hands the visitor one grid manager per cell; the visit is stopped at the cap (a full sweep
-// refuses the next candidate and every later manager call returns at once), so a dense area costs the cap, not a row, a hash entry and a sort
-// per unit in range. The candidates are the ones the visit met first, listed nearest first by the sweep's own order.
+// The bounded grid visits. `Cell::VisitAllObjects` hands the visitor one grid manager per cell. The hostile visit takes at most FD::kMobVisitBound
+// candidates (then every later manager call returns at once) and keeps the NEAREST kMobCap of them in a bounded max-heap, plus every boss; critters
+// and neutrals that cannot be attacked are never candidates, so they neither burn the bound nor take a place. The object visit stops at its cap.
 struct CappedUnitVisit
 {
-    CappedUnitVisit(Player* lead, float range, FD::Sweep<Unit*>& sweep) : lead(lead), range(range), sweep(sweep) { }
+    CappedUnitVisit(Player* lead, float range, FD::NearestSelector<Unit*>& sweep, std::unordered_set<uint32> const& bossEntries)
+        : lead(lead), range(range), sweep(sweep), bossEntries(bossEntries) { }
 
     template <class T>
     void Visit(GridRefManager<T>& manager)
@@ -637,9 +639,14 @@ struct CappedUnitVisit
                 if (!unit->IsInWorld() || !unit->IsAlive() || !unit->InSamePhase(lead) || lead->IsFriendlyTo(unit)
                     || !lead->IsWithinDist(unit, range))
                     continue;
+                bool const boss = unit->GetTypeId() == TYPEID_UNIT && bossEntries.count(unit->GetEntry());
+                // A critter, or a neutral that cannot be attacked, is not a candidate (a boss always is: its state matters even when it is
+                // not yet attackable).
+                if (!boss && (unit->IsCritter() || (!lead->IsHostileTo(unit) && !lead->IsValidAttackTarget(unit))))
+                    continue;
                 float const dx = unit->GetPositionX() - lead->GetPositionX();
                 float const dy = unit->GetPositionY() - lead->GetPositionY();
-                if (!sweep.Offer(RawOf(unit->GetGUID()), dx * dx + dy * dy, unit) || sweep.Full())
+                if (!sweep.Offer(RawOf(unit->GetGUID()), dx * dx + dy * dy, unit, boss) || sweep.Exhausted())
                 {
                     stopped = true;
                     return;
@@ -649,7 +656,8 @@ struct CappedUnitVisit
 
     Player* lead;
     float range;
-    FD::Sweep<Unit*>& sweep;
+    FD::NearestSelector<Unit*>& sweep;
+    std::unordered_set<uint32> const& bossEntries;
     bool stopped = false;
 };
 
@@ -716,10 +724,29 @@ void FillBinding(Player* lead, CT::BindingInfo& binding, uint32 nowMs, WatchedBi
     Map* map = lead->GetMap();
     if (!map)
         return;
-    // The hostiles near the lead: one capped grid visit (spec: 24 per binding per cycle), stopped at the cap, the rows nearest first.
-    FD::Sweep<Unit*> sweep(FD::kMobCap);
-    CappedUnitVisit visit(lead, Get().mobRange, sweep);
+    // The hostiles near the lead: one bounded grid visit (at most FD::kMobVisitBound candidates), the nearest 24 kept (spec: 24 per binding per
+    // cycle), the rows nearest first. The bosses of this map's roster are always rows: one the visit did not meet (past the bound, or in a grid
+    // the visit stopped before) is resolved from its spawn id and added, so a boss is never the row a crowd of trash crowded out.
+    std::vector<CT::BossEntrySpawns> const* roster = BossRoster(lead->GetMapId());
+    std::unordered_set<uint32> bossEntries;
+    if (roster)
+        for (CT::BossEntrySpawns const& boss : *roster)
+            bossEntries.insert(boss.info.entry);
+    FD::NearestSelector<Unit*> sweep(FD::kMobCap, FD::kMobVisitBound);
+    CappedUnitVisit visit(lead, Get().mobRange, sweep, bossEntries);
     Cell::VisitAllObjects(lead, visit, Get().mobRange);
+    if (roster)
+        for (CT::BossEntrySpawns const& boss : *roster)
+            for (uint32 dbGuid : boss.dbGuids)
+            {
+                Creature* creature = map->GetCreatureBySpawnId(dbGuid);
+                if (!creature || !creature->IsInWorld() || !creature->IsAlive() || !creature->InSamePhase(lead) || lead->IsFriendlyTo(creature)
+                    || !lead->IsWithinDist(creature, Get().mobRange))
+                    continue;
+                float const dx = creature->GetPositionX() - lead->GetPositionX();
+                float const dy = creature->GetPositionY() - lead->GetPositionY();
+                sweep.AddBoss(RawOf(creature->GetGUID()), dx * dx + dy * dy, creature);
+            }
     std::vector<std::pair<FD::Near, Unit*>> near = sweep.Take();
     binding.mobsReported = true;
     binding.mobsMap = lead->GetMapId();
@@ -829,7 +856,7 @@ bool FeedsActive()
 void FillFeeds(std::vector<CT::BindingInfo>& out)
 {
     State& s = Get();
-    if (!FeedsActive() || out.empty())
+    if (!FeedsActive())
         return;
     // A plan reload (`.tb run reloadplans`) replaces the plan table: the boss roster is built again from the new rows, once, here rather than in
     // the reload command (that file belongs to another package).
@@ -858,14 +885,16 @@ void FillFeeds(std::vector<CT::BindingInfo>& out)
         watch.leadGuid = Ctr(lead->GetGUID());
         standing.insert(binding.commanderGuid);
     }
-    for (auto it = s.watched.begin(); it != s.watched.end();)
-        it = standing.count(it->first) ? std::next(it) : s.watched.erase(it);
+    // What no longer stands is forgotten, also when the list is empty (the last binding was released): the position clock then has nothing to
+    // send, so COMMANDER_POS never goes out with the stale bots and mobs of a binding that is gone.
+    FD::KeepStanding(s.watched, standing);
     std::unordered_set<uint64> bots;
     for (CT::BindingInfo const& binding : out)
         for (CT::BotInfo const& bot : binding.bots)
             bots.insert(bot.id);
-    for (auto it = s.ready.begin(); it != s.ready.end();)
-        it = bots.count(it->first) ? std::next(it) : s.ready.erase(it);
+    FD::KeepStanding(s.ready, bots);
+    if (out.empty())
+        return;   // nothing was collected: not a fill cycle for the cost line
 
     uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
     ++s.fillCycles;

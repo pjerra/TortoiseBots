@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -97,6 +98,126 @@ private:
     size_t cap_;
     std::vector<std::pair<Near, Row>> rows_;
 };
+
+// The hard bound on one hostile visit: candidates that passed the filters (in the radius, hostile or attackable, not a critter) the visit may take
+// before it stops, however dense the area. The rows kept are the nearest of the ones met, plus every boss (see NearestSelector).
+constexpr size_t kMobVisitBound = 512;
+
+// The id a unit, object or player carries on the wire (a decimal string, 64 bits): the guid's type (6 bits) over its counter (40 bits). The counter
+// alone is not unique across kinds: a Creature, a Pet or Vehicle and a Player can hold the same counter, and the dashboard keys its rows (and the
+// overlay a boss row takes) by this id. The 128-bit guid's other fields (realm, map, entry) are not needed: the counter is unique within a type.
+inline uint64_t WireId(uint32_t guidType, uint64_t counter)
+{
+    return (uint64_t(guidType & 0x3F) << 40) | (counter & 0xFFFFFFFFFFULL);
+}
+
+// The hostiles of one binding: the nearest `cap` of what a bounded visit met, and every boss. The visit offers candidates until the bound is
+// reached (`Exhausted`); the others are kept in a bounded max-heap (the farthest kept row sits on top and is replaced by a nearer one: no
+// allocation per candidate, no sort of everything), the bosses in their own heap of `cap`. A boss the visit did not reach (beyond the bound, or in a
+// grid the visit stopped before) is added afterwards by `AddBoss`, from the boss cache. `Take` returns at most `cap` rows nearest first: all the
+// bosses first claimed, the rest of the room filled with the nearest others (the wire cuts a binding's mob list at the same cap, so a boss
+// that was kept is never the row cut).
+template <class Row>
+class NearestSelector
+{
+public:
+    NearestSelector(size_t cap, size_t visitBound) : cap_(cap), bound_(visitBound)
+    {
+        others_.reserve(cap);
+        bosses_.reserve(cap);
+    }
+
+    bool Exhausted() const { return visited_ >= bound_; }
+    size_t Visited() const { return visited_; }
+
+    // Takes a candidate of the visit. False once the bound was reached: the visit stops there.
+    bool Offer(uint64_t id, float dist2, Row row, bool boss)
+    {
+        if (Exhausted())
+            return false;
+        ++visited_;
+        Keep(boss ? bosses_ : others_, Entry{ Near{ id, dist2 }, std::move(row) });
+        return true;
+    }
+
+    // A boss the visit did not meet. False when it is already held (no row twice).
+    bool AddBoss(uint64_t id, float dist2, Row row)
+    {
+        for (Entry const& e : bosses_)
+            if (e.near.id == id)
+                return false;
+        Keep(bosses_, Entry{ Near{ id, dist2 }, std::move(row) });
+        return true;
+    }
+
+    std::vector<std::pair<Near, Row>> Take()
+    {
+        std::sort(bosses_.begin(), bosses_.end(), Less);
+        std::sort(others_.begin(), others_.end(), Less);
+        size_t const room = cap_ > bosses_.size() ? cap_ - bosses_.size() : 0;
+        if (others_.size() > room)
+            others_.erase(others_.begin() + room, others_.end());
+        std::vector<Entry> all;
+        all.reserve(bosses_.size() + others_.size());
+        for (Entry& e : bosses_)
+            all.push_back(std::move(e));
+        for (Entry& e : others_)
+            all.push_back(std::move(e));
+        std::sort(all.begin(), all.end(), Less);
+        std::vector<std::pair<Near, Row>> out;
+        out.reserve(all.size());
+        for (Entry& e : all)
+            out.emplace_back(e.near, std::move(e.row));
+        return out;
+    }
+
+private:
+    struct Entry
+    {
+        Near near;
+        Row row;
+    };
+
+    static bool Less(Entry const& a, Entry const& b)
+    {
+        if (a.near.dist2 != b.near.dist2)
+            return a.near.dist2 < b.near.dist2;
+        return a.near.id < b.near.id;
+    }
+
+    // Keeps the nearest cap_ entries in a max-heap: the farthest kept entry is the front.
+    void Keep(std::vector<Entry>& heap, Entry entry)
+    {
+        if (!cap_)
+            return;
+        if (heap.size() < cap_)
+        {
+            heap.push_back(std::move(entry));
+            std::push_heap(heap.begin(), heap.end(), Less);
+            return;
+        }
+        if (!Less(entry, heap.front()))
+            return;
+        std::pop_heap(heap.begin(), heap.end(), Less);
+        heap.back() = std::move(entry);
+        std::push_heap(heap.begin(), heap.end(), Less);
+    }
+
+    size_t cap_;
+    size_t bound_;
+    size_t visited_ = 0;
+    std::vector<Entry> bosses_;
+    std::vector<Entry> others_;
+};
+
+// The standing bindings' guids kept in a state map: every other entry is dropped. An empty `standing` empties the map (the last binding was
+// released: nothing is watched and nothing is sent).
+template <class Map, class Set>
+void KeepStanding(Map& state, Set const& standing)
+{
+    for (auto it = state.begin(); it != state.end();)
+        it = standing.count(it->first) ? std::next(it) : state.erase(it);
+}
 
 // A remaining cooldown in whole seconds, rounded down: the wire's `cdLongestS` is seconds and SpellHistory counts milliseconds (a 90 s
 // cooldown left is 90 000 ms -> 90); a remainder already elapsed is 0 (none).

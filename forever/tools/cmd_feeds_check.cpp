@@ -7,7 +7,10 @@
 
 #include <chrono>
 #include <cstdio>
+#include <map>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -135,6 +138,128 @@ void TestSweepCost()
     CHECK(rows.front().first.dist2 == float(dense - FD::kMobCap + 1));
     std::printf("cmd_feeds_check: dense sweep of %zu candidates -> %zu rows, %zu offers, %lld us\n", dense, rows.size(), offered,
         static_cast<long long>(us));
+}
+
+void TestNearestSelector()
+{
+    // Finding 2 of the cold review: the hostiles are the NEAREST 24 of what a bounded visit met, not the first 24 of the grid order. Offered
+    // farthest first (the worst order for a first-come cap), the kept rows are still the 24 nearest.
+    FD::NearestSelector<int> sel(FD::kMobCap, FD::kMobVisitBound);
+    for (uint64_t i = 0; i < 100; ++i)
+        sel.Offer(5000 + i, float(100 - i), int(i), false);   // dist2 100 (first offered) down to 1 (last)
+    std::vector<std::pair<FD::Near, int>> rows = sel.Take();
+    CHECK(rows.size() == 24);
+    CHECK(rows.front().first.dist2 == 1.0f);
+    CHECK(rows.back().first.dist2 == 24.0f);
+    for (size_t i = 1; i < rows.size(); ++i)
+        CHECK(rows[i - 1].first.dist2 <= rows[i].first.dist2);
+
+    // A boss beyond the first 24 grid hits is still present (and a boss far beyond the nearest 24 too): 40 ordinary units near, the boss the
+    // 41st candidate and the farthest of all.
+    FD::NearestSelector<int> withBoss(FD::kMobCap, FD::kMobVisitBound);
+    for (uint64_t i = 0; i < 40; ++i)
+        withBoss.Offer(100 + i, float(1 + i), int(i), false);
+    CHECK(withBoss.Offer(9001, 3600.0f, 777, true));
+    std::vector<std::pair<FD::Near, int>> bossRows = withBoss.Take();
+    CHECK(bossRows.size() == FD::kMobCap);                 // the boss takes one of the 24 places, the wire's own cut never drops it
+    bool bossKept = false;
+    for (auto const& row : bossRows)
+        bossKept = bossKept || row.first.id == 9001;
+    CHECK(bossKept);
+    CHECK(bossRows.back().first.id == 9001);               // nearest first: the far boss is last
+    CHECK(bossRows[0].first.dist2 == 1.0f && bossRows[22].first.dist2 == 23.0f);
+
+    // A boss the visit never reached (past the bound) is added from the boss cache; added twice or already held it is one row.
+    FD::NearestSelector<int> late(FD::kMobCap, FD::kMobVisitBound);
+    for (uint64_t i = 0; i < 30; ++i)
+        late.Offer(100 + i, float(1 + i), int(i), false);
+    CHECK(late.AddBoss(8001, 2500.0f, 1));
+    CHECK(!late.AddBoss(8001, 2500.0f, 1));
+    CHECK(late.Offer(8002, 4.0f, 2, true));
+    CHECK(!late.AddBoss(8002, 4.0f, 2));
+    std::vector<std::pair<FD::Near, int>> lateRows = late.Take();
+    CHECK(lateRows.size() == FD::kMobCap);
+    size_t bossCount = 0;
+    for (auto const& row : lateRows)
+        bossCount += (row.first.id == 8001 || row.first.id == 8002) ? 1 : 0;
+    CHECK(bossCount == 2);
+
+    // Bosses fill the list before the others, but never past the cap: 30 bosses keep the 24 nearest bosses and no ordinary row.
+    FD::NearestSelector<int> manyBosses(FD::kMobCap, FD::kMobVisitBound);
+    for (uint64_t i = 0; i < 30; ++i)
+        manyBosses.AddBoss(300 + i, float(30 - i), int(i));
+    manyBosses.Offer(1, 0.5f, 0, false);
+    std::vector<std::pair<FD::Near, int>> bossOnly = manyBosses.Take();
+    CHECK(bossOnly.size() == FD::kMobCap);
+    for (auto const& row : bossOnly)
+        CHECK(row.first.id >= 300);
+
+    // The visit bound: a dense grid of 200 000 candidates is cut at kMobVisitBound offers, and the cost stays small (a bounded heap, no sort of
+    // everything). Candidates run farthest first, so the kept rows are the nearest of the 512 met.
+    FD::NearestSelector<int> dense(FD::kMobCap, FD::kMobVisitBound);
+    size_t const candidates = 200000;
+    size_t offered = 0;
+    auto const started = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < candidates; ++i)
+    {
+        if (!dense.Offer(uint64_t(1000 + i), float(candidates - i), int(i), false))
+            break;
+        ++offered;
+        if (dense.Exhausted())
+            break;
+    }
+    std::vector<std::pair<FD::Near, int>> denseRows = dense.Take();
+    auto const us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
+    CHECK(offered == FD::kMobVisitBound);
+    CHECK(dense.Visited() == FD::kMobVisitBound);
+    CHECK(denseRows.size() == FD::kMobCap);
+    CHECK(denseRows.front().first.dist2 == float(candidates - FD::kMobVisitBound + 1));
+    CHECK(us < 5000);
+    std::printf("cmd_feeds_check: dense hostile visit of %zu candidates -> %zu rows, %zu offers (bound %zu), %lld us\n", candidates, denseRows.size(),
+        offered, FD::kMobVisitBound, static_cast<long long>(us));
+
+    // Equal distances: the guid orders them; a cap of zero keeps nothing.
+    FD::NearestSelector<int> ties(2, 8);
+    ties.Offer(7, 1.0f, 7, false);
+    ties.Offer(5, 1.0f, 5, false);
+    ties.Offer(6, 1.0f, 6, false);
+    std::vector<std::pair<FD::Near, int>> tied = ties.Take();
+    CHECK(tied.size() == 2 && tied[0].first.id == 5 && tied[1].first.id == 6);
+    FD::NearestSelector<int> none(0, 8);
+    none.Offer(1, 1.0f, 1, false);
+    none.AddBoss(2, 1.0f, 2);
+    CHECK(none.Take().empty());
+}
+
+void TestWireId()
+{
+    // Finding 3: a Creature, a Pet and a Player holding the same counter must not share a wire id. The pure id is the guid type over the counter.
+    uint32_t const creature = 9, pet = 11, player = 4, vehicle = 10;   // distinct guid types (their values do not matter, only that they differ)
+    CHECK(FD::WireId(creature, 5) != FD::WireId(pet, 5));
+    CHECK(FD::WireId(creature, 5) != FD::WireId(player, 5));
+    CHECK(FD::WireId(pet, 5) != FD::WireId(vehicle, 5));
+    CHECK(FD::WireId(player, 5) != FD::WireId(player, 6));
+    CHECK(FD::WireId(creature, 5) == FD::WireId(creature, 5));   // stable: the same unit keeps its id across cycles
+    CHECK(FD::WireId(creature, 0xFFFFFFFFFFULL) != FD::WireId(pet, 0xFFFFFFFFFFULL));
+    CHECK(FD::WireId(creature, 5) != 0 && FD::WireId(creature, 0) != 0);
+    // The counter's top bits never leak into the type bits: a counter past 40 bits is masked, not added to another type's id.
+    CHECK(FD::WireId(creature, 0x10000000005ULL) == FD::WireId(creature, 5));
+}
+
+void TestKeepStanding()
+{
+    // Finding 1: with no standing binding the state is emptied (the early return on an empty list used to leave it, and the position clock
+    // went on sending the stale bots and mobs).
+    std::map<uint32_t, int> watched = { { 1, 10 }, { 2, 20 }, { 3, 30 } };
+    std::unordered_set<uint32_t> standing = { 2 };
+    FD::KeepStanding(watched, standing);
+    CHECK(watched.size() == 1 && watched.count(2) == 1);
+    std::unordered_set<uint32_t> none;
+    FD::KeepStanding(watched, none);
+    CHECK(watched.empty());
+    std::unordered_map<uint64_t, int> ready = { { 9, 1 } };
+    FD::KeepStanding(ready, std::unordered_set<uint64_t>());
+    CHECK(ready.empty());
 }
 
 void TestLetters()
@@ -314,6 +439,9 @@ int main()
     TestCaps();
     TestRemainingSeconds();
     TestSweepCost();
+    TestNearestSelector();
+    TestWireId();
+    TestKeepStanding();
     TestLetters();
     TestBossState();
     TestBodyless();

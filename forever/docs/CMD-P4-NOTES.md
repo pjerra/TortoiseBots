@@ -8,8 +8,8 @@ and D6 of "Lead decisions". Branch `cmd/p4` from `tbf/main` (P1 and P2 merged). 
 The Commander card's map layers and the live positions, as the Turtle collector built them (T `commands/Commander.cpp:15653-16636`, `:17052-17123`),
 against what ForeverCore holds:
 
-* **mobs**: the hostiles near a binding's lead, from one capped grid visit (`Cell::VisitAllObjects`; the cap **stops the visit** once
-  `CommanderTelemetry::kMaxMobsPerBinding` = 24 units are held, so a dense area costs 24 candidates, not one per unit in range), the rows nearest
+* **mobs**: the hostiles near a binding's lead, from one bounded grid visit (`Cell::VisitAllObjects`; the visit **stops** after 512 candidates and keeps
+  the nearest `CommanderTelemetry::kMaxMobsPerBinding` = 24, bosses always included), the rows nearest
   first. Each row carries name, entry, health percent, place, victim, reaction to the
   bots, critter/civilian/guard/unattackable, level, rank (boss/elite/rare; a plan boss or an `ai_dungeon_boss` entry reads 'b' through
   `DungeonPlanTable::IsBossEntry`), crowd control and the spell it casts. The first 16 boss/elite rows also carry the overlay: facing, the current
@@ -40,7 +40,7 @@ carries null (the dashboard greys the layer out), never `[]` — the failing cas
 |---|---|
 | `forever/src/host/cmd/TbCmdFeedsPure.h` | pure: `Sweep` (the cap that stops the visit, rows nearest first with the guid tie), `RemainingSeconds` (cooldown ms -> whole seconds, rounded down), the game-object kind/state letters, `BossState(spawnState, encounterDone)`, `NextPosWindow` (rotation), the clamps. Standard library + `runtime/CommanderTelemetry.h` only |
 | `forever/src/host/cmd/TbCmdFeeds.{h,cpp}` | the collector: the two clocks (`FillFeeds` in the dash-runs cycle, `UpdateFeeds` on the position clock), the boss spawn cache and its states, the sweeps, the bot extras, the position datagrams. With the option OFF every function is a no-op |
-| `forever/tools/cmd_feeds_check.cpp` | the standalone check (84 checks): the capped sweep and its dense-grid cost (200 000 candidates -> 24 offers), the cooldown seconds, the letters, the boss states, the rotation, and the real COMMANDERS/COMMANDER_POS builders for the null-vs-empty rule, the extras' keys and the position caps |
+| `forever/tools/cmd_feeds_check.cpp` | the standalone check (164 checks): the capped sweep, the nearest-24 selector with its boss rule and its 512 visit bound (200 000 candidates -> 512 offers), the wire id, the standing-state prune, the cooldown seconds, the letters, the boss states, the rotation, and the real COMMANDERS/COMMANDER_POS builders for the null-vs-empty rule, the extras' keys and the position caps |
 | `forever/tools/test_cmd_p4_wiring.py` | wiring pins + three mutations (`cap`, `boss`, `window`) under `CMD_P4_MUTATE=1` (run on the VM) |
 | `forever/conf/tortoisebots.conf.dist` | `TortoiseBots.Commander.Feeds` (1), `.MobRange` (60), `.ObjectRange` (40), `.PosMs` (100), documented with the defaults the code falls back to |
 
@@ -63,14 +63,22 @@ No other file was changed; `TbCmdFeeds.cpp` is new and owns everything else.
   null.
 * **The sweeps are the only scans, and they are the collector's.** One hostile visit (radius `MobRange`, 60) and one object visit (`ObjectRange`, 40)
   per binding per 2 s cycle; the position clock resolves the last report's guids only (no sweep). Both clocks log their cost every 60 s.
-* **The caps bound the work.** A visit offers a candidate to the pure `FD::Sweep`; when the sweep is full the next offer is refused and the visitor
-  sets `stopped`, so the rest of that grid manager and every later cell return without touching a ref. Nothing collects the whole range any more:
-  no `std::list` of every match, no per-match guid map, no sort of everything. The rows are the first `cap` candidates the grid handed out, then
-  sorted (distance, guid) — see the limit below.
+* **The caps bound the work.** The hostile visit offers each candidate (in the radius, hostile or an attackable neutral, not a critter) to the pure
+  `FD::NearestSelector`: at most `kMobVisitBound` (512) candidates are taken, then the visitor stops (`Exhausted`) and the rest of that grid manager
+  and every later cell return without touching a ref. The selector keeps the NEAREST 24 in a bounded max-heap (the farthest kept row is replaced by
+  a nearer one: no allocation per candidate, no sort of everything) and every boss in a heap of its own; `Take` fills the list bosses first, then the
+  nearest others, at most 24 rows (the wire cuts a binding's list at 24, so a kept boss is never the row cut), nearest first with the guid tie. The
+  object visit is still the first-16 `FD::Sweep` that stops when full.
+* **Bosses are always rows.** A candidate whose entry is in the map's boss roster (the boss cache) is a boss for the selector, and after the visit
+  every roster spawn is resolved by `Map::GetCreatureBySpawnId`: an alive, hostile, in-range boss the visit did not meet (past the bound) is added
+  by `AddBoss` (no row twice). A boss therefore always gets its `rank=b` row and overlay, whatever the trash around it.
+* **The wire id is the guid's type over its counter** (`FD::WireId`: 6 type bits, 40 counter bits), not the counter alone: a Creature, a Pet or
+  Vehicle and a Player holding the same counter no longer collide in the sweep, the overlay match or the dashboard's rows.
 * **The plan generation rebuilds the roster.** `.tb run reloadplans` replaces the plan table; the feed notices `DungeonPlanTableGeneration()` change on
   the next cycle and rebuilds the spawn cache once (not in the reload command: that file belongs to the run package).
 * **The two clocks are independent.** `FillFeeds` is the dash-runs collector's cycle (2 s, `TortoiseBots.Dashboard.IntervalMs`); `UpdateFeeds` has its
-  own `PosMs` clock and sends nothing while no binding stands or the sender is closed.
+  own `PosMs` clock and sends nothing while no binding stands or the sender is closed. `FillFeeds` forgets what no longer stands (`FD::KeepStanding`)
+  before anything else, also for an empty binding list: the last binding released leaves nothing watched, so COMMANDER_POS stops at once.
 
 ## GetBossState: what the pin lets the module map
 
@@ -100,9 +108,8 @@ kill latch. This is the same "alive beats dead beats unknown" order the Turtle b
   well-fed aura cannot be recognised (the potion family still sets the elixir bit). The row under-reports consumables; it never invents them.
 * The mob list is the grid around the lead, not the bots' perception lists (the Turtle build read those). A hostile the bots see but the sweep does
   not (out of `MobRange`) is not listed.
-* The visit stops at the cap, so the rows are the first 24 hostiles (16 objects) the grid hands out, not the nearest 24 of the whole range: in a
-  crowd denser than the cap, a nearer unit the visit had not reached yet is missing. That is the price of the cap bounding the work; the rows are
-  still listed nearest first among the ones kept.
+* The hostile visit is bounded at `kMobVisitBound` = 512 candidates (in the radius, hostile or attackable, not a critter); past the bound the visit
+  stops, so in a crowd of more than 512 candidates a nearer unit the visit had not reached is missing. The bosses are exempt (see the second fix round).
 * A boss whose grid is unloaded, whose corpse is gone and whose respawn time has expired reads 'u' (unknown) once its latch expired (10 min without a
   binding on the instance).
 * The position report carries at most 20 bindings per cycle (a rotation) and at most 40 bots and 24 enemies per binding; the readers see every binding
@@ -125,7 +132,7 @@ Both findings were real and fixed; each has a test that failed on the reviewed c
    per-match allocation, no guid map, one sort of at most 24 (16) rows. The check measures it: a dense 200 000-candidate grid costs **24 offers**
    (was 200 000 offers and a full sort: `cmd_feeds_check: dense sweep of 200000 candidates -> 24 rows, 200000 offers, 9024 us`) and the same sweep
    now reports `24 rows, 24 offers, 0 us`.
-   The trade-off is in the limits below: the rows are the first candidates the grid handed out (then sorted nearest first), not the nearest of the
+   (Superseded by fix round 2: the rows are now the nearest 24 of a 512-candidate bound, bosses always present.) Round 1's trade-off: the rows were the first candidates the grid handed out (then sorted nearest first), not the nearest of the
    whole range. The live fill cost below (47-103 us, 204 us at most) was measured on the reviewed binary before this change and did not cover a
    range densely packed past the cap; that case is now measured in the check (24 offers instead of 200 000, and no per-candidate allocation).
 
@@ -174,3 +181,18 @@ Restore: the release binary (`bin/worldserver.pre-cmdp4`, md5 `52364138…`) bac
 from the dump above (`IMPORT_RC=0`; 28 characters, no `auctionhousebot*` tables, no 70959 `build_info` row, no `tb_commander_binding`: the state the
 server had before the test). The boot check of the restored server could not be made: another worker installed their own binary (`00f94fc2…`, 17:12)
 and started `forever-world2` during the restore, so the server now runs their build. Nothing else on that server was changed by this package.
+
+## Fix round 2 (cold review batch 7)
+
+1. **The last binding released kept the position clock sending.** `FillFeeds` returned on an empty list before it forgot `watched` and `ready`; it now
+   forgets first (`FD::KeepStanding`, pure, checked with an empty standing set) and returns only afterwards.
+2. **The cap kept the first 24 hostiles in grid order.** Now the nearest 24 of a visit bounded at 512, bosses always present (kept from the boss cache),
+   critters and non-attackable neutrals skipped. The dense-grid check: 200 000 candidates -> 24 rows, 512 offers, tens of microseconds.
+3. **The wire id was the counter only.** `FD::WireId(type, counter)`.
+Each has a check or mutation that fails on the old behaviour (`nearest`, `bossrow`, `wireid`, `standing` under `CMD_P4_MUTATE=1`) and a wiring pin.
+
+Gates of fix round 2 (slot 5, pin 25fc7ca): option-ON `worldserver` and option-OFF `tortoisebots` `CMAKE_RC=0 MAKE_RC=0`; census `forever/SLICE9.txt`
+`files 265  compile clean 265  with errors 0`; `cmd_feeds_check: 164 checks, 0 failed` (dense hostile visit: 200000 candidates -> 24 rows, 512 offers,
+31 us); `test_cmd_p4_wiring.py` with `CMD_P4_MUTATE=1`: 14 tests OK, the eight mutations (`cap`, `seconds`, `boss`, `window`, `nearest`, `bossrow`,
+`wireid`, `standing`) each fail the check; `slice_gen_context.py --check` up to date, `slice_registry_check.py` `(a)=0 (b)=224`; the p1/p2/run-review/
+dash-runs/slice4-d4 wiring tests OK. Not run live.
