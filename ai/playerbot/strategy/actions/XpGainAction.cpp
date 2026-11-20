@@ -2,6 +2,7 @@
 #include "XpGainAction.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "playerbot/LootObjectStack.h"
+#include "playerbot/TbCompatW2.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "runtime/ObservabilityEmitter.h"

@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "Mail/Mail.h"
+
 inline Creature* VendorIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 {
     return bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_VENDOR);
