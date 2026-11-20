@@ -62,7 +62,7 @@ class RevFix1(unittest.TestCase):
         self.assertNotIn("bot->GetMap()", body)
         self.assertIn("bot->FindMap()", body)
         self.assertIn("IsBeingTeleported()", body)
-        self.assertIn("bot->GetMapId() != o.map", body)
+        self.assertIn("PointOnBotMap(o.map, o.instance, bot->GetMapId(), bot->GetInstanceId())", body)
         self.assertIn('"fail:wrong-map"', body)
         # the check comes before the liquid read and before the walk
         self.assertLess(body.index('"fail:wrong-map"'), body.index("SegmentPrefixRefusedOnMap"))

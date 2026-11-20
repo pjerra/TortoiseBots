@@ -15,7 +15,8 @@ namespace TortoiseBots
 namespace h3
 {
 // One queued order. Verbs: follow stay come attack pull endpull release (the `.tb order` verbs) and the run verbs
-//   move-direct   x y z map: a straight MovePoint(generatePath=false) to the point, the stay position written there (the lead of a direct step)
+//   move-direct   x y z map [instance]: a straight MovePoint(generatePath=false) to the point, the stay position written there (the lead of a direct step);
+//                 the executor refuses it when the bot is no longer in that Map instance
 //   pullback      unit: `pullback my target`, the party hold, the tank's stay position written at its own spot (the pull anchor)
 //   focus         unit: the skull on the unit for the whole fight, every bot attacks its skull target
 //   rest          (none): drink / eat until full, out of combat
@@ -28,6 +29,7 @@ struct OrderSpec
     ObjectGuid unit;
     float x = 0, y = 0, z = 0;
     uint32 map = 0;
+    uint32 instance = 0;        // move-direct: the Map instance the point was made in (0 = not recorded); two copies of a dungeon share the map id
     bool fromRun = false;
 };
 

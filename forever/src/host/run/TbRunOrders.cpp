@@ -418,6 +418,7 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         batch.Back().y = p.y;
         batch.Back().z = ground;
         batch.Back().map = lead->GetMapId();
+        batch.Back().instance = lead->GetInstanceId();
         for (Player* bot : party.bots)
             if (bot != lead && bot->IsAlive())
             {

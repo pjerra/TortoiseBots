@@ -109,3 +109,15 @@ Suggested patch (not applied):
 | S5 policy tests (VM) | `test_dungeon_run_policy` ok, `test_system_run_policy` 109 checks, `test_forever_plan_match` 38 checks, `test_dungeon_plan_reload_policy` all passed, `test_rez_hold_policy` ok |
 | wiring pins (VM) | `test_run_revfix1_wiring.py` 8 OK, `test_run_review_wiring.py` 9 OK, `test_reload_plans_wiring`, `test_plan_step_label_wiring`, `test_aura_tactics_wiring`, `test_run_leader_wiring`, `test_forever_no_direct_queries`, `test_dungeon_plan_sql` OK |
 | Turtle `vm-build` / `vm-test tb` | not needed: every changed file is under `forever/` (`git diff --stat tbf/main..HEAD`) |
+
+## Review fix round 2 (two reviews of this branch)
+| Review finding | Verdict | Where / reason |
+|---|---|---|
+| Codex (medium) `move-direct` checks the map id but not the dungeon instance | FIX | `TbOrdersApi.h` / `TbOrders.cpp` `OrderSpec`+`Order` carry `instance` (0 = not recorded); `TbRunOrders.cpp` `DoMove` queues `lead->GetInstanceId()`; `TbOrders.cpp` `move-direct` refuses with `fail:wrong-map` unless `PointOnBotMap(o.map, o.instance, bot->GetMapId(), bot->GetInstanceId())` (`TbOrderQueuePure.h`). Tests: `test_run_cancel.cpp` (equal map id, different instance refuses; 0 = map id only) and `test_run_revfix2_wiring.py` (3 cases, all fail on the previous commit). |
+| Gemini 1 pause cancels queued orders | REJECT (no defect) | The review itself confirms `ForgetRunOrders` in `CancelRunWork` covers pause, stop-pending and finish; no change. |
+| Gemini 2 stand-path liquid rule | REJECT (no defect) | It confirms `PathPrefixRefused` matches the executor's move rule; no change. |
+| Gemini 3 `move-direct` / `.tb where` map reads | REJECT (no defect; superseded) | It confirms `FindMap`/teleport guards; round 2 replaces the map-id comparison with the map+instance rule (Codex). |
+| Gemini 4 rez roster map compare | REJECT (no defect) | `SameMapObject` is used for `corpseYd`, `blocksDruid` and `seesBody`; no change. |
+| Gemini 5 too-far before path work | REJECT (no defect) | Early `TooFar` return is present; verdict and text unchanged. |
+| Gemini 6 `BindBotMaster` | REJECT (no defect) | The pointer is set unconditionally (null for an offline master); no change. |
+| Gemini 7 time-limit subtraction | REJECT (no defect) | Both stamps are `GameTime::GetGameTimeMS()`; unsigned subtraction is correct at the wrap; no change. |
