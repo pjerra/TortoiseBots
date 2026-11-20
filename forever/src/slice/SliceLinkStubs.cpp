@@ -514,6 +514,7 @@ bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unpo
 // GuildOrders, TravelMgr) are not in the slice yet (waits for W1/W4).
 // =====================================================================================================================
 #include "playerbot/strategy/values/MaintenanceValues.h"
+#include "compat/TbCompat_W2Town.h"
 #include "playerbot/strategy/values/TrainerValues.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
