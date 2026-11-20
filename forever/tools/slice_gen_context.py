@@ -170,13 +170,21 @@ W6_KEYS = {
     "trigger": "equipment audit, item push result",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W6_KEYS)
+# W3 (package E): quests (accept, turn-in with reward choice, drop, share; quest strategies and actions).
+W3_KEYS = {
+    "strategy": "quest, accept all quests",
+    "action": "talk to quest giver, accept quest, accept all quests, accept quest share, drop, clean quest log, share, auto share quest, quest reward",
+    "trigger": "quest share",
+    "value": "quest reward",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W6_KEYS, W3_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
 BASE_T = {"strategy": "Strategy", "action": "Action", "trigger": "Trigger", "value": "UntypedValue"}
 LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "SliceMovementStrategyContext",
-         "AssistStrategyContext": "SliceAssistStrategyContext", "ActionContext": "SliceActionContext",
+         "AssistStrategyContext": "SliceAssistStrategyContext", "QuestStrategyContext": "SliceQuestStrategyContext",
+         "ActionContext": "SliceActionContext",
          "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
          "TriggerContext": "SliceTriggerContext", "ChatTriggerContext": "SliceChatTriggerContext",
          "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
