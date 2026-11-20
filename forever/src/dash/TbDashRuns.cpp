@@ -8,6 +8,7 @@
 #include "dash/TbDashLink.h"
 #include "dash/TbDashRunsPure.h"
 #include "host/TbH3.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRun.h"
 #include "TbBotMgr.h"
 
@@ -312,6 +313,7 @@ void Cycle(State& s)
     uint32 const nowMs = GameTime::GetGameTimeMS();
 
     std::vector<CT::BindingInfo> bindings;
+    std::vector<uint32> shownRunLeaders;
     for (run::RunRec* rec : run::All())
     {
         // An old finished run stays in the run table until its leader starts another: once it left the Commander tab and a summary job
@@ -329,8 +331,15 @@ void Cycle(State& s)
         if (view.ended)
             EnqueueSummary(s, view);
         if (P::OnCommanderTab(view, nowUnix))
+        {
             bindings.push_back(P::Binding(view));
+            shownRunLeaders.push_back(uint32(rec->leader.GetCounter()));
+        }
     }
+    // P1/P2 (spec section 5): every standing commander binding beside the run cards, then the run cards' own order logs from the card of the same
+    // commander (the run feed leaves `orders` empty).
+    cmd::AppendBindings(bindings, shownRunLeaders);
+    cmd::FillRunOrders(bindings);
 
     FlushSummaries(s);
 

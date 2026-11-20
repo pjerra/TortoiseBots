@@ -136,6 +136,8 @@ public:
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
             LoadEngineConfig();
+        if (reload)
+            TortoiseBots::cmd::LoadBindings();     // P2: the key or the graces changed, or persistence was just turned on
     }
 
     void OnWorldInitialized() override
@@ -164,6 +166,7 @@ public:
             {
                 LoadEngineConfig();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
+                TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
             }
         }
 #endif
@@ -185,6 +188,7 @@ public:
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
+        TortoiseBots::cmd::Maintain();         // P2: the binding timers (dead lead, absent commander) and the stored rows whose party is back
 #endif
     }
 
@@ -203,6 +207,28 @@ public:
     tortoisebots_unit() : UnitScript("tortoisebots_unit") { }
     void OnDamageSpell(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spellInfo) override { TortoiseBots::Dashboard::OnDamage(attacker, victim, damage, spellInfo); }
     void OnHealOutcome(Unit* healer, Unit* /*target*/, uint32 /*spellId*/, uint32 raw, uint32 effective) override { TortoiseBots::Dashboard::OnHealOutcome(healer, raw, effective); }
+    // P2: a dead lead bot starts its grace; the binding ends only after it (TortoiseBots.Slice.DeadBackstopSeconds).
+    void OnUnitDeath(Unit* victim, Unit* /*killer*/) override
+    {
+        if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+            TortoiseBots::cmd::NoteDeath(victim->ToPlayer());
+    }
+};
+
+// P2: the group events a commander binding ends on (the lead leaving, the group disbanding or losing its leader, another player joining). Called by the
+// core's Group methods, the same ones BotMgr uses to form a bot party, so robot groups fire them too.
+class tortoisebots_group : public GroupScript
+{
+public:
+    tortoisebots_group() : GroupScript("tortoisebots_group") { }
+
+    void OnAddMember(Group* group, ObjectGuid guid) override { TortoiseBots::cmd::NoteGroupAdd(group, guid); }
+    void OnRemoveMember(Group* group, ObjectGuid guid, RemoveMethod /*method*/, ObjectGuid /*kicker*/, char const* /*reason*/) override
+    {
+        TortoiseBots::cmd::NoteGroupRemove(group, guid);
+    }
+    void OnChangeLeader(Group* group, ObjectGuid newLeaderGuid, ObjectGuid /*oldLeaderGuid*/) override { TortoiseBots::cmd::NoteGroupLeader(group, newLeaderGuid); }
+    void OnDisband(Group* group) override { TortoiseBots::cmd::NoteGroupDisband(group); }
 };
 
 class tortoisebots_player : public PlayerScript
@@ -226,12 +252,14 @@ public:
             // nothing is added to the bags and the ammo slot is untouched.
             player->SetPreferDrawableAmmo(true);
         }
+        TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
 
     void OnLogout(Player* player) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
             TC_LOG_INFO("tortoisebots", "bot {} left the world", player->GetName());
+        TortoiseBots::cmd::NoteLogout(player);    // P2: a lead's departure, or the commander's grace (a shutdown keeps the binding)
         // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
         BotMgr::Instance().OnPlayerLogout(player);
     }
@@ -1281,5 +1309,6 @@ void AddSC_tortoisebots()
     new tortoisebots_world();
     new tortoisebots_player();
     new tortoisebots_unit();
+    new tortoisebots_group();
     new tortoisebots_commands();
 }

@@ -12,7 +12,6 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
-#include "host/cmd/TbCmdBinding.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "host/run/TbRunTasks.h"
@@ -1016,10 +1015,9 @@ void TickRun(RunRec& rec, uint32 nowMs)
 
     if (!order.empty())
     {
-        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
+        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));   // P1/P2: Issue notes the order on the commander card
         // G8: a refused automatic cc order assigned nothing: the unit, bot, mark and budget go back for the next pick (the Turtle glue calls it after every order).
         DungeonRun::CcOrderTaken(run, order, answer.accepted);
-        cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);   // P1: the commander card's order log
         if (answer.accepted)
         {
             if (answer.movePathRead)

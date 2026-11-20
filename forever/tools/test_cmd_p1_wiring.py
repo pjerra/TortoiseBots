@@ -56,8 +56,10 @@ class Wiring(unittest.TestCase):
         read = function_body(self.cpp, r"std::vector<HostCard> Read\(int64 nowUnix, uint32 nowMs\)\s*\{")
         self.assertIn("h3::CommanderBindings()", read)           # the pairs come from h3's table, valid ones only
         self.assertIn("h3::CommanderGuid(rec->leader)", read)    # the run's leader keeps its own commander
-        self.assertNotIn("SetCommander", code(self.cpp))         # the card code never writes a binding
-        self.assertNotIn("BindBotMaster", code(self.cpp))
+        # The card read never writes a binding: only P2's release/restore do (pinned by test_cmd_p2_wiring.py).
+        self.assertNotIn("SetCommander", code(read))
+        self.assertNotIn("BindBotMaster", code(read))
+        self.assertNotIn("store::", code(read))
 
     def test_no_group_number_is_stored_and_no_database_call(self):
         self.assertNotIn("GetDbStoreId", code(self.cpp + self.pure + self.hdr))      # D2: the DB store id is reused
@@ -65,8 +67,9 @@ class Wiring(unittest.TestCase):
             self.assertNotIn(word, code(self.cpp))
         # the group key is the session counter and exists only as a value of a card, never as a map key of the module's state
         self.assertIn("GetGUID().GetCounter()", function_body(self.cpp, r"uint32 GroupKey\(Group const\* group\)\s*\{"))
-        meta = code(re.search(r"struct Meta\s*\{.*?\};", self.cpp, re.S).group(0))
-        self.assertNotIn("group", meta.lower().replace("guid", ""))
+        # P2 keeps GroupIdW2 in memory only (the spec allows the counter as a session key), and the persisted row has no group field at all
+        # (test_cmd_p2_wiring.py pins the stored model and the SQL columns).
+        self.assertIn("uint32 groupId = 0;", self.cpp)
 
     def test_cards_are_keyed_by_commander(self):
         self.assertIn("std::map<uint32_t, std::vector<uint32_t>> byCommander;", self.pure)
@@ -82,9 +85,11 @@ class Wiring(unittest.TestCase):
         self.assertLess(order.index("cmd::NoteOrder("), order.index('Rec end("order")'))
         self.assertIn("outcomes.push_back({ bot, code })", order)                 # refused bot, its own code
         self.assertIn("outcomes.push_back({ bot, std::string() })", order)        # queued bot
-        tick = self.run.split("OrderAnswer const answer = Issue(")[1][:400]
-        self.assertTrue(tick.lstrip().startswith("rec, order") or "cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);" in tick)
-        self.assertRegex(self.run, r"OrderAnswer const answer = Issue\([^\n]*\n\s*cmd::NoteRunOrder\(rec\.leader, order, answer\.accepted, answer\.code, answer\.text\);")
+        # P2 moved the order-log hook from the run tick into the executor `Issue` (the one path the run tick and `.tb run order` share).
+        orders = (HOST / "run" / "TbRunOrders.cpp").read_text()
+        issue = function_body(orders, r"OrderAnswer Issue\(RunRec& rec, std::string const& order, uint32 nowMs, bool gather\)\s*\{")
+        self.assertIn("cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);", issue)
+        self.assertNotIn("NoteRunOrder", code(self.run))
 
     def test_the_collection_is_never_capped_and_a_run_counts_only_bound_bots(self):
         builds = self.pure.split("inline std::vector<Card> BuildCards")[1].split("// ---- the order log")[0]
@@ -103,7 +108,10 @@ class Wiring(unittest.TestCase):
         key_of_bot = function_body(self.cpp, r"ObjectGuid CardKeyOfBot\(ObjectGuid bot\)\s*\{")
         self.assertIn("run::Find(bot)", key_of_bot)                           # a system run's leader is its own card key
         master = function_body(self.cpp, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
-        self.assertEqual(master.count("PruneToStanding(s)"), 2)               # release and rebind, not only the next read
+        self.assertEqual(master.count("PruneToStanding(s)"), 1)               # the bind path; P2's release erases the record at once
+        release = function_body(self.cpp, r"void ReleaseCommander\(ObjectGuid commander, L::End end\)\s*\{")
+        self.assertIn("s.metas.erase(it)", release)
+        self.assertIn("store::Erase(", release)
 
     def test_the_order_store_has_no_whole_card_cap(self):
         state = code(re.search(r"struct State\s*\{.*?\};", self.cpp, re.S).group(0))
