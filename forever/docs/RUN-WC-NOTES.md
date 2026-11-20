@@ -97,9 +97,9 @@ spawn row) and the corpse/grid fields certify the kill.
 
 | gate | result |
 |---|---|
-| census (`FOREVER_SLOT=4`, `FOREVER_CORE=~/ForeverCore-25fc7ca`, `FOREVER_CENSUS_LIST=forever/SLICE9.txt`) | `files 265 compile clean 265 with errors 0 error places 0 (in 0 files) includes of a header ForeverCore does not have 0` |
-| option ON `worldserver` (`FOREVER_SLOT=2 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0`, 305/305, `worldserver` links |
-| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | (see the line below) |
+| census (slot 4 upload, `FOREVER_CORE=~/ForeverCore-25fc7ca`, `FOREVER_CENSUS_LIST=forever/SLICE9.txt`) | `files 265 compile clean 265 with errors 0 error places 0 (in 0 files) includes of a header ForeverCore does not have 0` |
+| option ON `worldserver` (`-DTORTOISEBOTS_SLICE1=ON`, 12 jobs, the `forever-builder` image, source `src-2` = core 25fc7ca + this worktree) | `CMAKE_RC=0`, `MAKE_RC=0`, 1419/1419, `worldserver` links; the module's own objects: 283/283, 0 errors (one pre-existing `sTerrainMgr` macro warning) |
+| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0`, `MAKE_RC=0` (`libtortoisebots.a` of empty slice objects) |
 | `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=218` |
 | `test_run_wc`, `test_run_tasks`, `test_run_orders`, `test_run_facts` (RFC), `test_run_facts_s9`, `test_run_liquid`, `test_run_cancel`, `test_run_binding`, `test_run_gather`, `test_run_c6` | all PASS (see section 5) |
 | `test_wc_plan_rows.py`, `tools/test_dungeon_plan_sql.py` (Turtle SQL unchanged), the six `forever/tools/test_*_wiring.py` | OK / 104 tests OK / OK |
