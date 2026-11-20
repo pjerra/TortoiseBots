@@ -122,3 +122,7 @@ Rows changed by slice 9 package L9 (`SLICE9-L-NOTES.md`): item loot, group-loot 
 | `incoming: loot roll` (`IncomingLoot`) | the bot never rolled | renamed `incoming: loot vote and roll won`: the start of a roll (`Player::GetLootRolls`, polled) and the bot's own vote (`HandleLootRoll`, GREED ONLY) are real; other players' votes and the won packet are not fed (the `loot roll won` trigger is not registered, so nothing auto-equips) |
 | `item usage` (`ItemUsage`) | `ItemUsageValue.cpp` was four stand-ins and the key was not registered | row and stand-ins removed; `ItemUsageValue.cpp` is in the slice and `item usage` is registered. Inside it: auction listings (type only), disenchant ids, the equip slot of a prototype, honor ranks and the ammo id answer the "none" value (LESS) |
 <!-- end slice 9, package L9 -->
+
+<!-- slice 9, package O9 -->
+Slice 9 package O9 (`SLICE9-DOORS-NOTES.md`): the **run's** object, loot and loot-method orders are carried out by `forever/src/host/run/TbRunTasks.*` on the core's public API (the typed `GameObjUse` packet into `HandleGameObjectUseOpcode`, the engine's `open loot`, `LootOpenCompat`, `HandleSetLootMethodOpcode`). The ENGINE-driven rows above (`game object use`: lightwells, party portals, ritual objects; `GameObjectUseUnportedCompat`) are unchanged and still count: a bot's own strategy never uses a game object, only the run's order does. `use <item>` (a use_item step) stays refused.
+<!-- end slice 9, package O9 -->
