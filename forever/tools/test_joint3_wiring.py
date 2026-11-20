@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Wiring pin for the third joint live test (JOINT-LIVE-3) fixes in the module.
 
-  * `.tb equip ... replace` destroys a replaced starter piece (poor or common, lower item level) instead of pushing it
-    into the bags, reports it (`destroyed=`/`destroyed_item=`) and never touches a real player's character
-    (host/cmd/TbReplacePure.h; forever/tools/test_equip_replace.cpp proves the rule);
+  * `.tb equip ... replace` destroys a replaced piece only when it is start-outfit gear (the core's `playercreateinfo_item` data for the
+    character's race and class, read through the guarded access) or poor quality, and only after the new piece is confirmed in the slot; never a
+    quest item, never a bag that holds items, never a real player's character. Every destroy writes one INFO log line with the character and item
+    identities and the reason, and the record lists it (`destroyed=`/`destroyed_item=`) (host/cmd/TbReplacePure.h,
+    host/cmd/TbStartOutfit.h; forever/tools/test_equip_replace.cpp proves the rule);
   * `.tb run status` names the total member deaths (`member_deaths=`, the same total as the existing `deaths=`), so the
     done note's narrower wipe, near-wipe and lead-death counters cannot be read as the party's death total;
   * the run event ring holds 1024 events (a 63-minute run overflowed 200) and `events since=` reports `oldest=`, the oldest
@@ -24,23 +26,43 @@ def text(rel):
 
 
 class Joint3(unittest.TestCase):
-    def test_a_starter_piece_is_destroyed_on_replace(self):
+    def test_a_disposable_piece_is_destroyed_on_replace(self):
         kit = text("host/TbTestKit.cpp")
-        self.assertIn("replace::IsStarterUpgrade(", kit)
-        self.assertIn("replace::MayDestroyReplacedItem(", kit)
+        self.assertIn("replace::DisposableReason(", kit)
+        self.assertIn("replace::StartOutfitItem(bot, piece->GetEntry())", kit)
+        self.assertIn("oldProto->GetStartQuest() != 0", kit)
+        self.assertIn("piece->IsNotEmptyBag()", kit)
         self.assertIn("bot->DestroyItem(piece->GetBagSlot(), piece->GetSlot(), true);", kit)
         self.assertLess(kit.index("bot->SwapItem(fresh->GetPos(), swapDest);"),
-                        kit.index("dropIfStarter(displaced);"))
+                        kit.index("bool const equipped ="))
+        self.assertLess(kit.index("bool const equipped ="), kit.index("if (equipped)"))
+        self.assertLess(kit.index("if (equipped)"), kit.index("dropIfDisposable(displaced);"))
+
+    def test_every_destroy_is_logged_at_info(self):
+        kit = text("host/TbTestKit.cpp")
+        self.assertIn('TC_LOG_INFO("tortoisebots", "TestKit: .tb equip destroyed {} x{} ({}) of {} ({}): ', kit)
+        self.assertIn("piece->GetGUID().ToString(), bot->GetName(), bot->GetGUID().ToString(),", kit)
+        self.assertIn("replace::ReasonName(why));", kit)
+        self.assertLess(kit.index("TC_LOG_INFO(\"tortoisebots\", \"TestKit: .tb equip destroyed"),
+                        kit.index("bot->DestroyItem(piece->GetBagSlot()"))
 
     def test_the_equip_record_reports_destruction(self):
         kit = text("host/TbTestKit.cpp")
-        self.assertIn('rec.N("destroyed", int64(destroyed->size())).L("destroyed_item", ids);', kit)
+        self.assertIn('rec.N("destroyed", int64(destroyed->size())).LP("destroyed_item", rows);', kit)
         self.assertIn("SEC_GAMEMASTER", kit)
 
+    def test_the_start_outfit_access_is_guarded(self):
+        access = text("host/cmd/TbStartOutfit.h")
+        self.assertIn("PlayerInfo const* info = sObjectMgr->GetPlayerInfo(character->GetRace(), character->GetClass());", access)
+        self.assertIn("if (!info)", access)
+        self.assertIn("initial.item_id == itemEntry", access)
+
     def test_the_replace_rule_is_pure(self):
-        pure = (ROOT / "forever" / "src" / "host" / "cmd" / "TbReplacePure.h").read_text()
-        self.assertIn("quality <= kCommonQuality", pure)
-        self.assertIn("oldItemLevel < newItemLevel", pure)
+        pure = text("host/cmd/TbReplacePure.h")
+        self.assertIn("if (!equipConfirmed || questItem || nonEmptyBag)", pure)
+        self.assertIn("if (startOutfit)", pure)
+        self.assertIn("quality <= kPoorQuality", pure)
+        self.assertIn('case Disposable::StartOutfit: return "start-outfit";', pure)
         self.assertIn("targetIsHostBot || (senderIsGm && senderIsTarget)", pure)
 
     def test_status_names_member_deaths(self):

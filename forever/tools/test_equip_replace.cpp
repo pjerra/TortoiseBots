@@ -3,10 +3,12 @@
 #include "host/cmd/TbReplacePure.h"
 
 #include <cstdio>
+#include <cstring>
 
-using TortoiseBots::h3::replace::IsStarterUpgrade;
+using TortoiseBots::h3::replace::Disposable;
+using TortoiseBots::h3::replace::DisposableReason;
 using TortoiseBots::h3::replace::MayDestroyReplacedItem;
-using TortoiseBots::h3::replace::StarterPiece;
+using TortoiseBots::h3::replace::ReasonName;
 
 namespace
 {
@@ -28,19 +30,32 @@ constexpr unsigned kPoor = 0, kCommon = 1, kUncommon = 2, kRare = 3;
 
 int main()
 {
-    // Starter gear is poor or common; anything better is worth keeping.
-    Check(StarterPiece(kPoor), "poor is starter gear");
-    Check(StarterPiece(kCommon), "common is starter gear");
-    Check(!StarterPiece(kUncommon), "uncommon is not starter gear");
-    Check(!StarterPiece(kRare), "rare is not starter gear");
+    // Quality and item level alone do not identify starter gear: a common piece the character did not start with is kept.
+    Check(DisposableReason(true, false, kCommon, false, false) == Disposable::No, "common, not start outfit: bagged");
+    Check(DisposableReason(true, false, kUncommon, false, false) == Disposable::No, "uncommon, not start outfit: bagged");
+    Check(DisposableReason(true, false, kRare, false, false) == Disposable::No, "rare, not start outfit: bagged");
 
-    // The incoming piece must be strictly better in item level.
-    Check(IsStarterUpgrade(kPoor, 1, 2), "poor, lower item level: destroyed");
-    Check(IsStarterUpgrade(kCommon, 10, 12), "common, lower item level: destroyed");
-    Check(!IsStarterUpgrade(kCommon, 12, 12), "equal item level: kept");
-    Check(!IsStarterUpgrade(kPoor, 13, 12), "better old item level: kept");
-    Check(!IsStarterUpgrade(kUncommon, 1, 40), "better quality: kept");
-    Check(!IsStarterUpgrade(kRare, 1, 40), "rare: kept");
+    // A start-outfit piece is destroyed, whatever its quality.
+    Check(DisposableReason(true, true, kCommon, false, false) == Disposable::StartOutfit, "start outfit, common: destroyed");
+    Check(DisposableReason(true, true, kPoor, false, false) == Disposable::StartOutfit, "start outfit, poor: destroyed");
+
+    // A poor (grey) piece is disposable on its own.
+    Check(DisposableReason(true, false, kPoor, false, false) == Disposable::Poor, "poor, not start outfit: destroyed");
+
+    // Never when the equip itself failed: the piece is still on the body or in the bags, untouched.
+    Check(DisposableReason(false, true, kCommon, false, false) == Disposable::No, "failed equip, start outfit: nothing destroyed");
+    Check(DisposableReason(false, false, kPoor, false, false) == Disposable::No, "failed equip, poor: nothing destroyed");
+
+    // Never a quest item, and never a bag that holds items, whatever the quality or provenance.
+    Check(DisposableReason(true, true, kPoor, true, false) == Disposable::No, "start-outfit quest item: kept");
+    Check(DisposableReason(true, false, kPoor, true, false) == Disposable::No, "poor quest item: kept");
+    Check(DisposableReason(true, true, kPoor, false, true) == Disposable::No, "start-outfit bag with items: kept");
+    Check(DisposableReason(true, false, kPoor, false, true) == Disposable::No, "poor bag with items: kept");
+
+    // The words the log line and the reply carry.
+    Check(std::strcmp(ReasonName(Disposable::StartOutfit), "start-outfit") == 0, "reason name: start-outfit");
+    Check(std::strcmp(ReasonName(Disposable::Poor), "poor") == 0, "reason name: poor");
+    Check(std::strcmp(ReasonName(Disposable::No), "") == 0, "reason name: none");
 
     // Only a host bot, or the sender's own character when the sender is a GM.
     Check(MayDestroyReplacedItem(true, false, false), "host bot: may lose a piece");
