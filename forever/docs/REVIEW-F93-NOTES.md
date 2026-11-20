@@ -101,8 +101,8 @@ and repair spends from the full purse.
 - `slice_registry_check.py` (0, 228 later), `slice_gen_context.py --check`
   (up to date), `test_ignore13_wiring.py` OK, `test_w2_town_wiring.py` OK,
   `test_w1_wiring.py` OK, `git diff --check` clean.
-- `tbf-build.sh <wt> tortoisebots`: BUILD OK (final pass re-run after the
-  include fix; first pass BUILD OK tortoisebots ON 29b37c626).
+- `tbf-build.sh <wt> tortoisebots`: BUILD OK tortoisebots ON 7575313aa
+  (first pass BUILD OK ON 29b37c626, before the SharedValueContext include fix).
 - `turtle-compile-check <wt> origin/main`: COMPILE OK at 060c7d1e (the first
   run caught a missing `SharedValueContext.h` include in DowntimeService.cpp;
   shared ai/ files touched: TownErrandPolicy.h, TrainerAction.cpp,
