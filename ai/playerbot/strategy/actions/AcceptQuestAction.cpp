@@ -142,7 +142,7 @@ bool AcceptAllQuestsAction::OffersAcceptableQuest(PlayerbotAI* ai, Player* bot, 
     {
         QuestMenuItem const& item = menu.GetItem(i);
 
-        if (QuestMenuItemIconCompat(item) != DIALOG_STATUS_AVAILABLE) //Only what the bot could take now.
+        if (!QuestMenuItemIsAvailableCompat(item)) //Only what the bot could take now.
             continue;
 
         Quest const* quest = sObjectMgr.GetQuestTemplate(QuestMenuItemIdCompat(item));
@@ -214,6 +214,8 @@ bool AcceptQuestAction::Execute(Event& event)
             if (go && text == "*" && bot->GetDistance(go) <= INTERACTION_DISTANCE)
                 hasAccept |= QuestAction::ProcessQuests(go);
         }
+        if (text == "*")
+            return hasAccept;
     }
     else
     {

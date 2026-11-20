@@ -30,9 +30,9 @@ bool QuestAction::Execute(Event& event)
         }
     }
 
-    if (!guid.IsEmpty())
+    if (!guid.IsEmpty() && ProcessQuests(guid))
     {
-        return ProcessQuests(guid);
+        return true;
     }
 
     bool result = false;

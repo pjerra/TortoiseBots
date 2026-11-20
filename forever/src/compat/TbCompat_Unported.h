@@ -16,7 +16,11 @@
 // Included from forever-compat-shim.h at the end of the R4 block, so every type of the pre-included set is visible here.
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -281,6 +285,28 @@ inline void GuidPositionWriteCompat(ByteBuffer& /*buffer*/, GuidPos& /*guidPosit
 using BattleGroundQueueTypeId = BattlegroundQueueTypeId;
 // (The battleground type of a queue type id, and the chat link extractors of ChatHandler, are blocks: ServerFacade.h and
 // PlayerbotAI.h call them through UnportedBlockResultCompat with Feature::BattlegroundQueue / Feature::ChatLinks.)
+
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+{
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first != std::string::npos)
+    {
+        size_t last = str.find_last_not_of(" \t\r\n");
+        std::string trimmed = str.substr(first, last - first + 1);
+        if (!trimmed.empty() && trimmed.size() <= 9 &&
+            std::all_of(trimmed.begin(), trimmed.end(), [](unsigned char c) { return std::isdigit(c); }))
+        {
+            unsigned long const value = std::strtoul(trimmed.c_str(), nullptr, 10);
+            if (value > 0 && value <= std::numeric_limits<uint32>::max())
+                return static_cast<uint32>(value);
+        }
+    }
+    char* source = (char*)str.c_str();
+    char* cId = UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, static_cast<char*>(nullptr),
+        [&](auto* self) -> char* { return self->ExtractKeyFromLink(&source, "Hquest"); }, handler);
+    return cId ? static_cast<uint32>(std::strtoul(cId, nullptr, 10)) : 0u;
+}
 
 
 // ===============================================================================================================
