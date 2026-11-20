@@ -24,7 +24,7 @@ What was wrong: the script uploaded the core and the worktree into `src[-N]` BEF
 it was released). Two users of one slot therefore overwrote each other's source in the middle of a run, and a run that started while another one was deleting `census[-N]/` (the runner
 does `rm -rf census[-N]`) could print a "files 0" summary, or somebody else's.
 
-Now (pinned by `forever/tools/test_vm_census_order.py`, 8 tests, run with fake `ssh`/`rsync`/`docker` and the real `flock`):
+Now (pinned by `forever/tools/test_vm_census_order.py`, 10 tests, run with fake `ssh`/`rsync`/`docker` and the real `flock`):
 1. the script opens ONE ssh session on the VM that takes `census[-N].lock` and `build[-N].lock` (so no ForeverCore build starts on a source being replaced); it waits there while another run holds the slot;
 2. only then the core and the worktree are uploaded into `src[-N]`, and the script sends `GO` into the session;
 3. the SAME session runs the census (the `census.sh` that came with the uploaded tree; the old `~/forever-build/census.sh` is no longer used by this script and is left alone for other callers) and reads the summary;
@@ -160,7 +160,7 @@ Live tests on the VM: none were made in this pass (the Turtle gates are a compil
 |---|---|
 | Codex: a failed census is reported as a successful run | fix (`vm-census.sh`, `census.sh`, 2 tests) |
 | Gemini 1: DB queries against missing tables/columns abort ForeverCore | documentation fix; code rejected (a schema decision, recorded) |
-| Gemini 2: `auto` / `if (auto ...)` printf `PQuery` calls were missed | fix (rewriter + 10 tests, 20 sites and 4 `%s` sites) |
+| Gemini 2: `auto` / `if (auto ...)` printf `PQuery` calls were missed | fix (rewriter + 10 tests, 20 sites in 10 files) |
 | Gemini 3: zero-argument `DbPQueryW3` went through printf | fix (header + `tools/test_w3_zero_argument_query.cpp`) |
 | Gemini 4: `vm-census.sh` masks failures | fix (the Codex finding) |
 
@@ -178,12 +178,12 @@ fake docker exits 0 without a summary -> the run fails too.
 **Fix (documentation).** The claim was false and is corrected in this file (Family 3, the `PExecute` paragraph): `MySQLConnection.cpp:594-606` sleeps 10 s and `ABORT()`s on
 `ER_NO_SUCH_TABLE`, `ER_BAD_FIELD_ERROR` and `ER_PARSE_ERROR`, so a compile-clean file is not schema-safe.
 **Reject (code).** A table/column guard needs a per-table decision (create module SQL, skip the feature, or route to the unported list) — a port of its own, not a call-site rewrite; this pass
-never executes those queries and nothing in it added a new query. The risk is recorded above for the lead with the affected files in the review.
+adds no query and cannot decide the schema. The risk is recorded above for the lead with the affected files in the review.
 
 ### Gemini 2: `auto` / `if (auto ...)` printf `PQuery` calls were missed
 
 **Fix.** Confirmed: those shapes compile on ForeverCore (`PQuery` takes an fmt format string; extra arguments are accepted and dropped, which the census could not see). `rewrite_wide_pass3.py`
-now rewrites them through the same helpers (20 sites, 10 files) and `PQuery("%s", text)` to `DB.Query(text)` (4 sites); a scan outside the exclusion list finds 0 remaining.
+now rewrites them through the same helpers (20 sites in 10 files, 4 of them `PQuery("%s", text)` -> `DB.Query(text)`); a scan outside the exclusion list finds 0 remaining.
 **Test.** `forever/tools/test_rewrite_wide_pass3.py` (10 tests; 7 failed before the change) pins the five shapes, multi-line literals with nested parentheses, `%%`, a query without a conversion,
 and a commented-out call. `ItemUsageValue.cpp` (3 sites) and `Commander.cpp` keep theirs: both are excluded (slice-listed / the Commander port), so the claim is scoped to the list.
 
@@ -196,3 +196,20 @@ and a commented-out call. `ItemUsageValue.cpp` (3 sites) and `Commander.cpp` kee
 ### Gemini 4: `vm-census.sh` masks failures
 
 Same finding as Codex, fixed once (above): nonzero census status, required summary and tables, tests for both.
+
+### Gates (fix round)
+
+| gate | command | result |
+|---|---|---|
+| whole-tree census | `FOREVER_CENSUS_NAME=wide3-fix1 forever/tools/vm-census.sh "" 12` | `files 649  compile clean 364  with errors 285  error places 5533 (in 302 files)  includes of a header ForeverCore does not have 40` — the same as before the fix, through the changed script |
+| slice 4 census | `FOREVER_CENSUS_LIST=forever/SLICE4.txt forever/tools/vm-census.sh "" 12` | `files 174  compile clean 174  with errors 0  error places 0 (in 0 files)` (`wide3-fix-slice4`) |
+| ON `worldserver` build | `FOREVER_SLOT= FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON ~/forever-build/build.sh 12 worldserver` | `CMAKE_RC=0 MAKE_RC=0`, `TOTAL_SECONDS=149`; `TORTOISEBOTS_SLICE1:BOOL=ON`, `worldserver` linked |
+| OFF module build | `FOREVER_SLOT= ~/forever-build/build.sh 12 tortoisebots` | `CMAKE_RC=0 MAKE_RC=0`, `TOTAL_SECONDS=19` |
+| generator + registry | `python3 forever/tools/slice_gen_context.py --check` / `python3 forever/tools/slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=215` (unchanged: no strategy or key touched) |
+| census order tests | `python3 forever/tools/test_vm_census_order.py` | `Ran 10 tests ... OK` (two new failure tests) |
+| rewrite family tests | `python3 forever/tools/test_rewrite_wide_pass3.py` | `Ran 10 tests ... OK` (7 failed before the change) |
+| slice-4 wiring test | `python3 forever/tools/test_slice4_d4_wiring.py` | `Ran 10 tests ... OK` |
+| C++ zero-argument test | `tools/test_w3_zero_argument_query.cpp` (step 5 of `tools/verify_all.sh`, and `g++ -std=c++17 -Wall -Wextra`) | `test_w3_zero_argument_query: OK`; `480 standalone policy tests verified` in the VM suite |
+| wiring tests | `ls tools/test_*wiring*.py \| xargs -P 8` | all 187 pass |
+| Turtle build | `vm-build ~/wt-wide3 --wait` | `MAKE_RC=0`, 249 module files changed, `COMPILE_SECONDS=115  TOTAL_SECONDS=120` |
+| Turtle tests | `vm-test tb ~/wt-wide3` | `RESULT: PASS  kind=tb wt=wt-wide3 sha=988e9f7dd dirty=2 files=3798`, `rc=0  vm_duration=2183s` (2659 tests, 61 skipped; `ALL TORTOISEBOTS CHECKS PASSED CLEANLY`). The run before it failed one unit test: `test_raid_strategy_restore.py` compiles `PlayerbotDbStore.cpp`'s `Load` with its own harness, which now declares `CharacterPQueryCompat` with the Turtle body beside its `DbEscapeW3` double; that test passes locally and in this run. |
