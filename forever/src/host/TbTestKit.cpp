@@ -288,7 +288,7 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         : nullptr;
     Player* const sender = SenderPlayer(handler);
     bool const mayDestroy = replace::MayDestroyReplacedItem(IsHostBot(bot),
-        !handler->GetSession() || handler->GetSession()->GetSecurity() >= SEC_GAMEMASTER, sender && sender == bot);
+        !handler->GetSession() || handler->GetSession()->GetSecurity() >= SEC_GAMEMASTER, sender && (sender == bot));
     bot->SwapItem(fresh->GetPos(), swapDest);
     Item* worn = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
     if (worn && worn->GetEntry() == item)
