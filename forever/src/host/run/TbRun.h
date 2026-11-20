@@ -88,6 +88,16 @@ struct RunRec
     std::set<std::string> seenDead;
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
+
+    // ---- S9 (package C9): what the run keys and the step-end events read. Plain data from the last tick's facts: the facts the policy decided on. ----
+    std::string carrier;                         // the bot a loot / open / use_item step goes to (empty on any other step)
+    std::string itemKey;                         // the step's item and whether the carrier holds it ("5397:held" | "5397:missing"; empty: the step has no item)
+    std::string objKey;                          // the object the step waits on or opens: "<entry>:<ready|active|active_alt|none>" (empty on any other step)
+    size_t preStep = size_t(-1);                 // the step the next fields were read for (the tick that ends a step read them before it decided)
+    int preObjState = -1;                        // wait_object: Facts::objectState (-1 not found)
+    uint32 preClearNear = 0;                     // wait_clear: hostiles within the radius
+    bool preHasItem = false;                     // loot: the carrier, or a party bot, holds the step's item
+    std::string preHolder;                       // ... the first bot that does
 };
 
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
@@ -122,7 +132,7 @@ bool Ended(RunRec const& rec);                          // the run is done or st
 
 struct StartOutcome
 {
-    std::string code;           // empty = started; else not-bot not-leader group-raid player-in-group not-tank no-engine wrong-map already-running not-commanded bind-failed no-plan
+    std::string code;           // empty = started; else not-bot not-leader group-raid player-in-group not-tank no-engine wrong-map already-running not-commanded bind-failed no-plan bags loot-method
     std::string detail;
     RunRec* rec = nullptr;
 };

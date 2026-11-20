@@ -12,6 +12,7 @@
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFactsPure.h"
 #include "host/run/TbRunLiquid.h"
+#include "host/run/TbRunTasks.h"
 
 #include <chrono>
 #include <list>
@@ -22,8 +23,10 @@
 #include "Corpse.h"
 #include "CreatureData.h"
 #include "CreatureGroups.h"
+#include "DB2Stores.h"
 #include "GameTime.h"
 #include "Group.h"
+#include "Loot.h"
 #include "Map.h"
 #include "MapManager.h"
 #include "ObjectAccessor.h"
@@ -815,6 +818,30 @@ fx::BossSpawnObs ObserveSpawn(Ctx& c, uint32 spawnId, bool own)
 }
 
 // The core's StepWorld: the grid, path and sight calls behind TbRunFactsPure.h's ReadStepFacts. All counters go to the report.
+// S9 (F9): the instance's doors: where an area trigger into the plan's map puts a player (the trigger's destination), once per map (Commander.cpp:10800
+// InstanceDoors). A living lead bot on one of them far from every point of the plan revived in another part of the instance (DungeonRun::LeadInOtherPart).
+// ForeverCore keeps the trigger rows in ObjectMgr::GetAreaTrigger(id) (the destination is its `Loc`), the ids in the DB2 store.
+std::vector<DungeonRun::DoorFact> const& InstanceDoors(uint32 mapId)
+{
+    static std::map<uint32, std::vector<DungeonRun::DoorFact>> cache;
+    auto found = cache.find(mapId);
+    if (found != cache.end())
+        return found->second;
+    std::vector<DungeonRun::DoorFact>& doors = cache[mapId];
+    for (AreaTriggerEntry const* at : sAreaTriggerStore)
+    {
+        AreaTriggerTeleport const* tele = at ? sObjectMgr->GetAreaTrigger(at->ID) : nullptr;
+        if (!tele || tele->Loc.GetMapId() != mapId)
+            continue;
+        DungeonRun::DoorFact door;
+        door.x = tele->Loc.GetPositionX();
+        door.y = tele->Loc.GetPositionY();
+        door.z = tele->Loc.GetPositionZ();
+        doors.push_back(door);
+    }
+    return doors;
+}
+
 class CoreStepWorld : public fx::StepWorld
 {
 public:
@@ -964,6 +991,155 @@ public:
         }
     }
 
+    // ---- S9 (F9): objects, waits and task bags ----
+
+    // wait_object: the spawned game object of the step's entry nearest to the step's point, within tasks::kEntrySearchYd (the same search as the open order:
+    // never another object of the entry). `readable` says whether a "not found" proves it gone (Facts::objectReadable).
+    fx::ObjectObs ObjectAt(ai::PlanStep const& step) override
+    {
+        fx::ObjectObs o;
+        Player* const lead = _c.lead;
+        ai::DungeonPlan const* plan = _c.rec->run.plan;
+        float const toPoint = ai::PlanDistance(lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), step.x, step.y, step.z);
+        bool const reachable = RemoteCommander::EntryPointInReach(toPoint, sPlayerbotAIConfig.reactDistance);
+        o.readable = lead->IsAlive() && !lead->IsBeingTeleported() && plan && lead->GetMapId() == plan->map && reachable && _c.map &&
+            _c.map->IsGridLoaded(step.x, step.y);
+        if (!reachable)
+            return o;
+        std::list<GameObject*> found;
+        ++_c.R().gridScans;
+        lead->GetGameObjectListWithEntryInGrid(found, step.entry, toPoint + tasks::kEntrySearchYd + 1.0f);
+        GameObject* best = nullptr;
+        float bestYd = 0.0f;
+        for (GameObject* go : found)
+        {
+            if (!go || !go->isSpawned())
+                continue;
+            float const d = DistanceTo(go, step.x, step.y, step.z);
+            if (d > tasks::kEntrySearchYd)
+                continue;
+            if (!best || d < bestYd)
+            {
+                best = go;
+                bestYd = d;
+            }
+        }
+        if (best)
+        {
+            o.found = true;
+            o.coreState = uint32(best->GetGoState());
+        }
+        return o;
+    }
+
+    // wait_clear: the living hostile creatures within `range` of the lead (HostileCreaturesAround), engaged = in a fight with a party bot or its pet.
+    void ClearHostiles(float range, std::vector<fx::ClearObs>& out) override
+    {
+        Player* const lead = _c.lead;
+        std::list<Unit*> around;
+        Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(lead, lead, range);
+        Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(lead, around, check);
+        ++_c.R().gridScans;
+        Cell::VisitAllObjects(lead, searcher, range);
+        for (Unit* unit : around)
+        {
+            if (!unit->IsCreature() || !unit->IsAlive() || !unit->GetOwnerGUID().IsEmpty() || !lead->IsHostileTo(unit))
+                continue;
+            if (out.size() >= 4 * fx::kMaxListed)
+            {
+                ++_c.R().listsCut;
+                break;
+            }
+            fx::ClearObs o;
+            o.x = unit->GetPositionX();
+            o.y = unit->GetPositionY();
+            o.z = unit->GetPositionZ();
+            if (unit->IsInCombat())
+            {
+                if (Unit* victim = unit->GetVictim())
+                    o.engaged = _c.partyGuids.count(victim->GetGUID()) != 0;
+                if (!o.engaged)
+                    for (Unit* attacker : unit->getAttackers())
+                        if (attacker && _c.partyGuids.count(attacker->GetGUID()))
+                        {
+                            o.engaged = true;
+                            break;
+                        }
+            }
+            out.push_back(o);
+        }
+    }
+
+    // loot / open / use_item: every party bot's bags (the step's inputs it holds, and why it cannot take a task), the task module's carrier, busy bots and
+    // answer, and for a loot step after a refusal the remembered corpse. False: the lead's group is gone (nothing to read).
+    bool TaskBags(ai::PlanStep const& step, fx::TaskView& out) override
+    {
+        Player* const lead = _c.lead;
+        Group* group = lead->GetGroup();
+        if (!group)
+            return false;
+        out.inputs.push_back(step.kind == ai::PlanStepKind::Open || step.kind == ai::PlanStepKind::UseOn ? step.item : step.entry);
+        if (step.param)
+            out.inputs.push_back(step.param);
+        std::vector<ObjectGuid> members{ lead->GetGUID() };
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            if (slot.guid != lead->GetGUID() && members.size() < fx::kMaxMembers)
+                members.push_back(slot.guid);
+        for (ObjectGuid guid : members)
+        {
+            Player* bot = guid == lead->GetGUID() ? lead : ObjectAccessor::FindPlayer(guid);
+            fx::BagObs b;
+            b.fact.name = bot ? std::string(bot->GetName()) : std::string();
+            b.fact.guid = GuidKeyCompat(guid);
+            if (!bot)
+                continue;                   // a member not in the world carries nothing the run can use; it is not listed
+            if (!bot->IsAlive())
+                b.fact.away = "dead";
+            else if (!bot->IsInWorld() || bot->FindMap() != _c.map)
+                b.fact.away = "not in the instance";
+            for (uint32 item : out.inputs)
+                if (item && bot->HasItemCount(item))
+                    b.fact.held.push_back(item);
+            b.hasStepItem = step.item && bot->HasItemCount(step.item);
+            b.hasEntryItem = step.kind == ai::PlanStepKind::UseItem && bot->HasItemCount(step.entry);
+            if (tasks::Busy(_c.rec->leader, guid))
+                out.busyKeys.push_back(b.fact.guid);
+            out.bags.push_back(b);
+        }
+        tasks::TaskState const state = tasks::StateOf(_c.rec->leader);
+        out.taskCarrierKey = state.carrier.IsEmpty() ? 0 : GuidKeyCompat(state.carrier);
+        out.reply = state.reply;
+        out.replyText = state.text;
+        // The remembered corpse of a loot step, read only after a refusal (Commander.cpp:12815-12834): whose round-robin turn it is, and whether the item
+        // is still on it.
+        DungeonRun::Run const& run = _c.rec->run;
+        if (step.kind == ai::PlanStepKind::Loot && step.item && !run.lootRefusal.empty())
+        {
+            auto const corpse = run.corpses.find(step.entry);
+            ObjectGuid guid;
+            if (corpse != run.corpses.end() && corpse->second.guid && ResolveHandle(_c.rec->leader, corpse->second.guid, guid) && _c.map)
+                if (Creature* body = _c.map->GetCreature(guid))
+                    if (Loot* loot = body->GetLootForPlayer(lead))
+                    {
+                        out.corpse.checked = true;
+                        for (fx::BagObs const& b : out.bags)
+                            for (ObjectGuid member : members)
+                                if (GuidKeyCompat(member) == b.fact.guid && member == loot->roundRobinPlayer)
+                                    out.corpse.turn = b.fact.name;
+                        for (LootItem const& item : loot->items)
+                            out.corpse.hasItem = out.corpse.hasItem || (item.itemid == step.item && !item.is_looted);
+                    }
+        }
+        return true;
+    }
+
+    // A task whose bot is gone: the run's order is retired by the policy's own rule, and the task module drops its task and answer.
+    void RetireTask() override
+    {
+        DungeonRun::RetireOrder(_c.rec->run);
+        tasks::Cancel(_c.rec->leader);
+    }
+
     void NotKnown(char const* field) override { NotKnownField(_c, field); }
 
 private:
@@ -982,6 +1158,7 @@ void ReadStep(Ctx& c, Facts& f)
     lead.z = c.lead->GetPositionZ();
     lead.alive = c.lead->IsAlive();
     lead.mapId = c.lead->GetMapId();
+    lead.name = c.lead->GetName();
     CoreStepWorld world(c, f);
     fx::ReadStepFacts(f, run, lead, c.state->moveProbe, world);
 }
@@ -1036,6 +1213,15 @@ bool ReadFacts(RunRec& rec, uint32 nowMs, DungeonRun::Facts& f, FactsReport* rep
         ReadGuard(c, f);
     }
     fx::ReadLeadFacts(f, c.lo);
+    // S9 (F9): the group's loot method (the five 1.12 methods keep their numbers; the core's personal loot reads as -1) and whether the lead leads the group
+    // (Commander.cpp:11756), and the instance's doors (a lead revived in another part of the instance, Commander.cpp:11766).
+    if (Group* leadGroup = c.lead->GetGroup())
+    {
+        f.lootMethod = tasks::PolicyLootMethod(uint32(leadGroup->GetLootMethod()));
+        f.leadLeadsGroup = leadGroup->IsLeader(c.lead->GetGUID());
+    }
+    if (f.leadAlive)
+        f.doors = InstanceDoors(rec.run.plan->map);
     ReadStep(c, f);
     NotKnownField(c, "leadShotYd");
     NotKnownField(c, "members.actedMs(exact)");
