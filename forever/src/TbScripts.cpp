@@ -11,6 +11,7 @@
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#include "host/TbHostGuildOrders.h"
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #endif
@@ -169,6 +170,7 @@ public:
                 LoadEngineConfig();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
+                tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
             }
         }
 #endif
