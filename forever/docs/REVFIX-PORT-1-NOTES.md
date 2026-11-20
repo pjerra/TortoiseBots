@@ -97,3 +97,15 @@ Suggested patch (not applied):
 +        if (Map* map = bot->FindMap(); map && map->IsDungeon())
 ```
 (`LocName` escapes already, so the `Escape(...)` around the map name goes. `acc.spells` keys were raw names before; they pass through `Escape` later or not: check where they are printed.)
+
+## Gates (build slot 1; source of 45af74ed6, test-only 1deb3e92a after the builds)
+| Gate | Result |
+|---|---|
+| census SLICE5 / SLICE4 / SLICE3 / SLICE2 / SLICE1 (`FOREVER_SLOT=1`, `FOREVER_CENSUS_LIST=...`) | `files 176 / 174 / 170 / 160 / 133  compile clean = files  with errors 0  error places 0  includes of a header ForeverCore does not have 0` |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, slot 1) | `CMAKE_RC=0 MAKE_RC=0`; `run::Issue`, `run::StartCheck`, `run::ReadFacts`, `run::Update` strong in the binary, `fail:wrong-map` present, 0 `undefined` |
+| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0`; `libtortoisebots.a` 18 objects, `TbRunStands.cpp.o` / `TbRunOrders.cpp.o` empty objects, no `wrong-map` string |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | up to date; `(a)=0  (b)=215` |
+| run tests (VM, g++ -std=c++17 -O1 -Wall -Wextra) | `test_run_orders` 159 checks PASS, `test_run_c6` 28 PASS, `test_run_cancel` PASS, `test_run_liquid` PASS, `test_run_facts` PASS (`facts_rfc_rows.py ragefire_chasm` + `RUN-S6-F-FIELDS.tsv`) |
+| S5 policy tests (VM) | `test_dungeon_run_policy` ok, `test_system_run_policy` 109 checks, `test_forever_plan_match` 38 checks, `test_dungeon_plan_reload_policy` all passed, `test_rez_hold_policy` ok |
+| wiring pins (VM) | `test_run_revfix1_wiring.py` 8 OK, `test_run_review_wiring.py` 9 OK, `test_reload_plans_wiring`, `test_plan_step_label_wiring`, `test_aura_tactics_wiring`, `test_run_leader_wiring`, `test_forever_no_direct_queries`, `test_dungeon_plan_sql` OK |
+| Turtle `vm-build` / `vm-test tb` | not needed: every changed file is under `forever/` (`git diff --stat tbf/main..HEAD`) |
