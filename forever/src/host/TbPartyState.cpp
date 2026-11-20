@@ -9,6 +9,7 @@
 #include "host/TbHostProfession.h"
 #include "host/TbHostTransport.h"
 #include "host/TbHostAuction.h"
+#include "host/TbHostGuildOrders.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -399,6 +400,8 @@ Rec StateRec(Player* bot, Readiness& ready)
     uint32 ahPosted = 0, ahSold = 0;
     tbhost::ah::GetBotStateCounts(bot, ahPosted, ahSold);
     rec.S("ah", std::to_string(ahPosted) + "/" + std::to_string(ahSold));
+    if (auto gorder = tbhost::guild_orders::FindOrder(guid.GetCounter()))
+        rec.P("order", {std::to_string(gorder->itemId), std::to_string(gorder->delivered) + "/" + std::to_string(gorder->amount)});
     return rec;
 }
 
