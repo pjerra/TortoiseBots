@@ -140,16 +140,19 @@ The merge also carries the two findings of round A2's review (`codex-w4a2.txt`),
   points`), on Turtle the release is a no-op because that index is a shared value other code reads. One index remains per
   process: `pointsMap`, the one the destinations point into (67,420 points live).
 
-  Memory, before and after, both boots on run2 against the same databases, read at the ready line (worldserver RSS, `/proc`):
+  Memory, before and after, boots on run2 against the same databases, read at the ready line (worldserver RSS, `/proc`):
 
   | Build | Purpose entries | Boot index | RSS at ready |
   |---|---|---|---|
   | `tbf/world/w4a2` as reviewed (72,303,248 bytes) | 224,997 | kept for the process | 4,543,836 KiB |
-  | this tree (72,588,184 bytes) | 7,792 | released after the build | 4,533,464 KiB |
+  | this tree (72,588,184 bytes), quiet boot | 7,792 | released after the build | 4,533,464 KiB |
+  | this tree, boot under build load | 7,792 | released after the build | 4,547,572 KiB |
 
-  The 10 MiB difference is what the purpose map's 217,205 unused rows and the released index copy weigh at that point (both
-  boots ran the same core and databases; the number includes the world's own load, so it is a same-setup comparison, not an
-  isolated heap measurement).
+  The data volumes are exact: 217,205 purpose rows gone, and a boot index of 123,558 points freed after the build in place of
+  the 67,420 the destinations keep. The RSS at the ready line does **not** show that difference: the two fixed runs alone span
+  14 MiB with load (they are above and below the A2 reading), so the freed copy is not visible in process RSS at that point -
+  the allocator keeps the pages. A heap-accounting probe (`mallinfo2`) was tried first and reads 0 under this core's allocator
+  setup, so it was dropped rather than quoted.
 
 ## 9. Gates
 
@@ -165,7 +168,7 @@ The merge also carries the two findings of round A2's review (`codex-w4a2.txt`),
 | `tools/verify_all.sh` (laptop) | OK through step 6 (OKF, command table, surface, wiring, unit tests, 483 standalone tests, decision trail); step 7 fails with `TortoiseBots host-contract check failed: required core file is missing: src/game/SessionTransport.h`, the same failure `tbf/main` (10efad5bb) gives against the same `../tortoise-wow` checkout - no new failure |
 | Turtle `vm-build` | `COMPILE_SECONDS=1318 CMAKE_RC=0 MAKE_RC=0`, mangosd and realmd written (statics `449c92c6e487...`/`bbb4388460...`, sha256 of each) on the merged tree. Re-run on the final committed tree after the notes commit |
 | Turtle `vm-test tb` | see the final report; the same suite `verify_all` runs locally |
-| Runtime check (section 7) | `RESULT: PASS` on the slot-7 binary: scenarios a, b, c and final, 33 checks; the reviewed tree (`07a57c8b2`) fails scenario a with `HARNESS_RC=1` |
+| Runtime check (section 7) | `RESULT: PASS` in one run on the slot-7 binary: scenarios a, b, c and final, 33 checks, rev `91f94b5cb`'s harness; the reviewed tree (`07a57c8b2`) fails scenario a with `HARNESS_RC=1` (5 checks) |
 
 ## 10. Live (forever-run2, our binary in place, console only)
 
@@ -177,7 +180,7 @@ boot-checked afterwards), the server lock held for the whole run, four boots thr
 | `a` no tables | ready, 0 assertions; guard refused the node query; one absent-graph line; no node read; no `Calculating mapoffset`; destinations still built |
 | `b` empty tables | ready, 0 assertions; one `travel-node dataset is empty` line; no guard refusal; no generation |
 | `c` 3 nodes + a link to a missing node id + its 5 path points | ready, 0 assertions; `>> Loaded 3 travelNodes.`, `>> Loaded 2 travelNode paths.`, `>> Loaded 5 travelNode paths points.`, `-Calculating mapoffset`; the unknown target skipped |
-| `final` no tables | ready, 0 assertions; one absent-graph line; `tb status` -> `TortoiseBots: enabled, 0 bot session(s)`; worldserver RSS at ready 4,533,464 KiB (~4.3 GiB, the core's own world load included; the A2 build measured 4,543,836 KiB in the same state, section 8) |
+| `final` no tables | ready, 0 assertions; one absent-graph line; `tb status` -> `TortoiseBots: enabled, 0 bot session(s)`; worldserver RSS at ready 4,533,464-4,547,572 KiB across runs (~4.3 GiB, the core's own world load included; the A2 build measured 4,543,836 KiB, section 8) |
 
 The fixed boot's destination figures (unloaded server, bot logging off):
 
