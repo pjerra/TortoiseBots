@@ -58,8 +58,27 @@ inline InventoryResult CanUseItemForEquipCompat(Player const* bot, ItemPrototype
     return EQUIP_ERR_OK;
 }
 
-// D4: auto-equip is ON for free bots only; a bot bound in a commanded/run party never auto-equips.
+namespace tbs_w6
+{
+inline bool& ExplicitEquipOrderFlag()
+{
+    static bool active = false;
+    return active;
+}
+
+struct ScopedExplicitEquipOrder
+{
+    bool prev;
+    ScopedExplicitEquipOrder() : prev(ExplicitEquipOrderFlag()) { ExplicitEquipOrderFlag() = true; }
+    ~ScopedExplicitEquipOrder() { ExplicitEquipOrderFlag() = prev; }
+    ScopedExplicitEquipOrder(ScopedExplicitEquipOrder const&) = delete;
+    ScopedExplicitEquipOrder& operator=(ScopedExplicitEquipOrder const&) = delete;
+};
+}
+
+// D4: auto-equip is ON for free bots only; a bot bound in a commanded/run party never auto-equips
+// unless an explicit order is running.
 inline bool MayAutoEquipUpgradesCompat(Player* bot)
 {
-    return bot && !TortoiseBots::BotCommands::IsInCommandedGroup(bot);
+    return bot && (tbs_w6::ExplicitEquipOrderFlag() || !TortoiseBots::BotCommands::IsInCommandedGroup(bot));
 }
