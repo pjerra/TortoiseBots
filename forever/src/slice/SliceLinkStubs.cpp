@@ -408,7 +408,12 @@ double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
 double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
 void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
 std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
-InventoryResult RandomBotFacade::CanEquipUnseenItem(Player*, uint8, uint16&, uint32) { NotePool(); return EQUIP_ERR_CANT_DO_THAT_RIGHT_NOW; }
+// The core checks an item it has not created through a temporary Item (Player::CanEquipNewItem); swap=true as on Turtle:
+// the caller compares old and new itself, and an occupied slot must not reject every upgrade.
+InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, uint16& dest, uint32 item)
+{
+    return player ? player->CanEquipNewItem(slot, dest, item, true) : EQUIP_ERR_ITEM_NOT_FOUND;
+}
 // MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
 uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
 uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
