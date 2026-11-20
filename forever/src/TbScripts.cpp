@@ -17,6 +17,7 @@
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
+#include "host/TbHostProfession.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -300,6 +301,9 @@ public:
         if (BotMgr::Instance().IsBot(player->GetGUID()))
         {
             TC_LOG_INFO("tortoisebots", "bot {} entered the world on map {}", player->GetName(), player->GetMapId());
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            tbhost::prof::ClearBotErrands(player->GetGUID());
+#endif
             // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1527). Only the preference:
             // nothing is added to the bags and the ammo slot is untouched.
             player->SetPreferDrawableAmmo(true);

@@ -158,7 +158,7 @@ void LogSkillUpIfChanged(Player const* bot, uint32_t skillId, uint16_t beforeVal
     }
 }
 
-TortoiseBots::prof::GatherNodeFacts BuildGoNodeFacts(Player const* bot, GameObject const* go, float maxDistYd)
+TortoiseBots::prof::GatherNodeFacts BuildGoNodeFacts(Player const* bot, GameObject const* go, float maxDistYd, bool checkDanger = false)
 {
     TortoiseBots::prof::GatherNodeFacts f;
     if (!bot || !go || !go->GetGOInfo())
@@ -170,7 +170,7 @@ TortoiseBots::prof::GatherNodeFacts BuildGoNodeFacts(Player const* bot, GameObje
     f.distanceYd = bot->GetDistance(go);
     f.maxDistanceYd = maxDistYd;
     f.freeBagSlots = bot->GetFreeInventorySlotCount();
-    f.dangerNearby = HasDangerNearby(bot);
+    f.dangerNearby = checkDanger ? HasDangerNearby(bot) : false;
 
     LockEntry const* lock = sLockStore.LookupEntry(go->GetGOInfo()->GetLockId());
     if (lock)
@@ -469,7 +469,7 @@ GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots
     {
         if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
             continue;
-        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
+        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
         if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)
             continue;
         TortoiseBots::prof::GatherDecision const dec = TortoiseBots::prof::EvaluateGatherNode(facts);
@@ -488,6 +488,12 @@ GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots
             nearestAnyDist = d;
             outSkipCode = dec.code;
         }
+    }
+    if (bestGo && HasDangerNearby(bot))
+    {
+        outFacts.dangerNearby = true;
+        outSkipCode = "danger";
+        return nullptr;
     }
     return bestGo;
 }
@@ -633,8 +639,13 @@ bool OpenNode(Player* bot, ObjectGuid const& guid, float maxDistYd, std::string&
         return false;
     }
 
-    TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
-    TortoiseBots::prof::GatherDecision const decision = TortoiseBots::prof::EvaluateGatherNode(facts);
+    TortoiseBots::prof::GatherNodeFacts facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
+    TortoiseBots::prof::GatherDecision decision = TortoiseBots::prof::EvaluateGatherNode(facts);
+    if (decision.allow && HasDangerNearby(bot))
+    {
+        facts.dangerNearby = true;
+        decision = TortoiseBots::prof::EvaluateGatherNode(facts);
+    }
     if (!decision.allow)
     {
         code = decision.code;
@@ -1041,6 +1052,31 @@ std::string ActiveErrandPhase(Player const* bot)
     return {};
 }
 
+namespace
+{
+TortoiseBots::prof::FreeGatherCooldownTracker& FreeGatherTimers()
+{
+    static TortoiseBots::prof::FreeGatherCooldownTracker tracker;
+    return tracker;
+}
+} // namespace
+
+bool AdvanceFreeGatherTimer(uint64_t botGuidCounter, uint32_t diffMs)
+{
+    return FreeGatherTimers().Advance(botGuidCounter, diffMs, 5000);
+}
+
+void ClearFreeGatherTimer(uint64_t botGuidCounter)
+{
+    FreeGatherTimers().Clear(botGuidCounter);
+}
+
+void ClearBotErrands(ObjectGuid const& botGuid)
+{
+    Errands().erase(botGuid);
+    FreeGatherTimers().Clear(botGuid.GetCounter());
+}
+
 void TickFreeGather(Player* bot)
 {
     if (!bot || !bot->IsAlive() || bot->IsInCombat() || bot->isMoving() || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
@@ -1125,11 +1161,11 @@ bool HasGatherableNodeInSight(Player* bot, float maxDistYd)
     {
         if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
             continue;
-        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
+        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
         if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)
             continue;
         if (TortoiseBots::prof::EvaluateGatherNode(facts).allow)
-            return true;
+            return !HasDangerNearby(bot);
     }
     return false;
 }

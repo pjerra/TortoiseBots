@@ -565,6 +565,9 @@ void BotMgr::OnPlayerLogout(Player* player)
     auto itr = _bots.find(leaving);
     if (itr == _bots.end())
         return;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::prof::ClearBotErrands(leaving);
+#endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
     // would count against the party's five seats at the next login and re-form a party nobody asked for.
@@ -1312,13 +1315,8 @@ void BotMgr::Update(uint32 diff)
             tbhost::guild_orders::TickBotOrder(me);
         if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
         {
-            static uint32 freeGatherMs = 0;
-            freeGatherMs += diff;
-            if (freeGatherMs >= 5000)
-            {
-                freeGatherMs = 0;
+            if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
                 tbhost::prof::TickFreeGather(me);
-            }
         }
 #endif
     }
@@ -1327,6 +1325,9 @@ void BotMgr::Update(uint32 diff)
     {
         TC_LOG_INFO("tortoisebots", "BotMgr: session of {} ended", guid.ToString());
         // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::ClearBotErrands(guid);
+#endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);
         _bots.erase(guid);
