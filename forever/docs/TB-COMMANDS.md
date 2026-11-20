@@ -514,3 +514,15 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 ### `.tb state` keys for a hunter or a warlock (after `practice=`)
 `pet=<entry>:<alive|dead>:<hp pct>` (empty with no pet: the grammar has no `none` word and no 0 for "not there"; `dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold; empty with no ammo set), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.
+
+## 14. Commander port, package P6: `.tb cmd` task orders (objects, loot windows, gossip)
+
+Bound commanders issue task orders on the shared `TbRunTasks` engine (`forever/src/host/cmd/TbCmdTasks.cpp`):
+
+* **`.tb cmd loot <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<itemId>] [#token]`**: walks the bot (or the binding's lead) to the corpse or chest, opens its loot window via `LootOpenCompat` / `open loot`, and stores loot through `StoreLootAction`. Refuses `busy`, `in-combat`, `no-binding`, `invalid-target`, `too-far`, `no-item`, `locked`. The asynchronous result (`done: <items/copper>` or `failed: <code>: <msg>`) is read from `.tb cmd state`.
+* **`.tb cmd open <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: walks to the door, lever, goober or chest and opens it (`HandleGameObjectUseOpcode` or `open loot`). A door not at rest is never toggled closed (`done: already open ...`).
+* **`.tb cmd use <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: uses a game object via `HandleGameObjectUseOpcode` (or `open loot` for chests). `.tb cmd use <itemId>` is refused `unsupported` (`item use except food and drink`).
+* **`.tb cmd gossip <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<index | "text" | text>] [#token]`**: walks to a `UNIT_NPC_FLAG_GOSSIP` NPC, calls `HandleGossipHelloOpcode`, and either lists the menu options (when no option is given) or validates the option via `GossipOrder::MatchOption` (refusing service/coded/missing options) and calls `HandleGossipSelectOptionOpcode`.
+* **`.tb cmd lootmethod <ffa|group|rr> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; `master` and `nbg` are refused `unsupported`.
+* **`.tb cmd state [<bot>] [#token]`**: reports each bound bot's active or last task (`task bot= busy= status=none|running|done|failed [verb=] [entry=] [text=]`).
+* **`.tb cmd ritual|scout ...`**: refused `unsupported` (decision D5).
