@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "RepairAllAction.h"
+#include "playerbot/TbCompatW2Town.h"
 
 #include "playerbot/ServerFacade.h"
 
@@ -12,7 +13,7 @@ bool RepairAllAction::Execute(Event& event)
     std::list<ObjectGuid> npcs = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
     for (std::list<ObjectGuid>::iterator i = npcs.begin(); i != npcs.end(); i++)
     {
-        Creature *unit = bot->GetNPCIfCanInteractWith(*i, UNIT_NPC_FLAG_REPAIR);
+        Creature *unit = RepairIfCanInteractCompat(bot, *i);
         if (!unit)
             continue;
 
@@ -22,7 +23,7 @@ bool RepairAllAction::Execute(Event& event)
 #ifdef CMANGOS
         if (bot->HasUnitState(UNIT_STAT_FEIGN_DEATH))
 #endif
-            bot->RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
+            RemoveFeignDeathCompat(bot);
 
         sServerFacade.SetFacingTo(bot, unit);
         float discountMod = bot->GetReputationPriceDiscount(unit);
@@ -35,18 +36,7 @@ bool RepairAllAction::Execute(Event& event)
             bot->SetMoney(10000000);
         }
 
-        //Repair weapons first.
-        uint32 totalCost = bot->DurabilityRepair((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_MAINHAND, true, discountMod
-        );
-
-        totalCost += bot->DurabilityRepair((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_RANGED, true, discountMod
-        );
-
-        totalCost += bot->DurabilityRepair((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_OFFHAND, true, discountMod
-        );
-
-        totalCost += bot->DurabilityRepairAll(true, discountMod
-        );
+        uint32 totalCost = RepairAllCompat(bot, unit, discountMod);
 
         if (ai->HasCheat(BotCheatMask::gold))
         {

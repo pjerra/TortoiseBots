@@ -419,8 +419,6 @@ uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
 uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
 uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
 bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
-// BudgetValues.cpp: the repair price of an item. Absent = free (0), which only matters for the budget of a vendor trip.
-uint32 ai::RepairCostValue::RepairCost(Item const*, bool) { NoteMisc(); return 0; }
 // GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
 namespace TortoiseBots { namespace GuildOrders {
 void RefreshOrderProtectedSet(Player*) { NotePool(); }
@@ -509,3 +507,16 @@ bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteB
 // the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
 // PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
 bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }
+
+// =====================================================================================================================
+// W2 (town: sell, buy, repair, trainer, mail read): symbols referenced by the W2 action files whose owners (MaintenanceValues,
+// GuildOrders, TravelMgr) are not in the slice yet (waits for W1/W4).
+// =====================================================================================================================
+#include "playerbot/strategy/values/MaintenanceValues.h"
+#include "playerbot/TravelMgr.h"
+namespace ai
+{
+bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
+void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
+}
+void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteMisc(); }

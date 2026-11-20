@@ -273,3 +273,9 @@ ai/playerbot/strategy/warlock/WarlockStrategy.cpp
 ai/playerbot/strategy/warlock/WarlockTriggers.cpp
 ai/playerbot/strategy/actions/CombatActions.cpp
 ai/playerbot/strategy/values/ActiveSpellValue.cpp
+ai/playerbot/strategy/actions/SellAction.cpp
+ai/playerbot/strategy/actions/BuyAction.cpp
+ai/playerbot/strategy/actions/RepairAllAction.cpp
+ai/playerbot/strategy/actions/TrainerAction.cpp
+ai/playerbot/strategy/actions/MailAction.cpp
+ai/playerbot/strategy/values/BudgetValues.cpp

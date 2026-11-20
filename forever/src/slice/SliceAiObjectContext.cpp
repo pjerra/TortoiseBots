@@ -17,6 +17,7 @@
 #include "playerbot/strategy/actions/AddLootAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/BuyAction.h"
 #include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
@@ -28,12 +29,16 @@
 #include "playerbot/strategy/actions/GiveItemAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
+#include "playerbot/strategy/actions/MailAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
+#include "playerbot/strategy/actions/RepairAllAction.h"
+#include "playerbot/strategy/actions/SellAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
+#include "playerbot/strategy/actions/TrainerAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
@@ -258,7 +263,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (9 of its keys)
+    // the registry of ChatActionContext (14 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -273,6 +278,11 @@ namespace slice
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
             creators["equip upgrades"] = [](PlayerbotAI* ai) { return new EquipUpgradesAction(ai); };
+            creators["sell"] = [](PlayerbotAI* ai) { return new SellAction(ai); };
+            creators["buy"] = [](PlayerbotAI* ai) { return new BuyAction(ai); };
+            creators["repair"] = [](PlayerbotAI* ai) { return new RepairAllAction(ai); };
+            creators["trainer"] = [](PlayerbotAI* ai) { return new TrainerAction(ai); };
+            creators["mail"] = [](PlayerbotAI* ai) { return new MailAction(ai); };
         }
     };
 
@@ -426,7 +436,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (186 of its keys)
+    // the registry of ValueContext (193 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -618,11 +628,18 @@ namespace slice
             creators["seen need rolls"] = [](PlayerbotAI* ai) { return new SeenNeedRolls(ai); };
             creators["item usage"] = [](PlayerbotAI* ai) { return new ItemUsageValue(ai); };
             creators["skip go loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "skip go loot list"); };
+            creators["free money for"] = [](PlayerbotAI* ai) { return new FreeMoneyForValue(ai); };
+            creators["total money needed for"] = [](PlayerbotAI* ai) { return new TotalMoneyNeededForValue(ai); };
+            creators["money needed for"] = [](PlayerbotAI* ai) { return new MoneyNeededForValue(ai); };
+            creators["repair cost"] = [](PlayerbotAI* ai) { return new RepairCostValue(ai); };
+            creators["max repair cost"] = [](PlayerbotAI* ai) { return new MaxGearRepairCostValue(ai); };
+            creators["min repair cost"] = [](PlayerbotAI* ai) { return new MinRepairCostValue(ai); };
+            creators["has all money for"] = [](PlayerbotAI* ai) { return new HasAllMoneyForValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 21, kActions = 69, kTriggers = 108, kValues = 186;
+    constexpr unsigned kStrategies = 21, kActions = 74, kTriggers = 108, kValues = 193;
 }
 }
 
