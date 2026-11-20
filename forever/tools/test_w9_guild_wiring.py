@@ -47,6 +47,7 @@ class TestW9GuildWiring(unittest.TestCase):
             "HandleGuildBankDepositMoney",
             "HandleAutoGuildBankItem",
             "HandleSendMail",
+            "MailSendConfirmed",
         ):
             self.assertIn(sym, guild_cpp, f"missing {sym} in TbHostGuild.cpp")
         self.assertNotIn("MailDraft", guild_cpp)
@@ -77,6 +78,7 @@ class TestW9GuildWiring(unittest.TestCase):
         self.assertIn("HostGatherCraftProvider", orders_cpp)
         self.assertIn("HostAuctionBuyProvider", orders_cpp)
         self.assertIn("HostDeliveryProvider", orders_cpp)
+        self.assertIn("FindNearestMailbox", orders_cpp)
         self.assertIn("TickBotOrder", orders_cpp)
         self.assertIn('"work"', orders_cpp)
 

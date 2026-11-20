@@ -184,20 +184,34 @@ inline std::string MailBodyTextCompat(Mail const* mail)
     return mail && mail->itemTextId ? sObjectMgr.GetItemText(mail->itemTextId) : std::string();
 }
 
-inline void MailTakeMoneyCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail)
+inline ObjectGuid FindNearestMailboxCompat(Player* /*bot*/, bool* handled = nullptr)
 {
+    if (handled)
+        *handled = false;
+    return ObjectGuid();
+}
+
+inline bool MailTakeMoneyCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail)
+{
+    if (!bot || !bot->GetSession() || !mail)
+        return false;
+    uint32 const before = bot->GetMoney();
     WorldPacket packet;
     packet << mailbox;
     packet << mail->messageID;
     bot->GetSession()->HandleMailTakeMoney(packet);
+    return bot->GetMoney() > before;
 }
 
-inline void MailTakeItemCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail, uint32 /*itemGuid*/)
+inline bool MailTakeItemCompat(Player* bot, ObjectGuid const& mailbox, Mail const* mail, uint32 /*itemGuid*/)
 {
+    if (!bot || !bot->GetSession() || !mail)
+        return false;
     WorldPacket packet;
     packet << mailbox;
     packet << mail->messageID;
     bot->GetSession()->HandleMailTakeItem(packet);
+    return true;
 }
 
 inline void MailDeleteCompat(Player* bot, ObjectGuid const& mailbox, uint32 mailId)

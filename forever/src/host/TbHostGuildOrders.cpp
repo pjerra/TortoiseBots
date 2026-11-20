@@ -7,6 +7,7 @@
 #include "host/TbHostAuction.h"
 #include "host/TbHostGuild.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostTown.h"
 
 #include "Bag.h"
 #include "CellImpl.h"
@@ -384,7 +385,7 @@ public:
         Player* bot = FindOnlineBot(botGuidLow);
         if (!bot || !recipientGuidLow)
             return false;
-        return FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_MAILBOX, kW2MaxVisitDistYd) != nullptr;
+        return tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd) != nullptr;
     }
 
     bool Deliver(uint32_t botGuidLow, uint64_t guildId, uint32_t recipientGuidLow, uint32_t itemId, uint32_t /*count*/, std::string& outReason) override
@@ -421,7 +422,7 @@ public:
             }
         }
 
-        GameObject* mailbox = FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_MAILBOX, kW2MaxVisitDistYd);
+        GameObject* mailbox = tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd);
         if (!mailbox)
         {
             outReason = "cannot: travel";

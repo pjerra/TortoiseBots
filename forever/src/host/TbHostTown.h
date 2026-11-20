@@ -10,6 +10,7 @@
 #include <vector>
 
 class Creature;
+class GameObject;
 class Item;
 class Player;
 struct VendorItem;
@@ -77,7 +78,8 @@ std::vector<TrainerSpellView> GetTrainerSpells(Creature const* creature);
 bool CanTeachTrainerSpell(Player* bot, Creature* creature, TrainerSpellView const& spell, float discountMod, std::string* refusalReason = nullptr);
 bool TeachTrainerSpell(Player* bot, Creature* creature, uint32_t spellId, std::string* refusalReason = nullptr);
 
-// Mail (read-only).
+// Mail (read-only & interactable mailbox lookup).
+GameObject* FindNearestMailbox(Player* bot, float maxDistYd = 0.0f);
 std::vector<MailView> GetMails(Player* bot);
 Item* GetMailItem(Player* bot, uint64_t itemGuid);
 uint32_t GetUnreadMailCount(Player* bot);

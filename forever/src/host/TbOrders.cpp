@@ -8,6 +8,7 @@
 #include "host/TbH3.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTaxi.h"
+#include "host/TbHostTown.h"
 #include "host/TbHostTransport.h"
 #include "host/TbIgnore.h"   // I13: explicit orders take a listed mob off the commander's ignore list
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
@@ -425,7 +426,14 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     if (o.verb == "train")
         return act("trainer", Event("tb order", o.arg.empty() ? std::string("learn") : o.arg, owner)) ? "ok" : "fail:train";
     if (o.verb == "mail")
-        return act("mail", Event("tb order", o.arg.empty() ? std::string("take") : o.arg, owner)) ? "ok" : "fail:mail";
+    {
+        if (!tbhost::town::FindNearestMailbox(bot))
+            return "fail:no-mailbox";
+        std::string const arg = o.arg.empty() ? std::string("take") : o.arg;
+        if (act("mail", Event("tb order", arg, owner)))
+            return "ok";
+        return arg.rfind("take", 0) == 0 ? "fail:mail-none-taken" : "fail:mail";
+    }
     if (o.verb == "learn-prof")
     {
         uint32 const skillId = TortoiseBots::prof::SkillIdFromName(o.arg);
@@ -1253,7 +1261,14 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         else if (verb == "train")
             needAction[0] = "trainer";
         else if (verb == "mail")
+        {
             needAction[0] = "mail";
+            if (!tbhost::town::FindNearestMailbox(bot))
+            {
+                refuse("no-mailbox", "no interactable mailbox within reach");
+                continue;
+            }
+        }
         else if (verb == "ah")
         {
             std::string const sub = Lower(order.arg);

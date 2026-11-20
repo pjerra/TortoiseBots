@@ -165,6 +165,7 @@ public:
     bool Before(Player* requester, PlayerbotAI* ai) override
     {
         copper = 0;
+        confirmedTakes = 0;
         items.clear();
         return true;
     }
@@ -182,22 +183,25 @@ public:
         }
 
         ObjectGuid mailbox = FindMailbox(ai);
-        bool moneyTaken = false;
+        if (mailbox.IsEmpty())
+            return false;
+
         if (mail->money)
         {
-            std::ostringstream out;
-            if (event.getSource() == "rpg action")
+            if (MailTakeMoneyCompat(bot, mailbox, mail))
             {
-                copper += mail->money;
+                ++confirmedTakes;
+                if (event.getSource() == "rpg action")
+                {
+                    copper += mail->money;
+                }
+                else
+                {
+                    std::ostringstream out;
+                    out << mail->subject << ", |cffffff00" << ChatHelper::formatMoney(mail->money) << "|cff00ff00 processed";
+                    ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                }
             }
-            else
-            {
-                out << mail->subject << ", |cffffff00" << ChatHelper::formatMoney(mail->money) << "|cff00ff00 processed";
-                ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-            }
-
-            MailTakeMoneyCompat(bot, mailbox, mail);
-            moneyTaken = true;
         }
 
         if (MailHasItemsCompat(mail))
@@ -213,22 +217,26 @@ public:
             for (std::list<uint32>::iterator i = guids.begin(); i != guids.end(); ++i)
             {
                 Item* item = MailItemCompat(GetMailOwner(bot), *i);
+                std::string const itemFormatted = item ? ChatHelper::formatItem(item) : std::string();
+                std::string const itemFormattedCount = item ? ChatHelper::formatItem(item, item->GetCount()) : std::string();
 
-                if (item)
+                if (MailTakeItemCompat(bot, mailbox, mail, *i))
                 {
-                    if (event.getSource() == "rpg action")
+                    ++confirmedTakes;
+                    if (!itemFormatted.empty())
                     {
-                        items.push_back(ChatHelper::formatItem(item, item->GetCount()));
-                    }
-                    else
-                    {
-                        std::ostringstream out;
-                        out << mail->subject << ", " << ChatHelper::formatItem(item) << "|cff00ff00 processed";
-                        ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                        if (event.getSource() == "rpg action")
+                        {
+                            items.push_back(itemFormattedCount);
+                        }
+                        else
+                        {
+                            std::ostringstream out;
+                            out << mail->subject << ", " << itemFormatted << "|cff00ff00 processed";
+                            ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                        }
                     }
                 }
-
-                MailTakeItemCompat(bot, mailbox, mail, *i);
             }
         }
 
@@ -273,7 +281,7 @@ public:
             ai->TellPlayer(requester, BOT_TEXT2("|cffffff00%money |cff00ff00recieved from mail.", args), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
 
-        return true;
+        return confirmedTakes > 0;
     }
 
     static TakeMailProcessor instance;
@@ -304,6 +312,7 @@ private:
 
 private:
     uint32 copper = 0;
+    uint32 confirmedTakes = 0;
     std::vector<std::string> items;
 };
 
@@ -346,14 +355,19 @@ uint32_t ai::TakeOrderMail(PlayerbotAI* ai, uint32_t itemId)
         Item* item = MailItemCompat(owner, wantedGuid);
         if (!item)
             continue;
-        uint32_t count = item->GetCount();
         ItemPosCountVec dest;
         if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, item, false) != EQUIP_ERR_OK)
             break;
-        MailTakeItemCompat(bot, mailbox, mail, wantedGuid);
-        taken += count;
+        uint32_t const beforeInv = ai->GetInventoryItemsCountWithId(itemId);
+        if (!MailTakeItemCompat(bot, mailbox, mail, wantedGuid))
+            break;
+        uint32_t const afterInv = ai->GetInventoryItemsCountWithId(itemId);
+        if (afterInv <= beforeInv)
+            break;
+        uint32_t const gained = afterInv - beforeInv;
+        taken += gained;
         if (senderLow)
-            TortoiseBots::GuildOrders::NoteTakenMailSender(senderLow, itemId, count);
+            TortoiseBots::GuildOrders::NoteTakenMailSender(senderLow, itemId, gained);
         Mail* current = MailByIdCompat(owner, mail->messageID);
         if (current && current->money == 0 && current->items.empty() && !ai->HasActivePlayerMaster())
         {
@@ -374,7 +388,8 @@ bool TakeRelistValue(PlayerbotAI* ai, Player* bot, ObjectGuid mailbox, Mail* mai
     if (kind == TortoiseBots::GuildOrders::RelistMailKind::Sold)
     {
         uint32_t before = bot->GetMoney();
-        MailTakeMoneyCompat(bot, mailbox, mail);
+        if (!MailTakeMoneyCompat(bot, mailbox, mail))
+            return false;
         uint32_t after = bot->GetMoney();
         if (after <= before)
             return false;
@@ -395,7 +410,8 @@ bool TakeRelistValue(PlayerbotAI* ai, Player* bot, ObjectGuid mailbox, Mail* mai
     if (!itemGuid)
         return false;
     uint32_t before = ai->GetInventoryItemsCountWithId(itemId);
-    MailTakeItemCompat(bot, mailbox, mail, itemGuid);
+    if (!MailTakeItemCompat(bot, mailbox, mail, itemGuid))
+        return false;
     uint32_t after = ai->GetInventoryItemsCountWithId(itemId);
     if (after <= before)
         return false;
@@ -650,6 +666,14 @@ void MailProcessor::RemoveMail(Player* bot, uint32 id, ObjectGuid mailbox)
 
 ObjectGuid MailProcessor::FindMailbox(PlayerbotAI* ai)
 {
+    if (!ai || !ai->GetBot())
+        return ObjectGuid();
+
+    bool handled = false;
+    ObjectGuid const compatMailbox = FindNearestMailboxCompat(ai->GetBot(), &handled);
+    if (handled)
+        return compatMailbox;
+
     std::list<ObjectGuid> gos = *ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest game objects no los");
     ObjectGuid mailbox;
     for (std::list<ObjectGuid>::iterator i = gos.begin(); i != gos.end(); ++i)
