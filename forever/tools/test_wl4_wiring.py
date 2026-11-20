@@ -76,6 +76,14 @@ class LinkTypes(unittest.TestCase):
         route = func(TRAVEL, "TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal")
         self.assertIn("link.second->getCost(costContext, currentNode->currentGold)", route)
 
+    def test_the_a_star_adds_no_portal_edge_on_f(self):
+        route = func(TRAVEL, "TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal")
+        self.assertIn("TravelTeleportLinksCompat() && AI_VALUE2(bool, \"action useful\", \"hearthstone\")", route)
+        self.assertLess(route.index("TravelTeleportLinksCompat()"),
+            route.index("if (TravelTeleportLinksCompat())", route.index("TravelTeleportLinksCompat()") + 1))
+        self.assertIn("return false;", func(COMPAT_F, "inline bool TravelTeleportLinksCompat()"))
+        self.assertIn("return true;", func(COMPAT_T, "inline bool TravelTeleportLinksCompat()"))
+
 
 class Generator(unittest.TestCase):
     def test_every_async_pass_sits_behind_the_pair(self):

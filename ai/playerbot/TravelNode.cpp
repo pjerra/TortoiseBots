@@ -1100,11 +1100,7 @@ bool TravelPath::UpcommingSpecialMovement(WorldPosition startPos, float maxDist,
         if (startP->entry) //For area triggers we need to be close enough to trigger it's activation.
         {
             AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(startP->entry);
-            if (!atEntry)
-                return false;
-
-            AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(startP->entry);
-            if (!at)
+            if (!atEntry || !AreaTriggerKnownCompat(startP->entry))
                 return false;
 
             if (!AreaTriggerZoneContainsCompat(atEntry, startPos.GetMapId(), startPos.getX(), startPos.getY(), startPos.getZ(), 0.5f))
@@ -1767,7 +1763,8 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
                 }
             }
 
-            if (AI_VALUE2(bool, "action useful", "hearthstone") && bot->IsAlive())
+            // D4: a travel teleport is cut on ForeverCore (the host's rescue is the only one); Turtle keeps its portal edges.
+            if (TravelTeleportLinksCompat() && AI_VALUE2(bool, "action useful", "hearthstone") && bot->IsAlive())
             {
                 TravelNode* homeNode = sTravelNodeMap.GetNode(AI_VALUE(WorldPosition, "home bind"), nullptr, 50.0f);
                 if (homeNode)
@@ -1791,52 +1788,55 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
         else
             startStub->currentGold = bot->GetMoney();
 
-        std::vector<uint32> teleSpells = { 3561,3562,3563,3565,3566,3567,18960 };
-
-        for (auto spellId : teleSpells)
+        if (TravelTeleportLinksCompat())
         {
-            if (!bot->IsAlive())
-                continue;
+            std::vector<uint32> teleSpells = { 3561,3562,3563,3565,3566,3567,18960 };
 
-            if (bot->IsInCombat())
-                continue;
-
-            if (!bot->HasSpell(spellId))
-                continue;
-
-            if (!sServerFacade.IsSpellReady(bot, spellId))
-                continue;
-
-            if (!SpellTargetPositionCompat(spellId))
-                continue;
-
-            if (ai)
+            for (auto spellId : teleSpells)
             {
-                AiObjectContext* context = ai->GetAiObjectContext();
-                if (AI_VALUE2(uint32, "has reagents for", spellId) == 0)
+                if (!bot->IsAlive())
                     continue;
+
+                if (bot->IsInCombat())
+                    continue;
+
+                if (!bot->HasSpell(spellId))
+                    continue;
+
+                if (!sServerFacade.IsSpellReady(bot, spellId))
+                    continue;
+
+                if (!SpellTargetPositionCompat(spellId))
+                    continue;
+
+                if (ai)
+                {
+                    AiObjectContext* context = ai->GetAiObjectContext();
+                    if (AI_VALUE2(uint32, "has reagents for", spellId) == 0)
+                        continue;
+                }
+
+                WorldPosition telePos(SpellTargetPositionCompat(spellId));
+
+                TravelNode* homeNode = sTravelNodeMap.GetNode(telePos, nullptr, 10.0f);
+
+                if (!homeNode)
+                    continue;
+
+                PortalNode* portNode = new PortalNode(start);
+                portNode->SetPortal(start, homeNode, spellId);
+
+                childNode = &m_stubs.insert(std::make_pair(portNode, TravelNodeStub(portNode))).first->second;
+
+                childNode->m_g = MINUTE; //If we can walk there in a minute. Walk instead.
+                childNode->m_h = childNode->dataNode->fDist(goal) / unitSpeed;
+                childNode->m_f = childNode->m_g + childNode->m_h;
+
+                open.emplace_back(childNode->m_f, childNode);
+                std::push_heap(open.begin(), open.end(), openLess);
+                childNode->open = true;
+                portNodes.push_back(portNode);
             }
-
-            WorldPosition telePos(SpellTargetPositionCompat(spellId));
-
-            TravelNode* homeNode = sTravelNodeMap.GetNode(telePos, nullptr, 10.0f);
-
-            if (!homeNode)
-                continue;
-
-            PortalNode* portNode = new PortalNode(start);
-            portNode->SetPortal(start, homeNode, spellId);
-
-            childNode = &m_stubs.insert(std::make_pair(portNode, TravelNodeStub(portNode))).first->second;
-
-            childNode->m_g = MINUTE; //If we can walk there in a minute. Walk instead.
-            childNode->m_h = childNode->dataNode->fDist(goal) / unitSpeed;
-            childNode->m_f = childNode->m_g + childNode->m_h;
-
-            open.emplace_back(childNode->m_f, childNode);
-            std::push_heap(open.begin(), open.end(), openLess);
-            childNode->open = true;
-            portNodes.push_back(portNode);
         }
     }
 
@@ -3484,6 +3484,12 @@ void TravelNodeMap::saveNodeStore(bool force)
 {
     if (!hasToSave && !force)
         return;
+
+    if (!TravelNodeStoreWritableCompat())
+    {
+        sLog.outInfo("TortoiseBots: the travel-node tables are missing or incomplete; nothing saved");
+        return;
+    }
 
     hasToSave = false;
 

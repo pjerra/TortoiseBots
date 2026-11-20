@@ -33,6 +33,10 @@ LEGACY_EXCEPTION = {"forever/src/compat/TbCompat_Unported.h": 2}
 # synchronous statement. The store itself makes none, and forever/tools/test_cmd_p2_wiring.py pins where every one of them stands.
 CHAR_GUARD_FILE = "forever/src/compat/TbCompat_CharStore.h"
 CHAR_GUARD_CALLS = 3
+# The travel slice's saver (W4-A1): its probe is WorldSchemaHasCompat (the S5 guard) for the three node tables, and the one raw
+# statement is the one-way write that follows a passing probe. The pair is forever/src/compat/TbCompat_WL4n.h.
+TRAVEL_SAVE_FILE = "forever/src/compat/TbCompat_WL4n.h"
+TRAVEL_SAVE_CALLS = 1
 
 
 def strip_comments(text: str) -> str:
@@ -68,6 +72,7 @@ class NoDirectQueries(unittest.TestCase):
         allowed = dict(LEGACY_EXCEPTION)
         allowed[GUARD_FILE] = GUARD_CALLS
         allowed[CHAR_GUARD_FILE] = CHAR_GUARD_CALLS
+        allowed[TRAVEL_SAVE_FILE] = TRAVEL_SAVE_CALLS
         for name, lines in sorted(found.items()):
             self.assertIn(name, allowed, f"{name}:{lines}: a direct database query: route it through WorldQueryCompat (the schema guard)")
             self.assertEqual(len(lines), allowed[name], f"{name}: {len(lines)} direct calls at lines {lines}, expected {allowed[name]}")

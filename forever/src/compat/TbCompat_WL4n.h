@@ -7,6 +7,9 @@
 // Notes: forever/docs/W4-A1-NOTES.md.
 #pragma once
 
+#include <memory>
+#include <string>
+
 #include "TbCompat_S5.h" // WorldQueryCompat: the single-table SELECT guard (backticked table and column names)
 #include "TbCompat_W3.h" // LegacyFormatW3: printf formatting for the saver's INSERT/UPDATE statements
 
@@ -28,8 +31,21 @@ inline QueryResult TravelNodeQueryCompat(char const* sql, bool* schemaMissing = 
     return WorldQueryCompat(sql, schemaMissing);
 }
 
-// One write of the saver: printf formats (the Turtle rules) sent as text, because ForeverCore's PExecute takes `{}` formats and
-// would silently drop the arguments.
+// Are the three travel-node tables, with every column the saver writes, there? Asked once before the first write: a statement
+// naming a missing table or column aborts ForeverCore (the same rule WorldQueryCompat follows for reads), so the save is skipped
+// with one line instead (does less; the graph in memory is unaffected).
+inline bool TravelNodeStoreWritableCompat()
+{
+    return WorldSchemaHasCompat("ai_playerbot_travelnode", { "id", "name", "map_id", "x", "y", "z", "linked" }) &&
+        WorldSchemaHasCompat("ai_playerbot_travelnode_link",
+            { "node_id", "to_node_id", "type", "object", "distance", "swim_distance", "extra_cost", "calculated",
+              "max_creature_0", "max_creature_1", "max_creature_2" }) &&
+        WorldSchemaHasCompat("ai_playerbot_travelnode_path", { "node_id", "to_node_id", "nr", "map_id", "x", "y", "z" });
+}
+
+// One write of the saver (after TravelNodeStoreWritableCompat): printf formats (the Turtle rules) sent as text, because
+// ForeverCore's PExecute takes `{}` formats and would silently drop the arguments. THE one raw statement of this pair, named in
+// tools/test_forever_no_direct_queries.py with its count.
 template <class... Args>
 inline void TravelNodeExecuteCompat(char const* format, Args... args)
 {
@@ -80,6 +96,14 @@ inline bool TravelLinkUsableCompat(uint8 pathType)
     return pathType != 3 && pathType != 4;
 }
 
+// Decision D4: the only travel teleport of the slice is the host's rescue of a stuck free bot, so the A* adds no portal
+// edge here (the hearthstone edge and the teleport-spell edges are cut; the bot walks or refuses the target). Turtle keeps
+// its portal edges.
+inline bool TravelTeleportLinksCompat()
+{
+    return false;
+}
+
 // ===============================================================================================================
 // AREA TRIGGERS (TravelCostContext::canUseAreaTrigger, getAreaTriggerId, LeaveDeeprunTram)
 // ===============================================================================================================
@@ -98,6 +122,13 @@ inline void AreaTriggerBoxPosCompat(AreaTriggerEntry const* entry, float& x, flo
 inline bool AreaTriggerConditionAllowsCompat(AreaTriggerTeleport const* /*at*/, Player* /*bot*/, Map* /*map*/)
 {
     return true;
+}
+
+// Is there a record for this area trigger id? ForeverCore has the DBC entries (sAreaTriggerStore) and looks the teleport up in
+// the world-thread handler; Turtle keeps the legacy teleport-record lookup of the path code.
+inline bool AreaTriggerKnownCompat(uint32 id)
+{
+    return sAreaTriggerStore.LookupEntry(id) != nullptr;
 }
 
 // Whether a position is inside an area trigger's zone. ForeverCore has no static zone test for a DBC AreaTriggerEntry (the

@@ -179,7 +179,8 @@ class Registry(unittest.TestCase):
                      "ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp", "ai/playerbot/strategy/values/DeadValues.cpp",
                      "ai/playerbot/FleeManager.cpp"):
             self.assertIn(path, listed)
-        self.assertIn("forever/SLICE-W1.txt", CMAKE)
+        # The newest list (now the travel slice W4's) is what the build reads; the W1 list stays its first part.
+        self.assertIn("forever/SLICE-W4.txt", CMAKE)
         self.assertNotIn("forever/SLICE9.txt", CMAKE)
 
 

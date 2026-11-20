@@ -15,6 +15,12 @@ inline std::unique_ptr<QueryResult> TravelNodeQueryCompat(char const* sql, bool*
     return std::unique_ptr<QueryResult>(WorldDatabase.Query(sql));
 }
 
+// The saver's tables: this core logs a missing table and answers null instead of aborting, so the save is attempted as before.
+inline bool TravelNodeStoreWritableCompat()
+{
+    return true;
+}
+
 // One write of the saver: the engine's own printf-format statement.
 template <class... Args>
 inline void TravelNodeExecuteCompat(char const* format, Args... args)
@@ -44,6 +50,12 @@ inline bool TravelLinkUsableCompat(uint8 /*pathType*/)
     return true;
 }
 
+// The A* portal edges (hearthstone, teleport spells) are the legacy ones.
+inline bool TravelTeleportLinksCompat()
+{
+    return true;
+}
+
 // Area triggers: the T fields and the T condition test of the teleport.
 inline void AreaTriggerBoxPosCompat(AreaTriggerEntry const* entry, float& x, float& y, float& z)
 {
@@ -56,6 +68,11 @@ inline bool AreaTriggerConditionAllowsCompat(AreaTriggerTeleport const* at, Play
 {
     return !at || !at->requiredCondition || !map ||
         sObjectMgr.IsConditionSatisfied(at->requiredCondition, bot, map, nullptr, (ConditionSource)CONDITION_FROM_AREATRIGGER_TELEPORT);
+}
+
+inline bool AreaTriggerKnownCompat(uint32 id)
+{
+    return sObjectMgr.GetAreaTrigger(id) != nullptr;
 }
 
 inline bool AreaTriggerZoneContainsCompat(AreaTriggerEntry const* entry, uint32 mapId, float x, float y, float z, float radius)
@@ -87,7 +104,7 @@ inline uint32 GameObjectSpellcasterSpellCompat(GameObjectInfo const* data) { ret
 inline uint32 GameObjectMoTransportTaxiPathCompat(GameObjectInfo const* data) { return data->moTransport.taxiPathId; }
 
 inline SpellTargetPosition const* SpellTargetPositionCompat(uint32 spellId) { return sSpellMgr.GetSpellTargetPosition(spellId); }
-inline char const* SpellNameCompat(SpellEntry const* spell) { return spell ? spell->SpellName[0] : ""; }
+inline char const* SpellNameCompat(SpellEntry const* spell) { return spell ? spell->SpellName[0].c_str() : ""; }
 
 // Taxi tables: the T fields.
 inline uint32 TaxiPathFromCompat(TaxiPathEntry const* path) { return path->from; }
