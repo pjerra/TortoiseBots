@@ -450,6 +450,10 @@ func main() {
 	}
 
 	// Dungeon runs tab: one pass over the trace folder now, then a cheap directory check every few seconds. Requests read the in-memory index.
+	// ForeverCore: the module writes its run summaries to <LogsDir>/runs, next to the data tables, unless told otherwise.
+	if *traceDir == "" && *core == "forever" && effectiveDataDir != "" {
+		*traceDir = filepath.Join(effectiveDataDir, "runs")
+	}
 	dungeonIndex := dungeons.NewIndex(*traceDir)
 	dungeonIndex.Scan()
 	if m := dungeonIndex.Meta(); m.DirFound {
