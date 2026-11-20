@@ -44,12 +44,13 @@ inline bool TravelNodeStoreWritableCompat()
 }
 
 // One write of the saver (after TravelNodeStoreWritableCompat): printf formats (the Turtle rules) sent as text, because
-// ForeverCore's PExecute takes `{}` formats and would silently drop the arguments. THE one raw statement of this pair, named in
+// ForeverCore's PExecute takes `{}` formats and would silently drop the arguments. DirectExecute, so the DELETE and the INSERTs run
+// on the calling thread in order (the pool's queued statements could interleave). THE one raw statement of this pair, named in
 // tools/test_forever_no_direct_queries.py with its count.
 template <class... Args>
 inline void TravelNodeExecuteCompat(char const* format, Args... args)
 {
-    WorldDatabase.Execute(LegacyFormatW3(format, args...).c_str());
+    WorldDatabase.DirectExecute(LegacyFormatW3(format, args...).c_str());
 }
 
 // ForeverCore's one-way statements run on their own, so there is no unbound transaction to open; the DELETE and the INSERTs keep
