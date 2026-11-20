@@ -73,6 +73,25 @@ class TaskModule(unittest.TestCase):
         self.assertNotIn('DoSpecificAction("open loot"', body)
         self.assertLess(body.index("JudgeLock("), body.index("RC::LootOrders().Watch("))
 
+    def test_no_task_act_starts_unless_the_group_is_on_group_loot(self):
+        gate = func(TASKS, "bool LeadGroupLoot(")
+        self.assertIn("RunLootMethodOk(PolicyLootMethod(uint32(group->GetLootMethod()))", gate)
+        body = func(TASKS, "bool Look(")
+        check = body.index("LeadGroupLoot(")
+        self.assertLess(check, body.index("BeginLootAct("))
+        self.assertLess(check, body.index("BeginObjectAct("))
+        self.assertLess(check, body.index("NoteActStart(", check))
+        self.assertIn("ActFailed(\"loot-method\"", body)
+
+    def test_a_chest_cast_extends_the_act_budget(self):
+        body = func(TASKS, "ActResult BeginLootAct(")
+        execute = body.index("openLoot->Execute(")
+        self.assertIn("GetCastedTime()", body)
+        self.assertLess(execute, body.index("NoteActCast("))
+        self.assertLess(body.index("NoteActCast("), body.index("return Started();", execute))
+        self.assertIn("inline void NoteActCast(", PURE)
+        self.assertIn("RC::ActBudgetAfterCast(", PURE)
+
     def test_every_finish_gives_the_loot_watch_back(self):
         self.assertIn("RC::LootOrders().Forget(GuidKeyCompat(task.bot))", func(TASKS, "void Finish("))
         self.assertIn("RC::LootOrders().Forget(GuidKeyCompat(entry.first))", func(TASKS, "void Cancel("))
@@ -114,6 +133,19 @@ class Hooks(unittest.TestCase):
         self.assertIn("tasks::TakeQueuedOrders(entry.first)", body)
         self.assertIn("BaselineOrders(*entry.second)", body)
 
+    def test_a_loot_method_change_mid_run_pauses_before_any_loot_action(self):
+        body = func(RUNCPP, "void TickRun(")
+        check = body.index("RunLootMethodOk(facts.lootMethod")
+        # the check runs on every running tick, before the policy decides (and before any order goes out)
+        self.assertLess(check, body.index("DungeonRun::Tick(run, facts, dt)"))
+        block = body[check:body.index("SnapshotStepFacts(rec, facts)", check)]
+        self.assertIn("tasks::Cancel(rec.leader)", block)      # a queued loot / open task never gets to act
+        self.assertIn('PauseWith(rec, "loot-method")', block)
+        self.assertIn("return;", block)
+        for token in ("tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy)",
+                      'refuse("loot-method"'):
+            self.assertIn(token, func(RUNCPP, "StateOutcome ResumeRun("))
+
 
 class StartChecks(unittest.TestCase):
     def test_bags_and_loot_method_are_refused_before_anything_changes(self):
@@ -122,7 +154,7 @@ class StartChecks(unittest.TestCase):
         self.assertLess(body.index('refuse("bags"'), change)
         self.assertLess(body.index('refuse("loot-method"'), change)
         self.assertIn("tasks::kStartFreeSlots", body)
-        self.assertIn("tasks::StartLootMethodOk(", body)
+        self.assertIn("tasks::RunLootMethodOk(", body)
 
     def test_the_bags_floor_pauses_a_loot_step_before_the_policy_decides(self):
         body = func(RUNCPP, "void TickRun(")
@@ -158,6 +190,8 @@ class Facts(unittest.TestCase):
         body = func(FACTS, "fx::ObjectObs ObjectAt(")
         for token in ("IsAlive()", "IsBeingTeleported()", "plan->map", "EntryPointInReach", "IsGridLoaded"):
             self.assertIn(token, body)
+        # a dead lead is a ghost on the graveyard's map: the grid search never runs on a map other than the plan's
+        self.assertLess(body.index("lead->GetMapId() != plan->map"), body.index("GetGameObjectListWithEntryInGrid("))
 
 
 if __name__ == "__main__":

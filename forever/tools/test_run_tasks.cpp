@@ -82,9 +82,13 @@ static void TestMethod()
     CHECK(tk::PolicyLootMethod(3) == RC::kLootGroup && tk::PolicyLootMethod(4) == RC::kLootNeedBeforeGreed);
     CHECK(tk::PolicyLootMethod(5) == -1 && tk::PolicyLootMethod(6) == -1 && tk::PolicyLootMethod(200) == -1);
     std::string why;
-    CHECK(tk::StartLootMethodOk(RC::kLootGroup, why));
-    CHECK(!tk::StartLootMethodOk(RC::kLootFfa, why) && why.find("ffa") != std::string::npos);
-    CHECK(!tk::StartLootMethodOk(-1, why) && why.find("personal") != std::string::npos);
+    CHECK(tk::RunLootMethodOk(RC::kLootGroup, why));
+    CHECK(!tk::RunLootMethodOk(RC::kLootFfa, why) && why.find("ffa") != std::string::npos);
+    CHECK(!tk::RunLootMethodOk(-1, why) && why.find("personal") != std::string::npos);
+    // a method changed under a running run is refused by the same rule: the run pauses and its pending task dies before any act
+    CHECK(!tk::RunLootMethodOk(RC::kLootRoundRobin, why) && why.find("rr") != std::string::npos);
+    CHECK(!tk::RunLootMethodOk(RC::kLootMaster, why) && why.find("master") != std::string::npos);
+    CHECK(!tk::RunLootMethodOk(RC::kLootNeedBeforeGreed, why) && why.find("nbg") != std::string::npos);
     CHECK(tk::StartBagsOk(12) && tk::StartBagsOk(16) && !tk::StartBagsOk(11) && !tk::StartBagsOk(0));
     CHECK(DR::kTaskCapMs > tk::kTaskCapMs);
 }
@@ -357,6 +361,35 @@ static void TestLoot()
     CHECK(s.what == tk::Do::Fail);
 }
 
+static void TestChestCastBudget()
+{
+    // A locked chest's Opening cast runs inside the act stage: its 5 s are added on top of the 8 s window wait, so the stage does not time out while
+    // the cast itself is still running (the Turtle BeginLootAct and ActBudgetAfterCast).
+    tk::TaskRec r = tk::MakeRec(tk::Kind::Loot, true, false, 5397, 3.0f);
+    r.state.stage = RC::TaskStage::Act;
+    r.state.stageMs = 0;
+    r.actStarted = true;
+    tk::NoteActCast(r, 5000);
+    CHECK(r.state.actBudgetMs == RC::kLootWindowMs + 5000);
+    tk::Obs o;
+    o.watchFound = true;
+    o.windowFinished = false;
+    tk::Step s;
+    for (int i = 0; i < 9; ++i)
+        s = tk::Advance(r, o, 1000);
+    CHECK(s.what == tk::Do::Wait);                       // 9 s in: the 5 s cast and the window wait are not over, and the act is not answered as a timeout
+    o.windowFinished = true;
+    o.itemsTaken = 1;
+    o.looted = "5397:1";
+    s = tk::Advance(r, o, 250);
+    CHECK(s.what == tk::Do::Succeed);
+    // an instant act (no cast) keeps its budget
+    tk::TaskRec door = tk::MakeRec(tk::Kind::Open, false, false, 0, 0.0f);
+    uint32_t const before = door.state.actBudgetMs;
+    tk::NoteActCast(door, 0);
+    CHECK(door.state.actBudgetMs == before);
+}
+
 static void TestTargets()
 {
     uint64_t key = 0;
@@ -386,6 +419,7 @@ int main()
     TestDoorFailures();
     TestGoober();
     TestLoot();
+    TestChestCastBudget();
     TestTargets();
     TestExecutorTexts();
     std::printf("test_run_tasks: %d checks, %d failed\n", g_checks, g_fail);

@@ -33,6 +33,7 @@
 #include "ObjectAccessor.h"
 #include "PartyPackets.h"
 #include "Player.h"
+#include "Spell.h"
 #include "WorldSession.h"
 
 #include "TbBotMgr.h"
@@ -99,6 +100,19 @@ PlayerbotAI* AiOf(Player* bot)
 std::string NameOf(Player* player)
 {
     return player ? std::string(player->GetName()) : std::string();
+}
+
+// A run takes loot under group loot only (spec D4), for its whole life. The run tick pauses on a changed method once a second, but a task's act comes up
+// to four times a second: the method is read again right before every act, so no loot or object use starts under rules the policy does not know.
+bool LeadGroupLoot(Player* lead, std::string& why)
+{
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    if (!group)
+    {
+        why = "the lead bot is not in a group";
+        return false;
+    }
+    return RunLootMethodOk(PolicyLootMethod(uint32(group->GetLootMethod())), why);
 }
 
 OrderAnswer Refuse(std::string const& code, std::string const& message)
@@ -361,7 +375,12 @@ ActResult BeginLootAct(Task& task, Player* bot, PlayerbotAI* ai, Player* lead, T
     ai::Action* openLoot = ai->GetAiObjectContext()->GetAction("open loot");
     ai::Event openEvent("cmd loot", "", lead);
     if (openLoot && openLoot->Execute(openEvent))
+    {
+        // The Opening cast of a locked chest runs inside the act stage: give the stage the cast time it just started, on top of the window wait.
+        if (Spell* cast = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+            NoteActCast(task.rec, uint32(cast->GetCastedTime()));
         return Started();
+    }
     RC::LootOrders().Forget(GuidKeyCompat(bot->GetGUID()));
     uint32 const castFail = uint32(ai->GetLastCastCheckFail());
     char const* reason = nullptr;
@@ -498,7 +517,10 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
         case Do::BeginAct:
         {
             ActResult result;
-            if (HoldForAct(ai, bot))
+            std::string methodWhy;
+            if (!LeadGroupLoot(lead ? lead : bot, methodWhy))
+                result = ActFailed("loot-method", methodWhy + ": no loot or object is used while the group's loot method is not group loot.");
+            else if (HoldForAct(ai, bot))
                 result = ActFailed(RC::CastReasonCode("moving"), RC::OpenRefusalText("moving", 0), ActStart::Retry);
             else if (task.rec.lootLike)
                 result = BeginLootAct(task, bot, ai, lead ? lead : bot, target);

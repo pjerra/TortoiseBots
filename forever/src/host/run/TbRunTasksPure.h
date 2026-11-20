@@ -163,8 +163,10 @@ inline int PolicyLootMethod(uint32_t coreMethod)
     }
 }
 
-// The loot method a run may START with (package C9): group loot only (spec D4). Others are named, so the supervisor can set it.
-inline bool StartLootMethodOk(int policyMethod, std::string& why)
+// The loot method a run may go on with (packages C9 and O9): group loot only, at the start and for the whole run (spec D4). Others are named, so the
+// supervisor can set it back. A method changed under a running run leaves a chest or corpse to rules the policy does not know (rolls it cannot vote,
+// items to chance), so the run pauses and no loot or object act starts until it is group loot again.
+inline bool RunLootMethodOk(int policyMethod, std::string& why)
 {
     if (policyMethod == RC::kLootGroup)
         return true;
@@ -415,6 +417,14 @@ inline void NoteActStart(TaskRec& r, bool started, bool final, std::string const
     r.lastMessage = message;
     if (final)
         r.actTries = RC::kActTries;     // the next look answers with it
+}
+
+// A cast the act started (the 5 s Opening of a locked chest) runs inside the act stage, whose budget was read before the cast: the cast time still to run
+// is added on top of the result wait, so a chest is not answered "No result came back in time" while its own cast is still running.
+// Same rule and numbers as the Turtle glue (commands/Commander.cpp:5112-5146, RemoteCommander::ActBudgetAfterCast).
+inline void NoteActCast(TaskRec& r, uint32_t castMs)
+{
+    r.state.actBudgetMs = RC::ActBudgetAfterCast(r.state, r.lootLike, castMs);
 }
 
 // ---- the target search of a by-entry order ----

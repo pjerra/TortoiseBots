@@ -785,6 +785,17 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     DungeonRun::ApplyPlayerFacts(facts);
+    // S9 (C9, spec D4): group loot is the run's rule for every tick, not only at the start. A method changed under a running run would let a chest or a
+    // corpse pay out under rules the policy does not know (rolls it cannot vote, items to chance). The pending loot task dies before its act, and the run
+    // pauses; the resume checks the method again, so group loot has to be back first.
+    if (std::string methodWhy; !tasks::RunLootMethodOk(facts.lootMethod, methodWhy))
+    {
+        tasks::Cancel(rec.leader);
+        DungeonRun::Pause(run, methodWhy + ": the run waits for group loot (set it, then .tb run resume)");
+        PauseWith(rec, "loot-method");
+        Observe(rec, nowMs, &facts);
+        return;
+    }
     SnapshotStepFacts(rec, facts);              // S9 (C9): the run keys and the step-end events read what the policy is about to decide on
     run.liveTactics = &ai::GetBossTactics();
     // An order the executor accepted earlier failed when the bot's engine ran it: the policy hears it as any refusal, before it decides this tick.
@@ -981,7 +992,7 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
     // group loot (Group.cpp:296), so a refusal here means someone changed it.
     {
         std::string methodWhy;
-        if (!tasks::StartLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
+        if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
             return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot)");
     }
     // Every check passed: nothing is changed before this line. A finished earlier run of the leader gives way to the new one.
@@ -1084,10 +1095,17 @@ StateOutcome ResumeRun(RunRec& rec, uint32 nowMs)
     if (rec.run.state != State::Paused)
         return refuse("not-paused", "only a paused run can be resumed (it is " + StateName(rec) + ")");
     Player* lead = InWorld(rec.leader);
-    if (Group* group = lead ? lead->GetGroup() : nullptr)
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    if (group)
+    {
         for (Group::MemberSlot const& slot : group->GetMemberSlots())
             if (!BotMgr::Instance().IsBot(slot.guid))
                 return refuse("player-in-group", slot.name + " is in the group: the run waits until the group is bots only again");
+        // The pause reason of a method changed under the run ends only on group loot: a resume with the method still wrong would pause again at once.
+        std::string methodWhy;
+        if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
+            return refuse("loot-method", methodWhy + " (a run needs group loot)");
+    }
     DungeonRun::LeadSpot spot;
     if (lead)
     {

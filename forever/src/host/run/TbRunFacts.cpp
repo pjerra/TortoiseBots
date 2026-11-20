@@ -1004,7 +1004,9 @@ public:
         bool const reachable = RemoteCommander::EntryPointInReach(toPoint, sPlayerbotAIConfig.reactDistance);
         o.readable = lead->IsAlive() && !lead->IsBeingTeleported() && plan && lead->GetMapId() == plan->map && reachable && _c.map &&
             _c.map->IsGridLoaded(step.x, step.y);
-        if (!reachable)
+        // A lead dead at a graveyard is on another map: the grid search would look for the plan's object around the graveyard's coordinates, not the
+        // instance (and could find a spawn of the same entry there). "Not found" stays unreadable, as a dead lead's read is.
+        if (!reachable || !plan || lead->GetMapId() != plan->map)
             return o;
         std::list<GameObject*> found;
         ++_c.R().gridScans;

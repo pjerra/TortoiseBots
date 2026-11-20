@@ -76,7 +76,7 @@ struct RunRec
     uint32 stopPendingSinceMs = 0;               // R6 (review item 6): the clock of that request; kStopPendingMaxMs later the stop takes effect whatever the fight does
     uint32 instanceId = 0;                       // R6 (review item 4): the leader's instance of the plan's map at the start; the lead in another instance ends the run
     std::string stopWhy;
-    std::string pauseCode;                       // the machine word of the next pause event's `why=` (outside-order, player-in-group, lead-off-map, command); empty: the run's own note
+    std::string pauseCode;                       // the machine word of the next pause event's `why=` (outside-order, player-in-group, lead-off-map, command, bags-full, loot-method); empty: the run's own note
     bool pausedForPlayer = false;                // the system run's join flag (SystemRun::JoinFlagAfterScan)
     // What the last tick saw, to name the events (start .. stop) of the next one.
     bool seenInit = false;
