@@ -25,6 +25,7 @@ DB=${FOREVER_WORLD_DB:-world}
 HERE=$(cd "$(dirname "$0")" && pwd)
 SCHEMA=${FOREVER_TRAVEL_SCHEMA:-$HERE/../../data/sql/world/20260824090000_world.sql}
 LOG=$RUN/logs/world.out
+BOTLOG=$RUN/logs/bot.log
 SERVER=forever-world2
 TABLES="ai_playerbot_travelnode ai_playerbot_travelnode_link ai_playerbot_travelnode_path"
 
@@ -34,9 +35,11 @@ FAILS=0
 pass() { printf '  ok   %s\n' "$1"; }
 fail() { printf '  FAIL %s\n' "$1"; FAILS=$((FAILS + 1)); }
 
-has()      { if grep -qE "$1" "$LOG"; then pass "$2"; else fail "$2 (no line: $1)"; fi; }
-hasnt()    { if grep -qE "$1" "$LOG"; then fail "$2 (unexpected line: $1)"; else pass "$2"; fi; }
-has_once() { local n; n=$(grep -cE "$1" "$LOG"); if [ "$n" = 1 ]; then pass "$2"; else fail "$2 (expected 1 line, saw $n: $1)"; fi; }
+# Module lines land in two files: the bot brain logs through BotLog (logs/bot.log), the forever/src compat code
+# through the core logger (logs/world.out); every check reads both.
+has()      { if grep -qE "$1" "$LOG" "$BOTLOG"; then pass "$2"; else fail "$2 (no line: $1)"; fi; }
+hasnt()    { if grep -qE "$1" "$LOG" "$BOTLOG"; then fail "$2 (unexpected line: $1)"; else pass "$2"; fi; }
+has_once() { local n; n=$(grep -hE "$1" "$LOG" "$BOTLOG" | wc -l); if [ "$n" = 1 ]; then pass "$2"; else fail "$2 (expected 1 line, saw $n: $1)"; fi; }
 
 sql() { docker exec -e MYSQL_PWD="$(cat "$RUN/.db_root_pass")" "$DB_CONTAINER" mysql -uroot -N -B "$DB" -e "$1"; }
 
@@ -50,10 +53,20 @@ create_empty() {
         | docker exec -i -e MYSQL_PWD="$(cat "$RUN/.db_root_pass")" "$DB_CONTAINER" mysql -uroot -N -B "$DB"
 }
 
-stop_server() { ( cd "$RUN" && ./world.sh stop ) >/dev/null 2>&1; }
+# world.sh stop writes the shutdown command into console.fifo; with no running server nothing reads it and the write blocks
+# forever (the run2 trap), so only call it when the container is up.
+stop_server() {
+    if docker inspect -f '{{.State.Running}}' "$SERVER" 2>/dev/null | grep -q true; then
+        ( cd "$RUN" && ./world.sh stop ) >/dev/null 2>&1
+    else
+        docker rm -f "$SERVER" >/dev/null 2>&1
+    fi
+    rm -f "$RUN/console.fifo"
+}
 
 boot() {
     : > "$LOG"
+    : > "$BOTLOG"
     ( cd "$RUN" && ./world.sh start ) >/dev/null 2>&1
     local i
     for i in $(seq 1 120); do
@@ -65,12 +78,13 @@ boot() {
 }
 
 rss() {
-    docker exec "$SERVER" bash -c 'for p in /proc/[0-9]*; do tr "\0" " " < "$p/cmdline" 2>/dev/null | grep -q worldserver && awk "/VmRSS/ {print \$2}" "$p/status"; done' 2>/dev/null | head -1
+    # The worldserver process itself: /proc/<pid>/comm is the executable name (the container's `bash -c` wrapper is not it).
+    docker exec "$SERVER" sh -c 'for f in /proc/[0-9]*/comm; do [ "$(cat "$f" 2>/dev/null)" = worldserver ] && awk "/VmRSS/ {print \$2}" "${f%comm}status"; done' 2>/dev/null | head -1
 }
 
 common_checks() {
     has "worldserver-daemon\\) ready\\.\\.\\." "server ready"
-    local n; n=$(grep -c "ASSERTION FAILED" "$LOG")
+    local n; n=$(grep -h "ASSERTION FAILED" "$LOG" "$BOTLOG" 2>/dev/null | wc -l)
     if [ "$n" = 0 ]; then pass "no assertion"; else fail "assertions in the log: $n"; fi
     has "Loading travel nodes\\." "the loader was reached"
     has ">> Loaded [0-9]+ travel destination spawn entries" "the A2 destination index is built"
@@ -120,8 +134,8 @@ scenario_c() {
            (2, 1, 2, 0, -8949.95, -132.49, 83.53)" || { fail "path insert failed"; return; }
     if ! boot; then fail "boot did not come up"; tail -5 "$LOG"; return; fi
     common_checks
-    has '>> Loaded 3 travelNodes\\.' "three nodes loaded"
-    has '>> Loaded 2 travelNode paths\\.' "both link rows read"
+    has '>> Loaded 3 travelNodes\.' "three nodes loaded"
+    has '>> Loaded 2 travelNode paths\.' "both link rows read"
     hasnt 'travel-node dataset is empty' "the graph is not empty"
     # The link to the unknown node was skipped: no route is built from node 1 to it, and the boot survived.
     has 'Calculating mapoffset' "the populated graph builds its derived data"

@@ -281,10 +281,12 @@ inline bool PlayerHasQuestWL4(Player* player, uint32 questId)
 // PLAYER, MAP
 // ===============================================================================================================
 
-// The player's homebind (Turtle GetHomeBindLocation, ForeverCore the public m_homebind).
-inline WorldLocation const& PlayerHomeBindWL4(Player* player)
+// The player's homebind (Turtle GetHomeBindLocation, ForeverCore the public m_homebind). decltype(auto) with the parentheses:
+// under the shim `WorldLocation` is the bot's legacy struct, so a `WorldLocation const&` return would convert the core member
+// to a temporary and return a dangling reference (TbCompat_V.h's HomeBindLocationCompat does the same).
+inline decltype(auto) PlayerHomeBindWL4(Player* player)
 {
-    return player->m_homebind;
+    return (player->m_homebind);
 }
 
 // Maximum skill value (Turtle GetSkillMax, ForeverCore GetPureMaxSkillValue).

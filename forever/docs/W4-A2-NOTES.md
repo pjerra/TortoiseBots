@@ -115,3 +115,19 @@ Measurements that changed the design (kept in the code and here):
   the whole index 1.9 s; everything is released afterwards.
 - The guarded queries must backtick the table and the columns (`SELECT \`id\`, \`level\` FROM \`ai_playerbot_zone_level\``), or the
   guard refuses them (it reports the refusal; nothing aborts).
+
+## 7. Merged into round A1 (and the review's two findings fixed there)
+
+This branch is merged into `world/w4a1` (`W4-A1-NOTES.md` sections 5-8): round A1 wires `TravelEntryGuidpsCompat`-based
+destinations to the node store through `TravelGraphLoadCompat`, and the two findings of this round's review were fixed in
+the merged files:
+
+- `TravelMgr::pointsMap` is keyed by `ai::TravelPointKey` (`ai/playerbot/TravelPointKey.h`, both guid halves) instead of the
+  low half alone, so a creature and a game object that share a spawn counter no longer collide; `tools/test_travel_point_key.cpp`
+  covers it, and `forever/tools/test_wl4_wiring.py` pins both sides' `GuidKeyWL4`.
+- The purpose map keeps only templates with an indexed spawn (224,997 rows -> the entries the loader can use), and the boot
+  spawn index is freed after the destination build (`TravelEntryGuidpsReleaseCompat`; Turtle's is a no-op, its index is a
+  shared value). One index remains per process: `pointsMap`.
+
+The live boot figures for both are in `W4-A1-NOTES.md` sections 8 and 10. The graph data itself is round B, not A1 or A2
+(`W4-A1-NOTES.md` section 0).

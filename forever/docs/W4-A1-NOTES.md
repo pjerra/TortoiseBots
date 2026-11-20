@@ -5,12 +5,33 @@ Round W4-A1 of `FOREVER-W0-W4-SPEC.md` part 2 (round table). Files: `ai/playerbo
 `TravelPath` stand-ins of the Travel block in `forever/src/slice/SliceLinkStubs.cpp` are gone; `forever/SLICE-W4.txt` is the
 merged W1 list plus this round's legacy file, and `CMakeLists.txt` reads it. Zero core changes.
 
+Round W4-A2 (travel destinations and zone levels, `forever/docs/W4-A2-NOTES.md`) is merged into this branch: `TravelMgr.cpp` and
+`TravelValues.cpp` are in the slice with it, so `TravelMgr::LoadQuestTravelTable` - the loader the graph hangs off - runs on
+ForeverCore too. This round wires the node store into it (`TravelGraphLoadCompat`, section 5), makes the path-point load
+linear (section 6) and adds the runtime checks the review asked for (section 7).
+
+## 0. The graph data itself is round B, not this one
+
+This branch ships the **schema and the loader of the node graph, not the graph**: `data/sql/world/20260824090000_world.sql`
+creates the three `ai_playerbot_travelnode*` tables empty, and no migration carries nodes, links or path points. The data is
+the generation boot's output - round B of the plan (decision D3), which runs the generator once on a server that has the map
+data and writes the rows with the saver this round ports - and it is deliberately not started here (`generatePaths` refuses
+on the pinned core's PathInfo area filter, section 2).
+
+Until that boot runs, a deployed server has **no graph**, and that is a clean no-op: `loadNodeStore` asks the schema guard
+first, sees the tables missing or the datasets empty, logs one line, and leaves the graph empty; `generateAll` returns on the
+empty node list; travel has no route and picks no target. No query ever reaches a missing table (ForeverCore aborts the
+server on one), no error is logged, and the destination build (round A2) still runs. Section 7's runtime check covers this
+state at every boot. When round B's rows exist, the same code path loads them.
+
 ## 1. What runs
 
 | Piece | Where |
 |---|---|
 | The node store: `ai_playerbot_travelnode`, `_link`, `_path` read through the schema guard | `TravelNodeMap::loadNodeStore` |
 | A missing table or column: empty graph, one line, travel does nothing | `emptyGraph` in `loadNodeStore` |
+| The loader reads the store at boot (the graph is round B's data) | `TravelGraphLoadCompat` in `forever/src/compat/TbCompat_WL4.cpp` |
+| One ordered path point per row, appended in place: a path loads in O(its points) | `TravelNodePath::appendPathPoint` |
 | A*, with `TravelRoutePolicy` costs | `TravelNodeMap::getRoute`, `TravelNodePath::getCost` |
 | Taxi and transport links loaded, never used | `TravelLinkUsableCompat` at the top of `getCost` (F: false for 3/4) |
 | No portal edge in the A* (D4: the rescue is the only travel teleport) | `TravelTeleportLinksCompat` around the hearthstone and teleport-spell edges |
@@ -44,18 +65,76 @@ care: the area-trigger existence check in `TravelPath::UpcommingSpecialMovement`
 
 ## 4. Shared lines touched
 
-- `forever/src/slice/SliceLinkStubs.cpp`: the six TravelNodeMap/TravelPath stand-in lines deleted; one new line,
-  `TravelMgr::LoadMapTransfers` (TravelMgr.cpp is W4-A2; TravelNode.cpp's generator calls it). The destination stand-ins, the
-  slice-9 block and the W1 block are untouched.
-- `CMakeLists.txt`: `TB_SLICE_LIST` -> `forever/SLICE-W4.txt` (comment and FATAL_ERROR text updated).
-- `forever/SLICE-W4.txt`: new; the merged W1 list line for line, then `ai/playerbot/TravelNode.cpp`.
+- `forever/src/slice/SliceLinkStubs.cpp`: the whole Travel block is gone - the six TravelNodeMap/TravelPath stand-ins (this
+  round) and the TravelMgr/TravelTarget/destination stand-ins (round A2) with `NoteTravel`, since all three owner files are in
+  the slice now. The slice-9 block and the W1 block are untouched.
+- `CMakeLists.txt`: `TB_SLICE_LIST` -> `forever/SLICE-W4.txt` (comment and FATAL_ERROR text updated); the OFF build filters
+  `TbCompat_WL4.cpp` (round A2).
+- `forever/SLICE-W4.txt`: the merged W1 list line for line (round A2 appended `TravelMgr.cpp` and `TravelValues.cpp` to it),
+  then `ai/playerbot/TravelNode.cpp` (273 paths).
+- `forever/tools/test_wl4_wiring.py`: round A2's file and this round's classes in one file (the A2 pair is `COMPAT_F`,
+  `COMPAT_T`; this round's `COMPAT_FN`, `COMPAT_TN`).
+- `ai/playerbot/TravelPointKey.h`: new; the destination point key (section 8, round A2's review).
+
+## 5. The boot path (the wiring)
+
+`TravelMgr::LoadQuestTravelTable` calls `TravelGraphLoadCompat()` where Turtle's loader always did. On ForeverCore that is the
+one function in `forever/src/compat/TbCompat_WL4.cpp` (declared there for `TravelMgr.cpp`): `loadNodeStore()`, then
+`generateAll()`, the two print helpers and (only when `generateTravelNodes` is set) the saver - the same order as the Turtle
+pair's inline body. `loadNodeStore` is the only reader of the three tables and it asks `TravelNodeQueryCompat` (the
+`WorldQueryCompat` guard) first, so an absent schema never reaches a query. With no rows, `generateAll` returns at its
+`m_nodes.empty()` gate: no map offsets, no transfer table, no taxi pass, no coverage scan.
+
+## 6. Path-point loading is linear
+
+`loadNodeStore`'s path loop used to copy the path grown so far for every row (`std::vector<WorldPosition> ppath = path->GetPath();
+ppath.push_back(...); path->setPath(ppath);`), so a path of N points copied O(N^2) positions and allocated on every row. The
+rows arrive `ORDER BY node_id, to_node_id, nr`, so each is `TravelNodePath::appendPathPoint(point)` now - one `push_back` per
+row, one growth sequence per path. The `setPath` copy is still there for the callers that replace a whole path.
+
+## 7. Runtime checks (the harness, and what it fails on before this round)
+
+`forever/tools/travel_graph_boot_check.sh` boots the installed run2 server once per scenario and asserts the log lines (it
+installs nothing; the caller holds the server lock and restores the binary):
+
+| Scenario | Database | Must show |
+|---|---|---|
+| `a` | the three tables dropped | one guard line (`world table `ai_playerbot_travelnode` is missing, or lacks a column this query names: not read`), exactly one `the travel-node tables are missing or incomplete; the travel graph stays empty and travel does nothing`; no node row read; no `Calculating mapoffset`; the A2 destination index still built (`>> travel destinations keep ... spawn points`) |
+| `b` | the three tables, empty | one `travel-node dataset is empty or unavailable; skipping startup graph generation`; no guard refusal; no graph generation |
+| `c` | three nodes, a link to a node id with no row (the out-of-map link) and its path points, one real link with three ordered points | `>> Loaded 3 travelNodes.`, both link rows read, the graph's derived data built (`Calculating mapoffset`), boot ready - the unknown target is skipped, never dereferenced |
+| `final` | the three tables dropped again | the shipped state: one absent-graph line, `tb status` enabled, RSS recorded |
+
+Every scenario also asserts the ready line, zero `ASSERTION FAILED`, and that the loader was reached (`Loading travel nodes.`).
+On the reviewed tree (`07a57c8b2`) the same check fails: `TravelMgr.cpp` was not in the slice, so `LoadQuestTravelTable` never
+ran, `Loading travel nodes.` and the guard line never appear, and scenarios a, b and c fail on those missing lines - the
+loader was code that no boot exercised.
 - `forever/tools/slice_registry_check.py`: `SLICE_LIST` -> `SLICE-W4.txt` (the list CMake reads).
 - `forever/tools/test_w1_wiring.py`, `test_slice9_l9_wiring.py`: the list pointer they pin moved from `SLICE-W1.txt` to
   `SLICE-W4.txt` (the W4 list starts with the W1 list, so their file checks are unchanged).
 - `tools/test_forever_no_direct_queries.py`: the saver's one raw write (`TbCompat_WL4n.h`, after the S5 schema probe) is named
   with its count, like the two existing guard files.
 
-## 5. Gates
+## 8. Round A2's review findings, fixed here
+
+The merge also carries the two findings of round A2's review (`codex-w4a2.txt`), because they live in the same files:
+
+- **The destination point key dropped the guid's high half.** `TravelMgr::pointsMap` was keyed by
+  `GuidKeyWL4` = `ObjectGuid::GetRawValue(0)`, which on ForeverCore is only the spawn counter; creatures and game objects count
+  their spawns in separate namespaces, so two unrelated spawns collided and a destination pointed at the other object's
+  coordinates and cached area. The key is `ai::TravelPointKey` (`ai/playerbot/TravelPointKey.h`: both raw halves, the hash folds
+  the high one in); ForeverCore passes `GetRawValue(1)` and `GetRawValue(0)`, Turtle passes `0` and its one 64-bit guid and
+  keeps the legacy identity exactly. `tools/test_travel_point_key.cpp` puts a creature and a game object with the same counter
+  and different type/map/entry into the map and checks both points and their coordinates survive; before the fix the file does
+  not compile (the key was one `uint64`).
+- **The boot kept redundant full-world indexes.** `TravelEntryGuidpsData` held every spawn of maps 0/1 (123,558 spawns,
+  15,684 entries) for the whole process while the destination build copied the points it keeps into `pointsMap`; and the purpose
+  map kept a row for every template of the world (224,997), most of which have no spawn and are skipped by the loader anyway.
+  Now: the purpose map only takes templates with an entry in the spawn index (both loops), and the loader calls
+  `TravelEntryGuidpsReleaseCompat()` after `GetPopulatedGrids()` - on ForeverCore the boot index is dropped (the log's
+  `in-use heap` figures are section 10), on Turtle it is a no-op because that index is a shared value other code reads. One
+  index remains per process: `pointsMap`, the one the destinations point into.
+
+## 9. Gates
 
 | Gate | Result |
 |---|---|
@@ -71,7 +150,7 @@ care: the area-trigger existence check in `TravelPath::UpcommingSpecialMovement`
 | Turtle `vm-build` | `CMAKE_RC=0 MAKE_RC=0` (final commit `1875ecee2`, no-op 9 s) |
 | Turtle `vm-test tb` | `RESULT: PASS` on `177ab5098` (the same run above; the later commit touches only the ForeverCore pair and these notes) |
 
-## 6. Live (forever-run2, our binary in place, console only)
+## 10. Live (forever-run2, our binary in place, console only)
 
 The node store loader is not reached yet: `TravelMgr.cpp` (and with it `LoadQuestTravelTable`, which calls `loadNodeStore`) is
 round W4-A2, so the boot cannot show the graph. What the boot does show, with the final slot-7 build (72,340,128 bytes, 18:04):

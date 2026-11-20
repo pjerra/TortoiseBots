@@ -7,6 +7,7 @@
 #include "TbCompat_WL4.h"
 
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TravelNode.h"
 #include "playerbot/RandomBotFacade.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/strategy/values/QuestValues.h"
@@ -18,12 +19,6 @@
 #include <mutex>
 #include <set>
 
-#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33))
-#include <malloc.h>
-#define TRAVEL_HEAP_IN_USE() (size_t(mallinfo2().uordblks))
-#else
-#define TRAVEL_HEAP_IN_USE() size_t(0)
-#endif
 
 using namespace ai;
 
@@ -187,13 +182,16 @@ namespace
         if (!cache)
             return;
 
-        size_t const entries = cache->size();
-        size_t const before = TRAVEL_HEAP_IN_USE();
-        cache.reset();
-        size_t const after = TRAVEL_HEAP_IN_USE();
+        size_t entries = 0, points = 0;
+        for (auto const& entry : *cache)
+        {
+            ++entries;
+            points += entry.second.size();
+        }
 
-        sLog.outString(">> travel destination index released: %u entries, in-use heap %u KiB -> %u KiB", uint32(entries),
-            uint32(before / 1024), uint32(after / 1024));
+        cache.reset();
+
+        sLog.outString(">> travel destination index released: %u entries, %u spawn points", uint32(entries), uint32(points));
     }
 
     // ===============================================================================================================
