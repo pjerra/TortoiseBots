@@ -8,8 +8,9 @@
     host bind AND `h3::SetCommander`, in that order, so one sync makes the next one Keep (SyncBindingAction, host/run/TbRunBindingPure.h;
     forever/tools/test_run_binding.cpp proves the rule); `.tb party` reads the party's commander from its MEMBERS (not the leader's own binding,
     which made a run's party read `commander=mixed`);
-  * a bot that leads its own group in an instance is not "its party is here": the party-is-here question excludes the bot itself
-    (PartyLeaderOnMap, host/TbEngineMapPure.h);
+  * "its party is here" is a question about the group's MEMBERS, not the leader's identity: one other member in the world, not between maps, on the bot's
+    exact map (the same Map, so the same instance) keeps the engine, so a bot that leads its own group still keeps it beside its party while a lone
+    leader has none (PartyMemberOnMap, host/TbEngineMapPure.h);
   * `.tb party <leader> <member>...` refuses a member that is in another (persisted) party with an error that names it, before anything changes, and
     `.tb run start` names an offline member left by such a group.
 
@@ -67,13 +68,18 @@ class Joint2(unittest.TestCase):
         stored = block(h3, "ObjectGuid StoredCommander(", "std::vector<std::pair<ObjectGuid, ObjectGuid>> CommanderBindings()")
         self.assertIn("return itr == Bindings().end() ? ObjectGuid::Empty : itr->second;", stored)
 
-    def test_the_party_is_not_the_bot_itself(self):
+    def test_the_party_is_the_members_on_the_bot_map(self):
         mgr = text("TbBotMgr.cpp")
         self.assertIn('#include "host/TbEngineMapPure.h"', mgr)
         branch = block(mgr, "bool kept = false;", "if (changed)")
-        # A bot leading its own group answers itself as the group leader: the party-is-here question excludes it (Gemini finding 3).
-        self.assertIn("PartyLeaderOnMap(partyLead->GetGUID() != me->GetGUID(),", branch)
-        self.assertNotRegex(branch, r"partyLead->GetMap\(\) == me->GetMap\(\);\s*\n\s*kept =")
+        # The group LEADER's identity is no proxy for the party: a run's leader bot answers itself as its group's leader and still has its members
+        # standing beside it, while a lone leader has none. The rule scans the group's members and asks the pure predicate about each.
+        self.assertNotIn("GetLeaderGUID", branch)
+        scan = block(branch, "bool partyHere = false;", "kept = EngineKeptOnOtherMap(")
+        self.assertIn("for (Group::MemberSlot const& slot : group->GetMemberSlots())", scan)
+        self.assertIn("me->GetMap() == member->GetMap()", scan)
+        self.assertIn("PartyMemberOnMap(slot.guid == me->GetGUID(), member->IsInWorld(), member->IsBeingTeleported(),", scan)
+        self.assertRegex(scan, r"if \(member && PartyMemberOnMap\([\s\S]*?\)\)\s*\{\s*partyHere = true;\s*break;")
 
     def test_the_party_commander_is_its_members(self):
         party = text("host/TbPartyState.cpp")

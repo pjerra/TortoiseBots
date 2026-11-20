@@ -13,10 +13,12 @@ inline bool EngineKeptOnOtherMap(bool alive, bool inInstance, bool partyHere)
     return alive && inInstance && partyHere;
 }
 
-// "Its party is here" for EngineKeptOnOtherMap: the group's leader is SOMEBODY ELSE (a bot that leads its own group is not a party standing beside it:
-// ObjectAccessor::FindPlayer(leaderGuid) answers the bot itself), in the world, not between maps, on the bot's map.
-inline bool PartyLeaderOnMap(bool leaderIsOther, bool inWorld, bool teleporting, bool sameMap)
+// "Its party is here" for EngineKeptOnOtherMap, asked of ONE group member: a party stands beside the bot when a member that is ANOTHER character is in
+// the world, not between maps, on the bot's exact map (the same Map object, so the same instance of it). The bot's own member row (a bot can lead its own
+// group: ObjectAccessor::FindPlayer answers the bot itself) never counts, so a lone leader has no party; who leads the group says nothing about it, and a
+// bot that leads its own group keeps its engine beside its members.
+inline bool PartyMemberOnMap(bool isTheBot, bool inWorld, bool teleporting, bool sameMap)
 {
-    return leaderIsOther && inWorld && !teleporting && sameMap;
+    return !isTheBot && inWorld && !teleporting && sameMap;
 }
 }

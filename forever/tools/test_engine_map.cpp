@@ -5,7 +5,7 @@
 #include <cstdio>
 
 using TortoiseBots::EngineKeptOnOtherMap;
-using TortoiseBots::PartyLeaderOnMap;
+using TortoiseBots::PartyMemberOnMap;
 
 namespace
 {
@@ -25,8 +25,8 @@ void Check(bool ok, char const* what)
 
 int main()
 {
-    // A party that landed in a dungeon while its commander stayed on the open-world map: the engine stays (the party's leader is on the bot's map, so the
-    // engine follows that leader; the run needs it after the worldport).
+    // A party that landed in a dungeon while its commander stayed on the open-world map: the engine stays (a party member is on the bot's map, so the
+    // engine has its party to follow and fight with; the run needs it after the worldport).
     Check(EngineKeptOnOtherMap(true, true, true), "alive, in an instance, its party is there: the engine stays");
     // Alone in the instance (no party on its map): nothing to follow, the engine goes as before.
     Check(!EngineKeptOnOtherMap(true, true, false), "alive, in an instance, no party there: the engine goes");
@@ -36,16 +36,19 @@ int main()
     // A body has its own dead-engine rule; this one never keeps an engine for a dead bot.
     Check(!EngineKeptOnOtherMap(false, true, true), "dead, in an instance with its party: not this rule");
 
-    // "Its party is here": the group's leader is somebody else, in the world, not between maps, on the bot's map. The bot that leads its own group
-    // answers itself as the leader (ObjectAccessor::FindPlayer), which is no party standing beside it (Gemini finding 3: a lone leader in an instance
-    // kept its engine).
-    Check(!PartyLeaderOnMap(false, true, false, true), "the leader is the bot itself: no party beside it");
-    Check(PartyLeaderOnMap(true, true, false, true), "another leader on the bot's map: its party is here");
-    Check(!PartyLeaderOnMap(true, false, false, true), "the leader is not in the world: not here");
-    Check(!PartyLeaderOnMap(true, true, true, true), "the leader is between maps: not here");
-    Check(!PartyLeaderOnMap(true, true, false, false), "the leader is on another map: not here");
-    Check(!PartyLeaderOnMap(true, false, true, false), "not in the world, between maps, another map: not here");
-    Check(!EngineKeptOnOtherMap(true, true, PartyLeaderOnMap(false, true, false, true)), "a lone leader's engine goes, as for no party");
+    // "Its party is here" is a question about the group's MEMBERS, not about who leads: one member that is another character, in the world, not between
+    // maps, on the bot's exact map (the same Map, so the same instance) is enough. The bot's own row never counts, so a lone leader has no party.
+    Check(!PartyMemberOnMap(true, true, false, true), "the bot itself in its own group is no party beside it");
+    Check(PartyMemberOnMap(false, true, false, true), "another member on the bot's map: its party is here");
+    Check(!PartyMemberOnMap(false, false, false, true), "the member is not in the world: not here");
+    Check(!PartyMemberOnMap(false, true, true, true), "the member is between maps: not here");
+    Check(!PartyMemberOnMap(false, true, false, false), "the member is on another map (or another instance of the bot's map id): not here");
+    Check(!PartyMemberOnMap(false, false, true, false), "not in the world, between maps, another map: not here");
+    // The review's two cases: a group LEADER is not a lone member. Leading the group says nothing about the members standing beside it, and the
+    // instance is split from the commander, not from the party.
+    Check(!EngineKeptOnOtherMap(true, true, PartyMemberOnMap(true, true, false, true)), "a truly lone self-leader's engine goes, as for no party");
+    Check(EngineKeptOnOtherMap(true, true, PartyMemberOnMap(false, true, false, true)),
+        "a self-leader with another member in its instance keeps its engine");
 
     std::printf("%s: %d checks, %d failed\n", failures ? "FAIL" : "RESULT: PASS", checks, failures);
     return failures ? 1 : 0;

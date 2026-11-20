@@ -1340,11 +1340,20 @@ void BotMgr::Think(Bot& bot, Player* me)
             {
                 if (me->IsAlive())
                 {
-                    Group* group = me->GetGroup();
-                    Player* partyLead = group ? ObjectAccessor::FindPlayer(group->GetLeaderGUID()) : nullptr;
-                    // A bot that leads its own group answers itself here: that is no party standing beside it (PartyLeaderOnMap, Gemini finding 3).
-                    bool const partyHere = partyLead && PartyLeaderOnMap(partyLead->GetGUID() != me->GetGUID(), partyLead->IsInWorld(),
-                        partyLead->IsBeingTeleported(), partyLead->GetMap() == me->GetMap());
+                    // A party stands beside the bot when one OTHER member is in the world, not between maps, on the bot's exact map (same instance): the
+                    // group's leader is no proxy for that. A bot that leads its own group (a run's leader) still has its party in the instance and keeps
+                    // its engine; a lone leader has nobody to follow and none (PartyMemberOnMap).
+                    bool partyHere = false;
+                    if (Group* group = me->GetGroup())
+                        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                        {
+                            Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                            if (member && PartyMemberOnMap(slot.guid == me->GetGUID(), member->IsInWorld(), member->IsBeingTeleported(), me->GetMap() == member->GetMap()))
+                            {
+                                partyHere = true;
+                                break;
+                            }
+                        }
                     kept = EngineKeptOnOtherMap(me->IsAlive(), inInstance, partyHere);
                 }
                 if (!me->IsAlive() && IsCommandedHere(bot, me))
