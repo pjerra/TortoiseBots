@@ -32,6 +32,7 @@
 #include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
+#include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
@@ -42,6 +43,7 @@
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
+#include "playerbot/strategy/generic/GrindingStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
@@ -73,6 +75,7 @@
 #include "playerbot/strategy/values/CombatStartTimeValue.h"
 #include "playerbot/strategy/values/CurrentCcTargetValue.h"
 #include "playerbot/strategy/values/CurrentTargetValue.h"
+#include "playerbot/strategy/values/DeadValues.h"
 #include "playerbot/strategy/values/DistanceValue.h"
 #include "playerbot/strategy/values/DpsTargetValue.h"
 #include "playerbot/strategy/values/DuelTargetValue.h"
@@ -81,6 +84,7 @@
 #include "playerbot/strategy/values/EstimatedLifetimeValue.h"
 #include "playerbot/strategy/values/Formations.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
+#include "playerbot/strategy/values/GrindTargetValue.h"
 #include "playerbot/strategy/values/GroupValues.h"
 #include "playerbot/strategy/values/HasAvailableLootValue.h"
 #include "playerbot/strategy/values/HasOwnTotemValue.h"
@@ -145,7 +149,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (15 of its keys)
+    // the registry of StrategyContext (16 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -166,6 +170,7 @@ namespace slice
             creators["hold position"] = [](PlayerbotAI* ai) { return new HoldPositionStrategy(ai); };
             creators["behind"] = [](PlayerbotAI* ai) { return new SetBehindCombatStrategy(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollStrategy(ai); };
+            creators["grind"] = [](PlayerbotAI* ai) { return new GrindingStrategy(ai); };
         }
     };
 
@@ -192,7 +197,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (54 of its keys)
+    // the registry of ActionContext (57 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -252,10 +257,13 @@ namespace slice
             creators["switch to ranged"] = [](PlayerbotAI* ai) { return new SwitchToRangedAction(ai); };
             creators["auto loot roll"] = [](PlayerbotAI* ai) { return new AutoLootRollAction(ai); };
             creators["release loot"] = [](PlayerbotAI* ai) { return new ReleaseLootAction(ai); };
+            creators["attack anything"] = [](PlayerbotAI* ai) { return new AttackAnythingAction(ai); };
+            creators["avoid elite"] = [](PlayerbotAI* ai) { return new AvoidEliteAction(ai); };
+            creators["idle wander"] = [](PlayerbotAI* ai) { return new IdleWanderAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (8 of its keys)
+    // the registry of ChatActionContext (9 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -269,10 +277,11 @@ namespace slice
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
+            creators["spirit healer"] = [](PlayerbotAI* ai) { return new SpiritHealerAction(ai); };
         }
     };
 
-    // the registry of WorldPacketActionContext (6 of its keys)
+    // the registry of WorldPacketActionContext (8 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -284,10 +293,12 @@ namespace slice
             creators["loot start roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootStartRollAction(ai); };
             creators["loot vote"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootVoteAction(ai); };
             creators["loot roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootRollAction(ai); };
+            creators["find corpse"] = [](PlayerbotAI* ai) { return new FindCorpseAction(ai); };
+            creators["revive from corpse"] = [](PlayerbotAI* ai) { return new ReviveFromCorpseAction(ai); };
         }
     };
 
-    // the registry of TriggerContext (101 of its keys)
+    // the registry of TriggerContext (106 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -394,6 +405,11 @@ namespace slice
             creators["new pet"] = [](PlayerbotAI* ai) { return new NewPetTrigger(ai); };
             creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackTrigger(ai); };
             creators["enemy fifteen yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy fifteen yards", 15.0f); };
+            creators["no target"] = [](PlayerbotAI* ai) { return new NoTargetTrigger(ai); };
+            creators["dangerous elite near"] = [](PlayerbotAI* ai) { return new DangerousEliteNearTrigger(ai); };
+            creators["dead"] = [](PlayerbotAI* ai) { return new DeadTrigger(ai); };
+            creators["corpse near"] = [](PlayerbotAI* ai) { return new CorpseNearTrigger(ai); };
+            creators["val"] = [](PlayerbotAI* ai) { return new ValueTrigger(ai); };
         }
     };
 
@@ -420,7 +436,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (186 of its keys)
+    // the registry of ValueContext (193 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -612,11 +628,18 @@ namespace slice
             creators["seen need rolls"] = [](PlayerbotAI* ai) { return new SeenNeedRolls(ai); };
             creators["item usage"] = [](PlayerbotAI* ai) { return new ItemUsageValue(ai); };
             creators["skip go loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "skip go loot list"); };
+            creators["grind target"] = [](PlayerbotAI* ai) { return new GrindTargetValue(ai); };
+            creators["can fight elite"] = [](PlayerbotAI* ai) { return new CanFightEliteValue(ai); };
+            creators["dangerous elite"] = [](PlayerbotAI* ai) { return new DangerousEliteValue(ai); };
+            creators["graveyard"] = [](PlayerbotAI* ai) { return new GraveyardValue(ai); };
+            creators["best graveyard"] = [](PlayerbotAI* ai) { return new BestGraveyardValue(ai); };
+            creators["should spirit healer"] = [](PlayerbotAI* ai) { return new ShouldSpiritHealerValue(ai); };
+            creators["can move around"] = [](PlayerbotAI* ai) { return new CanMoveAroundValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 20, kActions = 68, kTriggers = 106, kValues = 186;
+    constexpr unsigned kStrategies = 21, kActions = 74, kTriggers = 111, kValues = 193;
 }
 }
 
