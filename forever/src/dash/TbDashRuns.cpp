@@ -272,6 +272,15 @@ void Cycle(State& s)
     std::vector<CT::BindingInfo> bindings;
     for (run::RunRec* rec : run::All())
     {
+        // An old finished run stays in the run table until its leader starts another: once it left the Commander tab and its summary is
+        // written it costs nothing here (no party read, no role lookup).
+        if (run::Ended(*rec))
+        {
+            bool const lingering = rec->endedMs && (nowMs - rec->endedMs) / 1000u < uint32(P::kLingerSecs);
+            bool const summaryDue = !s.summaryDir.empty() && !s.ledger.Contains(uint32(rec->leader.GetCounter()), rec->startedMs);
+            if (!lingering && !summaryDue)
+                continue;
+        }
         P::RunView const view = ViewOf(*rec, nowUnix, nowMs);
         if (view.ended && !s.summaryDir.empty() && s.ledger.MarkIfNew(view.leaderGuid, view.startedMs))
             WriteSummary(s, view);

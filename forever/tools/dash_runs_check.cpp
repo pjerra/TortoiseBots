@@ -271,7 +271,9 @@ int main(int argc, char** argv)
     // ---- a summary is written once per (leader, startedMs) ----
     {
         SummaryLedger ledger;
+        CHECK(!ledger.Contains(7, 5000));
         CHECK(ledger.MarkIfNew(7, 5000));
+        CHECK(ledger.Contains(7, 5000));
         CHECK(!ledger.MarkIfNew(7, 5000));              // the next cycle: not again
         CHECK(!ledger.MarkIfNew(7, 5000));
         CHECK(ledger.MarkIfNew(7, 9000));               // the same leader's next run

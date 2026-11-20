@@ -303,6 +303,10 @@ public:
     {
         return seen_.insert({leaderGuid, startedMs}).second;
     }
+    bool Contains(uint32_t leaderGuid, uint32_t startedMs) const
+    {
+        return seen_.count({leaderGuid, startedMs}) != 0;
+    }
 
 private:
     std::set<std::pair<uint32_t, uint32_t>> seen_;
