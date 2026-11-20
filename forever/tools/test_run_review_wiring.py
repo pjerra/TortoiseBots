@@ -74,7 +74,7 @@ class Review(unittest.TestCase):
         self.assertNotIn("== LIQUID_MAP_IN_WATER", self.facts)
         self.assertIn("liquid::PointRefusedOnMap", self.facts)
         self.assertNotIn("LIQUID_MAP_IN_WATER", self.stands)
-        self.assertIn("liquid::PathRefused", self.stands)
+        self.assertIn("liquid::PathPrefixRefused", self.stands)       # review fix 1: the move rule (a wet prefix from the lead's own spot)
         self.assertNotRegex(self.liquid, r"LiquidStatusCompat\([^)]*z \+ 0\.5f")
         self.assertIn("PointRefused(static_cast<std::uint32_t>(status), data.level, z)", self.liquid)
 
