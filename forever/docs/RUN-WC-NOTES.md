@@ -93,6 +93,18 @@ spawn row) and the corpse/grid fields certify the kill.
 | `test_run_facts` (Ragefire Chasm, unchanged) | PASS |
 | `test_run_facts_s9`, `test_run_liquid`, `test_run_cancel`, `test_run_binding`, `test_run_gather`, `test_run_c6` | PASS |
 
-## 6. Gates and the live run
+## 6. Gates (build VM, core 25fc7ca, this worktree)
 
-(filled in the sections below when run on the build VM)
+| gate | result |
+|---|---|
+| census (`FOREVER_SLOT=4`, `FOREVER_CORE=~/ForeverCore-25fc7ca`, `FOREVER_CENSUS_LIST=forever/SLICE9.txt`) | `files 265 compile clean 265 with errors 0 error places 0 (in 0 files) includes of a header ForeverCore does not have 0` |
+| option ON `worldserver` (`FOREVER_SLOT=2 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0`, 305/305, `worldserver` links |
+| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | (see the line below) |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=218` |
+| `test_run_wc`, `test_run_tasks`, `test_run_orders`, `test_run_facts` (RFC), `test_run_facts_s9`, `test_run_liquid`, `test_run_cancel`, `test_run_binding`, `test_run_gather`, `test_run_c6` | all PASS (see section 5) |
+| `test_wc_plan_rows.py`, `tools/test_dungeon_plan_sql.py` (Turtle SQL unchanged), the six `forever/tools/test_*_wiring.py` | OK / 104 tests OK / OK |
+| Turtle `vm-build` / `vm-test tb` | not needed: nothing outside `forever/` changed |
+
+## 7. The live run
+
+(filled in below after the run)
