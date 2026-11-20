@@ -21,7 +21,7 @@ inline void NoteLootWindowAnnouncedCompat(Player const* bot, ObjectGuid const& o
 // LOOT: money first (lead decision D2), items since slice 9 (package L9). The bot opens a corpse, reads its money from the core's Loot object, takes it and releases
 // the window, through the core's own handlers (the calls a client's packets end in). Everything that takes ITEMS out of a window
 // is the named feature "loot: items, quest items and rolls".
-// Threading: the engine ticks on the world thread, before the maps update (World.cpp:2465, :2475). The loot handlers are
+// Threading: the engine ticks on the world thread, before the maps update (World.cpp:2481, :2475). The loot handlers are
 // PROCESS_THREADUNSAFE (Opcodes.cpp:689-693), i.e. the world thread is where the core itself runs them, and they read the map
 // (ObjectAccessor::GetCreature, Cell::VisitGridObjects, GetMap()->GetCreature) which no map thread writes while the engine runs.
 // ===============================================================================================================
@@ -78,7 +78,7 @@ inline void LootReleaseCompat(Player* bot, ObjectGuid const& guid)
 }
 
 // Release EVERY window of the bot's loot view (R5 item 2). T: the named window only (T opens one window per corpse and has no area loot, so this is
-// what it always did). F: with Loot.EnableAELoot on (World.cpp:713, default 1) HandleLootOpcode also opened up to 49 other corpses within 30 yards into
+// what it always did). F: with Loot.EnableAELoot on (World.cpp:725, default 1) HandleLootOpcode also opened up to 49 other corpses within 30 yards into
 // m_AELootView and HandleLootMoneyOpcode took the money of the whole view, so after the money take every window in the view is closed through the same
 // handler (LootReleaseCompat per owner guid; the owner guids are copied first, as the release erases from the view): the bot leaves every looters list,
 // loses UNIT_FLAG_LOOTING, and the other corpses reach the looted-corpse cleanup on their normal timer. `guid` (the named corpse) is released first.

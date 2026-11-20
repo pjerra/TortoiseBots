@@ -14,7 +14,7 @@
 //  * Player::isAllowedToLoot (Player.cpp:20256) is the core's own entitlement test, the one that masks the lootable dynamic flag per viewer
 //    (ViewerDependentValues.h:76) and that CMSG_LOOT applies (LootHandler.cpp:61, :214).
 //  * The loot handlers run on the world thread (PROCESS_THREADUNSAFE, Opcodes.cpp:689-693) and need no map context. Everything in this file
-//    is a READ: it takes no map lock, writes nothing, and the engine ticks on the world thread outside the map update (World.cpp:2462-2475,
+//    is a READ: it takes no map lock, writes nothing, and the engine ticks on the world thread outside the map update (World.cpp:2478-2491,
 //    findings item 2 still holds: nothing here proves a map thread cannot touch the same corpse while a tick runs).
 #pragma once
 
