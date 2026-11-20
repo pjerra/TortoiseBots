@@ -252,6 +252,46 @@ static void TestDoorFailures()
     CHECK(s.what == tk::Do::Fail && s.code == "in-combat");
 }
 
+static void TestGoober()
+{
+    // The Defias Cannon: the goober's script answers the use and its own state does not change: delivered = used, once the settle time has passed, and only then
+    tk::TaskRec r = tk::MakeRec(tk::Kind::Open, false, false, 0, 2.0f, true);
+    tk::Obs o = Walking(2.0f);
+    o.inRange = true;
+    CHECK(tk::Advance(r, o, RC::kTaskTickMs).what == tk::Do::BeginAct);
+    r.baseline = tk::PackState(0, 1);
+    tk::NoteActStart(r, true, false, "", "");
+    o.objectState = tk::PackState(0, 1);
+    tk::Step s;
+    int looks = 0;
+    do
+    {
+        s = tk::Advance(r, o, RC::kTaskTickMs);
+        ++looks;
+    } while (s.what == tk::Do::Wait && looks < 40);
+    CHECK(s.what == tk::Do::Succeed && s.message.compare(0, 5, "used:") == 0 && s.message != "opened");
+    CHECK(looks >= int(tk::kScriptSettleMs / RC::kTaskTickMs));
+    // a door is never reported "used" without its state changing
+    tk::TaskRec door = tk::MakeRec(tk::Kind::Open, false, false, 0, 2.0f, false);
+    tk::Obs d = Walking(2.0f);
+    d.inRange = true;
+    tk::Advance(door, d, RC::kTaskTickMs);
+    door.baseline = tk::PackState(0, 1);
+    tk::NoteActStart(door, true, false, "", "");
+    d.objectState = tk::PackState(0, 1);
+    s = Run(door, d, 30);
+    CHECK(s.what == tk::Do::Fail && s.code == "failed");
+    // a goober that vanished is no success
+    tk::TaskRec g2 = tk::MakeRec(tk::Kind::Open, false, false, 0, 2.0f, true);
+    tk::Obs e = Walking(2.0f);
+    e.inRange = true;
+    tk::Advance(g2, e, RC::kTaskTickMs);
+    tk::NoteActStart(g2, true, false, "", "");
+    e.objectPresent = false;
+    s = tk::Advance(g2, e, RC::kTaskTickMs);
+    CHECK(s.what == tk::Do::Fail);
+}
+
 static void TestLoot()
 {
     // a boss corpse, the whole window: money and an item
@@ -344,6 +384,7 @@ int main()
     TestLock();
     TestDoor();
     TestDoorFailures();
+    TestGoober();
     TestLoot();
     TestTargets();
     TestExecutorTexts();

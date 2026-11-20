@@ -582,7 +582,8 @@ OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, T
     task.goTarget = target.go != nullptr;
     bool const chest = target.go && target.go->GetGoType() == GAMEOBJECT_TYPE_CHEST;
     bool const lootLike = isLoot || chest;
-    task.rec = MakeRec(isLoot ? Kind::Loot : Kind::Open, lootLike, target.corpse != nullptr, isLoot ? order.itemId : 0, distance);
+    task.rec = MakeRec(isLoot ? Kind::Loot : Kind::Open, lootLike, target.corpse != nullptr, isLoot ? order.itemId : 0, distance,
+        target.go && target.go->GetGoType() == GAMEOBJECT_TYPE_GOOBER && !lootLike);
     task.startedMs = nowMs;
     rt.byBot[task.bot] = task;
     rt.state.carrier = task.bot;

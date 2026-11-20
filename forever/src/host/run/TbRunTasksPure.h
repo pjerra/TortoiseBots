@@ -30,6 +30,7 @@ namespace RC = ::TortoiseBots::RemoteCommander;
 constexpr float kEntrySearchYd = 5.0f;          // spec 7: a plan row names an object by entry and point; a spawn farther than this from the point is not "it" (never another one of the entry)
 constexpr float kCorpseRangeYd = 5.0f;          // a corpse is looted from this close (the core accepts 30: AELootCreatureCheck::LootDistance, LootHandler.cpp:42)
 constexpr uint32_t kWalkReorderMs = 3000;       // a bot standing still short of its stand is sent to it again this often
+constexpr uint32_t kScriptSettleMs = 1500;      // a goober's script may answer the use without changing the goober's own state (the Defias Cannon sets the Iron Clad Door instead)
 constexpr uint32_t kTaskCapMs = 60000;          // the whole task, walk and act: the policy's own cap is 90 s (kTaskCapMs there)
 constexpr uint32_t kFreeSlotsFloor = 2;         // the carrier keeps this many free bag slots (spec 5d); a loot order that needs a new slot below it is left alone
 constexpr int kLootNone = -1;                   // the policy's "no group / not a method it knows" (Facts::lootMethod)
@@ -220,12 +221,15 @@ struct TaskRec
     uint32_t sinceWalkOrderMs = kWalkReorderMs;   // the first look sends the bot (or finds it in range)
     uint32_t walkOrders = 0;
     uint32_t totalMs = 0;
+    bool scriptUse = false;         // a goober: its script handles the use (GameObject::Use, GOOBER case: `OnGossipHello` / the linked event), so the object's own state may never change
+    uint32_t actMs = 0;             // since the use was delivered
     std::string lastCode, lastMessage;
 };
 
-inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, float startDistance)
+inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, float startDistance, bool scriptUse = false)
 {
     TaskRec r;
+    r.scriptUse = scriptUse;
     r.kind = kind;
     r.lootLike = lootLike;
     r.corpse = corpse;
@@ -339,6 +343,16 @@ inline Step Advance(TaskRec& r, Obs const& o, uint32_t diffMs)
     if (r.totalMs >= kTaskCapMs && !facts.actDone)
         return Failed(RC::kCodeTimeout, "The task did not finish in " + std::to_string(kTaskCapMs / 1000) + " s.");
 
+    // A goober whose use was delivered and whose own state did not change: the core's handler gives no answer, and the script's effect is on another object
+    // (the cannon sets the Iron Clad Door). The use is reported as delivered, in those words (never "opened"); the plan's wait_object step reads the effect.
+    if (r.actStarted) r.actMs += diffMs;
+    if (r.scriptUse && r.actStarted && !facts.actDone && o.botAvailable && o.objectPresent && r.state.stage == RC::TaskStage::Act && r.actMs >= kScriptSettleMs)
+    {
+        Step s;
+        s.what = Do::Succeed;
+        s.message = "used: the object's script answers the use; its effect is read by the plan's next wait step";
+        return s;
+    }
     RC::TaskVerdict const verdict = RC::AdvanceTask(r.state, facts, diffMs);
     switch (verdict.step)
     {
