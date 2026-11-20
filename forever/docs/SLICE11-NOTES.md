@@ -112,3 +112,28 @@ All from SELECTs on the world database of the forever test server (read only, TD
 ## 9. The live test (M4 party, gates a-i of the spec)
 
 (filled in at the end of the package)
+
+## 10. Review fix round (Codex re-check)
+
+One finding; verified against the core at the pin and fixed. No rejections.
+
+**Failed map insertion left a persistent unusable pet (high) — real, fixed.** `GiveHunterPet` called `Map::AddToMap` and dropped its answer, then went on to `SetMinion`, `SavePetToDB(PET_SAVE_AS_CURRENT)` and `SaveSummonedPetNumberCompat`. `AddToMap` (`Map.cpp:527-546` at the pin) answers false before the pet enters the grid (invalid cell coordinates; the `ASSERT` that would abort in a debug build is a no-op in the Release build the gate uses), so the pet never reaches the world while `InitTamedPet` has already taken its active slot (`Unit.cpp`), the bot names it (`SetMinion`) and the row and pet number are written. The read-back answers `not-summoned`, and for the rest of the session every later check stops at `GetPetGUID()`/`HasStoredPetCompat()` (`has-pet`/`stored-pet`): the hunter has no pet and the module never tries again. The written row and `characters.summonedPetNumber` are not a rescue either (the review said the state survives relogging unusable; that part is overstated — `_LoadPetStable` reads the number, and the first movement after login summons the saved pet, `Player.cpp:29690`), but the session is lost and the bot's state no longer matches the world. The core's own `Spell::EffectTameCreature` drops the same answer (that is where the order came from); this path now deliberately differs.
+
+Fix: the steps live in the core-free flow `forever/src/host/TbPetSummonPure.h` (`SummonTamedPet`), and `TbHostPetFactory.cpp` implements them in core terms (`PetSummonSteps`). An insert that fails discards the pet: the active slot `InitTamedPet` took is freed and the object deleted, with nothing attached and nothing written. After the attach the bot reads the pet back; if it is not out there, the minion attachment is undone, the object removed and the slot freed, again before any write. `Keep()` (training points, autocast defaults, the save, the pet number, the pet bar) runs only for a pet the bot reads back, so a row or `characters.summonedPetNumber` can no longer be written for a pet that is not out. Both failures answer `not-summoned` ("the pet was made but is not out"), an existing code; no new refusal word. The `!map` branch now shares the same discard.
+
+Residual, cosmetic: `InitTamedPet` also appends a stable dynamic-update-field entry (`Player::AddPetToUpdateFields`). It cannot be removed from the module (`Player::m_values` is protected), holds no pet (the `PetStable` slot is cleared), is rebuilt at login, and has no DB row behind it.
+
+Test: `tools/test_pet_summon.cpp` (29 checks; discovered and run by `tools/verify_all.sh`) fakes the map, the attach and the read-back: a refused insert attaches nothing, saves nothing, numbers nothing and frees the slot, and the retry then succeeds; a read-back that does not show the pet is undone before the write; the happy path keeps exactly once. Mutation-checked against the fix: removing the insert guard fails the first test (`tools/test_pet_summon.cpp:83`) and dropping the read-back decision fails its own (`:108`).
+
+Gates on this tree:
+
+| Gate | Result |
+|---|---|
+| option-ON `worldserver`, isolated slot 8 (`FOREVER_COMBINED=0 FOREVER_SLOT=8 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON ./build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0 TOTAL_SECONDS=213`; `[1649/1673] Building CXX ... TbHostPetFactory.cpp.o`, `[1673/1673] Linking CXX executable bin/Release/bin/worldserver`, `grep -c "undefined reference" make.log` = 0 |
+| `tools/test_pet_summon.cpp` | 29 checks, OK; mutation checks as above |
+| `test_slice11_wiring.py` | OK (201 paths, 22 class files, 3 compat pairs, 8 starter races) |
+| `tools/test_forever_no_direct_queries.py` | 5 tests OK (no new direct character-database write) |
+| generator, registry | `SliceAiObjectContext.cpp is up to date`; `(a)=0 (b)=221` |
+| Turtle `vm-build ~/wt-s11 --wait` | `COMPILE_SECONDS=28 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, mangosd and realmd built |
+| Turtle `vm-test tb ~/wt-s11` | tree aee77ce46 (this notes file uncommitted): `RESULT: PASS kind=tb wt=wt-s11 sha=aee77ce46 dirty=1 files=3878 rc=0 vm_duration=1079s`, 481 standalone policy tests verified (the new `test_pet_summon` among them); the standing `action_loop` / `Mage stay` scenario baseline is unchanged |
+| option-OFF module, census | not rerun: the changed TU and header are in `forever/src/host`, which CMake excludes unless `TORTOISEBOTS_SLICE1` is ON; the option-ON build above is the only build that compiles them |
