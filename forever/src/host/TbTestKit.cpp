@@ -4,6 +4,7 @@
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/cmd/TbReplacePure.h"
 #include "host/cmd/TbTestTargetPure.h"
 
 #include "DB2Stores.h"
@@ -184,7 +185,8 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 // The core's own checks and calls: Player::CanEquipNewItem (Player.h:1603: class, level, skill, slot, two-hand rules, combat, stun), then
 // Player::EquipNewItem (:1621) into the slot it found. A slot that is taken refuses with the core's reason (EQUIP_ERR_NO_SLOT_AVAILABLE). With
 // `replace` the item goes to the bags and the core's own swap (Player::SwapItem, the call of a client's equip click) puts it on and the old piece
-// into the bags, after the same check with swap = true.
+// into the bags, after the same check with swap = true. A displaced piece the incoming piece beats (starter gear: poor or common, lower item
+// level) is destroyed instead of kept, and the record names it; anything better stays in the bags as before (TbReplacePure.h).
 
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
@@ -204,8 +206,9 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
     ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item);
     Reply reply(handler, args, "equip");
-    // One equip record: the item, the core's answer, the slot or the reason; one line.
-    auto const say = [&](char const* result, std::string const& why, int slot = -1, int code = -1, char const* note = nullptr, bool replaced = false)
+    // One equip record: the item, the core's answer, the slot or the reason, and what a replace threw away; one line.
+    auto const say = [&](char const* result, std::string const& why, int slot = -1, int code = -1, char const* note = nullptr,
+                         bool replaced = false, std::vector<uint32> const* destroyed = nullptr)
     {
         Rec rec("equip");
         rec.S("bot", bot->GetName()).N("item", item);
@@ -219,6 +222,14 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.N("code", code);
         if (replaced)
             rec.B("replaced", true);
+        if (destroyed && !destroyed->empty())
+        {
+            std::vector<std::string> ids;
+            ids.reserve(destroyed->size());
+            for (uint32 id : *destroyed)
+                ids.push_back(std::to_string(id));
+            rec.N("destroyed", int64(destroyed->size())).L("destroyed_item", ids);
+        }
         if (note)
             rec.S("note", note);
         reply.Begin();
@@ -269,10 +280,37 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         say("refused", fresh ? ResultName(result) : std::string("item-not-in-bags"), -1, -1, "item left in bags");
         return true;
     }
+    // The pieces the swap will take off the body: the one in the named slot and, for a two-hander, the offhand (SwapItem's
+    // AutoUnequipOffhandIfNeed puts it in the bags).
+    Item* displaced = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
+    Item* displacedOff = ((swapDest & 255) == EQUIPMENT_SLOT_MAINHAND && proto->InventoryType == INVTYPE_2HWEAPON)
+        ? bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND)
+        : nullptr;
+    Player* const sender = SenderPlayer(handler);
+    bool const mayDestroy = replace::MayDestroyReplacedItem(IsHostBot(bot),
+        !handler->GetSession() || handler->GetSession()->GetSecurity() >= SEC_GAMEMASTER, sender && sender == bot);
     bot->SwapItem(fresh->GetPos(), swapDest);
     Item* worn = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
     if (worn && worn->GetEntry() == item)
-        say("equipped", "", int(swapDest & 255), -1, nullptr, true);
+    {
+        std::vector<uint32> destroyed;
+        auto const dropIfStarter = [&](Item* piece)
+        {
+            if (!piece || piece == worn || !mayDestroy)
+                return;
+            ItemTemplate const* oldProto = piece->GetTemplate();
+            if (!oldProto || !replace::IsStarterUpgrade(oldProto->GetQuality(), oldProto->GetBaseItemLevel(), proto->GetBaseItemLevel()))
+                return;
+            // Only a piece that really moved into the bags: never the one just equipped.
+            if (!Player::IsInventoryPos(piece->GetBagSlot(), piece->GetSlot()))
+                return;
+            destroyed.push_back(piece->GetEntry());
+            bot->DestroyItem(piece->GetBagSlot(), piece->GetSlot(), true);
+        };
+        dropIfStarter(displaced);
+        dropIfStarter(displacedOff);
+        say("equipped", "", int(swapDest & 255), -1, nullptr, true, &destroyed);
+    }
     else
         say("refused", "swap-failed", -1, -1, "item left in bags");
     return true;

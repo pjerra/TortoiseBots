@@ -170,7 +170,9 @@ h3::Rec RunRecord(RunRec const& rec, uint32 nowMs)
     for (auto const& [entry, dead] : rec.bossDead)
         bosses.push_back({ std::to_string(entry), dead ? "dead" : "alive" });
     out.LP("boss", bosses);
-    out.N("deaths", rec.deaths).N("wipes", rec.wipes).N("pauses", rec.pauses);
+    // One total under two names: `deaths` is what existing readers count, `member_deaths` says what it counts (every
+    // member death edge, bots and real players included; the done note's wipe and lead-death counters are narrower).
+    out.N("deaths", rec.deaths).N("member_deaths", rec.deaths).N("wipes", rec.wipes).N("pauses", rec.pauses);
     uint32 const until = rec.endedMs ? rec.endedMs : nowMs;
     out.N("elapsed", until >= rec.startedMs ? (until - rec.startedMs) / 1000u : 0u);
     // why= only when the run is paused (the run's own note says why) or stopped (the reason it was given), as addendum A5 does for `ready`.

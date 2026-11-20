@@ -34,7 +34,7 @@ class Joint3(unittest.TestCase):
 
     def test_the_equip_record_reports_destruction(self):
         kit = text("host/TbTestKit.cpp")
-        self.assertIn('rec.N("destroyed", int(destroyed->size())).S("destroyed_item", ids);', kit)
+        self.assertIn('rec.N("destroyed", int64(destroyed->size())).L("destroyed_item", ids);', kit)
         self.assertIn("SEC_GAMEMASTER", kit)
 
     def test_the_replace_rule_is_pure(self):
