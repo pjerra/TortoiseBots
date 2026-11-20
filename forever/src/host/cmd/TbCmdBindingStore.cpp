@@ -2,7 +2,8 @@
 //
 // The DDL is the one in forever/sql/characters/2026_11_20_00_tb_commander_binding.sql, kept here as text and run once when the key is on, so an enabled
 // server works without the migration. ForeverCore aborts the world on a statement naming a missing table or column (MySQLConnection.cpp), so EVERY
-// statement here - the read, the schema check and both writes - asks information_schema first and refuses when the five columns are not all there.
+// statement the store makes - the read, the schema check and both writes - goes through the guard in compat/TbCompat_CharStore.h, which asks
+// information_schema first and runs nothing when the five columns are not all there.
 // The column check is repeated before every write: a table dropped or altered after the first check must disable persistence, not reach the core.
 #include "host/cmd/TbCmdBindingStore.h"
 
