@@ -49,11 +49,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
-#include <list>
 #include <map>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace TortoiseBots
@@ -465,7 +466,10 @@ void ReadReadyCooldowns(Player* bot, State::Ready& entry)
         if (!proto)
             continue;
         if (bot->GetSpellHistory()->HasCooldown(proto))
-            longest = std::max(longest, uint32(std::max<int64>(0, bot->GetSpellHistory()->GetRemainingCooldown(proto).count())));
+        {
+            int64 const leftMs = bot->GetSpellHistory()->GetRemainingCooldown(proto).count();
+            longest = std::max(longest, FD::RemainingSeconds(leftMs));
+        }
         else
             ++ready;
     }
@@ -614,37 +618,88 @@ void FillBosses(Player* lead, CT::BindingInfo& binding)
     }
 }
 
+// The capped grid visits. `Cell::VisitAllObjects` hands the visitor one grid manager per cell; the visit is stopped at the cap (a full sweep
+// refuses the next candidate and every later manager call returns at once), so a dense area costs the cap, not a row, a hash entry and a sort
+// per unit in range. The candidates are the ones the visit met first, listed nearest first by the sweep's own order.
+struct CappedUnitVisit
+{
+    CappedUnitVisit(Player* lead, float range, FD::Sweep<Unit*>& sweep) : lead(lead), range(range), sweep(sweep) { }
+
+    template <class T>
+    void Visit(GridRefManager<T>& manager)
+    {
+        if (stopped)
+            return;
+        if constexpr (std::is_base_of_v<Unit, T>)
+            for (GridReference<T> const& ref : manager)
+            {
+                Unit* unit = ref.GetSource();
+                if (!unit->IsInWorld() || !unit->IsAlive() || !unit->InSamePhase(lead) || lead->IsFriendlyTo(unit)
+                    || !lead->IsWithinDist(unit, range))
+                    continue;
+                float const dx = unit->GetPositionX() - lead->GetPositionX();
+                float const dy = unit->GetPositionY() - lead->GetPositionY();
+                if (!sweep.Offer(RawOf(unit->GetGUID()), dx * dx + dy * dy, unit) || sweep.Full())
+                {
+                    stopped = true;
+                    return;
+                }
+            }
+    }
+
+    Player* lead;
+    float range;
+    FD::Sweep<Unit*>& sweep;
+    bool stopped = false;
+};
+
+struct CappedObjectVisit
+{
+    CappedObjectVisit(Player* lead, float range, FD::Sweep<GameObject*>& sweep) : lead(lead), range(range), sweep(sweep) { }
+
+    template <class T>
+    void Visit(GridRefManager<T>& manager)
+    {
+        if (stopped)
+            return;
+        if constexpr (std::is_base_of_v<GameObject, T>)
+            for (GridReference<T> const& ref : manager)
+            {
+                GameObject* go = ref.GetSource();
+                // A kind the dashboard does not draw is not a candidate: it must not fill the cap and empty the list.
+                if (!go->IsInWorld() || !GoKindLetter(go->GetGoType()) || !lead->IsWithinDist(go, range, false))
+                    continue;
+                float const dx = go->GetPositionX() - lead->GetPositionX();
+                float const dy = go->GetPositionY() - lead->GetPositionY();
+                if (!sweep.Offer(RawOf(go->GetGUID()), dx * dx + dy * dy, go) || sweep.Full())
+                {
+                    stopped = true;
+                    return;
+                }
+            }
+    }
+
+    Player* lead;
+    float range;
+    FD::Sweep<GameObject*>& sweep;
+    bool stopped = false;
+};
+
 void FillObjects(Player* lead, CT::BindingInfo& binding)
 {
     Map* map = lead->GetMap();
     if (!map)
         return;
-    std::list<GameObject*> found;
-    Trinity::AllGameObjectsWithEntryInRange check(lead, 0, Get().objectRange);
-    Trinity::GameObjectListSearcher<Trinity::AllGameObjectsWithEntryInRange> searcher(lead, found, check);
-    Cell::VisitAllObjects(lead, searcher, Get().objectRange);
-    std::vector<FD::Near> near;
-    std::unordered_map<uint64, GameObject*> byGuid;
-    float const px = lead->GetPositionX(), py = lead->GetPositionY();
-    for (GameObject* go : found)
-    {
-        if (!go || !go->IsInWorld() || !GoKindLetter(go->GetGoType()))
-            continue;
-        float const dx = go->GetPositionX() - px, dy = go->GetPositionY() - py;
-        near.push_back({ RawOf(go->GetGUID()), dx * dx + dy * dy });
-        byGuid.emplace(RawOf(go->GetGUID()), go);
-    }
-    FD::KeepNearest(near, FD::kObjectCap);
+    FD::Sweep<GameObject*> sweep(FD::kObjectCap);
+    CappedObjectVisit visit(lead, Get().objectRange, sweep);
+    Cell::VisitGridObjects(lead, visit, Get().objectRange);
+    std::vector<std::pair<FD::Near, GameObject*>> near = sweep.Take();
     binding.objectsReported = true;
     binding.objects.reserve(near.size());
-    for (FD::Near const& n : near)
+    for (auto const& [row, go] : near)
     {
-        auto const it = byGuid.find(n.id);
-        if (it == byGuid.end())
-            continue;
-        GameObject* go = it->second;
         CT::ObjectInfo info;
-        info.id = n.id;
+        info.id = row.id;
         info.entry = go->GetEntry();
         info.name = go->GetName();
         info.x = go->GetPositionX();
@@ -661,38 +716,23 @@ void FillBinding(Player* lead, CT::BindingInfo& binding, uint32 nowMs, WatchedBi
     Map* map = lead->GetMap();
     if (!map)
         return;
-    // The hostiles near the lead: one grid sweep, nearest first, capped (spec: 24 per binding per cycle).
-    std::list<Unit*> found;
-    Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(lead, lead, Get().mobRange);
-    Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(lead, found, check);
-    Cell::VisitAllObjects(lead, searcher, Get().mobRange);
-    std::vector<FD::Near> near;
-    std::unordered_map<uint64, Unit*> byGuid;
-    float const px = lead->GetPositionX(), py = lead->GetPositionY();
-    for (Unit* unit : found)
-    {
-        if (!unit || !unit->IsInWorld())
-            continue;
-        float const dx = unit->GetPositionX() - px, dy = unit->GetPositionY() - py;
-        near.push_back({ RawOf(unit->GetGUID()), dx * dx + dy * dy });
-        byGuid.emplace(RawOf(unit->GetGUID()), unit);
-    }
-    FD::KeepNearest(near, FD::kMobCap);
+    // The hostiles near the lead: one capped grid visit (spec: 24 per binding per cycle), stopped at the cap, the rows nearest first.
+    FD::Sweep<Unit*> sweep(FD::kMobCap);
+    CappedUnitVisit visit(lead, Get().mobRange, sweep);
+    Cell::VisitAllObjects(lead, visit, Get().mobRange);
+    std::vector<std::pair<FD::Near, Unit*>> near = sweep.Take();
     binding.mobsReported = true;
     binding.mobsMap = lead->GetMapId();
     binding.mobs.clear();
     binding.mobs.reserve(near.size());
     watch.mobs.clear();
-    for (FD::Near const& n : near)
+    for (auto const& [row, unit] : near)
     {
-        auto const it = byGuid.find(n.id);
-        if (it == byGuid.end())
-            continue;
         CT::MobInfo mob;
-        if (!FillMob(lead, it->second, mob))
+        if (!FillMob(lead, unit, mob))
             continue;
         binding.mobs.push_back(std::move(mob));
-        watch.mobs.push_back(it->second->GetGUID());
+        watch.mobs.push_back(unit->GetGUID());
     }
     // The overlay rows (facing, cast, shape, auras, flags): bosses first, then elites, at most the datagram's own overlay cap.
     size_t overlays = 0;
@@ -703,11 +743,17 @@ void FillBinding(Player* lead, CT::BindingInfo& binding, uint32 nowMs, WatchedBi
                 break;
             if (mob.rank != rank)
                 continue;
-            auto const it = byGuid.find(mob.id);
-            if (it == byGuid.end() || !it->second)
+            Unit* unit = nullptr;
+            for (auto const& [row, kept] : near)
+                if (row.id == mob.id)
+                {
+                    unit = kept;
+                    break;
+                }
+            if (!unit)
                 continue;
-            FillMobFacingAndCast(it->second, mob);
-            FillMobState(it->second, mob);
+            FillMobFacingAndCast(unit, mob);
+            FillMobState(unit, mob);
             ++overlays;
         }
 

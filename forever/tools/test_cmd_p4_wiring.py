@@ -2,9 +2,11 @@
 """Wiring pins and mutations for the commander map layers (package P4, forever/docs/CMD-P4-NOTES.md).
 
 The core calls cannot run without a server, so the wiring tests pin where the two clocks stand, what the feed files may never do (a database call,
-an engine-free path that still answers), and that a layer is only reported after its scan ran. The mutation tests (CMD_P4_MUTATE=1, they compile
-forever/tools/cmd_feeds_check.cpp, so run them on the build VM) break the pure half four ways and expect the standalone check to FAIL each time:
-  cap      the nearest-first cut keeps every candidate (the card's mob cap gone)
+an engine-free path that still answers), that a layer is only reported after its scan ran, that the caps stop the grid visit and that the cooldown
+conversion is the pure half's. The mutation tests (CMD_P4_MUTATE=1, they compile forever/tools/cmd_feeds_check.cpp, so run them on the build VM)
+break the pure half four ways and expect the standalone check to FAIL each time:
+  cap      a full sweep keeps taking candidates (the card's caps no longer stop the visit)
+  seconds  the cooldown is passed through as milliseconds (a 90 s cooldown reads 90000)
   boss     the instance's DONE encounter no longer marks an unseen boss dead
   window   the position report always starts at the first binding (bindings past the cap never get a turn)
 """
@@ -63,14 +65,38 @@ class Wiring(unittest.TestCase):
         body = function_body(self.cpp, r"void FillBinding\(Player\* lead, CT::BindingInfo& binding")
         self.assertGreater(body.index("binding.mobsReported = true;"), body.index("Cell::VisitAllObjects"))
         objs = function_body(self.cpp, r"void FillObjects\(Player\* lead, CT::BindingInfo& binding")
-        self.assertGreater(objs.index("binding.objectsReported = true;"), objs.index("Cell::VisitAllObjects"))
+        self.assertGreater(objs.index("binding.objectsReported = true;"), objs.index("Cell::VisitGridObjects"))
 
-    def test_the_caps_come_from_the_pure_half(self):
+    def test_the_caps_bound_the_grid_visit(self):
+        # The caps are the sweep's, and both visitors stop the visit at them: a full sweep refuses the next candidate and every later grid
+        # manager call returns without touching a ref, so the caps bound the work (not only the rows). The old shape is gone: no list of every
+        # match, no per-match map, no sort of everything in range.
         body = function_body(self.cpp, r"void FillBinding\(Player\* lead, CT::BindingInfo& binding")
-        self.assertIn("FD::KeepNearest(near, FD::kMobCap)", body)
-        self.assertGreater(body.index("FD::KeepNearest(near, FD::kMobCap)"), body.index("Cell::VisitAllObjects"))
+        self.assertIn("FD::Sweep<Unit*> sweep(FD::kMobCap);", body)
+        self.assertIn("Cell::VisitAllObjects(lead, visit, Get().mobRange);", body)
+        self.assertLess(body.index("CappedUnitVisit visit("), body.index("Cell::VisitAllObjects"))
         objs = function_body(self.cpp, r"void FillObjects\(Player\* lead, CT::BindingInfo& binding")
-        self.assertIn("FD::KeepNearest(near, FD::kObjectCap)", objs)
+        self.assertIn("FD::Sweep<GameObject*> sweep(FD::kObjectCap);", objs)
+        self.assertIn("Cell::VisitGridObjects(lead, visit, Get().objectRange);", objs)
+        for name in ("CappedUnitVisit", "CappedObjectVisit"):
+            visit = function_body(self.cpp, "struct " + name + r"\s*\{")
+            self.assertIn("if (stopped)", visit)                      # the rest of the visit is skipped once the cap is reached
+            self.assertGreater(visit.index("stopped = true;"), visit.index("sweep.Offer("))
+            self.assertIn("sweep.Full()", visit)
+        self.assertNotIn("FD::KeepNearest", self.cpp)
+        self.assertNotIn("FD::KeepNearest", self.pure)
+        self.assertNotIn("UnitListSearcher", self.cpp)
+        self.assertNotIn("GameObjectListSearcher", self.cpp)
+
+    def test_the_cooldowns_go_out_in_seconds(self):
+        # SpellHistory::Duration counts milliseconds; the wire's cl is whole seconds, so the collector converts through the pure half's
+        # RemainingSeconds instead of passing .count() on.
+        body = function_body(self.cpp, r"void ReadReadyCooldowns\(Player\* bot, State::Ready& entry\)")
+        self.assertIn("FD::RemainingSeconds(leftMs)", body)
+        self.assertIn("GetRemainingCooldown(proto).count()", body)
+        self.assertEqual(body.count("count()"), 1)
+        self.assertIn("longest = std::max(longest, FD::RemainingSeconds(leftMs));", body)
+        self.assertIn("remainingMs / 1000", self.pure)
 
     def test_the_feed_files_make_no_database_call(self):
         # All six sources, comments stripped: no pool, no query, no executes. The boss roster is read from the core's in-memory spawn data.
@@ -136,7 +162,8 @@ class Wiring(unittest.TestCase):
 
 
 MUTATIONS = {
-    "cap": ("    if (items.size() > cap)\n        items.resize(cap);", "    (void)cap;"),
+    "cap": ("    bool Full() const { return rows_.size() >= cap_; }", "    bool Full() const { return false; }"),
+    "seconds": ("    return remainingMs > 0 ? uint32_t(remainingMs / 1000) : 0;", "    return remainingMs > 0 ? uint32_t(remainingMs) : 0;"),
     "boss": ("    return encounterDone ? 'd' : 'u';", "    return 'u';"),
     "window": ("    w.first = start % bindings;", "    w.first = 0;"),
 }

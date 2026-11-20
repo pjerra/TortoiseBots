@@ -5,8 +5,10 @@
 #include "forever/src/host/cmd/TbCmdFeedsPure.h"
 #include "runtime/ReadyCheckPolicy.h"
 
+#include <chrono>
 #include <cstdio>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace FD = TortoiseBots::cmd::feeds;
@@ -49,25 +51,43 @@ CT::BindingInfo Binding(char const* commander, uint32_t commanderGuid)
 
 void TestCaps()
 {
-    // The mob cap: the nearest 24, and two equal distances keep a stable order (the guid), so rows do not shuffle between cycles.
-    std::vector<FD::Near> mobs;
+    // The cap bounds the collection, not only the rows: the sweep holds 24, the next offer is refused (the grid visit stops there), and
+    // two equal distances keep a stable order (the guid), so rows do not shuffle between cycles.
+    FD::Sweep<int> mobs(FD::kMobCap);
     for (uint64_t i = 0; i < 40; ++i)
-        mobs.push_back({ 1000 + i, float(i) });
-    mobs[3].dist2 = 1.0f;   // three at distance 1: ids 1000, 1001, 1003
-    mobs[1].dist2 = 1.0f;
-    mobs[0].dist2 = 1.0f;
-    FD::KeepNearest(mobs, FD::kMobCap);
-    CHECK(mobs.size() == 24);
-    CHECK(mobs[0].id == 1000 && mobs[1].id == 1001 && mobs[2].id == 1003);
-    CHECK(mobs.back().id == 1023);
-    // A cap of zero keeps nothing; a short list is untouched.
-    std::vector<FD::Near> one = { { 7, 1.0f } };
-    FD::KeepNearest(one, 0);
-    CHECK(one.empty());
-    std::vector<FD::Near> two = { { 9, 4.0f }, { 8, 1.0f } };
-    FD::KeepNearest(two, FD::kObjectCap);
-    CHECK(two.size() == 2 && two[0].id == 8 && two[1].id == 9);
+        if (!mobs.Offer(1000 + i, float(i), int(i)))
+            break;
+    CHECK(mobs.Size() == 24);
+    CHECK(mobs.Full());
+    CHECK(!mobs.Offer(2000, 0.5f, 99));   // a full sweep never takes another candidate, however near
+    CHECK(mobs.Size() == 24);
+    std::vector<std::pair<FD::Near, int>> rows = mobs.Take();
+    CHECK(rows.size() == 24);
+    CHECK(rows.front().first.id == 1000 && rows.back().first.id == 1023);
+    CHECK(rows.front().second == 0 && rows.back().second == 23);
+
+    // Ties on distance: the guid orders them, so two cycles over the same units keep the same rows.
+    FD::Sweep<int> ties(4);
+    ties.Offer(1003, 1.0f, 3);
+    ties.Offer(1000, 1.0f, 0);
+    ties.Offer(1001, 1.0f, 1);
+    ties.Offer(1002, 0.5f, 2);
+    std::vector<std::pair<FD::Near, int>> sorted = ties.Take();
+    CHECK(sorted.size() == 4);
+    CHECK(sorted[0].first.id == 1002 && sorted[1].first.id == 1000 && sorted[2].first.id == 1001 && sorted[3].first.id == 1003);
+
+    // A cap of zero keeps nothing and refuses at once; a short list is untouched.
+    FD::Sweep<int> one(0);
+    CHECK(one.Full());
+    CHECK(!one.Offer(7, 1.0f, 0));
+    CHECK(one.Take().empty());
+    FD::Sweep<int> two(FD::kObjectCap);
+    two.Offer(9, 4.0f, 1);
+    two.Offer(8, 1.0f, 2);
+    std::vector<std::pair<FD::Near, int>> pair = two.Take();
+    CHECK(pair.size() == 2 && pair[0].first.id == 8 && pair[1].first.id == 9);
     CHECK(FD::kMobCap == 24);
+    CHECK(FD::kObjectCap == 16);
 
     // The position clock: 100 ms by default, clamped.
     CHECK(FD::ClampPosMs(100) == 100);
@@ -78,6 +98,43 @@ void TestCaps()
     CHECK(FD::ClampRange(0.0f, FD::kDefaultMobRange) == FD::kDefaultMobRange);
     CHECK(FD::ClampRange(500.0f, 60.0f) == 60.0f);
     CHECK(FD::ClampRange(80.0f, 60.0f) == 80.0f);
+}
+
+void TestRemainingSeconds()
+{
+    // The wire's `cl` (cdLongestS) is whole seconds; SpellHistory counts milliseconds, so a 90 s cooldown left is 90 000 ms -> 90, rounded down.
+    CHECK(FD::RemainingSeconds(90000) == 90);
+    CHECK(FD::RemainingSeconds(90999) == 90);
+    CHECK(FD::RemainingSeconds(1000) == 1);
+    CHECK(FD::RemainingSeconds(999) == 0);
+    CHECK(FD::RemainingSeconds(0) == 0);
+    CHECK(FD::RemainingSeconds(-5) == 0);
+    CHECK(FD::RemainingSeconds(86400000) == 86400);
+}
+
+void TestSweepCost()
+{
+    // The caps bound the work, not only the rows: faced with a dense grid of 200 000 candidates the collector offers 24 and stops (the visit
+    // ends at the first refusal), then sorts 24 rows; collecting everything would allocate a row per unit in range and sort all of them.
+    size_t const dense = 200000;
+    FD::Sweep<int> sweep(FD::kMobCap);
+    size_t offered = 0;
+    auto const started = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < dense; ++i)
+    {
+        if (!sweep.Offer(uint64_t(1000 + i), float(dense - i), int(i)))
+            break;
+        ++offered;
+        if (sweep.Full())
+            break;
+    }
+    std::vector<std::pair<FD::Near, int>> rows = sweep.Take();
+    auto const us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
+    CHECK(offered == FD::kMobCap);
+    CHECK(rows.size() == FD::kMobCap);
+    CHECK(rows.front().first.dist2 == float(dense - FD::kMobCap + 1));
+    std::printf("cmd_feeds_check: dense sweep of %zu candidates -> %zu rows, %zu offers, %lld us\n", dense, rows.size(), offered,
+        static_cast<long long>(us));
 }
 
 void TestLetters()
@@ -255,6 +312,8 @@ void TestWindow()
 int main()
 {
     TestCaps();
+    TestRemainingSeconds();
+    TestSweepCost();
     TestLetters();
     TestBossState();
     TestBodyless();

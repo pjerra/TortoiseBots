@@ -8,21 +8,23 @@ and D6 of "Lead decisions". Branch `cmd/p4` from `tbf/main` (P1 and P2 merged). 
 The Commander card's map layers and the live positions, as the Turtle collector built them (T `commands/Commander.cpp:15653-16636`, `:17052-17123`),
 against what ForeverCore holds:
 
-* **mobs**: the hostiles near a binding's lead, from one grid sweep (`AnyUnfriendlyUnitInObjectRangeCheck` + `Cell::VisitAllObjects`), nearest first,
-  **capped at 24 per binding** (`CommanderTelemetry::kMaxMobsPerBinding`). Each row carries name, entry, health percent, place, victim, reaction to the
+* **mobs**: the hostiles near a binding's lead, from one capped grid visit (`Cell::VisitAllObjects`; the cap **stops the visit** once
+  `CommanderTelemetry::kMaxMobsPerBinding` = 24 units are held, so a dense area costs 24 candidates, not one per unit in range), the rows nearest
+  first. Each row carries name, entry, health percent, place, victim, reaction to the
   bots, critter/civilian/guard/unattackable, level, rank (boss/elite/rare; a plan boss or an `ai_dungeon_boss` entry reads 'b' through
   `DungeonPlanTable::IsBossEntry`), crowd control and the spell it casts. The first 16 boss/elite rows also carry the overlay: facing, the current
   cast or channel with its time left, total and unit target, the spell's area (`runtime/SpellShape.h`), a breath window when the cast never reaches a
   slot (`runtime/BossWindowSignal.h`), the unit's own auras and its state flags.
-* **objects**: doors, chests, buttons/levers, goobers and rituals around the lead (one `AllGameObjectsWithEntryInRange` sweep), nearest first, capped
-  at 16, each with type and state (ready/active/used).
+* **objects**: doors, chests, buttons/levers, goobers and rituals around the lead (one capped `Cell::VisitGridObjects` visit, stopped at 16; a kind
+  the dashboard does not draw never fills the cap), nearest first, each with type and state (ready/active/used).
 * **bosses**: the module's own spawn cache, built once over the core's creature spawn data (`ObjectMgr::GetAllCreatureData()`, one pass) plus the plan
   boss steps for entries with no spawn row. A map's roster is never cut short: over the per-binding cap it is not sent at all. Each boss's state comes
   from its spawn rows on the lead's instance — the creature alive, its corpse, or the respawn time the map still holds for the spawn — and the
   instance script's encounter state (see "GetBossState" below), through the module's `BossKillLatch` so a killed boss read 'u' later stays dead.
 * **bot extras**: per bound bot its state (combat/not/dead), the spell it casts and that spell's unit target, crowd control, drinking/eating, moving,
   its target's name, the boss debuffs it carries (negative auras from outside its group) whether it is charmed, and the ready check (raid buff bits, key
-  cooldowns ready/known/longest, cached 10 s out of combat, sent as cached in combat).
+  cooldowns ready/known, the longest remaining in **whole seconds rounded down** (`FD::RemainingSeconds`: SpellHistory counts milliseconds, the wire's
+  `cl` is seconds), cached 10 s out of combat, sent as cached in combat).
 * **COMMANDER_POS**: one datagram per standing binding every `TortoiseBots.Commander.PosMs` (default **100 ms**), through the dash-runs sender shim
   (`dash/TbDashLink.h`, D6: no second socket): the bots of that binding's last full report (map, x/y/z, facing, health, alive) and the enemies that
   report listed, resolved by guid on the lead's map. Over `kMaxPosBindings` bindings the window rotates.
@@ -36,9 +38,9 @@ carries null (the dashboard greys the layer out), never `[]` — the failing cas
 
 | File | What |
 |---|---|
-| `forever/src/host/cmd/TbCmdFeedsPure.h` | pure: `KeepNearest` (nearest first, guid tie), the game-object kind/state letters, `BossState(spawnState, encounterDone)`, `NextPosWindow` (rotation), the clamps. Standard library + `runtime/CommanderTelemetry.h` only |
+| `forever/src/host/cmd/TbCmdFeedsPure.h` | pure: `Sweep` (the cap that stops the visit, rows nearest first with the guid tie), `RemainingSeconds` (cooldown ms -> whole seconds, rounded down), the game-object kind/state letters, `BossState(spawnState, encounterDone)`, `NextPosWindow` (rotation), the clamps. Standard library + `runtime/CommanderTelemetry.h` only |
 | `forever/src/host/cmd/TbCmdFeeds.{h,cpp}` | the collector: the two clocks (`FillFeeds` in the dash-runs cycle, `UpdateFeeds` on the position clock), the boss spawn cache and its states, the sweeps, the bot extras, the position datagrams. With the option OFF every function is a no-op |
-| `forever/tools/cmd_feeds_check.cpp` | the standalone check (65 checks): the caps, the letters, the boss states, the rotation, and the real COMMANDERS/COMMANDER_POS builders for the null-vs-empty rule, the extras' keys and the position caps |
+| `forever/tools/cmd_feeds_check.cpp` | the standalone check (84 checks): the capped sweep and its dense-grid cost (200 000 candidates -> 24 offers), the cooldown seconds, the letters, the boss states, the rotation, and the real COMMANDERS/COMMANDER_POS builders for the null-vs-empty rule, the extras' keys and the position caps |
 | `forever/tools/test_cmd_p4_wiring.py` | wiring pins + three mutations (`cap`, `boss`, `window`) under `CMD_P4_MUTATE=1` (run on the VM) |
 | `forever/conf/tortoisebots.conf.dist` | `TortoiseBots.Commander.Feeds` (1), `.MobRange` (60), `.ObjectRange` (40), `.PosMs` (100), documented with the defaults the code falls back to |
 
@@ -59,8 +61,12 @@ No other file was changed; `TbCmdFeeds.cpp` is new and owns everything else.
 * **No raw pointer across a tick.** The state holds guids (`std::vector<ObjectGuid> mobs`), guid counters, names and flags; every unit is resolved
   again on the tick that reads it. The `ObjectGuid`s of the last report are the only unit reference kept, and a guid that left the world resolves to
   null.
-* **The sweeps are the only scans, and they are the collector's.** One hostile sweep (radius `MobRange`, 60) and one object sweep (`ObjectRange`, 40)
+* **The sweeps are the only scans, and they are the collector's.** One hostile visit (radius `MobRange`, 60) and one object visit (`ObjectRange`, 40)
   per binding per 2 s cycle; the position clock resolves the last report's guids only (no sweep). Both clocks log their cost every 60 s.
+* **The caps bound the work.** A visit offers a candidate to the pure `FD::Sweep`; when the sweep is full the next offer is refused and the visitor
+  sets `stopped`, so the rest of that grid manager and every later cell return without touching a ref. Nothing collects the whole range any more:
+  no `std::list` of every match, no per-match guid map, no sort of everything. The rows are the first `cap` candidates the grid handed out, then
+  sorted (distance, guid) — see the limit below.
 * **The plan generation rebuilds the roster.** `.tb run reloadplans` replaces the plan table; the feed notices `DungeonPlanTableGeneration()` change on
   the next cycle and rebuilds the spawn cache once (not in the reload command: that file belongs to the run package).
 * **The two clocks are independent.** `FillFeeds` is the dash-runs collector's cycle (2 s, `TortoiseBots.Dashboard.IntervalMs`); `UpdateFeeds` has its
@@ -94,25 +100,49 @@ kill latch. This is the same "alive beats dead beats unknown" order the Turtle b
   well-fed aura cannot be recognised (the potion family still sets the elixir bit). The row under-reports consumables; it never invents them.
 * The mob list is the grid around the lead, not the bots' perception lists (the Turtle build read those). A hostile the bots see but the sweep does
   not (out of `MobRange`) is not listed.
+* The visit stops at the cap, so the rows are the first 24 hostiles (16 objects) the grid hands out, not the nearest 24 of the whole range: in a
+  crowd denser than the cap, a nearer unit the visit had not reached yet is missing. That is the price of the cap bounding the work; the rows are
+  still listed nearest first among the ones kept.
 * A boss whose grid is unloaded, whose corpse is gone and whose respawn time has expired reads 'u' (unknown) once its latch expired (10 min without a
   binding on the instance).
 * The position report carries at most 20 bindings per cycle (a rotation) and at most 40 bots and 24 enemies per binding; the readers see every binding
   within a few cycles.
 * The first position report of a binding waits for the next card cycle (the report's bindings come from that cycle's list).
 
+## Fix round (codex review of `cmd/p4`)
+
+Both findings were real and fixed; each has a test that failed on the reviewed code.
+
+1. **Cooldowns were milliseconds reported as seconds.** `SpellHistory::GetRemainingCooldown` returns `SpellHistory::Duration` = `Milliseconds`, and
+   `ReadReadyCooldowns` assigned `.count()` straight to `cdLongestS`, which the wire documents as seconds: a 90 s cooldown reached the card as 90000.
+   The conversion is now the pure `FD::RemainingSeconds` (whole seconds, rounded down; a non-positive remainder is 0) and the collector passes the
+   millisecond count through it. The check pins 90000 -> 90, 90999 -> 90, 999 -> 0, 1000 -> 1, 0/-5 -> 0: on the reviewed code it reported
+   `FAIL ... FD::RemainingSeconds(90000) == 90` (the old pass-through returned 90000).
+2. **The mob/object caps did not bound the collection cost.** Both collectors swept the whole range, built a `std::list` of every match, a
+   `std::unordered_map` per match and sorted everything, then cut to 24/16 — on the world thread, every 2 s, for up to 20 bindings with configurable
+   200-yard ranges. Now each sweep is a `FD::Sweep` whose cap stops the visit: the visitor offers candidates, the full sweep refuses the next one
+   (`Offer` false) and the visitor sets `stopped`, after which the rest of that grid manager and every later cell return without touching a ref. No
+   per-match allocation, no guid map, one sort of at most 24 (16) rows. The check measures it: a dense 200 000-candidate grid costs **24 offers**
+   (was 200 000 offers and a full sort: `cmd_feeds_check: dense sweep of 200000 candidates -> 24 rows, 200000 offers, 9024 us`) and the same sweep
+   now reports `24 rows, 24 offers, 0 us`.
+   The trade-off is in the limits below: the rows are the first candidates the grid handed out (then sorted nearest first), not the nearest of the
+   whole range. The live fill cost below (47-103 us, 204 us at most) was measured on the reviewed binary before this change and did not cover a
+   range densely packed past the cap; that case is now measured in the check (24 offers instead of 200 000, and no per-candidate allocation).
+
 ## Gates (slot 5 on the build VM, core pin 25fc7ca; `src-5` seeded from the pin-move tree)
 
 | Gate | Result |
 |---|---|
 | census, list `forever/SLICE5.txt` (P4 adds no legacy file) | `files 176  compile clean 176  with errors 0  error places 0` |
-| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (72,066,032-byte binary, md5 `e24b68ba…`); `nm` on `libtortoisebots.a`: `cmd::FillFeeds`, `UpdateFeeds`, `LoadFeeds`, `FeedsActive` defined |
-| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (55,972,168 bytes); the archive holds the four no-op stubs only (no boss cache, no sweeps) |
-| `forever/tools/cmd_feeds_check.cpp` (VM, g++) | `cmd_feeds_check: 65 checks, 0 failed` |
-| `test_cmd_p4_wiring.py` with `CMD_P4_MUTATE=1` (VM) | 10 tests OK; the three mutations (`cap`, `boss`, `window`) each FAIL the check |
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (72,064,600-byte binary, 57 s; `TbCmdFeeds.cpp` compiled and linked) |
+| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (55,972,168 bytes, 37 s); the archive holds the four no-op stubs only (no boss cache, no capped visit) |
+| `forever/tools/cmd_feeds_check.cpp` (VM, g++) | `cmd_feeds_check: 84 checks, 0 failed`; the dense sweep reports `200000 candidates -> 24 rows, 24 offers, 1 us` |
+| `test_cmd_p4_wiring.py` with `CMD_P4_MUTATE=1` (VM) | 11 tests OK; the four mutations (`cap`, `seconds`, `boss`, `window`) each FAIL the check |
 | `test_cmd_p1_wiring.py`, `test_cmd_p2_wiring.py`, `test_run_review_wiring.py`, `test_dash_runs_wiring.py`, `test_slice4_d4_wiring.py` | OK |
 | `slice_registry_check.py`, `slice_gen_context.py --check` | `summary: (a)=0  (b)=224`; `SliceAiObjectContext.cpp is up to date` |
 | `tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent).` |
 | Turtle `vm-build` / `vm-test tb` | not run: no file outside `forever/` changed |
+| live server | not re-run this round: no live gate was asked for; the ON binary of slot 5 was built and linked only |
 
 ## Live (run2, ForeverCore test server 2)
 
