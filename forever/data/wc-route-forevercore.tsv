@@ -1,0 +1,132 @@
+# Wailing Caverns (map 43): the route ForeverCore proved, exported from the public agent plan
+# dungeons/wailing_caverns.json at forever-agent 109a2496 (plan v1, 13 legs, 126 steps) by
+# `forever-agent plan-export --forever`. Every waypoint was confirmed by the server's own position in the
+# live route walk (forever-agent docs/forever/ROUTEWALK-NOTES.md: 3583.0 yd planned, 3582.3 walked, every
+# leg PASS, no NOPATH/STUCK/FELL/LIQUID). Do not hand-edit: change the agent plan and export it again.
+# leg	name	seq	kind	entry	x	y	z	radius	flags	timeout_s	entries	comment
+0	anacondra_a	0	move	0	-117.200	159.600	-77.400	0.000	0	0		to
+0	anacondra_a	1	pull	0	-100.800	181.900	-78.500	21.800	0	0	3637	pull group 0
+0	anacondra_a	2	move	0	-104.830	209.450	-82.430	0.000	0	0		pull group 1 approach
+0	anacondra_a	3	move	0	-105.360	219.430	-85.940	0.000	0	0		pull group 1 approach
+0	anacondra_a	4	pull	0	-106.250	234.450	-91.350	16.000	0	0	3636	pull group 1
+0	anacondra_a	5	pull	0	-72.200	214.800	-93.600	13.800	0	0	3636	pull group 2
+0	anacondra_a	6	pull	0	-73.700	197.600	-93.900	13.800	0	0	3636	pull group 3
+0	anacondra_a	7	pull	0	-35.100	203.850	-96.500	21.400	0	0	3637,3636	pull group 4
+0	anacondra_a	8	pull	0	-33.700	167.730	-96.070	11.100	0	0	3636,3637,3840	pull group 5
+0	anacondra_a	9	pull	0	-60.800	138.200	-91.600	9.500	0	0	3636	pull group 6
+0	anacondra_a	10	pull	0	-53.600	119.100	-89.500	11.100	0	0	3636	pull group 7
+0	anacondra_a	11	pull	0	-69.700	124.100	-90.070	9.500	0	0	3840,3637,3671	pull group 8
+0	anacondra_a	12	pull	0	-74.950	105.000	-90.100	10.000	0	0	3636	pull group 9
+1	anacondra_b	0	move	0	-50.000	117.300	-88.500	0.000	0	0		to
+1	anacondra_b	1	pull	0	-26.450	91.100	-90.950	23.000	0	0	3637,3636	pull group 0
+1	anacondra_b	2	pull	0	12.800	160.500	-87.900	20.200	0	0	3637	pull group 1
+1	anacondra_b	3	pull	0	33.300	172.400	-87.800	10.300	0	0	3636	pull group 2
+1	anacondra_b	4	pull	0	43.970	183.430	-88.830	10.300	0	0	3840,3636,3671	pull group 3
+1	anacondra_b	5	pull	0	59.100	205.800	-91.300	9.400	0	0	3636,3640	pull group 4
+1	anacondra_b	6	pull	0	47.600	211.800	-88.400	9.400	0	0	3840	pull group 5
+1	anacondra_b	7	pull	0	44.400	235.350	-88.150	14.800	0	0	3637	pull group 6
+1	anacondra_b	8	pull	0	30.500	269.400	-87.200	11.300	0	0	3637	pull group 7
+1	anacondra_b	9	pull	0	16.600	291.830	-87.680	11.300	0	0	3637,3840,3671	pull group 8
+1	anacondra_b	10	pull	0	2.700	312.200	-88.900	10.000	0	0	3637	pull group 9
+2	cobrahn_a	0	move	0	12.300	297.500	-87.300	0.000	0	0		to
+2	cobrahn_a	1	pull	0	-10.100	307.800	-88.500	10.000	0	0	3637	pull group 0
+2	cobrahn_a	2	pull	0	-52.330	266.970	-92.800	23.100	0	0	3636,3840,3671	pull group 1
+2	cobrahn_a	3	move	0	-25.340	212.340	-97.360	0.000	0	0		pull group 2 approach
+2	cobrahn_a	4	move	0	-16.570	219.970	-103.230	0.000	0	0		pull group 2 approach
+2	cobrahn_a	5	pull	0	-6.100	214.900	-106.200	10.000	0	0	5053	pull group 2
+3	kresh	0	move	0	-18.000	234.000	-104.500	0.000	0	0		to
+3	kresh	1	boss	3653	-3.641	229.268	-106.189	0.000	0	300		boss
+4	cobrahn_b	0	move	0	-61.367	323.721	-106.561	0.000	0	0		to
+4	cobrahn_b	1	pull	0	-71.600	348.300	-106.200	10.000	0	0	5053	pull group 0
+4	cobrahn_b	2	pull	0	-63.800	417.300	-106.700	10.000	0	0	3640	pull group 1
+4	cobrahn_b	3	move	0	-25.490	452.060	-99.880	0.000	0	0		pull group 2 approach
+4	cobrahn_b	4	pull	0	-8.100	470.300	-93.100	22.700	0	0	5048	pull group 2
+4	cobrahn_b	5	pull	0	28.800	454.400	-86.100	17.000	0	0	5048	pull group 3
+4	cobrahn_b	6	pull	0	16.900	438.600	-80.900	10.200	0	0	5755	pull group 4
+4	cobrahn_b	7	pull	0	6.100	447.600	-76.300	10.200	0	0	3840,5755	pull group 5
+4	cobrahn_b	8	move	0	3.560	434.250	-70.820	0.000	0	0		pull group 6 approach
+4	cobrahn_b	9	move	0	0.160	427.000	-67.800	0.000	0	0		pull group 6 approach
+4	cobrahn_b	10	pull	0	-2.800	420.000	-66.500	19.600	0	0	3840	pull group 6
+4	cobrahn_b	11	pull	0	-33.530	410.900	-60.300	21.400	0	0	5755,3640,3840	pull group 7
+4	cobrahn_b	12	pull	0	23.500	398.100	-59.400	21.700	0	0	5048	pull group 8
+4	cobrahn_b	13	pull	0	51.530	400.970	-62.900	21.700	0	0	8886,3840	pull group 9
+4	cobrahn_b	14	pull	0	65.100	436.900	-64.300	10.000	0	0	5048	pull group 10
+4	cobrahn_b	15	pull	0	43.130	476.430	-65.830	12.100	0	0	8886,3840	pull group 11
+5	cobrahn_c	0	move	0	34.800	473.700	-66.300	0.000	0	0		to
+5	cobrahn_c	1	pull	0	27.700	504.000	-60.100	12.900	0	0	3840	pull group 0
+5	cobrahn_c	2	pull	0	20.100	523.100	-57.150	12.900	0	0	3840,5048	pull group 1
+5	cobrahn_c	3	pull	0	-18.600	493.600	-54.900	12.300	0	0	5755	pull group 2
+5	cobrahn_c	4	pull	0	-42.150	476.300	-55.670	12.300	0	0	5755,8886,3840,5048	pull group 3
+5	cobrahn_c	5	move	0	-62.890	475.720	-59.330	0.000	0	0		pull group 4 approach
+5	cobrahn_c	6	pull	0	-80.030	471.570	-66.870	17.500	0	0	3840,5048,5755	pull group 4
+5	cobrahn_c	7	pull	0	-109.020	450.770	-72.400	17.500	0	0	8886,5755,3840	pull group 5
+5	cobrahn_c	8	pull	0	-125.600	411.550	-72.650	18.700	0	0	5048,3840	pull group 6
+5	cobrahn_c	9	boss	3669	-151.100	414.400	-72.600	0.000	0	0	8886	boss
+6	pythas_a	0	move	0	-21.300	183.400	-103.600	0.000	0	0		to
+6	pythas_a	1	pull	0	-11.900	158.700	-106.200	12.500	0	0	5053	pull group 0
+6	pythas_a	2	move	0	-50.000	112.000	-105.420	0.000	0	0		pull group 1 approach
+6	pythas_a	3	pull	0	-50.500	81.700	-106.200	23.800	0	0	5053	pull group 1
+6	pythas_a	4	move	0	-90.000	70.000	-105.810	0.000	0	0		pull group 2 approach
+6	pythas_a	5	pull	0	-107.200	68.700	-106.400	10.000	0	0	5053	pull group 2
+6	pythas_a	6	move	0	-142.000	62.000	-105.650	0.000	0	0		pull group 3 approach
+6	pythas_a	7	pull	0	-161.500	51.800	-106.000	20.800	0	0	5053	pull group 3
+6	pythas_a	8	pull	0	-203.700	-5.300	-105.800	16.900	0	0	5053	pull group 4
+6	pythas_a	9	pull	0	-249.300	-17.200	-105.700	22.700	0	0	5053	pull group 5
+6	pythas_a	10	pull	0	-273.700	-7.600	-106.400	22.700	0	0	5053	pull group 6
+6	pythas_a	11	pull	0	-347.600	23.230	-101.070	17.100	0	0	5761,3840,3640	pull group 7
+7	pythas_b	0	move	0	-314.400	18.400	-105.300	0.000	0	0		to
+7	pythas_b	1	pull	0	-352.800	43.300	-100.100	8.800	0	0	3840	pull group 0
+7	pythas_b	2	pull	0	-339.600	51.250	-98.200	8.800	0	0	5761,3840	pull group 1
+7	pythas_b	3	move	0	-299.900	45.060	-91.750	0.000	0	0		pull group 2 approach
+7	pythas_b	4	pull	0	-265.250	40.550	-87.550	12.700	0	0	3840,5761	pull group 2
+7	pythas_b	5	pull	0	-223.400	48.330	-82.430	18.200	0	0	3840,5761	pull group 3
+7	pythas_b	6	pull	0	-157.000	69.720	-75.830	16.700	0	0	5055	pull group 4
+7	pythas_b	7	pull	0	-148.270	-4.930	-75.630	21.000	0	0	5055	pull group 5
+7	pythas_b	8	pull	0	-133.500	-31.800	-76.900	19.400	0	0	3840	pull group 6
+7	pythas_b	9	pull	0	-155.020	-49.140	-78.180	19.400	0	0	5055,3840	pull group 7
+8	pythas_c	0	move	0	-158.700	-55.000	-75.900	0.000	0	0		to
+8	pythas_c	1	move	0	-165.260	-69.590	-70.230	0.000	0	0		pull group 0 approach
+8	pythas_c	2	pull	0	-173.170	-87.170	-67.630	14.900	0	0	5761,3840	pull group 0
+8	pythas_c	3	pull	0	-120.500	-101.000	-72.800	10.000	0	0	5761	pull group 1
+8	pythas_c	4	pull	0	-68.900	-146.700	-80.430	24.200	0	0	5761,3640	pull group 2
+8	pythas_c	5	pull	0	-42.750	-186.800	-74.450	17.100	0	0	3840,5761	pull group 3
+8	pythas_c	6	pull	0	8.020	-198.540	-82.100	24.900	0	0	3840,5055	pull group 4
+8	pythas_c	7	boss	3670	36.800	-241.100	-79.500	0.000	0	0	5761,3840	boss
+9	skum	0	move	0	13.500	-235.600	-76.900	0.000	0	0		to
+9	skum	1	move	0	3.530	-248.110	-70.910	0.000	0	0		pull group 0 approach
+9	skum	2	pull	0	-4.550	-262.430	-68.200	9.300	0	0	3840,5055	pull group 0
+9	skum	3	pull	0	-29.950	-267.300	-67.600	9.300	0	0	5761,3840	pull group 1
+9	skum	4	pull	0	-55.100	-249.600	-68.700	10.200	0	0	3840	pull group 2
+9	skum	5	pull	0	-56.900	-236.000	-68.800	10.200	0	0	5761	pull group 3
+9	skum	6	pull	0	-140.400	-181.300	-68.200	10.900	0	0	3840	pull group 4
+9	skum	7	pull	0	-148.150	-194.500	-68.250	10.900	0	0	5756,5056	pull group 5
+9	skum	8	pull	0	-193.000	-237.800	-70.100	10.000	0	0	5756	pull group 6
+9	skum	9	pull	0	-225.100	-250.600	-64.500	14.600	0	0	5056,3840	pull group 7
+9	skum	10	pull	0	-221.470	-299.100	-70.100	10.900	0	0	5055,3840	pull group 8
+9	skum	11	pull	0	-216.300	-320.900	-73.200	10.900	0	0	3840	pull group 9
+9	skum	12	pull	0	-266.950	-299.800	-68.050	19.300	0	0	3840	pull group 10
+9	skum	13	boss	3674	-285.600	-313.700	-69.200	0.000	0	0		boss
+10	west_column	0	move	0	-269.000	-264.800	-64.600	0.000	0	0		to
+10	west_column	1	pull	0	-299.720	-241.750	-63.670	18.500	0	0	5055,3840	pull group 0
+10	west_column	2	pull	0	-282.130	-216.830	-63.770	18.500	0	0	3840,5756,5056	pull group 1
+10	west_column	3	pull	0	-268.000	-181.350	-60.300	13.800	0	0	3840,5056	pull group 2
+10	west_column	4	pull	0	-185.250	-200.980	-59.980	14.500	0	0	5055	pull group 3
+10	west_column	5	move	0	-246.750	-177.020	-60.750	0.000	0	0		pull group 4 approach
+10	west_column	6	pull	0	-307.400	-147.500	-61.300	16.700	0	0	5056	pull group 4
+10	west_column	7	pull	0	-322.400	-134.000	-62.200	16.700	0	0	5756	pull group 5
+10	west_column	8	pull	0	-304.700	-104.300	-63.800	23.700	0	0	5056	pull group 6
+10	west_column	9	pull	0	-337.720	-110.560	-64.240	21.200	0	0	5055,3840	pull group 7
+10	west_column	10	pull	0	-332.700	-75.750	-65.550	22.600	0	0	3840,5056	pull group 8
+11	serpentis	0	move	0	-293.300	0.500	-58.000	0.000	64	0		via (exact: the direct step's launch point)
+11	serpentis	1	move_hop_exact	0	-287.500	5.000	-63.600	0.000	0	0		via (direct from the exact point before it)
+11	serpentis	2	move	0	-244.600	52.700	-51.700	0.000	0	0		to
+11	serpentis	3	pull	0	-219.900	58.700	-48.900	9.700	0	0	5756	pull group 0
+11	serpentis	4	pull	0	-196.000	38.950	-48.550	14.700	0	0	5756,3840	pull group 1
+11	serpentis	5	pull	0	-190.150	64.050	-47.330	14.700	0	0	5055,3840	pull group 2
+11	serpentis	6	move	0	-173.040	53.700	-41.440	0.000	0	0		pull group 3 approach
+11	serpentis	7	move	0	-162.800	44.320	-37.790	0.000	0	0		pull group 3 approach
+11	serpentis	8	move	0	-155.650	27.910	-30.810	0.000	0	0		pull group 3 approach
+11	serpentis	9	pull	0	-145.700	2.400	-28.600	10.000	0	0	5056	pull group 3
+11	serpentis	10	boss	3673	-120.200	-24.600	-28.600	0.000	0	0	3840,5756	boss
+12	verdan	0	move	0	-98.600	7.400	-29.900	0.000	0	0		to
+12	verdan	1	boss	5775	-81.900	32.300	-31.000	0.000	0	0		boss
