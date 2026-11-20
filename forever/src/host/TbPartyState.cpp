@@ -4,6 +4,7 @@
 #include "host/TbH3.h"
 #include "host/TbPet.h"
 #include "host/TbHostTown.h"
+#include "host/TbHostProfession.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -387,6 +388,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.S("corpserun", phase);
     if (ghostYd >= 0.0f)
         rec.N("ghostyd", static_cast<int32>(ghostYd + 0.5f));
+    rec.S("prof", tbhost::prof::FormatStateProf(bot));
     return rec;
 }
 
