@@ -24,16 +24,17 @@ What was wrong: the script uploaded the core and the worktree into `src[-N]` BEF
 it was released). Two users of one slot therefore overwrote each other's source in the middle of a run, and a run that started while another one was deleting `census[-N]/` (the runner
 does `rm -rf census[-N]`) could print a "files 0" summary, or somebody else's.
 
-Now (pinned by `forever/tools/test_vm_census_order.py`, 6 tests, run with fake `ssh`/`rsync`/`docker` and the real `flock`):
-1. the script opens an ssh session on the VM that takes `census[-N].lock` and `build[-N].lock` (so no ForeverCore build starts on a source being replaced) and holds both until the script
-   ends, however it ends (closing its stdin releases them); it waits there while another run holds the slot;
-2. only then the core and the worktree are uploaded into `src[-N]`;
-3. the census runs the `census.sh` that came with the uploaded tree (the old `~/forever-build/census.sh` is no longer used by this script and is left alone for other callers);
-4. the summary is read, still under the lock; a summary that says `files 0` makes the script fail (exit 3);
-5. the lock is released.
+Now (pinned by `forever/tools/test_vm_census_order.py`, 8 tests, run with fake `ssh`/`rsync`/`docker` and the real `flock`):
+1. the script opens ONE ssh session on the VM that takes `census[-N].lock` and `build[-N].lock` (so no ForeverCore build starts on a source being replaced); it waits there while another run holds the slot;
+2. only then the core and the worktree are uploaded into `src[-N]`, and the script sends `GO` into the session;
+3. the SAME session runs the census (the `census.sh` that came with the uploaded tree; the old `~/forever-build/census.sh` is no longer used by this script and is left alone for other callers) and reads the summary;
+   the census is a child of the session and inherits the lock descriptors, so if the script or its ssh connection dies, the census on the VM goes on and keeps the slot locked until it ends (found during this pass:
+   an ssh drop under a VM load of 100-300 left an orphan census running while the next run took the freed lock and uploaded over its source; a first version of the fix that only held the lock in a side session had that flaw);
+4. a summary that says `files 0` makes the script fail (exit 3); a session that ends before the census reports its end makes it fail (exit 1) instead of reading a summary;
+5. the lock is released when the session ends.
 Output folder: one per run, `yulon-ubuntu2:~/forever-build/census-runs/<name>/`, `<name>` = `FOREVER_CENSUS_NAME` (checked: letters, digits, `.`, `_`, `-`) or by default
 `<worktree>-s<slot>-<list or all>-<utc stamp>-<pid>`; it never collides with a build slot's folders (`census-N` is not written any more). The 120 MB precompiled header of a run is deleted when it ends.
-The tests prove: lock held at the moment of both uploads; order lock, upload, upload, census start, census end; two runs on one slot do not overlap and each summary names its OWN tree;
+The tests prove: lock held at the moment of both uploads; a run killed in the middle of its census leaves the slot locked until that census ends (the next run uploads only after it); order lock, upload, upload, census start, census end; two runs on one slot do not overlap and each summary names its OWN tree;
 two different slots do run at the same time; a passed name is used and a bad name is refused; `files 0` fails; the lock is free after the run.
 
 ## Numbers (whole tree, default slot, `forever/tools/vm-census.sh "" 12`)

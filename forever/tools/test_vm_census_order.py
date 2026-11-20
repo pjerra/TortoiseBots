@@ -14,6 +14,10 @@ TOOLS = ROOT / "forever" / "tools"
 
 FAKE_SSH = """#!/bin/bash
 shift            # the VM name
+if [ -n "$FAKE_SSH_DIE_AFTER_GO" ]; then
+  # the connection drops as soon as the local side sends GO: no census runs and no summary is printed
+  echo LOCKED; read -r line; exit 255
+fi
 exec bash -c "$*"
 """
 FAKE_RSYNC = """#!/bin/bash
@@ -37,7 +41,7 @@ while [ $# -gt 0 ]; do
 done
 mark=$(cat "$src/src/modules/TortoiseBots/forever/MARK")
 echo "$(date +%s.%N) CENSUS-START $mark out=$(basename $out)" >> "$EVENTS"
-sleep 1
+sleep "${FAKE_DOCKER_SLEEP:-1}"
 if [ "$mark" = EMPTY ]; then n=0; else n=3; fi
 echo "files $n  compile clean $n  with errors 0  error places 0 (tree $mark)" > "$out/summary.txt"
 : > "$out/where.tsv"; : > "$out/names.tsv"; : > "$out/kinds.tsv"; : > "$out/botpch_forever.pch"
@@ -148,6 +152,30 @@ class VmCensusOrder(unittest.TestCase):
         out, err = p.communicate(timeout=60)
         self.assertEqual(p.returncode, 3, (out, err))
         self.assertIn("files 0, not a measurement", err)
+
+    def test_a_killed_run_leaves_the_slot_locked_until_its_census_ends(self):
+        """The census runs inside the lock session: if the local script dies (an ssh drop), the census goes on and holds the slot."""
+        a, b = self.env.worktree("A"), self.env.worktree("B")
+        pa = self.env.run(a, slot="2", extra={"FAKE_DOCKER_SLEEP": "3"})
+        deadline = time.time() + 30
+        while time.time() < deadline and "CENSUS-START" not in self.env.events.read_text():
+            time.sleep(0.1)
+        self.assertIn("CENSUS-START", self.env.events.read_text())
+        pa.kill()
+        pa.communicate(timeout=10)
+        pb = self.env.run(b, slot="2")
+        ob, eb = pb.communicate(timeout=90)
+        self.assertEqual(pb.returncode, 0, eb)
+        marks = [e.split()[0] + ":" + e.split()[1] for e in self.env.events_list()]
+        self.assertEqual(marks, ["RSYNC:core", "RSYNC:A", "CENSUS-START:A", "CENSUS-END:A",
+                                 "RSYNC:core", "RSYNC:B", "CENSUS-START:B", "CENSUS-END:B"], marks)
+        self.assertIn("tree B", ob)
+
+    def test_a_lost_session_is_reported_not_read_as_a_summary(self):
+        p = self.env.run(self.env.worktree("A"), slot="2", extra={"FAKE_DOCKER_SLEEP": "1", "FAKE_SSH_DIE_AFTER_GO": "1"})
+        out, err = p.communicate(timeout=60)
+        self.assertEqual(p.returncode, 1, (out, err))
+        self.assertIn("ended before the census finished", err)
 
     def test_the_lock_is_released_when_the_run_ends(self):
         p = self.env.run(self.env.worktree("A"), slot="2")
