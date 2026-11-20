@@ -13,6 +13,7 @@
 #include "compat/TbCompat_Unported.h"
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
+#include "host/gear/TbGearGen.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -167,6 +168,7 @@ public:
             if (BotMgr::Instance().Enabled())
             {
                 LoadEngineConfig();
+                TortoiseBots::gear::InitGearIndex();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
             }
