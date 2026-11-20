@@ -13,9 +13,13 @@
 #include "TbCompat_S5.h" // WorldQueryCompat: the single-table SELECT guard (backticked table and column names)
 #include "TbCompat_W3.h" // LegacyFormatW3: printf formatting for the saver's INSERT/UPDATE statements
 #include "TbCompat_WL4.h" // CreatureLevelMaxWL4: the classic creature level (round A2)
+// W5T: the travel graph's flight and transport legs board through the W5 host seams.
+#include "host/TbHostTaxi.h"
+#include "host/TbHostTransport.h"
 #include "playerbot/policy/travel/CreatureLevelPolicy.h"
+// The per-link flight decision (known ends, fare, faction, classic maps).
+#include "playerbot/policy/travel/TaxiChoicePolicy.h"
 #include "playerbot/policy/travel/TravelGraphPolicy.h"
-
 // The old size format of a log line (T `SIZEFMTD`, shared/Util.h). ForeverCore logs through a printf Format, so the size_t
 // conversion is the same one.
 #ifndef SIZEFMTD
@@ -117,11 +121,12 @@ inline bool MmapTileLoadCompat(uint32 mapId, uint32 instanceId, int x, int y)
 // THE LINK TYPES THE ROUTE MAY USE (TravelNodePath::getCost, the A* of TravelNodeMap::getRoute)
 // ===============================================================================================================
 // `pathType` is TravelNodePathType as its number (0 none, 1 walk, 2 areaTrigger, 3 transport, 4 flightPath, 5 teleportSpell,
-// 6 staticPortal). On ForeverCore only walks and area triggers are routes (ai::travel_graph::LinkUsableOnForever): taxi and
-// transport legs are loaded from the tables but never used (flights, boats, zeppelins and the tram are W5), and decision D4 allows
-// no travel teleport but the host's logged rescue, so the teleport-spell and static-portal links are refused until W5 too. A route
-// that needs one is refused so the bot picks another target (does less), and reachability (TravelNode::getNodeMap) and the map
-// transfers (TravelMgr::LoadMapTransfers) ask the same rule. On Turtle every type stays usable, as it always was.
+// 6 staticPortal). On ForeverCore walks, area triggers, transport legs and flight paths are routes
+// (ai::travel_graph::LinkUsableOnForever): flights board through tbhost::taxi::Fly and rides through tbhost::ride (never
+// instant flight or teleport), and decision D4 allows no travel teleport but the host's logged rescue, so the
+// teleport-spell and static-portal links stay refused. A route that needs one is refused so the bot picks another target
+// (does less), and reachability (TravelNode::getNodeMap) and the map transfers (TravelMgr::LoadMapTransfers) ask the
+// same rule. On Turtle every type stays usable, as it always was.
 inline bool TravelLinkUsableCompat(uint8 pathType)
 {
     return ai::travel_graph::LinkUsableOnForever(pathType);
@@ -256,6 +261,83 @@ inline float TaxiPathNodeXCompat(TaxiPathNodeList const& nodes, std::size_t i) {
 inline float TaxiPathNodeYCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.Y; }
 inline float TaxiPathNodeZCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.Z; }
 inline uint32 TaxiPathNodeDelayCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Delay; }
+// ===============================================================================================================
+// W5T: THE PER-LINK CHECKS AND THE EXECUTOR (TravelNodePath::getCost, MovementAction::UseTaxi/UseTransport)
+// ===============================================================================================================
+class PlayerbotAI;
+
+// A stored flight link may carry this bot only when it knows both ends and can pay the fare: the from node (the bot
+// boards there, so Turtle's destination-only check is not enough), the faction of each end (the mount a team can use)
+// and the classic maps (the runtime flight links W5 builds) feed the pure per-link decision; the fare is the path's own
+// price, like the legacy check below it in getCost. A refused link costs -1 and the A* routes around it (cannot: travel).
+inline bool TravelFlightLinkUsableCompat(Player* bot, TaxiPathEntry const* taxiPath, uint32 cGold)
+{
+    if (!bot || !taxiPath)
+        return false;
+    uint32 const fromId = TaxiPathFromCompat(taxiPath);
+    uint32 const toId = TaxiPathToCompat(taxiPath);
+    TaxiNodesEntry const* fromNode = sTaxiNodesStore.LookupEntry(fromId);
+    TaxiNodesEntry const* toNode = sTaxiNodesStore.LookupEntry(toId);
+    bool const cheater = bot->IsTaxiCheater();
+    uint32 const teamIdx = bot->GetTeam() == ALLIANCE ? 1 : 0;
+    ai::FlightLinkAccess access;
+    access.fromKnown = cheater || PlayerTaxiMaskKnowsCompat(bot, fromId);
+    access.toKnown = cheater || PlayerTaxiMaskKnowsCompat(bot, toId);
+    access.fareCopper = TaxiPathPriceCompat(taxiPath);
+    access.botMoneyCopper = cGold;
+    access.fromFactionOk = fromNode && fromNode->MountCreatureID[teamIdx] != 0;
+    access.toFactionOk = toNode && toNode->MountCreatureID[teamIdx] != 0;
+    access.fromClassic = fromNode && ai::IsClassicContinentMap(TaxiNodeMapIdCompat(fromNode));
+    access.toClassic = toNode && ai::IsClassicContinentMap(TaxiNodeMapIdCompat(toNode));
+    return ai::DecideFlightLinkUsable(access).action == ai::TaxiChoiceResult::Fly;
+}
+
+// Boards a graph flight leg through the W5 host seam: learn the master's node when it is new (the legacy executor
+// learns it too), then fly the core's own ActivateTaxi path. Never instant flight or teleport: the bot flies for real
+// and TickLandingWatch logs the landing. Always handled here, so the legacy body below never runs on ForeverCore.
+// False is the refusal (unknown node, fare, the master out of reach): the move fails and the travel layer drops the
+// target (cannot: travel).
+inline bool TravelTaxiFlyCompat(PlayerbotAI* ai, uint32 pathId, bool* handled)
+{
+    if (handled)
+        *handled = true;
+    Player* bot = ai ? ai->GetBot() : nullptr;
+    TaxiPathEntry const* taxiPath = bot ? sTaxiPathStore.LookupEntry(pathId) : nullptr;
+    if (!taxiPath)
+        return false;
+    Creature* npc = tbhost::taxi::NearestFlightMaster(bot);
+    if (!npc)
+        return false;
+    uint32 const nodeId = tbhost::taxi::NodeOfFlightMaster(bot, npc);
+    if (nodeId && !bot->IsTaxiCheater() && !PlayerTaxiMaskKnowsCompat(bot, nodeId))
+        tbhost::taxi::Learn(bot, npc);
+    std::string fail;
+    return tbhost::taxi::Fly(bot, npc, TaxiPathToCompat(taxiPath), &fail);
+}
+
+// Arms a graph transport leg (boat, zeppelin, tram) through the W5 host seam: the engine tick boards the stopped
+// transport where it stands, rides it and leaves at the destination dock (walk on, board where it stands). Always
+// returns false: the bot waits at the dock while TickRide works, so no call site may read this as boarded, and no
+// legacy teleport ever runs for the wait (TravelTransportTeleportCompat). A refused StartRide is the host's own
+// [W5] ride-refused line; the bot keeps waiting (cannot: travel, never a silent success).
+inline bool TravelRideBoardCompat(PlayerbotAI* ai, uint32 entry, bool* handled)
+{
+    if (handled)
+        *handled = true;
+    Player* bot = ai ? ai->GetBot() : nullptr;
+    if (!bot || !entry || tbhost::ride::IsOnBoard(bot))
+        return false;
+    std::string fail;
+    tbhost::ride::StartRide(bot, entry, &fail);
+    return false;
+}
+
+// The legacy executor teleports a waiting bot to the far dock (TransportTeleportType 2). On ForeverCore the bot rides
+// instead, so that teleport never runs in travel. Turtle keeps it.
+inline bool TravelTransportTeleportCompat()
+{
+    return false;
+}
 
 // ===============================================================================================================
 // THE START POSITION OF A RACE AND CLASS (generateStartNodes)

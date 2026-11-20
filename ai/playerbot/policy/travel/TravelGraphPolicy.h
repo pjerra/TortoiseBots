@@ -6,15 +6,19 @@
 #include <cstdint>
 #include <vector>
 
-// Which links of the travel node graph count as a route (W4 review fixes, decisions 1 and 2 of the W4 A1+A2 round).
+// Which links of the travel node graph count as a route (W4 review fixes, decisions 1 and 2 of the W4 A1+A2 round,
+// plus W5T: flight and transport legs are routes too, flown and ridden through the W5 host seams).
 //
 // The graph loads every link the node store holds (walk, area trigger, transport, flight path, teleport spell, static portal), but
-// on ForeverCore the A* (TravelNodePath::getCost) only walks some of them: taxi and boat/zeppelin/tram legs are W5, and decision D4
-// allows no travel teleport but the host's logged rescue, so the teleport-spell and static-portal links are refused too. A link
+// on ForeverCore the A* (TravelNodePath::getCost) only takes some of them: decision D4 allows
+// no travel teleport but the host's logged rescue, so the teleport-spell and static-portal links are refused. A link
 // the A* refuses is not a route, and nothing that asks "can I get there" may count it:
-//  * TravelNode::getNodeMap (hasRouteTo, getRouteSize) skips it, so a goal that only a zeppelin reaches is unreachable;
+//  * TravelNode::getNodeMap (hasRouteTo, getRouteSize) skips it, so a goal that only a refused link reaches is unreachable;
 //  * TravelMgr::LoadMapTransfers adds no map transfer for it, so MapTransDistance does not call a cross-continent goal
 //    "finite" because of a link nobody can take (the bot would re-pick that destination on every pick).
+// A flight link is usable only for a bot that knows both ends and can pay the fare, a transport link is boarded through
+// tbhost::ride: those per-bot checks live in getCost (TravelFlightLinkUsableCompat), this gate only names the types the
+// A* may take at all. Turtle answers every type usable, as it always did.
 // `type` is TravelNodePathType as its number.
 namespace ai
 {
@@ -28,10 +32,11 @@ namespace ai
         constexpr std::uint8_t kTeleportSpell = 5;
         constexpr std::uint8_t kStaticPortal = 6;
 
-        // ForeverCore: walks and area triggers only (the core teleports the bot when it crosses the trigger itself).
+        // ForeverCore: walks, area triggers, transport legs and flight paths (the core teleports the bot when it crosses
+        // the trigger itself; flights and rides go through the W5 host seams, never instant flight or teleport).
         inline bool LinkUsableOnForever(std::uint8_t type)
         {
-            return type != kTransport && type != kFlightPath && type != kTeleportSpell && type != kStaticPortal;
+            return type != kTeleportSpell && type != kStaticPortal;
         }
 
         // A link becomes a map transfer (a cross-map shortcut of MapTransDistance) only when it joins two maps and may be used.

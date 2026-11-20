@@ -1,7 +1,8 @@
 """Wiring pins for the travel slice W4: round A1 (the node graph on ForeverCore) and round A2 (travel destinations).
 
-Round A1: the decisions are text only here: the graph is read through the schema guard, a taxi or transport link is loaded but
-never used on ForeverCore, the generator runs its map passes on the world thread there, and the stand-ins of the Travel block in
+Round A1: the decisions are text only here: the graph is read through the schema guard, flight links are usable when the
+bot knows both ends and can pay the fare and transport links board through the W5 host seams (W5T), the generator runs
+its map passes on the world thread there, and the stand-ins of the Travel block in
 SliceLinkStubs are gone now that ai/playerbot/TravelNode.cpp is in the slice (FOREVER-W0-W4-SPEC 2.3, W4-A1).
 
 Round A2: TravelMgr.cpp and TravelValues.cpp. The decisions themselves are exercised by standalone tests
@@ -231,15 +232,32 @@ class LinkTypes(unittest.TestCase):
         body = func(TRAVEL, "float TravelNodePath::getCost(TravelCostContext& context")
         self.assertLess(body.index("TravelLinkUsableCompat(uint8(getPathType()))"), body.index("float modifier"))
 
-    def test_the_f_side_refuses_taxi_and_transport_and_turtle_keeps_all(self):
+    def test_the_f_side_routes_taxis_and_transports_and_turtle_keeps_all(self):
         f = COMPAT_FN
         t = COMPAT_TN
-        # Taxi, transport, teleport-spell and static-portal links are refused (decision 1 and D4); the rule is the tested policy.
+        # Taxi and transport links are routes (W5T); teleport-spell and static-portal links stay refused (D4);
+        # the rule is the tested policy.
         self.assertIn("return ai::travel_graph::LinkUsableOnForever(pathType);", f)
         self.assertIn("return true;", func(t, "inline bool TravelLinkUsableCompat"))
         # The A* is the only user: every link cost goes through getCost.
         route = func(TRAVEL, "TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal")
         self.assertIn("link.second->getCost(costContext, currentNode->currentGold)", route)
+        # A flight link costs -1 unless the bot knows both ends and can pay the fare (the pure per-link decision).
+        cost = func(TRAVEL, "float TravelNodePath::getCost(TravelCostContext& context")
+        self.assertIn("TravelFlightLinkUsableCompat(bot, taxiPath, cGold)", cost)
+        self.assertIn("return ai::DecideFlightLinkUsable(access).action == ai::TaxiChoiceResult::Fly;", f)
+        self.assertIn("return true;", func(t, "inline bool TravelFlightLinkUsableCompat"))
+
+    def test_the_travel_executor_boards_through_the_w5_host_seams(self):
+        move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        # Graph flight legs fly through tbhost::taxi::Fly (never instant flight); Turtle runs its legacy body.
+        self.assertIn("TravelTaxiFlyCompat(ai, entry, &handled)", move)
+        self.assertIn("tbhost::taxi::Fly(bot, npc, TaxiPathToCompat(taxiPath), &fail)", COMPAT_FN)
+        self.assertNotIn("BotInstantFlightFinish", COMPAT_FN)
+        # Graph transport legs arm the W5 ride; the legacy teleport to the far dock never runs on ForeverCore.
+        self.assertIn("TravelRideBoardCompat(ai, entry, &handled)", move)
+        self.assertIn("tbhost::ride::StartRide(bot, entry, &fail)", COMPAT_FN)
+        self.assertIn("if (!TravelTransportTeleportCompat())", move)
 
     def test_the_a_star_adds_no_portal_edge_on_f(self):
         route = func(TRAVEL, "TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal")
@@ -369,7 +387,7 @@ class ReviewFixes(unittest.TestCase):
         transfers = func(MGR, "void TravelMgr::LoadMapTransfers()")
         self.assertIn("ai::travel_graph::MapTransferWanted(TravelLinkUsableCompat(uint8(path->getPathType()))", transfers)
         self.assertLess(transfers.index("MapTransferWanted"), transfers.index("AddMapTransfer("))
-        # Teleport-spell and static-portal links are refused too until W5 (D4), and the tram exit is off.
+        # Teleport-spell and static-portal links stay refused (D4; W5T wires flights and transports instead), and the tram exit is off.
         self.assertIn("type != kTeleportSpell && type != kStaticPortal", GRAPH_POLICY)
         tram = func(TRAVEL, "bool LeaveDeeprunTram(")
         self.assertLess(tram.index("TravelTramExitAllowedCompat()"), tram.index("TeleportTo"))

@@ -140,7 +140,34 @@ inline float PlayerInfoYCompat(PlayerInfo const* info) { return info->positionY;
 inline float PlayerInfoZCompat(PlayerInfo const* info) { return info->positionZ; }
 inline float PlayerInfoOrientationCompat(PlayerInfo const* info) { return info->orientation; }
 inline uint32 TravelHighElfRaceCompat() { return RACE_HIGH_ELF; }
-
 // The hold's fight gates: the T calls.
 inline bool CreatureCanInitiateAttackCompat(Creature* creature, Unit* /*target*/) { return creature->CanInitiateAttack(); }
 inline float CombatReachToCompat(Unit* from, Unit* to) { return from->GetCombatReach(to, false, 0.0f); }
+
+// W5T: flight and transport legs of the travel graph on ForeverCore. Turtle keeps the legacy bodies in
+// TravelNodePath::getCost and MovementAction::UseTaxi/UseTransport, so every helper here passes through.
+class PlayerbotAI;
+
+// The per-link flight decision (known ends, fare, faction, classic maps): the legacy branch below it in getCost asks
+// the same questions, so this always passes and Turtle behaviour is unchanged.
+inline bool TravelFlightLinkUsableCompat(Player* /*bot*/, TaxiPathEntry const* /*taxiPath*/, uint32 /*cGold*/)
+{
+    return true;
+}
+
+// Boarding a graph flight or transport leg goes through the W5 host seams on ForeverCore only; Turtle runs the
+// legacy executor bodies, so these never handle.
+inline bool TravelTaxiFlyCompat(PlayerbotAI* /*ai*/, uint32 /*pathId*/, bool* /*handled*/)
+{
+    return false;
+}
+inline bool TravelRideBoardCompat(PlayerbotAI* /*ai*/, uint32 /*entry*/, bool* /*handled*/)
+{
+    return false;
+}
+
+// The legacy executor teleports a bot that is not yet aboard (TransportTeleportType 2); Turtle keeps that.
+inline bool TravelTransportTeleportCompat()
+{
+    return true;
+}
