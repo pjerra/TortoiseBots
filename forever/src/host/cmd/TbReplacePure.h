@@ -5,14 +5,17 @@
 //   (a) the piece is one of the items the core creates that character with (its race and class; the start-outfit data the module reads through
 //       StartOutfitItem, forever/src/host/cmd/TbStartOutfit.h), or
 //   (b) the piece is poor (grey) quality.
-// Everything else goes to the bags as before. Two pieces are never destroyed whatever their provenance or quality: a quest item (it starts a quest)
-// and a bag that still holds items. Quality alone is not enough: a common piece the character did not start with is loot, not starter gear.
+// Everything else goes to the bags as before. Two pieces are never destroyed whatever their provenance or quality: a quest item and a bag that
+// still holds items. A piece is a quest item when its template is in the quest class, bonds as a quest item, starts a quest, or when an item
+// objective of a quest still in the character's log names its entry (IsQuestItem; the handler reads the template and the quest log through the
+// core). Quality alone is not enough: a common piece the character did not start with is loot, not starter gear.
 //
 // Who may lose a piece: a host bot, or the sender's own character when the sender is a GM. `.tb equip` refuses another real player's character before
 // this is asked (TbTestTargetPure.h), so the sender check only keeps a non-GM sender's own character's gear untouched.
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace TortoiseBots
 {
@@ -30,6 +33,33 @@ enum class Disposable : unsigned char
 
 // ItemQuality poor (0). Common (1) is NOT disposable on its own.
 inline constexpr unsigned kPoorQuality = 0;
+
+// QUEST_OBJECTIVE_ITEM (QuestDef.h, the core's QuestObjectiveType): the type whose ObjectID is a required item entry.
+inline constexpr int kItemObjective = 1;
+
+// One objective of a quest the character still has in its log: the core's objective type and the id it names (QuestObjective::Type, :ObjectID).
+struct ActiveObjective
+{
+    int type = 0;
+    std::int32_t objectId = 0;
+};
+
+// An item objective of one of the character's active quests names this entry.
+inline bool RequiredByActiveQuest(std::uint32_t entry, std::vector<ActiveObjective> const& objectives)
+{
+    for (ActiveObjective const& objective : objectives)
+        if (objective.type == kItemObjective && objective.objectId > 0 && std::uint32_t(objective.objectId) == entry)
+            return true;
+    return false;
+}
+
+// The piece is a quest item: never destroyed. The facts are the template's class, bonding and start quest, and the item objectives of every quest
+// still in the character's log (required items of quests it currently has).
+inline bool IsQuestItem(std::uint32_t entry, bool questClass, bool questBonding, bool startsQuest,
+                        std::vector<ActiveObjective> const& activeObjectives)
+{
+    return questClass || questBonding || startsQuest || RequiredByActiveQuest(entry, activeObjectives);
+}
 
 // The decision, from the facts the handler can check. `equipConfirmed`: the incoming piece is in the slot the swap aimed at.
 inline Disposable DisposableReason(bool equipConfirmed, bool startOutfit, unsigned quality, bool questItem, bool nonEmptyBag)

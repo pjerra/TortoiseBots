@@ -3,7 +3,8 @@
 
   * `.tb equip ... replace` destroys a replaced piece only when it is start-outfit gear (the core's `playercreateinfo_item` data for the
     character's race and class, read through the guarded access) or poor quality, and only after the new piece is confirmed in the slot; never a
-    quest item, never a bag that holds items, never a real player's character. Every destroy writes one INFO log line with the character and item
+    quest item (one in the quest item class, one that bonds as a quest item, one that starts a quest, or one an item objective of a quest still in
+    the character's log requires), never a bag that holds items, never a real player's character. Every destroy writes one INFO log line with the character and item
     identities and the reason, and the record lists it (`destroyed=`/`destroyed_item=`) (host/cmd/TbReplacePure.h,
     host/cmd/TbStartOutfit.h; forever/tools/test_equip_replace.cpp proves the rule);
   * `.tb run status` names the total member deaths (`member_deaths=`, the same total as the existing `deaths=`), so the
@@ -57,6 +58,20 @@ class Joint3(unittest.TestCase):
         self.assertIn("if (!info)", access)
         self.assertIn("initial.item_id == itemEntry", access)
 
+    def test_a_quest_objective_item_is_read_from_the_quest_log(self):
+        kit = text("host/TbTestKit.cpp")
+        self.assertIn("replace::ActiveObjective", kit)
+        self.assertIn("player->getQuestStatusMap()", kit)
+        self.assertIn("sObjectMgr->GetQuestTemplate(logged.first)", kit)
+        self.assertIn("for (QuestObjective const& objective : quest->GetObjectives())", kit)
+        self.assertIn("objective.Type == QUEST_OBJECTIVE_ITEM", kit)
+        self.assertIn("QUEST_STATUS_INCOMPLETE", kit)
+        self.assertIn("QUEST_STATUS_COMPLETE", kit)
+        self.assertIn("QUEST_STATUS_FAILED", kit)
+        self.assertIn("bool const questItem = replace::IsQuestItem(piece->GetEntry(), oldProto->GetClass() == ITEM_CLASS_QUEST,", kit)
+        self.assertIn("oldProto->GetBonding() == BIND_QUEST, oldProto->GetStartQuest() != 0, activeItems);", kit)
+        self.assertLess(kit.index("ActiveItemObjectives(bot)"), kit.index("dropIfDisposable(displaced);"))
+
     def test_the_replace_rule_is_pure(self):
         pure = text("host/cmd/TbReplacePure.h")
         self.assertIn("if (!equipConfirmed || questItem || nonEmptyBag)", pure)
@@ -64,6 +79,8 @@ class Joint3(unittest.TestCase):
         self.assertIn("quality <= kPoorQuality", pure)
         self.assertIn('case Disposable::StartOutfit: return "start-outfit";', pure)
         self.assertIn("targetIsHostBot || (senderIsGm && senderIsTarget)", pure)
+        self.assertIn("inline bool IsQuestItem(", pure)
+        self.assertIn("objective.type == kItemObjective && objective.objectId > 0", pure)
 
     def test_status_names_member_deaths(self):
         run = text("host/run/TbRun.cpp")

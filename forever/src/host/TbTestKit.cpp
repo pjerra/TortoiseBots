@@ -15,6 +15,7 @@
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "QuestDef.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
 #include "WorldSession.h"
@@ -144,6 +145,26 @@ bool Ids(ChatHandler* handler, Words const& args, char const* cmd, size_t from, 
     }
     return true;
 }
+
+// The item objectives of every quest still in the character's log (incomplete, complete, failed): the required items `.tb equip replace` may not
+// destroy. The quest log is the core's own map (Player::getQuestStatusMap), a rewarded quest is not in it.
+std::vector<replace::ActiveObjective> ActiveItemObjectives(Player* player)
+{
+    std::vector<replace::ActiveObjective> objectives;
+    for (auto const& logged : player->getQuestStatusMap())
+    {
+        QuestStatus const status = logged.second.Status;
+        if (status != QUEST_STATUS_INCOMPLETE && status != QUEST_STATUS_COMPLETE && status != QUEST_STATUS_FAILED)
+            continue;
+        Quest const* quest = sObjectMgr->GetQuestTemplate(logged.first);
+        if (!quest)
+            continue;
+        for (QuestObjective const& objective : quest->GetObjectives())
+            if (objective.Type == QUEST_OBJECTIVE_ITEM)
+                objectives.push_back({int(objective.Type), objective.ObjectID});
+    }
+    return objectives;
+}
 }
 
 // ---- `.tb learn <bot> <spell id>... [#token]` ----
@@ -198,7 +219,8 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 // Player::EquipNewItem (:1621) into the slot it found. A slot that is taken refuses with the core's reason (EQUIP_ERR_NO_SLOT_AVAILABLE). With
 // `replace` the item goes to the bags and the core's own swap (Player::SwapItem, the call of a client's equip click) puts it on and the old piece
 // into the bags, after the same check with swap = true. A displaced piece the equipment makes disposable (start-outfit gear, or poor quality) is
-// destroyed instead of kept, only once the incoming piece is confirmed in the slot; the log line names it and the record lists it (TbReplacePure.h).
+// destroyed instead of kept, only once the incoming piece is confirmed in the slot; a quest item is never destroyed (TbReplacePure.h). The log line
+// names a destroy and the record lists it.
 
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
@@ -306,6 +328,7 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     bool const equipped = worn && worn->GetEntry() == item;
     if (equipped)
     {
+        std::vector<replace::ActiveObjective> const activeItems = ActiveItemObjectives(bot);
         std::vector<DestroyedPiece> destroyed;
         auto const dropIfDisposable = [&](Item* piece)
         {
@@ -317,9 +340,12 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             ItemTemplate const* oldProto = piece->GetTemplate();
             if (!oldProto)
                 return;
+            // A quest item by class, by bonding or by the quest it starts, or a required item of a quest the character still has, is never
+            // destroyed: it goes to the bags (TbReplacePure.h).
+            bool const questItem = replace::IsQuestItem(piece->GetEntry(), oldProto->GetClass() == ITEM_CLASS_QUEST,
+                oldProto->GetBonding() == BIND_QUEST, oldProto->GetStartQuest() != 0, activeItems);
             replace::Disposable const why = replace::DisposableReason(equipped,
-                replace::StartOutfitItem(bot, piece->GetEntry()), oldProto->GetQuality(), oldProto->GetStartQuest() != 0,
-                piece->IsNotEmptyBag());
+                replace::StartOutfitItem(bot, piece->GetEntry()), oldProto->GetQuality(), questItem, piece->IsNotEmptyBag());
             if (why == replace::Disposable::No)
                 return;
             destroyed.push_back({piece->GetEntry(), piece->GetGUID().ToString(), replace::ReasonName(why)});
