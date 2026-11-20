@@ -152,6 +152,21 @@ public:
 #ifdef TORTOISEBOTS_SLICE1
         if (command != "reload all" || !BotMgr::Instance().Enabled() || !ai::GetDungeonPlans().Sealed())
             return;
+        // A run keeps the plan it started on and matches its units by (leg, seq): new unit rows under it could give it another step's
+        // spawns. So while any run holds a plan the reload waits; `.tb plan reload` does it once the runs end.
+        std::vector<std::string> const runs = TortoiseBots::run::PlanRunLeaders();
+        if (!runs.empty())
+        {
+            std::string names;
+            for (std::string const& leader : runs)
+            {
+                if (!names.empty())
+                    names += ", ";
+                names += leader;
+            }
+            TC_LOG_WARN("tortoisebots", "TortoiseBots: plans not reloaded: run(s) in progress ({}); use .tb plan reload after they end", names);
+            return;
+        }
         ai::PlanReloadHost host;
         TortoiseBots::run::FillUnitReloadHost(host);
         ai::PlanReloadReport const report = ai::ReloadDungeonPlans(TortoiseBots::run::PlansInUse(), &host);

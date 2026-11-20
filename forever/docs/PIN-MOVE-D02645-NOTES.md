@@ -19,8 +19,9 @@ one gap: a kick is invisible"). `BotSession::Tick` now reads `IsKickRequested()`
 on the next tick (`RequestLogout` -> `LogoutPlayer(true)`). The reason string is not kept, so the log line names the request
 only.
 
-The account-owner case keeps its earlier workaround (`BotMgr::Update`, `ownerLoadingMs` >= 2 s -> logout): it leaves before
-the core's kick is seen and works whether or not the core ever kicks, so both remain.
+The kick poll normally wins: the core sets the kick flag at once, so `BotSession::Tick` sees it first. The account-owner
+workaround (`BotMgr::Update`, `ownerLoadingMs` >= 2 s -> logout) is the fallback: it works whether or not the core ever kicks,
+so both remain.
 
 ### 1b. `.reload` answered: `OnAfterReload` (#374)
 

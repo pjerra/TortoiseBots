@@ -126,6 +126,15 @@ std::vector<ai::DungeonPlan const*> PlansInUse()
     return out;
 }
 
+std::vector<std::string> PlanRunLeaders()
+{
+    std::vector<std::string> out;
+    for (RunRec const* rec : All())
+        if (rec->run.plan)
+            out.push_back(rec->leaderName);
+    return out;
+}
+
 uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step, int32 leg, int32 unit, std::string why)
 {
     RunEvent event;
