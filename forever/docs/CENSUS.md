@@ -12,7 +12,7 @@ Order inside `vm-census.sh` (pinned by `forever/tools/test_vm_census_order.py`):
 the census and the summary read (`forever/tools/census.sh`, the runner that comes with the uploaded tree, started by the same VM-side session that holds the
 lock, so a dropped connection does not free the slot under a running census), then the lock is released. Each run writes its tables to its own folder `yulon-ubuntu2:~/forever-build/census-runs/<name>/`
 (`FOREVER_CENSUS_NAME`, default `<worktree>-s<slot>-<list or all>-<utc stamp>-<pid>`), so two runs never share an output
-folder; the old `census-N/` folders are not used any more. A summary that says `files 0` fails the script.
+folder; the old `census-N/` folders are not used any more. A summary that says `files 0` fails the script, and so does a census that exits nonzero (docker or `port_census.py`) or writes no summary or tables: the script prints no summary then and exits with the census's status (1 when the artifacts are missing).
 
 | Date | Core pin | State | Files | Compile clean | Error places |
 |---|---|---|---|---|---|

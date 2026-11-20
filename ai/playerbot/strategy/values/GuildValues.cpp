@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -1565,7 +1566,7 @@ uint8 PetitionSignsValue::Calculate()
     if (petitions.empty())
         return 0;
 
-    auto result = CharacterDatabase.PQuery("SELECT playerguid FROM petition_sign WHERE petitionguid = '%u'", petitions.front()->getObjectGuid().GetCounter());
+    auto result = CharacterPQueryCompat("SELECT playerguid FROM petition_sign WHERE petitionguid = '%u'", petitions.front()->getObjectGuid().GetCounter());
 
     return result ? (uint8)result->GetRowCount() : 0;
 };

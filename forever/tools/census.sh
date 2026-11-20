@@ -15,4 +15,7 @@ docker run --rm --cpus=${1:-12} -u "$(id -u):$(id -g)" -e HOME=/tmp -e FOREVER_C
   bash -c "nice -n 10 python3 /src/src/modules/TortoiseBots/forever/tools/port_census.py /build /census ${1:-12} ${2:-}"
 rc=$?
 rm -f "$OUT/botpch_forever.pch"    # 120 MB per run, only needed while the census runs
-exit $rc
+[ $rc -eq 0 ] || exit $rc
+# A run that wrote no summary is not a measurement: say so instead of letting the caller read an empty folder.
+[ -s "$OUT/summary.txt" ] || { echo "census.sh: no summary.txt in $OUT: the census did not finish" >&2; exit 3; }
+exit 0

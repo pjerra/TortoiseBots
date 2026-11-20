@@ -909,7 +909,7 @@ void RandomItemMgr::BuildItemInfoCache()
     std::vector<uint32> allianceItems;
     std::vector<uint32> hordeItems;
     vendorItems.clear();
-    if (auto result = WorldDatabase.PQuery("%s", "SELECT item, entry FROM npc_vendor"))
+    if (auto result = WorldDatabase.Query("SELECT item, entry FROM npc_vendor"))
     {
         BarGoLink bar(result->GetRowCount());
         do
@@ -1189,7 +1189,7 @@ void RandomItemMgr::BuildItemInfoCache()
                         if (!crItem || !crItem->conditionId)
                             continue;
 
-                        if (auto result = WorldDatabase.PQuery("SELECT type, value1, value2 FROM conditions WHERE condition_entry = '%u'", crItem->conditionId))
+                        if (auto result = DbPQueryW3(WorldDatabase, "SELECT type, value1, value2 FROM conditions WHERE condition_entry = '%u'", crItem->conditionId))
                         {
                             do
                             {
@@ -4129,8 +4129,7 @@ void RandomItemMgr::BuildAmmoCache()
     // then lowest entry) is ai::PickAmmo, so it never depends on row order.
     auto pickAmmo = [](uint32 itemClass, uint32 subClass, uint32 level) -> uint32
     {
-        auto rows = WorldDatabase.PQuery(
-            "select entry, required_level, flags, name, dmg_min1, dmg_max1, delay from item_template"
+        auto rows = DbPQueryW3(WorldDatabase, "select entry, required_level, flags, name, dmg_min1, dmg_max1, delay from item_template"
             " where class = '%u' and subclass = '%u' and required_level <= '%u' and quality = '%u'",
             itemClass, subClass, level, ITEM_QUALITY_NORMAL);
         if (!rows)
@@ -4190,8 +4189,7 @@ void RandomItemMgr::BuildAmmoCache()
     {
         for (uint32 subClass = ItemSubclassQuiver::ITEM_SUBCLASS_QUIVER; subClass <= ItemSubclassQuiver::ITEM_SUBCLASS_AMMO_POUCH; ++subClass)
         {
-            auto results = WorldDatabase.PQuery(
-                    "SELECT it.entry FROM item_template it JOIN npc_vendor v ON v.item = it.entry"
+            auto results = DbPQueryW3(WorldDatabase, "SELECT it.entry FROM item_template it JOIN npc_vendor v ON v.item = it.entry"
                     " WHERE it.class = '%u' AND it.subclass = '%u' AND it.required_level <= '%u'"
                     " ORDER BY it.required_level DESC LIMIT 1",
                     ITEM_CLASS_QUIVER, subClass, level);

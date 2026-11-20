@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "ResetAiAction.h"
 #include "playerbot/PlayerbotDbStore.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -36,7 +37,7 @@ void ResetAiAction::ResetValues()
 {
     uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
 
-    auto results = CharacterDatabase.PQuery("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' and `preset` = '' and `key` = 'value'", guid);
+    auto results = CharacterPQueryCompat("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' and `preset` = '' and `key` = 'value'", guid);
     if (results)
     {
         std::list<std::string> values;
@@ -116,7 +117,7 @@ bool ListAiAction::Execute(Event& event)
 
       ai->TellError(requester, "### PRESETS AVAILABLE ###");
 
-      auto results = CharacterDatabase.PQuery("SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu'", guid);
+      auto results = CharacterPQueryCompat("SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu'", guid);
       if (results)
       {
          std::list<std::string> values;

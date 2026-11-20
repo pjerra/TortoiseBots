@@ -42,6 +42,8 @@ done
 mark=$(cat "$src/src/modules/TortoiseBots/forever/MARK")
 echo "$(date +%s.%N) CENSUS-START $mark out=$(basename $out)" >> "$EVENTS"
 sleep "${FAKE_DOCKER_SLEEP:-1}"
+if [ -n "${FAKE_DOCKER_FAIL:-}" ]; then exit "$FAKE_DOCKER_FAIL"; fi
+if [ -n "${FAKE_DOCKER_NO_SUMMARY:-}" ]; then echo "docker run: the census died before writing a summary"; exit 0; fi
 if [ "$mark" = EMPTY ]; then n=0; else n=3; fi
 echo "files $n  compile clean $n  with errors 0  error places 0 (tree $mark)" > "$out/summary.txt"
 : > "$out/where.tsv"; : > "$out/names.tsv"; : > "$out/kinds.tsv"; : > "$out/botpch_forever.pch"
@@ -152,6 +154,24 @@ class VmCensusOrder(unittest.TestCase):
         out, err = p.communicate(timeout=60)
         self.assertEqual(p.returncode, 3, (out, err))
         self.assertIn("files 0, not a measurement", err)
+
+    def test_a_census_that_exits_nonzero_is_not_a_successful_run(self):
+        """docker/port_census fails: the run's folder exists but holds no summary; the run must fail, not print a summary."""
+        p = self.env.run(self.env.worktree("A"), slot="2", extra={"FAKE_DOCKER_FAIL": "7"})
+        out, err = p.communicate(timeout=60)
+        self.assertNotEqual(p.returncode, 0, (out, err))
+        self.assertIn("the census failed", out + err)
+        self.assertNotIn("compile clean", out)
+        lock = self.env.home / "forever-build" / "census-2.lock"
+        self.assertEqual(subprocess.run(["flock", "-n", str(lock), "true"]).returncode, 0)
+
+    def test_a_census_that_writes_no_summary_is_not_a_successful_run(self):
+        """docker exits 0 but the summary and tables are missing: the artifacts are required before success."""
+        p = self.env.run(self.env.worktree("A"), slot="2", extra={"FAKE_DOCKER_NO_SUMMARY": "1"})
+        out, err = p.communicate(timeout=60)
+        self.assertNotEqual(p.returncode, 0, (out, err))
+        self.assertIn("the census failed", out + err)
+        self.assertNotIn("compile clean", out)
 
     def test_a_killed_run_leaves_the_slot_locked_until_its_census_ends(self):
         """The census runs inside the lock session: if the local script dies (an ssh drop), the census goes on and holds the slot."""

@@ -30,12 +30,14 @@ Now (pinned by `forever/tools/test_vm_census_order.py`, 8 tests, run with fake `
 3. the SAME session runs the census (the `census.sh` that came with the uploaded tree; the old `~/forever-build/census.sh` is no longer used by this script and is left alone for other callers) and reads the summary;
    the census is a child of the session and inherits the lock descriptors, so if the script or its ssh connection dies, the census on the VM goes on and keeps the slot locked until it ends (found during this pass:
    an ssh drop under a VM load of 100-300 left an orphan census running while the next run took the freed lock and uploaded over its source; a first version of the fix that only held the lock in a side session had that flaw);
-4. a summary that says `files 0` makes the script fail (exit 3); a session that ends before the census reports its end makes it fail (exit 1) instead of reading a summary;
+4. a summary that says `files 0` makes the script fail (exit 3); a census that exits nonzero (docker or `port_census.py` failed) fails the run with that status, and one that writes no
+   `summary.txt` or no table fails it (exit 1) instead of printing anything; a session that ends before the census reports its end makes it fail (exit 1);
 5. the lock is released when the session ends.
 Output folder: one per run, `yulon-ubuntu2:~/forever-build/census-runs/<name>/`, `<name>` = `FOREVER_CENSUS_NAME` (checked: letters, digits, `.`, `_`, `-`) or by default
 `<worktree>-s<slot>-<list or all>-<utc stamp>-<pid>`; it never collides with a build slot's folders (`census-N` is not written any more). The 120 MB precompiled header of a run is deleted when it ends.
 The tests prove: lock held at the moment of both uploads; a run killed in the middle of its census leaves the slot locked until that census ends (the next run uploads only after it); order lock, upload, upload, census start, census end; two runs on one slot do not overlap and each summary names its OWN tree;
-two different slots do run at the same time; a passed name is used and a bad name is refused; `files 0` fails; the lock is free after the run.
+two different slots do run at the same time; a passed name is used and a bad name is refused; `files 0` fails; a census that exits nonzero, or writes no summary, is a failed run
+(no summary printed, nonzero exit, lock released); the lock is free after the run.
 Every census in the tables below ran through this script after the change, so the order and the per-run folders are exercised for real, not only against the fakes.
 
 ## Numbers (whole tree, default slot, `forever/tools/vm-census.sh "" 12`)
@@ -80,7 +82,11 @@ Helpers (existing ones reused, three new):
   Shapes rewritten: `CharacterDatabase.PQuery` 50, `CharacterDatabase.Query` 9, `WorldDatabase.Query` 10, `WorldDatabase.PQuery` 2, `LoginDatabase.PQuery` 4 (75 declarations).
 * printf-format queries (findings item 18, the PQuery trap): the character database goes through the existing `CharacterPQueryCompat`; `DbPQueryW3(db, format, args...)` (new) is the same for the world and login databases.
   Turtle: `db.PQuery(format, args...)`. ForeverCore: formats with `vsnprintf` semantics (`LegacyFormatW3`, string arguments must be `char const*`, a `static_assert` says so) and sends the text with `Query()`.
-  No site now hands a printf format to ForeverCore's `{}` PQuery.
+  A zero-argument call skips the formatter on both sides of `LegacyFormatW3` (a query with a literal `%` has no conversions).
+  The first round matched only `std::unique_ptr<QueryResult> x(DB.PQuery(...))`; the second (fix round) also rewrites the shapes that compile on ForeverCore with the arguments dropped:
+  `auto x = DB.PQuery(fmt, args)`, `if (auto x = ...)` and `x = ...` (20 sites, 10 files), and `PQuery("%s", text)` becomes `DB.Query(text)` (4 sites: three TravelNode loads and
+  one vendor query in `RandomItemMgr.cpp`). No site outside the exclusion list now hands a printf format to ForeverCore's `{}` PQuery (0 found by the scan; `ItemUsageValue.cpp` and
+  `Commander.cpp` keep theirs, both excluded).
 * `FieldTextW3(field)` (32 sites): Turtle `GetCppString()`, ForeverCore `GetString()`. `FieldIsNullW3(field)` (4): Turtle `IsNULL()`, ForeverCore `IsNull()`.
 * `DbEscapeW3(db, text)` (15 sites; character 11, login 2, world 2): Turtle `db.escape_string(text)`, ForeverCore `db.EscapeString(text)`.
 Closed: 243 places, 6 files clean. The census has no error in `TbCompat_W3.h` or from a helper's `static_assert`.
@@ -88,7 +94,9 @@ Closed: 243 places, 6 files clean. The census has no error in `TbCompat_W3.h` or
 NOT done, needs a port: **`PExecute` (35 sites outside the exclude list: character 23, world 11, login 1)**. On ForeverCore it compiles and silently drops its arguments, so a rewrite through a helper would START
 real writes against ForeverCore's schema (tables and columns that may not exist). Decision for the lead: route them to the unported list (log once, write nothing) or add a formatting helper like `DbPQueryW3`
 once each statement's table is checked. Until then a file that becomes clean in this pass still holds its `PExecute` calls; the scripts say where: `grep -rn PExecute` outside the exclude list. The strategy-store
-tables (`ai_playerbot_*`) and the character/world tables the SELECTs read are written for Turtle's schema; a query against a table ForeverCore lacks logs a SQL error and returns no rows (the bot does less).
+tables (`ai_playerbot_*`) and the character/world tables the SELECTs read are written for Turtle's schema. A query against a table or column ForeverCore lacks is NOT harmless: `MySQLConnection::_HandleMySQLErrno`
+(`ForeverCore/src/server/database/Database/MySQLConnection.cpp:594-606`) sleeps 10 s and calls `ABORT()` on `ER_NO_SUCH_TABLE`, `ER_BAD_FIELD_ERROR` and `ER_PARSE_ERROR`. A file this pass made
+compile-clean is compiled, not schema-safe: before a linked path runs on ForeverCore its tables and columns must exist (module SQL) or the call must go to the unported list.
 
 ## Family 4: the manager singletons (49 sites, 13 files)
 
@@ -145,3 +153,38 @@ ForeverCore `q->RewardItemId`, `RewardItemCount`, `RewardChoiceItemId` (`std::ar
 | helper files | `git diff --stat e57bd1849 HEAD -- forever/src/compat ai/cmangos-compat-w3.h ai/playerbot/TbCompatW3.h` | only the three new files (124 added lines); the pass's diff has nothing under `forever/src/slice`, no slice-listed file and no `*Commander*` file |
 
 Live tests on the VM: none were made in this pass (the Turtle gates are a compile and the unit/wiring suites; they ran while the VM's `forever-world` containers were up and touch neither).
+
+## Fix round (two reviews)
+
+### Codex: a failed census was masked as a successful run (`forever/tools/vm-census.sh:31-36`)
+
+**Fix.** The remote session no longer pipes `census.sh` into `tail`: it runs the census into `~/forever-build/census-runs/<name>.census.log`, keeps `census.sh`'s own status, prints the log's
+last three lines, and fails with that status when it is nonzero (`vm-census.sh:31-33`). It then requires `summary.txt` to be non-empty and `where.tsv`, `names.tsv`, `kinds.tsv` to exist before
+printing a summary (`:34-35`); a missing one fails with exit 1. `forever/tools/census.sh:17-19` also refuses a run that wrote no summary (exit 3). The local side captures the coproc
+descriptors (`SIN`/`SOUT`) so a session that has already ended is an error, not an `unbound variable`.
+**Test.** `forever/tools/test_vm_census_order.py` 8 -> 10: fake docker exits 7 without a summary -> the run exits 7, prints `the census failed`, prints no `compile clean`, and the lock is free;
+fake docker exits 0 without a summary -> the run fails too.
+
+### Gemini 1: DB queries do not check table existence (missing tables abort ForeverCore)
+
+**Fix (documentation).** The claim was false and is corrected in this file (Family 3, the `PExecute` paragraph): `MySQLConnection.cpp:594-606` sleeps 10 s and `ABORT()`s on
+`ER_NO_SUCH_TABLE`, `ER_BAD_FIELD_ERROR` and `ER_PARSE_ERROR`, so a compile-clean file is not schema-safe.
+**Reject (code).** A table/column guard needs a per-table decision (create module SQL, skip the feature, or route to the unported list) — a port of its own, not a call-site rewrite; this pass
+never executes those queries and nothing in it added a new query. The risk is recorded above for the lead with the affected files in the review.
+
+### Gemini 2: `auto` / `if (auto ...)` printf `PQuery` calls were missed
+
+**Fix.** Confirmed: those shapes compile on ForeverCore (`PQuery` takes an fmt format string; extra arguments are accepted and dropped, which the census could not see). `rewrite_wide_pass3.py`
+now rewrites them through the same helpers (20 sites, 10 files) and `PQuery("%s", text)` to `DB.Query(text)` (4 sites); a scan outside the exclusion list finds 0 remaining.
+**Test.** `forever/tools/test_rewrite_wide_pass3.py` (10 tests; 7 failed before the change) pins the five shapes, multi-line literals with nested parentheses, `%%`, a query without a conversion,
+and a commented-out call. `ItemUsageValue.cpp` (3 sites) and `Commander.cpp` keep theirs: both are excluded (slice-listed / the Commander port), so the claim is scoped to the list.
+
+### Gemini 3: zero-argument `DbPQueryW3` went through printf
+
+**Fix.** `forever/src/compat/TbCompat_W3.h:36-45`: `LegacyFormatW3` returns the text unchanged with zero arguments, and `DbPQueryW3` sends it with `Query(format)` — a query with a literal `%`
+(`LIKE '100%'`) is no longer read as a printf conversion.
+**Test.** `tools/test_w3_zero_argument_query.cpp` (compiled and run by `tools/verify_all.sh`): it fails on the old header (`sent` empty) and passes now.
+
+### Gemini 4: `vm-census.sh` masks failures
+
+Same finding as Codex, fixed once (above): nonzero census status, required summary and tables, tests for both.

@@ -32,7 +32,7 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
     // preset's own "wait for attack time" must win over the pre-pull one).
     ai->EndPullWindow("reload");
 
-    auto results = CharacterDatabase.PQuery("SELECT `key`,`value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' AND `preset` = '%s'", guid, preset.c_str());
+    auto results = CharacterPQueryCompat("SELECT `key`,`value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' AND `preset` = '%s'", guid, preset.c_str());
     if (results)
     {
         struct StoredRow

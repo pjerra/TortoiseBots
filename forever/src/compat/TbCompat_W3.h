@@ -35,6 +35,8 @@ template <class... Args>
 inline std::string LegacyFormatW3(char const* format, Args... args)
 {
     static_assert((!std::is_same_v<std::decay_t<Args>, std::string> && ...), "pass char const* to a printf format");
+    if constexpr (sizeof...(Args) == 0)
+        return std::string(format);   // no conversions: printf would read a literal '%' in the query as one
     int const size = std::snprintf(nullptr, 0, format, args...);
     if (size < 0)
         return std::string();
@@ -43,7 +45,12 @@ inline std::string LegacyFormatW3(char const* format, Args... args)
     return out;
 }
 template <class Db, class... Args>
-inline auto DbPQueryW3(Db& db, char const* format, Args... args) { return db.Query(LegacyFormatW3(format, args...).c_str()); }
+inline auto DbPQueryW3(Db& db, char const* format, Args... args)
+{
+    if constexpr (sizeof...(Args) == 0)
+        return db.Query(format);
+    return db.Query(LegacyFormatW3(format, args...).c_str());
+}
 template <class F>
 inline std::string FieldTextW3(F const& field) { return field.GetString(); }
 template <class F>

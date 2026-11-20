@@ -1054,7 +1054,7 @@ void HireRecruiterScript::SyncUnlockFees()
     {
         uint32 fee = IsRaidUnlockQuest(questId) ? sPlayerbotAIConfig.worldBuffsUnlockFeeRaidCopper
                                                 : sPlayerbotAIConfig.worldBuffsUnlockFeeCopper;
-        auto result = WorldDatabase.PQuery("SELECT RewOrReqMoney, Objectives FROM quest_template WHERE entry = %u", questId);
+        auto result = DbPQueryW3(WorldDatabase, "SELECT RewOrReqMoney, Objectives FROM quest_template WHERE entry = %u", questId);
         if (!result)
             continue;
         Field* fields = result->Fetch();
@@ -1079,7 +1079,7 @@ void HireRecruiterScript::SyncHireUnlockChain()
     {
         uint32 questId = HireUnlockQuestForTier(tier);
         int32 want = HireTierChainPrevQuest(tier, sPlayerbotAIConfig.hireGearAllQuestsAvailable);
-        auto result = WorldDatabase.PQuery("SELECT PrevQuestId FROM quest_template WHERE entry = %u", questId);
+        auto result = DbPQueryW3(WorldDatabase, "SELECT PrevQuestId FROM quest_template WHERE entry = %u", questId);
         if (!result)
             continue;
         if (result->Fetch()[0].GetInt32() == want)

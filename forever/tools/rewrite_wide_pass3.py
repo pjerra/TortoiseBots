@@ -152,6 +152,93 @@ FIELD_TEXT = re.compile(r"(?<![\w.>])([A-Za-z_]\w*(?:\[[^\]\n]*\])?)\.GetCppStri
 FIELD_NULL = re.compile(r"(?<![\w.>])([A-Za-z_]\w*(?:\[[^\]\n]*\])?)\.IsNULL\(\)")
 ESCAPE = re.compile(r"\b(\w+Database)\s*\.\s*escape_string\(\s*([A-Za-z_][\w.]*(?:\[[^\]\n]*\])?)\s*\)")
 
+# The PQuery shapes family 3's DECL rule did not match (`auto x = ...`, `if (auto x = ...)`, `x = ...`) still compile on
+# ForeverCore (its PQuery is an fmt format string, so extra arguments are accepted and dropped) and would send the printf
+# text itself as SQL. Every remaining printf-format call goes through the same two helpers; `PQuery("%s", text)` is the text.
+PQUERY = re.compile(r"\b(Character|World|Login)Database\s*\.\s*PQuery\s*\(")
+PRINTF_CONV = re.compile(r"%[-+ #0-9.*hlLzjt]*[diouxXeEfgGaAcspn]")
+
+
+def c_literals(args):
+    """(text of the leading C string literal run, the arguments after it) or ("", args) when the call opens with no literal."""
+    i, n, parts = 0, len(args), []
+    while True:
+        while i < n and args[i] in " \t\n\r":
+            i += 1
+        if i >= n or args[i] != '"':
+            break
+        j = i + 1
+        buf = []
+        while j < n and args[j] != '"':
+            if args[j] == "\\" and j + 1 < n:
+                buf.append(args[j:j + 2])
+                j += 2
+                continue
+            buf.append(args[j])
+            j += 1
+        parts.append("".join(buf))
+        i = j + 1
+    rest = args[i:].lstrip()
+    if rest.startswith(","):   # the arguments after the format literal
+        rest = rest[1:].lstrip()
+        return "".join(parts), rest
+    return "".join(parts), rest
+
+
+def single_argument(rest):
+    depth, instr, i = 0, False, 0
+    while i < len(rest):
+        c = rest[i]
+        if instr:
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                instr = False
+        else:
+            if c == '"':
+                instr = True
+            elif c in "([{":
+                depth += 1
+            elif c in ")]}":
+                depth -= 1
+            elif c == "," and depth == 0:
+                return False
+        i += 1
+    return rest.strip() != ""
+
+
+def rewrite_format_pqueries(text):
+    total, pos = 0, 0
+    while True:
+        msk = mask(text)
+        m = None
+        for cand in PQUERY.finditer(text, pos):
+            if not msk[cand.start()]:
+                m = cand
+                break
+        if not m:
+            return text, total
+        close = balanced_close(text, m.end() - 1)
+        if close < 0:
+            pos = m.end()
+            continue
+        args = text[m.end():close]
+        literal, rest = c_literals(args)
+        if not rest or not PRINTF_CONV.search(literal.replace("%%", "")):
+            pos = close + 1   # no printf conversion: ForeverCore's PQuery is the same call
+            continue
+        db = m.group(1) + "Database"
+        if literal == "%s" and single_argument(rest):
+            call = db + ".Query(" + rest + ")"
+        elif db == "CharacterDatabase":
+            call = "CharacterPQueryCompat(" + args + ")"
+        else:
+            call = "DbPQueryW3(" + db + ", " + args.lstrip() + ")"
+        text = text[:m.start()] + call + text[close + 1:]
+        pos = m.start() + len(call)
+        total += 1
+
 
 def fam_db(text):
     total = 0
@@ -184,10 +271,11 @@ def fam_db(text):
         text = text[:m.start()] + new + text[close_outer + 1:]
         pos = m.start() + len(new)
         total += 1
+    text, q = rewrite_format_pqueries(text)
     text, a = subst(text, FIELD_TEXT, lambda m: "FieldTextW3(" + m.group(1) + ")")
     text, b = subst(text, FIELD_NULL, lambda m: "FieldIsNullW3(" + m.group(1) + ")")
     text, c = subst(text, ESCAPE, lambda m: "DbEscapeW3(" + m.group(1) + ", " + m.group(2) + ")")
-    return text, total + a + b + c
+    return text, total + q + a + b + c
 
 
 # ---- family 4: the manager singletons ------------------------------------------------------------------------------------

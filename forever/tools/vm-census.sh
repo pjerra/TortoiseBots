@@ -28,16 +28,22 @@ OUT=census-runs/$NAME
 # The census is a child of this session and inherits the lock descriptors, so it keeps the slot locked even if the session dies.
 coproc VM_SESSION { ssh "$VM" "exec 2>&1; mkdir -p \$HOME/forever-build/census-runs; exec 8>\$HOME/forever-build/census$SUF.lock 9>\$HOME/forever-build/build$SUF.lock; flock 8; flock 9; echo LOCKED
 read -r go || exit 1; [ \"\$go\" = GO ] || exit 1
-FOREVER_SLOT='${FOREVER_SLOT:-}' FOREVER_CENSUS_LIST='$LIST' FOREVER_CENSUS_OUT='$OUT' \$HOME/forever-build/src$SUF/src/modules/TortoiseBots/forever/tools/census.sh $JOBS '$ONLY' | tail -3
-cd \$HOME/forever-build/$OUT || { echo 'VM-CENSUS-RC=1'; exit 0; }
+FOREVER_SLOT='${FOREVER_SLOT:-}' FOREVER_CENSUS_LIST='$LIST' FOREVER_CENSUS_OUT='$OUT' \$HOME/forever-build/src$SUF/src/modules/TortoiseBots/forever/tools/census.sh $JOBS '$ONLY' >\$HOME/forever-build/census-runs/$NAME.census.log 2>&1
+census_rc=\$?
+tail -3 \$HOME/forever-build/census-runs/$NAME.census.log
+if [ \$census_rc -ne 0 ]; then echo \"vm-census: the census failed (rc \$census_rc; log ~/forever-build/census-runs/$NAME.census.log)\"; echo VM-CENSUS-RC=\$census_rc; exit 0; fi
+cd \$HOME/forever-build/$OUT || { echo \"vm-census: the census wrote no run folder ~/forever-build/$OUT\"; echo 'VM-CENSUS-RC=1'; exit 0; }
+[ -s summary.txt ] || { echo 'vm-census: the census wrote no summary.txt'; echo 'VM-CENSUS-RC=1'; exit 0; }
+for f in where.tsv names.tsv kinds.tsv; do [ -e \$f ] || { echo \"vm-census: the census wrote no \$f\"; echo 'VM-CENSUS-RC=1'; exit 0; }; done
 echo 'run folder: ~/forever-build/$OUT'; cat summary.txt
 case \"\$(cat summary.txt)\" in 'files 0 '*) echo 'vm-census: files 0, not a measurement'; echo 'VM-CENSUS-RC=3'; exit 0;; esac
 echo '--- where'; head -15 where.tsv; echo '--- names'; head -40 names.tsv; echo '--- kinds'; head -12 kinds.tsv | cut -c1-140
 echo 'VM-CENSUS-RC=0'"; }
-release() { set +e; [ -n "${VM_SESSION[1]:-}" ] && eval "exec ${VM_SESSION[1]}>&-" 2>/dev/null; [ -n "${VM_SESSION_PID:-}" ] && wait "$VM_SESSION_PID" 2>/dev/null; return 0; }
+SIN=${VM_SESSION[0]}; SOUT=${VM_SESSION[1]}
+release() { set +e; [ -n "${SOUT:-}" ] && eval "exec ${SOUT}>&-" 2>/dev/null; [ -n "${VM_SESSION_PID:-}" ] && wait "$VM_SESSION_PID" 2>/dev/null; return 0; }
 trap release EXIT
 echo "vm-census: waiting for the slot ${FOREVER_SLOT:-0} lock ($NAME)" >&2
-read -r -u "${VM_SESSION[0]}" got || { echo "vm-census: could not take the slot lock on $VM" >&2; exit 1; }
+read -r -u "$SIN" got || { echo "vm-census: could not take the slot lock on $VM" >&2; exit 1; }
 [ "$got" = LOCKED ] || { echo "vm-census: unexpected answer from the VM session: $got" >&2; exit 1; }
 echo "vm-census: lock held, uploading" >&2
 
@@ -47,12 +53,12 @@ rsync -a --delete --exclude .git --exclude 'src/modules/TortoiseBots' "$CORE/" "
 rsync -a --delete --exclude .git "$WT/" "$VM:forever-build/src$SUF/src/modules/TortoiseBots/"
 
 # 3 + 4. The VM session runs the census of THIS source into this run's own folder and reads the summary (the lock is still ours).
-echo GO >&"${VM_SESSION[1]}"
+echo GO >&"$SOUT" || { echo "vm-census: the VM session ended before the census started" >&2; exit 1; }
 rc=""
-while IFS= read -r line <&"${VM_SESSION[0]}"; do
+while IFS= read -r line <&"$SIN"; do
     case "$line" in
         VM-CENSUS-RC=*) rc=${line#VM-CENSUS-RC=};;
-        "vm-census: files 0"*) echo "$line" >&2;;
+        "vm-census: "*) echo "$line" >&2;;
         *) printf '%s\n' "$line";;
     esac
 done
