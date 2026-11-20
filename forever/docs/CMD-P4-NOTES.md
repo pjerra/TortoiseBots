@@ -105,8 +105,8 @@ kill latch. This is the same "alive beats dead beats unknown" order the Turtle b
 | Gate | Result |
 |---|---|
 | census, list `forever/SLICE5.txt` (P4 adds no legacy file) | `files 176  compile clean 176  with errors 0  error places 0` |
-| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`; `nm` on `libtortoisebots.a`: `cmd::FillFeeds`, `UpdateFeeds`, `LoadFeeds`, `FeedsActive` defined |
-| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0`; the archive holds the four no-op stubs only (no boss cache, no sweeps) |
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (72,066,032-byte binary, md5 `e24b68ba…`); `nm` on `libtortoisebots.a`: `cmd::FillFeeds`, `UpdateFeeds`, `LoadFeeds`, `FeedsActive` defined |
+| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (55,972,168 bytes); the archive holds the four no-op stubs only (no boss cache, no sweeps) |
 | `forever/tools/cmd_feeds_check.cpp` (VM, g++) | `cmd_feeds_check: 65 checks, 0 failed` |
 | `test_cmd_p4_wiring.py` with `CMD_P4_MUTATE=1` (VM) | 10 tests OK; the three mutations (`cap`, `boss`, `window`) each FAIL the check |
 | `test_cmd_p1_wiring.py`, `test_cmd_p2_wiring.py`, `test_run_review_wiring.py`, `test_dash_runs_wiring.py`, `test_slice4_d4_wiring.py` | OK |
@@ -114,6 +114,31 @@ kill latch. This is the same "alive beats dead beats unknown" order the Turtle b
 | `tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent).` |
 | Turtle `vm-build` / `vm-test tb` | not run: no file outside `forever/` changed |
 
-## Live (run2)
+## Live (run2, ForeverCore test server 2)
 
-Pending.
+The ON binary of slot 5 was installed as `bin/worldserver` (the release saved as `bin/worldserver.pre-cmdp4`), `sqlsrc` checked out at
+25fc7ca (the pin's SQL), the databases dumped to `/mnt/forever/p4-dump/run2-free-20261120T155215Z.sql.gz` before the test. Boot: `ready`, 0
+`ASSERT`/`ABORT`/`Segmentation`, `TortoiseBots: commander boss spawn cache built in 9 ms for 12 maps`. The module's own notices named the four new
+keys as missing from the file and used their defaults (Feeds 1, MobRange 60, ObjectRange 40, PosMs 100).
+
+A UDP listener inside the world container (the module's sender writes 127.0.0.1:9195; the container has its own loopback) captured:
+
+| Check | Result |
+|---|---|
+| binding | `commander=Mcmd lead=Mtank group=1 bound=5 bots=5`, 5 `member` records, all five with an extra row (`st`, `rdy` with `cr`/`cn` = 5..8) |
+| COMMANDERS cadence | every 2.0 s (30 datagrams in 60 s) |
+| mobs, RFC instance | `mobs_map=389`, 4 rows at the instance entrance (Earthborer 11320, Molten Elemental 11321; `rank=e`, `o`, `au`), 21 rows next to Oggleflint |
+| mobs of a boss | Oggleflint 11517 read `rank=b`, alive, in the list beside its pack |
+| bosses, RFC | `(11517,'a',p=1) (11520,'a',p=1) (11518,'a',p=1) (11519,'a',p=1)` next to Oggleflint; at the instance entrance the four are `'u'` (their grids are not loaded and no respawn time is held: unknown, as designed) |
+| objects, open world | map 0 next to the Food Crates near (-706,-1683): `('c','r','Food Crate',3696)`, `(3698)`, `(3696)`; `objects:[]` at the RFC spots (the RFC game objects in the world DB are types 5 and 8, which the dashboard does not draw) |
+| bosses, open world | `bosses` absent (null): the lead is not on a dungeon map |
+| COMMANDER_POS | 595 datagrams in 60 s for the one binding: **median gap 100 ms, p90 101 ms**, 5 bots and 4 enemies per frame |
+| feed cost (the module's own 60 s line) | fill 47-103 us each on average, 204 us at most; positions 112-166 us each on average (one 2.66 ms spike while the party logged in) — the fill stays under the spec's 300 us |
+| run tick with the feeds on | `.tb run status all`: `ticks=25 tick_avg_us=343 tick_max_us=4078 facts_avg_us=230` — inside the 326-366 us band of the run package's own reports (S6-M, S8-M), and the feed runs after `run::Update` in the same tick |
+
+Found live and fixed in the last commit: the boss state read the creature by a rebuilt `ObjectGuid`, which this core does not match (the guid carries a
+realm id); `(11517..11519)` all read 'u' beside a live Oggleflint. `Map::GetCreatureBySpawnId(spawnId)` (the API built for exactly this) fixed it, and
+the next run showed all four `'a'` with `p=1`.
+
+Restore: the release binary (`bin/worldserver.pre-cmdp4`, md5 `52364138…`), `sqlsrc` back at 6517af05, the databases re-imported from the dump above,
+the bnet certificate re-copied and the server booted to `ready` on the release binary, then stopped. Nothing else on that server was changed.

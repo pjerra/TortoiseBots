@@ -92,10 +92,6 @@ void TestLetters()
     CHECK(FD::ObjectState(true, true) == 'a');
     CHECK(FD::ObjectState(false, true) == 'r');
     CHECK(FD::ObjectState(false, false) == 'u');
-    // A layer is reported only when its scan ran.
-    CHECK(FD::Reported(true, true));
-    CHECK(!FD::Reported(true, false));
-    CHECK(!FD::Reported(false, true));
 }
 
 void TestBossState()

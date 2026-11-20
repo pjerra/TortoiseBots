@@ -5,8 +5,9 @@
 // forever/tools/cmd_feeds_check.cpp.
 //
 // What it decides: which units of a grid sweep the card keeps (the nearest, capped), the letter a game-object type and state get, the state of a
-// boss from its spawn read (and the instance's encounter state where it is known), whether a layer may be reported at all (a scan that did not run
-// is null on the wire, never an empty list), and the rotation of the live position report over more bindings than one datagram cycle carries.
+// boss from its spawn read (and the instance's encounter state where it is known), and the rotation of the live position report over more bindings
+// than one datagram cycle carries. Whether a layer is reported at all is the collector's control flow (no lead in the world: the scan does not
+// run and the wire carries null, never an empty list).
 #pragma once
 
 #include "runtime/CommanderTelemetry.h"
@@ -25,8 +26,7 @@ namespace feeds
 {
 namespace CT = ::TortoiseBots::CommanderTelemetry;
 
-// The feed cadence and scan shapes. One COMMANDERS report per snapshot cycle (2 s); the position report on its own clock.
-constexpr uint32_t kFeedIntervalMs = 2000;
+// The scan shapes. The collector's own cycle (2 s) and the position clock are the callers' cadences.
 constexpr float kDefaultMobRange = 60.0f;     // yards around the lead: the perception radius its feed used
 constexpr float kDefaultObjectRange = 40.0f;  // yards around the lead: the objects a bot walking with it could use
 constexpr uint32_t kDefaultPosMs = 100;       // COMMANDER_POS: every 100 ms while a binding stands (the spec's row)
@@ -103,13 +103,6 @@ inline char ObjectTypeLetter(GoKind kind)
 inline char ObjectState(bool goActive, bool lootReady)
 {
     return goActive ? 'a' : lootReady ? 'r' : 'u';
-}
-
-// A layer is reported only when its scan ran: the lead stood in the world and the feed was on (the wire's rule: absent = null, [] = the scan
-// found nothing). A scan that did not run must never be sent as an empty list.
-inline bool Reported(bool feedOn, bool leadInWorld)
-{
-    return feedOn && leadInWorld;
 }
 
 // The state of one known boss entry in the lead's instance. `spawnState` is the strongest read over its spawn rows (CT::BossSpawnState: found

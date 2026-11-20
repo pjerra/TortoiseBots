@@ -5,7 +5,6 @@ The core calls cannot run without a server, so the wiring tests pin where the tw
 an engine-free path that still answers), and that a layer is only reported after its scan ran. The mutation tests (CMD_P4_MUTATE=1, they compile
 forever/tools/cmd_feeds_check.cpp, so run them on the build VM) break the pure half four ways and expect the standalone check to FAIL each time:
   cap      the nearest-first cut keeps every candidate (the card's mob cap gone)
-  reported a layer is reported even when its scan did not run (null becomes [] on the wire)
   boss     the instance's DONE encounter no longer marks an unseen boss dead
   window   the position report always starts at the first binding (bindings past the cap never get a turn)
 """
@@ -54,10 +53,13 @@ class Wiring(unittest.TestCase):
         self.scripts = text(SRC / "TbScripts.cpp")
         self.dash = text(SRC / "dash" / "TbDashRuns.cpp")
 
-    def test_the_null_rule_is_pinned_in_the_pure_half(self):
-        self.assertIn("inline bool Reported(bool feedOn, bool leadInWorld)", self.pure)
-        self.assertIn("return feedOn && leadInWorld;", code(self.pure))
-        # The mob rows are set only after the sweep ran: the assignment comes after the grid visit in the same function.
+    def test_a_scan_that_did_not_run_is_never_reported(self):
+        # The failing case of spec section 7 (mobs:null, never []): a binding without a lead in the world never reaches the scan, so its layers
+        # stay unreported; the two reported flags are set only after their own sweep in the same function.
+        fill = function_body(self.cpp, r"void FillFeeds\(std::vector<CT::BindingInfo>& out\)")
+        self.assertIn("if (!lead)", fill)
+        self.assertGreater(fill.index("continue;", fill.index("if (!lead)")), fill.index("if (!lead)"))
+        self.assertLess(fill.index("if (!lead)"), fill.index("FillBinding(lead, binding, nowMs, watch);"))
         body = function_body(self.cpp, r"void FillBinding\(Player\* lead, CT::BindingInfo& binding")
         self.assertGreater(body.index("binding.mobsReported = true;"), body.index("Cell::VisitAllObjects"))
         objs = function_body(self.cpp, r"void FillObjects\(Player\* lead, CT::BindingInfo& binding")
@@ -135,7 +137,6 @@ class Wiring(unittest.TestCase):
 
 MUTATIONS = {
     "cap": ("    if (items.size() > cap)\n        items.resize(cap);", "    (void)cap;"),
-    "reported": ("    return feedOn && leadInWorld;", "    (void)feedOn; (void)leadInWorld; return true;"),
     "boss": ("    return encounterDone ? 'd' : 'u';", "    return 'u';"),
     "window": ("    w.first = start % bindings;", "    w.first = 0;"),
 }

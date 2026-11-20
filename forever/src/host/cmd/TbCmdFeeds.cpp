@@ -602,7 +602,7 @@ void FillBosses(Player* lead, CT::BindingInfo& binding)
         bool encounterDone = false;
         for (uint32 dbGuid : boss.dbGuids)
         {
-            Creature* creature = map->GetCreature(ObjectGuid::Create<HighGuid::Creature>(uint16(map->GetId()), boss.info.entry, dbGuid));
+            Creature* creature = map->GetCreatureBySpawnId(dbGuid);
             int64 const respawnAt = int64(map->GetCreatureRespawnTime(dbGuid));
             state = CT::StrongerBossState(state, CT::BossSpawnState(creature != nullptr, creature && creature->IsAlive(), respawnAt, now));
             if (creature && script && !encounterDone)
