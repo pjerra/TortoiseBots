@@ -68,4 +68,50 @@ ForeverCore build. `TravelValues.cpp` keeps one call per value; the ForeverCore 
 | Module OFF (`FOREVER_SLOT=8 build.sh 14 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; the OFF library holds no `TravelMgr::`/`TbCompat_WL4` symbol (the pair's .cpp is filtered like `TbCompat_C.cpp`) |
 | Module ON + worldserver link (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, target `worldserver`) | `CMAKE_RC=0 MAKE_RC=0`, `bin/Release/bin/worldserver` 72,311,608 bytes, 0 `error:`; `strings` carries "travel destination spawn entries" and "the travel node store is not ported" |
 | Turtle `vm-build` | `COMPILE_SECONDS=55 CMAKE_RC=0 MAKE_RC=0`, `mangosd` and `realmd` written, job rc=0 |
+| `tools/verify_all.sh` (laptop, `tbf/main` baseline) | `Ran 2673 tests ... OK`, `482 standalone policy tests verified`, decision trail OK; the only failure is step 7, `TortoiseBots host-contract check failed: required core file is missing: src/game/SessionTransport.h` — the `../tortoise-wow` checkout is on another branch, exactly as on `tbf/main` (W1 notes, section 9). No new failure |
+| Turtle `vm-test tb` (first run) | unit discovery 2673 tests, one error: `test_guild_founding_wiring.test_petition_need_honors_flag` read the petition branch from `TravelValues.cpp`, where the moved body no longer lives. The pin now reads `ai/cmangos-compat-wl4.h` (the branch text is verbatim there; the 3 tests pass). Its `action_loop`/`Mage stay FAILED` block is the same on the sibling A1 and W0a runs of the shared base (timing under load, not this round) |
+| Turtle `vm-test tb` (after the pin fix) | see section 6 |
 
+
+## 6. Live test (run2, 25fc7ca, console only)
+
+Server `~/forever-run2` (lock taken for the whole run; its databases carry the 25fc7ca updates). Slot-8 ON `worldserver` installed
+over `bin/worldserver` (backup `bin/worldserver.before-w4a2`, restored and boot-checked afterwards), `world.sh start`, console
+`tb status` / `tb perf`, `world.sh stop`.
+
+Boot log (the engine config loads in `OnWorldInitialized`, so the destination build is part of startup, not the first bot):
+
+```
+Loading area levels.
+TortoiseBots: world table `ai_playerbot_zone_level` is missing, or lacks a column this query names: not read   (the W4-B migration is not applied here: parent/exploration fallback, no abort)
+Loading trainable spells.
+Loading object locations.
+>> travel destination index: 20000 spawns, 1490 ms
+...
+>> Loaded 15684 travel destination spawn entries (123558 spawns on maps 0/1, 24551 skipped on other maps) in 1914 ms.
+Creating travel destinations.
+>> Loaded 224997 travel destination purpose entries in 64 ms.
+Loading travel nodes.
+TortoiseBots: the travel node store is not ported yet; travel has no graph and picks no target.
+TrinityCore rev. ... (worldserver-daemon) ready...      (60 s after start, destination build included)
+```
+
+| Check | Result |
+|---|---|
+| Boot | ready; `grep -cE 'ASSERT|Segmentation|Aborted'` = 0 |
+| Destination build | 1.9 s for 123,558 spawns on maps 0/1 (15,684 entries); purpose map 64 ms, 224,997 entries (grind, town, vendor, repair and the quest relations) |
+| Zone levels | table missing on this server: one guard line, no abort, area levels from the parent/exploration fallback |
+| Graph | one line: not loaded (round A1), travel still boots |
+| `.tb status` | `enabled, 0 bot session(s)` |
+| `.tb perf` after the build | 5007 ticks, world update avg 1.12 ms / worst 2 ms, module avg 0 us / worst 204 us, 0 sessions |
+| Restore | old binary back, clean boot (`ready`, 0 asserts), server stopped |
+
+Measurements that changed the design (kept in the code and here):
+
+- `AsyncGuidPosition`'s pair constructor had no ForeverCore form (empty guid); the index now builds the guid from the entry and
+  the spawn id.
+- `TerrainMgr` holds the continents' terrain through a **weak** reference; with no live map every area lookup reloaded the
+  map's grid files (20 ms per spawn, the boot did not finish in 4 minutes). Holding map 0 and 1's terrain for the pass makes
+  the whole index 1.9 s; everything is released afterwards.
+- The guarded queries must backtick the table and the columns (`SELECT \`id\`, \`level\` FROM \`ai_playerbot_zone_level\``), or the
+  guard refuses them (it reports the refusal; nothing aborts).

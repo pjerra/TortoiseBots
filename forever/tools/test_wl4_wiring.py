@@ -101,7 +101,7 @@ class LoaderData(unittest.TestCase):
     def test_no_module_table_is_read_outside_the_guard(self):
         self.assertNotIn("WorldDatabase.Query(", MGR)
         self.assertNotIn("WorldDatabase.PQuery(", MGR)
-        self.assertIn('TravelWorldQueryCompat("SELECT id, level FROM ai_playerbot_zone_level", &schemaMissing)', MGR)
+        self.assertIn('TravelWorldQueryCompat("SELECT `id`, `level` FROM `ai_playerbot_zone_level`", &schemaMissing)', MGR)
         self.assertIn("WorldQueryCompat(sql, schemaMissing)", COMPAT_F)
         # Every query the pair's own data builders run goes through the guard too.
         self.assertEqual(COMPAT_F_CPP.count("WorldQueryCompat("), 1)

@@ -313,6 +313,13 @@ inline uint32 MapEntryIdWL4(MapEntry const* entry)
 
 namespace ai
 {
+// The creature spawns the explore destinations are built from. ForeverCore: none - the explore purpose is not in the
+// reduced set (its points need an explored-area bit this core tracks per area id, and the spawn pair has no guid here).
+inline std::vector<CreatureDataPair const*> TravelExploreSpawnsCompat()
+{
+    return {};
+}
+
 // ===============================================================================================================
 // TRAVEL DATA SETS (TravelMgr.cpp, TravelValues.cpp). Defined in TbCompat_WL4.cpp; built once, at boot.
 // ===============================================================================================================

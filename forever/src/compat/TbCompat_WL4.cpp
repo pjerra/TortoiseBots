@@ -13,6 +13,8 @@
 #include "playerbot/strategy/values/SharedValueContext.h"
 #include "playerbot/policy/travel/TravelPurposeGatePolicy.h"
 
+#include "Maps/TerrainMgr.h"
+
 #include <mutex>
 #include <set>
 
@@ -55,10 +57,10 @@ namespace
         {
             EntryQuestRelationMap out;
 
-            TravelAddQuestRelationRows(out, "SELECT id, quest FROM creature_queststarter", 1, true);
-            TravelAddQuestRelationRows(out, "SELECT id, quest FROM creature_questender", 1, false);
-            TravelAddQuestRelationRows(out, "SELECT id, quest FROM gameobject_queststarter", -1, true);
-            TravelAddQuestRelationRows(out, "SELECT id, quest FROM gameobject_questender", -1, false);
+            TravelAddQuestRelationRows(out, "SELECT `id`, `quest` FROM `creature_queststarter`", 1, true);
+            TravelAddQuestRelationRows(out, "SELECT `id`, `quest` FROM `creature_questender`", 1, false);
+            TravelAddQuestRelationRows(out, "SELECT `id`, `quest` FROM `gameobject_queststarter`", -1, true);
+            TravelAddQuestRelationRows(out, "SELECT `id`, `quest` FROM `gameobject_questender`", -1, false);
 
             // Creature and game-object objectives of classic quests, by objective slot (QuestObjective1..4).
             for (auto const& [questId, questPtr] : sObjectMgr.GetQuestTemplates())
@@ -101,6 +103,14 @@ namespace
             uint32 const started = getMSTime();
             EntryGuidps out;
             uint32 spawns = 0, skippedMaps = 0;
+
+            // TerrainMgr keeps only a weak reference to a map's terrain: with no live map yet, every area lookup would
+            // reload the continent's grid files. Holding the two continents' terrain for this pass makes each lookup a
+            // grid read (the first one per grid loads it) and releases everything when the index is built.
+            std::vector<std::shared_ptr<TerrainInfo>> terrain;
+            for (uint32 mapId : { 0u, 1u })
+                if (std::shared_ptr<TerrainInfo> continent = sTerrainMgr.LoadTerrain(mapId))
+                    terrain.push_back(continent);
 
             // Travel covers the two continents; the instance and battleground spawns are no destination and no terrain
             // file of theirs is loaded for this.

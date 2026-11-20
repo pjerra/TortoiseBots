@@ -1878,7 +1878,7 @@ void TravelMgr::LoadAreaLevels()
     // on a stock install does not make EnableRandomTeleports permanently no-op
     // while still avoiding creature scans and DB writes.
     bool schemaMissing = false;
-    auto result = TravelWorldQueryCompat("SELECT id, level FROM ai_playerbot_zone_level", &schemaMissing);
+    auto result = TravelWorldQueryCompat("SELECT `id`, `level` FROM `ai_playerbot_zone_level`", &schemaMissing);
     if (!result)
     {
         if (schemaMissing)
@@ -2026,7 +2026,7 @@ void TravelMgr::LoadQuestTravelTable()
     sLog.outString("Loading Explore locations.");
 
     //Explore points
-    for (auto& creatureDataPair : WorldPosition().GetCreaturesNear())
+    for (auto& creatureDataPair : TravelExploreSpawnsCompat())
     {
         ExploreTravelDestination* loc;
 

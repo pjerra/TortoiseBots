@@ -109,6 +109,12 @@ inline uint32 MapEntryIdWL4(MapEntry const* entry) { return entry ? entry->id : 
 
 namespace ai
 {
+// The creature spawns the explore destinations are built from: the world scan the loader always did.
+inline std::vector<CreatureDataPair const*> TravelExploreSpawnsCompat()
+{
+    return WorldPosition().GetCreaturesNear();
+}
+
 // ===============================================================================================================
 // TRAVEL DATA SETS: the shared values the loader always read (TravelValues.cpp / QuestValues.cpp build them).
 // ===============================================================================================================
