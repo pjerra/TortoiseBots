@@ -134,6 +134,7 @@ struct AuctionEntry
     // AuctionEntry is empty and these are only named, not read from a real auction.
     uint32 Id = 0;
     uint32 itemGuidLow = 0;
+    uint32 itemCount = 0;
     uint32 buyout = 0;
     uint32 owner = 0;
 };

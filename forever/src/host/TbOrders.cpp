@@ -119,7 +119,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "ah" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -422,6 +422,25 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         return act("trainer", Event("tb order", o.arg.empty() ? std::string("learn") : o.arg, owner)) ? "ok" : "fail:train";
     if (o.verb == "mail")
         return act("mail", Event("tb order", o.arg.empty() ? std::string("take") : o.arg, owner)) ? "ok" : "fail:mail";
+    if (o.verb == "ah")
+    {
+        std::string const sub = Lower(o.arg);
+        if (sub == "list")
+            return act("ah", Event("tb order", std::string("list"), owner)) ? "ok" : "fail:ah-list";
+        if (sub == "sell" || sub.rfind("sell ", 0) == 0)
+        {
+            std::string const param = (sub == "sell") ? std::string("vendor") : o.arg.substr(5);
+            return act("ah", Event("tb order", param, owner)) ? "ok" : "fail:ah-sell";
+        }
+        if (sub.rfind("buy ", 0) == 0)
+            return act("ah bid", Event("tb order", o.arg.substr(4), owner)) ? "ok" : "fail:ah-buy";
+        if (sub == "cancel" || sub.rfind("cancel ", 0) == 0)
+        {
+            std::string const param = (sub == "cancel") ? std::string("all") : o.arg.substr(7);
+            return act("ah cancel", Event("tb order", param, owner)) ? "ok" : "fail:ah-cancel";
+        }
+        return "fail:ah-arg";
+    }
     if (o.verb == "hold")
     {
         ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
@@ -848,6 +867,8 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
         return need("trainer");
     if (verb == "mail")
         return need("mail");
+    if (verb == "ah")
+        return need("ah") && need("ah bid") && need("ah cancel");
     if (verb == "rest")
     {
         bool const needMana = bot->GetPowerType() == POWER_MANA && bot->GetPower(POWER_MANA) < bot->GetMaxPower(POWER_MANA);
@@ -1146,6 +1167,19 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             needAction[0] = "trainer";
         else if (verb == "mail")
             needAction[0] = "mail";
+        else if (verb == "ah")
+        {
+            std::string const sub = Lower(order.arg);
+            if (sub != "list" && sub != "sell" && sub.rfind("sell ", 0) != 0 &&
+                sub.rfind("buy ", 0) != 0 && sub != "cancel" && sub.rfind("cancel ", 0) != 0)
+            {
+                refuse("bad-ah-subverb", "expected: ah sell [item] | ah buy <item> [n] | ah list | ah cancel <id>");
+                continue;
+            }
+            needAction[0] = "ah";
+            needAction[1] = "ah bid";
+            needAction[2] = "ah cancel";
+        }
 
         bool missing = false;
         for (char const* key : needAction)
