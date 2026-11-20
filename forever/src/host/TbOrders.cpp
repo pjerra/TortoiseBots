@@ -12,6 +12,8 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/run/TbRunLiquid.h"
+#include "host/run/TbRunFacts.h"
+#include "slice/SliceHybridPolicy.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -287,7 +289,7 @@ void AnchorPullHoldOnTank(Player* tank)
         if (!member || member == tank || !member->IsInWorld() || member->GetMapId() != tank->GetMapId())
             continue;
         PlayerbotAI* memberAi = AiOf(member);
-        if (!memberAi || !memberAi->GetAiObjectContext() || PlayerbotAI::IsTank(member, true) || PlayerbotAI::IsHeal(member, true))
+        if (!memberAi || !memberAi->GetAiObjectContext() || run::IsTankMember(member) || PlayerbotAI::IsHeal(member, true))
             continue;
         ai::PositionMap& positions = memberAi->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
         for (char const* key : { "stay", "pull hold" })
@@ -848,7 +850,7 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
         }
         if (verb == "pull" || verb == "pullback")
         {
-            if (!ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT) || !PlayerbotAI::IsTank(bot, true))
+            if (!ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT) || !run::IsTankMember(bot))
             {
                 code = "no-pull-strategy";
                 detail = "the bot has no `pull` combat strategy or is not a tank (give it the tank role)";
@@ -1169,6 +1171,42 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         Rec rec("role");
         rec.S("bot", bot->GetName()).S("role", roleName);
         PlayerbotAI* ai = AiOf(bot);
+        // Slice 10: a tank order is honoured only by a class this slice gives a tank kit (SliceHybridPolicy.h). Without this a shaman
+        // (restoration only, D2) would store the tank bit, PlayerbotAI::IsTank would answer true and the run would admit it as its tank.
+        // The refusal also clears a tank bit already on the bot (the two reads IsTank makes, the kit built from them and this tick's role
+        // map): an order from an older build, `.bot role` (its shaman tank kit is not in this slice) or the dungeon finder can leave one.
+        TortoiseBots::slice::hybrid::TankOrderStep const plan = TortoiseBots::slice::hybrid::PlanTankOrder(
+            unsigned(bot->GetClass()), role == RoleTank,
+            PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == RoleTank,
+            ai && ai->GetForcedRole() == RoleTank);
+        if (plan.refuse)
+        {
+            bool cleared = false;
+            if (plan.clearStored)
+            {
+                PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), 0);
+                cleared = true;
+            }
+            auto stored = Roles().find(bot->GetGUID());
+            if (stored != Roles().end() && stored->second == RoleTank)
+            {
+                Roles().erase(stored);
+                cleared = true;
+            }
+            if (ai && plan.clearAi)
+            {
+                ApplyKit(ai, 0, true);
+                cleared = true;
+            }
+            else if (ai && cleared)
+                ApplyKit(ai, ai->GetForcedRole(), false);   // the kit was built from the stored bit just cleared
+            rec.S("status", "refused").S("code", "no-tank-kit");
+            if (cleared)
+                rec.S("cleared", "yes");
+            rec.T("msg", bot->GetName() + " has no tank kit in this slice: the tank role needs a warrior, a druid (bear) or a paladin (protection, recorded only)");
+            emit(rec);
+            continue;
+        }
         if (!ai)
         {
             // No engine yet: the role is stored for the brain that is built later (BeforeEngineTick compares it with the AI's), and that is true now.

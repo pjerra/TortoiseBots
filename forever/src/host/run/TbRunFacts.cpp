@@ -12,6 +12,7 @@
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFactsPure.h"
 #include "host/run/TbRunLiquid.h"
+#include "slice/SliceHybridPolicy.h"
 
 #include <chrono>
 #include <list>
@@ -330,7 +331,7 @@ void ReadParty(Ctx& c, Facts& f, bool& playerInGroup)
         bool const sameMap = bot->GetMap() == lead->GetMap();
         e.inCombat = MemberInCombat(bot);
         e.healer = PlayerbotAI::IsHeal(bot);
-        e.dps = !e.healer && !PlayerbotAI::IsTank(bot);
+        e.dps = !e.healer && !IsTankMember(bot);
         uint8 const cls = bot->GetClass();
         e.canResurrect = cls == CLASS_PRIEST || cls == CLASS_PALADIN || cls == CLASS_SHAMAN;
         e.healthPct = bot->GetMaxHealth() ? uint32(uint64(bot->GetHealth()) * 100 / bot->GetMaxHealth()) : 100;
@@ -348,7 +349,7 @@ void ReadParty(Ctx& c, Facts& f, bool& playerInGroup)
         m.y = bot->GetPositionY();
         m.z = bot->GetPositionZ();
         m.healer = e.healer;
-        m.tank = PlayerbotAI::IsTank(bot);
+        m.tank = IsTankMember(bot);
         m.core = m.tank || m.healer;
         m.level = bot->GetLevel();
         // G8: the run's crowd control is a mage's Polymorph only (see RunCcHeld). No other class carries a family and no Sap is ordered (canSap stays false: a
@@ -430,7 +431,7 @@ void ReadRezRoster(Ctx& c, Facts& f)
         RezHold::Member m;
         m.name = bot->GetName();
         m.healer = PlayerbotAI::IsHeal(bot);
-        m.tank = PlayerbotAI::IsTank(bot);
+        m.tank = IsTankMember(bot);
         if (!bot->IsAlive())
         {
             m.dead = true;
@@ -656,7 +657,7 @@ void ReadGuard(Ctx& c, Facts& f)
             Unit* victim = target->GetVictim();
             c.lo.reaching = !(victim && c.partyGuids.count(victim->GetGUID()));
         }
-        c.lo.isTank = PlayerbotAI::IsTank(lead);
+        c.lo.isTank = IsTankMember(lead);
     }
     c.lo.guardRead = true;
     if (DungeonRun::GuardReadMode(lead->IsAlive(), c.lo.isTank, false, false) != DungeonRun::GuardRead::Lead)
@@ -756,7 +757,7 @@ void ReadGuard(Ctx& c, Facts& f)
     {
         if (!bot->IsAlive() || bot == lead || bot->GetDistance(lead) > DungeonRun::kGuardYd)
             continue;
-        addAttackers(bot, PlayerbotAI::IsHeal(bot), false, PlayerbotAI::IsTank(bot));
+        addAttackers(bot, PlayerbotAI::IsHeal(bot), false, IsTankMember(bot));
         if (Pet* pet = bot->GetPet())
             if (pet->IsAlive() && pet->IsInWorld())
                 addAttackers(pet, false, true, false);
@@ -1058,6 +1059,13 @@ void ReadStep(Ctx& c, Facts& f)
     fx::ReadStepFacts(f, run, lead, c.state->moveProbe, world);
 }
 }   // namespace
+
+// One definition for every run read of a member's tank-ness (TbRunFacts.h): `PlayerbotAI::IsTank` reads the forced role bit before the kit, so a
+// bit left on a class whose kit cannot tank is not a tank (SliceHybridPolicy.h).
+bool IsTankMember(Player* bot)
+{
+    return bot && TortoiseBots::slice::hybrid::CountsAsTank(unsigned(bot->GetClass()), PlayerbotAI::IsTank(bot));
+}
 
 bool ReadFacts(RunRec& rec, uint32 nowMs, DungeonRun::Facts& f, FactsReport* report)
 {

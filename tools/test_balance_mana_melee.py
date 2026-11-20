@@ -70,6 +70,7 @@ struct Player {
  unsigned GetPower(int){return mana;} unsigned GetMaxPower(int){return max;}
  unsigned GetShapeshiftForm(){return form;} bool IsNonMeleeSpellCasted(bool){return casting;}
 };
+inline bool AttackStopCompat(Player* unit, bool targetSwitch){unit->AttackStop(targetSwitch); return true;}  // the both-core helper (TbCompat_S10.h)
 struct PlayerbotAI {
  Player player; std::set<std::string> strategies{"ranged","balance","oom melee"};
  Player* GetBot(){return &player;}

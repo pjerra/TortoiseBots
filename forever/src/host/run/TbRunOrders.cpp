@@ -16,6 +16,7 @@
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrdersPure.h"
+#include "slice/SliceHybridPolicy.h"
 
 #include <algorithm>
 #include <cmath>
@@ -555,7 +556,7 @@ OrderAnswer DoAttack(RunRec& rec, Party const& party, od::Parsed const& p, std::
             if (PlayerbotAI::IsHeal(bot))
                 continue;
             Unit* victim = bot->GetVictim();
-            if (PlayerbotAI::IsTank(bot) && victim && victim != target && victim->IsAlive() && victim->GetVictim() == bot)
+            if (IsTankMember(bot) && victim && victim != target && victim->IsAlive() && victim->GetVictim() == bot)
                 continue;
         }
         batch.Add(bot, "attack", true, named != nullptr);
@@ -810,6 +811,21 @@ bool StartCheck(ObjectGuid leader, std::string& code, std::string& message)
     {
         code = "no-tank";
         message = NameOf(lead) + " has no tank role: set it with `.tb role " + NameOf(lead) + " tank` and let one engine tick pass, then start the run.";
+        return false;
+    }
+    // Slice 10: the role bit alone is not a tank kit. `PlayerbotAI::IsTank` reads the forced role first, so a shaman ordered tank answered true while its
+    // kit was the restoration one; only the warrior tank and the bear druid lead a run (D1: the protection paladin is recorded only). The kit itself must
+    // carry "pull", which the run's first tank order needs (TbOrders.cpp:844); a class with a tank order but no tank kit is refused here, not started.
+    if (!TortoiseBots::slice::hybrid::CanLeadRun(unsigned(lead->GetClass())))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " cannot lead a run as its tank: only a warrior tank and a bear druid can.";
+        return false;
+    }
+    if (!AiOf(lead)->HasStrategy("pull", BotState::BOT_STATE_COMBAT))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " has no tank kit with a pull strategy: its role says tank but its kit cannot tank.";
         return false;
     }
     for (Group::MemberSlot const& slot : group->GetMemberSlots())

@@ -63,7 +63,13 @@ class G8Wiring(unittest.TestCase):
     def test_reach_cc_registered(self):
         ctx = text("forever/src/slice/SliceAiObjectContext.cpp")
         self.assertIn('creators["reach cc"]', ctx)
-        self.assertIn("kActions = 54", ctx)
+        # The registry file is generated: the action count must be the number of action creators its own Action contexts
+        # register (54 on the slice-8 tree; the integration branch adds the slice-10 and slice-11 keys, so the number itself
+        # is not pinned here).
+        registered = 0
+        for m in re.finditer(r"class Slice\w+Context : public NamedObjectContext<(Action)>\n    \{\n(.*?)\n    \};", ctx, re.S):
+            registered += m.group(2).count('creators["')
+        self.assertEqual(registered, int(re.search(r"kActions = (\d+)", ctx).group(1)))
 
     def test_mana_filter(self):
         value = text("ai/playerbot/strategy/values/PartyMemberWithoutAuraValue.cpp")
