@@ -1,4 +1,5 @@
 #include "TbBotMgr.h"
+#include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -1298,6 +1299,18 @@ void BotMgr::Update(uint32 diff)
         // the brain is gone by then.
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
             engine::Tick(bot.brain.get(), diff);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
+        {
+            static uint32 freeGatherMs = 0;
+            freeGatherMs += diff;
+            if (freeGatherMs >= 5000)
+            {
+                freeGatherMs = 0;
+                tbhost::prof::TickFreeGather(me);
+            }
+        }
+#endif
     }
 
     for (ObjectGuid const& guid : finished)

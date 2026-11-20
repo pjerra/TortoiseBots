@@ -342,6 +342,7 @@ public:
             { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -1353,6 +1354,25 @@ public:
             stats.empty() ? "none" : stats.c_str(), spells.empty() ? "none" : spells.c_str(),
             uint32(proto->HolyRes), uint32(proto->FireRes), uint32(proto->NatureRes), uint32(proto->FrostRes),
             uint32(proto->ShadowRes), uint32(proto->ArcaneRes));
+        return true;
+    }
+
+    // W7 test helper ONLY: .tb setskill <bot> <skill> <value> [max]
+    static bool HandleSetSkill(ChatHandler* handler, Tail args)
+    {
+        std::vector<std::string> const words = WordsOf(args);
+        if (words.size() < 3)
+            return Fail(handler, "usage: .tb setskill <bot> <skill> <value> [max]");
+        ObjectGuid const guid = GuidByName(words[0]);
+        Player* bot = guid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(guid);
+        if (!bot || !BotMgr::Instance().IsBot(guid))
+            return Fail(handler, "bot '" + words[0] + "' is not online.");
+        uint32 const skillId = uint32(std::strtoul(words[1].c_str(), nullptr, 10));
+        uint16 const val = uint16(std::strtoul(words[2].c_str(), nullptr, 10));
+        uint16 const maxVal = words.size() >= 4 ? uint16(std::strtoul(words[3].c_str(), nullptr, 10)) : std::max<uint16>(75, val);
+        uint16 const step = maxVal >= 300 ? 4 : maxVal >= 225 ? 3 : maxVal >= 150 ? 2 : 1;
+        bot->SetSkill(skillId, step, val, maxVal);
+        handler->PSendSysMessage("TortoiseBots: %s skill %u set to %u/%u (step %u).", bot->GetName().c_str(), skillId, val, maxVal, step);
         return true;
     }
 };
