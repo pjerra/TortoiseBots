@@ -21,6 +21,7 @@ ai/playerbot/PlayerbotAIPackets.cpp
 ai/playerbot/PlayerbotAIQuests.cpp
 ai/playerbot/PlayerbotAISpells.cpp
 ai/playerbot/PlayerbotSecurity.cpp
+ai/playerbot/RandomItemWeights.cpp
 ai/playerbot/ServerFacade.cpp
 ai/playerbot/WorldPosition.cpp
 ai/playerbot/WorldSquare.cpp
