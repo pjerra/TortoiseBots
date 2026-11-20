@@ -2,8 +2,9 @@
 """Wiring pins and mutations for the fight debugger (package P5, forever/docs/CMD-P5-NOTES.md).
 
 The core calls cannot run without a server, so the wiring tests pin where the hooks stand, what the monitor may never do, and the two option
-builds. The mutation tests (CMD_P5_MUTATE=1) compile forever/tools/cmd_combat_check.cpp with the pure half broken six ways and expect the
+builds. The mutation tests (CMD_P5_MUTATE=1) compile forever/tools/cmd_combat_check.cpp with the pure half broken seven ways and expect the
 check to FAIL each time:
+  keepbook   a card whose lead is in a loading screen (group 0) loses its book at once (the lead-away grace is unreachable)
   feed0      a card with no live group is fed (every party-less binding lands on one book)
   bookkey    a card's fight is keyed by its WoW group (two commanders in one group overwrite each other's members and fight)
   rankorder  the engaged units are ordered by arrival instead of rank (the newest mob is kept ahead of the boss met before it)
@@ -51,6 +52,13 @@ class Wiring(unittest.TestCase):
         self.assertIn("runtime/CombatMonitorService.cpp", slice_block)
         off_block = CMAKELISTS[:CMAKELISTS.index("if(TORTOISEBOTS_SLICE1)")]
         self.assertNotIn("runtime/CombatMonitorService.cpp", off_block)
+
+    def test_a_held_book_survives_a_lead_in_a_loading_screen(self):
+        # Review finding: a lead that is not in the world gives group 0, and the book was forgotten at once, so the lead-away grace was
+        # unreachable. The sampler passes whether the card already holds a book, and the book is still keyed by the binding.
+        self.assertIn("P::Feedable(book.key, book.group, Feeds().count(book.key) != 0)", self.combat)
+        self.assertIn("inline bool Feedable(uint32_t bookKey, uint32_t groupId, bool hasBook = false)", self.pure)
+        self.assertIn("feed.away.Overdue(usable, nowMs)", self.combat)
 
     def test_the_tick_and_the_scripts_are_registered(self):
         update = code(self.scripts)
@@ -172,7 +180,8 @@ class Wiring(unittest.TestCase):
 
 
 MUTATIONS = {
-    "feed0": ("    return bookKey != 0 && groupId != 0;", "    return groupId != 0;"),
+    "feed0": ("    return bookKey != 0 && (groupId != 0 || hasBook);", "    return groupId != 0 || hasBook;"),
+    "keepbook": ("    return bookKey != 0 && (groupId != 0 || hasBook);", "    return bookKey != 0 && groupId != 0;"),
     "bookkey": ("    return BookRef{ commanderGuid, groupId };", "    return BookRef{ groupId, groupId };"),
     "rankorder": ("        while (at < m_kept && static_cast<uint8_t>(m_keys[at].rank) >= static_cast<uint8_t>(rank))",
                   "        while (at < m_kept && static_cast<uint8_t>(m_keys[at].rank) > static_cast<uint8_t>(rank))"),

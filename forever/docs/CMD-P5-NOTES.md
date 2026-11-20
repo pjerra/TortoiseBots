@@ -37,7 +37,7 @@ the dash-runs collector already uses.
 
 | File | What |
 |---|---|
-| `forever/src/host/cmd/TbCmdCombatPure.h` | pure (stdlib + `runtime/CombatMonitorPolicy.h`): `BookOf`/`BookRef` (the card's book), `Feedable`, `Due`, `Rank`/`CastRank`/`CastWatched`, `EngagedScan` (the bounded best-k walk), `PickFocus`, `AuraEdges`, `AllDead`, `RoleOf`, `SortUnique`, the pass cadences and bounds (1 Hz sample, 250 ms cast poll, 100 ms event drain, 250 ms event gap, 8 units kept, 128 references visited) |
+| `forever/src/host/cmd/TbCmdCombatPure.h` | pure (stdlib + `runtime/CombatMonitorPolicy.h`): `BookOf`/`BookRef` (the card's book), `Feedable` (a card with no live group is fed only while it already holds a book: a lead in a loading screen keeps its fight through the grace), `Due`, `Rank`/`CastRank`/`CastWatched`, `EngagedScan` (the bounded best-k walk), `PickFocus`, `AuraEdges`, `AllDead`, `RoleOf`, `SortUnique`, the pass cadences and bounds (1 Hz sample, 250 ms cast poll, 100 ms event drain, 250 ms event gap, 8 units kept, 128 references visited) |
 | `forever/src/host/cmd/TbCmdCombat.{h,cpp}` | the ForeverCore side: the two script objects, the sampler, the boss pick and timeline sample, the cast poll, `COMBAT_FIGHT`/`COMBAT_EVENTS` through `DashRuns::link`, `FillWindow`, the cost line. Engine-only; without `TORTOISEBOTS_SLICE1` the file is three no-ops |
 | `forever/src/compat/TbCompat_C5.h`, `ai/cmangos-compat-c5.h`, `ai/playerbot/TbCompatC5.h` | the monitor's one world read (`ai_combat_aura_watch`, through `WorldQueryCompat`) and its two log lines, one pair of helpers for both cores |
 | `forever/tools/cmd_combat_check.cpp` | the standalone check: the pure half, the bounded engaged walk (a 100,000-reference pull costs the budget), two commander cards in one group (two books, two windows, their own fight numbering, one reported group), the golden fight JSON, a wipe and a leaving-combat end that each file a fight and change the id, the live stream's fight id, the timeline sample |
@@ -181,3 +181,14 @@ run on the VM as `bin/tortoise-observability.p5 -core forever -dev-no-auth`, UDP
 Restore: world stopped, `bin/worldserver.pre-p5` and both `*.pre-p5` configs put back, started and booted to `ready...` with 0
 `ASSERT`/`ABORTED`, then stopped; the dashboard process stopped. Left changed on that server: the databases now carry the 25fc7ca updates the
 updater applied (the dump above is the pre-test state) and `sqlsrc` is at 25fc7ca, which is the state the port expects.
+
+## Fix round 2 (cold review batch 7)
+
+A lead that is not in the world (a loading screen) reads group 0, and `Sample` forgot the card's book at once, so the lead-away grace (`feed.away.Overdue`,
+30 s) was unreachable. `Feedable(bookKey, groupId, hasBook)` now keeps a card that already holds a book; the book stays keyed by the binding. A
+groupless card with no book is still not fed. `cmd_combat_check` runs the whole decision (a lead zoning out, back inside the grace, away past it) and
+the `keepbook` mutation (`CMD_P5_MUTATE=1`) restores the old rule and fails it.
+
+Gates of fix round 2 (slot 6, pin 25fc7ca): option-ON `worldserver` and option-OFF `tortoisebots` `CMAKE_RC=0 MAKE_RC=0`; census `forever/SLICE9.txt`
+`files 265  compile clean 265  with errors 0`; `cmd_combat_check: 120 checks, 0 failed`; `test_cmd_p5_wiring.py` with `CMD_P5_MUTATE=1`: 15 tests OK, the seven
+mutations each fail the check; `slice_gen_context.py --check` up to date, `slice_registry_check.py` `(a)=0 (b)=224`. Not run live.

@@ -26,6 +26,7 @@ struct PlayerbotAIConfig
 #undef COMBAT_MONITOR_TEST_CONFIG
 
 #include "forever/src/host/cmd/TbCmdCombatPure.h"
+#include "runtime/BoundFightPolicy.h"
 
 PlayerbotAIConfig sPlayerbotAIConfig;
 
@@ -147,6 +148,10 @@ static void TestPure()
     CHECK(!P::Feedable(0, 3));   // no identity to key the book with
     CHECK(!P::Feedable(5, 0));   // no live group to read the fight against
     CHECK(P::Feedable(5, 3));
+    CHECK(!P::Feedable(5, 0, false));   // a groupless card with no book yet gets none
+    CHECK(P::Feedable(5, 0, true));     // ... but a book it already holds is kept (the lead is in a loading screen)
+    CHECK(!P::Feedable(0, 0, true));    // no identity: never
+    CHECK(P::Feedable(5, 3, true));
     CHECK(P::Due(1000, 0, P::kSampleMs));            // the first pass after a start
     CHECK(!P::Due(1999, 1000, P::kSampleMs));
     CHECK(P::Due(2000, 1000, P::kSampleMs));
@@ -189,6 +194,40 @@ static void TestPure()
     CHECK(bookA.key != bookB.key);
     CHECK_EQ(bookA.group, bookB.group);
     CHECK_EQ(bookA.group, 90u);
+}
+
+// ---- a lead in a loading screen: the book survives the lead-away grace ----
+static void TestLeadInLoadingScreen()
+{
+    // The sampler's decision for one card, as the core-facing tick makes it: the card is read (a lead that is not in the world reads group 0),
+    // `Feedable` says whether it is sampled and kept, the lead is usable only in the world in the binding's group, and the away clock closes the
+    // open fight once it has been away for the grace. The book is keyed by the binding (5), the group is metadata.
+    namespace BF = TortoiseBots::BoundFight;
+    uint32_t const binding = 5, group = 90;
+    bool hasBook = false;
+    BF::LeadAway away;
+    auto pass = [&](bool leadInWorld, uint32_t nowMs, bool& closed) -> bool
+    {
+        uint32_t const readGroup = leadInWorld ? group : 0;   // StandingCards: the group of a lead that is not in the world is 0
+        P::BookRef const book = P::BookOf(binding, readGroup);
+        if (!P::Feedable(book.key, book.group, hasBook))
+            return false;   // the tick skips the card and its book is forgotten at once
+        hasBook = true;
+        bool const usable = BF::LeadUsable(leadInWorld, leadInWorld, readGroup, group);
+        closed = away.Overdue(usable, nowMs);
+        return true;
+    };
+    bool closed = false;
+    CHECK(pass(true, 1000, closed) && !closed);                 // in a group: a book is made
+    CHECK(hasBook);
+    CHECK(pass(false, 2000, closed) && !closed);                // the lead zones out: the book is kept, the away clock starts
+    CHECK(pass(false, 2000 + BF::kLeadGoneGraceMs - 1, closed) && !closed);   // still inside the grace: the fight is open
+    CHECK(pass(true, 2000 + BF::kLeadGoneGraceMs - 500, closed) && !closed);  // the lead is back before the grace ends: the fight survives
+    CHECK(pass(false, 40000, closed) && !closed);               // away again: a new clock
+    CHECK(pass(false, 40000 + BF::kLeadGoneGraceMs, closed) && closed);       // past the grace: the open fight closes as unfinished
+    // Without a book the same card is not fed: a binding that never stood in a group has nothing to feed.
+    hasBook = false;
+    CHECK(!pass(false, 100000, closed));
 }
 
 // ---- the engaged walk is bounded by the pass, never by the pull ----
@@ -476,6 +515,7 @@ int main(int argc, char** argv)
         return fight.empty() ? 1 : 0;
     }
     TestPure();
+    TestLeadInLoadingScreen();
     TestEngagedScan();
     TestGoldenFight();
     TestWipeEndsFight();

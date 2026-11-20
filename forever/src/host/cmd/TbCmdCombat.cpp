@@ -440,7 +440,9 @@ void Sample()
     for (C::CardView const& card : cards)
     {
         P::BookRef const book = P::BookOf(card.commanderGuid, card.groupId);
-        if (!P::Feedable(book.key, book.group))
+        // A card whose lead is not in the world (a loading screen) reads group 0: a book it already holds is kept through the lead-away grace,
+        // not forgotten at once.
+        if (!P::Feedable(book.key, book.group, Feeds().count(book.key) != 0))
             continue;
         standing.insert(book.key);
         SampleCard(card, nowMs);

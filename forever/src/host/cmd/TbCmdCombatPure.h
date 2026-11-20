@@ -51,12 +51,14 @@ inline BookRef BookOf(uint32_t commanderGuid, uint32_t groupId)
     return BookRef{ commanderGuid, groupId };
 }
 
-// A card is fed only when the lead stands in a live group and the card has an identity to key its book with: T's rule (group counter 0 is
-// never sampled), and the sample's lead check compares that counter against the binding's, so a party-less binding would have nothing to feed
-// a book for.
-inline bool Feedable(uint32_t bookKey, uint32_t groupId)
+// A card is fed when it has an identity to key its book with and either its lead stands in a live group (T's rule: group counter 0 is never
+// sampled for a NEW book) or the card already holds a book. A lead in a loading screen (a teleport, a summon, a map change) is not in the world,
+// so the card reads group 0 for those seconds; the book stays until the sample's own lead-away grace (BoundFight::kLeadGoneGraceMs) decides
+// whether the open fight is closed as unfinished or carries on when the lead is back. The book is keyed by the commander binding, so it is
+// forgotten only when the binding is gone from the standing cards.
+inline bool Feedable(uint32_t bookKey, uint32_t groupId, bool hasBook = false)
 {
-    return bookKey != 0 && groupId != 0;
+    return bookKey != 0 && (groupId != 0 || hasBook);
 }
 
 // True when a pass is due. `sinceMs` 0 is the first pass after boot or after the monitor was turned on; the subtraction is the core's
