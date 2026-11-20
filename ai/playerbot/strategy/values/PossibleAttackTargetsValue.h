@@ -25,6 +25,10 @@ namespace ai
         // Deliberate damage-breakable CC that splash damage would waste
         // (sheep, sap, gouge, trap, ...). Frost Nova's frozen state is left
         // out on purpose: nova + AoE is normal play. Skull opts out.
+        // `.tb ignore` defence exception in one helper: true while `target` is
+        // attacking `player` or any of its party members (current victim or
+        // threat), so every ignore check that drops a target fights it anyway.
+        static bool IgnoredMobAttacksParty(Unit* target, Player* player);
         static bool HoldsBreakableCc(PlayerbotAI* ai, Unit* unit, Player* bot);
         virtual std::string Format() override;
 

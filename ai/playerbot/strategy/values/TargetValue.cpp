@@ -303,7 +303,8 @@ bool CcGuard::IgnoredMobNear(WorldObject* blastCenter, float blastRadius)
         Unit* unit = ai->GetUnit(guid);
         if (!unit || !unit->IsAlive() || unit->GetMapId() != bot->GetMapId())
             continue;
-        if (!IsIgnoredMobCompat(bot, unit->getObjectGuid()))
+        // A listed mob attacking the party is fought, not left alone: it guards nothing.
+        if (!IsIgnoredMobCompat(bot, unit->getObjectGuid()) || PossibleAttackTargetsValue::IgnoredMobAttacksParty(unit, bot))
             continue;
         if (ai::AoEBlockedByIgnored(blastRadius, bot->GetDistance(unit), blastCenter->GetDistance(unit)))
             return true;

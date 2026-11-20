@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <vector>
 #include <string>
 
 namespace ai
@@ -188,6 +189,36 @@ inline SupplyTargetW2 SupplyTargetForLevelAndClass(uint8_t level, uint8_t player
         out.ammoItemId = 11285; // Jagged Arrow
     }
     return out;
+}
+
+// One rank the trainer visit considers, as plain data so the learning order is
+// pinned without a server (test_w2_town.cpp). reqLevel is the row's required
+// level, moneyCost the discounted price the visit pays.
+struct TrainerVisitRank
+{
+    uint32_t spellId = 0;
+    uint32_t reqLevel = 0;
+    uint32_t moneyCost = 0;
+};
+
+// Learning order for several affordable ranks: lowest required level first
+// (chain order: a rank that needs another lists the higher level), then
+// cheapest, then spell id for ties. A purse that covers only some ranks then
+// keeps the foundational ones, and a rank never jumps ahead of its own
+// prerequisite mid-visit.
+inline bool TrainerVisitRankLess(TrainerVisitRank const& a, TrainerVisitRank const& b)
+{
+    if (a.reqLevel != b.reqLevel)
+        return a.reqLevel < b.reqLevel;
+    if (a.moneyCost != b.moneyCost)
+        return a.moneyCost < b.moneyCost;
+    return a.spellId < b.spellId;
+}
+
+// Sorts the visit's ranks into learning order (above).
+inline void SortTrainerVisitRanks(std::vector<TrainerVisitRank>& ranks)
+{
+    std::sort(ranks.begin(), ranks.end(), TrainerVisitRankLess);
 }
 
 } // namespace ai
