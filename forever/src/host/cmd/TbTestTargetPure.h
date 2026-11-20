@@ -69,6 +69,13 @@ inline bool IsNumberWord(std::string_view word)
             return false;
     return true;
 }
+
+// `.tb removeitem`: how many of an item to destroy out of the `inBags` the target carries in its bags (equipped pieces are never counted). `requested` 0
+// means "all" (no count given); a count above what the bags hold removes what there is. The reply's left= is inBags - this.
+inline std::uint32_t RemoveAmount(std::uint32_t inBags, std::uint32_t requested)
+{
+    return (requested == 0 || requested > inBags) ? inBags : requested;
+}
 }
 }
 }

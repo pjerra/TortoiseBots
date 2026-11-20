@@ -282,6 +282,55 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     return true;
 }
 
+// ---- `.tb removeitem [<character>] <item id> [count] [#token]` ----
+// The inverse of `.tb additem`: Player::DestroyItemCount (Player.h:1677, the core's own removal, quest bookkeeping included) takes up to `count` (no count =
+// all) of the item out of the target's BAGS. Equipped pieces are never touched: the amount is capped at what the bags hold, and the core's call empties the
+// bags before it looks at the equipment. Only the item named is touched, so a quest item goes only when it is the one asked for. One record
+// `removeitem bot=.. item=<id> removed=<n> left=<n>` (left = what the bags still hold); errors are typed: no-such-player / not-a-bot / missing-argument /
+// bad-id / unknown-item / unexpected-argument.
+
+bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "removeitem"))
+        return false;
+    size_t start = 1;
+    Player* bot = TargetArg(handler, args, "removeitem", start);
+    if (!bot)
+        return false;
+    if (args.w.size() <= start)
+        return Fail(handler, args, "removeitem", "missing-argument", ".tb removeitem <character> <item id> [count]");
+    uint32 item = 0;
+    if (!ParseId(args.w[start], item))
+        return Fail(handler, args, "removeitem", "bad-id", args.w[start]);
+    uint32 requested = 0;
+    if (args.w.size() > start + 1 && !ParseId(args.w[start + 1], requested))
+        return Fail(handler, args, "removeitem", "bad-id", args.w[start + 1]);
+    if (args.w.size() > start + 2)
+        return Fail(handler, args, "removeitem", "unexpected-argument", args.w[start + 2]);
+    if (!sObjectMgr->GetItemTemplate(item))
+        return Fail(handler, args, "removeitem", "unknown-item", args.w[start]);
+
+    // What the bags hold: the backpack and the bags, not the equipped pieces (the equipment slots, the worn bags themselves).
+    uint32 inBags = 0;
+    uint8 const itemEnd = INVENTORY_SLOT_ITEM_START + bot->GetInventorySlotCount();
+    bot->ForEachItem(ItemSearchLocation::Inventory, [&](Item* it)
+    {
+        if (it->GetEntry() == item && (it->GetBagSlot() != INVENTORY_SLOT_BAG_0 || (it->GetSlot() >= INVENTORY_SLOT_ITEM_START && it->GetSlot() < itemEnd)))
+            inBags += it->GetCount();
+        return ItemSearchCallbackResult::Continue;
+    });
+    uint32 const want = target::RemoveAmount(inBags, requested);
+    uint32 const removed = want ? bot->DestroyItemCount(item, want, true) : 0;
+    uint32 const left = inBags - std::min(inBags, removed);
+
+    Reply reply(handler, args, "removeitem");
+    reply.Begin();
+    reply.Line(Rec("removeitem").S("bot", bot->GetName()).N("item", item).N("removed", removed).N("left", left));
+    reply.End(Rec("removeitem").S("bot", bot->GetName()));
+    return true;
+}
+
 // ---- `.tb itemscan <bot> <item id>... [#token]` ----
 // For each id: whether the item exists on this server (ObjectMgr::GetItemTemplate) and whether THIS bot could equip it now, by the core's own check
 // with swap = true (an occupied slot does not count against it): Player::CanEquipNewItem (class, level, skill, slot, combat). Nothing is created or

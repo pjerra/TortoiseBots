@@ -351,6 +351,7 @@ public:
             { "hurt",   HandleHurt,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "power",  HandlePower,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "removeitem", TortoiseBots::h3::HandleRemoveItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "use",    HandleUse,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "order",  TortoiseBots::h3::HandleOrder,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },

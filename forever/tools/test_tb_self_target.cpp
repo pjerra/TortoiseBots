@@ -57,6 +57,14 @@ int main()
     CHECK(!tg::IsNumberWord("5%"));
     CHECK(!tg::IsNumberWord(""));
 
+    // `.tb removeitem`: no count = all of it; a count is capped at what the bags hold; nothing in the bags removes nothing.
+    CHECK(tg::RemoveAmount(7, 0) == 7);
+    CHECK(tg::RemoveAmount(7, 3) == 3);
+    CHECK(tg::RemoveAmount(7, 7) == 7);
+    CHECK(tg::RemoveAmount(7, 50) == 7);
+    CHECK(tg::RemoveAmount(0, 0) == 0);
+    CHECK(tg::RemoveAmount(0, 5) == 0);
+
     std::printf("test_tb_self_target: %d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }
