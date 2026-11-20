@@ -160,7 +160,17 @@ SLICE9_KEYS = {
     "trigger": "loot start roll, loot vote, loot roll",
     "value": "active rolls, seen need rolls, item usage, skip go loot list",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS)
+# W6a (package E6): auto-equip upgrades for free bots (`equipment audit` 300 s + `item push result` bag-generation poll).
+# Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `disenchant random item`,
+# `enchant random item`, `smart destroy item`, `pool gear top up`, `use random quest item`, `auto share quest`, `auto complete quest`)
+# stay unregistered and are skipped by the engine.
+W6_KEYS = {
+    "strategy": "maintenance",
+    "action": "equip upgrades",
+    "trigger": "equipment audit, item push result",
+    "value": "",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W6_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

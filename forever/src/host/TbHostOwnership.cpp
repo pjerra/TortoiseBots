@@ -13,6 +13,7 @@
 #include "behavior/PlayerConvenience.h"
 #include "runtime/AhBotSellerAccount.h"
 #include "runtime/BotActivityLease.h"
+#include "runtime/BotGearService.h"
 #include "runtime/ClaimLifecycle.h"
 #include "runtime/CommandedGroupQuery.h"
 #include "runtime/GuildOrderStore.h"
@@ -51,9 +52,28 @@ ClaimLifecycle& ClaimLifecycle::Instance()
     return instance;
 }
 
+bool ClaimLifecycle::IsClaimed(uint32_t /*botGuidLow*/) const
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
 bool ClaimLifecycle::IsClaimedByPlayer(uint32_t /*botGuidLow*/, uint32_t /*playerGuidLow*/) const
 {
     return false;
+}
+
+// ---- BotGearService (runtime/BotGearService.cpp): no pinned gear cap. ----
+BotGearService& BotGearService::Instance()
+{
+    static BotGearService instance;
+    return instance;
+}
+
+uint32_t BotGearService::PinnedCap(uint32_t /*guidLow*/) const
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return 0;
 }
 
 // ---- BotActivityLeaseManager (runtime/BotActivityLease.cpp): no bot holds a lease, every bot is Idle, except a COMMANDED bot (H4). ----

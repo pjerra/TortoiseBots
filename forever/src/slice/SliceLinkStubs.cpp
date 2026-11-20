@@ -481,13 +481,9 @@ void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
 // PlayerbotFactory.cpp: the five pet and ammo members are real since slice 11 (forever/src/host/TbHostPetFactory.cpp).
 
-// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load finds nothing.
+// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load/save does nothing.
 void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
-
-// EquipAction.cpp: the warlock's firestone and spellstone equip (WarlockActions.cpp:60 and :82). The file brings RandomItemMgr, ItemUsageValue,
-// BotGearService, ClaimLifecycle and PlayerbotDbStore with it (nine symbols, five owners outside the slice), so the stone stays in the bags and
-// the weapon keeps its plain damage. The stones are level 28 and 36 spells: the slice's bots (18-22) never reach the call.
-void ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool) { NoteMisc(); }
+void PlayerbotDbStore::Save(PlayerbotAI*, std::string) { NoteMisc(); }
 
 // RandomBotFacade loaders (runtime/PlayerbotRuntimeFacade.cpp): the pool caches are not built.
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
