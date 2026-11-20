@@ -233,7 +233,8 @@ void RestoreFollower(Follower const& follower, ObjectGuid lead)
     if (!ai || !ai->GetAiObjectContext())
         return;
     ai::Value<ai::GuidPosition>* value = ai->GetAiObjectContext()->GetValue<ai::GuidPosition>("manual follow target");
-    if (!value || value->Get().GetRawValue() != lead.GetRawValue())
+    ObjectGuid const current = value ? value->Get() : ObjectGuid::Empty;
+    if (!value || !(current == lead))
         return;
     value->Set(follower.saved);
     if (ai::Value<Unit*>* follow = ai->GetAiObjectContext()->GetValue<Unit*>("follow target"))
@@ -257,7 +258,8 @@ void PointFollowerAtLead(Meta& m, Player* bot, Player* lead)
         Follower follower;
         follower.guid = bot->GetGUID();
         follower.saved = value->Get();
-        if (follower.saved.GetRawValue() == lead->GetGUID().GetRawValue())
+        ObjectGuid const hadTarget = follower.saved;
+        if (hadTarget == lead->GetGUID())
             follower.saved = ai::GuidPosition();
         m.followers.push_back(std::move(follower));
     }
@@ -298,17 +300,6 @@ void SaveRow(ObjectGuid commander, Meta const& m)
     if (row.members.empty() || !L::Valid(row))
         return;
     store::Save(row);
-}
-
-bool RowChanged(ObjectGuid commander, Meta const& m)
-{
-    std::vector<ObjectGuid> const bound = BoundTo(commander);
-    if (bound.size() != m.members.size())
-        return true;
-    for (size_t i = 0; i < bound.size(); ++i)
-        if (bound[i] != m.members[i])
-            return true;
-    return false;
 }
 
 // ---- the release ----
@@ -412,7 +403,7 @@ void ReleaseCommander(ObjectGuid commander, L::End end)
         h3::SetCommander(bot, ObjectGuid::Empty);
     store::Erase(commander.GetCounter());
     s.releasing = wasReleasing;
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: the commander binding of {} was released: {} ({})", NameOf(commander), L::EndText(end), L::EndCode(end));
+    sLog.outString("TortoiseBots: the commander binding of %s was released: %s (%s)", NameOf(commander).c_str(), L::EndText(end), L::EndCode(end));
 }
 
 // ---- the live facts and the 1 Hz upkeep ----
@@ -482,7 +473,7 @@ void RestoreOne(ObjectGuid commander)
 {
     State& s = Get();
     auto const it = s.metas.find(commander);
-    if (it == s.metas.end() || it->second.restored && !RowChanged(commander, it->second))
+    if (it == s.metas.end())
         return;
     Meta& m = it->second;
     Player* commanderPlayer = InWorld(commander);
@@ -510,8 +501,8 @@ void RestoreOne(ObjectGuid commander)
         if (!error.empty())
         {
             joined = false;
-            TC_LOG_WARN("tortoisebots", "TortoiseBots: stored commander binding of {} not restored yet: {} could not join {}: {}",
-                NameOf(commander), NameOf(bot), NameOf(m.lead), error);
+            sLog.outError("TortoiseBots: stored commander binding of %s not restored yet: %s could not join %s: %s",
+                NameOf(commander).c_str(), NameOf(bot).c_str(), NameOf(m.lead).c_str(), error.c_str());
         }
     }
     if (!joined)
@@ -525,18 +516,11 @@ void RestoreOne(ObjectGuid commander)
             continue;
         h3::SetCommander(bot, commander);
     }
-    std::vector<ObjectGuid> const boundNow = BoundTo(commander);
-    bool const changed = boundNow.size() != m.members.size() ||
-        !std::equal(boundNow.begin(), boundNow.end(), m.members.begin());
     m.restored = true;
     SyncFollowers(commander, m, ObjectGuid::Empty);
     RefreshGroupId(m, InWorld(m.lead));
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: the commander binding of {} was restored (lead {}, {} bot(s))", NameOf(commander), NameOf(m.lead), boundNow.size());
-    if (changed)
-    {
-        m.members = boundNow;
-        SaveRow(commander, m);
-    }
+    sLog.outString("TortoiseBots: the commander binding of %s was restored (lead %s, %u bot(s))", NameOf(commander).c_str(), NameOf(m.lead).c_str(),
+        uint32(BoundTo(commander).size()));
 }
 
 void TryRestore()
@@ -545,20 +529,27 @@ void TryRestore()
         return;
     std::vector<ObjectGuid> commanders;
     for (auto const& [commander, m] : Get().metas)
-        if (!m.restored || RowChanged(commander, m))
+    {
+        if (!m.restored)
+        {
             commanders.push_back(commander);
+            continue;
+        }
+        // A member of the stored row that is back in the world and not bound yet (it was offline at the restore): join it now.
+        for (ObjectGuid member : m.members)
+            if (InWorld(member) && h3::CommanderGuid(member) != commander)
+            {
+                commanders.push_back(commander);
+                break;
+            }
+    }
     for (ObjectGuid commander : commanders)
         RestoreOne(commander);
-}
 }
 }
 
 // ---- P2 hooks ----
 
-namespace TortoiseBots
-{
-namespace cmd
-{
 void Maintain()
 {
     State& s = Get();
@@ -587,11 +578,6 @@ void Maintain()
         {
             ReleaseCommander(commander, end);
             continue;
-        }
-        if (store::Enabled() && RowChanged(commander, m))
-        {
-            m.members = BoundTo(commander);
-            SaveRow(commander, m);
         }
     }
 }
@@ -969,8 +955,20 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
         for (auto const& [cmd, m] : s.metas)
             commanders.push_back(cmd);
         for (ObjectGuid cmd : commanders)
+        {
+            auto const it = s.metas.find(cmd);
+            if (it == s.metas.end())
+                continue;
+            Meta& m = it->second;
+            // A bot this command released is no longer part of the binding: the stored row follows h3's table, so a restart does not bring it back.
+            size_t const before = m.members.size();
+            m.members.erase(std::remove_if(m.members.begin(), m.members.end(),
+                [&](ObjectGuid member) { return member != m.lead && h3::CommanderGuid(member) != cmd; }), m.members.end());
+            if (m.members.size() != before)
+                SaveRow(cmd, m);
             if (BoundTo(cmd).empty())
                 ReleaseCommander(cmd, L::End::Unbound);
+        }
         return;
     }
     // Only what h3 holds now counts: a bot the host refused is not bound, whatever the command asked.
