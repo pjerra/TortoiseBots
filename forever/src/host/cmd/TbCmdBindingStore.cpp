@@ -155,7 +155,7 @@ std::vector<life::Stored> ReadRows(State& s)
             continue;
         }
         TC_LOG_ERROR("tortoisebots", "TortoiseBots: stored commander binding of #{}: refused (lead #{}, {} members)", row.commander, row.lead, row.members.size());
-    } while (result.NextRow());
+    } while (result->NextRow());
     return rows;
 }
 

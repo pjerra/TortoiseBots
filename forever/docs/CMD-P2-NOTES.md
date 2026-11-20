@@ -80,17 +80,17 @@ Two things the live run taught, both fixed here:
 | `forever/conf/tortoisebots.conf.dist` | `TortoiseBots.Commander.KeepBindings = 0` with its documentation |
 | `forever/tools/cmd_binding_life_check.cpp`, `test_cmd_p2_wiring.py` | the P2 check (53 checks) and the wiring pins/mutations |
 
-## Gates (slot 7, core pin 6517af05)
+## Gates (slot 7, core pin 6517af05; counts are after the fix round of 2026-11-20)
 
 | Gate | Result |
 |---|---|
 | census, list `forever/SLICE5.txt` (P2 adds no legacy file) | `files 176  compile clean 176  with errors 0  error places 0` |
-| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (64,693,656-byte binary); the ON library defines `ReleaseCommander`, `RestoreOne`, `store::Save` |
-| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (55,819,952 bytes); the OFF library has the no-op hook stubs only |
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (64,706,344-byte binary); the ON library defines `ReleaseCommander` (local), `store::Save` |
+| option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (55,819,952 bytes); the OFF library has no `ReleaseCommander`/`RestoreOne` (the no-op hooks only) and `store::Save` as before (the store is compiled in both flavours) |
 | `forever/tools/cmd_binding_check.cpp` (P1) | `cmd_binding_check: 57 checks, 0 failed` |
-| `forever/tools/cmd_binding_life_check.cpp` (P2) | `cmd_binding_life_check: 53 checks, 0 failed` |
+| `forever/tools/cmd_binding_life_check.cpp` (P2) | `cmd_binding_life_check: 73 checks, 0 failed` |
 | `test_cmd_p1_wiring.py` with `CMD_P1_MUTATE=1` | 12 tests OK (three mutations caught) |
-| `test_cmd_p2_wiring.py` with `CMD_P2_MUTATE=1` | 12 tests OK (`lead-offline`, `dead-grace`, `away-grace` each FAIL the check; the row checker refuses a group column) |
+| `test_cmd_p2_wiring.py` with `CMD_P2_MUTATE=1` | 13 tests OK (six mutations caught: `lead-offline`, `dead-grace`, `away-grace`, `commander-member`, `members-overflow`, `claimed-steal`; the row checker refuses a group column) |
 | `test_run_c6.cpp`, `test_run_cancel.cpp`, `test_run_orders.cpp` | `PASS: 28 checks`, `PASS`, `PASS (159 checks)` |
 | `test_run_review_wiring.py`, `test_slice4_d4_wiring.py`, `test_dash_runs_wiring.py`, `test_run_revfix1/2_wiring.py` | OK |
 | `slice_registry_check.py`, `slice_gen_context.py --check` | `summary: (a)=0  (b)=215`; `SliceAiObjectContext.cpp is up to date` |

@@ -294,7 +294,7 @@ void TestClaim()
         heal.bot = false;
         auto const claims = L::Claim(Cmd, party.members, { tank, heal, dps });
         CHECK((claims.free == std::vector<uint64_t>{ Tank }));
-        CHECK((claims.foreign == std::vector<uint64_t>{ Dps, Heal }));
+        CHECK((claims.foreign == std::vector<uint64_t>{ Heal, Dps }));   // stored order, never reordered
         dps.master = 0;
         heal.bot = true;
     }
