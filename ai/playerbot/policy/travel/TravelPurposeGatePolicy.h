@@ -35,7 +35,7 @@ namespace ai
         // change after startup); this header only decides.
         struct Registered
         {
-            bool vendorKeys = false; // W2: sell/repair/trainer keys are in the context
+            bool vendorKeys = false; // W2: sell/repair/trainer keys are in the context, and the `vendor trip needed` value
             bool questKeys = false;  // W3: the rpg quest keys are in the context
         };
 
@@ -66,6 +66,27 @@ namespace ai
         inline bool Allows(Group group, Registered const& registered)
         {
             return RefusalOf(group, registered) == Refusal::None;
+        }
+
+        // The grind errand's clock (the legacy rule of the Turtle side, issue #393 included): a grind errand is open in the
+        // first 45 minutes of the hour (`rpgPhase`, 1..60, the bot's fixed number). A beginner - a free pool bot below level 5
+        // with no real player master - is open ALL hour: the generic RPG walk that fills the last 15 minutes refuses every
+        // non-vendor errand below level 5 (RpgTravelDestination::IsPossible), so closing the grind there left a level 1-4 bot
+        // with no errand at all and idling 25% of every hour.
+        inline bool GrindPhaseOpen(std::uint32_t botLevel, bool freeBot, bool hasRealPlayerMaster, std::uint32_t rpgPhase)
+        {
+            bool const beginner = botLevel < 5 && freeBot && !hasRealPlayerMaster;
+            return beginner || rpgPhase <= 45;
+        }
+
+        // The vendor errand's need (decision 5, issue #379). The old pair `should sell && can sell` is true for every pool bot
+        // holding food (2,300 vendor errands in 65 minutes, no sale made); the need is the real one: W2's `vendor trip needed`
+        // value (stock a vendor pays for and worth the walk, a durability below the repair line, or an empty food bag the bot can
+        // pay to refill, never while the purpose is parked). It stays gated on W2's keys: with them absent the answer is false
+        // whatever the value says, so W4 can merge before W2.
+        inline bool VendorErrandNeeded(Registered const& registered, bool vendorTripNeeded)
+        {
+            return registered.vendorKeys && vendorTripNeeded;
         }
     }
 }

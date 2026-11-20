@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -1148,6 +1149,15 @@ inline uint32 FishingZoneOfWL4(ai::AsyncGuidPosition const& pos)
 inline void TravelTerrainTrimCompat() { sTerrainMgr.Update(60 * 60 * 24); }
 
 inline QueryResult* TravelWorldQueryCompat(char const* sql, bool* schemaMissing = nullptr) { if (schemaMissing) *schemaMissing = false; return WorldDatabase.Query(sql); }
+// The legacy loader's own check before it read the zone-level table: `SHOW TABLES LIKE` (a missing table is logged as such and the
+// area levels stay uncached).
+inline bool TravelWorldTableMissingCompat(char const* table)
+{
+    std::unique_ptr<QueryResult> found(WorldDatabase.PQuery("SHOW TABLES LIKE '%s'", table));
+    return !found;
+}
+// The area-level cache stays lazy on this core, as it always was.
+inline bool TravelPrecomputeAreaLevelsCompat() { return false; }
 inline void TravelBeginTransactionCompat() { WorldDatabase.BeginTransaction(); }
 inline void TravelCommitTransactionCompat() { WorldDatabase.CommitTransaction(); }
 }

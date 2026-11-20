@@ -9,19 +9,26 @@
 #   forever/tools/travel_graph_boot_check.sh                 # all scenarios
 #   forever/tools/travel_graph_boot_check.sh a               # only scenario a
 #
+# Needs a scratch database (the check drops the travel tables in it): FOREVER_WORLD_DB=world_scratch, with $FOREVER_RUN_DIR/etc/
+# worldserver.conf (WorldDatabaseInfo) pointing the server at it. It refuses to run otherwise, before anything is dropped.
+#
 # Scenarios (each one a boot, because every case is a boot-time decision):
 #   a  no travel tables        the guard refuses the queries (never sends one to a missing table), the graph stays empty,
 #                              one line; travel has no graph and the destination build still runs
 #   b  empty tables            one line "dataset is empty", no startup graph generation, no abort
-#   c  nodes and links         two nodes and a link whose target node does not exist (an out-of-map link): the link is
-#                              skipped, the graph is built, the server stays up
+#   c  two-continent graph     five nodes on maps 0 and 1: a link to a missing node, a "walk" between the two maps (both refused
+#                              at load and counted), a zeppelin (loaded, not a route); the log line of what each node reaches
+#                              shows no continent reaching the other; the server stays up
 #   final  no travel tables    the state a server ships in before the generation boot (round B): the "absent graph" no-op
 #
 # Exit code 0 = every checked line was seen (and none that must not appear); 1 = a check failed or a boot did not come up.
 set -uo pipefail
 
 RUN=${FOREVER_RUN_DIR:-$HOME/forever-run2}
-DB=${FOREVER_WORLD_DB:-world}
+# This check DROPS the three travel tables (at the start of a scenario and in the exit trap), so it runs only against a scratch
+# world database: FOREVER_WORLD_DB must name one (its name contains "scratch") and the server under $RUN must actually be
+# configured to use it (refuse_unless_scratch below). There is no default: the real `world` database is never touched.
+DB=${FOREVER_WORLD_DB:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
 SCHEMA=${FOREVER_TRAVEL_SCHEMA:-$HERE/../../data/sql/world/20260824090000_world.sql}
 LOG=$RUN/logs/world.out
@@ -44,6 +51,29 @@ has_once() { local n; n=$(grep -hE "$1" "$LOG" "$BOTLOG" | wc -l); if [ "$n" = 1
 sql() { docker exec -e MYSQL_PWD="$(cat "$RUN/.db_root_pass")" "$DB_CONTAINER" mysql -uroot -N -B "$DB" -e "$1"; }
 
 DB_CONTAINER=forever-db2
+
+# The refusal that keeps the DROP TABLEs away from a real database. Two conditions, both required: the database NAME is a scratch
+# one, and the server's own config names that same database (a scratch name with a server still on `world` would drop nothing
+# the server uses, but the other way round - a scratch name in the shell and the server on `world` - would test the wrong thing).
+refuse_unless_scratch() {
+    case "$DB" in
+        *scratch*) ;;
+        *) echo "REFUSED: FOREVER_WORLD_DB='$DB' is not a scratch database (its name must contain 'scratch'); this check drops the travel tables." >&2; exit 2 ;;
+    esac
+    local conf
+    for conf in "$RUN/etc/worldserver.conf" "$RUN/worldserver.conf"; do
+        [ -f "$conf" ] && break
+        conf=
+    done
+    if [ -z "$conf" ]; then
+        echo "REFUSED: no worldserver.conf under $RUN to confirm the server uses '$DB'." >&2
+        exit 2
+    fi
+    if ! grep -E '^[[:space:]]*WorldDatabaseInfo[[:space:]]*=' "$conf" | grep -qE ";${DB}\"?[[:space:]]*$"; then
+        echo "REFUSED: $conf does not point WorldDatabaseInfo at '$DB'." >&2
+        exit 2
+    fi
+}
 
 drop_tables() { sql "DROP TABLE IF EXISTS ai_playerbot_travelnode_path, ai_playerbot_travelnode_link, ai_playerbot_travelnode"; }
 create_empty() {
@@ -115,17 +145,24 @@ scenario_b() {
 }
 
 scenario_c() {
-    printf 'scenario c: three nodes, a link whose target node does not exist, and its path points\n'
+    printf 'scenario c: a two-continent graph with a zeppelin, a link to a missing node and a walk between two maps\n'
     drop_tables || { fail "could not drop the travel tables"; return; }
     if ! create_empty; then fail "could not create the empty schema"; return; fi
+    # Azeroth (map 0): Alpha, Beta, Gamma; Kalimdor (map 1): Kal1, Kal2.
     sql "INSERT INTO ai_playerbot_travelnode (id, name, map_id, x, y, z, linked) VALUES
            (1, 'Alpha', 0, -8949.95, -132.493, 83.5312, 1),
            (2, 'Beta',  0, -8950.0, -130.0,   83.5312, 1),
-           (3, 'Gamma', 0, -100.0,  -200.0,   50.0,    1)" || { fail "node insert failed"; return; }
-    # 1 -> 424242: no such node row (the out-of-map link); 2 -> 1: a real link with three ordered path points.
+           (3, 'Gamma', 0, -100.0,  -200.0,   50.0,    1),
+           (4, 'Kal1',  1, 1600.0,  -4400.0,  10.0,    1),
+           (5, 'Kal2',  1, 1610.0,  -4410.0,  10.0,    1)" || { fail "node insert failed"; return; }
+    # 1 -> 424242: no such node row; 2 -> 1: a real walk with three ordered path points; 4 -> 5: a real walk on Kalimdor;
+    # 3 -> 4: a zeppelin (type 3, loaded, never a route); 1 -> 4: a "walk" between the two maps (refused at load).
     sql "INSERT INTO ai_playerbot_travelnode_link (node_id, to_node_id, type, object, distance, swim_distance, extra_cost, calculated, max_creature_0, max_creature_1, max_creature_2) VALUES
            (1, 424242, 1, 0, 10.0, 0, 0, 1, 0, 0, 0),
-           (2, 1,      1, 0, 20.0, 0, 0, 1, 0, 0, 0)" || { fail "link insert failed"; return; }
+           (2, 1,      1, 0, 20.0, 0, 0, 1, 0, 0, 0),
+           (4, 5,      1, 0, 14.0, 0, 0, 1, 0, 0, 0),
+           (3, 4,      3, 0, 9000.0, 0, 0, 1, 0, 0, 0),
+           (1, 4,      1, 0, 9000.0, 0, 0, 1, 0, 0, 0)" || { fail "link insert failed"; return; }
     sql "INSERT INTO ai_playerbot_travelnode_path (node_id, to_node_id, nr, map_id, x, y, z) VALUES
            (1, 424242, 0, 0, -8949.9, -132.4, 83.5),
            (1, 424242, 1, 0, -8949.9, -132.3, 83.5),
@@ -134,11 +171,16 @@ scenario_c() {
            (2, 1, 2, 0, -8949.95, -132.49, 83.53)" || { fail "path insert failed"; return; }
     if ! boot; then fail "boot did not come up"; tail -5 "$LOG"; return; fi
     common_checks
-    has '>> Loaded 3 travelNodes\.' "three nodes loaded"
-    has '>> Loaded 2 travelNode paths\.' "both link rows read"
+    has '>> Loaded 5 travelNodes\.' "five nodes loaded"
+    has '>> Loaded 5 travelNode paths\.' "all five link rows were read"
     hasnt 'travel-node dataset is empty' "the graph is not empty"
-    # The link to the unknown node was skipped: no route is built from node 1 to it, and the boot survived.
     has 'Calculating mapoffset' "the populated graph builds its derived data"
+    # The bad rows are refused at load, counted in one line: the missing target and the walk between two maps.
+    has '>> Skipped 1 travelNode links to an unknown node and 1 walk links between two maps\.' "the unknown-node link and the cross-map walk were skipped"
+    # What each node reaches over usable links: the zeppelin (Gamma -> Kal1) and the refused walk (Alpha -> Kal1) join nothing, and the
+    # link to the missing node is no edge, so no continent reaches the other and the three path points of 2 -> 1 count once.
+    has '>> travel graph reach \(usable links\): Alpha=1 Beta=2 Gamma=1 Kal1=2 Kal2=1' "no node reaches across the continents (zeppelin and bad walk are no route)"
+    hasnt 'Alpha=[2-9]|Gamma=[2-9]' "Alpha and Gamma reach only themselves"
     stop_server
 }
 
@@ -160,6 +202,7 @@ cleanup() {
     drop_tables
 }
 
+refuse_unless_scratch
 trap cleanup EXIT
 
 for s in $WANT; do

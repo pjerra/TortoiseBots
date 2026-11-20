@@ -547,6 +547,10 @@ namespace ai
 
 		int32 GetAreaLevel(uint32 area_id);
 		void LoadAreaLevels();
+		// The cache rows only (the table read), then the boot fill: ForeverCore resolves every DBC area once here and freezes the
+		// cache, so GetAreaLevel (called from bot ticks on parallel map threads) only reads afterwards and never inserts.
+		void LoadAreaLevelRows();
+		void FreezeAreaLevels();
 		// Bounded validated level for login scatter: cached table first (with parent-zone
 		// cached fallback), then immutable DBC AreaTable AreaLevel / parent AreaLevel.
 		// No creature scan, no DB write, no lazy GetAreaLevel mutation.
@@ -604,6 +608,7 @@ namespace ai
 		ai::DeathAvoidSpot unreachableNoted[ai::kUnreachablePointSlots] = {};
 		ai::DeathAvoidSpot unreachableRefused[ai::kUnreachablePointSlots] = {};
 		std::unordered_map<uint32, int32> areaLevels;
+		bool areaLevelsFrozen = false; // set once by FreezeAreaLevels: GetAreaLevel no longer writes the map
 		// Taxi-node zone cache (#426 flight transport): node id -> zone area id
 		// (0 = unresolvable at build, fail closed at use). Built once at startup
 		// from loaded terrain, then immutable.

@@ -1,6 +1,8 @@
 #include "TravelNode.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/policy/travel/TravelRoutePolicy.h"
+#include "playerbot/policy/travel/TravelGraphPolicy.h"
+#include "playerbot/policy/travel/CreatureLevelPolicy.h"
 #include "playerbot/DungeonFollowHoldPolicy.h"
 
 #include <iomanip>
@@ -84,14 +86,8 @@ void TravelNodePath::calculateCost(bool distanceOnly)
                             hReact.insert(std::make_pair(factionEntry, PlayerbotAI::friendToHorde(factionEntry)));
                         hFriend = hReact.find(factionEntry)->second;
 
-                        uint32 const maxLevel = CreatureTemplateMaxLevelCompat(cInfo);
-
-                        if (maxLevelCreature[0] < maxLevel && !aFriend && !hFriend)
-                            maxLevelCreature[0] = maxLevel;
-                        if (maxLevelCreature[1] < maxLevel && aFriend && !hFriend)
-                            maxLevelCreature[1] = maxLevel;
-                        if (maxLevelCreature[2] < maxLevel && !aFriend && hFriend)
-                            maxLevelCreature[2] = maxLevel;
+                        // The creature's classic level on ForeverCore (0 = not rated, adds no threat); Turtle its template level.
+                        ai::travel_graph::RecordCreatureLevel(maxLevelCreature, CreatureTemplateMaxLevelCompat(cInfo), aFriend, hFriend);
                     }
                 }
 
@@ -469,40 +465,14 @@ void TravelNode::removeLinkTo(TravelNode* node, bool removePaths) {
 
 std::vector<TravelNode*> TravelNode::getNodeMap(bool importantOnly, std::vector<TravelNode*> ignoreNodes, bool mapOnly)
 {
-    std::vector<TravelNode*> openList;
-    std::vector<TravelNode*> closeList;
-
-    openList.push_back(this);
-
-    uint32 i = 0;
-
-    while (i < openList.size())
-    {
-        TravelNode* currentNode = openList[i];
-
-        i++;
-
-        if (!importantOnly || currentNode->IsImportant())
-            closeList.push_back(currentNode);
-
-        for (auto& nextPath : *currentNode->GetLinks())
-        {
-            TravelNode* nextNode = nextPath.first;
-
-            if (mapOnly && nextNode->GetMapId() != getMapId())
-                continue;
-
-            if (std::find(openList.begin(), openList.end(), nextNode) != openList.end())
-                continue;
-
-            if (!ignoreNodes.empty() && std::find(ignoreNodes.begin(), ignoreNodes.end(), nextNode) != ignoreNodes.end())
-                continue;
-
-            openList.push_back(nextNode);
-        }
-    }
-
-    return closeList;
+    // Reachability counts only the links the A* may take (TravelLinkUsableCompat: Turtle every type, ForeverCore walks and area
+    // triggers): a goal that only a zeppelin or a taxi reaches is not a route here, so hasRouteTo refuses it before the A* expands
+    // the start continent's graph for nothing (ai/playerbot/policy/travel/TravelGraphPolicy.h).
+    return ai::travel_graph::CollectReachable<TravelNode*>(this, importantOnly, ignoreNodes, mapOnly,
+        [](TravelNode* node) -> std::unordered_map<TravelNode*, TravelNodePath*> const& { return *node->GetLinks(); },
+        [](TravelNode* node) { return node->GetMapId(); },
+        [](TravelNode* node) { return node->IsImportant(); },
+        [](TravelNodePath* path) { return TravelLinkUsableCompat(uint8(path->getPathType())); });
 }
 
 bool TravelNode::isUselessLink(TravelNode* farNode)
@@ -1944,6 +1914,10 @@ static float const TRAVEL_WALK_LEG_REACH_YD = 5.0f;
 
 bool LeaveDeeprunTram(PlayerbotAI* ai, Player* bot, WorldPosition const& goal)
 {
+    // A teleport outside the host's logged rescue (decision D4) is not allowed on ForeverCore until W5's transport legs exist.
+    if (!TravelTramExitAllowedCompat())
+        return false;
+
     if (bot->GetMapId() != MAP_DEEPRUN_TRAM || ai->HasRealPlayerMaster() || !sRandomBotFacade.IsFreeBot(bot) ||
         bot->IsInCombat() || !bot->IsAlive() || bot->IsBeingTeleported())
         return false;
@@ -3668,6 +3642,7 @@ void TravelNodeMap::loadNodeStore()
 
         if (result)
         {
+            uint32 skippedUnknownNode = 0, skippedCrossMapWalk = 0;
             BarGoLink bar(result->GetRowCount());
             do
             {
@@ -3677,10 +3652,21 @@ void TravelNodeMap::loadNodeStore()
                 auto startIt = saveNodes.find(fields[0].GetUInt32());
                 auto endIt = saveNodes.find(fields[1].GetUInt32());
                 if (startIt == saveNodes.end() || endIt == saveNodes.end())
+                {
+                    ++skippedUnknownNode;
                     continue;
+                }
 
                 TravelNode* startNode = startIt->second;
                 TravelNode* endNode = endIt->second;
+
+                // A walk link joins two nodes of one map (ForeverCore: the loader trusts no data a walk cannot follow).
+                if (TravelLoaderChecksWalkMapsCompat() &&
+                    !ai::travel_graph::WalkLinkMapsConsistent(fields[2].GetUInt8(), startNode->GetMapId(), endNode->GetMapId()))
+                {
+                    ++skippedCrossMapWalk;
+                    continue;
+                }
 
                 startNode->setPathTo(endNode, TravelNodePath(fields[4].GetFloat(), fields[6].GetFloat(), fields[2].GetUInt8(), fields[3].GetUInt64(), fields[7].GetBool(), { fields[8].GetUInt8(),fields[9].GetUInt8(),fields[10].GetUInt8() }, fields[5].GetFloat()), true);
 
@@ -3690,6 +3676,9 @@ void TravelNodeMap::loadNodeStore()
             } while (result->NextRow());
 
             sLog.outString(">> Loaded " SIZEFMTD " travelNode paths.", result->GetRowCount());
+            if (skippedUnknownNode || skippedCrossMapWalk)
+                sLog.outString(">> Skipped %u travelNode links to an unknown node and %u walk links between two maps.",
+                    skippedUnknownNode, skippedCrossMapWalk);
         }
         else
         {
@@ -3712,6 +3701,7 @@ void TravelNodeMap::loadNodeStore()
 
         if (result)
         {
+            uint32 droppedCrossMapPath = 0;
             BarGoLink bar(result->GetRowCount());
             do
             {
@@ -3731,6 +3721,16 @@ void TravelNodeMap::loadNodeStore()
 
                 TravelNodePath* path = startNode->GetPathTo(endNode);
 
+                // A walk link whose path leaves its map is dropped whole (its later rows then find no link): the bot would walk
+                // a "path" through another map's coordinates.
+                if (TravelLoaderChecksWalkMapsCompat() &&
+                    !ai::travel_graph::WalkPathPointOnLinkMap(uint8(path->getPathType()), startNode->GetMapId(), fields[3].GetUInt32()))
+                {
+                    startNode->removeLinkTo(endNode, true);
+                    ++droppedCrossMapPath;
+                    continue;
+                }
+
                 // The rows arrive ordered by `nr`, so each is appended once: no per-point copy of the path grown so far.
                 path->appendPathPoint(WorldPosition(fields[3].GetUInt32(), fields[4].GetFloat(), fields[5].GetFloat(), fields[6].GetFloat()));
 
@@ -3740,6 +3740,8 @@ void TravelNodeMap::loadNodeStore()
             } while (result->NextRow());
 
             sLog.outString(">> Loaded " SIZEFMTD " travelNode paths points.", result->GetRowCount());
+            if (droppedCrossMapPath)
+                sLog.outString(">> Dropped %u walk links whose path runs through another map.", droppedCrossMapPath);
         }
         else
         {

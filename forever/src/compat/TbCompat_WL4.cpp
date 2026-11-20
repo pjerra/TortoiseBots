@@ -165,8 +165,29 @@ namespace
         return out;
     }
 
+    // Set once the loader dropped the boot index. After that the index is NOT rebuilt: a later reader (W2's MaintenanceValues
+    // reads `entry guidps` once) would silently pay a 2 s world-thread rebuild with the terrain held again and keep a second copy
+    // of 123k points resident. It gets an empty index and one log line naming the caller's miss instead.
+    bool& TravelEntryGuidpsReleased()
+    {
+        static bool released = false;
+        return released;
+    }
+
     EntryGuidps const& TravelEntryGuidpsData()
     {
+        if (TravelEntryGuidpsReleased())
+        {
+            static EntryGuidps const empty;
+            static std::once_flag logged;
+            std::call_once(logged, []()
+            {
+                sLog.outError("TortoiseBots: the travel destination spawn index was asked for after the boot build released it; "
+                    "answering empty (it is not rebuilt at runtime). A reader of `entry guidps` needs the index kept: change the release.");
+            });
+            return empty;
+        }
+
         std::shared_ptr<EntryGuidps const>& cache = TravelEntryGuidpsCache();
         if (!cache)
             cache = std::make_shared<EntryGuidps const>(TravelBuildEntryGuidps());
@@ -175,7 +196,7 @@ namespace
     }
 
     // The loader's points are copies in TravelMgr::pointsMap; on this core the boot index has no other reader, so it is
-    // dropped after the destination build. A later ask rebuilds it (correct, only slow) - nothing on this core does.
+    // dropped after the destination build and a later ask answers empty (TravelEntryGuidpsData above), never a rebuild.
     void TravelReleaseEntryGuidps()
     {
         std::shared_ptr<EntryGuidps const>& cache = TravelEntryGuidpsCache();
@@ -190,6 +211,7 @@ namespace
         }
 
         cache.reset();
+        TravelEntryGuidpsReleased() = true;
 
         sLog.outString(">> travel destination index released: %u entries, %u spawn points", uint32(entries), uint32(points));
     }
@@ -301,11 +323,14 @@ namespace
         std::lock_guard<std::mutex> guard(mutex);
         if (!facts.checked && ai && ai->GetAiObjectContext())
         {
-            std::set<std::string> actions, strategies;
+            std::set<std::string> actions, strategies, values;
             ai->GetAiObjectContext()->GetSupportedActions(actions);
             ai->GetAiObjectContext()->GetSupportedStrategies(strategies);
+            ai->GetAiObjectContext()->GetSupportedValues(values);
 
-            facts.vendor = actions.count("sell") && actions.count("repair") && strategies.count("maintenance");
+            // W2's vendor keys: the two actions, the strategy, and the `vendor trip needed` value the need below reads.
+            facts.vendor = actions.count("sell") && actions.count("repair") && strategies.count("maintenance") &&
+                values.count("vendor trip needed");
             facts.quest = strategies.count("rpg quest") > 0;
             facts.checked = true;
         }
@@ -420,8 +445,10 @@ namespace ai
             if (AI_VALUE2(bool, "manual bool", "is travel refresh"))
                 return false;
 
-            uint32 const rpgPhase = ai->GetFixedBotNumber(BotTypeNumber::RPG_PHASE_NUMBER, 60, 1);
-            return rpgPhase <= 45; // only the first 45 minutes of the hour allow a grind errand
+            // The first 45 minutes of the hour allow a grind errand; a beginner (a free pool bot below level 5, no real master)
+            // grinds all hour, as on Turtle (issue #393): the RPG walk of the last 15 minutes refuses it below level 5.
+            return travel_purpose::GrindPhaseOpen(bot->GetLevel(), sRandomBotFacade.IsFreeBot(bot), ai->HasRealPlayerMaster(),
+                ai->GetFixedBotNumber(BotTypeNumber::RPG_PHASE_NUMBER, 60, 1));
         }
         case TravelDestinationPurpose::GenericRpg:
         {
@@ -432,8 +459,17 @@ namespace ai
             return !AI_VALUE2(bool, "manual bool", "is travel refresh");
         }
         case TravelDestinationPurpose::Vendor:
-            // The need itself is W2's: until its values are registered they answer false, and no trip starts (LESS).
-            return AI_VALUE2(bool, "has strategy", "maintenance") && AI_VALUE(bool, "should sell") && AI_VALUE(bool, "can sell");
+            // The real need, not the retired `should sell && can sell` pair (issue #379: true for every pool bot holding food, 2,300
+            // vendor errands in 65 minutes): W2's `vendor trip needed` value, the snapshot of the Turtle side's
+            // `VendorTripNeeded`. The purpose is already refused above until W2's keys (that value among them) are registered, so
+            // this line never asks a value the context does not have. The Turtle `BagPressureVendorTrip` valve is W2's request
+            // path (ChooseTravelTargetAction), not a value, and comes with it.
+            {
+                TravelRegisteredKeys const& keys = TravelRegistryFacts(ai);
+                travel_purpose::Registered const registered{ keys.vendor, keys.quest };
+                bool const tripNeeded = registered.vendorKeys && AI_VALUE(bool, "vendor trip needed");
+                return travel_purpose::VendorErrandNeeded(registered, tripNeeded);
+            }
         case TravelDestinationPurpose::Repair:
             return AI_VALUE2(bool, "has strategy", "maintenance") && AI_VALUE(bool, "should repair") && AI_VALUE(bool, "can repair");
         default:
@@ -513,6 +549,18 @@ namespace ai
     {
         sTravelNodeMap.loadNodeStore();
         sTravelNodeMap.generateAll();
+
+        // A small graph (the boot check's) names what each node reaches over the links the A* may take, so the check can see that a
+        // zeppelin or a skipped bad link is no route. A real graph has hundreds of nodes: no line.
+        std::vector<TravelNode*> const nodes = sTravelNodeMap.GetNodes();
+        if (!nodes.empty() && nodes.size() <= 16)
+        {
+            std::string reach;
+            for (TravelNode* node : nodes)
+                reach += (reach.empty() ? "" : " ") + node->GetName() + "=" + std::to_string(node->getRouteSize());
+            sLog.outString(">> travel graph reach (usable links): %s", reach.c_str());
+        }
+
         sTravelNodeMap.printMap();
         sTravelNodeMap.printNodeStore();
         if (sPlayerbotAIConfig.generateTravelNodes)

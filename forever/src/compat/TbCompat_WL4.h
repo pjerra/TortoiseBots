@@ -36,6 +36,7 @@
 #include "playerbot/TravelMgr.h"      // WorldPosition, before ChatHelper.h names it by value
 #include "playerbot/ChatHelper.h"
 #include "playerbot/strategy/values/QuestValues.h"
+#include "playerbot/policy/travel/CreatureLevelPolicy.h"
 
 // The key the loader stores a spawn point under. ForeverCore's guid is two raw halves: the low one is only the spawn
 // counter, which creatures and game objects count separately, so the high half (type, entry, map) is part of the key.
@@ -62,11 +63,12 @@ inline uint32 AreaZoneIdOrSelfWL4(AreaTableEntry const* area)
     return zoneId ? zoneId : AreaIdWL4(area);
 }
 
-// The area's team (Turtle `Team`; ForeverCore carries a faction-group mask and no ally/horde team per area).
-// AREATEAM_NONE = the team rules do not refuse the destination (LESS: an enemy-home-zone explore point is offered).
-inline uint32 AreaTeamWL4(AreaTableEntry const* /*area*/)
+// The area's team (Turtle `Team`; ForeverCore carries the same 2 Alliance / 4 Horde / 6 both bits as the area's faction-group
+// mask, AreaTeamCompat in TbCompat_C.h, the one WorldPosition::isEnemyHomeZoneFor reads). A sub-area usually carries none and
+// the caller falls back to its zone, as on Turtle.
+inline uint32 AreaTeamWL4(AreaTableEntry const* area)
 {
-    return AREATEAM_NONE;
+    return area ? uint32(AreaTeamCompat(area)) : uint32(AREATEAM_NONE);
 }
 
 // The DBC area row by id (Turtle `AreaEntry::GetById`, ForeverCore the area table store).
@@ -134,11 +136,13 @@ inline uint32 DefaultMaxLevelWL4()
 // ===============================================================================================================
 
 // The spawn's top level. Turtle `CreatureInfo::level_max`; ForeverCore has no per-template level, the vanilla levels live
-// in `creature_classic_level` (ObjectMgr::GetCreatureClassicLevel, a min/max pair). 0 = unknown.
+// in `creature_classic_level` (ObjectMgr::GetCreatureClassicLevel, a min/max pair). An entry without a row has NO known level
+// and answers ai::travel_level::kUnknown (above every level window), never 0: 0 sat inside the grind band of a level 1-2 bot
+// and offered a fresh bot a spot that could be rated 60+ (review of W4-A2, decision 4; CreatureLevelPolicy.h).
 inline int32 CreatureLevelMaxWL4(uint32 entry)
 {
     std::pair<uint8, uint8> const* classic = ObjectMgr::instance()->GetCreatureClassicLevel(entry);
-    return classic ? int32(classic->second) : 0;
+    return ai::travel_level::FromClassicRow(classic != nullptr, classic ? uint32(classic->second) : 0u);
 }
 
 // The template's rank as the legacy numbers: 0 normal, 1 elite, 2 rare elite, 3 world boss, 4 rare. ForeverCore's
@@ -392,6 +396,14 @@ inline QueryResult TravelWorldQueryCompat(char const* sql, bool* schemaMissing =
 {
     return WorldQueryCompat(sql, schemaMissing);
 }
+
+// The legacy loader asked `SHOW TABLES LIKE` before reading the zone-level table; ForeverCore never sends a statement to a missing
+// table (the guard above refuses it and says so), so there is no separate probe: false.
+inline bool TravelWorldTableMissingCompat(char const* /*table*/) { return false; }
+
+// Fill the area-level cache for every DBC area at boot, so the runtime GetAreaLevel only reads (bot ticks run on the parallel
+// map threads and an unlocked insert into the shared map is a crash class). Turtle keeps its lazy cache as it always was.
+inline bool TravelPrecomputeAreaLevelsCompat() { return true; }
 
 // One transaction around the fish-location save (never reached on this core; kept compiling).
 // Never reached on this core (the fish loader returns first); the batch form needs no transaction here.

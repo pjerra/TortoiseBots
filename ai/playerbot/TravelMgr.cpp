@@ -27,6 +27,8 @@
 #include "playerbot/TbCompatW2.h"
 #include "playerbot/TbCompatW3.h"
 #include "playerbot/TbCompatWL4.h"
+#include "playerbot/TbCompatWL4n.h"
+#include "playerbot/policy/travel/TravelGraphPolicy.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -1733,6 +1735,11 @@ int32 TravelMgr::GetAreaLevel(uint32 area_id)
     if (lev != areaLevels.end())
         return lev->second;
 
+    // Frozen (ForeverCore, after the boot fill): the cache is read-only from here on, because bot ticks reach this from the parallel
+    // map threads and an unlocked insert would race. An id the fill never saw is an area the DBC does not know: -2, as below.
+    if (areaLevelsFrozen)
+        return -2;
+
     AreaTableEntry const* area = GetAreaEntryByAreaID(area_id);
 
     if (!area)
@@ -1869,6 +1876,33 @@ void TravelMgr::LoadAreaLevels()
     if (!areaLevels.empty())
         return;
 
+    LoadAreaLevelRows();
+    FreezeAreaLevels();
+}
+
+void TravelMgr::FreezeAreaLevels()
+{
+    // Turtle keeps its lazy cache; ForeverCore fills every area now, on the loading thread, and never writes the map again.
+    if (!TravelPrecomputeAreaLevelsCompat() || areaLevelsFrozen)
+        return;
+
+    uint32 filled = 0;
+    for (uint32 areaId = 0; areaId < AreaStoreCountWL4(); ++areaId)
+    {
+        if (!AreaStoreLookupWL4(areaId))
+            continue;
+
+        GetAreaLevel(areaId);
+        ++filled;
+    }
+
+    areaLevelsFrozen = true;
+    sLog.outString(">> Resolved %u area levels at boot (%u cached in all).", filled, uint32(areaLevels.size()));
+}
+
+void TravelMgr::LoadAreaLevelRows()
+{
+
     // The module migration owns this table. Do not create or bulk-populate it
     // during world startup: a missing migration must be visible, and an empty
     // cache should fall back to the in-memory area-level calculation instead of
@@ -1877,6 +1911,12 @@ void TravelMgr::LoadAreaLevels()
     // AreaTable AreaLevel / parent fallback, so an empty ai_playerbot_zone_level
     // on a stock install does not make EnableRandomTeleports permanently no-op
     // while still avoiding creature scans and DB writes.
+    if (TravelWorldTableMissingCompat("ai_playerbot_zone_level"))
+    {
+        sLog.outErrorDb("TortoiseBots: ai_playerbot_zone_level is missing; using uncached area levels");
+        return;
+    }
+
     bool schemaMissing = false;
     auto result = TravelWorldQueryCompat("SELECT `id`, `level` FROM `ai_playerbot_zone_level`", &schemaMissing);
     if (!result)
@@ -2063,6 +2103,8 @@ void TravelMgr::LoadQuestTravelTable()
     {
         sLog.outString("Running analysis.");
     }
+
+    sLog.outString("Opening log files (previous run retained as .1).");
 
     // Start fresh per-run logs; openLog preserves the previous run.
     TravelOpenRunLogsCompat();
@@ -3522,6 +3564,13 @@ void TravelMgr::LoadMapTransfers()
     {
         for (auto& [endNode, path] : *startNode->GetLinks())
         {
+            // A link the A* refuses (taxi and transport legs, teleports on ForeverCore) is no way to get to the other map: with a
+            // transfer for it MapTransDistance would call a cross-continent goal reachable and the bot would re-pick it on
+            // every pick (ai/playerbot/policy/travel/TravelGraphPolicy.h).
+            if (!ai::travel_graph::MapTransferWanted(TravelLinkUsableCompat(uint8(path->getPathType())),
+                startNode->getPosition()->GetMapId(), endNode->getPosition()->GetMapId()))
+                continue;
+
             AddMapTransfer(*startNode->getPosition(), *endNode->getPosition(), path->getDistance());
         }
     }

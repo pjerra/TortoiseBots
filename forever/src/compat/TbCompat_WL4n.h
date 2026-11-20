@@ -12,6 +12,9 @@
 
 #include "TbCompat_S5.h" // WorldQueryCompat: the single-table SELECT guard (backticked table and column names)
 #include "TbCompat_W3.h" // LegacyFormatW3: printf formatting for the saver's INSERT/UPDATE statements
+#include "TbCompat_WL4.h" // CreatureLevelMaxWL4: the classic creature level (round A2)
+#include "playerbot/policy/travel/CreatureLevelPolicy.h"
+#include "playerbot/policy/travel/TravelGraphPolicy.h"
 
 // The old size format of a log line (T `SIZEFMTD`, shared/Util.h). ForeverCore logs through a printf Format, so the size_t
 // conversion is the same one.
@@ -43,20 +46,45 @@ inline bool TravelNodeStoreWritableCompat()
         WorldSchemaHasCompat("ai_playerbot_travelnode_path", { "node_id", "to_node_id", "nr", "map_id", "x", "y", "z" });
 }
 
+// The saver's one transaction. The save writes a whole graph (hundreds of thousands of path rows): as autocommit statements that
+// is an hour-class stall on the world thread, and a crash between the DELETEs and the last INSERT leaves empty tables. So the
+// DELETEs and every INSERT are appended to one transaction (TravelDbBeginCompat) that commits on the calling thread when the
+// saver is done (TravelDbCommitCompat): the tables hold the old graph or the whole new one.
+inline WorldDatabaseTransaction& TravelNodeTransactionCompat()
+{
+    static WorldDatabaseTransaction transaction;
+    return transaction;
+}
+
+inline void TravelDbBeginCompat()
+{
+    TravelNodeTransactionCompat() = WorldDatabase.BeginTransaction();
+}
+
+inline void TravelDbCommitCompat()
+{
+    WorldDatabaseTransaction& transaction = TravelNodeTransactionCompat();
+    if (!transaction)
+        return;
+
+    WorldDatabase.DirectCommitTransaction(transaction);
+    transaction.reset();
+}
+
 // One write of the saver (after TravelNodeStoreWritableCompat): printf formats (the Turtle rules) sent as text, because
-// ForeverCore's PExecute takes `{}` formats and would silently drop the arguments. DirectExecute, so the DELETE and the INSERTs run
-// on the calling thread in order (the pool's queued statements could interleave). THE one raw statement of this pair, named in
-// tools/test_forever_no_direct_queries.py with its count.
+// ForeverCore's PExecute takes `{}` formats and would silently drop the arguments. Inside the saver's transaction it is appended to
+// it; outside one it is a DirectExecute on the calling thread. THE raw statements of this pair, named in
+// tools/test_forever_no_direct_queries.py with their count.
 template <class... Args>
 inline void TravelNodeExecuteCompat(char const* format, Args... args)
 {
-    WorldDatabase.DirectExecute(LegacyFormatW3(format, args...).c_str());
+    std::string const sql = LegacyFormatW3(format, args...);
+    WorldDatabaseTransaction& transaction = TravelNodeTransactionCompat();
+    if (transaction)
+        transaction->Append(sql.c_str());
+    else
+        WorldDatabase.DirectExecute(sql.c_str());
 }
-
-// ForeverCore's one-way statements run on their own, so there is no unbound transaction to open; the DELETE and the INSERTs keep
-// their order. Turtle keeps its transaction.
-inline void TravelDbBeginCompat() {}
-inline void TravelDbCommitCompat() {}
 
 // ===============================================================================================================
 // THE GENERATOR'S PASSES (generateWalkPaths, generateHelperNodes, removeUselessPaths, calculatePathCosts)
@@ -89,12 +117,29 @@ inline bool MmapTileLoadCompat(uint32 mapId, uint32 instanceId, int x, int y)
 // THE LINK TYPES THE ROUTE MAY USE (TravelNodePath::getCost, the A* of TravelNodeMap::getRoute)
 // ===============================================================================================================
 // `pathType` is TravelNodePathType as its number (0 none, 1 walk, 2 areaTrigger, 3 transport, 4 flightPath, 5 teleportSpell,
-// 6 staticPortal). On ForeverCore taxi and transport legs are loaded from the tables but never used: flight paths, boats,
-// zeppelins and the tram are W5, and a route that needs one is refused so the bot picks another target (does less). The other
-// types keep their legacy rules in getCost. On Turtle every type stays usable, as it always was.
+// 6 staticPortal). On ForeverCore only walks and area triggers are routes (ai::travel_graph::LinkUsableOnForever): taxi and
+// transport legs are loaded from the tables but never used (flights, boats, zeppelins and the tram are W5), and decision D4 allows
+// no travel teleport but the host's logged rescue, so the teleport-spell and static-portal links are refused until W5 too. A route
+// that needs one is refused so the bot picks another target (does less), and reachability (TravelNode::getNodeMap) and the map
+// transfers (TravelMgr::LoadMapTransfers) ask the same rule. On Turtle every type stays usable, as it always was.
 inline bool TravelLinkUsableCompat(uint8 pathType)
 {
-    return pathType != 3 && pathType != 4;
+    return ai::travel_graph::LinkUsableOnForever(pathType);
+}
+
+// May the loader keep a walk link that joins two maps, or whose path runs through a point on another map? A walk is costed as
+// `distance` yards on foot, so such a row (one bad row from the generator is enough) would leave the bot standing at the node: ForeverCore
+// skips it, one log line counts them. Turtle loads its rows as it always did.
+inline bool TravelLoaderChecksWalkMapsCompat()
+{
+    return true;
+}
+
+// The Deeprun Tram exit: a TeleportTo outside the logged rescue, which decision D4 does not allow. Off until W5 brings the transport
+// legs (and with them a way into the tram); a free bot already inside is left to the host's stuck rescue. Turtle keeps the exit.
+inline bool TravelTramExitAllowedCompat()
+{
+    return false;
 }
 
 // Decision D4: the only travel teleport of the slice is the host's rescue of a stuck free bot, so the A* adds no portal
@@ -151,9 +196,15 @@ inline uint32 CreatureTemplateEntryCompat(CreatureInfo const* info) { return inf
 inline std::string CreatureTemplateNameCompat(CreatureInfo const* info) { return info->Name; }
 inline uint64 CreatureTemplateNpcFlagsCompat(CreatureInfo const* info) { return info->npcflag; }
 inline uint32 CreatureTemplateRankCompat(CreatureInfo const* info) { return uint32(info->Classification); }
-// The highest level of the template. ForeverCore has no template level (it comes from the spawn's difficulty and the
-// creature_classic_level data, round A2); 0 means "no level": the route cost adds no threat modifier (does less).
-inline uint32 CreatureTemplateMaxLevelCompat(CreatureInfo const* /*info*/) { return 0; }
+// The highest level of the template, for the creature scan of a link's cost (max_creature_0..2). ForeverCore has no template level:
+// the classic level of the entry is the helper A2 merged (CreatureLevelMaxWL4 = `creature_classic_level`). An entry without a row is
+// not rated (0: it adds no threat reading; the unknown level of the destination rules, kUnknown, must never reach a link's cost).
+// A constant 0 here stored 0,0,0 on every link and made the creature cost modifier always 1 (a level-5 bot routed through a level-50
+// camp as through an empty road).
+inline uint32 CreatureTemplateMaxLevelCompat(CreatureInfo const* info)
+{
+    return info ? ai::travel_level::ThreatLevelOf(CreatureLevelMaxWL4(info->Entry)) : 0u;
+}
 
 // The NPC service flags of a template. T `UNIT_NPC_FLAG_SPIRITHEALER/SPIRITGUIDE` (0x20/0x40), F `UNIT_NPC_FLAG_SPIRIT_HEALER`
 // (0x4000) and no guide flag at all.

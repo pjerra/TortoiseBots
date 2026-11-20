@@ -33,6 +33,9 @@ LIST_W1 = (ROOT / "forever/SLICE-W1.txt").read_text()
 LIST_W4 = (ROOT / "forever/SLICE-W4.txt").read_text()
 CMAKE = (ROOT / "CMakeLists.txt").read_text()
 SCHEMA = (ROOT / "data/sql/world/20260824090000_world.sql").read_text()
+GRAPH_POLICY = (ROOT / "ai/playerbot/policy/travel/TravelGraphPolicy.h").read_text()
+LEVEL_POLICY = (ROOT / "ai/playerbot/policy/travel/CreatureLevelPolicy.h").read_text()
+BOOT_CHECK = (ROOT / "forever/tools/travel_graph_boot_check.sh").read_text()
 ZONE_POLICY = (ROOT / "ai/playerbot/policy/travel/ZoneLevelPolicy.h").read_text()
 PURPOSE_POLICY = (ROOT / "ai/playerbot/policy/travel/TravelPurposeGatePolicy.h").read_text()
 
@@ -231,7 +234,8 @@ class LinkTypes(unittest.TestCase):
     def test_the_f_side_refuses_taxi_and_transport_and_turtle_keeps_all(self):
         f = COMPAT_FN
         t = COMPAT_TN
-        self.assertIn("return pathType != 3 && pathType != 4;", f)
+        # Taxi, transport, teleport-spell and static-portal links are refused (decision 1 and D4); the rule is the tested policy.
+        self.assertIn("return ai::travel_graph::LinkUsableOnForever(pathType);", f)
         self.assertIn("return true;", func(t, "inline bool TravelLinkUsableCompat"))
         # The A* is the only user: every link cost goes through getCost.
         route = func(TRAVEL, "TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal")
@@ -352,6 +356,103 @@ class PathPoints(unittest.TestCase):
         body = func(COMPAT_F_CPP, "void TravelGraphLoadCompat()")
         self.assertLess(body.index("sTravelNodeMap.loadNodeStore();"), body.index("sTravelNodeMap.generateAll();"))
         self.assertIn("if (sPlayerbotAIConfig.generateTravelNodes)", body)
+
+
+class ReviewFixes(unittest.TestCase):
+    """The round-A review's findings (claude-w4a.md, codex-w4a-r2.txt). The decisions are exercised by standalone tests
+    (test_travel_graph_policy.cpp, test_travel_purpose_gate_policy.cpp); these pin that the production code asks them."""
+
+    def test_reachability_and_map_transfers_ask_the_link_rule(self):
+        node_map = func(TRAVEL, "std::vector<TravelNode*> TravelNode::getNodeMap(")
+        self.assertIn("ai::travel_graph::CollectReachable<TravelNode*>", node_map)
+        self.assertIn("TravelLinkUsableCompat(uint8(path->getPathType()))", node_map)
+        transfers = func(MGR, "void TravelMgr::LoadMapTransfers()")
+        self.assertIn("ai::travel_graph::MapTransferWanted(TravelLinkUsableCompat(uint8(path->getPathType()))", transfers)
+        self.assertLess(transfers.index("MapTransferWanted"), transfers.index("AddMapTransfer("))
+        # Teleport-spell and static-portal links are refused too until W5 (D4), and the tram exit is off.
+        self.assertIn("type != kTeleportSpell && type != kStaticPortal", GRAPH_POLICY)
+        tram = func(TRAVEL, "bool LeaveDeeprunTram(")
+        self.assertLess(tram.index("TravelTramExitAllowedCompat()"), tram.index("TeleportTo"))
+        self.assertIn("return false;", func(COMPAT_FN, "inline bool TravelTramExitAllowedCompat()"))
+        self.assertIn("return true;", func(COMPAT_TN, "inline bool TravelTramExitAllowedCompat()"))
+
+    def test_max_creature_comes_from_the_classic_level(self):
+        helper = func(COMPAT_FN, "inline uint32 CreatureTemplateMaxLevelCompat(")
+        self.assertIn("CreatureLevelMaxWL4(info->Entry)", helper)
+        self.assertNotRegex(helper, r"return 0;")
+        cost = func(TRAVEL, "void TravelNodePath::calculateCost(")
+        self.assertIn("ai::travel_graph::RecordCreatureLevel(maxLevelCreature, CreatureTemplateMaxLevelCompat(cInfo)", cost)
+
+    def test_an_unknown_creature_level_is_not_zero(self):
+        body = func(COMPAT_F, "inline int32 CreatureLevelMaxWL4(")
+        self.assertIn("ai::travel_level::FromClassicRow(", body)
+        self.assertNotIn(": 0;", body)
+        # Turtle keeps its template level.
+        self.assertIn("info->level_max", COMPAT_T)
+
+    def test_the_f_needs_use_the_tested_policies(self):
+        need = func(COMPAT_F_CPP, "bool TravelPurposeNeedCompat(")
+        self.assertIn("travel_purpose::GrindPhaseOpen(", need)
+        self.assertNotIn("rpgPhase <= 45", need)
+        self.assertIn("travel_purpose::VendorErrandNeeded(", need)
+        self.assertIn('AI_VALUE(bool, "vendor trip needed")', need)
+        self.assertNotIn('"should sell"', need)
+        self.assertNotIn('"can sell"', need)
+        self.assertIn('values.count("vendor trip needed")', COMPAT_F_CPP)
+
+    def test_the_area_team_is_the_cores(self):
+        body = func(COMPAT_F, "inline uint32 AreaTeamWL4(")
+        self.assertIn("AreaTeamCompat(area)", body)
+        self.assertNotIn("return AREATEAM_NONE;", body)
+
+    def test_turtle_keeps_the_legacy_zone_level_table_check_and_the_log_line(self):
+        self.assertIn("SHOW TABLES LIKE '%s'", COMPAT_T)
+        self.assertIn("return false;", func(COMPAT_F, "inline bool TravelWorldTableMissingCompat("))
+        levels = func(MGR, "void TravelMgr::LoadAreaLevelRows()")
+        self.assertIn('TravelWorldTableMissingCompat("ai_playerbot_zone_level")', levels)
+        self.assertLess(levels.index("TravelWorldTableMissingCompat"), levels.index("TravelWorldQueryCompat("))
+        loader = func(MGR, "void TravelMgr::LoadQuestTravelTable()")
+        self.assertLess(loader.index('"Opening log files (previous run retained as .1)."'), loader.index("TravelOpenRunLogsCompat();"))
+
+    def test_the_loader_refuses_cross_map_walk_links(self):
+        body = func(TRAVEL, "void TravelNodeMap::loadNodeStore()")
+        self.assertIn("ai::travel_graph::WalkLinkMapsConsistent(", body)
+        self.assertIn("ai::travel_graph::WalkPathPointOnLinkMap(", body)
+        self.assertIn("TravelLoaderChecksWalkMapsCompat()", body)
+        self.assertIn("return true;", func(COMPAT_FN, "inline bool TravelLoaderChecksWalkMapsCompat()"))
+        self.assertIn("return false;", func(COMPAT_TN, "inline bool TravelLoaderChecksWalkMapsCompat()"))
+
+    def test_the_saver_writes_in_one_transaction(self):
+        self.assertIn("WorldDatabase.BeginTransaction()", func(COMPAT_FN, "inline void TravelDbBeginCompat()"))
+        self.assertIn("WorldDatabase.DirectCommitTransaction(transaction)", func(COMPAT_FN, "inline void TravelDbCommitCompat()"))
+        execute = func(COMPAT_FN, "inline void TravelNodeExecuteCompat(")
+        self.assertIn("transaction->Append(", execute)
+        save = func(TRAVEL, "void TravelNodeMap::saveNodeStore(")
+        self.assertLess(save.index("TravelDbBeginCompat();"), save.index("DELETE FROM ai_playerbot_travelnode"))
+        self.assertLess(save.rindex("TravelNodeExecuteCompat("), save.index("TravelDbCommitCompat();"))
+
+    def test_the_area_level_cache_is_filled_at_boot_and_then_read_only(self):
+        rows = func(MGR, "void TravelMgr::LoadAreaLevels()")
+        self.assertLess(rows.index("LoadAreaLevelRows();"), rows.index("FreezeAreaLevels();"))
+        freeze = func(MGR, "void TravelMgr::FreezeAreaLevels()")
+        self.assertIn("TravelPrecomputeAreaLevelsCompat()", freeze)
+        self.assertLess(freeze.index("GetAreaLevel(areaId);"), freeze.index("areaLevelsFrozen = true;"))
+        get = func(MGR, "int32 TravelMgr::GetAreaLevel(uint32 area_id)")
+        self.assertLess(get.index("if (areaLevelsFrozen)"), get.index("areaLevels[area_id]"))
+        self.assertIn("return true;", func(COMPAT_F, "inline bool TravelPrecomputeAreaLevelsCompat()"))
+        self.assertIn("return false;", func(COMPAT_T, "inline bool TravelPrecomputeAreaLevelsCompat()"))
+
+    def test_a_released_spawn_index_is_not_rebuilt_silently(self):
+        data = func(COMPAT_F_CPP, "EntryGuidps const& TravelEntryGuidpsData()")
+        self.assertLess(data.index("TravelEntryGuidpsReleased()"), data.index("TravelBuildEntryGuidps()"))
+        self.assertIn("sLog.outError(", data)
+        self.assertIn("TravelEntryGuidpsReleased() = true;", func(COMPAT_F_CPP, "void TravelReleaseEntryGuidps()"))
+
+    def test_the_boot_check_refuses_a_database_that_is_not_scratch(self):
+        call = BOOT_CHECK.index("\nrefuse_unless_scratch\n")
+        self.assertLess(call, BOOT_CHECK.index("trap cleanup EXIT"))
+        self.assertLess(call, BOOT_CHECK.index("for s in $WANT"))
+        self.assertNotIn("DB=${FOREVER_WORLD_DB:-world}", BOOT_CHECK)
 
 
 if __name__ == "__main__":

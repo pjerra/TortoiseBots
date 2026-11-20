@@ -33,10 +33,10 @@ state at every boot. When round B's rows exist, the same code path loads them.
 | The loader reads the store at boot (the graph is round B's data) | `TravelGraphLoadCompat` in `forever/src/compat/TbCompat_WL4.cpp` |
 | One ordered path point per row, appended in place: a path loads in O(its points) | `TravelNodePath::appendPathPoint` |
 | A*, with `TravelRoutePolicy` costs | `TravelNodeMap::getRoute`, `TravelNodePath::getCost` |
-| Taxi and transport links loaded, never used | `TravelLinkUsableCompat` at the top of `getCost` (F: false for 3/4) |
+| Taxi, transport, teleport-spell and static-portal links loaded, never used (section 11) | `TravelLinkUsableCompat` at the top of `getCost`, in `getNodeMap` (reachability) and in `LoadMapTransfers` (F: walks and area triggers only) |
 | No portal edge in the A* (D4: the rescue is the only travel teleport) | `TravelTeleportLinksCompat` around the hearthstone and teleport-spell edges |
 | The generator's map passes on the world thread on F | `TravelGenParallelCompat` at the four `std::async` sites |
-| The saver asks the schema once, then writes synchronously (DELETE before INSERTs) | `TravelNodeStoreWritableCompat` + `TravelNodeExecuteCompat` |
+| The saver asks the schema once, then writes the DELETEs and INSERTs in one transaction (section 11) | `TravelNodeStoreWritableCompat` + `TravelNodeExecuteCompat` + `TravelDbBeginCompat`/`TravelDbCommitCompat` |
 | Loading the map data of a far tile (round B uses it) | `MmapTileLoadCompat` (F: `TerrainInfo::LoadMapAndVMap` + `LoadMMap`) |
 
 The other helpers of the pair are the spellings the two cores differ in (area trigger fields and the teleport condition, creature
@@ -49,11 +49,11 @@ teleport condition) the answer refuses or ignores LESS.
 
 | Legacy | W4-A1 on F |
 |---|---|
-| A taxi (`flightPath`) or transport (`transport`) link | edge cost -1, the A* never takes it, the route is refused |
+| A taxi (`flightPath`), transport, teleport-spell or static-portal link | edge cost -1, the A* never takes it, the route is refused; reachability and map transfers ignore it (section 11) |
 | Hearthstone and teleport-spell edges | not added (D4); Turtle keeps them |
 | A missing node table or column | empty graph, one line; the save is skipped with one line |
 | Generator passes on worker threads | one thread (the generation boot's world thread); Turtle unchanged |
-| A creature template level (path cost) | 0 = no threat modifier |
+| A creature template level (path cost) | the classic level (`CreatureLevelMaxWL4`); an entry without a row is not rated (section 11) |
 | An area trigger's zone test, its condition, a game object's faction | not refused here (the core decides when the bot crosses); Turtle unchanged |
 
 ## 3. Turtle behaviour
@@ -198,3 +198,28 @@ TortoiseBots: the travel-node tables are missing or incomplete; the travel graph
 The two absent-graph lines are the guard's refusal (so no query reached a missing table) and the outcome line; both at INFO,
 the second in `logs/bot.log` (the bot brain's `BotLog`), which is why section 7's check reads both log files. The boot is
 ready in about 60 s including the destination build; nothing about the absent graph delays or fails it.
+
+## 11. The review round (claude-w4a.md 13 findings, codex-w4a-r2.txt 1 medium), decisions 1-5
+
+Tests: `forever/tools/test_travel_graph_policy.cpp` (762 checks, the two-continent graph), `forever/tools/test_travel_purpose_gate_policy.cpp`
+(929 checks) and the wiring pins of `forever/tools/test_wl4_wiring.py` (`ReviewFixes`). The rules live in three headers under
+`ai/playerbot/policy/travel/`, and the production code calls them: `TravelGraphPolicy.h` (link rule, the node walk that IS
+`TravelNode::getNodeMap`, map transfers, walk-map rules, the per-link creature levels), `CreatureLevelPolicy.h` (unknown level),
+`TravelPurposeGatePolicy.h` (`GrindPhaseOpen`, `VendorErrandNeeded`). Each test fails with the old rule put back (mutations run).
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | Taxi/transport links counted as routes (`LoadMapTransfers`, `hasRouteTo`) | `getNodeMap` runs `CollectReachable` with `TravelLinkUsableCompat`; `LoadMapTransfers` asks `MapTransferWanted`. A cross-continent goal behind a zeppelin or a taxi is unreachable and is not offered. The same rule now also refuses teleport-spell (5) and static-portal (6) links on F (D4: no teleport outside the logged rescue), until W5 |
+| 2 | `max_creature` stored 0 | `CreatureTemplateMaxLevelCompat` = `CreatureLevelMaxWL4(entry)` through `ThreatLevelOf` (an unrated entry adds no reading); `calculateCost` records it with `RecordCreatureLevel` |
+| 3 | Grind need lost the beginner clause | `GrindPhaseOpen(level, free, hasRealMaster, phase)`: level 1-4 free pool bots grind all hour (issue #393) |
+| 4 | Unknown level read as 0 | `CreatureLevelMaxWL4` answers `travel_level::kUnknown` (INT32_MAX) for no row or a 0 row: it fits no grind band, quest cap or boss cap |
+| 5 | Vendor need = the #379 pair | F asks `vendor trip needed` (W2's snapshot of `VendorTripNeeded`) through `VendorErrandNeeded`; the registry gate now also needs that value. `BagPressureVendorTrip` is not a value; it is W2's request path |
+| low | `AreaTeamWL4` | `AreaTeamCompat` (the area's faction-group mask, the one `isEnemyHomeZoneFor` reads) |
+| low | Turtle lost `SHOW TABLES` and a log line | `TravelWorldTableMissingCompat` (Turtle: the legacy probe; F: false, the guard does it) in `LoadAreaLevelRows`; "Opening log files" line back |
+| low | cross-map walk links | the loader skips a walk link between two maps and drops a walk whose path point is on another map (F only: `TravelLoaderChecksWalkMapsCompat`), one count line each |
+| low | `LeaveDeeprunTram` | off on F (`TravelTramExitAllowedCompat`); static-portal links are refused above |
+| low | saver autocommit | one `WorldDatabaseTransaction`, appended per statement, `DirectCommitTransaction` at the end |
+| low | boot check drops tables | refuses unless `FOREVER_WORLD_DB` names a scratch database and the server's `WorldDatabaseInfo` uses it; scenario c is now a two-continent graph and reads the skip counts and a per-node reach line (codex r2 medium); **not run live in this round** (run2 and its lock are another session's), the script is syntax-checked and pinned |
+| low | `GetAreaLevel` writes a shared map | `FreezeAreaLevels` fills every DBC area at boot (F), then `GetAreaLevel` only reads |
+| low | released spawn index rebuilt | after the release the index answers empty and logs once, never rebuilds |
+

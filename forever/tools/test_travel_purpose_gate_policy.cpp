@@ -47,6 +47,41 @@ int main()
     for (tp::Group group : { tp::Group::Grind, tp::Group::Town, tp::Group::Vendor, tp::Group::Repair, tp::Group::Quest })
         CHECK(tp::Allows(group, both));
 
+
+    // ---- Decision 3: the grind clock keeps the beginner round-the-clock clause (issue #393) ----------------------------------
+    // A free pool bot below level 5 with no real master grinds the whole hour; everyone else only in the first 45 minutes.
+    for (std::uint32_t phase = 1; phase <= 60; ++phase)
+    {
+        for (std::uint32_t level = 1; level <= 4; ++level)
+        {
+            CHECK(tp::GrindPhaseOpen(level, true, false, phase));   // beginner: open at every phase, including 46..60
+            CHECK(tp::GrindPhaseOpen(level, true, true, phase) == (phase <= 45));  // a real master's bot is no beginner
+            CHECK(tp::GrindPhaseOpen(level, false, false, phase) == (phase <= 45)); // not a free pool bot
+        }
+        for (std::uint32_t level : { 5u, 10u, 60u })
+            CHECK(tp::GrindPhaseOpen(level, true, false, phase) == (phase <= 45)); // level 5+ keeps the clock
+    }
+    CHECK(!tp::GrindPhaseOpen(5, true, false, 46));
+    CHECK(tp::GrindPhaseOpen(4, true, false, 60));
+
+    // ---- Decision 5: the vendor need is the real one, and stays gated on W2's keys (issue #379) -----------------------------
+    // The old pair (`should sell && can sell`) was true for every pool bot holding food; the need is `vendor trip needed`.
+    // 112 bots all holding rations: the loose pair says yes for each, the real need says no, so no errand starts.
+    int errands = 0;
+    for (int bot = 0; bot < 112; ++bot)
+    {
+        bool const shouldSell = true, canSell = true; // the retired pair, true for a bot with food
+        bool const vendorTripNeeded = false;          // nothing worth the walk
+        (void)shouldSell; (void)canSell;
+        if (tp::VendorErrandNeeded(both, vendorTripNeeded))
+            ++errands;
+    }
+    CHECK(errands == 0);
+    CHECK(tp::VendorErrandNeeded(both, true));          // a real need starts one
+    CHECK(tp::VendorErrandNeeded(vendorOnly, true));
+    CHECK(!tp::VendorErrandNeeded(nothing, true));      // W2's keys absent: no vendor errand whatever the value says
+    CHECK(!tp::VendorErrandNeeded(questOnly, true));
+
     std::printf("%d checks, %d failed\n", g_checks, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

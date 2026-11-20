@@ -50,6 +50,18 @@ inline bool TravelLinkUsableCompat(uint8 /*pathType*/)
     return true;
 }
 
+// The loader keeps every row it always kept (a walk link between two maps included).
+inline bool TravelLoaderChecksWalkMapsCompat()
+{
+    return false;
+}
+
+// The Deeprun Tram exit teleport stays, as it always was.
+inline bool TravelTramExitAllowedCompat()
+{
+    return true;
+}
+
 // The A* portal edges (hearthstone, teleport spells) are the legacy ones.
 inline bool TravelTeleportLinksCompat()
 {
