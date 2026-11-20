@@ -11,6 +11,7 @@
 // voted by the greed-only roll code, so they would time out), a lock whose key the bot does not carry (the core's `Use` would not look: the host does).
 #pragma once
 
+#include "runtime/GossipOrderPolicy.h"
 #include "runtime/RemoteCommanderPolicy.h"
 #include "runtime/RemoteCommanderTasks.h"
 
@@ -40,17 +41,18 @@ inline char const* LootRightsText() { return "nothing this bot may loot"; }
 inline char const* LootEmptyText() { return "Nothing is left to loot"; }
 
 // ---- the grammar ----
-enum class Verb : uint8_t { None, Open, Loot, LootMethod, Use };
+enum class Verb : uint8_t { None, Open, Loot, LootMethod, Use, Gossip };
 
 struct TaskOrder
 {
     Verb verb = Verb::None;
     RC::TargetSpec spec;            // open, loot: the target as the policy typed it (a handle of ReadFacts, or entry:id@x,y,z)
-    std::string bot;                // open, loot, use
+    std::string bot;                // open, loot, use, gossip
     uint32_t itemId = 0;            // loot: only this item (0 = everything); use: the item
     int method = -1;                // lootmethod: RC::kLoot*
     int threshold = 0;
     bool hasThreshold = false;
+    GossipOrder::Request gossip;    // gossip: the NPC's entry, the bot and the menu line (index or text)
 };
 
 // `words` = the order split by RC::SplitOrderArgs, the verb word first and lower case. False with a code and a message in the legacy words.
@@ -104,6 +106,18 @@ inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> con
         out.itemId = request.itemId;
         out.bot = request.bot;
         out.spec = request.spec;
+        return true;
+    }
+    if (verb == "gossip")
+    {
+        // The policy's own grammar (`gossip <entry> <bot> <index | "text">`, GossipOrder::ParseRequest): an index is 1-based.
+        std::string rest;
+        for (size_t i = 0; i < args.size(); ++i)
+            rest += (i ? " " : "") + args[i];
+        if (!GossipOrder::ParseRequest(rest, out.gossip))
+            return invalid("gossip <npc entry> <bot> <option number 1-15 | \"option text\">");
+        out.verb = Verb::Gossip;
+        out.bot = out.gossip.bot;
         return true;
     }
     code = "invalid";
@@ -208,13 +222,14 @@ inline uint32_t PackState(uint32_t lootState, uint32_t goState) { return (lootSt
 inline bool AlreadyUsed(uint32_t goState) { return goState != 1u; }
 
 // ---- the task clock ----
-enum class Kind : uint8_t { Open, Loot };
+enum class Kind : uint8_t { Open, Loot, Gossip };
 
 struct TaskRec
 {
     Kind kind = Kind::Open;
     bool lootLike = false;          // loot window at the end: a corpse, or a chest
     bool corpse = false;            // the target is a creature corpse (else a game object)
+    std::string gossipPicked;       // Gossip: the menu line whose option was selected (the answer's payload)
     uint32_t itemId = 0;
     RC::TaskState state;
     bool actStarted = false;
@@ -236,7 +251,8 @@ inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, f
     r.lootLike = lootLike;
     r.corpse = corpse;
     r.itemId = itemId;
-    r.state = RC::MakeTask(kind == Kind::Open ? RC::TaskKind::Open : RC::TaskKind::Loot, startDistance, true, lootLike);
+    r.state = RC::MakeTask(kind == Kind::Gossip ? RC::TaskKind::Gossip : kind == Kind::Open ? RC::TaskKind::Open : RC::TaskKind::Loot,
+        startDistance, true, lootLike);
     return r;
 }
 
@@ -277,6 +293,9 @@ inline bool ActDone(TaskRec const& r, Obs const& o)
 {
     if (!r.actStarted)
         return false;
+    // The core runs the choice inside the select handler (commands/Commander.cpp TaskActDone: "the act is over at once").
+    if (r.kind == Kind::Gossip)
+        return true;
     if (r.lootLike)
         return o.watchFound && o.windowFinished;
     return RC::JudgeObjectEffect(o.objectPresent, r.baseline, o.objectState) == RC::ObjectEffect::Reacted;
@@ -294,6 +313,13 @@ inline Step Failed(char const* code, std::string message)
 // The success answer of a finished act.
 inline Step Finished(TaskRec const& r, Obs const& o)
 {
+    if (r.kind == Kind::Gossip)
+    {
+        Step s;
+        s.what = Do::Succeed;
+        s.message = r.gossipPicked.empty() ? std::string("gossip") : r.gossipPicked;
+        return s;
+    }
     if (r.lootLike)
     {
         if (!o.watchFound)
@@ -329,7 +355,7 @@ inline Step Advance(TaskRec& r, Obs const& o, uint32_t diffMs)
     facts.actDone = r.state.stage == RC::TaskStage::Act && ActDone(r, o);
 
     // A used door that vanished (despawn, map change) is no "opened".
-    if (o.botAvailable && r.state.stage == RC::TaskStage::Act && r.actStarted && !r.lootLike && !o.objectPresent)
+    if (o.botAvailable && r.state.stage == RC::TaskStage::Act && r.actStarted && !r.lootLike && r.kind != Kind::Gossip && !o.objectPresent)
         return Failed(RC::kCodeFailed, "The object disappeared while the bot used it.");
 
     // A refused attempt that may pass the next look.

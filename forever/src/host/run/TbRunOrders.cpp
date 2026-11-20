@@ -747,6 +747,8 @@ OrderAnswer IssueOrder(RunRec& rec, std::string const& order, uint32 nowMs, bool
             return tasks::Begin(rec, party.lead, party.bots, p.task, nowMs);
         case od::Verb::LootMethod:
             return tasks::SetLootMethod(rec, party.lead, party.bots, p.task);
+        case od::Verb::Gossip:
+            return tasks::BeginGossip(rec, party.lead, party.bots, p.task, nowMs);
         case od::Verb::Use:
             return Refuse("unsupported", tasks::UseUnsupportedText());
         default:

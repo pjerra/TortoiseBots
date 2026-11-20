@@ -421,8 +421,8 @@ def emit_sql(legs, units, bosses, header):
 
 
 def emit_tsv(legs, units):
-    """The test's input: one line per step, then one per unit row (`U`); an empty `entries` is `-` (a TSV keeps no empty last field)."""
-    out = []
+    """The test's input: the plan row (`P`), one line per step, then one per unit row (`U`); an empty `entries` is `-` (a TSV keeps no empty last field)."""
+    out = ['P\t%d\t3840\t\t3671' % MAP]
     for leg, name, steps in legs:
         for s in steps:
             out.append('\t'.join([str(leg), name, str(s.seq), s.kind, str(s.entry), '%.3f' % s.x, '%.3f' % s.y,

@@ -410,9 +410,62 @@ static void TestExecutorTexts()
     CHECK(std::fabs(p.y - 1.5f) < 0.001f && std::fabs(p.z - 3.0f) < 0.001f);
 }
 
+// WC: the gossip task of the Naralex event. The act is over at once (the core runs the choice inside the select handler), the payload is the menu line
+// the matcher picked, and the two refusal texts are GossipOrder's own.
+static void TestGossip()
+{
+    tk::TaskRec rec = tk::MakeRec(tk::Kind::Gossip, false, false, 0, 3.0f);
+    CHECK(rec.state.kind == RC::TaskKind::Gossip);
+    tk::Obs o;
+    o.botAvailable = true;
+    o.inRange = true;
+    o.distance = 3.0f;
+    tk::Step begin = tk::Advance(rec, o, 500);
+    CHECK(begin.what == tk::Do::BeginAct);              // in range: the gossip act starts at once
+    tk::NoteActStart(rec, true, false, "", "");
+    rec.gossipPicked = "Let the event begin!";
+    tk::Step step = tk::Advance(rec, o, 500);
+    CHECK(step.what == tk::Do::Succeed && step.message == "Let the event begin!");
+    // not started yet: the walk stage keeps it waiting, the act stage answers once it started
+    tk::TaskRec walk = tk::MakeRec(tk::Kind::Gossip, false, false, 0, 12.0f);
+    tk::Obs far;
+    far.distance = 12.0f;
+    tk::Step s2 = tk::Advance(walk, far, 500);
+    CHECK(s2.what != tk::Do::Succeed);
+    // the grammar the policy sends: "gossip <entry> <bot> <index>"
+    od::Parsed p = Parse("gossip 3678 Mtank 1");
+    CHECK(p.verb == od::Verb::Gossip && p.task.verb == tk::Verb::Gossip && p.task.bot == "Mtank");
+    CHECK(p.task.gossip.entry == 3678 && p.task.gossip.byIndex && p.task.gossip.index == 1);
+    Parse("gossip 3678 Mtank 0", false);
+    Parse("gossip 3678 Mtank 16", false);
+    Parse("gossip 0 Mtank 1", false);
+    Parse("gossip 3678 1", false);
+    p = Parse("gossip 3678 Mtank \"Let the event begin!\"");
+    CHECK(!p.task.gossip.byIndex && p.task.gossip.text == "Let the event begin!");
+    // the matcher: by index (1-based), and a service line is never picked
+    std::vector<TortoiseBots::GossipOrder::Option> menu(2);
+    menu[0].text = "Let the event begin!";
+    menu[0].sender = 202;
+    menu[1].text = "Let me browse your goods.";
+    menu[1].icon = 1;             // GOSSIP_OPTION_VENDOR
+    TortoiseBots::GossipOrder::Request byIndex;
+    byIndex.byIndex = true;
+    byIndex.index = 1;
+    TortoiseBots::GossipOrder::Match m = TortoiseBots::GossipOrder::MatchOption(menu, byIndex);
+    CHECK(m.ok && m.listIndex == 0);
+    byIndex.index = 2;
+    m = TortoiseBots::GossipOrder::MatchOption(menu, byIndex);
+    CHECK(!m.ok && m.code == std::string(TortoiseBots::GossipOrder::kCodeNoOption));
+    TortoiseBots::GossipOrder::Request byText;
+    byText.text = "begin";
+    m = TortoiseBots::GossipOrder::MatchOption(menu, byText);
+    CHECK(m.ok && m.listIndex == 0);
+}
+
 int main()
 {
     TestGrammar();
+    TestGossip();
     TestMethod();
     TestLock();
     TestDoor();

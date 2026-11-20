@@ -30,6 +30,7 @@
 #include "Loot.h"
 #include "Map.h"
 #include "MapManager.h"
+#include "InstanceScript.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Pet.h"
@@ -1105,6 +1106,17 @@ public:
             o.coreState = uint32(best->GetGoState());
         }
         return o;
+    }
+
+    // WC: the instance's own data by id (a hold step done by data: the Disciple of Naralex's state, Mutanus's). A map without an instance
+    // script answers "not known" (eventData -1: the policy pauses and says the map has none).
+    bool InstanceData(std::uint32_t id, long long& out) override
+    {
+        InstanceScript* script = _c.map ? _c.map->GetInstanceScript() : nullptr;
+        if (!script)
+            return false;
+        out = static_cast<long long>(script->GetData(id));
+        return true;
     }
 
     // wait_clear: the living hostile creatures within `range` of the lead (HostileCreaturesAround), engaged = in a fight with a party bot or its pet.

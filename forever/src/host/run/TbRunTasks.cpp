@@ -35,6 +35,8 @@
 #include "Player.h"
 #include "Spell.h"
 #include "WorldSession.h"
+#include "GossipDef.h"
+#include "NPCPackets.h"
 
 #include "TbBotMgr.h"
 #include "compat/TbCompat_I2.h"
@@ -66,6 +68,7 @@ struct Task
     TaskRec rec;
     uint32 entry = 0;               // the target's entry (for the events and the texts)
     bool goTarget = false;          // a game object (else a corpse)
+    GossipOrder::Request gossip;    // Gossip: the entry, the bot and the menu line the order named
     uint32 walkSeq = 0;             // the order seq of the newest `come`
     std::string order;              // the order the policy sent
     uint32 startedMs = 0;
@@ -182,7 +185,11 @@ struct Target
 {
     GameObject* go = nullptr;
     Creature* corpse = nullptr;
-    WorldObject* object() const { return go ? static_cast<WorldObject*>(go) : static_cast<WorldObject*>(corpse); }
+    Creature* npc = nullptr;        // a living creature (gossip)
+    WorldObject* object() const
+    {
+        return go ? static_cast<WorldObject*>(go) : corpse ? static_cast<WorldObject*>(corpse) : static_cast<WorldObject*>(npc);
+    }
 };
 
 Target TargetOf(Player* bot, ObjectGuid guid, bool corpsesToo)
@@ -197,10 +204,12 @@ Target TargetOf(Player* bot, ObjectGuid guid, bool corpsesToo)
         if (go && go->isSpawned())
             t.go = go;
     }
-    else if (corpsesToo && guid.IsAnyTypeCreature())
+    else if (guid.IsAnyTypeCreature())
     {
         Creature* creature = ObjectAccessor::GetCreature(*bot, guid);
-        if (creature && !creature->IsAlive())
+        if (creature && creature->IsAlive())
+            t.npc = creature;
+        else if (corpsesToo && creature && !creature->IsAlive())
             t.corpse = creature;
     }
     return t;
@@ -324,6 +333,54 @@ ActResult BeginObjectAct(Task& task, Player* bot, PlayerbotAI* ai, GameObject* g
     WorldPackets::GameObject::GameObjUse packet{ WorldPacket(CMSG_GAME_OBJ_USE) };
     packet.Guid = go->GetGUID();
     session->HandleGameObjectUseOpcode(packet);
+    return Started();
+}
+
+// A gossip line of the menu the core built for this bot: the two packets a client sends. The hello runs the NPC's script (that is what prepares menu
+// 202 for the Disciple of Naralex); the choice is matched against that menu (GossipOrder's own matcher) and handed to the select handler, which runs
+// sScriptMgr.OnGossipSelect or Player::OnGossipSelect. The option sent is the menu item's own id (the core's handler looks the item up by it).
+ActResult BeginGossipAct(Task& task, Player* bot, Creature* npc)
+{
+    if (!npc || !npc->IsAlive())
+        return ActFailed(GossipOrder::kCodeNoNpc, "The NPC died or despawned.");
+    if (npc->IsInCombat())
+        return ActFailed(RC::kCodeInCombat, "The NPC is in combat.");
+    if (!bot->GetSession())
+        return ActFailed(RC::kCodeFailed, "The bot has no session.");
+    if (!npc->IsWithinDistInMap(bot, INTERACTION_DISTANCE))
+        return ActFailed(RC::kCodeUnreachable, "The bot could not get close enough to the NPC to talk.", ActStart::Retry);
+
+    bot->PlayerTalkClass->ClearMenus();
+    WorldPackets::NPC::Hello hello{ WorldPacket(CMSG_GOSSIP_HELLO) };
+    hello.Unit = npc->GetGUID();
+    bot->GetSession()->HandleGossipHelloOpcode(hello);
+
+    GossipMenu const& menu = bot->PlayerTalkClass->GetGossipMenu();
+    std::vector<GossipOrder::Option> options;
+    options.reserve(menu.GetMenuItemCount());
+    for (GossipMenuItem const& item : menu.GetMenuItems())
+    {
+        GossipOrder::Option option;
+        option.text = item.OptionText;
+        option.icon = uint8(item.OptionNpc);
+        option.sender = item.Sender;
+        option.action = uint32(item.GossipOptionID);
+        option.coded = item.BoxCoded;
+        options.push_back(option);
+    }
+    GossipOrder::Match const match = GossipOrder::MatchOption(options, task.gossip);
+    if (!match.ok)
+    {
+        bot->PlayerTalkClass->SendCloseGossip();
+        return ActFailed(match.code.c_str(), match.message);
+    }
+    GossipMenuItem const& picked = menu.GetMenuItems()[match.listIndex];
+    task.rec.gossipPicked = picked.OptionText;
+    WorldPackets::NPC::GossipSelectOption select{ WorldPacket(CMSG_GOSSIP_SELECT_OPTION) };
+    select.GossipUnit = npc->GetGUID();
+    select.GossipOptionID = picked.GossipOptionID;
+    select.GossipID = int32(menu.GetMenuId());
+    bot->GetSession()->HandleGossipSelectOptionOpcode(select);
     return Started();
 }
 
@@ -470,7 +527,9 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
         if (WorldObject* object = target.object())
         {
             o.distance = bot->GetDistance(object);
-            o.inRange = target.go ? target.go->IsWithinDistInMap(bot) : o.distance <= kCorpseRangeYd;
+            o.inRange = target.go ? target.go->IsWithinDistInMap(bot)
+                                  : target.npc ? target.npc->IsWithinDistInMap(bot, INTERACTION_DISTANCE)
+                                               : o.distance <= kCorpseRangeYd;
         }
         o.moving = sServerFacade.isMoving(bot) || !bot->movespline->Finalized();
         if (task.walkSeq)
@@ -518,7 +577,14 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
         {
             ActResult result;
             std::string methodWhy;
-            if (!LeadGroupLoot(lead ? lead : bot, methodWhy))
+            if (task.rec.kind == Kind::Gossip)
+            {
+                // A menu line has nothing to do with loot: the group's method is not read for it.
+                result = HoldForAct(ai, bot)
+                    ? ActFailed(RC::CastReasonCode("moving"), RC::OpenRefusalText("moving", 0), ActStart::Retry)
+                    : BeginGossipAct(task, bot, target.npc);
+            }
+            else if (!LeadGroupLoot(lead ? lead : bot, methodWhy))
                 result = ActFailed("loot-method", methodWhy + ": no loot or object is used while the group's loot method is not group loot.");
             else if (HoldForAct(ai, bot))
                 result = ActFailed(RC::CastReasonCode("moving"), RC::OpenRefusalText("moving", 0), ActStart::Retry);
@@ -606,6 +672,70 @@ OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, T
     bool const lootLike = isLoot || chest;
     task.rec = MakeRec(isLoot ? Kind::Loot : Kind::Open, lootLike, target.corpse != nullptr, isLoot ? order.itemId : 0, distance,
         target.go && target.go->GetGoType() == GAMEOBJECT_TYPE_GOOBER && !lootLike);
+    task.startedMs = nowMs;
+    rt.byBot[task.bot] = task;
+    rt.state.carrier = task.bot;
+    rt.state.reply = 0;
+    rt.state.text.clear();
+    ++TotalsRw().began;
+    return Accepted("bot:" + NameOf(bot), 1);
+}
+
+// The nearest living creature of the entry around the bot (the plan's own NPC, by what a client would see in range).
+bool FindNpcByEntry(Player* bot, uint32 entry, float yd, ObjectGuid& out)
+{
+    std::vector<RC::EntryCandidate> found;
+    std::map<uint64, ObjectGuid> keys;
+    std::list<Creature*> bodies;
+    bot->GetCreatureListWithEntryInGrid(bodies, entry, yd + 1.0f);
+    for (Creature* creature : bodies)
+        if (creature && creature->IsAlive() && creature->isSpawned())
+        {
+            uint64 const key = GuidKeyCompat(creature->GetGUID());
+            keys[key] = creature->GetGUID();
+            found.push_back(RC::EntryCandidate{ key, bot->GetDistance(creature) });
+        }
+    uint64 key = 0;
+    if (!RC::PickNearestEntry(found, yd, key))
+        return false;
+    out = keys[key];
+    return true;
+}
+
+OrderAnswer BeginGossip(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs)
+{
+    GossipOrder::Request const& request = order.gossip;
+    Player* bot = nullptr;
+    for (Player* candidate : bots)
+        if (candidate && strcasecmp(candidate->GetName().c_str(), request.bot.c_str()) == 0)
+            bot = candidate;
+    if (!bot)
+        return Refuse("no-bot", "That bot is not in your commanded group.");
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !bot->IsAlive() || bot->IsInFlight() || bot->IsBeingTeleported())
+        return Refuse("unavailable", NameOf(bot) + " is dead, on a taxi, teleporting or has no AI.");
+    // The gate: the NPC of the run's own gossip step, or one of AiPlayerbot.BotGossipNpcs. The hello runs the NPC's scripts, so nothing else is talked to.
+    GossipOrder::RunGossipStep const step = DungeonRun::RunGossipStepOf(&rec.run);
+    if (!GossipOrder::MayTalkTo(sPlayerbotAIConfig.botGossipNpcs, step, request.entry))
+        return Refuse(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
+    ObjectGuid npcGuid;
+    if (!FindNpcByEntry(bot, request.entry, GossipOrder::kSearchYards, npcGuid))
+        return Refuse(GossipOrder::kCodeNoNpc, "No living NPC of entry " + std::to_string(request.entry) + " is within " +
+            std::to_string(int(GossipOrder::kSearchYards)) + " yd of " + NameOf(bot) + ".");
+    Creature* npc = ObjectAccessor::GetCreature(*bot, npcGuid);
+    if (!npc)
+        return Refuse(GossipOrder::kCodeNoNpc, "The NPC is gone.");
+    RunTasks& rt = Table()[rec.leader];
+    if (rt.byBot.count(bot->GetGUID()))
+        return Refuse(RC::kCodeBusy, NameOf(bot) + " is carrying out an earlier order.");
+    if (bot != lead && h3::CommanderGuid(bot->GetGUID()) != lead->GetGUID())
+        return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`).");
+    Task task;
+    task.bot = bot->GetGUID();
+    task.target = npcGuid;
+    task.entry = request.entry;
+    task.gossip = request;
+    task.rec = MakeRec(Kind::Gossip, false, false, 0, bot->GetDistance(npc));
     task.startedMs = nowMs;
     rt.byBot[task.bot] = task;
     rt.state.carrier = task.bot;

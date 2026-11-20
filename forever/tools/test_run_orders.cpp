@@ -99,7 +99,7 @@ static void TestParse()
 
     // Refused by grammar: the verbs the module does not carry out are `unsupported`, a broken one `invalid`.
     for (char const* order : { "escape from 1 2 3 4 5 6", "rescue from a to 1 2 3", "fetch 1 2 3", "return Mdps 389", "rejoin Mdps",
-             "ritual 5 A B", "gossip 5 Mdps 1", "state 5", "enter near" })
+             "ritual 5 A B", "state 5", "enter near" })
     {
         Parse(order, false);
         CHECK(CodeOf(order) == "unsupported");
@@ -115,6 +115,11 @@ static void TestParse()
     CHECK(Parse("lootmethod ffa").verb == od::Verb::LootMethod);
     CHECK(Parse("open entry:1 Mdps").verb == od::Verb::Open);
     CHECK(Parse("use 5 Mdps").verb == od::Verb::Use);
+    // WC: the plan's own gossip step has a grammar (`gossip <entry> <bot> <option>`, GossipOrder); the executor judges the menu (test_run_tasks).
+    CHECK(Parse("gossip 3678 Mtank 1").verb == od::Verb::Gossip);
+    CHECK(Parse("gossip 3678 Mtank 1").bot == "Mtank");
+    CHECK(Parse("gossip 3678 Mtank 1").task.gossip.index == 1 && Parse("gossip 3678 Mtank 1").task.gossip.entry == 3678);
+    CHECK(Parse("gossip 3678 Mtank \"Let the event begin!\"").task.gossip.text == "Let the event begin!");
     for (char const* order : { "loot", "loot 5", "lootmethod", "lootmethod sideways", "open", "open entry:0 Mdps", "use", "use 5" })
     {
         Parse(order, false);

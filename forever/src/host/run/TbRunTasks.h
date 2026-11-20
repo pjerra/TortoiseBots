@@ -38,6 +38,10 @@ namespace tasks
 // lead's map and instance, the lead first (the executor's party). A refusal changes nothing.
 OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
 
+// `gossip`: the bot talks to the NPC through the two packets a client sends (hello, then the option), the choice judged on the menu the core built
+// (GossipOrder). Only the NPC a gossip step of the run's own plan names, or one of AiPlayerbot.BotGossipNpcs, may be talked to.
+OrderAnswer BeginGossip(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
+
 // `lootmethod`: the lead bot, the group's leader, sets it through the handler a client's window uses; the answer reads the method back from the group.
 OrderAnswer SetLootMethod(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order);
 
