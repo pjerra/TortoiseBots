@@ -166,8 +166,8 @@ The merge also carries the two findings of round A2's review (`codex-w4a2.txt`),
 | Policy tests (standalone, g++ C++17) | `test_zone_level_policy` 13 checks 0 failed; `test_travel_purpose_gate_policy` 22 checks 0 failed; `tools/test_travel_point_key.cpp` all checks passed (fails to compile before the key fix) |
 | Wiring | `forever/tools/test_wl4_wiring.py` 30 tests OK; all `forever/tools/test_*wiring.py` 179 tests OK (6 skipped); `tools.test_forever_no_direct_queries` + `tools.test_guild_founding_wiring` 8 OK |
 | `tools/verify_all.sh` (laptop) | OK through step 6 (OKF, command table, surface, wiring, unit tests, 483 standalone tests, decision trail); step 7 fails with `TortoiseBots host-contract check failed: required core file is missing: src/game/SessionTransport.h`, the same failure `tbf/main` (10efad5bb) gives against the same `../tortoise-wow` checkout - no new failure |
-| Turtle `vm-build` | `COMPILE_SECONDS=1318 CMAKE_RC=0 MAKE_RC=0`, mangosd and realmd written (statics `449c92c6e487...`/`bbb4388460...`, sha256 of each) on the merged tree. Re-run on the final committed tree after the notes commit |
-| Turtle `vm-test tb` | see the final report; the same suite `verify_all` runs locally |
+| Turtle `vm-build` | `COMPILE_SECONDS=1318 CMAKE_RC=0 MAKE_RC=0`, mangosd and realmd written (sha256 `449c92c6e48794e5...`/`bbb438846082b349...`), then `COMPILE_SECONDS=19 CMAKE_RC=0 MAKE_RC=0` on the committed tree (`sha=712c80ae7`, statics identical) |
+| Turtle `vm-test tb` | `RESULT: PASS kind=tb wt=wt-w4a1 sha=91f94b5cb dirty=0 files=4027 rc=0 vm_duration=1204s` and again `... sha=b84e28b84 dirty=0 ... vm_duration=1515s` (logs `wt-w4a1-20261120-200941-1153988-a64d.log`, `wt-w4a1-20261120-203011-1313980-9a9e.log`); the only later change is one word of the runtime check's scenario label |
 | Runtime check (section 7) | `RESULT: PASS` in one run on the slot-7 binary: scenarios a, b, c and final, 33 checks, rev `91f94b5cb`'s harness; the reviewed tree (`07a57c8b2`) fails scenario a with `HARNESS_RC=1` (5 checks) |
 
 ## 10. Live (forever-run2, our binary in place, console only)
