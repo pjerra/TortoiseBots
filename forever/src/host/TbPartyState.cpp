@@ -20,6 +20,7 @@
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "Corpse.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ThreatManager.h"
@@ -27,10 +28,12 @@
 
 #include "TbBotSession.h"
 #include "compat/TbCompat_Unit.h"
+#include "compat/TbCompat_P.h"
 #include "compat/TbCompat_V.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/policy/death/SafeRevivePolicy.h"
 #include "PlayerbotAIStorage.h"
 
 namespace TortoiseBots
@@ -135,6 +138,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     AiObjectContext* context = ai ? ai->GetAiObjectContext() : nullptr;
     ObjectGuid const guid = bot->GetGUID();
+    BotMgr::LifeInfo const lifeInfo = BotMgr::Instance().GetLifeInfo(guid);
 
     uint32 const hp = uint32(bot->GetHealth());
     uint32 const hpMax = uint32(bot->GetMaxHealth());
@@ -322,6 +326,51 @@ Rec StateRec(Player* bot, Readiness& ready)
     // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
     // a new slot when two or fewer are free.
     rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());
+
+    // ---- W1 (world life): the free flag and what the bot has done since login ----
+    rec.B("free", lifeInfo.free).N("kills", lifeInfo.kills).N("deaths", lifeInfo.deaths);
+    rec.N("xp", PlayerXPCompat(bot)).N("xpnext", PlayerNextLevelXPCompat(bot));
+    rec.N("bags", bot->GetFreeInventorySlotCount());
+    rec.B("sick", bot->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS));
+    if (ai)
+        rec.N("dur", AI_VALUE(uint8, "lowest durability"));
+    rec.N("rescue", lifeInfo.rescues).N("tele", lifeInfo.teleports);
+    if (ai && context && context->GetValue<Unit*>("grind target"))
+        if (Unit* grind = context->GetValue<Unit*>("grind target")->Get())
+            rec.S("grind", std::to_string(grind->GetEntry()) + ":" + std::to_string(grind->GetLevel()) + ":" + Fixed(bot->GetDistance(grind), 1));
+    // corpserun: release (a body that will release) | walk | delay | safe-spot | reclaim | healer | rescue; empty while alive.
+    std::string phase;
+    float ghostYd = -1.0f;
+    if (!alive)
+    {
+        if (!ghost)
+            phase = "release";
+        else
+        {
+            phase = "walk";
+            Corpse* corpse = bot->GetCorpse();
+            bool const corpseHere = corpse && corpse->GetMapId() == bot->GetMapId();
+            if (corpseHere)
+            {
+                ghostYd = bot->GetDistance(corpse);
+                bool const unsafe = ai && ai->safeReviveUnsafeSinceMs_ && ai->safeReviveCorpseGhostTime_ == corpse->GetGhostTime();
+                if (unsafe && !TortoiseBots::SafeReviveWaitExpired(ai->safeReviveUnsafeSinceMs_, WorldTimer::getMSTime()))
+                    phase = "safe-spot";
+                else if (corpse->IsWithinDistInMap(bot, (float)CORPSE_RECLAIM_RADIUS, true))
+                {
+                    int64 const wait = int64(corpse->GetGhostTime()) + int64(bot->GetCorpseReclaimDelay(corpse->GetType() == CORPSE_RESURRECTABLE_PVP)) - int64(time(nullptr));
+                    phase = wait > 0 ? "delay" : "reclaim";
+                }
+            }
+            if (ai && AI_VALUE2(int32, "manual int", "w1 ghost leg") == 1)
+                phase = "healer";
+            if (lifeInfo.rescuedThisDeath)
+                phase = "rescue";
+        }
+    }
+    rec.S("corpserun", phase);
+    if (ghostYd >= 0.0f)
+        rec.N("ghostyd", static_cast<int32>(ghostYd + 0.5f));
     return rec;
 }
 

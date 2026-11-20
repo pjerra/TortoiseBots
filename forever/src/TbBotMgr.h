@@ -7,11 +7,13 @@
 #include "ObjectGuid.h"
 #include "ai/playerbot/FollowTrailPolicy.h"   // shared with the Turtle build, no core includes
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
+#include "ai/playerbot/policy/death/GhostRescuePolicy.h"   // W1: when a ghost may be rescued (core-free)
 #include <map>
 #include <set>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <ctime>
 #include <vector>
 
 class Player;
@@ -29,8 +31,9 @@ public:
     bool Enabled() const { return _enabled; }
     uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
 
-    // Empty string = started. Otherwise the reason it was refused. An empty master = the bot stands where it is.
-    std::string Login(ObjectGuid characterGuid, ObjectGuid master);
+    // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
+    // loots and corpse-runs on its own (W1); without `free` it stands where it is.
+    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false);
 
     // Makes a new level 1 character on the account and saves it. Empty string = done.
     std::string CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender);
@@ -57,6 +60,32 @@ public:
     std::string GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid);
     // `.tb ungroup <bot>`: the bot leaves its party and has no master afterwards. Empty string = done, else the reason.
     std::string Ungroup(ObjectGuid botGuid);
+
+    // W1: a free bot has no master and plays the grind/live kit. `.tb free <bot> on|off`; empty string = done, else the reason.
+    std::string SetFree(ObjectGuid characterGuid, bool on);
+    bool IsFreeBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.free; }
+
+    // W1: what `.tb state` keeps of a bot's life: the free flag, kills and deaths since login, ghost rescues and teleports taken,
+    // and whether the last revive was a reclaim (0), the spirit healer (1) or a rescue (2).
+    struct LifeInfo
+    {
+        bool free = false;
+        uint32 kills = 0;
+        uint32 deaths = 0;
+        uint32 rescues = 0;
+        uint32 teleports = 0;
+        bool rescuedThisDeath = false;
+        bool wasGhost = false;            // the release teleport was already counted for this death
+        time_t diedAt = 0;
+        int reviveHow = -1;
+        float ghostYd = -1.0f;            // yards to the corpse while a ghost on its map (-1 = no answer)
+        std::string phase;                // release | walk | delay | safe-spot | reclaim | healer | rescue (empty = alive)
+    };
+    LifeInfo GetLifeInfo(ObjectGuid characterGuid) const;
+    void NoteKill(ObjectGuid characterGuid);
+    // The engine's revive paths call this through TbCompat_W1.h: kind 0 = reclaimed at the body, 1 = the spirit healer.
+    void NoteReviveKind(ObjectGuid characterGuid, int kind);
+    // `.tb tele` counts in `tele=`: every teleport the bot took, any cause.
 
     // `.tb engine <character> on|off`: Empty string = done, else the reason it was refused.
     std::string SetEngine(ObjectGuid characterGuid, bool on);
@@ -177,6 +206,18 @@ private:
         std::string blockText;
         uint32 catchups = 0;
         bool wasDead = false;
+        // W1: a masterless bot that plays the world (free kit); its kills/deaths, the ghost rescue tracker and the counters of `.tb state`.
+        bool free = false;
+        uint32 kills = 0;
+        uint32 deaths = 0;
+        uint32 rescues = 0;
+        uint32 teleports = 0;
+        bool rescuedThisDeath = false;
+        bool wasGhost = false;            // the release teleport was already counted for this death
+        time_t diedAt = 0;
+        int reviveHow = -1;
+        float ghostYd = -1.0f;
+        TortoiseBots::GhostRescueProgress ghostRescue;
         bool deadEngineFailed = false;  // N2: the dead engine could not be built while the commander is away (logged once per death)
         uint32 deadMs = 0;              // N2/N3: how long the body has lain (reset when alive): the bound after which a commanded bot releases itself
         bool runBack = false;
@@ -194,6 +235,8 @@ private:
     void UpdateEntry(Bot& bot, Player* me, uint32 diff);
     void FailEntry(Bot& bot, std::string code, std::string text);
     void TrackLife(Bot& bot, Player* me);
+    void FreeThink(Bot& bot, Player* me);
+    void GhostRescue(Bot& bot, Player* me);
     void EnsureEntrance(Bot const& bot, Player* me);
     bool IsCommandedHere(Bot const& bot, Player* me) const;
     void DeadBackstop(Bot& bot, Player* me);

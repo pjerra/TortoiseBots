@@ -12,6 +12,7 @@
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/policy/pull/PullRegenPolicy.h"
+#include "playerbot/TbCompatW1.h"
 #include "playerbot/policy/travel/PointDangerPolicy.h"
 #include "playerbot/GrindSpotPolicy.h"
 #include "../../../../runtime/AltBotService.h"
@@ -262,7 +263,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         }
 
         Creature* creature = dynamic_cast<Creature*>(unit);
-        if (creature && creature->GetCreatureInfo() && creature->GetCreatureInfo()->rank > CREATURE_ELITE_NORMAL && !AI_VALUE(bool, "can fight elite"))
+        if (creature && creature->GetCreatureInfo() && CreatureRankCompat(creature) > CREATURE_ELITE_NORMAL && !AI_VALUE(bool, "can fight elite"))
         {
             logGrind(unit, "ignored (can not fight elites currently).");
             continue;
@@ -282,8 +283,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             unit->IsCreature())
         {
             Creature const* creature = static_cast<Creature const*>(unit);
-            ReputationOnKillEntry const* rep = sObjectMgr.GetReputationOnKillEntry(creature->GetEntry());
-            bool killLowersRep = rep && (rep->repvalue1 < 0 || rep->repvalue2 < 0);
+            bool killLowersRep = KillLowersReputationCompat(creature->GetEntry());
             if (!TortoiseBots::AltBotMayPickTarget(killLowersRep))
             {
                 logGrind(unit, "ignored (kill lowers reputation).");
@@ -300,7 +300,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         // Wild XP-granting type-8 beasts (Deer/Cow) are fair game, not critter
         // skips: gate the skip on the grey-level/no-XP verdict. Pre-attack
         // MaNGOS::XP::Gain is 0 for any creature nobody has damaged yet.
-        if (creature && creature->GetCreatureType() == CREATURE_TYPE_CRITTER && !bot->IsHonorOrXPTarget(unit) && urand(0, 10))
+        if (creature && creature->GetCreatureType() == CREATURE_TYPE_CRITTER && !IsHonorOrXPTargetCompat(bot, unit) && urand(0, 10))
         {
             logGrind(unit, "ignored (ignore critters).");
             continue;
@@ -347,7 +347,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             // applies (the attackers loop above returns before this), quest-objective
             // kills stay allowed (needForQuest branch), and bots with a real-player
             // master keep the old probabilistic lean so explicit orders are unchanged.
-            else if (creature && !bot->IsHonorOrXPTarget(unit))
+            else if (creature && !IsHonorOrXPTargetCompat(bot, unit))
             {
                 if (!ai->HasRealPlayerMaster() && !bot->InBattleGround())
                 {
@@ -487,9 +487,7 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
     // path check per candidate so the order never becomes the 50 yd stare
     // the reach action then has to give up on.
     std::list<Unit*> units;
-    MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(bot, bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(units, u_check);
-    Cell::VisitAllObjects(bot, searcher, ai::GRIND_IDLE_FALLBACK_RANGE_YD);
+    VisitUnfriendlyUnitsCompat(bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD, units);
 
     int const maxLevelOver = MaxGrindLevelOverBot(bot, ai);
     Unit* best = nullptr;
@@ -512,7 +510,7 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
         if ((int)unit->GetLevel() - (int)bot->GetLevel() > maxLevelOver)
             continue;
 
-        if (creature->GetCreatureInfo() && creature->GetCreatureInfo()->rank > CREATURE_ELITE_NORMAL &&
+        if (creature->GetCreatureInfo() && CreatureRankCompat(creature) > CREATURE_ELITE_NORMAL &&
             !AI_VALUE(bool, "can fight elite"))
             continue;
 
@@ -525,7 +523,7 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
         // Grey (no-XP) creatures are never worth starting a fight over, and
         // critters only when they pay XP (issue #396). Revenge still applies
         // through the attackers loop, which runs before this.
-        if (!bot->IsHonorOrXPTarget(unit))
+        if (!IsHonorOrXPTargetCompat(bot, unit))
             continue;
 
         float const dist = sServerFacade.GetDistance2d(bot, unit);
@@ -608,7 +606,7 @@ Unit* DangerousEliteValue::Calculate()
         Creature* creature = dynamic_cast<Creature*>(ai->GetUnit(guid));
         if (!creature || !creature->IsAlive() || !creature->GetCreatureInfo())
             continue;
-        uint32 const rank = creature->GetCreatureInfo()->rank;
+        uint32 const rank = CreatureRankCompat(creature);
         if (rank != CREATURE_ELITE_ELITE && rank != CREATURE_ELITE_RAREELITE && rank != CREATURE_ELITE_WORLDBOSS)
             continue;
         if (!ai::EliteCampDangerous(true, (int)creature->GetLevel(), bot->GetLevel()))

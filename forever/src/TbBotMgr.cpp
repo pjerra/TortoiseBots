@@ -19,6 +19,8 @@
 #include "Map.h"
 #include "MiscPackets.h"
 #include "MotionMaster.h"
+#include "Corpse.h"
+#include "compat/TbCompat_W1.h"
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
 #include "Player.h"
@@ -180,7 +182,7 @@ void BotMgr::LoadConfig()
     }
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -188,6 +190,8 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
         return "no such character";
     if (_bots.count(characterGuid))
         return "that bot is already logged in or loading";
+    if (free && !master.IsEmpty())
+        return "a free bot has no master";
     if (ObjectAccessor::FindConnectedPlayer(characterGuid))
         return "that character is already in the world";
 
@@ -208,8 +212,10 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
             engine::HandleTeleportAck(itr->second.brain.get());
     });
     bot.master = master;
+    bot.free = free;
     bot.wantParty = !master.IsEmpty();
-    bot.useEngine = _engineByDefault;
+    // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
+    bot.useEngine = _engineByDefault || free;
     if (bot.wantParty)
     {
         // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
@@ -952,6 +958,8 @@ void BotMgr::NoteTeleportStarted(ObjectGuid botGuid, char const* how, uint32 des
         return;
     itr->second.landing.pending = true;
     itr->second.landing.how = how;
+    ++itr->second.teleports;               // W1 `tele=`: every teleport the bot took, any cause
+
     itr->second.landing.mapId = destMapId;
     itr->second.block.clear();
     itr->second.blockText.clear();
@@ -1085,9 +1093,30 @@ void BotMgr::DeadBackstop(Bot& bot, Player* me)
 // leader without one); `.tb revive` marks `practice` until the next combat ends.
 void BotMgr::TrackLife(Bot& bot, Player* me)
 {
+    bool const ghost = !me->IsAlive() && me->HasPlayerFlag(PLAYER_FLAGS_GHOST);
     if (!me->IsAlive())
     {
-        bot.wasDead = true;
+        if (!bot.wasDead)
+        {
+            bot.wasDead = true;
+            ++bot.deaths;
+            bot.rescuedThisDeath = false;
+            bot.reviveHow = -1;
+            bot.ghostRescue.Reset();
+            bot.ghostYd = -1.0f;
+            bot.wasGhost = false;
+            bot.diedAt = time(nullptr);
+            if (bot.free)
+                TC_LOG_INFO("tortoisebots", "[W1] death bot={} level={}", me->GetName(), me->GetLevel());
+        }
+        // The core's release teleports the ghost to the graveyard: count it as the bot's first teleport of this death.
+        if (ghost && !bot.wasGhost)
+        {
+            bot.wasGhost = true;
+            ++bot.teleports;
+        }
+        if (bot.free)
+            GhostRescue(bot, me);
         bot.runBack = false;
         return;
     }
@@ -1100,7 +1129,17 @@ void BotMgr::TrackLife(Bot& bot, Player* me)
     if (bot.wasDead)
     {
         bot.wasDead = false;
+        bot.wasGhost = false;
         bot.runBack = follow && (follow->GetMap() != me->GetMap() || !me->IsWithinDist(follow, 30.0f));
+        if (bot.free)
+        {
+            char const* how = bot.rescuedThisDeath ? "rescue" : bot.reviveHow == 1 ? "healer" : "reclaim";
+            long secs = bot.diedAt ? long(time(nullptr) - bot.diedAt) : 0;
+            TC_LOG_INFO("tortoisebots", "[W1] revive bot={} how={} secs={} yd={:.1f}", me->GetName(), how, secs,
+                bot.ghostYd < 0.0f ? 0.0f : bot.ghostYd);
+            bot.ghostRescue.Reset();
+            bot.ghostYd = -1.0f;
+        }
     }
     if (bot.runBack && (!follow || (follow->GetMap() == me->GetMap() && me->IsWithinDist(follow, 20.0f))))
         bot.runBack = false;
@@ -1114,6 +1153,54 @@ void BotMgr::TrackLife(Bot& bot, Player* me)
             bot.practiceSawCombat = false;
         }
     }
+}
+
+// W1 (spec D2): the ONE teleport of a free bot besides the core's release. A ghost that makes no headway toward its corpse or
+// toward the spirit healer for five minutes is rescued by the core's own repop (Player::RepopAtGraveyard), once per death, with
+// the reason in the log. Every read is in-memory (corpse position, the graveyard store); no pointer is kept between ticks.
+void BotMgr::GhostRescue(Bot& bot, Player* me)
+{
+    if (!me->HasPlayerFlag(PLAYER_FLAGS_GHOST) || me->IsBeingTeleported() || !me->FindMap())
+    {
+        bot.ghostRescue.Reset();
+        bot.ghostYd = -1.0f;
+        return;
+    }
+
+    Corpse* corpse = me->GetCorpse();
+    bool const corpseHere = corpse && corpse->GetMapId() == me->GetMapId();
+    float corpseYd = corpseHere ? me->GetDistance(corpse) : -1.0f;
+    bot.ghostYd = corpseYd;
+
+    // The spirit healer stands at the graveyard the core would send this ghost to: the corpse's (the only reference a dead bot
+    // always has), or the bot's own when the corpse is gone or on another map. Plain coordinates only: no legacy type enters the
+    // host file, so the option-OFF build stays clean.
+    uint32 const refMap = corpseHere ? corpse->GetMapId() : me->GetMapId();
+    float const refX = corpseHere ? corpse->GetPositionX() : me->GetPositionX();
+    float const refY = corpseHere ? corpse->GetPositionY() : me->GetPositionY();
+    float const refZ = corpseHere ? corpse->GetPositionZ() : me->GetPositionZ();
+    WorldSafeLocsEntry const* grave = ClosestGraveyardCompat(me, refMap, refX, refY, refZ, me->GetTeam());
+    float healerYd = -1.0f;
+    if (grave && SafeLocMapIdCompat(grave) == me->GetMapId())
+        healerYd = me->GetDistance(SafeLocXCompat(grave), SafeLocYCompat(grave), SafeLocZCompat(grave));
+
+    if (corpseYd < 0.0f && healerYd < 0.0f)
+        return;
+    if (corpseYd < 0.0f)
+        corpseYd = healerYd;
+    if (healerYd < 0.0f)
+        healerYd = corpseYd;
+
+    bot.ghostRescue.Observe(corpseYd, healerYd, ThinkIntervalMs);
+    if (!bot.ghostRescue.Due() || bot.rescuedThisDeath)
+        return;
+    if (!RepopAtGraveyardCompat(me))
+        return;
+    bot.rescuedThisDeath = true;
+    ++bot.rescues;
+    ++bot.teleports;
+    TC_LOG_INFO("tortoisebots", "[W1] rescue bot={} reason=ghost-stuck secs={} yd={:.1f}", me->GetName(),
+        TortoiseBots::GHOST_RESCUE_STALL_MS / 1000, corpseYd);
 }
 
 void BotMgr::Update(uint32 diff)
@@ -1205,6 +1292,13 @@ void BotMgr::Update(uint32 diff)
 
 void BotMgr::Think(Bot& bot, Player* me)
 {
+    // W1: a free bot has no master and no host steering: its engine plays the world (grind, food, loot, roll, buff) and the
+    // dead kit (release, corpse run, spirit healer). Think only builds the brain once and otherwise stays out of the way.
+    if (bot.free)
+    {
+        FreeThink(bot, me);
+        return;
+    }
     // No master: the bot only does what the console tells it (WalkBy, AttackNearest).
     if (bot.master.IsEmpty())
         return;
@@ -1429,4 +1523,101 @@ void BotMgr::Think(Bot& bot, Player* me)
         me->GetMotionMaster()->MoveFollow(master, _followDistance, ChaseAngle(float(M_PI)));
     }
 }
+
+void BotMgr::FreeThink(Bot& bot, Player* me)
+{
+    if (bot.entry.active)
+        return;
+    if (bot.useEngine && !bot.engineFailed && !bot.brain)
+    {
+        std::string error;
+        bot.brain.reset(engine::Create(me, nullptr, error, true));
+        if (!bot.brain)
+        {
+            bot.engineFailed = true;
+            bot.engineNote = error;
+            TC_LOG_ERROR("tortoisebots", "BotMgr: engine for free bot {} not started: {} (it stands where it is)", me->GetName(), error);
+        }
+    }
+}
+
+std::string BotMgr::SetFree(ObjectGuid characterGuid, bool on)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return "that character is not a logged-in host bot";
+    Bot& bot = itr->second;
+    if (on)
+    {
+        if (!bot.master.IsEmpty())
+            return "the bot has a master: `.tb ungroup` it first";
+        Player* me = bot.session->GetPlayer();
+        if (me && me->GetGroup())
+            return "the bot is in a party: a free bot plays alone";
+        if (bot.free)
+            return std::string();
+        bot.free = true;
+        bot.useEngine = true;
+        if (bot.brain)
+            engine::ReapplyStrategies(bot.brain.get(), true);
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} is a free bot (grind, food, loot, roll, buff; no master)", me ? me->GetName() : characterGuid.ToString());
+        return std::string();
+    }
+    if (!bot.free)
+        return std::string();
+    bot.free = false;
+    bot.ghostRescue.Reset();
+    bot.ghostYd = -1.0f;
+    bot.rescuedThisDeath = false;
+    if (bot.brain)
+    {
+        if (bot.master.IsEmpty())
+            DropBrain(bot);                    // no master and no free kit: it stands, as any console bot without a master
+        else
+            engine::ReapplyStrategies(bot.brain.get(), false);
+    }
+    Player* me = bot.session->GetPlayer();
+    TC_LOG_INFO("tortoisebots", "BotMgr: {} is no longer a free bot", me ? me->GetName() : characterGuid.ToString());
+    return std::string();
+}
+
+void BotMgr::NoteKill(ObjectGuid characterGuid)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr != _bots.end() && itr->second.free)
+        ++itr->second.kills;
+}
+
+void BotMgr::NoteReviveKind(ObjectGuid characterGuid, int kind)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr != _bots.end())
+        itr->second.reviveHow = kind;
+}
+
+BotMgr::LifeInfo BotMgr::GetLifeInfo(ObjectGuid characterGuid) const
+{
+    LifeInfo info;
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return info;
+    Bot const& bot = itr->second;
+    info.free = bot.free;
+    info.kills = bot.kills;
+    info.deaths = bot.deaths;
+    info.rescues = bot.rescues;
+    info.teleports = bot.teleports;
+    info.rescuedThisDeath = bot.rescuedThisDeath;
+    info.reviveHow = bot.reviveHow;
+    info.ghostYd = bot.ghostYd;
+    return info;
+}
+}
+
+// TbCompat_W1.h: the engine's revive paths (ReviveFromCorpseAction.cpp, ReviveFromCorpseAction's spirit healer leg) name how the
+// bot came back, for the host's `[W1] revive` line and `.tb state corpserun=`.
+void NoteReviveKindCompat(Player* bot, int kind)
+{
+    if (bot)
+        TortoiseBots::BotMgr::Instance().NoteReviveKind(bot->GetGUID(), kind);
 }
