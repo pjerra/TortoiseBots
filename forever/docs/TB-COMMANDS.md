@@ -466,3 +466,15 @@ commander-end count=12 records=12 bindings=1 #c7
 ```
 One card while the run goes: the run's own orders (`move`, `pullback`, `focus`, `attack`) are in the same log. Without the engine a `stay` is logged `ok=no result=no-engine`. `.tb master party Mtank none` ends the card (`commander-begin` / `commander-end count=0 bindings=0`); `status Nobody` answers `error code=no-binding cmd=commander msg=Nobody%20commands%20no%20bots`.
 A run whose tank nobody commands is a system card: `binding cmd=Mtank ... system=yes inparty=no`, the run record after it.
+
+## 12. Commander port, package P3: `.tb cmd`
+
+`.tb cmd <verb> [args] [#token]` sends an order from the caller's character to its bound bots (`.tb master`) through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
+
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`. (`summon` is refused `unsupported` per decision D3.)
+* **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
+* **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` triggers `outside-order` pause on the next run tick so the two paths never fight.
+* **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
+* **Replies (grammar v2).**
+  * Accepted: `cmd-begin #token` / `cmd verb=<v> status=accepted bots=<n> result=<encoded> #token` / `cmd-end count=1 records=1 verb=<v> lead=<lead> bots=<n> #token`
+  * Refused: `error code=<code> cmd=cmd msg=<encoded> #token` (e.g. `needs-player-sender`, `not-bound`, `unreachable`, `no-ground`, `no-los`, `invalid-target`, `dead-target`, `no-tank`, `engine-not-built`).

@@ -58,10 +58,11 @@ std::map<ObjectGuid, std::vector<Pending>>& PendingByRun()
 
 // ---- the party ----
 
-struct Party
+struct ResolvedParty
 {
     Player* lead = nullptr;
     std::vector<Player*> bots;      // host bots in the world on the lead's map and instance, the lead first (alive or dead)
+    ObjectGuid expectedCommander;   // who followers must be bound to in h3's table
 };
 
 bool Usable(Player* player)
@@ -107,28 +108,47 @@ OrderAnswer Refuse(od::Judged const& judged)
 }
 
 // The leader and its party. A refusal (empty `party.lead`) carries the answer.
-bool ReadParty(RunRec const& rec, Party& party, OrderAnswer& refusal)
+bool ReadParty(Party const& ctx, ResolvedParty& party, OrderAnswer& refusal)
 {
-    Player* lead = ObjectAccessor::FindPlayer(rec.leader);
-    if (!Usable(lead) || !lead->GetGroup())
+    Player* lead = ObjectAccessor::FindPlayer(ctx.leader);
+    if (!Usable(lead) || (ctx.fromRun && !lead->GetGroup()))
     {
         refusal = Refuse("lead-unavailable", "The lead bot is between maps. Try again in a moment.");
         return false;
     }
     party.lead = lead;
+    ObjectGuid const leadCmd = h3::CommanderGuid(lead->GetGUID());
+    party.expectedCommander = ctx.fromRun ? (leadCmd.IsEmpty() ? lead->GetGUID() : leadCmd) : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
     party.bots.push_back(lead);
-    for (Group::MemberSlot const& slot : lead->GetGroup()->GetMemberSlots())
+    if (ctx.members.empty())
     {
-        if (slot.guid == lead->GetGUID())
-            continue;
-        Player* member = ObjectAccessor::FindPlayer(slot.guid);
-        if (Usable(member) && IsHostBot(member) && member->GetMapId() == lead->GetMapId() && member->GetInstanceId() == lead->GetInstanceId())
-            party.bots.push_back(member);
+        if (Group* group = lead->GetGroup())
+        {
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                if (slot.guid == lead->GetGUID())
+                    continue;
+                Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                if (Usable(member) && IsHostBot(member) && member->GetMapId() == lead->GetMapId() && member->GetInstanceId() == lead->GetInstanceId())
+                    party.bots.push_back(member);
+            }
+        }
+    }
+    else
+    {
+        for (ObjectGuid guid : ctx.members)
+        {
+            if (guid == lead->GetGUID())
+                continue;
+            Player* member = ObjectAccessor::FindPlayer(guid);
+            if (Usable(member) && IsHostBot(member) && member->GetMapId() == lead->GetMapId() && member->GetInstanceId() == lead->GetInstanceId())
+                party.bots.push_back(member);
+        }
     }
     return true;
 }
 
-Player* FindBotNamed(Party const& party, std::string const& name)
+Player* FindBotNamed(ResolvedParty const& party, std::string const& name)
 {
     for (Player* bot : party.bots)
         if (strcasecmp(bot->GetName().c_str(), name.c_str()) == 0)
@@ -220,13 +240,16 @@ struct Batch
         bool decisive;      // its result decides whether the order failed (any decisive success is enough)
         bool required;      // a refusal of its pre-flight refuses the whole order (the lead of a move, the tank of a pull, a named bot)
     };
+    bool fromRun = false;
     std::vector<Item> items;
+
+    explicit Batch(bool run) : fromRun(run) {}
 
     void Add(Player* bot, std::string const& verb, bool decisive, bool required)
     {
         Item item{ bot, h3::OrderSpec(), decisive, required };
         item.spec.verb = verb;
-        item.spec.fromRun = true;
+        item.spec.fromRun = fromRun;
         items.push_back(std::move(item));
     }
     h3::OrderSpec& Back() { return items.back().spec; }
@@ -272,7 +295,7 @@ bool PreflightBatch(Batch& batch, OrderAnswer& refusal)
     return true;
 }
 
-void Track(RunRec const& rec, std::string const& order, uint32 nowMs, std::vector<std::pair<Player*, uint32>> const& queued, std::vector<bool> const& decisive)
+void Track(ObjectGuid leader, std::string const& order, uint32 nowMs, std::vector<std::pair<Player*, uint32>> const& queued, std::vector<bool> const& decisive)
 {
     Pending pending;
     pending.order = order;
@@ -285,15 +308,15 @@ void Track(RunRec const& rec, std::string const& order, uint32 nowMs, std::vecto
         slot.decisive = decisive[i];
         pending.slots.push_back(slot);
     }
-    std::vector<Pending>& list = PendingByRun()[rec.leader];
+    std::vector<Pending>& list = PendingByRun()[leader];
     list.push_back(std::move(pending));
     if (list.size() > od::kMaxPending)
         list.erase(list.begin());
 }
 
 // Queues every kept item (each already pre-flighted, so a failure here is a race inside this call stack: it cannot happen on the world thread) and
-// records the pending order. Returns the number queued.
-uint32 Commit(RunRec const& rec, std::string const& order, uint32 nowMs, Batch& batch, OrderAnswer& answer)
+// records the pending order when `ctx.fromRun`. Returns the number queued.
+uint32 Commit(Party const& ctx, std::string const& order, uint32 nowMs, Batch& batch, OrderAnswer& answer)
 {
     std::vector<std::pair<Player*, uint32>> queued;
     std::vector<bool> decisive;
@@ -306,9 +329,9 @@ uint32 Commit(RunRec const& rec, std::string const& order, uint32 nowMs, Batch& 
         queued.emplace_back(item.bot, seq);
         decisive.push_back(item.decisive);
     }
-    if (!queued.empty())
-        Track(rec, order, nowMs, queued, decisive);
-    answer.pending = !queued.empty();
+    if (ctx.fromRun && !queued.empty())
+        Track(ctx.leader, order, nowMs, queued, decisive);
+    answer.pending = ctx.fromRun && !queued.empty();
     answer.bots = uint32(queued.size());
     return answer.bots;
 }
@@ -325,10 +348,10 @@ OrderAnswer Accept(OrderAnswer answer, std::string const& scope, uint32 count)
 
 // A handle of ReadFacts' unit list back to a unit of the lead's map, judged as the Turtle `ResolveOrderTarget` does (RemoteCommander::CheckOrderTarget):
 // a handle that no longer resolves is `invalid-target`, never a guess.
-Unit* ResolveUnit(RunRec const& rec, Party const& party, uint64 handle, ObjectGuid& guid, od::Judged& judged)
+Unit* ResolveUnit(Party const& ctx, ResolvedParty const& party, uint64 handle, std::string const& token, ObjectGuid& guid, od::Judged& judged)
 {
     Unit* unit = nullptr;
-    if (ResolveHandle(rec.leader, handle, guid))
+    if (ctx.resolveTarget && ctx.resolveTarget(handle, token, guid))
         unit = ObjectAccessor::GetUnit(*party.lead, guid);
     Player* judge = party.lead->IsAlive() ? party.lead : nullptr;
     for (Player* bot : party.bots)
@@ -358,9 +381,20 @@ Unit* ResolveUnit(RunRec const& rec, Party const& party, uint64 handle, ObjectGu
     return judged.ok ? unit : nullptr;
 }
 
+void SetPersistentSkull(Party const& ctx, ResolvedParty const& party, Unit const* target)
+{
+    if (!ctx.persistentIcons || !target)
+        return;
+    Group* group = party.lead->GetGroup();
+    if (!group)
+        return;
+    ObjectGuid const changedBy = ctx.owner.IsEmpty() ? party.lead->GetGUID() : ctx.owner;
+    group->SetTargetIcon(7, target->GetGUID(), changedBy);
+}
+
 // ---- the verbs ----
 
-OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::string const& order, uint32 nowMs, bool gather)
+OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed const& p, std::string const& order, uint32 nowMs, bool gather)
 {
     Player* lead = party.lead;
     if (!LeadAvailable(lead))
@@ -413,7 +447,7 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         // sampled every <= 1.5 yd, both ends; wet only as the prefix that holds the lead's own spot, the end dry) refuses the step with the code a point with no safe ground gets.
         if (liquid::SegmentPrefixRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground))
             return Refuse("no-ground", "The straight line to the point crosses or ends in liquid (lava or water): a direct step does not walk through it.");
-        Batch batch;
+        Batch batch(ctx.fromRun);
         batch.Add(lead, "move-direct", true, true);
         batch.Back().x = p.x;
         batch.Back().y = p.y;
@@ -423,18 +457,18 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         for (Player* bot : party.bots)
             if (bot != lead && bot->IsAlive())
             {
-                if (h3::CommanderGuid(bot->GetGUID()) != lead->GetGUID())
+                if (h3::CommanderGuid(bot->GetGUID()) != party.expectedCommander)
                     return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`): it would not follow.");
                 batch.Add(bot, "follow", false, false);
             }
         OrderAnswer refusal;
         if (!PreflightBatch(batch, refusal))
             return refusal;
-        Commit(rec, order, nowMs, batch, answer);
+        Commit(ctx, order, nowMs, batch, answer);
         return Accept(answer, "party", answer.bots);
     }
 
-    MoveCheck const check = CheckLeadMove(lead, wanted, true, gather);
+    MoveCheck const check = CheckLeadMove(lead, wanted, ctx.fromRun, gather);
     answer.movePathRead = check.pathRead;
     answer.movePathType = check.facts.pathType;
     od::Judged const judged = od::JudgeMove(check.facts);
@@ -453,7 +487,7 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         refusal.movePathType = answer.movePathType;
         return refusal;
     }
-    Batch batch;
+    Batch batch(ctx.fromRun);
     batch.Add(lead, "come", true, true);
     batch.Back().x = check.point.x;
     batch.Back().y = check.point.y;
@@ -462,7 +496,7 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     for (Player* bot : party.bots)
         if (bot != lead && bot->IsAlive())
         {
-            if (h3::CommanderGuid(bot->GetGUID()) != lead->GetGUID())
+            if (h3::CommanderGuid(bot->GetGUID()) != party.expectedCommander)
             {
                 OrderAnswer refusal = Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`): it would not follow.");
                 return refusal;
@@ -472,11 +506,11 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     OrderAnswer refusal;
     if (!PreflightBatch(batch, refusal))
         return refusal;
-    Commit(rec, order, nowMs, batch, answer);
+    Commit(ctx, order, nowMs, batch, answer);
     return Accept(answer, "party", answer.bots);
 }
 
-OrderAnswer DoWalk(RunRec& rec, Party const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
+OrderAnswer DoWalk(Party const& ctx, ResolvedParty const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
 {
     Player* bot = FindBotNamed(party, p.bot);
     if (!bot)
@@ -487,13 +521,13 @@ OrderAnswer DoWalk(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     wanted.x = p.x;
     wanted.y = p.y;
     wanted.z = p.z;
-    MoveCheck const check = CheckLeadMove(bot, wanted, true, false);
+    MoveCheck const check = CheckLeadMove(bot, wanted, ctx.fromRun, false);
     od::Judged const judged = od::JudgeMove(check.facts);
     if (!judged.ok)
         return Refuse(judged);
     if (check.liquidOnWay)
         return Refuse("unreachable", NameOf(bot) + "'s way to that point crosses or ends in liquid (lava or water): no walkable path avoids it.");
-    Batch batch;
+    Batch batch(ctx.fromRun);
     batch.Add(bot, "come", true, true);
     batch.Back().x = check.point.x;
     batch.Back().y = check.point.y;
@@ -503,35 +537,37 @@ OrderAnswer DoWalk(RunRec& rec, Party const& party, od::Parsed const& p, std::st
     if (!PreflightBatch(batch, refusal))
         return refusal;
     OrderAnswer answer;
-    Commit(rec, order, nowMs, batch, answer);
+    Commit(ctx, order, nowMs, batch, answer);
     return Accept(answer, "bot:" + NameOf(bot), 1);
 }
 
-OrderAnswer DoPull(RunRec& rec, Party const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
+OrderAnswer DoPull(Party const& ctx, ResolvedParty const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
 {
     Player* lead = party.lead;
     if (!LeadAvailable(lead))
         return Refuse("lead-unavailable", "The lead bot is dead, on a taxi or teleporting.");
     ObjectGuid guid;
     od::Judged judged;
-    if (!ResolveUnit(rec, party, p.handle, guid, judged))
+    Unit* target = ResolveUnit(ctx, party, p.handle, p.targetToken, guid, judged);
+    if (!target)
         return Refuse(judged.ok ? od::Refused("invalid-target", "No unit with that GUID is on the group's map and instance.") : judged);
-    Batch batch;
+    Batch batch(ctx.fromRun);
     batch.Add(lead, p.verb == od::Verb::Pullback ? "pullback" : "pull", true, true);
     batch.Back().unit = guid;
     OrderAnswer refusal;
     if (!PreflightBatch(batch, refusal))
         return refusal;
     OrderAnswer answer;
-    Commit(rec, order, nowMs, batch, answer);
+    if (Commit(ctx, order, nowMs, batch, answer))
+        SetPersistentSkull(ctx, party, target);
     return Accept(answer, "bot:" + NameOf(lead), 1);
 }
 
-OrderAnswer DoAttack(RunRec& rec, Party const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
+OrderAnswer DoAttack(Party const& ctx, ResolvedParty const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
 {
     ObjectGuid guid;
     od::Judged judged;
-    Unit* target = ResolveUnit(rec, party, p.handle, guid, judged);
+    Unit* target = ResolveUnit(ctx, party, p.handle, p.targetToken, guid, judged);
     if (!target)
         return Refuse(judged.ok ? od::Refused("invalid-target", "No unit with that GUID is on the group's map and instance.") : judged);
     Player* named = nullptr;
@@ -541,7 +577,7 @@ OrderAnswer DoAttack(RunRec& rec, Party const& party, od::Parsed const& p, std::
         if (!named)
             return Refuse("no-bot", "That bot is not in your commanded group.");
     }
-    Batch batch;
+    Batch batch(ctx.fromRun);
     for (Player* bot : party.bots)
     {
         if (named && bot != named)
@@ -566,18 +602,19 @@ OrderAnswer DoAttack(RunRec& rec, Party const& party, od::Parsed const& p, std::
     if (!PreflightBatch(batch, refusal))
         return refusal;
     OrderAnswer answer;
-    Commit(rec, order, nowMs, batch, answer);
+    if (Commit(ctx, order, nowMs, batch, answer))
+        SetPersistentSkull(ctx, party, target);
     return named ? Accept(answer, "bot:" + NameOf(named), 1) : Accept(answer, "party", answer.bots);
 }
 
-OrderAnswer DoFocus(RunRec& rec, Party const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
+OrderAnswer DoFocus(Party const& ctx, ResolvedParty const& party, od::Parsed const& p, std::string const& order, uint32 nowMs)
 {
     ObjectGuid guid;
     od::Judged judged;
-    Unit* target = ResolveUnit(rec, party, p.handle, guid, judged);
+    Unit* target = ResolveUnit(ctx, party, p.handle, p.targetToken, guid, judged);
     if (!target)
         return Refuse(judged.ok ? od::Refused("invalid-target", "No unit with that GUID is on the group's map and instance.") : judged);
-    Batch batch;
+    Batch batch(ctx.fromRun);
     for (Player* bot : party.bots)
         if (bot->IsAlive())
         {
@@ -588,21 +625,21 @@ OrderAnswer DoFocus(RunRec& rec, Party const& party, od::Parsed const& p, std::s
     if (batch.items.empty() || !PreflightBatch(batch, refusal))
         return batch.items.empty() ? Refuse("failed", "No bot of the group accepted the focus order.") : refusal;
     OrderAnswer answer;
-    Commit(rec, order, nowMs, batch, answer);
+    Commit(ctx, order, nowMs, batch, answer);
     return Accept(answer, "party", answer.bots);
 }
 
-// A party-wide order with no argument (rest, stay, follow): the bots that pass their pre-flight take it; at least one must. `verbFor` names the verb per bot.
+// A party-wide order with no argument (rest, stay, follow, hold): the bots that pass their pre-flight take it; at least one must. `verbFor` names the verb per bot.
 template <class VerbFor>
-OrderAnswer DoPartyWide(RunRec& rec, Party const& party, std::string const& order, uint32 nowMs, VerbFor verbFor)
+OrderAnswer DoPartyWide(Party const& ctx, ResolvedParty const& party, std::string const& order, uint32 nowMs, VerbFor verbFor)
 {
-    Batch batch;
+    Batch batch(ctx.fromRun);
     for (Player* bot : party.bots)
     {
         if (!bot->IsAlive())
             continue;
         std::string const verb = verbFor(bot);
-        if (verb == "follow" && h3::CommanderGuid(bot->GetGUID()) != party.lead->GetGUID())
+        if (verb == "follow" && h3::CommanderGuid(bot->GetGUID()) != party.expectedCommander)
             return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`): it would not follow.");
         batch.Add(bot, verb, true, false);
     }
@@ -610,15 +647,15 @@ OrderAnswer DoPartyWide(RunRec& rec, Party const& party, std::string const& orde
     if (batch.items.empty() || !PreflightBatch(batch, refusal))
         return batch.items.empty() ? Refuse("failed", "No bot of the group accepted the order.") : refusal;
     OrderAnswer answer;
-    Commit(rec, order, nowMs, batch, answer);
+    Commit(ctx, order, nowMs, batch, answer);
     return Accept(answer, "party", answer.bots);
 }
 
 // `revive party`: every dead bot releases its spirit (slice 4: inside the instance the core revives it at the entrance, D2), every living member follows the
 // lead. A bot that already released (a ghost) is on its own way back and is left alone. Nothing dead: refused not-dead.
-OrderAnswer DoReviveParty(RunRec& rec, Party const& party, std::string const& order, uint32 nowMs)
+OrderAnswer DoReviveParty(Party const& ctx, ResolvedParty const& party, std::string const& order, uint32 nowMs)
 {
-    Batch batch;
+    Batch batch(ctx.fromRun);
     uint32 dead = 0, ghosts = 0;
     for (Player* bot : party.bots)
     {
@@ -626,7 +663,7 @@ OrderAnswer DoReviveParty(RunRec& rec, Party const& party, std::string const& or
         {
             if (bot != party.lead)
             {
-                if (h3::CommanderGuid(bot->GetGUID()) != party.lead->GetGUID())
+                if (h3::CommanderGuid(bot->GetGUID()) != party.expectedCommander)
                     return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`): it would not follow.");
                 batch.Add(bot, "follow", false, false);
             }
@@ -640,7 +677,7 @@ OrderAnswer DoReviveParty(RunRec& rec, Party const& party, std::string const& or
         }
         batch.Add(bot, "release", true, false);
         // After its release the revived bot follows the lead again (the follow runs in the same tick, after the release).
-        if (bot != party.lead && h3::CommanderGuid(bot->GetGUID()) == party.lead->GetGUID())
+        if (bot != party.lead && h3::CommanderGuid(bot->GetGUID()) == party.expectedCommander)
             batch.Add(bot, "follow", false, false);
     }
     if (!dead)
@@ -651,14 +688,14 @@ OrderAnswer DoReviveParty(RunRec& rec, Party const& party, std::string const& or
     OrderAnswer refusal;
     if (!PreflightBatch(batch, refusal))
         return refusal;
-    Commit(rec, order, nowMs, batch, answer);
+    Commit(ctx, order, nowMs, batch, answer);
     return Accept(answer, "party", answer.bots);
 }
 }
 
 namespace
 {
-OrderAnswer IssueOrder(RunRec& rec, std::string const& order, uint32 nowMs, bool gather)
+OrderAnswer IssueOrder(Party const& ctx, std::string const& order, uint32 nowMs, bool gather)
 {
     od::Parsed p;
     std::string code, message;
@@ -666,31 +703,33 @@ OrderAnswer IssueOrder(RunRec& rec, std::string const& order, uint32 nowMs, bool
         return Refuse(code, message);
     if (p.verb == od::Verb::Summon)
         return Refuse("unsupported", "summon is not carried out on this core (decision D3): no bot is teleported to the lead bot; the party walks to it.");
-    Party party;
+    ResolvedParty party;
     OrderAnswer refusal;
-    if (!ReadParty(rec, party, refusal))
+    if (!ReadParty(ctx, party, refusal))
         return refusal;
     switch (p.verb)
     {
         case od::Verb::Move:
-            return DoMove(rec, party, p, order, nowMs, gather);
+            return DoMove(ctx, party, p, order, nowMs, gather);
         case od::Verb::Walk:
-            return DoWalk(rec, party, p, order, nowMs);
+            return DoWalk(ctx, party, p, order, nowMs);
         case od::Verb::Pull:
         case od::Verb::Pullback:
-            return DoPull(rec, party, p, order, nowMs);
+            return DoPull(ctx, party, p, order, nowMs);
         case od::Verb::Attack:
-            return DoAttack(rec, party, p, order, nowMs);
+            return DoAttack(ctx, party, p, order, nowMs);
         case od::Verb::Focus:
-            return DoFocus(rec, party, p, order, nowMs);
+            return DoFocus(ctx, party, p, order, nowMs);
         case od::Verb::Rest:
-            return DoPartyWide(rec, party, order, nowMs, [](Player*) { return std::string("rest"); });
+            return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("rest"); });
         case od::Verb::Stay:
-            return DoPartyWide(rec, party, order, nowMs, [](Player*) { return std::string("stay"); });
+            return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("stay"); });
         case od::Verb::Follow:
-            return DoPartyWide(rec, party, order, nowMs, [&](Player* bot) { return std::string(bot == party.lead ? "stay" : "follow"); });
+            return DoPartyWide(ctx, party, order, nowMs, [&](Player* bot) { return std::string((ctx.fromRun && bot == party.lead) ? "stay" : "follow"); });
+        case od::Verb::Hold:
+            return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("hold"); });
         case od::Verb::ReviveParty:
-            return DoReviveParty(rec, party, order, nowMs);
+            return DoReviveParty(ctx, party, order, nowMs);
         default:
             break;
     }
@@ -698,13 +737,24 @@ OrderAnswer IssueOrder(RunRec& rec, std::string const& order, uint32 nowMs, bool
 }
 }
 
-// The P1/P2 order log of the commander card (host/cmd/TbCmdBinding.cpp): every order the run leader emits is noted with the executor's own answer,
-// here in the ONE executor both the run tick and `.tb run order` go through.
+// The P1/P2/P3 order log of the commander card (host/cmd/TbCmdBinding.cpp): every order emitted by a run or a bound commander is noted with the
+// executor's own answer, here in the ONE lifted judge.
+OrderAnswer Issue(Party const& party, std::string const& order, uint32 nowMs, bool gather)
+{
+    OrderAnswer const answer = IssueOrder(party, order, nowMs, gather);
+    cmd::NoteRunOrder(party.leader, order, answer.accepted, answer.code, answer.text);
+    return answer;
+}
+
 OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gather)
 {
-    OrderAnswer const answer = IssueOrder(rec, order, nowMs, gather);
-    cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);
-    return answer;
+    Party party;
+    party.leader = rec.leader;
+    party.owner = rec.leader;
+    party.fromRun = true;
+    party.persistentIcons = false;
+    party.resolveTarget = [leader = rec.leader](uint64 handle, std::string const&, ObjectGuid& out) { return ResolveHandle(leader, handle, out); };
+    return Issue(party, order, nowMs, gather);
 }
 
 void TakeLateFailures(RunRec& rec, uint32 nowMs, std::vector<LateFailure>& out)

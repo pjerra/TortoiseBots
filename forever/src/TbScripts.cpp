@@ -3,6 +3,7 @@
 #include "TbDashboard.h"
 #include "dash/TbDashRuns.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdOrders.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "compat/TbItemPrototype.h"
@@ -295,6 +296,7 @@ public:
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cmd",    TortoiseBots::cmd::HandleCmd, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
