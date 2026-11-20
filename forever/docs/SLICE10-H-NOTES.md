@@ -85,7 +85,7 @@ Tested tree: `74f92174b` (the last code commit; the commits after it are notes o
 | Gate | Result |
 |---|---|
 | census, `SLICE10.txt`, slot 5, after the upload of this tree | `files 216  compile clean 216  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
-| census, `SLICE1.txt` and `SLICE2.txt` | `files 133  compile clean 133` and `files 160  compile clean 160`, 0 error places, 0 missing headers (`comm -23` against SLICE10.txt is empty for both, and for SLICE3-SLICE5 too, so every file of those lists is inside the SLICE10 measurement above) |
+| census, `SLICE1.txt` .. `SLICE5.txt` | `files 133 / 160 / 170 / 174 / 176  compile clean = files`, 0 error places, 0 missing headers in every one (each list is a subset of SLICE10.txt: `comm -23` empty) |
 | option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, slot 5) | `CMAKE_RC=0 MAKE_RC=0`; **0 undefined**: the only one seen on this branch was `undefined vtable for ai::RestoreSpecAuraAction`, removed by unregistering the key (commit `74f92174b`); no stub was needed in `SliceLinkStubs.cpp` |
 | option OFF `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` |
 | `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
