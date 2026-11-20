@@ -390,14 +390,6 @@ bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd)
     return true;
 }
 
-std::string Lower(std::string_view text)
-{
-    std::string out(text);
-    for (char& c : out)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return out;
-}
-
 std::string GuidText(ObjectGuid guid)
 {
     if (guid.IsEmpty())

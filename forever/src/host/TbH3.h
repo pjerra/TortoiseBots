@@ -14,6 +14,7 @@
 #include "ChatCommand.h"
 #include "Define.h"
 #include "ObjectGuid.h"
+#include <cctype>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -135,7 +136,15 @@ bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::st
 // True when the engine is built in; otherwise says `error ... code=engine-not-built` and returns false.
 bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd);
 
-std::string Lower(std::string_view text);
+// Inline here, not in TbH3.cpp: TbScripts.cpp is compiled in both builds and lowercases the `.tb power` words, while the option-OFF build
+// has no TbH3.cpp (TbH3Off.cpp stands in for it), so the definition has to live where both builds see it.
+inline std::string Lower(std::string_view text)
+{
+    std::string out(text);
+    for (char& c : out)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+}
 std::string GuidText(ObjectGuid guid);                 // 32 hex digits: GetRawValue(1) then GetRawValue(0), "" for the empty guid
 bool ParseGuidText(std::string_view text, ObjectGuid& out);
 
