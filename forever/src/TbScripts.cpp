@@ -3,6 +3,7 @@
 #include "TbDashboard.h"
 #include "dash/TbDashRuns.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdFeeds.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
@@ -138,6 +139,7 @@ public:
             LoadEngineConfig();
         if (reload)
             TortoiseBots::cmd::LoadBindings();     // P2: the key or the graces changed, or persistence was just turned on
+        TortoiseBots::cmd::LoadFeeds();            // P4: the map layers' keys and ranges (the boss roster is built by the world start, below)
     }
 
     void OnWorldInitialized() override
@@ -167,6 +169,7 @@ public:
                 LoadEngineConfig();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
+                TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
             }
         }
 #endif
@@ -189,6 +192,7 @@ public:
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
         TortoiseBots::cmd::Maintain();         // P2: the binding timers (dead lead, absent commander) and the stored rows whose party is back
+        TortoiseBots::cmd::UpdateFeeds(diff);   // P4: the live position report (TortoiseBots.Commander.PosMs, 100 ms)
 #endif
     }
 
