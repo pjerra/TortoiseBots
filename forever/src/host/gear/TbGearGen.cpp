@@ -2,14 +2,23 @@
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
-#include "compat/botpch_forever.h"
-#include "playerbot/policy/item/GearSetPolicy.h"
-
 #include "Item.h"
 #include "ItemTemplate.h"
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+
+namespace
+{
+inline void LogGearIndexBuilt(uint32 count, long long elapsedMs)
+{
+    TC_LOG_INFO("server.loading", "TortoiseBots: gear index built ({} classic items in {} ms)", count, elapsedMs);
+}
+} // namespace
+
+#include "compat/botpch_forever.h"
+#include "playerbot/RandomItemMgr.h"
+#include "playerbot/policy/item/GearSetPolicy.h"
 
 #include <algorithm>
 #include <chrono>
@@ -139,7 +148,7 @@ void InitGearIndex()
     idx.byId.clear();
     idx.totalCount = 0;
 
-    ItemTemplateContainer const& store = sObjectMgr->GetItemTemplateStore();
+    ItemTemplateContainer const& store = ObjectMgr::instance()->GetItemTemplateStore();
     for (auto const& [id, tpl] : store)
     {
         if (!ai::IsClassicItemCandidate(id, tpl.GetRequiredExpansion(), tpl.GetQuality(), tpl.RandomBonusListTemplateId))
@@ -152,7 +161,6 @@ void InitGearIndex()
         cand.requiredExpansion = tpl.GetRequiredExpansion();
         cand.randomBonusListTemplateId = tpl.RandomBonusListTemplateId;
         cand.allowableClass = tpl.GetAllowableClass();
-        cand.allowableRace = tpl.GetAllowableRace();
         cand.itemLevel = static_cast<uint16>(tpl.GetBaseItemLevel());
         cand.requiredLevel = static_cast<uint8>(std::min<uint32>(tpl.GetBaseRequiredLevel(), 255u));
         cand.quality = static_cast<uint8>(tpl.GetQuality());
@@ -180,8 +188,7 @@ void InitGearIndex()
     idx.initialized = true;
     auto const elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
-    TC_LOG_INFO("server.loading", "TortoiseBots: gear index built ({} classic items in {} ms)",
-        idx.totalCount, elapsedMs);
+    LogGearIndexBuilt(idx.totalCount, elapsedMs);
 }
 
 uint32 GearIndexItemCount()
