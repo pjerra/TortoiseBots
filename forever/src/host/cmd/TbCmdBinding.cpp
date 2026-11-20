@@ -524,7 +524,10 @@ void RestoreOne(ObjectGuid commander)
             continue;
         h3::SetCommander(bot, commander);
     }
-    m.restored = true;
+    // The binding stands once the party it was made on exists again: with the lead alone in the world (no group yet) the restore waits for the next
+    // stored member's login, which forms the group - a party cannot be made of one bot, and the release rule would end a groupless binding.
+    Player* restoredLead = InWorld(m.lead);
+    m.restored = (restoredLead && restoredLead->GetGroup()) || m.members.size() <= 1;
     SyncFollowers(commander, m, ObjectGuid::Empty);
     RefreshGroupId(m, InWorld(m.lead));
     sLog.outString("TortoiseBots: the commander binding of %s was restored (lead %s, %u bot(s))", NameOf(commander).c_str(), NameOf(m.lead).c_str(),
@@ -896,7 +899,6 @@ std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
         Meta& m = s.metas[PlayerGuid(commander)];
         if (!m.boundAt)
             m.boundAt = nowUnix;
-        m.restored = true;
     };
     for (P::Pair const& p : pairs)
         touch(p.commander);
