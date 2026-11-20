@@ -290,6 +290,12 @@ void BotSession::AcknowledgeTeleports()
 
 bool BotSession::Tick(uint32 diff)
 {
+    // A kick (a GM's `.kick`, a ban, the account owner taking the character over) is a forceExit in the core and was invisible to a
+    // session without a socket; IsKickRequested() is the public read (WorldSession.h:1104). The reason is not kept, so the log line
+    // names the request only. The account-owner case is still caught earlier by BotMgr::Update (ownerLoadingMs), which leaves before this sees it.
+    if (IsKickRequested() && !_logoutRequested)
+        RequestLogout("the core asked this session to leave (kick or ban)");
+
     // The base Update is safe without a socket: it reads no packets, runs the finished database callbacks (our login)
     // and the timed logout. It returns false for a session without a socket; that only means "drop me from the world's
     // session map", which a bot session is not in.
