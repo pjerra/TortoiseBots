@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include "playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -17,7 +18,7 @@ CampMgr& CampMgr::Instance()
 void CampMgr::Load()
 {
     std::vector<CampSpot> loaded;
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(
+    auto result = QueryGuardCompat(WorldDatabase.Query(
         "SELECT `id`, `map`, `x`, `y`, `z`, `orientation`, `zone_id`, `name`, `note`, `source` FROM `ai_playerbot_camp_spot` ORDER BY `id`"));
     if (result)
     {
@@ -32,8 +33,8 @@ void CampMgr::Load()
             spot.z = fields[4].GetFloat();
             spot.orientation = fields[5].GetFloat();
             spot.zoneId = fields[6].GetUInt32();
-            spot.name = fields[7].GetCppString();
-            spot.note = fields[8].GetCppString();
+            spot.name = FieldTextW3(fields[7]);
+            spot.note = FieldTextW3(fields[8]);
             spot.source = fields[9].GetUInt8();
             loaded.push_back(std::move(spot));
         } while (result->NextRow());

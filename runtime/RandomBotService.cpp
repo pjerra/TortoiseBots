@@ -58,6 +58,7 @@
 #include <random>
 #include <set>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -320,7 +321,7 @@ void RandomBotService::LoadCandidates()
     // pool.
     std::set<uint32> hiredCharacters;
     {
-        std::unique_ptr<QueryResult> ledger(CharacterDatabase.PQuery(
+        auto ledger = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT `character_guid` FROM `tortoise_bots_hire`"));
         if (ledger)
         {
@@ -334,7 +335,7 @@ void RandomBotService::LoadCandidates()
     std::set<uint32> characterIds;
     for (uint32 accountId : accountIds)
     {
-        std::unique_ptr<QueryResult> characters(CharacterDatabase.PQuery(
+        auto characters = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT guid, level, race, logout_time FROM characters WHERE account = '%u' ORDER BY guid", accountId));
         if (!characters)
             continue;
@@ -855,7 +856,7 @@ bool RandomBotService::TryAutoCreate(LineageRequest const* lineage)
         bool shouldRetry = !m_pendingNextRetry || now >= m_pendingNextRetry;
         if (shouldRetry)
         {
-            uint32 pendingId = sAccountMgr.GetId(m_pendingAccountName);
+            uint32 pendingId = AccountMgrW3().GetId(m_pendingAccountName);
             if (pendingId)
             {
                 std::string resolvedName = m_pendingAccountName;
@@ -993,13 +994,13 @@ bool RandomBotService::TryAutoCreate(LineageRequest const* lineage)
         std::snprintf(suffixBuf, sizeof(suffixBuf), "%06u", suffix);
         std::string username = safePrefix + suffixBuf;
         AccountMgr::normalizeString(username);
-        if (sAccountMgr.GetId(username) != 0)
+        if (AccountMgrW3().GetId(username) != 0)
             continue;
         std::string password = GenerateRandomPassword();
-        AccountOpResult res = sAccountMgr.CreateAccount(username, password);
+        AccountOpResult res = AccountMgrW3().CreateAccount(username, password);
         if (res == AOR_OK)
         {
-            uint32 id = sAccountMgr.GetId(username);
+            uint32 id = AccountMgrW3().GetId(username);
             if (id)
             {
                 // The account enters the registry before any character is
@@ -1090,8 +1091,8 @@ void RandomBotService::ResolvePinnedBots()
         if (rawName.empty())
             continue;
         std::string escaped = rawName;
-        CharacterDatabase.escape_string(escaped);
-        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT guid FROM characters WHERE name = '%s' LIMIT 1", escaped.c_str()));
+        DbEscapeW3(CharacterDatabase, escaped);
+        auto result = QueryGuardCompat(CharacterPQueryCompat("SELECT guid FROM characters WHERE name = '%s' LIMIT 1", escaped.c_str()));
         if (!result)
         {
             TB_LOG_DETAIL("TortoiseBots: pinned bot '%s' was not found or the lookup failed (no retry until restart)", rawName.c_str());
@@ -1196,7 +1197,7 @@ void RandomBotService::RemoveExpiredBots(uint32_t diff)
                 {
                     m_quickLogoutLogMs = nowMs;
                     TB_LOG_BASIC("TortoiseBots: level ladder: %s (level %u) left %u ms after entering the world - set aside for an hour (%u such quick logouts so far)",
-                        candidate.characterGuid.GetString().c_str(), uint32(candidate.level), m_ageMs[i], m_quickLogouts);
+                        GuidStringW3(candidate.characterGuid).c_str(), uint32(candidate.level), m_ageMs[i], m_quickLogouts);
                 }
             }
             m_wasBot[i] = 0;
@@ -1302,7 +1303,7 @@ void RandomBotService::RemoveExpiredBots(uint32_t diff)
             continue;
 
         TB_LOG_DETAIL("TortoiseBots: native random bot %s reached its online lifetime; removing",
-            candidate.characterGuid.GetString().c_str());
+            GuidStringW3(candidate.characterGuid).c_str());
         m_xpProgress.erase(candidate.characterGuid.GetCounter());
         BotManager::Instance().RemoveBot(candidate.characterGuid, true);
         BotActivityLeaseManager::Instance().Release(candidate.characterGuid.GetCounter(), BotActivity::Grinding);
@@ -1521,7 +1522,7 @@ void RandomBotService::QueueOrderBots(uint32_t target, uint32_t perInterval, uin
             ++online;
             ++added;
             TB_LOG_DETAIL("TortoiseBots: order random bot %s queued on account %u (prioritized)",
-                candidate.characterGuid.GetString().c_str(), candidate.accountId);
+                GuidStringW3(candidate.characterGuid).c_str(), candidate.accountId);
         }
         else
             BotActivityLeaseManager::Instance().Release(guidLow, BotActivity::Grinding);
@@ -1603,7 +1604,7 @@ void RandomBotService::MaintainOnlinePool()
                 ++online;
                 ++added;
                 TB_LOG_DETAIL("TortoiseBots: pinned random bot %s queued on account %u (prioritized)",
-                    pinnedCandidate->characterGuid.GetString().c_str(), pinnedCandidate->accountId);
+                    GuidStringW3(pinnedCandidate->characterGuid).c_str(), pinnedCandidate->accountId);
             }
             else
                 BotActivityLeaseManager::Instance().Release(guidLow, BotActivity::Grinding);
@@ -1674,7 +1675,7 @@ void RandomBotService::MaintainOnlinePool()
                 ++onlinePerBand[LadderBandOf(candidate.level)];
                 if (candidate.team == HORDE) ++onlineHorde; else ++onlineAlliance;
                 TB_LOG_DETAIL("TortoiseBots: level ladder queued random bot %s (level %u, band %s) on account %u",
-                    candidate.characterGuid.GetString().c_str(), uint32(candidate.level),
+                    GuidStringW3(candidate.characterGuid).c_str(), uint32(candidate.level),
                     LadderBandName(LadderBandOf(candidate.level)).c_str(), candidate.accountId);
             }
             else
@@ -1725,7 +1726,7 @@ void RandomBotService::MaintainOnlinePool()
             ++online;
             ++added;
             TB_LOG_DETAIL("TortoiseBots: native random bot %s queued on account %u",
-                candidate.characterGuid.GetString().c_str(), candidate.accountId);
+                GuidStringW3(candidate.characterGuid).c_str(), candidate.accountId);
         }
         else
             BotActivityLeaseManager::Instance().Release(guidLow, BotActivity::Grinding);
@@ -1791,7 +1792,7 @@ void RandomBotService::UpdateLineage(uint32_t diff)
     h.characterDbBytes = m_poolHealth.characterDbBytes;
     if (m_lineagePasses++ % 10 == 0)
     {
-        std::unique_ptr<QueryResult> size(CharacterDatabase.Query(
+        auto size = QueryGuardCompat(CharacterDatabase.Query(
             "SELECT COALESCE(SUM(`data_length` + `index_length`), 0) FROM `information_schema`.`TABLES` WHERE `table_schema` = DATABASE()"));
         if (size)
             h.characterDbBytes = size->Fetch()[0].GetUInt64();
@@ -1906,7 +1907,7 @@ void RandomBotService::JoinParentGuild(uint32_t parentGuidLow, ObjectGuid altGui
     if (GuildOrders::GuildHasRealPlayer(guildId))
         return;
     if (guild->AddMember(altGuid, guild->GetLowestRank()) != GuildAddStatus::OK)
-        TB_LOG_DETAIL("TortoiseBots: lineage alt %s could not join guild %u", altGuid.GetString().c_str(), guildId);
+        TB_LOG_DETAIL("TortoiseBots: lineage alt %s could not join guild %u", GuidStringW3(altGuid).c_str(), guildId);
 }
 
 void RandomBotService::Update(uint32_t diff)

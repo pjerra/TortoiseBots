@@ -18,6 +18,7 @@
 #include <set>
 #include <sstream>
 #include <vector>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -90,7 +91,7 @@ void CollectOwnedAuctions(uint32 guidLow, std::vector<OwnedAuction>& out)
         AuctionHouseEntry const* entry = sAuctionHouseStore.LookupEntry(i);
         if (!entry)
             continue;
-        if (AuctionHouseObject* house = sAuctionMgr.GetAuctionsMap(entry))
+        if (AuctionHouseObject* house = AuctionMgrW3().GetAuctionsMap(entry))
             houses.insert(house);
     }
 
@@ -136,10 +137,10 @@ bool SettleCharacterAuctions(uint32 guidLow, uint32& settled, std::string& error
             ++refunded;
         }
 
-        if (Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow))
+        if (Item* item = AuctionMgrW3().GetAItem(auction->itemGuidLow))
         {
             item->DeleteFromDB();
-            sAuctionMgr.RemoveAItem(auction->itemGuidLow);
+            AuctionMgrW3().RemoveAItem(auction->itemGuidLow);
             delete item;
         }
 
@@ -174,7 +175,7 @@ namespace
 // the core's own pet sweep afterwards finds nothing left to prune.
 void DeleteCharacterPets(uint32 guidLow)
 {
-    std::unique_ptr<QueryResult> pets(CharacterDatabase.PQuery(
+    auto pets = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT id FROM `character_pet` WHERE `owner` = '%u'", guidLow));
     if (!pets)
         return;

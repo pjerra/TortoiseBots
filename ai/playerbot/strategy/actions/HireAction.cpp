@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "HireAction.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -14,7 +15,7 @@ bool HireAction::Execute(Event& event)
         return false;
 
     uint32 account = AccountIdOfCharacterCompat(requester->getObjectGuid());
-    auto results = CharacterDatabase.PQuery("SELECT count(*) FROM characters where account = '%u'", account);
+    auto results = CharacterPQueryCompat("SELECT count(*) FROM characters where account = '%u'", account);
 
     uint32 charCount = 10;
     if (results)

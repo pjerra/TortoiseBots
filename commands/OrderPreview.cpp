@@ -52,6 +52,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 namespace BotCommands {
@@ -134,7 +135,7 @@ uint32_t PreviewBank(uint32_t guildId, uint32_t itemId)
 {
     if (!guildId || !itemId || !sGuildMgr.GetGuildById(guildId))
         return 0;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT SUM(`count`) FROM `guild_bank` WHERE `guildid` = '%u' AND `isInferno` = '0' AND "
         "`item_template` = '%u'",
         guildId, itemId));
@@ -170,7 +171,7 @@ bool PreviewGuildHasMaker(Player* self, uint32_t guildId, uint32_t itemId)
 {
     if (!self || !guildId || !itemId)
         return false;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `guid` FROM `guild_member` WHERE `guildid` = '%u' ORDER BY `guid`",
         guildId));
     if (!result)

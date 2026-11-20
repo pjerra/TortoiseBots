@@ -77,6 +77,7 @@
 #include "WorldSession.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "WorldPacket.h"
+#include "../ai/playerbot/TbCompatW3.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Log.h"
 // pi-lens-ignore: clang:pp_file_not_found
@@ -240,7 +241,7 @@ static bool HandlePoolAccounts(ChatHandler* handler)
     for (PoolAccount const& account : registry.Accounts())
     {
         uint32 characters = 0;
-        std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+        auto count = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT COUNT(*) FROM `characters` WHERE `deleteDate` IS NULL AND `account` = '%u'", account.accountId));
         if (count)
             characters = count->Fetch()[0].GetUInt32();

@@ -20,6 +20,7 @@
 #include "Maps/MoveMap.h"
 #include "strategy/values/HazardsValue.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -3513,7 +3514,7 @@ void TravelNodeMap::loadNodeStore()
     std::unordered_map<uint32, TravelNode*> saveNodes;
 
     {
-        auto result = WorldDatabase.PQuery("%s", query.c_str());
+        auto result = WorldDatabase.Query(query.c_str());
 
         if (result)
         {
@@ -3523,7 +3524,7 @@ void TravelNodeMap::loadNodeStore()
                 Field* fields = result->Fetch();
                 bar.step();
 
-                TravelNode* node = addNode(WorldPosition(fields[2].GetUInt32(), fields[3].GetFloat(), fields[4].GetFloat(), fields[5].GetFloat()), fields[1].GetCppString(), true);
+                TravelNode* node = addNode(WorldPosition(fields[2].GetUInt32(), fields[3].GetFloat(), fields[4].GetFloat(), fields[5].GetFloat()), FieldTextW3(fields[1]), true);
 
                 if (fields[6].GetBool())
                     node->setLinked(true);
@@ -3555,7 +3556,7 @@ void TravelNodeMap::loadNodeStore()
         //                     0        1          2    3      4         5              6          7          8               9             10
         std::string query = "SELECT node_id, to_node_id,type,object,distance,swim_distance, extra_cost,calculated, max_creature_0,max_creature_1,max_creature_2 FROM ai_playerbot_travelnode_link";
 
-        auto result = WorldDatabase.PQuery("%s", query.c_str());
+        auto result = WorldDatabase.Query(query.c_str());
 
         if (result)
         {
@@ -3593,7 +3594,7 @@ void TravelNodeMap::loadNodeStore()
         //                     0        1           2   3      4   5  6
         std::string query = "SELECT node_id, to_node_id, nr, map_id, x, y, z FROM ai_playerbot_travelnode_path order by node_id, to_node_id, nr";
 
-        auto result = WorldDatabase.PQuery("%s", query.c_str());
+        auto result = WorldDatabase.Query(query.c_str());
 
         if (result)
         {
@@ -3774,16 +3775,16 @@ TravelNodeMap::PathFindResult TravelNodeMap::testPathToLoop(const WorldPosition&
     Player* player = (Player*)bot;
     if (PlayerbotAIStorage::Instance().GetAI(player))
     {
-        if (!PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().GetSource().empty())
-            reason = PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().GetSource();
+        if (!PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().getSource().empty())
+            reason = PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().getSource();
 
         AiObjectContext* context = PlayerbotAIStorage::Instance().GetAI(player)->GetAiObjectContext();
         if (context)
         {
             LastMovement& lastMove = context->GetValue<LastMovement&>("last movement")->Get();
-            if (!(!lastMove.moveEvent) && !lastMove.moveEvent.GetSource().empty())
+            if (!(!lastMove.moveEvent) && !lastMove.moveEvent.getSource().empty())
             {
-                prevReason = lastMove.moveEvent.GetSource();
+                prevReason = lastMove.moveEvent.getSource();
             }
         }
     }

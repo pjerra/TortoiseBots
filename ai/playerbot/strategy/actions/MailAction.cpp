@@ -185,7 +185,7 @@ public:
         if (mail->money)
         {
             std::ostringstream out;
-            if (event.GetSource() == "rpg action")
+            if (event.getSource() == "rpg action")
             {
                 copper += mail->money;
             }
@@ -221,7 +221,7 @@ public:
 
                 if (item)
                 {
-                    if (event.GetSource() == "rpg action")
+                    if (event.getSource() == "rpg action")
                     {
                         items.push_back(ChatHelper::formatItem(item, item->GetCount()));
                     }
@@ -592,10 +592,10 @@ ReadMailProcessor ReadMailProcessor::instance;
 bool MailAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
-    if (!requester && event.GetSource() != "rpg action")
+    if (!requester && event.getSource() != "rpg action")
         return false;
 
-    if (!MailProcessor::FindMailbox(ai) && event.GetSource() != "debug")
+    if (!MailProcessor::FindMailbox(ai) && event.getSource() != "debug")
     {
         ai->TellError(requester, "There is no mailbox nearby");
         return false;

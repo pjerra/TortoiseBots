@@ -29,7 +29,7 @@ using namespace MaNGOS;
 bool DebugAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
-    bool isMod = event.GetSource() == ".bot" || (event.GetOwner() && event.GetOwner()->GetSession() && event.GetOwner()->GetSession()->GetSecurity() >= SEC_MODERATOR);
+    bool isMod = event.getSource() == ".bot" || (event.GetOwner() && event.GetOwner()->GetSession() && event.GetOwner()->GetSession()->GetSecurity() >= SEC_MODERATOR);
 
     if (!requester)
     {

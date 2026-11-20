@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include "AcceptQuestAction.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW3.h"
 
 
 using namespace ai;
@@ -93,7 +94,7 @@ bool TravelAction::Execute(Event& event)
                         "no quest objective until::" + std::to_string(questId),
                         time(0) + kQuestStallParkSec);
                     sPlayerbotAIConfig.logEvent(ai, "QuestObjectiveStalled",
-                        quest->GetTitle(), std::to_string(questId));
+                        QuestTitleW3(quest), std::to_string(questId));
                     sTravelMgr.SetNullTravelTarget(target);
                     RESET_AI_VALUE(bool, "travel target active");
                     return true;

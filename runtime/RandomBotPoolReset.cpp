@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <memory>
 #include <sstream>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -106,7 +107,7 @@ void RandomBotPoolReset::Fail(std::string reason)
 bool RandomBotPoolReset::LoadAppliedGeneration(std::string& out, std::string& error) const
 {
     uint32 rows = 0;
-    std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+    auto count = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `tortoise_bots_pool_state` WHERE `pool_name` = '%s'", kPoolName));
     if (!count)
     {
@@ -118,7 +119,7 @@ bool RandomBotPoolReset::LoadAppliedGeneration(std::string& out, std::string& er
     if (!rows)
         return true;
 
-    std::unique_ptr<QueryResult> state(CharacterDatabase.PQuery(
+    auto state = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `applied_generation` FROM `tortoise_bots_pool_state` WHERE `pool_name` = '%s'", kPoolName));
     if (!state)
     {
@@ -138,7 +139,7 @@ bool RandomBotPoolReset::SnapshotTargets(std::string& error)
     // The account scope comes from the registry, exactly like reporting and
     // verification, so the three can never disagree about what is managed.
     std::string accounts = RandomBotAccountRegistry::Instance().AccountIdList();
-    std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+    auto rows = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `guid`, `account`, `name` FROM `characters` "
         "WHERE `deleteDate` IS NULL AND `account` IN (%s) "
         "AND `guid` NOT IN (SELECT `bot_guid` FROM `tortoise_bots_claimed`) "
@@ -164,7 +165,7 @@ bool RandomBotPoolReset::SnapshotTargets(std::string& error)
         Target target;
         target.guidLow = fields[0].GetUInt32();
         target.accountId = fields[1].GetUInt32();
-        target.name = fields[2].GetCppString();
+        target.name = FieldTextW3(fields[2]);
         if (!target.guidLow || !target.accountId)
         {
             error = "a managed character row is invalid (missing guid or account)";
@@ -210,7 +211,7 @@ bool RandomBotPoolReset::PreflightGuilds(std::string& error) const
     std::string guidList = SqlIdList(guids);
 
     uint32 ledGuilds = 0;
-    std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+    auto count = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `guild` WHERE `leaderguid` IN (%s)", guidList.c_str()));
     if (!count)
     {
@@ -226,7 +227,7 @@ bool RandomBotPoolReset::PreflightGuilds(std::string& error) const
     // Guild::DelMember). A guild that holds anyone outside the managed pool
     // must not be touched by a pool reset, so any non-pool member blocks the
     // whole reset before the first deletion.
-    std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+    auto rows = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT g.`guildid`, g.`name`, g.`leaderguid`, gm.`guid`, c.`account` "
         "FROM `guild` g "
         "LEFT JOIN `guild_member` gm ON gm.`guildid` = g.`guildid` "
@@ -242,12 +243,12 @@ bool RandomBotPoolReset::PreflightGuilds(std::string& error) const
     do
     {
         Field* fields = rows->Fetch();
-        std::string guildName = fields[1].GetCppString();
+        std::string guildName = FieldTextW3(fields[1]);
         uint32 leaderGuid = fields[2].GetUInt32();
-        if (fields[3].IsNULL())
+        if (FieldIsNullW3(fields[3]))
             continue; // bot-led guild without members
 
-        uint32 memberAccount = fields[4].IsNULL() ? 0 : fields[4].GetUInt32();
+        uint32 memberAccount = FieldIsNullW3(fields[4]) ? 0 : fields[4].GetUInt32();
         if (!memberAccount || !registry.IsRegistered(memberAccount))
         {
             std::string memberName;
@@ -466,12 +467,12 @@ bool RandomBotPoolReset::DeleteNextTarget(std::string& error)
 
     // Revalidate the snapshotted ownership: a character that moved to another
     // account between planning and deletion is not ours to delete.
-    std::unique_ptr<QueryResult> row(CharacterDatabase.PQuery(
+    auto row = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `account` FROM `characters` WHERE `guid` = '%u'", target.guidLow));
     if (!row)
     {
         uint32 exists = 0;
-        std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+        auto count = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT COUNT(*) FROM `characters` WHERE `guid` = '%u'", target.guidLow));
         if (!count)
         {
@@ -564,7 +565,7 @@ bool RandomBotPoolReset::VerifyModuleRowsCleared(std::string& error) const
             std::string sql = check.sql;
             size_t at = sql.find("%s");
             sql.replace(at, 2, guids);
-            std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(sql.c_str()));
+            auto count = QueryGuardCompat(CharacterPQueryCompat(sql.c_str()));
             if (!count)
             {
                 error = std::string("verification query failed for ") + check.label;
@@ -600,7 +601,7 @@ bool RandomBotPoolReset::ApplyGeneration(std::string& error)
     if (m_setting.mode == PoolResetMode::Once)
     {
         std::string token = m_setting.token;
-        CharacterDatabase.escape_string(token);
+        DbEscapeW3(CharacterDatabase, token);
         if (!CharacterDatabase.DirectPExecute(
                 "INSERT INTO `tortoise_bots_pool_state` (`pool_name`, `applied_generation`, `completed_at`) "
                 "VALUES ('%s', '%s', NOW()) "

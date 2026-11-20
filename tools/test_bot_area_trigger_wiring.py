@@ -68,10 +68,10 @@ class BotAreaTriggerWiringTest(unittest.TestCase):
         self.assertLess(fire.index("std::vector<uint32_t> const armedIds"), fire.index("state.Step("))
         self.assertNotIn("runArmed", fire[fire.index("state.Step("):])
         self.assertIn("bool const armedByRun = std::find(armedIds.begin(), armedIds.end(), id) != armedIds.end();", fire)
-        self.assertRegex(squash(fire), r"bool const ran = sScriptMgr\.OnAreaTrigger\(bot, at\);.*if \(armedByRun\) \{ "
+        self.assertRegex(squash(fire), r"bool const ran = ScriptMgrW3\(\)\.OnAreaTrigger\(bot, at\);.*if \(armedByRun\) \{ "
                          r"if \(ran\) TortoiseBots::BotCommands::NoteRunAreaTriggerFired\(bot, id\); else state\.Refused\(id\); \}")
         self.assertEqual(MGR.count("NoteRunAreaTriggerFired("), 1)
-        self.assertEqual(MGR.count("sScriptMgr.OnAreaTrigger("), 1)
+        self.assertEqual(MGR.count("ScriptMgrW3().OnAreaTrigger("), 1)
         self.assertIn("void ai::UpdateBotAreaTriggers(Player* bot, BotAreaTriggerState& state, std::vector<uint32_t> const* runArmed)", MGR)
         # The run arms in its own tick, before and after the step body.
         policy = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
@@ -104,9 +104,9 @@ class BotAreaTriggerWiringTest(unittest.TestCase):
     def test_index_filter_uses_every_exclusion(self):
         fn = body(MGR, "BotAreaTriggerIndex const& GetIndex()", "\n    }\n}\n")
         # Every scripted dungeon trigger is indexed with its listed flag; the per-check arming decides.
-        self.assertIn("IsBotIndexableAreaTrigger(sScriptMgr.GetAreaTriggerScriptId(at.id) != 0,", fn)
+        self.assertIn("IsBotIndexableAreaTrigger(ScriptMgrW3().GetAreaTriggerScriptId(at.id) != 0,", fn)
         self.assertIn("shape.listed = IsListedAreaTrigger(sPlayerbotAIConfig.botAreaTriggerIds, at.id);", fn)
-        self.assertIn("sScriptMgr.GetAreaTriggerScriptId(at.id) != 0", fn)
+        self.assertIn("ScriptMgrW3().GetAreaTriggerScriptId(at.id) != 0", fn)
         self.assertIn("map && map->IsNonRaidDungeon()", fn)
         self.assertNotIn("map->IsDungeon()", fn)
         self.assertIn("sObjectMgr.GetAreaTriggerTeleport(at.id) != nullptr", fn)
@@ -115,7 +115,7 @@ class BotAreaTriggerWiringTest(unittest.TestCase):
         self.assertIn("if (built)", fn)
 
     def test_only_the_script_runs_and_no_world_scan(self):
-        self.assertIn("sScriptMgr.OnAreaTrigger(bot, at);", MGR)
+        self.assertIn("ScriptMgrW3().OnAreaTrigger(bot, at);", MGR)
         self.assertNotIn("HandleAreaTriggerOpcode", MGR)
         self.assertNotIn("CMSG_AREATRIGGER", MGR)
         self.assertNotRegex(MGR, r"Cell::|Visit\(|GridNotifiers|WorldDatabase|CharacterDatabase")

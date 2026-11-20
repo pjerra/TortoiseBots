@@ -18,6 +18,7 @@
 #include "World.h"
 #include <ctime>
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 using namespace ai;
 
 bool RpgTrigger::IsActive()
@@ -827,7 +828,7 @@ bool RpgGossipTalkTrigger::IsActive()
         return false;
 
 
-    if (!sScriptMgr.OnGossipHello(bot, creature))
+    if (!ScriptMgrW3().OnGossipHello(bot, creature))
     {
         bot->PrepareGossipMenu(creature, creature->GetDefaultGossipMenuId());
     }

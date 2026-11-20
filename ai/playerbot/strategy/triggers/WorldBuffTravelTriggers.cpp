@@ -133,7 +133,7 @@ static bool AreAllGroupMembersInPortalDestZone(Player* bot)
         if (!member)
             continue;
 
-        uint32 zoneId = member->getZoneId();
+        uint32 zoneId = member->GetZoneId();
         if (zoneId != destZone)
             return false;
     }
@@ -311,7 +311,7 @@ bool WorldBuffTravelNeedMoveTrigger::IsActive()
     if (s == WorldBuffTravelStep::STEP_DM_PORTAL)
     {
         uint32 destZone = GetDMPortalDestZone(bot);
-        if (bot->getZoneId() == destZone)
+        if (bot->GetZoneId() == destZone)
             return false;
 
         return !IsInStepZone(bot, WorldBuffTravelStep::STEP_DM_TRAVEL);
@@ -320,7 +320,7 @@ bool WorldBuffTravelNeedMoveTrigger::IsActive()
     if (s == WorldBuffTravelStep::STEP_PORTAL_HOME)
     {
         uint32 homeZone = GetHomeZone(bot);
-        if (bot->getZoneId() == homeZone)
+        if (bot->GetZoneId() == homeZone)
             return false;
 
         if (bot->IsBeingTeleported())

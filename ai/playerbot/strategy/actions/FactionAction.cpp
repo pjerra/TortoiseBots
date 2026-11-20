@@ -13,7 +13,7 @@ bool FactionAction::Execute(Event& event)
     bool setWar = (cmd.find("+atwar") == 0);
     bool removeWar = (cmd.find("-atwar") == 0);
 
-    if (event.GetSource() == "at war")
+    if (event.getSource() == "at war")
         removeWar = true;
 
     std::string factionName;

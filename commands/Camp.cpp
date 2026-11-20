@@ -25,6 +25,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 namespace BotCommands {
@@ -200,7 +201,7 @@ bool HandleCampAdd(ChatHandler* handler, Player* gm, std::string const& rawName)
     }
 
     std::string safeName = spotName;
-    WorldDatabase.escape_string(safeName);
+    DbEscapeW3(WorldDatabase, safeName);
     if (!WorldDatabase.DirectPExecute(
             "INSERT INTO `ai_playerbot_camp_spot` "
             "(`map`, `x`, `y`, `z`, `orientation`, `zone_id`, `name`, `note`, `source`) "
@@ -212,8 +213,7 @@ bool HandleCampAdd(ChatHandler* handler, Player* gm, std::string const& rawName)
     }
 
     uint32 newId = 0;
-    std::unique_ptr<QueryResult> res(WorldDatabase.PQuery(
-        "SELECT `id` FROM `ai_playerbot_camp_spot` "
+    auto res = QueryGuardCompat(DbPQueryW3(WorldDatabase, "SELECT `id` FROM `ai_playerbot_camp_spot` "
         "WHERE `map` = %u AND `zone_id` = %u AND `source` = %u AND `name` = '%s' "
         "ORDER BY `id` DESC LIMIT 1",
         mapId, zoneId, static_cast<unsigned>(CAMP_SPOT_SOURCE_GM), safeName.c_str()));

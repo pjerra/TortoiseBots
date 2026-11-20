@@ -158,7 +158,7 @@ static bool SummonPlayerToSummoner(Player* summoner, Player* target, PlayerbotAI
 
         WorldPacket data(SMSG_SUMMON_REQUEST, 8 + 4 + 4);
         data << summoner->getObjectGuid();
-        data << uint32(summoner->getZoneId());
+        data << uint32(summoner->GetZoneId());
         data << uint32(MAX_PLAYER_SUMMON_DELAY * IN_MILLISECONDS);
         target->GetSession()->SendPacket(&data);
     }
@@ -528,7 +528,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
         if (step == WorldBuffTravelStep::STEP_DM_PORTAL)
         {
             uint32 destZone = GetDMPortalDestZone(bot);
-            if (bot->getZoneId() == destZone)
+            if (bot->GetZoneId() == destZone)
                 return false;
 
             GameObjectData const* goData = sObjectMgr.GetGOData(GO_DM_NORTH_DOOR_GUID);
@@ -546,7 +546,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
         if (step == WorldBuffTravelStep::STEP_PORTAL_HOME)
         {
             uint32 homeZone = GetHomeZone(bot);
-            if (bot->getZoneId() == homeZone)
+            if (bot->GetZoneId() == homeZone)
                 return false;
 
             const GameObjectData* goData = FindClosestSongflowerSpawn(bot);
@@ -648,7 +648,7 @@ bool WorldBuffTravelSetTargetAction::Execute(Event& event)
 
     if (step == WorldBuffTravelStep::STEP_FELWOOD)
     {
-        uint32 zoneId = bot->getZoneId();
+        uint32 zoneId = bot->GetZoneId();
         uint32 portalDestZone = GetDMPortalDestZone(bot);
         if (zoneId != portalDestZone && zoneId != ZONE_FELWOOD)
         {

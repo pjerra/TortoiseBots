@@ -25,6 +25,7 @@
 #include "ModuleLog.h"
 #include "ModuleVersion.h"
 #include "Pet.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
@@ -247,7 +248,7 @@ void BotPlayerAdapter::OnPlayerCompleteQuest(Player* player, Quest const* quest)
     if (!botAi)
         return;
 
-    sPlayerbotAIConfig.logEvent(botAi, "QuestCompleted", quest->GetTitle(), std::to_string(quest->GetQuestId()));
+    sPlayerbotAIConfig.logEvent(botAi, "QuestCompleted", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
     AltBotService::Instance().OnQuestCompleted(player);
 }
 

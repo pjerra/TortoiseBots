@@ -164,7 +164,7 @@ bool TrainerAction::Execute(Event& event)
     std::string text = event.GetParam();
     Creature* creature = nullptr;
 
-    if (event.GetSource() == "rpg action")
+    if (event.getSource() == "rpg action")
     {
         ObjectGuid guid = event.getObject();
         creature = ai->GetCreature(guid);
