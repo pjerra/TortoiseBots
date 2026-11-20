@@ -1,4 +1,5 @@
 #include "host/TbHostGuild.h"
+#include "host/TbHostGuildPure.h"
 
 #include "Creature.h"
 #include "GameObject.h"
@@ -241,19 +242,25 @@ bool DepositItem(Player* bot, ObjectGuid const& bankerGuid, uint8_t tabId, Item*
     if (!bot->GetGameObjectIfCanInteractWith(bankerGuid, GAMEOBJECT_TYPE_GUILD_BANK))
         return SetFail(failReason, "cannot-interact-bank");
 
+    static_assert(kGuildBankAutoSlot == NULL_SLOT, "kGuildBankAutoSlot must match core NULL_SLOT");
+
     uint32_t const itemId = item->GetEntry();
     uint32_t const beforeCount = bot->GetItemCount(itemId, false);
+    uint8_t const bagSlot = item->GetBagSlot();
+    uint8_t const itemSlot = item->GetSlot();
 
     WorldPackets::Guild::AutoGuildBankItem packet{ WorldPacket(CMSG_AUTO_GUILD_BANK_ITEM) };
     packet.Banker = bankerGuid;
     packet.BankTab = tabId;
-    packet.BankSlot = 0;
-    packet.ContainerSlot = item->GetBagSlot();
-    packet.ContainerItemSlot = item->GetSlot();
+    packet.BankSlot = kGuildBankAutoSlot;
+    packet.ContainerSlot = bagSlot;
+    packet.ContainerItemSlot = itemSlot;
     bot->GetSession()->HandleAutoGuildBankItem(packet);
 
     uint32_t const afterCount = bot->GetItemCount(itemId, false);
-    if (afterCount >= beforeCount)
+    Item* slotAfter = bot->GetItemByPos(bagSlot, itemSlot);
+    uint32_t const slotAfterEntry = slotAfter ? slotAfter->GetEntry() : 0;
+    if (!VerifyBankDeposit(beforeCount, afterCount, itemId, slotAfterEntry))
         return SetFail(failReason, "bank-refused");
 
     TC_LOG_INFO("tortoisebots", "[W9] bank-deposit-item bot={} guild={} tab={} item={} count={}",

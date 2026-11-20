@@ -62,6 +62,7 @@ void SetDeliveryProvider(IDeliveryProvider* provider);
 void SetOrderWorking(uint32_t botGuidLow, bool working);
 bool IsOrderWorking(uint32_t botGuidLow);
 void TickBotOrder(Player* bot);
+void OnBotLogout(uint32_t botGuidLow);
 
 // W8 trade-good reserve helper: true if any open order in `guildId` needs `itemId` (directly or as a craft reagent).
 bool IsItemNeededByGuildOrder(uint64_t guildId, uint32_t itemId);

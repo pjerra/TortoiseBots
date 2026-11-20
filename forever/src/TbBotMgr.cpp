@@ -1,5 +1,6 @@
 #include "TbBotMgr.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -569,6 +570,9 @@ void BotMgr::OnPlayerLogout(Player* player)
     // would count against the party's five seats at the next login and re-form a party nobody asked for.
     if (player->GetGroup())
         player->RemoveFromGroup(GROUP_REMOVEMETHOD_LEAVE);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::guild_orders::OnBotLogout(leaving.GetCounter());
+#endif
 }
 
 std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender)

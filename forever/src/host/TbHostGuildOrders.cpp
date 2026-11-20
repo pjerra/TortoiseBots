@@ -1,11 +1,13 @@
 #include "host/TbHostGuildOrders.h"
 
+#include "TbBotMgr.h"
 #include "compat/TbCompat_CharStore.h"
 #include "compat/TbItemPrototype.h"
 #include "compat/TbSqlNames.h"
 #include "host/TbH3.h"
 #include "host/TbHostAuction.h"
 #include "host/TbHostGuild.h"
+#include "host/TbHostGuildPure.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
 
@@ -16,6 +18,7 @@
 #include "Creature.h"
 #include "DatabaseEnv.h"
 #include "GameObject.h"
+#include "GameTime.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Item.h"
@@ -63,6 +66,7 @@ struct StoreState
     bool warned = false;
     std::unordered_map<uint32_t, OrderRecord> orders;
     std::unordered_set<uint32_t> workingBots;
+    std::unordered_map<uint32_t, tbhost::guild::OrderTickThrottleState> tickThrottle;
 };
 
 StoreState& State()
@@ -78,6 +82,7 @@ std::set<std::string> const& RequiredColumns()
         std::set<std::string> s;
         for (size_t i = 0; i < StoreColumns::kCount; ++i)
             s.insert(StoreColumns::kSelect[i]);
+        s.insert("ah_gold_spent");
         return s;
     }();
     return cols;
@@ -196,6 +201,8 @@ class HostGatherCraftProvider final : public IGatherCraftProvider
     std::unordered_map<uint32_t, PendingStep> _pending;
 
 public:
+    void ClearPending(uint32_t botGuidLow) { _pending.erase(botGuidLow); }
+
     bool CanGather(uint32_t botGuidLow, uint32_t /*itemId*/) const override
     {
         Player* bot = FindOnlineBot(botGuidLow);
@@ -371,6 +378,67 @@ public:
 
 class HostDeliveryProvider final : public IDeliveryProvider
 {
+    static uint32_t ResolveMailTarget(Player const* bot, uint64_t guildId, uint32_t giverGuidLow, std::string& outReason)
+    {
+        uint32_t const botGuidLow = bot->GetGUID().GetCounter();
+        uint32_t const leaderLow = tbhost::guild::GetLeaderGuid(guildId).GetCounter();
+        uint32_t const probeGuidLow = (giverGuidLow != 0 && giverGuidLow != botGuidLow) ? giverGuidLow : leaderLow;
+        bool const targetIsBot = probeGuidLow != 0 &&
+            TortoiseBots::BotMgr::Instance().IsBot(ObjectGuid::Create<HighGuid::Player>(probeGuidLow));
+        tbhost::guild::MailRecipientDecision const dec =
+            tbhost::guild::DecideMailRecipient(botGuidLow, giverGuidLow, leaderLow, targetIsBot);
+        if (!dec.allowed)
+        {
+            outReason = dec.reason;
+            return 0;
+        }
+        return dec.targetGuidLow;
+    }
+
+    static Item* SplitDeliveryStack(Player* bot, uint32_t itemId, Item* item, uint32_t missingCount, std::string& outReason)
+    {
+        tbhost::guild::DeliveryStackPlan const plan = tbhost::guild::PlanDeliveryStack(item->GetCount(), missingCount);
+        if (plan.deliverCount == 0)
+        {
+            outReason = "done";
+            return nullptr;
+        }
+        if (!plan.needSplit)
+            return item;
+
+        uint16 const srcPos = (uint16(item->GetBagSlot()) << 8) | item->GetSlot();
+        auto trySlot = [&](uint8_t dstBag, uint8_t dstSlot) -> Item*
+        {
+            if (bot->GetItemByPos(dstBag, dstSlot))
+                return nullptr;
+            uint16 const dstPos = (uint16(dstBag) << 8) | dstSlot;
+            bot->SplitItem(srcPos, dstPos, plan.splitCount);
+            Item* split = bot->GetItemByPos(dstBag, dstSlot);
+            if (split && split->GetEntry() == itemId && split->GetCount() == plan.splitCount)
+                return split;
+            return nullptr;
+        };
+
+        for (uint8_t slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        {
+            if (Item* split = trySlot(INVENTORY_SLOT_BAG_0, slot))
+                return split;
+        }
+        for (uint8_t bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+        {
+            if (Bag* pBag = bot->GetBagByPos(bag))
+            {
+                for (uint32_t slot = 0; slot < pBag->GetBagSize(); ++slot)
+                {
+                    if (Item* split = trySlot(bag, static_cast<uint8_t>(slot)))
+                        return split;
+                }
+            }
+        }
+        outReason = "bags-full";
+        return nullptr;
+    }
+
 public:
     bool CanDeliverToBank(uint32_t botGuidLow, uint64_t guildId) const override
     {
@@ -383,17 +451,26 @@ public:
     bool CanDeliverByMail(uint32_t botGuidLow, uint32_t recipientGuidLow) const override
     {
         Player* bot = FindOnlineBot(botGuidLow);
-        if (!bot || !recipientGuidLow)
+        if (!bot)
+            return false;
+        uint64_t const guildId = tbhost::guild::GetGuildId(bot);
+        std::string ignoreReason;
+        if (!ResolveMailTarget(bot, guildId, recipientGuidLow, ignoreReason))
             return false;
         return tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd) != nullptr;
     }
 
-    bool Deliver(uint32_t botGuidLow, uint64_t guildId, uint32_t recipientGuidLow, uint32_t itemId, uint32_t /*count*/, std::string& outReason) override
+    bool Deliver(uint32_t botGuidLow, uint64_t guildId, uint32_t recipientGuidLow, uint32_t itemId, uint32_t count, std::string& outReason) override
     {
         Player* bot = FindOnlineBot(botGuidLow);
         if (!bot)
         {
             outReason = "not-in-world";
+            return false;
+        }
+        if (count == 0)
+        {
+            outReason = "done";
             return false;
         }
         Item* item = FindBagItemByEntry(bot, itemId);
@@ -402,6 +479,9 @@ public:
             outReason = "no-items";
             return false;
         }
+        Item* deliveryItem = SplitDeliveryStack(bot, itemId, item, count, outReason);
+        if (!deliveryItem)
+            return false;
 
         if (GameObject* banker = FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_GUILD_BANK, kW2MaxVisitDistYd))
         {
@@ -414,13 +494,17 @@ public:
             for (uint8_t tab = 0; tab < kDeliveryTabCount; ++tab)
             {
                 std::string failReason;
-                if (tbhost::guild::DepositItem(bot, banker->GetGUID(), tab, item, &failReason))
+                if (tbhost::guild::DepositItem(bot, banker->GetGUID(), tab, deliveryItem, &failReason))
                 {
                     outReason = "bank";
                     return true;
                 }
             }
         }
+
+        uint32_t const targetLow = ResolveMailTarget(bot, guildId, recipientGuidLow, outReason);
+        if (!targetLow)
+            return false;
 
         GameObject* mailbox = tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd);
         if (!mailbox)
@@ -435,11 +519,8 @@ public:
             return false;
         }
 
-        uint32_t targetLow = recipientGuidLow;
-        if (!targetLow || targetLow == botGuidLow)
-            targetLow = tbhost::guild::GetLeaderGuid(guildId).GetCounter();
         std::string targetName;
-        if (!targetLow || !sCharacterCache->GetCharacterNameByGuid(ObjectGuid::Create<HighGuid::Player>(targetLow), targetName))
+        if (!sCharacterCache->GetCharacterNameByGuid(ObjectGuid::Create<HighGuid::Player>(targetLow), targetName))
         {
             outReason = "no-recipient";
             return false;
@@ -447,7 +528,7 @@ public:
 
         uint32_t const beforeCount = bot->GetItemCount(itemId, false);
         std::vector<ObjectGuid> attachments;
-        attachments.push_back(item->GetGUID());
+        attachments.push_back(deliveryItem->GetGUID());
         std::string failReason;
         if (!tbhost::guild::SendMail(bot, mailbox->GetGUID(), targetName, "Guild Order", "", 0, attachments, &failReason))
         {
@@ -485,7 +566,7 @@ void LoadOrders()
     if (!EnsureSchema(s))
         return;
 
-    std::string const sql = "SELECT " + StoreColumns::SelectList() + " FROM `tortoise_bots_guild_order`";
+    std::string const sql = "SELECT " + StoreColumns::SelectList() + ", `ah_gold_spent` FROM `tortoise_bots_guild_order`";
     QueryResult result = GuildOrderQueryCompat(sql);
     if (!result)
         return;
@@ -538,6 +619,7 @@ void LoadOrders()
         record.reportedCarry = fields[StoreColumns::ColCarried].GetUInt32();
         record.bringItems = ParseBringItemsToken(fields[StoreColumns::ColBring].GetString());
         record.given = ParseGivenItems(fields[StoreColumns::ColGiven].GetString());
+        record.ahGoldSpent = fields[StoreColumns::kCount].GetUInt32();
 
         if (record.botGuidLow && record.itemId && record.amount)
             s.orders[record.botGuidLow] = std::move(record);
@@ -594,10 +676,10 @@ bool GiveOrder(OrderRecord record)
     record.updatedAt = now;
 
     std::string const sql = Trinity::StringFormat(
-        "REPLACE INTO `tortoise_bots_guild_order` ({}) VALUES "
+        "REPLACE INTO `tortoise_bots_guild_order` ({}, `ah_gold_spent`) VALUES "
         "({}, {}, {}, {}, {}, '{}', {}, {}, {}, {}, '{}', '{}', {}, {}, {}, {}, {}, "
         "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, '{}', '{}', {}, {}, {}, '{}', {}, '{}', {}, {}, {}, "
-        "{}, {}, {}, '{}', '{}')",
+        "{}, {}, {}, '{}', '{}', {})",
         StoreColumns::SelectList(),
         record.botGuidLow, record.guildId, record.giverGuidLow, record.parentBotGuidLow, record.rootGiverGuidLow,
         TypeToken(record.type), record.itemId, record.amount, record.hours, record.delivered,
@@ -612,7 +694,8 @@ bool GiveOrder(OrderRecord record)
         EscapeSql(record.lastNeedWhisper), record.needBankDenied ? 1u : 0u,
         record.stockTarget, record.lastBankCheckMs,
         record.createdAt, record.updatedAt,
-        record.reportedCarry, EscapeSql(BringItemsToken(record.bringItems)), EscapeSql(GivenItemsToken(record.given)));
+        record.reportedCarry, EscapeSql(BringItemsToken(record.bringItems)), EscapeSql(GivenItemsToken(record.given)),
+        record.ahGoldSpent);
 
     CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
     trans->Append(sql.c_str());
@@ -661,9 +744,23 @@ void SetOrderWorking(uint32_t botGuidLow, bool working)
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
     if (working)
+    {
         s.workingBots.insert(botGuidLow);
+        s.tickThrottle.erase(botGuidLow);
+    }
     else
         s.workingBots.erase(botGuidLow);
+}
+
+void OnBotLogout(uint32_t botGuidLow)
+{
+    if (!botGuidLow)
+        return;
+    g_hostGatherCraft.ClearPending(botGuidLow);
+    StoreState& s = State();
+    std::lock_guard<std::mutex> lock(s.mutex);
+    s.workingBots.erase(botGuidLow);
+    s.tickThrottle.erase(botGuidLow);
 }
 
 bool IsOrderWorking(uint32_t botGuidLow)
@@ -703,6 +800,15 @@ void TickBotOrder(Player* bot)
     if (!IsOrderWorking(botGuidLow))
         return;
 
+    uint64_t const nowMs = GameTime::GetGameTimeMS();
+    {
+        StoreState& s = State();
+        std::lock_guard<std::mutex> lock(s.mutex);
+        auto const it = s.tickThrottle.find(botGuidLow);
+        if (it != s.tickThrottle.end() && !it->second.ShouldRun(nowMs))
+            return;
+    }
+
     auto ordOpt = FindOrder(botGuidLow);
     if (!ordOpt || ordOpt->cancelled || ordOpt->state == OrderState::Done || ordOpt->state == OrderState::Mailed)
     {
@@ -712,7 +818,8 @@ void TickBotOrder(Player* bot)
 
     OrderRecord rec = *ordOpt;
     uint32_t const inBagsBefore = bot->GetItemCount(rec.itemId, false);
-    uint32_t const recipientLow = rec.giverGuidLow ? rec.giverGuidLow : tbhost::guild::GetLeaderGuid(rec.guildId).GetCounter();
+    tbhost::guild::OrderGoldBudget const budget =
+        tbhost::guild::RemainingOrderGoldCap(rec.hasGoldCap, rec.goldCap, rec.ahGoldSpent);
 
     OrderStepInput in;
     in.type = rec.type;
@@ -721,12 +828,20 @@ void TickBotOrder(Player* bot)
     in.inBags = inBagsBefore;
     in.canCraft = GatherCraft().CanCraft(botGuidLow, rec.itemId);
     in.canGather = GatherCraft().CanGather(botGuidLow, rec.itemId);
-    in.canBuyAh = AuctionBuy().CanBuyOnAuction(botGuidLow, rec.itemId, rec.hasGoldCap ? rec.goldCap : 0);
+    in.canBuyAh = (budget.capped && budget.remainingCopper == 0)
+        ? false
+        : AuctionBuy().CanBuyOnAuction(botGuidLow, rec.itemId, budget.capped ? budget.remainingCopper : 0);
     in.canDeliverBank = Delivery().CanDeliverToBank(botGuidLow, rec.guildId);
-    in.canDeliverMail = Delivery().CanDeliverByMail(botGuidLow, recipientLow);
+    in.canDeliverMail = Delivery().CanDeliverByMail(botGuidLow, rec.giverGuidLow);
 
     OrderStepDecision const dec = DecideOrderStep(in);
     std::string reason;
+    auto recordTick = [&](bool succeeded, bool inProgress, std::string const& failReason) -> bool
+    {
+        StoreState& s = State();
+        std::lock_guard<std::mutex> lock(s.mutex);
+        return s.tickThrottle[botGuidLow].RecordResult(nowMs, succeeded, inProgress, failReason);
+    };
 
     switch (dec.action)
     {
@@ -743,25 +858,36 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::DeliverMail:
         {
             rec.state = OrderState::Delivering;
-            bool const ok = Delivery().Deliver(botGuidLow, rec.guildId, recipientLow, rec.itemId, rec.amount - rec.delivered, reason);
+            uint32_t const missing = (rec.amount > rec.delivered) ? (rec.amount - rec.delivered) : 0u;
+            bool const ok = Delivery().Deliver(botGuidLow, rec.guildId, rec.giverGuidLow, rec.itemId, missing, reason);
             if (!ok)
             {
-                if (reason == "cannot: travel")
+                if (reason == "cannot: travel" || reason == "real-player-mail-refused")
                 {
                     rec.state = OrderState::Cant;
-                    rec.reason = OrderReason::NoBanker;
+                    rec.reason = (reason == "real-player-mail-refused") ? OrderReason::BankDenied : OrderReason::NoBanker;
                     GiveOrder(rec);
                     SetOrderWorking(botGuidLow, false);
                     TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason={}",
                         rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, reason);
                 }
-                else if (reason != "walking")
+                else
                 {
-                    TC_LOG_INFO("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode=none result={}",
-                        rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, reason);
+                    bool const inProgress = (reason == "walking");
+                    if (recordTick(false, inProgress, reason))
+                    {
+                        TC_LOG_INFO("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode=none result={}",
+                            rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, reason);
+                    }
+                    else if (!inProgress)
+                    {
+                        TC_LOG_DEBUG("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode=none result={}",
+                            rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, reason);
+                    }
                 }
                 return;
             }
+            recordTick(true, false, "");
             uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
             uint32_t const moved = (inBagsBefore > inBagsAfter) ? (inBagsBefore - inBagsAfter) : 0;
             if (moved > 0)
@@ -793,21 +919,60 @@ void TickBotOrder(Player* bot)
                 rec.reportedHave = haveAfter;
                 GiveOrder(rec);
             }
-            TC_LOG_INFO("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action={} result={}",
-                rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount,
-                dec.action == OrderStepAction::Craft ? "craft" : "gather",
-                ok ? reason : (reason.empty() ? "fail" : reason));
+            std::string const res = ok ? reason : (reason.empty() ? "fail" : reason);
+            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering");
+            bool const logInfo = ok || recordTick(false, inProgress, res);
+            if (ok)
+                recordTick(true, false, "");
+            if (logInfo)
+            {
+                TC_LOG_INFO("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action={} result={}",
+                    rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount,
+                    dec.action == OrderStepAction::Craft ? "craft" : "gather", res);
+            }
+            else
+            {
+                TC_LOG_DEBUG("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action={} result={}",
+                    rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount,
+                    dec.action == OrderStepAction::Craft ? "craft" : "gather", res);
+            }
             return;
         }
 
         case OrderStepAction::BuyAh:
         {
-            bool const ok = AuctionBuy().StepBuyOnAuction(botGuidLow, rec.itemId, dec.remaining, rec.hasGoldCap ? rec.goldCap : 0, reason);
+            uint64_t const moneyBefore = bot->GetMoney();
+            bool const ok = AuctionBuy().StepBuyOnAuction(
+                botGuidLow, rec.itemId, dec.remaining, budget.capped ? budget.remainingCopper : 0, reason);
+            uint64_t const moneyAfter = bot->GetMoney();
+            if (ok)
+            {
+                uint32_t const spent = (moneyBefore > moneyAfter)
+                    ? static_cast<uint32_t>(std::min<uint64_t>(moneyBefore - moneyAfter, UINT32_MAX))
+                    : 0u;
+                if (spent > 0)
+                {
+                    rec.ahGoldSpent = (spent > UINT32_MAX - rec.ahGoldSpent) ? UINT32_MAX : (rec.ahGoldSpent + spent);
+                    GiveOrder(rec);
+                }
+            }
             uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
             uint32_t const haveAfter = rec.delivered + inBagsAfter;
-            TC_LOG_INFO("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action=buy result={}",
-                rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount,
-                ok ? reason : (reason.empty() ? "fail" : reason));
+            std::string const res = ok ? reason : (reason.empty() ? "fail" : reason);
+            bool const inProgress = !ok && (res == "walking");
+            bool const logInfo = ok || recordTick(false, inProgress, res);
+            if (ok)
+                recordTick(true, false, "");
+            if (logInfo)
+            {
+                TC_LOG_INFO("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action=buy result={}",
+                    rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount, res);
+            }
+            else
+            {
+                TC_LOG_DEBUG("tortoisebots", "[W9] step id={} bot={} item={} have={} want={} action=buy result={}",
+                    rec.itemId, bot->GetName(), rec.itemId, haveAfter, rec.amount, res);
+            }
             return;
         }
 
