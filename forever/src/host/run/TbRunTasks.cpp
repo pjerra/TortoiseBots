@@ -12,6 +12,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
+#include "host/run/TbRunOrdersPure.h"
 
 #include <algorithm>
 #include <cmath>

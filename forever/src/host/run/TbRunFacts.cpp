@@ -830,7 +830,7 @@ std::vector<DungeonRun::DoorFact> const& InstanceDoors(uint32 mapId)
     std::vector<DungeonRun::DoorFact>& doors = cache[mapId];
     for (AreaTriggerEntry const* at : sAreaTriggerStore)
     {
-        AreaTriggerTeleport const* tele = at ? sObjectMgr->GetAreaTrigger(at->ID) : nullptr;
+        AreaTriggerTeleport const* tele = at ? sObjectMgr.GetAreaTrigger(at->ID) : nullptr;
         if (!tele || tele->Loc.GetMapId() != mapId)
             continue;
         DungeonRun::DoorFact door;
