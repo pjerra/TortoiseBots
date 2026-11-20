@@ -74,6 +74,16 @@ RunRec* Find(ObjectGuid leader)
     return it == Table().end() ? nullptr : it->second.get();
 }
 
+namespace
+{
+EndListener EndHook = nullptr;
+}
+
+void SetEndListener(EndListener listener)
+{
+    EndHook = listener;
+}
+
 RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs)
 {
     if (!plan || leader.IsEmpty() || Table().count(leader))
@@ -487,6 +497,8 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     ai::DungeonPlan const* plan = rec.run.plan;
     int32 const current = plan && rec.run.step < plan->steps.size() ? int32(rec.run.step) : -1;
     Note(rec, nowMs, stopped ? "stop" : "done", current, why);
+    if (EndHook)
+        EndHook(rec);
     return stayed;
 }
 

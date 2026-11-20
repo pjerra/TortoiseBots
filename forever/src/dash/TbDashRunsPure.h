@@ -295,27 +295,77 @@ private:
     bool sentNonEmpty_ = false;
 };
 
-// One summary file per (leader, startedMs): the key of a run that ended. True the first time a key is seen.
-class SummaryLedger
+// The summaries still to write, one per finished run, keyed by (leader, startedMs): a run nobody has written yet has a job here, and it
+// leaves the queue only after the atomic rename succeeded. A failed write is retried on the next cycle (the same job, bounded); a second
+// sighting of the same run (the end listener and the run table poll) adds nothing.
+struct SummaryJob
 {
-public:
-    bool MarkIfNew(uint32_t leaderGuid, uint32_t startedMs)
-    {
-        return seen_.insert({leaderGuid, startedMs}).second;
-    }
-    bool Contains(uint32_t leaderGuid, uint32_t startedMs) const
-    {
-        return seen_.count({leaderGuid, startedMs}) != 0;
-    }
-
-private:
-    std::set<std::pair<uint32_t, uint32_t>> seen_;
+    uint32_t leaderGuid = 0;
+    uint32_t startedMs = 0;
+    std::string stem;       // RunId: the file is stem + ".summary.json"
+    std::string json;
 };
 
-// The file stem and run id: plan, start second and leader, only [A-Za-z0-9_.-] (the dashboard indexes "<run>.summary.json" by name).
+class SummaryQueue
+{
+public:
+    static constexpr int kMaxAttempts = 15;     // ~30 s at the feed's 2 s cycle
+
+    bool Add(SummaryJob job)
+    {
+        Key const key(runKey(job.leaderGuid, job.startedMs));
+        if (done_.count(key) || pending_.count(key) || abandoned_.count(key))
+            return false;
+        pending_.emplace(key, Entry{std::move(job), 0});
+        return true;
+    }
+    SummaryJob const* Next() const { return pending_.empty() ? nullptr : &pending_.begin()->second.job; }
+    void Succeeded(uint32_t leaderGuid, uint32_t startedMs)
+    {
+        Key const key(runKey(leaderGuid, startedMs));
+        pending_.erase(key);
+        done_.insert(key);
+    }
+    // False when this was the last attempt: the job is dropped (and counted), never marked done.
+    bool Failed(uint32_t leaderGuid, uint32_t startedMs)
+    {
+        auto const it = pending_.find(runKey(leaderGuid, startedMs));
+        if (it == pending_.end())
+            return true;
+        if (++it->second.attempts >= kMaxAttempts)
+        {
+            pending_.erase(it);
+            abandoned_.insert(runKey(leaderGuid, startedMs));
+            return false;
+        }
+        return true;
+    }
+    bool Done(uint32_t leaderGuid, uint32_t startedMs) const { return done_.count(runKey(leaderGuid, startedMs)) != 0; }
+    bool Holds(uint32_t leaderGuid, uint32_t startedMs) const { return pending_.count(runKey(leaderGuid, startedMs)) != 0; }
+    // A job dropped after kMaxAttempts is never retried: the run table poll and the listener both see it as one that cannot land.
+    bool GaveUp(uint32_t leaderGuid, uint32_t startedMs) const { return abandoned_.count(runKey(leaderGuid, startedMs)) != 0; }
+    size_t Pending() const { return pending_.size(); }
+    size_t Dropped() const { return abandoned_.size(); }
+
+private:
+    using Key = std::pair<uint32_t, uint32_t>;
+    struct Entry
+    {
+        SummaryJob job;
+        int attempts = 0;
+    };
+    static Key runKey(uint32_t leaderGuid, uint32_t startedMs) { return Key(leaderGuid, startedMs); }
+
+    std::map<Key, Entry> pending_;
+    std::set<Key> done_;
+    std::set<Key> abandoned_;
+};
+
+// The file stem and run id: plan, start second, the run's own clock in ms (two runs of one leader in the same second differ) and leader,
+// only [A-Za-z0-9_.-] (the dashboard indexes "<run>.summary.json" by name).
 inline std::string RunId(RunView const& run)
 {
-    std::string id = run.planName + "-" + std::to_string(run.startedUnix) + "-" + std::to_string(run.leaderGuid);
+    std::string id = run.planName + "-" + std::to_string(run.startedUnix) + "-" + std::to_string(run.startedMs) + "-" + std::to_string(run.leaderGuid);
     for (char& c : id)
         if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '.' || c == '-'))
             c = '_';

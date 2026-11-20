@@ -268,16 +268,54 @@ int main(int argc, char** argv)
         CHECK(empty.find("\"commanders\":[]") != std::string::npos);
     }
 
-    // ---- a summary is written once per (leader, startedMs) ----
+    // ---- one summary job per (leader, startedMs); only a landed write marks it done ----
     {
-        SummaryLedger ledger;
-        CHECK(!ledger.Contains(7, 5000));
-        CHECK(ledger.MarkIfNew(7, 5000));
-        CHECK(ledger.Contains(7, 5000));
-        CHECK(!ledger.MarkIfNew(7, 5000));              // the next cycle: not again
-        CHECK(!ledger.MarkIfNew(7, 5000));
-        CHECK(ledger.MarkIfNew(7, 9000));               // the same leader's next run
-        CHECK(ledger.MarkIfNew(8, 5000));               // another leader
+        SummaryQueue q;
+        SummaryJob job;
+        job.leaderGuid = 7;
+        job.startedMs = 5000;
+        job.stem = "x";
+        job.json = "{}";
+        CHECK(!q.Done(7, 5000) && !q.Holds(7, 5000));
+        CHECK(q.Add(job));                              // the run's own end enqueues it
+        CHECK(q.Holds(7, 5000) && !q.Done(7, 5000));    // queued is not written
+        CHECK(q.Next() && q.Next()->stem == "x");
+        CHECK(!q.Add(job));                             // the same run seen again (the run table poll): nothing added
+        // FAILING CASE: a transient write failure must not mark the run done, and the next cycle must retry it
+        CHECK(q.Failed(7, 5000));
+        CHECK(q.Holds(7, 5000) && !q.Done(7, 5000));
+        CHECK(q.Next() && q.Next()->stem == "x");
+        // the atomic rename succeeded: done, and never added again
+        q.Succeeded(7, 5000);
+        CHECK(q.Done(7, 5000) && !q.Holds(7, 5000) && q.Pending() == 0);
+        CHECK(!q.Add(job));
+
+        // a write that keeps failing is dropped after the bounded attempts, never marked done
+        SummaryQueue bad;
+        SummaryJob again;
+        again.leaderGuid = 8;
+        again.startedMs = 7000;
+        again.stem = "y";
+        again.json = "{}";
+        CHECK(bad.Add(again));
+        for (int i = 0; i < SummaryQueue::kMaxAttempts - 1; ++i)
+            CHECK(bad.Failed(8, 7000) && bad.Holds(8, 7000));
+        CHECK(!bad.Failed(8, 7000));                    // the last attempt drops it
+        CHECK(!bad.Holds(8, 7000) && !bad.Done(8, 7000) && bad.Pending() == 0 && bad.Dropped() == 1);
+        CHECK(bad.GaveUp(8, 7000) && !bad.Add(again));  // and the run table poll does not restart the 15 attempts
+
+        // two runs of one leader in the same second are two jobs (different run clocks), oldest key first
+        SummaryQueue multi;
+        SummaryJob first = job;
+        SummaryJob second = job;
+        second.startedMs = 6000;
+        SummaryJob other = job;
+        other.leaderGuid = 8;
+        CHECK(multi.Add(first) && multi.Add(second) && multi.Add(other));
+        CHECK(multi.Pending() == 3);
+        CHECK(multi.Next() && multi.Next()->leaderGuid == 7 && multi.Next()->startedMs == 5000);
+        multi.Succeeded(7, 5000);
+        CHECK(multi.Next() && multi.Next()->startedMs == 6000);
     }
 
     // ---- the summary file ----
@@ -286,9 +324,9 @@ int main(int argc, char** argv)
         SummaryMeta meta;
         meta.coreRevision = "abc123";
         std::string const json = SummaryJson(r, meta);
-        CHECK(SummaryFileName(r) == "ragefire_chasm-1763560000-7.summary.json");
+        CHECK(SummaryFileName(r) == "ragefire_chasm-1763560000-5000-7.summary.json");
         char const* const want[] = {
-            "\"run\":\"ragefire_chasm-1763560000-7\"", "\"plan\":\"ragefire_chasm\"", "\"map\":389", "\"dungeon\":{\"map\":389}",
+            "\"run\":\"ragefire_chasm-1763560000-5000-7\"", "\"plan\":\"ragefire_chasm\"", "\"map\":389", "\"dungeon\":{\"map\":389}",
             "\"started\":1763560000", "\"ended\":1763560400", "\"duration_ms\":400000", "\"status\":\"done\"", "\"outcome\":\"cleared\"",
             "\"bosses\":[{\"entry\":11520,\"name\":\"Taragaman the Hungerer\",\"killed_at_s\":null,\"killed\":true}]",
             "\"wipes\":0", "\"deaths\":1", "\"party\":[{\"class\":\"warrior\",\"role\":\"tank\",\"level\":18}", "\"driver\":\"human\"",
@@ -301,6 +339,14 @@ int main(int argc, char** argv)
                 CHECK(false);
             }
         CHECK(json.find("stop_reason") == std::string::npos);
+        // two starts of the same leader and plan inside one wall-clock second: the run's own clock tells them apart
+        RunView sameSecond = r;
+        sameSecond.startedMs = 6000;
+        CHECK(sameSecond.startedUnix == r.startedUnix && sameSecond.planName == r.planName && sameSecond.leaderGuid == r.leaderGuid);
+        if (SummaryFileName(sameSecond) == SummaryFileName(r))
+            std::printf("two runs in one second share the file %s\n", SummaryFileName(r).c_str());
+        CHECK(SummaryFileName(sameSecond) != SummaryFileName(r));
+        CHECK(SummaryJson(sameSecond, meta) != json);
         // a stopped run names the reason; a run id never carries a character the file name cannot
         RunView s = Rfc();
         s.ended = true;
@@ -310,7 +356,7 @@ int main(int argc, char** argv)
         std::string const sj = SummaryJson(s, meta);
         CHECK(sj.find("\"outcome\":\"wiped_out\"") != std::string::npos && sj.find("\"status\":\"stopped\"") != std::string::npos);
         CHECK(sj.find("\"stop_reason\":\"wipe \\\"limit\\\"\"") != std::string::npos);
-        CHECK(SummaryFileName(s) == "a_b_c-1763560000-7.summary.json");
+        CHECK(SummaryFileName(s) == "a_b_c-1763560000-5000-7.summary.json");
     }
 
     // ---- a finished run lingers on the Commander tab, then leaves ----

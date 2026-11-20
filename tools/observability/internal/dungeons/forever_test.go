@@ -11,13 +11,13 @@ import (
 // (the run keeps none yet: killed_at_s is null).
 func TestForeverSummaryIsIndexed(t *testing.T) {
 	dir := t.TempDir()
-	data, err := os.ReadFile("testdata/forever/ragefire_chasm-1763560000-7.summary.json")
+	data, err := os.ReadFile("testdata/forever/ragefire_chasm-1763560000-5000-7.summary.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// a stopped run of the same dungeon, as the module writes one (its stop reason says why)
 	stopped := []byte(`{"run":"ragefire_chasm-1763561000-7","mode":"forever-run","plan":"ragefire_chasm","map":389,"dungeon":{"map":389},"build":{"module":"forever-port"},"driver":"human","started":1763561000,"ended":1763561100,"duration_ms":100000,"status":"stopped","outcome":"wiped_out","stop_reason":"the party wiped","bosses":[{"entry":11520,"name":"Taragaman the Hungerer","killed_at_s":null,"killed":false}],"wipes":2,"deaths":9,"party":[{"class":"warrior","role":"tank","level":18}]}`)
-	for name, body := range map[string][]byte{"ragefire_chasm-1763560000-7.summary.json": data, "ragefire_chasm-1763561000-7.summary.json": stopped} {
+	for name, body := range map[string][]byte{"ragefire_chasm-1763560000-5000-7.summary.json": data, "ragefire_chasm-1763561000-7.summary.json": stopped} {
 		if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
 			t.Fatal(err)
 		}

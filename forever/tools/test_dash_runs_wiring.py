@@ -68,7 +68,20 @@ class DashRunsWiring(unittest.TestCase):
 
     def test_summary_is_written_once_per_run(self):
         cpp = text("forever/src/dash/TbDashRuns.cpp")
-        self.assertIn("s.ledger.MarkIfNew(view.leaderGuid, view.startedMs)", cpp)
+        # the job is queued before the file lands; only the atomic rename marks it done, and a failure leaves it for the next cycle
+        self.assertIn("s.summaries.Add(std::move(job))", cpp)
+        self.assertIn("s.summaries.Succeeded(leaderGuid, startedMs)", cpp)
+        self.assertIn("s.summaries.Failed(leaderGuid, startedMs)", cpp)
+        self.assertNotIn("MarkIfNew", cpp)
+
+    def test_the_run_end_is_captured_before_a_new_start_removes_it(self):
+        run = text("forever/src/host/run/TbRun.cpp")
+        finish = re.search(r"uint32 Finish\(RunRec& rec.*?\n\}", run, re.S).group(0)
+        self.assertEqual(finish.count("EndHook(rec)"), 1)       # at the run's end, not only at the next 2 s poll
+        self.assertIn("void SetEndListener(EndListener listener)", run)
+        cpp = text("forever/src/dash/TbDashRuns.cpp")
+        self.assertIn("run::SetEndListener(&OnRunEnded)", cpp)
+        self.assertIn("void OnRunEnded(run::RunRec const& rec)", cpp)
 
     def test_empty_list_goes_through_the_gate(self):
         cpp = text("forever/src/dash/TbDashRuns.cpp")

@@ -95,6 +95,12 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
 bool Remove(ObjectGuid leader);
 std::vector<RunRec*> All();                         // by leader name
 
+// One listener for a run that ends (Finish is its only writer of endedMs): the dashboard feed copies what it needs while the record is
+// whole, because a later `.tb run start` removes it before the next world tick. Null when nothing is installed; a refused start calls it
+// never. The listener must not keep the record or a Player pointer.
+using EndListener = void (*)(RunRec const&);
+void SetEndListener(EndListener listener);
+
 // Appends an event (the ring drops the oldest past kEventRing) and returns its seq. `tMs` is taken from `nowMs` and the run's start.
 uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step = -1, int32 leg = -1, int32 unit = -1, std::string why = {});
 

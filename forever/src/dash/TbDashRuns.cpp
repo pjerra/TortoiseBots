@@ -48,7 +48,7 @@ struct State
     std::string summaryDir;
     bool summaryDirWarned = false;
     P::CommandersGate gate;
-    P::SummaryLedger ledger;
+    P::SummaryQueue summaries;
     struct Role { std::string role; uint32 atMs = 0; };
     std::map<ObjectGuid, Role> roles;
     // cost of a cycle, logged every kCostLogMs
@@ -237,31 +237,73 @@ P::RunView ViewOf(run::RunRec const& rec, int64 nowUnix, uint32 nowMs)
     return v;
 }
 
-void WriteSummary(State& s, P::RunView const& view)
+// The job is immutable before it is queued: a `.tb run start` may remove the run record before the file is written.
+bool EnqueueSummary(State& s, P::RunView const& view)
 {
+    if (s.summaryDir.empty() || !view.ended)
+        return false;
     P::SummaryMeta meta;
     meta.coreRevision = GitRevision::GetHash();
+    P::SummaryJob job;
+    job.leaderGuid = view.leaderGuid;
+    job.startedMs = view.startedMs;
+    job.stem = P::RunId(view);
+    job.json = P::SummaryJson(view, meta);
+    return s.summaries.Add(std::move(job));
+}
+
+bool WriteSummaryFile(State& s, P::SummaryJob const& job)
+{
     std::error_code ec;
     std::filesystem::path const dir(s.summaryDir);
     std::filesystem::create_directories(dir, ec);
-    std::filesystem::path const file = dir / P::SummaryFileName(view);
-    std::filesystem::path const tmp = dir / (P::SummaryFileName(view) + ".tmp");
-    bool ok = false;
-    if (!ec)
+    if (ec)
+        return false;
+    std::filesystem::path const file = dir / (job.stem + ".summary.json");
+    std::filesystem::path const tmp = file.parent_path() / (job.stem + ".summary.json.tmp");
+    std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+    out.write(job.json.data(), std::streamsize(job.json.size()));
+    out.close();
+    if (!out.good())
+        return false;
+    std::filesystem::rename(tmp, file, ec);     // the index never sees a half-written summary
+    return !ec;
+}
+
+// One job per cycle: a good write drops the job, a failed one is retried next cycle (bounded), and only success marks the run done.
+void FlushSummaries(State& s)
+{
+    P::SummaryJob const* job = s.summaries.Next();
+    if (!job)
+        return;
+    uint32 const leaderGuid = job->leaderGuid;
+    uint32 const startedMs = job->startedMs;
+    if (WriteSummaryFile(s, *job))
     {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        out << P::SummaryJson(view, meta);
-        out.close();
-        ok = out.good();
-        if (ok)
-            std::filesystem::rename(tmp, file, ec);
-        ok = ok && !ec;
+        s.summaries.Succeeded(leaderGuid, startedMs);
+        s.summaryDirWarned = false;
+        return;
     }
-    if (!ok && !s.summaryDirWarned)
+    std::string const stem = job->stem;
+    if (!s.summaries.Failed(leaderGuid, startedMs))
+        sLog.outString("TortoiseBots: dashboard run summary '%s' dropped after %d attempts (the Dungeon runs tab misses it)",
+            stem.c_str(), P::SummaryQueue::kMaxAttempts);
+    else if (!s.summaryDirWarned)
     {
         s.summaryDirWarned = true;
-        sLog.outString("TortoiseBots: dashboard run summary not written to '%s' (the Dungeon runs tab stays empty)", s.summaryDir.c_str());
+        sLog.outString("TortoiseBots: dashboard run summary not written to '%s' (retrying; the Dungeon runs tab misses it until it lands)",
+            s.summaryDir.c_str());
     }
+}
+
+// The run's own end (host/run/TbRun.h Finish): its record is whole now and a new start can remove it before the next cycle.
+void OnRunEnded(run::RunRec const& rec)
+{
+    State& s = Get();
+    if (!s.enabled || s.summaryDir.empty())
+        return;
+    P::RunView const view = ViewOf(rec, int64(GameTime::GetGameTime()), GameTime::GetGameTimeMS());
+    EnqueueSummary(s, view);
 }
 
 void Cycle(State& s)
@@ -272,21 +314,25 @@ void Cycle(State& s)
     std::vector<CT::BindingInfo> bindings;
     for (run::RunRec* rec : run::All())
     {
-        // An old finished run stays in the run table until its leader starts another: once it left the Commander tab and its summary is
-        // written it costs nothing here (no party read, no role lookup).
+        // An old finished run stays in the run table until its leader starts another: once it left the Commander tab and a summary job
+        // holds it (or it is written) it costs nothing here (no party read, no role lookup).
         if (run::Ended(*rec))
         {
+            uint32 const leaderGuid = uint32(rec->leader.GetCounter());
             bool const lingering = rec->endedMs && (nowMs - rec->endedMs) / 1000u < uint32(P::kLingerSecs);
-            bool const summaryDue = !s.summaryDir.empty() && !s.ledger.Contains(uint32(rec->leader.GetCounter()), rec->startedMs);
+            bool const summaryDue = !s.summaryDir.empty() && !s.summaries.Done(leaderGuid, rec->startedMs) && !s.summaries.Holds(leaderGuid, rec->startedMs)
+                && !s.summaries.GaveUp(leaderGuid, rec->startedMs);
             if (!lingering && !summaryDue)
                 continue;
         }
         P::RunView const view = ViewOf(*rec, nowUnix, nowMs);
-        if (view.ended && !s.summaryDir.empty() && s.ledger.MarkIfNew(view.leaderGuid, view.startedMs))
-            WriteSummary(s, view);
+        if (view.ended)
+            EnqueueSummary(s, view);
         if (P::OnCommanderTab(view, nowUnix))
             bindings.push_back(P::Binding(view));
     }
+
+    FlushSummaries(s);
 
     P::CommandersGate::Cycle const what = s.gate.Next(bindings.size());
     if (what == P::CommandersGate::Cycle::Skip)
@@ -311,6 +357,7 @@ void LoadConfig()
     s.intervalMs = uint32(std::max(500, sConfigMgr->GetIntDefault("TortoiseBots.Dashboard.IntervalMs", 2000)));
     s.summaryDir = sConfigMgr->GetStringDefault("TortoiseBots.Dashboard.RunSummaryDir", "");
     s.summaryDirWarned = false;
+    run::SetEndListener(&OnRunEnded);
     link::Load();
 }
 
