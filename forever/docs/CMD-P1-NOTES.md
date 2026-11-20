@@ -15,7 +15,7 @@ subgroup), the commander (online, map, position), the lead, the party counter, `
 |---|---|
 | `forever/src/host/cmd/TbCmdBindingPure.h` | pure: `BuildCards` (pairs + runs + metas -> cards), `MakeOrder`, `SplitRunOrder`, `RoleOfBrainLines`, `BindingOf` (card -> `CT::BindingInfo`). Standard library + `runtime/CommanderTelemetry.h` only |
 | `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | reads h3's table, the run table and the live players; `.tb commander status`; the three hooks; `AppendBindings`. With the option OFF the command answers `engine-not-built` and the hooks do nothing |
-| `forever/tools/cmd_binding_check.cpp` | the standalone check (36 checks, incl. the golden COMMANDERS datagram) |
+| `forever/tools/cmd_binding_check.cpp` | the standalone check (incl. the golden COMMANDERS datagram) |
 | `forever/tools/test_cmd_p1_wiring.py` | wiring pins; with `CMD_P1_MUTATE=1` (run on the VM) three mutations of the pure half must FAIL the check |
 | `forever/docs/TB-COMMANDS.md` section 11 | the reply records |
 
@@ -24,7 +24,7 @@ subgroup), the commander (online, map, position), the lead, the party counter, `
 | File | Line | Why |
 |---|---|---|
 | `host/TbOrders.cpp` HandleMaster | `cmd::NoteMaster(who.bots, who.leader, commander);` before the end record | the lead named and `boundAt`; a release drops the record |
-| `host/TbOrders.cpp` HandleOrder | `cmd::NoteOrder(who.bots, verb, rest, queued, refused, firstRefusal);` before the end record; `firstRefusal` is set in the `refuse` lambda | the order log |
+| `host/TbOrders.cpp` HandleOrder | `cmd::NoteOrder(outcomes, verb, rest);` before the end record; `outcomes` gets one `{bot, refusal code}` per addressed bot (`refuse` pushes the code, a queued bot pushes an empty one) | each card's own order log |
 | `host/run/TbRun.cpp` (the run tick) | `cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);` right after `Issue`, plus the include | the run's own orders in the log. The spec named `Issue` itself; the one caller is the better place until P3 lifts `Issue` to a `Party` (then move it into `Issue`) |
 | `TbScripts.cpp` | the `commander` row of the `.tb` table, plus the include | the command |
 
@@ -37,14 +37,22 @@ subgroup), the commander (online, map, position), the lead, the party counter, `
 * **One card per run (the failing case).** A running (not ended) run is a card: key = the commander of the run's leader when there is one (the run never
   rebinds its own leader), else the leader (`system=yes`). The pairs the run made (members -> tank) are dropped, so a run shows once (mutation `twice`); a
   card that runs keeps its commander's other bots. A run the card code skips would lose `run` and `system` (mutation `skiprun`).
+* **A run's bots are its bound ones.** The card holds the leader plus the party members h3's table binds to it (`RunMembers`); a real player or an unbound
+  bot in the leader's party is never counted in `bound` or listed as a member. While the leader is off-world (loading, teleporting) the run's own bound
+  members supply the same list, so the card does not empty.
+* **Every card is collected.** `BuildCards` returns all of them; the Turtle telemetry cap (twenty) is applied only by `AppendBindings` while serializing the
+  dashboard payload, never to the list the state is pruned from. `.tb commander status` shows every card.
 * **D2: guids only.** Nothing stores a group number. `group` in the reply and the JSON is `group->GetGUID().GetCounter()` (the value `GroupIdW2` returns; the
   helper is inlined here because `TbCompat_W2.h` is not reachable from host files without the wide-pass wrapper) read from the LEAD's live group at each
   read; the lead is found by guid. `GetDbStoreId` does not occur (pinned). No database call.
-* **What is kept beside the table:** per commander `{lead guid, boundAt}` (pruned at the next read once no bound bot is left, and at a release), the order
-  log (T `OrderLog`, 8 per commander, 20 commanders; an exact repeat of the last order is not noted), a role cache (10 s).
+* **What is kept beside the table:** per commander `{lead guid, boundAt}`, the order log (T `OrderLog`, 8 per commander, 20 commanders; an exact repeat of
+  the last order is not noted), a role cache (10 s). A release or a rebind that leaves a commander no bot prunes all three at once (`NoteMaster` ->
+  `PruneToStanding`), not only at the next read; the prune reads the whole card collection.
 * **The lead:** the one `.tb master party <leader> <commander>` named and still bound, else the leader of the first bound bot's party, else the first bot.
-* **Orders logged:** `.tb order` once per commander the addressed bots are bound to (a bot of a run counts for the run's card: the tank's own commander, else
-  the tank); `ok=yes` when at least one bot queued it. The run's orders are logged under the same key with the executor's answer.
+  A named lead is never overwritten by the party fallback, even when it is the lowest bound guid.
+* **Orders logged:** `.tb order` once per card the addressed bots stand on (a bot of a run counts for the run's card: the tank's own commander, else the
+  tank; a system run's tank addressed alone is keyed by itself). Each card gets its own queued/refused counts and its own first refusal (`TallyByCard`);
+  `ok=yes` only when that card queued at least one bot. The run's orders are logged under the same key with the executor's answer.
 
 ## What the dashboard collector needs (not done here: `forever/src/dash/*` is another package)
 
@@ -61,6 +69,18 @@ No other change: the format is the Turtle one (golden datagram in the check).
 * `view` is false (the TBM addon view is cut, D5); raid layout is empty (P7).
 * An offline commander is named `offline #<guid>` (or its real name from the character cache); an offline bot is not listed in `bots` (`bound` counts it).
 
+## Review round (FIX-cmdp1): fix or reject, one line each
+
+| Finding | Verdict | Reason |
+|---|---|---|
+| Codex: the card cap truncates the collection the state is pruned from | fix | `BuildCards` returns every card; only `AppendBindings` applies `kMaxCommandersReported`; the check builds 30 cards. |
+| Codex: a run copies every party member into its card | fix | `RunMembers` keeps the leader plus the members h3 binds to it, so humans and unbound bots are not counted; mixed-party check added. |
+| Codex: one order's aggregate counts are written to every card | fix | `NoteOrder` groups per-bot outcomes by card (`TallyByCard`); each card gets its own counts and first refusal; check and wiring pin added. |
+| Gemini 1: a named lead equal to the lowest bound guid is overwritten | fix | `namedLead` gates the party fallback; check added. |
+| Gemini 2: an order to a system run's tank alone is not logged | fix | `CardKeyOfBot` falls back to the running run's leader; wiring pin added. |
+| Gemini 3: release/rebind leaves log and repeat suppression until the next read | fix | `PruneToStanding` runs in `NoteMaster` on both paths; wiring pin added. |
+| Gemini 4: an off-world run leader empties the card | fix | the run's `bound` members are candidates too, and `RunMembers` filters them like the live party; check added. |
+
 ## Gates (slot 7 on the build VM, core pin 6517af05)
 
 | Gate | Result |
@@ -68,10 +88,11 @@ No other change: the format is the Turtle one (golden datagram in the check).
 | census, list `forever/SLICE5.txt` (P1 adds no legacy file: its code is under `forever/src`) | `files 176  compile clean 176  with errors 0  error places 0` |
 | option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`; `nm`: `cmd::HandleCommander`, `NoteMaster`, `NoteOrder`, `NoteRunOrder`, `AppendBindings` defined in `libtortoisebots.a` |
 | option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` |
-| `forever/tools/cmd_binding_check.cpp` (VM, g++) | `cmd_binding_check: 36 checks, 0 failed` |
-| `test_cmd_p1_wiring.py` | 9 tests OK; with `CMD_P1_MUTATE=1` (VM): the unmutated check passes and the three mutations (`key`, `skiprun`, `twice`) each FAIL it |
+| `forever/tools/cmd_binding_check.cpp` (VM, g++) | `cmd_binding_check: 47 checks, 0 failed` |
+| `test_cmd_p1_wiring.py` | 11 tests OK; with `CMD_P1_MUTATE=1` (VM): the unmutated check passes and the three mutations (`key`, `skiprun`, `twice`) each FAIL it |
 | `test_run_review_wiring.py` (names TbRun.cpp, TbOrders.cpp), `test_slice4_d4_wiring.py` | OK |
-| `slice_registry_check.py`, `slice_gen_context.py --check` | `(a)=0`; `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py`, `slice_gen_context.py --check` | `summary: (a)=0`; `SliceAiObjectContext.cpp is up to date` |
+| `tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent).` |
 | `test_run_c6`, `test_run_orders`, `test_run_cancel` (VM) | PASS 28 checks, PASS 128 checks, PASS |
 | Turtle `vm-build` / `vm-test tb` | not run: no file outside `forever/` changed |
 

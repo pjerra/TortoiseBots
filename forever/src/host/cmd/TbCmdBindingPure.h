@@ -33,7 +33,9 @@ struct Pair
 };
 
 // One run that goes on (not ended). `leaderCommander` is h3's commander of the run's leader, 0 when the leader has none: the run never rebinds its own
-// leader, so a leader that was commanded before the run still is, and that commander owns the card. `members` is the leader's party, leader first.
+// leader, so a leader that was commanded before the run still is, and that commander owns the card. `members` are candidates for the card's bots: the
+// leader's live party and the run's own bound members. BuildCards keeps the leader plus the candidates h3's table binds to it (RunMembers), so a human
+// player or an unbound party member is never counted as a bound bot.
 struct RunIn
 {
     uint32_t leader = 0;
@@ -78,12 +80,35 @@ inline void LeadFirst(std::vector<uint32_t>& bots, uint32_t lead)
         std::rotate(bots.begin(), it, it + 1);
 }
 
+// The bots of a run's card: its leader, then the candidates h3's table binds to that leader. A member of the leader's party that is a real player or a
+// host bot the run did not bind has no such pair and is not on the card.
+inline std::vector<uint32_t> RunMembers(uint32_t leader, std::vector<uint32_t> const& candidates, std::vector<Pair> const& pairs)
+{
+    std::vector<uint32_t> out;
+    if (!leader)
+        return out;
+    out.push_back(leader);
+    for (uint32_t candidate : candidates)
+    {
+        if (!candidate || candidate == leader)
+            continue;
+        for (Pair const& p : pairs)
+            if (p.bot == candidate && p.commander == leader)
+            {
+                AddUnique(out, candidate);
+                break;
+            }
+    }
+    return out;
+}
+
 // The cards, by commander guid. `groupLeader` maps a bot to the leader of the group it stands in (0 or absent: none), only to name the lead of a card
 // that `.tb master` made without naming one. Rules:
 //  * one card per commander: the bots bound to it, wherever they are (a commander never gets two cards);
 //  * one card per run: the run's leader is the key (system, when nobody commands the leader) or its own commander is (the run's bound members are folded
 //    into that commander's card). The pairs the run itself made (members -> tank) are dropped, so a run shows ONCE;
-//  * at most CT::kMaxCommandersReported cards, by commander guid.
+//  * every card is returned: the telemetry cap (CT::kMaxCommandersReported) belongs to the dashboard serializer, never to this collection (state is pruned
+//    from the whole list).
 inline std::vector<Card> BuildCards(std::vector<Pair> const& pairs, std::vector<RunIn> const& runs, std::vector<MetaIn> const& metas,
                                     std::map<uint32_t, uint32_t> const& groupLeader)
 {
@@ -110,7 +135,7 @@ inline std::vector<Card> BuildCards(std::vector<Pair> const& pairs, std::vector<
             c.run = int(r.index);
             AddUnique(c.bots, r.leader);
         }
-        for (uint32_t m : r.members)
+        for (uint32_t m : RunMembers(r.leader, r.members, pairs))
             AddUnique(c.bots, m);
         if (r.leaderCommander)
         {
@@ -127,10 +152,14 @@ inline std::vector<Card> BuildCards(std::vector<Pair> const& pairs, std::vector<
         c.commander = commander;
         c.bots = bots;
         c.lead = c.bots.front();
+        bool namedLead = false;
         for (MetaIn const& m : metas)
             if (m.commander == commander && m.lead && Has(c.bots, m.lead))
+            {
                 c.lead = m.lead;
-        if (c.lead == c.bots.front())
+                namedLead = true;
+            }
+        if (!namedLead)
         {
             auto const g = groupLeader.find(c.bots.front());
             if (g != groupLeader.end() && Has(c.bots, g->second))
@@ -147,13 +176,48 @@ inline std::vector<Card> BuildCards(std::vector<Pair> const& pairs, std::vector<
                 c.boundAt = m.boundAt;
         LeadFirst(c.bots, c.lead);
         out.push_back(std::move(c));
-        if (out.size() >= CT::kMaxCommandersReported)
-            break;
     }
     return out;
 }
 
 // ---- the order log (T CommanderTelemetry::OrderLog, as is) ----
+
+// One addressed bot's outcome of one order: refusal empty = the bot queued it.
+struct OrderOutcome
+{
+    uint32_t bot = 0;
+    std::string refusal;    // the first refusal code for this bot, empty when it queued the order
+};
+
+struct OrderTally
+{
+    uint32_t queued = 0;
+    uint32_t refused = 0;
+    std::string firstRefusal;
+};
+
+// One command's outcomes grouped by the card each bot is shown on (`cardOfBot`: bot guid -> card key). Every card gets its OWN counts and first refusal:
+// a card never claims work that queued or was refused for a bot of another card. Bots without a card are ignored.
+inline std::map<uint32_t, OrderTally> TallyByCard(std::vector<OrderOutcome> const& outcomes, std::map<uint32_t, uint32_t> const& cardOfBot)
+{
+    std::map<uint32_t, OrderTally> out;
+    for (OrderOutcome const& o : outcomes)
+    {
+        auto const card = cardOfBot.find(o.bot);
+        if (!o.bot || card == cardOfBot.end() || !card->second)
+            continue;
+        OrderTally& tally = out[card->second];
+        if (o.refusal.empty())
+            ++tally.queued;
+        else
+        {
+            ++tally.refused;
+            if (tally.firstRefusal.empty())
+                tally.firstRefusal = o.refusal;
+        }
+    }
+    return out;
+}
 
 // One order and the module's answer, in the Turtle record: ok = accepted, result = the scope (accepted) or "<code>: <message>" (refused).
 inline CT::OrderRecord MakeOrder(int64_t at, std::string verb, std::string detail, bool ok, std::string const& code, std::string const& text)

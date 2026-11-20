@@ -78,12 +78,32 @@ class Wiring(unittest.TestCase):
         self.assertLess(master.index("SetCommander(guid, commander->GetGUID())"), master.index("cmd::NoteMaster(who.bots, who.leader, commander)"))
         self.assertLess(master.index("cmd::NoteMaster("), master.index('Rec end("master")'))
         order = function_body(self.orders, r"bool HandleOrder\(ChatHandler\* handler, Trinity::ChatCommands::Tail tail\)\s*\{")
-        self.assertIn("cmd::NoteOrder(who.bots, verb, rest, queued, refused, firstRefusal)", order)
+        self.assertIn("cmd::NoteOrder(outcomes, verb, rest)", order)
         self.assertLess(order.index("cmd::NoteOrder("), order.index('Rec end("order")'))
-        self.assertIn("firstRefusal = code", order)
+        self.assertIn("outcomes.push_back({ bot, code })", order)                 # refused bot, its own code
+        self.assertIn("outcomes.push_back({ bot, std::string() })", order)        # queued bot
         tick = self.run.split("OrderAnswer const answer = Issue(")[1][:400]
         self.assertTrue(tick.lstrip().startswith("rec, order") or "cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);" in tick)
         self.assertRegex(self.run, r"OrderAnswer const answer = Issue\([^\n]*\n\s*cmd::NoteRunOrder\(rec\.leader, order, answer\.accepted, answer\.code, answer\.text\);")
+
+    def test_the_collection_is_never_capped_and_a_run_counts_only_bound_bots(self):
+        builds = self.pure.split("inline std::vector<Card> BuildCards")[1].split("// ---- the order log")[0]
+        self.assertNotIn("kMaxCommandersReported", builds)                    # the dashboard serializer owns the cap
+        self.assertIn("RunMembers(r.leader, r.members, pairs)", builds)       # a run's card holds the leader plus its bound bots
+        read = function_body(self.cpp, r"std::vector<HostCard> Read\(int64 nowUnix, uint32 nowMs\)\s*\{")
+        self.assertIn("for (auto const& member : rec->bound)", read)          # the leader off-world: its bound members still list the card
+        self.assertIn("PruneToStanding(s)", read)
+        append = function_body(self.cpp, r"void AppendBindings\(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32> const& runLeadersShown\)\s*\{")
+        self.assertIn("CT::kMaxCommandersReported", append)                   # telemetry limit, applied while serializing only
+
+    def test_a_card_keeps_its_own_order_tally_and_a_release_prunes_at_once(self):
+        note = function_body(self.cpp, r"void NoteOrder\(std::vector<std::pair<Player\*, std::string>> const& results, std::string const& verb, std::string const& arg\)\s*\{")
+        self.assertIn("P::TallyByCard(outcomes, cardOfBot)", note)            # no global queued/refused totals shared by every card
+        self.assertIn("CardKeyOfBot(bot->GetGUID())", note)
+        key_of_bot = function_body(self.cpp, r"ObjectGuid CardKeyOfBot\(ObjectGuid bot\)\s*\{")
+        self.assertIn("run::Find(bot)", key_of_bot)                           # a system run's leader is its own card key
+        master = function_body(self.cpp, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
+        self.assertEqual(master.count("PruneToStanding(s)"), 2)               # release and rebind, not only the next read
 
     def test_the_command_is_registered_and_the_off_build_answers(self):
         self.assertIn('{ "commander", TortoiseBots::cmd::HandleCommander', self.scripts)

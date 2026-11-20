@@ -21,8 +21,8 @@
 #include "Player.h"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
-#include <set>
 #include <unordered_set>
 
 namespace TortoiseBots
@@ -187,6 +187,46 @@ ObjectGuid CardKeyOf(ObjectGuid commander)
     return commander;
 }
 
+// The card an order for this bot is logged under. A bot bound to a commander shows on that commander's card (a run's fold included); a run's leader the
+// run never rebound (a system run) stands on the run's own card, keyed by itself.
+ObjectGuid CardKeyOfBot(ObjectGuid bot)
+{
+    ObjectGuid const commander = h3::CommanderGuid(bot);
+    if (!commander.IsEmpty())
+        return CardKeyOf(commander);
+    run::RunRec const* rec = run::Find(bot);
+    return rec && !run::Ended(*rec) ? bot : ObjectGuid::Empty;
+}
+
+// The card keys that stand now: every valid binding's card and every run that goes on. The same keys BuildCards returns, so the state kept beside h3's
+// table is pruned from the whole collection and never from a capped view.
+std::unordered_set<uint64> StandingKeys()
+{
+    std::unordered_set<uint64> keep;
+    for (auto const& binding : h3::CommanderBindings())
+    {
+        ObjectGuid const key = CardKeyOf(binding.second);
+        if (!key.IsEmpty())
+            keep.insert(Ctr(key));
+    }
+    for (run::RunRec* rec : run::All())
+        if (!run::Ended(*rec))
+            keep.insert(Ctr(CardKeyOf(rec->leader)));
+    return keep;
+}
+
+// A released binding (or a rebind that leaves a commander no bot) takes its record, its order log and its repeat suppression with it at once, not only at
+// the next read.
+void PruneToStanding(State& s)
+{
+    std::unordered_set<uint64> const keep = StandingKeys();
+    for (auto it = s.metas.begin(); it != s.metas.end();)
+        it = keep.count(Ctr(it->first)) ? std::next(it) : s.metas.erase(it);
+    s.log.Retain(keep);
+    for (auto it = s.lastLogged.begin(); it != s.lastLogged.end();)
+        it = keep.count(it->first) ? std::next(it) : s.lastLogged.erase(it);
+}
+
 std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
 {
     State& s = Get();
@@ -207,7 +247,11 @@ std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
         if (Player* lead = InWorld(rec->leader))
             if (Group* group = lead->GetGroup())
                 for (Group::MemberSlot const& slot : group->GetMemberSlots())
-                    r.members.push_back(Ctr(slot.guid));
+                    P::AddUnique(r.members, Ctr(slot.guid));
+        // While the leader loads or teleports the live group is not readable: the run's own bound members still say who is on its card. BuildCards keeps
+        // only the candidates h3's table binds to the leader, so neither list can add a human player or an unbound bot.
+        for (auto const& member : rec->bound)
+            P::AddUnique(r.members, Ctr(member.first));
         runRecs.push_back(rec);
         runs.push_back(std::move(r));
     }
@@ -225,6 +269,7 @@ std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
         touch(p.commander);
     for (P::RunIn const& r : runs)
         touch(r.leaderCommander ? r.leaderCommander : r.leader);
+    PruneToStanding(s);
 
     std::vector<P::MetaIn> metas;
     for (auto const& [commander, m] : s.metas)
@@ -237,19 +282,6 @@ std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
 
     std::vector<P::Card> const cards = P::BuildCards(pairs, runs, metas, groupLeader);
 
-    // A released binding takes its record and its order log with it.
-    std::set<ObjectGuid> standing;
-    std::unordered_set<uint64> keep;
-    for (P::Card const& c : cards)
-    {
-        standing.insert(PlayerGuid(c.commander));
-        keep.insert(c.commander);
-    }
-    for (auto it = s.metas.begin(); it != s.metas.end();)
-        it = standing.count(it->first) ? std::next(it) : s.metas.erase(it);
-    s.log.Retain(keep);
-    for (auto it = s.lastLogged.begin(); it != s.lastLogged.end();)
-        it = keep.count(it->first) ? std::next(it) : s.lastLogged.erase(it);
     for (auto it = s.roles.begin(); it != s.roles.end();)
         it = nowMs - it->second.atMs > 60000 ? s.roles.erase(it) : std::next(it);
 
@@ -314,12 +346,8 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
     int64 const now = int64(GameTime::GetGameTime());
     if (!commander)
     {
-        // A release: a record whose commander has no bound bot left goes at once, so a later bind starts a new card (boundAt).
-        std::set<ObjectGuid> held;
-        for (auto const& [bot, cmdr] : h3::CommanderBindings())
-            held.insert(cmdr);
-        for (auto it = s.metas.begin(); it != s.metas.end();)
-            it = held.count(it->first) ? std::next(it) : s.metas.erase(it);
+        // A release (or a rebind that left a commander no bot) drops the card's record and order log at once, so a later bind starts a new card.
+        PruneToStanding(s);
         return;
     }
     // Only what h3 holds now counts: a bot the host refused is not bound, whatever the command asked.
@@ -337,23 +365,33 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
         m.boundAt = now;
     if (leader && leaderBound)
         m.lead = leader->GetGUID();
+    PruneToStanding(s);     // a commander whose last bot was rebound elsewhere is gone from h3's table now: its log and lead go with it
 }
 
-void NoteOrder(std::vector<Player*> const& bots, std::string const& verb, std::string const& arg, uint32 queued, uint32 refused, std::string const& firstRefusal)
+void NoteOrder(std::vector<std::pair<Player*, std::string>> const& results, std::string const& verb, std::string const& arg)
 {
-    std::set<ObjectGuid> keys;
-    for (Player* bot : bots)
-        keys.insert(CardKeyOf(h3::CommanderGuid(bot->GetGUID())));
-    keys.erase(ObjectGuid::Empty);
-    if (keys.empty())
+    std::map<uint32, uint32> cardOfBot;
+    std::vector<P::OrderOutcome> outcomes;
+    for (auto const& [bot, refusal] : results)
+    {
+        ObjectGuid const key = CardKeyOfBot(bot->GetGUID());
+        if (key.IsEmpty())
+            continue;
+        uint32 const botGuid = Ctr(bot->GetGUID());
+        cardOfBot[botGuid] = Ctr(key);
+        outcomes.push_back({ botGuid, refusal });
+    }
+    if (outcomes.empty())
         return;
-    bool const ok = queued > 0;
-    std::string text = "queued " + std::to_string(queued) + " of " + std::to_string(queued + refused);
-    if (refused)
-        text += ", refused " + std::to_string(refused);
     int64 const now = int64(GameTime::GetGameTime());
-    for (ObjectGuid key : keys)
-        NoteLog(key, P::MakeOrder(now, verb, arg, ok, firstRefusal, ok ? text : std::string()));
+    for (auto const& [card, tally] : P::TallyByCard(outcomes, cardOfBot))
+    {
+        bool const ok = tally.queued > 0;
+        std::string text = "queued " + std::to_string(tally.queued) + " of " + std::to_string(tally.queued + tally.refused);
+        if (tally.refused)
+            text += ", refused " + std::to_string(tally.refused);
+        NoteLog(PlayerGuid(card), P::MakeOrder(now, verb, arg, ok, tally.firstRefusal, ok ? text : std::string()));
+    }
 }
 
 void NoteRunOrder(ObjectGuid leader, std::string const& order, bool accepted, std::string const& code, std::string const& text)
@@ -370,6 +408,9 @@ void AppendBindings(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32>
     {
         if (std::find(runLeadersShown.begin(), runLeadersShown.end(), h.card.lead) != runLeadersShown.end())
             continue;
+        // The datagram's cap, not the card collection's: `.tb commander status` shows every card and the state beside the table is pruned from all of them.
+        if (out.size() >= CT::kMaxCommandersReported)
+            return;
         out.push_back(P::BindingOf(h.view));
     }
 }
@@ -492,7 +533,7 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 }
 
 void NoteMaster(std::vector<Player*> const&, Player*, Player*) {}
-void NoteOrder(std::vector<Player*> const&, std::string const&, std::string const&, uint32, uint32, std::string const&) {}
+void NoteOrder(std::vector<std::pair<Player*, std::string>> const&, std::string const&, std::string const&) {}
 void NoteRunOrder(ObjectGuid, std::string const&, bool, std::string const&, std::string const&) {}
 void AppendBindings(std::vector<pure::CT::BindingInfo>&, std::vector<uint32> const&) {}
 }

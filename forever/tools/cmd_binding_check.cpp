@@ -16,6 +16,7 @@ namespace
 {
 // guid counters of the fixture
 constexpr uint32_t Tank = 10, Heal = 11, Dps1 = 12, Dps2 = 13, Dps3 = 14, Cmd = 20, Cmd2 = 21, Other = 30;
+constexpr uint32_t Human = 40, UnboundBot = 41;   // in the leader's party, not bound to it
 
 std::vector<P::Pair> PartyBoundTo(uint32_t commander, std::initializer_list<uint32_t> bots)
 {
@@ -120,13 +121,48 @@ void TestCards()
         auto const cards = P::BuildCards(pairs, { run }, {}, noGroups);
         CHECK(cards.size() == 2 && cards[0].commander == Tank && cards[1].commander == Cmd);
     }
-    // The cap.
+    // The named lead is kept even when it is the first bound bot and its party leader is another bound bot (the fallback must not overwrite it).
+    {
+        auto const cards = P::BuildCards(PartyBoundTo(Cmd, { Tank, Heal }), {}, { { Cmd, Tank, 7 } }, { { Tank, Heal } });
+        CHECK(cards.size() == 1 && cards[0].lead == Tank);
+    }
+    // Every card is returned: the telemetry cap belongs to the dashboard serializer, never to the collection the module prunes its state from.
     {
         std::vector<P::Pair> pairs;
         for (uint32_t c = 100; c < 100 + 30; ++c)
             pairs.push_back({ c + 1000, c });
-        CHECK(P::BuildCards(pairs, {}, {}, noGroups).size() == CT::kMaxCommandersReported);
+        auto const all = P::BuildCards(pairs, {}, {}, noGroups);
+        CHECK(all.size() == 30);
+        CHECK(all.size() > CT::kMaxCommandersReported);
+        CHECK(all.front().commander == 100 && all.back().commander == 129);
     }
+    // A run's card counts only the bots h3 binds to its leader: an unbound party member (a human player or an unbound bot) is never on it.
+    {
+        P::RunIn run;
+        run.leader = Tank;
+        run.members = { Tank, Heal, Human, UnboundBot };
+        auto const cards = P::BuildCards(PartyBoundTo(Tank, { Heal }), { run }, {}, noGroups);
+        CHECK(cards.size() == 1 && cards[0].system && cards[0].lead == Tank);
+        CHECK((cards[0].bots == std::vector<uint32_t>{ Tank, Heal }));
+        // The run's own bound members are enough while the leader is not in the world and its live group cannot be read.
+        run.members = { Heal };
+        auto const offWorld = P::BuildCards(PartyBoundTo(Tank, { Heal }), { run }, {}, noGroups);
+        CHECK(offWorld.size() == 1 && (offWorld[0].bots == std::vector<uint32_t>{ Tank, Heal }));
+    }
+}
+
+// ---- the per-card order tallies ----
+void TestTally()
+{
+    std::map<uint32_t, uint32_t> cardOfBot = { { Tank, Cmd }, { Heal, Cmd }, { Dps1, Cmd2 }, { Dps2, Cmd2 } };
+    auto const tallies = P::TallyByCard({ { Tank, "" }, { Heal, "" }, { Dps1, "no-engine" }, { Dps2, "not-in-group" } }, cardOfBot);
+    CHECK(tallies.size() == 2);
+    CHECK(tallies.at(Cmd).queued == 2 && tallies.at(Cmd).refused == 0 && tallies.at(Cmd).firstRefusal.empty());
+    CHECK(tallies.at(Cmd2).queued == 0 && tallies.at(Cmd2).refused == 2 && tallies.at(Cmd2).firstRefusal == "no-engine");
+    // A mixed card keeps its own first refusal and both counts; a bot without a card is not counted anywhere.
+    auto const mixed = P::TallyByCard({ { Tank, "" }, { Heal, "no-pull-strategy" }, { Other, "" } }, cardOfBot);
+    CHECK(mixed.size() == 1);
+    CHECK(mixed.at(Cmd).queued == 1 && mixed.at(Cmd).refused == 1 && mixed.at(Cmd).firstRefusal == "no-pull-strategy");
 }
 
 // ---- the order log ----
@@ -230,6 +266,7 @@ void TestGolden()
 int main()
 {
     TestCards();
+    TestTally();
     TestOrders();
     TestRole();
     TestGolden();

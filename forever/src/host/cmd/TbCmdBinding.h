@@ -20,6 +20,7 @@
 #include "host/cmd/TbCmdBindingPure.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 class ChatHandler;
@@ -35,9 +36,9 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 // HandleMaster (TbOrders.cpp), after the bindings were written: `bots` are the bots the command addressed, `leader` the party leader the command named
 // (null for a single bot or a `party` without a leader), `commander` the new commander (null: release).
 void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* commander);
-// HandleOrder (TbOrders.cpp), once per command: the order as typed and how many bots queued it or refused it; `firstRefusal` is the first refusal's code.
-// Logged once per commander the addressed bots are bound to.
-void NoteOrder(std::vector<Player*> const& bots, std::string const& verb, std::string const& arg, uint32 queued, uint32 refused, std::string const& firstRefusal);
+// HandleOrder (TbOrders.cpp), once per command: one entry per addressed bot, its refusal code (empty when it queued the order). Logged once per card the
+// addressed bots stand on, each with its own counts and first refusal.
+void NoteOrder(std::vector<std::pair<Player*, std::string>> const& results, std::string const& verb, std::string const& arg);
 // The run tick (host/run/TbRun.cpp), after `run::Issue` answered: the order string the policy sent and the executor's answer.
 void NoteRunOrder(ObjectGuid leader, std::string const& order, bool accepted, std::string const& code, std::string const& text);
 
