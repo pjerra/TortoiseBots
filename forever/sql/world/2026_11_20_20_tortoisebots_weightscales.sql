@@ -1,23 +1,23 @@
 -- TortoiseBots spec weight scales (final state of Turtle world migrations).
 
-CREATE TABLE IF NOT EXISTS `ai_playerbot_weightscales` (
+CREATE TABLE IF NOT EXISTS `world`.`ai_playerbot_weightscales` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(32) NOT NULL,
   `class` tinyint unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 
-CREATE TABLE IF NOT EXISTS `ai_playerbot_weightscale_data` (
+CREATE TABLE IF NOT EXISTS `world`.`ai_playerbot_weightscale_data` (
   `id` int unsigned NOT NULL,
   `field` varchar(32) NOT NULL,
   `val` smallint unsigned NOT NULL,
   KEY `id` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 
-DELETE FROM `ai_playerbot_weightscale_data`;
-DELETE FROM `ai_playerbot_weightscales`;
+DELETE FROM `world`.`ai_playerbot_weightscale_data`;
+DELETE FROM `world`.`ai_playerbot_weightscales`;
 
-INSERT INTO `ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
+INSERT INTO `world`.`ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
   (1, 'arms', 1),
   (2, 'fury', 1),
   (3, 'prot', 1),
@@ -48,7 +48,7 @@ INSERT INTO `ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
   (31, 'resto', 11),
   (32, 'feraldps', 11);
 
-INSERT INTO `ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
+INSERT INTO `world`.`ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
   (1, 'agi', 3),
   (1, 'atkpwr', 2),
   (1, 'critstrkrtng', 56),
