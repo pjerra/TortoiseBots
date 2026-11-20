@@ -421,7 +421,7 @@ public:
     static bool HandleLootNear(ChatHandler* handler, std::string name)
     {
         Player* bot = RequireBot(handler, name);
-        if (!bot)
+        if (!bot || !bot->FindMap() || bot->IsBeingTeleported())
             return false;
         FindCreatureOptions options;
         options.IsAlive = FindCreatureAliveState::Dead;
@@ -469,7 +469,10 @@ public:
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 #ifdef TORTOISEBOTS_SLICE1
         // R6 live check: the liquid at the bot's feet and the nearest wet floor cells within 40 yd (the run's own liquid rule, TbRunLiquid.h).
-        for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(bot->GetMap(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
+        Map* map = bot->FindMap();
+        if (!map)
+            return false;
+        for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 #endif
 
