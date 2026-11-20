@@ -118,6 +118,20 @@ int main()
         assert(!protPrefs.empty());
     }
 
-    std::cout << "PASS: test_gear_set_policy (7 checks, 0 failed)\n";
+    // 8. Mage at level 60 ranks classic cloth/weapon candidates both with "fire" and empty spec.
+    {
+        std::vector<ai::GearItemCandidate> pool = {
+            MakeItem(18727, 0, 3, 59, 54, 1, 4, 1, 248), // Crimson Felt Hat (cloth)
+            MakeItem(12587, 0, 3, 63, 58, 1, 4, 4, 500), // Plate helm -> refused for mage
+        };
+        auto rankedFire = ai::RankCandidatesForSlot(pool, 8, "fire", 60, 0, 3, false, false);
+        assert(rankedFire.size() == 1);
+        assert(rankedFire[0].itemId == 18727);
+        auto rankedEmpty = ai::RankCandidatesForSlot(pool, 8, "", 60, 0, 3, false, false);
+        assert(rankedEmpty.size() == 1);
+        assert(rankedEmpty[0].itemId == 18727);
+    }
+
+    std::cout << "PASS: test_gear_set_policy (8 checks, 0 failed)\n";
     return 0;
 }

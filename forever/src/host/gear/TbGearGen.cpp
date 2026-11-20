@@ -118,6 +118,7 @@ bool EquipCandidateInSlot(Player* target, uint8 slot, uint32 itemId, std::string
     uint16 swapDest = 0;
     if (!fresh || target->CanEquipItem(slot, swapDest, fresh, true) != EQUIP_ERR_OK)
     {
+        target->DestroyItemCount(itemId, 1, true, false);
         outStatus = "refused";
         outCode = "core-refused";
         return false;
@@ -132,6 +133,7 @@ bool EquipCandidateInSlot(Player* target, uint8 slot, uint32 itemId, std::string
         return true;
     }
 
+    target->DestroyItemCount(itemId, 1, true, false);
     outStatus = "refused";
     outCode = "core-refused";
     return false;
@@ -258,7 +260,7 @@ GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint
         specId = sRandomItemMgr.GetPlayerSpecId(target);
         if (!specId)
             specId = sRandomItemMgr.GetFallbackSpecId(playerClass);
-        canonicalSpec = sRandomItemMgr.GetSpecName(specId);
+        canonicalSpec = ai::CanonicalSpecName(playerClass, sRandomItemMgr.GetSpecName(specId));
     }
 
     uint32 const level = levelArg > 0 ? std::clamp<uint32>(levelArg, 1, 60) : std::clamp<uint32>(target->GetLevel(), 1, 60);
@@ -359,6 +361,8 @@ GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint
                 lastFailCode = "bags-full";
                 break;
             }
+            if (lastFailCode == "no-item" && !code.empty())
+                lastFailCode = code;
         }
 
         if (!equippedSlot)
