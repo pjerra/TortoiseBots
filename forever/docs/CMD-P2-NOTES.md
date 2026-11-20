@@ -85,7 +85,7 @@ Two things the live run taught, both fixed here:
 | Gate | Result |
 |---|---|
 | census, list `forever/SLICE5.txt` (P2 adds no legacy file) | `files 176  compile clean 176  with errors 0  error places 0` |
-| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (64,706,344-byte binary); the ON library defines `ReleaseCommander` (local), `store::Save` |
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (64,706,328-byte binary); the ON library defines `ReleaseCommander` (local), `store::Save` |
 | option-OFF `worldserver` | `CMAKE_RC=0 MAKE_RC=0` (55,819,952 bytes); the OFF library has no `ReleaseCommander`/`RestoreOne` (the no-op hooks only) and `store::Save` as before (the store is compiled in both flavours) |
 | `forever/tools/cmd_binding_check.cpp` (P1) | `cmd_binding_check: 57 checks, 0 failed` |
 | `forever/tools/cmd_binding_life_check.cpp` (P2) | `cmd_binding_life_check: 73 checks, 0 failed` |

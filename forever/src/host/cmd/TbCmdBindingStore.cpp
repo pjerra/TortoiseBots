@@ -134,7 +134,7 @@ QueryResult CharacterQueryCompat(char const* sql, bool* schemaMissing = nullptr)
 }
 
 // Every stored row, read through the guard. Never touches `loadTried`: it is the one reader Rows() and the write confirmations share.
-std::vector<life::Stored> ReadRows(State& s)
+std::vector<life::Stored> ReadRows()
 {
     std::vector<life::Stored> rows;
     QueryResult result = CharacterQueryCompat(kSelect);
@@ -223,7 +223,7 @@ std::vector<life::Stored> Rows()
     s.loadTried = true;
     if (!CheckSchema(s, true))
         return s.rows;
-    s.rows = ReadRows(s);
+    s.rows = ReadRows();
     return s.rows;
 }
 
@@ -252,7 +252,7 @@ bool Save(life::Stored const& stored)
         kColumns, stored.commander, stored.lead, life::EncodeMembers(stored.members), stored.flags, stored.boundAt);
     CharacterDatabase.DirectExecute(sql.c_str());
     // A one-way statement cannot answer, so the row is read back: the in-memory view changes only after the database really holds it.
-    std::vector<life::Stored> const rows = ReadRows(s);
+    std::vector<life::Stored> const rows = ReadRows();
     life::Stored const* now = Find(rows, stored.commander);
     if (!now || !SameRow(*now, stored))
     {
@@ -272,7 +272,7 @@ bool Erase(uint64_t commander)
     if (!Writable(s))
         return false;
     CharacterDatabase.DirectExecute(Trinity::StringFormat("DELETE FROM `tb_commander_binding` WHERE `commander_guid` = {}", commander).c_str());
-    std::vector<life::Stored> const rows = ReadRows(s);
+    std::vector<life::Stored> const rows = ReadRows();
     if (Find(rows, commander))
     {
         TC_LOG_ERROR("tortoisebots", "TortoiseBots: the stored commander binding of #{} was not deleted (the row is still there); the next start may restore it",

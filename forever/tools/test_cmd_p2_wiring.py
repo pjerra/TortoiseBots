@@ -171,10 +171,10 @@ class Wiring(unittest.TestCase):
         self.assertIn("Writable(s)", save)
         self.assertIn("ON DUPLICATE KEY UPDATE", save)                       # one atomic statement: no DELETE and INSERT to split
         self.assertIn("DirectExecute(sql.c_str())", save)
-        self.assertIn("ReadRows(s)", save)                                   # the in-memory view changes only after the read-back
+        self.assertIn("ReadRows()", save)                                   # the in-memory view changes only after the read-back
         erase = function_body(self.store, r"bool Erase\(uint64_t commander\)\s*\{")
         self.assertIn("Writable(s)", erase)
-        self.assertIn("ReadRows(s)", erase)
+        self.assertIn("ReadRows()", erase)
         # The guard only ever names this store's table: a table name can never be built from anywhere but this file.
         self.assertIn("table != kTable", guard)
         # A reload re-reads: the load state, the schema flag and the rows all start over.
