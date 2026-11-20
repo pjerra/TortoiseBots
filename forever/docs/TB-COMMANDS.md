@@ -370,6 +370,7 @@ plan-end count=103 records=103 verb=check plan=ragefire_chasm bot=Mtank map=389 
 
 ### `.tb plan reload [#token]`
 Reads the plan tables again through the loader (`ReloadDungeonPlans`) with every running run's plan pointer as `inUse`, and swaps them in only when every row passes (the loader's own rules). When the swap happened the unit rows are read again against the new table and the cached matches are dropped. No record lines: the end line says it. End: `verb=reload swapped=yes|no`, `why=` exactly when `swapped=no` (the loader's reason, free text), `changes=` (when swapped: how many plan changes the loader listed), `plans= steps=` of the table now in use, and `units= units_refused=` (the last unit-row read; absent when it was not read).
+The same all-or-nothing reload also runs by itself after a successful `reload all` (in game, console or remote), so a plan edited in the database is in use without the extra command: core pin d02645dd21 has the `OnAfterReload` hook (#374) and the module answers it. The outcome goes to the server log as one `TortoiseBots:` line (`reloaded <n> dungeon plans ...` or `the dungeon plans kept after reload all (<reason>)`); no other core `.reload` command touches module data, so none of them reloads anything here.
 ```
 plan-begin #p4
 plan-end count=0 records=0 verb=reload swapped=yes changes=0 plans=1 steps=80 units=103 units_refused=0 #r1
