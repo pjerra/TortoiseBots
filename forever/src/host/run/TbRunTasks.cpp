@@ -278,7 +278,8 @@ void Finish(ObjectGuid leader, RunTasks& rt, Task const& task, bool ok, std::str
     else
         ++totals.failed;
     if (RunRec* rec = Find(leader))
-        NoteTaskEvent(*rec, nowMs, task.rec.lootLike ? "loot" : "open", int32(task.entry), (ok ? "done: " : "failed: ") + text);
+        NoteTaskEvent(*rec, nowMs, task.rec.kind == Kind::Gossip ? "gossip" : task.rec.lootLike ? "loot" : "open", int32(task.entry),
+            (ok ? "done: " : "failed: ") + text);
 }
 
 // ---- the act ----
@@ -689,7 +690,7 @@ bool FindNpcByEntry(Player* bot, uint32 entry, float yd, ObjectGuid& out)
     std::list<Creature*> bodies;
     bot->GetCreatureListWithEntryInGrid(bodies, entry, yd + 1.0f);
     for (Creature* creature : bodies)
-        if (creature && creature->IsAlive() && creature->isSpawned())
+        if (creature && creature->IsAlive() && creature->IsInWorld())
         {
             uint64 const key = GuidKeyCompat(creature->GetGUID());
             keys[key] = creature->GetGUID();
