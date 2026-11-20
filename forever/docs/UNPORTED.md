@@ -110,3 +110,19 @@ Rows added by the slice-4 porting worker (`SLICE4-P-NOTES.md` section 5): 76 fea
 |---|---|---|---|---|
 | battleground release aura | the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground | ReleaseSpiritAction.h: `WaitingForResurrectAuraCompat` (2 places: `ReleaseSpiritAction`, `AutoReleaseSpiritAction`; only when `InBattleGround()`) | nothing is cast (the release itself still runs) | the battleground slice: the core puts the aura on a player when its spirit guide is chosen (`Player::SetAreaSpiritHealer`, Player.cpp:33468) |
 | self resurrection | soulstone and ankh self-resurrection: `PLAYER_SELF_RES_SPELL` and `CMSG_SELF_RES` | ReleaseSpiritAction.h: `SelfResurrectPossibleCompat`, `SelfResurrectCompat` (`SelfResurrectAction`, key `self resurrect` not registered) | not possible, nothing sent | read the player's self-resurrection spell list (`InitializeSelfResurrectionSpells`) and send the typed packet with the spell id |
+
+<!-- slice 9, package L9 -->
+Rows changed by slice 9 package L9 (`SLICE9-L-NOTES.md`): item loot, group-loot rolls and the item usage value are real now. Helpers: `forever/src/compat/TbCompat_S9.h` (Turtle twin `ai/cmangos-compat-s9.h`) and the F bodies edited in `TbCompat_I2.h` / `TbCompat_V2.h`. The boot line counts one feature less (75: `item usage` is gone; the ids below keep their place in the table).
+
+| Feature | Before | Now |
+|---|---|---|
+| `loot: items, quest items and rolls` (enum `LootItems`) | the window held no items; no item was taken; no roll was answered | renamed `loot: bot-only drop boost` (enum `LootBoost`): only the random-bot extra roll (`ApplyBotLootBonus`) stays; a host bot is never a random bot. The window rows, the slot rights, the take (`HandleAutostoreLootItemOpcode`), quest and free-for-all copies, and the roll are real |
+| `loot tables (drop maps)` (`LootTables`) | no template could be read | renamed `loot tables: shared drop maps`: the templates are copied from the world database through a guarded reader (`creature_`, `gameobject_`, `reference_`, `item_loot_template`); only the maps built through the shared value context (not built on F) stay unported |
+| `loot: gathering, skinning and game objects` (`GatheringLoot`) | no game object was a loot target | renamed `loot: gathering and skinning`: a CHEST in its ready state is looted (opening cast, window polled); herb / ore nodes, skinning, pickpocketing, fishing and disenchant loot stay |
+| `incoming: loot roll` (`IncomingLoot`) | the bot never rolled | renamed `incoming: loot vote and roll won`: the start of a roll (`Player::GetLootRolls`, polled) and the bot's own vote (`HandleLootRoll`, GREED ONLY) are real; other players' votes and the won packet are not fed (the `loot roll won` trigger is not registered, so nothing auto-equips) |
+| `item usage` (`ItemUsage`) | `ItemUsageValue.cpp` was four stand-ins and the key was not registered | row and stand-ins removed; `ItemUsageValue.cpp` is in the slice and `item usage` is registered. Inside it: auction listings (type only), disenchant ids, the equip slot of a prototype, honor ranks and the ammo id answer the "none" value (LESS) |
+<!-- end slice 9, package L9 -->
+
+<!-- slice 9, package O9 -->
+Slice 9 package O9 (`SLICE9-DOORS-NOTES.md`): the **run's** object, loot and loot-method orders are carried out by `forever/src/host/run/TbRunTasks.*` on the core's public API (the typed `GameObjUse` packet into `HandleGameObjectUseOpcode`, the engine's `open loot`, `LootOpenCompat`, `HandleSetLootMethodOpcode`). The ENGINE-driven rows above (`game object use`: lightwells, party portals, ritual objects; `GameObjectUseUnportedCompat`) are unchanged and still count: a bot's own strategy never uses a game object, only the run's order does. `use <item>` (a use_item step) stays refused.
+<!-- end slice 9, package O9 -->

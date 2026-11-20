@@ -126,6 +126,12 @@ inline int32 NewItemRandomPropertyIdCompat(uint32 /*itemId*/) { tbcompat::Unport
 struct AuctionEntry
 {
     uint32 itemTemplate = 0;
+    // The fields the price code of ItemUsageValue.cpp reads (slice 9, package L9). Never set: nothing creates a listing here, so every container of
+    // AuctionEntry is empty and these are only named, not read from a real auction.
+    uint32 Id = 0;
+    uint32 itemGuidLow = 0;
+    uint32 buyout = 0;
+    uint32 owner = 0;
 };
 
 

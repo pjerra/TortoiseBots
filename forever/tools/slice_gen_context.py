@@ -93,7 +93,19 @@ SLICE4_KEYS = {
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# Slice 9 (package L9, FOREVER-SLICE9-SPEC section 6, listed with creator file:line in forever/docs/SLICE9-L-NOTES.md): item loot and group loot rolls. The
+# `roll` strategy is the one whose `very often` trigger fires `auto loot roll`; `loot start roll` / `loot vote` are the pass-through names of the
+# `default` strategy (WorldPacketHandlerStrategy::supported), fed by the poll of TbCompat_S9.h. Left out on purpose (each one does less): `loot roll won`
+# and `log roll won` (nothing feeds them; the trigger's second action is `equip upgrades`, so registering it would wire AUTO-EQUIP), `delayed roll`,
+# `equip upgrades`, `item push result`; the item usage value's own dependencies (mount list, craft spells, should craft spell, free money for): their
+# absence reads as the empty value, so no mount, craft or purchase is planned.
+SLICE9_KEYS = {
+    "strategy": "roll",
+    "action": "loot start roll, loot vote, loot roll, auto loot roll, roll, release loot",
+    "trigger": "loot start roll, loot vote, loot roll",
+    "value": "active rolls, seen need rolls, item usage, skip go loot list",
+}
+KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k] + ", " + SLICE9_KEYS[k]).split(",")] for k in SLICE_KEYS}
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
