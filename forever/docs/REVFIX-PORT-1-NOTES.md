@@ -121,3 +121,15 @@ Suggested patch (not applied):
 | Gemini 5 too-far before path work | REJECT (no defect) | Early `TooFar` return is present; verdict and text unchanged. |
 | Gemini 6 `BindBotMaster` | REJECT (no defect) | The pointer is set unconditionally (null for an offline master); no change. |
 | Gemini 7 time-limit subtraction | REJECT (no defect) | Both stamps are `GameTime::GetGameTimeMS()`; unsigned subtraction is correct at the wrap; no change. |
+
+## Gates (round 2, slot 1, commit 4f9aa7537)
+| Gate | Result |
+|---|---|
+| census SLICE5 / SLICE4 / SLICE3 / SLICE2 / SLICE1 (`FOREVER_SLOT=1`) | `files 176 / 174 / 170 / 160 / 133  compile clean = files  with errors 0  error places 0  includes of a header ForeverCore does not have 0` |
+| option ON `worldserver` (`-DTORTOISEBOTS_SLICE1=ON`) | `CMAKE_RC=0 MAKE_RC=0`; 4 `run::` symbols strong, 0 `undefined` |
+| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0`; `libtortoisebots.a` 18 objects (run files empty) |
+| `slice_gen_context.py --check`, `slice_registry_check.py`, `verify_okf.py` | up to date; `(a)=0  (b)=215`; OKF PASSED |
+| run tests (VM, g++ -std=c++17 -O1 -Wall -Wextra) | `test_run_orders` 159 checks, `test_run_c6` 28, `test_run_cancel` PASS (incl. equal-map/different-instance), `test_run_liquid` PASS, `test_run_facts` PASS |
+| S5 policy tests (VM) | `test_dungeon_run_policy` ok, `test_system_run_policy` 109, `test_forever_plan_match` 38, `test_dungeon_plan_reload_policy` all passed, `test_rez_hold_policy` ok |
+| wiring pins | `test_run_revfix2_wiring.py` 3 OK, `test_run_revfix1_wiring.py` 8 OK, `test_run_review_wiring.py` 9 OK, `test_reload_plans_wiring`, `test_plan_step_label_wiring`, `test_aura_tactics_wiring`, `test_run_leader_wiring`, `test_forever_no_direct_queries`, `test_dungeon_plan_sql` OK |
+| Turtle `vm-build` / `vm-test tb` | not needed: every changed file is under `forever/` |
