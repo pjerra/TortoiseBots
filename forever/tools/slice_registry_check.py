@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 STRAT = os.path.join(ROOT, "ai", "playerbot", "strategy")
 SLICE_CTX = os.path.join(ROOT, "forever", "src", "slice", "SliceAiObjectContext.cpp")
-SLICE_LIST = os.path.join(ROOT, "forever", "SLICE9.txt")   # slice 9: the list the keys are closed against (SLICE5 plus the L9 files and, after integration batch 2, the slice-8/10/11 files; CMake reads the same file)
+SLICE_LIST = os.path.join(ROOT, "forever", "SLICE-W1.txt")   # W1: the list the keys are closed against (the slice-9 list plus the W1 files; CMake reads the same file)
 SLICE_GUARD = os.path.join(ROOT, "forever", "src", "slice", "SliceMissingKeyGuard.h")
 
 # Full-build registries, in the order AiObjectContext::AiObjectContext adds them (first context wins a lookup).

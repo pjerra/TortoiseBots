@@ -135,6 +135,17 @@ SLICE11_KEYS = {
     "trigger": "no pet, has pet, new pet, pet attack, pet, enemy ten yards, enemy fifteen yards, low mana, target of attacker close, has aggro in raid group",
     "value": "pet dead, pet happy, active spell",
 }
+# World-life slice W1 (FOREVER-W1-W6A-SPEC section 1.3, forever/docs/W1-NOTES.md): the grind target value and its strategy, the
+# actions and triggers of the open-world dead kit, and the graveyard values. Left unregistered on purpose (each one does less, spec
+# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `collision`, `group`, `guild`; the travel
+# target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
+# reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
+W1_KEYS = {
+    "strategy": "grind",
+    "action": "attack anything, avoid elite, idle wander, find corpse, revive from corpse, spirit healer",
+    "trigger": "no target, dangerous elite near, dead, corpse near, val",
+    "value": "grind target, can fight elite, dangerous elite, graveyard, best graveyard, should spirit healer, can move around",
+}
 def _join(*ds):
     # One entry per key and kind: a key two slice lists both name (slice 8's and slice 10's `low mana`, `enemy is close`) is
     # registered once, in the order of the first list that names it.
@@ -160,7 +171,7 @@ SLICE9_KEYS = {
     "trigger": "loot start roll, loot vote, loot roll",
     "value": "active rolls, seen need rolls, item usage, skip go loot list",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

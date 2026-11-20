@@ -22,6 +22,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ACTION = (ROOT / "ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp").read_text()
+COMPAT_T = (ROOT / "ai/cmangos-compat-w1.h").read_text()
 
 
 def body(text, start, end):
@@ -43,24 +44,29 @@ class CorpseEntranceWiringTest(unittest.TestCase):
     def test_the_pick_is_by_the_corpse(self):
         self.assertIn("PickCorpseEntrance(candidates, corpsePos.getX(), corpsePos.getY(), corpsePos.getZ(), rules)",
                       self.find)
-        # The candidates carry the trigger's destination, the ghost's distance to the trigger only on its own map.
-        for field in ("c.destX = at->destination.x;", "c.destY = at->destination.y;", "c.destZ = at->destination.z;"):
+        # The candidates carry the trigger's destination, the ghost's distance to the trigger only on its own map. The fields are read
+        # through the both-core pair; the Turtle side is the expression the code always made.
+        for field in ("c.destX = destX;", "c.destY = destY;", "c.destZ = destZ;"):
             self.assertIn(field, self.find)
+        self.assertIn("AreaTeleportPosCompat(at, destX, destY, destZ);", self.find)
+        self.assertIn("x = at ? at->destination.x : 0.0f;", COMPAT_T)
         self.assertRegex(self.find, r"c\.ghostSqYd = onGhostMap \? botPos\.sqDistance2d\(")
-        self.assertIn("bool const onGhostMap = atEntry->mapid == rules.ghostMap;", self.find)
+        self.assertIn("bool const onGhostMap = atMap == rules.ghostMap;", self.find)
         # No nearest-to-the-ghost pick of its own any more.
         self.assertNotIn("bestDist", self.find)
 
     def test_only_doors_into_the_corpse_map_and_the_rules(self):
-        self.assertIn("if (at->destination.mapId != corpseMapId)", self.find)
-        self.assertIn("c.sourceMap = atEntry->mapid;", self.find)
-        self.assertIn("MapEntry const* sourceMap = sMapStorage.LookupEntry<MapEntry>(atEntry->mapid);", self.find)
+        self.assertIn("if (destMap != corpseMapId)", self.find)
+        self.assertIn("destMap = AreaTeleportMapIdCompat(at);", self.find)
+        self.assertIn("return at ? at->destination.mapId : 0;", COMPAT_T)
+        self.assertIn("c.sourceMap = atMap;", self.find)
+        self.assertIn("MapEntry const* sourceMap = MapEntryCompat(atMap);", self.find)
         self.assertIn("c.sourceInstanceable = !sourceMap || sourceMap->Instanceable();", self.find)
         self.assertIn("rules.destMap = corpseMapId;", self.find)
         self.assertIn("rules.ghostMap = botMapId;", self.find)
         self.assertIn("rules.timeout = timeout;", self.find)
-        self.assertIn("rules.entranceMap = corpseMap->ghostEntranceMap;", self.find)
-        self.assertIn("sMapStorage.LookupEntry<MapEntry>(corpseMapId)", self.find)
+        self.assertIn("rules.entranceMap = MapGhostEntranceMapCompat(corpseMapId);", self.find)
+        self.assertIn("return entry ? entry->ghostEntranceMap : 0;", COMPAT_T)
         # No filter of its own that could let a door past the policy's rules.
         self.assertNotIn("anyMap", self.find)
 
@@ -70,14 +76,18 @@ class CorpseEntranceWiringTest(unittest.TestCase):
             "entranceTrigger, entranceTeleport)", self.corpse)
 
     def test_the_timeout_uses_its_rules_and_falls_back(self):
-        timeout = body(self.corpse, "if (corpseInDungeon && deadTime >= 5 * MINUTE)",
+        # The timeout is a teleport, so W1's ForeverCore side cuts it; the Turtle side answers true and keeps the block.
+        self.assertIn("inline bool CorpseRunTeleportsEnabledCompat()\n{\n    return true;\n}", COMPAT_T)
+        timeout = body(self.corpse, "if (CorpseRunTeleportsEnabledCompat() && corpseInDungeon && deadTime >= 5 * MINUTE)",
                        "if (botPos.GetMapId() != corpsePos.GetMapId())")
         pick = timeout.index("FindInstanceEntranceTrigger(dungeonMapId, botPos.GetMapId(), botPos, corpsePos, true,")
         fallback = timeout.index("entranceTeleport = sObjectMgr.GetMapEntranceTrigger(dungeonMapId);")
         self.assertLess(pick, fallback)
         self.assertRegex(timeout, r"if \(!FindInstanceEntranceTrigger\([^;]*\)\)\s*entranceTeleport = sObjectMgr\.GetMapEntranceTrigger")
-        # The teleport goes to the picked destination.
-        self.assertIn("bot->TeleportTo(entranceTeleport->destination.mapId", timeout)
+        # The teleport goes to the picked destination, orientation included (the Turtle pair answers destination.o).
+        self.assertIn("bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport)", timeout)
+        self.assertIn("AreaTeleportOrientationCompat(entranceTeleport));", timeout)
+        self.assertIn("return at ? at->destination.o : 0.0f;", COMPAT_T)
         self.assertEqual(len(re.findall(r"sObjectMgr\.GetMapEntranceTrigger\(", ACTION)), 1)
 
 

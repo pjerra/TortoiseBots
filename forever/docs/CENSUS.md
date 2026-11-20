@@ -153,3 +153,13 @@ spec expected 3-8 in the last two: `PlayerConvenience.h`, `Formations.h` and the
 Names (`names.tsv`): `SummonCreature` 3, `GetSource` 2, `GetPlayer` 2, `SendPlaySpellVisual` 2, and one each of `find`, two `unordered_map`
 operator[] on a raw guid, `SeekCycleSnapshot`, `threat` (the field of `SpellThreatEntry`), `uint64_t`. Full tables:
 `yulon-ubuntu2:~/forever-build/census-2/`.
+
+## W1 (world life, grind and live), 2026-11-20
+
+List `forever/SLICE-W1.txt` = the slice-9 list plus `strategy/generic/GrindingStrategy.cpp`, `strategy/values/GrindTargetValue.cpp`,
+`strategy/actions/ReviveFromCorpseAction.cpp`, `strategy/values/DeadValues.cpp` and `FleeManager.cpp` (270 files; the list CMake and
+`slice_registry_check.py` now read). Summary: `files 270  compile clean 270  with errors 0  error places 0  includes of a header
+ForeverCore does not have 0` (run folder `yulon-ubuntu2:~/forever-build/census-runs/wt-w1-s8-SLICE-W1-20261120T125238Z-2669463/`).
+The first pass had 13 places in 3 files (the `%s`/`GetName()` format, the `ObjectMgr` pointer, the duplicated `MapEntryCompat` and
+`TerrainIsInWaterCompat`); all closed in `forever/src/compat/TbCompat_W1.h`. `FleeManager` is no longer an unported feature (it is
+compiled now), so the boot line counts 74, one less than before.

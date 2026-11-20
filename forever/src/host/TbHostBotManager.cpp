@@ -125,14 +125,14 @@ bool RandomBotFacade::IsRandomBot(uint32 /*guid*/)
     return false;
 }
 
-bool RandomBotFacade::IsFreeBot(Player* /*bot*/)
+bool RandomBotFacade::IsFreeBot(Player* bot)
 {
-    return false;
+    return bot && IsFreeBot(bot->GetObjectGuid().GetCounter());
 }
 
-bool RandomBotFacade::IsFreeBot(uint32 /*guid*/)
+bool RandomBotFacade::IsFreeBot(uint32 guid)
 {
-    return false;
+    return TortoiseBots::BotMgr::Instance().IsFreeBot(ObjectGuid::Create<HighGuid::Player>(guid));
 }
 
 // RandomBotFacade::GetValue reads a per-bot value row of the random-bot tables (for example "always online"): there are none.

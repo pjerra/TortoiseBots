@@ -236,7 +236,12 @@ class tortoisebots_player : public PlayerScript
 public:
     tortoisebots_player() : PlayerScript("tortoisebots_player") { }
 
-    void OnCreatureKill(Player* killer, Creature* killed) override { TortoiseBots::Dashboard::OnKill(killer, killed); }
+    void OnCreatureKill(Player* killer, Creature* killed) override
+    {
+        TortoiseBots::Dashboard::OnKill(killer, killed);
+        if (killer && BotMgr::Instance().IsBot(killer->GetGUID()))
+            BotMgr::Instance().NoteKill(killer->GetGUID());   // W1 `kills=`
+    }
     void OnPlayerKilledByCreature(Creature* killer, Player* killed) override { TortoiseBots::Dashboard::OnKilledByCreature(killer, killed); }
     void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
     void OnLootItem(Player* player, Item* item) override { TortoiseBots::Dashboard::OnLootItem(player, item); }
@@ -327,6 +332,7 @@ public:
             { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot> co|nc +name,-name` (SETUP)
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
+            { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // W1: `.tb free <bot> on|off`
         };
         static ChatCommandTable commandTable =
         {
@@ -359,27 +365,66 @@ public:
         return true;
     }
 
-    // .tb login <character> [master]: the character joins the world as a bot. It follows <master>, or the caller when
-    // no master is named and the command comes from a player. From the console without a master it stands still.
-    static bool HandleLogin(ChatHandler* handler, std::string name, Optional<std::string> masterName)
+    // .tb login <character> [master|free]: the character joins the world as a bot. It follows <master>, or the caller when
+    // no master is named and the command comes from a player. `free` = a masterless bot that grinds, loots and corpse-runs on
+    // its own (W1). From the console without a master it stands still.
+    static bool HandleLogin(ChatHandler* handler, std::string name, Optional<std::string> masterName, Optional<std::string> extra)
     {
         ObjectGuid master;
+        bool free = false;
+        std::vector<std::string> words;
         if (masterName)
+            words.push_back(*masterName);
+        if (extra)
+            words.push_back(*extra);
+        for (std::string const& word : words)
         {
-            master = GuidByName(*masterName);
+            if (Lower(word) == "free")
+            {
+                if (free)
+                    return Fail(handler, "`free` is named twice.");
+                free = true;
+                continue;
+            }
+            if (!master.IsEmpty())
+                return Fail(handler, "name one master (or `free`), not two.");
+            master = GuidByName(word);
             if (master.IsEmpty())
-                return Fail(handler, "no character named " + *masterName + ".");
+                return Fail(handler, "no character named " + word + ".");
             if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
-                return Fail(handler, *masterName + " is neither a host bot nor your own character: it cannot be the master of a bot.");
+                return Fail(handler, word + " is neither a host bot nor your own character: it cannot be the master of a bot.");
         }
-        else if (Player* caller = Caller(handler))
-            master = caller->GetGUID();
+        if (free && !master.IsEmpty())
+            return Fail(handler, "a free bot has no master: name `free` or a master, not both.");
+        if (!free && master.IsEmpty())
+            if (Player* caller = Caller(handler))
+                master = caller->GetGUID();
 
-        std::string const error = BotMgr::Instance().Login(GuidByName(name), master);
+        std::string const error = BotMgr::Instance().Login(GuidByName(name), master, free);
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
-        handler->PSendSysMessage("TortoiseBots: %s is logging in.", name.c_str());
+        handler->PSendSysMessage("TortoiseBots: %s is logging in%s.", name.c_str(), free ? " as a free bot" : "");
         return true;
+    }
+
+    // .tb free <bot> on|off: a logged-in bot without a master plays the world on its own (W1). Off puts it back to standing.
+    static bool HandleFree(ChatHandler* handler, std::string name, std::string state)
+    {
+        std::string const word = Lower(state);
+        if (word != "on" && word != "off")
+            return Fail(handler, "usage: `.tb free <bot> on|off`.");
+        std::string const error = BotMgr::Instance().SetFree(GuidByName(name), word == "on");
+        if (!error.empty())
+            return Fail(handler, name + " is not free: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s free is %s.", name.c_str(), word.c_str());
+        return true;
+    }
+
+    static std::string Lower(std::string text)
+    {
+        for (char& c : text)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return text;
     }
 
     // .tb group <bot> <master>: two logged-in characters: the bot joins the master's party (the master leads) and takes it as its master.

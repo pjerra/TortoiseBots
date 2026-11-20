@@ -12,6 +12,7 @@
 #include "MovementActions.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "ReviveFromCorpseAction.h"
+#include "playerbot/TbCompatW1.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/policy/travel/GraveyardTeleportPolicy.h"
 #include "playerbot/policy/rpg/GroupHygienePolicy.h"
@@ -35,6 +36,9 @@ namespace ai
                 ai->TellPlayerNoFacing(requester, "I am already a spirit", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
                 return false;
             }
+
+            // W1 (ForeverCore): a stale corpse on the bot's own map makes BuildPlayerRepop refuse; wake the body as bones first.
+            StaleCorpseBonesCompat(bot);
 
             WorldPacket& p = event.GetPacket();
             if (!p.empty() && p.getOpcode() == CMSG_REPOP_REQUEST)
@@ -136,6 +140,7 @@ namespace ai
                     bot->GetGroup() ? 1 : 0, DungeonCrewHasLivingResurrecter() ? 1 : 0, DungeonCrewInCombat() ? 1 : 0);
 
             // See ReleaseSpiritAction::Execute: false on ForeverCore when the core did not release (nothing is logged as a release then).
+            StaleCorpseBonesCompat(bot);
             if (!RepopRequestCompat(bot))
                 return false;
 
@@ -157,7 +162,11 @@ namespace ai
                 return false;
 
             if (bot->GetCorpse())
-                return false;
+            {
+                // W1: a dead body with a stale corpse on its own map can release after the bones (ForeverCore's BuildPlayerRepop
+                // refuses otherwise). Turtle answers false here, so its rule is unchanged.
+                return StaleCorpsePresentCompat(bot);
+            }
 
 
             if (bot->InBattleGround())
