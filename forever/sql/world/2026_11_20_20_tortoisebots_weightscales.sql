@@ -14,8 +14,9 @@ CREATE TABLE IF NOT EXISTS `world`.`ai_playerbot_weightscale_data` (
   KEY `id` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 
-DELETE FROM `world`.`ai_playerbot_weightscale_data`;
-DELETE FROM `world`.`ai_playerbot_weightscales`;
+-- Only the module's own scale ids are replaced; scales a server added under other ids stay.
+DELETE FROM `world`.`ai_playerbot_weightscale_data` WHERE `id` IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32);
+DELETE FROM `world`.`ai_playerbot_weightscales` WHERE `id` IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32);
 
 INSERT INTO `world`.`ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
   (1, 'arms', 1),

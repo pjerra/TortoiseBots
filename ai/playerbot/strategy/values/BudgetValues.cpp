@@ -88,6 +88,8 @@ uint32 MaxGearRepairCostValue::Calculate()
 uint32 MinRepairCostValue::Calculate()
 {
     std::vector<uint8> importantSlots = { EQUIPMENT_SLOT_MAINHAND , EQUIPMENT_SLOT_RANGED, EQUIPMENT_SLOT_OFFHAND };
+    uint32 brokenCost = 0;
+    bool anyBroken = false;
     for (uint32 slot : importantSlots)
     {
         uint16 pos = ((INVENTORY_SLOT_BAG_0 << 8) | slot);
@@ -105,8 +107,12 @@ uint32 MinRepairCostValue::Calculate()
         if (curDurability > 0)
             continue;
 
-        return RepairCost(item); //The cost to repair the most important broken item.
+        anyBroken = true;
+        brokenCost += RepairCost(item); //Every broken weapon slot: the repair fixes all of them first.
     }
+
+    if (anyBroken)
+        return brokenCost;
 
     return RepairCostValue::Calculate();
 }
