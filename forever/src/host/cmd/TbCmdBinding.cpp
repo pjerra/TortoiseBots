@@ -233,8 +233,10 @@ void RestoreFollower(Follower const& follower, ObjectGuid lead)
     if (!ai || !ai->GetAiObjectContext())
         return;
     ai::Value<ai::GuidPosition>* value = ai->GetAiObjectContext()->GetValue<ai::GuidPosition>("manual follow target");
-    ObjectGuid const current = value ? value->Get() : ObjectGuid::Empty;
-    if (!value || !(current == lead))
+    if (!value)
+        return;
+    ObjectGuid const current = value->Get();
+    if (!(current == lead))
         return;
     value->Set(follower.saved);
     if (ai::Value<Unit*>* follow = ai->GetAiObjectContext()->GetValue<Unit*>("follow target"))
