@@ -170,7 +170,14 @@ W6_KEYS = {
     "trigger": "equipment audit, item push result",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W6_KEYS)
+# W2 (D): vendor, repair, trainer, mail read (actions + budget values).
+W2_KEYS = {
+    "strategy": "",
+    "action": "sell, buy, repair, trainer, mail",
+    "trigger": "",
+    "value": "free money for, total money needed for, money needed for, repair cost, max repair cost, min repair cost, has all money for",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W6_KEYS, W2_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
