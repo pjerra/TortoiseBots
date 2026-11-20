@@ -428,39 +428,7 @@ inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
 }
 
 
-// ===============================================================================================================
-// QUEST INTERNALS (PlayerbotAIQuests.cpp, GenericTriggers.h QuestLogNearlyFullTrigger)
-// ===============================================================================================================
-// What the quest triage reads of a quest template. T fills it from the 1.12 fields; F's Quest keeps objectives and a classic level
-// range, and the view is not ported: it is EMPTY (level 0 = "scaling quest, never grey", no item objectives, not inactive, no
-// money cost, no deliver flag). The trigger that uses it (quest log nearly full) is not registered in the slice.
-struct QuestTriageViewCompat
-{
-    struct Item { uint32 id = 0; uint32 count = 0; };
-    bool inactive = false;               // T: !quest->IsActive()
-    bool hasItemObjective = false;       // an item objective or a source item with a count
-    bool deliver = false;                // T: HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER)
-    uint32 level = 0;                     // T: GetQuestLevel()
-    uint32 levelForPlayer = 0;            // T: bot->GetQuestLevelForPlayer(quest)
-    uint32 type = 0;                     // T: GetType()
-    uint32 suggestedPlayers = 0;         // T: GetSuggestedPlayers()
-    int32 rewardOrRequiredMoney = 0;     // T: GetRewOrReqMoney() (negative = the quest costs money)
-    std::vector<Item> items;             // the required items with a count
-};
-inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* /*bot*/, Quest const* /*quest*/)
-{
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
-    return QuestTriageViewCompat();
-}
-
-// Quest log bookkeeping of PlayerbotAI. Failure values: no title (empty), nothing dropped, no required items.
-inline std::string QuestTitleCompat(Quest const* /*quest*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); return std::string(); }
-inline void RemoveQuestFromLogCompat(Player* /*bot*/, uint32 /*questId*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); }
-inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* /*quest*/)
-{
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
-    return {};
-}
+// Quest internals moved to TbCompat_Quest.h (W3).
 
 
 // ===============================================================================================================

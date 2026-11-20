@@ -433,15 +433,12 @@ inline Access const* ReferenceLootTemplateCompat(uint32 referenceId)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Quest relation tables (QuestValues.h, QuestObjectMgr). T's ObjectMgr hands out its four relation maps by reference
-// (ObjectMgr.h:1612-1615, QuestRelationsMap = multimap<uint32, uint32>, :328). F's two "involved" maps have no accessor at all (ObjectMgr.h:
-// 1817, :1820 are private; only the first two have a HACK getter) and its per-entry getters return a result object, so the whole table is
-// not read: feature "quest internals", every map reads as empty (no giver, no turn-in known: the bot starts and hands in nothing).
+// Quest relation tables: ObjectMgr::Get*Quest*Relations are public on ForeverCore.
+// QuestObjectMgr in QuestValues.h is only used by QuestValues.cpp (not in slice); keep empty map macros for its header.
 // ---------------------------------------------------------------------------------------------------------------------
 using QuestRelationsMap = QuestRelations;
 inline QuestRelationsMap& QuestRelationsMapCompat()
 {
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
     static QuestRelationsMap none;
     return none;
 }

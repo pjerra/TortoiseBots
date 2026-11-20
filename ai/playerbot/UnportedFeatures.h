@@ -19,7 +19,6 @@
     X(Companions, "companions", "spells with the summon critter effect (1.12 SPELL_EFFECT_SUMMON_CRITTER); ForeverCore has no such effect") \
     X(Auction, "auction (type only)", "AuctionEntry named in the declarations of the auction code (RandomBotFacade.h, ItemUsageValue.h); the slice never reaches that code and ForeverCore has AuctionPosting instead") \
     X(IncomingLoot, "incoming: loot vote and roll won", "the loot vote (another roller's vote) and loot roll won packets (1.12 layouts) are not fed on ForeverCore; the start of a group-loot roll and the bot's own vote are real since slice 9 (the roll list of Player::GetLootRolls is polled, the vote goes through HandleLootRoll, greed only), the loot window is read from the core's Loot object") \
-    X(IncomingQuest, "incoming: quest", "quest accept, complete, confirm, share, details and update packets (1.12 layouts)") \
     X(IncomingTaxi, "incoming: taxi", "activate taxi and taxi node packets") \
     X(IncomingGroup, "incoming: group and party", "group invite, uninvite, set leader, party command, ready check, summon request and duel request packets") \
     X(IncomingTradeAndItems, "incoming: trade and item errors", "trade status, buy errors, item push, inventory change failure, master use item packets") \
@@ -47,7 +46,6 @@
     X(CustomStrategyStore, "custom strategy store", "reading custom strategy lines from ai_playerbot_custom_strategy; that table does not exist in ForeverCore characters schema") \
     X(StrategyStoreTransactions, "strategy store transactions", "BeginTransaction(serial) / CommitTransaction() around saving strategies; ForeverCore transactions are objects and the ai_playerbot tables do not exist") \
     X(Skills, "skills", "skill lines ForeverCore does not name (thrown) and skill writes (SetSkill with the 1.12 argument list)") \
-    X(QuestInternals, "quest internals", "the 1.12 quest template fields (ReqItemId/ReqItemCount, ReqSource*, GetQuestLevel, GetRewOrReqMoney, IsActive) and Player::RemoveQuest; ForeverCore has quest objectives and a classic level range instead") \
     X(Taxi, "taxi", "flight masters and taxi paths (Player::GetTaxi, TaxiPathEntry/TaxiNodesEntry fields, ActivateTaxiPathTo, CleanupFlagsOnTaxiPathFinished); ForeverCore's taxi model is different") \
     X(TransportBoarding, "transports", "boarding, leaving and riding transports (MoveOnTransport, MoveOffTransport, UseTransport, FollowOnTransport, AddPassenger, RemovePassenger, transport movement info); ForeverCore's passenger model and spline transform differ") \
     X(NavmeshProbe, "navmesh and path internals", "the navmesh-island unstick probe over MMapFactory / PathInfo::FindWalkPoly, and the 1.12 path type and nav flag bits (PATHFIND_*, NAV_*); ForeverCore's MMapManager and path flags differ") \
