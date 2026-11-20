@@ -2,6 +2,7 @@
 
 #include "playerbot/playerbot.h"
 #include "playerbot/DungeonPlanMgr.h"
+#include "playerbot/TbCompatK11w.h"
 #include "playerbot/strategy/values/CcMarkHoldPolicy.h"
 #include "playerbot/strategy/values/TargetValue.h"
 #include "../../../runtime/policy/class/WarlockRaidRotationPolicy.h"
@@ -25,7 +26,7 @@ inline bool WarlockBossTarget(PlayerbotAI* ai, Unit* target)
         return false;
     return TortoiseBots::WarlockIsBossTarget(
         creature->IsWorldBoss(),
-        creature->HasExtraFlag(CREATURE_FLAG_EXTRA_INSTANCE_BIND),
+        CreatureExtraFlagCompat(creature, CREATURE_FLAG_EXTRA_INSTANCE_BIND),
         ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry()));
 }
 

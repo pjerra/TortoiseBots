@@ -1,6 +1,7 @@
 #pragma once
 
 #include "playerbot/HunterSwitchPolicy.h"
+#include "playerbot/TbCompatK11h.h"
 #include "playerbot/HunterAoePolicy.h"
 #include "playerbot/HunterKitePolicy.h"
 #include "playerbot/GroupMembers.h"
@@ -226,7 +227,7 @@ public:
 
         lastCheckTime = now;
 
-        uint32 ammoId = bot->GetUInt32Value(PLAYER_AMMO_ID);
+        uint32 ammoId = AmmoItemIdCompat(bot);
 
         // No ammo equipped at all
         if (ammoId == 0)
@@ -265,7 +266,7 @@ private:
         float minRange = 0.0f;
         if (!target || !ai->GetSpellRange("auto shot", &maxRange, &minRange) || minRange <= 0.0f)
             return false;
-        return ai->GetBot()->GetDistance(target, SizeFactor::CombatReach) < minRange;
+        return GetDistanceCompat(ai->GetBot(), target, SizeFactor::CombatReach) < minRange;
     }
 
     // The dead-zone step-out verdict (HunterSwitchPolicy.h) for the current
@@ -348,7 +349,7 @@ private:
             if (target->GetVictim() != bot)
                 return false;
 
-            return bot->GetDistance(target, SizeFactor::CombatReach) < minRange;
+            return GetDistanceCompat(bot, target, SizeFactor::CombatReach) < minRange;
         }
     };
 
@@ -397,7 +398,7 @@ private:
     inline bool HunterShouldKite(PlayerbotAI* ai, uint8_t attackerCount)
     {
         Unit* nearest = ai->GetAiObjectContext()->GetValue<Unit*>("closest attacker targeting me")->Get();
-        float const nearestYd = nearest ? ai->GetBot()->GetCombatDistance(nearest) : 9999.0f;
+        float const nearestYd = nearest ? GetCombatDistanceCompat(ai->GetBot(), nearest) : 9999.0f;
         return ShouldHunterKite(attackerCount, HunterKiteReady(ai), nearestYd);
     }
 
@@ -578,7 +579,7 @@ private:
                 return false;
             Unit* target = GetTarget();
             return target && ai::HunterCarveAllowed(sPlayerbotAIConfig.hunterCarveInReachOnly,
-                bot->GetDistance(target, SizeFactor::CombatReach));
+                GetDistanceCompat(bot, target, SizeFactor::CombatReach));
         }
     };
 
