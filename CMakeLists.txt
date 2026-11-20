@@ -70,7 +70,7 @@ set_target_properties(tortoisebots
 if(TORTOISEBOTS_SLICE1)
   # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-9 list (forever/SLICE9.txt),
   # which holds every file of SLICE1.txt .. SLICE5.txt (the plan loader: DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md)
-  # plus the L9 files of slice 9 (LootRollAction.cpp, ItemUsageValue.cpp; forever/docs/SLICE9-L-NOTES.md).
+  # plus the L9 files of slice 9 (LootRollAction.cpp, ItemUsageValue.cpp; forever/docs/SLICE9-L-NOTES.md). The doors package adds no legacy file.
   set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE9.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.

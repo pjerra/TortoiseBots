@@ -1,6 +1,6 @@
-# Slice 9 (item loot and rolls, doors and object tasks): SLICE5.txt plus the L9 files at the end.
+# Slice 9 (item loot and rolls, doors and object tasks): SLICE5.txt plus the L9 files at the end. The doors package (O9/F9/C9) adds no legacy file: its code is under forever/src.
 # L9 = group loot rolls and the item usage value (FOREVER-SLICE9-SPEC section 6); the slice-5 plan loader stays in the list.
-# One path per line. Used by: FOREVER_SLOT=1 FOREVER_CENSUS_LIST=forever/SLICE9.txt forever/tools/vm-census.sh "" 14
+# One path per line. Used by: FOREVER_SLOT=4 FOREVER_CENSUS_LIST=forever/SLICE9.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
 ai/playerbot/BotLog.cpp

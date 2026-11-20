@@ -39,7 +39,7 @@ Shared files changed on the Turtle side, each with the T behaviour word for word
 
 ## 4. Things the merge worker must know
 
-- `WorldQueryCompat` (slice 5, branch run/*) is not in this branch: the loot table reader has its own guard with the same rule (information_schema before a query that names columns). At the merge it may call `WorldQueryCompat` instead; behaviour is the same.
+- Rebased onto main (S5+S6 merged): the loot table copy now reads through `WorldQueryCompat` (TbCompat_S5.h, included at the top of TbCompat_V2.h); `forever/SLICE9.txt` = the newest `SLICE5.txt` + the L9 trailer; the AH deposit reads use main's `WorldU32ConfigW2` / `WorldFloatConfigW2`.
 - `LootTablePreloadCompat()` is optional: a boot hook may call it (`OnWorldInitialized`); without it the tables are copied on first use (a few hundred ms on the world thread, once per table).
 - `loot response` poll covers game object windows only. A chest opened by an order (package O9) arrives as that event; O9's result check reads the item in the bags.
 - The roll poll runs inside the trigger check, which runs in the engine tick: no host file changed, no packet parsing (the core's `GetLootRolls()` is the source). Rolls of a bot that logs out with a window open leave one small memo entry until the bot's next poll prunes it.
