@@ -61,6 +61,13 @@ inline bool Feedable(uint32_t bookKey, uint32_t groupId, bool hasBook = false)
     return bookKey != 0 && (groupId != 0 || hasBook);
 }
 
+// A book whose lead-away grace has expired is dropped (the fight was closed as unfinished): the feed and the service book are freed, so a
+// binding whose lead never comes back does not hold them forever. A lead that returns later gets a fresh book and a fresh fight.
+inline bool KeepBook(bool graceExpired)
+{
+    return !graceExpired;
+}
+
 // True when a pass is due. `sinceMs` 0 is the first pass after boot or after the monitor was turned on; the subtraction is the core's
 // getMSTime rule (unsigned, so a tick wrap reads as the small elapsed time it is).
 inline bool Due(uint32_t nowMs, uint32_t sinceMs, uint32_t everyMs)

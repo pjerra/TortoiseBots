@@ -60,6 +60,15 @@ class Wiring(unittest.TestCase):
         self.assertIn("inline bool Feedable(uint32_t bookKey, uint32_t groupId, bool hasBook = false)", self.pure)
         self.assertIn("feed.away.Overdue(usable, nowMs)", self.combat)
 
+    def test_an_expired_book_is_dropped(self):
+        # The lead-away grace expired: SampleCard says so, the sample leaves the card out of the standing set, and the forget/erase loop frees the
+        # feed and the service book.
+        combat = code(self.combat)
+        self.assertIn("bool SampleCard(C::CardView const& card, uint32 nowMs)", combat)
+        self.assertIn("return P::KeepBook(true);", combat)
+        self.assertIn("if (!SampleCard(card, nowMs))", combat)
+        self.assertLess(combat.index("if (!SampleCard(card, nowMs))"), combat.index("standing.insert(book.key);"))
+
     def test_the_tick_and_the_scripts_are_registered(self):
         update = code(self.scripts)
         self.assertIn("TortoiseBots::cmd::combat::Update(diff)", update)
@@ -182,6 +191,7 @@ class Wiring(unittest.TestCase):
 MUTATIONS = {
     "feed0": ("    return bookKey != 0 && (groupId != 0 || hasBook);", "    return groupId != 0 || hasBook;"),
     "keepbook": ("    return bookKey != 0 && (groupId != 0 || hasBook);", "    return bookKey != 0 && groupId != 0;"),
+    "keepexpired": ("    return !graceExpired;", "    return true;"),
     "bookkey": ("    return BookRef{ commanderGuid, groupId };", "    return BookRef{ groupId, groupId };"),
     "rankorder": ("        while (at < m_kept && static_cast<uint8_t>(m_keys[at].rank) >= static_cast<uint8_t>(rank))",
                   "        while (at < m_kept && static_cast<uint8_t>(m_keys[at].rank) > static_cast<uint8_t>(rank))"),

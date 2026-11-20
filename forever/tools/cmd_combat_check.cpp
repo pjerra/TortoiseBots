@@ -215,6 +215,8 @@ static void TestLeadInLoadingScreen()
         hasBook = true;
         bool const usable = BF::LeadUsable(leadInWorld, leadInWorld, readGroup, group);
         closed = away.Overdue(usable, nowMs);
+        if (!P::KeepBook(closed))
+            hasBook = false;   // the grace expired: the feed and the service book are dropped
         return true;
     };
     bool closed = false;
@@ -225,6 +227,12 @@ static void TestLeadInLoadingScreen()
     CHECK(pass(true, 2000 + BF::kLeadGoneGraceMs - 500, closed) && !closed);  // the lead is back before the grace ends: the fight survives
     CHECK(pass(false, 40000, closed) && !closed);               // away again: a new clock
     CHECK(pass(false, 40000 + BF::kLeadGoneGraceMs, closed) && closed);       // past the grace: the open fight closes as unfinished
+    // The expired book is gone: a groupless card is no longer fed (nothing is retained forever), and the lead's return makes a fresh book.
+    CHECK(!hasBook);
+    CHECK(!pass(false, 40000 + BF::kLeadGoneGraceMs + 1000, closed));
+    BF::LeadAway fresh;
+    away = fresh;
+    CHECK(pass(true, 90000, closed) && !closed && hasBook);
     // Without a book the same card is not fed: a binding that never stood in a group has nothing to feed.
     hasBook = false;
     CHECK(!pass(false, 100000, closed));

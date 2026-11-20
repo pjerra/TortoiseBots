@@ -348,7 +348,7 @@ void SampleBoss(Feed& feed, uint32 book, Player* lead, uint32 nowMs)
 
 // One sample of a standing card: the members and their combat state, the focus's tracked debuffs, the run's context, and then the boss and
 // his timeline. A card whose lead left its group feeds nothing; past the grace the open fight closes as unfinished.
-void SampleCard(C::CardView const& card, uint32 nowMs)
+bool SampleCard(C::CardView const& card, uint32 nowMs)
 {
     CombatMonitorService& service = CombatMonitorService::Instance();
     P::BookRef const book = P::BookOf(card.commanderGuid, card.groupId);
@@ -360,13 +360,13 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
     if (feed.away.Overdue(usable, nowMs))
     {
         service.CloseUnfinished(book.key, nowMs);
-        feed.NewFight();
-        feed.inFight = false;
+        // The grace is over: the book is dropped (the caller forgets it), not kept forever for a lead that never comes back.
+        return P::KeepBook(true);
     }
     if (!usable)
     {
         feed.lead = ObjectGuid();
-        return;
+        return true;
     }
     feed.lead = lead->GetGUID();
     feed.members.clear();
@@ -419,7 +419,7 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
     {
         if (wasInFight)
             feed.NewFight();
-        return;
+        return true;
     }
     if (!wasInFight)
         feed.NewFight();
@@ -427,6 +427,7 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
     if (service.BossEntry(book.key) == 0)
         PickBoss(feed, book.key, lead, engaged, ctx);
     SampleBoss(feed, book.key, lead, nowMs);
+    return true;
 }
 
 // The 1 Hz pass: every standing card, then the books of the cards that are gone (a released binding, a dismissed party).
@@ -444,8 +445,9 @@ void Sample()
         // not forgotten at once.
         if (!P::Feedable(book.key, book.group, Feeds().count(book.key) != 0))
             continue;
+        if (!SampleCard(card, nowMs))
+            continue;   // the lead-away grace expired: not standing, so the loop below forgets the book and frees the feed
         standing.insert(book.key);
-        SampleCard(card, nowMs);
     }
     for (auto it = Feeds().begin(); it != Feeds().end();)
     {
