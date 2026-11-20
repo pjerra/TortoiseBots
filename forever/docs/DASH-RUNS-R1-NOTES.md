@@ -27,14 +27,14 @@ A finished run stays on the Commander tab 30 s (state `done` / `stopped`), then 
 ## Message formats
 
 * COMMANDERS: unchanged Turtle v12, built by `runtime/CommanderTelemetry.h` `BuildPayloadParts` (standard library only; compiles in the module flags: U2 resolved). Golden string: `forever/tools/dash_runs_check.cpp` (`kGolden`), same bytes as `tools/observability/internal/state/testdata/forever_commanders.json`. `seq` is our own counter (the dashboard keeps COMMANDERS' session and seq apart from the roster's).
-* Summary file: keys read by `internal/dungeons/run.go`: `run, mode, plan, map, dungeon{map}, build{module,core}, driver, started, ended, duration_ms, status, outcome, stop_reason, bosses[{entry,name,killed_at_s:null,killed}], wipes (count), deaths (count), party[{class,role,level}]`. File `<plan>-<startedUnix>-<leaderGuid>.summary.json`, written to a `.tmp` and renamed, once per (leader, startedMs). Fixture: `internal/dungeons/testdata/forever/`. U3 resolved: the index takes it (`TestForeverSummaryIsIndexed`).
+* Summary file: keys read by `internal/dungeons/run.go`: `run, mode, plan, map, dungeon{map}, build{module,core}, driver, started, ended, duration_ms, status, outcome, stop_reason, bosses[{entry,name,killed_at_s:null,killed}], wipes (count), deaths (count), party[{class,role,level}]`. File `<plan>-<startedUnix>-<startedMs>-<leaderGuid>.summary.json`, written to a `.tmp` and renamed, once per (leader, startedMs). Fixture: `internal/dungeons/testdata/forever/`. U3 resolved: the index takes it (`TestForeverSummaryIsIndexed`).
 * Outcome rule (`Outcome` in `TbDashRunsPure.h`): running while the run goes on; stopped with a stop reason naming "wipe" is `wiped_out`, other stops `stopped`; a Done run is `cleared` only when EVERY plan boss was read dead, else `partial`.
 * `GET /api/v1/core`: `{"core":"forever","ported":{"raids":false,"coverage":false,"commander_orders":false,"combat":false}}`; Turtle answers all true. `combat` means the commander card's live combat window (his COMBAT_FIGHT feed is separate).
 
 ## Files
 
-New: `forever/src/dash/TbDashRunsPure.h` (plain data, Turtle builders, outcome, summary, gate, ledger, role), `TbDashRuns.{h,cpp}` (collector; SLICE1 only, stubs otherwise), `TbDashLink.{h,cpp}` (local sender shim), `forever/tools/dash_runs_check.cpp`, `forever/tools/test_dash_runs_wiring.py`, `cmd/server/forevertabs{,_test}.go`, `internal/plans/plans_tc_test.go`, `internal/state/forever_runs_test.go`, `internal/dungeons/forever_test.go`, `internal/commandersjs/core_notice_ui_check.js`.
-Edited (shared): `forever/src/TbScripts.cpp` (3 one-liners: `DashRuns::LoadConfig()` at both config loads, `DashRuns::Update(diff)` after `run::Update`), `forever/conf/tortoisebots.conf.dist` (`Dashboard.Runs = 1`, `Dashboard.RunSummaryDir = ""`), `internal/plans/plans.go`, `cmd/server/main.go` (one route), `web/index.html`, `web/static/js/app.js` + `commanders.js`. The CMake glob picks the new sources up (no list edit). `TbDashboard.*` and the Go auth files are untouched.
+New: `forever/src/dash/TbDashRunsPure.h` (plain data, Turtle builders, outcome, summary, gate, summary queue, role), `TbDashRuns.{h,cpp}` (collector; SLICE1 only, stubs otherwise), `TbDashLink.{h,cpp}` (local sender shim), `forever/tools/dash_runs_check.cpp`, `forever/tools/test_dash_runs_wiring.py`, `cmd/server/forevertabs{,_test}.go`, `internal/plans/plans_tc_test.go`, `internal/state/forever_runs_test.go`, `internal/dungeons/forever_test.go`, `internal/commandersjs/core_notice_ui_check.js`.
+Edited (shared): `forever/src/TbScripts.cpp` (3 one-liners: `DashRuns::LoadConfig()` at both config loads, `DashRuns::Update(diff)` after `run::Update`), `forever/conf/tortoisebots.conf.dist` (`Dashboard.Runs = 1`, `Dashboard.RunSummaryDir = ""`), `internal/plans/plans.go`, `cmd/server/main.go` (one route), `web/index.html`, `web/static/js/app.js` + `commanders.js`. From the fix round, `forever/src/host/run/TbRun.{h,cpp}` (one function pointer + its call in `Finish`; see the fix-round section). The CMake glob picks the new sources up (no list edit). `TbDashboard.*` and the Go auth files are untouched.
 
 ## The header change asked of the team member (D2)
 
@@ -86,3 +86,47 @@ The module was synced into `src-6/src/modules/TortoiseBots` from this worktree (
 * **Census**: `FOREVER_SLOT=6 FOREVER_CENSUS_LIST=forever/SLICE5.txt .../census.sh 14` -> `files 176  compile clean 176  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0`. `SLICE5.txt` is a superset of `SLICE4..SLICE1.txt` (checked: each smaller list minus the next is empty), so this one run is the "census 0 for SLICE5..1" gate.
 * **Pure check**: `clang++ -std=c++17 -Wall -Wextra -I<m> forever/tools/dash_runs_check.cpp` in the `forever-builder` image (module tree mounted) -> `RESULT: PASS (dash_runs_check)`, exit 0: the binding mapping, the 30-note and 20-step windows, the outcome rule (a `done` run with an unread boss is `partial`), the golden COMMANDERS bytes, the single empty list, and the one-summary-per-(leader, startedMs) ledger.
 * **Turtle side** (files outside `forever/` changed: the Go daemon, `web/`): `vm-build ~/wt-dash-runs --wait` -> `MAKE_RC=0`, job rc 0, `mangosd`/`realmd` hashes printed; `vm-test tb ~/wt-dash-runs` -> `RESULT: PASS kind=tb sha=e46a32c0d dirty=0`, rc 0, `vm_duration=2920s` (queued behind other sessions on a loaded VM).
+
+## Fix round (2026-11-20): review findings
+
+Codex, [high] "run summaries are neither captured durably nor retried" — **FIXED**. Reconciled against the code: both halves were
+real. `StartRun` removes a finished record before creating the next (`TbRun.cpp:812-816`), so a `.tb run stop` plus a start inside
+one 2 s cycle lost the only source; and the old `MarkIfNew` marked the ledger *before* `WriteSummary`, so one failed create/write/
+rename suppressed every retry. Fix:
+* `run::Finish` — the single writer of `endedMs` — calls one listener (`EndListener`) just before it returns (`TbRun.cpp:496-499`);
+  `run::SetEndListener` (`TbRun.h:98-102`, `TbRun.cpp:77-85`) is null until the feed installs it at config load, so the run itself is
+  unchanged, and the call is a no-op when `Dashboard.Runs = 0` or `RunSummaryDir` is empty. The listener copies a `RunView` into an
+  immutable job (json + file stem) at the moment the run ends, before any later start can remove the record.
+  This is the one run-layer file this branch now touches; D5 said not to, but a poll cannot see an end that a command deletes
+  between ticks, and the fix brief recommends exactly this capture point.
+* `SummaryQueue` (`TbDashRunsPure.h:298-360`) replaces `SummaryLedger`: a job leaves the queue only after the atomic rename
+  (`FlushSummaries`, `TbDashRuns.cpp:271-297`); a failed write is retried on the next cycle, up to `kMaxAttempts = 15` (~30 s), then
+  dropped with one log line and never marked done. The 2 s run-table poll still enqueues ends the listener missed (feed enabled
+  later in a run's life); `Add` dedups by (leader, startedMs) so the two paths never write twice.
+Tests: `dash_runs_check.cpp` "one summary job per (leader, startedMs)": a failed write leaves the job queued and not done, success
+marks it done and refuses a second add, 15 failures drop it without a done mark; the wiring test pins the hook call in `Finish`, the
+setter, and its registration in `LoadConfig`.
+
+Codex, [medium] "summary filenames can collide and overwrite distinct runs" — **FIXED**. Real: the file id was
+`<plan>-<startedUnix>-<leaderGuid>`, while the ledger keyed on the millisecond clock, so two runs of one leader and plan in the same
+wall-clock second resolved to one path. `RunId` now carries the run's own start clock: `<plan>-<startedUnix>-<startedMs>-<leaderGuid>`
+(`TbDashRunsPure.h:362-371`), the same value the queue key uses. `startedMs` is `GameTime::GetGameTimeMS()` at `Create`; two starts of
+one leader are serialised by an ended record plus a command, so their millisecond clocks differ, and a restart resets the run table with
+the clock. No extra process/session field: it would make ids unstable across config reloads without adding a collision case that can
+happen. Test (failing before the fix: both names came out identical): two `FinishedRfc` views with `startedMs` 5000 and 6000 in the
+same `startedUnix` differ in `SummaryFileName` and in the JSON `run` id; queue test: three jobs (two clocks of one leader, one of
+another) stay distinct. Fixture regenerated: `internal/dungeons/testdata/forever/ragefire_chasm-1763560000-5000-7.summary.json`.
+
+Gemini, "no findings" — nothing to fix (its checks match mine: zero core changes, no DB call in `forever/src/dash/`, 9 wiring
+tests, pure check PASS, Go suite green).
+
+### Gates, fix round (build VM, slot 6)
+
+* Option ON: `FOREVER_SLOT=6 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON ~/forever-build/build.sh 12 tortoisebots` -> `CMAKE_RC=0`, `MAKE_RC=0` (80 changed files synced; no `error:`).
+* Option OFF: `FOREVER_SLOT=6 ~/forever-build/build.sh 12 tortoisebots` -> `CMAKE_RC=0`, `MAKE_RC=0` (9 steps).
+* Census `forever/SLICE5.txt` (superset of SLICE4..1): `files 176  compile clean 176  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0`.
+* Generator: `aiplayerbot.conf.dist matches (696 keys)`; registry: `(a)=0`.
+* Pure check: `RESULT: PASS (dash_runs_check)` (queue retry/drop, both same-second starts, the summary fields).
+* Wiring: 9 tests, OK.
+* Go: `go test ./...` in `tools/observability` -> ok for every package; `go vet ./...` clean; `go test -race ./internal/dungeons` ok. `-race ./cmd/server` fails on pre-existing races in `fightdetail_test.go`/`runtotals_test.go` (commit d6ab15ab9, not this work); `vm-test ta` is not applicable here (no go.mod at the worktree root; the harness's go1.22 install fails before it runs anything).
+* Turtle: `vm-build ~/wt-dash-runs --wait` -> `MAKE_RC=0`, job rc 0; `vm-test tb ~/wt-dash-runs` -> `RESULT: PASS kind=tb sha=a8c950a76 dirty=1`, rc 0, `vm_duration=1641s` (the dirty file was this notes edit, docs only; committed after the run).
