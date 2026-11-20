@@ -55,8 +55,8 @@ check(set(s10) <= set(s11), "SLICE11.txt lacks paths of SLICE10.txt: " + ", ".jo
 for extra in ("ai/playerbot/strategy/actions/CancelChannelAction.cpp", "ai/playerbot/strategy/actions/CombatActions.cpp",
               "ai/playerbot/strategy/values/ActiveSpellValue.cpp"):
     check(extra in s11, "SLICE11.txt lacks " + extra)
-check("ai/playerbot/strategy/actions/EquipAction.cpp" not in s11, "SLICE11.txt must not carry EquipAction.cpp (it links RandomItemMgr, ItemUsageValue and three more owners outside the slice); the warlock stones use the StandIn in SliceLinkStubs.cpp")
-check("void ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool)" in read("forever/src/slice/SliceLinkStubs.cpp"), "SliceLinkStubs.cpp lacks the EquipAction::EquipItem StandIn the warlock stones link to")
+# W6a compiles EquipAction.cpp (forever/SLICE9.txt): the warlock stones call the real EquipItem, so no StandIn is left.
+check("void ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool)" not in read("forever/src/slice/SliceLinkStubs.cpp"), "SliceLinkStubs.cpp still defines an EquipAction::EquipItem StandIn next to the compiled EquipAction.cpp")
 
 # ---- compat pairs ----
 HELPER = re.compile(r"\binline\s+[\w:<>&\*\s]+?\b(\w+Compat)\s*\(")

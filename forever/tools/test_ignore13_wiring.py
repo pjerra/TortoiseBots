@@ -88,7 +88,7 @@ def check_wiring(scripts, ignore_h, ignore_cpp, compat_f, compat_t,
     if "kIgnoreMobAoERadiusYd = 30.0f" not in policy:
         raise AssertionError("IgnoreMobPolicy.h must pin the ~30 yd AoE radius")
 
-    if "## 14. The leave-it-alone list" not in docs or "`.tb ignore" not in docs:
+    if "The leave-it-alone list: `.tb ignore`" not in docs or "`.tb ignore" not in docs:
         raise AssertionError("TB-COMMANDS.md missing the .tb ignore section")
     if "`ignored`" not in docs:
         raise AssertionError("TB-COMMANDS.md missing the ignored error code")
