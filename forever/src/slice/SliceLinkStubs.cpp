@@ -434,6 +434,7 @@ void RandomItemMgr::Init() { LoadWeightScales(); }
 uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
+uint8 RandomItemMgr::GetSourceFlags(uint32) { NoteItems(); return ITEM_SOURCE_FLAG_NONE; }
 
 // With no text table the real GetBotText(name) answers the empty text (PlayerbotTextMgr.cpp:65; R9: the old stand-in answered the key, so a bot whispered raw
 // keys such as "hello"); every caller of it skips an empty text. The placeholder form falls back to the name with the placeholders replaced, as the real one does.
