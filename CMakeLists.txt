@@ -68,9 +68,10 @@ set_target_properties(tortoisebots
     FOLDER "src/modules/TortoiseBots")
 
 if(TORTOISEBOTS_SLICE1)
-  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-5 list (forever/SLICE5.txt),
-  # which holds every file of SLICE1.txt .. SLICE4.txt plus the plan loader (DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md).
-  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE5.txt)
+  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-8 list (forever/SLICE8.txt),
+  # which holds every file of SLICE1.txt .. SLICE5.txt (SLICE4 plus the plan loader DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md)
+  # plus the 22 mage, rogue and give-item files of slice 8 (forever/docs/SLICE8-K-NOTES.md).
+  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE8.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TB_SLICE_LIST})
@@ -93,7 +94,7 @@ if(TORTOISEBOTS_SLICE1)
       continue()
     endif()
     if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${line})
-      message(FATAL_ERROR "TortoiseBots: forever/SLICE5.txt names ${line}, which does not exist")
+      message(FATAL_ERROR "TortoiseBots: forever/SLICE8.txt names ${line}, which does not exist")
     endif()
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()

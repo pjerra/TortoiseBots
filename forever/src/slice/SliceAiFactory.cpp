@@ -24,6 +24,13 @@
 // combat "protection", "tank assist", "pull", "close", "tank face"; non-combat "protection", "tank assist", "follow", "food", "default". Any other
 // warrior (dps): the arms kit as before plus "threat" (where KeepsPartyThreatBackoff says so) and non-combat "food". The priest gets "threat" the same
 // way. Left out on purpose (spec): "pull back", "behind", "aoe", "cc", "boost", "should pull" (autonomous pulls), "chat".
+// Slice 8 (FOREVER-SLICE-MAGE-ROGUE-SPEC sections 2 and 6, lead decisions D1-D5; forever/docs/SLICE8-H-NOTES.md): a mage and a rogue get their own contexts
+// (MageAiObjectContext, RogueAiObjectContext, compiled as they are), the talent tab 1 the full factory gives them without talents (AiFactory.cpp:169-185: mage fire,
+// rogue combat), a damage role, and these kits. Mage: combat "fire", "dps assist", "ranged", "cc", "buff", "boost" (+ "threat" where KeepsPartyThreatBackoff says so);
+// non-combat "fire", "dps assist", "follow", "buff", "food", "default"; reaction "fire". Rogue: combat "combat", "dps assist", "close", "behind", "cc", "buff", "boost" (+ "threat");
+// non-combat "combat", "dps assist", "follow", "buff", "food", "default"; reaction "combat". Left out on purpose (the spec's list): the full kits' "flee", "cure", "aoe" (both),
+// the mage's "loot", and for the rogue "stealth", "poisons" (D4: stealth is measured by a toggle, poisons need level 20). The rogue KEEPS "cc" (G8 kit decision, M8 live test e): Kick and
+// Kick on enemy healer live in RogueCcStrategy; its Sap rows need a real player master (D3: no Sap in this slice) and stay silent in a bot-led run.
 #include "compat/botpch_forever.h"
 #include "playerbot/playerbot.h"
 #include "playerbot/AiFactory.h"
@@ -31,6 +38,8 @@
 #include "playerbot/strategy/ReactionEngine.h"
 #include "playerbot/strategy/warrior/WarriorAiObjectContext.h"
 #include "playerbot/strategy/priest/PriestAiObjectContext.h"
+#include "playerbot/strategy/mage/MageAiObjectContext.h"
+#include "playerbot/strategy/rogue/RogueAiObjectContext.h"
 #include "../../../runtime/PlayerbotAIStorage.h"
 #include "../../../runtime/CommandedGroupQuery.h"
 #include "../../../runtime/RemoteCommanderPolicy.h"
@@ -40,23 +49,31 @@
 
 AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* ai)
 {
-    // The slice registers the warrior's and the priest's class strategies (SliceAiObjectContext.cpp + the class context compiled as it
-    // is); another class would run on the warrior's kit, so say so once.
+    // The slice registers the warrior's, the priest's, the mage's and the rogue's class strategies (SliceAiObjectContext.cpp + the class context compiled
+    // as it is); another class would run on the warrior's kit, so say so once.
     if (player && player->GetClass() == CLASS_PRIEST)
         return new slice::GuardedContext<PriestAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_MAGE)
+        return new slice::GuardedContext<MageAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_ROGUE)
+        return new slice::GuardedContext<RogueAiObjectContext>(ai);
 
     static bool warned = false;
     if (player && player->GetClass() != CLASS_WARRIOR && !warned)
     {
         warned = true;
-        slice::LogWarn("slice: " + player->GetName() + " is neither a warrior nor a priest; the slice build gives every other bot the warrior context");
+        slice::LogWarn("slice: " + player->GetName() + " is not a warrior, priest, mage or rogue; the slice build gives every other bot the warrior context");
     }
     return new slice::GuardedContext<WarriorAiObjectContext>(ai);
 }
 
-int AiFactory::GetPlayerSpecTab(const Player* /*player*/)
+int AiFactory::GetPlayerSpecTab(const Player* player)
 {
-    return 0; // arms
+    // The slice never reads talents. A mage is fire and a rogue combat (tab 1: AiFactory.cpp:169-185 gives both that tab without talents; GenericMageStrategy.cpp:119 and
+    // :140 read it); every other class keeps tab 0 (warrior arms, priest discipline).
+    if (player && (player->GetClass() == CLASS_MAGE || player->GetClass() == CLASS_ROGUE))
+        return 1;
+    return 0;
 }
 
 std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* /*player*/)
@@ -135,6 +152,9 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
     // A priest on tab 0 or 1 (discipline, holy: the only tabs the slice gives it) heals (AiFactory.cpp GetPlayerRoles(cls, tab): tab 2 is dps).
     if (player && player->GetClass() == CLASS_PRIEST)
         return BOT_ROLE_HEALER;
+    // Slice 8: a mage and a rogue are damage (spec section 2: GetPlayerRoles dps for both).
+    if (player && (player->GetClass() == CLASS_MAGE || player->GetClass() == CLASS_ROGUE))
+        return BOT_ROLE_DPS;
     return BOT_ROLE_NONE;
 }
 
@@ -147,6 +167,11 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         // (slice 3: a commanded healer backs off the tank's threat).
         combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", "heal interrupt", NULL);
     }
+    else if (player && player->GetClass() == CLASS_MAGE)
+        combatEngine->addStrategies("fire", "dps assist", "ranged", "cc", "buff", "boost", NULL);
+    else if (player && player->GetClass() == CLASS_ROGUE)
+        // "cc" gives the rogue Kick (RogueCcStrategy: kick, kick on enemy healer; its Sap rows need a real player master and stay silent): M8 live test.
+        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", NULL);
     else if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.
@@ -166,6 +191,16 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     if (player && player->GetClass() == CLASS_PRIEST)
     {
         nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "default", NULL);
+        return;
+    }
+    if (player && player->GetClass() == CLASS_MAGE)
+    {
+        nonCombatEngine->addStrategies("fire", "dps assist", "follow", "buff", "food", "default", NULL);
+        return;
+    }
+    if (player && player->GetClass() == CLASS_ROGUE)
+    {
+        nonCombatEngine->addStrategies("combat", "dps assist", "follow", "buff", "food", "default", NULL);
         return;
     }
     if (WarriorIsTank(player, facade))
@@ -197,7 +232,17 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
     // never left it (R8 observation d).
     // The tank's spec strategy, as AiFactory.cpp:2085 (a warrior on the protection tab).
-    reactionEngine->addStrategy(player && player->GetClass() == CLASS_PRIEST ? "discipline" : (WarriorIsTank(player, facade) ? "protection" : "arms"));
+    // Slice 8: the mage's "fire" and the rogue's "combat" (AiFactory.cpp:2015-2060, tab 1).
+    char const* spec = "arms";
+    if (player && player->GetClass() == CLASS_PRIEST)
+        spec = "discipline";
+    else if (player && player->GetClass() == CLASS_MAGE)
+        spec = "fire";
+    else if (player && player->GetClass() == CLASS_ROGUE)
+        spec = "combat";
+    else if (WarriorIsTank(player, facade))
+        spec = "protection";
+    reactionEngine->addStrategy(spec);
 }
 
 Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade, AiObjectContext* AiObjectContext)

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "host/TbH3.h"
+#include "host/run/TbRunGatherPure.h"
 #include "host/run/TbRunHooks.h"
 #include "runtime/DungeonRunPolicy.h"
 
@@ -25,7 +26,7 @@ namespace run
 {
 constexpr size_t kEventRing = 200;
 
-// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | fight-end | rest | death | wipe | revive | pause | resume | done | stop.
+// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop.
 // `step`, `leg` and `unit` are -1 when the event has none (the record then omits the key: an unknown number is never written as a number).
 struct RunEvent
 {
@@ -85,6 +86,11 @@ struct RunRec
     bool seenCombat = false;
     bool seenWipe = false;
     std::set<std::string> seenDead;
+    gather::Extension gatherExt;                 // G8: the regroup gather's bounded extensions at the current step (TbRunGatherPure.h)
+    // G8 (review): the bots the run's own `cc` orders marked, name -> mark. Run::ccHolds does not survive a step advance, a resume or a regroup
+    // (DungeonRun::ResetStep clears it) and the bots' `rti cc` / `run cc family` do: this is what ClearRunCc resets at the run's end, moving an entry it
+    // could not settle to the pending retry (DropPendingCc/RetryPendingCc).
+    std::map<std::string, std::string> ccOwned;
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
 };
@@ -102,9 +108,9 @@ uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step = -1, in
 std::string StateName(RunRec const& rec);
 
 // ---- S6 (package C6): the tick, the binding and the commands' logic (the `.tb run` handlers in TbRunCommands.cpp only parse and write replies) ----
-// `Update` is called once per world tick from OnBeforeMapsUpdate (TbRunHooks.h); it runs every live run once per second. Cost of one run tick: one
-// `ReadFacts` (F6: at most a few path queries and grid scans, 2-3 us in the pure half), one `DungeonRun::Tick`, at most ONE order through the
-// executor, and a handful of map lookups; `TickTotals` says what it measured.
+// `Update` is called once per world tick from OnBeforeMapsUpdate (TbRunHooks.h); it retries the cc teardown an ended run left pending and runs every live run
+// once per second. Cost of one run tick: one `ReadFacts` (F6: at most a few path queries and grid scans, 2-3 us in the pure half), one `DungeonRun::Tick`,
+// at most ONE order through the executor, and a handful of map lookups; `TickTotals` says what it measured.
 struct TickTotals
 {
     uint64 ticks = 0;           // run ticks since boot
@@ -114,6 +120,10 @@ struct TickTotals
 TickTotals const& TickCost();
 
 bool Ended(RunRec const& rec);                          // the run is done or stopped (it stays in the table for `status` and `events` until a new start)
+
+// G8 (review): a run's cc mark that its teardown could not take back (the bot out of the world, no engine, a read-back that did not take) is retried every
+// world tick until it settles. A newer accepted `cc` / `cc clear` for the bot drops its pending entry first (that order takes the bot over).
+void DropPendingCc(std::string const& botName);
 
 struct StartOutcome
 {

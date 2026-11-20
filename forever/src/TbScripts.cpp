@@ -54,6 +54,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
+#include "host/TbCc.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -261,6 +262,8 @@ public:
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cc",       TortoiseBots::h8::HandleCc,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: crowd-control mark of one bot
+            { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot> co|nc +name,-name` (SETUP)
         };
         static ChatCommandTable commandTable =
         {

@@ -149,6 +149,28 @@ static void TestUpgradeStock()
     CHECK(!ShouldUpgradeToGroupBuff(false, false, 5));
 }
 
+// Mana buffs only target mana users (Slice 8: 48 refused Arcane Intellect casts on a warrior and a rogue). A mana user needs the mana display power AND a pool.
+static void TestManaBuffTargets()
+{
+    CHECK(BuffNeedsManaUser("arcane intellect"));
+    CHECK(BuffNeedsManaUser("arcane brilliance"));
+    CHECK(BuffNeedsManaUser("divine spirit"));
+    CHECK(BuffNeedsManaUser("prayer of spirit"));
+    CHECK(!BuffNeedsManaUser("mark of the wild"));
+    CHECK(!BuffNeedsManaUser("power word: fortitude"));
+    CHECK(!BuffNeedsManaUser(""));
+    // the warrior (rage), rogue (energy): never a target of a mana buff; a priest or a mage is
+    CHECK(!BuffTargetFits("arcane intellect", false, 0));
+    CHECK(!BuffTargetFits("arcane intellect", false, 1300));
+    // a display power that says mana on a class with no pool is not a mana user either (the core would refuse the cast)
+    CHECK(!BuffTargetFits("arcane intellect", true, 0));
+    CHECK(BuffTargetFits("arcane intellect", true, 764));
+    CHECK(BuffTargetFits("arcane brilliance", true, 1296));
+    // an ordinary buff fits every unit
+    CHECK(BuffTargetFits("mark of the wild", false, 0));
+    CHECK(BuffTargetFits("mark of the wild", true, 0));
+}
+
 int main()
 {
     TestRefreshWindow();
@@ -160,6 +182,7 @@ int main()
     TestUpgradePairScope();
     TestUpgradeQuorum();
     TestUpgradeStock();
+    TestManaBuffTargets();
     std::printf("test_group_buff_policy: %d checks passed\n", checks);
     return 0;
 }

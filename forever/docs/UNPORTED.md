@@ -110,3 +110,12 @@ Rows added by the slice-4 porting worker (`SLICE4-P-NOTES.md` section 5): 76 fea
 |---|---|---|---|---|
 | battleground release aura | the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground | ReleaseSpiritAction.h: `WaitingForResurrectAuraCompat` (2 places: `ReleaseSpiritAction`, `AutoReleaseSpiritAction`; only when `InBattleGround()`) | nothing is cast (the release itself still runs) | the battleground slice: the core puts the aura on a player when its spirit guide is chosen (`Player::SetAreaSpiritHealer`, Player.cpp:33468) |
 | self resurrection | soulstone and ankh self-resurrection: `PLAYER_SELF_RES_SPELL` and `CMSG_SELF_RES` | ReleaseSpiritAction.h: `SelfResurrectPossibleCompat`, `SelfResurrectCompat` (`SelfResurrectAction`, key `self resurrect` not registered) | not possible, nothing sent | read the player's self-resurrection spell list (`InitializeSelfResurrectionSpells`) and send the typed packet with the spell id |
+
+<!-- slice 8, package K8 (mage, rogue, give item) -->
+Slice 8, package K8 (`SLICE8-K-NOTES.md` section 5): no new row. One call site added to an existing row; helper `PoisonItemCheatCastCompat` at the end of `forever/src/compat/TbCompat_K8.h` (Turtle twin `ai/cmangos-compat-k8.h`).
+
+| Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
+|---|---|---|---|---|
+| item and totem casts (existing row, K8 adds 1 site: 6 in all) | the poison item-cheat branch of `ApplyPoisonAction`: a hand-built `BotUseItemSpell` per on-use spell of the poison, cast onto the weapon | RogueActions.h: `PoisonItemCheatCastCompat` (reached only behind the `item` cheat; no poison below level 20, decision D4) | false: no cast started | n/a: F never builds a `BotUseItemSpell` |
+
+Documented limits of slice 8 that are decisions, not rows (nothing in the code reaches them in the slice): Sap and stealth openers (D3, D4: the rogue kit has no `stealth`, `poisons` or rogue `cc`), poisons (the items need level 20; spec section 9).

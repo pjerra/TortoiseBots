@@ -119,7 +119,12 @@ inline bool IsImmuneToSpellEffectCompat(Unit const* target, SpellEntry const* sp
     // for effects 0..2 of every spell, so a spell with fewer effects answers "not immune" (it has no such effect to be immune to).
     if (!info || effectIndex >= info->GetEffects().size())
         return false;
-    return target->IsImmunedToSpellEffect(info, info->GetEffect(SpellEffIndex(effectIndex)), castOnSelf ? target : caster);
+    SpellEffectInfo const& effect = info->GetEffect(SpellEffIndex(effectIndex));
+    // Slice 8 (K8 notes section 4, H8): the core refuses an interrupt on a unit whose mechanic immunity holds MECHANIC_INTERRUPT (SpellInfo::CanBeInterrupted,
+    // SpellInfo.cpp:1778); the engine's own read of effect immunity does not know it, so a Kick at such a mob was cast and wasted. Immune = the bot does less.
+    if (effect.Effect == SPELL_EFFECT_INTERRUPT_CAST && (target->GetMechanicImmunityMask() & (uint64(1) << MECHANIC_INTERRUPT)))
+        return true;
+    return target->IsImmunedToSpellEffect(info, effect, castOnSelf ? target : caster);
 }
 inline bool IsImmuneToDamageCompat(Unit const* target, SpellEntry const* spell, WorldObject const* caster)
 {
