@@ -290,3 +290,8 @@ ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
 ai/playerbot/strategy/actions/DropQuestAction.cpp
 ai/playerbot/strategy/actions/ShareQuestAction.cpp
 ai/playerbot/strategy/actions/QuestRewardActions.cpp
+
+# World-life slice W4 (travel destinations, round A2): the destination manager and its values. They compile against the
+# core only through the WL4 pair (TbCompat_WL4.h + ai/cmangos-compat-wl4.h).
+ai/playerbot/TravelMgr.cpp
+ai/playerbot/strategy/values/TravelValues.cpp

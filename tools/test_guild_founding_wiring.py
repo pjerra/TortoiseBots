@@ -1,7 +1,8 @@
 """Guild-founding travel + strategy wiring stays live while the flag is on.
 
 The petition travel row must exist (TravelStrategy.cpp), the "petition" need
-must stay need-gated (TravelValues.cpp), and both still honor the
+must stay need-gated (its body lives in the both-core pair, ai/cmangos-compat-wl4.h,
+since the W4 travel round moved the value bodies there), and both still honor the
 RandomBotFormGuild flag so the 0 default keeps every leg dark.
 """
 import pathlib
@@ -9,7 +10,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TRAVEL_STRATEGY = (ROOT / "ai/playerbot/strategy/generic/TravelStrategy.cpp").read_text()
-TRAVEL_VALUES = (ROOT / "ai/playerbot/strategy/values/TravelValues.cpp").read_text()
+TRAVEL_VALUES = (ROOT / "ai/cmangos-compat-wl4.h").read_text()
 RPG_STRATEGY = (ROOT / "ai/playerbot/strategy/generic/RpgStrategy.cpp").read_text()
 
 

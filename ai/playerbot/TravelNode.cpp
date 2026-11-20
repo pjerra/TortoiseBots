@@ -1,6 +1,8 @@
 #include "TravelNode.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/policy/travel/TravelRoutePolicy.h"
+#include "playerbot/policy/travel/TravelGraphPolicy.h"
+#include "playerbot/policy/travel/CreatureLevelPolicy.h"
 #include "playerbot/DungeonFollowHoldPolicy.h"
 
 #include <iomanip>
@@ -21,6 +23,8 @@
 #include "strategy/values/HazardsValue.h"
 #include "playerbot/TbCompatW2.h"
 #include "playerbot/TbCompatW3.h"
+#include "playerbot/TbCompatW1.h"
+#include "playerbot/TbCompatWL4n.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -68,7 +72,7 @@ void TravelNodePath::calculateCost(bool distanceOnly)
                 for (auto& creaturePair : point.GetCreaturesNear(50)) //Agro radius + 5
                 {
                     CreatureData const cData = creaturePair->second;
-                    CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(cData.creature_id[0]);
+                    CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(SpawnEntryCompat(cData));
 
                     if (cInfo)
                     {
@@ -82,12 +86,8 @@ void TravelNodePath::calculateCost(bool distanceOnly)
                             hReact.insert(std::make_pair(factionEntry, PlayerbotAI::friendToHorde(factionEntry)));
                         hFriend = hReact.find(factionEntry)->second;
 
-                        if (maxLevelCreature[0] < cInfo->level_max && !aFriend && !hFriend)
-                            maxLevelCreature[0] = cInfo->level_max;
-                        if (maxLevelCreature[1] < cInfo->level_max && aFriend && !hFriend)
-                            maxLevelCreature[1] = cInfo->level_max;
-                        if (maxLevelCreature[2] < cInfo->level_max && !aFriend && hFriend)
-                            maxLevelCreature[2] = cInfo->level_max;
+                        // The creature's classic level on ForeverCore (0 = not rated, adds no threat); Turtle its template level.
+                        ai::travel_graph::RecordCreatureLevel(maxLevelCreature, CreatureTemplateMaxLevelCompat(cInfo), aFriend, hFriend);
                     }
                 }
 
@@ -147,12 +147,14 @@ bool TravelCostContext::canUseAreaTrigger(uint32 triggerId)
 
     bool usable = true;
 
-    AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(triggerId);
-    AreaTriggerTeleport const* at = sObjectMgr.GetAreaTriggerTeleport(triggerId);
-    if (atEntry && at && atEntry->mapid == mapId)
+    AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(triggerId);
+    AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(triggerId);
+    if (atEntry && at && AreaTriggerMapIdCompat(atEntry) == mapId)
     {
-        Map* map = WorldPosition(atEntry->mapid, atEntry->box_x, atEntry->box_y, atEntry->box_z).GetMap(instanceId);
-        if (map && at->requiredCondition && !sObjectMgr.IsConditionSatisfied(at->requiredCondition, bot, map, nullptr, (ConditionSource)CONDITION_FROM_AREATRIGGER_TELEPORT))
+        float boxX = 0.0f, boxY = 0.0f, boxZ = 0.0f;
+        AreaTriggerBoxPosCompat(atEntry, boxX, boxY, boxZ);
+        Map* map = WorldPosition(AreaTriggerMapIdCompat(atEntry), boxX, boxY, boxZ).GetMap(instanceId);
+        if (map && !AreaTriggerConditionAllowsCompat(at, bot, map))
             usable = false;
     }
 
@@ -166,7 +168,7 @@ bool TravelCostContext::canUseAreaTrigger(uint32 triggerId)
         // cannot board: a bot routed through it stood on the platform
         // for good (13 of 2000 pool bots, live 2026-10-09). Masterless
         // bots walk or fly between Stormwind and Ironforge instead.
-        if (usable && at && at->destination.mapId == MAP_DEEPRUN_TRAM && !hasRealPlayerMaster())
+        if (usable && at && AreaTeleportMapIdCompat(at) == MAP_DEEPRUN_TRAM && !hasRealPlayerMaster())
             usable = false;
     }
 
@@ -183,6 +185,11 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
 
 float TravelNodePath::getCost(TravelCostContext& context, uint32 cGold)
 {
+    // A taxi or transport leg is loaded from the node store but never used on ForeverCore: the route is refused (does less)
+    // and the bot picks another target. Turtle answers true for every type and keeps its rules below.
+    if (!TravelLinkUsableCompat(uint8(getPathType())))
+        return -1;
+
     float modifier = 1.0f; //Global modifier
     float timeCost = 0.1f;
     float runDistance = distance - swimDistance;
@@ -208,11 +215,8 @@ float TravelNodePath::getCost(TravelCostContext& context, uint32 cGold)
             if (!data)
                 return -1;
 
-            FactionTemplateEntry const* factionEntry = sFactionTemplateStore.LookupEntry(data->faction);
-
-            if(factionEntry)
-                if (PlayerbotAI::GetFactionReaction(factionEntry, bot->GetFactionTemplateEntry()) < REP_NEUTRAL)
-                    return -1;
+            if (!GameObjectFactionAllowsCompat(data, bot))
+                return -1;
         }
 
         if (getPathType() == TravelNodePathType::flightPath && pathObject)
@@ -225,14 +229,14 @@ float TravelNodePath::getCost(TravelCostContext& context, uint32 cGold)
             if (taxiPath)
             {
 
-                if (!bot->IsTaxiCheater() && taxiPath->price > cGold)
+                if (!bot->IsTaxiCheater() && TaxiPathPriceCompat(taxiPath) > cGold)
                     return -1;
 
-                if (!bot->IsTaxiCheater() && !bot->GetTaxi().IsTaximaskNodeKnown(taxiPath->to))
+                if (!bot->IsTaxiCheater() && !PlayerTaxiMaskKnowsCompat(bot, TaxiPathToCompat(taxiPath)))
                     return -1;
 
-                TaxiNodesEntry const* startTaxiNode = sTaxiNodesStore.LookupEntry(taxiPath->from);
-                TaxiNodesEntry const* endTaxiNode = sTaxiNodesStore.LookupEntry(taxiPath->to);
+                TaxiNodesEntry const* startTaxiNode = sTaxiNodesStore.LookupEntry(TaxiPathFromCompat(taxiPath));
+                TaxiNodesEntry const* endTaxiNode = sTaxiNodesStore.LookupEntry(TaxiPathToCompat(taxiPath));
 
                 if (!startTaxiNode || !endTaxiNode || !startTaxiNode->MountCreatureID[bot->GetTeam() == ALLIANCE ? 1 : 0] || !endTaxiNode->MountCreatureID[bot->GetTeam() == ALLIANCE ? 1 : 0])
                     return -1;
@@ -275,7 +279,7 @@ uint32 TravelNodePath::getPrice()
     if (!taxiPath)
         return 0;
 
-    return taxiPath->price;
+    return TaxiPathPriceCompat(taxiPath);
 }
 
 
@@ -286,11 +290,13 @@ uint32 TravelNode::getAreaTriggerId()
         if (link.second->getPathType() != TravelNodePathType::areaTrigger)
             continue;
 
-        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(link.second->getPathObject());
+        AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(link.second->getPathObject());
         if (!atEntry)
             continue;
 
-        WorldPosition inPos = WorldPosition(atEntry->mapid, atEntry->x, atEntry->y, atEntry->z - 4.0f, 0);
+        float atX = 0.0f, atY = 0.0f, atZ = 0.0f;
+        AreaTriggerPosCompat(atEntry, atX, atY, atZ);
+        WorldPosition inPos = WorldPosition(AreaTriggerMapIdCompat(atEntry), atX, atY, atZ - 4.0f, 0);
 
         if (*getPosition() == inPos)
             return link.second->getPathObject();
@@ -301,20 +307,22 @@ uint32 TravelNode::getAreaTriggerId()
 
 bool TravelNode::isAreaTriggerTarget(uint32 areaTriggerId)
 {
-    for (uint32 i = 0; i < sAreaTriggerStore.GetNumRows(); i++)
+    for (uint32 i = 0; i < AreaTriggerCountCompat(); i++)
     {
         if (areaTriggerId && areaTriggerId != i)
             continue;
 
-        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(i);
+        AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(i);
         if (!atEntry)
             continue;
 
-        AreaTriggerTeleport const* at = sObjectMgr.GetAreaTriggerTeleport(i);
+        AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(i);
         if (!at)
             continue;
 
-        WorldPosition outPos = WorldPosition(at->destination.mapId, at->destination.x, at->destination.y, at->destination.z, at->destination.o);
+        float outX = 0.0f, outY = 0.0f, outZ = 0.0f;
+        AreaTeleportPosCompat(at, outX, outY, outZ);
+        WorldPosition outPos = WorldPosition(AreaTeleportMapIdCompat(at), outX, outY, outZ, AreaTeleportOrientationCompat(at));
 
         if (*getPosition() == outPos)
             return true;
@@ -457,40 +465,14 @@ void TravelNode::removeLinkTo(TravelNode* node, bool removePaths) {
 
 std::vector<TravelNode*> TravelNode::getNodeMap(bool importantOnly, std::vector<TravelNode*> ignoreNodes, bool mapOnly)
 {
-    std::vector<TravelNode*> openList;
-    std::vector<TravelNode*> closeList;
-
-    openList.push_back(this);
-
-    uint32 i = 0;
-
-    while (i < openList.size())
-    {
-        TravelNode* currentNode = openList[i];
-
-        i++;
-
-        if (!importantOnly || currentNode->IsImportant())
-            closeList.push_back(currentNode);
-
-        for (auto& nextPath : *currentNode->GetLinks())
-        {
-            TravelNode* nextNode = nextPath.first;
-
-            if (mapOnly && nextNode->GetMapId() != getMapId())
-                continue;
-
-            if (std::find(openList.begin(), openList.end(), nextNode) != openList.end())
-                continue;
-
-            if (!ignoreNodes.empty() && std::find(ignoreNodes.begin(), ignoreNodes.end(), nextNode) != ignoreNodes.end())
-                continue;
-
-            openList.push_back(nextNode);
-        }
-    }
-
-    return closeList;
+    // Reachability counts only the links the A* may take (TravelLinkUsableCompat: Turtle every type, ForeverCore walks and area
+    // triggers): a goal that only a zeppelin or a taxi reaches is not a route here, so hasRouteTo refuses it before the A* expands
+    // the start continent's graph for nothing (ai/playerbot/policy/travel/TravelGraphPolicy.h).
+    return ai::travel_graph::CollectReachable<TravelNode*>(this, importantOnly, ignoreNodes, mapOnly,
+        [](TravelNode* node) -> std::unordered_map<TravelNode*, TravelNodePath*> const& { return *node->GetLinks(); },
+        [](TravelNode* node) { return node->GetMapId(); },
+        [](TravelNode* node) { return node->IsImportant(); },
+        [](TravelNodePath* path) { return TravelLinkUsableCompat(uint8(path->getPathType())); });
 }
 
 bool TravelNode::isUselessLink(TravelNode* farNode)
@@ -1087,15 +1069,11 @@ bool TravelPath::UpcommingSpecialMovement(WorldPosition startPos, float maxDist,
     {
         if (startP->entry) //For area triggers we need to be close enough to trigger it's activation.
         {
-            AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(startP->entry);
-            if (!atEntry)
+            AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(startP->entry);
+            if (!atEntry || !AreaTriggerKnownCompat(startP->entry))
                 return false;
 
-            AreaTrigger const* at = sObjectMgr.GetAreaTrigger(startP->entry);
-            if (!at)
-                return false;
-
-            if(!IsPointInAreaTriggerZone(atEntry, startPos.GetMapId(), startPos.getX(), startPos.getY(), startPos.getZ(), 0.5f))
+            if (!AreaTriggerZoneContainsCompat(atEntry, startPos.GetMapId(), startPos.getX(), startPos.getY(), startPos.getZ(), 0.5f))
                 return false;
         }
 
@@ -1208,7 +1186,7 @@ void TravelPath::ClipPath(PlayerbotAI* ai, Unit* mover, bool ignoreEnemyTargets,
             if (unit->GetLevel() > mover->GetLevel() + 5)
                 continue;
 
-            float range = unit->GetCombatReach(mover, false, 0.0f);
+            float range = CombatReachToCompat(unit, mover);
             if (WorldPosition(unit).sqDistance(p->point) > range * range)
                 continue;
 
@@ -1313,7 +1291,7 @@ void TravelPath::ClipBeforePack(PlayerbotAI* ai, Unit* mover, bool ignoreEnemyTa
         if (creature->IsInCombat() || creature->GetVictim())
             continue;
 
-        if (!creature->IsHostileTo(mover) || !creature->CanInitiateAttack())
+        if (!creature->IsHostileTo(mover) || !CreatureCanInitiateAttackCompat(creature, mover))
             continue;
 
         float const radius = creature->GetAttackDistance(mover);
@@ -1755,7 +1733,8 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
                 }
             }
 
-            if (AI_VALUE2(bool, "action useful", "hearthstone") && bot->IsAlive())
+            // D4: a travel teleport is cut on ForeverCore (the host's rescue is the only one); Turtle keeps its portal edges.
+            if (TravelTeleportLinksCompat() && AI_VALUE2(bool, "action useful", "hearthstone") && bot->IsAlive())
             {
                 TravelNode* homeNode = sTravelNodeMap.GetNode(AI_VALUE(WorldPosition, "home bind"), nullptr, 50.0f);
                 if (homeNode)
@@ -1779,52 +1758,55 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
         else
             startStub->currentGold = bot->GetMoney();
 
-        std::vector<uint32> teleSpells = { 3561,3562,3563,3565,3566,3567,18960 };
-
-        for (auto spellId : teleSpells)
+        if (TravelTeleportLinksCompat())
         {
-            if (!bot->IsAlive())
-                continue;
+            std::vector<uint32> teleSpells = { 3561,3562,3563,3565,3566,3567,18960 };
 
-            if (bot->IsInCombat())
-                continue;
-
-            if (!bot->HasSpell(spellId))
-                continue;
-
-            if (!sServerFacade.IsSpellReady(bot, spellId))
-                continue;
-
-            if (!sSpellMgr.GetSpellTargetPosition(spellId))
-                continue;
-
-            if (ai)
+            for (auto spellId : teleSpells)
             {
-                AiObjectContext* context = ai->GetAiObjectContext();
-                if (AI_VALUE2(uint32, "has reagents for", spellId) == 0)
+                if (!bot->IsAlive())
                     continue;
+
+                if (bot->IsInCombat())
+                    continue;
+
+                if (!bot->HasSpell(spellId))
+                    continue;
+
+                if (!sServerFacade.IsSpellReady(bot, spellId))
+                    continue;
+
+                if (!SpellTargetPositionCompat(spellId))
+                    continue;
+
+                if (ai)
+                {
+                    AiObjectContext* context = ai->GetAiObjectContext();
+                    if (AI_VALUE2(uint32, "has reagents for", spellId) == 0)
+                        continue;
+                }
+
+                WorldPosition telePos(SpellTargetPositionCompat(spellId));
+
+                TravelNode* homeNode = sTravelNodeMap.GetNode(telePos, nullptr, 10.0f);
+
+                if (!homeNode)
+                    continue;
+
+                PortalNode* portNode = new PortalNode(start);
+                portNode->SetPortal(start, homeNode, spellId);
+
+                childNode = &m_stubs.insert(std::make_pair(portNode, TravelNodeStub(portNode))).first->second;
+
+                childNode->m_g = MINUTE; //If we can walk there in a minute. Walk instead.
+                childNode->m_h = childNode->dataNode->fDist(goal) / unitSpeed;
+                childNode->m_f = childNode->m_g + childNode->m_h;
+
+                open.emplace_back(childNode->m_f, childNode);
+                std::push_heap(open.begin(), open.end(), openLess);
+                childNode->open = true;
+                portNodes.push_back(portNode);
             }
-
-            WorldPosition telePos(sSpellMgr.GetSpellTargetPosition(spellId));
-
-            TravelNode* homeNode = sTravelNodeMap.GetNode(telePos, nullptr, 10.0f);
-
-            if (!homeNode)
-                continue;
-
-            PortalNode* portNode = new PortalNode(start);
-            portNode->SetPortal(start, homeNode, spellId);
-
-            childNode = &m_stubs.insert(std::make_pair(portNode, TravelNodeStub(portNode))).first->second;
-
-            childNode->m_g = MINUTE; //If we can walk there in a minute. Walk instead.
-            childNode->m_h = childNode->dataNode->fDist(goal) / unitSpeed;
-            childNode->m_f = childNode->m_g + childNode->m_h;
-
-            open.emplace_back(childNode->m_f, childNode);
-            std::push_heap(open.begin(), open.end(), openLess);
-            childNode->open = true;
-            portNodes.push_back(portNode);
         }
     }
 
@@ -1932,6 +1914,10 @@ static float const TRAVEL_WALK_LEG_REACH_YD = 5.0f;
 
 bool LeaveDeeprunTram(PlayerbotAI* ai, Player* bot, WorldPosition const& goal)
 {
+    // A teleport outside the host's logged rescue (decision D4) is not allowed on ForeverCore until W5's transport legs exist.
+    if (!TravelTramExitAllowedCompat())
+        return false;
+
     if (bot->GetMapId() != MAP_DEEPRUN_TRAM || ai->HasRealPlayerMaster() || !sRandomBotFacade.IsFreeBot(bot) ||
         bot->IsInCombat() || !bot->IsAlive() || bot->IsBeingTeleported())
         return false;
@@ -1941,15 +1927,17 @@ bool LeaveDeeprunTram(PlayerbotAI* ai, Player* bot, WorldPosition const& goal)
     // (TravelNodePath::getCost) has no other way out.
     AreaTriggerTeleport const* best = nullptr;
     float bestDistance = 0.0f;
-    for (uint32 i = 0; i < sAreaTriggerStore.GetNumRows(); i++)
+    for (uint32 i = 0; i < AreaTriggerCountCompat(); i++)
     {
-        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(i);
-        if (!atEntry || atEntry->mapid != MAP_DEEPRUN_TRAM)
+        AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(i);
+        if (!atEntry || AreaTriggerMapIdCompat(atEntry) != MAP_DEEPRUN_TRAM)
             continue;
-        AreaTriggerTeleport const* at = sObjectMgr.GetAreaTriggerTeleport(i);
-        if (!at || at->destination.mapId == MAP_DEEPRUN_TRAM)
+        AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(i);
+        if (!at || AreaTeleportMapIdCompat(at) == MAP_DEEPRUN_TRAM)
             continue;
-        WorldPosition const exit(at->destination.mapId, at->destination.x, at->destination.y, at->destination.z);
+        float exitX = 0.0f, exitY = 0.0f, exitZ = 0.0f;
+        AreaTeleportPosCompat(at, exitX, exitY, exitZ);
+        WorldPosition const exit(AreaTeleportMapIdCompat(at), exitX, exitY, exitZ);
         float const distance = goal.GetMapId() == exit.GetMapId() ? exit.distance(goal) : 0.0f;
         if (!best || distance < bestDistance)
         {
@@ -1958,10 +1946,15 @@ bool LeaveDeeprunTram(PlayerbotAI* ai, Player* bot, WorldPosition const& goal)
         }
     }
 
-    if (!best || !bot->TeleportTo(best->destination.mapId, best->destination.x, best->destination.y, best->destination.z, best->destination.o))
+    float exitX = 0.0f, exitY = 0.0f, exitZ = 0.0f;
+    if (!best)
+        return false;
+    AreaTeleportPosCompat(best, exitX, exitY, exitZ);
+
+    if (!bot->TeleportTo(AreaTeleportMapIdCompat(best), exitX, exitY, exitZ, AreaTeleportOrientationCompat(best)))
         return false;
 
-    sPlayerbotAIConfig.logEvent(ai, "TramExitTeleport", std::to_string(best->destination.mapId), std::to_string((int32)bestDistance));
+    sPlayerbotAIConfig.logEvent(ai, "TramExitTeleport", std::to_string(AreaTeleportMapIdCompat(best)), std::to_string((int32)bestDistance));
     return true;
 }
 
@@ -1972,8 +1965,8 @@ TravelNodeRoute TravelNodeMap::getRoute(WorldPosition startPos, WorldPosition en
 
     uint32 transportEntry = 0;
 
-    if (unit && unit->GetTransport())
-        transportEntry = unit->GetTransport()->GetEntry();
+    if (unit && TransportOfCompat(unit))
+        transportEntry = TransportOfCompat(unit)->GetEntry();
 
     std::vector<WorldPosition> newStartPath;
     std::vector<TravelNode*> startNodes = getNodes(startPos, -1, transportEntry), endNodes = getNodes(endPos);
@@ -2408,35 +2401,36 @@ void TravelNodeMap::generateNpcNodes()
         if (!cInfo)
             continue;
 
-        uint32 flagMask = UNIT_NPC_FLAG_INNKEEPER | UNIT_NPC_FLAG_FLIGHTMASTER | UNIT_NPC_FLAG_SPIRITHEALER | UNIT_NPC_FLAG_SPIRITGUIDE;
+        uint64 npcFlags = CreatureTemplateNpcFlagsCompat(cInfo);
 
-        if (cInfo->npc_flags & flagMask)
+        if (NpcFlagIsInnkeeperCompat(npcFlags) || NpcFlagIsFlightMasterCompat(npcFlags) ||
+            NpcFlagIsSpiritHealerCompat(npcFlags) || NpcFlagIsSpiritGuideCompat(npcFlags))
         {
             std::string nodeName = guidP.GetAreaName(false);
 
-            if (cInfo->npc_flags & UNIT_NPC_FLAG_INNKEEPER)
+            if (NpcFlagIsInnkeeperCompat(npcFlags))
                 nodeName += " innkeeper";
-            else if (cInfo->npc_flags & UNIT_NPC_FLAG_FLIGHTMASTER)
+            else if (NpcFlagIsFlightMasterCompat(npcFlags))
                 nodeName += " flightMaster";
-            else if (cInfo->npc_flags & UNIT_NPC_FLAG_SPIRITHEALER)
+            else if (NpcFlagIsSpiritHealerCompat(npcFlags))
                 nodeName += " spirithealer";
-            else if (cInfo->npc_flags & UNIT_NPC_FLAG_SPIRITGUIDE)
+            else if (NpcFlagIsSpiritGuideCompat(npcFlags))
                 nodeName += " spiritguide";
 
             TravelNode* node = sTravelNodeMap.addNode(guidP, nodeName, true, true);
         }
-        else if (cInfo->rank == 3)
+        else if (CreatureTemplateRankCompat(cInfo) == 3)
         {
-            std::string nodeName = cInfo->name;
+            std::string nodeName = CreatureTemplateNameCompat(cInfo);
 
             sTravelNodeMap.addNode(guidP, nodeName, true, true);
         }
-        else if (cInfo->rank == 1 && !guidP.isOverworld())
+        else if (CreatureTemplateRankCompat(cInfo) == 1 && !guidP.isOverworld())
         {
-            if (bossMap.find(cInfo->entry) == bossMap.end())
-                bossMap[cInfo->entry] = guidP;
-            else if (bossMap[cInfo->entry])
-                bossMap[cInfo->entry] = GuidPosition();
+            if (bossMap.find(CreatureTemplateEntryCompat(cInfo)) == bossMap.end())
+                bossMap[CreatureTemplateEntryCompat(cInfo)] = guidP;
+            else if (bossMap[CreatureTemplateEntryCompat(cInfo)])
+                bossMap[CreatureTemplateEntryCompat(cInfo)] = GuidPosition();
         }
     }
 
@@ -2452,7 +2446,7 @@ void TravelNodeMap::generateNpcNodes()
         if (!cInfo)
             continue;
 
-        std::string nodeName = cInfo->name;
+        std::string nodeName = CreatureTemplateNameCompat(cInfo);
 
         sTravelNodeMap.addNode(guidP, nodeName, true, true);
     }
@@ -2470,7 +2464,7 @@ void TravelNodeMap::generateStartNodes()
     startNames[RACE_GNOME] = "Dwarf and Gnome";
     startNames[RACE_TROLL] = "Orc and Troll";
     startNames[RACE_GOBLIN] = "Goblin";
-    startNames[RACE_HIGH_ELF] = "High Elf";
+    startNames[TravelHighElfRaceCompat()] = "High Elf";
 
     for (uint32 i = 0; i < MAX_RACES; i++)
     {
@@ -2481,7 +2475,7 @@ void TravelNodeMap::generateStartNodes()
             if (!info)
                 continue;
 
-             WorldPosition pos(info->mapId, info->positionX, info->positionY, info->positionZ, info->orientation);
+             WorldPosition pos(PlayerInfoMapIdCompat(info), PlayerInfoXCompat(info), PlayerInfoYCompat(info), PlayerInfoZCompat(info), PlayerInfoOrientationCompat(info));
 
             std::string nodeName = startNames[i] + " start";
 
@@ -2496,19 +2490,23 @@ void TravelNodeMap::generateAreaTriggerNodes()
 {
     //Entrance nodes
 
-    for (uint32 i = 0; i < sAreaTriggerStore.GetNumRows(); i++)
+    for (uint32 i = 0; i < AreaTriggerCountCompat(); i++)
     {
-        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(i);
+        AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(i);
         if (!atEntry)
             continue;
 
-        AreaTriggerTeleport const* at = sObjectMgr.GetAreaTriggerTeleport(i);
+        AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(i);
         if (!at)
             continue;
 
-        WorldPosition inPos = WorldPosition(atEntry->mapid, atEntry->x, atEntry->y, atEntry->z - 4.0f, 0);
+        float atX = 0.0f, atY = 0.0f, atZ = 0.0f;
+        AreaTriggerPosCompat(atEntry, atX, atY, atZ);
+        WorldPosition inPos = WorldPosition(AreaTriggerMapIdCompat(atEntry), atX, atY, atZ - 4.0f, 0);
 
-        WorldPosition outPos = WorldPosition(at->destination.mapId, at->destination.x, at->destination.y, at->destination.z, at->destination.o);
+        float outX = 0.0f, outY = 0.0f, outZ = 0.0f;
+        AreaTeleportPosCompat(at, outX, outY, outZ);
+        WorldPosition outPos = WorldPosition(AreaTeleportMapIdCompat(at), outX, outY, outZ, AreaTeleportOrientationCompat(at));
 
         std::string nodeName;
 
@@ -2524,19 +2522,23 @@ void TravelNodeMap::generateAreaTriggerNodes()
 
     //Exit nodes
 
-    for (uint32 i = 0; i < sAreaTriggerStore.GetNumRows(); i++)
+    for (uint32 i = 0; i < AreaTriggerCountCompat(); i++)
     {
-        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(i);
+        AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(i);
         if (!atEntry)
             continue;
 
-        AreaTriggerTeleport const* at = sObjectMgr.GetAreaTriggerTeleport(i);
+        AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(i);
         if (!at)
             continue;
 
-        WorldPosition inPos = WorldPosition(atEntry->mapid, atEntry->x, atEntry->y, atEntry->z - 4.0f, 0);
+        float atX = 0.0f, atY = 0.0f, atZ = 0.0f;
+        AreaTriggerPosCompat(atEntry, atX, atY, atZ);
+        WorldPosition inPos = WorldPosition(AreaTriggerMapIdCompat(atEntry), atX, atY, atZ - 4.0f, 0);
 
-        WorldPosition outPos = WorldPosition(at->destination.mapId, at->destination.x, at->destination.y, at->destination.z, at->destination.o);
+        float outX = 0.0f, outY = 0.0f, outZ = 0.0f;
+        AreaTeleportPosCompat(at, outX, outY, outZ);
+        WorldPosition outPos = WorldPosition(AreaTeleportMapIdCompat(at), outX, outY, outZ, AreaTeleportOrientationCompat(at));
 
         std::string nodeName;
 
@@ -2576,7 +2578,7 @@ void TravelNodeMap::generatePortalNodes()
         if (data->type != GAMEOBJECT_TYPE_SPELLCASTER)
             continue;
 
-        const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(data->spellcaster.spellId);
+        const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(GameObjectSpellcasterSpellCompat(data));
 
         if(pSpellInfo->EffectTriggerSpell[0])
             pSpellInfo = sServerFacade.LookupSpellInfo(pSpellInfo->EffectTriggerSpell[0]);
@@ -2584,7 +2586,7 @@ void TravelNodeMap::generatePortalNodes()
         if (pSpellInfo->Effect[0] != SPELL_EFFECT_TELEPORT_UNITS && pSpellInfo->Effect[1] != SPELL_EFFECT_TELEPORT_UNITS && pSpellInfo->Effect[2] != SPELL_EFFECT_TELEPORT_UNITS)
             continue;
 
-        SpellTargetPosition const* pos = sSpellMgr.GetSpellTargetPosition(pSpellInfo->Id);
+        SpellTargetPosition const* pos = SpellTargetPositionCompat(pSpellInfo->Id);
 
         if (!pos)
             continue;
@@ -2617,7 +2619,7 @@ void TravelNodeMap::generatePortalNodes()
         if (pSpellInfo->Effect[0] != SPELL_EFFECT_TELEPORT_UNITS && pSpellInfo->Effect[1] != SPELL_EFFECT_TELEPORT_UNITS && pSpellInfo->Effect[2] != SPELL_EFFECT_TELEPORT_UNITS)
             continue;
 
-        SpellTargetPosition const* pos = sSpellMgr.GetSpellTargetPosition(pSpellInfo->Id);
+        SpellTargetPosition const* pos = SpellTargetPositionCompat(pSpellInfo->Id);
 
         if (!pos)
             continue;
@@ -2626,11 +2628,11 @@ void TravelNodeMap::generatePortalNodes()
 
         if (outPos.isOverworld() && outPos.currentHeight() > 0.5f && outPos.currentHeight() < 50.0f)
         {
-            sLog.outError("%s adjusting height down from %f", pSpellInfo->SpellName[0], outPos.currentHeight());
+            sLog.outError("%s adjusting height down from %f", SpellNameCompat(pSpellInfo), outPos.currentHeight());
             outPos.setZ(outPos.getZ() - outPos.currentHeight() + 0.5f);
         }
 
-        TravelNode* destNode = sTravelNodeMap.addNode(outPos, pSpellInfo->SpellName[0], true, true);
+        TravelNode* destNode = sTravelNodeMap.addNode(outPos, SpellNameCompat(pSpellInfo), true, true);
     }
 }
 
@@ -2675,7 +2677,7 @@ void TravelNodeMap::generateTransportNodes()
             if (data->displayId == 808) //Remove plunger
                 continue;
 
-            uint32 pathId = data->moTransport.taxiPathId;
+            uint32 pathId = GameObjectMoTransportTaxiPathCompat(data);
             float moveSpeed = data->moTransport.moveSpeed;
             if (pathId >= sTaxiPathNodesByPath.size())
                 continue;
@@ -2696,15 +2698,15 @@ void TravelNodeMap::generateTransportNodes()
                 //Loop over the path and connect stop locations.
                 for (size_t pathIndex = 0; pathIndex < path.size(); ++pathIndex)
                 {
-                    auto& p = path[pathIndex];
-                    WorldPosition pos = WorldPosition(p.mapid, p.x, p.y, p.z, 0);
+                    WorldPosition pos = WorldPosition(TaxiPathNodeMapIdCompat(path, pathIndex), TaxiPathNodeXCompat(path, pathIndex),
+                        TaxiPathNodeYCompat(path, pathIndex), TaxiPathNodeZCompat(path, pathIndex), 0);
 
                     if (prevNode)
                     {
                         ppath.push_back(pos);
                     }
 
-                    if (p.delay > 0)
+                    if (TaxiPathNodeDelayCompat(path, pathIndex) > 0)
                     {
                         TravelNode* node = sTravelNodeMap.addNode(pos, data->name, true, true, true, entry);
 
@@ -2741,8 +2743,8 @@ void TravelNodeMap::generateTransportNodes()
                     //Continue from start until first stop and connect to end.
                     for (size_t pathIndex = 0; pathIndex < path.size(); ++pathIndex)
                     {
-                        auto& p = path[pathIndex];
-                        WorldPosition pos = WorldPosition(p.mapid, p.x, p.y, p.z, 0);
+                        WorldPosition pos = WorldPosition(TaxiPathNodeMapIdCompat(path, pathIndex), TaxiPathNodeXCompat(path, pathIndex),
+                            TaxiPathNodeYCompat(path, pathIndex), TaxiPathNodeZCompat(path, pathIndex), 0);
 
                         //if (data->displayId == 3015)
                         //    pos.setZ(pos.getZ() + 6.0f);
@@ -2751,7 +2753,7 @@ void TravelNodeMap::generateTransportNodes()
 
                         ppath.push_back(pos);
 
-                        if (p.delay > 0)
+                        if (TaxiPathNodeDelayCompat(path, pathIndex) > 0)
                         {
                             TravelNode* node = sTravelNodeMap.GetNode(pos, NULL, 5.0f);
 
@@ -2895,17 +2897,27 @@ void TravelNodeMap::generateWalkPaths()
 
     BarGoLink bar(nodes);
 
-    std::vector<std::future<void>> calculations;
-
-    for (auto& map : nodeMaps)
+    // On ForeverCore every map pass runs on the calling (world) thread: PathGenerator must query its map on that map's update
+    // thread, and the graph is built in the generation boot only. Turtle keeps the asynchronous passes it always had.
+    if (!TravelGenParallelCompat())
     {
-        uint32 mapId = map.first;
-        calculations.push_back(std::async([this,mapId, &bar] { generateWalkPathMap(mapId, &bar); }));
+        for (auto& map : nodeMaps)
+            generateWalkPathMap(map.first, &bar);
     }
-
-    for (uint32 i = 0; i < calculations.size(); i++)
+    else
     {
-        calculations[i].wait();
+        std::vector<std::future<void>> calculations;
+
+        for (auto& map : nodeMaps)
+        {
+            uint32 mapId = map.first;
+            calculations.push_back(std::async([this,mapId, &bar] { generateWalkPathMap(mapId, &bar); }));
+        }
+
+        for (uint32 i = 0; i < calculations.size(); i++)
+        {
+            calculations[i].wait();
+        }
     }
 
     sLog.outString(">> Generated paths for " SIZEFMTD " nodes.", sTravelNodeMap.GetNodes().size());
@@ -3062,17 +3074,25 @@ void TravelNodeMap::generateHelperNodes()
 
     BarGoLink bar(places_to_reach);
 
-    std::vector<std::future<void>> calculations;
-
-    for (auto& map : nodeMaps)
+    if (!TravelGenParallelCompat())
     {
-        uint32 mapId = map.first;
-        calculations.push_back(std::async([this, mapId, &bar] { generateHelperNodes(mapId, &bar); }));
+        for (auto& map : nodeMaps)
+            generateHelperNodes(map.first, &bar);
     }
-
-    for (uint32 i = 0; i < calculations.size(); i++)
+    else
     {
-        calculations[i].wait();
+        std::vector<std::future<void>> calculations;
+
+        for (auto& map : nodeMaps)
+        {
+            uint32 mapId = map.first;
+            calculations.push_back(std::async([this, mapId, &bar] { generateHelperNodes(mapId, &bar); }));
+        }
+
+        for (uint32 i = 0; i < calculations.size(); i++)
+        {
+            calculations[i].wait();
+        }
     }
 
     sLog.outString(">> Generated " SIZEFMTD " helpdernodes.", sTravelNodeMap.GetNodes().size()-old);
@@ -3087,12 +3107,12 @@ void TravelNodeMap::generateTaxiPaths()
         if (!taxiPath)
             continue;
 
-        TaxiNodesEntry const* startTaxiNode = sTaxiNodesStore.LookupEntry(taxiPath->from);
+        TaxiNodesEntry const* startTaxiNode = sTaxiNodesStore.LookupEntry(TaxiPathFromCompat(taxiPath));
 
         if (!startTaxiNode)
             continue;
 
-        TaxiNodesEntry const* endTaxiNode = sTaxiNodesStore.LookupEntry(taxiPath->to);
+        TaxiNodesEntry const* endTaxiNode = sTaxiNodesStore.LookupEntry(TaxiPathToCompat(taxiPath));
 
         if (!endTaxiNode)
             continue;
@@ -3102,8 +3122,8 @@ void TravelNodeMap::generateTaxiPaths()
         if (nodes.empty())
             continue;
 
-        WorldPosition startPos(startTaxiNode->map_id, startTaxiNode->x, startTaxiNode->y, startTaxiNode->z);
-        WorldPosition endPos(endTaxiNode->map_id, endTaxiNode->x, endTaxiNode->y, endTaxiNode->z);
+        WorldPosition startPos(TaxiNodeMapIdCompat(startTaxiNode), TaxiNodeXCompat(startTaxiNode), TaxiNodeYCompat(startTaxiNode), TaxiNodeZCompat(startTaxiNode));
+        WorldPosition endPos(TaxiNodeMapIdCompat(endTaxiNode), TaxiNodeXCompat(endTaxiNode), TaxiNodeYCompat(endTaxiNode), TaxiNodeZCompat(endTaxiNode));
 
         TravelNode* startNode = sTravelNodeMap.GetNode(startPos, nullptr, 15.0f);
         TravelNode* endNode = sTravelNodeMap.GetNode(endPos, nullptr, 15.0f);
@@ -3113,13 +3133,14 @@ void TravelNodeMap::generateTaxiPaths()
 
         std::vector<WorldPosition> ppath;
 
-        if (startNode->fDist(WorldPosition(nodes[0].mapid, nodes[0].x, nodes[0].y, nodes[0].z, 0.0)) > 0.1f)
+        if (startNode->fDist(WorldPosition(TaxiPathNodeMapIdCompat(nodes, 0), TaxiPathNodeXCompat(nodes, 0),
+                TaxiPathNodeYCompat(nodes, 0), TaxiPathNodeZCompat(nodes, 0), 0.0)) > 0.1f)
             ppath.push_back(*startNode->getPosition());
 
         for (size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex)
         {
-            auto const& n = nodes[nodeIndex];
-            ppath.push_back(WorldPosition(n.mapid, n.x, n.y, n.z, 0.0));
+            ppath.push_back(WorldPosition(TaxiPathNodeMapIdCompat(nodes, nodeIndex), TaxiPathNodeXCompat(nodes, nodeIndex),
+                TaxiPathNodeYCompat(nodes, nodeIndex), TaxiPathNodeZCompat(nodes, nodeIndex), 0.0));
         }
 
         if (endNode->fDist(ppath.back()) > 0.1f)
@@ -3214,18 +3235,29 @@ void TravelNodeMap::removeUselessPaths()
     std::vector<std::future<void>> calculations;
 
     BarGoLink bar(nodeMaps.size());
-    for (auto& map : nodeMaps)
+    if (!TravelGenParallelCompat())
     {
-        uint32 mapId = map.first;
-        calculations.push_back(std::async([this, mapId] { removeUselessPathMap(mapId); }));
-        bar.step();
+        for (auto& map : nodeMaps)
+        {
+            removeUselessPathMap(map.first);
+            bar.step();
+        }
     }
-
-    BarGoLink bar2(calculations.size());
-    for (uint32 i = 0; i < calculations.size(); i++)
+    else
     {
-        calculations[i].wait();
-        bar2.step();
+        for (auto& map : nodeMaps)
+        {
+            uint32 mapId = map.first;
+            calculations.push_back(std::async([this, mapId] { removeUselessPathMap(mapId); }));
+            bar.step();
+        }
+
+        BarGoLink bar2(calculations.size());
+        for (uint32 i = 0; i < calculations.size(); i++)
+        {
+            calculations[i].wait();
+            bar2.step();
+        }
     }
 }
 
@@ -3234,6 +3266,7 @@ void TravelNodeMap::calculatePathCosts()
     BarGoLink bar(sTravelNodeMap.GetNodes().size());
 
     std::vector<std::future<void>> calculations;
+    uint32 calculated = 0;
 
     for (auto& startNode : sTravelNodeMap.GetNodes())
     {
@@ -3249,8 +3282,22 @@ void TravelNodeMap::calculatePathCosts()
             if (nodePath->GetCalculated())
                 continue;
 
+            if (!TravelGenParallelCompat())
+            {
+                nodePath->calculateCost();
+                ++calculated;
+                continue;
+            }
+
             calculations.push_back(std::async([nodePath] {nodePath->calculateCost(); }));
         }
+    }
+
+    // The world-thread pass visited every link once, so there is nothing left for a second pass.
+    if (!TravelGenParallelCompat())
+    {
+        sLog.outString(">> Calculated cost for %u paths.", calculated);
+        return;
     }
 
     BarGoLink bar2(calculations.size());
@@ -3412,6 +3459,12 @@ void TravelNodeMap::saveNodeStore(bool force)
     if (!hasToSave && !force)
         return;
 
+    if (!TravelNodeStoreWritableCompat())
+    {
+        sLog.outInfo("TortoiseBots: the travel-node tables are missing or incomplete; nothing saved");
+        return;
+    }
+
     hasToSave = false;
 
     std::unordered_map<TravelNode*, uint32> saveNodes;
@@ -3419,11 +3472,11 @@ void TravelNodeMap::saveNodeStore(bool force)
 
     std::sort(anodes.begin(), anodes.end(), [](TravelNode* i, TravelNode* j) {return i->GetName() + std::to_string(i->GetMapId()) + std::to_string(i->getX()) < j->GetName() + std::to_string(j->GetMapId()) + std::to_string(j->getX()); });
 
-    WorldDatabase.BeginTransaction();
+    TravelDbBeginCompat();
 
-    WorldDatabase.PExecute("DELETE FROM ai_playerbot_travelnode");
-    WorldDatabase.PExecute("DELETE FROM ai_playerbot_travelnode_link");
-    WorldDatabase.PExecute("DELETE FROM ai_playerbot_travelnode_path");
+    TravelNodeExecuteCompat("DELETE FROM ai_playerbot_travelnode");
+    TravelNodeExecuteCompat("DELETE FROM ai_playerbot_travelnode_link");
+    TravelNodeExecuteCompat("DELETE FROM ai_playerbot_travelnode_path");
 
     BarGoLink bar(anodes.size());
     for (uint32 i = 0; i < anodes.size(); i++)
@@ -3433,7 +3486,7 @@ void TravelNodeMap::saveNodeStore(bool force)
         std::string name = node->GetName();
         name.erase(remove(name.begin(), name.end(), '\''), name.end());
 
-        WorldDatabase.PExecute("INSERT INTO `ai_playerbot_travelnode` (`id`, `name`, `map_id`, `x`, `y`, `z`, `linked`) VALUES ('%u', '%s', '%d', '%f', '%f', '%f', '%d')"
+        TravelNodeExecuteCompat("INSERT INTO `ai_playerbot_travelnode` (`id`, `name`, `map_id`, `x`, `y`, `z`, `linked`) VALUES ('%u', '%s', '%d', '%f', '%f', '%f', '%d')"
             , i, name.c_str(), node->GetMapId(), node->getX(), node->getY(), node->getZ(), (node->IsLinked() ? 1 : 0));
 
         saveNodes.insert(std::make_pair(node, i));
@@ -3465,7 +3518,7 @@ void TravelNodeMap::saveNodeStore(bool force)
                 if (targetIt == saveNodes.end())
                     continue;
 
-                WorldDatabase.PExecute("INSERT INTO `ai_playerbot_travelnode_link` (`node_id`, `to_node_id`,`type`,`object`,`distance`,`swim_distance`, `extra_cost`,`calculated`, `max_creature_0`,`max_creature_1`,`max_creature_2`) VALUES ('%d','%d', '%d', '%lu', '%f', '%f', '%f', '%d', '%d', '%d', '%d')"
+                TravelNodeExecuteCompat("INSERT INTO `ai_playerbot_travelnode_link` (`node_id`, `to_node_id`,`type`,`object`,`distance`,`swim_distance`, `extra_cost`,`calculated`, `max_creature_0`,`max_creature_1`,`max_creature_2`) VALUES ('%d','%d', '%d', '%lu', '%f', '%f', '%f', '%d', '%d', '%d', '%d')"
                     , i
                     , targetIt->second
                     , uint8(path->getPathType())
@@ -3485,7 +3538,7 @@ void TravelNodeMap::saveNodeStore(bool force)
                 for (uint32 j = 0; j < ppath.size(); j++)
                 {
                     WorldPosition point = ppath[j];
-                    WorldDatabase.PExecute("INSERT INTO `ai_playerbot_travelnode_path` (`node_id`, `to_node_id`, `nr`, `map_id`, `x`, `y`, `z`) VALUES ('%d', '%d', '%d','%d', '%f', '%f', '%f')"
+                    TravelNodeExecuteCompat("INSERT INTO `ai_playerbot_travelnode_path` (`node_id`, `to_node_id`, `nr`, `map_id`, `x`, `y`, `z`) VALUES ('%d', '%d', '%d','%d', '%f', '%f', '%f')"
                         , i
                         , targetIt->second
                         , j
@@ -3501,7 +3554,7 @@ void TravelNodeMap::saveNodeStore(bool force)
             bar.step();
         }
 
-        WorldDatabase.CommitTransaction();
+        TravelDbCommitCompat();
 
         sLog.outString(">> Saved %d travelNode Paths, %d points.", paths,points);
     }
@@ -3509,12 +3562,35 @@ void TravelNodeMap::saveNodeStore(bool force)
 
 void TravelNodeMap::loadNodeStore()
 {
-    std::string query = "SELECT id, name, map_id, x, y, z, linked FROM ai_playerbot_travelnode";
+    // The node store is optional module data: a database without the three tables (or with a missing column) reads as an empty
+    // graph, one line, and travel then does nothing. TravelNodeQueryCompat asks information_schema first, because ForeverCore's
+    // connection aborts the server on a missing table instead of answering null as Turtle does.
+    bool missing = false;
+
+    auto const emptyGraph = [this](char const* why)
+    {
+        for (TravelNode* node : m_nodes)
+            delete node;
+
+        m_nodes.clear();
+        m_map_nodes.clear();
+        hasToGen = false;
+        hasToFullGen = false;
+        sLog.outInfo("TortoiseBots: %s; the travel graph stays empty and travel does nothing", why);
+    };
+
+    std::string query = "SELECT `id`, `name`, `map_id`, `x`, `y`, `z`, `linked` FROM `ai_playerbot_travelnode`";
 
     std::unordered_map<uint32, TravelNode*> saveNodes;
 
     {
-        auto result = WorldDatabase.Query(query.c_str());
+        auto result = TravelNodeQueryCompat(query.c_str(), &missing);
+
+        if (missing)
+        {
+            emptyGraph("the travel-node tables are missing or incomplete");
+            return;
+        }
 
         if (result)
         {
@@ -3554,12 +3630,19 @@ void TravelNodeMap::loadNodeStore()
 
     {
         //                     0        1          2    3      4         5              6          7          8               9             10
-        std::string query = "SELECT node_id, to_node_id,type,object,distance,swim_distance, extra_cost,calculated, max_creature_0,max_creature_1,max_creature_2 FROM ai_playerbot_travelnode_link";
+        std::string query = "SELECT `node_id`, `to_node_id`, `type`, `object`, `distance`, `swim_distance`, `extra_cost`, `calculated`, `max_creature_0`, `max_creature_1`, `max_creature_2` FROM `ai_playerbot_travelnode_link`";
 
-        auto result = WorldDatabase.Query(query.c_str());
+        auto result = TravelNodeQueryCompat(query.c_str(), &missing);
+
+        if (missing)
+        {
+            emptyGraph("the travel-node link table is missing or incomplete");
+            return;
+        }
 
         if (result)
         {
+            uint32 skippedUnknownNode = 0, skippedCrossMapWalk = 0;
             BarGoLink bar(result->GetRowCount());
             do
             {
@@ -3569,10 +3652,21 @@ void TravelNodeMap::loadNodeStore()
                 auto startIt = saveNodes.find(fields[0].GetUInt32());
                 auto endIt = saveNodes.find(fields[1].GetUInt32());
                 if (startIt == saveNodes.end() || endIt == saveNodes.end())
+                {
+                    ++skippedUnknownNode;
                     continue;
+                }
 
                 TravelNode* startNode = startIt->second;
                 TravelNode* endNode = endIt->second;
+
+                // A walk link joins two nodes of one map (ForeverCore: the loader trusts no data a walk cannot follow).
+                if (TravelLoaderChecksWalkMapsCompat() &&
+                    !ai::travel_graph::WalkLinkMapsConsistent(fields[2].GetUInt8(), startNode->GetMapId(), endNode->GetMapId()))
+                {
+                    ++skippedCrossMapWalk;
+                    continue;
+                }
 
                 startNode->setPathTo(endNode, TravelNodePath(fields[4].GetFloat(), fields[6].GetFloat(), fields[2].GetUInt8(), fields[3].GetUInt64(), fields[7].GetBool(), { fields[8].GetUInt8(),fields[9].GetUInt8(),fields[10].GetUInt8() }, fields[5].GetFloat()), true);
 
@@ -3582,6 +3676,9 @@ void TravelNodeMap::loadNodeStore()
             } while (result->NextRow());
 
             sLog.outString(">> Loaded " SIZEFMTD " travelNode paths.", result->GetRowCount());
+            if (skippedUnknownNode || skippedCrossMapWalk)
+                sLog.outString(">> Skipped %u travelNode links to an unknown node and %u walk links between two maps.",
+                    skippedUnknownNode, skippedCrossMapWalk);
         }
         else
         {
@@ -3592,12 +3689,19 @@ void TravelNodeMap::loadNodeStore()
 
     {
         //                     0        1           2   3      4   5  6
-        std::string query = "SELECT node_id, to_node_id, nr, map_id, x, y, z FROM ai_playerbot_travelnode_path order by node_id, to_node_id, nr";
+        std::string query = "SELECT `node_id`, `to_node_id`, `nr`, `map_id`, `x`, `y`, `z` FROM `ai_playerbot_travelnode_path` ORDER BY `node_id`, `to_node_id`, `nr`";
 
-        auto result = WorldDatabase.Query(query.c_str());
+        auto result = TravelNodeQueryCompat(query.c_str(), &missing);
+
+        if (missing)
+        {
+            emptyGraph("the travel-node path table is missing or incomplete");
+            return;
+        }
 
         if (result)
         {
+            uint32 droppedCrossMapPath = 0;
             BarGoLink bar(result->GetRowCount());
             do
             {
@@ -3617,10 +3721,18 @@ void TravelNodeMap::loadNodeStore()
 
                 TravelNodePath* path = startNode->GetPathTo(endNode);
 
-                std::vector<WorldPosition> ppath = path->GetPath();
-                ppath.push_back(WorldPosition(fields[3].GetUInt32(), fields[4].GetFloat(), fields[5].GetFloat(), fields[6].GetFloat()));
+                // A walk link whose path leaves its map is dropped whole (its later rows then find no link): the bot would walk
+                // a "path" through another map's coordinates.
+                if (TravelLoaderChecksWalkMapsCompat() &&
+                    !ai::travel_graph::WalkPathPointOnLinkMap(uint8(path->getPathType()), startNode->GetMapId(), fields[3].GetUInt32()))
+                {
+                    startNode->removeLinkTo(endNode, true);
+                    ++droppedCrossMapPath;
+                    continue;
+                }
 
-                path->setPath(ppath);
+                // The rows arrive ordered by `nr`, so each is appended once: no per-point copy of the path grown so far.
+                path->appendPathPoint(WorldPosition(fields[3].GetUInt32(), fields[4].GetFloat(), fields[5].GetFloat(), fields[6].GetFloat()));
 
                 if (path->GetCalculated())
                     path->setComplete(true);
@@ -3628,6 +3740,8 @@ void TravelNodeMap::loadNodeStore()
             } while (result->NextRow());
 
             sLog.outString(">> Loaded " SIZEFMTD " travelNode paths points.", result->GetRowCount());
+            if (droppedCrossMapPath)
+                sLog.outString(">> Dropped %u walk links whose path runs through another map.", droppedCrossMapPath);
         }
         else
         {

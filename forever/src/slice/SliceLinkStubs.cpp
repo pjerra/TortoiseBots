@@ -34,8 +34,6 @@
 #include "playerbot/PlayerbotTextMgr.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/Talentspec.h"
-#include "playerbot/TravelMgr.h"
-#include "playerbot/TravelNode.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/CheatAction.h"
 #include "playerbot/strategy/actions/EmoteAction.h"
@@ -86,7 +84,6 @@ inline void NoteBoss()
     if (lastSecond.exchange(now) != now)
         tbcompat::Unported(tbcompat::Feature::BossTactics);
 }
-inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
 inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
 inline void NoteTexts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
 inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
@@ -321,58 +318,6 @@ std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list
 bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
-// =====================================================================================================================
-// Travel (owner files: ai/playerbot/TravelMgr.cpp, TravelNode.cpp). No node map, no destinations, no route.
-// =====================================================================================================================
-namespace ai
-{
-void TravelMgr::Clear() { NoteTravel(); }
-void TravelMgr::LoadAreaLevels() { NoteTravel(); }
-void TravelMgr::LoadQuestTravelTable() { NoteTravel(); }
-void TravelMgr::LoadTaxiNodeZones() { NoteTravel(); }
-int32 TravelMgr::GetAreaLevel(uint32) { NoteTravel(); return 0; }
-void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteTravel(); }
-// The real function clears the out list; on the same map the start itself is the one "portal" at distance 0; otherwise the transfer table answers, and it is empty.
-void TravelMgr::CollectMapTransferPortals(const WorldPosition& start, uint32 endMapId, std::vector<std::pair<WorldPosition, float>>& outPortals) const
-{
-    NoteTravel();
-    outPortals.clear();
-    if (start.GetMapId() == endMapId)
-        outPortals.emplace_back(start, 0.0f);
-}
-// The real distance (TravelMgr.cpp:3644): on one map the flat distance, across maps the distance through the nearest known transfer, FLT_MAX when there is
-// none. No transfer table is built here, so every cross-map distance is FLT_MAX (R9: 0.0f made it read "right here", 53 call sites).
-float TravelMgr::MapTransDistance(const WorldPosition& start, const WorldPosition& end, bool) const
-{
-    NoteTravel();
-    if (start.GetMapId() == end.GetMapId())
-        return std::sqrt(start.sqDistance2d(end));
-    return FLT_MAX;
-}
-
-TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
-TravelTarget::~TravelTarget() {}
-bool TravelTarget::IsActive() { NoteTravel(); return false; }
-void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
-
-// The real answer with no stored offset: the map with a zero position.
-WorldPosition TravelNodeMap::getMapOffset(uint32 mapId) { NoteTravel(); return WorldPosition(mapId, 0, 0, 0, 0); }
-TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
-void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTravel(); }
-bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
-bool TravelPath::cutTo(PathNodePoint, bool) { NoteTravel(); return false; }
-void TravelPath::makeShortCut(WorldPosition, float, Unit*) { NoteTravel(); }
-
-// The vtables of the destination classes TravelMgr's members construct: the key functions, with the "nothing is possible"
-// answers the base TravelDestination gives.
-std::string EntryTravelDestination::GetShortName() const { NoteTravel(); return ""; }
-bool GrindTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GrindTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GrindTravelDestination::GetTitle() const { NoteTravel(); return "grind"; }
-bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
-}
 
 // =====================================================================================================================
 // Slice 9 (package L9): ItemUsageValue.cpp and LootRollAction.cpp are in the slice, and what they call outside it is answered here. Every answer is
@@ -402,6 +347,12 @@ namespace TortoiseBots { namespace GuildOrders {
 void RefreshOrderProtectedSet(Player*) { NotePool(); }
 void NoteBagsFull(uint32_t) { NotePool(); }
 } }
+// GuildOrderSources.cpp (same feature): no order is planned, so no bot carries a farm item, waits for a mail or uses a source.
+std::pair<uint32_t, uint32_t> ai::GuildOrderFarmItemFor(Player*) { NotePool(); return {}; }
+bool ai::GuildOrderMailWaiting(Player*) { NotePool(); return false; }
+bool ai::GuildOrderEntryUsableFor(uint32_t, int32_t, uint32_t, uint32_t, uint32_t, uint32_t, bool) { NotePool(); return false; }
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no teleport cache is built, so the overlay export writes nothing.
+void RandomBotFacade::PrintTeleportCache() { NotePool(); }
 // QueryItemUsageAction.cpp: the `query item usage` chat reply (a debug answer) is not built; the class is the base of the roll actions, which override Execute.
 bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 
