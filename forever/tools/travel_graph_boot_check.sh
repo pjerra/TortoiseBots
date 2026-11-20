@@ -115,7 +115,7 @@ scenario_b() {
 }
 
 scenario_c() {
-    printf 'scenario c: two nodes, a link whose target node does not exist, and its path points\n'
+    printf 'scenario c: three nodes, a link whose target node does not exist, and its path points\n'
     drop_tables || { fail "could not drop the travel tables"; return; }
     if ! create_empty; then fail "could not create the empty schema"; return; fi
     sql "INSERT INTO ai_playerbot_travelnode (id, name, map_id, x, y, z, linked) VALUES
