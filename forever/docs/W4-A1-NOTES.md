@@ -223,3 +223,18 @@ Tests: `forever/tools/test_travel_graph_policy.cpp` (762 checks, the two-contine
 | low | `GetAreaLevel` writes a shared map | `FreezeAreaLevels` fills every DBC area at boot (F), then `GetAreaLevel` only reads |
 | low | released spawn index rebuilt | after the release the index answers empty and logs once, never rebuilds |
 
+Gates of the review round (commit `80b7ec9fd`, core 25fc7ca; the slot-7 source tree on the build VM was overwritten by another session
+mid-queue, its build failed on a file that is not in this branch, so the gates ran again on slot 9):
+
+| Gate | Result |
+|---|---|
+| Census, `forever/SLICE-W4.txt` | `files 273  compile clean 273  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (`census-runs/w4a1-review-s9-SLICE-W4`) |
+| Worldserver ON (`TORTOISEBOTS_SLICE1=ON`) | `CMAKE_RC=0 MAKE_RC=0`, 0 `error:`, 72,593,576 bytes; `strings` holds the new boot lines |
+| Module OFF (`tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` |
+| Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` `(a)=0 (b)=223` (unchanged) |
+| Policy tests | `test_travel_graph_policy` 762 checks 0 failed; `test_travel_purpose_gate_policy` 929 checks 0 failed; seven mutations (old link rule, no creature levels, unknown = 0, cross-map walk, no beginner clause, loose vendor need, unfiltered transfers) each fail |
+| Wiring | `forever/tools/test_wl4_wiring.py` 41 tests OK; `tools.test_forever_no_direct_queries` 5 OK |
+| `tools/verify_all.sh` | same single failure as `tbf/main` (step 7, `src/game/SessionTransport.h` missing in `../tortoise-wow`) |
+| Turtle `vm-build` | `COMPILE_SECONDS=1427 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb` | `RESULT: PASS kind=tb wt=wt-w4a1 sha=80b7ec9fd dirty=0 files=4030` |
+
