@@ -437,6 +437,7 @@ void RandomItemMgr::Init() { LoadWeightScales(); }
 uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetLiveStatWeight(Player*, uint32, uint32) { NoteItems(); return 0; }
 uint8 RandomItemMgr::GetSourceFlags(uint32) { NoteItems(); return ITEM_SOURCE_FLAG_NONE; }
 
 // With no text table the real GetBotText(name) answers the empty text (PlayerbotTextMgr.cpp:65; R9: the old stand-in answered the key, so a bot whispered raw
@@ -513,9 +514,28 @@ bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unpo
 // GuildOrders, TravelMgr) are not in the slice yet (waits for W1/W4).
 // =====================================================================================================================
 #include "playerbot/strategy/values/MaintenanceValues.h"
+#include "playerbot/strategy/values/TrainerValues.h"
+#include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
 namespace ai
 {
 bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
 void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
+// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these three are its plain helpers.
+uint32 TrainerSpellPrice(TrainerSpell const* tSpell, float discountMod) { return uint32(floor(tSpell->spellCost * discountMod)); }
+bool TrainerTrainsForFree(PlayerbotAI* ai) { return sPlayerbotAIConfig.autoTrainSpells == "free" || ai->HasCheat(BotCheatMask::gold); }
+uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
+{
+    if (TrainerTrainsForFree(ai))
+        return UINT32_MAX;
+    NeedMoneyFor budget = NeedMoneyFor::anything;
+    if (type == TRAINER_TYPE_CLASS)
+        budget = NeedMoneyFor::spells;
+    else if (type == TRAINER_TYPE_MOUNTS)
+        budget = NeedMoneyFor::mount;
+    else if (type == TRAINER_TYPE_TRADESKILLS)
+        budget = NeedMoneyFor::skilltraining;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE2(uint32, "free money for", (uint32)budget);
+}
 }
