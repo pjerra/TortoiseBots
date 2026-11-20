@@ -124,7 +124,6 @@ static void TestTexts()
     none.distanceFromLead = 1.0f;       // no ReactDistance configured: always too far (the early return takes this too)
     none.maxDistance = 0.0f;
     CHECK(RC::CheckMove(none) == RC::MoveVerdict::TooFar);
-    f.distanceFromLead = 40.0f;
 
     // no path, and a path that goes nowhere from the lead's own spot
     f.distanceFromLead = 40.0f;
