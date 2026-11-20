@@ -36,8 +36,13 @@ bool ApplyCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
 
 // Reset the bot's `rti cc` and `run cc family` to "none". When `mark` and `unit` are given (non-empty) the party's icon `mark` is removed, but ONLY while it
 // still holds `unit` (a later order may have moved it); `iconRemoved` says whether it was. With neither (G8) the icon of the bot's OWN crowd-control mark
-// (`rti cc`, read before the reset) is removed whatever it holds, so a bare `clear` leaves no icon behind. Codes as above (engine-not-built no-engine bad-mark no-party failed).
+// (`rti cc`, read before the reset) is removed whatever it holds, so a bare `clear` leaves no icon behind. A mark with no unit is a values-only reset, so it
+// needs no party (a bot that left the group is still taken off its run mark). Every write is read back and undone completely when it does not hold: a refused
+// clear changes nothing. Codes as above (engine-not-built no-engine bad-mark no-party failed; no-party only when a named unit's icon must be looked up).
 bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGuid unit, std::string& code, std::string* detail = nullptr, bool* iconRemoved = nullptr);
+
+// The bot's `rti cc` and `run cc family` ("" for "none" or when the bot has no engine), as `.tb state` reads them.
+void CcOrderValues(Player* bot, std::string& mark, std::string& family);
 
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail args);         // .tb cc <bot> <mark> <unit guid|target> [family] | .tb cc <bot> clear [<mark> <unit guid>] [#token]
 bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb strategy <bot> co|nc <+name,-name ...> [#token]   (SETUP)

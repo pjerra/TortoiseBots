@@ -8,6 +8,7 @@
 #include "ai/playerbot/BossTacticsMgr.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/TbCc.h"
+#include "host/TbCcPure.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
@@ -283,7 +284,8 @@ void DropFocusMark(RunRec const& rec, uint64 handle)
 }
 
 // G8: the crowd control the run set comes off when the run ends (T: ClearRunCcIcons): each raid icon of Run::ccIcons only while it is still on the unit the run
-// put it on (an icon a player moved since stays), and every bot that still holds a run mark gets its `rti cc` and `run cc family` back to none.
+// put it on (an icon a player moved since stays), and every bot a run `cc` order marked gets its `rti cc` and `run cc family` back to none. The bots come from
+// RunRec::ccOwned, not Run::ccHolds: a step advance, a resume or a regroup clears ccHolds and leaves the bots' values set.
 void ClearRunCc(RunRec& rec)
 {
     Player* lead = InWorld(rec.leader);
@@ -295,20 +297,30 @@ void ClearRunCc(RunRec& rec)
             if (icon.first >= 0 && icon.first < 8 && ResolveHandle(rec.leader, icon.second, unit) && group->GetTargetIcon(uint8(icon.first)) == unit)
                 group->SetTargetIcon(uint8(icon.first), ObjectGuid::Empty, rec.leader);
         }
-    std::set<std::string> done;
-    for (auto const& hold : rec.run.ccHolds)
+    for (auto const& owned : rec.ccOwned)
     {
-        if (!done.insert(hold.second.bot).second)
-            continue;
+        Player* bot = nullptr;
         for (ObjectGuid guid : PartyGuids(rec))
         {
-            Player* bot = InWorld(guid);
-            if (!bot || bot->GetName() != hold.second.bot)
-                continue;
-            // The mark is named so that only the bot's own values reset: the icon was settled above (an empty unit takes no icon down).
-            std::string code;
-            h8::ClearCcOrder(lead, bot, hold.second.mark, ObjectGuid::Empty, code);
+            Player* member = InWorld(guid);
+            if (member && member->GetName() == owned.first)
+            {
+                bot = member;
+                break;
+            }
         }
+        if (!bot)
+            bot = ObjectAccessor::FindPlayerByName(owned.first.c_str());
+        if (!bot || !bot->IsInWorld())
+            continue;
+        std::string mark, family;
+        h8::CcOrderValues(bot, mark, family);
+        if (!h8::CcMarkOwned(owned.second, mark))
+            continue;   // a later order gave the bot another mark: not the run's to take off
+        // The mark is named so that only the bot's own values reset: the icons were settled above (an empty unit takes no icon down), and a values-only clear
+        // needs no party, so a bot that left the group is taken off the run's mark too.
+        std::string code;
+        h8::ClearCcOrder(lead, bot, owned.second, ObjectGuid::Empty, code);
     }
 }
 

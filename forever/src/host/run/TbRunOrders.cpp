@@ -11,6 +11,7 @@
 
 #include "host/TbH3.h"
 #include "host/TbCc.h"
+#include "host/TbCcPure.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
@@ -605,6 +606,7 @@ OrderAnswer DoCc(RunRec& rec, Party const& party, od::Parsed const& p)
     std::string code, detail;
     if (!h8::ApplyCcOrder(party.lead, bot, p.mark, guid, p.family, code, &detail))
         return Refuse(od::CcAnswerCode(code), detail.empty() ? "The crowd-control order was refused (" + code + ")." : detail);
+    h8::CcOwnedRecord(rec.ccOwned, bot->GetName(), p.mark);
     return Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
 }
 
@@ -621,6 +623,7 @@ OrderAnswer DoCcClear(RunRec& rec, Party const& party, od::Parsed const& p)
     std::string code, detail;
     if (!h8::ClearCcOrder(party.lead, bot, p.mark, guid, code, &detail))
         return Refuse(od::CcAnswerCode(code), detail.empty() ? "The crowd-control clear was refused (" + code + ")." : detail);
+    h8::CcOwnedForget(rec.ccOwned, bot->GetName());
     return Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
 }
 

@@ -45,7 +45,7 @@ class G8Wiring(unittest.TestCase):
         body = cc[cc.index("bool ClearCcOrder("):]
         body = body[:body.index("\nnamespace")]
         self.assertIn('ownCc->Get()', body)
-        self.assertIn("ObjectGuid::Empty", body)
+        self.assertIn("target.own", body)
         self.assertIn("iconRemoved", body)
 
     def test_facts_know_the_crowd_control(self):
@@ -79,6 +79,35 @@ class G8Wiring(unittest.TestCase):
         # the order of the calls: the extension sits right after the policy's tick, before the executor and before Observe sees the pause
         self.assertLess(run.index("DungeonRun::Tick(run, facts, dt)"), run.index("gather::Decide(rec.gatherExt"))
         self.assertLess(run.index("gather::Decide(rec.gatherExt"), run.index("Issue(rec, order, nowMs"))
+
+    # Review fix round: a refused clear changes nothing, and the run's end resets every bot a run `cc` order marked, not only Run::ccHolds.
+    def test_clear_is_atomic(self):
+        cc = text("forever/src/host/TbCc.cpp")
+        body = cc[cc.index("bool ClearCcOrder("):]
+        body = body[:body.index("\nvoid CcOrderValues(")]
+        self.assertIn("ClearCcState(values, icons, plan)", body)
+        self.assertIn("CcClearTargetOf(", body)
+        self.assertIn("CcClearFailure::Icon", body)
+        self.assertIn("CcClearFailure::Values", body)
+        self.assertNotIn("ownCc->Set(", body)        # both values are written and undone by ClearCcState
+        self.assertNotIn("group->SetTargetIcon(", body)
+        # the icon comes down only after the target is read, and the no-party refusal is for a named unit alone
+        self.assertLess(body.index("CcClearTargetOf("), body.index("ClearCcState(values, icons, plan)"))
+        self.assertIn("if (target.needsGroup && !group)", body)
+
+    def test_run_clears_every_bot_it_marked(self):
+        run = text("forever/src/host/run/TbRun.cpp")
+        clear = run[run.index("void ClearRunCc("):]
+        clear = clear[:clear.index("\n}\n")]
+        self.assertIn("for (auto const& owned : rec.ccOwned)", clear)
+        self.assertNotIn("rec.run.ccHolds", clear)
+        self.assertIn("h8::CcOrderValues(", clear)
+        self.assertIn("h8::CcMarkOwned(", clear)
+        self.assertIn("h8::ClearCcOrder(", clear)
+        self.assertIn("ObjectAccessor::FindPlayerByName(", clear)    # a bot that left the group is still found
+        orders = text("forever/src/host/run/TbRunOrders.cpp")
+        self.assertIn("h8::CcOwnedRecord(rec.ccOwned", orders)
+        self.assertIn("h8::CcOwnedForget(rec.ccOwned", orders)
 
 
 if __name__ == "__main__":

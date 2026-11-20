@@ -1,6 +1,7 @@
 // Slice 8, host package H8: see TbCc.h. The command parsing and the replies use the core and TbH3.h only; the engine-facing part is behind TORTOISEBOTS_SLICE1
 // exactly as TbOrders.cpp keeps it, and the default build answers `error code=engine-not-built` (the second half of this file).
 #include "host/TbCc.h"
+#include "host/TbCcPure.h"
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -111,6 +112,45 @@ void ResetTargets(PlayerbotAI* ai)
         if (ai::Value<Unit*>* value = ai->GetAiObjectContext()->GetValue<Unit*>(key))
             value->Reset();
 }
+
+// The two values a clear resets (TbCcPure.h ClearCcState).
+struct CcValueAccess
+{
+    ai::Value<std::string>* cc;
+    ai::Value<std::string>* family;
+
+    std::string GetCc() { return cc->Get(); }
+    std::string GetFamily() { return family->Get(); }
+    void SetCc(std::string const& text) { cc->Set(text); }
+    void SetFamily(std::string const& text) { family->Set(text); }
+};
+
+// The party's raid icons as the clear's undo sees them: every slot is snapshotted before the write, so a read-back that does not hold puts the slots back
+// (two passes: a slot whose icon is still on its unit is asked again, as ApplyCcOrder's Undo does).
+struct CcIconAccess
+{
+    Group* group;
+    ObjectGuid by;
+    ObjectGuid before[8];
+
+    ObjectGuid Get(int index) { return group->GetTargetIcon(uint8(index)); }
+    void Set(int index, ObjectGuid const& unit) { group->SetTargetIcon(uint8(index), unit, by); }
+    void Snapshot()
+    {
+        if (group)
+            for (uint8 i = 0; i < 8; ++i)
+                before[i] = group->GetTargetIcon(i);
+    }
+    void Restore()
+    {
+        if (!group)
+            return;
+        for (int pass = 0; pass < 2; ++pass)
+            for (uint8 i = 0; i < 8; ++i)
+                if (group->GetTargetIcon(i) != before[i])
+                    group->SetTargetIcon(i, before[i], by);
+    }
+};
 
 std::vector<Player*> MembersOf(Group* group)
 {
@@ -233,55 +273,62 @@ bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
     ai::Value<std::string>* ownFamily = StringValue(ai, "run cc family");
     if (!ownCc || !ownFamily)
         return Refuse(code, detail, "no-engine", "the bot has no running engine (`.tb engine <bot> on`)");
-    int index = -1;
-    Group* group = nullptr;
-    if (!mark.empty() || !unit.IsEmpty())
+    bool const markNamed = !mark.empty();
+    bool const unitNamed = !unit.IsEmpty();
+    int namedIndex = -1;
+    if (markNamed || unitNamed)
     {
-        index = MarkIndex(Lower(mark));
-        if (index < 0 || index == SkullIndex)
+        namedIndex = MarkIndex(Lower(mark));
+        if (namedIndex < 0 || namedIndex == SkullIndex)
             return Refuse(code, detail, "bad-mark", "a crowd-control mark is star, circle, diamond, triangle, moon, square or cross");
-        group = bot->GetGroup();
-        if (!group)
-            return Refuse(code, detail, "no-party", "the bot is in no party, so it has no raid mark to take down");
     }
     // `clear` with no mark and no unit (G8): the bot's own crowd-control mark names the icon. The icon of that mark goes too, whichever unit it holds: it is
     // this bot's mark by `rti cc` (a later order of ANOTHER bot would have taken `rti cc` off this one: exclusive ownership), so no other work uses it.
-    if (mark.empty() && unit.IsEmpty())
+    int ownIndex = -1;
+    if (!markNamed && !unitNamed)
     {
         int const own = MarkIndex(Lower(ownCc->Get()));
-        if (own >= 0 && own != SkullIndex && bot->GetGroup())
+        if (own >= 0 && own != SkullIndex)
+            ownIndex = own;
+    }
+    CcClearTarget const target = CcClearTargetOf(markNamed, unitNamed, namedIndex, ownIndex);
+    Group* group = bot->GetGroup();
+    if (target.needsGroup && !group)
+        return Refuse(code, detail, "no-party", "the bot is in no party, so it has no raid mark to take down");
+    // The icon goes only while it still holds the unit the clear names (a later order may have moved it to another); with no unit named, the bot's own mark's
+    // icon, whatever it holds.
+    CcClearPlan<ObjectGuid> plan;
+    if (group && target.icon >= 0)
+    {
+        ObjectGuid const held = group->GetTargetIcon(uint8(target.icon));
+        if (target.own ? !held.IsEmpty() : held == unit)
         {
-            group = bot->GetGroup();
-            index = own;
+            plan.icon = target.icon;
+            plan.held = held;
         }
     }
-    ownCc->Set("none");
-    ownFamily->Set("none");
-    // The icon goes only while it still holds THIS unit (a later order may have moved it to another); with no unit named, the bot's own mark's icon.
-    if (group && unit.IsEmpty() && mark.empty())
-    {
-        ObjectGuid const held = group->GetTargetIcon(uint8(index));
-        if (!held.IsEmpty())
-        {
-            group->SetTargetIcon(uint8(index), ObjectGuid::Empty, ChangedBy(leader, bot));
-            if (group->GetTargetIcon(uint8(index)) == held)
-                return Refuse(code, detail, "failed", "the raid mark is still on the unit");
-            if (iconRemoved)
-                *iconRemoved = true;
-        }
-    }
-    else if (group && !unit.IsEmpty() && group->GetTargetIcon(uint8(index)) == unit)
-    {
-        group->SetTargetIcon(uint8(index), ObjectGuid::Empty, ChangedBy(leader, bot));
-        if (group->GetTargetIcon(uint8(index)) == unit)
-            return Refuse(code, detail, "failed", "the raid mark is still on the unit");
-        if (iconRemoved)
-            *iconRemoved = true;
-    }
+    CcValueAccess values{ ownCc, ownFamily };
+    CcIconAccess icons{ group, ChangedBy(leader, bot) };
+    CcClearFailure const failure = ClearCcState(values, icons, plan);
     ResetTargets(ai);
-    if (ownCc->Get() != "none" || ownFamily->Get() != "none")
+    if (failure == CcClearFailure::Icon)
+        return Refuse(code, detail, "failed", "the raid mark is still on the unit");
+    if (failure == CcClearFailure::Values)
         return Refuse(code, detail, "failed", "the bot's `rti cc` or `run cc family` did not reset");
+    if (iconRemoved && plan.icon >= 0)
+        *iconRemoved = true;
     return true;
+}
+
+// The bot's `rti cc` and `run cc family` as `.tb state` reads them ("" for "none" or no engine): the run's end (TbRun.cpp ClearRunCc) checks that a bot it
+// marked still carries the run's mark before it resets it.
+void CcOrderValues(Player* bot, std::string& mark, std::string& family)
+{
+    mark.clear();
+    family.clear();
+    PlayerbotAI* ai = AiOf(bot);
+    mark = ValueText(ai, "rti cc");
+    family = ValueText(ai, "run cc family");
 }
 
 namespace
@@ -627,6 +674,7 @@ bool NoEngine(std::string& code, std::string* detail)
 
 bool ApplyCcOrder(Player*, Player*, std::string const&, ObjectGuid, std::string const&, std::string& code, std::string* detail) { return NoEngine(code, detail); }
 bool ClearCcOrder(Player*, Player*, std::string const&, ObjectGuid, std::string& code, std::string* detail, bool*) { return NoEngine(code, detail); }
+void CcOrderValues(Player*, std::string& mark, std::string& family) { mark.clear(); family.clear(); }
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail args)       { return NotBuilt(handler, args, "cc"); }
 bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "strategy"); }
 }

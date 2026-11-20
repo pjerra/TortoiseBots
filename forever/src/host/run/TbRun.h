@@ -87,6 +87,9 @@ struct RunRec
     bool seenWipe = false;
     std::set<std::string> seenDead;
     gather::Extension gatherExt;                 // G8: the regroup gather's bounded extensions at the current step (TbRunGatherPure.h)
+    // G8 (review): the bots the run's own `cc` orders marked, name -> mark. Run::ccHolds does not survive a step advance, a resume or a regroup
+    // (DungeonRun::ResetStep clears it) and the bots' `rti cc` / `run cc family` do: this is what ClearRunCc resets at the run's end.
+    std::map<std::string, std::string> ccOwned;
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
 };
