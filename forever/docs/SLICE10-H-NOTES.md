@@ -124,3 +124,33 @@ Tested tree: `75009e82b` (fixes, tests, docs, notes); the commit after it is not
 | wiring: `verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`, `test_slice4_d4_wiring.py`, `test_run_review_wiring.py` | all OK (`live-missing=0`, surface OK, 23 pin tests) |
 | Turtle `vm-build ~/wt-s10-h --wait` | `COMPILE_SECONDS=54 CMAKE_RC=0 MAKE_RC=0` |
 | Turtle `vm-test tb ~/wt-s10-h` | `RESULT: PASS  kind=tb wt=wt-s10-h sha=75009e82b dirty=1 files=3866` (`rc=0`, 1201 s) |
+
+## 12. Second review round (2026-11-20, final)
+
+One finding (Codex):
+
+| # | Finding | Verdict | Evidence |
+|---|---|---|---|
+| C2 | [medium] A refused tank order left an existing shaman tank role active: the guard emitted `no-tank-kit` and continued without clearing a stored or AI-level tank role, and the run's member reads still derived tank/dps/threat-victim/resurrection from `PlayerbotAI::IsTank`, so a restoration shaman with stale tank state could join under a valid leader as a run tank | **fix** | Verified: `IsTank` answers the player-wide stored bit first and the AI's own bit second (PlayerbotAI.cpp:4339-4346); a bit can be left by an older build, `.tb role` before this guard, or `.bot role <bot> tank`, which calls `SetForcedRole(1)` (commands/Party.cpp:896; its "tank shaman" strategies are not registered in this slice). `TbRunFacts.cpp` read every member through `IsTank` (:281, :299, :368, :590, :687) and `StartCheck`'s member loop (TbRunOrders.cpp:781-800) checks only bot + engine, so the stale bit classified the shaman as a run tank. Now: `hybrid::PlanTankOrder`/`CountsAsTank` (SliceHybridPolicy.h); the refusal clears the stored bit, the AI bit (kit rebuilt with `ApplyKit`) and the tick's `Roles()` map and says `cleared=yes`; `run::IsTankMember` (TbRunFacts.h/.cpp) is the one run/party tank read (`CountsAsTank(class, IsTank)`), used by the party split, member facts, rez roster, lead guard, attacker victim-tank, the party attack's leave-the-tank rule, the pull-hold anchor and `.tb pull`'s preflight. Tests: `test_slice10_roles.cpp` (28 checks; does not compile on `75009e82b`, which lacks the helpers) and `test_slice10_fix_wiring.py` (6 tests; on `75009e82b` `FAILED (failures=2)`). Docs: TB-COMMANDS.md role and `start` lines |
+
+Deviation from the recommendation, deliberate: the refusal clears only a tank bit (stored/AI) and rebuilds the kit; it does not overwrite a healer or damage role the bot already had, and it does not touch `commands/Party.cpp`'s `.bot role` (the full build gives a shaman its own tank kit there; this slice does not, and the run read is capability-aware now, so the bit is inert).
+
+### Gates
+
+Tested tree: `67d1f65fb` (fixes, tests, docs); the commit after it is notes only.
+
+| Gate | Result |
+|---|---|
+| census, `SLICE10.txt`, slot 5, after the upload of this tree | `files 216  compile clean 216  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census, `SLICE1.txt` .. `SLICE5.txt` | `files 133 / 160 / 170 / 174 / 176`, `compile clean = files`, 0 error places, 0 missing headers in every one. The first pass of this round (run beside the Turtle test, box at load 30+) failed SLICE1/2 (`126`/`159` files, 1/2 error places); the same tree re-ran `133/133` and `160/160`, and no changed file is in these lists |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, slot 5) | `CMAKE_RC=0 MAKE_RC=0` (193 s; 167 module files synced) |
+| option OFF `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` (13 s) |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` | registers `17/49/88/176`, `(a)=0`, `(b)=232` (no key added or removed) |
+| `forever/tools/test_slice10_roles.cpp` (VM: `g++ -std=c++17 -O1 -Wall -Wextra -I. …`) | `RESULT: PASS (28 checks)`; on `75009e82b` the same file does not compile (`CountsAsTank`/`PlanTankOrder` absent) |
+| `forever/tools/test_slice10_fix_wiring.py` | `Ran 6 tests … OK`; on `75009e82b` `FAILED (failures=2)` |
+| policy/run/class tests (`policy-tests-s10h.sh`, 478 of `clean_tests.txt`, current tree) | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`: the baseline counts and the same six names |
+| wiring: `verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`, `test_slice4_d4_wiring.py`, `test_run_review_wiring.py` | all OK (`queued=1890 creators=2926 live-missing=0`, surface OK, 23 pin tests) |
+| OKF docs (`verify_okf.py`) | `PASSED (60 nodes validated, graph edges consistent)` |
+| Turtle `vm-build ~/wt-s10-h --wait` | `COMPILE_SECONDS=23 CMAKE_RC=0 MAKE_RC=0` (`rc=0`) |
+| Turtle `vm-test tb ~/wt-s10-h` | `RESULT: PASS  kind=tb wt=wt-s10-h sha=67d1f65fb dirty=1 files=3866` (`rc=0`, 1087 s) |
