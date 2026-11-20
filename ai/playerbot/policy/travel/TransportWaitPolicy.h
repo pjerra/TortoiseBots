@@ -51,6 +51,32 @@ inline TransportWaitStep DecideTransportWait(TransportWaitInput const& in)
     return TransportWaitStep::Wait;
 }
 
+// Type-11 animated transports (e.g. Deeprun Tram) pause at stations via consecutive animation
+// nodes that share identical coordinates.
+inline bool IsTransportAnimPaused(
+    float x1, float y1, float z1,
+    float x2, float y2, float z2)
+{
+    constexpr float kEps = 0.001f;
+    float const dx = x1 - x2;
+    float const dy = y1 - y2;
+    float const dz = z1 - z2;
+    return (dx * dx + dy * dy + dz * dz) <= (kEps * kEps);
+}
+
+// A boarded rider has left the start dock only after changing maps or moving past minLeaveDist
+// while the transport is in motion (prevents immediate Leave if boarded near maxBoardRange).
+inline bool HasLeftStartDock(
+    bool sameMap,
+    bool transportStopped,
+    float distFromStart,
+    float minLeaveDist)
+{
+    if (!sameMap)
+        return true;
+    return !transportStopped && distFromStart > minLeaveDist;
+}
+
 // Only transports whose routes stay within classic maps (0, 1, or 369 for the tram if present)
 // are allowed by default; custom transports require an explicit allow-list entry.
 inline bool IsAllowedClassicTransportRoute(

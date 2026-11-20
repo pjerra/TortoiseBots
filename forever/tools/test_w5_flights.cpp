@@ -115,6 +115,20 @@ int main()
         ++passed;
     }
 
+    // 8. Type-11 animation pause & start-dock departure guards.
+    {
+        assert(ai::IsTransportAnimPaused(4.5f, 8.4f, -4.3f, 4.5f, 8.4f, -4.3f));
+        assert(!ai::IsTransportAnimPaused(4.5f, 8.4f, -4.3f, 50.0f, 8.4f, -4.3f));
+
+        // Same map, still stopped at start dock -> must NOT mark leftStartDock even if dist > minLeaveDist.
+        assert(!ai::HasLeftStartDock(/*sameMap=*/true, /*transportStopped=*/true, 120.0f, 100.0f));
+        // Same map, moving past minLeaveDist -> leftStartDock.
+        assert(ai::HasLeftStartDock(/*sameMap=*/true, /*transportStopped=*/false, 120.0f, 100.0f));
+        // Different map -> always leftStartDock.
+        assert(ai::HasLeftStartDock(/*sameMap=*/false, /*transportStopped=*/true, 0.0f, 100.0f));
+        ++passed;
+    }
+
     std::cout << "PASS: test_w5_flights (" << passed << " checks, 0 failed)\n";
     return 0;
 }

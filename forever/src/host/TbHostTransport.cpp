@@ -1,6 +1,8 @@
 #include "host/TbHostTransport.h"
 
+#include "DB2Structure.h"
 #include "GameObject.h"
+#include "GameTime.h"
 #include "Log.h"
 #include "Map.h"
 #include "MotionMaster.h"
@@ -11,6 +13,7 @@
 #include "playerbot/policy/travel/TransportWaitPolicy.h"
 
 #include <cmath>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
@@ -21,8 +24,8 @@ namespace ride
 namespace
 {
 
-constexpr float kMaxBoardReachYd = 35.0f;
-constexpr float kLeaveDockMinDistYd = 50.0f;
+constexpr float kMaxBoardReachYd = 60.0f;
+constexpr float kLeaveDockMinDistYd = 100.0f;
 constexpr uint32_t kGiveUpMarginMs = 15000;
 
 struct RideState
@@ -61,6 +64,58 @@ struct FoundTransport
     uint32_t totalPathTimeMs = 0;
 };
 
+bool IsMoTransportStopped(Transport const* t)
+{
+    if (!t)
+        return false;
+    if (t->IsStopped())
+        return true;
+
+    // Regular ships/zeppelins (allowstopping=0) never set GO_DYNFLAG_LO_STOPPED;
+    // their dock pauses are reported by TransportTemplate::ComputePosition.
+    if (TransportTemplate const* tmpl = sTransportMgr->GetTransportTemplate(t->GetEntry()))
+    {
+        TransportMovementState moveState = TransportMovementState::Moving;
+        if (tmpl->ComputePosition(t->GetTimer(), &moveState, nullptr))
+            return moveState != TransportMovementState::Moving;
+    }
+    return false;
+}
+
+bool IsGoTransportStopped(GameObject const* go, uint32_t* outTotalTimeMs = nullptr)
+{
+    if (!go)
+        return false;
+
+    if (TransportAnimation const* anim = sTransportMgr->GetTransportAnimInfo(go->GetEntry()))
+    {
+        if (outTotalTimeMs)
+            *outTotalTimeMs = anim->TotalTime;
+
+        if (go->HasDynamicFlag(GO_DYNFLAG_LO_STOPPED))
+            return true;
+
+        if (!go->GetPauseTimes().empty())
+            return GameTime::GetGameTimeMS() >= static_cast<uint32_t>(*go->m_gameObjectData->Level);
+
+        if (anim->TotalTime > 0)
+        {
+            uint32_t progressMs = 0;
+            if (Optional<float> pct = go->GetPathProgressForClient())
+                progressMs = static_cast<uint32_t>(*pct * static_cast<float>(anim->TotalTime)) % anim->TotalTime;
+            else
+                progressMs = GameTime::GetGameTimeMS() % anim->TotalTime;
+
+            TransportAnimationEntry const* prev = anim->GetPrevAnimNode(progressMs);
+            TransportAnimationEntry const* next = anim->GetNextAnimNode(progressMs);
+            if (prev && next)
+                return ai::IsTransportAnimPaused(prev->Pos.X, prev->Pos.Y, prev->Pos.Z, next->Pos.X, next->Pos.Y, next->Pos.Z);
+        }
+    }
+
+    return go->HasDynamicFlag(GO_DYNFLAG_LO_STOPPED);
+}
+
 // Finds a transport by GUID on the bot's current map (MO_TRANSPORT or type-11 GAMEOBJECT_TYPE_TRANSPORT).
 FoundTransport FindByGuid(Map* map, ObjectGuid const& guid)
 {
@@ -73,7 +128,7 @@ FoundTransport FindByGuid(Map* map, ObjectGuid const& guid)
         out.base = t;
         out.obj = t;
         out.guid = t->GetGUID();
-        out.stopped = t->IsStopped();
+        out.stopped = IsMoTransportStopped(t);
         out.totalPathTimeMs = t->GetTransportPeriod();
         return out;
     }
@@ -85,9 +140,7 @@ FoundTransport FindByGuid(Map* map, ObjectGuid const& guid)
             out.base = tb;
             out.obj = go;
             out.guid = go->GetGUID();
-            out.stopped = go->HasDynamicFlag(GO_DYNFLAG_LO_STOPPED);
-            if (TransportAnimation const* anim = sTransportMgr->GetTransportAnimInfo(go->GetEntry()))
-                out.totalPathTimeMs = anim->TotalTime;
+            out.stopped = IsGoTransportStopped(go, &out.totalPathTimeMs);
             return out;
         }
     }
@@ -108,27 +161,51 @@ FoundTransport FindByEntry(Player const* bot, Map* map, uint32_t entry)
         out.base = t;
         out.obj = t;
         out.guid = t->GetGUID();
-        out.stopped = t->IsStopped();
+        out.stopped = IsMoTransportStopped(t);
         out.totalPathTimeMs = t->GetTransportPeriod();
         return out;
     }
 
-    std::vector<GameObject*> gos;
-    bot->GetGameObjectListWithEntryInGrid(gos, entry, 100.0f);
-    for (GameObject* go : gos)
+    // Type-11 transports (e.g. Deeprun Tram) are active GameObjects that roam across the whole map,
+    // so check the map's spawn store first rather than a 100 yd grid search around the bot.
+    GameObject* bestGo = nullptr;
+    float bestDist = std::numeric_limits<float>::max();
+    for (auto const& pair : map->GetGameObjectBySpawnIdStore())
     {
-        if (!go || go->GetEntry() != entry)
+        GameObject* go = pair.second;
+        if (!go || !go->IsInWorld() || go->GetEntry() != entry || !go->ToTransportBase())
             continue;
-        if (TransportBase* tb = go->ToTransportBase())
+        float const d = bot->GetDistance(go);
+        if (d < bestDist)
         {
-            out.base = tb;
-            out.obj = go;
-            out.guid = go->GetGUID();
-            out.stopped = go->HasDynamicFlag(GO_DYNFLAG_LO_STOPPED);
-            if (TransportAnimation const* anim = sTransportMgr->GetTransportAnimInfo(go->GetEntry()))
-                out.totalPathTimeMs = anim->TotalTime;
-            return out;
+            bestDist = d;
+            bestGo = go;
         }
+    }
+
+    if (!bestGo)
+    {
+        std::vector<GameObject*> gos;
+        bot->GetGameObjectListWithEntryInGrid(gos, entry, 250.0f);
+        for (GameObject* go : gos)
+        {
+            if (!go || go->GetEntry() != entry || !go->ToTransportBase())
+                continue;
+            float const d = bot->GetDistance(go);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                bestGo = go;
+            }
+        }
+    }
+
+    if (bestGo)
+    {
+        out.base = bestGo->ToTransportBase();
+        out.obj = bestGo;
+        out.guid = bestGo->GetGUID();
+        out.stopped = IsGoTransportStopped(bestGo, &out.totalPathTimeMs);
     }
     return out;
 }
@@ -233,7 +310,8 @@ void TickRide(Player* bot, uint32_t diffMs)
 
     if (rs.boarded && found.obj)
     {
-        if (map->GetId() != rs.startMap || Dist2D(found.obj->GetPositionX(), found.obj->GetPositionY(), rs.startX, rs.startY) > kLeaveDockMinDistYd)
+        float const distFromStart = Dist2D(found.obj->GetPositionX(), found.obj->GetPositionY(), rs.startX, rs.startY);
+        if (ai::HasLeftStartDock(map->GetId() == rs.startMap, found.stopped, distFromStart, kLeaveDockMinDistYd))
             rs.leftStartDock = true;
     }
 
@@ -260,10 +338,10 @@ void TickRide(Player* bot, uint32_t diffMs)
         {
             if (found.base && found.obj)
             {
-                // Walk onto the deck and attach as passenger (core MovementHandler.cpp:529-533).
-                bot->GetMotionMaster()->MovePoint(0, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ());
-                Position const offset = found.base->GetPositionOffsetTo(found.obj->GetPosition());
-                found.base->AddPassenger(bot, offset);
+                bot->GetMotionMaster()->Clear();
+                bot->StopMoving();
+                found.base->AddPassenger(bot, Position(0.0f, 0.0f, 0.0f, 0.0f));
+                map->PlayerRelocation(bot, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), found.obj->GetOrientation());
                 rs.boarded = true;
                 TC_LOG_INFO("tortoisebots", "[W5] ride-board bot={} entry={} guid={} map={}",
                     bot->GetName(), rs.entry, rs.transportGuid.ToString(), map->GetId());
