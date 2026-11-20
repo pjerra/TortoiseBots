@@ -65,8 +65,8 @@ table in `forever/src/TbScripts.cpp`. `ItemUsageValue.cpp`, the `PoolServices`/`
 | Module OFF (`TORTOISEBOTS_SLICE1=OFF`, `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` |
 | Worldserver link ON | `CMAKE_RC=0 MAKE_RC=0` (`worldserver`, 71.8 MB, contains the W1 rescue marker, no `flee manager` row) |
 | Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` (a) = 0 (21 strategies / 74 actions / 111 triggers / 193 values) |
-| Policy tests (standalone, g++ C++17) | `test_ghost_rescue_policy` 19 checks PASS; `test_free_kit_policy` 72 checks PASS |
-| Wiring | `python3 -m unittest forever/tools/test_w1_wiring.py` 15 tests OK; `test_slice9_l9_wiring.py` 11 OK (its list pointer moved to SLICE-W1.txt) |
+| Policy tests (standalone, g++ C++17) | `test_ghost_rescue_policy` 19 checks PASS; `test_free_kit_policy` 72 checks PASS; `test_free_grind_policy` 50 checks PASS |
+| Wiring | `python3 -m unittest forever/tools/test_w1_wiring.py` 22 tests OK; `test_slice9_l9_wiring.py` 11 OK (its list pointer moved to SLICE-W1.txt) |
 
 ## 5. Live test
 
@@ -136,3 +136,32 @@ Open points:
   is grey to a level 10; the setup teleport happens after login (`.tb tele` addresses a host bot only) and shows as one `tele`.
 - **U1/U2**: no null-master dereference was seen; `IsFreeBot` flipped only the intended gates (idle fallback, elite camp, the
   sub-10 death-count healer skip, loot quickening). The unexpected gate was `can move around`, now registered.
+
+## 7. Review fix round (free vs. commanded, and what a free bot may pull)
+
+Two high findings from the Codex review of the W1 diff, both fixed in place.
+
+**A master turns free mode off.** A bot has one identity. `BotMgr::BindMaster` is now the one binding step: a non-empty master
+clears `free`, resets the ghost bookkeeping, and (on a live brain) calls the new `engine::BindMaster`, which takes the master
+pointer, runs the full reset the engine's own adoption path runs (travel/grind targets purged, the current path stopped) and
+rebuilds the commanded kit. Every binding path lands there: `.tb group` (`GroupWith`), the commander binding, a run and the
+engine's adoption (`SetMaster`, through `BindBotMaster`). Free can only come back through an explicit `.tb free <bot> on`,
+which still refuses a bot that has a master or a party.
+
+**A free bot only starts fights it is allowed to start.** New pure decision `policy/world/FreeGrindPolicy.h`
+(`FreeGrindFacts` -> `FreeGrindRefusal`); `GrindTargetValue` fills the facts from the unit and asks it in both new-pull paths
+(the possible-targets pick and the idle fallback). Refused: players, friendly units, player-controlled units (pets, guardians,
+totems), quest givers, vendors, trainers, flight masters, innkeepers, guards, civilians, kills that lower a standing, and mobs
+another player tapped. Self-defence is unchanged: the attackers loop of `FindTargetForGrinding` runs first and answers anything
+already fighting the bot or its group.
+
+Tests (all fail on the W1 code before this round):
+
+| Test | Before |
+|---|---|
+| `forever/tools/test_w1_wiring.py`, `FreeAndCommanded.*` (4) | `GroupWith`/`SetMaster` set the master directly; no `BotMgr::BindMaster` |
+| `forever/tools/test_w1_wiring.py`, `FreeGrindTargets.*` (3) | no free rule in `GrindTargetValue`; the facts are not read |
+| `forever/tools/test_free_grind_policy.cpp` (50 checks) | the header does not exist, so it does not compile |
+
+The scene in the standalone policy test includes a player and a quest giver in range next to an ordinary mob: only the mob is
+picked.

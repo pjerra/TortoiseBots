@@ -39,6 +39,10 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free = false
 // free bot, "follow" otherwise). No-op without a brain.
 void ReapplyStrategies(Brain* brain, bool free);
 
+// W1 (review): a master was bound to a live brain (the host ends free mode first). The engine takes the master pointer, then the full
+// reset the adoption path does (travel and grind targets purged, the current path stopped) and the commanded kit. No-op without a brain.
+void BindMaster(Brain* brain, Player* master);
+
 // One tick of the engine. `diff` is the world tick's elapsed milliseconds. Before the engine's UpdateAI the bot's queued cast
 // results (BotSession, TbBotSession.h) are handed to the engine: SPELL_FAILURE -> PlayerbotAI::SpellInterrupted, CAST_FAILED ->
 // the action log's CAST_FAILED_ASYNC line. The queue is filled only while the bot has a brain (SLICE2-R0-NOTES.md).

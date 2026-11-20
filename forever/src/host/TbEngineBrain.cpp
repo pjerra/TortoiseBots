@@ -317,6 +317,18 @@ void ReapplyStrategies(Brain* brain, bool free)
     brain->ai->SetMovementStrategy(free ? "free" : "follow");
 }
 
+void BindMaster(Brain* brain, Player* master)
+{
+    if (!brain || !brain->ai)
+        return;
+    brain->ai->SetMaster(master);
+    // The engine's own adoption path ("remove bot masters not in our group", PlayerbotAI.cpp): a full reset purges the travel and grind
+    // targets and stops the path the free kit had started, so the bot is the commanded one from this tick on, not the one it was.
+    brain->ai->Reset(true);
+    brain->ai->StopMoving();
+    ReapplyStrategies(brain, false);
+}
+
 void HandleTeleportAck(Brain* brain)
 {
     // The host session hands over every teleport it acknowledges for the bot (TbBotSession.cpp AcknowledgeTeleports). World thread.
@@ -469,6 +481,7 @@ Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
     return nullptr;
 }
 void ReapplyStrategies(Brain*, bool) {}
+void BindMaster(Brain*, Player*) {}
 void Tick(Brain*, uint32) {}
 void HandleTeleportAck(Brain*) {}
 void Destroy(Brain*) {}

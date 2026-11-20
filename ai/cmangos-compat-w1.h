@@ -29,6 +29,13 @@ inline bool KillLowersReputationCompat(uint32 entry)
     return rep && (rep->repvalue1 < 0 || rep->repvalue2 < 0);
 }
 
+// Whether the unit offers a service (UNIT_NPC_FLAG_*): a vendor, trainer, quest giver, flight master or innkeeper. The update field the
+// old names use; F has Unit::HasNpcFlag over the same flag (forever/src/compat/TbCompat_W1.h).
+inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)
+{
+    return unit && unit->HasFlag(UNIT_NPC_FLAGS, flag);
+}
+
 
 // ===============================================================================================================
 // GRAVEYARDS AND MAPS

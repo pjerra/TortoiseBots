@@ -98,8 +98,9 @@ public:
     Player* FindBot(ObjectGuid characterGuid) const;
     // The in-world bots whose master is `master` (host/TbHostBotManager.cpp answers the legacy BotManager::GetBotsForMaster with it).
     std::vector<Player*> BotsOfMaster(ObjectGuid master) const;
-    // Re-binds a bot's master (empty = none). False when it is not a logged-in bot. The engine's own master pointer is the
-    // caller's (host/TbHostBotManager.cpp BindBotMaster/ClearBotMaster set it too).
+    // Re-binds a bot's master (empty = none). False when it is not a logged-in bot. A master and free mode are exclusive: a non-empty
+    // one ends free mode then and there (BindMaster). The engine's own master pointer is the caller's (host/TbHostBotManager.cpp
+    // BindBotMaster/ClearBotMaster set it too).
     bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
     // Every logged-in bot (the dashboard roster).
@@ -231,6 +232,9 @@ public:
     static std::string CanEnterMap(Player* who, uint32 mapId);
 private:
     static std::string JoinParty(Player* bot, Player* master);
+    // W1 (review): the ONE master-binding step. A master replaces free mode at that moment (the autonomous kit, the ghost bookkeeping),
+    // so every binding path lands here: `.tb group` (GroupWith), the commander binding, a run and the engine's own adoption (SetMaster).
+    void BindMaster(Bot& bot, ObjectGuid master);
     // H4 private steps
     void UpdateEntry(Bot& bot, Player* me, uint32 diff);
     void FailEntry(Bot& bot, std::string code, std::string text);

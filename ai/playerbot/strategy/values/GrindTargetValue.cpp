@@ -14,6 +14,7 @@
 #include "playerbot/policy/pull/PullRegenPolicy.h"
 #include "playerbot/TbCompatW1.h"
 #include "playerbot/policy/travel/PointDangerPolicy.h"
+#include "playerbot/policy/world/FreeGrindPolicy.h"
 #include "playerbot/GrindSpotPolicy.h"
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
@@ -34,6 +35,40 @@ namespace
 int MaxGrindLevelOverBot(Player* bot, PlayerbotAI* ai)
 {
     return ai::PullGrindLevelCap(bot->GetLevel(), ai->HasRealPlayerMaster());
+}
+
+// W1 (review): the facts of a candidate as far as a free bot's choice to START a fight goes, read from the unit once (FreeGrindPolicy.h
+// holds the rule itself). Self-defence is not this question: the attackers loop of FindTargetForGrinding answers what already fights the
+// bot or its group before the possible targets are read.
+TortoiseBots::world::FreeGrindFacts FreeGrindFactsOf(Unit* unit, Player* bot)
+{
+    TortoiseBots::world::FreeGrindFacts facts;
+    facts.player = unit->IsPlayer();
+    facts.friendly = sServerFacade.IsFriendlyTo(bot, unit);
+    facts.playerControlled = !facts.player && unit->GetCharmerOrOwnerPlayerOrPlayerItself() != nullptr;
+    if (!facts.player)
+    {
+        facts.serviceNpc = UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_QUESTGIVER) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_VENDOR) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_TRAINER) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_FLIGHTMASTER) ||
+            UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_INNKEEPER);
+    }
+    if (Creature* creature = dynamic_cast<Creature*>(unit))
+    {
+        CreatureInfo const* info = creature->GetCreatureInfo();
+        facts.guard = info && CreatureIsGuardFlagCompat(info);
+        facts.civilian = info && CreatureIsCivilianCompat(info);
+        facts.killLowersReputation = KillLowersReputationCompat(creature->GetEntry());
+        facts.tappedByAnotherPlayer = CreatureHasLootRecipientCompat(creature) && !CreatureIsTappedByCompat(creature, bot);
+    }
+    return facts;
+}
+
+// The refusal of the free rule in words for the grind log, empty when there is none.
+std::string FreeGrindRefusalReason(TortoiseBots::world::FreeGrindFacts const& facts)
+{
+    return TortoiseBots::world::FreeGrindRefusalText(TortoiseBots::world::FreeGrindRefusalOf(facts));
 }
 }
 
@@ -246,6 +281,20 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         {
             logGrind(unit, std::to_string((int)unit->GetLevel() - (int)bot->GetLevel()) + " levels above bot).");
             continue;
+        }
+
+        // W1 (review): a free bot starts only the fights the world allows it to start - an ordinary hostile or neutral NPC, not a
+        // player, a player-controlled unit, a quest giver, vendor, trainer, flight master, innkeeper, guard or civilian, not a kill
+        // that lowers a standing, not a friendly unit and not a mob another player tapped. Self-defence is the attackers loop above,
+        // which has already answered anything fighting the bot or its group.
+        if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster())
+        {
+            auto const facts = FreeGrindFactsOf(unit, bot);
+            if (!TortoiseBots::world::FreeBotMayStartFight(facts))
+            {
+                logGrind(unit, "ignored (free bot: " + FreeGrindRefusalReason(facts) + ").");
+                continue;
+            }
         }
 
         // No player pull while either side is fresh from a revive: pool bots of
@@ -515,6 +564,11 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
             continue;
 
         if (!AttackersValue::IsValid(unit, bot, nullptr, false, false))
+            continue;
+
+        // W1 (review): the same rule as the normal pick - the fallback is another way to START a fight.
+        if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
+            !TortoiseBots::world::FreeBotMayStartFight(FreeGrindFactsOf(unit, bot)))
             continue;
 
         if (!PossibleAttackTargetsValue::IsPossibleTarget(unit, bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD, false))

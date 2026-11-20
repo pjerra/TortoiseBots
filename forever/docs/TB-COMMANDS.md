@@ -32,9 +32,9 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 | `.tb status` | module enabled?, number of bot sessions |
 | `.tb create <account> <name> <race id> <class id> [gender]` | a new level 1 character for a bot |
 | `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run) |
-| `.tb free <bot> on\|off` | W1: turns the free kit on or off for a logged-in host bot (on: it must have no master and be in no party; off: a masterless bot stands again) |
+| `.tb free <bot> on\|off` | W1: turns the free kit on or off for a logged-in host bot (on: it must have no master and be in no party; off: a masterless bot stands again). Giving a bot a master (`.tb group`, the commander binding, a run) turns free off by itself |
 | `.tb logout <character>` | the bot leaves |
-| `.tb group <bot> <master>` / `.tb ungroup <bot>` | the bot joins the master's party (the master leads) / leaves it |
+| `.tb group <bot> <master>` / `.tb ungroup <bot>` | the bot joins the master's party (the master leads) / leaves it. A bot that was free stops being free (the free kit and its ghost bookkeeping go) |
 | `.tb raid <master>` | converts the master's party to a raid (a test helper for the "no raid" rule) |
 | `.tb engine <character> on\|off` | the bot runs the real engine (PlayerbotAI) or the spike behaviour |
 | `.tb where <character>` | position, health, money, brain, strategies, target, cast-result counters |

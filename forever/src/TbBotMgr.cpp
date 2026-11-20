@@ -331,6 +331,27 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
     return {};
 }
 
+// W1 (review): a bot has one identity, and a master wins. A free bot that is handed a master stops being free at that moment: the
+// autonomous kit and the ghost bookkeeping go, and it plays for the master until `.tb free on` says otherwise. Every path that binds a
+// master lands here (`.tb group`, the commander binding, a run, the engine's adoption), so none of them can leave a bot both commanded
+// and free. The engine needs the master pointer before its kit is rebuilt (the factory reads the free flag, so the flag goes first).
+void BotMgr::BindMaster(Bot& bot, ObjectGuid master)
+{
+    if (!master.IsEmpty() && bot.free)
+    {
+        bot.free = false;
+        bot.ghostRescue.Reset();
+        bot.ghostYd = -1.0f;
+        bot.rescuedThisDeath = false;
+        if (bot.brain)
+            engine::BindMaster(bot.brain.get(), ObjectAccessor::FindPlayer(master));
+        Player* me = bot.session->GetPlayer();
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} is no longer a free bot (a master is bound)", me ? me->GetName() : bot.session->GetCharacterGuid().ToString());
+    }
+    bot.master = master;
+    bot.masterAway = false;
+}
+
 std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
 {
     auto itr = _bots.find(botGuid);
@@ -345,9 +366,8 @@ std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
     std::string const error = JoinParty(bot, master);
     if (!error.empty())
         return error;
-    itr->second.master = masterGuid;
+    BindMaster(itr->second, masterGuid);
     itr->second.wantParty = false;
-    itr->second.masterAway = false;
     return {};
 }
 
@@ -722,8 +742,7 @@ bool BotMgr::SetMaster(ObjectGuid characterGuid, ObjectGuid master)
     auto itr = _bots.find(characterGuid);
     if (itr == _bots.end())
         return false;
-    itr->second.master = master;
-    itr->second.masterAway = false;
+    BindMaster(itr->second, master);
     return true;
 }
 

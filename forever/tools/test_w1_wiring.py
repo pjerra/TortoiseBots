@@ -17,6 +17,7 @@ MGR_CPP = (ROOT / "forever/src/TbBotMgr.cpp").read_text()
 MGR_H = (ROOT / "forever/src/TbBotMgr.h").read_text()
 SCRIPTS = (ROOT / "forever/src/TbScripts.cpp").read_text()
 ENGINE = (ROOT / "forever/src/host/TbEngineBrain.cpp").read_text()
+ENGINE_H = (ROOT / "forever/src/host/TbEngineBrain.h").read_text()
 FACTORY = (ROOT / "forever/src/slice/SliceAiFactory.cpp").read_text()
 STATE = (ROOT / "forever/src/host/TbPartyState.cpp").read_text()
 REVIVE = (ROOT / "ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp").read_text()
@@ -180,6 +181,86 @@ class Registry(unittest.TestCase):
             self.assertIn(path, listed)
         self.assertIn("forever/SLICE-W1.txt", CMAKE)
         self.assertNotIn("forever/SLICE9.txt", CMAKE)
+
+
+class FreeAndCommanded(unittest.TestCase):
+    """W1 (review fix 1): a bot has one identity. Binding a master ends free mode at that moment and keeps it off until `.tb free on`
+    says otherwise, in every path that binds one: `.tb group` (GroupWith), the commander binding, a run and the engine's adoption all
+    reach SetMaster (host bindings through BotMgr::SetMaster), and a login with a master never starts free."""
+
+    def test_every_master_binding_goes_through_one_place_that_ends_free(self):
+        bind = func(MGR_CPP, "void BotMgr::BindMaster(")
+        self.assertIn("!master.IsEmpty() && bot.free", bind)
+        self.assertIn("bot.free = false;", bind)
+        self.assertIn("bot.ghostRescue.Reset();", bind)
+        self.assertIn("bot.ghostYd = -1.0f;", bind)
+        self.assertIn("bot.rescuedThisDeath = false;", bind)
+        self.assertLess(bind.index("bot.free = false;"), bind.index("engine::BindMaster("))
+
+        group_with = func(MGR_CPP, "std::string BotMgr::GroupWith(")
+        self.assertIn("BindMaster(itr->second, masterGuid);", group_with)
+        self.assertLess(group_with.index("JoinParty(bot, master)"), group_with.index("BindMaster("))   # a refused group changes nothing
+        set_master = func(MGR_CPP, "bool BotMgr::SetMaster(")
+        self.assertIn("BindMaster(itr->second, master);", set_master)
+        login = func(MGR_CPP, "std::string BotMgr::Login(")
+        self.assertLess(login.index("free && !master.IsEmpty()"), login.index("bot.free = free;"))
+        self.assertIn("bot.free = free;", login)
+
+    def test_the_host_and_run_bindings_go_through_setmaster(self):
+        bind = func(HOSTBOTS, "bool BotManager::BindBotMaster(")
+        self.assertIn("BotMgr::Instance().SetMaster(botGuid, masterGuid)", bind)
+
+    def test_the_engine_takes_the_master_and_the_commanded_kit(self):
+        bind = func(ENGINE, "void BindMaster(Brain* brain, Player* master)")
+        self.assertIn("SetMaster(master)", bind)
+        self.assertIn("Reset(true)", bind)                    # the travel/grind targets and the current path go
+        self.assertIn("ReapplyStrategies(brain, false)", bind)  # ... and the kit is the commanded one, not the free one
+        self.assertIn("void BindMaster(Brain* brain, Player* master)", ENGINE_H)
+
+    def test_the_factory_and_the_host_agree_on_free(self):
+        # The mode is read at the moment the kit is rebuilt, so the flag has to be clear before ReapplyStrategies runs.
+        bind = func(MGR_CPP, "void BotMgr::BindMaster(")
+        self.assertLess(bind.index("bot.free = false;"), bind.index("engine::BindMaster("))
+        factory = func(FACTORY, "void AiFactory::AddDefaultNonCombatStrategies(")
+        self.assertIn("sRandomBotFacade.IsFreeBot(player)", factory)
+
+
+class FreeGrindTargets(unittest.TestCase):
+    """W1 (review fix 2): a free bot only starts fights with hostile or neutral NPCs that are none of the protected kinds, and never
+    starts one with a tapped mob. Self-defence is the attackers loop, which runs before the possible targets are read."""
+
+    def test_the_rule_is_one_pure_decision(self):
+        policy = (ROOT / "ai/playerbot/policy/world/FreeGrindPolicy.h").read_text()
+        for fact in ("player", "friendly", "playerControlled", "serviceNpc", "guard", "civilian", "killLowersReputation",
+                     "tappedByAnotherPlayer"):
+            self.assertIn(f"bool {fact} = false;", policy)
+        self.assertIn("constexpr bool FreeBotMayStartFight(", policy)
+        self.assertIn("return FreeGrindRefusalOf(facts) == FreeGrindRefusal::None;", policy)
+
+    def test_both_new_pull_paths_ask_the_rule(self):
+        grind = func(GRIND, "Unit* GrindTargetValue::FindTargetForGrinding(")
+        fallback = func(GRIND, "Unit* GrindTargetValue::FindIdleFallbackTarget(")
+        for body in (grind, fallback):
+            self.assertIn("FreeBotMayStartFight(", body)
+            self.assertIn("FreeGrindFactsOf(", body)
+        # The self-defence loop comes first and is not filtered by the free rule.
+        self.assertLess(grind.index("possible attack targets"), grind.index("FreeBotMayStartFight("))
+
+    def test_the_facts_come_from_the_protected_kinds(self):
+        facts = func(GRIND, "FreeGrindFacts FreeGrindFactsOf(")
+        for read in ("UNIT_NPC_FLAG_QUESTGIVER", "UNIT_NPC_FLAG_VENDOR", "UNIT_NPC_FLAG_TRAINER", "UNIT_NPC_FLAG_FLIGHTMASTER",
+                     "UNIT_NPC_FLAG_INNKEEPER", "CreatureIsGuardFlagCompat(", "CreatureIsCivilianCompat(",
+                     "KillLowersReputationCompat(", "CreatureHasLootRecipientCompat(", "CreatureIsTappedByCompat(",
+                     "GetCharmerOrOwnerPlayerOrPlayerItself()"):
+            self.assertIn(read, facts)
+        self.assertEqual(facts.count("UnitHasNpcFlagW1Compat("), 5)   # the two cores spell the field differently
+        self.assertIn("inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)", COMPAT_F)
+        self.assertIn("inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)", COMPAT_T)
+        self.assertIn("unit->HasNpcFlag(static_cast<NPCFlags>(flag))", COMPAT_F)
+        self.assertIn("unit->HasFlag(UNIT_NPC_FLAGS, flag)", COMPAT_T)
+        # And only for a free bot: a commanded bot keeps its player's own rules.
+        grind = func(GRIND, "Unit* GrindTargetValue::FindTargetForGrinding(")
+        self.assertIn("if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster())", grind)
 
 
 if __name__ == "__main__":
