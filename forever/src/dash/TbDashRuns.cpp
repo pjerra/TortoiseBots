@@ -9,6 +9,7 @@
 #include "dash/TbDashRunsPure.h"
 #include "host/TbH3.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdFeeds.h"
 #include "host/run/TbRun.h"
 #include "TbBotMgr.h"
 
@@ -340,6 +341,8 @@ void Cycle(State& s)
     // commander (the run feed leaves `orders` empty).
     cmd::AppendBindings(bindings, shownRunLeaders);
     cmd::FillRunOrders(bindings);
+    // P4 (spec section 5): the card's map layers - the mobs, bosses and objects of each binding's lead, and what each bot is doing.
+    cmd::FillFeeds(bindings);
 
     FlushSummaries(s);
 
