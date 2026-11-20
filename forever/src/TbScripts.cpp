@@ -5,6 +5,7 @@
 #include "host/cmd/TbCmdBinding.h"
 #include "host/cmd/TbCmdOrders.h"
 #include "host/cmd/TbCmdFeeds.h"
+#include "host/cmd/TbCmdCombat.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
@@ -236,6 +237,7 @@ public:
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
         TortoiseBots::cmd::Maintain();         // P2: the binding timers (dead lead, absent commander) and the stored rows whose party is back
         TortoiseBots::cmd::UpdateFeeds(diff);   // P4: the live position report (TortoiseBots.Commander.PosMs, 100 ms)
+        TortoiseBots::cmd::combat::Update(diff);   // P5: the fight monitor's 1 Hz sample, 250 ms cast poll and COMBAT_FIGHT/EVENTS
 #endif
     }
 
@@ -1408,4 +1410,5 @@ void AddSC_tortoisebots()
     new tortoisebots_unit();
     new tortoisebots_group();
     new tortoisebots_commands();
+    TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
 }
