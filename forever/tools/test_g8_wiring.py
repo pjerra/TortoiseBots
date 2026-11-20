@@ -10,6 +10,8 @@ assertion fails on the code before G8.
   4 the rogue's combat kit keeps `cc`
   5 the regroup gather's pause is extended by the glue (bounded), the policy header is untouched
   6 a clear is atomic (ClearCcState writes, reads back and restores) and the run's end resets every bot a run `cc` order marked, not only Run::ccHolds
+  7 a teardown clear that could not be taken (bot away, no engine, a refused read-back) is kept pending and retried; the run's event ring and the server
+    log say so
 """
 import re
 import unittest
@@ -38,8 +40,8 @@ class G8Wiring(unittest.TestCase):
         self.assertIn("DungeonRun::CcOrderTaken(run, order, answer.accepted)", run)
         finish = run[run.index("uint32 Finish("):]
         finish = finish[:finish.index("\n}\n")]
-        self.assertIn("ClearRunCc(rec);", finish)
-        self.assertLess(finish.index("ClearRunCc(rec);"), finish.index("ForgetRun(rec.leader);"))   # the handles still resolve
+        self.assertIn("ClearRunCc(rec, nowMs);", finish)
+        self.assertLess(finish.index("ClearRunCc(rec, nowMs);"), finish.index("ForgetRun(rec.leader);"))   # the handles still resolve
 
     def test_bare_clear_takes_the_icon(self):
         cc = text("forever/src/host/TbCc.cpp")
@@ -109,6 +111,27 @@ class G8Wiring(unittest.TestCase):
         orders = text("forever/src/host/run/TbRunOrders.cpp")
         self.assertIn("h8::CcOwnedRecord(rec.ccOwned", orders)
         self.assertIn("h8::CcOwnedForget(rec.ccOwned", orders)
+
+    # Review round 2: an unavailable bot and a refused teardown clear are kept pending, retried, and visible; a newer assignment takes the bot over.
+    def test_cc_teardown_is_retried(self):
+        run = text("forever/src/host/run/TbRun.cpp")
+        clear = run[run.index("void ClearRunCc("):]
+        clear = clear[:clear.index("\n}\n")]
+        self.assertNotIn("if (!bot || !bot->IsInWorld())", clear)   # was a silent skip
+        self.assertIn("bool const inWorld = bot && bot->IsInWorld();", clear)
+        self.assertIn("cleared = h8::ClearCcOrder(", clear)         # the answer is read, not discarded
+        self.assertIn("h8::CcTeardownSettles(inWorld, ownedMark, cleared)", clear)
+        self.assertIn("RetainPendingCc(rec, owned.first, owned.second);", clear)
+        self.assertIn('Note(rec, nowMs, "cc-clear"', clear)         # the run's event ring names the failure
+        retry = run[run.index("void RetryPendingCc()"):]
+        retry = retry[:retry.index("\n}\n")]
+        self.assertIn("h8::CcTeardownSettles(inWorld, ownedMark, cleared)", retry)
+        self.assertIn("h8::ClearCcOrder(nullptr, bot", retry)
+        self.assertIn("sLog.outString(", retry)                      # the wait is observable in the server log
+        update = run[run.index("void Update(uint32 diffMs)"):]
+        self.assertLess(update.index("RetryPendingCc();"), update.index("if (Table().empty())"))
+        orders = text("forever/src/host/run/TbRunOrders.cpp")
+        self.assertEqual(orders.count("DropPendingCc(bot->GetName());"), 2)   # accepted `cc` and `cc clear`
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
-// Standalone test of the crowd-control clear's core-free half (forever/src/host/TbCcPure.h; G8 review fix: a clear that is refused changes nothing):
+// Standalone test of the crowd-control clear's core-free half (forever/src/host/TbCcPure.h; G8 review fix: a clear that is refused changes nothing, and a
+// teardown that cannot reach its bot stays pending):
 //   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_cc_order.cpp -o /tmp/test_cc_order && /tmp/test_cc_order
 // The fakes below are the two accessors TbCc.cpp fills with the bot's `rti cc` / `run cc family` values and the party's raid icons; each can be made to
 // drop its write, which is the read-back that does not take.
@@ -142,6 +143,35 @@ static void TestOwned()
     CHECK(!cc::CcMarkOwned("moon", "cross"));
 }
 
+// ---- a clear the teardown could not take stays pending until an attempt settles it (TbRun.cpp ClearRunCc / RetryPendingCc) ----
+static void TestTeardownRetries()
+{
+    std::map<std::string, std::string> pending;
+    cc::CcOwnedRecord(pending, "Mmage", "moon");
+
+    // The bot logged out before the run ended: nothing can be read or written, so its entry survives the pass.
+    cc::CcTeardownAttempt(pending, "Mmage", false, false, false);
+    CHECK(pending.size() == 1 && pending["Mmage"] == "moon");
+
+    // Back in the world, but the clear is refused (no engine, or a write that did not read back): still pending.
+    cc::CcTeardownAttempt(pending, "Mmage", true, true, false);
+    CHECK(pending.size() == 1 && pending["Mmage"] == "moon");
+
+    // Another pass, now the clear takes: settled, the entry goes.
+    cc::CcTeardownAttempt(pending, "Mmage", true, true, true);
+    CHECK(pending.empty());
+
+    // Nothing of the run's is left (another order's mark, or none): settled without a clear.
+    cc::CcOwnedRecord(pending, "Mrogue", "square");
+    cc::CcTeardownAttempt(pending, "Mrogue", true, false, false);
+    CHECK(pending.empty());
+
+    // Out of the world, an unreadable mark settles nothing either.
+    cc::CcOwnedRecord(pending, "Mpriest", "circle");
+    cc::CcTeardownAttempt(pending, "Mpriest", false, false, true);
+    CHECK(pending.size() == 1 && pending["Mpriest"] == "circle");
+}
+
 int main()
 {
     TestTarget();
@@ -151,6 +181,7 @@ int main()
     TestValueReadBackFails();
     TestIconFirstThenValues();
     TestOwned();
+    TestTeardownRetries();
     if (g_fail)
     {
         std::printf("FAILED: %d of %d checks\n", g_fail, g_checks);

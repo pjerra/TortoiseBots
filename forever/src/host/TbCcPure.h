@@ -4,7 +4,8 @@
 // TbCc.cpp ClearCcOrder works in this order: it writes, it reads the writes back, and only then is the clear true. A write that does not hold is undone
 // completely (both values and every raid icon), so a refused clear changes nothing: the bot keeps the mark it had and the icon stays where it was. The run's
 // end (TbRun.cpp ClearRunCc) clears the bots a run `cc` order marked, which DungeonRun::Run::ccHolds can no longer name after a step advance or a resume
-// (ResetStep clears it, not the bots' values).
+// (ResetStep clears it, not the bots' values). A bot the clear could not reach (out of the world, no engine, a read-back that did not take) keeps its entry
+// in the run's pending table and is retried, so the end of the run does not forget an assignment it did not take back.
 #pragma once
 
 #include <map>
@@ -96,6 +97,23 @@ inline void CcOwnedForget(std::map<std::string, std::string>& owned, std::string
 inline bool CcMarkOwned(std::string const& recordedMark, std::string const& currentMark)
 {
     return currentMark.empty() || currentMark == recordedMark;
+}
+
+// ---- one recorded bot's clear (TbRun.cpp ClearRunCc and the pending retry) ----
+//
+// Whether an attempt settles the run's ownership of the bot's mark: only when the bot was reachable and either the mark is no longer the run's (`owned`
+// false: another order's, or already gone) or the clear took. A bot out of the world, and a clear the host refuses (no engine, a write that does not read
+// back), changes nothing: the entry stays pending and the next tick tries again.
+inline bool CcTeardownSettles(bool inWorld, bool owned, bool cleared)
+{
+    return inWorld && (!owned || cleared);
+}
+
+// One attempt against the pending record: settle drops the entry, anything else keeps it exactly as it is.
+inline void CcTeardownAttempt(std::map<std::string, std::string>& pending, std::string const& bot, bool inWorld, bool owned, bool cleared)
+{
+    if (CcTeardownSettles(inWorld, owned, cleared))
+        CcOwnedForget(pending, bot);
 }
 }
 }
