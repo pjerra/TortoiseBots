@@ -519,4 +519,3 @@ namespace ai
 bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
 void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
 }
-void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteMisc(); }
