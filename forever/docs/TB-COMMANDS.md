@@ -31,7 +31,8 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 |---|---|
 | `.tb status` | module enabled?, number of bot sessions |
 | `.tb create <account> <name> <race id> <class id> [gender]` | a new level 1 character for a bot |
-| `.tb login <character> [master]` | the character joins the world as a bot; follows `master` (from a player: the sender) |
+| `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run) |
+| `.tb free <bot> on\|off` | W1: turns the free kit on or off for a logged-in host bot (on: it must have no master and be in no party; off: a masterless bot stands again) |
 | `.tb logout <character>` | the bot leaves |
 | `.tb group <bot> <master>` / `.tb ungroup <bot>` | the bot joins the master's party (the master leads) / leaves it |
 | `.tb raid <master>` | converts the master's party to a raid (a test helper for the "no raid" rule) |
@@ -177,6 +178,11 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `outside` | slice 4: `yes` when the party's leader is inside an instance and this bot is not in that instance, else `no` |
 | `entered` `entry` `block` `blockmsg` | slice 4: how the last map change the host started happened (`trigger`, `order` (a direct entry or `.tb instance leave`), `setup` (`.tb tele`); empty = none yet); `entry` is the phase of a running entry (`walking`, `waiting-leader`, `teleporting`; empty when none); `block` is the code of the last refused entry or lost teleport (empty = none) and `blockmsg` says it in words |
 | `catchup` `practice` | slice 4: how many open-world catch-up teleports the host made for this bot (never into or inside an instance); `yes` after `.tb revive` until the next combat ends |
+| `free` `kills` `deaths` `xp` `xpnext` | W1: the free-bot flag; creatures the bot was credited with since login; deaths since login; experience into the level and the level's next total |
+| `grind` | W1: the `grind target` value as `<entry>:<level>:<yards>`, empty when it holds none |
+| `corpserun` `ghostyd` | W1: a dead bot's leg: `release` (a body about to release), `walk` (ghost walking to its corpse), `delay` (inside the reclaim radius, waiting out the core's reclaim delay), `safe-spot` (inside the radius but too many hostiles: stepping to a safe point), `reclaim` (inside the radius, nothing in the way), `healer` (the spirit-healer leg), `rescue` (the host's five-minute ghost rescue ran); empty while alive. `ghostyd` = whole yards to the corpse when the ghost and the corpse share the map |
+| `rescue` `tele` | W1: ghost rescues so far (the host's only teleport besides the core's release) and every teleport the bot took, any cause (the core's release teleport counts) |
+| `sick` `dur` `bags` | W1: resurrection sickness is on the bot; the lowest equipped durability percent; free bag slots (`bags` is `bagfree` under the W1 name) |
 | `form` `totems` `imbue` `seal` `paura` | slice 10 (appended after `practice=`): `form` = the shapeshift form id the bot is in (bear 5, cat 1, ghost wolf 16) or `none`; `totems` = `<creature entry>:<seconds left>;...` for the bot's live totems (summon slots 1-4, read only), empty when none; `imbue` = `<enchant id>:<seconds left>` of the main-hand weapon's temporary enchantment, empty when none; `seal` = the aura id of a paladin's own active "Seal of ..." (empty for every other class), `paura` = the aura id of a paladin's own active "... Aura" (empty otherwise). The power type and amount stay in `power` `pw` `pwmax`; no second `power=` is added |
 
 End line: `state-end count=<lines> records=<records> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
