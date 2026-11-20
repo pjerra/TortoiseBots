@@ -18,6 +18,7 @@
 #include <set>
 #include "Config.h"
 #include "Group.h"
+#include "Item.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "Map.h"
@@ -29,8 +30,10 @@
 #include "compat/TbCompat_Unit.h"
 #include "compat/TbCompat_V.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 #include "PlayerbotAIStorage.h"
 
 namespace TortoiseBots
@@ -322,6 +325,15 @@ Rec StateRec(Player* bot, Readiness& ready)
     // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
     // a new slot when two or fewer are free.
     rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());
+    uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);
+    if (!specId)
+        specId = sRandomItemMgr.GetFallbackSpecId(bot->GetClass());
+    rec.S("spec", sRandomItemMgr.GetSpecName(specId));
+    std::vector<std::vector<std::string>> gear;
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            gear.push_back({std::to_string(slot), std::to_string(item->GetEntry())});
+    rec.LP("gear", gear);
     return rec;
 }
 
@@ -567,6 +579,44 @@ bool MemberKnowsOocResurrection(Player* member)
         case CLASS_DRUID: return ai->HasSpell("revive");
         default: return false;
     }
+}
+
+namespace
+{
+char const* UsageName(ai::ItemUsage usage)
+{
+    switch (usage)
+    {
+        case ai::ItemUsage::ITEM_USAGE_NONE: return "NONE";
+        case ai::ItemUsage::ITEM_USAGE_EQUIP: return "EQUIP";
+        case ai::ItemUsage::ITEM_USAGE_BAD_EQUIP: return "BAD_EQUIP";
+        case ai::ItemUsage::ITEM_USAGE_BROKEN_EQUIP: return "BROKEN_EQUIP";
+        case ai::ItemUsage::ITEM_USAGE_QUEST: return "QUEST";
+        case ai::ItemUsage::ITEM_USAGE_SKILL: return "SKILL";
+        case ai::ItemUsage::ITEM_USAGE_USE: return "USE";
+        case ai::ItemUsage::ITEM_USAGE_GUILD_TASK: return "GUILD_TASK";
+        case ai::ItemUsage::ITEM_USAGE_DISENCHANT: return "DISENCHANT";
+        case ai::ItemUsage::ITEM_USAGE_AH: return "AH";
+        case ai::ItemUsage::ITEM_USAGE_BROKEN_AH: return "BROKEN_AH";
+        case ai::ItemUsage::ITEM_USAGE_KEEP: return "KEEP";
+        case ai::ItemUsage::ITEM_USAGE_VENDOR: return "VENDOR";
+        case ai::ItemUsage::ITEM_USAGE_AMMO: return "AMMO";
+        case ai::ItemUsage::ITEM_USAGE_FORCE_NEED: return "FORCE_NEED";
+        case ai::ItemUsage::ITEM_USAGE_FORCE_GREED: return "FORCE_GREED";
+    }
+    return "NONE";
+}
+}
+
+void AppendItemScanEngine(Player* bot, uint32 itemId, Rec& rec)
+{
+    ai::ItemQualifier qual(itemId);
+    if (PlayerbotAIStorage::Instance().GetAI(bot))
+        rec.S("usage", UsageName(ai::ItemUsageValue::QueryItemUsageForEquip(qual, bot)));
+    rec.N("w", sRandomItemMgr.ItemStatWeight(bot, qual));
+    ItemPrototype const* botProto = tbcompat::ItemProto(itemId);
+    if (Item* worn = botProto ? ai::ItemUsageValue::CurrentItemInSlot(botProto, bot) : nullptr)
+        rec.N("worn", worn->GetEntry()).N("wornw", sRandomItemMgr.ItemStatWeight(bot, worn));
 }
 }
 }

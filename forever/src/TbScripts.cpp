@@ -264,6 +264,7 @@ public:
             { "learn",  TortoiseBots::h3::HandleLearn,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "equip",  TortoiseBots::h3::HandleEquip,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "itemscan", TortoiseBots::h3::HandleItemScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "statcensus", TortoiseBots::h3::HandleStatCensus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "grammar", TortoiseBots::h3::HandleGrammar, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "trigger", TortoiseBots::h4::HandleTrigger, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "instance", TortoiseBots::h4::HandleInstance, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
