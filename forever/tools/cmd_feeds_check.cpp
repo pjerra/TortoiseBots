@@ -218,6 +218,32 @@ void TestNearestSelector()
     std::printf("cmd_feeds_check: dense hostile visit of %zu candidates -> %zu rows, %zu offers (bound %zu), %lld us\n", candidates, denseRows.size(),
         offered, FD::kMobVisitBound, static_cast<long long>(us));
 
+    // The bound counts units LOOKED AT, not only offers: a grid of 200 000 units where every one is skipped is cut at kMobVisitBound inspections.
+    FD::NearestSelector<int> skipped(FD::kMobCap, FD::kMobVisitBound);
+    size_t looked = 0;
+    for (size_t i = 0; i < 200000; ++i)
+    {
+        if (!skipped.Inspect())
+            break;
+        ++looked;   // the unit is filtered out: no Offer
+    }
+    CHECK(looked == FD::kMobVisitBound);
+    CHECK(skipped.Inspected() == FD::kMobVisitBound);
+    CHECK(skipped.Visited() == 0);
+    CHECK(skipped.Exhausted());
+    // Mostly skipped, a few offered: the inspections still end the visit, and the offers made before it are kept.
+    FD::NearestSelector<int> mixed(FD::kMobCap, FD::kMobVisitBound);
+    size_t mixedOffers = 0;
+    for (size_t i = 0; i < 200000; ++i)
+    {
+        if (!mixed.Inspect())
+            break;
+        if (i % 100 == 0 && mixed.Offer(i, float(i), int(i), false))
+            ++mixedOffers;
+    }
+    CHECK(mixed.Inspected() == FD::kMobVisitBound);
+    CHECK(mixedOffers == (FD::kMobVisitBound + 99) / 100);
+
     // Equal distances: the guid orders them; a cap of zero keeps nothing.
     FD::NearestSelector<int> ties(2, 8);
     ties.Offer(7, 1.0f, 7, false);

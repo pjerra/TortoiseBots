@@ -99,8 +99,8 @@ private:
     std::vector<std::pair<Near, Row>> rows_;
 };
 
-// The hard bound on one hostile visit: candidates that passed the filters (in the radius, hostile or attackable, not a critter) the visit may take
-// before it stops, however dense the area. The rows kept are the nearest of the ones met, plus every boss (see NearestSelector).
+// The hard bound on one hostile visit: units the visit may look at (and so also the candidates that passed the filters: in the radius, hostile or
+// attackable, not a critter) before it stops, however dense the area. The rows kept are the nearest of the ones met, plus every boss (see NearestSelector).
 constexpr size_t kMobVisitBound = 512;
 
 // The id a unit, object or player carries on the wire (a decimal string, 64 bits): the guid's type (6 bits) over its counter (40 bits). The counter
@@ -127,13 +127,24 @@ public:
         bosses_.reserve(cap);
     }
 
-    bool Exhausted() const { return visited_ >= bound_; }
+    // The visit is over once the bound of offers OR of units looked at is reached: the work is bounded even when most units are skipped.
+    bool Exhausted() const { return visited_ >= bound_ || inspected_ >= bound_; }
     size_t Visited() const { return visited_; }
+    size_t Inspected() const { return inspected_; }
+
+    // Counts a unit the visit looks at, before any filter. False once the bound of units looked at was reached: the visit stops there.
+    bool Inspect()
+    {
+        if (inspected_ >= bound_)
+            return false;
+        ++inspected_;
+        return true;
+    }
 
     // Takes a candidate of the visit. False once the bound was reached: the visit stops there.
     bool Offer(uint64_t id, float dist2, Row row, bool boss)
     {
-        if (Exhausted())
+        if (visited_ >= bound_)
             return false;
         ++visited_;
         Keep(boss ? bosses_ : others_, Entry{ Near{ id, dist2 }, std::move(row) });
@@ -206,6 +217,7 @@ private:
     size_t cap_;
     size_t bound_;
     size_t visited_ = 0;
+    size_t inspected_ = 0;
     std::vector<Entry> bosses_;
     std::vector<Entry> others_;
 };
