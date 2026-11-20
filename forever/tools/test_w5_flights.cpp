@@ -92,6 +92,11 @@ int main()
         assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Wait);
 
         in.transportStopped = true;
+        in.distanceToDeck = 40.0f;   // stopped at the dock but the bot is not on the deck: it walks, it does not board
+        assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Approach);
+        in.distanceToDeck = 90.0f;
+        assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Wait);
+        in.distanceToDeck = 5.0f;
         assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Board);
 
         in.onBoard = true;
@@ -112,6 +117,20 @@ int main()
         assert(ai::IsAllowedClassicTransportRoute(176495, { 0, 1 }, {}, false));
         assert(!ai::IsAllowedClassicTransportRoute(999999, { 0, 530 }, {}, false));
         assert(ai::IsAllowedClassicTransportRoute(999999, { 0, 530 }, { 999999 }, false));
+        ++passed;
+    }
+
+    // 8. Type-11 animation pause & start-dock departure guards.
+    {
+        assert(ai::IsTransportAnimPaused(4.5f, 8.4f, -4.3f, 4.5f, 8.4f, -4.3f));
+        assert(!ai::IsTransportAnimPaused(4.5f, 8.4f, -4.3f, 50.0f, 8.4f, -4.3f));
+
+        // Same map, still stopped at start dock -> must NOT mark leftStartDock even if dist > minLeaveDist.
+        assert(!ai::HasLeftStartDock(/*sameMap=*/true, /*transportStopped=*/true, 120.0f, 100.0f));
+        // Same map, moving past minLeaveDist -> leftStartDock.
+        assert(ai::HasLeftStartDock(/*sameMap=*/true, /*transportStopped=*/false, 120.0f, 100.0f));
+        // Different map -> always leftStartDock.
+        assert(ai::HasLeftStartDock(/*sameMap=*/false, /*transportStopped=*/true, 0.0f, 100.0f));
         ++passed;
     }
 
