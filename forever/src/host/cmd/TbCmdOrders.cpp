@@ -86,12 +86,15 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
 namespace TortoiseBots
 {
+namespace h3
+{
+bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd);   // host/TbH3Off.cpp
+}
 namespace cmd
 {
 bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
-    h3::Words const args = h3::Split(tail);
-    return h3::RequireBuilt(handler, args, "cmd");
+    return h3::NotBuilt(handler, tail, "cmd");
 }
 }
 }

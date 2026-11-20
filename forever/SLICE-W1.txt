@@ -273,3 +273,20 @@ ai/playerbot/strategy/values/GrindTargetValue.cpp
 ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp
 ai/playerbot/strategy/values/DeadValues.cpp
 ai/playerbot/FleeManager.cpp
+# W6a (item usage, equip upgrades), W2 (sell, buy, repair, trainer, mail) and W3 (quests): the legacy files these items add.
+ai/playerbot/RandomItemWeights.cpp
+ai/playerbot/strategy/actions/EquipAction.cpp
+ai/playerbot/strategy/generic/MaintenanceStrategy.cpp
+ai/playerbot/strategy/actions/SellAction.cpp
+ai/playerbot/strategy/actions/BuyAction.cpp
+ai/playerbot/strategy/actions/RepairAllAction.cpp
+ai/playerbot/strategy/actions/TrainerAction.cpp
+ai/playerbot/strategy/actions/MailAction.cpp
+ai/playerbot/strategy/values/BudgetValues.cpp
+ai/playerbot/strategy/generic/QuestStrategies.cpp
+ai/playerbot/strategy/actions/QuestAction.cpp
+ai/playerbot/strategy/actions/AcceptQuestAction.cpp
+ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
+ai/playerbot/strategy/actions/DropQuestAction.cpp
+ai/playerbot/strategy/actions/ShareQuestAction.cpp
+ai/playerbot/strategy/actions/QuestRewardActions.cpp
