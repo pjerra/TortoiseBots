@@ -72,3 +72,16 @@ Procedure for the real server (the ON image is saved on the VM as `~/forever-bui
 3. `.tb run start` on the S6 Ragefire Chasm party; check `/api/v1/commanders` (state running, step advancing), `/api/v1/dungeons` (`389:<inst>`, 5 bots), `/api/v1/raids` (empty, notice shown), `/api/v1/plans/ragefire_chasm` (TC fallback; U4 predicted a 1054 on the old query).
 4. `.tb run stop` (or let it finish): one file in the trace dir, `/api/v1/dungeon-runs` lists it with outcome and counts, and the Commander card shows `stopped` for 30 s and then the empty list clears it.
 5. `.tb run status all`: `tick_avg_us` unchanged; the log prints every 60 s "dashboard runs feed N cycles ... us each on average" (expect well under 200 us).
+
+## Gates (build VM, slot 6)
+
+The module was synced into `src-6/src/modules/TortoiseBots` from this worktree (the same rsync `vm-census.sh` does) before the builds.
+
+* **Option ON**: `FOREVER_SLOT=6 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON ~/forever-build/build.sh 12 tortoisebots` -> `CMAKE_RC=0`, `MAKE_RC=0` (198 ninja steps; `TbDashRuns.cpp.o` and `libtortoisebots.a` written; no `error:` in `build-6/make.log`).
+* **Option OFF**: `FOREVER_SLOT=6 ~/forever-build/build.sh 12 tortoisebots` (the default is OFF) -> `CMAKE_RC=0`, `MAKE_RC=0` (10 steps; the two dash objects are the stubs: 760 and 1312 bytes).
+* **Generator**: `python3 forever/tools/gen_aiplayerbot_conf.py --check` -> `aiplayerbot.conf.dist matches (696 keys)`. The file had been stale since R9 moved `PlayerbotAIConfig.cpp` lines (the `--check` failed on the branch base); regenerating changed only the `PlayerbotAIConfig.cpp:<line>` comments in its header lines (475 lines, no key or value), committed separately.
+* **Registry**: `python3 forever/tools/slice_registry_check.py --quiet` -> `(a)=0` (17 strategies, 48 actions, 75 triggers, 170 values registered; the 215 unregistered (b) keys are the known later-package list).
+* **Wiring**: `python3 -m unittest forever/tools/test_dash_runs_wiring.py` -> 8 tests, OK. No other `tools/*wiring*.py` names a file this branch changed.
+* **Go**: `flock /tmp/tb-test.lock nice -n 10 go test ./...` in `tools/observability` -> `ok` for every package, including `cmd/server` (`/api/v1/core`), `internal/state` (COMMANDERS fixture), `internal/dungeons` (summary fixture), `internal/plans` (TC fallback), `internal/commandersjs` (notices).
+* **Census**: `FOREVER_SLOT=6 FOREVER_CENSUS_LIST=forever/SLICE5.txt .../census.sh 14` -> `files 176  compile clean 176  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0`. `SLICE5.txt` is a superset of `SLICE4..SLICE1.txt` (checked: each smaller list minus the next is empty), so this one run is the "census 0 for SLICE5..1" gate.
+* **Pure check**: `clang++ -std=c++17 -Wall -Wextra -I<m> forever/tools/dash_runs_check.cpp` in the `forever-builder` image (module tree mounted) -> `RESULT: PASS (dash_runs_check)`, exit 0: the binding mapping, the 30-note and 20-step windows, the outcome rule (a `done` run with an unread boss is `partial`), the golden COMMANDERS bytes, the single empty list, and the one-summary-per-(leader, startedMs) ledger.
