@@ -169,6 +169,11 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
     origin.y = oy;
     origin.z = oz;
     check.facts = RemoteCommander::LeadMoveFacts(origin, point, 0, 0.0f, -1.0f, sPlayerbotAIConfig.reactDistance, fromRun && gather, fromRun);
+    // Review fix 6: a point beyond ReactDistance is refused TooFar by the judge before any path fact is read (RemoteCommander::CheckMove tests it first), so
+    // neither the PathFinder nor the liquid samples of a far point (up to the map's edge: one terrain read per 1.5 yd) are worth a single query in this tick.
+    // The caller's refusal comes from the facts alone; `pathRead` stays false (only an ACCEPTED order's path type is noted).
+    if (RemoteCommander::CheckMove(check.facts) == RemoteCommander::MoveVerdict::TooFar)
+        return check;
     if (!RemoteCommander::IsAtLead(check.facts.distanceFromLead))
     {
         PathFinder path(mover);
@@ -413,6 +418,7 @@ OrderAnswer DoMove(RunRec& rec, Party const& party, od::Parsed const& p, std::st
         batch.Back().y = p.y;
         batch.Back().z = ground;
         batch.Back().map = lead->GetMapId();
+        batch.Back().instance = lead->GetInstanceId();
         for (Player* bot : party.bots)
             if (bot != lead && bot->IsAlive())
             {

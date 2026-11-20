@@ -333,6 +333,14 @@ void ReadParty(Ctx& c, Facts& f, bool& playerInGroup)
     fx::RollUpParty(f, party);
 }
 
+// Both objects stand on the SAME Map object (the same instance of the same map): a null map (not placed, teleporting) is never "the same". GetMapId() alone
+// equals for two copies of one dungeon, and GetDistance across them compares coordinates of different worlds.
+bool SameMapObject(WorldObject const* a, WorldObject const* b)
+{
+    Map const* const map = a ? a->FindMap() : nullptr;
+    return map && b && map == b->FindMap();
+}
+
 // ---- the rez hold's roster (N6; commands/Commander.cpp:10474 ReadRezRoster, the same reads) ----
 // RezHoldPolicy.h decides from this roster whether the regroup HOLDS for a resurrection (the priest's own AI raises the dead where they lie), waits for the
 // resurrector's mana, or sends `revive party`. AiPlayerbot.DungeonRunRezHold (default false on Turtle) is FORCED ON here: M6's first live test showed the
@@ -371,7 +379,8 @@ void ReadRezRoster(Ctx& c, Facts& f)
             m.dead = true;
             Corpse* corpse = bot->GetCorpse();
             WorldObject* body = corpse ? static_cast<WorldObject*>(corpse) : static_cast<WorldObject*>(bot);
-            m.corpseYd = body->GetMapId() == lead->GetMapId() ? body->GetDistance(lead) : 1000.0f;
+            // Review fix 5: the same Map object (the instance), not only the same map id: a body in another copy of this dungeon is as far as another map.
+            m.corpseYd = SameMapObject(body, lead) ? body->GetDistance(lead) : 1000.0f;
             m.placed = true;
             m.bodyX = body->GetPositionX();
             m.bodyY = body->GetPositionY();
@@ -395,7 +404,7 @@ void ReadRezRoster(Ctx& c, Facts& f)
             default: break;
         }
         m.blocksDruid = (cls == CLASS_PRIEST || cls == CLASS_PALADIN || cls == CLASS_SHAMAN) &&
-            bot->GetMapId() == lead->GetMapId() && bot->GetDistance(lead) <= sPlayerbotAIConfig.sightDistance;
+            SameMapObject(bot, lead) && bot->GetDistance(lead) <= sPlayerbotAIConfig.sightDistance;
         uint32 spellId = 0;
         for (size_t i = 0; list && i < 5 && !spellId; ++i)
             if (bot->HasSpell(list[i]))
@@ -432,7 +441,7 @@ void ReadRezRoster(Ctx& c, Facts& f)
     for (size_t i = 0; body && i < f.rezMembers.size(); ++i)
     {
         RezHold::Member& m = f.rezMembers[i];
-        if (!m.dead && m.rez != RezClass::None && memberBots[i]->GetMapId() == body->GetMapId())
+        if (!m.dead && m.rez != RezClass::None && SameMapObject(memberBots[i], body))
         {
             ++c.R().losQueries;
             m.seesBody = memberBots[i]->IsWithinLOSInMap(body);

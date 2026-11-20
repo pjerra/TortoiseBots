@@ -72,6 +72,7 @@ struct Order
     ObjectGuid who;             // assist: the member whose victim is taken
     float x = 0, y = 0, z = 0;  // come
     uint32 map = 0;
+    uint32 instance = 0;        // move-direct: the Map instance the point was made in (Codex review fix)
     uint32 queuedAt = 0;
     bool fromRun = false;       // O6: the run leader's order (QueueOrder): owner is the bot itself, a pull hold anchors on the tank's own spot
 };
@@ -449,7 +450,13 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         // a plain `follow` from the executor. The point's z is the floor the judge read under it.
         // R6 (review item 7, round 2): the straight line is read again where it is walked (the judge read it when the order was made; the bot may have moved since),
         // with the same move rule as the judge (TbRunLiquid.h): wet samples only as the contiguous prefix that holds the bot's own spot, the end dry.
-        if (Map* map = bot->GetMap(); map && run::liquid::SegmentPrefixRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
+        // Review fix 4: the order was queued up to 15 s ago for a bot on map `o.map`. A bot that is teleporting (GetMap() asserts with no map) or stands on another
+        // map by now must not walk this point's coordinates on that map: the order fails, the run hears it as a late failure.
+        // Codex review fix: the map id is equal for two copies of a dungeon, so the instance recorded at queueing must match too (PointOnBotMap; 0 = not recorded).
+        Map* const map = bot->FindMap();
+        if (!map || bot->IsBeingTeleported() || !PointOnBotMap(o.map, o.instance, bot->GetMapId(), bot->GetInstanceId()))
+            return "fail:wrong-map";
+        if (run::liquid::SegmentPrefixRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
             return "fail:liquid";
         ai->DropQueuedMovementOrders();
         ai->Reset();
@@ -887,6 +894,7 @@ bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::stri
     order.y = spec.y;
     order.z = spec.z;
     order.map = spec.map;
+    order.instance = spec.instance;
     order.fromRun = spec.fromRun;
     Player* commander = CommanderOf(bot);
     order.owner = (commander && !spec.fromRun) ? commander->GetGUID() : bot->GetGUID();

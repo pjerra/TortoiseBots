@@ -47,6 +47,13 @@ int main()
     CHECK(!FocusMarkWaits(true, false, true, true));      // not in the world
     CHECK(!FocusMarkWaits(true, true, true, false));      // another map
 
+    // Codex review: a queued point belongs to one Map object, not to a map id (two copies of a dungeon share the id).
+    CHECK(PointOnBotMap(44, 7, 44, 7));
+    CHECK(!PointOnBotMap(44, 7, 44, 8));      // equal map ids, another instance
+    CHECK(!PointOnBotMap(44, 7, 45, 7));
+    CHECK(PointOnBotMap(44, 0, 44, 8));       // the order recorded no instance: the map id alone
+    CHECK(PointOnBotMap(0, 0, 44, 8));        // a hand-typed order names neither
+
     if (failures)
         return 1;
     std::printf("RESULT: PASS (test_run_cancel)\n");

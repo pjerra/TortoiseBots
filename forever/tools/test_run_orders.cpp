@@ -101,6 +101,30 @@ static void TestTexts()
     CHECK(!DR::UnreachableAnswer(j.text));
     CHECK(DR::DirectStragglerName(j.text).empty());      // a plain too-far is not a direct step's straggler
 
+    // review fix 6: the glue answers a too-far point from the distance alone, before it reads a path: so the verdict must not depend on any path fact
+    // (CheckLeadMove returns early on CheckMove == TooFar with pathType 0 and no end facts; the judge must then say the same as with the real ones).
+    for (unsigned type : {0u, 0x0001u, 0x0004u, 0x0008u, 0x0010u})
+        for (float endOffset : {0.0f, 12.0f})
+        {
+            RC::MoveFacts far;
+            far.maxDistance = 150.0f;
+            far.distanceFromLead = 20000.0f;
+            far.pathType = type;
+            far.endOffset = endOffset;
+            far.endFromLead = 0.5f;
+            RC::MoveFacts bare = far;
+            bare.pathType = 0;
+            bare.endOffset = 0.0f;
+            bare.endFromLead = -1.0f;
+            CHECK(RC::CheckMove(far) == RC::MoveVerdict::TooFar);
+            CHECK(RC::CheckMove(bare) == RC::MoveVerdict::TooFar);
+            CHECK(od::JudgeMove(far).code == od::JudgeMove(bare).code && od::JudgeMove(far).text == od::JudgeMove(bare).text);
+        }
+    RC::MoveFacts none;
+    none.distanceFromLead = 1.0f;       // no ReactDistance configured: always too far (the early return takes this too)
+    none.maxDistance = 0.0f;
+    CHECK(RC::CheckMove(none) == RC::MoveVerdict::TooFar);
+
     // no path, and a path that goes nowhere from the lead's own spot
     f.distanceFromLead = 40.0f;
     f.pathType = 0x0008;

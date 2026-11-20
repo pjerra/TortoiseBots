@@ -80,10 +80,14 @@ bool InLiquid(Map* map, float x, float y, float z)
     return liquid::PointRefusedOnMap(map, x, y, z);
 }
 
+// The move rule of TbRunLiquid.h (R6 round 2), not the plain "no wet sample at all": the path starts at the lead's own spot, and a lead that stands in
+// water or lava (the very case the stall stand is searched for) must be able to walk out of it. Wet samples are allowed only as the contiguous prefix
+// from the origin; a wet sample after the first dry one, and a wet end, refuse. The `come` that later walks to the stand is judged with the same rule
+// (TbRunOrders.cpp CheckLeadMove), so the search never offers a stand the executor would refuse, and never refuses one it would accept (review fix 1).
 template <class Points>
 bool PathInLiquid(Map* map, Points const& points)
 {
-    return liquid::PathRefused(points, points.size(), [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); });
+    return liquid::PathPrefixRefused(points, points.size(), [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); });
 }
 
 // The lead of the run: a living player in the world on a map.

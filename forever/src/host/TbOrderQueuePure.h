@@ -47,5 +47,12 @@ inline bool FocusMarkWaits(bool exists, bool inWorld, bool alive, bool sameMap)
 {
     return exists && inWorld && alive && sameMap;
 }
+
+// Codex review fix: an order's point is a spot on ONE Map object. The map id is equal for two copies of a dungeon, so a queued point that names the instance
+// must still be in that instance when the bot runs it. `instance = 0` = the order recorded none (a hand-typed order, an open-world map): the map id alone.
+inline bool PointOnBotMap(std::uint32_t map, std::uint32_t instance, std::uint32_t botMap, std::uint32_t botInstance)
+{
+    return (!map || map == botMap) && (!instance || instance == botInstance);
+}
 }
 }
