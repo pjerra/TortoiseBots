@@ -64,7 +64,7 @@ static void TestParse()
 
     // Refused by grammar: the verbs the module does not carry out are `unsupported`, a broken one `invalid`.
     for (char const* order : { "escape from 1 2 3 4 5 6", "rescue from a to 1 2 3", "fetch 1 2 3", "return Mdps 389", "rejoin Mdps", "cc star 5 Mmage",
-             "cc clear Mmage", "loot 5 Mdps", "lootmethod ffa", "open entry:1 Mdps", "use 5 Mdps", "ritual 5 A B", "gossip 5 Mdps 1", "state 5", "enter near" })
+             "cc clear Mmage", "ritual 5 A B", "gossip 5 Mdps 1", "state 5", "enter near" })
     {
         Parse(order, false);
         CHECK(CodeOf(order) == "unsupported");
@@ -74,6 +74,16 @@ static void TestParse()
         Parse(order, false);
         std::string const code = CodeOf(order);
         CHECK(code == "invalid" || code == "unsupported");
+    }
+    // S9 (O9): loot, lootmethod, open and use have a grammar now (the executor judges them: forever/tools/test_run_tasks.cpp); a broken one is `invalid`.
+    CHECK(Parse("loot 5 Mdps").verb == od::Verb::Loot);
+    CHECK(Parse("lootmethod ffa").verb == od::Verb::LootMethod);
+    CHECK(Parse("open entry:1 Mdps").verb == od::Verb::Open);
+    CHECK(Parse("use 5 Mdps").verb == od::Verb::Use);
+    for (char const* order : { "loot", "loot 5", "lootmethod", "lootmethod sideways", "open", "open entry:0 Mdps", "use", "use 5" })
+    {
+        Parse(order, false);
+        CHECK(CodeOf(order) == "invalid");
     }
     // The Turtle command's options that the module does not port are refused, not dropped.
     Parse("pull 12 ranged", false);
