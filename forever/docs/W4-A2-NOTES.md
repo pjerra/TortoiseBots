@@ -70,7 +70,7 @@ ForeverCore build. `TravelValues.cpp` keeps one call per value; the ForeverCore 
 | Turtle `vm-build` | `COMPILE_SECONDS=55 CMAKE_RC=0 MAKE_RC=0`, `mangosd` and `realmd` written, job rc=0 |
 | `tools/verify_all.sh` (laptop, `tbf/main` baseline) | `Ran 2673 tests ... OK`, `482 standalone policy tests verified`, decision trail OK; the only failure is step 7, `TortoiseBots host-contract check failed: required core file is missing: src/game/SessionTransport.h` — the `../tortoise-wow` checkout is on another branch, exactly as on `tbf/main` (W1 notes, section 9). No new failure |
 | Turtle `vm-test tb` (first run) | unit discovery 2673 tests, one error: `test_guild_founding_wiring.test_petition_need_honors_flag` read the petition branch from `TravelValues.cpp`, where the moved body no longer lives. The pin now reads `ai/cmangos-compat-wl4.h` (the branch text is verbatim there; the 3 tests pass). Its `action_loop`/`Mage stay FAILED` block is the same on the sibling A1 and W0a runs of the shared base (timing under load, not this round) |
-| Turtle `vm-test tb` (after the pin fix) | see section 6 |
+| Turtle `vm-test tb` (after the pin fix) | `RESULT: PASS  kind=tb`, rc=0, 886 s (the worktree as it stands, `sha=5e8239d51 dirty=6` = the final files) |
 
 
 ## 6. Live test (run2, 25fc7ca, console only)
