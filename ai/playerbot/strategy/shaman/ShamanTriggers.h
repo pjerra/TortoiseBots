@@ -628,14 +628,15 @@ namespace ai
 
             for (uint32 type = SPELL_AURA_NONE; type < TOTAL_AURAS; ++type)
             {
-                Unit::AuraList const& auras = target->GetAurasByType((AuraType)type);
-                for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
+                // One aura effect at a time through the both-core walk (T: one Aura per effect, F: one AuraEffect per effect).
+                if (ForEachAuraOfTypeCompat(target, (AuraType)type, [this](AuraOfTypeCompat const& aura) -> bool
                 {
-                    const Aura* aura = *itr;
-                    const SpellEntry* entry = GetSpellEntryCompat(aura->GetSpellProto());
+                    const SpellEntry* entry = aura.spell;
+                    if (!entry)
+                        return false;
                     uint32 spellId = entry->Id;
                     if (!IsPositiveSpell(spellId))
-                        continue;
+                        return false;
 
                     std::vector<uint32> ignoreSpells;
                     ignoreSpells.push_back(17627);
@@ -654,14 +655,14 @@ namespace ai
                     ignoreSpells.push_back(17539);
 
                     if (find(ignoreSpells.begin(), ignoreSpells.end(), spellId) != ignoreSpells.end())
-                        continue;
+                        return false;
 
                     /*if (sPlayerbotAIConfig.dispelAuraDuration && aura->GetAuraDuration() && aura->GetAuraDuration() < (int32)sPlayerbotAIConfig.dispelAuraDuration)
                         return false;*/
 
-                    if (ai->canDispel(entry, DISPEL_MAGIC))
-                        return true;
-                }
+                    return ai->canDispel(entry, DISPEL_MAGIC);
+                }))
+                    return true;
             }
             return false;
         }
@@ -908,7 +909,7 @@ namespace ai
                 if (ai->HasAuraToDispel(member, DISPEL_POISON))
                     return true;
                 Pet* pet = member->GetPet();
-                if (pet && pet->getPetType() != MINI_PET && sServerFacade.IsAlive(pet) &&
+                if (pet && !PetIsMiniPetCompat(pet) && sServerFacade.IsAlive(pet) &&
                     ai->HasAuraToDispel(pet, DISPEL_POISON))
                     return true;
             }
@@ -950,7 +951,7 @@ namespace ai
                 if (ai->HasAuraToDispel(member, DISPEL_DISEASE))
                     return true;
                 Pet* pet = member->GetPet();
-                if (pet && pet->getPetType() != MINI_PET && sServerFacade.IsAlive(pet) &&
+                if (pet && !PetIsMiniPetCompat(pet) && sServerFacade.IsAlive(pet) &&
                     ai->HasAuraToDispel(pet, DISPEL_DISEASE))
                     return true;
             }

@@ -93,7 +93,74 @@ SLICE4_KEYS = {
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# `behind` (the rogue kit's strategy, SetBehindCombatStrategy) and the three keys it fires (`set behind`, `rear flank`, `rear flank needed`) are NOT in the spec's table
+# (its closure read only the mage and rogue folders, not the kit): H8 adds them because the spec's rogue kit names `behind` (section 2) and section 5 relies on it.
+# Slice 8 (package H8, FOREVER-SLICE-MAGE-ROGUE-SPEC section 3 "Registry keys", forever/docs/SLICE8-K-NOTES.md "Needs from H8"; listed with creator file:line in
+# forever/docs/SLICE8-H-NOTES.md): the keys the compiled mage and rogue contexts and their kits name that the slice did not register yet. The give-item values
+# (`party member without item/food/water`) are not in the spec's table but `give food`/`give water` read them (K8 notes). Left unregistered on purpose (each one does
+# less): apply oil, throw grenade, oil of immolation, thistle tea (item casts); enemy flagcarrier near, player has flag, enemy player target, has enemy player targets
+# (PvP); grind target (the stealth trigger then reads `dps target` only); manual saved string; no blink instance; hemorrhage back/front (no context defines them).
+SLICE8_KEYS = {
+    "strategy": "hold position, behind",
+    "action": "give food, give water, cancel channel, set behind, rear flank, reach cc",
+    "trigger": "give food, give water, low mana, enemy ten yards, enemy is close, behind target, not behind target, high energy available, "
+               "no energy available, has aggro in raid group, rear flank needed",
+    "value": "party member without item, party member without food, party member without water",
+}
+# Slice 10 (package H10, FOREVER-SLICE10-HYBRIDS-SPEC section 3 "Registry keys", forever/docs/SLICE10-K-NOTES.md section 4; listed with creator file:line in
+# forever/docs/SLICE10-H-NOTES.md): the keys the compiled druid, paladin and shaman contexts and their kits name that the slice did not register yet. `low mana` and
+# `enemy is close` are not in the spec's table but the restoration shaman (`low mana`) and the holy paladin (`enemy is close`) kits fire them (K10 notes: also on
+# slice 8's list, listed once). Left unregistered on purpose (each one does less): manual saved string (D5: totem mode stays auto), travel target traveling, enemy player
+# target, has enemy player targets, grind target; enemy flagcarrier near, player has flag, new pet, has (greater) blessing of salvation, resist aura swap over, not
+# sensing undead, kick, aquatic form; apply oil/stone, oil of immolation, throw grenade, mana/stoneshield potion, remove (greater) blessing of salvation, set pet stance,
+# sense undead, switch to melee/ranged, cancel channel, powershift, reach party member for totem (no totem order). Cat, balance, enhancement, elemental and the Turtle
+# shaman tank kit are out of the slice (D2), so behind target / not behind target (the feral dps) stay out too. `restore spec aura` (the spec's table lists it) is NOT registered:
+# its class RestoreSpecAuraAction is defined in strategy/actions/DungeonActions.cpp (1,036 lines of raid and dungeon actions, not in the list: the option-ON link failed with
+# `undefined vtable for ai::RestoreSpecAuraAction`), and its only trigger `resist aura swap over` is on the unregistered list, so the action could never fire.
+SLICE10_KEYS = {
+    "strategy": "",
+    "action": "move out of enemy contact",
+    "trigger": "enemy too close for melee, not facing target, rooted, party member rooted, tank rooted, enough mana, healer low mana, medium aoe heal, "
+               "ranged medium aoe and healer should attack, target of attacker close, loose adds near, low mana, enemy is close",
+    "value": "has own totem, have any own totem, possible attack targets count, revive targets, boost targets, healer low mana",
+}
+# Slice 11 (package H11, FOREVER-SLICE11-PETS-SPEC sections 3 and 10, listed with creator file:line in forever/docs/SLICE11-NOTES.md section 5): the generic pet keys the hunter and
+# warlock kits fire, and the hunter's dead-zone and range keys. Left unregistered on purpose (each one makes the bot do less, spec section 3): the chat `tame` action and
+# trigger (TameAction.cpp stays out), `flee with pet`, `boss tactics seek pet`, `thaddius *`, `manual saved string` (so `choice pet`, `choice sting`, `choice aspect` and
+# `.bot choice` stay off, as S10 D5), `apply oil`, `apply stone`, `equip upgrades`, `dispel enrage` (Tranquilizing Shot is level 60), `player has flag`, `nearest stealthed unit`,
+# `warlock spread attacker my aura` (the raid DoT spread), `aoe fear`. `pet target` is registered since slice 1.
+SLICE11_KEYS = {
+    "strategy": "",
+    "action": "initialize pet, toggle pet spell, set pet stance, pet attack, pet, cancel channel, switch to melee, switch to ranged",
+    "trigger": "no pet, has pet, new pet, pet attack, pet, enemy ten yards, enemy fifteen yards, low mana, target of attacker close, has aggro in raid group",
+    "value": "pet dead, pet happy, active spell",
+}
+def _join(*ds):
+    # One entry per key and kind: a key two slice lists both name (slice 8's and slice 10's `low mana`, `enemy is close`) is
+    # registered once, in the order of the first list that names it.
+    out = {}
+    for k in SLICE_KEYS:
+        seen = []
+        for d in ds:
+            for x in d[k].split(","):
+                x = x.strip()
+                if x and x not in seen:
+                    seen.append(x)
+        out[k] = seen
+    return out
+# Slice 9 (package L9, FOREVER-SLICE9-SPEC section 6, listed with creator file:line in forever/docs/SLICE9-L-NOTES.md): item loot and group loot rolls. The
+# `roll` strategy is the one whose `very often` trigger fires `auto loot roll`; `loot start roll` / `loot vote` are the pass-through names of the
+# `default` strategy (WorldPacketHandlerStrategy::supported), fed by the poll of TbCompat_S9.h. Left out on purpose (each one does less): `loot roll won`
+# and `log roll won` (nothing feeds them; the trigger's second action is `equip upgrades`, so registering it would wire AUTO-EQUIP), `delayed roll`,
+# `equip upgrades`, `item push result`; the item usage value's own dependencies (mount list, craft spells, should craft spell, free money for): their
+# absence reads as the empty value, so no mount, craft or purchase is planned.
+SLICE9_KEYS = {
+    "strategy": "roll",
+    "action": "loot start roll, loot vote, loot roll, auto loot roll, roll, release loot",
+    "trigger": "loot start roll, loot vote, loot roll",
+    "value": "active rolls, seen need rolls, item usage, skip go loot list",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
@@ -101,7 +168,8 @@ BASE_T = {"strategy": "Strategy", "action": "Action", "trigger": "Trigger", "val
 LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "SliceMovementStrategyContext",
          "AssistStrategyContext": "SliceAssistStrategyContext", "ActionContext": "SliceActionContext",
          "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
-         "TriggerContext": "SliceTriggerContext", "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
+         "TriggerContext": "SliceTriggerContext", "ChatTriggerContext": "SliceChatTriggerContext",
+         "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
          "ValueContext": "SliceValueContext"}
 
 

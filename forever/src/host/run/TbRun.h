@@ -8,6 +8,7 @@
 #pragma once
 
 #include "host/TbH3.h"
+#include "host/run/TbRunGatherPure.h"
 #include "host/run/TbRunHooks.h"
 #include "runtime/DungeonRunPolicy.h"
 
@@ -25,7 +26,8 @@ namespace run
 {
 constexpr size_t kEventRing = 200;
 
-// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | fight-end | rest | death | wipe | revive | pause | resume | done | stop.
+// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop, and since
+// slice 9 (package C9) open | object | loot | item | clear (a task or a wait step of the plan ended: `unit` = the object's or boss's entry, `why` = what it saw).
 // `step`, `leg` and `unit` are -1 when the event has none (the record then omits the key: an unknown number is never written as a number).
 struct RunEvent
 {
@@ -75,7 +77,7 @@ struct RunRec
     uint32 stopPendingSinceMs = 0;               // R6 (review item 6): the clock of that request; kStopPendingMaxMs later the stop takes effect whatever the fight does
     uint32 instanceId = 0;                       // R6 (review item 4): the leader's instance of the plan's map at the start; the lead in another instance ends the run
     std::string stopWhy;
-    std::string pauseCode;                       // the machine word of the next pause event's `why=` (outside-order, player-in-group, lead-off-map, command); empty: the run's own note
+    std::string pauseCode;                       // the machine word of the next pause event's `why=` (outside-order, player-in-group, lead-off-map, command, bags-full, loot-method); empty: the run's own note
     bool pausedForPlayer = false;                // the system run's join flag (SystemRun::JoinFlagAfterScan)
     // What the last tick saw, to name the events (start .. stop) of the next one.
     bool seenInit = false;
@@ -85,8 +87,23 @@ struct RunRec
     bool seenCombat = false;
     bool seenWipe = false;
     std::set<std::string> seenDead;
+    gather::Extension gatherExt;                 // G8: the regroup gather's bounded extensions at the current step (TbRunGatherPure.h)
+    // G8 (review): the bots the run's own `cc` orders marked, name -> mark. Run::ccHolds does not survive a step advance, a resume or a regroup
+    // (DungeonRun::ResetStep clears it) and the bots' `rti cc` / `run cc family` do: this is what ClearRunCc resets at the run's end, moving an entry it
+    // could not settle to the pending retry (DropPendingCc/RetryPendingCc).
+    std::map<std::string, std::string> ccOwned;
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
+
+    // ---- S9 (package C9): what the run keys and the step-end events read. Plain data from the last tick's facts: the facts the policy decided on. ----
+    std::string carrier;                         // the bot a loot / open / use_item step goes to (empty on any other step)
+    std::string itemKey;                         // the step's item and whether the carrier holds it ("5397:held" | "5397:missing"; empty: the step has no item)
+    std::string objKey;                          // the object the step waits on or opens: "<entry>:<ready|active|active_alt|none>" (empty on any other step)
+    size_t preStep = size_t(-1);                 // the step the next fields were read for (the tick that ends a step read them before it decided)
+    int preObjState = -1;                        // wait_object: Facts::objectState (-1 not found)
+    uint32 preClearNear = 0;                     // wait_clear: hostiles within the radius
+    bool preHasItem = false;                     // loot: the carrier, or a party bot, holds the step's item
+    std::string preHolder;                       // ... the first bot that does
 };
 
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
@@ -104,13 +121,17 @@ void SetEndListener(EndListener listener);
 // Appends an event (the ring drops the oldest past kEventRing) and returns its seq. `tMs` is taken from `nowMs` and the run's start.
 uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step = -1, int32 leg = -1, int32 unit = -1, std::string why = {});
 
+// S9 (C9): a task or wait step of the run ended; an event of `kind` (open | object | loot | item | clear) with the entry it was about and what was seen. It
+// is written into the ring and the server log like every run event, on the run's current step.
+void NoteTaskEvent(RunRec& rec, uint32 nowMs, char const* kind, int32 unit, std::string const& why);
+
 // running | paused | done (the Turtle run's state), or stopped when `stopped` is set.
 std::string StateName(RunRec const& rec);
 
 // ---- S6 (package C6): the tick, the binding and the commands' logic (the `.tb run` handlers in TbRunCommands.cpp only parse and write replies) ----
-// `Update` is called once per world tick from OnBeforeMapsUpdate (TbRunHooks.h); it runs every live run once per second. Cost of one run tick: one
-// `ReadFacts` (F6: at most a few path queries and grid scans, 2-3 us in the pure half), one `DungeonRun::Tick`, at most ONE order through the
-// executor, and a handful of map lookups; `TickTotals` says what it measured.
+// `Update` is called once per world tick from OnBeforeMapsUpdate (TbRunHooks.h); it retries the cc teardown an ended run left pending and runs every live run
+// once per second. Cost of one run tick: one `ReadFacts` (F6: at most a few path queries and grid scans, 2-3 us in the pure half), one `DungeonRun::Tick`,
+// at most ONE order through the executor, and a handful of map lookups; `TickTotals` says what it measured.
 struct TickTotals
 {
     uint64 ticks = 0;           // run ticks since boot
@@ -121,9 +142,13 @@ TickTotals const& TickCost();
 
 bool Ended(RunRec const& rec);                          // the run is done or stopped (it stays in the table for `status` and `events` until a new start)
 
+// G8 (review): a run's cc mark that its teardown could not take back (the bot out of the world, no engine, a read-back that did not take) is retried every
+// world tick until it settles. A newer accepted `cc` / `cc clear` for the bot drops its pending entry first (that order takes the bot over).
+void DropPendingCc(std::string const& botName);
+
 struct StartOutcome
 {
-    std::string code;           // empty = started; else not-bot not-leader group-raid player-in-group not-tank no-engine wrong-map already-running not-commanded bind-failed no-plan
+    std::string code;           // empty = started; else not-bot not-leader group-raid player-in-group not-tank no-engine wrong-map already-running not-commanded bind-failed no-plan bags loot-method
     std::string detail;
     RunRec* rec = nullptr;
 };

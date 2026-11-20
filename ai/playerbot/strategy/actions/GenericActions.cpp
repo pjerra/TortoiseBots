@@ -4,6 +4,7 @@
 #include "GenericActions.h"
 #include "AttackAction.h"
 #include "playerbot/PlayerbotFactory.h"
+#include "playerbot/TbCompatP11.h"
 #include <algorithm>
 #include <vector>
 #include "../../../runtime/policy/pet/PetUpkeepPolicy.h"
@@ -234,16 +235,8 @@ bool InitializePetAction::isUseful()
             bool hasTamedPet = false;
             if (storedPetLookup.ShouldQuery(false, time(nullptr)))
             {
-                auto queryResult = QueryGuardCompat(CharacterPQueryCompat("SELECT id, entry, owner "
-                                                                                    "FROM character_pet WHERE owner = '%u' AND (slot = '%u' OR slot > '%u') ",
-                                                                                    bot->GetGUIDLow(), PET_SAVE_AS_CURRENT, PET_SAVE_LAST_STABLE_SLOT));
-
-                if (queryResult)
-                {
-                    Field* fields = queryResult->Fetch();
-                    const uint32 entry = fields[1].GetUInt32();
-                    hasTamedPet = sObjectMgr.GetCreatureTemplate(entry);
-                }
+                // T: a `character_pet` row of the current or a stable slot; F: an active slot of the pet stable (P11, G1).
+                hasTamedPet = HasStoredPetCompat(bot);
                 storedPetLookup.Store(time(nullptr), hasTamedPet);
             }
             else
@@ -578,14 +571,10 @@ bool TogglePetSpellAutoCastAction::Execute(Event& /*event*/)
         }
     }
 
-    UnportedBlockCompat(tbcompat::Feature::Pets, [&](auto* pet)
+    // The spells the pet knows that are not removed (T m_petSpells, F m_spells: PetSpellIdsCompat), a snapshot: a toggle never walks a changing map.
     {
-        for (auto itr = pet->m_petSpells.begin(); itr != pet->m_petSpells.end(); ++itr)
+        for (uint32 const spellId : PetSpellIdsCompat(pet))
         {
-            if (itr->second.state == PETSPELL_REMOVED)
-                continue;
-
-            uint32 spellId = itr->first;
             if (IsPassiveSpell(spellId))
                 continue;
             if (!TortoiseBots::ShouldSweepPetSpell(playerMaster, tauntOrdered,
@@ -606,7 +595,7 @@ bool TogglePetSpellAutoCastAction::Execute(Event& /*event*/)
             if (active != (std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId) != pet->m_autospells.end()))
                 changed = true;
         }
-    }, pet);
+    }
 
     return changed;
 }

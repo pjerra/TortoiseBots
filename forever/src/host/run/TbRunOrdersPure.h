@@ -7,6 +7,8 @@
 // when the bots' engines have run it.
 #pragma once
 
+#include "TbRunTasksPure.h"
+#include "runtime/CcOrderFamily.h"
 #include "runtime/RemoteCommanderPolicy.h"
 
 #include <cmath>
@@ -34,6 +36,12 @@ enum class Verb : uint8_t
     Stay,           // stay          (not emitted by the policy: the run's stop and the glue use it)
     Follow,         // follow        (same)
     Summon,         // summon <bot>: refused by decision D3
+    Cc,             // cc <mark> <handle> <bot> [family]            (G8: h8::ApplyCcOrder)
+    CcClear,        // cc clear <bot> [<mark> <handle>]             (G8: h8::ClearCcOrder)
+    Open,           // S9 (O9): open <object> <bot>: a door, a lever, a chest (TbRunTasks)
+    Loot,           // S9 (O9): loot <corpse or object> <bot> [item]
+    LootMethod,     // S9 (O9): lootmethod <ffa|group|rr> [threshold]
+    Use,            // S9 (O9): use <item> <bot>: parsed, refused `unsupported` by the executor (the item-use path is not ported)
     Unsupported,    // a verb of the grammar the module does not carry out on ForeverCore
 };
 
@@ -46,7 +54,33 @@ struct Parsed
     std::string bot;            // walk, attack, summon
     uint64_t handle = 0;        // pull, pullback, attack, focus: the handle of ReadFacts' unit guid
     bool body = false;          // pull <handle> body
+    std::string mark;           // cc, cc clear: the raid mark word, lower case ("" for a `cc clear <bot>`)
+    std::string family;         // cc: the family token the policy named after the bot ("" for the plan's own orders)
+    tasks::TaskOrder task;      // S9 (O9): open, loot, lootmethod, use
 };
+
+// The eight raid mark words of a `cc` order (skull parses and is refused by the host: it is the party's kill mark, never a crowd-control mark).
+inline bool IsRaidMarkWord(std::string const& word)
+{
+    for (char const* known : { "star", "circle", "diamond", "triangle", "moon", "square", "cross", "skull" })
+        if (word == known)
+            return true;
+    return false;
+}
+
+// The code of a refused `cc` / `cc clear` answer from the host's own code (h8::ApplyCcOrder / ClearCcOrder): the words the policy and `.tb run` know.
+inline std::string CcAnswerCode(std::string const& hostCode)
+{
+    if (hostCode == "bad-mark" || hostCode == "bad-family")
+        return "invalid";
+    if (hostCode == "no-party")
+        return "not-bound";
+    if (hostCode == "target-not-found" || hostCode == "bad-target" || hostCode == "target-dead" || hostCode == "not-attackable")
+        return "invalid-target";
+    if (hostCode == "no-engine" || hostCode == "engine-not-built")
+        return "no-engine";
+    return "failed";
+}
 
 // The text after the legacy `.bot cmd`: P's own grammar. A refused parse sets `code` (always "invalid" or "unsupported") and the reason in the legacy words.
 inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code, std::string& message)
@@ -172,7 +206,54 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
         out.bot = args[0];
         return true;
     }
-    for (char const* known : { "escape", "rescue", "fetch", "return", "rejoin", "cc", "loot", "lootmethod", "open", "use", "ritual", "gossip", "state", "enter" })
+    if (verb == "cc")
+    {
+        auto const lower = [](std::string text)
+        {
+            for (char& c : text)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return text;
+        };
+        if (!args.empty() && lower(args[0]) == "clear")
+        {
+            // cc clear <bot> [<mark> <handle>]: the bot's crowd-control mark goes; the icon only while it still holds that unit.
+            if (args.size() != 2 && args.size() != 4)
+                return invalid("cc clear <bot> [<mark> <guid>]");
+            out.verb = Verb::CcClear;
+            out.bot = args[1];
+            if (args.size() == 4)
+            {
+                out.mark = lower(args[2]);
+                if (!IsRaidMarkWord(out.mark) || !handleOf(args[3]))
+                    return invalid("cc clear <bot> [<mark> <guid>]");
+                out.handle = handleOf(args[3]);
+            }
+            return true;
+        }
+        // cc <mark> <handle> <bot> [family]: the run names the bot always (the Turtle command's selected-bot form has no run behind it).
+        if (args.size() < 3 || args.size() > 4)
+            return invalid("cc <mark> <guid> <bot> [family]");
+        out.mark = lower(args[0]);
+        if (!IsRaidMarkWord(out.mark) || !handleOf(args[1]))
+            return invalid("cc <mark> <guid> <bot> [family]");
+        if (args.size() == 4 && !DungeonRun::CcOrderFamilyKnown(args[3]))
+            return invalid("cc <mark> <guid> <bot> [family]");
+        out.verb = Verb::Cc;
+        out.handle = handleOf(args[1]);
+        out.bot = args[2];
+        if (args.size() == 4)
+            out.family = DungeonRun::CcFamilyTokenNorm(args[3]);
+        return true;
+    }
+    // S9 (O9): the four task verbs have a grammar and an executor (TbRunTasks); `use` is parsed and then refused by the executor with its own reason.
+    if (verb == "loot" || verb == "open" || verb == "lootmethod" || verb == "use")
+    {
+        if (!tasks::ParseTaskOrder(verb, args, out.task, code, message))
+            return false;
+        out.verb = verb == "loot" ? Verb::Loot : verb == "open" ? Verb::Open : verb == "lootmethod" ? Verb::LootMethod : Verb::Use;
+        return true;
+    }
+    for (char const* known : { "escape", "rescue", "fetch", "return", "rejoin", "ritual", "gossip", "state", "enter" })
         if (verb == known)
         {
             out.verb = Verb::Unsupported;
@@ -181,7 +262,7 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
             return false;
         }
     code = "invalid";
-    message = "Usage: attack <guid> [bot] / pull|pullback <guid> / focus <guid> / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / rest / revive party";
+    message = "Usage: attack <guid> [bot] / pull|pullback <guid> / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr> [threshold]";
     return false;
 }
 

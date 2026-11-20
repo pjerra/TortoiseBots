@@ -1,6 +1,7 @@
 #pragma once
 
 #include "playerbot/strategy/actions/GenericActions.h"
+#include "playerbot/TbCompatK11w.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/AoeFearPolicy.h"
 #include "../../../runtime/policy/pet/VoidwalkerPolicy.h"
@@ -233,7 +234,7 @@ namespace ai
             return true;
         }
     private:
-        std::string OwnSlotKey() const { return "curse slot " + std::to_string(bot->GetObjectGuid().GetRawValue()); }
+        std::string OwnSlotKey() const { return "curse slot " + std::to_string(GuidKeyCompat(bot->GetObjectGuid())); }
     };
 
     class CastCurseOfExhaustionAction : public CastCurseSlotAction
@@ -707,7 +708,7 @@ namespace ai
             {
                 for (int32 i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2; ++i)
                 {
-                    if (target->IsImmuneToSpellEffect(spellInfo, (SpellEffectIndex)i, false))
+                    if (IsImmuneToSpellEffectCompat(target, spellInfo, i, false, bot))
                         return false;
                 }
             }

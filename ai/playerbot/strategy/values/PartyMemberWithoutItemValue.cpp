@@ -15,7 +15,7 @@ public:
     virtual bool Check(Unit* unit) override
     {
         Pet* pet = dynamic_cast<Pet*>(unit);
-        if (pet && (pet->getPetType() == MINI_PET || pet->getPetType() == SUMMON_PET))
+        if (pet && (PetIsMiniPetCompat(pet) || pet->getPetType() == SUMMON_PET))
             return false;
 
         if (!sServerFacade.IsAlive(unit))

@@ -163,22 +163,7 @@ inline bool SpellProhibitedCompat(Player* player, SpellEntry const* spellInfo) {
 // ===============================================================================================================
 // PETS, GAME OBJECTS, ITEM CASTS, MISC FEATURES
 // ===============================================================================================================
-inline void PetLearnSpellCompat(Pet* pet, uint32 spellId) { pet->LearnSpell(spellId); }
-inline void PetToggleAutocastCompat(Pet* pet, uint32 spellId, bool on) { pet->ToggleAutocast(spellId, on); }
-// GenericActions.cpp: the dismiss command of the pet action, sent as a pet action packet.
-inline bool PetDismissCommandCompat(Player* bot, Pet* pet)
-{
-    const ObjectGuid& petGuid = pet->getObjectGuid();
-    const ObjectGuid& targetGuid = ObjectGuid();
-    const uint8 flag = ACT_COMMAND;
-    const uint32 spellId = COMMAND_DISMISS;
-    const uint32 command = (flag << 24) | spellId;
-
-    HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
-    return true;
-}
-template <class Visitor>
-inline void ForAllGuardiansCompat(Player* bot, Visitor&& visitor) { bot->CallForAllControlledUnits(visitor, CONTROLLED_GUARDIANS); }
+// (Pets: PetLearnSpellCompat, PetToggleAutocastCompat, PetDismissCommandCompat, ForAllGuardiansCompat moved to cmangos-compat-p11.h in slice 11.)
 
 inline bool UseGameObjectCompat(Player* bot, GameObject* go)
 {
@@ -295,6 +280,11 @@ template <class... Args>
 inline auto CharacterPQueryCompat(char const* format, Args... args) { return CharacterDatabase.PQuery(format, args...); }
 inline std::unique_ptr<QueryResult> QueryGuardCompat(QueryResult* result) { return std::unique_ptr<QueryResult>(result); }
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.escape_string(text); }
+// The pet a character brings back on login: the original statement.
+inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
+{
+    CharacterDatabase.PExecute("UPDATE characters SET summonedPetNumber = '%u' WHERE guid = '%u'", petNumber, guid);
+}
 
 
 // ===============================================================================================================

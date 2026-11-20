@@ -121,7 +121,7 @@ uint32 BagFamilyNumber(uint32 mask, uint32 itemClass)
     return 0;
 }
 
-// ItemTemplate::GetDPS (ItemTemplate.cpp:207-257) indexes one of five client damage tables with AssertEntry(itemLevel): a
+// ItemTemplate::GetDPS (ItemTemplate.cpp:210-260) indexes one of five client damage tables with AssertEntry(itemLevel): a
 // row the client data does not have aborts the server, and the eager fill would meet it for every weapon in the store.
 // This is GetDPS's own early return (not a weapon, quality past artifact with heirloom read as rare, an inventory type it
 // does not handle), so the fill only checks the tables where the core would actually read one.
@@ -175,7 +175,7 @@ std::string MissingDamageReason(uint32 itemLevel)
     return missing.empty() ? std::string() : "no row for item level " + std::to_string(itemLevel) + " in " + missing;
 }
 
-// ItemTemplate::GetArmor (ItemTemplate.cpp:147-204) reads ItemArmorQuality + ItemArmorTotal + ArmorLocation for armor with
+// ItemTemplate::GetArmor (ItemTemplate.cpp:150-207) reads ItemArmorQuality + ItemArmorTotal + ArmorLocation for armor with
 // a cloth..plate subclass, and ItemArmorShield for shields. Those are LookupEntry calls, so a missing row is a silent 0,
 // not an abort; the mirror marks the item so 0 is not read as the item's armor. GetArmor returns before any table for a
 // quality past artifact, and for a non-armor item or an armor subclass outside cloth..plate (not a shield) its answer is 0
@@ -183,7 +183,7 @@ std::string MissingDamageReason(uint32 itemLevel)
 bool ArmorUsesStores(ItemTemplate const* tpl, bool& shield)
 {
     shield = false;
-    // GetArmor maps heirloom to rare before its quality ceiling (ItemTemplate.cpp:148-150), so an heirloom armor item
+    // GetArmor maps heirloom to rare before its quality ceiling (ItemTemplate.cpp:151-153), so an heirloom armor item
     // still reads the item-level tables and must be marked when one is missing.
     uint32 quality = tpl->GetQuality();
     if (quality == ITEM_QUALITY_HEIRLOOM)

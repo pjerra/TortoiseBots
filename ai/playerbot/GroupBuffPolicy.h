@@ -82,6 +82,28 @@ namespace ai
         return !baseName.empty() && GroupBuffVariantFor(baseName) == groupName;
     }
 
+    // Buffs whose effect is a mana pool (more maximum mana, or spirit for a caster): only a unit that uses mana can carry them. The core refuses the cast on a rage,
+    // energy or focus user (SPELL_FAILED_BAD_TARGETS), so a party search for "a member without the aura" must never return one: it would pick the same
+    // warrior or rogue on every check, the cast would be refused each time and the members that DO use mana would be starved of the re-buff (Slice 8 live run:
+    // 48 refused Arcane Intellect casts in 20 minutes). Rank-less names, as the buff actions and values spell them.
+    inline bool BuffNeedsManaUser(std::string const& spell)
+    {
+        return spell == "arcane intellect" || spell == "arcane brilliance" || spell == "divine spirit" || spell == "prayer of spirit";
+    }
+
+    // A unit uses mana when its display power is mana AND it has a mana pool. Either one alone is not proof on every core: ForeverCore's display power is a
+    // field the bot's own login sets, the pool is the class's own, so both are asked.
+    inline bool UsesMana(bool displayPowerIsMana, std::uint32_t maxMana)
+    {
+        return displayPowerIsMana && maxMana > 0;
+    }
+
+    // Whether a unit may be a target of `spell`: any unit for an ordinary buff, a mana user for a mana buff.
+    inline bool BuffTargetFits(std::string const& spell, bool displayPowerIsMana, std::uint32_t maxMana)
+    {
+        return !BuffNeedsManaUser(spell) || UsesMana(displayPowerIsMana, maxMana);
+    }
+
     // Donor UpgradeToGroupIfAppropriate, quorum half: upgrade only when the
     // group variant is trained and stocked (every 1.12 group buff spends a
     // reagent: Wild Thornroot / Arcane Powder / candles) and at least

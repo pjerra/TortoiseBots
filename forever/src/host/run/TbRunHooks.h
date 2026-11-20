@@ -4,9 +4,11 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 class Player;
+class Group;
 
 namespace ai { struct DungeonPlan; }
 
@@ -21,6 +23,9 @@ void LoadPlans();
 
 // Every run's plan pointer (`.tb plan reload` passes them as `inUse`, so a replaced table a run still reads is kept alive).
 std::vector<ai::DungeonPlan const*> PlansInUse();
+
+// S9 (C9): the group's loot method in the policy's words (group | ffa | rr | master | nbg; none for a method the policy does not know, the core's personal loot).
+std::string LootMethodWord(Group const* group);
 
 // `.tb state`: the end line of a party in a run gains `run=<lead name> runstate=<state>` (addendum A8 allows new keys). Absent when the party has no run.
 void AnnotateStateEnd(h3::Rec& end, Player* member);

@@ -1,0 +1,9 @@
+role,order,talent_id,rank,spell_id,name,source,client_build
+priest,10,1181,1,18530,Divine Fury,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: yes,70959 (db2-70959 extraction)
+priest,11,361,1,14892,Inspiration,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: yes,70959 (db2-70959 extraction)
+priest,12,361,2,15362,Inspiration rank spell 15362,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: NO - ABSENT (rank spells beyond r1 have no SpellName/Spell row in either build; verify GetSpellInfo live),70959 (db2-70959 extraction)
+priest,13,361,3,15363,Inspiration rank spell 15363,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: NO - ABSENT (rank spells beyond r1 have no SpellName/Spell row in either build; verify GetSpellInfo live),70959 (db2-70959 extraction)
+mage,10,69,1,12472,Cold Snap,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: yes,70959 (db2-70959 extraction)
+mage,11,73,1,11207,Ice Shards,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: yes,70959 (db2-70959 extraction)
+mage,12,73,2,12672,Ice Shards rank spell 12672,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: NO - ABSENT (rank spells beyond r1 have no SpellName/Spell row in either build; verify GetSpellInfo live),70959 (db2-70959 extraction)
+mage,13,73,3,15047,Ice Shards rank spell 15047,Talent.db2 70959 SpellRank[]; SpellName.db2 70959: NO - ABSENT (rank spells beyond r1 have no SpellName/Spell row in either build; verify GetSpellInfo live),70959 (db2-70959 extraction)
