@@ -4,6 +4,7 @@
 #include "host/TbH3.h"
 #include "host/TbPet.h"
 #include "host/TbHostTown.h"
+#include "host/TbHostGuildOrders.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -387,6 +388,8 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.S("corpserun", phase);
     if (ghostYd >= 0.0f)
         rec.N("ghostyd", static_cast<int32>(ghostYd + 0.5f));
+    if (auto gorder = tbhost::guild_orders::FindOrder(guid.GetCounter()))
+        rec.P("order", {std::to_string(gorder->itemId), std::to_string(gorder->delivered) + "/" + std::to_string(gorder->amount)});
     return rec;
 }
 

@@ -1,56 +1,24 @@
 #include "host/TbHostGuildOrders.h"
 
 #include "compat/TbCompat_CharStore.h"
+#include "compat/TbItemPrototype.h"
 #include "compat/TbSqlNames.h"
+#include "host/TbH3.h"
+#include "host/TbHostGuild.h"
 
+#include "Chat.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
+#include "Player.h"
 #include "StringFormat.h"
 
-// Census includes for all reusable pure guild/order headers (Step 1).
-#include "runtime/GuildOrderAccessPolicy.h"
-#include "runtime/GuildOrderAuctionPolicy.h"
 #include "runtime/GuildOrderBringPolicy.h"
-#include "runtime/GuildOrderBuyPolicy.h"
-#include "runtime/GuildOrderCancelDepositPolicy.h"
-#include "runtime/GuildOrderCategoryPolicy.h"
 #include "runtime/GuildOrderContract.h"
-#include "runtime/GuildOrderCraftPolicy.h"
-#include "runtime/GuildOrderDeliveryPolicy.h"
-#include "runtime/GuildOrderDisenchantPolicy.h"
-#include "runtime/GuildOrderEnchantLifecyclePolicy.h"
-#include "runtime/GuildOrderEnchantPolicy.h"
-#include "runtime/GuildOrderFishingPolicy.h"
 #include "runtime/GuildOrderGiveUpPolicy.h"
-#include "runtime/GuildOrderKeepPolicy.h"
-#include "runtime/GuildOrderMailPolicy.h"
-#include "runtime/GuildOrderMeetPolicy.h"
 #include "runtime/GuildOrderNeedPolicy.h"
-#include "runtime/GuildOrderPlayerBuyPolicy.h"
-#include "runtime/GuildOrderPoolPolicy.h"
-#include "runtime/GuildOrderPreviewPolicy.h"
-#include "runtime/GuildOrderProtectedItems.h"
-#include "runtime/GuildOrderReagentTree.h"
-#include "runtime/GuildOrderRefundPolicy.h"
-#include "runtime/GuildOrderRelistPolicy.h"
-#include "runtime/GuildOrderSearchPolicy.h"
-#include "runtime/GuildOrderSourcesPolicy.h"
-#include "runtime/GuildOrderStepHistoryPolicy.h"
 #include "runtime/GuildOrderStoreColumns.h"
-#include "runtime/GuildOrderSubOrderPolicy.h"
-#include "runtime/GuildOrderSupplyPolicy.h"
-#include "runtime/GuildOrderTelemetryPolicy.h"
-#include "runtime/GuildOrderWhoSearchPolicy.h"
-#include "runtime/GuildOrderDeliveryQueue.h"
-#include "runtime/GuildOrderRefundQueue.h"
-#include "runtime/GuildOrderRelistQueue.h"
-#include "runtime/GuildOrderSupplyQueue.h"
-#include "runtime/QueuedOrderPolicy.h"
-#include "runtime/WorldThreadQueue.h"
-#include "ai/playerbot/policy/guild/GuildFoundingPolicy.h"
-#include "ai/playerbot/policy/guild/EnchantGatherPolicy.h"
-#include "ai/playerbot/policy/guild/EnchantTradePolicy.h"
 
+#include <cstdlib>
 #include <ctime>
 #include <mutex>
 #include <set>
@@ -358,3 +326,171 @@ void SetDeliveryProvider(IDeliveryProvider* provider) { g_delivery = provider ? 
 
 } // namespace guild_orders
 } // namespace tbhost
+
+namespace TortoiseBots
+{
+namespace h3
+{
+
+bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    Words const words = Split(std::string_view(args));
+    if (words.badToken)
+        return Fail(handler, words, "guildorder", "bad-token", "invalid #token");
+    if (!RequireBuilt(handler, words, "guildorder"))
+        return false;
+    if (words.w.empty())
+        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status");
+
+    std::string const sub = Lower(words.w[0]);
+    Player* sender = SenderPlayer(handler);
+
+    if (sub == "create")
+    {
+        if (words.w.size() < 4)
+            return Fail(handler, words, "guildorder", "usage", "create <bot> <item_id> <amount> [farm|craft|buy]");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
+        uint64_t const guildId = tbhost::guild::GetGuildId(bot);
+        if (!guildId)
+            return Fail(handler, words, "guildorder", "not-in-guild", bot->GetName());
+        if (sender)
+        {
+            if (tbhost::guild::GetGuildId(sender) != guildId)
+                return Fail(handler, words, "guildorder", "wrong-guild", bot->GetName());
+            if (!tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
+                return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+        }
+        uint32_t const itemId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
+        uint32_t const amount = static_cast<uint32_t>(std::strtoul(words.w[3].c_str(), nullptr, 10));
+        if (!itemId || !tbcompat::ItemProto(itemId))
+            return Fail(handler, words, "guildorder", "bad-item", words.w[2]);
+        if (!amount)
+            return Fail(handler, words, "guildorder", "bad-amount", words.w[3]);
+
+        GuildOrders::OrderType orderType = GuildOrders::OrderType::Farm;
+        if (words.w.size() >= 5)
+        {
+            std::string const t = Lower(words.w[4]);
+            if (t == "craft")
+                orderType = GuildOrders::OrderType::Craft;
+            else if (t == "buy")
+                orderType = GuildOrders::OrderType::Buy;
+            else if (t != "farm")
+                return Fail(handler, words, "guildorder", "bad-type", words.w[4]);
+        }
+
+        if (!tbhost::guild_orders::IsOrderStoreAvailable())
+            return Fail(handler, words, "guildorder", "store-unavailable", "tortoise_bots_guild_order missing");
+
+        GuildOrders::OrderRecord rec;
+        rec.botGuidLow = bot->GetGUID().GetCounter();
+        rec.guildId = static_cast<uint32_t>(guildId);
+        rec.giverGuidLow = sender ? sender->GetGUID().GetCounter() : rec.botGuidLow;
+        rec.rootGiverGuidLow = rec.giverGuidLow;
+        rec.type = orderType;
+        rec.itemId = itemId;
+        rec.amount = amount;
+        rec.hours = GuildOrders::kDefaultOrderHours;
+        rec.state = GuildOrders::OrderState::Working;
+        rec.reason = GuildOrders::OrderReason::None;
+        if (!tbhost::guild_orders::GiveOrder(rec))
+            return Fail(handler, words, "guildorder", "store-write-failed", bot->GetName());
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "create").S("bot", bot->GetName()).N("guild", guildId).N("item", itemId).N("want", amount)
+            .S("type", GuildOrders::TypeToken(orderType)).S("state", GuildOrders::StateToken(rec.state));
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    if (sub == "list")
+    {
+        uint32_t guildId = 0;
+        if (words.w.size() >= 2)
+        {
+            if (Player* bot = FindOnline(words.w[1]))
+                guildId = static_cast<uint32_t>(tbhost::guild::GetGuildId(bot));
+            else
+                guildId = static_cast<uint32_t>(std::strtoul(words.w[1].c_str(), nullptr, 10));
+        }
+        else if (sender)
+            guildId = static_cast<uint32_t>(tbhost::guild::GetGuildId(sender));
+
+        if (!guildId)
+            return Fail(handler, words, "guildorder", "no-guild", "specify <bot|guild_id>");
+
+        auto const orders = tbhost::guild_orders::ListOrdersForGuild(guildId);
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        for (auto const& o : orders)
+        {
+            Rec r("guildorder");
+            r.S("op", "list").N("botguid", o.botGuidLow).N("guild", o.guildId).N("item", o.itemId)
+                .N("have", o.delivered).N("want", o.amount)
+                .S("type", GuildOrders::TypeToken(o.type)).S("state", GuildOrders::StateToken(o.state));
+            reply.Line(r);
+        }
+        Rec end("guildorder-end");
+        end.N("guild", guildId);
+        reply.End(end);
+        return true;
+    }
+
+    if (sub == "cancel")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "guildorder", "usage", "cancel <bot>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
+        uint64_t const guildId = tbhost::guild::GetGuildId(bot);
+        if (sender && guildId && !tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
+            return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+        if (!tbhost::guild_orders::CancelOrder(bot->GetGUID().GetCounter()))
+            return Fail(handler, words, "guildorder", "not-found", bot->GetName());
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "cancel").S("bot", bot->GetName()).S("state", "cancelled");
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    if (sub == "status")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "guildorder", "usage", "status <bot>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
+        auto const ord = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "status").S("bot", bot->GetName());
+        if (ord)
+        {
+            r.N("item", ord->itemId).N("have", ord->delivered).N("want", ord->amount)
+                .S("type", GuildOrders::TypeToken(ord->type))
+                .S("state", GuildOrders::StateToken(ord->state))
+                .S("reason", GuildOrders::ReasonToken(ord->reason));
+        }
+        else
+            r.S("state", "none");
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status");
+}
+
+} // namespace h3
+} // namespace TortoiseBots

@@ -292,4 +292,4 @@ ai/playerbot/strategy/actions/ShareQuestAction.cpp
 ai/playerbot/strategy/actions/QuestRewardActions.cpp
 
 # W9: guilds and guild orders
-forever/src/host/TbHostGuildOrders.cpp
+forever/src/slice/SliceGuildOrderHeaders.cpp
