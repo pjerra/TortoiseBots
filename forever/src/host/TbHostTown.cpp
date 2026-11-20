@@ -162,9 +162,11 @@ bool BuyItemFromVendorSlot(Player* bot, Creature* vendor, uint32_t vendorSlot, u
     uint64_t const beforeMoney = bot->GetMoney();
     uint32_t const beforeCount = bot->GetItemCount(itemId, false);
 
-    bool const ok = bot->BuyItemFromVendorSlot(vendor->GetGUID(), vendorSlot, itemId, count, NULL_BAG, NULL_SLOT);
+    // The core's return value is "the vendor row has a limited stock", not "the purchase went through" (Player.cpp, end of
+    // BuyItemFromVendorSlot): the item count is the proof.
+    bot->BuyItemFromVendorSlot(vendor->GetGUID(), vendorSlot, itemId, count, NULL_BAG, NULL_SLOT);
     uint32_t const afterCount = bot->GetItemCount(itemId, false);
-    if (!ok || afterCount <= beforeCount)
+    if (afterCount <= beforeCount)
     {
         if (refusalReason)
             *refusalReason = "buy-failed";
