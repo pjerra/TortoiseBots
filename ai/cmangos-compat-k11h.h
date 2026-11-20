@@ -4,6 +4,9 @@
 // ai/cmangos-compat-shim.h:64 already. Notes: forever/docs/SLICE11-NOTES.md.
 #pragma once
 
+// SwitchToRangedAction (CombatActions.cpp): the swing stop as the bot always made it.
+inline bool AttackStopCompat(Unit* unit, bool targetSwitch) { return unit->AttackStop(targetSwitch); }
+
 // HunterEquipAmmoAction: the ammo field and the ranged damage refresh, as the action always did. Reports success.
 inline bool SetAmmoCompat(Player* bot, uint32 itemId)
 {

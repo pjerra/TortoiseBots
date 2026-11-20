@@ -4,6 +4,14 @@
 // GetCombatDistanceCompat (TbCompat_V.h:233), PetIsHappyCompat (TbCompat_V.h:210), AmmoItemIdCompat (TbCompat_Unported.h:284).
 #pragma once
 
+// Stop a unit's melee swing (SwitchToRangedAction, CombatActions.cpp:45: a hunter leaving its melee kit). T `Unit::AttackStop(bool targetSwitch, bool includingCast,
+// bool includingCombo)`; F `Unit::AttackStop()` (Unit.h:739, Unit.cpp:6262): no arguments. T's `targetSwitch = true` marks "a target change, not a real combat stop" and only
+// skips the creature-only reset at the end of the call; F's body does that reset for creatures unconditionally (Unit.cpp:6281-6284). The only caller is a Player, where
+// both sides do the same: drop the victim, clear the target, interrupt the melee swing, send the stop packet. NOTE: package K10 (branch s10/k, TbCompat_S10.h) adds the
+// same helper under the same name and body for BalanceDruidStrategy.cpp; the two wrappers are never in one translation unit, and at the merge one definition stays (the
+// same name, signature and answer).
+inline bool AttackStopCompat(Unit* unit, bool /*targetSwitch*/) { return unit->AttackStop(); }
+
 // Make `itemId` the ammo the ranged weapon draws from. T writes the PLAYER_AMMO_ID field and refreshes the ranged damage
 // (`UpdateDamagePhysical(RANGED_ATTACK)`), and always reports success. F `Player::SetAmmo` (Player.cpp:10567) refuses an item that is not
 // a projectile, that the bot does not hold or cannot use (false: nothing changed), and refreshes the ranged damage itself when the ammo

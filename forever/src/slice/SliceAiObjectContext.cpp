@@ -17,8 +17,10 @@
 #include "playerbot/strategy/actions/AddLootAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
+#include "playerbot/strategy/actions/CombatActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
@@ -47,12 +49,14 @@
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
+#include "playerbot/strategy/triggers/ChatCommandTrigger.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
 #include "playerbot/strategy/triggers/LootTriggers.h"
 #include "playerbot/strategy/triggers/PullTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
 #include "playerbot/strategy/triggers/WorldPacketTrigger.h"
+#include "playerbot/strategy/values/ActiveSpellValue.h"
 #include "playerbot/strategy/values/AlwaysLootListValue.h"
 #include "playerbot/strategy/values/AoeHealValues.h"
 #include "playerbot/strategy/values/AoeValues.h"
@@ -180,7 +184,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (39 of its keys)
+    // the registry of ActionContext (46 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -225,10 +229,17 @@ namespace slice
             creators["threat reset white stop noop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopNoopAction(ai); };
             creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
             creators["reach party member to resurrect"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToResurrectAction(ai); };
+            creators["initialize pet"] = [](PlayerbotAI* ai) { return new InitializePetAction(ai); };
+            creators["toggle pet spell"] = [](PlayerbotAI* ai) { return new TogglePetSpellAutoCastAction(ai); };
+            creators["set pet stance"] = [](PlayerbotAI* ai) { return new SetPetStanceAction(ai); };
+            creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackAction(ai); };
+            creators["cancel channel"] = [](PlayerbotAI* ai) { return new CancelChannelAction(ai); };
+            creators["switch to melee"] = [](PlayerbotAI* ai) { return new SwitchToMeleeAction(ai); };
+            creators["switch to ranged"] = [](PlayerbotAI* ai) { return new SwitchToRangedAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (6 of its keys)
+    // the registry of ChatActionContext (7 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -240,6 +251,7 @@ namespace slice
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
+            creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
         }
     };
 
@@ -255,7 +267,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (74 of its keys)
+    // the registry of TriggerContext (83 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -335,6 +347,25 @@ namespace slice
             creators["threat reset white stop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopTrigger(ai); };
             creators["party member dead"] = [](PlayerbotAI* ai) { return new PartyMemberDeadTrigger(ai); };
             creators["resurrect"] = [](PlayerbotAI* ai) { return new ResurrectTrigger(ai); };
+            creators["no pet"] = [](PlayerbotAI* ai) { return new NoPetTrigger(ai); };
+            creators["has pet"] = [](PlayerbotAI* ai) { return new HasPetTrigger(ai); };
+            creators["new pet"] = [](PlayerbotAI* ai) { return new NewPetTrigger(ai); };
+            creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackTrigger(ai); };
+            creators["enemy ten yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy ten yards", 10.0f); };
+            creators["enemy fifteen yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy fifteen yards", 15.0f); };
+            creators["low mana"] = [](PlayerbotAI* ai) { return new LowManaTrigger(ai); };
+            creators["target of attacker close"] = [](PlayerbotAI* ai) { return new TargetOfAttackerClose(ai); };
+            creators["has aggro in raid group"] = [](PlayerbotAI* ai) { return new HasAggroInRaidGroupTrigger(ai); };
+        }
+    };
+
+    // the registry of ChatTriggerContext (1 of its keys)
+    class SliceChatTriggerContext : public NamedObjectContext<Trigger>
+    {
+    public:
+        SliceChatTriggerContext()
+        {
+            creators["pet"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "pet"); };
         }
     };
 
@@ -348,7 +379,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (170 of its keys)
+    // the registry of ValueContext (173 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -524,11 +555,14 @@ namespace slice
             creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
             creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
             creators["party member to resurrect"] = [](PlayerbotAI* ai) { return new PartyMemberToResurrect(ai); };
+            creators["pet dead"] = [](PlayerbotAI* ai) { return new PetIsDeadValue(ai); };
+            creators["pet happy"] = [](PlayerbotAI* ai) { return new PetIsHappyValue(ai); };
+            creators["active spell"] = [](PlayerbotAI* ai) { return new ActiveSpellValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 17, kActions = 48, kTriggers = 75, kValues = 170;
+    constexpr unsigned kStrategies = 17, kActions = 56, kTriggers = 85, kValues = 173;
 }
 }
 
@@ -542,6 +576,7 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     actionContexts.Add(new slice::SliceChatActionContext());
     actionContexts.Add(new slice::SliceWorldPacketActionContext());
     triggerContexts.Add(new slice::SliceTriggerContext());
+    triggerContexts.Add(new slice::SliceChatTriggerContext());
     triggerContexts.Add(new slice::SliceWorldPacketTriggerContext());
     valueContexts.Add(new slice::SliceValueContext());
 

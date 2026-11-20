@@ -1,6 +1,6 @@
-# Slice 5 (plan + run core): SLICE4.txt plus the plan loader of FOREVER-RUN-S5S6-SPEC section 4.2 (DungeonPlanMgr.cpp, BossTacticsMgr.cpp;
-# their headers DungeonPlanPolicy.h, DungeonPlanReloadPolicy.h, BossTacticsPolicy.h, BossTacticsMgr.h come with them).
-# One path per line. Used by: FOREVER_SLOT=1 FOREVER_CENSUS_LIST=forever/SLICE5.txt forever/tools/vm-census.sh "" 14
+# Slice 11 (hunter, warlock and their pets): SLICE5.txt (SLICE4 plus the plan loader) plus the 22 class .cpp of strategy/hunter and strategy/warlock, and the 4 files the
+# registered keys of FOREVER-SLICE11-PETS-SPEC section 3 need (CancelChannelAction.cpp, CombatActions.cpp: switch to melee / ranged, ActiveSpellValue.cpp: active spell).
+# Their headers come with them. One path per line. Used by: FOREVER_SLOT=8 FOREVER_CENSUS_LIST=forever/SLICE11.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
 ai/playerbot/BotLog.cpp
@@ -199,3 +199,6 @@ ai/playerbot/strategy/warlock/WarlockAiObjectContext.cpp
 ai/playerbot/strategy/warlock/WarlockMultipliers.cpp
 ai/playerbot/strategy/warlock/WarlockStrategy.cpp
 ai/playerbot/strategy/warlock/WarlockTriggers.cpp
+ai/playerbot/strategy/actions/CancelChannelAction.cpp
+ai/playerbot/strategy/actions/CombatActions.cpp
+ai/playerbot/strategy/values/ActiveSpellValue.cpp

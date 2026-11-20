@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 STRAT = os.path.join(ROOT, "ai", "playerbot", "strategy")
 SLICE_CTX = os.path.join(ROOT, "forever", "src", "slice", "SliceAiObjectContext.cpp")
-SLICE_LIST = os.path.join(ROOT, "forever", "SLICE5.txt")   # slice 5: the list the keys are closed against (CMake reads the same file)
+SLICE_LIST = os.path.join(ROOT, "forever", "SLICE11.txt")   # slice 11: the list the keys are closed against (CMake reads the same file)
 SLICE_GUARD = os.path.join(ROOT, "forever", "src", "slice", "SliceMissingKeyGuard.h")
 
 # Full-build registries, in the order AiObjectContext::AiObjectContext adds them (first context wins a lookup).
@@ -36,7 +36,9 @@ FULL = {
 # The class context the slice compiles unchanged: it registers its own keys on top of the slice's generic ones.
 WARRIOR = os.path.join(STRAT, "warrior", "WarriorAiObjectContext.cpp")
 PRIEST = os.path.join(STRAT, "priest", "PriestAiObjectContext.cpp")   # slice 2 (R3): the second class context, compiled as it is
-CLASS_CONTEXTS = (WARRIOR, PRIEST)
+HUNTER = os.path.join(STRAT, "hunter", "HunterAiObjectContext.cpp")     # slice 11 (H11): the hunter and warlock contexts, compiled as they are
+WARLOCK = os.path.join(STRAT, "warlock", "WarlockAiObjectContext.cpp")
+CLASS_CONTEXTS = (WARRIOR, PRIEST, HUNTER, WARLOCK)
 KINDS = ("strategy", "action", "trigger", "value")
 CTX_TYPE = {"Strategy": "strategy", "Action": "action", "Trigger": "trigger", "UntypedValue": "value"}
 

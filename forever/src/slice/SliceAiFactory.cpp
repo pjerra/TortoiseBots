@@ -24,6 +24,13 @@
 // combat "protection", "tank assist", "pull", "close", "tank face"; non-combat "protection", "tank assist", "follow", "food", "default". Any other
 // warrior (dps): the arms kit as before plus "threat" (where KeepsPartyThreatBackoff says so) and non-combat "food". The priest gets "threat" the same
 // way. Left out on purpose (spec): "pull back", "behind", "aoe", "cc", "boost", "should pull" (autonomous pulls), "chat".
+// Slice 11 (FOREVER-SLICE11-PETS-SPEC sections 2 and 10, lead decisions D1-D6; forever/docs/SLICE11-NOTES.md): a hunter and a warlock get their own contexts
+// (HunterAiObjectContext, WarlockAiObjectContext, compiled as they are), a damage role, and these kits. Hunter on tab 1 (marksmanship, the tab the full factory's
+// `else` gives it; the slice never reads talents): combat "marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff" (+ "threat" where
+// KeepsPartyThreatBackoff says so); non-combat "marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default"; reaction "marksmanship".
+// Warlock on tab 0 (affliction): combat "affliction", "dps assist", "ranged", "pet", "curse", "buff" (+ "threat"); non-combat "affliction", "dps assist", "pet",
+// "pet voidwalker", "buff", "follow", "food", "default"; reaction "affliction". Left out on purpose (the spec's list): the full kits' "cc" (Scare Beast, Freezing
+// Trap through Feign Death, Fear), "aoe" (Multi-Shot, Rain of Fire), "boost", the warlock's "flee".
 #include "compat/botpch_forever.h"
 #include "playerbot/playerbot.h"
 #include "playerbot/AiFactory.h"
@@ -31,6 +38,8 @@
 #include "playerbot/strategy/ReactionEngine.h"
 #include "playerbot/strategy/warrior/WarriorAiObjectContext.h"
 #include "playerbot/strategy/priest/PriestAiObjectContext.h"
+#include "playerbot/strategy/hunter/HunterAiObjectContext.h"
+#include "playerbot/strategy/warlock/WarlockAiObjectContext.h"
 #include "../../../runtime/PlayerbotAIStorage.h"
 #include "../../../runtime/CommandedGroupQuery.h"
 #include "../../../runtime/RemoteCommanderPolicy.h"
@@ -44,6 +53,10 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* a
     // is); another class would run on the warrior's kit, so say so once.
     if (player && player->GetClass() == CLASS_PRIEST)
         return new slice::GuardedContext<PriestAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_HUNTER)
+        return new slice::GuardedContext<HunterAiObjectContext>(ai);
+    if (player && player->GetClass() == CLASS_WARLOCK)
+        return new slice::GuardedContext<WarlockAiObjectContext>(ai);
 
     static bool warned = false;
     if (player && player->GetClass() != CLASS_WARRIOR && !warned)
@@ -54,9 +67,13 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* a
     return new slice::GuardedContext<WarriorAiObjectContext>(ai);
 }
 
-int AiFactory::GetPlayerSpecTab(const Player* /*player*/)
+int AiFactory::GetPlayerSpecTab(const Player* player)
 {
-    return 0; // arms
+    // The slice never reads talents. A hunter is marksmanship (tab 1: AiFactory.cpp:858-873 gives it that tab without talents); every other class keeps tab 0
+    // (warrior arms, priest discipline, warlock affliction).
+    if (player && player->GetClass() == CLASS_HUNTER)
+        return 1;
+    return 0;
 }
 
 std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* /*player*/)
@@ -135,6 +152,9 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
     // A priest on tab 0 or 1 (discipline, holy: the only tabs the slice gives it) heals (AiFactory.cpp GetPlayerRoles(cls, tab): tab 2 is dps).
     if (player && player->GetClass() == CLASS_PRIEST)
         return BOT_ROLE_HEALER;
+    // Slice 11: a hunter and a warlock are damage (the Voidwalker off-tanks by order only: spec decision D4).
+    if (player && (player->GetClass() == CLASS_HUNTER || player->GetClass() == CLASS_WARLOCK))
+        return BOT_ROLE_DPS;
     return BOT_ROLE_NONE;
 }
 
@@ -147,6 +167,10 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         // (slice 3: a commanded healer backs off the tank's threat).
         combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", "heal interrupt", NULL);
     }
+    else if (player && player->GetClass() == CLASS_HUNTER)
+        combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff", NULL);
+    else if (player && player->GetClass() == CLASS_WARLOCK)
+        combatEngine->addStrategies("affliction", "dps assist", "ranged", "pet", "curse", "buff", NULL);
     else if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.
@@ -166,6 +190,16 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     if (player && player->GetClass() == CLASS_PRIEST)
     {
         nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "default", NULL);
+        return;
+    }
+    if (player && player->GetClass() == CLASS_HUNTER)
+    {
+        nonCombatEngine->addStrategies("marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default", NULL);
+        return;
+    }
+    if (player && player->GetClass() == CLASS_WARLOCK)
+    {
+        nonCombatEngine->addStrategies("affliction", "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default", NULL);
         return;
     }
     if (WarriorIsTank(player, facade))
@@ -197,7 +231,17 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
     // never left it (R8 observation d).
     // The tank's spec strategy, as AiFactory.cpp:2085 (a warrior on the protection tab).
-    reactionEngine->addStrategy(player && player->GetClass() == CLASS_PRIEST ? "discipline" : (WarriorIsTank(player, facade) ? "protection" : "arms"));
+    // Slice 11: the hunter's "marksmanship" and the warlock's "affliction" (AiFactory.cpp:2034-2060 and :2138-2152, tab 1 and tab 0).
+    char const* spec = "arms";
+    if (player && player->GetClass() == CLASS_PRIEST)
+        spec = "discipline";
+    else if (player && player->GetClass() == CLASS_HUNTER)
+        spec = "marksmanship";
+    else if (player && player->GetClass() == CLASS_WARLOCK)
+        spec = "affliction";
+    else if (WarriorIsTank(player, facade))
+        spec = "protection";
+    reactionEngine->addStrategy(spec);
 }
 
 Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade, AiObjectContext* AiObjectContext)

@@ -93,7 +93,18 @@ SLICE4_KEYS = {
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
-KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k]).split(",")] for k in SLICE_KEYS}
+# Slice 11 (package H11, FOREVER-SLICE11-PETS-SPEC sections 3 and 10, listed with creator file:line in forever/docs/SLICE11-NOTES.md section 5): the generic pet keys the hunter and
+# warlock kits fire, and the hunter's dead-zone and range keys. Left unregistered on purpose (each one makes the bot do less, spec section 3): the chat `tame` action and
+# trigger (TameAction.cpp stays out), `flee with pet`, `boss tactics seek pet`, `thaddius *`, `manual saved string` (so `choice pet`, `choice sting`, `choice aspect` and
+# `.bot choice` stay off, as S10 D5), `apply oil`, `apply stone`, `equip upgrades`, `dispel enrage` (Tranquilizing Shot is level 60), `player has flag`, `nearest stealthed unit`,
+# `warlock spread attacker my aura` (the raid DoT spread), `aoe fear`. `pet target` is registered since slice 1.
+SLICE11_KEYS = {
+    "strategy": "",
+    "action": "initialize pet, toggle pet spell, set pet stance, pet attack, pet, cancel channel, switch to melee, switch to ranged",
+    "trigger": "no pet, has pet, new pet, pet attack, pet, enemy ten yards, enemy fifteen yards, low mana, target of attacker close, has aggro in raid group",
+    "value": "pet dead, pet happy, active spell",
+}
+KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k] + ", " + SLICE3_KEYS[k] + ", " + SLICE4_KEYS[k] + ", " + SLICE11_KEYS[k]).split(",") if x.strip()] for k in SLICE_KEYS}
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
@@ -101,7 +112,8 @@ BASE_T = {"strategy": "Strategy", "action": "Action", "trigger": "Trigger", "val
 LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "SliceMovementStrategyContext",
          "AssistStrategyContext": "SliceAssistStrategyContext", "ActionContext": "SliceActionContext",
          "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
-         "TriggerContext": "SliceTriggerContext", "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
+         "TriggerContext": "SliceTriggerContext", "ChatTriggerContext": "SliceChatTriggerContext",
+         "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",
          "ValueContext": "SliceValueContext"}
 
 
