@@ -119,11 +119,14 @@ inline void RegisterDirectPacketCasesCompat() {}
 
 inline uint32 WorldAverageDiffCompat() { return sWorld.GetAverageDiff(); }
 
-template <class Handler>
-inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+// ChatHandler::ExtractKeyFromLink is a protected base member of PlayerbotChatHandler (protected inheritance), so this free
+// function cannot name it; W3's pointer form failed here (`ai/playerbot/PlayerbotAI.cpp`: "'ExtractKeyFromLink' is protected
+// within this context", "'ChatHandler' is not an accessible base"). The caller therefore passes the call as a block: its body
+// is compiled in the member's context, where the base member is reachable, exactly as extractSpellId's block is.
+template <class Handler, class Block>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string /*str*/, Block&& block)
 {
-    char* source = (char*)str.c_str();
-    char* cId = handler->ExtractKeyFromLink(&source, "Hquest");
+    char* cId = block(handler);
     return cId ? atol(cId) : 0;
 }
 inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(z); }
