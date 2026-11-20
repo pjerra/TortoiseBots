@@ -405,4 +405,53 @@ inline std::vector<GearItemCandidate> RankCandidatesForSlot(std::vector<GearItem
     return out;
 }
 
+struct CreatedItemCleanup
+{
+    bool destroyByGuid = false;
+    uint64_t destroyGuid = 0;
+    uint32_t destroyEntryCount = 0;
+};
+
+inline CreatedItemCleanup DecideFailedSwapCleanup(uint64_t createdInstanceGuid, uint32_t /*itemId*/)
+{
+    if (createdInstanceGuid == 0)
+        return { false, 0, 0 };
+    return { true, createdInstanceGuid, 0 };
+}
+
+inline std::vector<GearItemCandidate> FilterCandidatesForSlot(std::vector<GearItemCandidate> const& pool,
+                                                              uint8_t playerClass,
+                                                              std::string_view rawSpec,
+                                                              uint32_t level,
+                                                              uint8_t slot,
+                                                              uint8_t maxQuality,
+                                                              bool canDualWield,
+                                                              bool mainHandIsTwoHanded,
+                                                              std::vector<uint32_t> const& alreadyPickedIds = {})
+{
+    std::vector<GearItemCandidate> out;
+    for (GearItemCandidate const& c : pool)
+    {
+        if (!CandidateFitsSlotPolicy(c, playerClass, rawSpec, level, slot, maxQuality, canDualWield, mainHandIsTwoHanded))
+            continue;
+        if (std::find(alreadyPickedIds.begin(), alreadyPickedIds.end(), c.itemId) != alreadyPickedIds.end())
+            continue;
+        out.push_back(c);
+    }
+    return out;
+}
+
+inline void SortCandidatesForSlot(std::vector<GearItemCandidate>& out)
+{
+    std::sort(out.begin(), out.end(), [](GearItemCandidate const& a, GearItemCandidate const& b) {
+        if (a.score != b.score)
+            return a.score > b.score;
+        if (a.quality != b.quality)
+            return a.quality > b.quality;
+        if (a.itemLevel != b.itemLevel)
+            return a.itemLevel > b.itemLevel;
+        return a.itemId < b.itemId;
+    });
+}
+
 } // namespace ai

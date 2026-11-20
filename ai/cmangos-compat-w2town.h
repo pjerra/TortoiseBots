@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Mail/Mail.h"
+#include "playerbot/policy/town/TownErrandPolicy.h"
 
 inline Creature* VendorIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 {
@@ -220,4 +221,14 @@ inline void MailDeleteCompat(Player* bot, ObjectGuid const& mailbox, uint32 mail
     packet << mailbox;
     packet << mailId;
     bot->GetSession()->HandleMailDelete(packet);
+}
+
+inline bool MailRequiresMailboxCompat()
+{
+    return false;
+}
+
+inline bool MailTakeAfterResultCompat(uint32 confirmedTakes)
+{
+    return ai::MailTakeAfterResult(false, confirmedTakes);
 }
