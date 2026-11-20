@@ -60,3 +60,15 @@ with four one-line definitions in `TbDashboard.cpp`. Then the four functions of 
 * A run's `changed` is the time of its newest event (the run keeps no per-field change time).
 * Role comes from `BotMgr::DescribeBrain` (cached 10 s per bot), the same read the roster does; empty while the engine is off.
 * `driver` is `human` (no config key; the spec added none).
+
+## Live check (pending: both test servers were taken by other sessions)
+
+Done instead, on the laptop: the Go daemon built from this branch (`-core forever -dev-no-auth -trace-dir <dir>`) took the golden COMMANDERS datagram, a roster batch and a DUNGEON_MOBS of the roster sender's format over UDP: `/api/v1/commanders` answered one fresh binding (Mcmd, lead Mtank, 3 bots, ragefire_chasm running 3/6, leg entrance, 3 plan_steps, 4 notes, `orders:[]`), `/api/v1/dungeons` the copy `389:3` with 3 bots, `/api/v1/raids` the copy `409:13` (roster only, `live:false`), `/api/v1/dungeon-runs` the fixture summary (Ragefire Chasm, cleared, human), `/api/v1/core` the not-ported answer, and the served page carries the three notice boxes.
+
+Procedure for the real server (the ON image is saved on the VM as `~/forever-build/worldserver-dashruns-on`, built from commit "sObjectMgr is a reference..." of this branch; rebuild slot 6 for the last commit):
+
+1. Stop the world, back up `bin/worldserver`, copy the ON binary in (RUN2 notes), set `TortoiseBots.Dashboard.RunSummaryDir = "/home/pk/dash-runs-traces"` in `etc/worldserver.conf.d/tortoisebots.conf`, start.
+2. `TBDASH_TRACE_DIR=/home/pk/dash-runs-traces HTTP_HOST=127.0.0.1 tools/observability/run-dashboard-forever.sh` (binary built with `go build ./cmd/server`; DB port of the test server, `-data-dir` = the LogsDir of the world), then `ssh -L 8095:127.0.0.1:8095 yulon-ubuntu2`.
+3. `.tb run start` on the S6 Ragefire Chasm party; check `/api/v1/commanders` (state running, step advancing), `/api/v1/dungeons` (`389:<inst>`, 5 bots), `/api/v1/raids` (empty, notice shown), `/api/v1/plans/ragefire_chasm` (TC fallback; U4 predicted a 1054 on the old query).
+4. `.tb run stop` (or let it finish): one file in the trace dir, `/api/v1/dungeon-runs` lists it with outcome and counts, and the Commander card shows `stopped` for 30 s and then the empty list clears it.
+5. `.tb run status all`: `tick_avg_us` unchanged; the log prints every 60 s "dashboard runs feed N cycles ... us each on average" (expect well under 200 us).
