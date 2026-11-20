@@ -1,6 +1,7 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "TbDashboard.h"
+#include "dash/TbDashRuns.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
@@ -106,6 +107,7 @@ public:
     {
         BotMgr::Instance().LoadConfig();
         TortoiseBots::Dashboard::LoadConfig();
+        TortoiseBots::DashRuns::LoadConfig();
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -116,6 +118,7 @@ public:
     {
         BotMgr::Instance().LoadConfig();
         TortoiseBots::Dashboard::LoadConfig();
+        TortoiseBots::DashRuns::LoadConfig();
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
@@ -157,6 +160,7 @@ public:
         perf.botMaxUs = std::max(perf.botMaxUs, us);
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
+        TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
 #endif
     }
 
