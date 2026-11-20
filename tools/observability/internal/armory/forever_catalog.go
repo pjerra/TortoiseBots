@@ -10,14 +10,17 @@ import (
 	"tortoise-observability/internal/foreveritems"
 )
 
+// ForeverTalent is one talent of a class tab as the Forever client draws it (the module's trait-data layout): the trait
+// node and node entry a character's character_trait_entry rows name, its spell, name, icon, max rank and place.
 type ForeverTalent struct {
-	ID    uint32   `json:"id"`
-	Class uint32   `json:"class"`
-	Tab   uint32   `json:"tab"`
-	Tier  uint32   `json:"tier"`
-	Col   uint32   `json:"col"`
-	Spell uint32   `json:"spell"`
-	Ranks []uint32 `json:"ranks"`
+	Node  uint32 `json:"node"`
+	Entry uint32 `json:"entry"`
+	Spell uint32 `json:"spell"`
+	Name  string `json:"name"`
+	Icon  uint32 `json:"icon"`
+	Max   uint32 `json:"max"`
+	Row   uint32 `json:"row"`
+	Col   uint32 `json:"col"`
 }
 
 type ForeverTalentTab struct {
@@ -32,7 +35,7 @@ type ForeverTalentTab struct {
 // ForeverCatalog is the profile's talent data; spells, spell text, skills and factions come from Lookups, the one
 // reader of the module's data files and the client's spell text.
 type ForeverCatalog struct {
-	Talents    []ForeverTalent
+	Talents    map[uint32][][]ForeverTalent // class -> its tabs left to right -> talents
 	TalentTabs map[uint32]ForeverTalentTab
 	Lookups    *foreveritems.Lookups
 }
@@ -57,13 +60,19 @@ func (c *ForeverCatalog) loadTalents(path string) {
 		return
 	}
 	var doc struct {
-		Talents []ForeverTalent `json:"talents"`
+		Classes []struct {
+			Class uint32            `json:"class"`
+			Tabs  [][]ForeverTalent `json:"tabs"`
+		} `json:"classes"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		log.Printf("[Armory] forever talents parse %s: %v", path, err)
 		return
 	}
-	c.Talents = doc.Talents
+	c.Talents = make(map[uint32][][]ForeverTalent, len(doc.Classes))
+	for _, cl := range doc.Classes {
+		c.Talents[cl.Class] = cl.Tabs
+	}
 }
 
 func (c *ForeverCatalog) loadTalentTabs(path string) {

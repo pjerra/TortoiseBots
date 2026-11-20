@@ -183,10 +183,9 @@ func (s *Service) foreverItemMeta(entry uint32, curDurability *uint32) (name str
 func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 	var profile BotProfile
 
-	var activeTalentGroup uint8
 	summaryQuery := `
 		SELECT c.guid, c.name, c.race, c.class, c.gender, c.level, c.money, c.totaltime, c.online, c.zone, c.map,
-		       c.leveltime, c.xp, c.rest_bonus, c.restState, c.honor, c.honorLevel, c.totalKills, c.todayKills, c.yesterdayKills, c.activeTalentGroup
+		       c.leveltime, c.xp, c.rest_bonus, c.restState, c.honor, c.honorLevel, c.totalKills, c.todayKills, c.yesterdayKills
 		FROM characters c
 		WHERE c.guid = ? AND c.deleteDate IS NULL
 	`
@@ -197,7 +196,7 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 		&profile.Summary.Zone, &profile.Summary.Map,
 		&profile.Summary.LevelTime, &profile.Summary.XP, &profile.Summary.RestBonus,
 		&profile.Summary.RestState, &profile.Summary.Honor, &profile.Summary.HonorLevel,
-		&profile.Summary.TotalKills, &profile.Summary.TodayKills, &profile.Summary.YesterdayKills, &activeTalentGroup)
+		&profile.Summary.TotalKills, &profile.Summary.TodayKills, &profile.Summary.YesterdayKills)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("bot %d not found", guid)
@@ -323,7 +322,6 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 
 	// Spells: character_spell + ForeverCore spells catalog (+ spells-text when present).
 	profile.Spells = []SpellEntry{}
-	knownSpells := map[uint32]bool{}
 	spRows, err := s.db.Query("SELECT spell, active, disabled FROM character_spell WHERE guid = ? ORDER BY spell", guid)
 	if err != nil {
 		return nil, err
@@ -335,7 +333,6 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 		if err := spRows.Scan(&spellID, &active, &disabled); err != nil {
 			return nil, err
 		}
-		knownSpells[spellID] = true
 		profile.Spells = append(profile.Spells, s.foreverSpellEntry(spellID, active, disabled))
 	}
 	if err := spRows.Err(); err != nil {
@@ -368,7 +365,7 @@ func (s *Service) getBotProfileForever(guid uint32) (*BotProfile, error) {
 	}
 
 	// Talents: character_talent + ForeverCore talents catalog + talent-tabs.
-	talents, err := s.loadTalentsForever(guid, profile.Summary.Class, activeTalentGroup, knownSpells)
+	talents, err := s.loadTalentsForever(guid, profile.Summary.Class)
 	if err != nil {
 		return nil, err
 	}
@@ -801,39 +798,43 @@ func (s *Service) resolveForeverProfessions(bots []BotSummary) {
 	}
 }
 
-func (s *Service) loadTalentsForever(guid uint32, classID uint8, activeGroup uint8, knownSpells map[uint32]bool) ([]TalentTree, error) {
+// foreverTraitRanksQuery reads the ranks of the active combat trait config (type 1, flag ActiveForSpec): Forever keeps
+// a character's talents as trait entries, not in character_talent.
+const foreverTraitRanksQuery = `
+	SELECT e.guid, e.traitNodeId, e.rank
+	FROM character_trait_entry e
+	JOIN character_trait_config c ON c.guid = e.guid AND c.traitConfigId = e.traitConfigId
+	WHERE e.guid IN (%s) AND c.type = 1 AND (c.combatConfigFlags & 1) <> 0 AND e.rank > 0`
+
+func (s *Service) loadTalentsForever(guid uint32, classID uint8) ([]TalentTree, error) {
 	if s.cfg.ForeverData == nil || len(s.cfg.ForeverData.Talents) == 0 {
 		return []TalentTree{}, nil
 	}
-	activeTalents := map[uint32]bool{}
-	rows, err := s.db.Query("SELECT talentId, talentGroup FROM character_talent WHERE guid = ?", guid)
+	ranks := map[uint32]uint32{}
+	rows, err := s.db.Query(fmt.Sprintf(foreverTraitRanksQuery, "?"), guid)
 	if err != nil {
 		if isMissingTable(err) {
-			return []TalentTree{}, nil
+			return buildForeverTalents(s.cfg.ForeverData, classID, ranks), nil
 		}
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var talentID uint32
-		var group uint8
-		if err := rows.Scan(&talentID, &group); err != nil {
+		var g, node, rank uint32
+		if err := rows.Scan(&g, &node, &rank); err != nil {
 			return nil, err
 		}
-		if group == activeGroup {
-			activeTalents[talentID] = true
-		}
+		ranks[node] += rank
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return buildForeverTalents(s.cfg.ForeverData, classID, knownSpells, activeTalents), nil
+	return buildForeverTalents(s.cfg.ForeverData, classID, ranks), nil
 }
 
-func buildForeverTalents(cat *ForeverCatalog, classID uint8, knownSpells map[uint32]bool, activeTalents map[uint32]bool) []TalentTree {
-	if cat == nil || classID == 0 {
-		return []TalentTree{}
-	}
+// foreverClassTabs is the class's tab metadata (name, icon) in the client's order, which is the left-to-right order of
+// the tabs in the trait tree.
+func foreverClassTabs(cat *ForeverCatalog, classID uint8) []ForeverTalentTab {
 	classMask := uint32(1) << (classID - 1)
 	var tabs []ForeverTalentTab
 	for _, tab := range cat.TalentTabs {
@@ -841,87 +842,40 @@ func buildForeverTalents(cat *ForeverCatalog, classID uint8, knownSpells map[uin
 			tabs = append(tabs, tab)
 		}
 	}
-	if len(tabs) == 0 {
-		return []TalentTree{}
-	}
 	sort.Slice(tabs, func(i, j int) bool {
 		if tabs[i].Order != tabs[j].Order {
 			return tabs[i].Order < tabs[j].Order
 		}
 		return tabs[i].ID < tabs[j].ID
 	})
+	return tabs
+}
 
-	trees := make([]TalentTree, len(tabs))
-	byTab := make(map[uint32]int, len(tabs))
-	for i, tab := range tabs {
-		trees[i] = TalentTree{
-			TabID:   tab.ID,
-			Name:    tab.Name,
-			Page:    tab.Order,
-			Talents: []TalentNode{},
-		}
-		byTab[tab.ID] = i
+func buildForeverTalents(cat *ForeverCatalog, classID uint8, ranks map[uint32]uint32) []TalentTree {
+	if cat == nil || classID == 0 {
+		return []TalentTree{}
 	}
-
-	for _, t := range cat.Talents {
-		idx, ok := byTab[t.Tab]
-		if !ok || len(t.Ranks) == 0 {
-			continue
+	layout := cat.Talents[uint32(classID)]
+	meta := foreverClassTabs(cat, classID)
+	trees := make([]TalentTree, 0, len(layout))
+	for i, tab := range layout {
+		tree := TalentTree{Page: uint32(i), Name: fmt.Sprintf("Tab %d", i+1), Talents: []TalentNode{}}
+		if i < len(meta) {
+			tree.TabID, tree.Name = meta[i].ID, meta[i].Name
 		}
-		// Talent.db2 keeps rows whose spells this client no longer has (no spell name anywhere): the client shows no such talent.
-		if _, exists := cat.Lookups.GetSpell(t.Ranks[0]); !exists && cat.Lookups.HasSpells() {
-			continue
-		}
-		maxRank := uint32(len(t.Ranks))
-		rank := uint32(0)
-		spellID := t.Ranks[0]
-		for i, rs := range t.Ranks {
-			if rs != 0 && knownSpells[rs] {
-				rank = uint32(i + 1)
-				spellID = rs
+		for _, t := range tab {
+			rank := min(ranks[t.Node], t.Max)
+			node := TalentNode{TalentID: t.Node, Row: t.Row, Col: t.Col, Rank: rank, MaxRank: t.Max, SpellID: t.Spell, Name: t.Name}
+			if t.Icon > 0 {
+				node.Icon = fmt.Sprintf("%d", t.Icon)
 			}
-		}
-		if rank == 0 && activeTalents[t.ID] {
-			rank = 1
-		}
-		name := fmt.Sprintf("Talent #%d", t.ID)
-		icon := ""
-		if sp, ok := cat.Lookups.GetSpell(spellID); ok {
-			if sp.Name != "" {
-				name = sp.Name
+			if st, ok := cat.Lookups.GetSpellText(t.Spell); ok {
+				node.Description = st.Desc
 			}
-			if sp.Icon > 0 {
-				icon = fmt.Sprintf("%d", sp.Icon)
-			}
+			tree.Talents = append(tree.Talents, node)
+			tree.Points += rank
 		}
-		desc := ""
-		if st, ok := cat.Lookups.GetSpellText(spellID); ok {
-			desc = st.Desc
-		}
-		trees[idx].Talents = append(trees[idx].Talents, TalentNode{
-			TalentID:    t.ID,
-			Row:         t.Tier,
-			Col:         t.Col,
-			Rank:        rank,
-			MaxRank:     maxRank,
-			SpellID:     spellID,
-			Name:        name,
-			Icon:        icon,
-			Description: desc,
-		})
-		trees[idx].Points += rank
-	}
-
-	for i := range trees {
-		sort.Slice(trees[i].Talents, func(a, b int) bool {
-			if trees[i].Talents[a].Row != trees[i].Talents[b].Row {
-				return trees[i].Talents[a].Row < trees[i].Talents[b].Row
-			}
-			if trees[i].Talents[a].Col != trees[i].Talents[b].Col {
-				return trees[i].Talents[a].Col < trees[i].Talents[b].Col
-			}
-			return trees[i].Talents[a].TalentID < trees[i].Talents[b].TalentID
-		})
+		trees = append(trees, tree)
 	}
 	return trees
 }
@@ -944,118 +898,34 @@ func foreverSpecFromTrees(trees []TalentTree) string {
 }
 
 func (s *Service) resolveForeverSpecs(bots []BotSummary) {
-	if len(bots) == 0 || s.cfg.ForeverData == nil {
+	if len(bots) == 0 || s.cfg.ForeverData == nil || len(s.cfg.ForeverData.Talents) == 0 {
 		return
 	}
 	guids := make([]uint32, len(bots))
-	byGUID := make(map[uint32]int, len(bots))
 	for i, b := range bots {
 		guids[i] = b.GUID
-		byGUID[b.GUID] = i
 	}
 	ph, args := inList(guids)
-	rows, err := s.db.Query(fmt.Sprintf(`
-		SELECT ct.guid, ct.talentId
-		FROM character_talent ct
-		JOIN characters c ON c.guid = ct.guid
-		WHERE ct.guid IN (%s) AND ct.talentGroup = c.activeTalentGroup
-	`, ph), args...)
+	rows, err := s.db.Query(fmt.Sprintf(foreverTraitRanksQuery, ph), args...)
 	if err != nil {
 		return
 	}
-	defer rows.Close()
-
-	talentTab := make(map[uint32]uint32, len(s.cfg.ForeverData.Talents))
-	for _, t := range s.cfg.ForeverData.Talents {
-		talentTab[t.ID] = t.Tab
-	}
-	ptsByBot := map[uint32]map[uint32]uint32{}
+	ranks := map[uint32]map[uint32]uint32{}
 	for rows.Next() {
-		var guid, talentID uint32
-		if err := rows.Scan(&guid, &talentID); err != nil {
-			return
+		var g, node, rank uint32
+		if rows.Scan(&g, &node, &rank) != nil {
+			break
 		}
-		tab := talentTab[talentID]
-		if tab == 0 {
-			continue
+		if ranks[g] == nil {
+			ranks[g] = map[uint32]uint32{}
 		}
-		if ptsByBot[guid] == nil {
-			ptsByBot[guid] = map[uint32]uint32{}
-		}
-		ptsByBot[guid][tab]++
+		ranks[g][node] += rank
 	}
-	// Bots without character_talent rows: the talent rank spells they know (the profile reads them the same way).
-	rankOf := map[uint32][2]uint32{} // rank spell -> {talent tab, points at that rank}
-	for _, t := range s.cfg.ForeverData.Talents {
-		for i, rs := range t.Ranks {
-			if rs != 0 {
-				rankOf[rs] = [2]uint32{t.Tab, uint32(i + 1)}
-			}
-		}
-	}
-	var missing []uint32
-	for _, g := range guids {
-		if ptsByBot[g] == nil {
-			missing = append(missing, g)
-		}
-	}
-	if len(missing) > 0 && len(rankOf) > 0 {
-		mph, margs := inList(missing)
-		if srows, err := s.db.Query(fmt.Sprintf(`SELECT guid, spell FROM character_spell WHERE guid IN (%s)`, mph), margs...); err == nil {
-			best := map[uint32]map[uint32]uint32{} // guid -> first rank spell of a talent -> highest points known
-			first := map[uint32]uint32{}
-			for _, t := range s.cfg.ForeverData.Talents {
-				for _, rs := range t.Ranks {
-					if rs != 0 && len(t.Ranks) > 0 {
-						first[rs] = t.Ranks[0]
-					}
-				}
-			}
-			for srows.Next() {
-				var guid, spell uint32
-				if srows.Scan(&guid, &spell) != nil {
-					break
-				}
-				r, ok := rankOf[spell]
-				if !ok {
-					continue
-				}
-				if best[guid] == nil {
-					best[guid] = map[uint32]uint32{}
-				}
-				if r[1] > best[guid][first[spell]] {
-					best[guid][first[spell]] = r[1]
-				}
-			}
-			srows.Close()
-			for guid, talents := range best {
-				for firstRank, pts := range talents {
-					tab := rankOf[firstRank][0]
-					if ptsByBot[guid] == nil {
-						ptsByBot[guid] = map[uint32]uint32{}
-					}
-					ptsByBot[guid][tab] += pts
-				}
-			}
-		}
-	}
-	for guid, tabPts := range ptsByBot {
-		idx, ok := byGUID[guid]
-		if !ok {
-			continue
-		}
-		// Ties go to the tree shown first (the profile walks the trees in that order).
-		var bestTab uint32
-		var bestPts uint32
-		for tab, pts := range tabPts {
-			if pts > bestPts || (pts == bestPts && pts > 0 && s.cfg.ForeverData.TalentTabs[tab].Order < s.cfg.ForeverData.TalentTabs[bestTab].Order) {
-				bestPts = pts
-				bestTab = tab
-			}
-		}
-		if bestTab != 0 {
-			if meta, ok := s.cfg.ForeverData.TalentTabs[bestTab]; ok {
-				bots[idx].Spec = meta.Name
+	rows.Close()
+	for i := range bots {
+		if r := ranks[bots[i].GUID]; r != nil {
+			if spec := foreverSpecFromTrees(buildForeverTalents(s.cfg.ForeverData, bots[i].Class, r)); spec != "" {
+				bots[i].Spec = spec
 			}
 		}
 	}
