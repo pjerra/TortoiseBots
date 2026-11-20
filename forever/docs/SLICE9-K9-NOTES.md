@@ -24,8 +24,10 @@ hotfixes `spell_name`). No SQL was applied. Files in `forever/data/slice9/`:
 ## Ranks missing on the server (`trainer_spell`)
 
 - Warrior 71 Defensive Stance, 355 Taunt, 7386 Sunder Armor: no rows, no `spell_learn_spell`, no creation spell, no quest
-  reward. **Already covered** by `forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql` (slice 4, not applied): no K9
-  trainer SQL for these. 7405 Sunder Armor rank 2 (level 22, needs 7386) becomes learnable only after that file is applied.
+  reward. **Already covered** by `forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql` (slice 4, not applied; **removed
+  at integration batch 3**, the trainer rows are wrong in Classic: the three come from the level-10 warrior quest chain,
+  Path of Defense 8121, and the module teaches them with `.tb learn` and the class skill-line pass of `.tb train`): no K9
+  trainer SQL for these. 7405 Sunder Armor rank 2 (level 22, needs 7386) becomes learnable only after 7386 is learned.
 - Priest 2652 (prerequisite of 19261, level 20) and 9035 (prerequisite of 19281, level 20): no trainer rows, no other learn
   path. The level and trainer are not in the repo, so **no SQL was written**. Lead decides whether the priest needs them.
 - Every other `req_spell` of the 51 rows has trainer rows.

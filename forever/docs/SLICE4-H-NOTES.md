@@ -14,7 +14,7 @@ Briefs: `SLICE4-COMMON.md` (C1-C5, Q1-Q5), `SLICE4-H-BRIEF.md`; spec `FOREVER-SL
 | `forever/src/host/TbPartyState.cpp` | | state keys (Q1), end-line counts, threat keys (Q2) |
 | `forever/src/host/TbH3.cpp`, `TbH3.h` | | `.tb grammar selftest` calls `h4::SelfTestRecords`; `ResurrectOffererOf` declared |
 | `forever/src/TbScripts.cpp` | | six new rows; `enter` dispatches the old two-word form (character + map NUMBER) to the old code, everything else to `h4::HandleEnter` |
-| `forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql`, `forever/sql/README.md` | yes | the data collaborator's trainer fix (108 `INSERT IGNORE` rows, 27 trainers) and how a test server applies it BY HAND (the module has no world SQL, the core's updater does not read a module's folder). Not applied anywhere |
+| `forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql`, `forever/sql/README.md` | yes | the data collaborator's trainer fix (108 `INSERT IGNORE` rows, 27 trainers) and how a test server applies it BY HAND (the module has no world SQL, the core's updater does not read a module's folder). Not applied anywhere. **Removed at integration batch 3**: the trainer rows for Defensive Stance / Taunt / Sunder Armor are wrong in Classic (they come from the level-10 warrior quest chain, Path of Defense 8121) and the module teaches them itself (`.tb learn`, and the class skill-line pass of `.tb train`: SLICE4-M-NOTES.md section 2, SLICE9-K9-NOTES.md) |
 | `forever/docs/TB-COMMANDS.md` | | section 8, the state/threat/order tables, the new error codes |
 
 Nothing outside `forever/` changed: the Turtle gates (`vm-build`, `vm-test tb`) are not needed. `forever/src/slice`, `forever/src/compat` untouched.
