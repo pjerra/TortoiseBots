@@ -356,7 +356,11 @@ ActResult BeginLootAct(Task& task, Player* bot, PlayerbotAI* ai, Player* lead, T
     // A chest opens through the bot's own opening code (its lock spell, a key it carries); the window comes back through the loot window handler.
     ai->ClearLastCastCheckFail();
     ai->GetAiObjectContext()->GetValue<ai::LootObject>("loot target")->Set(lootObject);
-    if (ai->DoSpecificAction("open loot", ai::Event("cmd loot", "", lead), true))
+    // The order runs the action itself (the Turtle ExecuteOrderedAction, commands/BotCommandContext.cpp:112): through the engine's DoSpecificAction the action's
+    // own isPossible / isUseful gates refuse a chest the bot stands at ("can loot" wants it queued by the strategy), and the order then ended before a cast was tried.
+    ai::Action* openLoot = ai->GetAiObjectContext()->GetAction("open loot");
+    ai::Event openEvent("cmd loot", "", lead);
+    if (openLoot && openLoot->Execute(openEvent))
         return Started();
     RC::LootOrders().Forget(GuidKeyCompat(bot->GetGUID()));
     uint32 const castFail = uint32(ai->GetLastCastCheckFail());

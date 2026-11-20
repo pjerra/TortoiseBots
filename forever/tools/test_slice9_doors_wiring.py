@@ -69,7 +69,8 @@ class TaskModule(unittest.TestCase):
     def test_the_loot_act_watches_the_window_before_it_opens_it(self):
         body = func(TASKS, "ActResult BeginLootAct(")
         self.assertLess(body.index("RC::LootOrders().Watch("), body.index("LootOpenCompat("))
-        self.assertLess(body.index("RC::LootOrders().Watch("), body.index('DoSpecificAction("open loot"'))
+        self.assertLess(body.index("RC::LootOrders().Watch("), body.index('GetAction("open loot")'))
+        self.assertNotIn('DoSpecificAction("open loot"', body)
         self.assertLess(body.index("JudgeLock("), body.index("RC::LootOrders().Watch("))
 
     def test_every_finish_gives_the_loot_watch_back(self):
