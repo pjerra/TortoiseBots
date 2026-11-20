@@ -10,7 +10,6 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
-#include "host/cmd/TbCmdBinding.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "runtime/SystemRunPolicy.h"
