@@ -191,4 +191,3 @@ inline bool AcceptQuestShareDirectCompat(Player* bot, Player* requester, uint32 
     }
     return false;
 }
-

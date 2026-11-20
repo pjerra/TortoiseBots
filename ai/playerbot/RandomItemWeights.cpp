@@ -1470,4 +1470,3 @@ ai::ItemStatFamily RandomItemMgr::GetSpecStatFamily(uint32 specId)
 
     return ai::DeriveSpecStatFamily(w);
 }
-
