@@ -137,8 +137,22 @@ int main()
             auto in = base;
             in.itemClass = ai::kAhItemClassTradeGoods;
             in.maxStackSize = 20;
-            assert(ai::AhReserveTradeGoodsForW7());
+            // Reserved when needed by bot's own profession or an open guild order.
+            assert(ai::ShouldReserveTradeGood(in.itemId, in.itemClass, true, false));
+            in.reservedTradeGood = ai::ShouldReserveTradeGood(in.itemId, in.itemClass, true, false);
             assert(!ai::DecideAhSell(in).shouldPost);
+
+            assert(ai::ShouldReserveTradeGood(in.itemId, in.itemClass, false, true));
+            in.reservedTradeGood = ai::ShouldReserveTradeGood(in.itemId, in.itemClass, false, true);
+            assert(!ai::DecideAhSell(in).shouldPost);
+
+            // Other trade goods (not needed by own professions or open guild order) may be posted.
+            assert(!ai::ShouldReserveTradeGood(in.itemId, in.itemClass, false, false));
+            in.reservedTradeGood = ai::ShouldReserveTradeGood(in.itemId, in.itemClass, false, false);
+            ai::AhSellDecision const d = ai::DecideAhSell(in);
+            assert(d.shouldPost);
+            assert(d.kind == ai::AhPostKind::Commodity);
+            assert(d.unitPrice >= in.vendorSellPrice + in.depositTotal);
         }
         ++passed;
     }

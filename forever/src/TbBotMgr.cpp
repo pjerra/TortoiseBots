@@ -1,4 +1,5 @@
 #include "TbBotMgr.h"
+#include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -1300,6 +1301,8 @@ void BotMgr::Update(uint32 diff)
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
             engine::Tick(bot.brain.get(), diff);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+            tbhost::guild_orders::TickBotOrder(me);
         if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
         {
             static uint32 freeGatherMs = 0;

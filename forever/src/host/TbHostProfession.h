@@ -39,6 +39,12 @@ bool LootOpenNode(Player* bot, ObjectGuid const& guid);
 // Craft a recipe spell (up to `count` times) using CraftForSelfPolicy + HandleCastSpellOpcode.
 bool Craft(Player* bot, uint32_t spellId, uint32_t count, std::string& code, std::string& detail);
 
+// Helpers for guild orders (W9) and AH trade-good reserve (W8).
+bool HasGatherableNodeInSight(Player* bot, float maxDistYd);
+uint32_t FindCraftSpellForItem(Player* bot, uint32_t itemId);
+bool IsReagentForBotProfessions(Player const* bot, uint32_t itemId);
+bool IsReagentForItem(uint32_t craftedItemId, uint32_t reagentItemId);
+
 // Free-bot periodic gather tick (gated by TortoiseBots.World.Professions = 0, max 150 yd in current zone).
 void TickFreeGather(Player* bot);
 

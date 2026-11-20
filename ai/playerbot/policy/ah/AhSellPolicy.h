@@ -21,12 +21,13 @@ inline constexpr std::uint32_t kAhItemClassTradeGoods = 7;
 inline constexpr std::uint32_t kAhItemClassQuest = 12;
 inline constexpr std::uint32_t kAhDefaultRunTimeMinutes = 8 * 60; // Classic 1.60: 2h, 8h, 24h
 
-// W7 (professions) runs in parallel and is not merged yet.
-// Until W7 lands, trade goods are reserved (never sold on the AH) so bots
-// never sell crafting materials they might need.
-inline bool AhReserveTradeGoodsForW7()
+// Reserve trade goods only when needed by the bot's own professions or an open guild order.
+inline bool ShouldReserveTradeGood(std::uint32_t itemId, std::uint32_t itemClass,
+    bool neededByOwnProfessions, bool neededByGuildOrder)
 {
-    return true;
+    if (itemClass != kAhItemClassTradeGoods || itemId == 0)
+        return false;
+    return neededByOwnProfessions || neededByGuildOrder;
 }
 
 struct AhSellInput
@@ -46,6 +47,7 @@ struct AhSellInput
     bool nonEmptyBag = false;
     bool isW6aUpgrade = false;
     bool blacklisted = false;
+    bool reservedTradeGood = false;
 };
 
 struct AhSellDecision
@@ -82,9 +84,9 @@ inline AhSellDecision DecideAhSell(AhSellInput const& in)
         out.reason = "quest-item";
         return out;
     }
-    if (in.itemClass == kAhItemClassTradeGoods && AhReserveTradeGoodsForW7())
+    if (in.itemClass == kAhItemClassTradeGoods && in.reservedTradeGood)
     {
-        out.reason = "trade-goods-reserved-w7";
+        out.reason = "trade-goods-reserved";
         return out;
     }
     if (in.blacklisted)

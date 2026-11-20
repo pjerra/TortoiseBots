@@ -42,6 +42,7 @@ struct AhOwnedView
 bool IsWorldAuctionEnabled();
 Creature* NpcIfCanInteract(Player* bot, ObjectGuid const& guid);
 bool IsFactionAuctionHouse(Creature const* auctioneer);
+Creature* FindNearestFactionAuctioneer(Player* bot, float maxDistYd = 300.0f);
 
 // Market value & deposit helpers.
 uint64_t UnitValue(ItemTemplate const* proto);

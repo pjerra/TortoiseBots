@@ -3,6 +3,9 @@
 #pragma once
 
 #include "host/TbHostAuction.h"
+#include "host/TbHostGuild.h"
+#include "host/TbHostGuildOrders.h"
+#include "host/TbHostProfession.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/policy/ah/AhBuyPolicy.h"
 #include "playerbot/policy/ah/AhSellPolicy.h"
@@ -65,4 +68,11 @@ inline bool AhBuyFromDecisionCompat(Player* bot, Creature* auctioneer, tbhost::a
 inline bool AhCancelCompat(Player* bot, Creature* auctioneer, uint32 auctionId, uint32 itemId, std::string* failReason = nullptr)
 {
     return tbhost::ah::Cancel(bot, auctioneer, auctionId, itemId, failReason);
+}
+
+inline bool AhIsTradeGoodReservedCompat(Player const* bot, uint32 itemId, uint32 itemClass)
+{
+    bool const neededByProf = tbhost::prof::IsReagentForBotProfessions(bot, itemId);
+    bool const neededByOrder = tbhost::guild_orders::IsItemNeededByGuildOrder(tbhost::guild::GetGuildId(bot), itemId);
+    return ai::ShouldReserveTradeGood(itemId, itemClass, neededByProf, neededByOrder);
 }

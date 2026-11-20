@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+class Player;
+
 namespace tbhost
 {
 namespace guild_orders
@@ -55,6 +57,14 @@ IDeliveryProvider& Delivery();
 void SetGatherCraftProvider(IGatherCraftProvider* provider);
 void SetAuctionBuyProvider(IAuctionBuyProvider* provider);
 void SetDeliveryProvider(IDeliveryProvider* provider);
+
+// Per-tick order loop for `.tb guildorder work <bot> [id]`.
+void SetOrderWorking(uint32_t botGuidLow, bool working);
+bool IsOrderWorking(uint32_t botGuidLow);
+void TickBotOrder(Player* bot);
+
+// W8 trade-good reserve helper: true if any open order in `guildId` needs `itemId` (directly or as a craft reagent).
+bool IsItemNeededByGuildOrder(uint64_t guildId, uint32_t itemId);
 
 } // namespace guild_orders
 } // namespace tbhost

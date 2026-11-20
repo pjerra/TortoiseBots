@@ -3,11 +3,15 @@
 #include "AuctionHouseBotVanilla.h"
 #include "AuctionHouseMgr.h"
 #include "AuctionHousePackets.h"
+#include "CellImpl.h"
 #include "Config.h"
 #include "Creature.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 #include "Item.h"
 #include "ItemTemplate.h"
 #include "Log.h"
+#include "Map.h"
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
@@ -138,6 +142,37 @@ Creature* NpcIfCanInteract(Player* bot, ObjectGuid const& guid)
     if (!creature || !IsFactionAuctionHouse(creature))
         return nullptr;
     return creature;
+}
+
+Creature* FindNearestFactionAuctioneer(Player* bot, float maxDistYd)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap())
+        return nullptr;
+
+    std::list<Creature*> creatures;
+    Trinity::AllCreaturesOfEntryInRange check(bot, 0, maxDistYd);
+    Trinity::CreatureListSearcher<Trinity::AllCreaturesOfEntryInRange> searcher(bot, creatures, check);
+    Cell::VisitGridObjects(bot, searcher, maxDistYd);
+
+    Creature* best = nullptr;
+    float bestDist = maxDistYd + 1.0f;
+    uint32 const botZone = bot->GetZoneId();
+    for (Creature* c : creatures)
+    {
+        if (!c || !c->IsAlive() || !c->HasNpcFlag(UNIT_NPC_FLAG_AUCTIONEER))
+            continue;
+        if (!IsFactionAuctionHouse(c))
+            continue;
+        if (c->GetZoneId() != botZone)
+            continue;
+        float const d = bot->GetDistance(c);
+        if (d <= maxDistYd && d < bestDist)
+        {
+            bestDist = d;
+            best = c;
+        }
+    }
+    return best;
 }
 
 uint64_t UnitValue(ItemTemplate const* proto)

@@ -70,6 +70,28 @@ class TestW9GuildWiring(unittest.TestCase):
         state = read("forever/src/host/TbPartyState.cpp")
         self.assertIn('"order"', state)
 
+    def test_order_providers_and_w8_reserve_wired(self):
+        orders_cpp = read("forever/src/host/TbHostGuildOrders.cpp")
+        if MUTATE:
+            orders_cpp = orders_cpp.replace("HostGatherCraftProvider", "NullGatherCraftProvider")
+        self.assertIn("HostGatherCraftProvider", orders_cpp)
+        self.assertIn("HostAuctionBuyProvider", orders_cpp)
+        self.assertIn("HostDeliveryProvider", orders_cpp)
+        self.assertIn("TickBotOrder", orders_cpp)
+        self.assertIn('"work"', orders_cpp)
+
+        bot_mgr = read("forever/src/TbBotMgr.cpp")
+        self.assertIn("TickBotOrder", bot_mgr)
+
+        ah_policy = read("ai/playerbot/policy/ah/AhSellPolicy.h")
+        self.assertIn("ShouldReserveTradeGood", ah_policy)
+        self.assertNotIn("AhReserveTradeGoodsForW7", ah_policy)
+
+        wl8 = read("forever/src/compat/TbCompat_WL8.h")
+        self.assertIn("AhIsTradeGoodReservedCompat", wl8)
+        self.assertIn("IsReagentForBotProfessions", wl8)
+        self.assertIn("IsItemNeededByGuildOrder", wl8)
+
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:

@@ -33,6 +33,8 @@
 #include <algorithm>
 #include <cmath>
 #include <list>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace tbhost
 {
@@ -591,6 +593,205 @@ void TickFreeGather(Player* bot)
         return;
     std::string code, detail;
     GatherNearestInSight(bot, 150.0f, code, detail);
+}
+
+namespace
+{
+struct CraftReagentCache
+{
+    std::unordered_map<uint32_t, std::unordered_set<uint32_t>> bySkill;
+    std::unordered_map<uint32_t, std::unordered_set<uint32_t>> byCreatedItem;
+};
+
+CraftReagentCache const& GetCraftReagentCache()
+{
+    static CraftReagentCache const cache = []()
+    {
+        CraftReagentCache c;
+        static uint32_t const kCraftSkills[] = {
+            TortoiseBots::prof::SkillBlacksmithing,
+            TortoiseBots::prof::SkillLeatherworking,
+            TortoiseBots::prof::SkillAlchemy,
+            TortoiseBots::prof::SkillTailoring,
+            TortoiseBots::prof::SkillEngineering,
+            TortoiseBots::prof::SkillEnchanting,
+            TortoiseBots::prof::SkillFirstAid,
+            TortoiseBots::prof::SkillCooking
+        };
+        for (uint32_t sid : kCraftSkills)
+        {
+            auto const* list = sDB2Manager.GetSkillLineAbilitiesBySkill(sid);
+            if (!list)
+                continue;
+            auto& skillSet = c.bySkill[sid];
+            for (SkillLineAbilityEntry const* ab : *list)
+            {
+                if (!ab)
+                    continue;
+                SpellInfo const* si = sSpellMgr->GetSpellInfo(uint32_t(ab->Spell), DIFFICULTY_NONE);
+                if (!si)
+                    continue;
+                std::vector<uint32_t> createdItems;
+                for (SpellEffectInfo const& eff : si->GetEffects())
+                {
+                    if (eff.Effect == SPELL_EFFECT_CREATE_ITEM && eff.ItemType > 0)
+                        createdItems.push_back(uint32_t(eff.ItemType));
+                }
+                for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                {
+                    if (si->Reagent[i] > 0 && si->ReagentCount[i] > 0)
+                    {
+                        uint32_t const rId = uint32_t(si->Reagent[i]);
+                        skillSet.insert(rId);
+                        for (uint32_t itemOut : createdItems)
+                            c.byCreatedItem[itemOut].insert(rId);
+                    }
+                }
+            }
+        }
+        return c;
+    }();
+    return cache;
+}
+} // namespace
+
+bool HasGatherableNodeInSight(Player* bot, float maxDistYd)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap())
+        return false;
+
+    std::list<GameObject*> objects;
+    Trinity::GameObjectInRangeCheck check(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), maxDistYd, 0);
+    Trinity::GameObjectListSearcher<Trinity::GameObjectInRangeCheck> searcher(bot, objects, check);
+    Cell::VisitGridObjects(bot, searcher, maxDistYd);
+
+    for (GameObject* go : objects)
+    {
+        if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
+            continue;
+        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
+        if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)
+            continue;
+        if (TortoiseBots::prof::EvaluateGatherNode(facts).allow)
+            return true;
+    }
+    return false;
+}
+
+uint32_t FindCraftSpellForItem(Player* bot, uint32_t itemId)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap() || !itemId)
+        return 0;
+
+    static uint32_t const kCraftSkills[] = {
+        TortoiseBots::prof::SkillBlacksmithing,
+        TortoiseBots::prof::SkillLeatherworking,
+        TortoiseBots::prof::SkillAlchemy,
+        TortoiseBots::prof::SkillTailoring,
+        TortoiseBots::prof::SkillEngineering,
+        TortoiseBots::prof::SkillEnchanting,
+        TortoiseBots::prof::SkillFirstAid,
+        TortoiseBots::prof::SkillCooking
+    };
+
+    for (uint32_t sid : kCraftSkills)
+    {
+        if (!bot->HasSkill(sid))
+            continue;
+        auto const* list = sDB2Manager.GetSkillLineAbilitiesBySkill(sid);
+        if (!list)
+            continue;
+        for (SkillLineAbilityEntry const* ab : *list)
+        {
+            if (!ab)
+                continue;
+            uint32_t const spellId = uint32_t(ab->Spell);
+            if (!bot->HasSpell(spellId))
+                continue;
+            SpellInfo const* si = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
+            if (!si)
+                continue;
+            bool createsTarget = false;
+            bool createsBag = false;
+            for (SpellEffectInfo const& eff : si->GetEffects())
+            {
+                if (eff.Effect == SPELL_EFFECT_CREATE_ITEM && uint32_t(eff.ItemType) == itemId)
+                {
+                    createsTarget = true;
+                    if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(eff.ItemType))
+                        createsBag = (proto->GetClass() == ITEM_CLASS_CONTAINER);
+                }
+            }
+            if (!createsTarget)
+                continue;
+
+            TortoiseBots::prof::CraftFacts facts;
+            facts.spellId = spellId;
+            facts.known = true;
+            facts.skillId = sid;
+            facts.reqSkill = ab->MinSkillLineRank > 0 ? uint32_t(ab->MinSkillLineRank) : 0;
+            facts.botSkill = bot->GetSkillValue(sid);
+            facts.freeBagSlots = bot->GetFreeInventorySlotCount();
+            facts.createsBag = createsBag;
+            facts.hasFreeEquipBagSlot = createsBag ? HasFreeEquipBagSlot(bot) : false;
+            facts.purpose = TortoiseBots::prof::CraftPurpose::Explicit;
+            for (uint32_t i = 0; i < MAX_SPELL_TOTEMS; ++i)
+            {
+                if (si->Totem[i] > 0 && !bot->HasItemCount(uint32_t(si->Totem[i]), 1, false))
+                    facts.hasRequiredTool = false;
+                if (si->TotemCategory[i] > 0 && !bot->HasItemTotemCategory(si->TotemCategory[i]))
+                    facts.hasRequiredTool = false;
+            }
+            for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
+            {
+                if (si->Reagent[i] > 0 && si->ReagentCount[i] > 0)
+                {
+                    TortoiseBots::prof::ReagentCheck rc;
+                    rc.itemId = uint32_t(si->Reagent[i]);
+                    rc.need = uint32_t(si->ReagentCount[i]);
+                    rc.have = bot->GetItemCount(rc.itemId, false);
+                    facts.reagents.push_back(rc);
+                }
+            }
+            if (TortoiseBots::prof::EvaluateCraftForSelf(facts).allow)
+                return spellId;
+        }
+    }
+    return 0;
+}
+
+bool IsReagentForBotProfessions(Player const* bot, uint32_t itemId)
+{
+    if (!bot || !itemId)
+        return false;
+    CraftReagentCache const& cache = GetCraftReagentCache();
+    auto const checkSkill = [&](uint32_t sid) -> bool
+    {
+        if (!sid)
+            return false;
+        auto it = cache.bySkill.find(sid);
+        return it != cache.bySkill.end() && it->second.count(itemId) > 0;
+    };
+
+    auto const pair = TortoiseBots::prof::ProfessionPairForClass(bot->GetClass());
+    if (checkSkill(pair.first) || checkSkill(pair.second))
+        return true;
+
+    for (auto const& sv : GetSkills(bot))
+    {
+        if (checkSkill(sv.skillId))
+            return true;
+    }
+    return false;
+}
+
+bool IsReagentForItem(uint32_t craftedItemId, uint32_t reagentItemId)
+{
+    if (!craftedItemId || !reagentItemId)
+        return false;
+    CraftReagentCache const& cache = GetCraftReagentCache();
+    auto it = cache.byCreatedItem.find(craftedItemId);
+    return it != cache.byCreatedItem.end() && it->second.count(reagentItemId) > 0;
 }
 
 } // namespace prof
