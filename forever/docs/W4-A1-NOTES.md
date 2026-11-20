@@ -75,6 +75,12 @@ care: the area-trigger existence check in `TravelPath::UpcommingSpecialMovement`
 - `forever/tools/test_wl4_wiring.py`: round A2's file and this round's classes in one file (the A2 pair is `COMPAT_F`,
   `COMPAT_T`; this round's `COMPAT_FN`, `COMPAT_TN`).
 - `ai/playerbot/TravelPointKey.h`: new; the destination point key (section 8, round A2's review).
+- `forever/tools/slice_registry_check.py`: `SLICE_LIST` -> `SLICE-W4.txt` (the list CMake reads).
+- `forever/tools/test_w1_wiring.py`, `test_slice9_l9_wiring.py`: the list pointer they pin moved from `SLICE-W1.txt` to
+  `SLICE-W4.txt` (the W4 list starts with the W1 list, so their file checks are unchanged).
+- `tools/test_forever_no_direct_queries.py`: the saver's one raw write (`TbCompat_WL4n.h`, after the S5 schema probe) is named
+  with its count, like the two existing guard files.
+- `forever/tools/travel_graph_boot_check.sh`: new; the runtime check (section 7).
 
 ## 5. The boot path (the wiring)
 
@@ -105,15 +111,14 @@ installs nothing; the caller holds the server lock and restores the binary):
 | `final` | the three tables dropped again | the shipped state: one absent-graph line, `tb status` enabled, RSS recorded |
 
 Every scenario also asserts the ready line, zero `ASSERTION FAILED`, and that the loader was reached (`Loading travel nodes.`).
-On the reviewed tree (`07a57c8b2`) the same check fails: `TravelMgr.cpp` was not in the slice, so `LoadQuestTravelTable` never
-ran, `Loading travel nodes.` and the guard line never appear, and scenarios a, b and c fail on those missing lines - the
-loader was code that no boot exercised.
-- `forever/tools/slice_registry_check.py`: `SLICE_LIST` -> `SLICE-W4.txt` (the list CMake reads).
-- `forever/tools/test_w1_wiring.py`, `test_slice9_l9_wiring.py`: the list pointer they pin moved from `SLICE-W1.txt` to
-  `SLICE-W4.txt` (the W4 list starts with the W1 list, so their file checks are unchanged).
-- `tools/test_forever_no_direct_queries.py`: the saver's one raw write (`TbCompat_WL4n.h`, after the S5 schema probe) is named
-  with its count, like the two existing guard files.
+Module lines land in two files: the bot brain logs through `BotLog` (`logs/bot.log`, where the node-store lines and the
+empty-graph line go) and the `forever/src` compat code through the core logger (`logs/world.out`, where the destination index
+lines go), so the check reads both and truncates both per boot.
 
+On the reviewed tree (`07a57c8b2`) the same check fails: `TravelMgr.cpp` was not in the slice, so `LoadQuestTravelTable` never
+ran, `Loading travel nodes.` and the guard line never appear, and scenario a fails five checks (run on the `07a57c8b2`
+slot-8 build, `HARNESS_RC=1`: loader not reached, no destination index, no point map, no guard refusal, no absent-graph line).
+That build was code no boot exercised.
 ## 8. Round A2's review findings, fixed here
 
 The merge also carries the two findings of round A2's review (`codex-w4a2.txt`), because they live in the same files:
@@ -127,43 +132,66 @@ The merge also carries the two findings of round A2's review (`codex-w4a2.txt`),
   and different type/map/entry into the map and checks both points and their coordinates survive; before the fix the file does
   not compile (the key was one `uint64`).
 - **The boot kept redundant full-world indexes.** `TravelEntryGuidpsData` held every spawn of maps 0/1 (123,558 spawns,
-  15,684 entries) for the whole process while the destination build copied the points it keeps into `pointsMap`; and the purpose
-  map kept a row for every template of the world (224,997), most of which have no spawn and are skipped by the loader anyway.
-  Now: the purpose map only takes templates with an entry in the spawn index (both loops), and the loader calls
-  `TravelEntryGuidpsReleaseCompat()` after `GetPopulatedGrids()` - on ForeverCore the boot index is dropped (the log's
-  `in-use heap` figures are section 10), on Turtle it is a no-op because that index is a shared value other code reads. One
-  index remains per process: `pointsMap`, the one the destinations point into.
+  15,684 entries) for the whole process while the destination build copied the points it keeps into `pointsMap` (67,420
+  points); and the purpose map kept a row for every template of the world (224,997), most of which have no spawn and are
+  skipped by the loader anyway. Now the purpose map only takes templates with an entry in the spawn index (both loops) - live:
+  7,792 entries instead of 224,997 - and the loader calls `TravelEntryGuidpsReleaseCompat()` after `GetPopulatedGrids()`: on
+  ForeverCore the boot index is dropped (live line `>> travel destination index released: 15684 entries, 123558 spawn
+  points`), on Turtle the release is a no-op because that index is a shared value other code reads. One index remains per
+  process: `pointsMap`, the one the destinations point into (67,420 points live).
+
+  Memory, before and after, both boots on run2 against the same databases, read at the ready line (worldserver RSS, `/proc`):
+
+  | Build | Purpose entries | Boot index | RSS at ready |
+  |---|---|---|---|
+  | `tbf/world/w4a2` as reviewed (72,303,248 bytes) | 224,997 | kept for the process | 4,543,836 KiB |
+  | this tree (72,588,184 bytes) | 7,792 | released after the build | 4,533,464 KiB |
+
+  The 10 MiB difference is what the purpose map's 217,205 unused rows and the released index copy weigh at that point (both
+  boots ran the same core and databases; the number includes the world's own load, so it is a same-setup comparison, not an
+  isolated heap measurement).
 
 ## 9. Gates
 
 | Gate | Result |
 |---|---|
-| Census, `forever/SLICE-W4.txt` (271 files), core 25fc7ca | `files 271  compile clean 271  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (run `wt-w4a1-s7-SLICE-W4-20261120T164613Z`) |
-| Census after the last edits (TravelNode.cpp only, final) | `files 1  compile clean 1  with errors 0  error places 0` (runs `...T170248Z`, `...T172825Z`) |
-| Module ON (`TORTOISEBOTS_SLICE1=ON`, `tortoisebots`), slot 7 | `CMAKE_RC=0 MAKE_RC=0` (final tree, `worldserver` link too) |
-| Module OFF (`TORTOISEBOTS_SLICE1=OFF`, `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` |
-| Worldserver link ON | `CMAKE_RC=0 MAKE_RC=0` (72,340,128 bytes, 18:04; rebuilt after `DirectExecute` too, 58 s) |
-| Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` `(a)=0` (219 keys to register or stub later, from 218: `home bind` is read only on the Turtle side now) |
-| Policy tests | none added this round (no policy file); the standalone suite runs in `verify_all` |
-| Wiring | `test_wl4_wiring.py` 14 OK; `test_w1_wiring.py` + `test_slice9_l9_wiring.py` + `test_wl4_wiring.py` 45 OK; `tools.test_forever_no_direct_queries` 5 OK |
-| `tools/verify_all.sh` | `RESULT: PASS kind=tb wt=wt-w4a1 sha=177ab5098 dirty=0 files=4015 rc=0 vm_duration=848s` (the standing `action_loop` / `Mage stay` scenario is not a test failure, `forever/docs/SLICE1-R4P-NOTES.md`). The only later code delta is `Execute` -> `DirectExecute` in the pair; the naming test, the census and the ON/OFF builds cover it. |
-| Turtle `vm-build` | `CMAKE_RC=0 MAKE_RC=0` (final commit `1875ecee2`, no-op 9 s) |
-| Turtle `vm-test tb` | `RESULT: PASS` on `177ab5098` (the same run above; the later commit touches only the ForeverCore pair and these notes) |
+| Census, `forever/SLICE-W4.txt` (273 files), core 25fc7ca | `files 273  compile clean 273  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (run folder `census-runs/w4a1-fix-s8-SLICE-W4-20261120T190128Z`, also in `forever/docs/CENSUS.md`) |
+| Module ON (`TORTOISEBOTS_SLICE1=ON`, `tortoisebots`), slot 7 | `CMAKE_RC=0 MAKE_RC=0` (44 s after the last code edit) |
+| Worldserver link ON | `CMAKE_RC=0 MAKE_RC=0`, 72,588,184 bytes (the binary installed for the live check) |
+| Module OFF (`TORTOISEBOTS_SLICE1=OFF`, `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` (11 steps: `TbCompat_WL4.cpp` filtered, no slice file compiled) |
+| Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` `(a)=0` (223 keys to register or stub later) |
+| Policy tests (standalone, g++ C++17) | `test_zone_level_policy` 13 checks 0 failed; `test_travel_purpose_gate_policy` 22 checks 0 failed; `tools/test_travel_point_key.cpp` all checks passed (fails to compile before the key fix) |
+| Wiring | `forever/tools/test_wl4_wiring.py` 30 tests OK; all `forever/tools/test_*wiring.py` 179 tests OK (6 skipped); `tools.test_forever_no_direct_queries` + `tools.test_guild_founding_wiring` 8 OK |
+| `tools/verify_all.sh` (laptop) | OK through step 6 (OKF, command table, surface, wiring, unit tests, 483 standalone tests, decision trail); step 7 fails with `TortoiseBots host-contract check failed: required core file is missing: src/game/SessionTransport.h`, the same failure `tbf/main` (10efad5bb) gives against the same `../tortoise-wow` checkout - no new failure |
+| Turtle `vm-build` | `COMPILE_SECONDS=1318 CMAKE_RC=0 MAKE_RC=0`, mangosd and realmd written (statics `449c92c6e487...`/`bbb4388460...`, sha256 of each) on the merged tree. Re-run on the final committed tree after the notes commit |
+| Turtle `vm-test tb` | see the final report; the same suite `verify_all` runs locally |
+| Runtime check (section 7) | `RESULT: PASS` on the slot-7 binary: scenarios a, b, c and final, 33 checks; the reviewed tree (`07a57c8b2`) fails scenario a with `HARNESS_RC=1` |
 
 ## 10. Live (forever-run2, our binary in place, console only)
 
-The node store loader is not reached yet: `TravelMgr.cpp` (and with it `LoadQuestTravelTable`, which calls `loadNodeStore`) is
-round W4-A2, so the boot cannot show the graph. What the boot does show, with the final slot-7 build (72,340,128 bytes, 18:04):
+The slot-7 build (72,588,184 bytes) installed over `bin/worldserver` (backup `bin/worldserver.before-w4a1-graph`, restored and
+boot-checked afterwards), the server lock held for the whole run, four boots through `forever/tools/travel_graph_boot_check.sh`:
 
-- `worldserver-daemon) ready...`, `TortoiseBots (ForeverCore port, spike): enabled`, no `ASSERTION FAILED` (0 in the log).
-- `.tb status` -> `TortoiseBots: enabled, 0 bot session(s).`
-- `.tb perf` -> `8806 ticks; world update time avg 1.13 ms, worst 2 ms; module (sessions + engines) avg 0 us, worst 313 us`.
-- `server shutdown 1` -> clean halt, container gone.
-- The world DB has none of the three `ai_playerbot_travel*` tables. The boot does not query them (the loader is not called), so
-  the guard's missing-table path is proved by the census/store checks, not by this boot; it will be exercised by A2's loader.
+| Scenario | Result |
+|---|---|
+| `a` no tables | ready, 0 assertions; guard refused the node query; one absent-graph line; no node read; no `Calculating mapoffset`; destinations still built |
+| `b` empty tables | ready, 0 assertions; one `travel-node dataset is empty` line; no guard refusal; no generation |
+| `c` 3 nodes + a link to a missing node id + its 5 path points | ready, 0 assertions; `>> Loaded 3 travelNodes.`, `>> Loaded 2 travelNode paths.`, `>> Loaded 5 travelNode paths points.`, `-Calculating mapoffset`; the unknown target skipped |
+| `final` no tables | ready, 0 assertions; one absent-graph line; `tb status` -> `TortoiseBots: enabled, 0 bot session(s)`; worldserver RSS at ready 4,533,464 KiB (~4.3 GiB, the core's own world load included; the A2 build measured 4,543,836 KiB in the same state, section 8) |
 
-Binary bookkeeping (a mistake, reported in full in the final report): `./world.sh stop` blocked on the console FIFO before the
-`cp bin/worldserver bin/worldserver.pre-w4a1` step, so the pre-existing binary was overwritten without a backup. The era's
-backups all carry the same 65,678,144-byte build (`worldserver.pre-w0a` among them); that file was put back and boot-checked
-(ready, `.tb status` enabled, 0 assertions, clean shutdown). The round that installed the 17:10 binary should reinstall its own
-if it was newer than that build.
+The fixed boot's destination figures (unloaded server, bot logging off):
+
+```
+>> travel destination index: 20000 spawns, 1552 ms ... 120000 spawns, 1978 ms
+>> Loaded 15684 travel destination spawn entries (123558 spawns on maps 0/1, 24551 skipped on other maps) in 1978 ms
+>> Loaded 7792 travel destination purpose entries in 34 ms          (was 224,997)
+>> travel destination index released: 15684 entries, 123558 spawn points
+>> travel destinations keep 67420 spawn points
+Loading travel nodes.
+TortoiseBots: world table `ai_playerbot_travelnode` is missing, or lacks a column this query names: not read
+TortoiseBots: the travel-node tables are missing or incomplete; the travel graph stays empty and travel does nothing
+```
+
+The two absent-graph lines are the guard's refusal (so no query reached a missing table) and the outcome line; both at INFO,
+the second in `logs/bot.log` (the bot brain's `BotLog`), which is why section 7's check reads both log files. The boot is
+ready in about 60 s including the destination build; nothing about the absent graph delays or fails it.
