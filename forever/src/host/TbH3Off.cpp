@@ -87,4 +87,11 @@ Player* ResolveTestTarget(ChatHandler* /*handler*/, std::string_view /*name*/, s
 }
 bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail args)  { return NotBuilt(handler, args, "grammar"); }
 }
+namespace cmd
+{
+bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    return h3::NotBuilt(handler, args, "cmd");
+}
+}
 }

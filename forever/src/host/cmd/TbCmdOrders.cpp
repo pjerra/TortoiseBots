@@ -82,21 +82,4 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 }
 }
 
-#else
-
-namespace TortoiseBots
-{
-namespace h3
-{
-bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd);   // host/TbH3Off.cpp
-}
-namespace cmd
-{
-bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
-{
-    return h3::NotBuilt(handler, tail, "cmd");
-}
-}
-}
-
 #endif
