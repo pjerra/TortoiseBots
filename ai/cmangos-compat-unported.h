@@ -280,6 +280,11 @@ template <class... Args>
 inline auto CharacterPQueryCompat(char const* format, Args... args) { return CharacterDatabase.PQuery(format, args...); }
 inline std::unique_ptr<QueryResult> QueryGuardCompat(QueryResult* result) { return std::unique_ptr<QueryResult>(result); }
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.escape_string(text); }
+// The pet a character brings back on login: the original statement.
+inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
+{
+    CharacterDatabase.PExecute("UPDATE characters SET summonedPetNumber = '%u' WHERE guid = '%u'", petNumber, guid);
+}
 
 
 // ===============================================================================================================

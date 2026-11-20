@@ -414,6 +414,12 @@ inline QueryResult CharacterPQueryCompat(char const* format, Args... args)
 inline QueryResult QueryGuardCompat(QueryResult result) { return result; }
 // Escapes a string for a query (T `CharacterDatabase.escape_string(s)`, F `EscapeString(s)`).
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.EscapeString(text); }
+// The pet a character brings back on login (characters.summonedPetNumber): the host writes it right after SavePetToDB, before a map change can put the
+// pet away. T queues the statement; F runs it at once (`DirectPExecute`) for that reason.
+inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
+{
+    CharacterDatabase.DirectPExecute("UPDATE characters SET summonedPetNumber = {} WHERE guid = {}", petNumber, guid);
+}
 
 
 // ===============================================================================================================

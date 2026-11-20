@@ -26,7 +26,7 @@ Branch `s11/pets` (worktree `~/wt-s11`), build slot 8 (`FOREVER_SLOT=8`, `src-8`
 | `WarlockTriggers.cpp:44` | `Spell::CalculatePowerCost` -> `SpellPowerCostCompat` (existing, TbCompat_Unit.h:521) |
 | `actions/CombatActions.cpp:45` (a list member since this slice) | `bot->AttackStop(true)` -> `AttackStopCompat(bot, true)` (new; **S10's `TbCompat_S10.h` adds the same helper under the same name and body**: the two wrappers are never in one translation unit, one definition stays at the merge) |
 
-Compat pairs, found through a wrapper each (the same pattern as K8 and K10: the two shim headers are untouched): `forever/src/compat/TbCompat_K11h.h` + `ai/cmangos-compat-k11h.h` (wrapper `ai/playerbot/TbCompatK11h.h`), `TbCompat_K11w.h` + `cmangos-compat-k11w.h` (`TbCompatK11w.h`), `TbCompat_P11.h` + `cmangos-compat-p11.h` (`TbCompatP11.h`). The Turtle side of every helper is the original expression (the call is moved, not changed).
+Compat pairs, found through a wrapper each (the same pattern as K8 and K10: the two shim headers are untouched): `forever/src/compat/TbCompat_K11h.h` + `ai/cmangos-compat-k11h.h` (wrapper `ai/playerbot/TbCompatK11h.h`), `TbCompat_K11w.h` + `cmangos-compat-k11w.h` (`TbCompatK11w.h`), `TbCompat_P11.h` + `cmangos-compat-p11.h` (`TbCompatP11.h`). The Turtle side of every helper is the original expression (the call is moved, not changed). `CreatureExtraFlagCompat` takes `CreatureFlagsExtra` on both cores: the Turtle accessor `Creature::HasExtraFlag` is typed and a `uint32` argument is a compile error (the Turtle module build found it).
 
 Different answers to watch live: `IsTameableCompat` reads a beast as not tameable when it is exotic and the bot cannot tame exotics (F's rule, asked of the caster); `SetAmmoCompat` answers false when F's `SetAmmo` refuses (no such stack in the bags, not usable), so the equip-ammo action does nothing then; `HunterTriggers.h:307, :508` and `HunterRangedTelemetry.h` still call the one-argument `GetDistance(target)`: on F that is the combat-reach distance (TbCompat_V.h note), on Turtle the centre distance minus the radii, so the dead-zone numbers (8 yd) may read a little differently (gate d).
 
@@ -93,18 +93,20 @@ All from SELECTs on the world database of the forever test server (read only, TD
 4. `TbScripts.cpp` rows (`.tb cc`, `.tb strategy` of S8, `.tb pet` here) and the include; `TbPartyState.cpp` (one call each), `TbH3.cpp` (one selftest call each).
 5. `forever/conf`: nothing new (no conf key added). The live setup sets nothing: `AiPlayerbot.PetAutoTrain` is 1 by default.
 
-## 8. Gates (code commit 54435ef0e; this section is a notes-only commit)
+## 8. Gates (code commit 555d2c7d4; this section is a notes-only commit)
 
 | Gate | Result |
 |---|---|
 | option-ON `worldserver` (slot 8, `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`) | `CMAKE_RC=0 MAKE_RC=0` in 58 s, `grep -c undefined reference make.log` = 0; `nm -C worldserver` has the strong `ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool)` (the stand-in) |
 | option-OFF module build (`-DTORTOISEBOTS_SLICE1=OFF`, target `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` in 34 s; `ar t libtortoisebots.a` = 19 objects (bot manager, session, scripts, item/spell mirrors, engine brain, H3Off, H4, dashboard, the plan/run host files, TbPet) |
 | census SLICE11 (slot 8) | `files 201  compile clean 201  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census SLICE5 / 4 / 3 / 2 / 1 (slot 8) | `files 176 / 174 / 170 / 160 / 133  compile clean = files  with errors 0  error places 0` and `includes of a header ForeverCore does not have 0` in each |
 | generator, registry | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=221` |
 | `policy-tests.sh` (VM, tree `forever-build/tb`) | `472 PASS`, `4 COMPILE_FAIL`, `2 RUN_FAIL` = the baseline six (`test_combat_monitor_service`, `_race`, `test_decision_capture_files`, `test_run_trace_writer`; `test_decision_capture_codec`, `test_log_file_rotation`) |
 | wiring tests | `test_slice11_wiring.py` OK (201 paths, 22 class files, 3 compat pairs, 8 starter races); `test_slice4_d4_wiring.py` 10 tests OK; `test_run_review_wiring.py` 9 tests OK |
 | run tests (VM, g++ -std=c++17 -Wall -Wextra) | `test_run_orders` 128 checks, `test_run_c6` 28 checks, `test_run_facts` PASS, `test_run_liquid`, `test_run_cancel` PASS |
-| files outside `forever/` changed by the fix | none (the attempted `EquipAction.cpp` port was reverted: the file is not in the slice and the Turtle tree is unchanged) |
+| Turtle `vm-build ~/wt-s11 --wait` | the first run failed in five TUs: `ai/cmangos-compat-k11w.h:10:131: error: invalid conversion from 'uint32' to 'CreatureFlagsExtra'` (the Turtle `Creature::HasExtraFlag` is typed, GCC refuses the conversion); after the signature fix: `COMPILE_SECONDS=70 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, sha 555d2c7d4 |
+| files outside `forever/` changed by the fix | `ai/cmangos-compat-k11w.h` (the one-line signature; the Turtle expression is unchanged) |
 
 ## 9. The live test (M4 party, gates a-i of the spec)
 

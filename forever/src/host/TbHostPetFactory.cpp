@@ -160,7 +160,7 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
         pet->SavePetToDB(PET_SAVE_AS_CURRENT);
         // The next map change puts the pet away and a later save would write 0 here: the row names the pet already, so a re-login calls it back.
         if (CharmInfo const* charm = pet->GetCharmInfo())
-            CharacterDatabase.DirectPExecute("UPDATE characters SET summonedPetNumber = {} WHERE guid = {}", charm->GetPetNumber(), bot->GetGUID().GetCounter());
+            SaveSummonedPetNumberCompat(charm->GetPetNumber(), bot->GetGUID().GetCounter());
     }
     bot->PetSpellInitialize();
 
