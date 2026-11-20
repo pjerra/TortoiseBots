@@ -379,10 +379,16 @@ inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count)
 // ===============================================================================================================
 // ITEM USAGE (ItemUsageValue.cpp)
 // ===============================================================================================================
-// The auction code reads a listing's fields. Nothing creates an AuctionEntry on F (TbCompat_Unported.h), so the containers stay empty and none of
-// these runs for a real listing; the helper answers the "no listing" value: an item count of 0. The deposit's two settings go through the W2
-// config helpers (TbCompat_W2.h), as every other config site does.
-inline uint32 AuctionItemCountCompat(AuctionEntry const& /*auction*/) { return 0; }
+// `Item* item = sAuctionMgr->GetAItem(...)` when itemGuidLow is set, or the populated itemCount on ForeverCore.
+inline uint32 AuctionItemCountCompat(AuctionEntry const& auction)
+{
+    if (auction.itemCount)
+        return auction.itemCount;
+    if (auction.itemGuidLow)
+        if (Item* item = sAuctionMgr->GetAItem(ObjectGuid::Create<HighGuid::Item>(auction.itemGuidLow)))
+            return item->GetCount();
+    return 0;
+}
 
 // Is the quest in the bot's log still incomplete (T `getQuestStatusMap()[id].m_status == QUEST_STATUS_INCOMPLETE`, F `GetQuestStatus`, Player.h:1811).
 inline bool QuestIncompleteCompat(Player* player, Quest const* quest) { return player->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_INCOMPLETE; }

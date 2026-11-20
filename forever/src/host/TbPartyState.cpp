@@ -8,6 +8,7 @@
 #include "host/gear/TbGearGen.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTransport.h"
+#include "host/TbHostAuction.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -395,6 +396,9 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.N("taxi", tbhost::taxi::KnownNodeCount(bot)).B("onTaxi", tbhost::taxi::InFlight(bot));
     ObjectGuid const trGuid = tbhost::ride::CurrentTransportGuid(bot);
     rec.S("transport", trGuid.IsEmpty() ? std::string("none") : trGuid.ToString());
+    uint32 ahPosted = 0, ahSold = 0;
+    tbhost::ah::GetBotStateCounts(bot, ahPosted, ahSold);
+    rec.S("ah", std::to_string(ahPosted) + "/" + std::to_string(ahSold));
     return rec;
 }
 

@@ -17,7 +17,6 @@
     X(ItemUsePacket, "item use packet", "imbue / use an item by queueing a CMSG_USE_ITEM packet with a packed guid (1.12 layout)") \
     X(ItemSlotOfPrototype, "equip slot of an item prototype", "Player::FindEquipSlot on a prototype; ForeverCore asks about an Item (W6b gear generation uses GearSetPolicy::InventoryTypeFitsSlot)") \
     X(Companions, "companions", "spells with the summon critter effect (1.12 SPELL_EFFECT_SUMMON_CRITTER); ForeverCore has no such effect") \
-    X(Auction, "auction (type only)", "AuctionEntry named in the declarations of the auction code (RandomBotFacade.h, ItemUsageValue.h); the slice never reaches that code and ForeverCore has AuctionPosting instead") \
     X(IncomingLoot, "incoming: loot vote and roll won", "the loot vote (another roller's vote) and loot roll won packets (1.12 layouts) are not fed on ForeverCore; the start of a group-loot roll and the bot's own vote are real since slice 9 (the roll list of Player::GetLootRolls is polled, the vote goes through HandleLootRoll, greed only), the loot window is read from the core's Loot object") \
     X(IncomingTaxi, "incoming: taxi", "activate taxi and taxi node packets") \
     X(IncomingGroup, "incoming: group and party", "group invite, uninvite, set leader, party command, ready check, summon request and duel request packets") \

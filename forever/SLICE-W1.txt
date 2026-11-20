@@ -290,3 +290,4 @@ ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
 ai/playerbot/strategy/actions/DropQuestAction.cpp
 ai/playerbot/strategy/actions/ShareQuestAction.cpp
 ai/playerbot/strategy/actions/QuestRewardActions.cpp
+ai/playerbot/strategy/actions/AhAction.cpp
