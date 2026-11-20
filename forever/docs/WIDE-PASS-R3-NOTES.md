@@ -156,6 +156,14 @@ Live tests on the VM: none were made in this pass (the Turtle gates are a compil
 
 ## Fix round (two reviews)
 
+| finding | verdict |
+|---|---|
+| Codex: a failed census is reported as a successful run | fix (`vm-census.sh`, `census.sh`, 2 tests) |
+| Gemini 1: DB queries against missing tables/columns abort ForeverCore | documentation fix; code rejected (a schema decision, recorded) |
+| Gemini 2: `auto` / `if (auto ...)` printf `PQuery` calls were missed | fix (rewriter + 10 tests, 20 sites and 4 `%s` sites) |
+| Gemini 3: zero-argument `DbPQueryW3` went through printf | fix (header + `tools/test_w3_zero_argument_query.cpp`) |
+| Gemini 4: `vm-census.sh` masks failures | fix (the Codex finding) |
+
 ### Codex: a failed census was masked as a successful run (`forever/tools/vm-census.sh:31-36`)
 
 **Fix.** The remote session no longer pipes `census.sh` into `tail`: it runs the census into `~/forever-build/census-runs/<name>.census.log`, keeps `census.sh`'s own status, prints the log's
