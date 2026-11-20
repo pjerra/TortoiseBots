@@ -3,6 +3,7 @@
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
 #include "host/TbPet.h"
+#include "host/TbHostTown.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -334,6 +335,7 @@ Rec StateRec(Player* bot, Readiness& ready)
         if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
             gear.push_back({std::to_string(slot), std::to_string(item->GetEntry())});
     rec.LP("gear", gear);
+    rec.N("dur", tbhost::town::CalcInventoryDurabilityPct(bot)).N("mail", tbhost::town::GetUnreadMailCount(bot));
     return rec;
 }
 

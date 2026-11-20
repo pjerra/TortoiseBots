@@ -117,7 +117,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -406,6 +406,16 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     // instance's entrance (D2). The action's own result is the order's result; a bot that is not dead has nothing to release (`fail:release`).
     if (o.verb == "release")
         return act("release", Event("tb order", std::string(), owner)) ? "ok" : "fail:release";
+    if (o.verb == "sell")
+        return act("sell", Event("tb order", o.arg.empty() ? std::string("gray") : o.arg, owner)) ? "ok" : "fail:sell";
+    if (o.verb == "buy")
+        return act("buy", Event("tb order", o.arg.empty() ? std::string("vendor") : o.arg, owner)) ? "ok" : "fail:buy";
+    if (o.verb == "repair")
+        return act("repair", Event("tb order", std::string(), owner)) ? "ok" : "fail:repair";
+    if (o.verb == "train")
+        return act("trainer", Event("tb order", o.arg.empty() ? std::string("learn") : o.arg, owner)) ? "ok" : "fail:train";
+    if (o.verb == "mail")
+        return act("mail", Event("tb order", o.arg.empty() ? std::string("take") : o.arg, owner)) ? "ok" : "fail:mail";
     if (o.verb == "hold")
     {
         ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
@@ -820,6 +830,16 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
         }
         return true;
     }
+    if (verb == "sell")
+        return need("sell");
+    if (verb == "buy")
+        return need("buy");
+    if (verb == "repair")
+        return need("repair");
+    if (verb == "train")
+        return need("trainer");
+    if (verb == "mail")
+        return need("mail");
     if (verb == "rest")
     {
         bool const needMana = bot->GetPowerType() == POWER_MANA && bot->GetPower(POWER_MANA) < bot->GetMaxPower(POWER_MANA);
@@ -969,7 +989,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc") && rest.empty())
         return Fail(handler, args, "order", "missing-argument", verb == "assist" ? "assist <member name>" :
             (verb == "co" || verb == "nc") ? "co|nc <+strategy,-strategy>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
-    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release") && !rest.empty())
+    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair") && !rest.empty())
         return Fail(handler, args, "order", "unexpected-argument", rest);
     if (verb == "co" || verb == "nc")
         for (char c : rest)
@@ -1108,6 +1128,16 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 continue;
             }
         }
+        else if (verb == "sell")
+            needAction[0] = "sell";
+        else if (verb == "buy")
+            needAction[0] = "buy";
+        else if (verb == "repair")
+            needAction[0] = "repair";
+        else if (verb == "train")
+            needAction[0] = "trainer";
+        else if (verb == "mail")
+            needAction[0] = "mail";
 
         bool missing = false;
         for (char const* key : needAction)
