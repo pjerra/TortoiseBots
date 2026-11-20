@@ -186,7 +186,7 @@ uint32 RunCcRemainingMs(Unit const* unit)
 // immunities are in it: Unit::GetMechanicImmunityMask).
 uint32 RunCcImmune(Unit const* unit)
 {
-    SpellInfo const* info = sSpellMgr->GetSpellInfo(DungeonRun::kPolymorphSpells[0], DIFFICULTY_NONE);
+    SpellInfo const* info = sSpellMgr.GetSpellInfo(DungeonRun::kPolymorphSpells[0], DIFFICULTY_NONE);
     if (info && (unit->GetMechanicImmunityMask() & info->GetAllEffectsMechanicMask()))
         return DungeonRun::CcBit(DungeonRun::CcFamily::Polymorph);
     return 0;
