@@ -47,7 +47,7 @@ bool ManaShortForNuke(PlayerbotAI* ai, Player* bot, std::string const& nuke)
     SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellId);
     if (!spellInfo || spellInfo->powerType != POWER_MANA)
         return false;
-    uint32 const cost = Spell::CalculatePowerCost(spellInfo, bot, nullptr, nullptr);
+    uint32 const cost = SpellPowerCostCompat(spellInfo, bot);
     return NukeUnaffordable(true, bot->GetPower(POWER_MANA), cost);
 }
 

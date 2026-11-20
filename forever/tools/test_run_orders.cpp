@@ -62,9 +62,44 @@ static void TestParse()
     p = Parse("summon Mdpsb");
     CHECK(p.verb == od::Verb::Summon && p.bot == "Mdpsb");
 
+    // G8: the run's crowd-control orders (DungeonRunPolicy.h: CcOrderText, CcClearOrder) are carried out (they were `unsupported` before).
+    p = Parse("cc moon 77 Mmage");
+    CHECK(p.verb == od::Verb::Cc && p.mark == "moon" && p.handle == 77 && p.bot == "Mmage" && p.family.empty());
+    p = Parse("cc square 12 Mmage polymorph");
+    CHECK(p.verb == od::Verb::Cc && p.family == "polymorph");
+    p = Parse("CC Moon 5 Mmage Shackle Undead", false);       // two words after the bot: more than the grammar's four arguments
+    p = Parse("cc moon 5 Mmage shackleundead");
+    CHECK(p.verb == od::Verb::Cc && p.family == "shackleundead");
+    p = Parse("cc clear Mmage");
+    CHECK(p.verb == od::Verb::CcClear && p.bot == "Mmage" && p.mark.empty());
+    p = Parse("cc clear Mmage moon 77");
+    CHECK(p.verb == od::Verb::CcClear && p.bot == "Mmage" && p.mark == "moon" && p.handle == 77);
+    {
+        // the strings the policy builds parse back to what it meant
+        DR::CcPick pick;
+        pick.mark = "moon";
+        pick.bot = "Mmage";
+        p = Parse(DR::CcOrderText(pick, 4242));
+        CHECK(p.verb == od::Verb::Cc && p.handle == 4242 && p.bot == "Mmage" && p.mark == "moon");
+        DR::Run::CcHold hold;
+        hold.bot = "Mmage";
+        hold.mark = "moon";
+        p = Parse(DR::CcClearOrder(hold, 4242));
+        CHECK(p.verb == od::Verb::CcClear && p.handle == 4242 && p.mark == "moon" && p.bot == "Mmage");
+    }
+    for (char const* bad : { "cc", "cc moon", "cc moon 5", "cc blue 5 Mmage", "cc moon 0 Mmage", "cc moon 5 Mmage dance", "cc moon 5 Mmage fear extra", "cc clear", "cc clear Mmage moon", "cc clear Mmage blue 5" })
+    {
+        Parse(bad, false);
+        CHECK(CodeOf(bad) == "invalid");
+    }
+    // the host's refusal words map to the order answer's
+    CHECK(od::CcAnswerCode("target-dead") == "invalid-target" && od::CcAnswerCode("not-attackable") == "invalid-target");
+    CHECK(od::CcAnswerCode("bad-mark") == "invalid" && od::CcAnswerCode("no-party") == "not-bound");
+    CHECK(od::CcAnswerCode("no-engine") == "no-engine" && od::CcAnswerCode("failed") == "failed" && od::CcAnswerCode("anything") == "failed");
+
     // Refused by grammar: the verbs the module does not carry out are `unsupported`, a broken one `invalid`.
-    for (char const* order : { "escape from 1 2 3 4 5 6", "rescue from a to 1 2 3", "fetch 1 2 3", "return Mdps 389", "rejoin Mdps", "cc star 5 Mmage",
-             "cc clear Mmage", "loot 5 Mdps", "lootmethod ffa", "open entry:1 Mdps", "use 5 Mdps", "ritual 5 A B", "gossip 5 Mdps 1", "state 5", "enter near" })
+    for (char const* order : { "escape from 1 2 3 4 5 6", "rescue from a to 1 2 3", "fetch 1 2 3", "return Mdps 389", "rejoin Mdps",
+             "ritual 5 A B", "gossip 5 Mdps 1", "state 5", "enter near" })
     {
         Parse(order, false);
         CHECK(CodeOf(order) == "unsupported");
@@ -74,6 +109,16 @@ static void TestParse()
         Parse(order, false);
         std::string const code = CodeOf(order);
         CHECK(code == "invalid" || code == "unsupported");
+    }
+    // S9 (O9): loot, lootmethod, open and use have a grammar now (the executor judges them: forever/tools/test_run_tasks.cpp); a broken one is `invalid`.
+    CHECK(Parse("loot 5 Mdps").verb == od::Verb::Loot);
+    CHECK(Parse("lootmethod ffa").verb == od::Verb::LootMethod);
+    CHECK(Parse("open entry:1 Mdps").verb == od::Verb::Open);
+    CHECK(Parse("use 5 Mdps").verb == od::Verb::Use);
+    for (char const* order : { "loot", "loot 5", "lootmethod", "lootmethod sideways", "open", "open entry:0 Mdps", "use", "use 5" })
+    {
+        Parse(order, false);
+        CHECK(CodeOf(order) == "invalid");
     }
     // The Turtle command's options that the module does not port are refused, not dropped.
     Parse("pull 12 ranged", false);

@@ -16,6 +16,8 @@
 #include <string>
 #include <vector>
 
+class Player;
+
 namespace TortoiseBots
 {
 namespace DungeonRun
@@ -71,5 +73,9 @@ struct FactsTotals
     uint64 unreadable = 0;          // reads where the lead was not in the world
 };
 FactsTotals const& Totals();
+
+// A member's run-tank read. `PlayerbotAI::IsTank` answers from the forced role bit first, so a bit left on a class whose kit cannot tank
+// (a restoration shaman: slice/SliceHybridPolicy.h) must not make it a tank: every run and party read of a member's tank-ness uses this.
+bool IsTankMember(Player* bot);
 }
 }

@@ -14,8 +14,11 @@
 // The cheer text emote (T TEXTEMOTE_CHEER, F's TextEmotes TEXT_EMOTE_CHEER), like TEXTEMOTE_NOD in TbCompat_Names.h:173.
 #define TEXTEMOTE_CHEER TEXT_EMOTE_CHEER
 
+// Declared here, defined in TbCompat_S9.h (included after this file): LootOpenCompat tells the window memo that it raised the event itself.
+inline void NoteLootWindowAnnouncedCompat(Player const* bot, ObjectGuid const& owner);
+
 // ===============================================================================================================
-// LOOT: money only (lead decision D2). The bot opens a corpse, reads its money from the core's Loot object, takes it and releases
+// LOOT: money first (lead decision D2), items since slice 9 (package L9). The bot opens a corpse, reads its money from the core's Loot object, takes it and releases
 // the window, through the core's own handlers (the calls a client's packets end in). Everything that takes ITEMS out of a window
 // is the named feature "loot: items, quest items and rolls".
 // Threading: the engine ticks on the world thread, before the maps update (World.cpp:2465, :2475). The loot handlers are
@@ -26,7 +29,7 @@
 // Open the loot window of a corpse: WorldSession::HandleLootOpcode(LootUnit&) (LootHandler.cpp:213-259). It checks, in this order,
 // that the player is alive and the guid is a creature (:216), that the creature exists (:219), AELootCreatureCheck::IsValidLootTarget
 // (:223: the corpse is dead, within 30 yards of the player (LootHandler.cpp:46,:55), and Player::isAllowedToLoot = this player is an
-// allowed looter and has something to loot, Player.cpp:20246-20288), then interrupts a running cast (:228-229), and calls
+// allowed looter and has something to loot, Player.cpp:20256-20298), then interrupts a running cast (:228-229), and calls
 // Player::SendLoot(*creature->GetLootForPlayer(player)) (:254), which puts the loot into the player's loot view (Player.cpp:10019-10046:
 // SetLootGUID, m_AELootView[loot guid], UNIT_FLAG_LOOTING). A refusal sends NOTHING (the handler returns), so the answer here is read
 // back from the loot view. With AE loot on (CONFIG_ENABLE_AE_LOOT) the core also opens up to 49 other corpses of the area (:233-251);
@@ -59,6 +62,7 @@ inline bool LootOpenCompat(AiType* ai, Player* bot, ObjectGuid const& guid)
 
     WorldPacket event;
     event << guid;
+    NoteLootWindowAnnouncedCompat(bot, guid);
     trigger->ExternalEvent(event, nullptr);
     return true;
 }
@@ -93,7 +97,7 @@ inline void LootReleaseAllCompat(Player* bot, ObjectGuid const& guid)
 // WHOLE loot view; for a corpse window of a player in a group the money is split between the group members that are allowed looters
 // of that loot and within the group reward distance (:151-179), everybody else's share goes to them with their own money messages;
 // alone, or for a non-corpse window, the player takes all of it (:181-191). The split divides by the number of such members (:162):
-// with none the core would divide by zero. The looter itself always counts (IsAtGroupRewardDistance(self) is true, Player.cpp:28052-28065)
+// with none the core would divide by zero. The looter itself always counts (IsAtGroupRewardDistance(self) is true, Player.cpp:28062-28075)
 // as long as it is an allowed looter of the loot, which opening the window already required; the same test is made here first, and a
 // window that fails it is not taken (false) instead of reaching the division. Different answer: a bot in a party shares the money
 // with the party (the master gets a part of the bot's corpse gold), as every player of this core does.
@@ -126,9 +130,15 @@ inline bool LootMoneyCompat(Player* bot)
     return true;
 }
 
-// The event of a window (T: the head of the SMSG_LOOT_RESPONSE packet). F's event packet is the owner guid (LootOpenCompat); the money
-// is read from the core's Loot object in the player's view (Loot::gold, Loot.h:298). `items` stays 0 on purpose: items are not taken
-// (D2), so the item loop of StoreLootAction does not run. Returns false when the player has no window of that guid (T: a loot error).
+// The event of a window (T: the head of the SMSG_LOOT_RESPONSE packet [guid][loot type][gold u32][item count u8][item rows]). F's event packet is the
+// owner guid (LootOpenCompat, or the poll of a game object's window, TbCompat_S9.h); the money is read from the core's Loot object in the player's view
+// (Loot::gold, Loot.h:298) and the ITEM ROWS are rebuilt into `p` in the layout StoreLootAction's loop reads (T: [slot u8][item id u32][count u32]
+// [display id u32][random suffix u32][random property id u32][slot type u8]), one row per item the core would show this player in its loot window
+// (Loot::BuildLootResponse, Loot.cpp:1229: LootItem::GetUiTypeForPlayer has a value). The slot type is the loop's: 0 = this bot may take it (the core's
+// ALLOW_LOOT and OWNER), anything else is skipped by the loop (1 a roll is running, 2 locked, 3 master loot). The slot number is the core's loot list id,
+// the very number HandleAutostoreLootItemOpcode takes. Currencies and tracking quests are not rows (a Classic corpse holds none). The display id and the
+// random suffix / property are 0 (F has item bonus lists, Unported "item random properties"). Returns false when the player has no window of that guid
+// (T: a loot error).
 inline bool LootWindowReadCompat(Player* bot, WorldPacket& p, ObjectGuid& guid, uint8& loot_type, uint32& gold, uint8& items, uint8& lootError)
 {
     lootError = 0;
@@ -145,6 +155,25 @@ inline bool LootWindowReadCompat(Player* bot, WorldPacket& p, ObjectGuid& guid, 
     loot_type = uint8(loot->loot_type);
     gold = loot->gold;
     items = 0;
+
+    ByteBuffer rows;
+    for (LootItem const& item : loot->items)
+    {
+        if (items == 255 || item.type != LootItemType::Item)
+            continue;
+        Optional<LootSlotType> const uiType = item.GetUiTypeForPlayer(bot, *loot);
+        if (!uiType)
+            continue;
+        uint8 const slotType = (*uiType == LOOT_SLOT_TYPE_ALLOW_LOOT || *uiType == LOOT_SLOT_TYPE_OWNER) ? uint8(LOOT_SLOT_TYPE_ALLOW_LOOT) : uint8(*uiType);
+        rows << uint8(item.LootListId) << uint32(item.itemid) << uint32(item.count) << uint32(0) << uint32(0) << uint32(0) << slotType;
+        ++items;
+    }
+
+    p.clear();
+    p << guid;
+    size_t const head = p.wpos();
+    p.append(rows);
+    p.rpos(head);
     return true;
 }
 
@@ -156,27 +185,84 @@ inline void SetLootGuidCompat(Player* /*bot*/, ObjectGuid const& /*guid*/) {}
 // D2: money only). True on F: DoLoot stops there and answers "the open failed" (OpenLootAction counts it, three failures abandon the
 // object). The skill a corpse asks for is still named for the code behind the line (T's helper is ai/cmangos-compat-shim.h:59; F: the
 // creature difficulty's own accessor, CreatureData.h:475).
-inline bool LootGatherUnportedCompat() { tbcompat::Unported(tbcompat::Feature::GatheringLoot); return true; }
+// Slice 9: a CHEST (GAMEOBJECT_TYPE_CHEST) is opened by the opening cast and its window is read like a corpse's (the poll of TbCompat_S9.h), so a chest
+// is not "unported": false = the code below runs for it. Everything else that needs a cast (a herb or ore node, a skin, a lock the bot picks) stays
+// the named feature and answers true. Spec unknown U3: whether the lock of the gunpowder chest opens for a bot through `open loot`, one boot decides.
+inline bool LootGatherUnportedCompat(WorldObject* object)
+{
+    if (object)
+        if (GameObject* chest = object->ToGameObject())
+            if (chest->GetGoType() == GAMEOBJECT_TYPE_CHEST)
+                return false;
+    tbcompat::Unported(tbcompat::Feature::GatheringLoot);
+    return true;
+}
 inline uint32 GetRequiredLootSkillCompat(CreatureTemplate const* tpl)
 {
     CreatureDifficulty const* difficulty = tpl ? tpl->GetDifficulty(DIFFICULTY_NONE) : nullptr;
     return difficulty ? uint32(difficulty->GetRequiredLootSkill()) : uint32(SKILL_NONE);
 }
 
-// The loot item slots of a window, the take of one item and the quest requirements of a looted item: item looting (D2). Failure value:
-// no slot, nothing taken (the item loop does not run on F: LootWindowReadCompat reports 0 items).
-inline bool LootSlotFactsCompat(Player* /*bot*/, Loot* /*loot*/, uint8 /*itemindex*/, bool& /*allowedForPlayer*/, bool& /*isQuest*/, bool& /*isFfa*/,
-    bool& /*isBlocked*/, bool& /*sharedAllowed*/)
+// The facts of one slot of an open window behind the take decision (ai::BotMayTakeLootSlot): what the core's own loot view says about the slot for this bot.
+// `itemindex` is the core's loot list id. Returns false when the slot holds no item this bot sees. Mapping of LootItem::GetUiTypeForPlayer (Loot.cpp:212):
+// ALLOW_LOOT / OWNER = the bot may take it (sharedAllowed), ROLL_ONGOING = blocked (a roll runs), LOCKED / MASTER = no right (it never reaches here: the
+// window rows skip them). allowedForPlayer is true for every slot with a UI type (the core only shows an item to its allowed looters, Loot.cpp:217);
+// a personal quest copy is `needs_quest` outside the loot rules, a free-for-all copy is `freeforall` (Loot.h:187-190). The take itself is made by
+// the core (Player::StoreLootItem, Player.cpp:28834), which repeats every check.
+inline bool LootSlotFactsCompat(Player* bot, Loot* loot, uint8 itemindex, bool& allowedForPlayer, bool& isQuest, bool& isFfa,
+    bool& isBlocked, bool& sharedAllowed)
 {
-    tbcompat::Unported(tbcompat::Feature::LootItems);
-    return false;
+    LootItem const* item = loot ? loot->GetItemInSlot(itemindex) : nullptr;
+    if (!item)
+        return false;
+    Optional<LootSlotType> const uiType = item->GetUiTypeForPlayer(bot, *loot);
+    if (!uiType)
+        return false;
+
+    allowedForPlayer = true;
+    isQuest = item->needs_quest && !item->follow_loot_rules;
+    isFfa = item->freeforall;
+    isBlocked = *uiType == LOOT_SLOT_TYPE_ROLL_ONGOING;
+    sharedAllowed = *uiType == LOOT_SLOT_TYPE_ALLOW_LOOT || *uiType == LOOT_SLOT_TYPE_OWNER;
+    return true;
 }
-inline void LootAutostoreCompat(Player* /*bot*/, uint8 /*itemindex*/) { tbcompat::Unported(tbcompat::Feature::LootItems); }
-// True on F: IsLootAllowed answers "not allowed" for every item (the failure value of the rule: no item is taken).
-inline bool ItemLootingUnportedCompat() { tbcompat::Unported(tbcompat::Feature::LootItems); return true; }
-inline bool QuestRequiredItemCompat(Quest const* /*quest*/, int /*index*/, uint32& /*itemId*/, uint32& /*count*/)
+
+// Take one item of the window: CMSG_LOOT_ITEM into WorldSession::HandleAutostoreLootItemOpcode (LootHandler.cpp:77). The request names the Loot's own
+// guid (the key of the player's loot view, Player.cpp:10042) and the loot list id. The core checks the loot view, the distance of a game object or
+// corpse, then Player::StoreLootItem: the free bag slot (CanStoreNewItem), the allowed-looter and roll-winner rules, and tells the player. An item
+// that cannot be stored is left in the window (the core sends an equip error to the headless session). The caller counts the take; whether the item
+// reached the bags is read from the item count by the commander's order code.
+inline void LootAutostoreCompat(Player* bot, Loot* loot, uint8 itemindex)
 {
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
+    if (!bot->GetSession() || !loot)
+        return;
+    WorldPackets::Loot::LootItem packet{ WorldPacket(CMSG_LOOT_ITEM) };
+    WorldPackets::Loot::LootRequest request;
+    request.Object = loot->GetGUID();
+    request.LootListID = itemindex;
+    packet.Loot.push_back(request);
+    bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
+}
+
+// Does the legacy item loop stand aside? F: no, since slice 9 items are taken (false = the checks of IsLootAllowed run).
+inline bool ItemLootingUnportedCompat() { return false; }
+
+// The quest's required item i of the first four item objectives (T Quest::ReqItemId / ReqItemCount, four slots). F: the objectives of type item
+// (QuestDef.h:356, :477), in order; a quest with fewer item objectives answers false for the rest.
+inline bool QuestRequiredItemCompat(Quest const* quest, int index, uint32& itemId, uint32& count)
+{
+    int seen = 0;
+    for (QuestObjective const& objective : quest->GetObjectives())
+    {
+        if (objective.Type != QUEST_OBJECTIVE_ITEM)
+            continue;
+        if (seen++ == index)
+        {
+            itemId = uint32(objective.ObjectID);
+            count = uint32(std::max(0, objective.Amount));
+            return true;
+        }
+    }
     return false;
 }
 
@@ -191,10 +277,10 @@ inline uint64 GroupIdKeyCompat(Group* group) { return GuidKeyCompat(group->GetGU
 // feature, never reached on F). Failure values: no extra rate, the roll never succeeds.
 template <class LootStoreType>
 inline float DropRateOfQualityCompat(LootStoreType& /*creatureLootStore*/, uint32 /*quality*/) { return 1.0f; }
-inline bool RollChanceCompat(float /*chance*/) { tbcompat::Unported(tbcompat::Feature::LootItems); return false; }
+inline bool RollChanceCompat(float /*chance*/) { tbcompat::Unported(tbcompat::Feature::LootBoost); return false; }
 
 // Whether a corpse still has loot this bot may take. T: the raw lootable flag OR the viewer's own right. F: the core's own right
-// Player::isAllowedToLoot (Player.cpp:20246-20288: dead, the viewer's loot exists and is not looted, the viewer is an allowed looter,
+// Player::isAllowedToLoot (Player.cpp:20256-20298: dead, the viewer's loot exists and is not looted, the viewer is an allowed looter,
 // gold always counts (Loot.cpp:1184-1188), and the round-robin / group-loot turn). Different answer: the raw lootable dynamic flag is not
 // read (on T the core masks it per viewer so it mostly equalled the right; on F it is one value for everybody, so it would also say
 // yes for a corpse another player tapped).
@@ -204,7 +290,7 @@ inline bool CorpseHasBodyLootForCompat(Player* bot, Creature* creature) { return
 
 // ai::HasVisiblePersonalItemFor: the personal items (quest, free-for-all) the viewer may see while another member holds the turn.
 // F: Loot::hasItemFor(viewer) (Loot.cpp:1197-1209: quest items of the viewer and its free-for-all items), the very test
-// Player::isAllowedToLoot makes for the same situation (Player.cpp:20271, :20284). The policy's own T algorithm (`body`) is not run.
+// Player::isAllowedToLoot makes for the same situation (Player.cpp:20281, :20294). The policy's own T algorithm (`body`) is not run.
 template <class LootType, class ViewerType, class Body>
 inline bool PersonalItemVisibleCompat(LootType const& loot, ViewerType* viewer, Body&&) { return loot.hasItemFor(viewer); }
 
@@ -236,7 +322,7 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
 // reports failure): the bot does less.
 //
 // The core call: Player::CastItemUseSpell(item, spellId, targets, castId, misc) (Player.cpp:9707-9757), the call ProcessItemCast ends in
-// when the client sends CMSG_USE_ITEM (Player.cpp:33751-33837, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
+// when the client sends CMSG_USE_ITEM (Player.cpp:33761-33847, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
 // that the spell is an ON_USE effect of a non-LEGACY item, or a use-spell enchantment (:9716-9744, an error line and no cast otherwise),
 // builds `Spell(this, spellInfo, TRIGGERED_NONE)` with m_CastItem = the item and calls prepare(targets) (:9746-9756); prepare checks the
 // cast (CheckCast), refuses with SendCastResult and otherwise queues the cast, which consumes the item when it finishes. The call

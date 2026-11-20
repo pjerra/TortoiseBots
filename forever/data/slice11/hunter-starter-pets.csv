@@ -1,0 +1,11 @@
+race_id,race,entry,name,family,wild_level,source
+1,Human,1128,Young Black Bear,Bear,5-6,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 4, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+2,Orc,3121,Durotar Tiger,Cat,7-8,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 2, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+3,Dwarf,1196,Ice Claw Bear,Bear,7-8,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 4, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+4,NightElf,2042,Nightsaber,Cat,5-6,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 2, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+5,Undead,1765,Worg,Wolf,10-11,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 1, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+6,Tauren,2958,Prairie Wolf,Wolf,5-6,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 1, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+7,Gnome,1196,Ice Claw Bear,Bear,7-8,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 4, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+8,Troll,3121,Durotar Tiger,Cat,7-8,"creature_template + creature_template_difficulty (DifficultyID 0): type 1 (beast), family 2, TypeFlags tameable, not exotic; wild level from creature_classic_level; TDB 2026-10-14"
+fallback-alliance,Alliance,1128,Young Black Bear,Bear,5-6,used when the race has no row
+fallback-horde,Horde,2958,Prairie Wolf,Wolf,5-6,used when the race has no row

@@ -15,6 +15,7 @@ SQL, exactly what ran (on the VM, from the module folder `~/forever-build/src-1/
 ```
 docker exec -i forever-db mysql -utrinity -p"$(cat ~/forever-run/.db_pass)" world < forever/sql/world/2026_11_19_00_warrior_trainer_spells.sql
 ```
+**The file was removed at integration batch 3** (wrong in Classic: Defensive Stance, Taunt and Sunder Armor come from the level-10 warrior quest chain via Path of Defense 8121; the module teaches them with `.tb learn` and the class skill-line pass of `.tb train` below). The command above is the record of what ran then; the file is not in the tree any more.
 Before: `SELECT COUNT(*) FROM trainer_spell WHERE SpellId IN (71,355,7386,20252)` = 0; the 27 warrior trainers (`COUNT(DISTINCT TrainerId) ... SpellId IN (2687,2565)`) = 27. After: 108 rows; per spell `SELECT SpellId, COUNT(DISTINCT TrainerId) ... GROUP BY SpellId` = 27 / 27 / 27 / 27 for 71 / 355 / 7386 / 20252, and 27 trainers have all four. The trainer table is read at start, so the server was booted after the SQL.
 Normal proof: a new warrior `Mfreshb` (human, level 18 by `.tb level`), spells BEFORE `.tb train`: none of 71 / 355 / 7386 / 20252; `.tb train Mfreshb` ("learned 22 spell(s) from 34 class trainer(s) and 42 from the class skill lines"); AFTER: `71 Defensive Stance`, `355 Taunt`, `7386 Sunder Armor` known, 20252 Intercept not (needs Berserker Stance, as the SQL comment says). No `.tb learn` used. (`Mfresh` was the first try; its `.tb learn` afterwards answered `known` for all three.)
 

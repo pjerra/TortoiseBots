@@ -1,0 +1,39 @@
+role,slot,item_id,name,source,reason
+marksmanship hunter,head,211857,Resilient Leather Mask,"vendor (14753 Illiyana Moonblaze), 2 vendors","quest/vendor preferred, console-handable; ilvl 25 req 20"
+marksmanship hunter,neck,277204,Erudite's Amulet,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+marksmanship hunter,shoulder,270023,Tanned Shoulderpads,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,back,16990,Spritekin Cloak,quest (6283 Bloodfury Bloodline),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+marksmanship hunter,wrist,270032,Cultist's Armguards,quest (1200 Blackfathom Villainy),"quest/vendor preferred, console-handable; ilvl 29 req 0"
+marksmanship hunter,hands,5299,Gloves of the Moon,quest (913 Cry of the Thunderhawk),"quest/vendor preferred, console-handable; ilvl 20 req 0"
+marksmanship hunter,waist,16659,Deftkin Belt,quest (824 Je'neu of the Earthen Ring),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,legs,279868,Duty Bound Leggings,quest (95195 Bloodied Insignia),"quest/vendor preferred, console-handable; ilvl 24 req 1"
+marksmanship hunter,feet,16977,Warsong Boots,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,finger,2933,Seal of Wrynn,quest (396 An Audience with the King),"quest/vendor preferred, console-handable; ilvl 31 req 0"
+marksmanship hunter,finger2,6414,Seal of Sylvanas,quest (1014 Arugal Must Die),"quest/vendor preferred, console-handable; ilvl 29 req 0"
+marksmanship hunter,trinket,21566,Rune of Perfection,"vendor (14753 Illiyana Moonblaze), 2 vendors","quest/vendor preferred, console-handable; ilvl 25 req 20"
+marksmanship hunter,trinket2,21568,Rune of Duty,"vendor (14753 Illiyana Moonblaze), 2 vendors","quest/vendor preferred, console-handable; ilvl 25 req 20"
+marksmanship hunter,main_hand,6505,Crescent Staff,quest (914 Leaders of the Fang),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+marksmanship hunter,off_hand,,,none,EMPTY: two-hander in the main hand
+marksmanship hunter,ranged,3493,Raptor's End,quest (296 Ormer's Revenge),"quest/vendor preferred, console-handable; ilvl 30 req 0"
+marksmanship hunter,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+marksmanship hunter,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)
+affliction warlock,head,3556,Dread Mage Hat,quest (397 You Have Served Us Well),"quest/vendor preferred, console-handable; ilvl 30 req 0"
+affliction warlock,neck,277203,Scholarly Pendant,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+affliction warlock,shoulder,17695,Chestnut Mantle,quest (6565 Allegiance to the Old Gods),"quest/vendor preferred, console-handable; ilvl 28 req 0"
+affliction warlock,back,15468,Windsong Drape,quest (4904 Free at Last),"quest/vendor preferred, console-handable; ilvl 29 req 0"
+affliction warlock,chest,270035,Reclaimer's Robes,quest (1059 Reclaiming the Charred Vale),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+affliction warlock,wrist,15452,Featherbead Bracers,quest (5724 Returning the Lost Satchel),"quest/vendor preferred, console-handable; ilvl 18 req 0"
+affliction warlock,hands,270030,Tattered Mittens,quest (1013 The Book of Ur),"quest/vendor preferred, console-handable; ilvl 28 req 0"
+affliction warlock,waist,16975,Warsong Sash,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+affliction warlock,legs,4505,Swampland Trousers,quest (633 The Thandol Span),"quest/vendor preferred, console-handable; ilvl 31 req 0"
+affliction warlock,feet,277218,Incinerator's Boots,quest (95999 WANTED: Incinerator Gar'im),"quest/vendor preferred, console-handable; ilvl 28 req 0"
+affliction warlock,finger,2933,Seal of Wrynn,quest (396 An Audience with the King),"quest/vendor preferred, console-handable; ilvl 31 req 0"
+affliction warlock,finger2,1449,Minor Channeling Ring,quest (256 WANTED: Chok'sul),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+affliction warlock,trinket,21566,Rune of Perfection,"vendor (14753 Illiyana Moonblaze), 2 vendors","quest/vendor preferred, console-handable; ilvl 25 req 20"
+affliction warlock,trinket2,21568,Rune of Duty,"vendor (14753 Illiyana Moonblaze), 2 vendors","quest/vendor preferred, console-handable; ilvl 25 req 20"
+affliction warlock,main_hand,15109,Staff of Soran'ruk,quest (1740 The Orb of Soran'ruk),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+affliction warlock,off_hand,,,none,EMPTY: two-hander in the main hand
+affliction warlock,ranged,5818,Moonbeam Wand,quest (1044 Answered Questions),"quest/vendor preferred, console-handable; ilvl 30 req 0"
+affliction warlock,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+affliction warlock,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)

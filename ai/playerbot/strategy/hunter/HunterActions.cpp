@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/HunterRangedTelemetry.h"
+#include "playerbot/TbCompatK11h.h"
 #include "playerbot/ServerFacade.h"
 #include "HunterActions.h"
 #include "HunterValues.h"
@@ -158,7 +159,7 @@ bool CastChoiceStingAction::Execute(Event& event)
 bool FeedPetAction::Execute(Event& event)
 {
     Pet* pet = bot->GetPet();
-    if (pet && pet->getPetType() == HUNTER_PET && pet->GetHappinessState() != HAPPY)
+    if (pet && pet->getPetType() == HUNTER_PET && !PetIsHappyCompat(pet))
         pet->SetPower(POWER_HAPPINESS, pet->GetMaxPower(POWER_HAPPINESS));
 
     return true;
@@ -198,7 +199,7 @@ bool HunterEquipAmmoAction::Execute(Event& event)
         break;
     }
 
-    uint32 currentAmmoId = bot->GetUInt32Value(PLAYER_AMMO_ID);
+    uint32 currentAmmoId = AmmoItemIdCompat(bot);
     const ItemPrototype* bestAmmoProto = nullptr;
     auto checkAmmo = [&](Item* item)
     {
@@ -230,9 +231,8 @@ bool HunterEquipAmmoAction::Execute(Event& event)
     // Equip best ammo if not already equipped
     if (bestAmmoProto && currentAmmoId != bestAmmoProto->ItemId)
     {
-        bot->SetUInt32Value(PLAYER_AMMO_ID, bestAmmoProto->ItemId);
-        bot->UpdateDamagePhysical(RANGED_ATTACK);
-        return true;
+        // T sets the field and refreshes the ranged damage; F's SetAmmo does both and refuses a stack the bot does not hold or cannot use (false: nothing changed).
+        return SetAmmoCompat(bot, bestAmmoProto->ItemId);
     }
 
     return false;
@@ -286,7 +286,7 @@ bool HunterStepOutAction::Execute(Event& event)
     // an attempt, and the next one aims farther.
     BeginHunterStepOut(*state, targetRaw, nowMs);
 
-    float const edge = bot->GetDistance(target, SizeFactor::CombatReach);
+    float const edge = GetDistanceCompat(bot, target, SizeFactor::CombatReach);
     float const center = sServerFacade.getDistance2d(bot, target);
     // Reach terms between centre and edge distance, constant for the step.
     float const reach = std::max(0.0f, center - edge);
@@ -409,12 +409,11 @@ bool CastFeignDeathAction::isUseful()
         if (!attacker || !attacker->IsAlive() || attacker->GetVictim() != bot)
             continue;
         uint32_t n = 0;
-        for (HostileReference* ref : attacker->GetThreatManager().getThreatList())
+        ForEachThreatListTargetCompat(attacker, [&](Unit* target)
         {
-            Unit* target = ref ? ref->getTarget() : nullptr;
             if (target && target != bot && target->IsAlive())
                 ++n;
-        }
+        });
         others.push_back(n);
     }
     // Raid groups: medium threat on a tank-held mob is not a feign (it

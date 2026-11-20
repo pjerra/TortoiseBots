@@ -4,6 +4,10 @@
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbH4.h"
+#include "host/TbCc.h"
+#include "host/TbHybrid.h"
+#include "host/TbPet.h"
+#include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunHooks.h"
 
 #include "CharacterCache.h"
@@ -364,6 +368,9 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "unsplittable").S("value", std::string(3100, 'y')));
     h4::SelfTestRecords(reply);               // H4: one example of every record kind and key slice 4 adds
     run::SelfTestRecords(reply);              // H5: one plan, leg, unit, run and event record
+    h8::SelfTestRecords(reply);               // H8: the cc and strategy records and the state keys slice 8 adds
+    h10::SelfTestRecords(reply);              // H10: the state keys slice 10 adds (form, totems, imbue, seal, paura)
+    p11::SelfTestRecords(reply);              // P11: the pet state keys and the `pet` record
     Rec end("selftest");
     end.N("line_too_long", LineTooLongCount()).S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
     reply.End(end);
@@ -381,14 +388,6 @@ bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd)
     if (args.badToken)
         return Fail(handler, args, cmd, "bad-token", "a token is # and 1 to 32 of A-Za-z0-9_.:-; nothing was done");
     return true;
-}
-
-std::string Lower(std::string_view text)
-{
-    std::string out(text);
-    for (char& c : out)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return out;
 }
 
 std::string GuidText(ObjectGuid guid)
@@ -438,14 +437,46 @@ bool IsHostBot(Player const* player)
     return player && BotMgr::Instance().IsBot(player->GetGUID());
 }
 
+namespace
+{
+target::Guid Identity(ObjectGuid guid)
+{
+    return { guid.GetRawValue(0), guid.GetRawValue(1) };
+}
+}
+
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character)
 {
-    if (character.IsEmpty())
-        return false;
-    if (BotMgr::Instance().IsBot(character))
-        return true;
     Player* sender = SenderPlayer(handler);
-    return sender && sender->GetGUID() == character;
+    return target::MayTarget(Identity(character), sender ? Identity(sender->GetGUID()) : target::Guid(),
+                             BotMgr::Instance().IsBot(character));
+}
+
+Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail)
+{
+    Player* sender = SenderPlayer(handler);
+    if (name.empty())
+    {
+        if (sender)
+            return sender;
+        code = "no-character";
+        detail = "the console has no character: name a host bot";
+        return nullptr;
+    }
+    Player* player = FindOnline(name);
+    if (!player)
+    {
+        code = "no-such-player";
+        detail = std::string(name) + " is not in the world";
+        return nullptr;
+    }
+    if (!MayLeadBots(handler, player->GetGUID()))
+    {
+        code = "not-a-bot";
+        detail = std::string(name) + " is neither a host bot nor your own character";
+        return nullptr;
+    }
+    return player;
 }
 
 Player* CommanderOf(Player* bot)
@@ -509,7 +540,7 @@ std::vector<Player*> BotsOfGroup(Group* group)
 }
 }
 
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows)
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender)
 {
     Address result;
     if (pos >= args.w.size())
@@ -528,10 +559,10 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.code = "no-such-player";
             result.detail = name + " is not in the world";
         }
-        else if (!IsHostBot(bot))
+        else if (!IsHostBot(bot) && !(allowSender && sender && bot->GetGUID() == sender->GetGUID()))
         {
             result.code = "not-a-bot";
-            result.detail = name + " is not a logged-in host bot";
+            result.detail = allowSender ? name + " is neither a host bot nor your own character" : name + " is not a logged-in host bot";
         }
         else
         {

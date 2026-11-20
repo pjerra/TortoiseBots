@@ -26,14 +26,9 @@ public:
 
         for (std::vector<std::string>::iterator i = auras.begin(); i != auras.end(); ++i)
         {
-            // Ignore mana buff spells for non mana users
-            if (*i == "arcane intellect" || *i == "arcane brilliance" || *i == "divine spirit" || *i == "prayer of spirit")
-            {
-                if (unit->GetPowerType() != POWER_MANA)
-                {
-                    return false;
-                }
-            }
+            // Ignore mana buff spells for non mana users (ai::BuffTargetFits: display power AND a mana pool)
+            if (!ai::BuffTargetFits(*i, unit->GetPowerType() == POWER_MANA, unit->GetMaxPower(POWER_MANA)))
+                return false;
 
             // Issue #468 (donor BuffBelowRefreshTarget): a LONG aura expiring
             // inside the refresh window counts as missing, so the member is

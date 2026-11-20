@@ -24,8 +24,7 @@ namespace
 {
 uint32 GetAuctionItemCount(AuctionEntry const& auction)
 {
-    Item* item = sAuctionMgr.GetAItem(auction.itemGuidLow);
-    return item ? item->GetCount() : 0;
+    return AuctionItemCountCompat(auction);
 }
 
 // What a piece changes on the character sheet when it carries no stat the
@@ -433,7 +432,7 @@ ItemUsage ItemUsageValue::Calculate()
     if ((proto->Class == ITEM_CLASS_ARMOR || proto->Class == ITEM_CLASS_WEAPON) && proto->Bonding != BIND_WHEN_PICKED_UP &&
         ai->HasSkill(SKILL_ENCHANTING) && proto->Quality >= ITEM_QUALITY_UNCOMMON)
     {
-        if (proto->DisenchantID)
+        if (ItemDisenchantIdCompat(proto))
         {
 
                 Item* item = CurrentItem(proto, bot);
@@ -498,7 +497,7 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
 
             if (proto->Class == ammoClass && proto->SubClass == subClass)
             {
-                uint32 currentAmmoId = bot->GetUInt32Value(PLAYER_AMMO_ID);
+                uint32 currentAmmoId = PlayerAmmoIdCompat(bot);
                 // A thrown weapon is its own ammo and never sets PLAYER_AMMO_ID, so "no ammo
                 // equipped" was always true for it: a second stack of the same axes in the bag
                 // came back as "equip", equipping it swapped the two stacks and the next tick
@@ -821,7 +820,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
     // picks the quiver slot or a free slot, or fails explicitly).
     bool const isQuiverUpgradeCandidate = (itemProto->Class == ITEM_CLASS_QUIVER &&
         bot->GetClass() == CLASS_HUNTER &&
-        bot->GetWeaponForAttack(WeaponAttackType::RANGED_ATTACK, false, false) != nullptr);
+        GetWeaponForAttackCompat(bot, WeaponAttackType::RANGED_ATTACK, false, false) != nullptr);
 
     uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);
     if (!specId)
@@ -859,7 +858,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
 
     if (itemProto->Class == ITEM_CLASS_QUIVER)
     {
-        Item* equippedRangedWeapon = bot->GetWeaponForAttack(WeaponAttackType::RANGED_ATTACK, false, false);
+        Item* equippedRangedWeapon = GetWeaponForAttackCompat(bot, WeaponAttackType::RANGED_ATTACK, false, false);
         ItemPrototype const* rangedProto = equippedRangedWeapon ? GetItemProtoCompat(equippedRangedWeapon) : nullptr;
 
         auto bagKindFromSubClass = [](uint32 subClass) -> AmmoBagKind {
@@ -1046,7 +1045,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
             return ItemUsage::ITEM_USAGE_NONE;
     }
 
-    ItemQualifier oldBaseQualifier(oldItemProto->ItemId, oldItem->GetItemRandomPropertyId());
+    ItemQualifier oldBaseQualifier(oldItemProto->ItemId, ItemRandomPropertyIdCompat(oldItem));
     uint32 oldStatWeight = sRandomItemMgr.ItemStatWeight(bot, oldBaseQualifier);
 
     // When the weighted scores tie - the common case for low-level gear, since
@@ -1159,8 +1158,8 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
         isBetter = true;
 
     Item* item = CurrentItem(itemProto, bot);
-    bool itemIsBroken = item && item->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
-    bool oldItemIsBroken = oldItem->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && oldItem->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
+    bool itemIsBroken = item && ItemDurabilityCompat(item) == 0 && ItemMaxDurabilityCompat(item) > 0;
+    bool oldItemIsBroken = ItemDurabilityCompat(oldItem) == 0 && ItemMaxDurabilityCompat(oldItem) > 0;
     if (itemProto->ItemId != oldItemProto->ItemId && (shouldEquip || !existingShouldEquip) && isBetter)
     {
         switch (itemProto->Class)
@@ -1242,7 +1241,7 @@ std::string ItemUsageValue::ReasonForNeed(ItemUsage usage, ItemQualifier qualifi
 
         placeholders["%current"] = ChatHelper::formatItem(currentItem);
 
-        if (currentItem->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && currentItem->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0)
+        if (ItemDurabilityCompat(currentItem) == 0 && ItemMaxDurabilityCompat(currentItem) > 0)
             return BOT_TEXT2("for equiping as a replacement of %current because it is broken.", placeholders);
 
         uint32 currentStatWeight = sRandomItemMgr.ItemStatWeight(bot, currentItem);
@@ -1326,27 +1325,30 @@ bool ItemUsageValue::IsNeededForQuest(Player* player, uint32 itemId, bool ignore
         if (!quest)
             continue;
 
-        QuestStatusData& qData = player->getQuestStatusMap()[quest->GetQuestId()];
-        if (qData.m_status != QUEST_STATUS_INCOMPLETE)
+        if (!QuestIncompleteCompat(player, quest))
             continue;
 
         for (int i = 0; i < 4; i++)
         {
-            if (!quest->ReqItemCount[i])
+            uint32 reqItemId = 0;
+            uint32 reqItemCount = 0;
+            if (!QuestRequiredItemCompat(quest, i, reqItemId, reqItemCount) || !reqItemCount)
                 continue;
 
-            if (quest->ReqItemId[i] != itemId && ItemCreatedFrom(quest->ReqItemId[i]) != itemId)
+            if (reqItemId != itemId && ItemCreatedFrom(reqItemId) != itemId)
                 continue;
 
-            if (!ignoreInventory && player->GetItemCount(itemId, false) >= quest->ReqItemCount[i])
+            if (!ignoreInventory && player->GetItemCount(itemId, false) >= reqItemCount)
                 continue;
 
             return true;
         }
 
-        for (int j = 0; j < QUEST_SOURCE_ITEM_IDS_COUNT; ++j)
+        for (int j = 0; j < QuestSourceSlotsCompat; ++j)
         {
-            if (quest->ReqSourceId[j] != itemId)
+            uint32 sourceId = 0;
+            uint32 sourceCount = 0;
+            if (!QuestSourceItemCompat(quest, j, sourceId, sourceCount) || sourceId != itemId)
                 continue;
 
             if (ignoreInventory)
@@ -1357,7 +1359,7 @@ bool ItemUsageValue::IsNeededForQuest(Player* player, uint32 itemId, bool ignore
                 continue;
 
             if (ai::QuestSourceItemStillNeeded(player->GetItemCount(itemId, true), sourceProto->MaxCount,
-                                              quest->ReqSourceCount[j], sourceProto->Stackable))
+                                              sourceCount, sourceProto->Stackable))
                 return true;
         }
     }
@@ -1421,7 +1423,7 @@ bool ItemUsageValue::IsItemUsefulForSkill(ItemPrototype const* proto)
             return true;
         if (ai->HasSkill(SKILL_FISHING) && IsItemUsedBySkill(proto, SKILL_FISHING))
             return true;
-        if (ai->HasSkill(SKILL_FIRST_AID) && IsItemUsedBySkill(proto, SKILL_FIRST_AID))
+        if (ai->HasSkill((SkillType)SKILL_FIRST_AID) && IsItemUsedBySkill(proto, SKILL_FIRST_AID))
             return true;
         if (ai->HasSkill(SKILL_COOKING) && IsItemUsedBySkill(proto, SKILL_COOKING))
             return true;
@@ -1460,7 +1462,7 @@ bool ItemUsageValue::IsItemUsefulForSkill(ItemPrototype const* proto)
         case ITEM_SUBCLASS_ALCHEMY_RECIPE:
             return ai->HasSkill(SKILL_ALCHEMY);
         case ITEM_SUBCLASS_FIRST_AID_MANUAL:
-            return ai->HasSkill(SKILL_FIRST_AID);
+            return ai->HasSkill((SkillType)SKILL_FIRST_AID);
         case ITEM_SUBCLASS_ENCHANTING_FORMULA:
             return ai->HasSkill(SKILL_ENCHANTING);
         case ITEM_SUBCLASS_FISHING_MANUAL:
@@ -1527,7 +1529,7 @@ Item* ItemUsageValue::CurrentItem(ItemPrototype const* proto, Player* bot)
 
     for (auto item : found)
     {
-        if (bestItem && item->GetUInt32Value(ITEM_FIELD_DURABILITY) < bestItem->GetUInt32Value(ITEM_FIELD_DURABILITY))
+        if (bestItem && ItemDurabilityCompat(item) < ItemDurabilityCompat(bestItem))
             continue;
 
         if (bestItem && item->GetCount() < bestItem->GetCount())
@@ -1776,7 +1778,7 @@ void ItemUsageValue::PopulateProfessionReagentIds()
         if (!skillInfo)
             continue;
 
-        if (skillInfo->categoryId == SKILL_CATEGORY_PROFESSION || skillInfo->categoryId == SKILL_CATEGORY_SECONDARY)
+        if (SkillLineCategoryCompat(skillInfo) == SKILL_CATEGORY_PROFESSION || SkillLineCategoryCompat(skillInfo) == SKILL_CATEGORY_SECONDARY)
         {
             for (uint32 j = 0; j < sSkillLineAbilityStore.GetNumRows(); ++j)
             {
@@ -1785,10 +1787,10 @@ void ItemUsageValue::PopulateProfessionReagentIds()
                     continue;
 
                 // wrong skill
-                if (skillLine->skillId != skillInfo->id)
+                if (SkillLineAbilitySkillCompat(skillLine) != SkillLineIdCompat(skillInfo))
                     continue;
 
-                SpellEntry const* spellInfo = GetSpellEntryCompat(skillLine->spellId);
+                SpellEntry const* spellInfo = GetSpellEntryCompat(SkillLineAbilitySpellCompat(skillLine));
                 if (spellInfo)
                 {
                     bool isReagentFor = false;
@@ -1798,7 +1800,7 @@ void ItemUsageValue::PopulateProfessionReagentIds()
                         if (!spellInfo->ReagentCount[i] || !spellInfo->Reagent[i])
                             continue;
 
-                        m_reagentItemIdsForCraftingSkills[skillLine->skillId].insert(spellInfo->Reagent[i]);
+                        m_reagentItemIdsForCraftingSkills[SkillLineAbilitySkillCompat(skillLine)].insert(spellInfo->Reagent[i]);
                         m_allReagentItemIdsForCraftingSkills.insert(spellInfo->Reagent[i]);
                         m_allReagentItemIdsForCraftingSkillsVector.push_back(spellInfo->Reagent[i]);
                     }
@@ -1817,7 +1819,7 @@ void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds()
         if (!skillLine)
             continue;
 
-        SpellEntry const* spellInfo = GetSpellEntryCompat(skillLine->spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(SkillLineAbilitySpellCompat(skillLine));
         if (spellInfo)
         {
             for (int i = 0; i < 3; ++i)
@@ -1851,6 +1853,11 @@ void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds()
 
 void ItemUsageValue::PopulateSoldByVendorItemIds()
 {
+    // F: the three queries below name `npc_vendor_template` (a 1.12 table ForeverCore does not have: its connection ABORTS the server on a missing table)
+    // and use printf placeholders its PQuery drops (findings item 18). The vendor lists stay empty, so no item counts as "sold by a vendor" (LESS).
+    if (VendorItemListsUnportedCompat())
+        return;
+
     if (auto result = WorldDatabase.PQuery("%s", "SELECT distinct item FROM npc_vendor UNION SELECT distinct item FROM npc_vendor_template"))
     {
         BarGoLink bar(result->GetRowCount());
@@ -1936,7 +1943,7 @@ bool ItemUsageValue::IsItemSoldByAnyVendorWithoutLimit(ItemPrototype const* prot
     return m_itemIdsSoldByAnyVendorsWithoutLimit.count(proto->ItemId) > 0;
 }
 
-bool ItemUsageValue::IsItemUsedBySkill(ItemPrototype const* proto, SkillType skillType)
+bool ItemUsageValue::IsItemUsedBySkill(ItemPrototype const* proto, uint32 skillType)
 {
     return m_reagentItemIdsForCraftingSkills[skillType].count(proto->ItemId) > 0;
 }
@@ -2180,7 +2187,7 @@ bool ItemUsageValue::IsWorthBuyingFromVendorToResellAtAH(ItemPrototype const* pr
     }
 
     //do not buy items that require honor to use
-    if (proto->RequiredHonorRank > 0)
+    if (ItemRequiredHonorRankCompat(proto) > 0)
     {
         return false;
     }
@@ -2406,7 +2413,7 @@ bool ItemUsageValue::IsFutureUpgrade(ItemQualifier& itemQualifier, Player* bot)
     if (!statWeight)
         return false;
 
-    uint8 slot = bot->FindEquipSlot(proto, NULL_SLOT, true);
+    uint8 slot = EquipSlotOfProtoCompat(bot, proto);
     if (slot == NULL_SLOT)
         return false;
 
@@ -2414,7 +2421,7 @@ bool ItemUsageValue::IsFutureUpgrade(ItemQualifier& itemQualifier, Player* bot)
     if (!worn)
         return true;
 
-    ItemQualifier wornQualifier(GetItemProtoCompat(worn)->ItemId, worn->GetItemRandomPropertyId());
+    ItemQualifier wornQualifier(GetItemProtoCompat(worn)->ItemId, ItemRandomPropertyIdCompat(worn));
     return ai::EquipUpgradeBetter(statWeight, sRandomItemMgr.ItemStatWeight(bot, wornQualifier),
         sPlayerbotAIConfig.equipUpgradeThreshold);
 }

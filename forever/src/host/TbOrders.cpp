@@ -12,7 +12,10 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
+#include "host/run/TbRunFacts.h"
+#include "slice/SliceHybridPolicy.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -288,7 +291,7 @@ void AnchorPullHoldOnTank(Player* tank)
         if (!member || member == tank || !member->IsInWorld() || member->GetMapId() != tank->GetMapId())
             continue;
         PlayerbotAI* memberAi = AiOf(member);
-        if (!memberAi || !memberAi->GetAiObjectContext() || PlayerbotAI::IsTank(member, true) || PlayerbotAI::IsHeal(member, true))
+        if (!memberAi || !memberAi->GetAiObjectContext() || run::IsTankMember(member) || PlayerbotAI::IsHeal(member, true))
             continue;
         ai::PositionMap& positions = memberAi->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
         for (char const* key : { "stay", "pull hold" })
@@ -622,7 +625,7 @@ std::string JoinFrom(std::vector<std::string> const& words, size_t from)
 
 // H4 (slice 4, spec section 2): who offered the dead bot a resurrection, when that is a member of its party or its commander (a stranger's offer is
 // DECLINED: the bot does nothing, the offer lapses by itself; the legacy action would accept any). The core keeps the pending offer on the Player
-// (Player::SetResurrectRequestData, Player.cpp:25470); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
+// (Player::SetResurrectRequestData, Player.cpp:25480); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
 // of SMSG_RESURRECT_REQUEST in the session: the same fact, on the world thread, with no packet to parse.
 Player* ResurrectOffererOf(Player* bot)
 {
@@ -849,7 +852,7 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
         }
         if (verb == "pull" || verb == "pullback")
         {
-            if (!ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT) || !PlayerbotAI::IsTank(bot, true))
+            if (!ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT) || !run::IsTankMember(bot))
             {
                 code = "no-pull-strategy";
                 detail = "the bot has no `pull` combat strategy or is not a tank (give it the tank role)";
@@ -1146,9 +1149,23 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return false;
     bool const leaderFollows = args.w.size() >= 3 && Lower(args.w[0]) == "party";
     size_t pos = 0;
-    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
-    if (!who.ok())
-        return Fail(handler, args, "role", who.code, who.detail);
+    Address who;
+    if (!args.w.empty() && target::IsRoleWord(Lower(args.w[0])))
+    {
+        // TB-1: no name means the sender's own character (the first word is already the role).
+        std::string code, detail;
+        Player* self = ResolveTestTarget(handler, std::string_view(), code, detail);
+        if (!self)
+            return Fail(handler, args, "role", code, detail);
+        who.bots.push_back(self);
+        who.label = self->GetName();
+    }
+    else
+    {
+        who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows, true);
+        if (!who.ok())
+            return Fail(handler, args, "role", who.code, who.detail);
+    }
     if (pos >= args.w.size())
         return Fail(handler, args, "role", "missing-role", "tank, healer (heal), dps or none");
     std::string const word = Lower(args.w[pos]);
@@ -1174,6 +1191,42 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         Rec rec("role");
         rec.S("bot", bot->GetName()).S("role", roleName);
         PlayerbotAI* ai = AiOf(bot);
+        // Slice 10: a tank order is honoured only by a class this slice gives a tank kit (SliceHybridPolicy.h). Without this a shaman
+        // (restoration only, D2) would store the tank bit, PlayerbotAI::IsTank would answer true and the run would admit it as its tank.
+        // The refusal also clears a tank bit already on the bot (the two reads IsTank makes, the kit built from them and this tick's role
+        // map): an order from an older build, `.bot role` (its shaman tank kit is not in this slice) or the dungeon finder can leave one.
+        TortoiseBots::slice::hybrid::TankOrderStep const plan = TortoiseBots::slice::hybrid::PlanTankOrder(
+            unsigned(bot->GetClass()), role == RoleTank,
+            PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == RoleTank,
+            ai && ai->GetForcedRole() == RoleTank);
+        if (plan.refuse)
+        {
+            bool cleared = false;
+            if (plan.clearStored)
+            {
+                PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), 0);
+                cleared = true;
+            }
+            auto stored = Roles().find(bot->GetGUID());
+            if (stored != Roles().end() && stored->second == RoleTank)
+            {
+                Roles().erase(stored);
+                cleared = true;
+            }
+            if (ai && plan.clearAi)
+            {
+                ApplyKit(ai, 0, true);
+                cleared = true;
+            }
+            else if (ai && cleared)
+                ApplyKit(ai, ai->GetForcedRole(), false);   // the kit was built from the stored bit just cleared
+            rec.S("status", "refused").S("code", "no-tank-kit");
+            if (cleared)
+                rec.S("cleared", "yes");
+            rec.T("msg", bot->GetName() + " has no tank kit in this slice: the tank role needs a warrior, a druid (bear) or a paladin (protection, recorded only)");
+            emit(rec);
+            continue;
+        }
         if (!ai)
         {
             // No engine yet: the role is stored for the brain that is built later (BeforeEngineTick compares it with the AI's), and that is true now.

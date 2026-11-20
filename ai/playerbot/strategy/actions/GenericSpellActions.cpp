@@ -352,7 +352,8 @@ bool CastSpellAction::isPossible()
         ai->GetHealerDiagnostics().CheckFailed(ai, spellTarget, spellId, result);
         ai->NoteCastCheckFail(result);
         if (result != SPELL_FAILED_NOT_READY)
-            botdiag::BotActionLog::Write(ai, "CAST_REFUSED", "spell=%s result=%u", spellName.c_str(), (uint32)result);
+            botdiag::BotActionLog::Write(ai, "CAST_REFUSED", "spell=%s result=%u target=%s", spellName.c_str(), (uint32)result,
+                spellTarget ? CStrCompat(spellTarget->GetName()) : "none");
         return false;
     }
     return true;
@@ -765,6 +766,9 @@ uint32 BuffOnPartyAction::CountGroupMembersMissingBoth(std::string const& groupN
         // A hidden GM never gets the buff (see PartyMemberValue::Check), so
         // counting them would keep the group version wanted forever.
         if (PlayerHiddenGmCompat(member))
+            continue;
+        // A rage or energy user never carries a mana buff, so it never counts as missing it.
+        if (!ai::BuffTargetFits(GetSpellName(), member->GetPowerType() == POWER_MANA, member->GetMaxPower(POWER_MANA)))
             continue;
         Aura* single = ai->GetAura(GetSpellName(), member);
         if (!ai::BuffNeedsRefresh(single != nullptr, single ? single->GetAuraDuration() : 0,

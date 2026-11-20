@@ -41,7 +41,7 @@ uint32 WarlockShadowBoltCost(PlayerbotAI* ai)
     SpellEntry const* spellInfo = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
     if (!spellInfo || spellInfo->powerType != POWER_MANA)
         return 0;
-    return Spell::CalculatePowerCost(spellInfo, ai->GetBot(), nullptr, nullptr);
+    return SpellPowerCostCompat(spellInfo, ai->GetBot());
 }
 
 }

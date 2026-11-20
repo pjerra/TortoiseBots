@@ -792,6 +792,12 @@ SpellEntry* BuildSpellEntry(SpellInfo const* info)
     }
     else
         SetIncomplete(*entry, "no SpellName row");
+    // Slice 11 (U3): `hotfixes.spell_name` renames Curse of Agony 980 and 1014 "Bane of Agony" (forever/docs/SLICE11-NOTES.md, hotfix_data rows valid), and the bot
+    // finds a spell by the Classic name its action carries ("curse of agony"). The mirror gives those two ids the name the legacy code asks for, only while the core's
+    // own name is the renamed one (so a data fix on the core's side makes this a no-op). Other locales keep what the core says.
+    if (info->Id == 980 || info->Id == 1014)
+        if (entry->SpellName[LOCALE_enUS] == "Bane of Agony")
+            entry->SpellName[LOCALE_enUS] = "Curse of Agony";
 
     // The rank text is the spell's place in a proved chain (ChainTable above); a spell with no chain keeps an empty text.
     if (uint32 const rank = tbcompat::SpellRankOf(info->Id))

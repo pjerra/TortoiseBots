@@ -20,9 +20,22 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
    either at the pin:
    `LoadSpellInfoStore` and every pass that edits the `SpellInfo` objects (`LoadSpellInfoCorrections`,
    `LoadClassicSpellInfo`, `LoadSpellInfoCustomAttributes`) are called once from `World::SetInitialWorldSettings`
-   (`World.cpp:1471-1491`), and no `.reload` handler calls them again (`scripts/Commands/cs_reload.cpp` reloads
+   (`World.cpp:1471-1500`), and no `.reload` handler calls them again (`scripts/Commands/cs_reload.cpp` reloads
    `spell_required`, `spell_area`, `spell_proc` and the other side tables, never the store). A moved pin must re-check
    both halves of that: the store loaded before the hook, and no runtime path that rebuilds a `SpellInfo`.
+   Re-checked at 25fc7ca (the move from 6517af05, 2026-11-19; none of the core files this rule cites changed:
+   `Main.cpp`, `World.cpp`, `ObjectMgr.cpp`, `SpellMgr.cpp`, `SpellInfo.*` and `cs_reload.cpp` are not in the diff
+   6517af0..25fc7ca): `worldserver/Main.cpp:369` `SetInitialWorldSettings()`, then `:372` `ScriptMgr::OnWorldInitialized()`
+   (the hook, `ScriptMgr.cpp:1549`); inside it `World.cpp:1471` `LoadSpellInfoStore`, `:1474` serverside spells, `:1477`
+   `LoadSpellInfoCorrections`, `:1480-1485` `LoadClassicSpellInfo` / `TwinChannels` / `SpellEffects` / `SpellValues` /
+   `SpellCosts` / `ForeverVanillaAoe` (all edit `SpellInfo`, once), `:1491` `LoadSpellInfoCustomAttributes`, `:1494-1500`
+   diminishing, immunities, target caps; `:1608` `LoadItemTemplates` (definition `ObjectMgr.cpp:3649`, the only writer of
+   `_itemTemplateStore` besides `LoadClassicItemDurability`, `World.cpp:1614`, which only edits entries). A grep of `src/server` for every one of those loaders finds no caller outside
+   `World.cpp`; `cs_reload.cpp` (`:812-884`) reloads only the side tables, and `.reload all item` (`:328`) reloads page
+   texts and random bonus lists. `Main.cpp` calls `OnWorldInitialized` once, only after the world settings succeed.
+   The pin move added nothing that reloads either store. `forever/tools/check_core_cites.py` lists the `File.ext:LINE`
+   cites in `forever/` that point into a core file a pin move changed and where the cited line went: run it with
+   `--old <old pin> --new <new pin>` on every pin move.
 4. Game data is not ported blindly. Spell ids, talents, races, zones, travel nodes and boss data are re-derived from
    ForeverCore's DB2 and world database, feature by feature.
 

@@ -126,6 +126,12 @@ inline int32 NewItemRandomPropertyIdCompat(uint32 /*itemId*/) { tbcompat::Unport
 struct AuctionEntry
 {
     uint32 itemTemplate = 0;
+    // The fields the price code of ItemUsageValue.cpp reads (slice 9, package L9). Never set: nothing creates a listing here, so every container of
+    // AuctionEntry is empty and these are only named, not read from a real auction.
+    uint32 Id = 0;
+    uint32 itemGuidLow = 0;
+    uint32 buyout = 0;
+    uint32 owner = 0;
 };
 
 
@@ -296,12 +302,8 @@ inline bool SpellProhibitedCompat(Player const* player, SpellEntry const* spellI
 // ===============================================================================================================
 // PETS, GAME OBJECTS, ITEM CASTS, MISC FEATURES (the "Unported" helpers: failure value in each comment)
 // ===============================================================================================================
-// Pets. Failure values: nothing learned / toggled / sent / visited ("the action did not happen").
-inline void PetLearnSpellCompat(Pet* /*pet*/, uint32 /*spellId*/) { tbcompat::Unported(tbcompat::Feature::Pets); }
-inline void PetToggleAutocastCompat(Pet* /*pet*/, uint32 /*spellId*/, bool /*on*/) { tbcompat::Unported(tbcompat::Feature::Pets); }
-inline bool PetDismissCommandCompat(Player* /*bot*/, Pet* /*pet*/) { tbcompat::Unported(tbcompat::Feature::Pets); return false; }
-template <class Visitor>
-inline void ForAllGuardiansCompat(Player* /*bot*/, Visitor&&) { tbcompat::Unported(tbcompat::Feature::Pets); }
+// (Pets: PetLearnSpellCompat, PetToggleAutocastCompat, PetDismissCommandCompat, ForAllGuardiansCompat moved to TbCompat_P11.h in slice 11; found through
+// ai/playerbot/TbCompatP11.h.)
 
 // Use a game object by the 1.12 use packet. Failure value: false ("could not use it").
 inline bool UseGameObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
@@ -418,6 +420,12 @@ inline QueryResult CharacterPQueryCompat(char const* format, Args... args)
 inline QueryResult QueryGuardCompat(QueryResult result) { return result; }
 // Escapes a string for a query (T `CharacterDatabase.escape_string(s)`, F `EscapeString(s)`).
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.EscapeString(text); }
+// The pet a character brings back on login (characters.summonedPetNumber): the host writes it right after SavePetToDB, before a map change can put the
+// pet away. T queues the statement; F runs it at once (`DirectPExecute`) for that reason.
+inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
+{
+    CharacterDatabase.DirectPExecute("UPDATE characters SET summonedPetNumber = {} WHERE guid = {}", petNumber, guid);
+}
 
 
 // ===============================================================================================================

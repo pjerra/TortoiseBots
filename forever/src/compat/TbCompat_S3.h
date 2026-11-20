@@ -23,7 +23,7 @@ inline float SpellFlatThreatCompat(ThreatEntry const& entry) { return static_cas
 
 // A visual the `debug threat` strategy plays on the bot to show its threat band (high / medium). T `Unit::SendPlaySpellVisual(id)`
 // (Unit.cpp:11476: SMSG_PLAY_SPELL_VISUAL, guid + a SpellVisualKit.dbc index of the 1.12 client). F has no call with that meaning:
-// `Unit::SendPlaySpellVisual(target, spellVisualId, ...)` (Unit.cpp:12952) names a spell visual id of the new client and a target, and
+// `Unit::SendPlaySpellVisual(target, spellVisualId, ...)` (Unit.cpp:12962) names a spell visual id of the new client and a target, and
 // `SendPlaySpellVisualKit(id, type, duration)` (:12989) takes a kit id of the new client's DB2, so the two 1.12 numbers (6372, 5036)
 // would show nothing or something unrelated. Unported feature "debug spell visuals": counted, nothing shown (a debug aid; the bot does
 // less, never more).
