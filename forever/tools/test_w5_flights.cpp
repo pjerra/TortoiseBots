@@ -92,6 +92,11 @@ int main()
         assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Wait);
 
         in.transportStopped = true;
+        in.distanceToDeck = 40.0f;   // stopped at the dock but the bot is not on the deck: it walks, it does not board
+        assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Approach);
+        in.distanceToDeck = 90.0f;
+        assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Wait);
+        in.distanceToDeck = 5.0f;
         assert(ai::DecideTransportWait(in) == ai::TransportWaitStep::Board);
 
         in.onBoard = true;

@@ -24,7 +24,8 @@ namespace ride
 namespace
 {
 
-constexpr float kMaxBoardReachYd = 60.0f;
+constexpr float kMaxBoardReachYd = 12.0f;   // 2D from the transport's centre: the bot stands on the deck
+constexpr float kApproachReachYd = 60.0f;
 constexpr float kLeaveDockMinDistYd = 100.0f;
 constexpr uint32_t kGiveUpMarginMs = 15000;
 
@@ -318,7 +319,7 @@ void TickRide(Player* bot, uint32_t diffMs)
     bool const atDestinationDock = rs.boarded && rs.leftStartDock && found.obj && found.stopped &&
         (map->GetId() != rs.startMap || Dist2D(found.obj->GetPositionX(), found.obj->GetPositionY(), rs.startX, rs.startY) > kLeaveDockMinDistYd);
 
-    float const distToDeck = found.obj ? bot->GetDistance(found.obj) : 9999.0f;
+    float const distToDeck = found.obj ? Dist2D(bot->GetPositionX(), bot->GetPositionY(), found.obj->GetPositionX(), found.obj->GetPositionY()) : 9999.0f;
 
     ai::TransportWaitInput in;
     in.mapReady = true;
@@ -328,6 +329,7 @@ void TickRide(Player* bot, uint32_t diffMs)
     in.atDestinationDock = atDestinationDock;
     in.distanceToDeck = distToDeck;
     in.maxBoardRange = kMaxBoardReachYd;
+    in.approachRange = kApproachReachYd;
     in.waitedMs = rs.waitedMs;
     in.totalPathTimeMs = totalPathTimeMs;
     in.marginMs = kGiveUpMarginMs;
@@ -340,12 +342,18 @@ void TickRide(Player* bot, uint32_t diffMs)
             {
                 bot->GetMotionMaster()->Clear();
                 bot->StopMoving();
-                found.base->AddPassenger(bot, Position(0.0f, 0.0f, 0.0f, 0.0f));
-                map->PlayerRelocation(bot, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), found.obj->GetOrientation());
+                // Where the bot stands, in the transport's own frame: boarding never moves it.
+                found.base->AddPassenger(bot, found.base->GetPositionOffsetTo(bot->GetPosition()));
                 rs.boarded = true;
                 TC_LOG_INFO("tortoisebots", "[W5] ride-board bot={} entry={} guid={} map={}",
                     bot->GetName(), rs.entry, rs.transportGuid.ToString(), map->GetId());
             }
+            break;
+        }
+        case ai::TransportWaitStep::Approach:
+        {
+            if (found.obj && !bot->isMoving())
+                bot->GetMotionMaster()->MovePoint(0, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), false);
             break;
         }
         case ai::TransportWaitStep::Leave:

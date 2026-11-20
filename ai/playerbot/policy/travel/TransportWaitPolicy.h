@@ -11,7 +11,8 @@ enum class TransportWaitStep : std::uint8_t
     Wait = 0,
     Board = 1,
     Leave = 2,
-    GiveUp = 3
+    GiveUp = 3,
+    Approach = 4   // stopped but not yet on the deck: walk onto it, never jump
 };
 
 struct TransportWaitInput
@@ -23,6 +24,7 @@ struct TransportWaitInput
     bool atDestinationDock = false;
     float distanceToDeck = 0.0f;
     float maxBoardRange = 15.0f;
+    float approachRange = 60.0f;
     std::uint32_t waitedMs = 0;
     std::uint32_t totalPathTimeMs = 0;
     std::uint32_t marginMs = 15000;
@@ -44,6 +46,9 @@ inline TransportWaitStep DecideTransportWait(TransportWaitInput const& in)
 
     if (in.transportFound && in.transportStopped && !in.atDestinationDock && in.distanceToDeck <= in.maxBoardRange)
         return TransportWaitStep::Board;
+
+    if (in.transportFound && in.transportStopped && !in.atDestinationDock && in.distanceToDeck <= in.approachRange)
+        return TransportWaitStep::Approach;
 
     if (in.totalPathTimeMs > 0 && in.waitedMs >= in.totalPathTimeMs + in.marginMs)
         return TransportWaitStep::GiveUp;
