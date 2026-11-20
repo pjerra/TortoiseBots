@@ -540,3 +540,15 @@ uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
     return AI_VALUE2(uint32, "free money for", (uint32)budget);
 }
 }
+
+// =====================================================================================================================
+// W3 (quests): the alt-bot service and the random-bot value store are not ported, so the quest actions record nothing in
+// them: no quest is "taken by an alt" and a drop leaves no pool value behind.
+// =====================================================================================================================
+#include "runtime/AltBotService.h"
+namespace TortoiseBots
+{
+void AltBotService::AddTakenQuest(Player*, uint32_t) { NotePool(); }
+bool AltBotService::IsTakenQuest(uint32_t, uint32_t) const { NotePool(); return false; }
+}
+void RandomBotFacade::SetValue(Player*, std::string, uint32, std::string, int32) { NotePool(); }
