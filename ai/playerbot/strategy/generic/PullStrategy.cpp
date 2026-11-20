@@ -294,6 +294,12 @@ std::string PullStrategy::GetPreActionName() const
             {
                 modPullActionName.clear();
             }
+            // A druid below 40 knows Bear Form only. PullStartAction runs the pre-action through DoSpecificAction, which does not try the
+            // "dire bear form" -> "bear form" alternative; without this the shift never happened and the pull was made in caster form.
+            else if (!ai->HasSpell("dire bear form"))
+            {
+                modPullActionName = "bear form";
+            }
         }
     }
 

@@ -53,7 +53,14 @@
 #include "../../../runtime/RemoteCommanderPolicy.h"
 #include "SliceLog.h"
 #include <map>
+#include "SliceHybridPolicy.h"
 #include "SliceMissingKeyGuard.h"
+
+// Slice 10: the role policy (SliceHybridPolicy.h) names the core's classes by number so it stays core-free; these are the ids it means.
+static_assert(unsigned(TortoiseBots::slice::hybrid::ClassWarrior) == unsigned(CLASS_WARRIOR), "SliceHybridPolicy.h: warrior id");
+static_assert(unsigned(TortoiseBots::slice::hybrid::ClassPaladin) == unsigned(CLASS_PALADIN), "SliceHybridPolicy.h: paladin id");
+static_assert(unsigned(TortoiseBots::slice::hybrid::ClassShaman) == unsigned(CLASS_SHAMAN), "SliceHybridPolicy.h: shaman id");
+static_assert(unsigned(TortoiseBots::slice::hybrid::ClassDruid) == unsigned(CLASS_DRUID), "SliceHybridPolicy.h: druid id");
 
 AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* ai)
 {

@@ -12,6 +12,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/run/TbRunLiquid.h"
+#include "slice/SliceHybridPolicy.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -1160,6 +1161,15 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     {
         Rec rec("role");
         rec.S("bot", bot->GetName()).S("role", roleName);
+        // Slice 10: a tank order is honoured only by a class this slice gives a tank kit (SliceHybridPolicy.h). Without this a shaman
+        // (restoration only, D2) would store the tank bit, PlayerbotAI::IsTank would answer true and the run would admit it as its tank.
+        if (role == RoleTank && !TortoiseBots::slice::hybrid::CanTakeTankOrder(unsigned(bot->GetClass())))
+        {
+            rec.S("status", "refused").S("code", "no-tank-kit")
+                .T("msg", bot->GetName() + " has no tank kit in this slice: the tank role needs a warrior, a druid (bear) or a paladin (protection, recorded only)");
+            emit(rec);
+            continue;
+        }
         PlayerbotAI* ai = AiOf(bot);
         if (!ai)
         {
