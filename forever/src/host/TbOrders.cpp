@@ -479,8 +479,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         uint32_t const entry = static_cast<uint32_t>(std::strtoul(o.arg.c_str(), nullptr, 10));
         if (!entry)
             return "fail:bad-entry";
-        std::string failCode;
-        return tbhost::ride::StartRide(bot, entry, &failCode) ? "ok" : ("fail:" + (failCode.empty() ? std::string("ride") : failCode));
+        std::string stateOut;
+        return tbhost::ride::StartRide(bot, entry, &stateOut, o.seq) ? stateOut : ("fail:" + (stateOut.empty() ? std::string("ride") : stateOut));
     }
     if (o.verb == "ah")
     {
@@ -796,7 +796,10 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     if (rec->second.seq != 0)
     {
         std::string errandResult;
-        if (tbhost::prof::PollOrderErrand(bot, rec->second.seq, errandResult) && rec->second.result != errandResult)
+        bool const hasErrandUpdate =
+            (tbhost::prof::PollOrderErrand(bot, rec->second.seq, errandResult) ||
+             tbhost::ride::PollOrderErrand(bot, rec->second.seq, errandResult));
+        if (hasErrandUpdate && rec->second.result != errandResult)
         {
             rec->second.result = errandResult;
             if (errandResult.compare(0, 5, "fail:") == 0)
@@ -812,6 +815,8 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         rec->second.queue.pop_front();
         if (order.verb != "gather" && order.verb != "craft")
             tbhost::prof::CancelOrderErrand(bot);
+        if (order.verb != "ride")
+            tbhost::ride::CancelOrderErrand(bot);
         std::string result = now - order.queuedAt > OrderMaxAgeMs ? "fail:expired" : Run(bot, ai, order);
         if (rec->second.seq == order.seq)       // a later order of the same bot keeps the later one's name and seq
             rec->second.result = result;
