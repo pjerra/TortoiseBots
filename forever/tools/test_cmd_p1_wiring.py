@@ -85,10 +85,10 @@ class Wiring(unittest.TestCase):
         self.assertLess(order.index("cmd::NoteOrder("), order.index('Rec end("order")'))
         self.assertIn("outcomes.push_back({ bot, code })", order)                 # refused bot, its own code
         self.assertIn("outcomes.push_back({ bot, std::string() })", order)        # queued bot
-        # P2 moved the order-log hook from the run tick into the executor `Issue` (the one path the run tick and `.tb run order` share).
+        # The order-log hook lives in the executor `Issue(Party...)`, the one path the run tick, `.tb run order` and `.tb cmd` share.
         orders = (HOST / "run" / "TbRunOrders.cpp").read_text()
-        issue = function_body(orders, r"OrderAnswer Issue\(RunRec& rec, std::string const& order, uint32 nowMs, bool gather\)\s*\{")
-        self.assertIn("cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);", issue)
+        issue = function_body(orders, r"OrderAnswer Issue\(Party const& party, std::string const& order, uint32 nowMs, bool gather\)\s*\{")
+        self.assertIn("cmd::NoteRunOrder(party.leader, order, answer.accepted, answer.code, answer.text);", issue)
         self.assertNotIn("NoteRunOrder", code(self.run))
 
     def test_the_collection_is_never_capped_and_a_run_counts_only_bound_bots(self):

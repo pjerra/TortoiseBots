@@ -278,3 +278,22 @@ ai/playerbot/FleeManager.cpp
 # core only through the WL4 pair (TbCompat_WL4.h + ai/cmangos-compat-wl4.h).
 ai/playerbot/TravelMgr.cpp
 ai/playerbot/strategy/values/TravelValues.cpp
+
+# W6a (item usage, equip upgrades), W2 (sell, buy, repair, trainer, mail) and W3 (quests): the legacy files these items add.
+ai/playerbot/RandomItemWeights.cpp
+ai/playerbot/strategy/actions/EquipAction.cpp
+ai/playerbot/strategy/generic/MaintenanceStrategy.cpp
+ai/playerbot/strategy/actions/SellAction.cpp
+ai/playerbot/strategy/actions/BuyAction.cpp
+ai/playerbot/strategy/actions/RepairAllAction.cpp
+ai/playerbot/strategy/actions/TrainerAction.cpp
+ai/playerbot/strategy/actions/MailAction.cpp
+ai/playerbot/strategy/values/BudgetValues.cpp
+ai/playerbot/strategy/generic/QuestStrategies.cpp
+ai/playerbot/strategy/actions/QuestAction.cpp
+ai/playerbot/strategy/actions/AcceptQuestAction.cpp
+ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
+ai/playerbot/strategy/actions/DropQuestAction.cpp
+ai/playerbot/strategy/actions/ShareQuestAction.cpp
+ai/playerbot/strategy/actions/QuestRewardActions.cpp
+ai/playerbot/strategy/actions/AhAction.cpp

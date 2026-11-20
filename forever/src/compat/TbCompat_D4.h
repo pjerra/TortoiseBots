@@ -12,7 +12,7 @@
 
 // Release the spirit: the core's own handler, the one a client's "Release Spirit" ends in (WorldSession::HandleRepopRequest,
 // MiscHandler.cpp:63-93; THREADUNSAFE, Opcodes.cpp:957: it runs here on the world thread, where those handlers normally run: engine and host
-// commands run with the maps idle, World.cpp:2465-2475). The typed packet carries one bit (CheckInstance) the handler never reads.
+// commands run with the maps idle, World.cpp:2481-2491). The typed packet carries one bit (CheckInstance) the handler never reads.
 // T: the 1.12 packet, `CMSG_REPOP_REQUEST` + uint8(0), HandleRepopRequestOpcode (MiscHandler.cpp:61), and `true`: the original never looked
 // at the outcome. F: the handler returns without doing anything when the player is alive or already a ghost (:65), is being teleported (:71:
 // a second release while the first one's teleport runs) or carries SPELL_AURA_PREVENT_RESURRECTION (:74); so the answer is what the player

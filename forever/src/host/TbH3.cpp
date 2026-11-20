@@ -5,6 +5,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
+#include "host/TbIgnore.h"            // I13: `.tb ignore` (self-test records here; the handler lives in TbIgnore.cpp)
 #include "host/TbHybrid.h"
 #include "host/TbPet.h"
 #include "host/cmd/TbTestTargetPure.h"
@@ -371,6 +372,7 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     h8::SelfTestRecords(reply);               // H8: the cc and strategy records and the state keys slice 8 adds
     h10::SelfTestRecords(reply);              // H10: the state keys slice 10 adds (form, totems, imbue, seal, paura)
     p11::SelfTestRecords(reply);              // P11: the pet state keys and the `pet` record
+    i13::SelfTestRecords(reply);              // I13: the `ignore` records of `.tb ignore`
     Rec end("selftest");
     end.N("line_too_long", LineTooLongCount()).S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
     reply.End(end);

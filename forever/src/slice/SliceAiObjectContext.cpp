@@ -13,27 +13,39 @@
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/actions/AcceptQuestAction.h"
 #include "playerbot/strategy/actions/AcceptResurrectAction.h"
 #include "playerbot/strategy/actions/AddLootAction.h"
+#include "playerbot/strategy/actions/AhAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/BuyAction.h"
 #include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
+#include "playerbot/strategy/actions/DropQuestAction.h"
+#include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
 #include "playerbot/strategy/actions/GiveItemAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
+#include "playerbot/strategy/actions/MailAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
+#include "playerbot/strategy/actions/QuestRewardActions.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
+#include "playerbot/strategy/actions/RepairAllAction.h"
 #include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
+#include "playerbot/strategy/actions/SellAction.h"
+#include "playerbot/strategy/actions/ShareQuestAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
+#include "playerbot/strategy/actions/TalkToQuestGiverAction.h"
+#include "playerbot/strategy/actions/TrainerAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
@@ -45,8 +57,10 @@
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/GrindingStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
+#include "playerbot/strategy/generic/MaintenanceStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
+#include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
 #include "playerbot/strategy/generic/StayStrategy.h"
 #include "playerbot/strategy/generic/TankAssistStrategy.h"
@@ -124,6 +138,7 @@
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/strategy/values/RaidTargetValues.h"
 #include "playerbot/strategy/values/RandomBotUpdateValue.h"
 #include "playerbot/strategy/values/RangeValues.h"
@@ -149,7 +164,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (16 of its keys)
+    // the registry of StrategyContext (17 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -171,6 +186,7 @@ namespace slice
             creators["behind"] = [](PlayerbotAI* ai) { return new SetBehindCombatStrategy(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollStrategy(ai); };
             creators["grind"] = [](PlayerbotAI* ai) { return new GrindingStrategy(ai); };
+            creators["maintenance"] = [](PlayerbotAI* ai) { return new MaintenanceStrategy(ai); };
         }
     };
 
@@ -197,7 +213,18 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (57 of its keys)
+    // the registry of QuestStrategyContext (2 of its keys)
+    class SliceQuestStrategyContext : public NamedObjectContext<Strategy>
+    {
+    public:
+        SliceQuestStrategyContext() : NamedObjectContext<Strategy>(false, true)
+        {
+            creators["quest"] = [](PlayerbotAI* ai) { return new DefaultQuestStrategy(ai); };
+            creators["accept all quests"] = [](PlayerbotAI* ai) { return new AcceptAllQuestsStrategy(ai); };
+        }
+    };
+
+    // the registry of ActionContext (58 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -260,10 +287,11 @@ namespace slice
             creators["attack anything"] = [](PlayerbotAI* ai) { return new AttackAnythingAction(ai); };
             creators["avoid elite"] = [](PlayerbotAI* ai) { return new AvoidEliteAction(ai); };
             creators["idle wander"] = [](PlayerbotAI* ai) { return new IdleWanderAction(ai); };
+            creators["auto share quest"] = [](PlayerbotAI* ai) { return new AutoShareQuestAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (9 of its keys)
+    // the registry of ChatActionContext (22 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -278,10 +306,23 @@ namespace slice
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
             creators["spirit healer"] = [](PlayerbotAI* ai) { return new SpiritHealerAction(ai); };
+            creators["equip upgrades"] = [](PlayerbotAI* ai) { return new EquipUpgradesAction(ai); };
+            creators["sell"] = [](PlayerbotAI* ai) { return new SellAction(ai); };
+            creators["buy"] = [](PlayerbotAI* ai) { return new BuyAction(ai); };
+            creators["repair"] = [](PlayerbotAI* ai) { return new RepairAllAction(ai); };
+            creators["trainer"] = [](PlayerbotAI* ai) { return new TrainerAction(ai); };
+            creators["mail"] = [](PlayerbotAI* ai) { return new MailAction(ai); };
+            creators["drop"] = [](PlayerbotAI* ai) { return new DropQuestAction(ai); };
+            creators["clean quest log"] = [](PlayerbotAI* ai) { return new CleanQuestLogAction(ai); };
+            creators["share"] = [](PlayerbotAI* ai) { return new ShareQuestAction(ai); };
+            creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardAction(ai); };
+            creators["ah"] = [](PlayerbotAI* ai) { return new AhAction(ai); };
+            creators["ah bid"] = [](PlayerbotAI* ai) { return new AhBidAction(ai); };
+            creators["ah cancel"] = [](PlayerbotAI* ai) { return new AhCancelAction(ai); };
         }
     };
 
-    // the registry of WorldPacketActionContext (8 of its keys)
+    // the registry of WorldPacketActionContext (12 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -295,10 +336,14 @@ namespace slice
             creators["loot roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootRollAction(ai); };
             creators["find corpse"] = [](PlayerbotAI* ai) { return new FindCorpseAction(ai); };
             creators["revive from corpse"] = [](PlayerbotAI* ai) { return new ReviveFromCorpseAction(ai); };
+            creators["talk to quest giver"] = [](PlayerbotAI* ai) { return new TalkToQuestGiverAction(ai); };
+            creators["accept quest"] = [](PlayerbotAI* ai) { return new AcceptQuestAction(ai); };
+            creators["accept all quests"] = [](PlayerbotAI* ai) { return new AcceptAllQuestsAction(ai); };
+            creators["accept quest share"] = [](PlayerbotAI* ai) { return new AcceptQuestShareAction(ai); };
         }
     };
 
-    // the registry of TriggerContext (106 of its keys)
+    // the registry of TriggerContext (107 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -410,6 +455,7 @@ namespace slice
             creators["dead"] = [](PlayerbotAI* ai) { return new DeadTrigger(ai); };
             creators["corpse near"] = [](PlayerbotAI* ai) { return new CorpseNearTrigger(ai); };
             creators["val"] = [](PlayerbotAI* ai) { return new ValueTrigger(ai); };
+            creators["equipment audit"] = [](PlayerbotAI* ai) { return new EquipmentAuditTrigger(ai); };
         }
     };
 
@@ -423,7 +469,7 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketTriggerContext (4 of its keys)
+    // the registry of WorldPacketTriggerContext (6 of its keys)
     class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -433,10 +479,12 @@ namespace slice
             creators["loot start roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot start roll"); };
             creators["loot vote"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot vote"); };
             creators["loot roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll"); };
+            creators["item push result"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "item push result"); };
+            creators["quest share"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "quest share"); };
         }
     };
 
-    // the registry of ValueContext (193 of its keys)
+    // the registry of ValueContext (201 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -635,11 +683,19 @@ namespace slice
             creators["best graveyard"] = [](PlayerbotAI* ai) { return new BestGraveyardValue(ai); };
             creators["should spirit healer"] = [](PlayerbotAI* ai) { return new ShouldSpiritHealerValue(ai); };
             creators["can move around"] = [](PlayerbotAI* ai) { return new CanMoveAroundValue(ai); };
+            creators["free money for"] = [](PlayerbotAI* ai) { return new FreeMoneyForValue(ai); };
+            creators["total money needed for"] = [](PlayerbotAI* ai) { return new TotalMoneyNeededForValue(ai); };
+            creators["money needed for"] = [](PlayerbotAI* ai) { return new MoneyNeededForValue(ai); };
+            creators["repair cost"] = [](PlayerbotAI* ai) { return new RepairCostValue(ai); };
+            creators["max repair cost"] = [](PlayerbotAI* ai) { return new MaxGearRepairCostValue(ai); };
+            creators["min repair cost"] = [](PlayerbotAI* ai) { return new MinRepairCostValue(ai); };
+            creators["has all money for"] = [](PlayerbotAI* ai) { return new HasAllMoneyForValue(ai); };
+            creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 21, kActions = 74, kTriggers = 111, kValues = 193;
+    constexpr unsigned kStrategies = 24, kActions = 92, kTriggers = 114, kValues = 201;
 }
 }
 
@@ -649,6 +705,7 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     strategyContexts.Add(new slice::SliceStrategyContext());
     strategyContexts.Add(new slice::SliceMovementStrategyContext());
     strategyContexts.Add(new slice::SliceAssistStrategyContext());
+    strategyContexts.Add(new slice::SliceQuestStrategyContext());
     actionContexts.Add(new slice::SliceActionContext());
     actionContexts.Add(new slice::SliceChatActionContext());
     actionContexts.Add(new slice::SliceWorldPacketActionContext());

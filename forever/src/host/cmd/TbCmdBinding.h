@@ -64,6 +64,8 @@ void LoadBindings();                                                            
 // live group), and the bot is a member of the commander's own binding group. World thread, cheap, no database.
 bool IsCommandedBy(Player* commander, Player* bot);
 bool IsInOwnBindingGroup(Player* commander, Player* bot);
+// P3: resolves `commander`'s standing binding (lead guid + bound member guids from h3's table). False when `commander` commands no bots.
+bool ResolveBinding(ObjectGuid commander, ObjectGuid& lead, std::vector<ObjectGuid>& members);
 
 // The cards as the dashboard's bindings, one per commander (a run's card included, without its `run` section: the run feed fills that, matched by the
 // card's `lead` guid). `runLeadersShown` are the leaders (guid counters) of runs the caller reports itself (an ended run that lingers on the tab): a card

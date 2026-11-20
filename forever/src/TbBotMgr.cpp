@@ -1,4 +1,6 @@
 #include "TbBotMgr.h"
+#include "host/TbHostGuildOrders.h"
+#include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -998,7 +1000,7 @@ void BotMgr::MarkPractice(ObjectGuid botGuid)
 // D2 (the lead's decision of 2026-11-19): the entrance of a dungeon is given to the instance's script by the host, so a release inside revives the
 // bot at the entrance INSIDE the instance (Player::RepopAtGraveyard asks the script first, Player.cpp:5227-5228, and revives in place for every
 // non-raid dungeon, :5220; without an entrance it falls to the closest graveyard, which for Ragefire Chasm and an Alliance bot is Razor Hill).
-// InstanceScript::SetEntranceLocation is a public member (InstanceScript.h:289). Once per instance; the trigger the first entry used is the source, else
+// InstanceScript::SetEntranceLocation is a public member (InstanceScript.h:293). Once per instance; the trigger the first entry used is the source, else
 // ObjectMgr::GetMapEntranceTrigger(map) (the first areatrigger_teleport row that leads into the map; a dungeon with several entrances needs the entry's own).
 // N5: the host's own "commanded" test, engine-free (this file is in both builds): the bot's host master is a character OUTSIDE the bot's party (the commander,
 // `.tb master`). A bot led by its own party's leader is not commanded.
@@ -1014,7 +1016,7 @@ bool BotMgr::IsCommandedHere(Bot const& bot, Player* me) const
 // real player's instance), the instance script's entrance is read; when it is 0 the entrance for THIS (map, instance) is worked out and set, and a failure is
 // retried at the next think (the log line is once per (map, instance)). The trigger of the last entry into the instance is used only when its target is this
 // map (a stale RFC trigger must not name an entrance for Deadmines); otherwise the first trigger that leads into the map (ObjectMgr::GetMapEntranceTrigger).
-// InstanceScript::SetEntranceLocation is public (InstanceScript.h:289). D2: the bot then revives at the entrance inside the instance after a release
+// InstanceScript::SetEntranceLocation is public (InstanceScript.h:293). D2: the bot then revives at the entrance inside the instance after a release
 // (Player::RepopAtGraveyard, Player.cpp:5227-5228) instead of at the zone's graveyard (Razor Hill for Ragefire Chasm).
 void BotMgr::EnsureEntrance(Bot const& bot, Player* me)
 {
@@ -1296,8 +1298,25 @@ void BotMgr::Update(uint32 diff)
         // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
         // Not in the update in which its logout was requested or its master was lost (R9): Think may have asked for the logout above, and
         // the brain is gone by then.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::TickErrands(me, diff);
+#endif
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
             engine::Tick(bot.brain.get(), diff);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+            tbhost::guild_orders::TickBotOrder(me);
+        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
+        {
+            static uint32 freeGatherMs = 0;
+            freeGatherMs += diff;
+            if (freeGatherMs >= 5000)
+            {
+                freeGatherMs = 0;
+                tbhost::prof::TickFreeGather(me);
+            }
+        }
+#endif
     }
 
     for (ObjectGuid const& guid : finished)

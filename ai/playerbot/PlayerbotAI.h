@@ -1084,6 +1084,10 @@ public:
         // when the bot joins the player's group.
         void SetForcedRole(uint8 role) { m_forcedRole = role; }
         uint8 GetForcedRole() const { return m_forcedRole; }
+        // Denied crowd-control kinds as CcPermissions bits. 0 allows everything; a side that never sets the mask keeps
+        // today's behaviour exactly (the cast check below returns before reading any kind).
+        void SetCcDeniedMask(uint32 mask) { m_ccDeniedMask = mask; }
+        uint32 GetCcDeniedMask() const { return m_ccDeniedMask; }
         // PET-3: set when the player orders `pet autocast` on a pet taunt
         // (Growl/Torment); the autocast sweep then leaves taunts to them.
         void SetPetTauntAutocastOrdered() { m_petTauntAutocastOrdered = true; }
@@ -1127,6 +1131,7 @@ protected:
 	Player* bot;
 	Player* master;
 	uint8 m_forcedRole = 0;
+	uint32 m_ccDeniedMask = 0;
 	bool m_petTauntAutocastOrdered = false;
 	time_t m_dungeonCatchUpAt = 0;
 	// Mage-portal follow: the party portal the master just stepped through

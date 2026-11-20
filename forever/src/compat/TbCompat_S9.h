@@ -13,7 +13,7 @@
 //  * the loot tables (creature / game object / reference / item) are copied from the world database through the guarded reader below
 //    (LootTemplate::Entries and ::Groups are private, LootMgr.h:150-151).
 //
-// Threading: the engine ticks on the world thread outside the map update (World.cpp:2462-2475, findings item 2). Everything here that
+// Threading: the engine ticks on the world thread outside the map update (World.cpp:2478-2491, findings item 2). Everything here that
 // reads a Loot, a LootRoll or a bot's roll list is a READ made on that thread; the memo below is touched only there.
 #pragma once
 
@@ -59,6 +59,8 @@ struct BotLootMemo
 {
     std::set<ObjectGuid> windows;                          // loot owners (game objects) whose window was announced
     std::set<std::pair<ObjectGuid, uint32>> rolls;         // (loot owner, loot list id) of the rolls announced
+    bool bagInit = false;
+    std::set<ObjectGuid> bagItems;                         // item guids already seen in bags (item push result poll)
 };
 
 inline std::map<ObjectGuid, BotLootMemo>& Memo()
@@ -125,18 +127,89 @@ inline bool BotRollsInGroupLootCompat(Player const* bot, Loot const* loot)
 //    opened for neighbouring corpses are never announced (the engine would take items from corpses it did not walk to).
 // Nothing is announced while the trigger still holds the previous event (the Check of an unconsumed event is non-empty).
 template <class TriggerType>
+inline void PollItemPush(Player* bot, tbs9::BotLootMemo& memo, TriggerType& trigger)
+{
+    std::set<ObjectGuid> live;
+    std::vector<Item*> added;
+    auto visit = [&](Item* item)
+    {
+        if (!item)
+            return;
+        ObjectGuid const guid = item->GetGUID();
+        live.insert(guid);
+        if (memo.bagInit && !memo.bagItems.count(guid))
+            added.push_back(item);
+    };
+    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        visit(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+    for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+    {
+        if (Bag* pBag = bot->GetBagByPos(bag))
+            for (uint32 slot = 0; slot < pBag->GetBagSize(); ++slot)
+                visit(pBag->GetItemByPos(slot));
+    }
+    if (!memo.bagInit)
+    {
+        memo.bagItems = std::move(live);
+        memo.bagInit = true;
+        return;
+    }
+    for (auto it = memo.bagItems.begin(); it != memo.bagItems.end();)
+        it = live.count(*it) ? std::next(it) : memo.bagItems.erase(it);
+    for (Item* item : added)
+    {
+        memo.bagItems.insert(item->GetGUID());
+        ItemTemplate const* tpl = item->GetTemplate();
+        if (!tpl)
+            continue;
+        uint32 const cls = tpl->GetClass();
+        if (cls != ITEM_CLASS_WEAPON && cls != ITEM_CLASS_ARMOR && cls != ITEM_CLASS_CONTAINER && cls != ITEM_CLASS_QUIVER)
+            continue;
+        WorldPacket event;
+        event << bot->GetGUID();
+        event << uint32(0);                                // received
+        event << uint32(0);                                // created
+        event << uint32(0);                                // isShowChatMessage
+        event << uint8(item->GetBagSlot());
+        event << uint32(item->GetSlot());
+        event << uint32(item->GetEntry());
+        event << uint32(0);                                // suffixFactor
+        event << uint32(0);                                // itemRandomPropertyId
+        event << uint32(item->GetCount());
+        trigger.ExternalEvent(event, nullptr);
+        return;
+    }
+}
+
+template <class TriggerType>
 inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerType& trigger)
 {
     if (!bot || !bot->IsInWorld())
         return;
+    if (name == "item push result")
+    {
+        PollItemPush(bot, tbs9::Memo()[bot->GetGUID()], trigger);
+        return;
+    }
+    if (name == "quest share")
+    {
+        PollQuestShareCompat(bot, trigger);
+        return;
+    }
     if (name != "loot start roll" && name != "loot response")
         return;
 
     // The cheap exit of every tick: the bot has no roll and no window, so there is nothing to announce and nothing to remember.
     if (bot->GetLootRolls().empty() && bot->GetAELootView().empty())
     {
-        if (!tbs9::Memo().empty())
-            tbs9::Memo().erase(bot->GetGUID());
+        auto it = tbs9::Memo().find(bot->GetGUID());
+        if (it != tbs9::Memo().end())
+        {
+            it->second.windows.clear();
+            it->second.rolls.clear();
+            if (!it->second.bagInit)
+                tbs9::Memo().erase(it);
+        }
         return;
     }
 
@@ -306,10 +379,16 @@ inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count)
 // ===============================================================================================================
 // ITEM USAGE (ItemUsageValue.cpp)
 // ===============================================================================================================
-// The auction code reads a listing's fields. Nothing creates an AuctionEntry on F (TbCompat_Unported.h), so the containers stay empty and none of
-// these runs for a real listing; the helper answers the "no listing" value: an item count of 0. The deposit's two settings go through the W2
-// config helpers (TbCompat_W2.h), as every other config site does.
-inline uint32 AuctionItemCountCompat(AuctionEntry const& /*auction*/) { return 0; }
+// `Item* item = sAuctionMgr->GetAItem(...)` when itemGuidLow is set, or the populated itemCount on ForeverCore.
+inline uint32 AuctionItemCountCompat(AuctionEntry const& auction)
+{
+    if (auction.itemCount)
+        return auction.itemCount;
+    if (auction.itemGuidLow)
+        if (Item* item = sAuctionMgr->GetAItem(ObjectGuid::Create<HighGuid::Item>(auction.itemGuidLow)))
+            return item->GetCount();
+    return 0;
+}
 
 // Is the quest in the bot's log still incomplete (T `getQuestStatusMap()[id].m_status == QUEST_STATUS_INCOMPLETE`, F `GetQuestStatus`, Player.h:1811).
 inline bool QuestIncompleteCompat(Player* player, Quest const* quest) { return player->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_INCOMPLETE; }

@@ -118,6 +118,14 @@ inline Result UnportedBlockResultCompat(tbcompat::Feature, Result, Block&& block
 inline void RegisterDirectPacketCasesCompat() {}
 
 inline uint32 WorldAverageDiffCompat() { return sWorld.GetAverageDiff(); }
+
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+{
+    char* source = (char*)str.c_str();
+    char* cId = handler->ExtractKeyFromLink(&source, "Hquest");
+    return cId ? atol(cId) : 0;
+}
 inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(z); }
 
 
@@ -287,56 +295,7 @@ inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
 }
 
 
-// ===============================================================================================================
-// QUEST INTERNALS
-// ===============================================================================================================
-struct QuestTriageViewCompat
-{
-    struct Item { uint32 id = 0; uint32 count = 0; };
-    bool inactive = false;
-    bool hasItemObjective = false;
-    bool deliver = false;
-    uint32 level = 0;
-    uint32 levelForPlayer = 0;
-    uint32 type = 0;
-    uint32 suggestedPlayers = 0;
-    int32 rewardOrRequiredMoney = 0;
-    std::vector<Item> items;
-};
-// The reads QuestLogNearlyFullTrigger::HasDroppableQuest made, in the same terms (all pure getters).
-inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* bot, Quest const* quest)
-{
-    QuestTriageViewCompat view;
-    view.inactive = !quest->IsActive();
-    bool hasItemObjective = false;
-    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-        if (quest->ReqItemId[i] && quest->ReqItemCount[i])
-            hasItemObjective = true;
-    for (uint8 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
-        if (quest->ReqSourceId[i] && quest->ReqSourceCount[i])
-            hasItemObjective = true;
-    view.hasItemObjective = hasItemObjective;
-    view.deliver = quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER);
-    view.level = quest->GetQuestLevel();
-    view.levelForPlayer = bot->GetQuestLevelForPlayer(quest);
-    view.type = quest->GetType();
-    view.suggestedPlayers = quest->GetSuggestedPlayers();
-    view.rewardOrRequiredMoney = quest->GetRewOrReqMoney();
-    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-        if (quest->ReqItemCount[i])
-            view.items.push_back({ quest->ReqItemId[i], quest->ReqItemCount[i] });
-    return view;
-}
-
-inline std::string QuestTitleCompat(Quest const* quest) { return quest->GetTitle(); }
-inline void RemoveQuestFromLogCompat(Player* bot, uint32 questId) { bot->RemoveQuest(questId); }
-inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* quest)
-{
-    std::vector<std::pair<uint32, uint32>> items;
-    for (uint8 i = 0; i < std::size(quest->ReqItemId); ++i)
-        items.push_back({ quest->ReqItemId[i], quest->ReqItemCount[i] });
-    return items;
-}
+// Quest internals moved to cmangos-compat-quest.h (W3).
 
 
 // ===============================================================================================================

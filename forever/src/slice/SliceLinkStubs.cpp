@@ -324,31 +324,24 @@ bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 // the "not there" value of the legacy code, so the item usage value classifies LESS: no equip upgrade is ever found (the stat weights are 0 and no
 // spec may wear anything), so nothing is looted or rolled for equipping, and no mount, auction listing or repair price is known.
 // =====================================================================================================================
-// RandomItemMgr.cpp (feature "random item tables"): the weights and the spec rules. Absent = weight 0, no spec wears the item, no spec at all.
-uint32 RandomItemMgr::ItemStatWeight(Player*, ai::ItemQualifier&) { NoteItems(); return 0; }
-uint32 RandomItemMgr::ItemStatWeight(Player*, Item*) { NoteItems(); return 0; }
-bool RandomItemMgr::ShouldEquipArmorForSpec(uint8, uint8, ItemPrototype const*) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSpec(Player const*, uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSpec(uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSlot(Player const*, uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSlot(uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
-uint32 RandomItemMgr::GetFallbackSpecId(uint8) { NoteItems(); return 0; }
-std::string RandomItemMgr::GetSpecName(uint32) { NoteItems(); return std::string(); }
-ai::ItemStatFamily RandomItemMgr::GetSpecStatFamily(uint32) { NoteItems(); return ai::ItemStatFamily::None; }
+// RandomItemMgr.cpp (feature "random item tables"): weights and spec rules now live in RandomItemWeights.cpp.
 // RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): the pool's price multipliers, trade discounts, auction prices and the unseen-item equip check. Absent =
 // neutral multipliers (1.0), no discount, no listing, the equip is refused.
 double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
 double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
 void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
 std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
-InventoryResult RandomBotFacade::CanEquipUnseenItem(Player*, uint8, uint16&, uint32) { NotePool(); return EQUIP_ERR_CANT_DO_THAT_RIGHT_NOW; }
+// The core checks an item it has not created through a temporary Item (Player::CanEquipNewItem); swap=true as on Turtle:
+// the caller compares old and new itself, and an occupied slot must not reject every upgrade.
+InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, uint16& dest, uint32 item)
+{
+    return player ? player->CanEquipNewItem(slot, dest, item, true) : EQUIP_ERR_ITEM_NOT_FOUND;
+}
 // MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
 uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
 uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
 uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
 bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
-// BudgetValues.cpp: the repair price of an item. Absent = free (0), which only matters for the budget of a vendor trip.
-uint32 ai::RepairCostValue::RepairCost(Item const*, bool) { NoteMisc(); return 0; }
 // GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
 namespace TortoiseBots { namespace GuildOrders {
 void RefreshOrderProtectedSet(Player*) { NotePool(); }
@@ -369,11 +362,12 @@ bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 // =====================================================================================================================
 RandomItemMgr::RandomItemMgr() {}
 RandomItemMgr::~RandomItemMgr() {}
-void RandomItemMgr::Init() { NoteItems(); }
+void RandomItemMgr::Init() { LoadWeightScales(); }
 uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
-uint32 RandomItemMgr::GetPlayerSpecId(Player*) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetLiveStatWeight(Player*, uint32, uint32) { NoteItems(); return 0; }
+uint8 RandomItemMgr::GetSourceFlags(uint32) { NoteItems(); return ITEM_SOURCE_FLAG_NONE; }
 
 // With no text table the real GetBotText(name) answers the empty text (PlayerbotTextMgr.cpp:65; R9: the old stand-in answered the key, so a bot whispered raw
 // keys such as "hello"); every caller of it skips an empty text. The placeholder form falls back to the name with the placeholders replaced, as the real one does.
@@ -410,13 +404,9 @@ void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
 // PlayerbotFactory.cpp: the five pet and ammo members are real since slice 11 (forever/src/host/TbHostPetFactory.cpp).
 
-// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load finds nothing.
+// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load/save does nothing.
 void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
-
-// EquipAction.cpp: the warlock's firestone and spellstone equip (WarlockActions.cpp:60 and :82). The file brings RandomItemMgr, ItemUsageValue,
-// BotGearService, ClaimLifecycle and PlayerbotDbStore with it (nine symbols, five owners outside the slice), so the stone stays in the bags and
-// the weapon keeps its plain damage. The stones are level 28 and 36 spells: the slice's bots (18-22) never reach the call.
-void ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool) { NoteMisc(); }
+void PlayerbotDbStore::Save(PlayerbotAI*, std::string) { NoteMisc(); }
 
 // RandomBotFacade loaders (runtime/PlayerbotRuntimeFacade.cpp): the pool caches are not built.
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
@@ -459,3 +449,47 @@ bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI*) { NoteMisc(); re
 // the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
 // PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
 bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }
+
+// =====================================================================================================================
+// W2 (town: sell, buy, repair, trainer, mail read): symbols referenced by the W2 action files whose owners (MaintenanceValues,
+// GuildOrders, TravelMgr) are not in the slice yet (waits for W1/W4).
+// =====================================================================================================================
+#include "playerbot/strategy/values/MaintenanceValues.h"
+#include "compat/TbCompat_W2Town.h"
+#include "playerbot/strategy/values/TrainerValues.h"
+#include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/TravelMgr.h"
+namespace ai
+{
+bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
+void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
+// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these three are its plain helpers.
+uint32 TrainerSpellPrice(TrainerSpell const* tSpell, float discountMod) { return uint32(floor(tSpell->spellCost * discountMod)); }
+bool TrainerTrainsForFree(PlayerbotAI* ai) { return sPlayerbotAIConfig.autoTrainSpells == "free" || ai->HasCheat(BotCheatMask::gold); }
+uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
+{
+    if (TrainerTrainsForFree(ai))
+        return UINT32_MAX;
+    NeedMoneyFor budget = NeedMoneyFor::anything;
+    if (type == TRAINER_TYPE_CLASS)
+        budget = NeedMoneyFor::spells;
+    else if (type == TRAINER_TYPE_MOUNTS)
+        budget = NeedMoneyFor::mount;
+    else if (type == TRAINER_TYPE_TRADESKILLS)
+        budget = NeedMoneyFor::skilltraining;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE2(uint32, "free money for", (uint32)budget);
+}
+}
+
+// =====================================================================================================================
+// W3 (quests): the alt-bot service and the random-bot value store are not ported, so the quest actions record nothing in
+// them: no quest is "taken by an alt" and a drop leaves no pool value behind.
+// =====================================================================================================================
+#include "runtime/AltBotService.h"
+namespace TortoiseBots
+{
+void AltBotService::AddTakenQuest(Player*, uint32_t) { NotePool(); }
+bool AltBotService::IsTakenQuest(uint32_t, uint32_t) const { NotePool(); return false; }
+}
+void RandomBotFacade::SetValue(Player*, std::string, uint32, std::string, int32) { NotePool(); }

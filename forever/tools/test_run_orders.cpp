@@ -312,11 +312,80 @@ static void TestSettle()
     CHECK(od::Settle(party, 100, look, failure) && !failure.empty());   // a helper's success does not rescue it
 }
 
+static void TestCommanderP3()
+{
+    // `hold` verb + 32-hex guid targets for pull/pullback/attack/focus
+    CHECK(Parse("hold").verb == od::Verb::Hold);
+    CHECK(Parse("HOLD").verb == od::Verb::Hold);
+    Parse("hold now", false);
+    CHECK(CodeOf("hold now") == "invalid");
+
+    std::string const hexGuid = "2000000000000000000000000000002A";
+    od::Parsed p = Parse("pull " + hexGuid);
+    CHECK(p.verb == od::Verb::Pull && p.handle == 0 && p.targetToken == hexGuid);
+    p = Parse("pullback " + hexGuid);
+    CHECK(p.verb == od::Verb::Pullback && p.handle == 0 && p.targetToken == hexGuid);
+    p = Parse("attack " + hexGuid + " Mdpsa");
+    CHECK(p.verb == od::Verb::Attack && p.handle == 0 && p.targetToken == hexGuid && p.bot == "Mdpsa");
+    p = Parse("focus " + hexGuid);
+    CHECK(p.verb == od::Verb::Focus && p.handle == 0 && p.targetToken == hexGuid);
+
+    // Invalid 32-hex edge cases (all-zero, wrong length, non-hex)
+    for (char const* bad : {
+             "pull 00000000000000000000000000000000",
+             "pull 2000000000000000000000000000002",
+             "attack 2000000000000000000000000000002AA",
+             "focus 2000000000000000000000000000002G" })
+    {
+        Parse(bad, false);
+        CHECK(CodeOf(bad) == "invalid");
+    }
+
+    // Table-driven parity: identical facts produce identical verdicts for run and commander.
+    struct TargetCase
+    {
+        RC::TargetFacts facts;
+        bool expectOk;
+        char const* expectCode;
+    };
+    TargetCase const targetCases[] = {
+        { { true, true, false, true, false, true, true }, true, "" },
+        { { false, false, false, false, false, false, false }, false, "invalid-target" },
+        { { true, false, false, false, false, false, false }, false, "invalid-target" },
+        { { true, true, false, false, false, false, false }, false, "dead-target" },
+        { { true, true, false, true, true, false, false }, false, "friendly" },
+        { { true, true, false, true, false, false, false }, false, "invalid-target" },
+        { { true, true, false, true, false, true, false }, false, "no-target" },
+        { { true, true, true, true, false, true, true }, false, "invalid-target" },
+    };
+    for (TargetCase const& tc : targetCases)
+    {
+        od::Judged const runJudge = od::JudgeTarget(tc.facts);
+        od::Judged const cmdJudge = od::JudgeTarget(tc.facts);
+        CHECK(runJudge.ok == tc.expectOk && cmdJudge.ok == tc.expectOk);
+        CHECK(runJudge.code == tc.expectCode && cmdJudge.code == tc.expectCode);
+        CHECK(runJudge.text == cmdJudge.text);
+    }
+
+    // Move parity: same MoveFacts yield identical verdicts regardless of fromRun.
+    for (bool fromRun : { true, false })
+    {
+        RC::MovePoint origin{ 0.0f, 0.0f, 0.0f };
+        RC::MovePoint dest{ 20.0f, 0.0f, 0.0f };
+        RC::MoveFacts okFacts = RC::LeadMoveFacts(origin, dest, 0x0001u, 0.0f, 20.0f, 150.0f, false, fromRun);
+        CHECK(od::JudgeMove(okFacts).ok);
+        RC::MoveFacts noPathFacts = RC::LeadMoveFacts(origin, dest, 0x0008u, 10.0f, 0.0f, 150.0f, false, fromRun);
+        od::Judged const j = od::JudgeMove(noPathFacts);
+        CHECK(!j.ok && j.code == "unreachable");
+    }
+}
+
 int main()
 {
     TestParse();
     TestTexts();
     TestSettle();
+    TestCommanderP3();
     if (g_fail)
     {
         std::printf("RESULT: FAIL (%d of %d checks)\n", g_fail, g_checks);

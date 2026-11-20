@@ -3,16 +3,17 @@
 #include "ItemUsageValue.h"
 #include "MountValues.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW2Town.h"
 
 using namespace ai;
 
 uint32 RepairCostValue::RepairCost(const Item* item, bool fullCost)
 {
-    uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+    uint32 maxDurability = ItemMaxDurabilityCompat(item);
     if (!maxDurability)
         return 0;
 
-    uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+    uint32 curDurability = ItemDurabilityCompat(item);
 
     uint32 LostDurability = maxDurability;
 
@@ -35,9 +36,9 @@ uint32 RepairCostValue::RepairCost(const Item* item, bool fullCost)
     if (!dQualitymodEntry)
         return 0;
 
-    uint32 dmultiplier = dcost->multiplier[ItemSubClassToDurabilityMultiplierId(ditemProto->Class, ditemProto->SubClass)];
+    uint32 dmultiplier = DurabilityCostMultiplierCompat(dcost, ditemProto->Class, ditemProto->SubClass);
 
-    return uint32(LostDurability * dmultiplier * double(dQualitymodEntry->quality_mod));
+    return uint32(LostDurability * dmultiplier * double(DurabilityQualityModCompat(dQualitymodEntry)));
 }
 
 uint32 RepairCostValue::Calculate()
@@ -69,11 +70,11 @@ uint32 MaxGearRepairCostValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         if (i >= EQUIPMENT_SLOT_END && curDurability >= maxDurability) //Only count items equiped or already damanged.
             continue;
@@ -87,6 +88,8 @@ uint32 MaxGearRepairCostValue::Calculate()
 uint32 MinRepairCostValue::Calculate()
 {
     std::vector<uint8> importantSlots = { EQUIPMENT_SLOT_MAINHAND , EQUIPMENT_SLOT_RANGED, EQUIPMENT_SLOT_OFFHAND };
+    uint32 brokenCost = 0;
+    bool anyBroken = false;
     for (uint32 slot : importantSlots)
     {
         uint16 pos = ((INVENTORY_SLOT_BAG_0 << 8) | slot);
@@ -95,17 +98,21 @@ uint32 MinRepairCostValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         if (curDurability > 0)
             continue;
 
-        return RepairCost(item); //The cost to repair the most important broken item.
+        anyBroken = true;
+        brokenCost += RepairCost(item); //Every broken weapon slot: the repair fixes all of them first.
     }
+
+    if (anyBroken)
+        return brokenCost;
 
     return RepairCostValue::Calculate();
 }
@@ -203,11 +210,11 @@ uint32 MoneyNeededForValue::Calculate()
 
             totalDeposit += deposit;
 
-            uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+            uint32 maxDurability = ItemMaxDurabilityCompat(item);
             if (!maxDurability)
                 continue;
 
-            uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+            uint32 curDurability = ItemDurabilityCompat(item);
 
             uint32 LostDurability = maxDurability - curDurability;
 
@@ -225,8 +232,8 @@ uint32 MoneyNeededForValue::Calculate()
             if (!dQualitymodEntry)
                 continue;
 
-            uint32 dmultiplier = dcost->multiplier[ItemSubClassToDurabilityMultiplierId(ditemProto->Class, ditemProto->SubClass)];
-            uint32 costs = uint32(LostDurability * dmultiplier * double(dQualitymodEntry->quality_mod));
+            uint32 dmultiplier = DurabilityCostMultiplierCompat(dcost, ditemProto->Class, ditemProto->SubClass);
+            uint32 costs = uint32(LostDurability * dmultiplier * double(DurabilityQualityModCompat(dQualitymodEntry)));
 
             totalDeposit += costs;
         }

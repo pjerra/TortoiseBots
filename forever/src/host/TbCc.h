@@ -44,6 +44,16 @@ bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
 // The bot's `rti cc` and `run cc family` ("" for "none" or when the bot has no engine), as `.tb state` reads them.
 void CcOrderValues(Player* bot, std::string& mark, std::string& family);
 
+// Crowd-control permissions (`.tb cc <bot|party [leader]> [class] allow|deny <kind>... | list`): the memory-only
+// per-(commander account, class) store of denied kinds. A class of 0 is the all-classes entry an order without a
+// class word writes; a missing entry reads as fear denied. The host pushes each bot's effective mask into its engine,
+// whose cast check then skips a denied spell and moves the rotation on.
+uint32 CcDeniedForOwner(uint32 owner, uint8 botClass);
+uint64 CcDeniedVersion();
+uint32 CcOwnerOf(Player* bot, Player* sender);
+void CcSetDenied(uint32 owner, uint8 botClass, uint32 mask);
+void CcSyncBot(Player* bot);
+
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail args);         // .tb cc <bot> <mark> <unit guid|target> [family] | .tb cc <bot> clear [<mark> <unit guid>] [#token]
 bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb strategy <bot> co|nc <+name,-name ...> [#token]   (SETUP)
 

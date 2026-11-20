@@ -29,7 +29,7 @@ bool IsItemCurrentlyEquipped(Player* bot, Item* item)
     if (!bot || !item || !GetItemProtoCompat(item))
         return false;
     if (GetItemProtoCompat(item)->InventoryType == INVTYPE_AMMO)
-        return bot->GetUInt32Value(PLAYER_AMMO_ID) == GetItemProtoCompat(item)->ItemId;
+        return PlayerAmmoIdCompat(bot) == GetItemProtoCompat(item)->ItemId;
     if (GetItemProtoCompat(item)->Class == ITEM_CLASS_CONTAINER || GetItemProtoCompat(item)->Class == ITEM_CLASS_QUIVER)
         return item->GetBagSlot() == INVENTORY_SLOT_BAG_0 &&
             item->GetSlot() >= INVENTORY_SLOT_BAG_START && item->GetSlot() < INVENTORY_SLOT_BAG_END;
@@ -481,9 +481,7 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
 
         if (!equipedBag && !isBag)
         {
-            WorldPacket packet(CMSG_AUTOEQUIP_ITEM, 2);
-            packet << bagIndex << slot;
-            bot->GetSession()->HandleAutoEquipItemOpcode(packet);
+            AutoEquipCompat(bot, bagIndex, slot);
         }
 
         // A hunter swapping bow<->gun keeps the stale ammo id: after the
@@ -516,6 +514,9 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
 
 bool EquipUpgradesAction::Execute(Event& event)
 {
+    if (!MayAutoEquipUpgradesCompat(bot))
+        return false;
+
     if (!sPlayerbotAIConfig.autoEquipUpgradeLoot && !sRandomBotFacade.IsRandomBot(bot))
         return false;
 
@@ -824,8 +825,8 @@ bool EquipUpgradesAction::Execute(Event& event)
                 bool curOHForced = curOH && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", GetItemProtoCompat(curOH)->ItemId, ForceItemUsage::FORCE_USAGE_NONE) == ForceItemUsage::FORCE_USAGE_EQUIP;
                 // Broken-over-working never auto-equips elsewhere either: a
                 // broken displaced hand only fills an empty off hand.
-                bool displacedBroken = displacedMH->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && displacedMH->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
-                bool curOHBroken = curOH && curOH->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && curOH->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
+                bool displacedBroken = ItemDurabilityCompat(displacedMH) == 0 && ItemMaxDurabilityCompat(displacedMH) > 0;
+                bool curOHBroken = curOH && ItemDurabilityCompat(curOH) == 0 && ItemMaxDurabilityCompat(curOH) > 0;
                 if (displacedKeepInBag || curOHForced || (curOH && displacedBroken && !curOHBroken))
                 {
                     if (TortoiseBots::ShouldKeepDisplacedClaimedGear(isClaimed) &&
