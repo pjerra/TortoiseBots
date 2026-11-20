@@ -8,12 +8,14 @@
 #include "host/cmd/TbTestTargetPure.h"
 
 #include "DB2Stores.h"
+#include "Chat.h"
 #include "Item.h"
 #include "ItemTemplate.h"
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
+#include "WorldSession.h"
 
 #include <cstdlib>
 
@@ -283,7 +285,7 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // The pieces the swap will take off the body: the one in the named slot and, for a two-hander, the offhand (SwapItem's
     // AutoUnequipOffhandIfNeed puts it in the bags).
     Item* displaced = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
-    Item* displacedOff = ((swapDest & 255) == EQUIPMENT_SLOT_MAINHAND && proto->InventoryType == INVTYPE_2HWEAPON)
+    Item* displacedOff = ((swapDest & 255) == EQUIPMENT_SLOT_MAINHAND && proto->GetInventoryType() == INVTYPE_2HWEAPON)
         ? bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND)
         : nullptr;
     Player* const sender = SenderPlayer(handler);
