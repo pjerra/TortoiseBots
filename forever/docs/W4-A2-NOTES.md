@@ -59,4 +59,13 @@ ForeverCore build. `TravelValues.cpp` keeps one call per value; the ForeverCore 
 
 ## 5. Gates
 
-Filled in below as they run.
+| Gate | Result |
+|---|---|
+| Census `forever/SLICE-W4.txt` (272 files), slot 8, core 25fc7ca | `files 272  compile clean 272  with errors 0  error places 0`, run folder `w4a2-c2` |
+| Policy tests (standalone, g++ C++17, forever-builder) | `test_zone_level_policy` 13 checks PASS; `test_travel_purpose_gate_policy` 22 checks PASS. Failing first: both tests against the pre-round tree (`HEAD~1`) stop at `fatal error: ai/playerbot/policy/travel/ZoneLevelPolicy.h: No such file or directory` (and the purpose header) |
+| Wiring | `python3 -m unittest forever/tools/test_wl4_wiring.py` 12 tests OK |
+| Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` (a)=0, (b)=222 |
+| Module OFF (`FOREVER_SLOT=8 build.sh 14 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; the OFF library holds no `TravelMgr::`/`TbCompat_WL4` symbol (the pair's .cpp is filtered like `TbCompat_C.cpp`) |
+| Module ON + worldserver link (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, target `worldserver`) | `CMAKE_RC=0 MAKE_RC=0`, `bin/Release/bin/worldserver` 72,311,608 bytes, 0 `error:`; `strings` carries "travel destination spawn entries" and "the travel node store is not ported" |
+| Turtle `vm-build` | `COMPILE_SECONDS=55 CMAKE_RC=0 MAKE_RC=0`, `mangosd` and `realmd` written, job rc=0 |
+

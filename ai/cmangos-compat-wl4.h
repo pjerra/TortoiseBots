@@ -19,6 +19,9 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/TravelNode.h"
+#include "playerbot/TbCompatW2.h"
+#include "playerbot/RandomBotFacade.h"
+#include "playerbot/TbCompatW3.h"
 #include "playerbot/policy/rpg/LocalPickPolicy.h"
 #include "playerbot/policy/rpg/ZoneMigratePolicy.h"
 #include "playerbot/policy/guild/GuildFoundingPolicy.h"
@@ -94,7 +97,7 @@ inline bool QuestIsRaidWL4(Quest const* quest) { return quest && quest->GetType(
 inline bool QuestIsPvpWL4(Quest const* quest) { return quest && quest->GetType() == QUEST_TYPE_PVP; }
 inline uint32 QuestReqItemIdWL4(Quest const* quest, uint32 index) { return quest && index < QUEST_OBJECTIVES_COUNT ? quest->ReqItemId[index] : 0; }
 inline uint32 QuestReqItemCountWL4(Quest const* quest, uint32 index) { return quest && index < QUEST_OBJECTIVES_COUNT ? quest->ReqItemCount[index] : 0; }
-inline bool QuestHasRequiredConditionWL4(Quest const* quest) { return quest && quest->GetRequiredCondition() != nullptr; }
+inline bool QuestHasRequiredConditionWL4(Quest const* quest) { return quest && quest->GetRequiredCondition() != 0; }
 inline bool PlayerSatisfyQuestPrevChainWL4(Player* player, Quest const* quest) { return player && quest && player->SatisfyQuestPrevChain(quest, false); }
 inline bool PlayerHasQuestWL4(Player* player, uint32 questId) { return player && player->HasQuest(questId); }
 
@@ -154,6 +157,29 @@ inline ai::EntryGuidps TravelEntryGuidpsLegacyCompat()
     }
 
     return guidps;
+}
+
+// The gathering skill a game object's lock requires (herbalism / mining). Creatures no longer carry a gather purpose: a
+// skinnable spawn point is a live mob, so those destinations were removed (see the map builder and NeedTravelPurposeValue).
+inline uint32 GameObjectLockSkill(GameObjectInfo const* gInfo)
+{
+    if (!gInfo)
+        return SKILL_NONE;
+
+    LockEntry const* lockInfo = sLockStore.LookupEntry(gInfo->GetLockId());
+    if (!lockInfo)
+        return SKILL_NONE;
+
+    for (int i = 0; i < 8; ++i)
+    {
+        if (lockInfo->Type[i] != LOCK_KEY_SKILL)
+            continue;
+
+        if (uint32 skillId = SkillByLockType(LockType(lockInfo->Index[i])))
+            return skillId;
+    }
+
+    return SKILL_NONE;
 }
 
 inline ai::EntryTravelPurposeMap TravelEntryPurposeMapLegacyCompat()
@@ -825,6 +851,7 @@ inline bool HasHandInAbleQuest(PlayerbotAI* ai, Player* bot)
     }
     return false;
 }
+}   // namespace outgrown_yield
 
 inline bool TravelLeaveOutgrownCompat(PlayerbotAI* ai)
 {

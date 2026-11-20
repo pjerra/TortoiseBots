@@ -33,8 +33,8 @@
 #include "World/World.h"
 
 // The bot's own types (idempotent: TravelMgr.h/TravelValues.h/QuestValues.h are included by the callers first).
+#include "playerbot/TravelMgr.h"      // WorldPosition, before ChatHelper.h names it by value
 #include "playerbot/ChatHelper.h"
-#include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/values/QuestValues.h"
 
 // The key the loader stores a spawn point under (Turtle ObjectGuid::GetRawValue is one 64-bit number; ForeverCore's is the

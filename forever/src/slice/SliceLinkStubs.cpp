@@ -376,7 +376,7 @@ std::pair<uint32_t, uint32_t> ai::GuildOrderFarmItemFor(Player*) { NotePool(); r
 bool ai::GuildOrderMailWaiting(Player*) { NotePool(); return false; }
 bool ai::GuildOrderEntryUsableFor(uint32_t, int32_t, uint32_t, uint32_t, uint32_t, uint32_t, bool) { NotePool(); return false; }
 // RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no teleport cache is built, so the overlay export writes nothing.
-void ai::RandomBotFacade::PrintTeleportCache() { NotePool(); }
+void RandomBotFacade::PrintTeleportCache() { NotePool(); }
 // QueryItemUsageAction.cpp: the `query item usage` chat reply (a debug answer) is not built; the class is the base of the roll actions, which override Execute.
 bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 

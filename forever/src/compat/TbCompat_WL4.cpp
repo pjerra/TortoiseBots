@@ -7,6 +7,7 @@
 #include "TbCompat_WL4.h"
 
 #include "playerbot/TravelMgr.h"
+#include "playerbot/RandomBotFacade.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/strategy/values/SharedValueContext.h"
@@ -97,29 +98,51 @@ namespace
     {
         static EntryGuidps const index = []()
         {
+            uint32 const started = getMSTime();
             EntryGuidps out;
+            uint32 spawns = 0, skippedMaps = 0;
+
+            // Travel covers the two continents; the instance and battleground spawns are no destination and no terrain
+            // file of theirs is loaded for this.
+            auto indexedMap = [](uint32 mapId) { return mapId <= 1; };
 
             for (auto const& spawn : sObjectMgr.GetAllCreatureData())
             {
-                AsyncGuidPosition point(&spawn);
+                if (!indexedMap(spawn.second.mapId)) { ++skippedMaps; continue; }
+
+                // The spawn's guid here is the entry + the spawn id (the shim's pair constructor has no ForeverCore form).
+                AsyncGuidPosition point(GuidPosition(ObjectGuid::Create<HighGuid::Creature>(spawn.second.mapId, spawn.second.id, spawn.first),
+                    WorldPosition(spawn.second.mapId, spawn.second.spawnPoint.GetPositionX(), spawn.second.spawnPoint.GetPositionY(),
+                        spawn.second.spawnPoint.GetPositionZ(), spawn.second.spawnPoint.GetOrientation())));
                 if (!point.isValid() || point.IsEventUnspawned())
                     continue;
 
                 point.FetchArea();   // boot only: the area flag is cached, no rule below loads terrain again
                 out[point.GetEntry()].push_back(point);
+
+                if ((++spawns % 20000) == 0)
+                    sLog.outString(">> travel destination index: %u spawns, %u ms", spawns, GetMSTimeDiffToNow(started));
             }
 
             for (auto const& spawn : sObjectMgr.GetAllGameObjectData())
             {
-                AsyncGuidPosition point(&spawn);
+                if (!indexedMap(spawn.second.mapId)) { ++skippedMaps; continue; }
+
+                AsyncGuidPosition point(GuidPosition(ObjectGuid::Create<HighGuid::GameObject>(spawn.second.mapId, spawn.second.id, spawn.first),
+                    WorldPosition(spawn.second.mapId, spawn.second.spawnPoint.GetPositionX(), spawn.second.spawnPoint.GetPositionY(),
+                        spawn.second.spawnPoint.GetPositionZ(), spawn.second.spawnPoint.GetOrientation())));
                 if (!point.isValid() || point.IsEventUnspawned())
                     continue;
 
                 point.FetchArea();
                 out[-int32(point.GetEntry())].push_back(point);
+
+                if ((++spawns % 20000) == 0)
+                    sLog.outString(">> travel destination index: %u spawns, %u ms", spawns, GetMSTimeDiffToNow(started));
             }
 
-            sLog.outString(">> Loaded %u travel destination spawn entries.", uint32(out.size()));
+            sLog.outString(">> Loaded %u travel destination spawn entries (%u spawns on maps 0/1, %u skipped on other maps) in %u ms.",
+                uint32(out.size()), spawns, skippedMaps, GetMSTimeDiffToNow(started));
             return out;
         }();
 
@@ -135,6 +158,7 @@ namespace
     {
         static EntryTravelPurposeMap const map = []()
         {
+            uint32 const started = getMSTime();
             EntryQuestRelationMap const& relations = TravelQuestRelationMapData();
             EntryTravelPurposeMap out;
 
@@ -196,7 +220,8 @@ namespace
                     out[-int32(entry)] = purpose;
             }
 
-            sLog.outString(">> Loaded %u travel destination purpose entries.", uint32(out.size()));
+            sLog.outString(">> Loaded %u travel destination purpose entries in %u ms.", uint32(out.size()),
+                GetMSTimeDiffToNow(started));
             return out;
         }();
 
@@ -412,7 +437,7 @@ namespace ai
 
         if (objective)
         {
-            AiObjectContext* context = bot->GetPlayerbotAI()->GetAiObjectContext();
+            AiObjectContext* context = PlayerbotAIStorage::Instance().GetAI(bot)->GetAiObjectContext();
             if (!context->HasValue("need quest objective", "{" + std::to_string(questId) + "," + std::to_string(objective - 1) + "}"))
                 return false;
             if (!context->GetValue<bool>("need quest objective", "{" + std::to_string(questId) + "," + std::to_string(objective - 1) + "}")->Get())
