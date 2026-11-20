@@ -19,7 +19,7 @@
 //
 // The core has no spell reload at the pinned commit: LoadSpellInfoStore and every pass that edits the SpellInfo objects
 // (LoadSpellInfoCorrections, LoadClassicSpellInfo, LoadSpellInfoCustomAttributes) are called once from
-// World::SetInitialWorldSettings (World.cpp:1471-1491) and no `.reload` handler calls them again (scripts/Commands/cs_reload.cpp
+// World::SetInitialWorldSettings (World.cpp:1485-1505) and no `.reload` handler calls them again (scripts/Commands/cs_reload.cpp
 // reloads spell_required/spell_area/spell_proc and the other side tables only). So a mirror is only as fresh as the core's
 // object, which never changes once built; PORT-PLAN.md carries the same rule for the pin.
 #include "TbSpellEntry.h"

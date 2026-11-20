@@ -12,7 +12,7 @@
 // ForEachThreatenerThreatCompat (slice 1). The `getThreat` spelling is the shim's `#define getThreat GetThreat` (forever-compat-shim.h:148).
 //
 // THREAT CALLS OF THIS PACKAGE: every one is a pure READ of the core's ThreatManager (the engine runs on the world thread before the maps
-// update, World.cpp:2465-2475, and must not change the core's own choice of victim). See SLICE3-P-NOTES.md section 3 for the table.
+// update, World.cpp:2481-2491, and must not change the core's own choice of victim). See SLICE3-P-NOTES.md section 3 for the table.
 // ===============================================================================================================
 
 // The flat threat a spell adds on top of its damage or healing (the spell threat table). T `SpellThreatEntry::threat` (SpellMgr.h:108,

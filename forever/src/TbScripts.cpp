@@ -11,6 +11,8 @@
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#include "ai/playerbot/DungeonPlanMgr.h"
+#include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #endif
@@ -142,16 +144,55 @@ public:
             TortoiseBots::cmd::LoadBindings();     // P2: the key or the graces changed, or persistence was just turned on
     }
 
+    // `reload all` is the operator's "read the database again". The plan tables are the module's own (ai_dungeon_plan and
+    // ai_dungeon_step_unit in the world DB): no core reload reads them, so this hook (WorldScript::OnAfterReload, ScriptMgr.h:295)
+    // refreshes them through the same all-or-nothing path as `.tb plan reload`. The other core reloads do not touch anything the
+    // module caches: the item, spell and talent mirrors come from the DB2 stores (never reloaded), the commander bindings from the
+    // character DB (no core reload reads them) and the engine config through OnConfigLoad above.
+    void OnAfterReload(std::string_view command) override
+    {
+#ifdef TORTOISEBOTS_SLICE1
+        if (command != "reload all" || !BotMgr::Instance().Enabled() || !ai::GetDungeonPlans().Sealed())
+            return;
+        // A run keeps the plan it started on and matches its units by (leg, seq): new unit rows under it could give it another step's
+        // spawns. So while any run holds a plan the reload waits; `.tb plan reload` does it once the runs end.
+        std::vector<std::string> const runs = TortoiseBots::run::PlanRunLeaders();
+        if (!runs.empty())
+        {
+            std::string names;
+            for (std::string const& leader : runs)
+            {
+                if (!names.empty())
+                    names += ", ";
+                names += leader;
+            }
+            TC_LOG_WARN("tortoisebots", "TortoiseBots: plans not reloaded: run(s) in progress ({}); use .tb plan reload after they end", names);
+            return;
+        }
+        ai::PlanReloadHost host;
+        TortoiseBots::run::FillUnitReloadHost(host);
+        ai::PlanReloadReport const report = ai::ReloadDungeonPlans(TortoiseBots::run::PlansInUse(), &host);
+        if (!report.outcome.swapped)
+            TC_LOG_WARN("tortoisebots", "TortoiseBots: the dungeon plans kept after {} ({})", command,
+                report.outcome.reason.empty() ? std::string("the reload was refused") : report.outcome.reason);
+        else
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: reloaded {} dungeon plans ({} steps, {} step units) after {}", ai::GetDungeonPlans().PlanCount(),
+                ai::GetDungeonPlans().StepCount(), TortoiseBots::run::LastStepUnitLoad().kept, command);
+#else
+        (void)command;
+#endif
+    }
+
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
         TortoiseBots::Dashboard::LoadConfig();
         TortoiseBots::DashRuns::LoadConfig();
-        // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
+        // The item store is loaded by now (World.cpp:1622, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
         TortoiseBots::Dashboard::WriteItemsFile();
-        // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
+        // The spell store is loaded too (World.cpp:1485). This hook is what tells the mirror so: it answers 0 and null
         // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
         // store into a table that is never rebuilt.
         tbcompat::MarkSpellStoreReady();
