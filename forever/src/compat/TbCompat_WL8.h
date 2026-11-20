@@ -18,6 +18,16 @@
 #include <string>
 #include <vector>
 
+inline bool AhIsWorldAuctionEnabledCompat()
+{
+    return tbhost::ah::IsWorldAuctionEnabled();
+}
+
+inline void AhSetLastFailCodeCompat(Player* bot, std::string const& code)
+{
+    tbhost::ah::SetLastFailCode(bot, code);
+}
+
 inline Creature* AuctioneerIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 {
     return tbhost::ah::NpcIfCanInteract(bot, guid);
