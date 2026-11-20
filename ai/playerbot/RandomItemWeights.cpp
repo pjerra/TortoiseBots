@@ -73,7 +73,7 @@ void RandomItemMgr::LoadWeightScales()
 
     // load weightscales
     sLog.outString("Loading weightscales info");
-    auto results = WeightScaleQueryCompat("SELECT id, name, class FROM ai_playerbot_weightscales");
+    auto results = WeightScaleQueryCompat("SELECT id, name, class FROM `ai_playerbot_weightscales`");
 
     if (results)
     {
@@ -98,7 +98,7 @@ void RandomItemMgr::LoadWeightScales()
 
         sLog.outString("Loaded %d weightscale class specs", totalcount);
 
-        auto result = WeightScaleQueryCompat("SELECT id, field, val FROM ai_playerbot_weightscale_data");
+        auto result = WeightScaleQueryCompat("SELECT id, field, val FROM `ai_playerbot_weightscale_data`");
         if (result)
         {
             do
