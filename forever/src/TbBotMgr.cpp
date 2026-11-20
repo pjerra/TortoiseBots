@@ -1342,7 +1342,9 @@ void BotMgr::Think(Bot& bot, Player* me)
                 {
                     Group* group = me->GetGroup();
                     Player* partyLead = group ? ObjectAccessor::FindPlayer(group->GetLeaderGUID()) : nullptr;
-                    bool const partyHere = partyLead && partyLead->IsInWorld() && !partyLead->IsBeingTeleported() && partyLead->GetMap() == me->GetMap();
+                    // A bot that leads its own group answers itself here: that is no party standing beside it (PartyLeaderOnMap, Gemini finding 3).
+                    bool const partyHere = partyLead && PartyLeaderOnMap(partyLead->GetGUID() != me->GetGUID(), partyLead->IsInWorld(),
+                        partyLead->IsBeingTeleported(), partyLead->GetMap() == me->GetMap());
                     kept = EngineKeptOnOtherMap(me->IsAlive(), inInstance, partyHere);
                 }
                 if (!me->IsAlive() && IsCommandedHere(bot, me))

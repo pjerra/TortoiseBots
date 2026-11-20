@@ -12,4 +12,11 @@ inline bool EngineKeptOnOtherMap(bool alive, bool inInstance, bool partyHere)
 {
     return alive && inInstance && partyHere;
 }
+
+// "Its party is here" for EngineKeptOnOtherMap: the group's leader is SOMEBODY ELSE (a bot that leads its own group is not a party standing beside it:
+// ObjectAccessor::FindPlayer(leaderGuid) answers the bot itself), in the world, not between maps, on the bot's map.
+inline bool PartyLeaderOnMap(bool leaderIsOther, bool inWorld, bool teleporting, bool sameMap)
+{
+    return leaderIsOther && inWorld && !teleporting && sameMap;
+}
 }

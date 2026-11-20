@@ -484,6 +484,12 @@ ObjectGuid CommanderGuid(ObjectGuid bot)
     return itr != Bindings().end() && Valid(bot, itr->second) ? itr->second : ObjectGuid::Empty;
 }
 
+ObjectGuid StoredCommander(ObjectGuid bot)
+{
+    auto itr = Bindings().find(bot);
+    return itr == Bindings().end() ? ObjectGuid::Empty : itr->second;
+}
+
 std::vector<std::pair<ObjectGuid, ObjectGuid>> CommanderBindings()
 {
     std::vector<std::pair<ObjectGuid, ObjectGuid>> out;

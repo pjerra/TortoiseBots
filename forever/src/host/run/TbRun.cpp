@@ -363,8 +363,15 @@ void ReleaseAll(RunRec& rec)
 }
 
 // A bot that joined the party mid-run is bound too (only when it is commanded already: its kit needs no rebuild); one that left is given back.
-// A member the run bound keeps its binding through a pause and a regroup: the engine's own master logic can drop the commander entry while the host
-// master stays the run's lead (SyncBindingAction), and the run puts its binding back; a master somebody else set (`.tb master`) stays their decision.
+// A member the run bound keeps its binding through a pause and a regroup: the engine's own master logic can drop the commander entry or move the host
+// master under the run's entry (SyncBindingAction), and the run puts its binding back; a commander somebody else set (`.tb master`) stays their decision.
+BindingEntry BindingEntryOf(ObjectGuid stored, ObjectGuid lead)
+{
+    if (stored.IsEmpty())
+        return BindingEntry::Missing;
+    return stored == lead ? BindingEntry::Lead : BindingEntry::Other;
+}
+
 void SyncBinding(RunRec& rec, Group* group, Player* lead)
 {
     std::set<ObjectGuid> inGroup;
@@ -379,11 +386,13 @@ void SyncBinding(RunRec& rec, Group* group, Player* lead)
         uint32 awaySeconds = 0;
         std::string blockedWhy;
         BotMgr::Instance().FollowStatus(slot.guid, away, awaySeconds, blocked, blockedWhy, hasBrain);
-        if (!away && SyncBindingAction(boundByRun, BotMgr::Instance().MasterOf(slot.guid) == rec.leader,
-                h3::CommanderGuid(slot.guid) == rec.leader) == BindingSync::Reassert)
+        bool const masterIsLead = BotMgr::Instance().MasterOf(slot.guid) == rec.leader;
+        if (SyncBindingAction(boundByRun, away, masterIsLead, BindingEntryOf(h3::StoredCommander(slot.guid), rec.leader)) == BindingSync::Reassert)
         {
-            // The same host call BindMember makes (the host master and the engine's pointer), without touching the master to give back at the end.
-            BotManager::Instance().BindBotMaster(slot.guid, rec.leader);
+            // The same host call BindMember makes (the host master and the engine's pointer), then the entry itself: the bind first, so a refused bind
+            // leaves the commander table alone. Both agree afterwards, so the next tick is Keep and a member's away mark is not reset every tick.
+            RepairBinding([&] { return BotManager::Instance().BindBotMaster(slot.guid, rec.leader); },
+                          [&] { h3::SetCommander(slot.guid, rec.leader); });
             continue;
         }
         if (boundByRun)

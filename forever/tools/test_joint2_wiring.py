@@ -4,12 +4,16 @@
   * a bot that landed in an instance with its party keeps (and gets back) its engine although its commander stands on another map
     (EngineKeptOnOtherMap, host/TbEngineMapPure.h; forever/tools/test_engine_map.cpp proves the rule);
   * the run's binding of a member holds through a pause and a regroup: SyncBinding puts back a commander entry the engine's master logic dropped while
-    the host master still is the run's lead (SyncBindingAction, host/run/TbRunBindingPure.h; forever/tools/test_run_binding.cpp proves the rule), and
-    `.tb party` reads the party's commander from its MEMBERS (not the leader's own binding, which made a run's party read `commander=mixed`);
+    the host master still is the run's lead, and puts the host master back when the engine moved it under the run's own entry: the repair writes the
+    host bind AND `h3::SetCommander`, in that order, so one sync makes the next one Keep (SyncBindingAction, host/run/TbRunBindingPure.h;
+    forever/tools/test_run_binding.cpp proves the rule); `.tb party` reads the party's commander from its MEMBERS (not the leader's own binding,
+    which made a run's party read `commander=mixed`);
+  * a bot that leads its own group in an instance is not "its party is here": the party-is-here question excludes the bot itself
+    (PartyLeaderOnMap, host/TbEngineMapPure.h);
   * `.tb party <leader> <member>...` refuses a member that is in another (persisted) party with an error that names it, before anything changes, and
     `.tb run start` names an offline member left by such a group.
 
-These assertions fail on the commit before the fixes.
+These assertions fail on the commit before the fixes (the review round added the entry states, the SetCommander write and the identity check).
 """
 import re
 import unittest
@@ -44,8 +48,32 @@ class Joint2(unittest.TestCase):
         self.assertIn('#include "host/run/TbRunBindingPure.h"', run)
         sync = block(run, "void SyncBinding(", "void BaselineOrders(")
         self.assertIn("SyncBindingAction(boundByRun,", sync)
-        self.assertIn("BindBotMaster(slot.guid, rec.leader)", sync)
+        # The rule reads the entry as the table stores it (StoredCommander), because an entry that lapsed under a moved host master is exactly the
+        # state it repairs; CommanderGuid's "the host master agrees" check would hide it.
+        self.assertIn("BindingEntryOf(h3::StoredCommander(slot.guid), rec.leader)", sync)
+        # The repair writes BOTH tables: the host master (BindBotMaster, the engine's pointer with it) and the commander entry h3::SetCommander,
+        # which the bind-only repair never wrote, so the condition stayed true and the branch ran every tick.
+        self.assertIn("RepairBinding(", sync)
+        self.assertLess(sync.index("BindBotMaster(slot.guid, rec.leader)"), sync.index("h3::SetCommander(slot.guid, rec.leader)"))
         self.assertLess(sync.index("SyncBindingAction(boundByRun,"), sync.index("BindMember(rec, bot, lead);"))
+
+    def test_a_lapsed_entry_is_told_apart(self):
+        run = text("host/run/TbRun.cpp")
+        entry = block(run, "BindingEntry BindingEntryOf(", "void SyncBinding(")
+        self.assertIn("if (stored.IsEmpty())", entry)
+        self.assertIn("return BindingEntry::Missing;", entry)
+        self.assertIn("return stored == lead ? BindingEntry::Lead : BindingEntry::Other;", entry)
+        h3 = text("host/TbH3.cpp")
+        stored = block(h3, "ObjectGuid StoredCommander(", "std::vector<std::pair<ObjectGuid, ObjectGuid>> CommanderBindings()")
+        self.assertIn("return itr == Bindings().end() ? ObjectGuid::Empty : itr->second;", stored)
+
+    def test_the_party_is_not_the_bot_itself(self):
+        mgr = text("TbBotMgr.cpp")
+        self.assertIn('#include "host/TbEngineMapPure.h"', mgr)
+        branch = block(mgr, "bool kept = false;", "if (changed)")
+        # A bot leading its own group answers itself as the group leader: the party-is-here question excludes it (Gemini finding 3).
+        self.assertIn("PartyLeaderOnMap(partyLead->GetGUID() != me->GetGUID(),", branch)
+        self.assertNotRegex(branch, r"partyLead->GetMap\(\) == me->GetMap\(\);\s*\n\s*kept =")
 
     def test_the_party_commander_is_its_members(self):
         party = text("host/TbPartyState.cpp")
