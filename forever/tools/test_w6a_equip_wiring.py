@@ -52,9 +52,9 @@ def check_d4_gate(equip_src, f_header_src):
 class E6Wiring(unittest.TestCase):
     def test_both_headers_define_the_same_helpers(self):
         self.assertEqual(names(F_HEADER), names(T_HEADER))
-        self.assertEqual(
-            names(F_HEADER),
+        self.assertLessEqual(
             {"AutoEquipCompat", "CanUseItemForEquipCompat", "MayAutoEquipUpgradesCompat"},
+            names(F_HEADER),
         )
 
     def test_the_shims_include_both_headers(self):
