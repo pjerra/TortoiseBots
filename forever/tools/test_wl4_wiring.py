@@ -7,6 +7,7 @@ SliceLinkStubs are gone now that ai/playerbot/TravelNode.cpp is in the slice (FO
 Run: python3 -m unittest forever/tools/test_wl4_wiring.py
 """
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -144,9 +145,17 @@ class StandIns(unittest.TestCase):
         self.assertIn('#include "cmangos-compat-wl4n.h"', WRAPPER)
         self.assertIn('#if __has_include("TbCompat_WL4n.h")', WRAPPER)
         self.assertIn('#include "playerbot/TbCompatWL4n.h"', TRAVEL)
-        for name in ("TravelNodeQueryCompat", "TravelGenParallelCompat", "MmapTileLoadCompat", "TravelLinkUsableCompat"):
+        for name in ("TravelNodeQueryCompat", "TravelGenParallelCompat", "MmapTileLoadCompat", "TravelLinkUsableCompat",
+                     "TravelTeleportLinksCompat", "TravelNodeStoreWritableCompat", "TravelNodeExecuteCompat",
+                     "AreaTriggerKnownCompat", "AreaTriggerZoneContainsCompat"):
             self.assertIn(name, COMPAT_F)
             self.assertIn(name, COMPAT_T)
+
+    def test_the_two_sides_define_the_same_helpers(self):
+        def names(text):
+            return set(re.findall(r"^inline [A-Za-z0-9_:<> ]+ ([A-Za-z0-9_]+)\(", text, re.M))
+        self.assertEqual(names(COMPAT_F), names(COMPAT_T))
+        self.assertGreater(len(names(COMPAT_F)), 30)
 
 
 if __name__ == "__main__":
