@@ -116,9 +116,14 @@ class Wiring(unittest.TestCase):
         self.assertLess(maintain.index("kMaintainMs", maintain.index("kMaintainMs") + 1), maintain.index("TryRestore()"))
         # A card the read made for a run's tank has no lead: the release rule and the restore never touch it (its pairs belong to the run).
         self.assertIn("!m.lead.IsEmpty()", maintain)
+        # A stored row whose DELETE did not land is owed, not forgotten: the upkeep retries it even with nothing standing.
+        self.assertIn("store::RetryErases()", maintain)
+        self.assertLess(maintain.index("store::RetryErases()"), maintain.index("if (s.metas.empty())"))
         release = function_body(self.cpp, r"void ReleaseCommander\(ObjectGuid commander, L::End end\)\s*\{")
         self.assertIn("h3::SetCommander(bot, ObjectGuid::Empty)", release)  # h3's table is the owner: a release clears its pairs
-        self.assertIn("store::Erase(commander.GetCounter())", release)      # and the stored row
+        self.assertIn("bool const erased = store::Erase(commander.GetCounter())", release)  # and the stored row, read for its verdict
+        self.assertIn("store::PendingErase(commander.GetCounter())", release)
+        self.assertIn("the release is not complete", release)               # a durable row is never reported as a completed release
         self.assertIn("RestoreFollower(follower, m.lead)", release)         # the followers' own follow targets come back
         self.assertIn("ClearBotMaster(bot)", release)                       # a released bot keeps its former commander as neither master nor...
         self.assertIn("s.log.Retain(", release)                             # ...and the released card's order log goes with it at once
@@ -184,6 +189,30 @@ class Wiring(unittest.TestCase):
         for reset in ("s.loadTried = false", "s.tableReady = false", "s.rows.clear()"):
             self.assertIn(reset, config)
         self.assertIn("CREATE TABLE IF NOT EXISTS `tb_commander_binding`", self.store)
+
+    def test_a_failed_delete_is_pending_and_never_restored(self):
+        # A DELETE that did not land leaves the row durable: it is marked pending, kept out of Rows(), retried by the upkeep, and cleared by a
+        # later Save of the same commander (a rebind is newer than the delete it replaces).
+        erase = function_body(self.store, r"bool Erase\(uint64_t commander\)\s*\{")
+        self.assertIn("s.pendingErase.insert(commander)", erase)
+        visible = function_body(self.store, r"std::vector<life::Stored> VisibleRows\(State& s\)\s*\{")
+        self.assertIn("s.pendingErase.count(row.commander)", visible)
+        pending = function_body(self.store, r"bool PendingErase\(uint64_t commander\)\s*\{")
+        self.assertIn("s.pendingErase.count(commander) != 0", pending)
+        retry = function_body(self.store, r"bool RetryErases\(\)\s*\{")
+        self.assertIn("Erase(commander)", retry)
+        save = function_body(self.store, r"bool Save\(life::Stored const& stored\)\s*\{")
+        self.assertIn("s.pendingErase.erase(stored.commander)", save)
+        # A config reload clears the cached rows and the load state, never the pending delete.
+        config = function_body(self.store, r"void LoadConfig\(\)\s*\{")
+        self.assertNotIn("pendingErase.clear", config)
+        # No restore path reaches a pending commander: the row walk, the reload and the restore itself all skip it.
+        load = function_body(self.cpp, r"void LoadBindings\(\)\s*\{")
+        self.assertIn("store::PendingErase(row.commander)", load)
+        restore = function_body(self.cpp, r"void RestoreOne\(ObjectGuid commander\)\s*\{")
+        self.assertIn("store::PendingErase(commander.GetCounter())", restore)
+        try_restore = function_body(self.cpp, r"void TryRestore\(\)\s*\{")
+        self.assertIn("store::PendingErase(commander.GetCounter())", try_restore)
 
     def test_the_stored_rows_start_at_the_first_row(self):
         rows = function_body(self.store, r"std::vector<life::Stored> ReadRows\(\)\s*\{")
@@ -283,6 +312,18 @@ STORE_MUTATIONS = {
     "rows-skip-first": [
         ("    do\n    {\n        Field* fields = result->Fetch();", "    while (result->NextRow())\n    {\n        Field* fields = result->Fetch();"),
         ("    } while (result->NextRow());", "    }"),
+    ],
+    # a failed delete that is only logged: the durable row comes back through Rows() and the next start restores it
+    "erase-forgotten": [
+        ("        s.pendingErase.insert(commander);\n", ""),
+    ],
+    # a pending delete that is still offered to a restore
+    "pending-restored": [
+        ("        if (!s.pendingErase.count(row.commander))\n            rows.push_back(row);", "        rows.push_back(row);"),
+    ],
+    # the retry deletes the row a later bind wrote
+    "retry-deletes-a-rebind": [
+        ("    s.pendingErase.erase(stored.commander);     // an explicit write is newer than the delete it replaces\n", ""),
     ],
 }
 

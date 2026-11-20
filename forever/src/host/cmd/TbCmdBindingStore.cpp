@@ -43,6 +43,7 @@ struct State
     int64_t commanderGraceMs = 300000;
     int64_t leadDeadGraceMs = 180000;
     std::vector<life::Stored> rows;
+    std::set<uint64_t> pendingErase;    // a DELETE that did not land: retried, and never offered to a restore
 };
 
 State& Get()
@@ -175,6 +176,17 @@ bool SameRow(life::Stored const& a, life::Stored const& b)
     return a.commander == b.commander && a.lead == b.lead && a.members == b.members && a.flags == b.flags && a.boundAt == b.boundAt;
 }
 
+// The rows a restore may see: a row whose delete has not landed is not a binding any more, whatever the database still says.
+std::vector<life::Stored> VisibleRows(State& s)
+{
+    std::vector<life::Stored> rows;
+    rows.reserve(s.rows.size());
+    for (life::Stored const& row : s.rows)
+        if (!s.pendingErase.count(row.commander))
+            rows.push_back(row);
+    return rows;
+}
+
 void Remember(State& s, life::Stored const& stored)
 {
     auto const found = std::find_if(s.rows.begin(), s.rows.end(), [&](life::Stored const& row) { return row.commander == stored.commander; });
@@ -213,6 +225,7 @@ void LoadConfig()
     s.tableReady = false;
     s.tableWarned = false;
     s.tableTried = false;
+    // pendingErase is NOT cleared: a delete that did not land is still owed, and a reload must not turn its row back into a restorable binding.
 }
 
 std::vector<life::Stored> Rows()
@@ -221,12 +234,12 @@ std::vector<life::Stored> Rows()
     if (!s.configured)
         LoadConfig();
     if (!s.enabled || s.loadTried)
-        return s.rows;
+        return VisibleRows(s);
     s.loadTried = true;
     if (!CheckSchema(s, true))
-        return s.rows;
+        return VisibleRows(s);
     s.rows = ReadRows();
-    return s.rows;
+    return VisibleRows(s);
 }
 
 bool Enabled()
@@ -263,6 +276,7 @@ bool Save(life::Stored const& stored)
         return false;
     }
     Remember(s, stored);
+    s.pendingErase.erase(stored.commander);     // an explicit write is newer than the delete it replaces
     return true;
 }
 
@@ -277,12 +291,35 @@ bool Erase(uint64_t commander)
     std::vector<life::Stored> const rows = ReadRows();
     if (Find(rows, commander))
     {
-        TC_LOG_ERROR("tortoisebots", "TortoiseBots: the stored commander binding of #{} was not deleted (the row is still there); the next start may restore it",
-            commander);
+        // The row is still durable, so the release it belonged to is not complete: keep it pending for the upkeep pass and out of every restore.
+        s.pendingErase.insert(commander);
+        TC_LOG_ERROR("tortoisebots", "TortoiseBots: the stored commander binding of #{} was not deleted (the row is still there); it is kept pending for a retry and is not restored", commander);
         return false;
     }
+    s.pendingErase.erase(commander);
     s.rows.erase(std::remove_if(s.rows.begin(), s.rows.end(), [&](life::Stored const& row) { return row.commander == commander; }), s.rows.end());
     return true;
+}
+
+bool PendingErase(uint64_t commander)
+{
+    State& s = Get();
+    if (!s.configured)
+        LoadConfig();
+    return s.pendingErase.count(commander) != 0;
+}
+
+bool RetryErases()
+{
+    State& s = Get();
+    if (!s.configured)
+        LoadConfig();
+    if (!s.enabled || s.pendingErase.empty())
+        return s.pendingErase.empty();
+    std::vector<uint64_t> const pending(s.pendingErase.begin(), s.pendingErase.end());
+    for (uint64_t commander : pending)
+        Erase(commander);
+    return s.pendingErase.empty();
 }
 
 int64_t CommanderGraceMs()

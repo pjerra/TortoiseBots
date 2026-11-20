@@ -412,11 +412,15 @@ void ReleaseCommander(ObjectGuid commander, L::End end)
         TortoiseBots::BotManager::Instance().ClearBotMaster(bot);
         h3::SetCommander(bot, ObjectGuid::Empty);
     }
-    store::Erase(commander.GetCounter());
+    // A delete that does not land leaves the row durable; it stays pending (retried by the upkeep, never restored) and the release is not complete.
+    bool const erased = store::Erase(commander.GetCounter());
     s.releasing = wasReleasing;
     // The released card's order log goes with it at once, whether the dashboard reads the cards or not.
     s.log.Retain(StandingKeys());
-    sLog.outString("TortoiseBots: the commander binding of %s was released: %s (%s)", NameOf(commander).c_str(), L::EndText(end), L::EndCode(end));
+    if (!erased && store::PendingErase(commander.GetCounter()))
+        sLog.outError("TortoiseBots: the commander binding of %s ended (%s) but its stored row was not deleted: the release is not complete, the row is retried and is not restored", NameOf(commander).c_str(), L::EndCode(end));
+    else
+        sLog.outString("TortoiseBots: the commander binding of %s was released: %s (%s)", NameOf(commander).c_str(), L::EndText(end), L::EndCode(end));
 }
 
 // ---- the live facts and the 1 Hz upkeep ----
@@ -514,6 +518,8 @@ void RestoreOne(ObjectGuid commander)
     auto const it = s.metas.find(commander);
     if (it == s.metas.end())
         return;
+    if (store::PendingErase(commander.GetCounter()))
+        return;     // its delete did not land: the row is not a binding any more, never restore it
     Meta& m = it->second;
     if (m.lead.IsEmpty())
         return;     // a card record made by Read (a run's tank), not a binding this module restores
@@ -609,6 +615,8 @@ void TryRestore()
     {
         if (m.lead.IsEmpty())
             continue;
+        if (store::PendingErase(commander.GetCounter()))
+            continue;
         if (!m.restored)
         {
             commanders.push_back(commander);
@@ -633,8 +641,6 @@ void TryRestore()
 void Maintain()
 {
     State& s = Get();
-    if (s.metas.empty())
-        return;
     // The world tick calls this 20 times a second; a fourth of the releases it decides and every restore step only need one tick a second (review
     // fix: an unrestored party re-ran GroupWith and its log line on every world tick).
     static constexpr int64 kMaintainMs = 1000;
@@ -642,6 +648,10 @@ void Maintain()
     if (s.maintainAtMs && nowMs >= s.maintainAtMs && nowMs - s.maintainAtMs < kMaintainMs)
         return;
     s.maintainAtMs = nowMs;
+    // A stored row whose DELETE did not land is owed whether or not a binding stands: retry it before the early return below.
+    store::RetryErases();
+    if (s.metas.empty())
+        return;
     TryRestore();
     std::vector<ObjectGuid> commanders;
     for (auto const& [commander, m] : s.metas)
@@ -680,6 +690,8 @@ void LoadBindings()
     for (L::Stored const& row : store::Rows())
     {
         ObjectGuid const commander = PlayerGuid(row.commander);
+        if (store::PendingErase(row.commander))
+            continue;   // its row is only waiting for the delete to land: a reload must not revive the binding
         if (auto const it = s.metas.find(commander); it != s.metas.end() && it->second.restored)
             continue;   // a live binding stands; a config reload never turns it back into a pending row
         Meta& m = s.metas[commander];

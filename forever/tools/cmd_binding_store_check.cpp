@@ -75,6 +75,8 @@ void Reset(bool keepBindings = true, int columns = 5)
     if (keepBindings)
         sConfigMgr->bools["TortoiseBots.Commander.KeepBindings"] = true;
     S::store::LoadConfig();
+    // A pending delete left by a test is retried against this fresh empty table: it never leaks into the next fixture.
+    S::store::RetryErases();
 }
 
 // The core's QueryResult contract (see the header). A one-row table is the case a reader that advances before its first Fetch cannot see at all.
@@ -193,6 +195,43 @@ void TestAnEraseThatDoesNotLandIsRefused()
     CHECK(CharacterDatabase.rows.size() == 1);
 }
 
+// A DELETE that did not land must leave a pending mark: the row is still in the table, but it must never be offered to a restore again, and the next
+// maintenance pass retries until it is gone. A release that only logged and forgot the row would bring the binding back after the next start.
+void TestAFailedEraseIsPendingNotGone()
+{
+    Reset();
+    CHECK(S::store::Save(Party));
+    CharacterDatabase.failDeletes = true;
+    CHECK(!S::store::Erase(Cmd));
+    CHECK(CharacterDatabase.rows.size() == 1);        // the delete really did not land: the durable row is the danger
+    CHECK(S::store::PendingErase(Cmd));
+    CHECK(S::store::Rows().empty());                  // a pending delete is never offered to the restore
+    // A config reload re-reads the table from the database; it must not turn the row back into a restorable binding.
+    S::store::LoadConfig();
+    CHECK(S::store::PendingErase(Cmd));
+    CHECK(S::store::Rows().empty());
+    // The upkeep pass retries; once the database takes the statement the row and its mark are gone.
+    CharacterDatabase.failDeletes = false;
+    CHECK(S::store::RetryErases());
+    CHECK(!S::store::PendingErase(Cmd));
+    CHECK(CharacterDatabase.rows.empty());
+    CHECK(S::store::Rows().empty());
+    // A bind written after a failed release wins over the pending delete: the retry must never delete the new row.
+    CharacterDatabase.failInserts = false;
+    CHECK(S::store::Save(Party));
+    CharacterDatabase.failDeletes = true;
+    CHECK(!S::store::Erase(Cmd));
+    CHECK(S::store::PendingErase(Cmd));
+    CharacterDatabase.failDeletes = false;
+    L::Stored const moved = Stored(Cmd, Dps, { Dps, Tank }, L::FlagRaid, 1700000300);
+    CHECK(S::store::Save(moved));
+    CHECK(!S::store::PendingErase(Cmd));
+    CHECK(S::store::RetryErases());
+    CHECK(CharacterDatabase.rows.size() == 1);
+    if (CharacterDatabase.rows.size() == 1)
+        CHECK(CharacterDatabase.rows[0].lead == Dps);
+}
+
 void TestTheKeyOffDoesNothing()
 {
     Reset(false);
@@ -228,6 +267,7 @@ int main()
     TestASaveThatDoesNotLandIsRefused();
     TestEraseReadsTheRowBack();
     TestAnEraseThatDoesNotLandIsRefused();
+    TestAFailedEraseIsPendingNotGone();
     TestTheKeyOffDoesNothing();
     TestAMissingColumnTurnsPersistenceOff();
     std::printf("cmd_binding_store_check: %d checks, %d failed\n", g_checks, g_fail);

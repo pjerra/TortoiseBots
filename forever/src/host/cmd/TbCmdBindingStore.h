@@ -30,9 +30,14 @@ std::vector<life::Stored> Rows();
 bool Enabled();
 // Writes one row (ONE `INSERT ... ON DUPLICATE KEY UPDATE` on a synchronous connection: atomic, so a failure can never leave the binding deleted;
 // the row is read back before the in-memory view changes) and drops one (DELETE, then the same read-back). False when persistence is off or the
-// write did not land.
+// write did not land. An Erase that did not land leaves the commander pending: Rows() never offers that row again (a restore cannot revive the
+// binding), and RetryErases() owes the delete until it lands. A later Save of the same commander replaces the pending delete.
 bool Save(life::Stored const& stored);
 bool Erase(uint64_t commander);
+// A row whose DELETE did not land: still durable, not a binding any more. Survives a config reload.
+bool PendingErase(uint64_t commander);
+// Retries every pending DELETE (the 1 Hz upkeep calls it); true when nothing is owed any more.
+bool RetryErases();
 // The grace a commander's absence gets before the binding ends, and the grace a dead lead gets. Milliseconds; 0 = immediate.
 int64_t CommanderGraceMs();
 int64_t LeadDeadGraceMs();
