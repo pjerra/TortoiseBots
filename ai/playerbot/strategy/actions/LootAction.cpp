@@ -247,10 +247,10 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         return windowOpened;
     }
 
-    // Gathering, skinning and opening game objects (a cast on the object and the window that follows) are not ported: lead decision D2,
-    // nothing below this line runs on ForeverCore ("loot: gathering, skinning and game objects"). False = the open failed, which
-    // OpenLootAction counts and abandons after three tries.
-    if (LootGatherUnportedCompat())
+    // Gathering and skinning (a cast on the object or the corpse and the window that follows) are not ported on ForeverCore ("loot: gathering and
+    // skinning"); a chest is (slice 9: the opening cast, its window read like a corpse's). False = the open failed, which OpenLootAction counts and
+    // abandons after three tries.
+    if (LootGatherUnportedCompat(ai->GetWorldObject(lootObject.guid)))
         return false;
 
     if (creature)
@@ -689,6 +689,13 @@ bool StoreLootAction::Execute(Event& event)
             }
         }
 
+        // The bag floor (F: an item that needs a new slot is left when two or fewer slots are free; T never). An ordered item is exempt.
+        if (!commanderOrder && LootBagFloorCompat(bot, itemid, itemcount))
+        {
+            sLog.outDebug("[BOT LOOT] %s: skip item=%u (bag floor)", CStrCompat(bot->GetName()), itemid);
+            continue;
+        }
+
         if (AI_VALUE2(uint32, "stack space for item", itemid) < itemcount)
         {
             sLog.outDebug("[BOT LOOT] %s: skip item=%u (no stack space, need=%u)", CStrCompat(bot->GetName()), itemid, itemcount);
@@ -704,7 +711,7 @@ bool StoreLootAction::Execute(Event& event)
         if (!proto)
             continue;
 
-        // The facts of the slot in the 1.12 loot view (T) behind the take decision; F reads no slots (items are not taken, D2).
+        // The facts of the slot in the loot view behind the take decision (T: the 1.12 view; F: the core's loot window for this bot, TbCompat_I2.h).
         bool slotAllowedForPlayer = false, slotIsQuest = false, slotIsFfa = false, slotIsBlocked = false, slotSharedAllowed = false;
         if (!LootSlotFactsCompat(bot, loot, itemindex, slotAllowedForPlayer, slotIsQuest, slotIsFfa, slotIsBlocked, slotSharedAllowed))
             continue;
@@ -725,7 +732,7 @@ bool StoreLootAction::Execute(Event& event)
         }
 
         uint32 const countBefore = commanderOrder ? bot->GetItemCount(itemid) : 0;
-        LootAutostoreCompat(bot, itemindex);
+        LootAutostoreCompat(bot, loot, itemindex);
         ++itemsTaken;
         if (commanderOrder)
         {
@@ -799,7 +806,7 @@ bool StoreLootAction::IsLootAllowed(ItemQualifier& itemQualifier, PlayerbotAI *a
 {
     AiObjectContext *context = ai->GetAiObjectContext();
 
-    // Item looting is not ported on ForeverCore (lead decision D2): no item is allowed. (T: false, the checks below run.)
+    // (T and F, since slice 9: false, the checks below run.)
     if (ItemLootingUnportedCompat())
         return false;
 
@@ -1007,7 +1014,7 @@ void ai::ApplyBotLootBonus(PlayerbotAI* ai, Player* bot, ObjectGuid victimGuid)
 
     // The rest reads the creature's 1.12 loot object and loot templates: T runs it as it was, F counts the feature ("loot: items,
     // quest items and rolls": a random bot's drop boost; a host bot is never a random bot, so it is not reached there anyway).
-    UnportedBlockCompat(tbcompat::Feature::LootItems, [&](auto* corpse)
+    UnportedBlockCompat(tbcompat::Feature::LootBoost, [&](auto* corpse)
     {
         // Personal loot of this bot's own kill. m_personal is false whenever the core rolled the
         // corpse for a group, which is exactly the "loot shared with a real player" case.

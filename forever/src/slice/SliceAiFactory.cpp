@@ -165,16 +165,18 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 {
     if (player && player->GetClass() == CLASS_PRIEST)
     {
-        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "default", NULL);
+        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "roll", "default", NULL);
         return;
     }
     if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:1445 plus the follow the slice's movement mode needs, food (the rest between pulls) and the engine's own "default".
-        nonCombatEngine->addStrategies("protection", "tank assist", "follow", "food", "default", NULL);
+        // Slice 9 (L9): the tank (the run's leader and the carrier of plan items) loots and rolls like the others: "loot" (corpses, chests) and "roll"
+        // (group loot, greed only). The legacy dungeon-run feature has its own loot steps, DungeonRunLootFfa stays 0 (FOREVER-SLICE9-SPEC 5d).
+        nonCombatEngine->addStrategies("protection", "tank assist", "follow", "food", "loot", "roll", "default", NULL);
         return;
     }
-    nonCombatEngine->addStrategies("arms", "dps assist", "follow", "food", "loot", "default", NULL);
+    nonCombatEngine->addStrategies("arms", "dps assist", "follow", "food", "loot", "roll", "default", NULL);
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* deadEngine)

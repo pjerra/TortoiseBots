@@ -86,7 +86,7 @@ inline bool LootSlotFactsCompat(Player* bot, Loot* loot, uint8 itemindex, bool& 
 }
 
 // CMSG_AUTOSTORE_LOOT_ITEM.
-inline void LootAutostoreCompat(Player* bot, uint8 itemindex)
+inline void LootAutostoreCompat(Player* bot, Loot* /*loot*/, uint8 itemindex)
 {
     WorldPacket packet(CMSG_AUTOSTORE_LOOT_ITEM, 1);
     packet << itemindex;
@@ -94,7 +94,7 @@ inline void LootAutostoreCompat(Player* bot, uint8 itemindex)
 }
 
 // Gathering, skinning and opening game objects are a later slice on ForeverCore (lead decision D2); on Turtle they always run.
-inline bool LootGatherUnportedCompat() { return false; }
+inline bool LootGatherUnportedCompat(WorldObject* /*object*/) { return false; }
 
 // Item looting is a later slice on ForeverCore (lead decision D2); on Turtle the item loop of the loot window always runs.
 inline bool ItemLootingUnportedCompat() { return false; }

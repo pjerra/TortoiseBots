@@ -47,6 +47,10 @@
 #include "playerbot/strategy/actions/PatchwerkSafety.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
+#include "playerbot/strategy/actions/QueryItemUsageAction.h"
+#include "playerbot/RandomBotFacade.h"
+#include "playerbot/strategy/values/BudgetValues.h"
+#include "../../../runtime/GuildOrderStore.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
 #include "playerbot/strategy/actions/WorldBuffAction.h"
@@ -259,9 +263,6 @@ bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI* ai, Unit* target)
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
-void ItemUsageValue::PopulateProfessionReagentIds() { NoteItems(); }
-void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds() { NoteItems(); }
-void ItemUsageValue::PopulateSoldByVendorItemIds() { NoteItems(); }
 // EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
 // The real answer outside a battleground is 60 yd (EnemyPlayerValue.cpp:276). In one the real values are 40 (10 late in Alterac Valley); battlegrounds are
 // not ported, so the shortest of them answers (less).
@@ -334,17 +335,7 @@ std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list
     return {};
 }
 
-// ItemUsageValue.cpp (feature "item usage", lead decision D2: the item-usage value is a later slice; the `item usage` key is not registered, the
-// missing-key stand-in answers ITEM_USAGE_NONE).
-// IsNeededForQuest: absent = "no quest needs this item". Value: false. Effect (LootObjectStack.cpp:187): the corpse-refusal facts do not name a quest item
-// (a debug text), the game object branch (:521) is not reached on ForeverCore. No item is looted for a quest either way (items are not looted).
-bool ItemUsageValue::IsNeededForQuest(Player*, uint32, bool) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
-// IsFutureUpgrade: absent = "not an upgrade". Value: false. Effect (LootStrategyValue.cpp:25): a CanLoot answer that would wait for an upgrade is "no" (LESS).
-bool ItemUsageValue::IsFutureUpgrade(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
-// QueryItemUsageForEquip: absent = the item has no equip use. Value: ITEM_USAGE_NONE. Effect (LootValues.cpp HasUpgradeValue, not registered): no upgrade is found.
-ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return ItemUsage::ITEM_USAGE_NONE; }
-// GetRecipeSpell: absent = the item teaches no recipe. Value: 0. Effect (UseItemAction.cpp UseRandomRecipe): no recipe is picked, the action finds nothing to use (LESS).
-uint32 ItemUsageValue::GetRecipeSpell(ItemPrototype const*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return 0; }
+// ItemUsageValue.cpp is in the slice since slice 9 (package L9): its four stand-ins (IsNeededForQuest, IsFutureUpgrade, QueryItemUsageForEquip, GetRecipeSpell) are gone.
 
 // GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
 // Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
@@ -403,6 +394,44 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTr
 bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
 std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
 }
+
+// =====================================================================================================================
+// Slice 9 (package L9): ItemUsageValue.cpp and LootRollAction.cpp are in the slice, and what they call outside it is answered here. Every answer is
+// the "not there" value of the legacy code, so the item usage value classifies LESS: no equip upgrade is ever found (the stat weights are 0 and no
+// spec may wear anything), so nothing is looted or rolled for equipping, and no mount, auction listing or repair price is known.
+// =====================================================================================================================
+// RandomItemMgr.cpp (feature "random item tables"): the weights and the spec rules. Absent = weight 0, no spec wears the item, no spec at all.
+uint32 RandomItemMgr::ItemStatWeight(Player*, ai::ItemQualifier&) { NoteItems(); return 0; }
+uint32 RandomItemMgr::ItemStatWeight(Player*, Item*) { NoteItems(); return 0; }
+bool RandomItemMgr::ShouldEquipArmorForSpec(uint8, uint8, ItemPrototype const*) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSpec(Player const*, uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSpec(uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSlot(Player const*, uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
+bool RandomItemMgr::ShouldEquipWeaponForSlot(uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
+uint32 RandomItemMgr::GetFallbackSpecId(uint8) { NoteItems(); return 0; }
+std::string RandomItemMgr::GetSpecName(uint32) { NoteItems(); return std::string(); }
+ai::ItemStatFamily RandomItemMgr::GetSpecStatFamily(uint32) { NoteItems(); return ai::ItemStatFamily::None; }
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): the pool's price multipliers, trade discounts, auction prices and the unseen-item equip check. Absent =
+// neutral multipliers (1.0), no discount, no listing, the equip is refused.
+double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
+double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
+void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
+std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
+InventoryResult RandomBotFacade::CanEquipUnseenItem(Player*, uint8, uint16&, uint32) { NotePool(); return EQUIP_ERR_CANT_DO_THAT_RIGHT_NOW; }
+// MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
+uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
+uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
+uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
+bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
+// BudgetValues.cpp: the repair price of an item. Absent = free (0), which only matters for the budget of a vendor trip.
+uint32 ai::RepairCostValue::RepairCost(Item const*, bool) { NoteMisc(); return 0; }
+// GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
+namespace TortoiseBots { namespace GuildOrders {
+void RefreshOrderProtectedSet(Player*) { NotePool(); }
+void NoteBagsFull(uint32_t) { NotePool(); }
+} }
+// QueryItemUsageAction.cpp: the `query item usage` chat reply (a debug answer) is not built; the class is the base of the roll actions, which override Execute.
+bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 
 // =====================================================================================================================
 // Managers with tables (owner files: ai/playerbot/RandomItemMgr.cpp, PlayerbotTextMgr.cpp, PlayerbotHelpMgr.cpp,
