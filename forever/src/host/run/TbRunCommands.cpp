@@ -15,6 +15,8 @@
 #include "host/run/TbRunStands.h"
 
 #include "GameTime.h"
+#include "Group.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 
 #include <algorithm>
@@ -127,10 +129,14 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             if (!h3::CheckPartyLeadAccess(handler, leader, code, detail))
                 return Fail(handler, args, "run", code, detail);
             if (Group* group = leader->GetGroup())
+            {
                 for (Group::MemberSlot const& slot : group->GetMemberSlots())
-                    if (Player* m = ObjectAccessor::FindPlayer(slot.guid); m && m->IsInWorld() && h3::IsHostBot(m))
-                        if (!h3::CheckBotAccess(handler, m, code, detail))
-                            return Fail(handler, args, "run", code, detail);
+                {
+                    Player* m = ObjectAccessor::FindPlayer(slot.guid);
+                    if (m && m->IsInWorld() && h3::IsHostBot(m) && !h3::CheckBotAccess(handler, m, code, detail))
+                        return Fail(handler, args, "run", code, detail);
+                }
+            }
         }
         ai::DungeonPlanTable& table = ai::GetDungeonPlans();
         if (!table.Sealed())
