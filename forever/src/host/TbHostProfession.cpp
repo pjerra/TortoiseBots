@@ -1071,6 +1071,12 @@ void ClearFreeGatherTimer(uint64_t botGuidCounter)
     FreeGatherTimers().Clear(botGuidCounter);
 }
 
+void ClearBotErrands(ObjectGuid const& botGuid)
+{
+    Errands().erase(botGuid);
+    FreeGatherTimers().Clear(botGuid.GetCounter());
+}
+
 void TickFreeGather(Player* bot)
 {
     if (!bot || !bot->IsAlive() || bot->IsInCombat() || bot->isMoving() || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))

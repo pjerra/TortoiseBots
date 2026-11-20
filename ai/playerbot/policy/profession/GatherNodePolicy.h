@@ -272,5 +272,20 @@ inline GatherErrandStep StepGatherErrand(GatherErrandFacts const& f)
     }
 }
 
+class GatherErrandRegistry
+{
+public:
+    void SetActive(std::uint64_t botGuid, GatherPhase phase) { _phaseByBot[botGuid] = phase; }
+    bool HasActive(std::uint64_t botGuid) const
+    {
+        auto it = _phaseByBot.find(botGuid);
+        return it != _phaseByBot.end() && it->second != GatherPhase::Idle && it->second != GatherPhase::Done && it->second != GatherPhase::Failed;
+    }
+    void Clear(std::uint64_t botGuid) { _phaseByBot.erase(botGuid); }
+
+private:
+    std::unordered_map<std::uint64_t, GatherPhase> _phaseByBot;
+};
+
 } // namespace prof
 } // namespace TortoiseBots

@@ -124,6 +124,14 @@ int main()
         Check(filtered.size() == 1 && filtered[0].itemId == 12587, "gear-filter-before-scoring-size-1");
     }
 
+    // Addendum 1: Gather/craft errand map cleared on logout so stale errand does not resume after relog.
+    {
+        TortoiseBots::prof::GatherErrandRegistry errands;
+        errands.SetActive(1001, TortoiseBots::prof::GatherPhase::Walking);
+        errands.Clear(1001);
+        Check(!errands.HasActive(1001), "gather-errand-cleared-on-logout");
+    }
+
     if (g_failed > 0)
     {
         std::cout << "FAIL: test_r_misc (" << g_passed << " passed, " << g_failed << " failed)\n";

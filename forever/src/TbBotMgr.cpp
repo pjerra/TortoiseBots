@@ -565,7 +565,7 @@ void BotMgr::OnPlayerLogout(Player* player)
     if (itr == _bots.end())
         return;
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
-    tbhost::prof::ClearFreeGatherTimer(leaving.GetCounter());
+    tbhost::prof::ClearBotErrands(leaving);
 #endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
@@ -1322,7 +1322,7 @@ void BotMgr::Update(uint32 diff)
         TC_LOG_INFO("tortoisebots", "BotMgr: session of {} ended", guid.ToString());
         // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
-        tbhost::prof::ClearFreeGatherTimer(guid.GetCounter());
+        tbhost::prof::ClearBotErrands(guid);
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);

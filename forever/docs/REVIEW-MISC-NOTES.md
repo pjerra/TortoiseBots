@@ -37,3 +37,14 @@ Branch: `fix/wl2r-misc` (based on `feat/world-life-2`).
   - PASS after: `PASS: test_r_misc (16 checks, 0 failed)`
 - **Live check**:
   - `.tb gear <bot> set #s1` equips/swaps classic gear; if a target already has a matching item in bags and a swap fails, the pre-existing bag item is preserved.
+
+### Addendum (Low)
+1. **Stale gather/craft errands across relog**:
+   - **What was wrong**: `Errands()` (`TbHostProfession.cpp:447`) was never erased on bot logout/login, so a relogged bot could resume a stale errand.
+   - **Fix**: Added `GatherErrandRegistry` in `GatherNodePolicy.h` and `tbhost::prof::ClearBotErrands(ObjectGuid const&)` in `TbHostProfession.h/.cpp` (erasing both `Errands()` and `FreeGatherTimers()`), called from `BotMgr::OnPlayerLogout`, `BotMgr::Update` finished-session cleanup (`TbBotMgr.cpp`), and `OnLogin` (`TbScripts.cpp`).
+   - **Test (`forever/tools/test_r_misc.cpp`)**:
+     - FAIL before: `FAIL: gather-errand-cleared-on-logout` (`FAIL: test_r_misc (16 passed, 1 failed)`)
+     - PASS after: `PASS: test_r_misc (17 checks, 0 failed)`
+   - **Live check**: Start a gather errand, log the bot out mid-walk (`tb bot <bot> logout`), log it back in (`tb bot <bot> login`), and verify `tb state <bot>` shows no active/resumed gather errand.
+2. **Craft proof**:
+   - Checked and verified: for item-producing crafts (`tracksOutputItem == true`), `StartCraft` (`TbHostProfession.cpp:781`) snapshots `c.lastItemCount = bot->GetItemCount(craftedItemId, false)`, `TickErrands` (`TbHostProfession.cpp:919-920`) computes `gainedThisRun = currentCount - c.lastItemCount`, and `StepCraftErrand` (`CraftForSelfPolicy.h:132-144`) transitions to `FinishOk` (`"ok"` at `TbHostProfession.cpp:964-977`) only when `itemsGainedThisRun > 0` (otherwise `fail:craft-no-item` at `CraftForSelfPolicy.h:142-143` or `fail:timeout` at `:140-141`). No code change needed.

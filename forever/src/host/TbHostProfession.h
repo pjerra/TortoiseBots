@@ -57,6 +57,7 @@ bool IsReagentForItem(uint32_t craftedItemId, uint32_t reagentItemId);
 // Free-bot periodic gather tick (gated by TortoiseBots.World.Professions = 0, max 150 yd in current zone).
 bool AdvanceFreeGatherTimer(uint64_t botGuidCounter, uint32_t diffMs);
 void ClearFreeGatherTimer(uint64_t botGuidCounter);
+void ClearBotErrands(ObjectGuid const& botGuid);
 void TickFreeGather(Player* bot);
 
 } // namespace prof
