@@ -83,6 +83,7 @@ Decisions made here (the spec leaves them open):
 | `test_run_tasks` | 141 checks, 0 failed |
 | `test_run_facts_s9` | 42 checks, 0 failed (mutation: `PlanObjectState(1)` returning 1 fails 3) |
 | `test_run_orders` / `test_run_c6` / `test_run_facts` (RFC rows + field table) / `test_run_liquid` / `test_run_cancel` / `test_forever_plan_match` | 144 / 28 / PASS / PASS / PASS / 38 checks |
+| Turtle `vm-build` / `vm-test tb` (no `forever-world` container running) | `CMAKE_RC=0 MAKE_RC=0 QUEUE_RC=0` / `RESULT: PASS kind=tb wt=wt-s9-doors sha=f477cee8b` |
 | python wiring | `test_slice9_doors_wiring.py` 21 tests, `test_slice9_l9_wiring.py`, `test_run_review_wiring.py`, `test_slice4_d4_wiring.py`, `tools/test_forever_no_direct_queries.py`: all OK |
 
 ## 8. Live results (build VM, `~/forever-run` / `forever-world`, my binary copied in and the original restored; level-22 party Mtank (prot warrior), Mpriest, Mdpsa (arms), Mmage, Mrogue; commander Mcmd, GM)
