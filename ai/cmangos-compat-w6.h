@@ -23,3 +23,21 @@ inline uint32 RandomPropertyEnchantIdCompat(uint32 propId, uint8 slot)
     ItemRandomPropertiesEntry const* entry = sItemRandomPropertiesStore.LookupEntry(propId);
     return entry ? entry->enchant_id[slot] : 0;
 }
+
+// equip
+inline void AutoEquipCompat(Player* bot, uint8 bagIndex, uint8 slot)
+{
+    WorldPacket packet(CMSG_AUTOEQUIP_ITEM, 2);
+    packet << bagIndex << slot;
+    bot->GetSession()->HandleAutoEquipItemOpcode(packet);
+}
+
+inline InventoryResult CanUseItemForEquipCompat(Player const* bot, ItemPrototype const* proto)
+{
+    return bot->CanUseItem(proto);
+}
+
+inline bool MayAutoEquipUpgradesCompat(Player* /*bot*/)
+{
+    return true;
+}

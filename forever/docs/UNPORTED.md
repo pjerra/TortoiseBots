@@ -134,3 +134,7 @@ Rows changed by slice 9 package L9 (`SLICE9-L-NOTES.md`): item loot, group-loot 
 <!-- slice 9, package O9 -->
 Slice 9 package O9 (`SLICE9-DOORS-NOTES.md`): the **run's** object, loot and loot-method orders are carried out by `forever/src/host/run/TbRunTasks.*` on the core's public API (the typed `GameObjUse` packet into `HandleGameObjectUseOpcode`, the engine's `open loot`, `LootOpenCompat`, `HandleSetLootMethodOpcode`). The ENGINE-driven rows above (`game object use`: lightwells, party portals, ritual objects; `GameObjectUseUnportedCompat`) are unchanged and still count: a bot's own strategy never uses a game object, only the run's order does. `use <item>` (a use_item step) stays refused.
 <!-- end slice 9, package O9 -->
+
+<!-- W6a, package E6 -->
+W6a package E6 (`EquipAction.cpp`): adds `ClaimLifecycle::IsClaimed` and `BotGearService::PinnedCap` stand-ins in `forever/src/host/TbHostOwnership.cpp` (counted under `Feature::PoolServices`, returning `false` / `0`), and `PlayerbotDbStore::Save` in `forever/src/slice/SliceLinkStubs.cpp` (counted under `Feature::MiscLegacyServices`, no-op). `UnportedFeatures.h` `PoolServices` row updated to also name `BotGearService` and `AltBotService`.
+<!-- end W6a, package E6 -->

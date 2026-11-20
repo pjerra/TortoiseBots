@@ -337,6 +337,8 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
+    if (nonCombatEngine)
+        nonCombatEngine->addStrategy("maintenance");
     if (player && player->GetClass() == CLASS_PRIEST)
     {
         nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "roll", "default", NULL);

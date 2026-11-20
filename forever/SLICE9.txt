@@ -183,6 +183,8 @@ ai/playerbot/DungeonPlanMgr.cpp
 ai/playerbot/BossTacticsMgr.cpp
 ai/playerbot/strategy/actions/LootRollAction.cpp
 ai/playerbot/strategy/values/ItemUsageValue.cpp
+ai/playerbot/strategy/actions/EquipAction.cpp
+ai/playerbot/strategy/generic/MaintenanceStrategy.cpp
 # Integration batch 2 (mage/rogue, druid/paladin/shaman, hunter/warlock/pets): the files of forever/SLICE11.txt not listed above.
 ai/playerbot/strategy/actions/CancelChannelAction.cpp
 ai/playerbot/strategy/actions/GiveItemAction.cpp

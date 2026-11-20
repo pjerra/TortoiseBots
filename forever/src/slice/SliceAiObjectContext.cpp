@@ -21,6 +21,7 @@
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
+#include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
@@ -43,6 +44,7 @@
 #include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
+#include "playerbot/strategy/generic/MaintenanceStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
@@ -145,7 +147,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (15 of its keys)
+    // the registry of StrategyContext (16 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -166,6 +168,7 @@ namespace slice
             creators["hold position"] = [](PlayerbotAI* ai) { return new HoldPositionStrategy(ai); };
             creators["behind"] = [](PlayerbotAI* ai) { return new SetBehindCombatStrategy(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollStrategy(ai); };
+            creators["maintenance"] = [](PlayerbotAI* ai) { return new MaintenanceStrategy(ai); };
         }
     };
 
@@ -255,7 +258,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (8 of its keys)
+    // the registry of ChatActionContext (9 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -269,6 +272,7 @@ namespace slice
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
+            creators["equip upgrades"] = [](PlayerbotAI* ai) { return new EquipUpgradesAction(ai); };
         }
     };
 
@@ -287,7 +291,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (101 of its keys)
+    // the registry of TriggerContext (102 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -394,6 +398,7 @@ namespace slice
             creators["new pet"] = [](PlayerbotAI* ai) { return new NewPetTrigger(ai); };
             creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackTrigger(ai); };
             creators["enemy fifteen yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy fifteen yards", 15.0f); };
+            creators["equipment audit"] = [](PlayerbotAI* ai) { return new EquipmentAuditTrigger(ai); };
         }
     };
 
@@ -407,7 +412,7 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketTriggerContext (4 of its keys)
+    // the registry of WorldPacketTriggerContext (5 of its keys)
     class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -417,6 +422,7 @@ namespace slice
             creators["loot start roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot start roll"); };
             creators["loot vote"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot vote"); };
             creators["loot roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll"); };
+            creators["item push result"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "item push result"); };
         }
     };
 
@@ -616,7 +622,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 20, kActions = 68, kTriggers = 106, kValues = 186;
+    constexpr unsigned kStrategies = 21, kActions = 69, kTriggers = 108, kValues = 186;
 }
 }
 
