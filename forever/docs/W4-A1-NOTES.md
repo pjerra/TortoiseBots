@@ -15,7 +15,7 @@ merged W1 list plus this round's legacy file, and `CMakeLists.txt` reads it. Zer
 | Taxi and transport links loaded, never used | `TravelLinkUsableCompat` at the top of `getCost` (F: false for 3/4) |
 | No portal edge in the A* (D4: the rescue is the only travel teleport) | `TravelTeleportLinksCompat` around the hearthstone and teleport-spell edges |
 | The generator's map passes on the world thread on F | `TravelGenParallelCompat` at the four `std::async` sites |
-| The saver asks the schema once, then writes one-way statements | `TravelNodeStoreWritableCompat` + `TravelNodeExecuteCompat` |
+| The saver asks the schema once, then writes synchronously (DELETE before INSERTs) | `TravelNodeStoreWritableCompat` + `TravelNodeExecuteCompat` |
 | Loading the map data of a far tile (round B uses it) | `MmapTileLoadCompat` (F: `TerrainInfo::LoadMapAndVMap` + `LoadMMap`) |
 
 The other helpers of the pair are the spellings the two cores differ in (area trigger fields and the teleport condition, creature
@@ -60,16 +60,16 @@ care: the area-trigger existence check in `TravelPath::UpcommingSpecialMovement`
 | Gate | Result |
 |---|---|
 | Census, `forever/SLICE-W4.txt` (271 files), core 25fc7ca | `files 271  compile clean 271  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (run `wt-w4a1-s7-SLICE-W4-20261120T164613Z`) |
-| Census after the last two edits (TravelNode.cpp only) | `files 1  compile clean 1  with errors 0  error places 0` (run `...T170248Z`) |
-| Module ON (`TORTOISEBOTS_SLICE1=ON`, `tortoisebots`), slot 7 | `CMAKE_RC=0 MAKE_RC=0` |
+| Census after the last edits (TravelNode.cpp only, final) | `files 1  compile clean 1  with errors 0  error places 0` (runs `...T170248Z`, `...T172825Z`) |
+| Module ON (`TORTOISEBOTS_SLICE1=ON`, `tortoisebots`), slot 7 | `CMAKE_RC=0 MAKE_RC=0` (final tree, `worldserver` link too) |
 | Module OFF (`TORTOISEBOTS_SLICE1=OFF`, `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` |
-| Worldserver link ON | `CMAKE_RC=0 MAKE_RC=0` (72,340,128 bytes) |
+| Worldserver link ON | `CMAKE_RC=0 MAKE_RC=0` (72,340,128 bytes, 18:04; rebuilt after `DirectExecute` too, 58 s) |
 | Generator / registry | `slice_gen_context.py --check` up to date; `slice_registry_check.py` `(a)=0` (219 keys to register or stub later, from 218: `home bind` is read only on the Turtle side now) |
 | Policy tests | none added this round (no policy file); the standalone suite runs in `verify_all` |
 | Wiring | `test_wl4_wiring.py` 14 OK; `test_w1_wiring.py` + `test_slice9_l9_wiring.py` + `test_wl4_wiring.py` 45 OK; `tools.test_forever_no_direct_queries` 5 OK |
-| `tools/verify_all.sh` | see the final report line (the standing `action_loop` / `Mage stay` scenario is not a test failure, `forever/docs/SLICE1-R4P-NOTES.md`) |
-| Turtle `vm-build` | `CMAKE_RC=0 MAKE_RC=0` (final tree, module-tree-hash `8dc99e1768179b3a`) |
-| Turtle `vm-test tb` | see the final report line |
+| `tools/verify_all.sh` | `RESULT: PASS kind=tb wt=wt-w4a1 sha=177ab5098 dirty=0 files=4015 rc=0 vm_duration=848s` (the standing `action_loop` / `Mage stay` scenario is not a test failure, `forever/docs/SLICE1-R4P-NOTES.md`). The only later code delta is `Execute` -> `DirectExecute` in the pair; the naming test, the census and the ON/OFF builds cover it. |
+| Turtle `vm-build` | `CMAKE_RC=0 MAKE_RC=0` (final commit `1875ecee2`, no-op 9 s) |
+| Turtle `vm-test tb` | `RESULT: PASS` on `177ab5098` (the same run above; the later commit touches only the ForeverCore pair and these notes) |
 
 ## 6. Live (forever-run2, our binary in place, console only)
 
