@@ -43,7 +43,7 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 | `.tb enter <character> <map id>` | what `Map::PlayerCannotEnter` says |
 | `.tb cast <bot> <spell id>` | the core's own cast on the sender's target |
 | `.tb castfail <bot> <spell> <reason> [interrupt]`, `.tb castlog <bot> [on\|off]` | inject / read cast results |
-| `.tb level <bot> <1-60>`, `.tb train <bot>`, `.tb hurt <name> <pct>`, `.tb power <bot> mana\|rage\|energy <pct>`, `.tb rage <bot> <points>` | test setup |
+| `.tb level <bot> <1-60>`, `.tb train <bot>`, `.tb hurt [<character>] <pct>`, `.tb power [<character>] mana\|rage\|energy <pct>`, `.tb rage <bot> <points>` | test setup (`hurt`/`power` with the name left out act on the sender's own character) |
 | `.tb additem <bot> <item id> [count]`, `.tb use <bot> <item id> [self]` | items |
 | `.tb spells <bot>`, `.tb spell <id>`, `.tb spellscan`, `.tb item <id>` | what the spell and item mirrors hold |
 | `.tb perf`, `.tb unported` | tick cost window / the unported-feature counters |
@@ -66,12 +66,15 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
 * **Length.** A line is at most 3,000 bytes (the token included). A record that is longer continues on `<kind>+ <identity key=value, `bot=` for a bot record> <more keys> #token` lines that follow their base line immediately. A single value longer than a line (a very long strategy list) is cut at a list item.
   Free text (`msg=`) is cut to 400 bytes before encoding.
 * **Errors**: `error code=<word> cmd=<word> [msg=<encoded text>] #token`, exactly those keys, one line, nothing else for that command. A per-bot refusal inside an accepted command is the same words on the bot's own line: `order bot=.. verb=.. status=refused code=.. msg=..`.
-  Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
+  Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-character`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
   `no-engine`, `queue-full`, `not-in-group`, `needs-player-sender`, `no-selection`, `mark-empty`, `no-such-spawn`, `target-not-found`, `target-dead`, `not-attackable`, `no-pull-strategy`, `no-commander`, `other-map`, `too-far`, `nothing-to-assist`, `self-master`, `missing-commander`,
   `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). Slice 4 adds (section 8): `no-trigger`, `not-allowed`, `leader-refused`, `leader-inside`, `not-leader`, `lfg-group`, `not-empty`, `locked`, `no-entrance`,
 `already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`. A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
 * **Addressing.** `<bot>` is a character name (a logged-in host bot). `party <leader>` is every host bot in the party of that character. `party` with no leader is, in this order: the bots bound (`.tb master`) to the sender, or to the one commander there is, or the members of the one bot-led party there is;
   anything else needs the leader's name (`error code=ambiguous-party`). Names are case-insensitive. The `target=` of a reply is `<name>`, `party:<leader>` or `party:commander:<name>` as parts.
+  `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt` and `.tb power` also accept the character of the sender (the GM who typed the command), by name; another real player's
+  character is refused (`not-a-bot`), and the console can only name host bots. With the name left out, the first word is already the command's own argument (a role, a power
+  kind, an id or a percent) and the target is the sender's own character: `.tb role tank`, `.tb equip <item id>`, `.tb learn <spell id>`, `.tb hurt <pct>`, `.tb power mana <pct>`.
 * **In a build without the engine** every command below (and `grammar`) answers `error code=engine-not-built cmd=<command> msg=...`.
 * **GUID text.** `32 uppercase hex digits`: the two 64-bit words of the `ObjectGuid`, high word first, as `tgt=`, `victim=` and `mob=` print them and as `.tb order ... attack|pull` reads them (a leading `0x` is accepted); empty for none. Another way to name a creature: `spawn:<database spawn id>` (a creature of the bot's map).
 
@@ -129,8 +132,10 @@ error code=unknown-verb cmd=order msg=bogus #o12
 ```
 `seq` numbers orders over the whole server; the bot's last one is `ord=` in its state line. An order older than 15 s that the engine could not run is dropped with `fail:expired`.
 
-### `.tb role <bot|party [leader]> tank|healer|dps|none [#token]`
+### `.tb role [<bot|character|party [leader]>] tank|healer|dps|none [#token]`
 Stores the role (`PlayerbotAIStorage::SetPlayerForcedRole`) and in the bot's next engine tick sets the AI's forced role and rebuilds the kit. `role-begin`, `role bot=Mdpsb role=dps seq=7 status=queued` (`status=stored` when it has no engine yet), `role-end count=.. records=.. role=.. target=.. bots=.. queued=..`. The `tank` role is refused (`status=refused code=no-tank-kit`) for a class the slice gives no tank kit (a shaman, priest, mage, rogue: the restoration/healing kit is all it has); a paladin may hold it (the protection kit, recorded only), a druid gets the bear kit and a warrior the protection kit. A refusal also clears a tank bit the bot already has (`cleared=yes`: the stored role, the AI's own and the kit built from them), so an order from an older build, `.bot role` or the dungeon finder cannot leave a restoration shaman read as a tank.
+The target is a host bot, the sender's own character, or `party [leader]` (host bots only); `.tb role tank` (no name) means the sender's own character, whose role is stored for the live side to read back.
+
 
 ### `.tb master <bot|party [leader]> <commander|none> [#token]`
 Binds the bots to a commander who stands OUTSIDE their party (decision D2): host master and engine master become the commander, `IsInCommandedGroup` answers true for them, and a commanded bot keeps that master (the engine's adoption step skips it) and follows it. `none` releases them.
@@ -196,8 +201,9 @@ READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per
 `threat mob=<GUID text> entry=426 name=Redridge%20Brute hppct=100 victim=Mtank target=Mtank size=3 top=Mtank:343;Mdpsb:338;Mdpsc:196 pos=-9091.12,-2001.40,131.00 flee=no #token` (`victim` is the mob's current threat victim, `target` what the mob is fighting, `top` the first three of the sorted list; slice 4 adds `pos=x,y,z` of the mob and `flee=yes|no`: the mob is in the fear state of a flee, or walks to the nearest helper as the core's `DoFleeToGetAssistance` makes it).
 
 ## 6. Test kit
-* `.tb learn <bot> <spell id>...`: `learn-begin`, `learn bot=.. spell=<id> result=<learned|known|unknown|invalid|not-learned> name=..`, `learn-end count=.. bot=.. learned=..`. Core path: `SpellMgr::IsSpellValid`, `Player::LearnSpell`. At most 40 ids.
-* `.tb equip <bot> <item id> [replace]`: `equip-begin`, ONE record `equip bot=.. item=<id> name=.. result=<equipped|refused> [slot=..] why=<empty|EQUIP_ERR_...|unknown-item|bags-full|swap-failed> [code=..] [replaced=yes] [note=..]`, `equip-end count=1 records=1 bot=..`.
+* Who may be named: a host bot, or the sender's own character (`.tb learn`, `.tb equip`, `.tb hurt`, `.tb power`, and `.tb role`); another real player's character is refused (`not-a-bot`). The name may be left out when the first word is already the command's own argument, and then the command acts on the sender's own character. `.tb itemscan` stays bot-only.
+* `.tb learn [<character>] <spell id>...`: `learn-begin`, `learn bot=.. spell=<id> result=<learned|known|unknown|invalid|not-learned> name=..`, `learn-end count=.. bot=.. learned=..`. Core path: `SpellMgr::IsSpellValid`, `Player::LearnSpell`. At most 40 ids.
+* `.tb equip [<character>] <item id> [replace]`: `equip-begin`, ONE record `equip bot=.. item=<id> name=.. result=<equipped|refused> [slot=..] why=<empty|EQUIP_ERR_...|unknown-item|bags-full|swap-failed> [code=..] [replaced=yes] [note=..]`, `equip-end count=1 records=1 bot=..`.
   `Player::CanEquipNewItem` then `Player::EquipNewItem`; a taken slot refuses (`EQUIP_ERR_NOT_EQUIPPABLE` or `EQUIP_ERR_NO_SLOT_AVAILABLE`); with `replace` the item is stored in the bags and the core's `Player::SwapItem` puts it on.
 * `.tb itemscan <bot> <item id>...`: `itemscan-begin`, per id `itemscan bot=.. item=<id> exists=<yes|no> [name= class=<c>:<sc> inv= req= quality= ilvl= canequip=<yes|no> slot=<n, only when yes> why=<empty|EQUIP_ERR_...>]`, `itemscan-end count=.. bot=.. exist=.. canequip=..`.
   `canequip` is the core's check for THIS bot with swap = true. Nothing is created or changed. The ids come from the data collaborator's list; the module holds no id.

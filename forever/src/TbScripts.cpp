@@ -58,12 +58,34 @@
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
+#include "host/cmd/TbTestTargetPure.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
 
 namespace
 {
+namespace target = TortoiseBots::h3::target;
+
+// The words of a free-form tail (the splitter `.tb enter`, `.tb hurt` and `.tb power` parse their optional name with).
+std::vector<std::string> WordsOf(Tail const& args)
+{
+    std::vector<std::string> words;
+    std::string_view const text(args);
+    size_t i = 0;
+    while (i < text.size())
+    {
+        while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        size_t const start = i;
+        while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        if (i > start)
+            words.emplace_back(text.substr(start, i - start));
+    }
+    return words;
+}
+
 ObjectGuid GuidByName(std::string name)
 {
     if (!normalizePlayerName(name))
@@ -391,21 +413,7 @@ public:
     // (host/TbH4.cpp). The old two-word form (a character and a map NUMBER) is kept as it was; every other shape is the new command.
     static bool HandleEnter(ChatHandler* handler, Tail args)
     {
-        std::vector<std::string> words;
-        {
-            std::string_view const text(args);
-            size_t i = 0;
-            while (i < text.size())
-            {
-                while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
-                    ++i;
-                size_t const start = i;
-                while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
-                    ++i;
-                if (i > start)
-                    words.emplace_back(text.substr(start, i - start));
-            }
-        }
+        std::vector<std::string> const words = WordsOf(args);
         bool legacy = words.size() == 2 && !words[1].empty();
         if (legacy)
         {
@@ -691,32 +699,48 @@ public:
         return true;
     }
 
-    // .tb hurt <name> <percent>: sets the character's health to that percent of its maximum (1 at least). A module bot or a bot-session master only (R5 item 6).
-    static bool HandleHurt(ChatHandler* handler, std::string name, uint32 percent)
+    // .tb hurt <character> <percent> (the name left out: the sender's own character): sets the character's health to that percent of its maximum (1 at
+    // least). A module bot, or the sender's own character (TB-1); never another real player.
+    static bool HandleHurt(ChatHandler* handler, Tail args)
     {
         if (!RequireEngine(handler))
             return false;
-        Player* player = RequireBot(handler, name);
+        std::vector<std::string> const words = WordsOf(args);
+        size_t const first = !words.empty() && target::IsNumberWord(words[0]) ? 0 : 1;
+        if (words.size() != first + 1)
+            return Fail(handler, "usage: .tb hurt <character> <percent>.");
+        std::string code, detail;
+        Player* player = TortoiseBots::h3::ResolveTestTarget(handler, first ? std::string_view(words[0]) : std::string_view(), code, detail);
         if (!player)
-            return false;
+            return Fail(handler, detail + ".");
+        if (!target::IsNumberWord(words[first]))
+            return Fail(handler, "the percent must be 0 to 100.");
+        uint32 const percent = uint32(std::strtoul(words[first].c_str(), nullptr, 10));
         if (percent > 100)
             return Fail(handler, "the percent must be 0 to 100.");
         if (!player->IsAlive())
-            return Fail(handler, name + " is dead.");
+            return Fail(handler, std::string(player->GetName()) + " is dead.");
         player->SetHealth(std::max<uint32>(1u, uint32(uint64(player->GetMaxHealth()) * percent / 100)));
-        handler->PSendSysMessage("TortoiseBots: %s health is %u/%u.", name.c_str(), uint32(player->GetHealth()), uint32(player->GetMaxHealth()));
+        handler->PSendSysMessage("TortoiseBots: %s health is %u/%u.", player->GetName().c_str(), uint32(player->GetHealth()), uint32(player->GetMaxHealth()));
         return true;
     }
 
-    // .tb power <bot> mana|rage|energy <value>: sets that power to <value> percent of its maximum (rage: percent of 100 = rage points, the
-    // unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten; SetPower takes core units (Unit.h:839).
-    static bool HandlePower(ChatHandler* handler, std::string name, std::string kind, uint32 value)
+    // .tb power <character> mana|rage|energy <value> (the name left out: the sender's own character): sets that power to <value> percent of its
+    // maximum (rage: percent of 100 = rage points, the unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten;
+    // SetPower takes core units (Unit.h:839). A module bot, or the sender's own character (TB-1); never another real player.
+    static bool HandlePower(ChatHandler* handler, Tail args)
     {
         if (!RequireEngine(handler))
             return false;
-        Player* bot = RequireBot(handler, name);
+        std::vector<std::string> const words = WordsOf(args);
+        size_t const first = !words.empty() && target::IsPowerWord(TortoiseBots::h3::Lower(words[0])) ? 0 : 1;
+        if (words.size() != first + 2)
+            return Fail(handler, "usage: .tb power <character> mana|rage|energy <percent>.");
+        std::string code, detail;
+        Player* bot = TortoiseBots::h3::ResolveTestTarget(handler, first ? std::string_view(words[0]) : std::string_view(), code, detail);
         if (!bot)
-            return false;
+            return Fail(handler, detail + ".");
+        std::string const kind = TortoiseBots::h3::Lower(words[first]);
         Powers power;
         if (kind == "mana")
             power = POWER_MANA;
@@ -726,11 +750,14 @@ public:
             power = POWER_ENERGY;
         else
             return Fail(handler, "usage: .tb power <character> mana|rage|energy <percent>.");
+        if (!target::IsNumberWord(words[first + 1]))
+            return Fail(handler, "the percent must be 0 to 100.");
+        uint32 const value = uint32(std::strtoul(words[first + 1].c_str(), nullptr, 10));
         int32 const max = bot->GetMaxPower(power);
         if (max <= 0)
-            return Fail(handler, name + " has no " + kind + ".");
+            return Fail(handler, std::string(bot->GetName()) + " has no " + kind + ".");
         bot->SetPower(power, int32(int64(max) * std::min<uint32>(value, 100) / 100));
-        handler->PSendSysMessage("TortoiseBots: %s %s is %d/%d (core units).", name.c_str(), kind.c_str(), bot->GetPower(power), max);
+        handler->PSendSysMessage("TortoiseBots: %s %s is %d/%d (core units).", bot->GetName().c_str(), kind.c_str(), bot->GetPower(power), max);
         return true;
     }
 

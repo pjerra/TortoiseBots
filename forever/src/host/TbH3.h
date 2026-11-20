@@ -29,7 +29,7 @@ namespace h3
 {
 // ---- command handlers (rows of the `.tb` table in TbScripts.cpp) ----
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb order <bot|party [leader]> <verb> [arg] [#token]
-bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role <bot|party [leader]> tank|healer|dps|none [#token]
+bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role [<bot|character|party [leader]>] tank|healer|dps|none [#token]
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb master <bot|party [leader]> <commander|none> [#token]
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb party <leader> | .tb party <leader> <member>... [#token]
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb state <bot|party [leader]> [#token]
@@ -148,6 +148,10 @@ bool MemberKnowsOocResurrection(Player* member);      // N3: the party member kn
 // character is never taken over (from the console only host bots qualify). Used by `.tb party`, `.tb master`, `.tb login <bot> <master>`, `.tb group`.
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character);                      // the in-world player the bot's host master guid names, or null
 
+// TB-1: the character a test-kit command changes: a host bot, or the sender's own character; another real player's character is refused. An empty `name`
+// means the sender (the no-name form of `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt`, `.tb power`). On a refusal `code`/`detail` say why and it returns null.
+Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail);
+
 // "who the command is about": one bot by name, or `party [leader]` (every host bot of that party).
 struct Address
 {
@@ -159,8 +163,9 @@ struct Address
     bool ok() const { return code.empty(); }
 };
 // Reads the address at words[pos] and advances pos past it. `party` takes the next word as the leader's name when `leaderFollows` says
-// so (the caller knows whether the word after `party` could be the leader or is already the next argument).
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows);
+// so (the caller knows whether the word after `party` could be the leader or is already the next argument). `allowSender` also accepts the
+// sender's own character as a single name (`MayLeadBots`); the other commands keep bots only.
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender = false);
 
 // Every in-world host bot (for `party` with no leader).
 std::vector<Player*> AllHostBots();
