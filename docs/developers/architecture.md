@@ -119,3 +119,9 @@ include roots (e.g. `playerbot/policy/travel/TravelRoutePolicy.h`), so no
 new include directory is needed. Headers still referenced by an open
 feature branch stay at their old flat path until that branch lands; the
 flat names disappear once the last branch moves over.
+
+The Forever port's opt-in Onyxia observer is a module host service
+(`forever/src/host/TbOnyxia`), not a core boss-script modification. Its
+core-free phase state has a standalone fixture; native API access stays in
+the host, on the existing world-thread engine tick. Observations and watches
+are cleared independently for each bot and instance.

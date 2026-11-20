@@ -32,6 +32,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args);      /
 bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role <bot|party [leader]> tank|healer|dps|none [#token]
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb master <bot|party [leader]> <commander|none> [#token]
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb party <leader> | .tb party <leader> <member>... [#token]
+bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb state <bot|party [leader]> [#token]
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb threat <bot|party [leader]> [#token]
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]

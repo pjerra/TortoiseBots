@@ -304,3 +304,12 @@ Razor Hill, OUTSIDE. The host therefore gives every dungeon instance an entrance
 or no trigger leading into it gets none, and then a release is HELD (`relhold=no-entrance`, `.tb order release` is refused with `no-entrance`): the bot waits at its body, never a graveyard revive outside.
 Commanded bots (`.tb master`) answer the engine's lease question as `Dungeon` (the legacy dungeon-crew rule of `RunReleaseHold::Decide`): on an instance map a dead bot waits while a living priest, paladin, shaman or druid of its party is on the map or a member fights (`relhold=rezzer`/`combat`, `life=awaiting-res`), and releases only on a wipe (`relhold=wipe`);
 a resurrection offered by a party member or the commander is accepted at once (`accept resurrect` with the offerer as the event's object; a stranger's offer is not answered); `.tb state` reports `resreq=`. After a release the bot is `life=running-back` until it is within 20 yd of its commander (or leader). No host teleport ever moves a dead bot or a commanded bot into or inside an instance (the open-world catch-up is unchanged and counted in `catchup=`).
+
+## Onyxia observation
+
+`.tb onyxia <bot> observe <32-hex-boss-guid> | status | off [#token]`
+adds opt-in, read-only encounter observation for a host bot with its engine
+running. It accepts only entry 10184 in that bot's map-249 instance. Replies
+are `onyxia-begin`, `onyxia` records and `onyxia-end` with the normal counts and
+echo token. The engine-off build returns `engine-not-built`.
+See [ONYXIA.md](ONYXIA.md) for fields, cleanup and sampling limitations.

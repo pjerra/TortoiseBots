@@ -10,6 +10,7 @@
 #include "TbEngineBrain.h"
 #include "TbBotSession.h"
 #include "host/TbH3.h"
+#include "host/TbOnyxia.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -46,6 +47,7 @@ namespace engine
 struct Brain
 {
     Player* bot = nullptr;       // only compared and passed back to the registry after the Player is gone, never dereferenced then
+    ObjectGuid guid;
     uint32 guidLow = 0;          // the bot's low guid: the action log is closed by it (the Player may be gone)
     PlayerbotAI* ai = nullptr;
     BotSession* session = nullptr;   // the bot's session (owned by BotMgr, which drops the brain before the session); its cast-result queue is on while the brain lives
@@ -115,6 +117,7 @@ void DeliverCastResults(Brain* brain)
 
 void Dispose(Brain* brain)
 {
+    onyxia::Forget(brain->guid);
     // The session's queue is only filled while the brain lives (no consumer afterwards).
     if (brain->session)
         brain->session->SetCastResultSink(false);
@@ -247,6 +250,7 @@ Brain* Create(Player* bot, Player* master, std::string& error)
 
     std::unique_ptr<Brain> brain = std::make_unique<Brain>();
     brain->bot = bot;
+    brain->guid = bot->GetGUID();
     brain->guidLow = bot->GetGUID().GetCounter();
     brain->ai = pai;
     brain->session = BotSessionOf(bot);
@@ -297,6 +301,7 @@ void Tick(Brain* brain, uint32 diff)
         BotSession::EngineTickScope tickScope(brain->session);
         DeliverCastResults(brain);
         TortoiseBots::h3::BeforeEngineTick(brain->bot, brain->ai);   // H3: the bot's queued orders, before its tick
+        onyxia::Tick(brain->bot, brain->ai, diff);
         brain->ai->UpdateAI(diff);
     }
     catch (ByteBufferException const&)
