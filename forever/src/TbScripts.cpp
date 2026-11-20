@@ -17,6 +17,7 @@
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
+#include "host/TbHostProfession.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
