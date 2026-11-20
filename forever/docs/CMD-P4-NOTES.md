@@ -140,5 +140,7 @@ Found live and fixed in the last commit: the boss state read the creature by a r
 realm id); `(11517..11519)` all read 'u' beside a live Oggleflint. `Map::GetCreatureBySpawnId(spawnId)` (the API built for exactly this) fixed it, and
 the next run showed all four `'a'` with `p=1`.
 
-Restore: the release binary (`bin/worldserver.pre-cmdp4`, md5 `52364138…`), `sqlsrc` back at 6517af05, the databases re-imported from the dump above,
-the bnet certificate re-copied and the server booted to `ready` on the release binary, then stopped. Nothing else on that server was changed.
+Restore: the release binary (`bin/worldserver.pre-cmdp4`, md5 `52364138…`) back in `bin/`, `sqlsrc` back at 6517af05 and the databases re-imported
+from the dump above (`IMPORT_RC=0`; 28 characters, no `auctionhousebot*` tables, no 70959 `build_info` row, no `tb_commander_binding`: the state the
+server had before the test). The boot check of the restored server could not be made: another worker installed their own binary (`00f94fc2…`, 17:12)
+and started `forever-world2` during the restore, so the server now runs their build. Nothing else on that server was changed by this package.
