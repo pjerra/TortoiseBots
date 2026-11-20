@@ -35,6 +35,7 @@ enum class Verb : uint8_t
     ReviveParty,     // revive party
     Stay,           // stay          (not emitted by the policy: the run's stop and the glue use it)
     Follow,         // follow        (same)
+    Hold,           // hold          (+passive in combat and non-combat)
     Summon,         // summon <bot>: refused by decision D3
     Cc,             // cc <mark> <handle> <bot> [family]            (G8: h8::ApplyCcOrder)
     CcClear,        // cc clear <bot> [<mark> <handle>]             (G8: h8::ClearCcOrder)
@@ -52,12 +53,29 @@ struct Parsed
     float x = 0, y = 0, z = 0;  // move, walk
     bool direct = false;        // move ... direct
     std::string bot;            // walk, attack, summon
-    uint64_t handle = 0;        // pull, pullback, attack, focus: the handle of ReadFacts' unit guid
+    uint64_t handle = 0;        // pull, pullback, attack, focus: the handle of ReadFacts' unit guid (0 when a 32-hex guid)
+    std::string targetToken;    // pull, pullback, attack, focus: the raw target token (handle or 32-hex guid)
     bool body = false;          // pull <handle> body
     std::string mark;           // cc, cc clear: the raid mark word, lower case ("" for a `cc clear <bot>`)
     std::string family;         // cc: the family token the policy named after the bot ("" for the plan's own orders)
     tasks::TaskOrder task;      // S9 (O9): open, loot, lootmethod, use
 };
+
+inline bool IsGuidHex32(std::string const& token)
+{
+    if (token.size() != 32)
+        return false;
+    bool nonZero = false;
+    for (char c : token)
+    {
+        bool const hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        if (!hex)
+            return false;
+        if (c != '0')
+            nonZero = true;
+    }
+    return nonZero;
+}
 
 // The eight raid mark words of a `cc` order (skull parses and is refused by the host: it is the party's kill mark, never a crowd-control mark).
 inline bool IsRaidMarkWord(std::string const& word)
@@ -109,6 +127,23 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
         uint64_t raw = 0;
         return RemoteCommander::ParseGuid(token, raw) ? raw : uint64_t(0);
     };
+    auto const targetOf = [&](std::string const& token, uint64_t& handleOut, std::string& tokenOut)
+    {
+        uint64_t raw = 0;
+        if (RemoteCommander::ParseGuid(token, raw) && raw != 0)
+        {
+            handleOut = raw;
+            tokenOut = token;
+            return true;
+        }
+        if (IsGuidHex32(token))
+        {
+            handleOut = 0;
+            tokenOut = token;
+            return true;
+        }
+        return false;
+    };
     if (verb == "move")
     {
         RemoteCommander::MoveOrder request;
@@ -141,9 +176,8 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
     }
     if (verb == "pull" || verb == "pullback")
     {
-        if (args.empty() || args.size() > 2 || !handleOf(args[0]))
+        if (args.empty() || args.size() > 2 || !targetOf(args[0], out.handle, out.targetToken))
             return invalid(verb + " <guid>" + (verb == "pull" ? " [body]" : ""));
-        out.handle = handleOf(args[0]);
         out.verb = verb == "pull" ? Verb::Pull : Verb::Pullback;
         if (args.size() == 2)
         {
@@ -164,27 +198,25 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
     }
     if (verb == "attack")
     {
-        if (args.empty() || args.size() > 2 || !handleOf(args[0]))
+        if (args.empty() || args.size() > 2 || !targetOf(args[0], out.handle, out.targetToken))
             return invalid("attack <guid> [bot]");
         out.verb = Verb::Attack;
-        out.handle = handleOf(args[0]);
         if (args.size() == 2)
             out.bot = args[1];
         return true;
     }
     if (verb == "focus")
     {
-        if (args.size() != 1 || !handleOf(args[0]))
+        if (args.size() != 1 || !targetOf(args[0], out.handle, out.targetToken))
             return invalid("focus <guid>");
         out.verb = Verb::Focus;
-        out.handle = handleOf(args[0]);
         return true;
     }
-    if (verb == "rest" || verb == "stay" || verb == "follow")
+    if (verb == "rest" || verb == "stay" || verb == "follow" || verb == "hold")
     {
         if (!args.empty())
             return invalid(verb);
-        out.verb = verb == "rest" ? Verb::Rest : verb == "stay" ? Verb::Stay : Verb::Follow;
+        out.verb = verb == "rest" ? Verb::Rest : verb == "stay" ? Verb::Stay : verb == "follow" ? Verb::Follow : Verb::Hold;
         return true;
     }
     if (verb == "revive")
@@ -262,7 +294,7 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
             return false;
         }
     code = "invalid";
-    message = "Usage: attack <guid> [bot] / pull|pullback <guid> / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr> [threshold]";
+    message = "Usage: attack <guid> [bot] / pull|pullback <guid> / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr> [threshold]";
     return false;
 }
 

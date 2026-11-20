@@ -10,6 +10,7 @@
 
 #include "host/TbH3.h"
 #include "host/TbOrdersApi.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrdersPure.h"
@@ -27,9 +28,11 @@
 #include "GameObject.h"
 #include "GameObjectData.h"
 #include "GameObjectPackets.h"
+#include "GossipDef.h"
 #include "Group.h"
 #include "Loot.h"
 #include "Map.h"
+#include "NPCPackets.h"
 #include "ObjectAccessor.h"
 #include "PartyPackets.h"
 #include "Player.h"
@@ -61,11 +64,15 @@ namespace od = orders;
 // One running task. Guids and plain data only.
 struct Task
 {
+    OwnerKind ownerKind = OwnerKind::Run;
+    Verb verb = Verb::Open;
     ObjectGuid bot;
+    std::string botName;
     ObjectGuid target;
     TaskRec rec;
     uint32 entry = 0;               // the target's entry (for the events and the texts)
-    bool goTarget = false;          // a game object (else a corpse)
+    bool goTarget = false;          // a game object
+    bool npcTarget = false;         // a living NPC (gossip)
     uint32 walkSeq = 0;             // the order seq of the newest `come`
     std::string order;              // the order the policy sent
     uint32 startedMs = 0;
@@ -74,6 +81,7 @@ struct Task
 struct RunTasks
 {
     std::map<ObjectGuid, Task> byBot;
+    std::map<ObjectGuid, BotTaskState> lastByBot;
     uint32 accumulatedMs = 0;
     uint32 queuedOrders = 0;        // `come` orders queued by tasks since TakeQueuedOrders
     TaskState state;
@@ -182,10 +190,16 @@ struct Target
 {
     GameObject* go = nullptr;
     Creature* corpse = nullptr;
-    WorldObject* object() const { return go ? static_cast<WorldObject*>(go) : static_cast<WorldObject*>(corpse); }
+    Creature* npc = nullptr;
+    WorldObject* object() const
+    {
+        if (go) return go;
+        if (corpse) return corpse;
+        return npc;
+    }
 };
 
-Target TargetOf(Player* bot, ObjectGuid guid, bool corpsesToo)
+Target TargetOf(Player* bot, ObjectGuid guid, bool corpsesToo, bool npcsToo = false)
 {
     Target t;
     Map* map = bot->FindMap();
@@ -197,11 +211,16 @@ Target TargetOf(Player* bot, ObjectGuid guid, bool corpsesToo)
         if (go && go->isSpawned())
             t.go = go;
     }
-    else if (corpsesToo && guid.IsAnyTypeCreature())
+    else if ((corpsesToo || npcsToo) && guid.IsAnyTypeCreature())
     {
         Creature* creature = ObjectAccessor::GetCreature(*bot, guid);
-        if (creature && !creature->IsAlive())
-            t.corpse = creature;
+        if (creature)
+        {
+            if (corpsesToo && !creature->IsAlive())
+                t.corpse = creature;
+            else if (npcsToo && creature->IsAlive())
+                t.npc = creature;
+        }
     }
     return t;
 }
@@ -256,7 +275,7 @@ void SetReply(RunTasks& rt, bool ok, std::string const& text)
     rt.state.text = text;
 }
 
-void Finish(ObjectGuid leader, RunTasks& rt, Task const& task, bool ok, std::string const& code, std::string const& message, uint32 nowMs)
+void Finish(ObjectGuid owner, RunTasks& rt, Task const& task, bool ok, std::string const& code, std::string const& message, uint32 nowMs)
 {
     Totals& totals = TotalsRw();
     // The ledger watch is given back whatever the result (a window that never closes must not hold the bot's next corpse).
@@ -264,12 +283,21 @@ void Finish(ObjectGuid leader, RunTasks& rt, Task const& task, bool ok, std::str
     std::string const text = ok ? message : code + ": " + message;
     if (rt.state.carrier == task.bot)
         SetReply(rt, ok, text);
+    BotTaskState& bts = rt.lastByBot[task.bot];
+    bts.bot = task.bot;
+    bts.botName = task.botName;
+    bts.busy = false;
+    bts.reply = ok ? 1 : 2;
+    bts.verb = VerbName(task.verb);
+    bts.entry = task.entry;
+    bts.text = (ok ? "done: " : "failed: ") + text;
     if (ok)
         ++totals.done;
     else
         ++totals.failed;
-    if (RunRec* rec = Find(leader))
-        NoteTaskEvent(*rec, nowMs, task.rec.lootLike ? "loot" : "open", int32(task.entry), (ok ? "done: " : "failed: ") + text);
+    if (task.ownerKind == OwnerKind::Run)
+        if (RunRec* rec = Find(owner))
+            NoteTaskEvent(*rec, nowMs, task.rec.lootLike ? "loot" : "open", int32(task.entry), (ok ? "done: " : "failed: ") + text);
 }
 
 // ---- the act ----
@@ -392,6 +420,67 @@ ActResult BeginLootAct(Task& task, Player* bot, PlayerbotAI* ai, Player* lead, T
     return ActFailed(RC::CastReasonCode(why), RC::OpenRefusalText(why, castFail), ActStart::Retry);
 }
 
+// Gossip on an NPC: HandleGossipHelloOpcode -> PrepareGossipMenu -> match option via GossipOrderPolicy -> HandleGossipSelectOptionOpcode.
+ActResult BeginGossipAct(Task& task, Player* bot, PlayerbotAI* ai, Creature* npc)
+{
+    if (!npc->IsAlive())
+        return ActFailed(GossipOrder::kCodeNoNpc, "The NPC is dead.");
+    if (!npc->IsWithinDistInMap(bot, INTERACTION_DISTANCE))
+        return ActFailed(RC::kCodeUnreachable, "The bot is not within the NPC's interaction range.", ActStart::Retry);
+    if (!bot->GetNPCIfCanInteractWith(npc->GetGUID(), UNIT_NPC_FLAG_GOSSIP, UNIT_NPC_FLAG_2_NONE))
+        return ActFailed(GossipOrder::kCodeNoNpc, "The bot cannot interact with that NPC (not a gossip NPC, hostile, or busy).");
+    if (!sPlayerbotAIConfig.botGossipNpcs.empty() && !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, npc->GetEntry()))
+        return ActFailed(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
+    if (bot->IsMounted())
+        ai->Unmount();
+    WorldSession* session = bot->GetSession();
+    if (!session)
+        return ActFailed(RC::kCodeFailed, "The bot has no session.");
+
+    WorldPackets::NPC::Hello hello{ WorldPacket(CMSG_TALK_TO_GOSSIP) };
+    hello.Unit = npc->GetGUID();
+    session->HandleGossipHelloOpcode(hello);
+
+    GossipMenu const& menu = bot->PlayerTalkClass->GetGossipMenu();
+    std::vector<GossipOrder::Option> options;
+    options.reserve(menu.GetMenuItemCount());
+    for (GossipMenuItem const& item : menu.GetMenuItems())
+        options.push_back(MakeGossipOption(item.OptionText, uint32(item.OptionNpc), item.BoxCoded));
+
+    if (!task.rec.gossipHasOption)
+    {
+        ActResult r;
+        r.how = ActStart::Done;
+        r.payload = GossipOrder::DescribeMenu(options);
+        return r;
+    }
+
+    GossipOrder::Request req;
+    req.entry = npc->GetEntry();
+    req.bot = task.botName;
+    req.byIndex = task.rec.gossipByIndex;
+    req.index = task.rec.gossipIndex;
+    req.text = task.rec.gossipText;
+    GossipOrder::Match const match = GossipOrder::MatchOption(options, req);
+    if (!match.ok)
+        return ActFailed(match.code.c_str(), match.message);
+
+    GossipMenuItem const* item = menu.GetItemByIndex(match.listIndex);
+    if (!item)
+        return ActFailed(GossipOrder::kCodeNoOption, "The selected gossip option is no longer in the menu.");
+
+    WorldPackets::NPC::GossipSelectOption sel{ WorldPacket(CMSG_GOSSIP_SELECT_OPTION) };
+    sel.GossipUnit = npc->GetGUID();
+    sel.GossipID = int32(menu.GetMenuId());
+    sel.GossipOptionID = item->GossipOptionID;
+    session->HandleGossipSelectOptionOpcode(sel);
+
+    ActResult r;
+    r.how = ActStart::Done;
+    r.payload = "selected " + std::to_string(match.listIndex + 1) + " \"" + item->OptionText + "\"";
+    return r;
+}
+
 // Before each start the bot stands still: it stopped at its stand already (the stay position is the stand), a bot still on the last yards is stopped and the
 // start comes on the next look (RC::ActWaitsForStop).
 bool HoldForAct(PlayerbotAI* ai, Player* bot)
@@ -447,30 +536,46 @@ bool OrderWalk(RunTasks& rt, Task& task, Player* bot, WorldObject* object, std::
 
 // ---- one look at one task ----
 // Returns true when the task is over.
-bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 nowMs)
+bool Look(ObjectGuid owner, RunTasks& rt, Task& task, uint32 diffMs, uint32 nowMs)
 {
     Player* bot = ObjectAccessor::FindPlayer(task.bot);
-    Player* lead = ObjectAccessor::FindPlayer(leader);
+    Player* lead = ObjectAccessor::FindPlayer(owner);
     PlayerbotAI* ai = bot && bot->IsInWorld() ? AiOf(bot) : nullptr;
     Obs o;
     o.botAvailable = ai && bot->FindMap() && bot->IsAlive() && !bot->IsBeingTeleported() && !bot->IsInFlight();
     o.teleporting = bot && bot->IsAlive() && (!bot->IsInWorld() || bot->IsBeingTeleported());
     // A follower that left the commanded party is not ours to order any more.
-    if (o.botAvailable && task.bot != leader && h3::CommanderGuid(task.bot) != leader)
+    if (o.botAvailable)
     {
-        Finish(leader, rt, task, false, RC::kCodeUnavailable, "The bot left the commanded party.", nowMs);
-        return true;
+        if (task.ownerKind == OwnerKind::Run)
+        {
+            if (task.bot != owner && h3::CommanderGuid(task.bot) != owner)
+            {
+                Finish(owner, rt, task, false, RC::kCodeUnavailable, "The bot left the commanded party.", nowMs);
+                return true;
+            }
+        }
+        else if (!lead || !cmd::IsCommandedBy(lead, bot))
+        {
+            Finish(owner, rt, task, false, RC::kCodeUnavailable, "The bot is no longer bound to this commander.", nowMs);
+            return true;
+        }
     }
     Target target;
     if (o.botAvailable)
     {
-        target = TargetOf(bot, task.target, true);
+        target = TargetOf(bot, task.target, task.rec.corpse || task.rec.lootLike, task.npcTarget);
         o.targetPresent = target.object() != nullptr;
         o.inCombat = bot->IsInCombat();
         if (WorldObject* object = target.object())
         {
             o.distance = bot->GetDistance(object);
-            o.inRange = target.go ? target.go->IsWithinDistInMap(bot) : o.distance <= kCorpseRangeYd;
+            if (target.go)
+                o.inRange = target.go->IsWithinDistInMap(bot);
+            else if (target.npc)
+                o.inRange = target.npc->IsWithinDistInMap(bot, INTERACTION_DISTANCE);
+            else
+                o.inRange = o.distance <= kCorpseRangeYd;
         }
         o.moving = sServerFacade.isMoving(bot) || !bot->movespline->Finalized();
         if (task.walkSeq)
@@ -509,7 +614,7 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
             std::string code, detail;
             if (!OrderWalk(rt, task, bot, target.object(), code, detail))
             {
-                Finish(leader, rt, task, false, RC::kCodeUnreachable, "The bot could not be sent to the object (" + code + ": " + detail + ").", nowMs);
+                Finish(owner, rt, task, false, RC::kCodeUnreachable, "The bot could not be sent to the object (" + code + ": " + detail + ").", nowMs);
                 return true;
             }
             return false;
@@ -518,10 +623,17 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
         {
             ActResult result;
             std::string methodWhy;
-            if (!LeadGroupLoot(lead ? lead : bot, methodWhy))
+            if (task.ownerKind == OwnerKind::Run && !LeadGroupLoot(lead ? lead : bot, methodWhy))
                 result = ActFailed("loot-method", methodWhy + ": no loot or object is used while the group's loot method is not group loot.");
             else if (HoldForAct(ai, bot))
                 result = ActFailed(RC::CastReasonCode("moving"), RC::OpenRefusalText("moving", 0), ActStart::Retry);
+            else if (task.rec.kind == Kind::Gossip)
+            {
+                if (target.npc)
+                    result = BeginGossipAct(task, bot, ai, target.npc);
+                else
+                    result = ActFailed(GossipOrder::kCodeNoNpc, "The NPC is gone.");
+            }
             else if (task.rec.lootLike)
                 result = BeginLootAct(task, bot, ai, lead ? lead : bot, target);
             else if (target.go)
@@ -530,17 +642,17 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
                 result = ActFailed(RC::kCodeInvalidTarget, "The object is gone.");
             if (result.how == ActStart::Done)
             {
-                Finish(leader, rt, task, true, "", result.payload, nowMs);
+                Finish(owner, rt, task, true, "", result.payload, nowMs);
                 return true;
             }
             NoteActStart(task.rec, result.how == ActStart::Started, result.how == ActStart::Failed, result.code, result.message);
             return false;
         }
         case Do::Succeed:
-            Finish(leader, rt, task, true, "", step.message, nowMs);
+            Finish(owner, rt, task, true, "", step.message, nowMs);
             return true;
         case Do::Fail:
-            Finish(leader, rt, task, false, step.code, step.message, nowMs);
+            Finish(owner, rt, task, false, step.code, step.message, nowMs);
             return true;
     }
     return false;
@@ -548,11 +660,14 @@ bool Look(ObjectGuid leader, RunTasks& rt, Task& task, uint32 diffMs, uint32 now
 }
 
 // ======================================================================================================================================================
-// the orders
+// the orders (shared by run and commander)
 // ======================================================================================================================================================
-OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs)
+namespace
+{
+OrderAnswer BeginTask(OwnerKind ownerKind, ObjectGuid owner, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, ObjectGuid resolvedTarget, uint32 nowMs)
 {
     bool const isLoot = order.verb == Verb::Loot;
+    bool const isGossip = order.verb == Verb::Gossip;
     Player* bot = nullptr;
     for (Player* candidate : bots)
         if (candidate && strcasecmp(candidate->GetName().c_str(), order.bot.c_str()) == 0)
@@ -562,31 +677,39 @@ OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, T
     PlayerbotAI* ai = AiOf(bot);
     if (!ai || !bot->IsAlive() || bot->IsInFlight() || bot->IsBeingTeleported())
         return Refuse("unavailable", NameOf(bot) + " is dead, on a taxi, teleporting or has no AI.");
-    RunTasks& rt = Table()[rec.leader];
+    RunTasks& rt = Table()[owner];
     if (rt.byBot.count(bot->GetGUID()))
         return Refuse(RC::kCodeBusy, NameOf(bot) + " is carrying out an earlier order.");
     if (bot->IsInCombat())
         return Refuse(RC::kCodeInCombat, NameOf(bot) + " is in combat.");
-    if (bot != lead && h3::CommanderGuid(bot->GetGUID()) != lead->GetGUID())
+    if (ownerKind == OwnerKind::Run && bot != lead && h3::CommanderGuid(bot->GetGUID()) != owner)
         return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`).");
 
-    // The target: a handle of ReadFacts (a boss corpse), or the entry at the plan's point.
-    ObjectGuid guid;
-    if (order.spec.ByEntry())
+    // The target: pre-resolved guid (commander), or a handle of ReadFacts / entry@point (run).
+    ObjectGuid guid = resolvedTarget;
+    if (guid.IsEmpty())
     {
-        float const px = order.spec.hasPoint ? order.spec.point.x : bot->GetPositionX();
-        float const py = order.spec.hasPoint ? order.spec.point.y : bot->GetPositionY();
-        float const pz = order.spec.hasPoint ? order.spec.point.z : bot->GetPositionZ();
-        if (!RC::EntryPointInReach(bot->GetDistance(px, py, pz), sPlayerbotAIConfig.reactDistance))
-            return Refuse(RC::kCodeTooFar, "That point is farther from the bot than AiPlayerbot.ReactDistance. Move the group closer first.");
-        if (!FindByEntry(bot, order.spec, isLoot, guid))
-            return Refuse(RC::kCodeInvalidTarget, NotFoundText(order.spec.entry));
+        if (order.spec.ByEntry())
+        {
+            float const px = order.spec.hasPoint ? order.spec.point.x : bot->GetPositionX();
+            float const py = order.spec.hasPoint ? order.spec.point.y : bot->GetPositionY();
+            float const pz = order.spec.hasPoint ? order.spec.point.z : bot->GetPositionZ();
+            if (!RC::EntryPointInReach(bot->GetDistance(px, py, pz), sPlayerbotAIConfig.reactDistance))
+                return Refuse(RC::kCodeTooFar, "That point is farther from the bot than AiPlayerbot.ReactDistance. Move the group closer first.");
+            if (!FindByEntry(bot, order.spec, isLoot, guid))
+                return Refuse(RC::kCodeInvalidTarget, NotFoundText(order.spec.entry));
+        }
+        else if (!ResolveHandle(owner, order.spec.guid, guid))
+            return Refuse(RC::kCodeInvalidTarget, "No corpse or game object with that handle is on the group's map (the handle came from an earlier read and no longer resolves).");
     }
-    else if (!ResolveHandle(rec.leader, order.spec.guid, guid))
-        return Refuse(RC::kCodeInvalidTarget, "No corpse or game object with that handle is on the group's map (the handle came from an earlier read and no longer resolves).");
-    Target const target = TargetOf(bot, guid, isLoot);
+
+    Target const target = TargetOf(bot, guid, isLoot, isGossip);
     if (!target.object())
+    {
+        if (isGossip)
+            return Refuse(GossipOrder::kCodeNoNpc, "No living NPC with that GUID is on the bot's map.");
         return Refuse(RC::kCodeInvalidTarget, isLoot ? "No corpse or game object with that GUID is on the bot's map." : "No game object with that GUID is on the bot's map.");
+    }
     float const distance = bot->GetDistance(target.object());
     if (!RC::WithinReactDistance(distance, sPlayerbotAIConfig.reactDistance))
         return Refuse(RC::kCodeTooFar, "The object is farther from the bot than AiPlayerbot.ReactDistance. Move the group closer first.");
@@ -596,26 +719,56 @@ OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, T
         if (!lock.ok)
             return Refuse(lock.code, lock.text);
     }
+    if (target.npc && !sPlayerbotAIConfig.botGossipNpcs.empty() && !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, target.npc->GetEntry()))
+        return Refuse(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
 
     Task task;
+    task.ownerKind = ownerKind;
+    task.verb = order.verb;
     task.bot = bot->GetGUID();
+    task.botName = NameOf(bot);
     task.target = guid;
     task.entry = target.object()->GetEntry();
     task.goTarget = target.go != nullptr;
+    task.npcTarget = target.npc != nullptr;
     bool const chest = target.go && target.go->GetGoType() == GAMEOBJECT_TYPE_CHEST;
-    bool const lootLike = isLoot || chest;
-    task.rec = MakeRec(isLoot ? Kind::Loot : Kind::Open, lootLike, target.corpse != nullptr, isLoot ? order.itemId : 0, distance,
+    bool const lootLike = !isGossip && (isLoot || chest);
+    Kind const kind = isGossip ? Kind::Gossip : (isLoot ? Kind::Loot : Kind::Open);
+    task.rec = MakeRec(kind, lootLike, target.corpse != nullptr, isLoot ? order.itemId : 0, distance,
         target.go && target.go->GetGoType() == GAMEOBJECT_TYPE_GOOBER && !lootLike);
+    task.rec.gossipHasOption = order.gossipHasOption;
+    task.rec.gossipByIndex = order.gossipByIndex;
+    task.rec.gossipIndex = order.gossipIndex;
+    task.rec.gossipText = order.gossipText;
     task.startedMs = nowMs;
     rt.byBot[task.bot] = task;
     rt.state.carrier = task.bot;
     rt.state.reply = 0;
     rt.state.text.clear();
+    BotTaskState& bts = rt.lastByBot[task.bot];
+    bts.bot = task.bot;
+    bts.botName = task.botName;
+    bts.busy = true;
+    bts.reply = 0;
+    bts.verb = VerbName(order.verb);
+    bts.entry = task.entry;
+    bts.text.clear();
     ++TotalsRw().began;
     return Accepted("bot:" + NameOf(bot), 1);
 }
+}
 
-OrderAnswer SetLootMethod(RunRec& /*rec*/, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order)
+OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs)
+{
+    return BeginTask(OwnerKind::Run, rec.leader, lead, bots, order, ObjectGuid::Empty, nowMs);
+}
+
+OrderAnswer BeginCommander(ObjectGuid commander, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, ObjectGuid resolvedTarget, uint32 nowMs)
+{
+    return BeginTask(OwnerKind::Commander, commander, lead, bots, order, resolvedTarget, nowMs);
+}
+
+OrderAnswer SetLootMethodForParty(Player* lead, std::vector<Player*> const& bots, TaskOrder const& order)
 {
     MethodVerdict const verdict = JudgeLootMethod(order);
     if (!verdict.ok)
@@ -634,6 +787,11 @@ OrderAnswer SetLootMethod(RunRec& /*rec*/, Player* lead, std::vector<Player*> co
     if (int(group->GetLootMethod()) != order.method)
         return Refuse(RC::kCodeFailed, "The group's loot method did not change.");
     return Accepted("party", uint32(bots.size()));
+}
+
+OrderAnswer SetLootMethod(RunRec& /*rec*/, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order)
+{
+    return SetLootMethodForParty(lead, bots, order);
 }
 
 // ======================================================================================================================================================
@@ -713,6 +871,29 @@ TaskState StateOf(ObjectGuid leader)
     TaskState state = found->second.state;
     state.busy = !state.carrier.IsEmpty() && found->second.byBot.count(state.carrier) != 0;
     return state;
+}
+
+std::vector<BotTaskState> BotStatesOf(ObjectGuid owner, std::vector<Player*> const& bots)
+{
+    std::vector<BotTaskState> out;
+    auto found = Table().find(owner);
+    for (Player* bot : bots)
+    {
+        if (!bot)
+            continue;
+        BotTaskState s;
+        s.bot = bot->GetGUID();
+        s.botName = NameOf(bot);
+        if (found != Table().end())
+        {
+            auto it = found->second.lastByBot.find(s.bot);
+            if (it != found->second.lastByBot.end())
+                s = it->second;
+            s.busy = found->second.byBot.count(s.bot) != 0;
+        }
+        out.push_back(std::move(s));
+    }
+    return out;
 }
 
 bool Busy(ObjectGuid leader, ObjectGuid bot)

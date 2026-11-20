@@ -38,6 +38,9 @@ bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     /
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb equip <bot> <item id> [replace] [#token]
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb itemscan <bot> <item id>... [#token]
+bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb statcensus [#token]
+bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb gear <bot|party [leader]> upgrade [#token]
+bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb quest <bot> status|accept|turnin|share|drop|reward ... [#token]
 
 // ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
 // Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.
@@ -57,6 +60,9 @@ uint8 WantedRole(ObjectGuid bot);
 // H4 (slice 4): the member of the dead bot's party (or its commander) that offered it a resurrection that is still pending; null when there is none or the
 // bot is alive. Defined with the slice only.
 Player* ResurrectOffererOf(Player* bot);
+// H6 (W6a): appends usage=, w=, worn=, wornw= to a `.tb itemscan` record. Defined with the slice only (TbPartyState.cpp).
+class Rec;
+void AppendItemScanEngine(Player* bot, uint32 itemId, Rec& rec);
 
 // ---- helpers shared by the three files (TbH3.cpp) ----
 // A command's words (whitespace separated) and its echo token: the last word that starts with '#' is taken out of the words and

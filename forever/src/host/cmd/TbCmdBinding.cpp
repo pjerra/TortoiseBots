@@ -1197,6 +1197,24 @@ void NoteRunOrder(ObjectGuid leader, std::string const& order, bool accepted, st
     NoteLog(above.IsEmpty() ? leader : above, P::MakeOrder(NowUnix(), verb, detail, accepted, code, text));
 }
 
+bool ResolveBinding(ObjectGuid commander, ObjectGuid& lead, std::vector<ObjectGuid>& members)
+{
+    lead = ObjectGuid::Empty;
+    members.clear();
+    if (commander.IsEmpty())
+        return false;
+    members = BoundTo(commander);
+    if (members.empty())
+        return false;
+    State const& s = Get();
+    auto const it = s.metas.find(commander);
+    if (it != s.metas.end() && it->second.restored && !it->second.lead.IsEmpty() && h3::CommanderGuid(it->second.lead) == commander)
+        lead = it->second.lead;
+    else
+        lead = members.front();
+    return true;
+}
+
 void AppendBindings(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32> const& runLeadersShown)
 {
     for (HostCard const& h : Read(NowUnix(), uint32(NowMs())))
@@ -1346,6 +1364,7 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 void NoteMaster(std::vector<Player*> const&, Player*, Player*) {}
 void NoteOrder(std::vector<std::pair<Player*, std::string>> const&, std::string const&, std::string const&) {}
 void NoteRunOrder(ObjectGuid, std::string const&, bool, std::string const&, std::string const&) {}
+bool ResolveBinding(ObjectGuid, ObjectGuid&, std::vector<ObjectGuid>&) { return false; }
 void NoteGroupAdd(Group*, ObjectGuid) {}
 void NoteGroupRemove(Group*, ObjectGuid) {}
 void NoteGroupLeader(Group*, ObjectGuid) {}

@@ -270,6 +270,7 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "DISCOVERY")
     "${TORTOISEBOTS_ROOT}/ai/playerbot/PlayerbotHelpMgr.cpp"
     "${TORTOISEBOTS_ROOT}/ai/playerbot/PlayerbotTextMgr.cpp"
     "${TORTOISEBOTS_ROOT}/ai/playerbot/RandomItemMgr.cpp"
+    "${TORTOISEBOTS_ROOT}/ai/playerbot/RandomItemWeights.cpp"
     "${TORTOISEBOTS_ROOT}/ai/playerbot/Talentspec.cpp"
     "${TORTOISEBOTS_ROOT}/ai/playerbot/ChatHelper.cpp"
     "${TORTOISEBOTS_ROOT}/ai/playerbot/WorldPosition.cpp"

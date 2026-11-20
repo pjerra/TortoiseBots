@@ -3,6 +3,7 @@
 #include "TbDashboard.h"
 #include "dash/TbDashRuns.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdOrders.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
@@ -59,6 +60,7 @@
 #include "host/TbH4.h"
 #include "host/TbCc.h"
 #include "host/cmd/TbTestTargetPure.h"
+#include "host/TbIgnore.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -319,6 +321,7 @@ public:
             { "learn",  TortoiseBots::h3::HandleLearn,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "equip",  TortoiseBots::h3::HandleEquip,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "itemscan", TortoiseBots::h3::HandleItemScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "statcensus", TortoiseBots::h3::HandleStatCensus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "grammar", TortoiseBots::h3::HandleGrammar, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "trigger", TortoiseBots::h4::HandleTrigger, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "instance", TortoiseBots::h4::HandleInstance, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -332,7 +335,11 @@ public:
             { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot> co|nc +name,-name` (SETUP)
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
-            { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // W1: `.tb free <bot> on|off`
+            { "gear",   TortoiseBots::h3::HandleGear,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cmd",      TortoiseBots::cmd::HandleCmd,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {

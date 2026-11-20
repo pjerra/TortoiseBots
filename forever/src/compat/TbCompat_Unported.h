@@ -16,7 +16,11 @@
 // Included from forever-compat-shim.h at the end of the R4 block, so every type of the pre-included set is visible here.
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -282,6 +286,28 @@ using BattleGroundQueueTypeId = BattlegroundQueueTypeId;
 // (The battleground type of a queue type id, and the chat link extractors of ChatHandler, are blocks: ServerFacade.h and
 // PlayerbotAI.h call them through UnportedBlockResultCompat with Feature::BattlegroundQueue / Feature::ChatLinks.)
 
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+{
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first != std::string::npos)
+    {
+        size_t last = str.find_last_not_of(" \t\r\n");
+        std::string trimmed = str.substr(first, last - first + 1);
+        if (!trimmed.empty() && trimmed.size() <= 9 &&
+            std::all_of(trimmed.begin(), trimmed.end(), [](unsigned char c) { return std::isdigit(c); }))
+        {
+            unsigned long const value = std::strtoul(trimmed.c_str(), nullptr, 10);
+            if (value > 0 && value <= std::numeric_limits<uint32>::max())
+                return static_cast<uint32>(value);
+        }
+    }
+    char* source = (char*)str.c_str();
+    char* cId = UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, static_cast<char*>(nullptr),
+        [&](auto* self) -> char* { return self->ExtractKeyFromLink(&source, "Hquest"); }, handler);
+    return cId ? static_cast<uint32>(std::strtoul(cId, nullptr, 10)) : 0u;
+}
+
 
 // ===============================================================================================================
 // PROPER both-core helpers added by R6A (ForeverCore has the thing: no Unported call)
@@ -428,39 +454,7 @@ inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
 }
 
 
-// ===============================================================================================================
-// QUEST INTERNALS (PlayerbotAIQuests.cpp, GenericTriggers.h QuestLogNearlyFullTrigger)
-// ===============================================================================================================
-// What the quest triage reads of a quest template. T fills it from the 1.12 fields; F's Quest keeps objectives and a classic level
-// range, and the view is not ported: it is EMPTY (level 0 = "scaling quest, never grey", no item objectives, not inactive, no
-// money cost, no deliver flag). The trigger that uses it (quest log nearly full) is not registered in the slice.
-struct QuestTriageViewCompat
-{
-    struct Item { uint32 id = 0; uint32 count = 0; };
-    bool inactive = false;               // T: !quest->IsActive()
-    bool hasItemObjective = false;       // an item objective or a source item with a count
-    bool deliver = false;                // T: HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER)
-    uint32 level = 0;                     // T: GetQuestLevel()
-    uint32 levelForPlayer = 0;            // T: bot->GetQuestLevelForPlayer(quest)
-    uint32 type = 0;                     // T: GetType()
-    uint32 suggestedPlayers = 0;         // T: GetSuggestedPlayers()
-    int32 rewardOrRequiredMoney = 0;     // T: GetRewOrReqMoney() (negative = the quest costs money)
-    std::vector<Item> items;             // the required items with a count
-};
-inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* /*bot*/, Quest const* /*quest*/)
-{
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
-    return QuestTriageViewCompat();
-}
-
-// Quest log bookkeeping of PlayerbotAI. Failure values: no title (empty), nothing dropped, no required items.
-inline std::string QuestTitleCompat(Quest const* /*quest*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); return std::string(); }
-inline void RemoveQuestFromLogCompat(Player* /*bot*/, uint32 /*questId*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); }
-inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* /*quest*/)
-{
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
-    return {};
-}
+// Quest internals moved to TbCompat_Quest.h (W3).
 
 
 // ===============================================================================================================

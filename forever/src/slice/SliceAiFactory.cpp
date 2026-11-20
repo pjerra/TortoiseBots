@@ -206,6 +206,9 @@ int AiFactory::GetPlayerSpecTab(const Player* player)
         return 1;
     if (player && player->GetClass() == CLASS_HUNTER)
         return 1;
+    // A warrior ordered to tank is protection (tab 2), so the item scoring picks the protection scale and keeps the shield.
+    if (player && player->GetClass() == CLASS_WARRIOR && OrderedRoleNoFacade(player) == static_cast<uint8>(BOT_ROLE_TANK))
+        return 2;
     if (player)
     {
         switch (HybridKitOf(player, OrderedRoleNoFacade(player)))
@@ -339,7 +342,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
 // W1 (spec D4): a free bot's non-combat kit is its class spec strategy plus the world kit, both from the pure policy
 // (policy/world/FreeKitPolicy.h; forever/tools/test_free_kit_policy.cpp). No follow, no wander, no rpg, travel, quests, vendors,
-// maintenance or group/guild strategy.
+// or group/guild strategy.
 static_assert(TortoiseBots::world::ClassWarrior == CLASS_WARRIOR, "FreeKitPolicy.h: warrior id");
 static_assert(TortoiseBots::world::ClassPaladin == CLASS_PALADIN, "FreeKitPolicy.h: paladin id");
 static_assert(TortoiseBots::world::ClassHunter == CLASS_HUNTER, "FreeKitPolicy.h: hunter id");
@@ -352,6 +355,8 @@ static_assert(TortoiseBots::world::ClassDruid == CLASS_DRUID, "FreeKitPolicy.h: 
 
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
+    if (nonCombatEngine)
+        nonCombatEngine->addStrategy("maintenance");
     // A free bot plays the world on its own: grind targets, food, loot, rolls, the class spec and the engine's default handler.
     if (player && sRandomBotFacade.IsFreeBot(player) && !facade->HasRealPlayerMaster())
     {

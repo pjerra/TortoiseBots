@@ -128,6 +128,9 @@ namespace ai
         // The area is centred on `spellTarget` (a ground area or a chain) or on
         // this bot (a caster-centred area).
         bool BreakableCcInArea(SpellEntry const* info, Unit* spellTarget);
+        // A `.tb ignore` mob near the spell: within the ignore radius of this
+        // bot, or within the blast plus that radius of the blast's centre.
+        bool IgnoredMobNear(WorldObject* blastCenter, float blastRadius);
 
     private:
         // "possible targets no los" around one point: the list a

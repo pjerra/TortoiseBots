@@ -3,16 +3,17 @@
 #include "ItemUsageValue.h"
 #include "MountValues.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW2Town.h"
 
 using namespace ai;
 
 uint32 RepairCostValue::RepairCost(const Item* item, bool fullCost)
 {
-    uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+    uint32 maxDurability = ItemMaxDurabilityCompat(item);
     if (!maxDurability)
         return 0;
 
-    uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+    uint32 curDurability = ItemDurabilityCompat(item);
 
     uint32 LostDurability = maxDurability;
 
@@ -35,9 +36,9 @@ uint32 RepairCostValue::RepairCost(const Item* item, bool fullCost)
     if (!dQualitymodEntry)
         return 0;
 
-    uint32 dmultiplier = dcost->multiplier[ItemSubClassToDurabilityMultiplierId(ditemProto->Class, ditemProto->SubClass)];
+    uint32 dmultiplier = DurabilityCostMultiplierCompat(dcost, ditemProto->Class, ditemProto->SubClass);
 
-    return uint32(LostDurability * dmultiplier * double(dQualitymodEntry->quality_mod));
+    return uint32(LostDurability * dmultiplier * double(DurabilityQualityModCompat(dQualitymodEntry)));
 }
 
 uint32 RepairCostValue::Calculate()
@@ -69,11 +70,11 @@ uint32 MaxGearRepairCostValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         if (i >= EQUIPMENT_SLOT_END && curDurability >= maxDurability) //Only count items equiped or already damanged.
             continue;
@@ -95,11 +96,11 @@ uint32 MinRepairCostValue::Calculate()
         if (!item)
             continue;
 
-        uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+        uint32 maxDurability = ItemMaxDurabilityCompat(item);
         if (!maxDurability)
             continue;
 
-        uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        uint32 curDurability = ItemDurabilityCompat(item);
 
         if (curDurability > 0)
             continue;
@@ -203,11 +204,11 @@ uint32 MoneyNeededForValue::Calculate()
 
             totalDeposit += deposit;
 
-            uint32 maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+            uint32 maxDurability = ItemMaxDurabilityCompat(item);
             if (!maxDurability)
                 continue;
 
-            uint32 curDurability = item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+            uint32 curDurability = ItemDurabilityCompat(item);
 
             uint32 LostDurability = maxDurability - curDurability;
 
@@ -225,8 +226,8 @@ uint32 MoneyNeededForValue::Calculate()
             if (!dQualitymodEntry)
                 continue;
 
-            uint32 dmultiplier = dcost->multiplier[ItemSubClassToDurabilityMultiplierId(ditemProto->Class, ditemProto->SubClass)];
-            uint32 costs = uint32(LostDurability * dmultiplier * double(dQualitymodEntry->quality_mod));
+            uint32 dmultiplier = DurabilityCostMultiplierCompat(dcost, ditemProto->Class, ditemProto->SubClass);
+            uint32 costs = uint32(LostDurability * dmultiplier * double(DurabilityQualityModCompat(dQualitymodEntry)));
 
             totalDeposit += costs;
         }

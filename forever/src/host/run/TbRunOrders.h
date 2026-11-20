@@ -20,6 +20,7 @@
 #include "Define.h"
 #include "ObjectGuid.h"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,18 @@ namespace TortoiseBots
 namespace run
 {
 struct RunRec;
+
+// A party context for the lifted order judge: a run or a bound commander.
+struct Party
+{
+    ObjectGuid leader;                                                                      // lead bot guid
+    std::vector<ObjectGuid> members;                                                        // optional explicit members (if empty, read from leader->GetGroup())
+    ObjectGuid owner;                                                                       // order/icon owner (leader for a run, commander for `.tb cmd`)
+    RunRec* runRec = nullptr;                                                               // non-null only when called from a dungeon run (for cc/task verbs)
+    bool fromRun = false;                                                                   // true for the run's own orders (gather, pull anchor on tank, late-failure tracking)
+    bool persistentIcons = false;                                                           // true for `.tb cmd`: keep the skull raid icon on attack/pull targets
+    std::function<bool(uint64 handle, std::string const& token, ObjectGuid& out)> resolveTarget;  // run handle or 32-hex guid -> ObjectGuid
+};
 
 // The synchronous answer of one order.
 struct OrderAnswer
@@ -43,6 +56,9 @@ struct OrderAnswer
     bool movePathRead = false;
     uint32 movePathType = 0;
 };
+
+// Lifted judge: carries out ONE order for `party` (either a dungeon run or a bound commander's `.tb cmd`), and logs it via `cmd::NoteRunOrder`.
+OrderAnswer Issue(Party const& party, std::string const& order, uint32 nowMs, bool gather = false);
 
 // Judges and carries out ONE order of the run `rec` (the leader is the tank bot; the party is the leader's group; every member is a host bot).
 // `order` is exactly the string the policy returned (`DungeonRun::MoveOrder`, `WalkOrder`, "pull 12 body", "pullback 12", "attack 12 Mdps", "focus 12",

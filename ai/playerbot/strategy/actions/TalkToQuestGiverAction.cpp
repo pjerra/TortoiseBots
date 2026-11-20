@@ -54,32 +54,24 @@ bool TalkToQuestGiverAction::ProcessQuest(Player* requester, Quest const* quest,
         }
     }
 
-    switch (status)
+    if (status == QUEST_STATUS_COMPLETE)
     {
-        case QUEST_STATUS_COMPLETE:
-        {
+        isCompleted |= TurnInQuest(requester, quest, questGiver, outputMessage);
+    }
+    else if (status == QUEST_STATUS_INCOMPLETE)
+    {
+        outputMessage = BOT_TEXT2("quest_status_incomplete", args);
+    }
+    else if (QuestIsAvailableStatusCompat(status))
+    {
+        if (QuestIsAutoCompleteCompat(quest) && bot->CanTakeQuest(quest, false) && CanRewardQuestCompat(bot, quest, false))
             isCompleted |= TurnInQuest(requester, quest, questGiver, outputMessage);
-            break;
-        }
-        case QUEST_STATUS_INCOMPLETE:
-        {
-            outputMessage = BOT_TEXT2("quest_status_incomplete", args);
-            break;
-        }
-        case QUEST_STATUS_AVAILABLE:
-        case QUEST_STATUS_NONE:
-        {
-            if (quest->IsAutoComplete() && bot->CanTakeQuest(quest, false) && bot->CanRewardQuest(quest, false))
-                isCompleted |= TurnInQuest(requester, quest, questGiver, outputMessage);
-            else
-                outputMessage = BOT_TEXT2("quest_status_available", args);
-            break;
-        }
-        case QUEST_STATUS_FAILED:
-        {
-            outputMessage = BOT_TEXT2("quest_status_failed", args);
-            break;
-        }
+        else
+            outputMessage = BOT_TEXT2("quest_status_available", args);
+    }
+    else if (status == QUEST_STATUS_FAILED)
+    {
+        outputMessage = BOT_TEXT2("quest_status_failed", args);
     }
 
     ai->TellPlayer(requester, outputMessage, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
@@ -144,9 +136,9 @@ void TalkToQuestGiverAction::RewardNoItem(Quest const* quest, WorldObject* quest
     std::map<std::string, std::string> args;
     args["%quest"] = chat->formatQuest(quest);
 
-    if (bot->CanRewardQuest(quest, false))
+    if (CanRewardQuestCompat(bot, quest, false))
     {
-        bot->RewardQuest(quest, 0, questGiver, false);
+        RewardQuestDirectCompat(bot, quest, 0, questGiver, false);
         sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
         out = BOT_TEXT2("quest_status_completed", args);
     }
@@ -165,9 +157,9 @@ void TalkToQuestGiverAction::RewardSingleItem(Quest const* quest, WorldObject* q
     args["%quest"] = chat->formatQuest(quest);
     args["%item"] = chat->formatItem(item);
 
-    if (bot->CanRewardQuest(quest, index, false))
+    if (CanRewardQuestChoiceCompat(bot, quest, index, false))
     {
-        bot->RewardQuest(quest, index, questGiver, true);
+        RewardQuestDirectCompat(bot, quest, index, questGiver, true);
         sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
         out = BOT_TEXT2("quest_status_complete_single_reward", args);
     }
@@ -297,7 +289,7 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
             out = BOT_TEXT2("quest_status_complete_single_reward", args);
         }
 
-        bot->RewardQuest(quest, rewardIndex, questGiver, true);
+        RewardQuestDirectCompat(bot, quest, rewardIndex, questGiver, true);
         sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest),
             std::to_string(quest->GetQuestId()) + (bestIds.size() > 1 ? " score " + std::to_string(rewardScore) : ""));
     }
@@ -325,7 +317,7 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
                 out = BOT_TEXT2("quest_status_complete_single_reward", args);
             }
 
-            bot->RewardQuest(quest, rewardIndex, questGiver, true);
+            RewardQuestDirectCompat(bot, quest, rewardIndex, questGiver, true);
             sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
         }
     }

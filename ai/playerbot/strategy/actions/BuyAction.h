@@ -16,7 +16,7 @@ namespace ai
         virtual bool Execute(Event& event) override;
 
     private:
-        bool BuyItem(Player* requester, VendorItemData const* tItems, ObjectGuid vendorguid, const ItemPrototype* proto, UsageBoughtList& bought, ItemUsage usage = ItemUsage::ITEM_USAGE_NONE);
+        bool BuyItem(Player* requester, Creature* vendor, VendorItemData const* tItems, ObjectGuid vendorguid, const ItemPrototype* proto, UsageBoughtList& bought, ItemUsage usage = ItemUsage::ITEM_USAGE_NONE);
 
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "buy"; } //Must equal iternal name

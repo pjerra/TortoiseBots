@@ -167,7 +167,7 @@ class Registry(unittest.TestCase):
                     "idle wander", "find corpse", "revive from corpse", "spirit healer", "no target",
                     "dangerous elite near", "corpse near", "val", "graveyard", "best graveyard", "should spirit healer", "can move around"):
             self.assertIn(key, block)
-        self.assertIn("SLICE9_KEYS, W1_KEYS)", GEN)
+        self.assertIn("SLICE9_KEYS, W1_KEYS", GEN)
         self.assertIn('creators["grind"]', CTX)
         self.assertIn('creators["grind target"]', CTX)
         self.assertIn('creators["should spirit healer"]', CTX)

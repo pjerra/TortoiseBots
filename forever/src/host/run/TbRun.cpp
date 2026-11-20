@@ -1042,7 +1042,7 @@ void TickRun(RunRec& rec, uint32 nowMs)
 
     if (!order.empty())
     {
-        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));   // P1/P2: Issue notes the order on the commander card
+        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
         // G8: a refused automatic cc order assigned nothing: the unit, bot, mark and budget go back for the next pick (the Turtle glue calls it after every order).
         DungeonRun::CcOrderTaken(run, order, answer.accepted);
         if (answer.accepted)
@@ -1108,10 +1108,11 @@ void Update(uint32 diffMs)
     // run leaving the table is exactly when a pending clear must still be driven.
     if (tick)
         RetryPendingCc();
+    // S9 (O9) + Commander P6: tasks (open, loot, use, gossip) tick every 250 ms even when no dungeon run is active.
+    tasks::Update(diffMs);
     if (Table().empty())
         return;
-    // S9 (O9): the tasks (open, loot) look at their bots every 250 ms; the `come` orders they queue are the run's own, so the outside-order baseline moves past them.
-    tasks::Update(diffMs);
+    // the `come` orders run tasks queue are the run's own, so the outside-order baseline moves past them.
     for (auto const& entry : Table())
         if (!Ended(*entry.second) && tasks::TakeQueuedOrders(entry.first))
             BaselineOrders(*entry.second);

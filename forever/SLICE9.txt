@@ -21,6 +21,7 @@ ai/playerbot/PlayerbotAIPackets.cpp
 ai/playerbot/PlayerbotAIQuests.cpp
 ai/playerbot/PlayerbotAISpells.cpp
 ai/playerbot/PlayerbotSecurity.cpp
+ai/playerbot/RandomItemWeights.cpp
 ai/playerbot/ServerFacade.cpp
 ai/playerbot/WorldPosition.cpp
 ai/playerbot/WorldSquare.cpp
@@ -182,6 +183,8 @@ ai/playerbot/DungeonPlanMgr.cpp
 ai/playerbot/BossTacticsMgr.cpp
 ai/playerbot/strategy/actions/LootRollAction.cpp
 ai/playerbot/strategy/values/ItemUsageValue.cpp
+ai/playerbot/strategy/actions/EquipAction.cpp
+ai/playerbot/strategy/generic/MaintenanceStrategy.cpp
 # Integration batch 2 (mage/rogue, druid/paladin/shaman, hunter/warlock/pets): the files of forever/SLICE11.txt not listed above.
 ai/playerbot/strategy/actions/CancelChannelAction.cpp
 ai/playerbot/strategy/actions/GiveItemAction.cpp
@@ -270,3 +273,16 @@ ai/playerbot/strategy/warlock/WarlockStrategy.cpp
 ai/playerbot/strategy/warlock/WarlockTriggers.cpp
 ai/playerbot/strategy/actions/CombatActions.cpp
 ai/playerbot/strategy/values/ActiveSpellValue.cpp
+ai/playerbot/strategy/actions/SellAction.cpp
+ai/playerbot/strategy/actions/BuyAction.cpp
+ai/playerbot/strategy/actions/RepairAllAction.cpp
+ai/playerbot/strategy/actions/TrainerAction.cpp
+ai/playerbot/strategy/actions/MailAction.cpp
+ai/playerbot/strategy/values/BudgetValues.cpp
+ai/playerbot/strategy/generic/QuestStrategies.cpp
+ai/playerbot/strategy/actions/QuestAction.cpp
+ai/playerbot/strategy/actions/AcceptQuestAction.cpp
+ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
+ai/playerbot/strategy/actions/DropQuestAction.cpp
+ai/playerbot/strategy/actions/ShareQuestAction.cpp
+ai/playerbot/strategy/actions/QuestRewardActions.cpp

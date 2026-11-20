@@ -4,6 +4,7 @@
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "compat/TbItemPrototype.h"
 #include "host/cmd/TbTestTargetPure.h"
 
 #include "DB2Stores.h"
@@ -14,7 +15,10 @@
 #include "SpellInfo.h"
 #include "SpellMgr.h"
 
+#include <algorithm>
 #include <cstdlib>
+#include <map>
+#include <set>
 
 namespace TortoiseBots
 {
@@ -321,10 +325,86 @@ bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (ok)
             rec.N("slot", unsigned(dest & 255));
         rec.S("why", ok ? std::string() : ResultName(result));
+        AppendItemScanEngine(bot, id, rec);
         reply.Line(rec);
     }
     Rec end("itemscan");
     end.S("bot", bot->GetName()).N("exist", exist).N("canequip", can);
+    reply.End(end);
+    return true;
+}
+
+// ---- `.tb statcensus [#token]` ----
+// One-pass census of ItemStatType ids across all loaded item templates.
+
+bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "statcensus"))
+        return false;
+    if (!args.w.empty())
+        return Fail(handler, args, "statcensus", "unexpected-argument", args.w[0]);
+
+    struct StatStat
+    {
+        uint32 items = 0;
+        int32 minVal = 0;
+        int32 maxVal = 0;
+        uint32 sampleItem = 0;
+        std::string sampleName;
+        int32 sampleVal = 0;
+    };
+
+    std::map<int32, StatStat> byId;
+    uint32 templates = 0;
+    uint32 withStats = 0;
+    for (auto const& [entry, tpl] : sObjectMgr->GetItemTemplateStore())
+    {
+        ++templates;
+        ItemPrototype const* proto = tbcompat::ItemProto(entry);
+        if (!proto)
+            continue;
+        bool any = false;
+        std::set<int32> seenOnItem;
+        for (uint32 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+        {
+            int32 const statVal = proto->ItemStat[i].ItemStatValue;
+            if (statVal == 0)
+                continue;
+            any = true;
+            int32 const statType = int32(proto->ItemStat[i].ItemStatType);
+            StatStat& st = byId[statType];
+            if (seenOnItem.insert(statType).second)
+                ++st.items;
+            if (st.sampleItem == 0)
+            {
+                st.minVal = statVal;
+                st.maxVal = statVal;
+                st.sampleItem = entry;
+                st.sampleName = proto->Name1;
+                st.sampleVal = statVal;
+            }
+            else
+            {
+                st.minVal = std::min(st.minVal, statVal);
+                st.maxVal = std::max(st.maxVal, statVal);
+            }
+        }
+        if (any)
+            ++withStats;
+    }
+
+    Reply reply(handler, args, "statcensus");
+    reply.Begin();
+    for (auto const& [id, st] : byId)
+    {
+        Rec rec("statcensus");
+        rec.N("id", id).N("items", st.items).N("min", st.minVal).N("max", st.maxVal)
+           .N("sample", st.sampleItem).S("samplename", st.sampleName).N("sampleval", st.sampleVal);
+        reply.Line(rec);
+    }
+    Rec end("statcensus");
+    end.N("templates", templates).N("with_stats", withStats).N("stat_ids", byId.size());
     reply.End(end);
     return true;
 }
