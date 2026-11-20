@@ -142,6 +142,12 @@ live. What was proven live: the plan rows load and every unit row matches (193/1
 pulls by the plan's own groups, fights, restarts after a wipe, and stops cleanly.
 
 The server was then stopped, the dump restored (`zstd -dc dumps/wc-20261120T212230Z.sql.zst | mysql`), the previous binary
-put back (its own `bin/worldserver` from before the test), the new plan SQL removed from `sqlsrc`, `etc/worldserver.conf`
-restored, the databases booted once more (the boot-check) and the server stopped. The five test characters (`Mwctank`,
-`Mwcpri`, `Mwcdps`, `Mwcmag`, `Mwcrog`) and their gear went back with the dump.
+put back (its own `bin/worldserver` from before the test: the same sha256 as `bin/worldserver.pre-wc`), the new plan SQL
+removed from `sqlsrc` (0 files left), `etc/worldserver.conf` restored (`MaxCoreStuckTime = 60`), the databases booted once
+more (the boot-check: `READY`, then `DONE`) and the server stopped (no `forever-world2` container). The five test characters
+(`Mwctank`, `Mwcpri`, `Mwcdps`, `Mwcmag`, `Mwcrog`) and their gear went back with the dump.
+
+**Slots:** `FOREVER_SLOT=4` (the brief's slot) was taken by another worker's build while this slice ran (`/tmp/w0a-*`
+builds); the ON/OFF builds were therefore made with the same `forever-builder` image and CMake options in this worker's own
+`~/wc-build-on` / `~/wc-build-off` directories from `src-2` (core 25fc7ca + this worktree), not through `build.sh`'s slot
+lock. The census did run through `vm-census.sh` with slot 4 before that worker took it.
