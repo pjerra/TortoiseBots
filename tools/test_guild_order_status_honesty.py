@@ -90,7 +90,7 @@ class GuildOrderStatusHonestyTest(unittest.TestCase):
 
     def test_carry_is_persisted_with_the_row(self):
         self.assertIn("record.reportedCarry = fields[StoreColumns::ColCarried].GetUInt32();", STORE)
-        self.assertIn("record.bringItems = ParseBringItemsToken(fields[StoreColumns::ColBring].GetCppString());", STORE)
+        self.assertIn("record.bringItems = ParseBringItemsToken(FieldTextW3(fields[StoreColumns::ColBring]));", STORE)
         self.assertIn("`created_at`, `updated_at`, `carried`, `bring`", STORE)
 
     def test_the_stored_carry_is_its_own_column(self):

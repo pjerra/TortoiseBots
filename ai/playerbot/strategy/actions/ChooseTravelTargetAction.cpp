@@ -43,6 +43,7 @@
 #include "Guild/GuildMgr.h"
 #include <iomanip>
 #include <mutex>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -927,7 +928,7 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
         std::string condition = "group or::{following party,need quest objective::{" + std::to_string(dest->GetQuestId()) + "," + std::to_string((uint8)dest->getObjective()) + "}}";
         oldTarget->AddCondition(condition);
         if (Quest const* q = sObjectMgr.GetQuestTemplate(dest->GetQuestId()))
-            sPlayerbotAIConfig.logEvent(ai, "QuestTravelToObjective", q->GetTitle(), std::to_string(dest->GetQuestId()));
+            sPlayerbotAIConfig.logEvent(ai, "QuestTravelToObjective", QuestTitleW3(q), std::to_string(dest->GetQuestId()));
     }
     else if (QuestRelationTravelDestination* dest = dynamic_cast<QuestRelationTravelDestination*>(oldTarget->GetDestination()))
     {
@@ -943,7 +944,7 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
         if (Quest const* q = sObjectMgr.GetQuestTemplate(dest->GetQuestId()))
         {
             std::string eventName = (dest->GetPurpose() == TravelDestinationPurpose::QuestGiver) ? "QuestTravelToGiver" : "QuestTravelToTaker";
-            sPlayerbotAIConfig.logEvent(ai, eventName, q->GetTitle(), std::to_string(dest->GetQuestId()));
+            sPlayerbotAIConfig.logEvent(ai, eventName, QuestTitleW3(q), std::to_string(dest->GetQuestId()));
         }
 
         // Picking the same hand-in taker again while still stuck near it (the
@@ -2226,7 +2227,7 @@ bool RequestTravelTargetAction::Execute(Event& event)
     // own level is outgrown can still field top-tier mobs inside the mob
     // window, which re-picks the old zone forever. Ordinary Grind (floor 0)
     // keeps its wider window.
-    bool const leavingOutgrown = event.GetSource() == "should leave outgrown zone";
+    bool const leavingOutgrown = event.getSource() == "should leave outgrown zone";
     int32 outgrownFloor = 0;
     uint32 outgrownExcludeZone = 0;
     if (leavingOutgrown && actionPurpose == TravelDestinationPurpose::Grind)
@@ -2276,7 +2277,7 @@ bool RequestTravelTargetAction::Execute(Event& event)
 
     AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
     SET_AI_VALUE2(std::string, "manual string", "future travel purpose", getQualifier());
-    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.GetSource());
+    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.getSource());
     SET_AI_VALUE2(int, "manual int", "future travel relevance", relevance * 100);
 
     // Outgrown-zone observability: one line per actual request (not per value
@@ -2284,7 +2285,7 @@ bool RequestTravelTargetAction::Execute(Event& event)
     // ValueTrigger::Check emits the bare value name (Trigger::Check builds the
     // event from getName(), which ValueTrigger sets to its qualifier), so the
     // source here is "should leave outgrown zone", never "val::...".
-    if (event.GetSource() == "should leave outgrown zone")
+    if (event.getSource() == "should leave outgrown zone")
     {
         std::string reason = WorldPosition(bot).HasAreaFlag(AREA_FLAG_CAPITAL) ? "capital" : "outgrown";
         sPlayerbotAIConfig.logEvent(ai, "LeaveOutgrownZone", WorldPosition(bot).GetAreaName(true, true), reason);
@@ -3283,7 +3284,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
         travelName == "guild order" ? orderCondition :
         travelName == "order focus" ? "should travel named::order focus" :
         travelName == "order vendor" ? "should travel named::order vendor" :
-        event.GetSource());
+        event.getSource());
     SET_AI_VALUE2(int, "manual int", "future travel relevance", relevance * 100);
 
     return true;
@@ -3669,7 +3670,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
 
     AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
     SET_AI_VALUE2(std::string, "manual string", "future travel purpose", "quest");
-    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.GetSource());
+    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.getSource());
     SET_AI_VALUE2(int, "manual int", "future travel relevance", relevance * 100);
 
     return true;

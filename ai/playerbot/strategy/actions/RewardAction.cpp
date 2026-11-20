@@ -3,6 +3,7 @@
 #include "RewardAction.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -68,7 +69,7 @@ bool RewardAction::Reward(Player* requester, uint32 itemId, Object* questGiver)
         {
             for (uint8 rewardIdx=0; rewardIdx < pQuest->GetRewChoiceItemsCount(); ++rewardIdx)
             {
-                ItemPrototype const * const pRewardItem = GetItemProtoByIdCompat(pQuest->RewChoiceItemId[rewardIdx]);
+                ItemPrototype const * const pRewardItem = GetItemProtoByIdCompat(QuestRewChoiceItemIdsW3(pQuest)[rewardIdx]);
                 if (itemId == pRewardItem->ItemId)
                 {
                     bot->RewardQuest(pQuest, rewardIdx, questGiver ? ToWorldObject(questGiver) : nullptr, false);

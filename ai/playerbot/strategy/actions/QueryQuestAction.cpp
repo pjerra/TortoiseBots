@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "QueryQuestAction.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -24,7 +25,7 @@ bool QueryQuestAction::Execute(Event& event)
             if (!quest)
                 continue;
 
-            if (text.find(quest->GetTitle()) != std::string::npos)
+            if (text.find(QuestTitleW3(quest)) != std::string::npos)
             {
                 questId = quest->GetQuestId();
                 break;

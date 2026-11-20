@@ -2,6 +2,7 @@
 #include "BossStandMgr.h"
 
 #include <memory>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -16,7 +17,7 @@ std::uint32_t ai::ReadBossStandRows(BossStandTable& table)
 {
     uint32 skipped = 0;
     // The core's Query hands over a raw QueryResult* the caller frees (src/shared/Database/Database.h).
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(
+    auto result = QueryGuardCompat(WorldDatabase.Query(
         "SELECT `map`, `boss_entry`, `anchor`, `anchor_x`, `anchor_y`, `anchor_r`, `role`, `window_spell`, `aura`, `side`, "
         "`seq`, `x`, `y`, `z`, `dx`, `dy`, `slots`, `hold_ms`, `release_anchor`, `window_signal` FROM `ai_boss_stand`"));
     if (result)
@@ -31,7 +32,7 @@ std::uint32_t ai::ReadBossStandRows(BossStandTable& table)
             row.anchorX = fields[3].GetFloat();
             row.anchorY = fields[4].GetFloat();
             row.anchorR = fields[5].GetFloat();
-            row.role = ParseStandRole(fields[6].GetCppString());
+            row.role = ParseStandRole(FieldTextW3(fields[6]));
             row.windowSpell = fields[7].GetUInt32();
             row.aura = fields[8].GetUInt32();
             row.side = fields[9].GetUInt8();
@@ -44,13 +45,13 @@ std::uint32_t ai::ReadBossStandRows(BossStandTable& table)
             row.slots = fields[16].GetUInt8();
             row.holdMs = fields[17].GetUInt32();
             row.releaseAnchor = fields[18].GetUInt32();
-            row.windowSignal = ParseStandSignal(fields[19].GetCppString());
+            row.windowSignal = ParseStandSignal(FieldTextW3(fields[19]));
             if (!table.Add(row))
             {
                 ++skipped;
                 sLog.outError("ai_boss_stand: map %u boss %u anchor %u role '%s' side %u seq %u skipped (unknown role, a zero "
                     "map or boss, no anchor radius, a side above 1, slots outside 1-%u, a release anchor equal to the anchor, a hold_ms outside 1000-15000, an unknown window_signal or a stopped_no_target one without an aura and a window spell, an anchor id with two places, or a "
-                    "second row of the key)", row.map, row.bossEntry, row.anchor, fields[6].GetCppString().c_str(),
+                    "second row of the key)", row.map, row.bossEntry, row.anchor, FieldTextW3(fields[6]).c_str(),
                     uint32(row.side), uint32(row.seq), uint32(kBossStandMaxSlots));
             }
         } while (result->NextRow());

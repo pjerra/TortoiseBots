@@ -6,6 +6,7 @@
 #include "Log.h"
 
 #include <cstring>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -31,7 +32,7 @@ void HireGearCache::Load()
             Field* fields = result->Fetch();
             HireGearRow row;
             row.classId = fields[0].GetUInt8();
-            std::string spec = fields[1].GetCppString();
+            std::string spec = FieldTextW3(fields[1]);
             std::strncpy(row.spec, spec.c_str(), sizeof(row.spec) - 1);
             row.spec[sizeof(row.spec) - 1] = '\0';
             row.race = fields[2].GetUInt8();

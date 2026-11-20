@@ -38,6 +38,7 @@
   const BOTS_VIEW_STORAGE_KEY = 'tortoisebots.dashboard.botsview';
 
   const state = {
+    core: null,       // GET /api/v1/core: which tabs the game core feeds
     activeTab: 'overview',
     currentZoneId: 12,
     mapView: 'world',
@@ -1072,10 +1073,34 @@
   // The Commanders tab belongs to the remote commander: shown only while the server runs AiPlayerbot.RemoteCommander = 1.
   function applyCommanderTabFlag() {
     const bots = state.serverInfo && state.serverInfo.bots;
-    const on = !!bots && bots.remote_commander === '1';
+    // ForeverCore's module has no remote commander switch: its runs bind a commander of their own, so the tab is always there.
+    const on = isForever || (!!bots && bots.remote_commander === '1');
     const item = document.querySelector('.menu-item[data-tab="commanders"]');
     if (item) item.style.display = on ? '' : 'none';
     if (!on && state.activeTab === 'commanders') go({ tab: 'overview' }, { replace: true });
+  }
+
+  // What the game core feeds (GET /api/v1/core): the Raids, Raid coverage and Commanders tabs say so when it does not. The text comes from
+  // CmdView.coreNotice; an older daemon without the route, or the Turtle core, shows no notice.
+  function applyCoreNotices() {
+    if (typeof CmdView === 'undefined' || !CmdView.coreNotice) return;
+    [['raids', 'core-note-raids'], ['coverage', 'core-note-coverage'], ['commanders', 'core-note-commanders']].forEach(([tab, id]) => {
+      const box = document.getElementById(id);
+      if (!box) return;
+      const text = CmdView.coreNotice(state.core, tab);
+      const p = box.querySelector('p');
+      if (p) p.textContent = text;
+      box.style.display = text ? '' : 'none';
+    });
+    const how = document.getElementById('cmd-empty-how');
+    const howText = CmdView.coreNotice(state.core, 'commanders-empty');
+    if (how && howText) how.textContent = howText;
+  }
+
+  function loadCore() {
+    fetch('/api/v1/core').then(r => (r.ok ? r.json() : null)).then(core => {
+      if (core && core.ported) { state.core = core; applyCoreNotices(); }
+    }).catch(() => {});
   }
 
   function showTab(tab) {
@@ -14716,6 +14741,7 @@
   setInterval(fetchCommanders, 30000); // goes through the refresh gate like the stream's reports
   setInterval(refreshGate.guard(expireCommanders), 3000); // a paused page keeps what it froze
   setInterval(refreshGate.guard(fetchRoster), 60000);
+  loadCore();
   initWebSocket();
   requestAnimationFrame(cmdLiveFrame);
 

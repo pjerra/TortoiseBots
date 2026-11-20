@@ -38,7 +38,7 @@ bool GoAction::Execute(Event& event)
     {
         float x = bot->getPositionX();
         float y = bot->getPositionY();
-        Map2ZoneCoordinates(x, y, bot->getZoneId());
+        Map2ZoneCoordinates(x, y, bot->GetZoneId());
         std::ostringstream out;
         out << "I am at " << x << "," << y;
         ai->TellPlayer(requester, out.str());
@@ -774,7 +774,7 @@ bool GoAction::MoveToMapGps(std::string& param, Player* requester)
         float x = atof(coords[0].c_str());
         float y = atof(coords[1].c_str());
 
-        Zone2MapCoordinates(x, y, bot->getZoneId());
+        Zone2MapCoordinates(x, y, bot->GetZoneId());
 
         Map* map = bot->GetMap();
         float z = bot->getPositionZ();
@@ -805,7 +805,7 @@ bool GoAction::MoveToMapGps(std::string& param, Player* requester)
         }
 
         float x1 = x, y1 = y;
-        Map2ZoneCoordinates(x1, y1, bot->getZoneId());
+        Map2ZoneCoordinates(x1, y1, bot->GetZoneId());
         std::ostringstream out; out << "Moving to " << x1 << "," << y1;
         ai->TellPlayerNoFacing(requester, out.str());
         return MoveNear(bot->GetMapId(), x, y, z + 0.5f, ai->GetRange("follow"));

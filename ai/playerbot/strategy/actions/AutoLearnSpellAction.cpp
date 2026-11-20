@@ -10,6 +10,7 @@
 #include <Mail/Mail.h>
 #include <map>
 #include <vector>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -384,28 +385,28 @@ void AutoLearnSpellAction::GetClassQuestItem(Quest const* quest, std::ostringstr
         for (uint32 i = 0; i < quest->GetRewItemsCount(); i++)
         {
             ItemPosCountVec itemVec;
-            ItemPrototype const* itemP = GetItemProtoByIdCompat(quest->RewItemId[i]);
-            InventoryResult result = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, itemVec, itemP->ItemId, quest->RewItemCount[i]);
+            ItemPrototype const* itemP = GetItemProtoByIdCompat(QuestRewItemIdsW3(quest)[i]);
+            InventoryResult result = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, itemVec, itemP->ItemId, QuestRewItemCountsW3(quest)[i]);
             if (result == EQUIP_ERR_OK)
             {
-                if (quest->RewItemId[i] != 8432 && // Stops Rogues from getting a quest reward item that is a quest item itself.
-                    quest->RewItemId[i] != 8095)   // Stops Rogues from getting a quest reward item that is a quest item itself.
+                if (QuestRewItemIdsW3(quest)[i] != 8432 && // Stops Rogues from getting a quest reward item that is a quest item itself.
+                    QuestRewItemIdsW3(quest)[i] != 8095)   // Stops Rogues from getting a quest reward item that is a quest item itself.
                 {
                     ItemPosCountVec itemVec;
-                    ItemPrototype const* itemP = GetItemProtoByIdCompat(quest->RewItemId[i]);
-                    InventoryResult result = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, itemVec, itemP->ItemId, quest->RewItemCount[i]);
+                    ItemPrototype const* itemP = GetItemProtoByIdCompat(QuestRewItemIdsW3(quest)[i]);
+                    InventoryResult result = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, itemVec, itemP->ItemId, QuestRewItemCountsW3(quest)[i]);
                     if (result == EQUIP_ERR_OK)
                     {
-                        bot->StoreNewItemInInventorySlot(itemP->ItemId, quest->RewItemCount[i]);
-                        *out << "Got " << chat->formatItem(itemP, 1, 1) << " from " << quest->GetTitle();
+                        bot->StoreNewItemInInventorySlot(itemP->ItemId, QuestRewItemCountsW3(quest)[i]);
+                        *out << "Got " << chat->formatItem(itemP, 1, 1) << " from " << QuestTitleW3(quest);
                     }
                     else if (result == EQUIP_ERR_INVENTORY_FULL)
                     {
-                        MailDraft draft("Item(s) from quest reward", quest->GetTitle());
-                        Item* item = Item::CreateItem(itemP->ItemId, quest->RewItemCount[i]);
+                        MailDraft draft("Item(s) from quest reward", QuestTitleW3(quest));
+                        Item* item = Item::CreateItem(itemP->ItemId, QuestRewItemCountsW3(quest)[i]);
                         draft.AddItem(item);
                         draft.SendMailTo(MailReceiver(bot), MailSender(bot));
-                        *out << "Could not add item " << chat->formatItem(itemP) << " from " << quest->GetTitle() << ". " << bot->GetName() << "'s inventory is full.";
+                        *out << "Could not add item " << chat->formatItem(itemP) << " from " << QuestTitleW3(quest) << ". " << bot->GetName() << "'s inventory is full.";
                     }
                 }
             }

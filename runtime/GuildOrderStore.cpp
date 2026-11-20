@@ -57,6 +57,7 @@
 #include <unordered_set>
 #include <vector>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -289,7 +290,7 @@ public:
         std::string select = "SELECT ";
         select += StoreColumns::SelectList();
         select += " FROM `tortoise_bots_guild_order`";
-        std::unique_ptr<QueryResult> result(CharacterDatabase.Query(select.c_str()));
+        auto result = QueryGuardCompat(CharacterDatabase.Query(select.c_str()));
         if (result)
         {
             do
@@ -301,13 +302,13 @@ public:
                 record.giverGuidLow = fields[StoreColumns::ColGiverGuid].GetUInt32();
                 record.parentBotGuidLow = fields[StoreColumns::ColParentBot].GetUInt32();
                 record.rootGiverGuidLow = fields[StoreColumns::ColRootGiver].GetUInt32();
-                ParseType(fields[StoreColumns::ColType].GetCppString(), record.type);
+                ParseType(FieldTextW3(fields[StoreColumns::ColType]), record.type);
                 record.itemId = fields[StoreColumns::ColItemId].GetUInt32();
                 record.amount = fields[StoreColumns::ColAmount].GetUInt32();
                 record.hours = fields[StoreColumns::ColHours].GetUInt32();
                 record.delivered = fields[StoreColumns::ColDelivered].GetUInt32();
-                ParseState(fields[StoreColumns::ColState].GetCppString(), record.state);
-                ParseReason(fields[StoreColumns::ColReason].GetCppString(), record.reason);
+                ParseState(FieldTextW3(fields[StoreColumns::ColState]), record.state);
+                ParseReason(FieldTextW3(fields[StoreColumns::ColReason]), record.reason);
                 record.farmZoneId = fields[StoreColumns::ColFarmZone].GetUInt32();
                 record.farmChance = static_cast<uint8_t>(fields[StoreColumns::ColFarmChance].GetUInt32());
                 record.farmItemId = fields[StoreColumns::ColFarmItem].GetUInt32();
@@ -324,22 +325,22 @@ public:
                 record.guildGoldWithdrawn = fields[StoreColumns::ColGuildGoldWithdrawn].GetUInt32();
                 record.guildGoldHeld = fields[StoreColumns::ColGuildGoldHeld].GetUInt32();
                 record.cancelled = fields[StoreColumns::ColCancelled].GetUInt32() != 0;
-                ParseSupplyStep(fields[StoreColumns::ColSupplyStep].GetCppString(), record.supplyStep);
-                ParseSupplyStep(fields[StoreColumns::ColSupplyReturnStep].GetCppString(), record.supplyReturnStep);
+                ParseSupplyStep(FieldTextW3(fields[StoreColumns::ColSupplyStep]), record.supplyStep);
+                ParseSupplyStep(FieldTextW3(fields[StoreColumns::ColSupplyReturnStep]), record.supplyReturnStep);
                 record.supplyItemId = fields[StoreColumns::ColSupplyItem].GetUInt32();
                 record.supplyCount = fields[StoreColumns::ColSupplyCount].GetUInt32();
                 record.supplyGoldCount = fields[StoreColumns::ColSupplyGoldCount].GetUInt32();
-                record.needItems = ParseNeedItems(fields[StoreColumns::ColNeedItems].GetCppString());
+                record.needItems = ParseNeedItems(FieldTextW3(fields[StoreColumns::ColNeedItems]));
                 record.needWhispered = fields[StoreColumns::ColNeedWhispered].GetUInt32() != 0;
-                record.lastNeedWhisper = fields[StoreColumns::ColLastNeedWhisper].GetCppString();
+                record.lastNeedWhisper = FieldTextW3(fields[StoreColumns::ColLastNeedWhisper]);
                 record.needBankDenied = fields[StoreColumns::ColNeedBankDenied].GetUInt32() != 0;
                 record.stockTarget = fields[StoreColumns::ColStockTarget].GetUInt32();
                 record.lastBankCheckMs = fields[StoreColumns::ColLastBankCheck].GetUInt32();
                 record.createdAt = fields[StoreColumns::ColCreatedAt].GetUInt64();
                 record.updatedAt = fields[StoreColumns::ColUpdatedAt].GetUInt64();
                 record.reportedCarry = fields[StoreColumns::ColCarried].GetUInt32();
-                record.bringItems = ParseBringItemsToken(fields[StoreColumns::ColBring].GetCppString());
-                record.given = ParseGivenItems(fields[StoreColumns::ColGiven].GetCppString());
+                record.bringItems = ParseBringItemsToken(FieldTextW3(fields[StoreColumns::ColBring]));
+                record.given = ParseGivenItems(FieldTextW3(fields[StoreColumns::ColGiven]));
                 if (record.hours != kUnlimitedOrderHours &&
                     (record.hours < kMinOrderHours || record.hours > kMaxOrderHours))
                     record.hours = kDefaultOrderHours;
@@ -364,7 +365,7 @@ public:
         // listing may land long after the order row is gone, and the value
         // still belongs to the guild until the bank trip pays it back.
         m_relist.clear();
-        std::unique_ptr<QueryResult> relists(CharacterDatabase.Query(
+        auto relists = QueryGuardCompat(CharacterDatabase.Query(
             "SELECT `bot_guid`, `seq`, `guild_id`, `item_id`, `count`, `unit_price`, `bid`, "
             "`buyout`, `deposit`, `posted_at`, `expires_at`, `state`, `claim_mail`, `held_gold`, "
             "`held_count` FROM `tortoise_bots_guild_relist`"));
@@ -401,7 +402,7 @@ public:
         // disenchanting survives a restart and is re-queued instead of being
         // eaten by the maintenance disenchant.
         m_disenchant.clear();
-        std::unique_ptr<QueryResult> queued(CharacterDatabase.Query(
+        auto queued = QueryGuardCompat(CharacterDatabase.Query(
             "SELECT `bot_guid`, `sender_guid`, `item_guid`, `item_entry`, `item_name`, "
             "`pending`, `results`, `created_at` FROM `tortoise_bots_guild_disenchant`"));
         size_t queuedCount = 0;
@@ -415,9 +416,9 @@ public:
                 entry.senderGuidLow = fields[1].GetUInt32();
                 entry.itemGuidLow = fields[2].GetUInt32();
                 entry.itemId = fields[3].GetUInt32();
-                entry.itemName = fields[4].GetCppString();
+                entry.itemName = FieldTextW3(fields[4]);
                 entry.pendingResults = fields[5].GetUInt32() != 0;
-                entry.results = fields[6].GetCppString();
+                entry.results = FieldTextW3(fields[6]);
                 if (!entry.botGuidLow || !entry.senderGuidLow || !entry.itemId)
                     continue;
                 m_disenchant[entry.botGuidLow].push_back(entry);
@@ -3165,7 +3166,7 @@ uint32_t BankItemCount(uint32_t guildId, uint32_t itemId)
 {
     if (!guildId || !itemId || !sGuildMgr.GetGuildById(guildId))
         return 0;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+    auto result = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT SUM(`count`) FROM `guild_bank` WHERE `guildid` = '%u' AND `isInferno` = '0' AND "
         "`item_template` = '%u'",
         guildId, itemId));
@@ -3341,7 +3342,7 @@ bool PlaceSubOrders(uint32_t nowMs)
             std::vector<uint32_t> members;
             // Ordered: the scan resumes at a guid, so an unordered result
             // would move the resume point between attempts and skip members.
-            std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+            auto result = QueryGuardCompat(CharacterPQueryCompat(
                 "SELECT `guid` FROM `guild_member` WHERE `guildid` = '%u' ORDER BY `guid`",
                 parent->guildId));
             if (result)

@@ -35,6 +35,7 @@
 #include <set>
 #include <string>
 #include <unordered_set>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -499,7 +500,7 @@ void LftBotFillService::AcceptPendingOffers()
         // World-thread only generic core API (PR #416). Reuses native offer accept.
         bool ok = sLFTMgr.AcceptOffer(guid);
         if (ok)
-            TB_LOG_DETAIL("TortoiseBots: LFT fill bot %s (%s) accepted offer (pending %u)", bot->GetName(), guid.GetString().c_str(), (uint32)m_pending.size());
+            TB_LOG_DETAIL("TortoiseBots: LFT fill bot %s (%s) accepted offer (pending %u)", bot->GetName(), GuidStringW3(guid).c_str(), (uint32)m_pending.size());
     }
 }
 
@@ -966,7 +967,7 @@ void LftBotFillService::Update(uint32_t diff)
                 ++filledThisTick;
                 const char* roleStr = (needRole == LFT_ROLE_TANK ? "tank" : (needRole == LFT_ROLE_HEALER ? "heal" : "dps"));
                 TB_LOG_DETAIL("TortoiseBots: LFT fill queued bot %s (%s) level %u team %u %s for instance %s role %s (authoritative range %u-%u, pending %u)",
-                    chosen->GetName(), chosen->GetObjectGuid().GetString().c_str(), chosen->GetLevel(), chosen->GetTeam(),
+                    chosen->GetName(), GuidStringW3(chosen->GetObjectGuid()).c_str(), chosen->GetLevel(), chosen->GetTeam(),
                     chosen->IsHardcore() ? "hardcore" : "softcore", instance.c_str(), roleStr, low, high, (uint32)m_pending.size());
             }
         }

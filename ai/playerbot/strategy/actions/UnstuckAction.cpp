@@ -232,7 +232,7 @@ static constexpr float UNSTUCK_LOG_PROGRESS = 50.0f;
 
 bool UnstuckAction::Execute(Event& event)
 {
-    std::string source = event.GetSource();
+    std::string source = event.getSource();
     Player* bot = ai->GetBot();
     Player* master = ai->GetMaster();
 

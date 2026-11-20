@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <cmath>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -365,7 +366,7 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     if (!ahEntry)
         return PostResult::Failed;
 
-    AuctionHouseObject* ahObject = sAuctionMgr.GetAuctionsMap(ahEntry);
+    AuctionHouseObject* ahObject = AuctionMgrW3().GetAuctionsMap(ahEntry);
     if (!ahObject)
         return PostResult::Failed;
 
@@ -515,7 +516,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
     if (!proto)
         return false;
 
-    Item* aItem = sAuctionMgr.GetAItem(auction->itemGuidLow);
+    Item* aItem = AuctionMgrW3().GetAItem(auction->itemGuidLow);
     uint32 count = aItem ? aItem->GetCount() : 1;
     if (!count) count = 1;
 
@@ -571,7 +572,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
         AuctionHouseEntry const* nearbyEntry = AuctionHouseMgr::GetAuctionHouseEntry(nearby);
         if (!nearbyEntry)
             continue;
-        AuctionHouseObject* nearbyHouse = sAuctionMgr.GetAuctionsMap(nearbyEntry);
+        AuctionHouseObject* nearbyHouse = AuctionMgrW3().GetAuctionsMap(nearbyEntry);
         if (!nearbyHouse || nearbyHouse != ahObject)
             continue;
         buyer = bot;
@@ -696,7 +697,7 @@ void AhMarketService::StepBuy()
         return;
     }
 
-    AuctionHouseObject* ahObject = sAuctionMgr.GetAuctionsMap(ahEntry);
+    AuctionHouseObject* ahObject = AuctionMgrW3().GetAuctionsMap(ahEntry);
     if (!ahObject || !ahObject->GetAuctions())
     {
         FinishPass();

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -57,7 +58,7 @@ void RandomBotAccountRegistry::Clear()
 
 bool RandomBotAccountRegistry::QueryCount(char const* sql, uint32_t& out) const
 {
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(sql));
+    auto result = QueryGuardCompat(CharacterPQueryCompat(sql));
     if (!result)
         return false;
     out = result->Fetch()[0].GetUInt32();
@@ -75,7 +76,7 @@ bool RandomBotAccountRegistry::LoadAccountsFromDatabase(std::vector<PoolAccount>
     if (!total)
         return true;
 
-    std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+    auto rows = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `account_id`, `username_at_registration`, `registration_source` "
         "FROM `tortoise_bots_pool_account` ORDER BY `account_id`"));
     if (!rows)
@@ -89,8 +90,8 @@ bool RandomBotAccountRegistry::LoadAccountsFromDatabase(std::vector<PoolAccount>
         Field* fields = rows->Fetch();
         PoolAccount account;
         account.accountId = fields[0].GetUInt32();
-        account.username = fields[1].GetCppString();
-        std::string source = fields[2].GetCppString();
+        account.username = FieldTextW3(fields[1]);
+        std::string source = FieldTextW3(fields[2]);
         if (source == "hire")
             account.source = RegistrationSource::Hire;
         else if (source == "adopted")
@@ -111,8 +112,7 @@ bool RandomBotAccountRegistry::LoadAccountsFromDatabase(std::vector<PoolAccount>
 
 bool RandomBotAccountRegistry::ValidateAgainstLoginDatabase(PoolAccount const& account, std::string& error) const
 {
-    std::unique_ptr<QueryResult> row(LoginDatabase.PQuery(
-        "SELECT `username` FROM `account` WHERE `id` = '%u'", account.accountId));
+    auto row = QueryGuardCompat(DbPQueryW3(LoginDatabase, "SELECT `username` FROM `account` WHERE `id` = '%u'", account.accountId));
     if (!row)
     {
         error = "registered pool account " + std::to_string(account.accountId) +
@@ -208,7 +208,7 @@ bool RandomBotAccountRegistry::CountManagedCharacters(uint32_t& out, std::string
         return true;
 
     std::string accounts = AccountIdList();
-    std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+    auto count = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT COUNT(*) FROM `characters` WHERE `deleteDate` IS NULL AND `account` IN (%s) "
         "AND `guid` NOT IN (SELECT `bot_guid` FROM `tortoise_bots_claimed`) "
         "AND `guid` NOT IN (SELECT s.`friend` FROM `character_social` s "
@@ -243,7 +243,7 @@ RegisterResult RandomBotAccountRegistry::RegisterCreatedAccount(uint32_t account
 
     // Read the current row first: re-registering the same account is idempotent
     // and must not be reported as a database error.
-    std::unique_ptr<QueryResult> existing(CharacterDatabase.PQuery(
+    auto existing = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `username_at_registration` FROM `tortoise_bots_pool_account` WHERE `account_id` = '%u'",
         accountId));
     if (existing)
@@ -285,7 +285,7 @@ RegisterResult RandomBotAccountRegistry::RegisterCreatedAccount(uint32_t account
 
     // Read the row back before the caller creates anything on the account: a
     // registry entry that cannot be read is not a registry entry.
-    std::unique_ptr<QueryResult> written(CharacterDatabase.PQuery(
+    auto written = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `username_at_registration` FROM `tortoise_bots_pool_account` WHERE `account_id` = '%u'",
         accountId));
     if (!written)
@@ -325,7 +325,7 @@ bool RandomBotAccountRegistry::DiscoverPrefixMatches(std::vector<LegacyAccount>&
     // The prefix is matched in code, not by a SQL LIKE: the configured value is
     // never interpolated into a pattern, and no wildcard in it can widen the
     // result set.
-    std::unique_ptr<QueryResult> probe(LoginDatabase.PQuery("SELECT COUNT(*) FROM `account`"));
+    auto probe = QueryGuardCompat(DbPQueryW3(LoginDatabase, "SELECT COUNT(*) FROM `account`"));
     uint32_t accountTotal = 0;
     if (probe)
         accountTotal = probe->Fetch()[0].GetUInt32();
@@ -340,7 +340,7 @@ bool RandomBotAccountRegistry::DiscoverPrefixMatches(std::vector<LegacyAccount>&
             break;
     }
 
-    std::unique_ptr<QueryResult> rows(LoginDatabase.PQuery("SELECT `id`, `username` FROM `account` ORDER BY `id`"));
+    auto rows = QueryGuardCompat(DbPQueryW3(LoginDatabase, "SELECT `id`, `username` FROM `account` ORDER BY `id`"));
     if (!rows)
     {
         error = "the login database did not answer the account scan";
@@ -352,7 +352,7 @@ bool RandomBotAccountRegistry::DiscoverPrefixMatches(std::vector<LegacyAccount>&
         Field* fields = rows->Fetch();
         LegacyAccount account;
         account.accountId = fields[0].GetUInt32();
-        account.username = fields[1].GetCppString();
+        account.username = FieldTextW3(fields[1]);
         if (!account.accountId || !AccountUsernameHasPrefix(account.username, prefix))
             continue;
         if (AhBotSellerAccount::Instance().IsSellerAccount(account.accountId) ||
@@ -363,7 +363,7 @@ bool RandomBotAccountRegistry::DiscoverPrefixMatches(std::vector<LegacyAccount>&
 
     for (LegacyAccount& account : out)
     {
-        std::unique_ptr<QueryResult> count(CharacterDatabase.PQuery(
+        auto count = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT COUNT(*) FROM `characters` WHERE `account` = '%u' AND `deleteDate` IS NULL",
             account.accountId));
         if (!count)
