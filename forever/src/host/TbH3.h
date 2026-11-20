@@ -14,6 +14,7 @@
 #include "ChatCommand.h"
 #include "Define.h"
 #include "ObjectGuid.h"
+#include <cctype>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -29,7 +30,7 @@ namespace h3
 {
 // ---- command handlers (rows of the `.tb` table in TbScripts.cpp) ----
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb order <bot|party [leader]> <verb> [arg] [#token]
-bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role <bot|party [leader]> tank|healer|dps|none [#token]
+bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role [<bot|character|party [leader]>] tank|healer|dps|none [#token]
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb master <bot|party [leader]> <commander|none> [#token]
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb party <leader> | .tb party <leader> <member>... [#token]
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb state <bot|party [leader]> [#token]
@@ -140,7 +141,15 @@ bool Fail(ChatHandler* handler, Words const& args, std::string_view cmd, std::st
 // True when the engine is built in; otherwise says `error ... code=engine-not-built` and returns false.
 bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd);
 
-std::string Lower(std::string_view text);
+// Inline here, not in TbH3.cpp: TbScripts.cpp is compiled in both builds and lowercases the `.tb power` words, while the option-OFF build
+// has no TbH3.cpp (TbH3Off.cpp stands in for it), so the definition has to live where both builds see it.
+inline std::string Lower(std::string_view text)
+{
+    std::string out(text);
+    for (char& c : out)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+}
 std::string GuidText(ObjectGuid guid);                 // 32 hex digits: GetRawValue(1) then GetRawValue(0), "" for the empty guid
 bool ParseGuidText(std::string_view text, ObjectGuid& out);
 
@@ -153,6 +162,10 @@ bool MemberKnowsOocResurrection(Player* member);      // N3: the party member kn
 // character is never taken over (from the console only host bots qualify). Used by `.tb party`, `.tb master`, `.tb login <bot> <master>`, `.tb group`.
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character);                      // the in-world player the bot's host master guid names, or null
 
+// TB-1: the character a test-kit command changes: a host bot, or the sender's own character; another real player's character is refused. An empty `name`
+// means the sender (the no-name form of `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt`, `.tb power`). On a refusal `code`/`detail` say why and it returns null.
+Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail);
+
 // "who the command is about": one bot by name, or `party [leader]` (every host bot of that party).
 struct Address
 {
@@ -164,8 +177,9 @@ struct Address
     bool ok() const { return code.empty(); }
 };
 // Reads the address at words[pos] and advances pos past it. `party` takes the next word as the leader's name when `leaderFollows` says
-// so (the caller knows whether the word after `party` could be the leader or is already the next argument).
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows);
+// so (the caller knows whether the word after `party` could be the leader or is already the next argument). `allowSender` also accepts the
+// sender's own character as a single name (`MayLeadBots`); the other commands keep bots only.
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender = false);
 
 // Every in-world host bot (for `party` with no leader).
 std::vector<Player*> AllHostBots();

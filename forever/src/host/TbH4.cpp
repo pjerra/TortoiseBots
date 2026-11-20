@@ -483,7 +483,7 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return true;
     }
 
-    // ---- reset: the core's rules (HandleResetInstancesOpcode MiscHandler.cpp:985-1003, Group::ResetInstances Group.cpp:1348, InstanceMap::Reset Map.cpp:3182) ----
+    // ---- reset: the core's rules (HandleResetInstancesOpcode MiscHandler.cpp:985-1003, Group::ResetInstances Group.cpp:1348, InstanceMap::Reset Map.cpp:3231) ----
     if (!IsHostBot(leader))
         return Fail(handler, args, "instance", "not-a-bot", args.w[0] + " is not a logged-in host bot");
     if (Map* here = leader->GetMap(); here && here->Instanceable())      // the opcode returns silently for a leader inside an instance
@@ -505,7 +505,7 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "instance", "target-not-found", "the party owns no instance");
     for (InstanceMap* instance : owned)
     {
-        if (instance->HavePlayers())      // a bot, a body, a GM: InstanceMap::Reset answers NotEmpty and notifies the players (Map.cpp:3199-3209)
+        if (instance->HavePlayers())      // a bot, a body, a GM: InstanceMap::Reset answers NotEmpty and notifies the players (Map.cpp:3248-3258)
             return Fail(handler, args, "instance", "not-empty", Trinity::StringFormat("someone is still on map {} instance {} (a bot, a body or a GM): the core would not reset it", instance->GetId(), instance->GetInstanceId()));
         if (InstanceLock const* lock = instance->GetInstanceLock(); lock && !lock->IsNew())
             return Fail(handler, args, "instance", "locked", Trinity::StringFormat("map {} instance {} has a lock (a boss was killed): the core cannot reset it", instance->GetId(), instance->GetInstanceId()));
@@ -570,10 +570,10 @@ bool TeleportNextTo(Player* source, Player* dest, bool revive, Rec& rec)
     {
         if (source->GetMapId() == dest->GetMapId() && source->GetInstanceId() != instanceId)
             return refuse("already-on-map", source->GetName() + " stands in another instance of that map: it must leave it first (the core aborts an entry check for a player on that map)");
-        // The core's group bind rule: a GM may join any instance (InstanceMap::CannotEnter, Map.cpp:2972-2973); anyone else only the instance its own group owns.
+        // The core's group bind rule: a GM may join any instance (InstanceMap::CannotEnter, Map.cpp:3021-3022); anyone else only the instance its own group owns.
         if (!source->IsGameMaster() && (!source->GetGroup() || source->GetGroup() != dest->GetGroup()))
             return refuse("not-in-group", source->GetName() + " is neither a GM nor in the party of " + dest->GetName() + ": the core would refuse it the instance");
-        // N8 (package N): being in the same party is not enough: the instance must be the one that party OWNS (Map.cpp:2972-2973, the owning-group test), or the core
+        // N8 (package N): being in the same party is not enough: the instance must be the one that party OWNS (Map.cpp:3021-3022, the owning-group test), or the core
         // refuses at the worldport ack and sends the bot HOME (which does more than asked). Read with the public InstanceMap::GetOwningGroup.
         if (!source->IsGameMaster())
         {
@@ -815,8 +815,8 @@ bool HandleKill(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 }
 
 // ---- `.tb gm <character> on|off` ----
-// Player::SetGameMaster (Player.h:1335): a GM passes InstanceMap::CannotEnter before the cap and owning-group tests (Map.cpp:2972-2973), takes no seat in an instance
-// and is valid in every instance (Player::CheckInstanceValidity, Player.cpp:21493). The commander of a party is a GM that stands outside the party.
+// Player::SetGameMaster (Player.h:1335): a GM passes InstanceMap::CannotEnter before the cap and owning-group tests (Map.cpp:3021-3022), takes no seat in an instance
+// and is valid in every instance (Player::CheckInstanceValidity, Player.cpp:21503). The commander of a party is a GM that stands outside the party.
 bool HandleGm(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
     Words const args = Split(tail);

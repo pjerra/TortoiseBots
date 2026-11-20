@@ -6,11 +6,11 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
 ## Client side, step by step
 
 1. **Talk to the NPC**. `CMSG_TALK_TO_GOSSIP` (`Opcodes.cpp:1116`) → `HandleGossipHelloOpcode`
-   (`Handlers/NPCHandler.cpp:161`) → `Player::PrepareGossipMenu` (`Entities/Player/Player.cpp:15015`).
+   (`Handlers/NPCHandler.cpp:161`) → `Player::PrepareGossipMenu` (`Entities/Player/Player.cpp:15025`).
    A trainer creature gets the extra "Train me." option when its class mask matches
-   (`Player.cpp:15163`); the class gate itself is evaluated at `Player.cpp:15072`.
+   (`Player.cpp:15173`); the class gate itself is evaluated at `Player.cpp:15082`.
 2. **Pick "Train me."** → `HandleGossipSelectOptionOpcode` (`NPCHandler.cpp:199`) →
-   `Player::OnGossipSelect` (`Player.cpp:15207`), case `GossipOptionNpc::Trainer` at `Player.cpp:15305`,
+   `Player::OnGossipSelect` (`Player.cpp:15217`), case `GossipOptionNpc::Trainer` at `Player.cpp:15315`,
    which resolves the trainer id (gossip option first, creature trainer as fallback) and calls
    `WorldSession::SendTrainerList` (`NPCHandler.cpp:112`).
    A client that opens the window directly uses `CMSG_TRAINER_LIST` (`Opcodes.cpp:1131`) →
@@ -48,4 +48,4 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
 - `CanTeachSpell` does **not** re-check level/skill/ability; it relies on `GetSpellState` — so any change
   to prerequisites only needs to land in `GetSpellState` (`Trainer.cpp:394`).
 - There is no trainer gossip menu generated from the spell list: the only entry point is the auto
-  "Train me." option (`Player.cpp:15163`) or the client's own `CMSG_TRAINER_LIST`.
+  "Train me." option (`Player.cpp:15173`) or the client's own `CMSG_TRAINER_LIST`.

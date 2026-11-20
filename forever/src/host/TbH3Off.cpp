@@ -75,6 +75,15 @@ bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args) { re
 bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "statcensus"); }
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "gear"); }
 bool MayLeadBots(ChatHandler* /*handler*/, ObjectGuid /*character*/) { return true; }   // N5 is an engine-build rule: the default build keeps the older commands as they were
+// TB-1: `.tb hurt` and `.tb power` (TbScripts.cpp, compiled in both builds) stop at RequireEngine before they ask who the target is, and
+// `.tb role`, `.tb equip` and `.tb learn` are the NotBuilt stubs above, so this rule is never reached here. The symbol has to exist for the
+// option-OFF link all the same; it answers what the real handlers answer without the engine.
+Player* ResolveTestTarget(ChatHandler* /*handler*/, std::string_view /*name*/, std::string& code, std::string& detail)
+{
+    code = "engine-not-built";
+    detail = "the engine is not built in (this build has no group-fight commands)";
+    return nullptr;
+}
 bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail args)  { return NotBuilt(handler, args, "grammar"); }
 }
 }

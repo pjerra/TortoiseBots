@@ -5,6 +5,7 @@
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "compat/TbItemPrototype.h"
+#include "host/cmd/TbTestTargetPure.h"
 
 #include "DB2Stores.h"
 #include "Item.h"
@@ -100,6 +101,25 @@ Player* BotArg(ChatHandler* handler, Words const& args, char const* cmd)
     return bot;
 }
 
+// TB-1: the character `.tb learn`/`.tb equip` change: a host bot, or the sender's own character, never another real player. A first word that is already
+// the command's own id means no name was given, and then the command means the sender's character.
+Player* TargetArg(ChatHandler* handler, Words const& args, char const* cmd, size_t& start)
+{
+    start = 1;
+    if (args.w.empty())
+    {
+        Fail(handler, args, cmd, "missing-bot", "name a host bot, or give an id with no name to act on your own character");
+        return nullptr;
+    }
+    if (target::IsIdWord(args.w[0]))
+        start = 0;
+    std::string code, detail;
+    Player* player = ResolveTestTarget(handler, start == 0 ? std::string_view() : std::string_view(args.w[0]), code, detail);
+    if (!player)
+        Fail(handler, args, cmd, code, detail);
+    return player;
+}
+
 bool Ids(ChatHandler* handler, Words const& args, char const* cmd, size_t from, std::vector<uint32>& ids)
 {
     if (args.w.size() <= from)
@@ -126,11 +146,12 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Words const args = Split(tail);
     if (!RequireBuilt(handler, args, "learn"))
         return false;
-    Player* bot = BotArg(handler, args, "learn");
+    size_t start = 1;
+    Player* bot = TargetArg(handler, args, "learn", start);
     if (!bot)
         return false;
     std::vector<uint32> ids;
-    if (!Ids(handler, args, "learn", 1, ids))
+    if (!Ids(handler, args, "learn", start, ids))
         return false;
 
     uint32 learned = 0;
@@ -174,15 +195,16 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Words const args = Split(tail);
     if (!RequireBuilt(handler, args, "equip"))
         return false;
-    Player* bot = BotArg(handler, args, "equip");
+    size_t start = 1;
+    Player* bot = TargetArg(handler, args, "equip", start);
     if (!bot)
         return false;
     uint32 item = 0;
-    if (args.w.size() < 2 || !ParseId(args.w[1], item))
-        return Fail(handler, args, "equip", "missing-argument", ".tb equip <bot> <item id> [replace]");
-    bool const replace = args.w.size() > 2 && Lower(args.w[2]) == "replace";
-    if (args.w.size() > 2 && !replace)
-        return Fail(handler, args, "equip", "unexpected-argument", args.w[2]);
+    if (args.w.size() <= start || !ParseId(args.w[start], item))
+        return Fail(handler, args, "equip", "missing-argument", ".tb equip <character> <item id> [replace]");
+    bool const replace = args.w.size() > start + 1 && Lower(args.w[start + 1]) == "replace";
+    if (args.w.size() > start + 1 && !replace)
+        return Fail(handler, args, "equip", "unexpected-argument", args.w[start + 1]);
 
     ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item);
     Reply reply(handler, args, "equip");

@@ -50,7 +50,7 @@ inline float GetAngleCompat(WorldObject const* from, WorldObject const* to)
 
 // Whether the session belongs to a connected player and not to a headless bot. The Turtle core's WorldSession has
 // HasNetworkTransport (a socket is attached); ForeverCore keeps the same fact as the flag the bot session sets when it is
-// made (WorldSession.h:1078, TbBotSession.cpp). A null session has no transport.
+// made (WorldSession.h:1079, TbBotSession.cpp). A null session has no transport.
 inline bool HasNetworkTransportCompat(WorldSession* session) { return session && !session->IsBot(); }
 
 // The creature's home point. T Creature.h:579 `GetRespawnCoord(x, y, z, &ori, &dist)`: where it respawns and the wander
@@ -66,7 +66,7 @@ inline void GetRespawnCoordCompat(Creature const* creature, float& x, float& y, 
 }
 
 // How far a melee swing from `self` reaches `victim`. T Unit.cpp:11035 `GetCombatReach(victim, ability, flat_mod)`: both
-// combat reaches plus a flat part plus the melee-leeway bonus; F Unit.cpp:749 `GetMeleeRange(victim)`: both combat reaches
+// combat reaches plus a flat part plus the melee-leeway bonus; F Unit.cpp:757 `GetMeleeRange(victim)`: both combat reaches
 // plus 4/3, at least the nominal melee range. The core's own answer to the same question; the flat part is added on top,
 // the ability flag only selects Turtle's leeway and has no ForeverCore counterpart.
 inline float GetCombatReachCompat(Unit const* self, Unit const* victim, bool /*ability*/, float flatMod)
@@ -138,7 +138,7 @@ inline bool HasInArcCompat(WorldObject const* self, WorldObject const* target, f
 
 // Whether a melee SPELL of `bot` (a spell whose range is the combat range) reaches `target` now. T ReachTargetActions.h
 // (before R3) asked Unit::CanReachWithMeleeSpellAttack with a modifier built from the caster's range spell mods and range
-// auras; F answers it where the cast does: Spell::CalcMinMaxRange (Spell.cpp:7677), the numbers CheckRange tests, which
+// auras; F answers it where the cast does: Spell::CalcMinMaxRange (Spell.cpp:7691), the numbers CheckRange tests, which
 // start from the caster's melee range to this target and apply the range spell mods itself.
 inline bool MeleeSpellReachCompat(Player* bot, SpellEntry const* spell, Unit* target)
 {
@@ -244,7 +244,7 @@ inline bool AreaHasFlagsCompat(AreaTableEntry const* area, AreaFlags mask)
 }
 
 // The point a ray from the source to the destination stops at. T `Map::GetLosHitPosition(src, dest&, modifyDist)` moves the
-// destination to the hit point and says whether it did; F `Map::getObjectHitPos` (Map.h:519) returns the hit point apart.
+// destination to the hit point and says whether it did; F `Map::getObjectHitPos` (Map.h:523) returns the hit point apart.
 inline bool GetLosHitPositionCompat(Map* map, float srcX, float srcY, float srcZ, float& destX, float& destY, float& destZ, float modifyDist)
 {
     float hitX = destX, hitY = destY, hitZ = destZ;
@@ -576,7 +576,7 @@ inline bool RootedCompat(Unit const* unit) { return unit->HasRootAura(); }
 //    0x40/0x80 start/end far from the polygon).
 // ---------------------------------------------------------------------------------------------------------------
 // T PathInfo::calculate(x, y, z, forceDest) (PathFinder.h:66) from the owner's position; F CalculatePath(x, y, z, forceDest)
-// (PathGenerator.h:86).
+// (PathGenerator.h:104).
 inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest = false)
 {
     return path.CalculatePath(x, y, z, forceDest);
@@ -597,13 +597,16 @@ inline uint32 PathTypeCompat(PathFinder const& path) { return static_cast<uint32
 // The closest reachable point to the asked end (T getActualEndPosition by value, F GetActualEndPosition).
 inline G3D::Vector3 PathActualEndCompat(PathFinder const& path) { return path.GetActualEndPosition(); }
 
-// The length of the point path. T Length() (PathFinder.cpp:1011) asserts a non-empty path; F GetPathLength (PathGenerator.cpp:1479)
+// The length of the point path. T Length() (PathFinder.cpp:1011) asserts a non-empty path; F GetPathLength (PathGenerator.cpp:1702)
 // would loop over an unsigned underflow on an empty one, so an empty path is 0 here.
 inline float PathLengthCompat(PathFinder const& path)
 {
     return path.GetPath().empty() ? 0.0f : path.GetPathLength();
 }
 
+// At 25fc7ca CalculatePath wraps CalculateLiquidAwarePath (PathGenerator.cpp:167): with no LiquidRouteCheck and no ClosedDoorCheck set
+// (the module sets neither) it is the old CalculatePathImpl. One answer changed: a swimmer whose destination is under the water gets a
+// dive leg or a straight swim appended (BuildPointPath), so such a path can now be PATHFIND_NORMAL where it was INCOMPLETE.
 inline bool PathIsCompleteCompat(PathFinder const& path) { return path.GetPathType() == PATHFIND_NORMAL; }
 
 
