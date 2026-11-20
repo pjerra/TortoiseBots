@@ -13,14 +13,14 @@ Branch `s9/l` (from `port/forever`), worktree `~/wt-s9-l`, build slot 2. Spec: `
 | Take an item | `CMSG_LOOT_ITEM` into `HandleAutostoreLootItemOpcode` (LootHandler.cpp:77); the request names the Loot's own guid; the core runs `Player::StoreLootItem` (Player.cpp:28834) with every check | `TbCompat_I2.h:235` `LootAutostoreCompat` |
 | Allowed to take | `IsLootAllowed` runs (T's rules: always/skip lists, unique, quest items, loot strategy); quest items from F's item objectives | `TbCompat_I2.h:248` `ItemLootingUnportedCompat` (false), `:252` `QuestRequiredItemCompat` |
 | What the corpse offers | `LootContentForCompat` (items takeable now), `LootStatusForCompat` (gold, items, rolling items count as unfinished), `CorpseHasVisiblePersonalItemForCompat` (`Loot::hasItemFor`) | `TbCompat_V2.h:74`, `:209`, `:229` |
-| Bag floor | an item that needs a NEW slot is left when two or fewer bag slots are free (stacking is always allowed; an ordered item is exempt). The start check of 12 free slots is package C9's | `TbCompat_S9.h:269` `LootBagFloorCompat`, `LootAction.cpp:693` |
+| Bag floor | an item that needs a NEW slot is left when two or fewer bag slots are free (stacking is always allowed; an ordered item is exempt; only the backpack and the bags the item can go into count, so an empty quiver or soul bag is no room). The start check of 12 free slots is package C9's | `TbCompat_S9.h:298` `LootBagFloorCompat`, `LootAction.cpp:693` |
 | A group-loot roll starts | the roll is in `Player::GetLootRolls()` (Player.h:2358, the core's read-only list of rolls waiting for this player). `WorldPacketTrigger::Check` polls it for the two triggers `loot start roll` and `loot response`, builds the legacy event packet `[owner guid][slot][item id][0][0][timeout]` once per roll and hands it to the existing `LootStartRollAction` | `WorldPacketTrigger.h:24`, `TbCompat_S9.h:119` `PollPacketEventCompat` |
-| The vote | `RollOnItemInSlot` is the ONE sink: vote normalised, then `GreedOnlyVoteCompat(vote)` (F: always GREED), then `RollVoteCompat` = typed `CMSG_LOOT_ROLL` packet into `WorldSession::HandleLootRoll` (LootHandler.cpp:507) | `LootRollAction.cpp:597-598`, `TbCompat_S9.h:184`, `:220` |
+| The vote | `RollOnItemInSlot` is the ONE sink: vote normalised, then `GreedOnlyVoteCompat(vote, orderedPass)` (F: GREED, except an explicit or hired-loot-off pass), then `RollVoteCompat` = typed `CMSG_LOOT_ROLL` packet into `WorldSession::HandleLootRoll` (LootHandler.cpp:507); a vote the core never takes drops the roll from `"active rolls"`, and the `LootRoll` row is written only after the vote went through | `LootRollAction.cpp:586-629`, `TbCompat_S9.h:184`, `:220` |
 | Roll winner | the core stores the item itself (`LootRoll::Finish`); nothing in the bot equips it: the trigger `loot roll won` (whose second action is `equip upgrades`) and `item push result` are NOT registered | `slice_gen_context.py` SLICE9_KEYS comment |
 | A chest | `LootGatherUnportedCompat(object)` is false for a game object chest, so `DoLoot` casts the opening spell as on T; the chest window is announced by the same poll (game object owners only) and read like a corpse. Herb/ore nodes, skinning, pickpocket, fishing stay unported | `TbCompat_I2.h:191`, `TbCompat_V2.h:137` |
 | Loot tables | `creature_`, `gameobject_`, `reference_`, `item_loot_template` are copied once (first use, or `LootTablePreloadCompat()`), through a guarded reader (information_schema first: a missing table or column reads empty, never aborts the server), into the layout classes the readers use. Used by the chest check (`IsCommonWorldProp`); the shared drop maps stay unported | `TbCompat_V2.h:298-390` |
 
-Greed-only means: never need, never pass on its own (no roll times out), also for an ordered "roll need". `ShouldWaitForPlayers` is not reached for a bots-only party (no real player in the group); with `GroupLootTimerCompat` = 0 the bot votes at once in any case.
+Greed-only means: never need, never pass on its own (no roll times out), also for an ordered "roll need"; an ordered "roll pass" and a hired companion with looting off still pass. `ShouldWaitForPlayers` is not reached for a bots-only party (no real player in the group); with `GroupLootTimerCompat` = 0 the bot votes at once in any case.
 
 ## 2. The compat pair
 
@@ -58,21 +58,35 @@ Their roll vote is `p->GetLootRoll(loot_object, loot_list_id)` then `roll->Playe
 
 ## 6. Gates
 
-All in build slot 2 of `yulon-ubuntu2`; Turtle gates ran with `docker ps | grep -c forever-world` = 0.
+All in build slot 2 of `yulon-ubuntu2`; Turtle gates ran with `docker ps | grep -c forever-world` = 0. The review round re-ran the Forever gates in slot 31: slots 1 to 9 are shared with concurrent workers, and a worker who syncs the same slot replaces the source tree under a running build or census (one round measured another worker's tree that way), so the final numbers below come from a private slot whose content was checked by md5 right before each step.
 
 | Gate | Result |
 |---|---|
-| census, list `forever/SLICE9.txt` (176 files = the slice-4 list + `LootRollAction.cpp` + `ItemUsageValue.cpp`) | `files 176  compile clean 176  with errors 0  error places 0` (before: the two L9 files alone had 121 error places: 67 + 53 + 2) |
+| census, list `forever/SLICE9.txt` (178 files = the slice-4 list + `LootRollAction.cpp` + `ItemUsageValue.cpp`) | `files 178  compile clean 178  with errors 0  error places 0` (before: the two L9 files alone had 121 error places: 67 + 53 + 2) |
 | `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
 | `slice_registry_check.py` | `(a)=0` (every registered key is a key of the full build with the same creator) |
-| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0`, `grep -c "undefined reference\|multiple definition"` = 0 (the first link had 61 undefined: `RandomItemMgr` rules and weights, `MountValue`, `RandomBotFacade` price calls, `GuildOrders`, `QueryItemUsageAction` vtable; each is now a stand-in in `SliceLinkStubs.cpp`, "slice 9" block, with the LESS value) |
-| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0` |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`, slot 31, 56 s) | `CMAKE_RC=0 MAKE_RC=0`, 330 module files resynced on the shared tree, worldserver linked, `grep -c "undefined reference\|multiple definition"` = 0 (the first link had 61 undefined: `RandomItemMgr` rules and weights, `MountValue`, `RandomBotFacade` price calls, `GuildOrders`, `QueryItemUsageAction` vtable; each is now a stand-in in `SliceLinkStubs.cpp`, "slice 9" block, with the LESS value) |
+| option OFF `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`, slot 31, 7 s) | `CMAKE_RC=0 MAKE_RC=0` |
 | policy tests (`policy-tests.sh` copy, 476+ tests) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: identical to the same run on the unchanged `port/forever` tree (the 6 are `test_combat_monitor_service*`, `test_decision_capture_*`, `test_log_file_rotation`, `test_run_trace_writer`) |
-| python wiring pins | `forever/tools/test_slice9_l9_wiring.py` 9 tests OK (mutation: `GreedOnlyVoteCompat` returning the vote fails 2); the 23 `tools/` and `forever/tools/` wiring tests that name an edited file all pass (one re-pinned, see section 2) |
+| python wiring pins | `forever/tools/test_slice9_l9_wiring.py` 18 tests OK (review round: nine of them fail on the previous tree, see section 7); the 23 `tools/` and `forever/tools/` wiring tests that name an edited file all pass (one re-pinned, see section 2); `verify_all.sh` passed in the review round's `vm-test tb` run |
 | round 2 (Codex fixes: rolls only in GROUP_LOOT, no vote past the bag floor) | pins `test_rolls_are_announced_and_voted_only_in_group_loot`, `test_a_roll_vote_respects_the_bag_floor` fail on the previous TbCompat_S9.h and pass now; ON, OFF, census, generator, registry, policy tests: see the final report |
 | Turtle `vm-build` | `RC=0`, `QUEUE_RC=0` (sha 6fb3e2431) |
-| Turtle `vm-test tb` | `RESULT: PASS  kind=tb wt=wt-s9-l sha=6fb3e2431` |
+| Turtle `vm-test tb` (review round) | `RESULT: PASS  kind=tb wt=wt-s9-l sha=67bb35b69 dirty=11 files=3857`, rc=0 |
 
 Fixes the first link found, kept for the merge worker: `ItemUsageValue::PopulateSoldByVendorItemIds` (called at config load, `PlayerbotAIConfig.cpp:1575`) names the 1.12 table `npc_vendor_template` and uses printf placeholders in a `PQuery`: on F that aborts the server, so `VendorItemListsUnportedCompat()` returns early there (T: unchanged). The two reagent populators were stand-ins and are the real code now (DB2 reads only, never called at boot).
 
 Not proven (no server was started): U4 (section 5), that the opening cast of a chest works for a bot (spec U3), the real roll-start-to-vote path, the chest window poll, and the bag floor under live bags.
+
+## 7. Review round (Gemini, 2026-11-20): one verdict per finding
+
+| # | Verdict | One line |
+|---|---|---|
+| 1 | fix | A vote the core never takes (method gate, bag floor) now drops its `"active rolls"` entry, and both vote paths log the `LootRoll` row only after `RollOnItemInSlot` succeeded: no 5 s retry loop and no false row for up to 60 s (`LootRollAction.cpp:601-609`, `:961-965`). |
+| 2 | fix | `LootTableOf` reads the `Item` column as `uint64` and skips values past `UINT32_MAX`, as the core's own `LootStore::LoadLootTable` does: a `BIGINT` column can no longer abort the world thread in `LogTruncation` (`TbCompat_V2.h:325-336`). |
+| 3 | fix | The bag floor counts the backpack plus only the equipped bags `ItemCanGoIntoBag` accepts the item into, so a hunter's empty quiver or a warlock's soul bag is no room for a sword (`TbCompat_S9.h:305-327`). |
+| 4 | fix | `GreedOnlyVoteCompat(vote, orderedPass)` keeps `ROLL_PASS` for an explicit `"roll pass"` and the hired-loot-off pass (orders), while an automatically calculated pass still becomes greed (`TbCompat_S9.h:238-247`, `LootRollAction.cpp:389-398`, `:906-913`). |
+| 5 | fix | `ActiveRolls::CleanUp` takes `slot = UINT32_MAX` for "every slot", so voting loot-list id 0 no longer erases the sibling roll 1 of the same loot (`LootValues.h:262-263`, `LootValues.cpp:417`). |
+| 6 | fix | The three registrations no longer cast to `(QueryItemUsageAction*)`; `LootStartRollAction` is a `ChatCommandAction`, so that cast was between unrelated classes (UB). Fixed in the full registry and the regenerated slice context (`WorldPacketActionContext.h:52-54`, `SliceAiObjectContext.cpp:260-262`). |
+| 7 | fix | `PlayerAmmoIdCompat` returns `player->GetAmmoId()` (the call `TbCompat_Unported.h` already makes), so the ammo already equipped is not read as an equip upgrade (`TbCompat_S9.h:364-366`). |
+
+The new pins are in `forever/tools/test_slice9_l9_wiring.py` (`test_a_refused_vote_drops_the_roll_and_is_not_logged`, `test_the_bag_floor_counts_only_room_the_item_can_use`, `test_an_ordered_pass_stays_a_pass`, `test_cleanup_erases_only_the_named_slot`, `test_the_loot_table_item_column_is_read_like_the_core`, `test_the_roll_actions_are_registered_without_an_unrelated_cast`, `test_the_ammo_id_is_the_equipped_ammo`); all of them fail on the previous tree and pass on this one.

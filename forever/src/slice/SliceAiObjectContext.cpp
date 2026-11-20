@@ -257,9 +257,9 @@ namespace slice
             creators["store loot"] = [](PlayerbotAI* ai) { return new StoreLootAction(ai); };
             creators["auto release"] = [](PlayerbotAI* ai) { return new AutoReleaseSpiritAction(ai); };
             creators["accept resurrect"] = [](PlayerbotAI* ai) { return new AcceptResurrectAction(ai); };
-            creators["loot start roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootStartRollAction(ai); };
-            creators["loot vote"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootVoteAction(ai); };
-            creators["loot roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootRollAction(ai); };
+            creators["loot start roll"] = [](PlayerbotAI* ai) { return new LootStartRollAction(ai); };
+            creators["loot vote"] = [](PlayerbotAI* ai) { return new LootVoteAction(ai); };
+            creators["loot roll"] = [](PlayerbotAI* ai) { return new LootRollAction(ai); };
         }
     };
 

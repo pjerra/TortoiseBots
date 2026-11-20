@@ -17,6 +17,10 @@ F_HEADER = (ROOT / "forever/src/compat/TbCompat_S9.h").read_text()
 T_HEADER = (ROOT / "ai/cmangos-compat-s9.h").read_text()
 ROLL = (ROOT / "ai/playerbot/strategy/actions/LootRollAction.cpp").read_text()
 LOOT = (ROOT / "ai/playerbot/strategy/actions/LootAction.cpp").read_text()
+LOOTVAL = (ROOT / "ai/playerbot/strategy/values/LootValues.cpp").read_text()
+LOOTVAL_H = (ROOT / "ai/playerbot/strategy/values/LootValues.h").read_text()
+CONTEXT = (ROOT / "forever/src/slice/SliceAiObjectContext.cpp").read_text()
+WPKT_CONTEXT = (ROOT / "ai/playerbot/strategy/actions/WorldPacketActionContext.h").read_text()
 TRIGGER = (ROOT / "ai/playerbot/strategy/triggers/WorldPacketTrigger.h").read_text()
 I2 = (ROOT / "forever/src/compat/TbCompat_I2.h").read_text()
 V2 = (ROOT / "forever/src/compat/TbCompat_V2.h").read_text()
@@ -30,16 +34,20 @@ def names(text):
 
 
 def body(text, name):
-    i = re.search(r"inline[^;{]*\b%s\s*\(" % re.escape(name), text).start()
-    j = text.index("{", i)
-    depth = 0
-    for k in range(j, len(text)):
-        if text[k] == "{":
-            depth += 1
-        elif text[k] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[i:k + 1]
+    for m in re.finditer(r"inline[^;{]*\b%s\s*\(" % re.escape(name), text):
+        i = m.start()
+        j = text.find("{", i)
+        semi = text.find(";", i)
+        if j < 0 or (0 <= semi < j):
+            continue                                  # a forward declaration, not the definition
+        depth = 0
+        for k in range(j, len(text)):
+            if text[k] == "{":
+                depth += 1
+            elif text[k] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[i:k + 1]
     raise AssertionError(name)
 
 
@@ -66,12 +74,12 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("FindEquipSlot(proto, NULL_SLOT, true)", body(T_HEADER, "EquipSlotOfProtoCompat"))
 
     def test_greed_only_on_forevercore(self):
-        # the F helper ignores the vote it is given
-        self.assertIn("return ROLL_GREED;", body(F_HEADER, "GreedOnlyVoteCompat"))
+        # the F helper turns every vote into greed, except the ordered pass the caller marks
+        self.assertIn("orderedPass && vote == ROLL_PASS ? ROLL_PASS : ROLL_GREED", body(F_HEADER, "GreedOnlyVoteCompat"))
         # the one sink: RollOnItemInSlot normalises the vote, then asks the helper, THEN votes through the core
         sink = ROLL[ROLL.index("bool RollAction::RollOnItemInSlot("):]
         sink = sink[:sink.index("\n}\n")]
-        self.assertLess(sink.index("GreedOnlyVoteCompat(vote)"), sink.index("RollVoteCompat("))
+        self.assertLess(sink.index("GreedOnlyVoteCompat(vote, orderedPass)"), sink.index("RollVoteCompat("))
         # nothing else in the file votes through the core
         self.assertEqual(len(re.findall(r"RollVoteCompat\(", ROLL)), 1)
         # the F vote is the core's own handler with the typed packet
@@ -113,6 +121,58 @@ class L9Wiring(unittest.TestCase):
         self.assertLess(floor, vote.index("HandleLootRoll(packet)"))
         # a refused floor is NO vote: it returns before the packet is built (not a pass, not a greed)
         self.assertIn("return false;", vote[floor:vote.index("WorldPackets::Loot::LootRoll packet")])
+        # a pass wins nothing, so it is not held by the floor
+        self.assertIn("vote != ROLL_PASS && LootBagFloorCompat(", vote)
+
+    def test_the_bag_floor_counts_only_room_the_item_can_use(self):
+        floor = body(F_HEADER, "LootBagFloorCompat")
+        # GetFreeInventorySlotCount counts the free slots of a quiver, an ammo pouch and a soul bag too
+        self.assertNotIn("GetFreeInventorySlotCount()", floor)
+        self.assertIn("ItemCanGoIntoBag(proto, bag->GetTemplate())", floor)
+        self.assertIn("GetFreeSlots()", floor)
+
+    def test_a_refused_vote_drops_the_roll_and_is_not_logged(self):
+        sink = ROLL[ROLL.index("bool RollAction::RollOnItemInSlot("):]
+        sink = sink[:sink.index("\n}\n")]
+        refused = sink[sink.index("if (!RollVoteCompat("):]
+        # the announcement is forgotten, so the auto vote neither retries nor logs it every tick until the timeout
+        self.assertLess(refused.index("ActiveRolls::CleanUp("), refused.index("return false;"))
+        # the polite vote logs the vote the core took, after the vote, never before it
+        etiquette = ROLL[ROLL.index("bool RollAction::RollWithEtiquette("):]
+        etiquette = etiquette[:etiquette.index("\n}\n")]
+        self.assertLess(etiquette.rindex("RollOnItemInSlot("), etiquette.rindex("LogLootRoll("))
+        # the ordered roll too
+        ordered = ROLL[ROLL.index("bool RollAction::Execute("):]
+        ordered = ordered[:ordered.index("\n}\n")]
+        self.assertLess(ordered.index("RollOnItemInSlot(cast"), ordered.index("LogLootRoll(ai, itemQualifier, cast"))
+
+    def test_an_ordered_pass_stays_a_pass(self):
+        # an explicit "roll pass" and a hired companion with looting off are orders, not the bot's own judgment
+        self.assertIn("RollOnItemInSlot(cast, roll.first, roll.second, doVote == ROLL_PASS)", ROLL)
+        self.assertIn("RollOnItemInSlot(hiredVote, lootGuid, slot, true)", ROLL)
+        # an automatic pass (the item is no use) still becomes greed at the sink
+        self.assertIn("BotRollVote cast = vote;", ROLL)
+
+    def test_cleanup_erases_only_the_named_slot(self):
+        # ForeverCore's loot list ids start at 0, so 0 is a real slot and cannot mean "all"
+        self.assertNotIn("if (slot && roll->second != slot)", LOOTVAL)
+        self.assertIn("if (slot != UINT32_MAX && roll->second != slot)", LOOTVAL)
+        self.assertIn("uint32 slot = UINT32_MAX", LOOTVAL_H)
+
+    def test_the_loot_table_item_column_is_read_like_the_core(self):
+        table = V2[V2.index("inline LootTableCopy const& LootTableOf("):]
+        table = table[:table.index("\n}\n")]
+        self.assertIn("fields[2].GetUInt64()", table)
+        self.assertNotIn("fields[2].GetUInt32()", table)
+        self.assertIn("rawItem > std::numeric_limits<uint32>::max()", table)
+
+    def test_the_roll_actions_are_registered_without_an_unrelated_cast(self):
+        for text in (CONTEXT, WPKT_CONTEXT):
+            self.assertIn("new LootStartRollAction(ai)", text)
+            self.assertNotIn("(QueryItemUsageAction*)new Loot", text)
+
+    def test_the_ammo_id_is_the_equipped_ammo(self):
+        self.assertIn("player->GetAmmoId()", body(F_HEADER, "PlayerAmmoIdCompat"))
 
     def test_the_item_take_uses_the_core_handlers(self):
         self.assertIn("HandleAutostoreLootItemOpcode(packet)", body(I2, "LootAutostoreCompat"))

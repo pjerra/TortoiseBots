@@ -259,7 +259,8 @@ namespace ai
     {
     public:
         ActiveRolls(PlayerbotAI* ai) : ManualSetValue(ai, {}, "active rolls") {}
-        static void CleanUp(Player* bot, LootRollMap& value, ObjectGuid guid = ObjectGuid(), uint32 slot = 0);
+        // slot UINT32_MAX: every slot of the named loot (a real slot index may be 0 on ForeverCore).
+        static void CleanUp(Player* bot, LootRollMap& value, ObjectGuid guid = ObjectGuid(), uint32 slot = UINT32_MAX);
         virtual std::string Format() override;
 
 #ifdef GenerateBotHelp

@@ -222,9 +222,10 @@ inline bool RollVoteCompat(Player* bot, Group* /*group*/, ObjectGuid const& owne
     // The method gate: no vote outside GROUP_LOOT (the roll was never announced there; a method changed in flight is left to the core's timeout).
     if (!BotRollsInGroupLootCompat(bot, live->GetLoot()))
         return false;
-    // The bag floor, before ANY vote: if winning would need a new slot with two or fewer free (or the item does not fit), cast NO vote (not a pass, not a
-    // greed): the core's timeout decides, and the bot cannot win an item it has no room for. The same floor as the corpse take (LootBagFloorCompat).
-    if (LootBagFloorCompat(bot, live->GetItem()->itemid, live->GetItem()->count))
+    // The bag floor, before ANY vote that could WIN the item: if winning would need a new slot with two or fewer free (or the item does not fit), cast NO
+    // vote (not a pass, not a greed): the core's timeout decides, and the bot cannot win an item it has no room for. The same floor as the corpse take
+    // (LootBagFloorCompat). A pass wins nothing, so an ordered pass is cast whatever the bags hold.
+    if (vote != ROLL_PASS && LootBagFloorCompat(bot, live->GetItem()->itemid, live->GetItem()->count))
         return false;
 
     WorldPackets::Loot::LootRoll packet{ WorldPacket(CMSG_LOOT_ROLL) };
@@ -235,11 +236,16 @@ inline bool RollVoteCompat(Player* bot, Group* /*group*/, ObjectGuid const& owne
     return true;
 }
 
-// THE GREED-ONLY RULE. T: the vote the bot decided. F: every vote the bot casts is GREED (lead decision 2026-11-20, FOREVER-SLICE9-SPEC "Lead decisions"):
-// never need (a need would take an item from a bot that wants it more, and the bot's own judgment of "wants" is the T item usage value, which is not
-// what this slice proves), never pass on its own (a pass leaves an item that a bot with free bags could take; with greed every roll resolves at once
-// instead of timing out after 60 s). The same function is the only sink to the core (RollAction::RollOnItemInSlot), so an ordered "roll need" is greed too.
-inline BotRollVote GreedOnlyVoteCompat(BotRollVote /*vote*/) { return ROLL_GREED; }
+// THE GREED-ONLY RULE. T: the vote the bot decided. F (lead decision 2026-11-20, FOREVER-SLICE9-SPEC "Lead decisions"): never need (a need would take an
+// item from a bot that wants it more, and the bot's own judgment of "wants" is the T item usage value, which is not what this slice proves), never pass
+// on its own (a pass leaves an item that a bot with free bags could take; with greed every roll resolves at once instead of timing out after 60 s). The
+// same function is the only sink to the core (RollAction::RollOnItemInSlot), so an ordered "roll need" is greed too. `orderedPass` is the one pass the bot
+// does cast: an explicit "roll pass", or a hired companion whose looting is off (RollAction::RollWithEtiquette). That is an order, not the bot's own
+// judgment, so it is not turned into greed.
+inline BotRollVote GreedOnlyVoteCompat(BotRollVote vote, bool orderedPass)
+{
+    return orderedPass && vote == ROLL_PASS ? ROLL_PASS : ROLL_GREED;
+}
 
 // Does this bot roll on loot while its bags are nearly full? T: nothing changes. F: a roll the bot cannot store is a roll it would still win; the
 // existing `bag space` rule (RollAction, >= 100 percent) stands, and so does LootBagFloorCompat for the corpse take.
@@ -300,7 +306,25 @@ inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count)
         if (!bot->GetItemByPos(position.pos))
             needsNewSlot = true;
     }
-    return needsNewSlot && bot->GetFreeInventorySlotCount() <= 2;
+    if (!needsNewSlot)
+        return false;
+
+    // Free slots the item could actually go into: the backpack, plus an equipped bag only when ItemCanGoIntoBag accepts it there.
+    // Player::GetFreeInventorySlotCount counts the free slots of a quiver, an ammo pouch or a soul bag too, which are no room for the
+    // items the floor is about (a hunter with an empty quiver would report room it does not have).
+    ItemTemplate const* proto = sObjectMgr.GetItemTemplate(itemId);
+    uint32 freeSlots = 0;
+    uint8 const backpackEnd = INVENTORY_SLOT_ITEM_START + bot->GetInventorySlotCount();
+    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < backpackEnd; ++slot)
+        if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            ++freeSlots;
+    for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+    {
+        Bag* bag = bot->GetBagByPos(slot);
+        if (bag && proto && ItemCanGoIntoBag(proto, bag->GetTemplate()))
+            freeSlots += bag->GetFreeSlots();
+    }
+    return freeSlots <= 2;
 }
 
 // ===============================================================================================================
@@ -337,8 +361,9 @@ inline uint32 ItemRequiredHonorRankCompat(ItemPrototype const* /*proto*/) { retu
 // prototype has no id: 0 ("not disenchantable"), so the bot never keeps an item for a disenchant it cannot plan: LESS.
 inline uint32 ItemDisenchantIdCompat(ItemPrototype const* /*proto*/) { return 0; }
 
-// T `player->GetUInt32Value(PLAYER_AMMO_ID)`: the equipped ammo. F has no ammo slot in the data of this client: 0 ("no ammo equipped").
-inline uint32 PlayerAmmoIdCompat(Player* /*player*/) { return 0; }
+// T `player->GetUInt32Value(PLAYER_AMMO_ID)`: the equipped ammo. F (Classic 1.60) `Player::GetAmmoId()` (Player.h:1518), the same call
+// TbCompat_Unported.h AmmoItemIdCompat makes. 0 only for no player.
+inline uint32 PlayerAmmoIdCompat(Player* player) { return player ? player->GetAmmoId() : 0; }
 
 // T `bot->FindEquipSlot(proto, NULL_SLOT, true)`; F's FindEquipSlot takes an Item (Player.h): NULL_SLOT ("no slot"), counted under the existing row
 // "equip slot of an item prototype". The caller (IsFutureUpgrade) then answers "not a future upgrade": LESS.

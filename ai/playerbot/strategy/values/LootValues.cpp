@@ -403,6 +403,7 @@ bool ShouldLootObject::Calculate()
 	return false;
 }
 
+// guid empty: every roll of the bot whose loot is gone or already looted; guid named: that loot's rolls, all of them (slot UINT32_MAX) or the one slot.
 void ActiveRolls::CleanUp(Player* bot, LootRollMap& rollMap, ObjectGuid guid, uint32 slot)
 {
 	for (auto roll = rollMap.begin(); roll != rollMap.end();)
@@ -413,7 +414,7 @@ void ActiveRolls::CleanUp(Player* bot, LootRollMap& rollMap, ObjectGuid guid, ui
 			continue;
 		}
 
-		if (slot && roll->second != slot)
+		if (slot != UINT32_MAX && roll->second != slot)
 		{
 			++roll;
 			continue;

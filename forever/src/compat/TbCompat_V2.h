@@ -21,6 +21,7 @@
 #include "TbCompat_S5.h"           // WorldQueryCompat (slice 5): the guarded world database read the loot table copy uses
 
 #include <algorithm>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -322,13 +323,18 @@ inline LootTableCopy const& LootTableOf(std::string const& table)
         int32 const itemType = fields[1].GetInt8();
         if (itemType != 0 && itemType != 1)
             continue;                                       // currency and tracking quests are not read
+        // The core's own loader reads this column as uint64 and skips what does not fit (LootMgr.cpp:179): a BIGINT column
+        // would make GetUInt32 abort the server in LogTruncation, and a value past an item id names nothing anyway.
+        uint64 const rawItem = fields[2].GetUInt64();
+        if (rawItem > std::numeric_limits<uint32>::max())
+            continue;
         LootTableRow row;
         row.entry = fields[0].GetUInt32();
-        row.item.itemid = fields[2].GetUInt32();
+        row.item.itemid = uint32(rawItem);
         row.item.chance = fields[3].GetFloat();
         row.item.needs_quest = fields[4].GetBool();
         row.group = fields[5].GetUInt8();
-        row.item.mincountOrRef = itemType == 1 ? -int32(fields[2].GetUInt32()) : int32(fields[6].GetUInt8());
+        row.item.mincountOrRef = itemType == 1 ? -int32(rawItem) : int32(fields[6].GetUInt8());
         copy.byEntry[row.entry].push_back(row);
         ++rows;
     } while (result->NextRow());

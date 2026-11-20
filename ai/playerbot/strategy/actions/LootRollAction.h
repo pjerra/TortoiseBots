@@ -74,7 +74,7 @@ namespace ai
     protected:
         virtual ItemQualifier GetRollItem(ObjectGuid lootGuid, uint32 slot);
         virtual BotRollVote CalculateRollVote(ItemQualifier& itemQualifier, BotRollVote* finalVote = nullptr, std::string* reasonOut = nullptr, bool log = true);
-        virtual bool RollOnItemInSlot(BotRollVote type, ObjectGuid lootGuid, uint32 slot);
+        virtual bool RollOnItemInSlot(BotRollVote& type, ObjectGuid lootGuid, uint32 slot, bool orderedPass = false);
         bool RollWithEtiquette(ObjectGuid lootGuid, uint32 slot, ObjectGuid seenVoter = ObjectGuid(), uint8 seenVote = ROLL_NOT_VALID);
         bool RealPlayerMayNeed(ObjectGuid lootGuid, ItemQualifier& itemQualifier, ObjectGuid seenVoter, uint8 seenVote);
         bool ShouldWaitForPlayers(ObjectGuid lootGuid, uint32 slot);

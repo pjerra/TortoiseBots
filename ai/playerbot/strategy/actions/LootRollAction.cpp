@@ -385,15 +385,17 @@ bool RollAction::Execute(Event& event)
             rolledItems += RollWithEtiquette(roll.first, roll.second);
             continue;
         }
-        else
-        {
-            std::string orderReason = std::string("ordered by ") + (requester ? requester->GetName() : "?");
-            if (!StoreLootAction::IsLootAllowed(itemQualifier, PlayerbotAIStorage::Instance().GetAI(bot)))
-                orderReason += " (can not be looted)";
-            LogLootRoll(ai, itemQualifier, doVote, orderReason);
-        }
 
-        rolledItems += RollOnItemInSlot(doVote, roll.first, roll.second);
+        // An ordered pass is the one pass the bot casts (the greed-only sink keeps it); need and greed both become greed there.
+        BotRollVote cast = doVote;
+        if (!RollOnItemInSlot(cast, roll.first, roll.second, doVote == ROLL_PASS))
+            continue;
+
+        std::string orderReason = std::string("ordered by ") + (requester ? requester->GetName() : "?");
+        if (!StoreLootAction::IsLootAllowed(itemQualifier, PlayerbotAIStorage::Instance().GetAI(bot)))
+            orderReason += " (can not be looted)";
+        LogLootRoll(ai, itemQualifier, cast, orderReason);
+        ++rolledItems;
     }
 
     return rolledItems;
@@ -583,7 +585,7 @@ BotRollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, BotRollV
     return decision;
 }
 
-bool RollAction::RollOnItemInSlot(BotRollVote vote, ObjectGuid lootGuid, uint32 slot)
+bool RollAction::RollOnItemInSlot(BotRollVote& vote, ObjectGuid lootGuid, uint32 slot, bool orderedPass)
 {
     Group* group = bot->GetGroup();
     if (!group)
@@ -595,9 +597,17 @@ bool RollAction::RollOnItemInSlot(BotRollVote vote, ObjectGuid lootGuid, uint32 
     // Same entry point the client uses via CMSG_LOOT_ROLL. The core checks
     // eligibility and resolves the roll once everyone has voted.
     // ForeverCore votes greed only (TbCompat_S9.h): the one sink every vote passes, so an ordered "roll need" is greed there too. T: the vote as it was.
-    vote = GreedOnlyVoteCompat(vote);
+    // `vote` comes back as the vote actually cast, so the caller logs what happened, not what it meant to do.
+    vote = GreedOnlyVoteCompat(vote, orderedPass);
     if (!RollVoteCompat(bot, group, lootGuid, slot, vote))
+    {
+        // The core will never see this vote: the loot method gate refuses the roll, or the item needs bag room the bot does not have.
+        // Forget the announcement, or the auto vote retries it (and logs it) every tick until the core times the roll out.
+        LootRollMap refused = AI_VALUE(LootRollMap, "active rolls");
+        ActiveRolls::CleanUp(bot, refused, lootGuid, slot);
+        SET_AI_VALUE(LootRollMap, "active rolls", refused);
         return false;
+    }
 
     LootRollMap lootRolls = AI_VALUE(LootRollMap, "active rolls");
 
@@ -894,8 +904,12 @@ bool RollAction::RollWithEtiquette(ObjectGuid lootGuid, uint32 slot, ObjectGuid 
     if (!TortoiseBots::HireMayLoot(TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid()),
             sPlayerbotAIConfig.hireLoot))
     {
-        LogLootRoll(ai, itemQualifier, ROLL_PASS, "because hired companion loot is off.");
-        return RollOnItemInSlot(ROLL_PASS, lootGuid, slot);
+        // "A hired companion does not loot" is an order, not the bot's own judgment: the pass stays a pass, and it takes no bag room.
+        BotRollVote hiredVote = ROLL_PASS;
+        if (!RollOnItemInSlot(hiredVote, lootGuid, slot, true))
+            return false;
+        LogLootRoll(ai, itemQualifier, hiredVote, "because hired companion loot is off.");
+        return true;
     }
 
     std::string reason;
@@ -924,12 +938,11 @@ bool RollAction::RollWithEtiquette(ObjectGuid lootGuid, uint32 slot, ObjectGuid 
             if (AI_VALUE2(bool, "manual bool", "roll feedback"))
                 ai->TellPlayerNoFacing(ai->GetMaster(), "Rolling greed on " + ChatHelper::formatItem(itemQualifier) + " instead: a player in the group may need it.");
 
-            LogLootRoll(ai, itemQualifier, vote, reason + " Stepped down to greed: a player in the group may need it.");
-            return RollOnItemInSlot(vote, lootGuid, slot);
+            reason += " Stepped down to greed: a player in the group may need it.";
         }
 
         // Another group member whose spec the item is made for goes first.
-        if (!forcedNeed)
+        else if (!forcedNeed)
         {
             Player* betterMember = FindBetterFittingMember(lootGuid, slot, itemQualifier, seenVoter, seenVote);
             if (betterMember)
@@ -939,15 +952,17 @@ bool RollAction::RollWithEtiquette(ObjectGuid lootGuid, uint32 slot, ObjectGuid 
                 if (AI_VALUE2(bool, "manual bool", "roll feedback"))
                     ai->TellPlayerNoFacing(ai->GetMaster(), "Rolling greed on " + ChatHelper::formatItem(itemQualifier) + " instead: " + betterMember->GetName() + " fits it better.");
 
-                LogLootRoll(ai, itemQualifier, vote, reason + " Stepped down to greed: " + betterMember->GetName() + " fits it better.");
-                return RollOnItemInSlot(vote, lootGuid, slot);
+                reason += std::string(" Stepped down to greed: ") + betterMember->GetName() + " fits it better.";
             }
         }
     }
 
-    LogLootRoll(ai, itemQualifier, vote, reason);
-
-    return RollOnItemInSlot(vote, lootGuid, slot);
+    // Log the vote the core actually took: a refused roll (method gate, bag floor) leaves no row, so the log never claims a vote that never happened.
+    BotRollVote cast = vote;
+    if (!RollOnItemInSlot(cast, lootGuid, slot))
+        return false;
+    LogLootRoll(ai, itemQualifier, cast, reason);
+    return true;
 }
 
 bool LootRollAction::Execute(Event& event)

@@ -33,7 +33,7 @@ inline bool RollVoteCompat(Player* bot, Group* group, ObjectGuid const& lootGuid
 }
 
 // The vote the bot decided (ForeverCore votes greed only, see TbCompat_S9.h).
-inline BotRollVote GreedOnlyVoteCompat(BotRollVote vote) { return vote; }
+inline BotRollVote GreedOnlyVoteCompat(BotRollVote vote, bool /*orderedPass*/) { return vote; }
 
 // `loot->LootItemInSlot(slot, bot->GetGUIDLow())`.
 inline LootItem* LootItemOfSlotCompat(Loot* loot, uint32 slot, Player* bot) { return loot ? loot->LootItemInSlot(slot, bot->GetGUIDLow()) : nullptr; }
