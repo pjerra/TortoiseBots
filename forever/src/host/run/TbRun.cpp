@@ -693,7 +693,8 @@ void TickRun(RunRec& rec, uint32 nowMs)
     }
     std::string const order = DungeonRun::Tick(run, facts, dt);
     // G8 (item 5): the regroup's gather ceiling ended in a pause. A revived member that is still walking back (or drinking first) is waited for a bounded time more
-    // by the policy's own checked resume, instead of a pause nobody asked for; the host has no `summon` (decision D3), this is the choice that does less.
+    // by the policy's own resume (a fresh regroup, its gather ceiling sized by the farthest bot), instead of a pause nobody asked for; the host has no `summon`
+    // (decision D3), this is the choice that does less.
     if (run.state == State::Paused && gather::IsRegroupGatherPause(run.note))
     {
         gather::Decision const verdict = gather::Decide(rec.gatherExt, run.step, run.note, facts.maxMemberYd, facts.leadAlive);

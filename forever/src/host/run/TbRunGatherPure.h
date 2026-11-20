@@ -6,9 +6,10 @@
 // then PAUSES: "regroup: the party did not gather within 60 s (a bot is 72.5 yd from the lead bot)". The policy's way out is a `summon` (a teleport of the
 // straggler to the lead bot), which this host does not carry out (decision D3: no teleport of a bot to the lead bot, a GM power).
 //
-// The choice (the one that does LESS): no summon. The glue waits a BOUNDED time more, by the policy's own checked resume (`DungeonRun::Resume`: a fresh regroup,
-// a fresh gather window sized for the farthest bot), instead of leaving the run paused. Nothing is teleported, no policy rule changes (the Turtle header is
-// untouched), and a gather that does not progress still ends in the pause the policy gives it:
+// The choice (the one that does LESS): no summon. The glue waits a BOUNDED time more, by the policy's own resume (`DungeonRun::Resume` -> `BeginRegroup`: a
+// fresh regroup whose gather ceiling is the policy's own `RegroupGatherCap`, the time the farthest bot needs to walk in), instead of leaving the run paused.
+// Nothing is teleported, no policy rule changes (the Turtle header is untouched), and a gather that does not progress still ends in the pause the policy
+// gives it:
 //   * only the regroup's gather pause is taken (`regroup: the party did not gather within`); every other pause is left alone;
 //   * at most kMaxGatherExtensions per plan step (the counter starts over on a new step);
 //   * the first extension is free (a bot that drinks or walks a long path has not moved much yet), the next ones need progress: the farthest member must be at least
