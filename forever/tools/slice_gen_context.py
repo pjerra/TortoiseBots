@@ -100,10 +100,12 @@ SLICE4_KEYS = {
 # target, has enemy player targets, grind target; enemy flagcarrier near, player has flag, new pet, has (greater) blessing of salvation, resist aura swap over, not
 # sensing undead, kick, aquatic form; apply oil/stone, oil of immolation, throw grenade, mana/stoneshield potion, remove (greater) blessing of salvation, set pet stance,
 # sense undead, switch to melee/ranged, cancel channel, powershift, reach party member for totem (no totem order). Cat, balance, enhancement, elemental and the Turtle
-# shaman tank kit are out of the slice (D2), so behind target / not behind target (the feral dps) stay out too.
+# shaman tank kit are out of the slice (D2), so behind target / not behind target (the feral dps) stay out too. `restore spec aura` (the spec's table lists it) is NOT registered:
+# its class RestoreSpecAuraAction is defined in strategy/actions/DungeonActions.cpp (1,036 lines of raid and dungeon actions, not in the list: the option-ON link failed with
+# `undefined vtable for ai::RestoreSpecAuraAction`), and its only trigger `resist aura swap over` is on the unregistered list, so the action could never fire.
 SLICE10_KEYS = {
     "strategy": "",
-    "action": "move out of enemy contact, restore spec aura",
+    "action": "move out of enemy contact",
     "trigger": "enemy too close for melee, not facing target, rooted, party member rooted, tank rooted, enough mana, healer low mana, medium aoe heal, "
                "ranged medium aoe and healer should attack, target of attacker close, loose adds near, low mana, enemy is close",
     "value": "has own totem, have any own totem, possible attack targets count, revive targets, boost targets, healer low mana",

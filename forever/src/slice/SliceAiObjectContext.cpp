@@ -19,7 +19,6 @@
 #include "playerbot/strategy/actions/BotStateActions.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
-#include "playerbot/strategy/actions/DungeonActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
@@ -182,7 +181,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (41 of its keys)
+    // the registry of ActionContext (40 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -228,7 +227,6 @@ namespace slice
             creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
             creators["reach party member to resurrect"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToResurrectAction(ai); };
             creators["move out of enemy contact"] = [](PlayerbotAI* ai) { return new MoveOutOfEnemyContactAction(ai); };
-            creators["restore spec aura"] = [](PlayerbotAI* ai) { return new RestoreSpecAuraAction(ai); };
         }
     };
 
@@ -551,7 +549,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 17, kActions = 50, kTriggers = 88, kValues = 176;
+    constexpr unsigned kStrategies = 17, kActions = 49, kTriggers = 88, kValues = 176;
 }
 }
 
