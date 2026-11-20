@@ -11,6 +11,7 @@
 #include "compat/botpch_forever.h"
 
 #include "host/TbPetFactory.h"
+#include "slice/SliceLog.h"
 
 #include "playerbot/playerbot.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -199,7 +200,7 @@ void PlayerbotFactory::InitPet(bool saveToDb)
         if (itr == logged.end() || itr->second != result)
         {
             logged[bot->GetGUID()] = result;
-            TC_LOG_WARN("tortoisebots", "pet: no pet for {}: {}", bot->GetName(), TortoiseBots::p11::GiveResultText(result));
+            ai::slice::LogWarn(std::string("pet: no pet for ") + bot->GetName() + ": " + TortoiseBots::p11::GiveResultText(result));
         }
     }
 }
