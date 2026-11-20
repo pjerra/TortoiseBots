@@ -206,3 +206,67 @@ the default constructor, now `ObjectGuid()`). The Turtle module then compiles: `
 | `tools/verify_all.sh` | unit discovery `Ran 2673 tests ... OK (skipped=19)`; the local host-contract step fails on `../tortoise-wow` (that checkout is on another branch and has no `src/game/SessionTransport.h`) exactly as on `tbf/main`, and the DBC step is skipped (no `../tortoise-docker/data/dbc` here); the same script on the VM is `vm-test tb` below |
 | Module ON / OFF (`FOREVER_SLOT=8`, `tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0` both (slot 8; build.sh's trailing error grep exits 1 when it finds none) |
 | Turtle `vm-build` / `vm-test tb` | `vm-build ~/wt-w1 --wait`: `COMPILE_SECONDS=146 CMAKE_RC=0 MAKE_RC=0`, `mangosd` and `realmd` written, job rc=0; `vm-test tb ~/wt-w1`: `RESULT: PASS kind=tb dirty=11` |
+
+## 9. Integration into main (batch 6, core pin 25fc7ca), 2026-11-20
+
+`integ/batch-6` (off `tbf/main` 6e8e0494a, the batch-5 merge) merges `tbf/world/w1` (4 commits, `c6ff3dc08`) into a tree on
+the new pin `25fc7ca3a68b`: **no conflict in any file**. W1's list is the union (`forever/SLICE1..SLICE11.txt` are subsets of
+`forever/SLICE-W1.txt`, 270 files), so it stays the list CMake and the registry read; the key lists union (`W1_KEYS` kept,
+`slice_registry_check.py` (a)=0, (b) 218 against main's 224, W1 registering six keys); the `W1 (world life)` block in
+`SliceLinkStubs.cpp` and the `TbCompat_W1.h` + `cmangos-compat-w1.h` pair are W1's own; `TbDashboard.*` and
+`tools/observability/` are main's, file for file; every doc keeps both sides (`TB-COMMANDS.md`, `UNPORTED.md`, `CENSUS.md`).
+
+**25fc7ca causes no compile break in the module**, so this merge carries no fix commit: the tree built and linked ON and OFF on
+the new pin at the first attempt, and the census of the 270-file list is clean without a code change. The core is byte-for-byte
+the pinned worktree (file-hash list of `src`, `sql` and the module excluded: equal).
+
+| Gate (slot 32, core 25fc7ca; slot 3 was in use by another worker, so this batch took a private core copy) | Result |
+|---|---|
+| Module OFF (`FOREVER_SLOT=32 build.sh 14 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0 TOTAL_SECONDS=28` |
+| Worldserver ON (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON build.sh 14 worldserver`, full core + module) | `CMAKE_RC=0 MAKE_RC=0 TOTAL_SECONDS=58`, `bin/Release/bin/worldserver` 72,052,480 bytes, 0 `error:`, 0 `undefined`; `strings` carries `[W1] death bot=`, `Loading free bots.`, `` `.tb free <bot> on\|off` `` |
+| Census `forever/SLICE-W1.txt` (270) | `files 270  compile clean 270  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (`census-runs/integ6-32-SLICE-W1`) |
+| Census `forever/SLICE11.txt` (263) | `files 263  compile clean 263  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` (`census-runs/integ6-32-SLICE11`) |
+| `slice_gen_context.py --check` / `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date` / `(a)=0  (b)=218` |
+| Policy tests, standalone (`policy-integ6.sh`: 478 of `clean_tests.txt` + the three W1 ones) | `475 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`; the six are main's (`test_combat_monitor_service`, `_race`, `test_decision_capture_files`, `test_run_trace_writer`; `test_log_file_rotation`, `test_decision_capture_codec`) |
+| `test_free_grind_policy` / `test_free_kit_policy` / `test_ghost_rescue_policy` | 50 / 72 / 19 checks PASS |
+| Run/class/policy C++ tests (`gate-forever.sh`) | 13 PASS, 0 FAIL (`test_run_orders` 209 checks, `test_run_c6` 28, `test_run_cancel`, `test_run_liquid`, `test_run_facts`, `test_run_facts_s9` 42, `test_run_tasks` 148, `test_run_gather` 21, `test_cc_order` 33, `test_slice10_roles` 28, `test_tb_self_target` 37, `cmd_binding_check` 57, `dash_runs_check`) |
+| `forever/tools/test_w1_wiring.py` / wiring discovery / `test_forever_no_direct_queries.py` | 22 tests OK / `Ran 149 tests ... OK (skipped=6)` / 5 tests OK |
+| `tools/verify_all.sh` (laptop) | `Ran 2673 tests ... OK (skipped=19)` (main: `Ran 2671 ... OK (skipped=19)`), `482 standalone policy tests verified` (main: 482); the host-contract step fails on `../tortoise-wow` exactly as on `tbf/main` (that checkout is on another branch), the DBC step is skipped: no new failure |
+| Turtle `vm-build` / `vm-test tb` | `vm-build ~/wt-integ6 --wait` rc=0: `COMPILE_SECONDS=9 CMAKE_RC=0 MAKE_RC=0`, `mangosd` and `realmd` written, module-tree-hash 32c7a70b7e4ac2d7, tree sha 93218437d dirty=0; `vm-test tb ~/wt-integ6`: `RESULT: PASS kind=tb` (rc=0, 1220 s, sha 93218437d dirty=0; unit discovery `Ran 2673 tests ... OK`, `482 standalone policy tests verified`, config defaults and usage verified) |
+
+## 10. Live on the new pin (run2, 2026-11-20)
+
+Server `~/forever-run2` (core 25fc7ca binary from the slot-32 ON build; run2's `sqlsrc` checked out at 25fc7ca for the run
+(the new binary needs the new core's `sql/`, PIN-MOVE-25FC7CA-NOTES section 9) and `world.sh update` applied its files; the four
+databases dumped to `/mnt/forever/pin-move-dump/run2-pre-integ6-dump.sql.gz` before the first start, then re-imported and the
+old binary (`worldserver.pre-integ6`, `cmp` identical) put back). Boot clean: `ready...`, `grep -c 'ASSERT|Segmentation|Aborted'`
+= 0, `tb status` "enabled, 0 bot session(s)", the only new lines are the two config notices for batch 5's keys.
+
+The scenario: `Mhol` (human warrior, level 20, `.tb gm on`) stands next to Rezlak the quest giver in Durotar
+(999.8, -4414.4, 14.5); `Pmob` (human warrior, level 20, no GM flag — a plain enemy player for the bot) 2 yd from it; `Wint`
+(orc warrior, `tb login` + `tb level 10` + `tb train`, then `tb free on`) at (1010, -4400, 17), 15-30 yd from all three, among
+the Elder Mottled Boar spawns (entry 3100). Console only, no client. `AiPlayerbot.AllowedLogFiles` gained `grind_target.csv`
+for the window and was restored.
+
+| Check | Result |
+|---|---|
+| Free mode | `free=yes`, `nc=arms;buff;default;food;free;grind;loot;roll`, `engine=yes` (a masterless bot runs its own kit) |
+| It grinds, 10 minutes (15:28:54-15:38:59 UTC) | `kills` 0 -> **4**, `deaths` **3**, `xp` **272**/7600, `bags` 18 -> 17, `dur` 76, `tele` 4 (the setup + three core release teleports), `rescue` 0; the target picks name level 8-9 boars and scorpids (`grind=3100:8:..`, then `3122:8:..`), never a grey and never above +4 |
+| Never the quest giver | `grind_target.csv`: 141 x `Rezlak` (entry 3293, friendly=1), every one `ignored (free bot: quest giver, vendor, trainer, flight master or innkeeper).` |
+| Never the player | 98 x `Pmob` (entry 0, hostile=1), every one `ignored (free bot: player).` |
+| Never the GM character | `Mhol` never appears in the candidate log (a GM-flagged unit is not in the bot's world for targeting), `hp=449/449`, `deaths=0`, `kills=0` over the whole window |
+| Corpse run | all three deaths: `[W1] death bot=Wint level=10` then `[W1] revive bot=Wint how=reclaim secs=28 yd=18.3`, `secs=33 yd=7.4`, `secs=11 yd=37.1` (no healer leg, no rescue) |
+| Rest and eat | `hp` 92 -> 171 -> 241 with `resting=yes rest_why=hp;eating` and then `eating=no resting=no`; food came from loot this time |
+| A master ends free mode | `.tb group Wint Mhol` -> `BotMgr: Wint is no longer a free bot (a master is bound)`, `Wint joined the party of Mhol`; `state` then `free=no`, `dm=154.9`, `nc=arms;default;dps assist;follow;food;loot;roll` (no `grind`, no `free`), `engine=yes` |
+| Tick cost | `tb perf` 289,598 ticks; module (sessions + engines) 6 us average, 176 ms worst; 3 bot sessions; no crash, no ASSERT |
+
+Note on the kill rate: 4 kills and 3 deaths in the 10 minutes, against 10 kills and 1 death in W1's own 12-minute window. The spot
+is not the same one (Rezlak's cluster holds 7 boar spawns within 120 yd against the spawn field of `game_tele` 308) and the bot
+fights on its creation `Battered Axe`; it lost the first exchanges after the mob respawns closed in, then killed steadily. Nothing
+in the run suggests a code difference: the free pick, the kit, the corpse run and the master handover all answered as W1's own live
+section records.
+
+Restore: worldserver stopped, `bin/worldserver` back from `worldserver.pre-integ6` (`cmp` identical), `sqlsrc` back at 6517af05,
+`aiplayerbot.conf` back from its `.pre-integ6` copy, the four databases dropped and re-imported from the dump (no
+`auctionhousebot*` table, 28 characters as before); run2 booted again on the old core (`ready...`, no ASSERT, `tb status`
+answers) and was stopped.

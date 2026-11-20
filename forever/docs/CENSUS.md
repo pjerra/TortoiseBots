@@ -163,3 +163,8 @@ ForeverCore does not have 0` (run folder `yulon-ubuntu2:~/forever-build/census-r
 The first pass had 13 places in 3 files (the `%s`/`GetName()` format, the `ObjectMgr` pointer, the duplicated `MapEntryCompat` and
 `TerrainIsInWaterCompat`); all closed in `forever/src/compat/TbCompat_W1.h`. `FleeManager` is no longer an unported feature (it is
 compiled now), so the boot line counts 74, one less than before.
+
+Integration batch 6 (the merge of `tbf/main` 6e8e0494a into W1) re-read the same list on the core pin 25fc7ca (slot 32, module tree
+`integ/batch-6`): `files 270  compile clean 270  with errors 0  error places 0  includes of a header ForeverCore does not have 0`
+(run folder `yulon-ubuntu2:~/forever-build/census-runs/integ6-32-SLICE-W1`). `SLICE11.txt` on the same tree: `files 263  compile
+clean 263  with errors 0  error places 0` (`census-runs/integ6-32-SLICE11`). Nothing in the module needed a change for the pin move.
