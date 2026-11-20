@@ -3,7 +3,9 @@
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
 #include "host/TbPet.h"
+#include "host/TbHostTaxi.h"
 #include "host/TbHostTown.h"
+#include "host/TbHostTransport.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -387,6 +389,9 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.S("corpserun", phase);
     if (ghostYd >= 0.0f)
         rec.N("ghostyd", static_cast<int32>(ghostYd + 0.5f));
+    rec.N("taxi", tbhost::taxi::KnownNodeCount(bot)).B("onTaxi", tbhost::taxi::InFlight(bot));
+    ObjectGuid const trGuid = tbhost::ride::CurrentTransportGuid(bot);
+    rec.S("transport", trGuid.IsEmpty() ? std::string("none") : trGuid.ToString());
     return rec;
 }
 

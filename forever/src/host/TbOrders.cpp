@@ -6,6 +6,8 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "host/TbHostTaxi.h"
+#include "host/TbHostTransport.h"
 #include "host/TbIgnore.h"   // I13: explicit orders take a listed mob off the commander's ignore list
 #include "MiscPackets.h"
 #include "TbBotMgr.h"
@@ -119,7 +121,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "taxi-learn", "fly", "ride" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -422,6 +424,32 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         return act("trainer", Event("tb order", o.arg.empty() ? std::string("learn") : o.arg, owner)) ? "ok" : "fail:train";
     if (o.verb == "mail")
         return act("mail", Event("tb order", o.arg.empty() ? std::string("take") : o.arg, owner)) ? "ok" : "fail:mail";
+    if (o.verb == "taxi-learn")
+    {
+        Creature* npc = tbhost::taxi::NearestFlightMaster(bot, 30.0f);
+        if (!npc)
+            return "fail:no-flightmaster";
+        return tbhost::taxi::Learn(bot, npc) ? "ok" : "fail:taxi-learn";
+    }
+    if (o.verb == "fly")
+    {
+        Creature* npc = tbhost::taxi::NearestFlightMaster(bot, 30.0f);
+        if (!npc)
+            return "fail:no-flightmaster";
+        uint32_t const toNode = tbhost::taxi::ResolveNodeArg(bot, o.arg);
+        if (!toNode)
+            return "fail:no-node";
+        std::string failCode;
+        return tbhost::taxi::Fly(bot, npc, toNode, &failCode) ? "ok" : ("fail:" + (failCode.empty() ? std::string("fly") : failCode));
+    }
+    if (o.verb == "ride")
+    {
+        uint32_t const entry = static_cast<uint32_t>(std::strtoul(o.arg.c_str(), nullptr, 10));
+        if (!entry)
+            return "fail:bad-entry";
+        std::string failCode;
+        return tbhost::ride::StartRide(bot, entry, &failCode) ? "ok" : ("fail:" + (failCode.empty() ? std::string("ride") : failCode));
+    }
     if (o.verb == "hold")
     {
         ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
@@ -994,11 +1022,19 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "order", "unknown-verb", verb);
     std::string const rest = JoinFrom(args.w, pos);
 
-    if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc") && rest.empty())
+    if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc" || verb == "fly" || verb == "ride") && rest.empty())
         return Fail(handler, args, "order", "missing-argument", verb == "assist" ? "assist <member name>" :
-            (verb == "co" || verb == "nc") ? "co|nc <+strategy,-strategy>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
-    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair") && !rest.empty())
+            (verb == "co" || verb == "nc") ? "co|nc <+strategy,-strategy>" :
+            verb == "fly" ? "fly <node id|name>" :
+            verb == "ride" ? "ride <transport entry>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
+    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair" || verb == "taxi-learn") && !rest.empty())
         return Fail(handler, args, "order", "unexpected-argument", rest);
+    if (verb == "ride")
+    {
+        uint32_t const entry = static_cast<uint32_t>(std::strtoul(rest.c_str(), nullptr, 10));
+        if (!entry)
+            return Fail(handler, args, "order", "bad-argument", "ride <transport entry>");
+    }
     if (verb == "co" || verb == "nc")
         for (char c : rest)
             if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == ',' || c == '_'))
