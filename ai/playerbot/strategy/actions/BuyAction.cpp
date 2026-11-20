@@ -202,7 +202,7 @@ bool BuyAction::Execute(Event& event)
                     // consumables, tradeskill stock or AH flips from a vendor.
                     // Trainer spells are taught by TrainerAction, not bought
                     // here, so refusing every usage in this loop is exact.
-                    if (isAltBot && event.GetSource() == "rpg action")
+                    if (isAltBot && event.getSource() == "rpg action")
                         break;
 
                     // Gold affordability

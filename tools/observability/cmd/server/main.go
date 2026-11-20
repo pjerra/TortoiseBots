@@ -866,6 +866,9 @@ func main() {
 	}))
 	mux.HandleFunc("GET /api/v1/plans/{plan}", requireAuth(plans.Handler(planSvc)))
 
+	// Which tabs this core feeds (the Raids, Raid coverage and Commanders pages say so when it does not).
+	mux.HandleFunc("GET /api/v1/core", requireAuth(coreHandler(*core)))
+
 	// The boss tactic rows the coverage view compares with the boss table:
 	// read-only, one cached snapshot, filtered per map on the cached copy.
 	mux.HandleFunc("GET /api/v1/boss/tactics", requireAuth(bosstactics.Handler(tacticSvc)))

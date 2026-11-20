@@ -119,6 +119,24 @@ TortoiseBots.Dashboard.TalentsFile = ""
 TortoiseBots.Dashboard.NamesFile = ""
 
 #
+#    TortoiseBots.Dashboard.Runs
+#        Description: Send the dungeon runs (`.tb run`) to the dashboard's Commander tab (one COMMANDERS datagram per cycle, one binding per
+#                     run). Only in the engine build, and only while TortoiseBots.Dashboard.Enable = 1.
+#        Default:     1
+#
+
+TortoiseBots.Dashboard.Runs = 1
+
+#
+#    TortoiseBots.Dashboard.RunSummaryDir
+#        Description: The folder where a finished run writes its `<run>.summary.json` for the dashboard's Dungeon runs tab. Point the dashboard's
+#                     -trace-dir (TBDASH_TRACE_DIR) at the same folder; created when missing. Empty = no summary files.
+#        Default:     ""
+#
+
+TortoiseBots.Dashboard.RunSummaryDir = ""
+
+#
 #    TortoiseBots.Dashboard.TraceDir
 #        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
 #                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.

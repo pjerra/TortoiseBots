@@ -6,6 +6,7 @@
 #include "../../../../runtime/AltBotPolicy.h"
 #include <algorithm>
 #include <vector>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -27,7 +28,7 @@ bool DropQuestAction::Execute(Event& event)
         if (!quest)
             continue;
 
-        if (questId == entry || link.find(quest->GetTitle()) != std::string::npos || link == "all")
+        if (questId == entry || link.find(QuestTitleW3(quest)) != std::string::npos || link == "all")
         {
             // Issue #872: an autonomous alt only abandons quests it took
             // itself. Explicit companion orders keep today's behaviour.

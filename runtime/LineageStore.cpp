@@ -4,6 +4,7 @@
 #include "Player.h"
 
 #include <memory>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -31,7 +32,7 @@ void LineageStore::Load()
     m_records.clear();
     m_lines.clear();
     m_lastCreatedAt = 0;
-    std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
+    auto result = QueryGuardCompat(CharacterDatabase.Query(
         "SELECT `guid`, `parent_guid`, `founder_guid`, `name`, `race`, `class`, `created_at`, `reached_60_at` "
         "FROM `tortoise_bots_lineage`"));
     if (!result)
@@ -43,7 +44,7 @@ void LineageStore::Load()
         r.guid = f[0].GetUInt32();
         r.parentGuid = f[1].GetUInt32();
         r.founderGuid = f[2].GetUInt32();
-        r.name = f[3].GetCppString();
+        r.name = FieldTextW3(f[3]);
         r.race = f[4].GetUInt8();
         r.cls = f[5].GetUInt8();
         r.createdAt = int64_t(f[6].GetUInt64());
@@ -98,7 +99,7 @@ int64_t LineageStore::LastCreatedAt() const
 void LineageStore::Record(LineageRecord const& record)
 {
     std::string name = record.name;
-    CharacterDatabase.escape_string(name);
+    DbEscapeW3(CharacterDatabase, name);
     CharacterDatabase.PExecute(
         "INSERT INTO `tortoise_bots_lineage` (`guid`, `parent_guid`, `founder_guid`, `name`, `race`, `class`, `created_at`, `reached_60_at`) "
         "VALUES ('%u', '%u', '%u', '%s', '%u', '%u', '%lld', '0')",

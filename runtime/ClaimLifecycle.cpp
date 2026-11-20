@@ -5,6 +5,7 @@
 
 #include "Database/DatabaseEnv.h"
 #include "Log.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -23,7 +24,7 @@ void ClaimLifecycle::Initialize()
 
     m_claimedByBotGuid.clear();
 
-    std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
+    auto result = QueryGuardCompat(CharacterDatabase.Query(
         "SELECT `bot_guid`, `owner_account_id`, `owner_player_guid`, `guild_id` FROM `tortoise_bots_claimed`"));
 
     if (result)

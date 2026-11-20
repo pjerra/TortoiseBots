@@ -52,6 +52,7 @@
 #include <unordered_map>
 #include <vector>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace
 {
@@ -74,7 +75,7 @@ std::string ValueKey(uint32 guid, std::string const& name)
 
 std::string TradeKey(ObjectGuid bot, ObjectGuid master)
 {
-    return bot.GetString() + "\n" + master.GetString();
+    return GuidStringW3(bot) + "\n" + GuidStringW3(master);
 }
 
 // Issue #1605: a party with a human's character in it is the player's, not
@@ -331,7 +332,7 @@ void RandomBotFacade::LoadNamedLocationCache()
             point.y = fields[3].GetFloat();
             point.z = fields[4].GetFloat();
             point.orientation = fields[5].GetFloat();
-            sNamedLocations.Add(fields[0].GetCppString(), point);
+            sNamedLocations.Add(FieldTextW3(fields[0]), point);
         } while (result->NextRow());
     }
 
@@ -370,7 +371,7 @@ void RandomBotFacade::LoadAuctionPrices()
         if (!houseEntry)
             continue;
 
-        AuctionHouseObject* auctionHouse = sAuctionMgr.GetAuctionsMap(houseEntry);
+        AuctionHouseObject* auctionHouse = AuctionMgrW3().GetAuctionsMap(houseEntry);
         if (!auctionHouse)
             continue;
         if (std::find(visited.begin(), visited.end(), auctionHouse) != visited.end())
@@ -391,7 +392,7 @@ void RandomBotFacade::LoadAuctionPrices()
             if (!entry->buyout)
                 continue;
 
-            Item const* item = sAuctionMgr.GetAItem(entry->itemGuidLow);
+            Item const* item = AuctionMgrW3().GetAItem(entry->itemGuidLow);
             if (!item || !item->GetCount())
                 continue;
 
@@ -409,7 +410,7 @@ void RandomBotFacade::LoadAuctionPrices()
                 size_t replaceIdx = ai::AhListingReplaceIndex(listings, currentUnitPrice,
                     [](AuctionEntry const& existing)
                     {
-                        Item const* existingItem = sAuctionMgr.GetAItem(existing.itemGuidLow);
+                        Item const* existingItem = AuctionMgrW3().GetAItem(existing.itemGuidLow);
                         uint32 existingCount = existingItem ? existingItem->GetCount() : 1;
                         return float(existing.buyout) / float(existingCount);
                     });

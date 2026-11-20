@@ -18,6 +18,7 @@
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
 #include "Database/DatabaseEnv.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -159,7 +160,7 @@ void HireUnlockKillAdapter::OnLogin(Player* player)
     if (BotManager::Instance().IsBot(player->GetObjectGuid()))
         return;
     std::set<uint32_t> kills;
-    std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+    auto rows = QueryGuardCompat(CharacterPQueryCompat(
         "SELECT `boss_entry` FROM `tortoise_bots_hire_unlock_kills` WHERE `guid` = '%u'",
         player->GetGUIDLow()));
     if (rows)

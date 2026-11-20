@@ -12,6 +12,7 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "runtime/SystemRunPolicy.h"
@@ -74,6 +75,16 @@ RunRec* Find(ObjectGuid leader)
 {
     auto const it = Table().find(leader);
     return it == Table().end() ? nullptr : it->second.get();
+}
+
+namespace
+{
+EndListener EndHook = nullptr;
+}
+
+void SetEndListener(EndListener listener)
+{
+    EndHook = listener;
 }
 
 RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs)
@@ -618,6 +629,8 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     ai::DungeonPlan const* plan = rec.run.plan;
     int32 const current = plan && rec.run.step < plan->steps.size() ? int32(rec.run.step) : -1;
     Note(rec, nowMs, stopped ? "stop" : "done", current, why);
+    if (EndHook)
+        EndHook(rec);
     return stayed;
 }
 
@@ -848,6 +861,7 @@ void TickRun(RunRec& rec, uint32 nowMs)
         OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
         // G8: a refused automatic cc order assigned nothing: the unit, bot, mark and budget go back for the next pick (the Turtle glue calls it after every order).
         DungeonRun::CcOrderTaken(run, order, answer.accepted);
+        cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);   // P1: the commander card's order log
         if (answer.accepted)
         {
             if (answer.movePathRead)

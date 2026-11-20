@@ -22,9 +22,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 // PlanMobSlackYd widens a step's radius when a spawn is matched to it: a pack
@@ -218,6 +219,22 @@ const (
 	QueryTemplates = "SELECT `entry`, `name`, `level_max`, `detection_range`, `rank`, `flags_extra` FROM `creature_template` WHERE `entry` IN (%s)"
 	QuerySpawns    = "SELECT `guid`, `id`, `position_x`, `position_y`, `position_z`, `movement_type` FROM `creature` WHERE `map` = ? AND `id` IN (%s) LIMIT 400"
 )
+
+// The same two reads for a TrinityCore world database (ForeverCore). It has no `level_max` or `detection_range`, calls the rank column
+// `Classification` and keeps the movement type in `creature`.`MovementType`. Level and detection are then 0 (unknown: the map draws no
+// aggro ring for them); the rank and the movement type are read as they are. Used only after the first query answered MySQL 1054.
+const (
+	QueryTemplatesTC = "SELECT `entry`, `name`, 0, 0, `Classification`, `flags_extra` FROM `creature_template` WHERE `entry` IN (%s)"
+	QuerySpawnsTC    = "SELECT `guid`, `id`, `position_x`, `position_y`, `position_z`, `MovementType` FROM `creature` WHERE `map` = ? AND `id` IN (%s) LIMIT 400"
+)
+
+// errUnknownColumn is MySQL's "Unknown column" (1054): the table exists but is not the Turtle schema.
+const errUnknownColumn = 1054
+
+func isUnknownColumn(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) && me.Number == errUnknownColumn
+}
 
 // kinds are the step kinds the module parses; any other row is dropped, as
 // AddStep drops it at startup.
@@ -505,7 +522,12 @@ func matchMobs(kept []keptStep, spawns []SpawnRow, templates map[uint32]Template
 // NewSQLSource reads the world database.
 func NewSQLSource(db *sql.DB) Source { return &sqlSource{db: db} }
 
-type sqlSource struct{ db *sql.DB }
+// sqlSource reads the world database. tc is set once a creature query answered 1054 (a TrinityCore schema): from then on the TC
+// queries are used first, so a plan costs one query per read, not two.
+type sqlSource struct {
+	db *sql.DB
+	tc atomic.Bool
+}
 
 func (s *sqlSource) Plan(ctx context.Context, name string) (PlanRow, bool, error) {
 	var r PlanRow
@@ -565,7 +587,20 @@ func (s *sqlSource) Templates(ctx context.Context, entries []uint32) ([]Template
 	for i, e := range entries {
 		args[i] = e
 	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(QueryTemplates, inMarks(len(entries))), args...)
+	query := QueryTemplates
+	if s.tc.Load() {
+		query = QueryTemplatesTC
+	}
+	out, err := s.templates(ctx, query, entries, args)
+	if err != nil && !s.tc.Load() && isUnknownColumn(err) {
+		s.tc.Store(true)
+		return s.templates(ctx, QueryTemplatesTC, entries, args)
+	}
+	return out, err
+}
+
+func (s *sqlSource) templates(ctx context.Context, query string, entries []uint32, args []any) ([]TemplateRow, error) {
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(query, inMarks(len(entries))), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +627,20 @@ func (s *sqlSource) Spawns(ctx context.Context, mapID uint32, entries []uint32) 
 	for _, e := range entries {
 		args = append(args, e)
 	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(QuerySpawns, inMarks(len(entries))), args...)
+	query := QuerySpawns
+	if s.tc.Load() {
+		query = QuerySpawnsTC
+	}
+	out, err := s.spawns(ctx, query, entries, args)
+	if err != nil && !s.tc.Load() && isUnknownColumn(err) {
+		s.tc.Store(true)
+		return s.spawns(ctx, QuerySpawnsTC, entries, args)
+	}
+	return out, err
+}
+
+func (s *sqlSource) spawns(ctx context.Context, query string, entries []uint32, args []any) ([]SpawnRow, error) {
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(query, inMarks(len(entries))), args...)
 	if err != nil {
 		return nil, err
 	}

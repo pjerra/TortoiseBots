@@ -90,6 +90,10 @@ struct Database {
   return rows.empty()?nullptr:std::make_shared<Result>(Result{rows});
  }
 } CharacterDatabase;
+// the Turtle bodies of the pass-3 helpers (ai/cmangos-compat-w3.h, ai/cmangos-compat-unported.h)
+template <class Db> inline void DbEscapeW3(Db& db, std::string& text) { db.escape_string(text); }
+template <class... Args>
+inline std::shared_ptr<Result> CharacterPQueryCompat(char const* format, Args... args) { return CharacterDatabase.PQuery(format, args...); }
 struct PlayerbotDbStore {void Load(PlayerbotAI*,std::string);};
 struct EnterDungeonTrigger {
  PlayerbotAI* ai; Player* bot; std::string dungeonStrategy; unsigned mapID;

@@ -10,6 +10,7 @@
 #include "runtime/HireLifecycle.h"
 #include "runtime/AltBotService.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -140,7 +141,7 @@ bool PetitionOfferAction::Execute(Event& event)
     data << petitions.front()->getObjectGuid();
     data << guid;
 
-    auto result = CharacterDatabase.PQuery("SELECT playerguid FROM petition_sign WHERE player_account = '%u' AND petitionguid = '%u'", player->GetSession()->GetAccountId(), petitions.front()->getObjectGuid().GetCounter());
+    auto result = CharacterPQueryCompat("SELECT playerguid FROM petition_sign WHERE player_account = '%u' AND petitionguid = '%u'", player->GetSession()->GetAccountId(), petitions.front()->getObjectGuid().GetCounter());
 
     if (result)
     {
@@ -149,7 +150,7 @@ bool PetitionOfferAction::Execute(Event& event)
 
     bot->GetSession()->HandleOfferPetitionOpcode(data);
 
-    result = CharacterDatabase.PQuery("SELECT playerguid FROM petition_sign WHERE petitionguid = '%u'", petitions.front()->getObjectGuid().GetCounter());
+    result = CharacterPQueryCompat("SELECT playerguid FROM petition_sign WHERE petitionguid = '%u'", petitions.front()->getObjectGuid().GetCounter());
     uint8 signs = result ? (uint8)result->GetRowCount() : 0;
 
     context->GetValue<uint8>("petition signs")->Set(signs);

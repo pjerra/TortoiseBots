@@ -11,6 +11,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
+#include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/run/TbRunFacts.h"
 #include "slice/SliceHybridPolicy.h"
@@ -976,6 +977,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 return Fail(handler, args, "order", "bad-argument", "strategy changes use letters, digits, space, + - , _");
 
     uint32 queued = 0, refused = 0;
+    std::vector<std::pair<Player*, std::string>> outcomes;   // per bot, for the card it stands on: its refusal code, empty when queued
     // `order-begin`, one line per bot, `order-end` (grammar version 2: only `error` is a one-line reply).
     Reply reply(handler, args, "order");
     reply.Begin();
@@ -985,6 +987,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         auto const refuse = [&](std::string const& code, std::string const& detail, char const* name = nullptr)
         {
             ++refused;
+            outcomes.push_back({ bot, code });
             Rec rec("order");
             rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused").S("code", code);
             if (name)
@@ -1124,10 +1127,12 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             continue;
         }
         ++queued;
+        outcomes.push_back({ bot, std::string() });
         Rec rec("order");
         rec.S("bot", bot->GetName()).S("verb", verb).N("seq", seq).S("status", "queued");
         emit(rec);
     }
+    cmd::NoteOrder(outcomes, verb, rest);   // P1: each card's own order log
     Rec end("order");
     end.S("verb", verb).P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued).N("refused", refused);
     reply.End(end);
@@ -1327,6 +1332,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("status", "bound");
         emit(rec);
     }
+    cmd::NoteMaster(who.bots, who.leader, commander);   // P1: the commander record (lead, boundAt) beside h3's table
     Rec end("master");
     end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", who.bots.size()).N("bound", done).N("queued", queued).N("refused", refused);
     reply.End(end);

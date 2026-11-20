@@ -44,6 +44,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -378,18 +379,18 @@ void CollectObtainableAndPhases(
         uint32_t const qPhase = LookupPhaseOrZero(questPhases, pair.first);
         for (uint32 i = 0; i < QUEST_REWARDS_COUNT; ++i)
         {
-            if (quest->RewItemId[i] > 0)
+            if (QuestRewItemIdsW3(quest)[i] > 0)
             {
-                obtainableItems.insert(quest->RewItemId[i]);
-                RecordDistinctPhase(itemSourcePhases[quest->RewItemId[i]], qPhase);
+                obtainableItems.insert(QuestRewItemIdsW3(quest)[i]);
+                RecordDistinctPhase(itemSourcePhases[QuestRewItemIdsW3(quest)[i]], qPhase);
             }
         }
         for (uint32 i = 0; i < QUEST_REWARD_CHOICES_COUNT; ++i)
         {
-            if (quest->RewChoiceItemId[i] > 0)
+            if (QuestRewChoiceItemIdsW3(quest)[i] > 0)
             {
-                obtainableItems.insert(quest->RewChoiceItemId[i]);
-                RecordDistinctPhase(itemSourcePhases[quest->RewChoiceItemId[i]], qPhase);
+                obtainableItems.insert(QuestRewChoiceItemIdsW3(quest)[i]);
+                RecordDistinctPhase(itemSourcePhases[QuestRewChoiceItemIdsW3(quest)[i]], qPhase);
             }
         }
     }

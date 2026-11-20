@@ -17,6 +17,7 @@
 #include "policy/gear/FeralSpecPolicy.h"
 #include "../../runtime/policy/provision/AmmoCachePolicy.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 char * strstri (const char* str1, const char* str2);
 
@@ -908,7 +909,7 @@ void RandomItemMgr::BuildItemInfoCache()
     std::vector<uint32> allianceItems;
     std::vector<uint32> hordeItems;
     vendorItems.clear();
-    if (auto result = WorldDatabase.PQuery("%s", "SELECT item, entry FROM npc_vendor"))
+    if (auto result = WorldDatabase.Query("SELECT item, entry FROM npc_vendor"))
     {
         BarGoLink bar(result->GetRowCount());
         do
@@ -1188,7 +1189,7 @@ void RandomItemMgr::BuildItemInfoCache()
                         if (!crItem || !crItem->conditionId)
                             continue;
 
-                        if (auto result = WorldDatabase.PQuery("SELECT type, value1, value2 FROM conditions WHERE condition_entry = '%u'", crItem->conditionId))
+                        if (auto result = DbPQueryW3(WorldDatabase, "SELECT type, value1, value2 FROM conditions WHERE condition_entry = '%u'", crItem->conditionId))
                         {
                             do
                             {
@@ -2210,10 +2211,10 @@ uint32 RandomItemMgr::GetQuestIdForItem(uint32 itemId)
         uint32 rewItemCount = quest->GetRewItemsCount();
         for (uint32 i = 0; i < rewItemCount; ++i)
         {
-            if (!quest->RewItemId[i])
+            if (!QuestRewItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewItemId[i] == itemId)
+            if (QuestRewItemIdsW3(quest)[i] == itemId)
             {
                 isQuest = true;
                 questId = quest->GetQuestId();
@@ -2224,10 +2225,10 @@ uint32 RandomItemMgr::GetQuestIdForItem(uint32 itemId)
         uint32 rewChocieItemCount = quest->GetRewChoiceItemsCount();
         for (uint32 i = 0; i < rewChocieItemCount; ++i)
         {
-            if (!quest->RewChoiceItemId[i])
+            if (!QuestRewChoiceItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewChoiceItemId[i] == itemId)
+            if (QuestRewChoiceItemIdsW3(quest)[i] == itemId)
             {
                 isQuest = true;
                 questId = quest->GetQuestId();
@@ -2257,10 +2258,10 @@ std::vector<uint32> RandomItemMgr::GetQuestIdsForItem(uint32 itemId)
         uint32 rewItemCount = quest->GetRewItemsCount();
         for (uint32 i = 0; i < rewItemCount; ++i)
         {
-            if (!quest->RewItemId[i])
+            if (!QuestRewItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewItemId[i] == itemId)
+            if (QuestRewItemIdsW3(quest)[i] == itemId)
             {
                 questIds.push_back(quest->GetQuestId());
                 break;
@@ -2270,10 +2271,10 @@ std::vector<uint32> RandomItemMgr::GetQuestIdsForItem(uint32 itemId)
         uint32 rewChocieItemCount = quest->GetRewChoiceItemsCount();
         for (uint32 i = 0; i < rewChocieItemCount; ++i)
         {
-            if (!quest->RewChoiceItemId[i])
+            if (!QuestRewChoiceItemIdsW3(quest)[i])
                 continue;
 
-            if (quest->RewChoiceItemId[i] == itemId)
+            if (QuestRewChoiceItemIdsW3(quest)[i] == itemId)
             {
                 questIds.push_back(quest->GetQuestId());
                 break;
@@ -2397,7 +2398,7 @@ void RandomItemMgr::BuildRaidSourceIndex()
     // Classify every spawn-table map through the DBC once.
     std::set<uint32> raidMaps;
     {
-        std::unique_ptr<QueryResult> rows(WorldDatabase.Query("SELECT DISTINCT map FROM creature UNION SELECT DISTINCT map FROM gameobject"));
+        auto rows = QueryGuardCompat(WorldDatabase.Query("SELECT DISTINCT map FROM creature UNION SELECT DISTINCT map FROM gameobject"));
         if (rows)
         {
             do
@@ -2421,8 +2422,7 @@ void RandomItemMgr::BuildRaidSourceIndex()
 
         auto collect = [&mapList](char const* table, std::set<uint32>& out)
         {
-            std::unique_ptr<QueryResult> rows(WorldDatabase.PQuery(
-                "SELECT DISTINCT id FROM %s WHERE map IN (%s)", table, mapList.c_str()));
+            auto rows = QueryGuardCompat(DbPQueryW3(WorldDatabase, "SELECT DISTINCT id FROM %s WHERE map IN (%s)", table, mapList.c_str()));
             if (!rows)
                 return;
             do
@@ -2489,7 +2489,7 @@ void RandomItemMgr::BuildSourceTierIndex()
 
     // Creature template -> min tier over its spawns (id..id4 columns).
     {
-        std::unique_ptr<QueryResult> rows(WorldDatabase.Query(
+        auto rows = QueryGuardCompat(WorldDatabase.Query(
             "SELECT id, id2, id3, id4, map FROM creature"));
         if (rows)
         {
@@ -2512,7 +2512,7 @@ void RandomItemMgr::BuildSourceTierIndex()
 
     // GameObject template -> min tier over its spawns.
     {
-        std::unique_ptr<QueryResult> rows(WorldDatabase.Query("SELECT id, map FROM gameobject"));
+        auto rows = QueryGuardCompat(WorldDatabase.Query("SELECT id, map FROM gameobject"));
         if (rows)
         {
             do
@@ -2566,7 +2566,7 @@ void RandomItemMgr::BuildSourceTierIndex()
     // The in-memory SpellEntry store carries the merged DBC+DB rows, so the
     // chain walks without world-DB spell queries.
     {
-        std::unique_ptr<QueryResult> recipes(WorldDatabase.Query(
+        auto recipes = QueryGuardCompat(WorldDatabase.Query(
             "SELECT entry, spellid_1 FROM item_template WHERE class = 9 AND spellid_1 <> 0"));
         if (recipes)
         {
@@ -2724,11 +2724,11 @@ void RandomItemMgr::BuildKnownSourceIndex()
     {
         Quest const* quest = entry.second.get();
         for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
-            if (quest->RewItemId[i])
-                knownSourceItems.insert(quest->RewItemId[i]);
+            if (QuestRewItemIdsW3(quest)[i])
+                knownSourceItems.insert(QuestRewItemIdsW3(quest)[i]);
         for (uint32 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
-            if (quest->RewChoiceItemId[i])
-                knownSourceItems.insert(quest->RewChoiceItemId[i]);
+            if (QuestRewChoiceItemIdsW3(quest)[i])
+                knownSourceItems.insert(QuestRewChoiceItemIdsW3(quest)[i]);
     }
 
     knownSourceItems.erase(0);
@@ -3546,20 +3546,20 @@ bool RandomItemMgr::HasSameQuestRewards(Player *player, uint32 itemId)
         uint32 rewItemCount = quest->GetRewItemsCount();
         for (uint32 i = 0; i < rewItemCount; ++i)
         {
-            if (!quest->RewItemId[i])
+            if (!QuestRewItemIdsW3(quest)[i])
                 continue;
 
-            if (player->HasItemCount(quest->RewItemId[i], 1, true))
+            if (player->HasItemCount(QuestRewItemIdsW3(quest)[i], 1, true))
                 return true;
         }
 
         uint32 rewChoiceItemCount = quest->GetRewChoiceItemsCount();
         for (uint32 i = 0; i < rewChoiceItemCount; ++i)
         {
-            if (!quest->RewChoiceItemId[i])
+            if (!QuestRewChoiceItemIdsW3(quest)[i])
                 continue;
 
-            if (player->HasItemCount(quest->RewChoiceItemId[i], 1, true))
+            if (player->HasItemCount(QuestRewChoiceItemIdsW3(quest)[i], 1, true))
                 return true;
         }
     }
@@ -4129,8 +4129,7 @@ void RandomItemMgr::BuildAmmoCache()
     // then lowest entry) is ai::PickAmmo, so it never depends on row order.
     auto pickAmmo = [](uint32 itemClass, uint32 subClass, uint32 level) -> uint32
     {
-        auto rows = WorldDatabase.PQuery(
-            "select entry, required_level, flags, name, dmg_min1, dmg_max1, delay from item_template"
+        auto rows = DbPQueryW3(WorldDatabase, "select entry, required_level, flags, name, dmg_min1, dmg_max1, delay from item_template"
             " where class = '%u' and subclass = '%u' and required_level <= '%u' and quality = '%u'",
             itemClass, subClass, level, ITEM_QUALITY_NORMAL);
         if (!rows)
@@ -4190,8 +4189,7 @@ void RandomItemMgr::BuildAmmoCache()
     {
         for (uint32 subClass = ItemSubclassQuiver::ITEM_SUBCLASS_QUIVER; subClass <= ItemSubclassQuiver::ITEM_SUBCLASS_AMMO_POUCH; ++subClass)
         {
-            auto results = WorldDatabase.PQuery(
-                    "SELECT it.entry FROM item_template it JOIN npc_vendor v ON v.item = it.entry"
+            auto results = DbPQueryW3(WorldDatabase, "SELECT it.entry FROM item_template it JOIN npc_vendor v ON v.item = it.entry"
                     " WHERE it.class = '%u' AND it.subclass = '%u' AND it.required_level <= '%u'"
                     " ORDER BY it.required_level DESC LIMIT 1",
                     ITEM_CLASS_QUIVER, subClass, level);

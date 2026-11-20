@@ -37,6 +37,7 @@
 #include <atomic>
 #include <cctype>
 #include <string>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
@@ -64,7 +65,7 @@ bool IsDisposableFixture(uint32 accountId, uint32 guidLow, char const* testName)
 
     bool disposableCharacter = name.rfind("TBPLAY", 0) == 0;
     bool disposableAccount = false;
-    if (auto account = LoginDatabase.PQuery("SELECT username FROM account WHERE id = '%u'", accountId))
+    if (auto account = DbPQueryW3(LoginDatabase, "SELECT username FROM account WHERE id = '%u'", accountId))
     {
         std::string accountName = account->Fetch()[0].GetCppString();
         for (char& character : accountName)

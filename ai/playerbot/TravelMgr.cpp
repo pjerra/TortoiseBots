@@ -25,6 +25,7 @@
 #include "ObjectAccessor.h"
 #include "Formulas.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -2819,13 +2820,13 @@ void TravelMgr::LoadFishLocations()
 
         Field* fields = result->Fetch();
 
-        std::string name = fields[0].GetCppString();
+        std::string name = FieldTextW3(fields[0]);
         uint32 mapId = fields[1].GetUInt32();
         float positionX = fields[2].GetFloat();
         float positionY = fields[3].GetFloat();
         float positionZ = fields[4].GetFloat();
         float orientation = fields[5].GetFloat();
-        std::string description = fields[6].GetCppString();
+        std::string description = FieldTextW3(fields[6]);
 
         AsyncGuidPosition* point = &fishPoints.emplace_back(GuidPosition(0, WorldPosition(mapId, positionX, positionY, positionZ, orientation)));
 

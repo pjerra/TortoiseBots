@@ -45,7 +45,7 @@ class GuildOrderStoreColumnsTest(unittest.TestCase):
         self.assertIn("StoreColumns::SelectList()", STORE)
         self.assertIn("fields[StoreColumns::ColCarried].GetUInt32()", STORE)
         self.assertIn("fields[StoreColumns::ColGuildGoldHeld].GetUInt32()", STORE)
-        self.assertIn("fields[StoreColumns::ColState].GetCppString()", STORE)
+        self.assertIn("FieldTextW3(fields[StoreColumns::ColState])", STORE)
 
     def test_replace_writes_the_loaded_row_in_the_same_order(self):
         self.assertEqual(replace_columns(), select_columns())
