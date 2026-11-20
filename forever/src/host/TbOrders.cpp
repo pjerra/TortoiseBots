@@ -449,7 +449,12 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         // a plain `follow` from the executor. The point's z is the floor the judge read under it.
         // R6 (review item 7, round 2): the straight line is read again where it is walked (the judge read it when the order was made; the bot may have moved since),
         // with the same move rule as the judge (TbRunLiquid.h): wet samples only as the contiguous prefix that holds the bot's own spot, the end dry.
-        if (Map* map = bot->GetMap(); map && run::liquid::SegmentPrefixRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
+        // Review fix 4: the order was queued up to 15 s ago for a bot on map `o.map`. A bot that is teleporting (GetMap() asserts with no map) or stands on another
+        // map by now must not walk this point's coordinates on that map: the order fails, the run hears it as a late failure.
+        Map* const map = bot->FindMap();
+        if (!map || bot->IsBeingTeleported() || (o.map && bot->GetMapId() != o.map))
+            return "fail:wrong-map";
+        if (run::liquid::SegmentPrefixRefusedOnMap(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), o.x, o.y, o.z))
             return "fail:liquid";
         ai->DropQueuedMovementOrders();
         ai->Reset();

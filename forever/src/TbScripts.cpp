@@ -469,8 +469,10 @@ public:
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 #ifdef TORTOISEBOTS_SLICE1
         // R6 live check: the liquid at the bot's feet and the nearest wet floor cells within 40 yd (the run's own liquid rule, TbRunLiquid.h).
-        for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(bot->GetMap(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
-            handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+        // Review fix 3b: FindMap, not GetMap (which ASSERTs while the bot is between maps); no map, no liquid lines.
+        if (Map* map = bot->FindMap())
+            for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
+                handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 #endif
 
         // What the bot has around it: proves its part of the map is loaded and populated.

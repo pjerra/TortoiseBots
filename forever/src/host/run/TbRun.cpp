@@ -259,6 +259,10 @@ uint32 StayParty(RunRec const& rec)
 // tank's pull strategy, every member's join window and hold) is ended. Called BEFORE the final stay of a stop, on a pause and when a stop is pending.
 void CancelRunWork(RunRec const& rec, bool endPulls)
 {
+    // Review fix 2: the executor's list of orders still waiting for their result goes with the queued orders. CancelRunOrders leaves the bot's result at
+    // `fail:cancelled`; a pending entry left behind would be settled by the first tick after `.tb run resume` (TakeLateFailures) as a refusal of an order
+    // the pause itself cancelled, and the policy would pause the run again for it.
+    ForgetRunOrders(rec.leader);
     for (ObjectGuid guid : PartyGuids(rec))
     {
         h3::CancelRunOrders(guid);
