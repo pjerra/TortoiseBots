@@ -150,8 +150,8 @@ namespace ai
     // otherwise deferred when nothing later in the plan needs it gone (runtime/DungeonRunPolicy.h PullMayBeDeferred,
     // DeferUnreachablePack); with this flag it pauses the run as before. Any other kind with this flag is refused (BadParam).
     constexpr std::uint32_t kPlanFlagNoDefer = 1024;
-    // open_proof only: the proof entry is a creature (alive). The next free bit: 65536 (8192 is kPlanFlagStandPull, a boss or a
-    // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold).
+    // open_proof only: the proof entry is a creature (alive). The next free bit: 131072 (8192 is kPlanFlagStandPull, a boss or a
+    // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold; 65536 kPlanFlagEscortNpc).
     constexpr std::uint32_t kPlanFlagProofCreature = 2048;
     // boss only: the boss may stand out of the party's reach by design (Stormwrought Ruins' Eldermaw 62661 swims a
     // pool whose bed is the only navmesh, cut off from the shore; specs/sw-eldermaw.md). Where the step would pause on
@@ -178,6 +178,10 @@ namespace ai
     // Run::startNpcDeadStep); a run resumed at the hold itself waits for a hostile unit as before. Any other kind, a hold with
     // a done flag, and a hold with kPlanFlagResetToGossip are refused (BadParam).
     constexpr std::uint32_t kPlanFlagDeadGossipOk = 32768;
+    // hold only, a units hold (no done flag): the hold's event has a start NPC (the gossip step before it, e.g. the Disciple of Naralex) that must stay
+    // alive for the escort to finish. The run reads that NPC around the lead bot; dead or gone for 10 s it stops the event with a named reason and goes
+    // back to the gossip once (DungeonRunPolicy.h kEscortNpcGoneMs, EventFailed), so a respawned NPC can start it again. Any other kind is refused.
+    constexpr std::uint32_t kPlanFlagEscortNpc = 65536;
     constexpr std::uint32_t kPlanEncounterNotStarted = 0;
     constexpr std::uint32_t kPlanEncounterFail = 2;
     constexpr std::uint32_t kPlanEncounterMax = 4;
@@ -554,6 +558,8 @@ namespace ai
         if ((step.flags & kPlanFlagResetToGossip) && step.kind != PlanStepKind::Hold)
             return PlanStepRefusal::BadParam;
         if ((step.flags & kPlanFlagDeadGossipOk) && step.kind != PlanStepKind::Hold)
+            return PlanStepRefusal::BadParam;
+        if ((step.flags & kPlanFlagEscortNpc) && step.kind != PlanStepKind::Hold)
             return PlanStepRefusal::BadParam;
         if (step.exactLaunch && step.kind != PlanStepKind::MoveDirect)
             return PlanStepRefusal::BadParam;

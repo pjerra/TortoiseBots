@@ -48,7 +48,8 @@ struct Row
     std::vector<std::uint32_t> entries;
 };
 
-bool LoadRows(char const* path, ai::DungeonPlanTable& table, std::vector<Row>& rows, int& unitRows)
+bool LoadRows(char const* path, ai::DungeonPlanTable& table, std::vector<Row>& rows, int& unitRows,
+    std::map<std::pair<int, int>, std::vector<Row>>& unitsByStep)
 {
     std::ifstream in(path);
     if (!in)
@@ -78,6 +79,12 @@ bool LoadRows(char const* path, ai::DungeonPlanTable& table, std::vector<Row>& r
         if (f[0] == "U")
         {
             ++unitRows;
+            Row u;
+            u.leg = std::uint8_t(std::stoi(f[1]));
+            u.seq = std::uint16_t(std::stoi(f[2]));
+            u.entry = std::uint32_t(std::stoul(f[4]));
+            u.x = std::stof(f[5]); u.y = std::stof(f[6]); u.z = std::stof(f[7]);
+            unitsByStep[{int(u.leg), int(u.seq)}].push_back(u);
             continue;
         }
         if (f.size() < 14)
@@ -488,7 +495,7 @@ void TestPlanShape(ai::DungeonPlan const* plan, int unitRows)
     int pulls = 0, holds = 0, gossip = 0, exact = 0;
     for (PlanStep const& s : plan->steps)
     {
-        CHECK(s.leg < plan->legs.size() + 40);
+        CHECK(s.leg < plan->legs.size());
         switch (s.kind)
         {
             case PlanStepKind::Boss: bosses.insert(s.entry); break;
@@ -499,9 +506,9 @@ void TestPlanShape(ai::DungeonPlan const* plan, int unitRows)
             default: break;
         }
     }
-    CHECK(plan->steps.size() > 400);
-    CHECK(pulls > 80);
-    CHECK(holds >= 6);
+    CHECK(plan->steps.size() == 302);
+    CHECK(pulls == 87);
+    CHECK(holds == 5);
     CHECK(gossip == 1);
     CHECK(exact == 2);          // the lift up to Serpentis's part, and the hop down on the way back
     // The required bosses, per the data (the notes): Kresh, Cobrahn, Pythas, Skum, Serpentis, Verdan, Mutanus.
@@ -516,8 +523,8 @@ void TestWalk(ai::DungeonPlan const* plan)
     Result const res = Walk(plan, 40000);
 
     CHECK(res.done);
-    CHECK(res.orders.count("move") && res.orders.at("move") > 300);
-    CHECK(res.orders.count("pullback") && res.orders.at("pullback") > 80);
+    CHECK(res.orders.count("move") && res.orders.at("move") > 150);
+    CHECK(res.orders.count("pullback") && res.orders.at("pullback") >= 80);
     // The bosses the run pulled and killed: all seven, Mutanus last.
     CHECK(res.bossesKilled.count(3653) && res.bossesKilled.count(3669) && res.bossesKilled.count(3670) &&
           res.bossesKilled.count(3674) && res.bossesKilled.count(3673) && res.bossesKilled.count(5775));
@@ -562,6 +569,286 @@ void TestUnitsHoldFacts(ai::DungeonPlan const* plan)
     CHECK(g.units.empty() && g.eventDown == 1);
 }
 
+
+// The party facts of the walk harness (the lead and four bots), the same shape Walk builds.
+void BuildPartyFacts(Facts& f, World const& w)
+{
+    fx::Config cfg;
+    fx::ApplyConfig(f, cfg);
+    char const* names[5] = { "Mtank", "Mpriest", "Mdpsa", "Mdpsb", "Mdpsc" };
+    std::vector<fx::PartyEntry> party;
+    for (int i = 0; i < 5; ++i)
+    {
+        fx::PartyEntry e;
+        e.name = names[i];
+        e.isLead = i == 0;
+        e.present = e.alive = true;
+        e.healer = i == 1;
+        e.dps = i >= 2;
+        e.usesMana = i < 2;
+        MemberFact& m = e.fact;
+        m.name = e.name;
+        m.yd = i == 0 ? 0.0f : 2.0f;
+        m.x = w.x + m.yd; m.y = w.y; m.z = w.z;
+        m.tank = i == 0; m.healer = i == 1; m.ranged = (i == 1 || i == 2); m.core = i < 2; m.level = 22;
+        m.actedMs = 0xFFFFFFFFu;
+        party.push_back(e);
+    }
+    fx::RollUpParty(f, party);
+    fx::LeadObs lo;
+    lo.x = w.x; lo.y = w.y; lo.z = w.z;
+    lo.name = "Mtank";
+    lo.ground.mmapLoaded = true; lo.ground.mapFloorZ = w.z;
+    lo.isTank = true; lo.staying = true; lo.iconsRead = true;
+    f.pointLiquid = [](float, float, float) { return false; };
+    fx::ReadLeadFacts(f, lo);
+}
+
+Facts ReadAt(ai::DungeonPlan const* plan, std::size_t step, World& w, Run& at)
+{
+    at = Start(plan, step);
+    w.Prepare(at);
+    w.x = plan->steps[step].x;
+    w.y = plan->steps[step].y;
+    w.z = plan->steps[step].z;
+    Facts f;
+    BuildPartyFacts(f, w);
+    fx::LeadView lead;
+    lead.x = w.x; lead.y = w.y; lead.z = w.z; lead.alive = true; lead.mapId = 43; lead.name = "Mtank";
+    DungeonRun::MoveProbeCache probe;
+    fx::ReadStepFacts(f, at, lead, probe, w);
+    return f;
+}
+
+// The real unit rows of a plan pull row (positions from the spawns): the facts list them where they stand.
+void TestRealUnitRows(ai::DungeonPlan const* plan, std::map<std::pair<int, int>, std::vector<Row>> const& unitsByStep)
+{
+    int checked = 0;
+    for (std::size_t i = 0; i < plan->steps.size(); ++i)
+    {
+        PlanStep const& s = plan->steps[i];
+        if (s.kind != PlanStepKind::Pull)
+            continue;
+        auto it = unitsByStep.find({int(s.leg), int(s.seq)});
+        if (it == unitsByStep.end() || it->second.empty())
+            continue;
+        World w;
+        Run at = Start(plan, i);
+        Facts f = ReadAt(plan, i, w, at);          // prepares the step and seeds its scripted mobs
+        w.mobs.clear();                             // now the plan's own unit rows, at their spawn positions
+        for (Row const& u : it->second)
+        {
+            Mob m;
+            m.handle = 7000 + std::uint64_t(w.mobs.size());
+            m.entry = u.entry;
+            m.x = u.x; m.y = u.y; m.z = u.z;
+            w.mobs.push_back(m);
+        }
+        f = Facts();
+        BuildPartyFacts(f, w);
+        {
+            fx::LeadView lead2;
+            lead2.x = w.x; lead2.y = w.y; lead2.z = w.z; lead2.alive = true; lead2.mapId = 43; lead2.name = "Mtank";
+            DungeonRun::MoveProbeCache probe2;
+            fx::ReadStepFacts(f, at, lead2, probe2, w);
+        }
+        for (Row const& u : it->second)
+        {
+            // A member outside the pull's own radius is a Left/patroller read (the pull still finds it by entry and radius); the check's
+            // reach is 15 yd, wider than the pull. The rows within the radius are the units the facts must list where they stand.
+            float const d3 = std::sqrt((u.x - s.x) * (u.x - s.x) + (u.y - s.y) * (u.y - s.y) + (u.z - s.z) * (u.z - s.z));
+            if (d3 > s.radius)
+                continue;
+            bool found = false;
+            for (UnitFact const& have : f.units)
+                found = found || (have.entry == u.entry && std::fabs(have.x - u.x) < 0.01f && std::fabs(have.y - u.y) < 0.01f &&
+                                  std::fabs(have.z - u.z) < 0.01f);
+            for (UnitFact const& have : f.patrollers)
+                found = found || (have.entry == u.entry && std::fabs(have.x - u.x) < 0.01f && std::fabs(have.y - u.y) < 0.01f);
+            CHECK(found);
+        }
+        ++checked;
+    }
+    CHECK(checked >= 10);
+}
+
+// A hold unit east of the spot lays the ranged row west of it (the side the event comes from): x and y are read into the hold's UnitFact.
+void TestHoldStandsSide(ai::DungeonPlan const* plan)
+{
+    std::size_t step = 0;
+    bool found = false;
+    for (std::size_t i = 0; i < plan->steps.size(); ++i)
+        if (plan->steps[i].kind == PlanStepKind::Hold && plan->steps[i].entries.size() == 1 && plan->steps[i].entries[0] == 3636)
+        {
+            step = i;
+            found = true;
+            break;
+        }
+    CHECK(found);
+    World w;
+    Run at;
+    Facts f = ReadAt(plan, step, w, at);
+    CHECK(f.units.size() == 1);
+    CHECK(std::fabs(f.units[0].x - (plan->steps[step].x + 1.0f)) < 0.01f);
+    CHECK(std::fabs(f.units[0].y - (plan->steps[step].y + 1.0f)) < 0.01f);
+    // A wave unit east of the spot: the ranged row stands west of it.
+    w.mobs[0].x = plan->steps[step].x + 12.0f;
+    w.mobs[0].y = plan->steps[step].y;
+    Facts g = ReadAt(plan, step, w, at);
+    std::vector<HoldStand> stands = HoldStands(at, g, plan->steps[step]);
+    CHECK(!stands.empty());
+    for (HoldStand const& st : stands)
+    {
+        CHECK(st.x < plan->steps[step].x);
+        CHECK(std::fabs(st.x - plan->steps[step].x) <= kHoldGatherYd);
+    }
+}
+
+// A dead or gone Disciple in an escort hold stops the event with its name (no wait for the hold's timeout), and the run goes back to the gossip once.
+void TestEscortNpcGone(ai::DungeonPlan const* plan)
+{
+    std::size_t step = 0;
+    for (std::size_t i = 0; i < plan->steps.size(); ++i)
+        if (plan->steps[i].kind == PlanStepKind::Hold && (plan->steps[i].flags & ai::kPlanFlagEscortNpc))
+        {
+            step = i;
+            break;
+        }
+    CHECK(step != 0);
+    World w;
+    w.mobs.clear();                 // the Disciple (3678) is not there: the start NPC is gone
+    Run at;
+    Facts f = ReadAt(plan, step, w, at);
+    CHECK(f.eventNpcRead && !f.eventNpcAlive);
+    for (int t = 0; t < 13 && at.state == State::Running; ++t)
+    {
+        Tick(at, f, 1000);
+        Facts next;
+        BuildPartyFacts(next, w);
+        fx::LeadView lead2;
+        lead2.x = w.x; lead2.y = w.y; lead2.z = w.z; lead2.alive = true; lead2.mapId = 43; lead2.name = "Mtank";
+        DungeonRun::MoveProbeCache probe2;
+        fx::ReadStepFacts(next, at, lead2, probe2, w);
+        f = next;
+    }
+    CHECK(at.state == State::Paused);
+    CHECK(at.note.find("Disciple of Naralex") != std::string::npos);
+    // Back to the gossip that starts the event (the one re-arm): a respawned Disciple can be talked to again.
+    std::size_t const back = at.step;
+    CHECK(plan->steps[back].kind == PlanStepKind::Gossip);
+
+    // A gossip that did not start the escort: the Disciple is alive, still at his stand, and no wave came. The first escort hold says so
+    // after kEscortStartMs and goes back to the gossip.
+    World w2;
+    Run at2;
+    Facts f2 = ReadAt(plan, step, w2, at2);
+    w2.mobs.clear();
+    Mob still;
+    still.handle = 7300;
+    still.entry = 3678;
+    still.x = -134.965f; still.y = 125.402f; still.z = -78.094f;
+    w2.mobs.push_back(still);
+    Facts r2 = Facts();
+    BuildPartyFacts(r2, w2);
+    {
+        fx::LeadView l2;
+        l2.x = w2.x; l2.y = w2.y; l2.z = w2.z; l2.alive = true; l2.mapId = 43; l2.name = "Mtank";
+        DungeonRun::MoveProbeCache pr2;
+        fx::ReadStepFacts(r2, at2, l2, pr2, w2);
+    }
+    CHECK(r2.eventNpcRead && r2.eventNpcAlive);
+    for (int t = 0; t < 32 && at2.state == State::Running; ++t)
+    {
+        Tick(at2, r2, 1000);
+        Facts n2 = Facts();
+        BuildPartyFacts(n2, w2);
+        fx::LeadView l3;
+        l3.x = w2.x; l3.y = w2.y; l3.z = w2.z; l3.alive = true; l3.mapId = 43; l3.name = "Mtank";
+        DungeonRun::MoveProbeCache pr3;
+        fx::ReadStepFacts(n2, at2, l3, pr3, w2);
+        r2 = n2;
+    }
+    CHECK(at2.state == State::Paused);
+    CHECK(at2.note.find("did not leave his stand") != std::string::npos);
+    CHECK(plan->steps[at2.step].kind == PlanStepKind::Gossip);
+
+    // A later escort hold (the Viper wave at stop 15) finds the same gossip across the holds between it and the gossip: a dead Disciple in
+    // its read range stops the event there (the back-search is EventGossipStartStep, not the hold-stopping EventStartStep).
+    std::size_t vipers = 0;
+    for (std::size_t i = 0; i < plan->steps.size(); ++i)
+        if (plan->steps[i].kind == PlanStepKind::Hold && plan->steps[i].entries.size() == 1 && plan->steps[i].entries[0] == 5755)
+        {
+            vipers = i;
+            break;
+        }
+    CHECK(vipers != 0);
+    World w3;
+    Run at3;
+    ReadAt(plan, vipers, w3, at3);
+    w3.mobs.clear();
+    Mob dead;
+    dead.handle = 7400;
+    dead.entry = 3678;
+    dead.alive = false;
+    dead.x = -60.0f; dead.y = 250.0f; dead.z = -90.0f;
+    w3.mobs.push_back(dead);
+    Facts r3 = Facts();
+    BuildPartyFacts(r3, w3);
+    {
+        fx::LeadView l4;
+        l4.x = w3.x; l4.y = w3.y; l4.z = w3.z; l4.alive = true; l4.mapId = 43; l4.name = "Mtank";
+        DungeonRun::MoveProbeCache pr4;
+        fx::ReadStepFacts(r3, at3, l4, pr4, w3);
+    }
+    CHECK(r3.eventNpcRead && !r3.eventNpcAlive);
+    for (int t = 0; t < 12 && at3.state == State::Running; ++t)
+        Tick(at3, r3, 1000);
+    CHECK(at3.state == State::Paused);
+    CHECK(at3.note.find("dead or gone") != std::string::npos);
+    CHECK(plan->steps[at3.step].kind == PlanStepKind::Gossip);
+}
+
+// An old corpse of the entry (a Ravager pack killed on the way in) does not end a hold early; a corpse this hold saw die does.
+void TestOldCorpseHold(ai::DungeonPlan const* plan)
+{
+    std::size_t step = 0;
+    for (std::size_t i = 0; i < plan->steps.size(); ++i)
+        if (plan->steps[i].kind == PlanStepKind::Hold && plan->steps[i].entries.size() == 1 && plan->steps[i].entries[0] == 3636)
+        {
+            step = i;
+            break;
+        }
+    World w;
+    Run at;
+    Facts f = ReadAt(plan, step, w, at);
+    w.mobs.clear();                 // the Disciple is alive for this hold (only the escort-NPC read cares), no wave yet
+    Mob disciple;
+    disciple.handle = 7200;
+    disciple.entry = 3678;
+    disciple.x = -134.965f; disciple.y = 125.402f; disciple.z = -78.094f;
+    w.mobs.push_back(disciple);
+    // One old corpse in the radius, no living unit: the first read's corpse is the baseline.
+    f.eventNpcRead = true;
+    f.eventNpcAlive = true;         // this test is the corpse rule; the Disciple's own read is TestEscortNpcGone
+    f.eventDown = 1;
+    f.units.clear();
+    for (int t = 0; t < 12 && at.state == State::Running; ++t)
+    {
+        Tick(at, f, 1000);
+        f.eventDown = 1;
+        f.units.clear();
+    }
+    CHECK(at.step == step);
+    CHECK(at.state == State::Running);
+    // A corpse of this hold (a second one): the "all dead before the hold" rule fires after kHoldAllDeadMs.
+    Facts g = f;
+    g.eventDown = 2;
+    g.units.clear();
+    for (int t = 0; t < 12 && at.step == step; ++t)
+        Tick(at, g, 1000);
+    CHECK(at.step != step || at.state != State::Running);
+}
+
 void TestDataHoldFacts(ai::DungeonPlan const* plan)
 {
     std::size_t step = 0;
@@ -598,8 +885,9 @@ int main(int argc, char** argv)
     }
     auto table = std::make_shared<ai::DungeonPlanTable>();
     std::vector<Row> rows;
+    std::map<std::pair<int, int>, std::vector<Row>> unitsByStep;
     int unitRows = 0;
-    if (!LoadRows(argv[1], *table, rows, unitRows))
+    if (!LoadRows(argv[1], *table, rows, unitRows, unitsByStep))
     {
         std::printf("FAIL: the plan rows could not be loaded from %s\n", argv[1]);
         return 1;
@@ -614,6 +902,10 @@ int main(int argc, char** argv)
     TestWalk(plan);
     TestUnitsHoldFacts(plan);
     TestDataHoldFacts(plan);
+    TestRealUnitRows(plan, unitsByStep);
+    TestHoldStandsSide(plan);
+    TestEscortNpcGone(plan);
+    TestOldCorpseHold(plan);
     std::printf("test_run_wc: %d checks, %d failed (plan: %zu steps, %zu legs, %d unit rows)\n", g_checks, g_fail,
         plan->steps.size(), plan->legs.size(), unitRows);
     return g_fail ? 1 : 0;

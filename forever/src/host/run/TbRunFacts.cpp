@@ -274,6 +274,12 @@ fx::CreatureObs ObserveCreature(Ctx& c, Creature* creature)
     o.ccRemainMs = o.polymorphed ? RunCcRemainingMs(creature) : 0;
     o.ccImmune = RunCcImmune(creature);
     o.healthPct = creature->GetHealthPct();
+    // A units hold's wave unit: awake and fighting (the tank takes it), and whom it is on (the lead bot keeps what it holds, the healer's attacker
+    // comes first). The same three reads the Turtle glue makes for its hold units.
+    Unit* const victim = creature->GetVictim();
+    o.engaged = o.hostile && creature->IsInCombat() && victim;
+    o.victimLead = victim == c.lead;
+    o.victimHealer = victim && victim->IsPlayer() && PlayerbotAI::IsHeal(static_cast<Player*>(victim));
     return o;
 }
 

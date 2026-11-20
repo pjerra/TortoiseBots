@@ -253,6 +253,10 @@ struct CreatureObs
     bool caster = false;
     bool normalRank = false;
     std::uint32_t level = 0;
+    // A units hold's wave unit: awake and fighting (a victim), and whom it is on: the lead bot, a healer (HoldEngageTarget sends the tank at it).
+    bool engaged = false;
+    bool victimLead = false;
+    bool victimHealer = false;
     std::uint32_t creatureType = 0;
     // G8 crowd control: a run crowd-control aura on it (polymorph family), its soonest-ending remaining time (0: none or not read) and the families it is immune to (CcBit).
     bool polymorphed = false;
@@ -428,6 +432,8 @@ inline void ReadStepCreatures(Facts& f, DungeonRun::Run const& run, ai::PlanStep
         u.entry = c.entry;
         u.formOf = c.formOf;
         u.distLead = c.distLead;
+        u.x = c.x;              // the side the event comes from (HoldStands), and where the tank is sent
+        u.y = c.y;
         u.z = c.z;
         u.hostile = c.hostile;
         u.stealthed = c.stealthed;
@@ -1028,6 +1034,8 @@ inline void ReadHoldUnits(Facts& f, ai::PlanStep const& step, std::vector<Creatu
         u.entry = c.entry;
         u.formOf = c.formOf;
         u.distLead = c.distLead;
+        u.x = c.x;              // the side the event comes from (HoldStands), and where the tank is sent
+        u.y = c.y;
         u.z = c.z;
         u.hostile = c.hostile;
         u.stealthed = c.stealthed;
@@ -1040,6 +1048,9 @@ inline void ReadHoldUnits(Facts& f, ai::PlanStep const& step, std::vector<Creatu
         u.ccRemainMs = c.ccRemainMs;
         u.ccImmune = c.ccImmune;
         u.attackable = c.attackable;
+        u.engaged = c.engaged;
+        u.victimLead = c.victimLead;
+        u.victimHealer = c.victimHealer;
         f.units.push_back(u);
     }
 }
@@ -1279,6 +1290,14 @@ inline void ReadStepFacts(Facts& f, DungeonRun::Run const& run, LeadView const& 
             // What ends the event: the instance's data (the row's `entry` is the data id), an object's state, or every unit of it dead.
             bool const byData = (step->flags & ai::kPlanFlagDoneData) != 0;
             bool const byObject = (step->flags & ai::kPlanFlagDoneObject) != 0;
+            // The approach is read for every hold (data, object and units): a wipe or a resume with the lead far from the spot must not find
+            // "no walkable path toward the event spot" while the data is all the hold needs.
+            if (!f.seen)
+            {
+                if (wantsApproach)
+                    approach(step->x, step->y, step->z, true, false);
+                break;
+            }
             if (byData)
             {
                 long long value = -1;
@@ -1291,11 +1310,25 @@ inline void ReadStepFacts(Facts& f, DungeonRun::Run const& run, LeadView const& 
                 ReadWaitObject(f, w.ObjectAt(*step));
             if (byData || byObject)
                 break;
-            if (!f.seen)
+            if (step->flags & ai::kPlanFlagEscortNpc)
             {
-                if (wantsApproach)
-                    approach(step->x, step->y, step->z, true, false);
-                break;
+                // The NPC that started the event (the gossip row before this hold): alive around the lead, or dead and gone.
+                std::size_t const start = DungeonRun::EventGossipStartStep(run);
+                if (start != static_cast<std::size_t>(-1) && run.plan && start < run.plan->steps.size() &&
+                    run.plan->steps[start].kind == ai::PlanStepKind::Gossip && run.plan->steps[start].entry)
+                {
+                    bool alive = false;
+                    for (CreatureObs const& c : w.CreaturesOfEntry(run.plan->steps[start].entry, DungeonRun::kEscortNpcRangeYd))
+                        if (c.alive && !alive)
+                        {
+                            alive = true;
+                            f.eventNpcX = c.x;
+                            f.eventNpcY = c.y;
+                            f.eventNpcZ = c.z;
+                        }
+                    f.eventNpcRead = true;
+                    f.eventNpcAlive = alive;
+                }
             }
             float const range = std::min(toPoint + step->radius + kPatrolSeeYd, 2.0f * kSeeYd);
             std::vector<CreatureObs> creatures;

@@ -759,7 +759,9 @@ OrderAnswer BeginTask(OwnerKind ownerKind, ObjectGuid owner, Player* lead, std::
         if (!lock.ok)
             return Refuse(lock.code, lock.text);
     }
-    if (target.npc && !sPlayerbotAIConfig.botGossipNpcs.empty() && !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, target.npc->GetEntry()))
+    // A run's own gossip step passed MayTalkTo (BeginGossip), which knows the step's NPC; a commander's gossip needs the allowlist.
+    if (ownerKind == OwnerKind::Commander && target.npc && !sPlayerbotAIConfig.botGossipNpcs.empty() &&
+        !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, target.npc->GetEntry()))
         return Refuse(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
 
     Task task;

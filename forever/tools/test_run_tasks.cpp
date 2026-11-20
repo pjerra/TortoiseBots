@@ -517,6 +517,29 @@ static void TestGossipAndCommanderP6()
     s = tk::Advance(emptyLoot, lo, RC::kTaskTickMs);
     CHECK(s.what == tk::Do::Fail && s.code == RC::kCodeFailed && s.message.find(tk::LootEmptyText()) != std::string::npos);
 
+    // The core's database options carry sender = menu id and action = order index, so the option's TYPE is what tells a service line:
+    // a binder (inn), auctioneer, battlemaster and stablemaster line are all refused, a plain line beside them is picked.
+    std::vector<GO::Option> db = {
+        tk::MakeGossipOption("Make this inn your home", 5, false),     // GossipOptionNpc::Binder
+        tk::MakeGossipOption("I want to browse your goods", 10, false), // Auctioneer
+        tk::MakeGossipOption("I wish to fight in the battlegrounds", 9, false),
+        tk::MakeGossipOption("I want to stable my pet", 12, false),
+        tk::MakeGossipOption("Let the event begin!", 0, false),
+    };
+    GO::Request svc;
+    svc.entry = 3678;
+    svc.bot = "Mtank";
+    svc.byIndex = true;
+    for (std::uint32_t i = 1; i <= 4; ++i)
+    {
+        svc.index = i;
+        GO::Match const sm = GO::MatchOption(db, svc);
+        CHECK(!sm.ok && sm.code == GO::kCodeNoOption);
+    }
+    svc.index = 5;
+    GO::Match const okm = GO::MatchOption(db, svc);
+    CHECK(okm.ok && okm.listIndex == 4);
+
     // Verb names:
     CHECK(std::string(tk::VerbName(tk::Verb::Gossip)) == "gossip");
     CHECK(std::string(tk::VerbName(tk::Verb::Use)) == "use");
