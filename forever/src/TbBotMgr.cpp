@@ -1298,6 +1298,9 @@ void BotMgr::Update(uint32 diff)
         // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
         // Not in the update in which its logout was requested or its master was lost (R9): Think may have asked for the logout above, and
         // the brain is gone by then.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::TickErrands(me, diff);
+#endif
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
             engine::Tick(bot.brain.get(), diff);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1

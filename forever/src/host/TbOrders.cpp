@@ -434,8 +434,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     }
     if (o.verb == "gather")
     {
-        std::string code, detail;
-        return tbhost::prof::GatherNearestInSight(bot, 150.0f, code, detail) ? "ok" : ("fail:" + code);
+        std::string stateOut, detail;
+        return tbhost::prof::StartGatherNearest(bot, 150.0f, o.seq, stateOut, detail) ? stateOut : ("fail:" + stateOut);
     }
     if (o.verb == "craft")
     {
@@ -445,8 +445,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         iss >> spellId >> count;
         if (count == 0)
             count = 1;
-        std::string code, detail;
-        return tbhost::prof::Craft(bot, spellId, count, code, detail) ? "ok" : ("fail:" + code);
+        std::string stateOut, detail;
+        return tbhost::prof::StartCraft(bot, spellId, count, o.seq, stateOut, detail) ? stateOut : ("fail:" + stateOut);
     }
     if (o.verb == "taxi-learn")
     {
@@ -783,17 +783,31 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     }
 
     auto rec = Recs().find(guid);
-    if (rec == Recs().end() || rec->second.queue.empty())
+    if (rec == Recs().end())
+        return;
+    if (rec->second.seq != 0)
+    {
+        std::string errandResult;
+        if (tbhost::prof::PollOrderErrand(bot, rec->second.seq, errandResult) && rec->second.result != errandResult)
+        {
+            rec->second.result = errandResult;
+            if (errandResult.compare(0, 5, "fail:") == 0)
+                sLog.outString("TortoiseBots order: %s seq %u (%s) -> %s", bot->GetName().c_str(), rec->second.seq, rec->second.verb.c_str(), errandResult.c_str());
+        }
+    }
+    if (rec->second.queue.empty())
         return;
     uint32 const now = NowMs();
     while (!rec->second.queue.empty())
     {
         Order order = std::move(rec->second.queue.front());
         rec->second.queue.pop_front();
+        if (order.verb != "gather" && order.verb != "craft")
+            tbhost::prof::CancelOrderErrand(bot);
         std::string result = now - order.queuedAt > OrderMaxAgeMs ? "fail:expired" : Run(bot, ai, order);
         if (rec->second.seq == order.seq)       // a later order of the same bot keeps the later one's name and seq
             rec->second.result = result;
-        if (result != "ok")
+        if (result != "ok" && result.compare(0, 7, "pending") != 0)
             sLog.outString("TortoiseBots order: %s seq %u (%s) -> %s", bot->GetName().c_str(), order.seq, order.verb.c_str(), result.c_str());
     }
 }

@@ -28,7 +28,9 @@ class TestW7ProfWiring(unittest.TestCase):
     def test_host_profession_uses_policies_and_core_handlers(self):
         host = read("forever/src/host/TbHostProfession.cpp")
         self.assertIn("EvaluateGatherNode", host)
+        self.assertIn("StepGatherErrand", host)
         self.assertIn("EvaluateCraftForSelf", host)
+        self.assertIn("StepCraftErrand", host)
         self.assertIn("HandleCastSpellOpcode", host)
         self.assertIn("HandleGameObjectUseOpcode", host)
         self.assertIn("HandleAutostoreLootItemOpcode", host)
@@ -41,6 +43,11 @@ class TestW7ProfWiring(unittest.TestCase):
         orders = read("forever/src/host/TbOrders.cpp")
         for verb in ('"learn-prof"', '"gather"', '"craft"'):
             self.assertIn(verb, orders, f"missing verb {verb} in TbOrders.cpp")
+        if MUTATE:
+            orders = orders.replace("PollOrderErrand", "DisabledPoll")
+        self.assertIn("PollOrderErrand", orders, "TbOrders must poll multi-tick gather/craft errands")
+        mgr = read("forever/src/TbBotMgr.cpp")
+        self.assertIn("tbhost::prof::TickErrands", mgr, "TbBotMgr must tick gather/craft errands")
         state = read("forever/src/host/TbPartyState.cpp")
         self.assertIn('"prof"', state)
 
