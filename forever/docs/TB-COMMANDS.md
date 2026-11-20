@@ -508,3 +508,15 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 ### `.tb state` keys for a hunter or a warlock (after `practice=`)
 `pet=<entry>:<alive|dead>:<hp pct>` (empty with no pet: the grammar has no `none` word and no 0 for "not there"; `dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold; empty with no ammo set), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.
+
+## 14. W3: Quests
+
+### `.tb quest <bot> status|accept <questId|*>|turnin [questId]|share <questId>|drop <questId|all>|reward <auto|list|ask|reset|?> [#token]`
+One host bot. Replies `quest-begin`, `quest` record(s), `quest-end` (grammar v2; `error code=engine-not-built` when `TORTOISEBOTS_SLICE1=OFF`).
+
+* `status`: lists the bot's quest log (`id=`, `title=`, `status=incomplete|complete|failed|none|rewarded`, `objectives=<done>/<amount>;...`).
+* `accept <questId|*>`: accepts a vanilla-eligible quest (`Expansion == 0` or `91xxx`/`99xxx` with spawned giver & ender) from a nearby giver (`status=accepted|refused`, `code=filtered` when refused by the vanilla filter).
+* `turnin [questId]`: turns in completed quests to a nearby quest taker (`status=ok|no-turnin`), picking multi-item rewards via `ItemUsageValue` + `RandomItemMgr::ItemStatWeight`.
+* `share <questId>`: shares a quest with the bot's party (`WorldPackets::Quest::PushQuestToParty`, `status=shared|refused`).
+* `drop <questId|all>`: abandons the quest (`Player::AbandonQuest`, `status=dropped|refused`).
+* `reward <auto|list|ask|reset|?>`: sets or queries the bot's `quest reward` option (`mode=auto|list|ask|config`).

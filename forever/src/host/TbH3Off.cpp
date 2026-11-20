@@ -73,6 +73,7 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { re
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "equip"); }
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "itemscan"); }
 bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "statcensus"); }
+bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "quest"); }
 bool MayLeadBots(ChatHandler* /*handler*/, ObjectGuid /*character*/) { return true; }   // N5 is an engine-build rule: the default build keeps the older commands as they were
 bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail args)  { return NotBuilt(handler, args, "grammar"); }
 }
