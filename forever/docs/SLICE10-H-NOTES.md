@@ -73,3 +73,27 @@ The run reads roles only through `PlayerbotAI::IsTank/IsHeal` (TbRunFacts.cpp:28
 
 * S8's H8 and this branch both edit the class-context chain, `GetPlayerSpecTab`, `GetPlayerRoles`, the three `AddDefault*` functions of `SliceAiFactory.cpp`, `KEYS` in `slice_gen_context.py`, `CLASS_CONTEXTS`, the list constant in `slice_registry_check.py` and `CMakeLists.txt`. Union: one list `SLICE10.txt` = S8's 199 + this branch's 40 class files (the 22 K8 files are disjoint from them); register `low mana` and `enemy is close` once.
 * `SliceAiFactory.cpp` combined: the S8 `GetPlayerSpecTab` returns 1 for a mage and a rogue; this branch's returns the hybrid tabs: one `switch` per class.
+
+## 8. Bear Form on this server: `.tb learn`, not the quest
+
+The druid Bear Form quest giver offers no quest on this server (checked live), and Bear Form (5487) is not a trainer spell at the pin: `.tb train` teaches the rest of the bear kit (Growl 6795, Maul 6807, Demoralizing Roar 99, Enrage 5229, Swipe 779), but Bear Form itself must be learned with `.tb learn Mbear 5487` (spec U1's gap path, TB-COMMANDS.md:199: `SpellMgr::IsSpellValid` then `Player::LearnSpell`). Without it the bear kit's `tank feral` strategy has no form to shift into (`form=` stays `none`) and the bot fights in caster form: the kit still runs, it just does less. The full bot factory (PlayerbotFactory.cpp:3609) teaches 5487 and 9634 itself, so only the sliced engine's live test needs the extra command. No code depends on the quest and no SQL is added (D3: trainer SQL only if a run needs it unattended).
+
+## 9. Gates
+
+Tested tree: `74f92174b` (the last code commit; the commits after it are notes only) plus this section.
+
+| Gate | Result |
+|---|---|
+| census, `SLICE10.txt`, slot 5, after the upload of this tree | `files 216  compile clean 216  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census, `SLICE1..SLICE5.txt` (each is a subset of SLICE10.txt, `comm -23` empty) | (pending) |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, slot 5) | `CMAKE_RC=0 MAKE_RC=0`; **0 undefined**: the only one seen on this branch was `undefined vtable for ai::RestoreSpecAuraAction`, removed by unregistering the key (commit `74f92174b`); no stub was needed in `SliceLinkStubs.cpp` |
+| option OFF `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` (SLICE10.txt + the three class contexts) | `(a)=0`, registers `17/49/88/176`, `(b)=232` (K10 measured 252 with the three contexts and no key added; the 20 registered keys close 20 of them, and `restore spec aura` stays listed there by design) |
+| policy/run/class tests (`policy-tests-s10h.sh`, the 478 of `clean_tests.txt`, current tree) | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`: the same counts and the same six names as the baseline `pt-9l`/`pt-s10k` |
+| wiring (`verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`, the 13 class wiring pins, `test_slice4_d4_wiring.py`, `test_run_review_wiring.py`) | all OK; `queued=1890 creators=2926 live-missing=0` |
+| OKF docs (`verify_okf.py`) | `PASSED (60 nodes validated, graph edges consistent)` |
+| Turtle `vm-build ~/wt-s10-h --wait` | `COMPILE_SECONDS=65 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb ~/wt-s10-h` | `RESULT: PASS  kind=tb wt=wt-s10-h sha=74f92174b dirty=1 files=3863` (`rc=0`, 1478 s) |
+
+The two Turtle gates were pending in `SLICE10-K-NOTES.md` (the VM had 4 GB free; it now has 23 GB): they ran here on the same unchanged class files and close that item too.
