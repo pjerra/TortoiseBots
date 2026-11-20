@@ -1,6 +1,7 @@
 #include "host/TbHostProfession.h"
 
 #include "host/TbHostTown.h"
+#include "host/run/TbRunTasks.h"
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
 #include "playerbot/policy/profession/GatherNodePolicy.h"
 #include "playerbot/policy/profession/CraftForSelfPolicy.h"
@@ -336,10 +337,7 @@ void CastGatherOnNode(Player* bot, GameObject* go, uint32_t lockSkillId)
     }
     else
     {
-        // Reuse slice 9 chest/object path for unlocked chests.
-        WorldPackets::GameObject::GameObjUse packet{ WorldPacket(CMSG_GAME_OBJ_USE) };
-        packet.Guid = go->GetGUID();
-        session->HandleGameObjectUseOpcode(packet);
+        TortoiseBots::run::tasks::SendGameObjectUse(bot, go);
     }
 }
 

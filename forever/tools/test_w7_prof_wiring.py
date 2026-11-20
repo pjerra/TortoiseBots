@@ -32,7 +32,7 @@ class TestW7ProfWiring(unittest.TestCase):
         self.assertIn("EvaluateCraftForSelf", host)
         self.assertIn("StepCraftErrand", host)
         self.assertIn("HandleCastSpellOpcode", host)
-        self.assertIn("HandleGameObjectUseOpcode", host)
+        self.assertIn("SendGameObjectUse(", host)
         self.assertIn("HandleAutostoreLootItemOpcode", host)
         self.assertIn("TeachTrainerSpell", host)
         self.assertNotIn("SetSkill", host)
