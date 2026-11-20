@@ -40,6 +40,7 @@
 #include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/CheatAction.h"
 #include "playerbot/strategy/actions/EmoteAction.h"
+#include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FankrissFocusActions.h"
 #include "playerbot/strategy/actions/FankrissRaidActions.h"
 #include "playerbot/strategy/actions/FankrissTankActions.h"
@@ -478,15 +479,15 @@ bool TalentSpec::CheckTalentLink(std::string, std::ostringstream*) { NoteSpecs()
 uint32 TalentSpec::LeveltoPoints(uint32) { NoteSpecs(); return 0; }
 void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
-// PlayerbotFactory.cpp: no ammo and no pet set-up.
-void PlayerbotFactory::InitAmmo() { NoteFactory(); }
-void PlayerbotFactory::InitPet(bool) { NoteFactory(); }
-void PlayerbotFactory::InitPetSpells() { NoteFactory(); }
-bool PlayerbotFactory::PetAutoTrainAllowed(Player*) { NoteFactory(); return false; }
-bool PlayerbotFactory::TrainHunterPet(Player*, Pet*, bool, std::function<bool(uint32)> const&) { NoteFactory(); return false; }
+// PlayerbotFactory.cpp: the five pet and ammo members are real since slice 11 (forever/src/host/TbHostPetFactory.cpp).
 
 // PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load finds nothing.
 void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
+
+// EquipAction.cpp: the warlock's firestone and spellstone equip (WarlockActions.cpp:60 and :82). The file brings RandomItemMgr, ItemUsageValue,
+// BotGearService, ClaimLifecycle and PlayerbotDbStore with it (nine symbols, five owners outside the slice), so the stone stays in the bags and
+// the weapon keeps its plain damage. The stones are level 28 and 36 spells: the slice's bots (18-22) never reach the call.
+void ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool) { NoteMisc(); }
 
 // RandomBotFacade loaders (runtime/PlayerbotRuntimeFacade.cpp): the pool caches are not built.
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }

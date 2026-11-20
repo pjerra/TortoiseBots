@@ -1,5 +1,8 @@
-# Slice 9 (item loot and rolls, doors and object tasks): SLICE5.txt plus the L9 files at the end. The doors package (O9/F9/C9) adds no legacy file: its code is under forever/src.
-# L9 = group loot rolls and the item usage value (FOREVER-SLICE9-SPEC section 6); the slice-5 plan loader stays in the list.
+# Slice 9 (item loot and rolls, doors and object tasks): SLICE5.txt plus the L9 files, and, after integration batch 2 was merged
+# into main ahead of it, every file of forever/SLICE11.txt (the slice-8, slice-10 and slice-11 class files; forever/docs/SLICE8-K-NOTES.md,
+# SLICE10-K-NOTES.md, SLICE11-NOTES.md): this is the list the build reads and the newest one, so SLICE5, SLICE8, SLICE10 and SLICE11 are subsets of it.
+# The doors package (O9/F9/C9) adds no legacy file: its code is under forever/src. L9 = group loot rolls and the item usage value
+# (FOREVER-SLICE9-SPEC section 6); the slice-5 plan loader stays in the list.
 # One path per line. Used by: FOREVER_SLOT=4 FOREVER_CENSUS_LIST=forever/SLICE9.txt forever/tools/vm-census.sh "" 14
 ai/playerbot/BotActionLog.cpp
 ai/playerbot/BotDiagnostics.cpp
@@ -177,6 +180,93 @@ ai/playerbot/strategy/actions/AcceptResurrectAction.cpp
 ai/playerbot/strategy/values/PartyMemberToResurrect.cpp
 ai/playerbot/DungeonPlanMgr.cpp
 ai/playerbot/BossTacticsMgr.cpp
-# L9: group loot rolls and the item usage value (FOREVER-SLICE9-SPEC section 6)
 ai/playerbot/strategy/actions/LootRollAction.cpp
 ai/playerbot/strategy/values/ItemUsageValue.cpp
+# Integration batch 2 (mage/rogue, druid/paladin/shaman, hunter/warlock/pets): the files of forever/SLICE11.txt not listed above.
+ai/playerbot/strategy/actions/CancelChannelAction.cpp
+ai/playerbot/strategy/actions/GiveItemAction.cpp
+ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp
+ai/playerbot/strategy/mage/FireMageStrategy.cpp
+ai/playerbot/strategy/mage/FrostMageStrategy.cpp
+ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp
+ai/playerbot/strategy/mage/GenericMageStrategy.cpp
+ai/playerbot/strategy/mage/MageActions.cpp
+ai/playerbot/strategy/mage/MageAiObjectContext.cpp
+ai/playerbot/strategy/mage/MageMultipliers.cpp
+ai/playerbot/strategy/mage/MageStrategy.cpp
+ai/playerbot/strategy/mage/MageTriggers.cpp
+ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp
+ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp
+ai/playerbot/strategy/rogue/DpsRogueStrategy.cpp
+ai/playerbot/strategy/rogue/GenericRogueNonCombatStrategy.cpp
+ai/playerbot/strategy/rogue/RogueActions.cpp
+ai/playerbot/strategy/rogue/RogueAiObjectContext.cpp
+ai/playerbot/strategy/rogue/RogueMultipliers.cpp
+ai/playerbot/strategy/rogue/RogueStrategy.cpp
+ai/playerbot/strategy/rogue/RogueTriggers.cpp
+ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp
+ai/playerbot/strategy/values/PartyMemberWithoutItemValue.cpp
+ai/playerbot/strategy/druid/BalanceDruidStrategy.cpp
+ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp
+ai/playerbot/strategy/druid/DruidActions.cpp
+ai/playerbot/strategy/druid/DruidAiObjectContext.cpp
+ai/playerbot/strategy/druid/DruidMultipliers.cpp
+ai/playerbot/strategy/druid/DruidPullStrategy.cpp
+ai/playerbot/strategy/druid/DruidStrategy.cpp
+ai/playerbot/strategy/druid/DruidTriggers.cpp
+ai/playerbot/strategy/druid/DruidValues.cpp
+ai/playerbot/strategy/druid/GenericDruidNonCombatStrategy.cpp
+ai/playerbot/strategy/druid/GenericDruidStrategy.cpp
+ai/playerbot/strategy/druid/LevelingDruidStrategy.cpp
+ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp
+ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp
+ai/playerbot/strategy/paladin/DpsPaladinStrategy.cpp
+ai/playerbot/strategy/paladin/GenericPaladinNonCombatStrategy.cpp
+ai/playerbot/strategy/paladin/GenericPaladinStrategy.cpp
+ai/playerbot/strategy/paladin/HolyPaladinStrategy.cpp
+ai/playerbot/strategy/paladin/OffhealRetPaladinStrategy.cpp
+ai/playerbot/strategy/paladin/PaladinActions.cpp
+ai/playerbot/strategy/paladin/PaladinAiObjectContext.cpp
+ai/playerbot/strategy/paladin/PaladinBuffStrategies.cpp
+ai/playerbot/strategy/paladin/PaladinMultipliers.cpp
+ai/playerbot/strategy/paladin/PaladinPullStrategy.cpp
+ai/playerbot/strategy/paladin/PaladinStrategy.cpp
+ai/playerbot/strategy/paladin/PaladinTriggers.cpp
+ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp
+ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp
+ai/playerbot/strategy/paladin/TankPaladinStrategy.cpp
+ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp
+ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp
+ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp
+ai/playerbot/strategy/shaman/ShamanActions.cpp
+ai/playerbot/strategy/shaman/ShamanAiObjectContext.cpp
+ai/playerbot/strategy/shaman/ShamanMultipliers.cpp
+ai/playerbot/strategy/shaman/ShamanPullStrategy.cpp
+ai/playerbot/strategy/shaman/ShamanStrategy.cpp
+ai/playerbot/strategy/shaman/ShamanTriggers.cpp
+ai/playerbot/strategy/shaman/ShamanWeaponUpkeepAction.cpp
+ai/playerbot/strategy/shaman/TankShamanStrategy.cpp
+ai/playerbot/strategy/hunter/BeastMasteryHunterStrategy.cpp
+ai/playerbot/strategy/hunter/GenericHunterNonCombatStrategy.cpp
+ai/playerbot/strategy/hunter/GenericHunterStrategy.cpp
+ai/playerbot/strategy/hunter/HunterActions.cpp
+ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp
+ai/playerbot/strategy/hunter/HunterBuffStrategies.cpp
+ai/playerbot/strategy/hunter/HunterMultipliers.cpp
+ai/playerbot/strategy/hunter/HunterStrategy.cpp
+ai/playerbot/strategy/hunter/HunterTriggers.cpp
+ai/playerbot/strategy/hunter/MarksmanshipHunterStrategy.cpp
+ai/playerbot/strategy/hunter/SurvivalHunterStrategy.cpp
+ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp
+ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp
+ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp
+ai/playerbot/strategy/warlock/GenericWarlockNonCombatStrategy.cpp
+ai/playerbot/strategy/warlock/GenericWarlockStrategy.cpp
+ai/playerbot/strategy/warlock/TankWarlockStrategy.cpp
+ai/playerbot/strategy/warlock/WarlockActions.cpp
+ai/playerbot/strategy/warlock/WarlockAiObjectContext.cpp
+ai/playerbot/strategy/warlock/WarlockMultipliers.cpp
+ai/playerbot/strategy/warlock/WarlockStrategy.cpp
+ai/playerbot/strategy/warlock/WarlockTriggers.cpp
+ai/playerbot/strategy/actions/CombatActions.cpp
+ai/playerbot/strategy/values/ActiveSpellValue.cpp

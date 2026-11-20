@@ -66,7 +66,7 @@ namespace
         if (Creature* creature = dynamic_cast<Creature*>(unit))
         {
             if (CreatureInfo const* info = creature->GetCreatureInfo())
-                return TankShamanTargetIsElite(info->rank, CREATURE_ELITE_NORMAL);
+                return TankShamanTargetIsElite(CreatureRankCompat(creature), CREATURE_ELITE_NORMAL);
         }
         return false;
     }

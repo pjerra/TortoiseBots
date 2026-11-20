@@ -24,9 +24,10 @@ DIRECT = re.compile(r"\b(?:World|Character|Login|Hotfix)Database\s*(?:\.|->)\s*"
 # The guard's own implementation: the schema probe and the guarded query itself (two calls, nothing else).
 GUARD_FILE = "forever/src/compat/TbCompat_S5.h"
 GUARD_CALLS = 2
-# The one other place: the legacy `CharacterDatabase.PQuery(format, ...)` shim of the unported-feature layer. It serves the legacy engine's character-database
-# reads (core tables that always exist), is not a plan or module table, and is outside slice 5; it is named here so it cannot grow unnoticed.
-LEGACY_EXCEPTION = {"forever/src/compat/TbCompat_Unported.h": 1}
+# The other place: the character-database shims of the unported-feature layer, `CharacterPQueryCompat` (a read) and `SaveSummonedPetNumberCompat` (the
+# `characters.summonedPetNumber` write the pet host makes). Both serve the legacy engine's character database (core tables that always exist), not a plan
+# or module table, and are outside slice 5; the count is named here so it cannot grow unnoticed.
+LEGACY_EXCEPTION = {"forever/src/compat/TbCompat_Unported.h": 2}
 
 
 def strip_comments(text: str) -> str:

@@ -7,6 +7,8 @@
 
 #include "ai/playerbot/BossTacticsMgr.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
+#include "host/TbCc.h"
+#include "host/TbCcPure.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
@@ -306,6 +308,130 @@ void DropFocusMark(RunRec const& rec, uint64 handle)
         group->SetTargetIcon(icon, ObjectGuid::Empty, rec.leader);
 }
 
+// G8 (review): the marks the run could not take off at its end. A finished run is not ticked any more and its record is replaced by the leader's next run, so
+// the teardown cannot rely on either: this table outlives the record, and every world tick retries what is still pending.
+struct PendingCc
+{
+    std::string mark;           // the run's recorded mark (CcMarkOwned still guards it on every attempt)
+    std::string leaderName;     // the run whose cc order set it, for the log line
+    bool reported = false;      // the first failure was logged (a bot that stays away does not repeat it every second)
+};
+
+std::map<std::string, PendingCc>& PendingCcTable()
+{
+    static std::map<std::string, PendingCc> table;
+    return table;
+}
+
+void RetainPendingCc(RunRec const& rec, std::string const& bot, std::string const& mark)
+{
+    PendingCc& entry = PendingCcTable()[bot];
+    entry.mark = mark;
+    entry.leaderName = rec.leaderName;
+    entry.reported = false;
+}
+
+// One pass of the pending clears: a bot that is not in the world keeps its entry, a clear the host refuses keeps it, and only a settled attempt drops it. The
+// first failure is logged once; a retry that takes is logged too, so both ends of the wait are in the server log.
+void RetryPendingCc()
+{
+    for (auto it = PendingCcTable().begin(); it != PendingCcTable().end();)
+    {
+        std::string const botName = it->first;
+        PendingCc& entry = it->second;
+        Player* bot = ObjectAccessor::FindPlayerByName(botName.c_str());
+        bool const inWorld = bot && bot->IsInWorld();
+        bool ownedMark = false, cleared = false;
+        std::string code, detail;
+        if (inWorld)
+        {
+            std::string mark, family;
+            h8::CcOrderValues(bot, mark, family);
+            ownedMark = h8::CcMarkOwned(entry.mark, mark);
+            if (ownedMark)
+            {
+                cleared = h8::ClearCcOrder(nullptr, bot, entry.mark, ObjectGuid::Empty, code, &detail);
+                if (!cleared)
+                    detail = code.empty() ? std::string("the clear was refused") : code;
+            }
+        }
+        else
+            detail = "the bot is not in the world";
+        if (h8::CcTeardownSettles(inWorld, ownedMark, cleared))
+        {
+            if (cleared)
+                sLog.outString("TortoiseBots run: cc clear for %s (run of %s) took on retry", botName.c_str(), entry.leaderName.c_str());
+            it = PendingCcTable().erase(it);
+            continue;
+        }
+        if (!entry.reported)
+        {
+            sLog.outString("TortoiseBots run: cc clear for %s (run of %s) is pending: %s", botName.c_str(), entry.leaderName.c_str(), detail.c_str());
+            entry.reported = true;
+        }
+        ++it;
+    }
+}
+
+void Note(RunRec& rec, uint32 nowMs, char const* kind, int32 step, std::string why = {});   // defined below (the ring and the server log)
+
+// G8: the crowd control the run set comes off when the run ends (T: ClearRunCcIcons): each raid icon of Run::ccIcons only while it is still on the unit the run
+// put it on (an icon a player moved since stays), and every bot a run `cc` order marked gets its `rti cc` and `run cc family` back to none. The bots come from
+// RunRec::ccOwned, not Run::ccHolds: a step advance, a resume or a regroup clears ccHolds and leaves the bots' values set. A bot the clear could not reach keeps
+// its entry in the pending table (RetryPendingCc) and the run's event ring says so.
+void ClearRunCc(RunRec& rec, uint32 nowMs)
+{
+    Player* lead = InWorld(rec.leader);
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    if (group)
+        for (auto const& icon : DungeonRun::CcIconsToClear(rec.run))
+        {
+            ObjectGuid unit;
+            if (icon.first >= 0 && icon.first < 8 && ResolveHandle(rec.leader, icon.second, unit) && group->GetTargetIcon(uint8(icon.first)) == unit)
+                group->SetTargetIcon(uint8(icon.first), ObjectGuid::Empty, rec.leader);
+        }
+    for (auto const& owned : rec.ccOwned)
+    {
+        Player* bot = nullptr;
+        for (ObjectGuid guid : PartyGuids(rec))
+        {
+            Player* member = InWorld(guid);
+            if (member && member->GetName() == owned.first)
+            {
+                bot = member;
+                break;
+            }
+        }
+        if (!bot)
+            bot = ObjectAccessor::FindPlayerByName(owned.first.c_str());
+        bool const inWorld = bot && bot->IsInWorld();
+        bool ownedMark = false, cleared = false;
+        std::string failure = "not in the world";
+        if (inWorld)
+        {
+            std::string mark, family;
+            h8::CcOrderValues(bot, mark, family);
+            ownedMark = h8::CcMarkOwned(owned.second, mark);
+            if (ownedMark)
+            {
+                // The mark is named so that only the bot's own values reset: the icons were settled above (an empty unit takes no icon down), and a values-only
+                // clear needs no party, so a bot that left the group is taken off the run's mark too.
+                std::string code;
+                cleared = h8::ClearCcOrder(lead, bot, owned.second, ObjectGuid::Empty, code);
+                if (!cleared)
+                    failure = code.empty() ? "failed" : code;
+            }
+            else
+                failure = "another mark";
+        }
+        if (h8::CcTeardownSettles(inWorld, ownedMark, cleared))
+            continue;   // nothing of the run's is left on the bot
+        RetainPendingCc(rec, owned.first, owned.second);
+        Note(rec, nowMs, "cc-clear", -1, owned.first + " " + failure);
+    }
+    rec.ccOwned.clear();
+}
+
 int32 UnitOfStep(ai::PlanStep const& step)
 {
     if (step.entry)
@@ -314,7 +440,7 @@ int32 UnitOfStep(ai::PlanStep const& step)
 }
 
 // An event: the ring (`.tb run events`) and one server log line (`TortoiseBots run: ...`, which replaces the legacy run line).
-void Note(RunRec& rec, uint32 nowMs, char const* kind, int32 step, std::string why = {})
+void Note(RunRec& rec, uint32 nowMs, char const* kind, int32 step, std::string why)
 {
     ai::DungeonPlan const* plan = rec.run.plan;
     int32 leg = -1, unit = -1;
@@ -506,6 +632,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
         DropFocusMark(rec, rec.run.focusIconClear);
         rec.run.focusIconClear = 0;
     }
+    ClearRunCc(rec, nowMs);
     ReleaseAll(rec);
     rec.stopPending = false;
     rec.stopped = stopped;
@@ -835,6 +962,18 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     std::string const order = DungeonRun::Tick(run, facts, dt);
+    // G8 (item 5): the regroup's gather ceiling ended in a pause. A revived member that is still walking back (or drinking first) is waited for a bounded time more
+    // by the policy's own resume (a fresh regroup, its gather ceiling sized by the farthest bot), instead of a pause nobody asked for; the host has no `summon`
+    // (decision D3), this is the choice that does less.
+    if (run.state == State::Paused && gather::IsRegroupGatherPause(run.note))
+    {
+        gather::Decision const verdict = gather::Decide(rec.gatherExt, run.step, run.note, facts.maxMemberYd, facts.leadAlive);
+        int32 const at = run.step < plan->steps.size() ? int32(run.step) : -1;
+        if (verdict.extend && DungeonRun::Resume(run))
+            Note(rec, nowMs, "gather-wait", at, verdict.why);
+        else if (!verdict.why.empty())
+            Note(rec, nowMs, "gather-stop", at, verdict.why);
+    }
     // The searches the policy asks the glue for after its tick (Commander.cpp:13941-13971), once per request, here and never per tick (N6: ported in
     // TbRunStands.cpp; before N6 both answered "found nothing"). A stalled walk asks for a dry stand-in near the step's point, an approach whose hops
     // got no nearer to a pack or boss asks for a stand with sight of it.
@@ -878,6 +1017,8 @@ void TickRun(RunRec& rec, uint32 nowMs)
     if (!order.empty())
     {
         OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
+        // G8: a refused automatic cc order assigned nothing: the unit, bot, mark and budget go back for the next pick (the Turtle glue calls it after every order).
+        DungeonRun::CcOrderTaken(run, order, answer.accepted);
         cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);   // P1: the commander card's order log
         if (answer.accepted)
         {
@@ -888,6 +1029,8 @@ void TickRun(RunRec& rec, uint32 nowMs)
                 Note(rec, nowMs, "pull", at);
             else if (order.compare(0, 6, "revive") == 0)
                 Note(rec, nowMs, "revive", at, order);
+            else if (order.compare(0, 3, "cc ") == 0)
+                Note(rec, nowMs, "cc", at, order);
         }
         else if (!DungeonRun::StallDirectRefused(run, order, answer.text))
             DungeonRun::OrderRefused(run, order, answer.text);
@@ -903,6 +1046,12 @@ void TickRun(RunRec& rec, uint32 nowMs)
 bool Ended(RunRec const& rec)
 {
     return rec.endedMs != 0;
+}
+
+// A newer assignment (an accepted `cc` or `cc clear`) takes the bot over: the old run's pending clear must not touch it.
+void DropPendingCc(std::string const& botName)
+{
+    PendingCcTable().erase(botName);
 }
 
 void NoteTaskEvent(RunRec& rec, uint32 nowMs, char const* kind, int32 unit, std::string const& why)
@@ -925,6 +1074,15 @@ TickTotals const& TickCost()
 
 void Update(uint32 diffMs)
 {
+    static uint32 accumulatedMs = 0;
+    accumulatedMs += diffMs;
+    bool const tick = accumulatedMs >= DungeonRun::kTickMs;
+    if (tick)
+        accumulatedMs = 0;
+    // An ended run has no tick of its own, so its unfinished cc clears retry here: before the empty-table return below, since the last
+    // run leaving the table is exactly when a pending clear must still be driven.
+    if (tick)
+        RetryPendingCc();
     if (Table().empty())
         return;
     // S9 (O9): the tasks (open, loot) look at their bots every 250 ms; the `come` orders they queue are the run's own, so the outside-order baseline moves past them.
@@ -932,11 +1090,8 @@ void Update(uint32 diffMs)
     for (auto const& entry : Table())
         if (!Ended(*entry.second) && tasks::TakeQueuedOrders(entry.first))
             BaselineOrders(*entry.second);
-    static uint32 accumulatedMs = 0;
-    accumulatedMs += diffMs;
-    if (accumulatedMs < DungeonRun::kTickMs)
+    if (!tick)
         return;
-    accumulatedMs = 0;
     uint32 const nowMs = GameTime::GetGameTimeMS();
     std::vector<RunRec*> live;
     for (auto const& entry : Table())

@@ -5,6 +5,7 @@
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
+#include "host/TbPet.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
@@ -56,6 +57,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
+#include "host/TbCc.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -196,7 +198,12 @@ public:
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
+        {
             TC_LOG_INFO("tortoisebots", "bot {} entered the world on map {}", player->GetName(), player->GetMapId());
+            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1527). Only the preference:
+            // nothing is added to the bags and the ammo slot is untouched.
+            player->SetPreferDrawableAmmo(true);
+        }
     }
 
     void OnLogout(Player* player) override
@@ -266,7 +273,10 @@ public:
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
-            { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cc",       TortoiseBots::h8::HandleCc,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: crowd-control mark of one bot
+            { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot> co|nc +name,-name` (SETUP)
+            { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
+            { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
         };
         static ChatCommandTable commandTable =
         {

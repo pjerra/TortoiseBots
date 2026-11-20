@@ -100,8 +100,8 @@ JudgementUpkeepState ReadJudgementUpkeep(PlayerbotAI* ai, Player* bot, bool want
 
     Creature* creature = dynamic_cast<Creature*>(target);
     CreatureInfo const* info = creature ? creature->GetCreatureInfo() : nullptr;
-    bool const eliteOrBoss = info && (info->rank == CREATURE_ELITE_ELITE || info->rank == CREATURE_ELITE_RAREELITE ||
-        info->rank == CREATURE_ELITE_WORLDBOSS);
+    bool const eliteOrBoss = info && (CreatureRankCompat(creature) == CREATURE_ELITE_ELITE || CreatureRankCompat(creature) == CREATURE_ELITE_RAREELITE ||
+        CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS);
     bool const inInstance = bot->GetMap() && bot->GetMap()->IsDungeon();
     if (!eliteOrBoss && !inInstance)
         return state;
@@ -326,7 +326,7 @@ Unit* FindBlessingCandidate(PlayerbotAI* ai, Player* bot, bool greaterOnly)
             continue;
         // Hidden GM masters can never land a spell (see the action-side
         // scan): skip them so they never wedge the trigger either.
-        if (member != bot && member->GetVisibility() == VISIBILITY_OFF)
+        if (member != bot && PlayerHiddenGmCompat(member))
             continue;
         if (member == bot)
         {

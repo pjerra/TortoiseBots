@@ -2,6 +2,7 @@
 
 #include "playerbot/HunterSwitchPolicy.h"
 #include "playerbot/strategy/actions/GenericActions.h"
+#include "playerbot/TbCompatK11h.h"
 
 namespace ai
 {
@@ -419,8 +420,7 @@ public:
                 return false;
 
             Creature* creature = target->ToCreature();
-            return creature && creature->GetCreatureInfo() &&
-                   creature->GetCreatureInfo()->isTameable();
+            return creature && IsTameableCompat(bot, creature);
         }
     };
 

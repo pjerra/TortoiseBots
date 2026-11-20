@@ -2,8 +2,11 @@
 // (`.tb party <leader> <member>...`). The line grammar is in forever/docs/TB-COMMANDS.md; every reply goes to the sender of the command
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
+#include "host/TbPet.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbCc.h"
+#include "host/TbHybrid.h"
 #include "host/run/TbRunHooks.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -313,6 +316,9 @@ Rec StateRec(Player* bot, Readiness& ready)
     if (!entry.blockText.empty())
         rec.T("blockmsg", entry.blockText);
     rec.N("catchup", entry.catchups).B("practice", BotMgr::Instance().Practice(guid));
+    h8::AppendCcState(rec, bot);                              // H8 (slice 8): rticc, ccfam, held, combo (appended: the older keys are unchanged)
+    h10::AppendHybridState(rec, bot);                         // H10 (slice 10): form, totems, imbue, seal, paura (appended: the older keys are unchanged)
+    p11::AppendPetState(rec, bot);                            // P11 (slice 11): pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
     // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
     // a new slot when two or fewer are free.
     rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());

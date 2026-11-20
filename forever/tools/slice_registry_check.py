@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 STRAT = os.path.join(ROOT, "ai", "playerbot", "strategy")
 SLICE_CTX = os.path.join(ROOT, "forever", "src", "slice", "SliceAiObjectContext.cpp")
-SLICE_LIST = os.path.join(ROOT, "forever", "SLICE9.txt")   # slice 9: the list the keys are closed against (SLICE5 plus the L9 files; CMake reads the same file)
+SLICE_LIST = os.path.join(ROOT, "forever", "SLICE9.txt")   # slice 9: the list the keys are closed against (SLICE5 plus the L9 files and, after integration batch 2, the slice-8/10/11 files; CMake reads the same file)
 SLICE_GUARD = os.path.join(ROOT, "forever", "src", "slice", "SliceMissingKeyGuard.h")
 
 # Full-build registries, in the order AiObjectContext::AiObjectContext adds them (first context wins a lookup).
@@ -36,7 +36,14 @@ FULL = {
 # The class context the slice compiles unchanged: it registers its own keys on top of the slice's generic ones.
 WARRIOR = os.path.join(STRAT, "warrior", "WarriorAiObjectContext.cpp")
 PRIEST = os.path.join(STRAT, "priest", "PriestAiObjectContext.cpp")   # slice 2 (R3): the second class context, compiled as it is
-CLASS_CONTEXTS = (WARRIOR, PRIEST)
+MAGE = os.path.join(STRAT, "mage", "MageAiObjectContext.cpp")     # slice 8 (H8): the mage and rogue contexts, compiled as they are
+ROGUE = os.path.join(STRAT, "rogue", "RogueAiObjectContext.cpp")
+DRUID = os.path.join(STRAT, "druid", "DruidAiObjectContext.cpp")     # slice 10 (H10): the druid, paladin and shaman contexts, compiled as they are
+PALADIN = os.path.join(STRAT, "paladin", "PaladinAiObjectContext.cpp")
+SHAMAN = os.path.join(STRAT, "shaman", "ShamanAiObjectContext.cpp")
+HUNTER = os.path.join(STRAT, "hunter", "HunterAiObjectContext.cpp")     # slice 11 (H11): the hunter and warlock contexts, compiled as they are
+WARLOCK = os.path.join(STRAT, "warlock", "WarlockAiObjectContext.cpp")
+CLASS_CONTEXTS = (WARRIOR, PRIEST, MAGE, ROGUE, DRUID, PALADIN, SHAMAN, HUNTER, WARLOCK)
 KINDS = ("strategy", "action", "trigger", "value")
 CTX_TYPE = {"Strategy": "strategy", "Action": "action", "Trigger": "trigger", "UntypedValue": "value"}
 
