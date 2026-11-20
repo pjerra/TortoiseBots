@@ -26,6 +26,7 @@
 #include "playerbot/strategy/actions/GenericSpellActions.h"
 #include "playerbot/strategy/actions/GiveItemAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
+#include "playerbot/strategy/actions/LootRollAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
@@ -144,7 +145,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (14 of its keys)
+    // the registry of StrategyContext (15 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -164,6 +165,7 @@ namespace slice
             creators["dead"] = [](PlayerbotAI* ai) { return new DeadStrategy(ai); };
             creators["hold position"] = [](PlayerbotAI* ai) { return new HoldPositionStrategy(ai); };
             creators["behind"] = [](PlayerbotAI* ai) { return new SetBehindCombatStrategy(ai); };
+            creators["roll"] = [](PlayerbotAI* ai) { return new RollStrategy(ai); };
         }
     };
 
@@ -190,7 +192,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (52 of its keys)
+    // the registry of ActionContext (54 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -248,10 +250,12 @@ namespace slice
             creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackAction(ai); };
             creators["switch to melee"] = [](PlayerbotAI* ai) { return new SwitchToMeleeAction(ai); };
             creators["switch to ranged"] = [](PlayerbotAI* ai) { return new SwitchToRangedAction(ai); };
+            creators["auto loot roll"] = [](PlayerbotAI* ai) { return new AutoLootRollAction(ai); };
+            creators["release loot"] = [](PlayerbotAI* ai) { return new ReleaseLootAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (7 of its keys)
+    // the registry of ChatActionContext (8 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -264,10 +268,11 @@ namespace slice
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
+            creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
         }
     };
 
-    // the registry of WorldPacketActionContext (3 of its keys)
+    // the registry of WorldPacketActionContext (6 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -276,6 +281,9 @@ namespace slice
             creators["store loot"] = [](PlayerbotAI* ai) { return new StoreLootAction(ai); };
             creators["auto release"] = [](PlayerbotAI* ai) { return new AutoReleaseSpiritAction(ai); };
             creators["accept resurrect"] = [](PlayerbotAI* ai) { return new AcceptResurrectAction(ai); };
+            creators["loot start roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootStartRollAction(ai); };
+            creators["loot vote"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootVoteAction(ai); };
+            creators["loot roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootRollAction(ai); };
         }
     };
 
@@ -399,17 +407,20 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketTriggerContext (1 of its keys)
+    // the registry of WorldPacketTriggerContext (4 of its keys)
     class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
         SliceWorldPacketTriggerContext()
         {
             creators["loot response"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot response"); };
+            creators["loot start roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot start roll"); };
+            creators["loot vote"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot vote"); };
+            creators["loot roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll"); };
         }
     };
 
-    // the registry of ValueContext (182 of its keys)
+    // the registry of ValueContext (186 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -597,11 +608,15 @@ namespace slice
             creators["pet dead"] = [](PlayerbotAI* ai) { return new PetIsDeadValue(ai); };
             creators["pet happy"] = [](PlayerbotAI* ai) { return new PetIsHappyValue(ai); };
             creators["active spell"] = [](PlayerbotAI* ai) { return new ActiveSpellValue(ai); };
+            creators["active rolls"] = [](PlayerbotAI* ai) { return new ActiveRolls(ai); };
+            creators["seen need rolls"] = [](PlayerbotAI* ai) { return new SeenNeedRolls(ai); };
+            creators["item usage"] = [](PlayerbotAI* ai) { return new ItemUsageValue(ai); };
+            creators["skip go loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "skip go loot list"); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 19, kActions = 62, kTriggers = 103, kValues = 182;
+    constexpr unsigned kStrategies = 20, kActions = 68, kTriggers = 106, kValues = 186;
 }
 }
 

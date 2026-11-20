@@ -15,6 +15,7 @@
 #include "host/cmd/TbCmdBinding.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
+#include "host/run/TbRunTasks.h"
 #include "runtime/SystemRunPolicy.h"
 
 #include "GameTime.h"
@@ -179,6 +180,14 @@ h3::Rec RunRecord(RunRec const& rec, uint32 nowMs)
         out.T("why", rec.run.note);
     if (rec.eventSeq)
         out.N("ev", rec.eventSeq);
+    // S9 (C9): the bot of a loot / open / use_item step, its item and whether the carrier holds it, the object a step waits on and its state (plan words
+    // ready | active | active_alt | none): absent on any other step, the grammar writes no empty value.
+    if (!rec.carrier.empty())
+        out.S("carrier", rec.carrier);
+    if (!rec.itemKey.empty())
+        out.S("item", rec.itemKey);
+    if (!rec.objKey.empty())
+        out.S("obj", rec.objKey);
     return out;
 }
 
@@ -276,6 +285,7 @@ void CancelRunWork(RunRec const& rec, bool endPulls)
     // `fail:cancelled`; a pending entry left behind would be settled by the first tick after `.tb run resume` (TakeLateFailures) as a refusal of an order
     // the pause itself cancelled, and the policy would pause the run again for it.
     ForgetRunOrders(rec.leader);
+    tasks::Cancel(rec.leader);              // S9 (O9): an open / loot task of the run ends with it (its answer is dropped, its loot watch given back)
     for (ObjectGuid guid : PartyGuids(rec))
     {
         h3::CancelRunOrders(guid);
@@ -531,6 +541,8 @@ bool OutsideOrder(RunRec const& rec, std::string& who, std::string& verb)
     return false;
 }
 
+void NoteStepEnd(RunRec& rec, uint32 nowMs, size_t stepIndex);     // S9 (C9), defined with the other step-event helpers below
+
 // ---- events and counters from what a tick saw ----
 void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
 {
@@ -547,8 +559,11 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
     if (run.step != rec.seenStep)
     {
         for (size_t i = rec.seenStep; i < run.step && i < steps; ++i)
+        {
             if (plan->steps[i].kind == ai::PlanStepKind::Boss && !run.notCleared.count(i) && plan->steps[i].entry)
                 rec.bossDead[plan->steps[i].entry] = true;
+            NoteStepEnd(rec, nowMs, i);             // S9 (C9)
+        }
         if (run.step < steps)
             Note(rec, nowMs, "step", int32(run.step));
         rec.seenStep = run.step;
@@ -626,6 +641,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     rec.endedMs = nowMs ? nowMs : 1;
     ForgetRun(rec.leader);
     ForgetRunOrders(rec.leader);
+    tasks::Forget(rec.leader);              // S9 (O9)
     ai::DungeonPlan const* plan = rec.run.plan;
     int32 const current = plan && rec.run.step < plan->steps.size() ? int32(rec.run.step) : -1;
     Note(rec, nowMs, stopped ? "stop" : "done", current, why);
@@ -643,6 +659,127 @@ uint32 EndEarly(RunRec& rec, uint32 nowMs, std::string const& note)
 void PauseWith(RunRec& rec, char const* code)
 {
     rec.pauseCode = code;
+}
+
+// ---- S9 (package C9): the keys and the step-end events of the object, wait and loot steps ----
+char const* ObjectWord(int planState)
+{
+    switch (planState)
+    {
+        case 0: return "ready";
+        case 1: return "active";
+        case 2: return "active_alt";
+        default: return "none";
+    }
+}
+
+// One event of the ring and the log, on a given step (the step that just ended, not the one the run is on now).
+void NoteStepEvent(RunRec& rec, uint32 nowMs, char const* kind, size_t stepIndex, int32 unit, std::string const& why)
+{
+    ai::DungeonPlan const* plan = rec.run.plan;
+    int32 step = -1, leg = -1;
+    if (plan && stepIndex < plan->steps.size())
+    {
+        step = int32(stepIndex);
+        leg = plan->steps[stepIndex].leg;
+    }
+    uint32 const seq = AddEvent(rec, nowMs, kind, step, leg, unit, why);
+    sLog.outString("TortoiseBots run: %s #%u %s step=%d leg=%d unit=%d %s", rec.leaderName.c_str(), seq, kind, step, leg, unit, why.c_str());
+}
+
+// What the facts of this tick say about the step the policy is about to decide on: the run keys (`carrier=`, `item=`, `obj=`) and the numbers the
+// step-end events read. The tick that ends a step read them BEFORE it decided, so Observe reads them for the step that ended.
+void SnapshotStepFacts(RunRec& rec, DungeonRun::Facts const& f)
+{
+    rec.carrier.clear();
+    rec.itemKey.clear();
+    rec.objKey.clear();
+    rec.preStep = size_t(-1);
+    rec.preObjState = -1;
+    rec.preClearNear = 0;
+    rec.preHasItem = false;
+    rec.preHolder.clear();
+    ai::DungeonPlan const* plan = rec.run.plan;
+    if (!plan || rec.run.step >= plan->steps.size())
+        return;
+    ai::PlanStep const& step = plan->steps[rec.run.step];
+    rec.preStep = rec.run.step;
+    switch (step.kind)
+    {
+        case ai::PlanStepKind::WaitObject:
+            rec.preObjState = f.objectState;
+            rec.objKey = std::to_string(step.entry) + ":" + ObjectWord(f.objectState);
+            break;
+        case ai::PlanStepKind::WaitClear:
+            rec.preClearNear = DungeonRun::WaitClearCount(step, f);
+            break;
+        case ai::PlanStepKind::Loot:
+        case ai::PlanStepKind::Open:
+        case ai::PlanStepKind::UseItem:
+        {
+            rec.carrier = f.carrier;
+            bool const loot = step.kind == ai::PlanStepKind::Loot;
+            if (step.item)
+            {
+                rec.preHasItem = f.carrierHasItem || (loot && f.partyHasItem);
+                rec.preHolder = f.carrierHasItem ? f.carrier : (loot && f.partyHasItem ? f.itemHolder : std::string());
+                rec.itemKey = std::to_string(step.item) + (rec.preHasItem ? ":held" : ":missing");
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+// The events of a step that ended on what the policy saw (never a step that was skipped or timed out): a wait_object that read its target state, a wait_clear
+// that read no hostile, a loot / open / use_item whose item the party held.
+void NoteStepEnd(RunRec& rec, uint32 nowMs, size_t stepIndex)
+{
+    ai::DungeonPlan const* plan = rec.run.plan;
+    if (!plan || stepIndex >= plan->steps.size() || rec.preStep != stepIndex)
+        return;
+    ai::PlanStep const& step = plan->steps[stepIndex];
+    switch (step.kind)
+    {
+        case ai::PlanStepKind::WaitObject:
+            if (rec.preObjState >= 0 && uint32(rec.preObjState) == step.param)
+                NoteStepEvent(rec, nowMs, "object", stepIndex, int32(step.entry), std::to_string(step.entry) + ":" + ObjectWord(rec.preObjState));
+            break;
+        case ai::PlanStepKind::WaitClear:
+            if (rec.preClearNear == 0)
+                NoteStepEvent(rec, nowMs, "clear", stepIndex, -1, "no hostile within " + std::to_string(int(step.radius)) + " yd of the spot");
+            break;
+        case ai::PlanStepKind::Loot:
+        case ai::PlanStepKind::Open:
+        case ai::PlanStepKind::UseItem:
+            if (step.item && rec.preHasItem)
+                NoteStepEvent(rec, nowMs, "item", stepIndex, int32(step.entry), "item " + std::to_string(step.item) + " is in " + rec.preHolder + "'s bags");
+            break;
+        default:
+            break;
+    }
+}
+
+// A loot step for an item, about to go out, with the carrier's bags at the floor: the carrier would leave the item (the bag floor of the loot code, spec 5d),
+// so the run says so and pauses instead of looting and then finding the item missing. Free slots are read from the carrier's own bags.
+bool BagsFullForStep(RunRec const& rec, DungeonRun::Facts const& f, std::string& why)
+{
+    ai::DungeonPlan const* plan = rec.run.plan;
+    if (!plan || rec.run.step >= plan->steps.size() || rec.run.orderSent)
+        return false;
+    ai::PlanStep const& step = plan->steps[rec.run.step];
+    if (step.kind != ai::PlanStepKind::Loot || !step.item || f.carrierHasItem || f.partyHasItem || f.carrier.empty())
+        return false;
+    Player* carrier = ObjectAccessor::FindPlayerByName(f.carrier);
+    if (!carrier || !carrier->IsInWorld())
+        return false;
+    uint32 const freeSlots = carrier->GetFreeInventorySlotCount();
+    if (freeSlots > tasks::kFreeSlotsFloor)
+        return false;
+    why = "bags-full: " + f.carrier + " has " + std::to_string(freeSlots) + " free bag slots (the loot code keeps " + std::to_string(tasks::kFreeSlotsFloor) +
+        "): item " + std::to_string(step.item) + " would be left on the corpse. Free some slots, then .tb run resume";
+    return true;
 }
 
 // ---- one second of one run ----
@@ -792,6 +929,18 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     DungeonRun::ApplyPlayerFacts(facts);
+    // S9 (C9, spec D4): group loot is the run's rule for every tick, not only at the start. A method changed under a running run would let a chest or a
+    // corpse pay out under rules the policy does not know (rolls it cannot vote, items to chance). The pending loot task dies before its act, and the run
+    // pauses; the resume checks the method again, so group loot has to be back first.
+    if (std::string methodWhy; !tasks::RunLootMethodOk(facts.lootMethod, methodWhy))
+    {
+        tasks::Cancel(rec.leader);
+        DungeonRun::Pause(run, methodWhy + ": the run waits for group loot (set it, then .tb run resume)");
+        PauseWith(rec, "loot-method");
+        Observe(rec, nowMs, &facts);
+        return;
+    }
+    SnapshotStepFacts(rec, facts);              // S9 (C9): the run keys and the step-end events read what the policy is about to decide on
     run.liveTactics = &ai::GetBossTactics();
     // An order the executor accepted earlier failed when the bot's engine ran it: the policy hears it as any refusal, before it decides this tick.
     std::vector<LateFailure> late;
@@ -800,6 +949,15 @@ void TickRun(RunRec& rec, uint32 nowMs)
         DungeonRun::OrderRefused(run, failure.order, failure.text);
     if (run.state != State::Running)
     {
+        Observe(rec, nowMs, &facts);
+        return;
+    }
+    // S9 (C9): a loot step for an item whose carrier has no room for it pauses here with the reason (the loot code would leave the item, and the step would
+    // end "done, but the item is not in the bags").
+    if (std::string bagsWhy; BagsFullForStep(rec, facts, bagsWhy))
+    {
+        DungeonRun::Pause(run, bagsWhy);
+        PauseWith(rec, "bags-full");
         Observe(rec, nowMs, &facts);
         return;
     }
@@ -896,6 +1054,19 @@ void DropPendingCc(std::string const& botName)
     PendingCcTable().erase(botName);
 }
 
+void NoteTaskEvent(RunRec& rec, uint32 nowMs, char const* kind, int32 unit, std::string const& why)
+{
+    ai::DungeonPlan const* plan = rec.run.plan;
+    int32 step = -1, leg = -1;
+    if (plan && rec.run.step < plan->steps.size())
+    {
+        step = int32(rec.run.step);
+        leg = plan->steps[rec.run.step].leg;
+    }
+    uint32 const seq = AddEvent(rec, nowMs, kind, step, leg, unit, why);
+    sLog.outString("TortoiseBots run: %s #%u %s step=%d leg=%d unit=%d %s", rec.leaderName.c_str(), seq, kind, step, leg, unit, why.c_str());
+}
+
 TickTotals const& TickCost()
 {
     return TickCostRw();
@@ -903,6 +1074,13 @@ TickTotals const& TickCost()
 
 void Update(uint32 diffMs)
 {
+    if (Table().empty())
+        return;
+    // S9 (O9): the tasks (open, loot) look at their bots every 250 ms; the `come` orders they queue are the run's own, so the outside-order baseline moves past them.
+    tasks::Update(diffMs);
+    for (auto const& entry : Table())
+        if (!Ended(*entry.second) && tasks::TakeQueuedOrders(entry.first))
+            BaselineOrders(*entry.second);
     static uint32 accumulatedMs = 0;
     accumulatedMs += diffMs;
     if (accumulatedMs < DungeonRun::kTickMs)
@@ -967,6 +1145,11 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
             return refuse("player-in-group", slot.name + " is not a host bot: a run is for bots only");
         if (member->GetMapId() != plan->map || member->GetInstanceId() != leader->GetInstanceId())
             return refuse("wrong-map", slot.name + " is not in the leader's instance of map " + std::to_string(plan->map));
+        // S9 (C9, spec 5d): every member starts with room for the loot of a dungeon. Below it the loot code leaves items and a full carrier cannot take a plan
+        // item, so the run refuses to start (a run that starts and then stops at the first chest is worse than a refusal that names the bot).
+        if (member->GetFreeInventorySlotCount() < tasks::kStartFreeSlots)
+            return refuse("bags", slot.name + " has " + std::to_string(member->GetFreeInventorySlotCount()) + " free bag slots: a run needs at least " +
+                std::to_string(tasks::kStartFreeSlots) + " (the loot code leaves items when two or fewer are free): make room first");
         if (slot.guid == leader->GetGUID())
             continue;
         // A member that is not commanded yet would need its engine kit rebuilt when the run binds it (`.tb master` queues that); a run does not do it: bind the party first.
@@ -974,10 +1157,19 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
             return refuse("not-commanded", slot.name + " has no commander yet: bind the party first (.tb master party " + name + " <commander>)");
         others.push_back(member);
     }
+    // S9 (C9, spec D4): the group's loot method is group loot: the bots roll greed in group loot only, so any other method would leave rolls un-voted
+    // (need-before-greed) or items to chance (free-for-all, round robin), and personal loot is a method the policy does not know. A new group is created in
+    // group loot (Group.cpp:296), so a refusal here means someone changed it.
+    {
+        std::string methodWhy;
+        if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
+            return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot)");
+    }
     // Every check passed: nothing is changed before this line. A finished earlier run of the leader gives way to the new one.
     if (Find(leader->GetGUID()))
     {
         ForgetRun(leader->GetGUID());
+        tasks::Forget(leader->GetGUID());   // S9 (O9)
         Remove(leader->GetGUID());
     }
     RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs);
@@ -1073,10 +1265,17 @@ StateOutcome ResumeRun(RunRec& rec, uint32 nowMs)
     if (rec.run.state != State::Paused)
         return refuse("not-paused", "only a paused run can be resumed (it is " + StateName(rec) + ")");
     Player* lead = InWorld(rec.leader);
-    if (Group* group = lead ? lead->GetGroup() : nullptr)
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    if (group)
+    {
         for (Group::MemberSlot const& slot : group->GetMemberSlots())
             if (!BotMgr::Instance().IsBot(slot.guid))
                 return refuse("player-in-group", slot.name + " is in the group: the run waits until the group is bots only again");
+        // The pause reason of a method changed under the run ends only on group loot: a resume with the method still wrong would pause again at once.
+        std::string methodWhy;
+        if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
+            return refuse("loot-method", methodWhy + " (a run needs group loot)");
+    }
     DungeonRun::LeadSpot spot;
     if (lead)
     {
@@ -1132,6 +1331,12 @@ uint32_t BotRunPlanMap(Player* bot)
 {
     RunRec* rec = RunOfBot(bot);
     return rec && rec->run.plan ? rec->run.plan->map : 0;
+}
+
+std::string LootMethodWord(Group const* group)
+{
+    int const method = tasks::PolicyLootMethod(uint32(group->GetLootMethod()));
+    return method < 0 ? std::string("none") : std::string(RemoteCommander::LootMethodName(method));
 }
 
 void LoadPlans()

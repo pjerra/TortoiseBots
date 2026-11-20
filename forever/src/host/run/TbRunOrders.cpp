@@ -17,6 +17,7 @@
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrdersPure.h"
 #include "slice/SliceHybridPolicy.h"
+#include "host/run/TbRunTasks.h"
 
 #include <algorithm>
 #include <cmath>
@@ -737,6 +738,14 @@ OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gath
             return DoCc(rec, party, p);
         case od::Verb::CcClear:
             return DoCcClear(rec, party, p);
+        // S9 (O9): the object, loot and loot-method orders are the task module's (TbRunTasks.cpp); `use <item>` is refused with its reason.
+        case od::Verb::Open:
+        case od::Verb::Loot:
+            return tasks::Begin(rec, party.lead, party.bots, p.task, nowMs);
+        case od::Verb::LootMethod:
+            return tasks::SetLootMethod(rec, party.lead, party.bots, p.task);
+        case od::Verb::Use:
+            return Refuse("unsupported", tasks::UseUnsupportedText());
         default:
             break;
     }

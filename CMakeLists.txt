@@ -68,11 +68,12 @@ set_target_properties(tortoisebots
     FOLDER "src/modules/TortoiseBots")
 
 if(TORTOISEBOTS_SLICE1)
-  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-11 list (forever/SLICE11.txt),
-  # which holds every file of SLICE1.txt .. SLICE5.txt (SLICE4 plus the plan loader DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md),
-  # plus the mage, rogue and give-item files of slice 8 (forever/docs/SLICE8-K-NOTES.md), the 40 druid, paladin and shaman files of slice 10
-  # (forever/docs/SLICE10-K-NOTES.md), and the hunter and warlock class files, the pet keys' files and CombatActions.cpp of slice 11 (forever/docs/SLICE11-NOTES.md).
-  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE11.txt)
+  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the slice-9 list (forever/SLICE9.txt),
+  # which holds every file of SLICE1.txt .. SLICE5.txt (the plan loader DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md), the L9 files of
+  # slice 9 (LootRollAction.cpp, ItemUsageValue.cpp; forever/docs/SLICE9-L-NOTES.md; the doors package adds no legacy file), and every file of the slice-8, slice-10
+  # and slice-11 lists that integration batch 2 brought in (mage, rogue, give item, the 40 druid/paladin/shaman files, hunter, warlock, pets:
+  # forever/docs/SLICE8-K-NOTES.md, SLICE10-K-NOTES.md, SLICE11-NOTES.md). It is the newest list; SLICE5, SLICE8, SLICE10 and SLICE11 are subsets of it.
+  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE9.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TB_SLICE_LIST})
@@ -95,7 +96,7 @@ if(TORTOISEBOTS_SLICE1)
       continue()
     endif()
     if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${line})
-      message(FATAL_ERROR "TortoiseBots: forever/SLICE11.txt names ${line}, which does not exist")
+      message(FATAL_ERROR "TortoiseBots: forever/SLICE9.txt names ${line}, which does not exist")
     endif()
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()

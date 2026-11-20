@@ -319,6 +319,9 @@ Rec StateRec(Player* bot, Readiness& ready)
     h8::AppendCcState(rec, bot);                              // H8 (slice 8): rticc, ccfam, held, combo (appended: the older keys are unchanged)
     h10::AppendHybridState(rec, bot);                         // H10 (slice 10): form, totems, imbue, seal, paura (appended: the older keys are unchanged)
     p11::AppendPetState(rec, bot);                            // P11 (slice 11): pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
+    // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
+    // a new slot when two or fewer are free.
+    rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());
     return rec;
 }
 
@@ -380,6 +383,13 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // leader (same map, within 40 yd).
     uint32 const total = uint32(who.bots.size());
     end.N("alive", aliveCount).N("dead", deadCount).N("ghost", ghostCount).B("wipe", total > 0 && aliveCount == 0).B("whole", total > 0 && togetherCount == total);
+    // S9 (C9): the party's loot method and threshold, as the policy names them (group | ffa | rr | master | nbg, or none for a method it does not know:
+    // the core's personal loot) and the quality number; absent for a party with no group.
+    if (!who.bots.empty() && who.bots.front()->GetGroup())
+    {
+        Group const* lootGroup = who.bots.front()->GetGroup();
+        end.S("lootmethod", run::LootMethodWord(lootGroup)).N("lootthr", uint32(lootGroup->GetLootThreshold()));
+    }
     run::AnnotateStateEnd(end, who.bots.empty() ? nullptr : who.bots.front());     // S5 (H5): run=<lead> runstate=<state> for a party in a run
     reply.End(end);
     return true;

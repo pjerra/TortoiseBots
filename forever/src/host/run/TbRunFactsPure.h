@@ -808,6 +808,161 @@ inline void ReadFightFacts(Facts& f, ai::DungeonPlan const* plan, std::vector<En
     }
 }
 
+// ---- objects, waits, tasks (slice 9, package F9) ----
+// A wait_object step's object (Commander.cpp:12674-12700): the plan's words for its state are 0 ready (closed), 1 active (open), 2 active_alt; -1 is "not found".
+// The core's GOState numbers are the same three (GO_STATE_ACTIVE 0, GO_STATE_READY 1, GO_STATE_DESTROYED 2, SharedDefines.h:3278), but the plan's 0 is the
+// core's READY: the map is by NAME, as the Turtle glue does it.
+inline int PlanObjectState(std::uint32_t coreState)
+{
+    switch (coreState)
+    {
+        case 1: return 0;           // GO_STATE_READY: a closed door
+        case 0: return 1;           // GO_STATE_ACTIVE: an open door, a pulled lever
+        default: return 2;          // GO_STATE_DESTROYED and the rest
+    }
+}
+
+struct ObjectObs
+{
+    bool found = false;             // a spawned object of the step's entry within the search radius of the step's point
+    std::uint32_t coreState = 1;
+    // "Not found" is authoritative only when the search could have found it: the lead alive, in the world on the plan's map, the step's point within
+    // ReactDistance of it (the by-entry search covers only that) and the point's grid loaded. An unreadable read never counts as gone.
+    bool readable = false;
+};
+
+inline void ReadWaitObject(Facts& f, ObjectObs const& o)
+{
+    f.objectReadable = o.readable;
+    if (o.found)
+        f.objectState = PlanObjectState(o.coreState);
+}
+
+// A hostile creature near the lead, for wait_clear: where it stands and whether it is engaged with the party.
+struct ClearObs
+{
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    bool engaged = false;
+};
+
+// Commander.cpp:12651-12672: the living hostiles within the step's 2D radius of its point; the wait counts every one (WaitClearCount); the engaged flag and
+// the z are for the timeout boundary only.
+inline void ReadWaitClear(Facts& f, ai::PlanStep const& step, std::vector<ClearObs> const& hostiles)
+{
+    for (ClearObs const& h : hostiles)
+    {
+        float const dx = h.x - step.x, dy = h.y - step.y;
+        if (std::sqrt(dx * dx + dy * dy) > step.radius)
+            continue;
+        if (f.clearUnits.size() >= kMaxListed)
+            break;
+        DungeonRun::HostileSpot spot;
+        spot.x = h.x;
+        spot.y = h.y;
+        spot.z = h.z;
+        spot.engaged = h.engaged;
+        f.clearUnits.push_back(spot);
+    }
+}
+
+// One party bot's bags, for a loot / open / use_item step (Commander.cpp RunTaskBags and the loot case, :9867, :12790-12836). `fact.held` lists the step's
+// INPUT items (open: its item and `param`; use_item: the entry item and `param`) the bot carries; `hasStepItem` / `hasEntryItem` are the plain HasItemCount reads.
+struct BagObs
+{
+    DungeonRun::BagFact fact;
+    bool hasStepItem = false;
+    bool hasEntryItem = false;
+};
+
+// What a loot step reads from the remembered corpse after a refusal (no scan).
+struct CorpseObs
+{
+    bool checked = false;           // the corpse (by handle) is in the map
+    bool hasItem = false;           // ... and still holds the step's item, not looted
+    std::string turn;               // the party bot whose round-robin turn it is ("" none)
+};
+
+struct TaskView
+{
+    std::vector<BagObs> bags;                       // every party bot, dead ones too (an unavailable one carries `fact.away`)
+    std::vector<std::uint32_t> inputs;              // the step's input items
+    std::uint64_t taskCarrierKey = 0;               // the task module's newest carrier (0 none)
+    std::vector<std::uint64_t> busyKeys;            // bots a task runs for
+    int reply = 0;                                  // the task module's answer since the order: 0 none, 1 ACK, 2 ERR
+    std::string replyText;
+    CorpseObs corpse;
+};
+
+// The bot an open / use_item / loot goes to, and what is read about it (Commander.cpp:12777-12836). Returns true when the order the run has out must be
+// RETIRED first (its bot left, died or is off the map: DungeonRun::RetireOrder, and the facts are not read from a bot the order did not go to).
+inline bool ReadTaskFacts(Facts& f, DungeonRun::Run const& run, ai::PlanStep const& step, std::string const& leadName, TaskView const& v)
+{
+    using namespace DungeonRun;
+    std::vector<BagFact> bags;
+    for (BagObs const& b : v.bags)
+        bags.push_back(b.fact);
+    std::string name;
+    bool const loot = step.kind == ai::PlanStepKind::Loot;
+    if (loot)
+    {
+        // The lead bot, or the one a loot refusal moved the order to (Run::taskBot).
+        name = leadName;
+        if (!run.taskBot.empty())
+            for (BagFact const& b : bags)
+                if (b.name == run.taskBot)
+                    name = b.name;
+    }
+    else
+    {
+        CarrierVerdict const verdict = OutstandingCarrierVerdict(run.orderSent, v.taskCarrierKey, bags, &name);
+        if (verdict == CarrierVerdict::Retire)
+            return true;
+        if (verdict == CarrierVerdict::NoOrder)
+        {
+            std::string split;
+            name = PickItemCarrier(bags, v.inputs, leadName, &split);
+            f.itemsSplit = split;
+        }
+    }
+    f.carrier = name;
+    BagObs const* carrier = nullptr;
+    for (BagObs const& b : v.bags)
+        if (b.fact.name == name)
+            carrier = &b;
+    f.carrierHasItem = step.item && carrier && carrier->hasStepItem;
+    f.carrierHasEntryItem = step.kind == ai::PlanStepKind::UseItem && carrier && carrier->hasEntryItem;
+    if (carrier)
+    {
+        for (std::uint64_t key : v.busyKeys)
+            f.carrierBusy = f.carrierBusy || key == carrier->fact.guid;
+        // The answer belongs to the bot the newest task order went to.
+        if (v.taskCarrierKey && v.taskCarrierKey == carrier->fact.guid)
+        {
+            f.taskReply = v.reply;
+            f.taskText = v.replyText;
+        }
+    }
+    if (loot && step.item)
+    {
+        // Any bot with the item counts for a loot step (a quest item is personal loot: its member took it, or the lead bot never can).
+        for (BagObs const& b : v.bags)
+            if (f.itemHolder.empty() && b.hasStepItem)
+            {
+                f.partyHasItem = true;
+                f.itemHolder = b.fact.name;
+            }
+        // After a refusal, from the remembered corpse: whose round-robin turn it is and whether the item is still on it.
+        auto const corpse = run.corpses.find(step.entry);
+        if (!run.lootRefusal.empty() && corpse != run.corpses.end() && corpse->second.guid)
+        {
+            f.corpseChecked = v.corpse.checked;
+            f.corpseHasItem = v.corpse.hasItem;
+            f.lootTurn = v.corpse.turn;
+        }
+    }
+    return false;
+}
+
 // ---- the step read: the dispatch of ReadRunFacts (Commander.cpp:12170-12440 and :7367-7440) as ONE function over a small world interface ----
 // The core implements StepWorld with its grid, path and line-of-sight calls (TbRunFacts.cpp); the unit test implements it with a scripted world. Which
 // reads happen on which tick, in which order and with which radius is therefore the same code in both.
@@ -816,6 +971,7 @@ struct LeadView
     float x = 0.0f, y = 0.0f, z = 0.0f;
     bool alive = true;
     std::uint32_t mapId = 0;
+    std::string name;               // S9: the carrier of a loot step is the lead bot unless a refusal moved the order
 };
 
 // A hostile creature near the lead, for the fight-forward read: its entry, place and the distance its aggro reaches (Creature::GetAttackDistance).
@@ -847,6 +1003,13 @@ public:
     virtual bool GroundUnder(CreatureObs const& c, float stepZ, float& groundZ) = 0;
     // Living hostile creatures within `range` of the lead (not pets), for the fight-forward read.
     virtual void HostilesNear(float range, std::vector<ForwardObs>& out) = 0;
+    // S9 (F9): the wait_object step's object, the wait_clear step's hostiles and the party's bags for a task step. A world that cannot answer says so
+    // (NotKnown) and the facts keep the "nothing there" value.
+    virtual ObjectObs ObjectAt(ai::PlanStep const& /*step*/) { NotKnown("objectState"); return ObjectObs(); }
+    virtual void ClearHostiles(float /*range*/, std::vector<ClearObs>& /*out*/) { NotKnown("clearUnits"); }
+    virtual bool TaskBags(ai::PlanStep const& /*step*/, TaskView& /*out*/) { NotKnown("carrier"); return false; }
+    // The task module's order for the retire (an order whose bot is gone): the world drops its task and its answer.
+    virtual void RetireTask() {}
     // A fact the world could not answer this tick (the "do less" value stands).
     virtual void NotKnown(char const* /*field*/) {}
 };
@@ -979,9 +1142,43 @@ inline void ReadStepFacts(Facts& f, DungeonRun::Run const& run, LeadView const& 
             ReadHopUnits(f, run, cx, cy, cz, hops);
             break;
         }
+        case ai::PlanStepKind::WaitClear:
+        {
+            if (!f.seen)
+            {
+                if (wantsApproach)
+                    approach(step->x, step->y, step->z, true, false);
+                break;
+            }
+            std::vector<ClearObs> hostiles;
+            w.ClearHostiles(std::min(toPoint + step->radius, 2.0f * kSeeYd), hostiles);
+            ReadWaitClear(f, *step, hostiles);
+            break;
+        }
+        case ai::PlanStepKind::WaitObject:
+            ReadWaitObject(f, w.ObjectAt(*step));
+            break;
+        case ai::PlanStepKind::Loot:
+        case ai::PlanStepKind::Open:
+        case ai::PlanStepKind::UseItem:
+        {
+            TaskView view;
+            if (!w.TaskBags(*step, view))
+                break;
+            // An order whose bot is gone is retired and the step is read again from a fresh pick (a policy that retires keeps no stale answer).
+            if (ReadTaskFacts(f, run, *step, lead.name, view))
+            {
+                w.RetireTask();
+                f.itemsSplit.clear();
+                TaskView again;
+                if (w.TaskBags(*step, again))
+                    ReadTaskFacts(f, run, *step, lead.name, again);
+            }
+            break;
+        }
         default:
-            // wait_clear, wait_object, hold, ritual, gossip, loot, open, use_item, use_on: not read (the plan has none for the Ragefire Chasm run); such a
-            // step reads as "nothing there" and the policy waits its own timeout and pauses.
+            // hold, ritual, gossip, use_on: not read (no plan of the two dungeons has one); such a step reads as "nothing there" and the policy waits its
+            // own timeout and pauses.
             w.NotKnown("stepKind");
             break;
     }
