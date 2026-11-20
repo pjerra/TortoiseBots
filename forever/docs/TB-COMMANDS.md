@@ -430,3 +430,25 @@ run-end count=2 records=2 verb=events lead=Mtank last=31 #r3
 error code=not-commanded cmd=run msg=Mdpsb%20has%20no%20commander%20yet%3A%20bind%20the%20party%20first%20%28.tb%20master%20party%20Mtank%20%3Ccommander%3E%29 #r4
 ```
 **The samples above were built by hand from the encoder's rules, as section 9's were; the first boot replaces them with real output.**
+
+## 10. Slice 11: pets (package P11; the hunter and the warlock)
+
+### `.tb pet <bot> give|call|dismiss|show [#token]` and `.tb pet <bot> order <words> [#token]`
+One host bot (a name; `party` is refused `bad-target`). Every reply is `pet-begin`, one `pet` record, `pet-end`, read back from the world after the verb (never what was asked).
+
+* `give`: a hunter of level 10 or more with no pet out and none in an active slot of its stable gets its first pet, a tameable beast picked for its race (`forever/data/slice11/hunter-starter-pets.csv`), through the core's own tame path (`Unit::CreateTamedPetFrom`, add to the map, minion, saved as the current pet, pet bar sent), Best Friend, defensive, every active spell on its autocast default, and then its spells trained by the module's planner (`AiPlayerbot.PetAutoTrain`). Refusals (`error code=`): `wrong-class` `level-too-low` `not-in-world` `has-pet` `stored-pet` (Call Pet brings it back) `no-starter` `create-failed` `no-map` `not-summoned`.
+* `call`: the engine casts Call Pet (a hunter with no pet out). `status=started` means the cast began; the pet is out when it ends. Errors: `wrong-class` `has-pet` `no-engine`.
+* `dismiss`: a hunter's pet goes by the Dismiss Pet cast (`status=started`), a warlock's demon by the pet command (`status=ok` only when the bot has no pet any more). Errors: `no-pet` `wrong-class` `no-engine`.
+* `order <autocast <spell name> | aggressive | defensive | passive | follow | stay>`: handed to the engine's chat `pet` action (the words a player types). `autocast torment` is the ordered taunt: the Voidwalker taunts and the engine's tank rule leaves it on (lead decision D4). `abandon` and `dismiss` are not orders (`bad-argument`: nothing deletes a pet by a word, decision D5). Errors: `no-pet` `bad-argument` `no-engine`.
+* `show`: the record with `spells=` (every spell the pet knows) and `tp_used=` `tp_total=` (training points).
+
+The `pet` record: `bot= verb= status=ok|started|refused entry=<creature entry> state=alive|dead|none hppct= [react=passive|defensive|aggressive auto=<spell ids on autocast> [loyal=<1-6>]] [note=...] #token`, end `pet-end count= records= verb= target= ok= refused= #token`.
+
+```
+pet-begin #p1
+pet bot=Mhunt verb=order status=ok entry=1196 state=alive hppct=100 react=defensive auto=3150 loyal=6 #p1
+pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
+```
+
+### `.tb state` keys for a hunter or a warlock (after `practice=`)
+`pet=<entry>:<alive|dead|none>:<hp pct>` (`dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.
