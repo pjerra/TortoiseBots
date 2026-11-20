@@ -30,6 +30,7 @@
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 #include "PlayerbotAIStorage.h"
 #include "runtime/CcOrderFamily.h"
+#include "playerbot/policy/combat/CcPermissionPolicy.h"
 
 namespace TortoiseBots
 {
@@ -331,6 +332,50 @@ void CcOrderValues(Player* bot, std::string& mark, std::string& family)
     family = ValueText(ai, "run cc family");
 }
 
+// ---- crowd-control permissions: the memory-only per-(commander account, class) store ----
+
+ai::CcPermissions::Store& CcPermissionStore()
+{
+    static ai::CcPermissions::Store store;
+    return store;
+}
+
+uint32 CcDeniedForOwner(uint32 owner, uint8 botClass)
+{
+    return CcPermissionStore().DeniedFor(owner, botClass, ai::CcPermissions::kDefaultDenied);
+}
+
+uint64 CcDeniedVersion()
+{
+    return CcPermissionStore().Version();
+}
+
+uint32 CcOwnerOf(Player* bot, Player* sender)
+{
+    if (Player* commander = CommanderOf(bot))
+        if (WorldSession* session = commander->GetSession())
+            return session->GetAccountId();
+    if (sender)
+        if (WorldSession* session = sender->GetSession())
+            return session->GetAccountId();
+    return 0;
+}
+
+void CcSetDenied(uint32 owner, uint8 botClass, uint32 mask)
+{
+    CcPermissionStore().Set(owner, botClass, mask);
+}
+
+void CcSyncBot(Player* bot)
+{
+    if (!bot)
+        return;
+    uint32 const mask = CcDeniedForOwner(CcOwnerOf(bot, nullptr), bot->GetClass());
+    if (PlayerbotAI* ai = AiOf(bot))
+        if (ai->GetCcDeniedMask() != mask)
+            ai->SetCcDeniedMask(mask);
+}
+
 namespace
 {
 // The unit a `.tb cc` argument names: `target` (the sender's selection, read when the command runs) or the 32 hex digits of a guid (`.tb state` writes them).
@@ -409,12 +454,144 @@ std::string Trim(std::string const& text)
 }
 }
 
+namespace
+{
+// Whether `party <leader>` names its leader here: the word after `party` is the leader's name unless it is a class
+// or the order word itself. (A leader literally named Mage or Priest reads as a class word; order that bot by name.)
+bool CcPermLeaderFollows(Words const& args)
+{
+    if (args.w.size() < 3 || Lower(args.w[0]) != "party")
+        return false;
+    std::string const next = Lower(args.w[1]);
+    return ai::CcPermissions::ClassFromWord(next) == 0 && next != "allow" && next != "deny" && next != "list";
+}
+
+// The permission order at the words: `pos` ends past the order word, `klass` is the named class (0 = all classes).
+bool CcPermOpAt(Words const& args, size_t& pos, uint8& klass, std::string& op)
+{
+    pos = 0;
+    klass = 0;
+    op.clear();
+    if (args.w.empty())
+        return false;
+    if (Lower(args.w[0]) == "party")
+    {
+        pos = 1;
+        if (CcPermLeaderFollows(args))
+            ++pos;
+    }
+    else
+        pos = 1;
+    if (pos >= args.w.size())
+        return false;
+    std::string word = Lower(args.w[pos]);
+    if (uint8 const named = ai::CcPermissions::ClassFromWord(word))
+    {
+        klass = named;
+        if (++pos >= args.w.size())
+        {
+            op = "list";
+            return true;
+        }
+        word = Lower(args.w[pos]);
+    }
+    if (word != "allow" && word != "deny" && word != "list")
+        return false;
+    op = word;
+    ++pos;
+    if (op == "list")
+        return pos == args.w.size();
+    return true;
+}
+
+bool HandleCcPermissions(ChatHandler* handler, Words const& args)
+{
+    Player* sender = SenderPlayer(handler);
+    size_t pos = 0;
+    Address who = ResolveAddress(args, pos, sender, CcPermLeaderFollows(args));
+    if (!who.ok())
+        return Fail(handler, args, "cc", who.code, who.detail);
+    uint8 klass = 0;
+    if (uint8 const named = ai::CcPermissions::ClassFromWord(Lower(args.w[pos])))
+    {
+        klass = named;
+        ++pos;
+    }
+    std::string const op = pos < args.w.size() ? Lower(args.w[pos++]) : "list";
+    if (op == "list" && pos != args.w.size())
+        return Fail(handler, args, "cc", "unexpected-argument", args.w[pos]);
+    uint32 kinds = 0;
+    for (size_t i = pos; i < args.w.size(); ++i)
+    {
+        uint32 const bit = ai::CcPermissions::KindFromWord(Lower(args.w[i]));
+        if (!bit)
+            return Fail(handler, args, "cc", "bad-argument", args.w[i]);
+        kinds |= bit;
+    }
+    if (op != "list" && kinds == 0)
+        return Fail(handler, args, "cc", "missing-argument", op == "deny" ? "deny <fear|sheep|banish|shackle|sap|sleep|trap|charm|all>..." : "allow <fear|sheep|banish|shackle|sap|sleep|trap|charm|all>...");
+    Reply reply(handler, args, "cc");
+    reply.Begin();
+    uint32 ok = 0, stored = 0, skipped = 0;
+    for (Player* bot : who.bots)
+    {
+        Rec rec("cc");
+        rec.S("bot", bot->GetName()).S("verb", "perms").S("op", op);
+        uint8 const botClass = bot->GetClass();
+        uint32 const owner = CcOwnerOf(bot, sender);
+        rec.S("class", ai::CcPermissions::ClassName(botClass)).N("owner", owner);
+        if (klass && klass != botClass)
+        {
+            rec.S("status", "skipped");
+            rec.L("denied", ai::CcPermissions::DeniedWords(CcDeniedForOwner(owner, botClass)));
+            reply.Line(rec);
+            ++skipped;
+            continue;
+        }
+        if (op == "list")
+        {
+            rec.S("status", "ok");
+            rec.L("denied", ai::CcPermissions::DeniedWords(CcDeniedForOwner(owner, botClass)));
+            reply.Line(rec);
+            ++ok;
+            continue;
+        }
+        uint32 const current = CcDeniedForOwner(owner, klass);
+        CcSetDenied(owner, klass, op == "deny" ? (current | kinds) : (current & ~kinds));
+        uint32 const effective = CcDeniedForOwner(owner, botClass);
+        if (PlayerbotAI* ai = AiOf(bot))
+        {
+            ai->SetCcDeniedMask(effective);
+            rec.S("status", "ok");
+            ++ok;
+        }
+        else
+        {
+            rec.S("status", "stored");
+            ++stored;
+        }
+        rec.L("denied", ai::CcPermissions::DeniedWords(effective));
+        reply.Line(rec);
+    }
+    Rec end("cc");
+    end.S("verb", "perms").S("op", op).P("target", LabelParts(who.label));
+    end.N("bots", who.bots.size()).N("ok", ok).N("stored", stored).N("skipped", skipped);
+    reply.End(end);
+    return true;
+}
+} // namespace
+
 // ---- `.tb cc <bot> <mark> <unit guid|target> [family]` and `.tb cc <bot> clear [<mark> <unit guid>]` ----
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
     Words const args = Split(tail);
     if (!RequireBuilt(handler, args, "cc"))
         return false;
+    size_t permPos = 0;
+    uint8 permClass = 0;
+    std::string permOp;
+    if (CcPermOpAt(args, permPos, permClass, permOp))
+        return HandleCcPermissions(handler, args);
     bool failed = false;
     Player* bot = ResolveBot(handler, args, "cc", failed);
     if (failed)
@@ -603,6 +780,8 @@ void SelfTestRecords(Reply& reply)
     reply.Line(Rec("cc").S("bot", "Mmage").S("verb", "set").S("status", "ok").S("mark", "moon").S("unit", "0000000000000000F130002C4A000001").N("entry", 11322).S("rticc", "moon").S("ccfam", "polymorph"));
     reply.Line(Rec("cc").S("bot", "Mmage").S("verb", "clear").S("status", "ok").S("rticc", "").S("ccfam", "").S("mark", "moon").B("icon_removed", true));
     reply.Line(Rec("selftest").S("case", "cc-end").S("verb", "set").S("target", "Mmage").N("ok", 1).N("refused", 0));
+    reply.Line(Rec("cc").S("bot", "Mwarlock").S("verb", "perms").S("op", "deny").S("class", "warlock").N("owner", 3).S("status", "ok").L("denied", { "fear" }));
+    reply.Line(Rec("selftest").S("case", "cc-perms-end").S("verb", "perms").S("op", "deny").S("target", "party:Mcmd").N("bots", 5).N("ok", 4).N("stored", 0).N("skipped", 1));
     reply.Line(Rec("strategy").S("bot", "Mrogue").S("state", "nc").S("op", "add").S("name", "stealth").S("tag", "SETUP").S("status", "ok").B("changed", true));
     reply.Line(Rec("selftest").S("case", "strategy-end").S("target", "Mrogue").S("state", "nc").N("applied", 1).N("refused", 0));
 }
@@ -675,6 +854,11 @@ bool NoEngine(std::string& code, std::string* detail)
 bool ApplyCcOrder(Player*, Player*, std::string const&, ObjectGuid, std::string const&, std::string& code, std::string* detail) { return NoEngine(code, detail); }
 bool ClearCcOrder(Player*, Player*, std::string const&, ObjectGuid, std::string& code, std::string* detail, bool*) { return NoEngine(code, detail); }
 void CcOrderValues(Player*, std::string& mark, std::string& family) { mark.clear(); family.clear(); }
+uint32 CcDeniedForOwner(uint32, uint8) { return 0; }
+uint64 CcDeniedVersion() { return 0; }
+uint32 CcOwnerOf(Player*, Player*) { return 0; }
+void CcSetDenied(uint32, uint8, uint32) {}
+void CcSyncBot(Player*) {}
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail args)       { return NotBuilt(handler, args, "cc"); }
 bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "strategy"); }
 }
