@@ -37,7 +37,9 @@ uint32 StarterPetEntry(Player const* bot);
 
 // Give a hunter its first pet: `Unit::CreateTamedPetFrom(entry)` (the core's tame path with no wild creature), then the four steps `Spell::EffectTameCreature`
 // takes (add to the map, make it the bot's minion, save it as the current pet, send the pet bar), the classic hunter rules the bot needs (Best Friend, defensive,
-// every learned active spell on its autocast default) and the pet number written to `characters.summonedPetNumber` at once. Reads back that the pet is out.
+// every learned active spell on its autocast default) and the pet number written to `characters.summonedPetNumber` at once. A map that refuses the pet, or a
+// pet the bot cannot read back after the attach, is undone completely (active slot, attachment, object; nothing saved), and the result is read back from the
+// world before anything is written.
 GiveResult GiveHunterPet(Player* bot, bool saveToDb = true);
 }
 }

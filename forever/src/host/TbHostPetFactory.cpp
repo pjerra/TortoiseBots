@@ -11,6 +11,7 @@
 #include "compat/botpch_forever.h"
 
 #include "host/TbPetFactory.h"
+#include "host/TbPetSummonPure.h"
 #include "slice/SliceLog.h"
 
 #include "playerbot/playerbot.h"
@@ -60,6 +61,58 @@ bool TameableBeast(uint32 entry)
     CreatureDifficulty const* difficulty = info ? info->GetDifficulty(DIFFICULTY_NONE) : nullptr;
     return info && difficulty && info->IsTameable(false, difficulty);
 }
+
+// Undo what CreateTamedPetFrom left behind for a pet that is not going to stay: the active slot InitTamedPet took, the minion attachment (only when the pet was
+// attached) and the pet object. Nothing reaches the database, so the next check finds the bot as it was and can make a pet again.
+void DropTamedPet(Player* bot, Pet* pet, bool attached)
+{
+    if (attached && pet->GetOwnerGUID() == bot->GetGUID())
+        bot->SetMinion(pet, false);
+    if (pet->IsInWorld())
+        pet->AddObjectToRemoveList();   // the map deletes it
+    else
+        delete pet;
+    PetStable& stable = bot->GetOrInitPetStable();
+    if (Optional<uint32> index = stable.GetCurrentActivePetIndex())
+        stable.ActivePets[*index].reset();
+    stable.CurrentPetIndex.reset();
+}
+
+// The steps SummonTamedPet (TbPetSummonPure.h) runs, in core terms. The map insert and the read-back decide whether anything is kept: the save and the
+// summoned-pet number are written only for a pet the bot reads back.
+struct PetSummonSteps
+{
+    Player* bot;
+    Pet* pet;
+    Map* map;
+    bool saveToDb;
+
+    bool Insert() { return map->AddToMap(pet->ToCreature()); }
+
+    void Attach() { bot->SetMinion(pet, true); }
+
+    bool Out() { return bot->GetPet() == pet && pet->IsInWorld(); }
+
+    void Keep()
+    {
+        pet->UpdateTrainingPoints();
+        // The default autocast of every active spell the beast came with (Growl and the like follow the taunt rule of the engine's sweep afterwards).
+        for (uint32 const spellId : PetSpellIdsCompat(pet))
+            if (!IsPassiveSpell(spellId))
+                PetToggleAutocastCompat(pet, spellId, TortoiseBots::ShouldPetSpellAutocastDefault(spellId));
+
+        if (saveToDb)
+        {
+            pet->SavePetToDB(PET_SAVE_AS_CURRENT);
+            // The next map change puts the pet away and a later save would write 0 here: the row names the pet already, so a re-login calls it back.
+            if (CharmInfo const* charm = pet->GetCharmInfo())
+                SaveSummonedPetNumberCompat(charm->GetPetNumber(), bot->GetGUID().GetCounter());
+        }
+        bot->PetSpellInitialize();
+    }
+
+    void Discard(bool attached) { DropTamedPet(bot, pet, attached); }
+};
 }
 
 char const* GiveResultCode(GiveResult result)
@@ -131,12 +184,7 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
     Map* map = pet->GetMap();
     if (!map)
     {
-        delete pet;
-        // Put the stable back as it was: InitTamedPet had taken a slot for it.
-        PetStable& stable = bot->GetOrInitPetStable();
-        if (Optional<uint32> index = stable.GetCurrentActivePetIndex())
-            stable.ActivePets[*index].reset();
-        stable.CurrentPetIndex.reset();
+        DropTamedPet(bot, pet, false);
         return GiveResult::NoMap;
     }
 
@@ -145,28 +193,10 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
     pet->InitLoyalty(Pet::BEST_FRIEND, Pet::GetLoyaltyStartPoints(Pet::BEST_FRIEND));
     pet->SetReactState(REACT_DEFENSIVE);
 
-    // The steps of Spell::EffectTameCreature after the pet exists.
-    map->AddToMap(pet->ToCreature());
-    bot->SetMinion(pet, true);
-    pet->UpdateTrainingPoints();
-
-    // The default autocast of every active spell the beast came with (Growl and the like follow the taunt rule of the engine's sweep afterwards).
-    for (uint32 const spellId : PetSpellIdsCompat(pet))
-        if (!IsPassiveSpell(spellId))
-            PetToggleAutocastCompat(pet, spellId, TortoiseBots::ShouldPetSpellAutocastDefault(spellId));
-
-    if (saveToDb)
-    {
-        pet->SavePetToDB(PET_SAVE_AS_CURRENT);
-        // The next map change puts the pet away and a later save would write 0 here: the row names the pet already, so a re-login calls it back.
-        if (CharmInfo const* charm = pet->GetCharmInfo())
-            SaveSummonedPetNumberCompat(charm->GetPetNumber(), bot->GetGUID().GetCounter());
-    }
-    bot->PetSpellInitialize();
-
-    // Read back.
-    Pet* const now = bot->GetPet();
-    return now && now->IsInWorld() ? GiveResult::Ok : GiveResult::NotSummoned;
+    // The steps of Spell::EffectTameCreature after the pet exists, with the answer of the map insert and of the read-back kept: a pet that is not out is
+    // dropped and the bot is left as it was (TbPetSummonPure.h).
+    PetSummonSteps steps{ bot, pet, map, saveToDb };
+    return SummonTamedPet(steps) == PetSummonOutcome::Out ? GiveResult::Ok : GiveResult::NotSummoned;
 }
 }
 }
