@@ -387,8 +387,8 @@ namespace ai
         if (!bot)
             return false;
 
-        uint32 const questId = getMultiQualifierInt(qualifier, 0, ",");
-        TravelDestinationPurpose const purpose = TravelDestinationPurpose(getMultiQualifierInt(qualifier, 1, ","));
+        uint32 const questId = Qualified::getMultiQualifierInt(qualifier, 0, ",");
+        TravelDestinationPurpose const purpose = TravelDestinationPurpose(Qualified::getMultiQualifierInt(qualifier, 1, ","));
 
         uint32 objective = 0;
         switch (purpose)

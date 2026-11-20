@@ -15,7 +15,24 @@
 #include <unordered_map>
 #include <vector>
 
+// The headers the moved value bodies used in TravelValues.cpp; the wrapper is included from TravelMgr.cpp too.
+#include "playerbot/TravelMgr.h"
+#include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/TravelNode.h"
+#include "playerbot/policy/rpg/LocalPickPolicy.h"
+#include "playerbot/policy/rpg/ZoneMigratePolicy.h"
+#include "playerbot/policy/guild/GuildFoundingPolicy.h"
+#include "playerbot/strategy/values/MaintenanceValues.h"
+#include "playerbot/strategy/values/QuestValues.h"
+#include "playerbot/strategy/values/SharedValueContext.h"
+#include "playerbot/strategy/values/BudgetValues.h"
+#include "playerbot/strategy/values/TrainerValues.h"
+#include "playerbot/strategy/values/GuildValues.h"
+#include "Guild/GuildMgr.h"
+#include "runtime/AltBotService.h"
+#include "runtime/GuildOrderStore.h"
+#include "runtime/GuildOrderSupplyPolicy.h"
+#include "runtime/HireLifecycle.h"
 
 using namespace ai;   // the moved value bodies were written inside `using namespace ai;`
 
@@ -23,12 +40,15 @@ using namespace ai;   // the moved value bodies were written inside `using names
 // FIELD HELPERS
 // ===============================================================================================================
 
+inline uint64 GuidKeyWL4(ObjectGuid const& guid) { return guid.GetRawValue(); }
 inline uint32 AreaIdWL4(AreaTableEntry const* area) { return area ? area->Id : 0; }
 inline uint32 AreaZoneIdOrSelfWL4(AreaTableEntry const* area) { uint32 const zoneId = AreaZoneIdCompat(area); return zoneId ? zoneId : AreaIdWL4(area); }
 inline uint32 AreaTeamWL4(AreaTableEntry const* area) { return area ? area->Team : AREATEAM_NONE; }
 inline AreaTableEntry const* AreaDbEntryWL4(uint32 areaId) { return areaId ? AreaEntry::GetById(areaId) : nullptr; }
 inline uint32 AreaStoreCountWL4() { return sAreaStore.GetMaxEntry(); }
 inline AreaTableEntry const* AreaStoreLookupWL4(uint32 areaId) { return sAreaStore.LookupEntry<AreaEntry>(areaId); }
+
+inline bool AreaDiscoverableWL4(AreaTableEntry const* area) { return area && area->ExploreFlag != 0; }
 
 // The original explored-zones bit test of ExploreTravelDestination::IsActive, inverted into "already explored".
 inline bool AreaExploredWL4(Player* player, AreaTableEntry const* area)
@@ -93,6 +113,14 @@ namespace ai
 inline ai::EntryQuestRelationMap const& TravelQuestRelationMapCompat() { return GAI_VALUE_REF(EntryQuestRelationMap, "entry quest relation"); }
 inline ai::EntryGuidps const& TravelEntryGuidpsCompat() { return GAI_VALUE_REF(EntryGuidps, "entry guidps"); }
 inline ai::EntryTravelPurposeMap const& TravelEntryPurposeMapCompat() { return GAI_VALUE_REF(EntryTravelPurposeMap, "entry travel purpose"); }
+
+// The loader warms two shared values before it builds the destinations (the trainer map and the mount list decide which
+// purposes exist). The Turtle build has both; ForeverCore's purpose map reads no spell or mount list.
+inline void TravelWarmSharedValuesCompat()
+{
+    GAI_VALUE(trainableSpellMap*, "trainable spell map");
+    GAI_VALUE(std::vector<MountValue>, "full mount list");
+}
 
 // The purpose gate is ForeverCore's rule (decision D5); the Turtle build has every cross-slice key and keeps its picks.
 inline bool TravelPurposeRegisteredCompat(PlayerbotAI* /*ai*/, ai::TravelDestinationPurpose /*purpose*/) { return true; }
@@ -777,7 +805,7 @@ namespace outgrown_yield
 // rewardable right now, not elite/dungeon unless the bot can fight bosses,
 // and the rpg-quest strategy is on (quest travel needs it). Anything else
 // would pin the leave rule forever behind an unturnable quest.
-bool HasHandInAbleQuest(PlayerbotAI* ai, Player* bot)
+inline bool HasHandInAbleQuest(PlayerbotAI* ai, Player* bot)
 {
     if (!ai->HasStrategy("rpg quest", BotState::BOT_STATE_NON_COMBAT))
         return false;
@@ -954,8 +982,8 @@ inline bool TravelLeaveOutgrownCompat(PlayerbotAI* ai)
 inline bool TravelQuestStageActiveCompat(Player* bot, std::string const& qualifier)
 {
     AiObjectContext* context = PlayerbotAIStorage::Instance().GetAI(bot)->GetAiObjectContext();
-    uint32 questId = getMultiQualifierInt(qualifier, 0, ",");
-    TravelDestinationPurpose purpose = (TravelDestinationPurpose)getMultiQualifierInt(qualifier, 1, ",");
+    uint32 questId = Qualified::getMultiQualifierInt(qualifier, 0, ",");
+    TravelDestinationPurpose purpose = (TravelDestinationPurpose)Qualified::getMultiQualifierInt(qualifier, 1, ",");
 
     uint32 objective = 0;
 

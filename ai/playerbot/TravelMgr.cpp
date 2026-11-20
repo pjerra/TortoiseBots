@@ -816,7 +816,7 @@ bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
         AreaTableEntry const* area = point->GetArea();
         uint32 zoneId = area ? (AreaZoneIdOrSelfWL4(area)) : 0;
         if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
-            (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
+            (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(area)))))
             return false;
 
         // Autonomous bots take the measured ceiling (GrindSpotPolicy.h): the first
@@ -1441,7 +1441,7 @@ namespace
             return false;
 
         return !GrindLevelFits(GetGrindLevelBand((uint32)info.GetLevel(), info.GetUint8Value("durability"), info.IsMasterlessRandom()),
-            (int32)grind->GetCreatureInfo()->level_max);
+            (int32)CreatureLevelMaxWL4(grind->GetEntry()));
     }
 }
 
@@ -1765,10 +1765,10 @@ int32 TravelMgr::GetAreaLevel(uint32 area_id)
     }
 
     //Get exploration level
-    if (area->AreaLevel)
+    if (AreaLevelCompat(area))
     {
-        areaLevels[area_id] = area->AreaLevel;
-        return area->AreaLevel;
+        areaLevels[area_id] = AreaLevelCompat(area);
+        return AreaLevelCompat(area);
     }
 
     //Get sub-area's
@@ -1896,7 +1896,7 @@ void TravelMgr::LoadAreaLevels()
         areaLevels[fields[0].GetUInt32()] = fields[1].GetInt32();
     } while (result->NextRow());
 
-    sLog.outString(">> Loaded " SIZEFMTD " area levels.", areaLevels.size());
+    sLog.outString(">> Loaded %u area levels.", uint32(areaLevels.size()));
 }
 
 void TravelMgr::LoadQuestTravelTable()
@@ -1957,11 +1957,11 @@ void TravelMgr::LoadQuestTravelTable()
             {
                 for (auto const& guidP : guidpMap.at(entry))
                 {
-                    pointsMap.insert(std::make_pair(guidP.GetRawValue(), guidP));
+                    pointsMap.insert(std::make_pair(GuidKeyWL4(guidP), guidP));
 
                     for (auto tLoc : locs)
                     {
-                        tLoc->AddPoint(&pointsMap.at(guidP.GetRawValue()));
+                        tLoc->AddPoint(&pointsMap.at(GuidKeyWL4(guidP)));
                     }
                 }
             }
@@ -2014,11 +2014,11 @@ void TravelMgr::LoadQuestTravelTable()
 
         for (auto& guidP : guidpMap.at(entry))
         {
-            pointsMap.insert(std::make_pair(guidP.GetRawValue(), guidP));
+            pointsMap.insert(std::make_pair(GuidKeyWL4(guidP), guidP));
 
             for (auto tLoc : dests)
             {
-                tLoc->AddPoint(&pointsMap.at(guidP.GetRawValue()));
+                tLoc->AddPoint(&pointsMap.at(GuidKeyWL4(guidP)));
             }
         }
     }
@@ -2040,15 +2040,15 @@ void TravelMgr::LoadQuestTravelTable()
         if (!area)
             continue;
 
-        if (!area->ExploreFlag)
+        if (!AreaDiscoverableWL4(area))
             continue;
 
         point.FetchArea();
 
-        pointsMap.insert_or_assign(point.GetRawValue(), point);
+        pointsMap.insert_or_assign(GuidKeyWL4(point), point);
 
-        loc = AddDestination<ExploreTravelDestination>(area->Id, TravelDestinationPurpose::Explore);
-        loc->AddPoint(&pointsMap.at(point.GetRawValue()));
+        loc = AddDestination<ExploreTravelDestination>(AreaIdWL4(area), TravelDestinationPurpose::Explore);
+        loc->AddPoint(&pointsMap.at(GuidKeyWL4(point)));
     }
 
     GetPopulatedGrids();
@@ -2983,7 +2983,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones && posArea)
     {
         uint32 posZoneId = AreaZoneIdOrSelfWL4(posArea);
-        if (PlayerbotAIConfig::IsIsolatedCustomZone(posZoneId) || PlayerbotAIConfig::IsIsolatedCustomZone(posArea->Id))
+        if (PlayerbotAIConfig::IsIsolatedCustomZone(posZoneId) || PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(posArea)))
             return false;
     }
 

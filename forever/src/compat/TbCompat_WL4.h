@@ -37,6 +37,13 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/values/QuestValues.h"
 
+// The key the loader stores a spawn point under (Turtle ObjectGuid::GetRawValue is one 64-bit number; ForeverCore's is the
+// raw bytes, so the low half - a database guid - is the stable number).
+inline uint64 GuidKeyWL4(ObjectGuid const& guid)
+{
+    return guid.GetRawValue(0);
+}
+
 // ===============================================================================================================
 // AREA TABLE (TravelMgr destination rules, WorldPosition helpers)
 // ===============================================================================================================
@@ -80,6 +87,13 @@ inline AreaTableEntry const* AreaStoreLookupWL4(uint32 areaId)
     return sAreaTableStore.LookupEntry(areaId);
 }
 
+// Is the area a place exploration can be credited for? (Turtle has an `ExploreFlag` bit index, ForeverCore an `AreaBit`;
+// -1 means the area carries none.)
+inline bool AreaDiscoverableWL4(AreaTableEntry const* area)
+{
+    return area && area->AreaBit >= 0;
+}
+
 // Is an explorable area already discovered by the player? Turtle keeps the legacy bit math on the explored-zones update
 // field; ForeverCore answers it per area id (Player::HasExploredZone), and an area with no exploration bit (AreaBit < 0)
 // is not discoverable - treated as done, so the explore destination is not offered (LESS).
@@ -112,7 +126,7 @@ inline bool AreaPreferParentCompat()
 // The level cap the explore rule compares against (Turtle `DEFAULT_MAX_LEVEL`, ForeverCore the world's configured cap).
 inline uint32 DefaultMaxLevelWL4()
 {
-    return uint32(sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL));
+    return uint32(sWorld.getIntConfig(CONFIG_MAX_PLAYER_LEVEL));
 }
 
 // ===============================================================================================================
@@ -196,9 +210,11 @@ inline int32 QuestMinLevelWL4(Quest const* quest)
 }
 
 // Quest kind: Turtle's QUEST_TYPE_* on GetType(); ForeverCore's quest tag (QuestTagType) on GetQuestTag().
-inline bool QuestIsEliteWL4(Quest const* quest)
+// ForeverCore has no elite quest tag (its classic quest table carries no such kind): a quest is dungeon, raid or pvp by tag,
+// never "elite", so the elite gates answer false here and the dungeon/raid gates do the work (LESS: no elite-only refusal).
+inline bool QuestIsEliteWL4(Quest const* /*quest*/)
 {
-    return quest && quest->GetQuestTag() && *quest->GetQuestTag() == QuestTagType::Elite;
+    return false;
 }
 
 inline bool QuestIsDungeonWL4(Quest const* quest)
@@ -320,6 +336,9 @@ ai::EntryTravelPurposeMap TravelEntryPurposeMapLegacyCompat();
 // boss or gather destination until their slices exist.
 ai::EntryTravelPurposeMap const& TravelEntryPurposeMapCompat();
 
+// The loader warms two shared values on Turtle (trainer map, mount list); this core's purpose map reads neither.
+inline void TravelWarmSharedValuesCompat() {}
+
 // Is a purpose's slice merged? The gate reads the bot's own registry (the generated slice contexts): W2's vendor keys are
 // the `sell`/`repair` actions plus the `maintenance` strategy, W3's quest keys the `rpg quest` strategy. A purpose whose
 // keys are absent is refused and the bot does LESS (keeps grinding). See policy/travel/TravelPurposeGatePolicy.h.
@@ -364,6 +383,7 @@ inline QueryResult TravelWorldQueryCompat(char const* sql, bool* schemaMissing =
 }
 
 // One transaction around the fish-location save (never reached on this core; kept compiling).
-inline void TravelBeginTransactionCompat() { WorldDatabase.BeginTransaction(TransactionType::World); }
-inline void TravelCommitTransactionCompat() { WorldDatabase.CommitTransaction(); }
+// Never reached on this core (the fish loader returns first); the batch form needs no transaction here.
+inline void TravelBeginTransactionCompat() {}
+inline void TravelCommitTransactionCompat() {}
 }
