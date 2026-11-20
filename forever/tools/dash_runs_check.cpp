@@ -1,6 +1,7 @@
 // Dashboard round 1 (FOREVER-DASH-RUNS-SPEC.md section 6): the pure half of the Commander and Dungeon runs feeds, core-free.
 //   g++ -std=c++17 -Wall -Wextra -I. forever/tools/dash_runs_check.cpp -o /tmp/dash_runs_check && /tmp/dash_runs_check
-// `--print-golden` writes the golden COMMANDERS datagram (the Go tests' fixture, tools/observability/internal/state/testdata) and exits.
+// `--print-golden` writes the golden COMMANDERS datagram and `--print-summary` a finished run's summary file: the Go tests' fixtures
+// (tools/observability/internal/state/testdata, internal/dungeons/testdata). Either prints and exits.
 #include "forever/src/dash/TbDashRunsPure.h"
 
 #include <cstdio>
@@ -87,6 +88,19 @@ static RunView Rfc()
     return r;
 }
 
+// A finished Ragefire Chasm run: done, its one boss read dead, one death, no wipe.
+static RunView FinishedRfc()
+{
+    RunView r = Rfc();
+    r.ended = true;
+    r.done = true;
+    r.step = 6;
+    r.state = "done";
+    r.endedUnix = 1763560400;
+    r.bosses = { { 11520, "Taragaman the Hungerer", true, true } };
+    return r;
+}
+
 static std::string Golden()
 {
     std::vector<CT::BindingInfo> bindings{ Binding(Rfc()) };
@@ -97,6 +111,13 @@ static std::string const kGolden = R"GOLDEN({"v":12,"session":1763559000,"seq":5
 
 int main(int argc, char** argv)
 {
+    if (argc > 1 && !std::strcmp(argv[1], "--print-summary"))
+    {
+        SummaryMeta meta;
+        meta.coreRevision = "abc123";
+        std::printf("%s\n", SummaryJson(FinishedRfc(), meta).c_str());
+        return 0;
+    }
     if (argc > 1 && !std::strcmp(argv[1], "--print-golden"))
     {
         std::printf("%s", Golden().c_str());
@@ -259,13 +280,7 @@ int main(int argc, char** argv)
 
     // ---- the summary file ----
     {
-        RunView r = Rfc();
-        r.ended = true;
-        r.done = true;
-        r.step = 6;
-        r.state = "done";
-        r.endedUnix = 1763560400;
-        r.bosses = { { 11520, "Taragaman the Hungerer", true, true } };
+        RunView r = FinishedRfc();
         SummaryMeta meta;
         meta.coreRevision = "abc123";
         std::string const json = SummaryJson(r, meta);

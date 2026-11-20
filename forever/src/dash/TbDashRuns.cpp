@@ -143,7 +143,7 @@ P::MemberView MemberOf(Player* player, Group* group, bool lead, uint32 nowMs)
 
 std::string CreatureName(uint32 entry)
 {
-    CreatureTemplate const* tmpl = sObjectMgr->GetCreatureTemplate(entry);
+    CreatureTemplate const* tmpl = sObjectMgr.GetCreatureTemplate(entry);
     return tmpl ? tmpl->Name : std::string();
 }
 
