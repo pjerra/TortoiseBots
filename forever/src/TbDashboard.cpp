@@ -38,6 +38,7 @@
 #include <map>
 #include <set>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 
@@ -104,6 +105,17 @@ std::string Escape(std::string const& in)
     }
     return out;
 }
+
+// A client string in the realm's locale; a missing string (null table entry or null text) reads as "".
+char const* Loc(LocalizedString const* str)
+{
+    char const* text = str ? (*str)[sWorld->GetDefaultDbcLocale()] : nullptr;
+    return text ? text : "";
+}
+
+// Hooks run on the map threads (MapUpdate.Threads > 1) while the feed cycle runs on the world thread: one lock over
+// the module's shared state (events, tracked bots, fights).
+std::mutex g_feedLock;
 
 char const* ClassName(uint8 cls)
 {
@@ -191,7 +203,7 @@ std::string DriverFields(Player* bot, time_t stillSince, time_t now)
     std::ostringstream ss;
     ObjectGuid const masterGuid = TortoiseBots::BotMgr::Instance().MasterOf(bot->GetGUID());
     ss << ",\"master\":" << masterGuid.GetCounter();
-    if (Player* master = ObjectAccessor::FindConnectedPlayer(masterGuid); master && master->IsInWorld() && master->GetMap() == bot->GetMap())
+    if (Player* master = ObjectAccessor::FindConnectedPlayer(masterGuid); master && master->IsInWorld() && master->FindMap() && master->FindMap() == bot->FindMap())
         ss << ",\"dist_master\":" << bot->GetDistance(master) << ",\"los_master\":" << (bot->IsWithinLOSInMap(master) ? 1 : 0);
     ss << ",\"move\":\"" << MoveName(bot->GetMotionMaster()->GetCurrentMovementGeneratorType()) << "\",\"still_s\":" << (now - stillSince)
        << ",\"ghost\":" << (bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? 1 : 0) << ",\"rez_pending\":" << (bot->IsResurrectRequested() ? 1 : 0)
@@ -462,7 +474,7 @@ void SendDungeonMobs(std::vector<Player*> const& bots, uint64 seq, time_t now)
     Sender& s = Get();
     std::map<std::pair<uint32, uint32>, std::vector<Player*>> runs;
     for (Player* bot : bots)
-        if (Map* map = bot->GetMap(); map && map->IsDungeon())
+        if (Map* map = bot->FindMap(); map && map->IsDungeon())
             runs[{ bot->GetMapId(), bot->GetInstanceId() }].push_back(bot);
 
     std::ostringstream ss;
@@ -482,7 +494,7 @@ void SendDungeonMobs(std::vector<Player*> const& bots, uint64 seq, time_t now)
                 mobs.emplace(creature->GetGUID(), creature);
         }
         Player* viewer = members.front();
-        ss << (firstRun ? "" : ",") << "{\"map\":" << key.first << ",\"instance\":" << key.second << ",\"raid\":" << (viewer->GetMap()->IsRaid() ? "true" : "false")
+        ss << (firstRun ? "" : ",") << "{\"map\":" << key.first << ",\"instance\":" << key.second << ",\"raid\":" << (viewer->FindMap() && viewer->FindMap()->IsRaid() ? "true" : "false")
            << ",\"members\":[";
         firstRun = false;
         for (size_t i = 0; i < members.size(); ++i)
@@ -503,7 +515,7 @@ void SendDungeonMobs(std::vector<Player*> const& bots, uint64 seq, time_t now)
                 : cls == CreatureClassifications::Rare ? "r" : "";
             std::string cast;
             if (Spell const* spell = mob->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-                cast = (*spell->GetSpellInfo()->SpellName)[sWorld->GetDefaultDbcLocale()];
+                cast = Loc(spell->GetSpellInfo()->SpellName);
             Unit const* victim = mob->GetVictim();
             ss << (shown ? "," : "") << "{\"id\":\"" << UnitId(mob) << "\",\"entry\":" << mob->GetEntry() << ",\"name\":\"" << Escape(mob->GetName())
                << "\",\"hp\":" << uint32(mob->GetHealthPct()) << ",\"x\":" << mob->GetPositionX() << ",\"y\":" << mob->GetPositionY()
@@ -578,7 +590,7 @@ uint32 g_fightCounter = 0;
 
 FightAcc* FightOf(Unit const* unit)
 {
-    if (!unit || !unit->GetMap() || !unit->GetMap()->IsDungeon())
+    if (!unit || !unit->FindMap() || !unit->FindMap()->IsDungeon())
         return nullptr;
     auto itr = g_fights.find({ unit->GetMapId(), unit->GetInstanceId() });
     return itr == g_fights.end() ? nullptr : &itr->second;
@@ -665,7 +677,7 @@ void UpdateFights(std::vector<Player*> const& bots, uint64 seq, time_t now)
 {
     std::map<std::pair<uint32, uint32>, bool> inCombat;
     for (Player* bot : bots)
-        if (Map* map = bot->GetMap(); map && map->IsDungeon())
+        if (Map* map = bot->FindMap(); map && map->IsDungeon())
             inCombat[{ bot->GetMapId(), bot->GetInstanceId() }] |= bot->IsInCombat();
     for (auto const& [key, combat] : inCombat)
         if (combat && !g_fights.count(key))
@@ -695,7 +707,7 @@ void SendCycle()
     TortoiseBots::BotMgr& mgr = TortoiseBots::BotMgr::Instance();
     std::vector<Player*> bots;
     for (ObjectGuid const& guid : mgr.BotGuids())
-        if (Player* bot = mgr.FindBot(guid); bot && bot->IsInWorld())
+        if (Player* bot = mgr.FindBot(guid); bot && bot->IsInWorld() && bot->FindMap() && !bot->IsBeingTeleported())
             bots.push_back(bot);
 
     TrackBots(bots);
@@ -751,7 +763,7 @@ void SendCycle()
                << ",\"class\":\"" << ClassName(bot->GetClass()) << "\",\"role\":\"" << Escape(brain.role) << "\""
                << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
                << ",\"subgroup\":" << (group ? uint32(group->GetMemberGroup(bot->GetGUID())) : 0)
-               << (bot->GetMap() && bot->GetMap()->IsRaid() ? ",\"raid\":true" : "")
+               << (bot->FindMap() && bot->FindMap()->IsRaid() ? ",\"raid\":true" : "")
                << ",\"level\":" << uint32(bot->GetLevel())
                << ",\"hp\":" << bot->GetHealth() << ",\"max_hp\":" << bot->GetMaxHealth()
                << ",\"power\":" << ShownPower(bot, power, bot->GetPower(power)) << ",\"max_power\":" << ShownPower(bot, power, bot->GetMaxPower(power))
@@ -840,6 +852,7 @@ void LoadConfig()
 
 void Update(uint32 diff)
 {
+    std::lock_guard lock(g_feedLock);
     Sender& s = Get();
     if (!s.enabled || !s.socket || !BotMgr::Instance().Enabled())
         return;
@@ -1046,7 +1059,7 @@ void WriteTalentsFile()
                 std::string name = def ? LocName(def->OverrideName) : "";
                 SpellInfo const* info = spellId ? sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE) : nullptr;
                 if (name.empty() && info)
-                    name = Escape((*info->SpellName)[sWorld->GetDefaultDbcLocale()]);
+                    name = Escape(Loc(info->SpellName));
                 int32 const icon = def && def->OverrideIcon ? def->OverrideIcon : info ? int32(info->IconFileDataId) : 0;
                 ss << (i ? "," : "") << "{\"node\":" << p.node << ",\"entry\":" << p.entry << ",\"spell\":" << spellId << ",\"name\":\"" << name
                    << "\",\"icon\":" << icon << ",\"max\":" << p.max << ",\"row\":" << p.row << ",\"col\":" << int32(std::lround(double(p.x - minX) / 600.0)) << "}";
@@ -1139,7 +1152,7 @@ void WriteUiMapsFile()
     out << "{\"maps\":[";
     size_t n = 0;
     for (UiMapEntry const* map : sUiMapStore)
-        out << (n++ ? "," : "") << "{\"id\":" << map->ID << ",\"name\":\"" << Escape(map->Name[sWorld->GetDefaultDbcLocale()]) << "\",\"parent\":"
+        out << (n++ ? "," : "") << "{\"id\":" << map->ID << ",\"name\":\"" << Escape(Loc(&map->Name)) << "\",\"parent\":"
             << map->ParentUiMapID << ",\"type\":" << int32(map->Type) << ",\"system\":" << int32(map->System) << "}";
     out << "]}";
     out.close();
@@ -1180,12 +1193,14 @@ void WriteItemsFile()
 
 void OnKill(Player* killer, Creature* killed)
 {
+    std::lock_guard lock(g_feedLock);
     if (IsBot(killer) && killed)
         QueueEvent(killer, "Kill", killed->GetName(), std::to_string(killed->GetEntry()));
 }
 
 void OnKilledByCreature(Creature* killer, Player* killed)
 {
+    std::lock_guard lock(g_feedLock);
     if (!IsBot(killed) || !Get().enabled)
         return;
     std::string const name = killer ? killer->GetName() : "";
@@ -1203,6 +1218,7 @@ void OnKilledByCreature(Creature* killer, Player* killed)
 
 void OnDamage(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spell)
 {
+    std::lock_guard lock(g_feedLock);
     if (!damage || !Get().enabled)
         return;
     Player* atk = attacker ? attacker->ToPlayer() : nullptr;
@@ -1220,7 +1236,7 @@ void OnDamage(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spel
             acc.taken += damage;
             std::string name = attacker ? attacker->GetName() : "";
             if (spell)
-                name += std::string(" (") + (*spell->SpellName)[sWorld->GetDefaultDbcLocale()] + ")";
+                name += std::string(" (") + Loc(spell->SpellName) + ")";
             acc.lastHits.push_back({ name, damage, FightMs(*fight) });
             if (acc.lastHits.size() > 5)
                 acc.lastHits.erase(acc.lastHits.begin());
@@ -1230,6 +1246,7 @@ void OnDamage(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spel
 
 void OnHealOutcome(Unit* healer, uint32 raw, uint32 effective)
 {
+    std::lock_guard lock(g_feedLock);
     Player* bot = healer ? healer->ToPlayer() : nullptr;
     if (!bot || !IsBot(bot) || !Get().enabled)
         return;
@@ -1243,6 +1260,7 @@ void OnHealOutcome(Unit* healer, uint32 raw, uint32 effective)
 
 void OnSpellCast(Player* player, SpellInfo const* spell)
 {
+    std::lock_guard lock(g_feedLock);
     if (!spell || !IsBot(player) || !Get().enabled)
         return;
     if (FightAcc* fight = FightOf(player))
@@ -1251,7 +1269,7 @@ void OnSpellCast(Player* player, SpellInfo const* spell)
         ++acc.casts;
         if (spell->IsPositive() && spell->HasEffect(SPELL_EFFECT_HEAL))
             ++acc.healCasts;
-        ++acc.spells[(*spell->SpellName)[sWorld->GetDefaultDbcLocale()]];
+        ++acc.spells[Loc(spell->SpellName)];
     }
 }
 
@@ -1259,6 +1277,7 @@ void OnSpellCast(Player* player, SpellInfo const* spell)
 // dashboard counts money earned and spent. The hook runs before the change, so the balance is computed here.
 void OnMoneyChanged(Player* player, int64 amount)
 {
+    std::lock_guard lock(g_feedLock);
     if (!IsBot(player) || !amount)
         return;
     int64 const after = std::max<int64>(0, int64(player->GetMoney()) + amount);
@@ -1268,6 +1287,7 @@ void OnMoneyChanged(Player* player, int64 amount)
 // A looted item stored in the bot's bags: the loot feed and the loot counters (item, quality, vendor value of the stack).
 void OnLootItem(Player* player, Item* item)
 {
+    std::lock_guard lock(g_feedLock);
     if (!IsBot(player) || !item)
         return;
     ItemTemplate const* proto = item->GetTemplate();
@@ -1279,6 +1299,7 @@ void OnLootItem(Player* player, Item* item)
 
 void OnQuestStatusChange(Player* player, uint32 questId)
 {
+    std::lock_guard lock(g_feedLock);
     if (!IsBot(player))
         return;
     Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
