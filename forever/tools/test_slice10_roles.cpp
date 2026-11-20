@@ -36,6 +36,32 @@ int main()
     CHECK(!hy::CanLeadRun(hy::ClassShaman));            // no tank kit: the old `IsTank`-only check admitted it
     CHECK(!hy::CanLeadRun(5));
 
+    // A tank bit is a tank only where the kit can tank: `PlayerbotAI::IsTank` answers from the forced role first, so the run's member
+    // reads and the party orders must not trust the bit alone (a bit left on a shaman by an older build, `.bot role` or LFT).
+    CHECK(!hy::CountsAsTank(hy::ClassShaman, true));
+    CHECK(!hy::CountsAsTank(3, true));                  // rogue
+    CHECK(!hy::CountsAsTank(5, true));                  // priest
+    CHECK(hy::CountsAsTank(hy::ClassWarrior, true));
+    CHECK(hy::CountsAsTank(hy::ClassDruid, true));
+    CHECK(hy::CountsAsTank(hy::ClassPaladin, true));
+    CHECK(!hy::CountsAsTank(hy::ClassWarrior, false));  // no role is no tank
+    CHECK(!hy::CountsAsTank(hy::ClassShaman, false));
+
+    // `.tb role ... tank` on a class with no tank kit: refused, and a tank bit already on the bot is cleared (both reads
+    // PlayerbotAI::IsTank makes before its kit: the player-wide stored role, then the bot's own forced role).
+    hy::TankOrderStep const stale = hy::PlanTankOrder(hy::ClassShaman, true, true, true);
+    CHECK(stale.refuse && stale.clearStored && stale.clearAi);
+    hy::TankOrderStep const storedOnly = hy::PlanTankOrder(hy::ClassShaman, true, true, false);
+    CHECK(storedOnly.refuse && storedOnly.clearStored && !storedOnly.clearAi);
+    hy::TankOrderStep const aiOnly = hy::PlanTankOrder(hy::ClassShaman, true, false, true);
+    CHECK(aiOnly.refuse && !aiOnly.clearStored && aiOnly.clearAi);
+    hy::TankOrderStep const clean = hy::PlanTankOrder(hy::ClassShaman, true, false, false);
+    CHECK(clean.refuse && !clean.clearStored && !clean.clearAi);
+    hy::TankOrderStep const bear = hy::PlanTankOrder(hy::ClassDruid, true, true, true);
+    CHECK(!bear.refuse && !bear.clearStored && !bear.clearAi);
+    hy::TankOrderStep const healerOrder = hy::PlanTankOrder(hy::ClassShaman, false, false, false);
+    CHECK(!healerOrder.refuse);                         // not a tank order: nothing to refuse or clear
+
     if (g_fail)
     {
         std::printf("RESULT: FAIL (%d of %d checks)\n", g_fail, g_checks);

@@ -548,7 +548,7 @@ OrderAnswer DoAttack(RunRec& rec, Party const& party, od::Parsed const& p, std::
             if (PlayerbotAI::IsHeal(bot))
                 continue;
             Unit* victim = bot->GetVictim();
-            if (PlayerbotAI::IsTank(bot) && victim && victim != target && victim->IsAlive() && victim->GetVictim() == bot)
+            if (IsTankMember(bot) && victim && victim != target && victim->IsAlive() && victim->GetVictim() == bot)
                 continue;
         }
         batch.Add(bot, "attack", true, named != nullptr);

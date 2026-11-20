@@ -29,6 +29,32 @@ inline bool CanTakeTankOrder(unsigned classId)
     return classId == ClassWarrior || classId == ClassDruid || classId == ClassPaladin;
 }
 
+// A tank role is a tank only where the class has a tank kit. `PlayerbotAI::IsTank` answers from the forced role bit first
+// (PlayerbotAI.cpp:4337-4341), so a bit left on a class with no tank kit (a restoration shaman: D2) would otherwise make every run
+// read of that member - its tank/damage split, its threat victim, its pull-hold anchor - answer "tank". The run facts, the party orders
+// and the pull orders ask this, never the bit alone.
+inline bool CountsAsTank(unsigned classId, bool roleSaysTank)
+{
+    return roleSaysTank && CanTakeTankOrder(classId);
+}
+
+// What `.tb role ... tank` must do for a class with no tank kit: refuse, and clear a tank bit already on the bot. `storedTank` and
+// `aiTank` are the two reads PlayerbotAI::IsTank makes before its kit (the player-wide stored role, then the bot's own forced role), so
+// a bit left by an older build, `.bot role` or the dungeon finder cannot survive the refusal.
+struct TankOrderStep
+{
+    bool refuse;
+    bool clearStored;
+    bool clearAi;
+};
+
+inline TankOrderStep PlanTankOrder(unsigned classId, bool tankOrder, bool storedTank, bool aiTank)
+{
+    if (!tankOrder || CanTakeTankOrder(classId))
+        return TankOrderStep{ false, false, false };
+    return TankOrderStep{ true, storedTank, aiTank };
+}
+
 // A run's lead tank, live test decision D1: the warrior tank and the bear druid. The protection paladin is recorded only (no taunt at
 // 18, spec row i) and every other class has no tank kit at all.
 inline bool CanLeadRun(unsigned classId)
