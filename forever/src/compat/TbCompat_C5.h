@@ -18,11 +18,12 @@ inline QueryResult AuraWatchRowsCompat()
     return WorldQueryCompat("SELECT `spell_id` FROM `ai_combat_aura_watch`");
 }
 
-// One monitor line, already formatted: the manager's log has no printf path on this core, and the world-database loop of it is a shared file.
+// One monitor line, already formatted. The TU is compiled with the legacy preinclude (it reads the engine's config), so `sLog` is that core's
+// printf proxy on both sides; nothing here may use a format string the caller did not build.
 inline void CombatMonitorLogCompat(bool error, std::string const& message)
 {
     if (error)
-        TC_LOG_ERROR("tortoisebots", "{}", message);
+        sLog.outError("%s", message.c_str());
     else
-        TC_LOG_INFO("tortoisebots", "{}", message);
+        sLog.outString("%s", message.c_str());
 }

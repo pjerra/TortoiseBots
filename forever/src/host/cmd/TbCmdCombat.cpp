@@ -144,7 +144,7 @@ P::Rank RankOfEntry(uint32 mapId, uint32 entry)
     if (!entry)
         return P::Rank::None;
     bool const planBoss = ai::GetDungeonPlans().IsBossEntry(mapId, entry);
-    CreatureTemplate const* info = sObjectMgr->GetCreatureTemplate(entry);
+    CreatureTemplate const* info = sObjectMgr.GetCreatureTemplate(entry);
     if (!info)
         return planBoss ? P::Rank::Boss : P::Rank::None;
     bool const boss = planBoss || (info->flags_extra & (CREATURE_FLAG_EXTRA_DUNGEON_BOSS | CREATURE_FLAG_EXTRA_INSTANCE_BIND));
@@ -278,7 +278,7 @@ CM::FightContext ContextOf(Player* lead)
         if (step->kind == ai::PlanStepKind::Boss)
         {
             ctx.bossEntry = step->entry;
-            if (CreatureTemplate const* info = sObjectMgr->GetCreatureTemplate(step->entry))
+            if (CreatureTemplate const* info = sObjectMgr.GetCreatureTemplate(step->entry))
                 ctx.bossName = info->Name;
         }
         ctx.planned = step->entries;
@@ -355,7 +355,7 @@ void SampleBoss(Feed& feed, uint32 group, Player* lead, uint32 nowMs)
         return;
     Unit* victim = boss->GetVictim();
     service.SampleTimeline(group, boss->IsAlive() ? uint32(boss->GetHealth()) : 0, uint32(boss->GetMaxHealth()),
-                           victim ? GuidLow(victim->GetGUID()) : 0, victim ? victim->GetName() : "", nowMs);
+                           victim ? GuidLow(victim->GetGUID()) : 0, victim ? victim->GetName().c_str() : "", nowMs);
 }
 
 // One sample of a standing card: the members and their combat state, the focus's tracked debuffs, the run's context, and then the boss and
@@ -415,7 +415,7 @@ void SampleCard(C::CardView const& card, uint32 nowMs)
     if (focus >= 0)
         for (AuraNow const& aura : AppliedAuras(engaged[size_t(focus)]))
         {
-            SpellInfo const* info = sSpellMgr->GetSpellInfo(aura.id, DIFFICULTY_NONE);
+            SpellInfo const* info = sSpellMgr.GetSpellInfo(aura.id, DIFFICULTY_NONE);
             if (!info || !info->SpellName)
                 continue;
             for (std::string const& key : CM::DebuffKeys(info->SpellName->Str[LOCALE_enUS], aura.stacks))
@@ -474,8 +474,9 @@ void Sample()
     if (nowMs - g_loggedAtMs >= 60000)
     {
         if (!Feeds().empty())
-            TC_LOG_INFO("tortoisebots", "bound fights 60s: {} samples, avg {} us max {} us, {} group(s)",
-                        g_samples, g_samples ? (g_sumUs / g_samples) : 0, g_maxUs, Feeds().size());
+            sLog.outString("TortoiseBots: bound fights 60s: %llu samples, avg %llu us max %llu us, %u group(s)",
+                           (unsigned long long)g_samples, (unsigned long long)(g_samples ? g_sumUs / g_samples : 0),
+                           (unsigned long long)g_maxUs, (uint32)Feeds().size());
         g_loggedAtMs = nowMs;
         g_samples = g_sumUs = g_maxUs = 0;
     }
@@ -518,9 +519,9 @@ void PollEnemyCasts()
             }
             feed.lastCast[key] = spellId;
             Unit* target = spell->m_targets.GetUnitTarget();
-            service.NoteEnemyCast(group, unit->GetEntry(), GuidKey(unit->GetGUID()), unit->GetName(), SpellName(info).c_str(),
+            service.NoteEnemyCast(group, unit->GetEntry(), GuidKey(unit->GetGUID()), unit->GetName().c_str(), SpellName(info).c_str(),
                                   P::CastRank(RankOfUnit(mapId, unit)), spellId, target ? GuidKey(target->GetGUID()) : 0,
-                                  target ? target->GetName() : "");
+                                  target ? target->GetName().c_str() : "");
         }
         for (auto it = feed.lastCast.begin(); it != feed.lastCast.end();)
             it = current.count(it->first) ? std::next(it) : feed.lastCast.erase(it);

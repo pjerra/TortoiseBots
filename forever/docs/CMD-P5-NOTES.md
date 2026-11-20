@@ -110,8 +110,44 @@ each FAIL the check.
 
 ## Gates (slot 6, core pin 25fc7ca)
 
-FILLED-AFTER-BUILD
+| Gate | Result |
+|---|---|
+| census, `forever/SLICE9.txt` (P5 adds no legacy file) | `files 265  compile clean 265  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| option-ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1`) | `CMAKE_RC=0 MAKE_RC=0` (72,294,016-byte binary); `nm` on `libtortoisebots.a`: `cmd::combat::{Update,FillWindow,RegisterScripts}` and `CombatMonitorService::{Instance,Refresh,LoadTimelineWatch}` are defined (`T`) and the archive holds `CombatMonitorService.cpp.o` |
+| option-OFF `tortoisebots` | `CMAKE_RC=0 MAKE_RC=0`; the archive holds `TbCmdCombat.cpp.o` (the three no-ops) and no `CombatMonitorService.cpp.o` |
+| `forever/tools/cmd_combat_check.cpp` (VM, g++) | `cmd_combat_check: 56 checks, 0 failed` |
+| `forever/tools/test_cmd_p5_wiring.py` with `CMD_P5_MUTATE=1` (VM) | 12 tests OK; the four mutations (`feed0`, `focus`, `applyonly`, `alwaysdue`) each FAIL the check |
+| `test_cmd_p1_wiring.py`, `test_cmd_p2_wiring.py`, `test_dash_runs_wiring.py`, `test_run_review_wiring.py`, `test_slice4_d4_wiring.py` | OK (the P1/P2 mutation runs skipped without their variables) |
+| `slice_registry_check.py`, `slice_gen_context.py --check` | `summary: (a)=0  (b)=224`; `SliceAiObjectContext.cpp is up to date` |
+| `tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent).` |
+| `git diff --check` | clean |
+| Turtle `vm-build` / `vm-test tb` | `MAKE_RC=0` (compile 148 s, 52 module files changed); `RESULT: PASS` (`tools/verify_all.sh`, rc=0, 908 s) |
 
-## Live (forever-test2, run2)
+## Live (forever-test2, run2, 2026-11-20)
 
-FILLED-AFTER-LIVE
+Install: run2 stopped, the four databases dumped first (`/mnt/forever/p5-dump/run2-pre-p5.sql.gz`, `gzip -t` OK), `bin/worldserver` saved as
+`bin/worldserver.pre-p5`, both config files as `*.pre-p5`, the slot-6 ON binary copied in (md5 `00f94fc2…`, 72,294,016 bytes).
+
+**The update first.** The first boot of the 25fc7ca binary aborted in the DB updater (`MySQLConnection.cpp:600 … ABORTED`) because run2's
+`sqlsrc` was still at 6517af05: exactly the trap of `PIN-MOVE-25FC7CA-NOTES.md` section 9. `git -C sqlsrc fetch origin 25fc7ca && git checkout
+25fc7ca` fixed it, and the boot then applied the core's updates and came up.
+
+Config for the test: `AiPlayerbot.CombatMonitor = 1`, `AiPlayerbot.CombatTimeline = 1`, `TortoiseBots.Dashboard.Host = "172.22.0.1"` (the
+docker gateway: the world container reaches the dashboard's UDP listener on the host), `Dashboard.Runs = 1`, `RunSummaryDir =
+/home/pk/p5-dash-runs`; certs copied and `docker restart forever-bnet2`. The dashboard is this branch's Go daemon (`go build ./cmd/server`),
+run on the VM as `bin/tortoise-observability.p5 -core forever -dev-no-auth`, UDP `0.0.0.0:9195`, HTTP `127.0.0.1:8095`, DB `127.0.0.1:3317`.
+
+| Check | Result |
+|---|---|
+| boot | `ready...`; `grep -c 'ASSERT\|Segmentation\|ABORTED'` = 0 |
+| the watch table guard | `TortoiseBots: world table 'ai_combat_aura_watch' is missing, or lacks a column this query names: not read` then `>> Loaded 0 combat timeline aura watch rows`: the missing table costs one line, never an abort |
+| the binding | `.tb commander status`: `binding cmd=Mcmd cguid=15 online=yes lead=Mtank group=1 bound=3 bots=3`; the dashboard's `/api/v1/commanders` carries the same card |
+| the window | during a fight the card's `combat` object: `{"win_s":10,"fight_ms":11003,"bots":[{"g":10,"dps":7,…,"ls":"Shield Block"},{"g":11,"dps":0,"hps":46,…,"ls":"Power Word: Shield"},{"g":12,"dps":6,…}]}` |
+| fight 1 (pull `spawn:20038043`) | `/api/v1/combat/live` opened `1-1` from COMBAT_EVENTS (the live row exists only from that stream); filed as `1-1`, `outcome "end"`, `dur 40004`; the fight detail's meters: Mtank dmg 426, taken 579, 6 casts (Shield Block, Bloodrage, Demoralizing Shout); Mpriest heal 670, over 164, 7 casts (Renew, Heal, Fade, Power Word: Shield); Mdpsa dmg 398, 50 casts; `engaged: [{"e":11320,"n":"Earthborer","c":1}]` |
+| fight 2 (pull `spawn:20038042`, then `.tb kill party Mtank`) | the live stream carried `start` and `engage` (`11321 Molten Elemental`) with its own id `1-2`; filed as `1-2`, `outcome "wipe"`, `deaths 3`, `dur 6000`. Two fights, two ids |
+| cost | `bound fights 60s: 60 samples, avg 9 us max 81 us` idle, `avg 50–66 us max 164 us` with three bots in a fight, `1 group(s)` |
+| what the timeline did not show | the run was a trash pull with no boss and the watch table is absent: `boss_hp`/`victims`/`auras` had nothing to record (the check covers the sample path) |
+
+Restore: world stopped, `bin/worldserver.pre-p5` and both `*.pre-p5` configs put back, started and booted to `ready...` with 0
+`ASSERT`/`ABORTED`, then stopped; the dashboard process stopped. Left changed on that server: the databases now carry the 25fc7ca updates the
+updater applied (the dump above is the pre-test state) and `sqlsrc` is at 25fc7ca, which is the state the port expects.
