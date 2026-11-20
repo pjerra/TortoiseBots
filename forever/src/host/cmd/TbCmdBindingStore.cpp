@@ -140,8 +140,9 @@ std::vector<life::Stored> ReadRows()
     QueryResult result = CharacterQueryCompat(kSelect);
     if (!result)
         return rows;
-    // ResultSet has no row fetched before the first NextRow(): a do/while would read one all-zero row (a refused "binding of #0" in the log).
-    while (result->NextRow())
+    // The core's Query hands the result over standing on its first row (BasicStatementTask::Query calls NextRow, and an empty answer is a null
+    // result), so that row is read before the loop advances; a `while (NextRow())` first would silently drop it.
+    do
     {
         Field* fields = result->Fetch();
         life::Stored row;
@@ -156,7 +157,7 @@ std::vector<life::Stored> ReadRows()
             continue;
         }
         TC_LOG_ERROR("tortoisebots", "TortoiseBots: stored commander binding of #{}: refused (lead #{}, {} members)", row.commander, row.lead, row.members.size());
-    }
+    } while (result->NextRow());
     return rows;
 }
 

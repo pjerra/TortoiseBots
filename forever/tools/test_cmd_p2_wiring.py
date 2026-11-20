@@ -3,11 +3,13 @@
 
 The core calls cannot run without a server, so these tests pin where the hooks stand and what the lifecycle must never do; every assertion fails on the
 pre-P2 source (the hooks, the store, the row and the config key do not exist there). With CMD_P2_MUTATE=1 (run on the build VM: they compile
-forever/tools/cmd_binding_life_check.cpp) the mutations break the pure half and the row checker, and each must FAIL:
+forever/tools/cmd_binding_life_check.cpp and cmd_binding_store_check.cpp) the mutations break the pure half, the row checker and the store, and each
+must FAIL:
   lead-offline  a restore whose lead is not in the world
   dead-grace    a dead lead released before its grace
   away-grace    an absent commander released before its grace
   group-column  a group column or id in the persisted row (the spec's failing case: the core reuses database group ids)
+  rows-skip-first  a stored-row reader that advances before its first Fetch (the core's Query already stands on row 1)
 """
 import os
 import re
@@ -183,6 +185,13 @@ class Wiring(unittest.TestCase):
             self.assertIn(reset, config)
         self.assertIn("CREATE TABLE IF NOT EXISTS `tb_commander_binding`", self.store)
 
+    def test_the_stored_rows_start_at_the_first_row(self):
+        rows = function_body(self.store, r"std::vector<life::Stored> ReadRows\(\)\s*\{")
+        # ForeverCore's Query returns the result standing on its first row (BasicStatementTask::Query calls NextRow): the reader must consume
+        # that row before advancing. A `while (NextRow())` first drops it - a one-row table reads as empty and a refused delete looks landed.
+        self.assertRegex(code(rows), r"do\s*\{\s*Field\* fields = result->Fetch\(\)")
+        self.assertNotRegex(code(rows), r"while \(result->NextRow\(\)\)\s*\{\s*Field\* fields = result->Fetch\(\)")
+
     def test_the_restore_needs_the_commander_and_the_lead(self):
         restore = function_body(self.cpp, r"void RestoreOne\(ObjectGuid commander\)\s*\{")
         self.assertIn("if (!commanderPlayer || !AuthorizedCommander(commanderPlayer))", restore)   # a real player or our own bot, never a stranger
@@ -268,6 +277,15 @@ MUTATIONS = {
                       "bool const foreign = false && ((owner->commander && owner->commander != commander) ||"),
 }
 
+# The store check compiles TbCmdBindingStore.cpp itself, so these mutation steps edit that file; each list is applied in order.
+STORE_MUTATIONS = {
+    # the reader that advances before its first Fetch: the core's Query has already fetched row 1 (BasicStatementTask::Query), so this drops it
+    "rows-skip-first": [
+        ("    do\n    {\n        Field* fields = result->Fetch();", "    while (result->NextRow())\n    {\n        Field* fields = result->Fetch();"),
+        ("    } while (result->NextRow());", "    }"),
+    ],
+}
+
 
 @unittest.skipUnless(os.environ.get("CMD_P2_MUTATE") == "1", "mutations compile the standalone check: run on the build VM with CMD_P2_MUTATE=1")
 class Mutations(unittest.TestCase):
@@ -292,6 +310,41 @@ class Mutations(unittest.TestCase):
             with self.subTest(mutation=name):
                 self.assertIn(old, source, f"mutation {name} no longer applies")
                 out = self.build(source.replace(old, new, 1))
+                self.assertNotEqual(out.returncode, 0, f"mutation {name} was NOT caught:\n{out.stdout}")
+                self.assertIn("FAIL", out.stdout)
+
+    def build_store(self, store_text):
+        tmp = Path(tempfile.mkdtemp(prefix="cmdp2-store-"))
+        for rel in ("forever/src/host/cmd/TbCmdBindingStore.h", "forever/src/host/cmd/TbCmdBindingLifePure.h",
+                    "forever/src/compat/TbSqlNames.h", "runtime/RemoteCommanderPolicy.h",
+                    "forever/tools/cmd_binding_store_check.cpp"):
+            (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp / rel).write_text((ROOT / rel).read_text())
+        fakes = tmp / "forever" / "tools" / "cmd_binding_store_fakes"
+        fakes.mkdir(parents=True)
+        for fake in (TOOLS / "cmd_binding_store_fakes").glob("*.h"):
+            (fakes / fake.name).write_text(fake.read_text())
+        (tmp / "forever" / "src" / "host" / "cmd" / "TbCmdBindingStore.cpp").write_text(store_text)
+        exe = tmp / "check"
+        subprocess.run(["g++", "-std=c++17", "-O0", "-I", str(fakes), "-I", str(tmp / "forever" / "src"), "-I", str(tmp),
+                        str(tmp / "forever" / "tools" / "cmd_binding_store_check.cpp"),
+                        str(tmp / "forever" / "src" / "host" / "cmd" / "TbCmdBindingStore.cpp"), "-o", str(exe)],
+                       check=True, capture_output=True, text=True)
+        return subprocess.run([str(exe)], capture_output=True, text=True)
+
+    def test_unmutated_store_passes(self):
+        out = self.build_store((CMD / "TbCmdBindingStore.cpp").read_text())
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+
+    def test_each_store_mutation_fails_the_check(self):
+        source = (CMD / "TbCmdBindingStore.cpp").read_text()
+        for name, edits in STORE_MUTATIONS.items():
+            with self.subTest(mutation=name):
+                mutated = source
+                for old, new in edits:
+                    self.assertIn(old, mutated, f"mutation {name} no longer applies")
+                    mutated = mutated.replace(old, new, 1)
+                out = self.build_store(mutated)
                 self.assertNotEqual(out.returncode, 0, f"mutation {name} was NOT caught:\n{out.stdout}")
                 self.assertIn("FAIL", out.stdout)
 
