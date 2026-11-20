@@ -12,6 +12,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/run/TbRunFacts.h"
 #include "slice/SliceHybridPolicy.h"
@@ -624,7 +625,7 @@ std::string JoinFrom(std::vector<std::string> const& words, size_t from)
 
 // H4 (slice 4, spec section 2): who offered the dead bot a resurrection, when that is a member of its party or its commander (a stranger's offer is
 // DECLINED: the bot does nothing, the offer lapses by itself; the legacy action would accept any). The core keeps the pending offer on the Player
-// (Player::SetResurrectRequestData, Player.cpp:25470); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
+// (Player::SetResurrectRequestData, Player.cpp:25480); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
 // of SMSG_RESURRECT_REQUEST in the session: the same fact, on the world thread, with no packet to parse.
 Player* ResurrectOffererOf(Player* bot)
 {
@@ -1148,9 +1149,23 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return false;
     bool const leaderFollows = args.w.size() >= 3 && Lower(args.w[0]) == "party";
     size_t pos = 0;
-    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
-    if (!who.ok())
-        return Fail(handler, args, "role", who.code, who.detail);
+    Address who;
+    if (!args.w.empty() && target::IsRoleWord(Lower(args.w[0])))
+    {
+        // TB-1: no name means the sender's own character (the first word is already the role).
+        std::string code, detail;
+        Player* self = ResolveTestTarget(handler, std::string_view(), code, detail);
+        if (!self)
+            return Fail(handler, args, "role", code, detail);
+        who.bots.push_back(self);
+        who.label = self->GetName();
+    }
+    else
+    {
+        who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows, true);
+        if (!who.ok())
+            return Fail(handler, args, "role", who.code, who.detail);
+    }
     if (pos >= args.w.size())
         return Fail(handler, args, "role", "missing-role", "tank, healer (heal), dps or none");
     std::string const word = Lower(args.w[pos]);

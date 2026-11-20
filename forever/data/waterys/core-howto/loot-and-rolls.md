@@ -5,9 +5,9 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
 
 ## Client side, step by step
 
-1. **Corpse is created on death**. `Unit::Kill` (`Entities/Unit/Unit.cpp:11797`) builds the corpse loot:
-   a grouped kill makes one shared `Loot` under the group's loot method (`Unit.cpp:11913`,
-   `FillLoot` at `Unit.cpp:11918`), gold is rolled in `generateMoneyLoot` (`Unit.cpp:11921`) and the
+1. **Corpse is created on death**. `Unit::Kill` (`Entities/Unit/Unit.cpp:11807`) builds the corpse loot:
+   a grouped kill makes one shared `Loot` under the group's loot method (`Unit.cpp:11923`,
+   `FillLoot` at `Unit.cpp:11928`), gold is rolled in `generateMoneyLoot` (`Unit.cpp:11931`) and the
    round-robin rotation advances in `Group::UpdateLooterGuid` (`Groups/Group.cpp:1148`).
    Loot table expansion is `Loot::FillLoot` (`Loot/Loot.cpp:924`) → `Loot::AddItem` (`Loot.cpp:1003`);
    items at or above the group's threshold in `MASTER_LOOT` / `GROUP_LOOT` / `NEED_BEFORE_GREED` are
@@ -33,7 +33,7 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
    timeout is driven from `Loot::Update` (`Loot.cpp:1264`), called per creature in
    `Creature::Update` (`Entities/Creature/Creature.cpp:848`).
 6. **Take the item**. `CMSG_LOOT_ITEM` (`Opcodes.cpp:689`) → `HandleAutostoreLootItemOpcode`
-   (`LootHandler.cpp:77`) → `Player::StoreLootItem` (`Player.cpp:28834`), which re-checks allowed looter,
+   (`LootHandler.cpp:77`) → `Player::StoreLootItem` (`Player.cpp:28844`), which re-checks allowed looter,
    `is_blocked` and `rollWinnerGUID` before `StoreNewItem`. For an item-owned loot container the residue
    is persisted by `LootItemStorage::AddNewStoredLoot` (`Loot/LootItemStorage.cpp:243`) and reloaded by
    `LoadStoredLoot` (`LootItemStorage.cpp:122`).
@@ -58,4 +58,4 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
 - Roll state is per-`Loot` (`_rolls`, `Loot.h:366`), i.e. in memory for the corpse's lifetime, not in a
   table; only unlooted container contents are persisted (`LootItemStorage`).
 - Personal loot exists (`PERSONAL_LOOT`, `m_personalLoot`) but the 1.60 classic servers use the shared
-  corpse path (`Unit.cpp:11913`), which is the one bots see.
+  corpse path (`Unit.cpp:11923`), which is the one bots see.

@@ -8,10 +8,10 @@
 // skinning", "loot tables (drop maps)"). Rule for those: the failure value makes the bot do LESS (no item, no object, no drop known).
 //
 // Core facts used below (F = pinned ForeverCore, src/server/game; T = Turtle core):
-//  * A corpse's loot is a Loot object. In the open world every tapper has a personal one (Creature::m_personalLoot, Unit.cpp:11965-11983);
-//    a grouped kill in a dungeon is one shared Loot (Creature::m_loot, Unit.cpp:11896-11922). Creature::GetLootForPlayer (Creature.cpp:1438)
+//  * A corpse's loot is a Loot object. In the open world every tapper has a personal one (Creature::m_personalLoot, Unit.cpp:11975-11993);
+//    a grouped kill in a dungeon is one shared Loot (Creature::m_loot, Unit.cpp:11906-11932). Creature::GetLootForPlayer (Creature.cpp:1438)
 //    returns the one a player may see, nullptr when this player has none. T keeps one public Loot per creature (Creature::loot).
-//  * Player::isAllowedToLoot (Player.cpp:20246) is the core's own entitlement test, the one that masks the lootable dynamic flag per viewer
+//  * Player::isAllowedToLoot (Player.cpp:20256) is the core's own entitlement test, the one that masks the lootable dynamic flag per viewer
 //    (ViewerDependentValues.h:76) and that CMSG_LOOT applies (LootHandler.cpp:61, :214).
 //  * The loot handlers run on the world thread (PROCESS_THREADUNSAFE, Opcodes.cpp:689-693) and need no map context. Everything in this file
 //    is a READ: it takes no map lock, writes nothing, and the engine ticks on the world thread outside the map update (World.cpp:2462-2475,
@@ -48,7 +48,7 @@ inline ObjectGuid GuidFromQualifierCompat(std::string const& text)
 // Whose corpse is it. T ObjectGuid / Loot calls under the same names as the lines they replace in LootObjectStack.cpp (MayLootCorpse).
 // ---------------------------------------------------------------------------------------------------------------------
 // The core's own test: may this player open this corpse's loot. T `Player::IsAllowedToLoot(creature)`, F `Player::isAllowedToLoot`
-// (Player.h:2962, body Player.cpp:20246): dead, no pending bind, a Loot for this player that is not looted, the player in its allowed
+// (Player.h:2962, body Player.cpp:20256): dead, no pending bind, a Loot for this player that is not looted, the player in its allowed
 // looters, something in it for all or for the player (gold counts: Loot::hasItemForAll, Loot.cpp:1186), then the loot method's turn rule.
 inline bool CorpseAllowedToLootCompat(Player* bot, Creature* creature) { return bot->isAllowedToLoot(creature); }
 

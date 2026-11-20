@@ -145,10 +145,10 @@ inline DiminishingGroup DiminishingGroupOfSpellCompat(SpellEntry const* spell, b
 // ---------------------------------------------------------------------------------------------------------------
 // Teleports and logout the bot acknowledges for itself, through the core's own handlers (the way forever/src/TbBotSession.cpp does
 // for the spike: AcknowledgeTeleports). T hand-builds MSG_MOVE_TELEPORT_ACK (guid, the counter the core waits for, a time) and
-// calls HandleMoveTeleportAckOpcode; F's handler takes the typed packet (WorldSession.h:1367) and needs the mover guid only
+// calls HandleMoveTeleportAckOpcode; F's handler takes the typed packet (WorldSession.h:1368) and needs the mover guid only
 // (TbBotSession.cpp:69-72). The far teleport: T HandleMoveWorldportAckOpcode() with no argument, F HandleMoveWorldportAck()
-// (WorldSession.h:1446, "for server-side calls"). Logout cancel: T takes any packet (the handler reads none), F the typed
-// LogoutCancel (WorldSession.h:1394).
+// (WorldSession.h:1447, "for server-side calls"). Logout cancel: T takes any packet (the handler reads none), F the typed
+// LogoutCancel (WorldSession.h:1395).
 // ---------------------------------------------------------------------------------------------------------------
 inline void AckNearTeleportCompat(Player* bot)
 {
@@ -166,7 +166,7 @@ inline void CancelLogoutCompat(Player* bot)
 // ---------------------------------------------------------------------------------------------------------------
 // Chat, one helper per kind of message. T hand-builds the packets (ChatHandler::BuildChatPacket, or a CMSG_MESSAGECHAT the
 // session reads on its next update); F has the typed packet (ChatPackets::Chat, ChatPackets.h:151-171), the unit's Say / Yell /
-// Whisper (Player.h:1411-1421) and the session's own chat entry (WorldSession::HandleChatMessage, WorldSession.h:1704).
+// Whisper (Player.h:1411-1421) and the session's own chat entry (WorldSession::HandleChatMessage, WorldSession.h:1706).
 // Different answers, all kinds: F's Say / Yell / Whisper run the core's language and ignore-list rules; the "like a player" kinds
 // run now (F) and not on the next session update (T).
 // ---------------------------------------------------------------------------------------------------------------
@@ -194,7 +194,7 @@ inline void BotChatLikePlayerCompat(Player* bot, ChatMsg chatType, uint32 lang, 
 {
     bot->GetSession()->HandleChatMessage(chatType, Language(lang), text);
 }
-// The queue a raw packet goes to. T QueuePacket(WorldPacket*); F QueuePacket(WorldPacket&&) (WorldSession.h:1109). Transport only:
+// The queue a raw packet goes to. T QueuePacket(WorldPacket*); F QueuePacket(WorldPacket&&) (WorldSession.h:1110). Transport only:
 // the layout of the packet is its builder's.
 inline void BotQueuePacketCompat(Player* bot, WorldPacket const& packet) { bot->GetSession()->QueuePacket(WorldPacket(packet)); }
 
@@ -202,7 +202,7 @@ inline bool PlayerNameByGuidCompat(ObjectGuid guid, std::string& name) { return 
 inline ObjectGuid PlayerGuidByNameCompat(std::string const& name) { return sCharacterCache->GetCharacterGuidByName(name); }
 inline ObjectGuid PlayerGuidCompat(uint32 low) { return ObjectGuid::Create<HighGuid::Player>(low); }
 
-// A session that belongs to a headless bot (no client). T WorldSession::IsHeadless; F IsBot (WorldSession.h:1078), the flag
+// A session that belongs to a headless bot (no client). T WorldSession::IsHeadless; F IsBot (WorldSession.h:1079), the flag
 // the bot session sets when it is made. Different answer: T's flag is set by the Turtle bot manager, F's by BotSession.
 inline bool IsHeadlessCompat(WorldSession* session) { return session->IsBot(); }
 
