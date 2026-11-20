@@ -32,6 +32,7 @@
 #include <ctime>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <unordered_map>
 #include <list>
@@ -41,6 +42,11 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+
+namespace TortoiseBots::Dashboard
+{
+bool WriteJsonFile(std::string const& path, std::string const& body, char const* what, size_t count);
+}
 
 namespace
 {
@@ -61,6 +67,7 @@ struct Sender
     boost::asio::ip::udp::endpoint target;
     std::string itemsFile;
     std::string uiMapsFile;
+    std::string traceDir; // where the dungeon run summaries go (the dashboard's -trace-dir)
     uint32 serverInfoSinceMs = 0;
     uint32 statsSinceMs = 0;
     bool serverInfoSent = false;
@@ -588,6 +595,136 @@ struct FightAcc
 std::map<std::pair<uint32, uint32>, FightAcc> g_fights;
 uint32 g_fightCounter = 0;
 
+// A dungeon run summary for the Dungeon runs tab (<TraceDir>/<map>-<instance>-<start>.summary.json, the trace summary
+// format the dashboard reads): from the first bot entering a dungeon or raid copy until no bot is in it, the copy's bosses
+// (the core's encounter list) with the second each died, the wipes and deaths with where they happened, the party and the outcome.
+struct RunSpot { uint32 t; float x, y; std::string role; };
+struct RunMember { std::string cls, role; uint32 level; };
+struct RunRec
+{
+    time_t started = 0;
+    std::vector<std::string> bosses;           // the copy's encounters, in order
+    std::map<std::string, uint32> killedAt;    // boss name -> seconds from the start
+    std::vector<RunSpot> wipes, deaths;
+    std::map<ObjectGuid, RunMember> party;
+};
+std::map<std::pair<uint32, uint32>, RunRec> g_runs;
+
+RunRec* RunOf(Unit const* unit)
+{
+    if (!unit || !unit->FindMap() || !unit->FindMap()->IsDungeon())
+        return nullptr;
+    auto itr = g_runs.find({ unit->GetMapId(), unit->GetInstanceId() });
+    return itr == g_runs.end() ? nullptr : &itr->second;
+}
+
+std::string IsoTime(time_t t)
+{
+    char buf[32];
+    std::tm tm{};
+    gmtime_r(&t, &tm);
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buf;
+}
+
+void WriteRunSummary(std::pair<uint32, uint32> const& key, RunRec const& run, time_t now)
+{
+    std::string const dir = Get().traceDir;
+    if (dir.empty())
+        return;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    MapEntry const* mapEntry = sMapStore.LookupEntry(key.first);
+    std::string const id = std::to_string(key.first) + "-" + std::to_string(key.second) + "-" + std::to_string(run.started);
+    size_t killed = 0;
+    for (std::string const& boss : run.bosses)
+        killed += run.killedAt.count(boss);
+    char const* outcome = !run.bosses.empty() && killed == run.bosses.size() ? "cleared" : killed || !run.killedAt.empty() ? "partial"
+        : !run.wipes.empty() ? "wiped_out" : "abandoned";
+    std::ostringstream ss;
+    ss << "{\"v\":1,\"schema\":\"bt-trace\",\"run\":\"" << id << "\",\"src\":\"server\",\"status\":\"complete\",\"end_reason\":\"left\",\"dungeon\":{\"map\":"
+       << key.first << ",\"name\":\"" << (mapEntry ? Escape(Loc(&mapEntry->MapName)) : std::string()) << "\"},\"mode\":\"engine\",\"started\":\"" << IsoTime(run.started)
+       << "\",\"ended\":\"" << IsoTime(now) << "\",\"outcome\":\"" << outcome << "\",\"bosses\":[";
+    std::vector<std::string> names = run.bosses;
+    for (auto const& [name, t] : run.killedAt)
+        if (std::find(names.begin(), names.end(), name) == names.end())
+            names.push_back(name);
+    uint32 lastKill = 0;
+    for (size_t i = 0; i < names.size(); ++i)
+    {
+        auto k = run.killedAt.find(names[i]);
+        ss << (i ? "," : "") << "{\"name\":\"" << Escape(names[i]) << "\",\"killed_at_s\":" << (k != run.killedAt.end() ? std::to_string(k->second) : "null") << "}";
+        if (k != run.killedAt.end())
+            lastKill = std::max(lastKill, k->second);
+    }
+    auto spots = [&](std::vector<RunSpot> const& list)
+    {
+        for (size_t i = 0; i < list.size(); ++i)
+            ss << (i ? "," : "") << "{\"t_s\":" << list[i].t << ",\"x\":" << list[i].x << ",\"y\":" << list[i].y << ",\"role\":\"" << list[i].role << "\"}";
+    };
+    ss << "],\"wipes\":[";
+    spots(run.wipes);
+    ss << "],\"deaths\":[";
+    spots(run.deaths);
+    ss << "],\"party\":[";
+    bool first = true;
+    for (auto const& [guid, m] : run.party)
+    {
+        ss << (first ? "" : ",") << "{\"class\":\"" << m.cls << "\",\"role\":\"" << (m.role == "healer" ? "heal" : m.role) << "\",\"level\":" << m.level << "}";
+        first = false;
+    }
+    ss << "],\"driver\":{\"model\":\"bot engine\"}";
+    if (std::string(outcome) == "cleared")
+        ss << ",\"clear_s\":" << lastKill;
+    ss << "}";
+    TortoiseBots::Dashboard::WriteJsonFile(dir + "/" + id + ".summary.json", ss.str(), "run summary", 1);
+}
+
+// Opens a run when bots enter a copy, keeps its party current and files it once no bot is in the copy.
+void UpdateRuns(std::vector<Player*> const& bots, time_t now)
+{
+    Sender& s = Get();
+    std::set<std::pair<uint32, uint32>> present;
+    for (Player* bot : bots)
+    {
+        Map* map = bot->FindMap();
+        if (!map || !map->IsDungeon())
+            continue;
+        std::pair<uint32, uint32> const key{ bot->GetMapId(), bot->GetInstanceId() };
+        present.insert(key);
+        auto [itr, created] = g_runs.try_emplace(key);
+        RunRec& run = itr->second;
+        if (created)
+        {
+            run.started = now;
+            std::set<int32> orders;
+            std::vector<std::pair<int32, std::string>> enc;
+            for (DungeonEncounterEntry const* e : sDungeonEncounterStore)
+                if (e->MapID == key.first && (e->DifficultyID == 0 || e->DifficultyID == int16(map->GetDifficultyID())))
+                {
+                    std::string const name = Loc(&e->Name);
+                    if (!name.empty() && std::none_of(enc.begin(), enc.end(), [&](auto const& p) { return p.second == name; }))
+                        enc.emplace_back(e->OrderIndex, name);
+                }
+            std::sort(enc.begin(), enc.end());
+            for (auto const& [order, name] : enc)
+                run.bosses.push_back(name);
+        }
+        auto brain = s.brains.find(bot->GetGUID());
+        run.party[bot->GetGUID()] = { ClassName(bot->GetClass()), brain != s.brains.end() && !brain->second.role.empty() ? brain->second.role : "dps", uint32(bot->GetLevel()) };
+    }
+    for (auto itr = g_runs.begin(); itr != g_runs.end();)
+    {
+        if (present.count(itr->first))
+        {
+            ++itr;
+            continue;
+        }
+        WriteRunSummary(itr->first, itr->second, now);
+        itr = g_runs.erase(itr);
+    }
+}
+
 FightAcc* FightOf(Unit const* unit)
 {
     if (!unit || !unit->FindMap() || !unit->FindMap()->IsDungeon())
@@ -620,6 +757,9 @@ void FileFight(std::pair<uint32, uint32> const& key, FightAcc& fight, std::vecto
     for (Player* bot : bots)
         if (bot->GetMapId() == key.first && bot->GetInstanceId() == key.second && bot->IsAlive())
             anyAlive = true;
+    if (!anyAlive)
+        if (auto run = g_runs.find(key); run != g_runs.end() && !fight.deaths.empty())
+            run->second.wipes.push_back({ uint32(now - run->second.started), fight.deaths.back().x, fight.deaths.back().y, "" });
     std::string const commander = "dgn:" + std::to_string(key.first) + ":" + std::to_string(key.second);
     std::ostringstream ss;
     ss << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
@@ -784,6 +924,7 @@ void SendCycle()
     SendDungeonMobs(bots, seq, now);
     SendRaids(bots, seq, now);
     UpdateFights(bots, seq, now);
+    UpdateRuns(bots, now);
 
     s.statsSinceMs += s.intervalMs;
     if (s.statsSinceMs >= StatsIntervalMs)
@@ -821,6 +962,9 @@ void LoadConfig()
     s.uiMapsFile = sConfigMgr->GetStringDefault("TortoiseBots.Dashboard.UiMapsFile", "");
     if (s.uiMapsFile.empty())
         s.uiMapsFile = sConfigMgr->GetStringDefault("LogsDir", ".") + "/tortoisebots-uimaps.json";
+    s.traceDir = sConfigMgr->GetStringDefault("TortoiseBots.Dashboard.TraceDir", "");
+    if (s.traceDir.empty())
+        s.traceDir = sConfigMgr->GetStringDefault("LogsDir", ".") + "/runs";
     s.socket.reset();
     if (!s.enabled)
         return;
@@ -1195,7 +1339,12 @@ void OnKill(Player* killer, Creature* killed)
 {
     std::lock_guard lock(g_feedLock);
     if (IsBot(killer) && killed)
+    {
         QueueEvent(killer, "Kill", killed->GetName(), std::to_string(killed->GetEntry()));
+        if (RunRec* run = RunOf(killed))
+            if (killed->IsDungeonBoss() || std::find(run->bosses.begin(), run->bosses.end(), killed->GetName()) != run->bosses.end())
+                run->killedAt.try_emplace(killed->GetName(), uint32(time(nullptr) - run->started));
+    }
 }
 
 void OnKilledByCreature(Creature* killer, Player* killed)
@@ -1206,6 +1355,12 @@ void OnKilledByCreature(Creature* killer, Player* killed)
     std::string const name = killer ? killer->GetName() : "";
     SendAnomaly(killed, "BOT_DEATH", "WARN", name, killer ? "killed by " + name + " (level " + std::to_string(killer->GetLevel()) + ")" : "died");
     QueueEvent(killed, "BotDeath", name, "");
+    if (RunRec* run = RunOf(killed))
+    {
+        auto brain = Get().brains.find(killed->GetGUID());
+        run->deaths.push_back({ uint32(time(nullptr) - run->started), killed->GetPositionX(), killed->GetPositionY(),
+            brain != Get().brains.end() ? brain->second.role : "" });
+    }
     if (FightAcc* fight = FightOf(killed))
     {
         FightBotAcc& acc = fight->bots[killed->GetGUID()];

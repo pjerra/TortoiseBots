@@ -135,3 +135,13 @@ TortoiseBots.Dashboard.Runs = 1
 #
 
 TortoiseBots.Dashboard.RunSummaryDir = ""
+
+#
+#    TortoiseBots.Dashboard.TraceDir
+#        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
+#                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.
+#                     Point the dashboard's -trace-dir (TBDASH_TRACE_DIR) at it.
+#        Default:     ""
+#
+
+TortoiseBots.Dashboard.TraceDir = ""
