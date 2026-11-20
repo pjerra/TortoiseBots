@@ -75,6 +75,18 @@ TortoiseBots.Slice.RestHealthPct = 90
 TortoiseBots.Slice.RestManaPct = 80
 
 #
+#    TortoiseBots.Commander.KeepBindings
+#        Description: Keep a commander binding (`.tb master party <lead> <commander>`) across a worldserver restart, in the characters-database
+#                     table `tb_commander_binding` (forever/sql/characters/2026_11_20_00_tb_commander_binding.sql; the module creates it when this key
+#                     is 1 and the database user may). Rows store character guids only, never a group number. When the commander and the lead are back
+#                     in the world, the party is re-formed through the lead and every member is bound to the commander again. 0 = nothing is written
+#                     and nothing is read (the binding lives in memory, as before).
+#        Default:     0
+#
+
+TortoiseBots.Commander.KeepBindings = 0
+
+#
 #    TortoiseBots.Dashboard.Enable
 #        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
 #        Default:     1

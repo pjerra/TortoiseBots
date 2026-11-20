@@ -719,8 +719,7 @@ void TickRun(RunRec& rec, uint32 nowMs)
 
     if (!order.empty())
     {
-        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));
-        cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);   // P1: the commander card's order log
+        OrderAnswer const answer = Issue(rec, order, nowMs, DungeonRun::IsGatherOrder(run, order));   // P1/P2: Issue notes the order on the commander card
         if (answer.accepted)
         {
             if (answer.movePathRead)
