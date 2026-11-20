@@ -124,4 +124,24 @@ the instance (`map 43, instance 2`) with `.tb tele party Mwctank 43 -158.441 131
 * **The run**: `.tb run start Mwctank wailing_caverns` -> `run lead=Mwctank plan=wailing_caverns state=running step=0
   steps=490 leg=0 legname=anaconda_a kind=move phase=begin note=started pull=0 pulls=88 boss= deaths=0 wipes=0`.
 
-(the results are below)
+**Live result** (the run was stopped by hand after about 50 minutes of wall time; the VM was at load 80-184 from other
+workers' builds, and the world thread ran at 15-35 ms per cycle, so the run's own clock (`elapsed=`, each tick at most 5 s)
+covered only 489 s):
+
+* 4 pulls of the 88 (`pull=4`), 8 deaths, **1 wipe** — recovered by the run's own `revive party` (event #31) — 0 pauses,
+  0 bosses, and `stop` with `stayed=5`;
+* where it stopped: `run lead=Mwctank plan=wailing_caverns state=stopped step=6 steps=490 leg=0 legname=anacondra_a kind=pull
+  phase=rest note=stopped: done pull=4 pulls=88 boss= deaths=8 wipes=1 pauses=0 elapsed=489 why=stopped: done ev=33`;
+* the events are the policy's own: `start`, `step` (0..6 through `anacondra_a`), `pull` (3637, 3636, 3637), `fight-end`,
+  `rest`, `death` (the tank and the priest), `wipe`, `revive` (`revive party`), `stop`.
+
+The party died on the first trash packs: five level-22 bots against Wailing Caverns elites, with their reactions slowed by the
+loaded VM, lose the tank faster than the priest can heal. The run did what the policy says (fought on, regrouped and revived
+after the wipe) and was stopped there; the walk, the Kresh leg, the ramp return and the Naralex event were **not** reached
+live. What was proven live: the plan rows load and every unit row matches (193/193), the run starts on the plan, walks,
+pulls by the plan's own groups, fights, restarts after a wipe, and stops cleanly.
+
+The server was then stopped, the dump restored (`zstd -dc dumps/wc-20261120T212230Z.sql.zst | mysql`), the previous binary
+put back (its own `bin/worldserver` from before the test), the new plan SQL removed from `sqlsrc`, `etc/worldserver.conf`
+restored, the databases booted once more (the boot-check) and the server stopped. The five test characters (`Mwctank`,
+`Mwcpri`, `Mwcdps`, `Mwcmag`, `Mwcrog`) and their gear went back with the dump.
