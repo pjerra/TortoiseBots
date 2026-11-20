@@ -8,6 +8,7 @@
 #include "ai/playerbot/BossTacticsMgr.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/run/TbPlanUnits.h"
+#include "host/run/TbRunBindingPure.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
 #include "host/cmd/TbCmdBinding.h"
@@ -362,13 +363,30 @@ void ReleaseAll(RunRec& rec)
 }
 
 // A bot that joined the party mid-run is bound too (only when it is commanded already: its kit needs no rebuild); one that left is given back.
+// A member the run bound keeps its binding through a pause and a regroup: the engine's own master logic can drop the commander entry while the host
+// master stays the run's lead (SyncBindingAction), and the run puts its binding back; a master somebody else set (`.tb master`) stays their decision.
 void SyncBinding(RunRec& rec, Group* group, Player* lead)
 {
     std::set<ObjectGuid> inGroup;
     for (Group::MemberSlot const& slot : group->GetMemberSlots())
     {
         inGroup.insert(slot.guid);
-        if (slot.guid == rec.leader || rec.bound.count(slot.guid) || !BotMgr::Instance().IsBot(slot.guid))
+        if (slot.guid == rec.leader || !BotMgr::Instance().IsBot(slot.guid))
+            continue;
+        bool const boundByRun = rec.bound.count(slot.guid) != 0;
+        // A member whose master is away is waiting out its grace (BotMgr's detach): binding it again would clear that wait.
+        bool away = false, blocked = false, hasBrain = false;
+        uint32 awaySeconds = 0;
+        std::string blockedWhy;
+        BotMgr::Instance().FollowStatus(slot.guid, away, awaySeconds, blocked, blockedWhy, hasBrain);
+        if (!away && SyncBindingAction(boundByRun, BotMgr::Instance().MasterOf(slot.guid) == rec.leader,
+                h3::CommanderGuid(slot.guid) == rec.leader) == BindingSync::Reassert)
+        {
+            // The same host call BindMember makes (the host master and the engine's pointer), without touching the master to give back at the end.
+            BotManager::Instance().BindBotMaster(slot.guid, rec.leader);
+            continue;
+        }
+        if (boundByRun)
             continue;
         if (Player* bot = InWorld(slot.guid))
             if (!h3::CommanderGuid(slot.guid).IsEmpty())
@@ -812,7 +830,8 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
     {
         Player* member = InWorld(slot.guid);
         if (!member)
-            return refuse("not-bot", slot.name + " is not in the world");
+            return refuse("not-bot", slot.name + " is not in the world (an offline member left by an old group keeps the run from starting: `.tb ungroup " + slot.name +
+                "` it once it is online, then form the party again)");
         if (!BotMgr::Instance().IsBot(slot.guid))
             return refuse("player-in-group", slot.name + " is not a host bot: a run is for bots only");
         if (member->GetMapId() != plan->map || member->GetInstanceId() != leader->GetInstanceId())
