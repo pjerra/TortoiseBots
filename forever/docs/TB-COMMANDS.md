@@ -141,6 +141,8 @@ The target is a host bot, the sender's own character, or `party [leader]` (host 
 Binds the bots to a commander who stands OUTSIDE their party (decision D2): host master and engine master become the commander, `IsInCommandedGroup` answers true for them, and a commanded bot keeps that master (the engine's adoption step skips it) and follows it. `none` releases them.
 `master-begin`, `master bot=Mtank commander=Mcmd commander_in_party=no seq=44 status=queued`, `master-end count=.. records=.. target=.. commander=.. bots=.. queued=..`.
 
+A binding ends by itself when the party it was made on stops being that party: the lead leaves the world or the party, the lead loses the group leadership, another player joins a commander-outside binding, the party becomes a raid or grows past five, the commander leaves an in-party binding, the lead lies dead past `TortoiseBots.Slice.DeadBackstopSeconds`, or the commander is away past `TortoiseBots.Slice.MasterGraceSeconds` (a server shutdown keeps it). The release restores the followers' own follow targets, clears h3's table and logs one line with the reason (`lead-left`, `lead-dead`, `group-changed`, `leader-changed`, `player-joined`, `group-raid`, `group-full`, `commander-left-party`, `commander-away`, `unbound`, `disabled`). With `TortoiseBots.Commander.KeepBindings = 1` the binding is also written to the characters table `tb_commander_binding` (character guids only) and restored after a restart once the commander and the lead are back in the world; the party is formed again through the lead and every member is bound again.
+
 ### `.tb party <leader> <member>... [#token]` (forms) and `.tb party <leader> [#token]` (roster)
 Forming: up to four host bots join the leader's party; each bot's HOST master becomes the leader: run `.tb master` afterwards. Replies `party-begin`, `party-join bot=.. leader=.. status=joined|refused [code= msg=]`, `party-end count=.. leader=.. joined=.. asked=.. note=..`.
 Roster (real output):
@@ -443,7 +445,7 @@ error code=not-commanded cmd=run msg=Mdpsb%20has%20no%20commander%20yet%3A%20bin
 
 ## 11. Commander port, package P1: the binding card
 
-`.tb commander status [<commander>] [#token]` shows every commander card (or the one commander's). A card is read from h3's table (the bots `.tb master` bound, section 4) and from the run table (section 10); the module keeps beside them only when a card was first seen, the lead `.tb master party <leader> <commander>` named, and the log of the commander's last orders. Nothing here binds or releases: that stays `.tb master`.
+`.tb commander status [<commander>] [#token]` shows every commander card (or the one commander's). A card is read from h3's table (the bots `.tb master` bound, section 4) and from the run table (section 10); the module keeps beside them only when a card was first seen, the lead `.tb master party <leader> <commander>` named, the flags the bind saw (`inparty`, `raid`, `playerled`), and the log of the commander's last orders. Nothing here binds or releases: that stays `.tb master`, the party events of section 4 and the two graces. `group=` is the lead's live group counter, read again on every card (a group re-created around the lead keeps the binding); no group number is stored anywhere.
 
 * **One card per commander.** The bots bound to one commander are one card wherever they stand; two commanders whose bots share a party are two cards.
 * **One card per run.** A run shows once. When nobody commands the run's tank bot the card is the run's own binding (`system=yes`, the tank is the `cmd=`); when the tank was commanded before the run (`.tb master party Mtank Mcmd`), the card is that commander's and the run's members are folded into it. The `run` record of `.tb run status` follows the card's own lines.
@@ -474,7 +476,6 @@ commander-end count=12 records=12 bindings=1 #c7
 ```
 One card while the run goes: the run's own orders (`move`, `pullback`, `focus`, `attack`) are in the same log. Without the engine a `stay` is logged `ok=no result=no-engine`. `.tb master party Mtank none` ends the card (`commander-begin` / `commander-end count=0 bindings=0`); `status Nobody` answers `error code=no-binding cmd=commander msg=Nobody%20commands%20no%20bots`.
 A run whose tank nobody commands is a system card: `binding cmd=Mtank ... system=yes inparty=no`, the run record after it.
-
 
 ## 12. Slice 9: doors, chests, loot and the bags (packages O9, F9, C9)
 
@@ -515,3 +516,31 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 ### `.tb state` keys for a hunter or a warlock (after `practice=`)
 `pet=<entry>:<alive|dead>:<hp pct>` (empty with no pet: the grammar has no `none` word and no 0 for "not there"; `dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold; empty with no ammo set), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.
+
+## 14. Commander port, packages P3 & P6: `.tb cmd`
+
+`.tb cmd <verb> [args] [#token]` sends an order or task from the caller's character to its bound bots (`.tb master`).
+
+### Order verbs (P3: lifted `run::Issue` judge)
+
+Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
+
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`. (`summon` is refused `unsupported` per decision D3.)
+* **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
+* **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
+* **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
+* **Replies (grammar v2).**
+  * Accepted: `cmd-begin #token` / `cmd verb=<v> status=accepted bots=<n> result=<encoded> #token` / `cmd-end count=1 records=1 verb=<v> lead=<lead> bots=<n> #token`
+  * Refused: `error code=<code> cmd=cmd msg=<encoded> #token` (e.g. `needs-player-sender`, `not-bound`, `unreachable`, `no-ground`, `no-los`, `invalid-target`, `dead-target`, `no-tank`, `engine-not-built`).
+
+### Task verbs (P6: objects, loot windows, gossip)
+
+Bound commanders issue task orders on the shared `TbRunTasks` engine (`forever/src/host/cmd/TbCmdTasks.cpp`):
+
+* **`.tb cmd loot <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<itemId>] [#token]`**: walks the bot (or the binding's lead) to the corpse or chest, opens its loot window via `LootOpenCompat` / `open loot`, and stores loot through `StoreLootAction`. Refuses `busy`, `in-combat`, `not-bound`, `invalid-target`, `too-far`, `no-item`, `locked`. The asynchronous result (`done: <items/copper>` or `failed: <code>: <msg>`) is read from `.tb cmd state`.
+* **`.tb cmd open <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: walks to the door, lever, goober or chest and opens it (`HandleGameObjectUseOpcode` or `open loot`). A door not at rest is never toggled closed (`done: already open ...`).
+* **`.tb cmd use <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: uses a game object via `HandleGameObjectUseOpcode` (or `open loot` for chests). `.tb cmd use <itemId>` is refused `unsupported` (`item use except food and drink`).
+* **`.tb cmd gossip <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<index | "text" | text>] [#token]`**: walks to a `UNIT_NPC_FLAG_GOSSIP` NPC, calls `HandleGossipHelloOpcode`, and either lists the menu options (when no option is given) or validates the option via `GossipOrder::MatchOption` (refusing service/coded/missing options) and calls `HandleGossipSelectOptionOpcode`.
+* **`.tb cmd lootmethod <ffa|group|rr> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; `master` and `nbg` are refused `unsupported`.
+* **`.tb cmd state [<bot>] [#token]`**: reports each bound bot's active or last task (`task bot= busy= status=none|running|done|failed [verb=] [entry=] [text=]`).
+* **`.tb cmd ritual|scout ...`**: refused `unsupported` (decision D5).

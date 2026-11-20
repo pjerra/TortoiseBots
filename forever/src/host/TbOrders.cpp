@@ -817,7 +817,7 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
         return need("stay chat shortcut");
     if (verb == "endpull")
         return need("end pull");
-    if (verb == "come" || verb == "move-direct")
+    if (verb == "come" || verb == "move-direct" || verb == "hold")
         return true;
     if (verb == "release")
     {

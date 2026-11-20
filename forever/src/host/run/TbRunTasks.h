@@ -38,8 +38,13 @@ namespace tasks
 // lead's map and instance, the lead first (the executor's party). A refusal changes nothing.
 OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
 
+// Commander P6: shared task entry points for `.tb cmd loot|open|use|gossip|lootmethod|state` on the same task engine.
+// `resolvedTarget` is the pre-resolved object/corpse/NPC guid (when `my`, `32-hex`, or `entry:<id>` without `@x,y,z` was resolved by the caller).
+OrderAnswer BeginCommander(ObjectGuid commander, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, ObjectGuid resolvedTarget, uint32 nowMs);
+
 // `lootmethod`: the lead bot, the group's leader, sets it through the handler a client's window uses; the answer reads the method back from the group.
 OrderAnswer SetLootMethod(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order);
+OrderAnswer SetLootMethodForParty(Player* lead, std::vector<Player*> const& bots, TaskOrder const& order);
 
 // Called once per world tick from run::Update: looks at every running task every kTaskTickMs (never while none runs).
 void Update(uint32 diffMs);
@@ -63,6 +68,19 @@ struct TaskState
     std::string text;           // the payload of an ACK ("opened", "5397:1,copper:30") or "<code>: <message>" of an ERR
 };
 TaskState StateOf(ObjectGuid leader);
+
+// Per-bot task status for `.tb cmd state`: active or last finished task for each bot under `owner` (commander or run leader).
+struct BotTaskState
+{
+    ObjectGuid bot;
+    std::string botName;
+    bool busy = false;
+    int reply = 0;              // 0 none, 1 ok (done), 2 err (failed)
+    std::string verb;           // open | loot | use | gossip
+    uint32_t entry = 0;
+    std::string text;
+};
+std::vector<BotTaskState> BotStatesOf(ObjectGuid owner, std::vector<Player*> const& bots);
 
 // Whether a task runs for this bot (a bot has one at a time).
 bool Busy(ObjectGuid leader, ObjectGuid bot);
