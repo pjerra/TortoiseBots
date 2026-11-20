@@ -154,7 +154,7 @@ inline bool CanSeeOrDetectCompat(Player* viewer, Unit const* target)
 }
 // Does the viewer see the object (T WorldObject::isVisibleFor(viewer, viewPoint), the viewpoint being the viewer itself in the bot).
 inline bool IsVisibleForCompat(WorldObject const* target, Player const* viewer) { return viewer->CanSeeOrDetect(target); }
-// A GM hidden from players (T VISIBILITY_OFF; F Unit::IsVisible is the GM visibility, Unit.cpp:9124).
+// A GM hidden from players (T VISIBILITY_OFF; F Unit::IsVisible is the GM visibility, Unit.cpp:9132).
 inline bool IsHiddenGmCompat(Unit* unit) { return !unit->IsVisible(); }
 
 // ---------------------------------------------------------------------------------------------------------------------

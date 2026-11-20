@@ -49,7 +49,7 @@ constexpr uint32 DeadBackstopDefaultMs = 180000;   // TortoiseBots.Slice.DeadBac
 // H4: the walk to the trigger makes no progress (the best distance does not shrink by a yard) for this long: `block=stuck`.
 constexpr uint32 EntryNoProgressMs = 20000;
 
-// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1829-1875), in words.
+// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1864-1910), in words.
 std::string AbortReasonText(TransferAbortParams const& denied)
 {
     char const* what = nullptr;
@@ -76,8 +76,8 @@ std::string AbortReasonText(TransferAbortParams const& denied)
 
 namespace
 {
-// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1843: no MapDifficulty row, id 0; Player::Satisfy,
-// Entities/Player/Player.cpp:21463: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
+// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1878: no MapDifficulty row, id 0; Player::Satisfy,
+// Entities/Player/Player.cpp:21473: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
 // minimum level the player is under is "level too low for this instance (needs N)" (measured live: level 9 refused, 10 allowed for Ragefire
 // Chasm); any other condition is "refused by an entry condition". The text of the other reasons is AbortReasonText's.
 std::string EntryRefusalText(TransferAbortParams const& denied, uint32 mapId, Player* who)
@@ -128,7 +128,7 @@ std::string EntryRefusalCode(TransferAbortParams const& denied, std::string cons
 }
 
 // N1 (package N): the ONE place the module asks the core whether a character may enter a map. Map::PlayerCannotEnter reaches InstanceMap::CannotEnter
-// (Maps/Map.cpp:2965-2971), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
+// (Maps/Map.cpp:3014-3020), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
 // question is never asked for a character that is not in the world, is being teleported, or whose map id IS the one asked about. Returns the code and the
 // reason in words; an empty code = the core has no objection (or the map is not a dungeon).
 // H4 (C1): CanEnterMap (below) and the entry code both go through here: `grep PlayerCannotEnter forever/src` finds this one call.

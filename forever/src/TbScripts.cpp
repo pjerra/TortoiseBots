@@ -811,7 +811,7 @@ public:
     }
 
     // .tb use <bot> <item id> [self]: the bot uses an item from its bags through the core's own item cast (Player::CastItemUseSpell, Player.h:2683:
-    // the call a client's use-item packet ends in, Player.cpp:33833), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
+    // the call a client's use-item packet ends in, Player.cpp:33843), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
     // flag, effects, on-use spell: a legacy item's effect is ignored by the core, Player.cpp:9718-9744), then mana, current cast and auras.
     // With the word `self` the cast carries the bot as its unit target; without, an empty target list (what a client sends for a self spell).
     static bool HandleUse(ChatHandler* handler, std::string name, uint32 entry, Optional<std::string> mode)
