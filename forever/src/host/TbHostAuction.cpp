@@ -1,4 +1,5 @@
 #include "host/TbHostAuction.h"
+#include "playerbot/policy/ah/AhSellPolicy.h"
 
 #include "AuctionHouseBotVanilla.h"
 #include "AuctionHouseMgr.h"
@@ -34,6 +35,7 @@ constexpr uint32_t kNeutralAuctionHouseId = 7;
 
 struct PendingPostRecord
 {
+    ObjectGuid itemGuid;
     uint32_t itemId = 0;
     uint32_t count = 0;
     uint64_t price = 0;
@@ -44,6 +46,7 @@ struct BotAhTracker
 {
     std::vector<PendingPostRecord> pendingPosts;
     uint32_t confirmedPosted = 0;
+    std::string lastFailCode;
 };
 
 std::unordered_map<ObjectGuid, BotAhTracker>& Trackers()
@@ -277,6 +280,7 @@ std::vector<AhOwnedView> Owned(Player* bot, Creature const* auctioneer, uint32_t
         v.isCommodity = ai.UnitPrice.has_value();
         v.buyoutOrUnitPrice = ai.UnitPrice ? *ai.UnitPrice : ai.BuyoutPrice.value_or(0);
         v.hasBidder = ai.Bidder.has_value();
+        v.itemGuid = ai.ItemGuid;
         out.push_back(v);
     }
     return out;
@@ -321,7 +325,7 @@ bool PostItem(Player* bot, Creature* auctioneer, Item* item, uint64_t minBid, ui
     if (bot->GetItemByGuid(itemGuid) && sAuctionMgr->PendingAuctionCount(bot) == pendingBefore)
         return fail("handler-refused-or-throttled");
 
-    Trackers()[bot->GetGUID()].pendingPosts.push_back({ itemId, 1, buyoutPrice, deposit });
+    Trackers()[bot->GetGUID()].pendingPosts.push_back({ itemGuid, itemId, 1, buyoutPrice, deposit });
     LogW8("post", bot, itemId, 1, buyoutPrice, deposit, "pending");
     return true;
 }
@@ -368,7 +372,7 @@ bool PostCommodity(Player* bot, Creature* auctioneer, Item* item, uint32_t count
     if (!countDropped && sAuctionMgr->PendingAuctionCount(bot) == pendingBefore)
         return fail("handler-refused-or-throttled");
 
-    Trackers()[bot->GetGUID()].pendingPosts.push_back({ itemId, count, unitPrice, deposit });
+    Trackers()[bot->GetGUID()].pendingPosts.push_back({ ObjectGuid::Empty, itemId, count, unitPrice, deposit });
     LogW8("post", bot, itemId, count, unitPrice, deposit, "pending");
     return true;
 }
@@ -493,13 +497,26 @@ void ConfirmPendingPosts(Player* bot)
         return;
 
     std::vector<AhOwnedView> const owned = Owned(bot, nullptr, nullptr);
+    std::vector<bool> used(owned.size(), false);
     auto& pending = it->second.pendingPosts;
     for (auto pit = pending.begin(); pit != pending.end();)
     {
-        bool const found = std::any_of(owned.begin(), owned.end(), [&](AhOwnedView const& o)
+        bool found = false;
+        uint64_t const pendingGuidCounter = pit->itemGuid.IsEmpty() ? 0 : pit->itemGuid.GetCounter();
+        for (size_t i = 0; i < owned.size(); ++i)
         {
-            return o.itemId == pit->itemId;
-        });
+            if (used[i])
+                continue;
+            AhOwnedView const& o = owned[i];
+            uint64_t const ownedGuidCounter = o.itemGuid.IsEmpty() ? 0 : o.itemGuid.GetCounter();
+            if (ai::MatchesPendingPost(pendingGuidCounter, pit->itemId, pit->count, pit->price,
+                    ownedGuidCounter, o.itemId, o.count, o.buyoutOrUnitPrice, o.isCommodity))
+            {
+                used[i] = true;
+                found = true;
+                break;
+            }
+        }
         if (found)
         {
             ++it->second.confirmedPosted;
@@ -511,6 +528,25 @@ void ConfirmPendingPosts(Player* bot)
             ++pit;
         }
     }
+}
+
+void SetLastFailCode(Player* bot, std::string const& code)
+{
+    if (!bot)
+        return;
+    Trackers()[bot->GetGUID()].lastFailCode = code;
+}
+
+std::string TakeLastFailCode(Player* bot)
+{
+    if (!bot)
+        return {};
+    auto it = Trackers().find(bot->GetGUID());
+    if (it == Trackers().end())
+        return {};
+    std::string out = std::move(it->second.lastFailCode);
+    it->second.lastFailCode.clear();
+    return out;
 }
 
 void GetBotStateCounts(Player* bot, uint32_t& outPosted, uint32_t& outSold)

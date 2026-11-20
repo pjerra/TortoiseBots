@@ -5,10 +5,95 @@
 // needed mats/orders against the bot's copper budget.
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 namespace ai
 {
+struct AhItemCandidate
+{
+    std::uint32_t itemId = 0;
+    std::string name;
+};
+
+struct AhResolveItemResult
+{
+    bool ok = false;
+    std::uint32_t itemId = 0;
+    char const* failCode = "";
+};
+
+inline std::string AhLowerAscii(std::string s)
+{
+    for (char& c : s)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+inline AhResolveItemResult ResolveAhBuyItemId(std::string const& query, std::vector<AhItemCandidate> const& candidates)
+{
+    AhResolveItemResult out;
+    std::vector<AhItemCandidate> unique;
+    std::unordered_set<std::uint32_t> seen;
+    for (AhItemCandidate const& c : candidates)
+    {
+        if (c.itemId == 0 || !seen.insert(c.itemId).second)
+            continue;
+        unique.push_back(c);
+    }
+
+    if (unique.empty())
+    {
+        out.failCode = "no-match";
+        return out;
+    }
+    if (unique.size() == 1)
+    {
+        out.ok = true;
+        out.itemId = unique[0].itemId;
+        out.failCode = "ok";
+        return out;
+    }
+
+    std::string const qLower = AhLowerAscii(query);
+    std::uint32_t exactId = 0;
+    std::size_t exactCount = 0;
+    for (AhItemCandidate const& c : unique)
+    {
+        if (AhLowerAscii(c.name) == qLower)
+        {
+            exactId = c.itemId;
+            ++exactCount;
+        }
+    }
+    if (exactCount == 1)
+    {
+        out.ok = true;
+        out.itemId = exactId;
+        out.failCode = "ok";
+        return out;
+    }
+
+    out.failCode = "ambiguous-item";
+    return out;
+}
+
+// Per-unit price ceiling: 3x AHBot unit value, else 4x vendor buy price,
+// else 10x vendor sell price, else 1g (10000c) fallback cap.
+inline std::uint64_t AhComputeMaxUnitPrice(std::uint64_t unitValue, std::uint64_t vendorBuyPrice, std::uint64_t vendorSellPrice)
+{
+    if (unitValue > 0)
+        return unitValue * 3;
+    if (vendorBuyPrice > 0)
+        return vendorBuyPrice * 4;
+    if (vendorSellPrice > 0)
+        return vendorSellPrice * 10;
+    return 10000;
+}
+
 struct AhBuyInput
 {
     std::uint32_t auctionId = 0;
@@ -22,6 +107,8 @@ struct AhBuyInput
     std::uint32_t w6aWornScore = 0;
     bool isNeededMatOrExplicit = false;
     std::uint64_t budgetCopper = 0;
+    std::uint64_t maxUnitPrice = 0;
+    bool worldAuctionEnabled = true;
 };
 
 struct AhBuyDecision
@@ -48,6 +135,11 @@ inline std::uint32_t AhClampCommodityBuyQty(std::uint32_t requestedQty, std::uin
 inline AhBuyDecision DecideAhBuy(AhBuyInput const& in)
 {
     AhBuyDecision out;
+    if (!in.worldAuctionEnabled)
+    {
+        out.reason = "auction-disabled";
+        return out;
+    }
     if (in.itemId == 0 || in.count == 0)
     {
         out.reason = "invalid-item";
@@ -75,6 +167,15 @@ inline AhBuyDecision DecideAhBuy(AhBuyInput const& in)
     else if (!in.isNeededMatOrExplicit)
     {
         out.reason = "not-needed";
+        return out;
+    }
+
+    std::uint64_t const unitPrice = in.isCommodity
+        ? in.buyoutOrUnitPrice
+        : ((in.buyoutOrUnitPrice + in.count - 1) / in.count);
+    if (in.maxUnitPrice > 0 && unitPrice > in.maxUnitPrice)
+    {
+        out.reason = "over-price-ceiling";
         return out;
     }
 

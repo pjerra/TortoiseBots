@@ -6,6 +6,7 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "host/TbHostAuction.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTaxi.h"
 #include "host/TbHostTown.h"
@@ -484,20 +485,29 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     }
     if (o.verb == "ah")
     {
+        if (!tbhost::ah::IsWorldAuctionEnabled())
+            return "fail:auction-disabled";
+        auto ahResult = [&](bool ok, char const* fallback) -> std::string
+        {
+            if (ok)
+                return "ok";
+            std::string const code = tbhost::ah::TakeLastFailCode(bot);
+            return "fail:" + (code.empty() ? std::string(fallback) : code);
+        };
         std::string const sub = Lower(o.arg);
         if (sub == "list")
-            return act("ah", Event("tb order", std::string("list"), owner)) ? "ok" : "fail:ah-list";
+            return ahResult(act("ah", Event("tb order", std::string("list"), owner)), "ah-list");
         if (sub == "sell" || sub.rfind("sell ", 0) == 0)
         {
             std::string const param = (sub == "sell") ? std::string("vendor") : o.arg.substr(5);
-            return act("ah", Event("tb order", param, owner)) ? "ok" : "fail:ah-sell";
+            return ahResult(act("ah", Event("tb order", param, owner)), "ah-sell");
         }
         if (sub.rfind("buy ", 0) == 0)
-            return act("ah bid", Event("tb order", o.arg.substr(4), owner)) ? "ok" : "fail:ah-buy";
+            return ahResult(act("ah bid", Event("tb order", o.arg.substr(4), owner)), "ah-buy");
         if (sub == "cancel" || sub.rfind("cancel ", 0) == 0)
         {
             std::string const param = (sub == "cancel") ? std::string("all") : o.arg.substr(7);
-            return act("ah cancel", Event("tb order", param, owner)) ? "ok" : "fail:ah-cancel";
+            return ahResult(act("ah cancel", Event("tb order", param, owner)), "ah-cancel");
         }
         return "fail:ah-arg";
     }
@@ -1276,6 +1286,11 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else if (verb == "ah")
         {
+            if (!tbhost::ah::IsWorldAuctionEnabled())
+            {
+                refuse("auction-disabled", "world auction is disabled (TortoiseBots.World.Auction=0)");
+                continue;
+            }
             std::string const sub = Lower(order.arg);
             if (sub != "list" && sub != "sell" && sub.rfind("sell ", 0) != 0 &&
                 sub.rfind("buy ", 0) != 0 && sub != "cancel" && sub.rfind("cancel ", 0) != 0)
