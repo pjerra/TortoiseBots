@@ -145,7 +145,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         in.freeMoneyForAh = freeMoney;
         in.soulbound = item->IsSoulBound();
         in.equipped = item->IsEquipped();
-        in.conjured = proto->HasFlag(ITEM_FLAG_CONJURED);
+        in.conjured = (proto->Flags & ITEM_FLAG_CONJURED) != 0;
         in.nonEmptyBag = item->IsNotEmptyBag();
         in.isW6aUpgrade = isUpgrade;
         in.blacklisted = AhItemSellBlacklisted(proto->ItemId, sPlayerbotAIConfig.ahSellBlacklist);
