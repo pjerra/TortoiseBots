@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "SellAction.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/MaintenanceValues.h"
@@ -180,11 +181,7 @@ bool SellAction::Sell(Player* requester, FindItemVisitor* visitor)
 
 bool SellAction::HasVendorStock(Creature* vendor)
 {
-    if (!vendor)
-        return false;
-    VendorItemData const* items = vendor->GetVendorItems();
-    VendorItemData const* templateItems = vendor->GetVendorTemplateItems();
-    return (items && !items->Empty()) || (templateItems && !templateItems->Empty());
+    return HasVendorStockCompat(vendor);
 }
 
 std::string SellAction::RefusalReason(PlayerbotAI* botAI)
@@ -196,7 +193,7 @@ std::string SellAction::RefusalReason(PlayerbotAI* botAI)
     std::list<ObjectGuid> vendors = botAI->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest npcs")->Get();
     for (ObjectGuid const& vendorguid : vendors)
     {
-        if (HasVendorStock(player->GetNPCIfCanInteractWith(vendorguid, UNIT_NPC_FLAG_VENDOR)))
+        if (HasVendorStock(VendorIfCanInteractCompat(player, vendorguid)))
         {
             vendorInReach = true;
             break;
@@ -279,7 +276,7 @@ bool SellAction::Sell(Player* requester, Item* item)
     for (std::list<ObjectGuid>::iterator i = vendors.begin(); i != vendors.end(); ++i)
     {
         ObjectGuid vendorguid = *i;
-        Creature *pCreature = bot->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
+        Creature *pCreature = VendorIfCanInteractCompat(bot, vendorguid);
         if (!pCreature)
             continue;
 
@@ -304,9 +301,8 @@ bool SellAction::Sell(Player* requester, Item* item)
 
         sPlayerbotAIConfig.logEvent(ai, "SellAction", GetItemProtoCompat(item)->Name1, std::to_string(GetItemProtoCompat(item)->ItemId));
 
-        WorldPacket p;
-        p << vendorguid << itemguid << count;
-        bot->GetSession()->HandleSellItemOpcode(p);
+        if (!SellItemToVendorCompat(bot, pCreature, vendorguid, item, count))
+            continue;
 
         if (ai->HasCheat(BotCheatMask::gold))
         {

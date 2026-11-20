@@ -30,9 +30,9 @@ bool QuestAction::Execute(Event& event)
         }
     }
 
-    if (guid)
+    if (!guid.IsEmpty() && ProcessQuests(guid))
     {
-        return ProcessQuests(guid);
+        return true;
     }
 
     bool result = false;
@@ -56,6 +56,9 @@ bool QuestAction::Execute(Event& event)
 
 bool QuestAction::CompleteQuest(Player* player, uint32 entry)
 {
+    if (!SyncQuestWithPlayerAllowedCompat())
+        return false;
+
     Quest const* pQuest = sObjectMgr.GetQuestTemplate(entry);
 
     // If player doesn't have the quest
@@ -64,6 +67,7 @@ bool QuestAction::CompleteQuest(Player* player, uint32 entry)
         return false;
     }
 
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     // Add quest items for quests that require items
     for (uint8 x = 0; x < QUEST_ITEM_OBJECTIVES_COUNT; ++x)
     {
@@ -138,6 +142,9 @@ bool QuestAction::CompleteQuest(Player* player, uint32 entry)
 
     player->CompleteQuest(entry);
     return true;
+#else
+    return false;
+#endif
 }
 
 bool QuestAction::ProcessQuests(ObjectGuid questGiver)
@@ -193,10 +200,10 @@ bool QuestAction::ProcessQuests(WorldObject* questGiver)
     QuestMenu& questMenu = bot->PlayerTalkClass->GetQuestMenu();
 
     bool hasAccept = false;
-    for (uint32 i = 0; i < questMenu.MenuItemCount(); ++i)
+    for (uint32 i = 0; i < QuestMenuCountCompat(questMenu); ++i)
     {
         QuestMenuItem const& menuItem = questMenu.GetItem(i);
-        uint32 questID = menuItem.m_qId;
+        uint32 questID = QuestMenuItemIdCompat(menuItem);
         Quest const* quest = sObjectMgr.GetQuestTemplate(questID);
         if (!quest)
         {
@@ -220,7 +227,7 @@ bool QuestAction::IsNearGroupedMaster()
         sServerFacade.getDistance2d(bot, master) <= sPlayerbotAIConfig.reactDistance;
 }
 
-bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 questGiver)
+bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, ObjectGuid questGiver)
 {
     bool success = false;
     const uint32 questId = quest->GetQuestId();
@@ -229,7 +236,7 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 ques
     if (questId == 80388)
         return false;
 
-    ObjectGuid giverGuid(questGiver);
+    ObjectGuid giverGuid = questGiver;
     if (giverGuid.IsCreature() && (giverGuid.GetEntry() == 81030 || giverGuid.GetEntry() == 62609))
         return false;
 
@@ -262,15 +269,12 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 ques
     }
     else
     {
-        WorldPacket p(CMSG_QUESTGIVER_ACCEPT_QUEST);
-        uint32 unk1 = 0;
-        p << questGiver << questId << unk1;
-        p.rpos(0);
-        bot->GetSession()->HandleQuestgiverAcceptQuestOpcode(p);
-
-        if (bot->GetQuestStatus(questId) == QUEST_STATUS_NONE && sPlayerbotAIConfig.syncQuestWithPlayer)
+        Object* pObject = ai->GetUnit(questGiver);
+        if (!pObject)
+            pObject = ai->GetGameObject(questGiver);
+        if (!AcceptQuestDirectCompat(bot, quest, pObject ? static_cast<WorldObject*>(pObject) : nullptr) &&
+            SyncQuestWithPlayerAllowedCompat() && sPlayerbotAIConfig.syncQuestWithPlayer)
         {
-            Object* pObject = bot->GetObjectByTypeMask((ObjectGuid)questGiver, TYPEMASK_CREATURE_GAMEOBJECT_PLAYER_OR_ITEM);
             bot->AddQuest(quest, pObject);
             // Objective-less quests complete on accept, as in the core handler.
             if (bot->CanCompleteQuest(questId))
@@ -285,10 +289,12 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 ques
             // Add it directly (as the donor does under SyncQuestWithPlayer, which
             // stays off here because it also stops quest-item looting). NPC and
             // object givers only; the bot must be eligible.
-            Object* pObject = bot->GetObjectByTypeMask((ObjectGuid)questGiver, TYPEMASK_CREATURE_OR_GAMEOBJECT);
-            if (pObject && bot->CanTakeQuest(quest, false) && bot->CanAddQuest(quest, false))
+            Object* pGiver = ai->GetUnit(questGiver);
+            if (!pGiver)
+                pGiver = ai->GetGameObject(questGiver);
+            if (pGiver && bot->CanTakeQuest(quest, false) && bot->CanAddQuest(quest, false))
             {
-                bot->AddQuest(quest, pObject);
+                bot->AddQuest(quest, pGiver);
                 // Objective-less quests complete on accept, as in the core handler.
                 if (bot->CanCompleteQuest(questId))
                     bot->CompleteQuest(questId);
@@ -297,7 +303,7 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 ques
             }
         }
 
-        if (bot->GetQuestStatus(questId) != QUEST_STATUS_NONE && bot->GetQuestStatus(questId) != QUEST_STATUS_AVAILABLE)
+        if (QuestIsAcceptedStatusCompat(bot->GetQuestStatus(questId)))
         {
             sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
             // Issue #872: remember quests the autonomous alt took itself so
@@ -336,7 +342,7 @@ bool QuestUpdateAddKillAction::Execute(Event& event)
         GameObjectInfo const* info = sObjectMgr.GetGameObjectInfo(entry);
         if (info)
         {
-            ai->TellPlayer(requester, chat->formatQuestObjective(info->name, available, required), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            ai->TellPlayer(requester, chat->formatQuestObjective(GameObjectNameCompat(info), available, required), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
     }
     else if (qInfo)
@@ -344,7 +350,7 @@ bool QuestUpdateAddKillAction::Execute(Event& event)
         CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
         if (info)
         {
-            ai->TellPlayer(requester, chat->formatQuestObjective(info->name, available, required), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            ai->TellPlayer(requester, chat->formatQuestObjective(CreatureNameCompat(info), available, required), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
     }
     else

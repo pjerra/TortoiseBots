@@ -10,6 +10,7 @@
 #include "TbEngineBrain.h"
 #include "TbBotSession.h"
 #include "host/TbH3.h"
+#include "host/TbCc.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -215,6 +216,9 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free)
         pai = new PlayerbotAI(bot);
         auto const constructedMs = lap();
         pai->SetMaster(master);
+        // The crowd-control permissions the commander ordered (or the fear-denied default for a fresh bot): the cast
+        // check reads the mask, so push the owner's setting before the first tick runs.
+        TortoiseBots::h8::CcSyncBot(bot);
         // The engines were built before the master was known, so saved strategies and values are applied now (:41-44).
         pai->ResetStrategies();
         auto const resetMs = lap();
@@ -292,6 +296,10 @@ void Tick(Brain* brain, uint32 diff)
         return;
     diff = brain->pendingMs;
     brain->pendingMs = 0;
+    // A rebind (`.tb master`) or an order for a class that joined later lands here: the store's version is 0 until the
+    // first permission order, so bots that never had one keep their creation mask for one integer compare per tick.
+    if (TortoiseBots::h8::CcDeniedVersion() != 0)
+        TortoiseBots::h8::CcSyncBot(brain->bot);
     try
     {
         // A CAST_FAILED the core sends during this call is the refusal of the engine's own cast (the call returns the same

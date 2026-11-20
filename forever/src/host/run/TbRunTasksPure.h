@@ -42,18 +42,47 @@ inline char const* LootEmptyText() { return "Nothing is left to loot"; }
 
 // ---- the grammar ----
 enum class Verb : uint8_t { None, Open, Loot, LootMethod, Use, Gossip };
+enum class OwnerKind : uint8_t { Run, Commander };
 
 struct TaskOrder
 {
     Verb verb = Verb::None;
-    RC::TargetSpec spec;            // open, loot: the target as the policy typed it (a handle of ReadFacts, or entry:id@x,y,z)
+    RC::TargetSpec spec;            // open, loot, use, gossip: the target as the policy typed it (a handle of ReadFacts, or entry:id@x,y,z)
     std::string bot;                // open, loot, use, gossip
     uint32_t itemId = 0;            // loot: only this item (0 = everything); use: the item
     int method = -1;                // lootmethod: RC::kLoot*
     int threshold = 0;
     bool hasThreshold = false;
-    GossipOrder::Request gossip;    // gossip: the NPC's entry, the bot and the menu line (index or text)
+    GossipOrder::Request gossip;    // gossip: the NPC's entry, the bot and the menu line (index or text; both empty = list the menu)
 };
+
+// Convert a ForeverCore GossipOptionNpc value to GossipOrder::Option. On this core a DATABASE menu item is added with sender = the menu id and action = the
+// order index (Player::PrepareGossipMenu, GossipMenu::AddMenuItem(item, MenuID, OrderIndex)), so neither field is the plain/service word the policy reads;
+// the option's own TYPE is (GossipOptionNpc::None = a plain gossip line, everything else a service: vendor, taxi, trainer, spirit healer, innkeeper/binder,
+// banker, battlemaster, auctioneer, stablemaster, mailbox, talent ...). The mapping hands the policy the database shape it knows: sender 0, action
+// GOSSIP_OPTION_GOSSIP (1) for None and 0 for every service (0 is a value the policy refuses: it is not GOSSIP_OPTION_GOSSIP).
+inline ::TortoiseBots::GossipOrder::Option MakeGossipOption(std::string const& text, uint32_t optionNpc, bool coded)
+{
+    ::TortoiseBots::GossipOrder::Option opt;
+    opt.text = text;
+    opt.coded = coded;
+    opt.sender = 0;
+    opt.action = optionNpc == 0 ? ::TortoiseBots::GossipOrder::kOptionGossip : 0;
+    return opt;
+}
+
+inline char const* VerbName(Verb v)
+{
+    switch (v)
+    {
+        case Verb::Open: return "open";
+        case Verb::Loot: return "loot";
+        case Verb::LootMethod: return "lootmethod";
+        case Verb::Use: return "use";
+        case Verb::Gossip: return "gossip";
+        default: return "none";
+    }
+}
 
 // `words` = the order split by RC::SplitOrderArgs, the verb word first and lower case. False with a code and a message in the legacy words.
 inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> const& args, TaskOrder& out, std::string& code, std::string& message)
@@ -243,6 +272,17 @@ struct TaskRec
     std::string lastCode, lastMessage;
 };
 
+inline RC::TaskKind ToRcKind(Kind kind)
+{
+    switch (kind)
+    {
+        case Kind::Open: return RC::TaskKind::Open;
+        case Kind::Loot: return RC::TaskKind::Loot;
+        case Kind::Gossip: return RC::TaskKind::Gossip;
+    }
+    return RC::TaskKind::Open;
+}
+
 inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, float startDistance, bool scriptUse = false)
 {
     TaskRec r;
@@ -251,8 +291,7 @@ inline TaskRec MakeRec(Kind kind, bool lootLike, bool corpse, uint32_t itemId, f
     r.lootLike = lootLike;
     r.corpse = corpse;
     r.itemId = itemId;
-    r.state = RC::MakeTask(kind == Kind::Gossip ? RC::TaskKind::Gossip : kind == Kind::Open ? RC::TaskKind::Open : RC::TaskKind::Loot,
-        startDistance, true, lootLike);
+    r.state = RC::MakeTask(ToRcKind(kind), startDistance, true, lootLike);
     return r;
 }
 

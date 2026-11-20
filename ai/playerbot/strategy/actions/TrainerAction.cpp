@@ -22,6 +22,16 @@ void TrainerAction::Learn(uint32 cost, ObjectGuid trainerGuid, uint32 spellId, T
         return;
     }
 
+    if (UsesForeverTrainerCompat())
+    {
+        if (LearnTrainerSpellForeverCompat(bot, visitCreature, tSpell->spell))
+        {
+            ++visitLearned;
+            msg << " - learned";
+        }
+        return;
+    }
+
     SpellEntry const* proto = sServerFacade.LookupSpellInfo(tSpell->spell);
     if (!proto)
         return;
@@ -68,20 +78,15 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
     bool hasHeader = false;
     bool hasTrainable = false;
 
-    TrainerSpellData const* cSpells = creature->GetTrainerSpells();
-    TrainerSpellData const* tSpells = creature->GetTrainerTemplateSpells();
     float fDiscountMod =  bot->GetReputationPriceDiscount(creature);
     uint32 totalCost = 0;
 
-    TrainerSpellMap trainer_spells;
-    if (cSpells)
-        trainer_spells.insert(cSpells->spellList.begin(), cSpells->spellList.end());
-    if (tSpells)
-        trainer_spells.insert(tSpells->spellList.begin(), tSpells->spellList.end());
+    std::vector<TrainerSpell> trainer_spells = CollectTrainerSpellsCompat(creature);
+    visitCreature = creature;
 
-    for (TrainerSpellMap::const_iterator itr =  trainer_spells.begin(); itr !=  trainer_spells.end(); ++itr)
+    for (std::vector<TrainerSpell>::const_iterator itr = trainer_spells.begin(); itr != trainer_spells.end(); ++itr)
     {
-        TrainerSpell const* tSpell = &itr->second;
+        TrainerSpell const* tSpell = &(*itr);
 
         if (!tSpell)
             continue;
@@ -92,7 +97,12 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
         // Green and teachable at this level: the rule the trip decision and
         // the rpg trigger use (TrainerSpellLearnableNow), so a row they did
         // not count is neither listed nor paid for here.
-        if (!TrainerSpellLearnableNow(bot, tSpell))
+        if (UsesForeverTrainerCompat())
+        {
+            if (!CanTeachTrainerSpellForeverCompat(bot, creature, *tSpell))
+                continue;
+        }
+        else if (!TrainerSpellLearnableNow(bot, tSpell))
             continue;
 
         // A visit must never add a 3rd primary profession. The row spell is
@@ -109,7 +119,7 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
                         taught.ids[taught.count] = teaching->EffectTriggerSpell[j];
                         ++taught.count;
                     }
-            auto isFirstRank = [](uint32_t id) { return sSpellMgr.IsPrimaryProfessionFirstRankSpell(id); };
+            auto isFirstRank = [](uint32_t id) { return IsPrimaryProfessionFirstRankSpellCompat(id); };
             if (TrainerRowTeachesFirstRankPrimary(tSpell->spell, taught, isFirstRank))
             {
                 static uint16 const kPrimary[] = { SKILL_ALCHEMY, SKILL_BLACKSMITHING, SKILL_ENCHANTING, SKILL_ENGINEERING,
@@ -140,7 +150,7 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
         out << chat->formatSpell(pSpellInfo) << chat->formatMoney(cost);
 
         if (action)
-            (this->*action)(cost, creature->getObjectGuid(), itr->first, tSpell, out);
+            (this->*action)(cost, creature->getObjectGuid(), tSpell->spell, tSpell, out);
 
         if (!hasHeader)
         {
@@ -171,21 +181,29 @@ bool TrainerAction::Execute(Event& event)
     }
     else
     {
-        if (requester)
+        if (requester && !requester->GetSelectionGuid().IsEmpty())
             creature = ai->GetCreature(requester->GetSelectionGuid());
-        else
+        if (!creature)
+        {
+            std::list<ObjectGuid> npcs = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
+            for (ObjectGuid const& guid : npcs)
+            {
+                Creature* cand = ai->GetCreature(guid);
+                if (cand && IsTrainerCompat(cand) && IsTrainerOfCompat(cand, bot) && bot->IsWithinDistInMap(cand, INTERACTION_DISTANCE))
+                {
+                    creature = cand;
+                    break;
+                }
+            }
+        }
+        if (!creature)
             return false;
     }
 
-#ifdef MANGOS
-    if (!creature || !creature->IsTrainer())
-#endif
-#ifdef CMANGOS
-    if (!creature || !creature->IsTrainer())
-#endif
+    if (!IsTrainerCompat(creature))
         return false;
 
-    if (!creature->IsTrainerOf(bot, false))
+    if (!IsTrainerOfCompat(creature, bot))
     {
         if (!ai->GetMaster() || sServerFacade.getDistance2d(bot, ai->GetMaster()) < sPlayerbotAIConfig.reactDistance || ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
             ai->TellPlayerNoFacing(requester, "This trainer cannot teach me");
@@ -193,9 +211,7 @@ bool TrainerAction::Execute(Event& event)
     }
 
     // check present spell in trainer spell list
-    TrainerSpellData const* cSpells = creature->GetTrainerSpells();
-    TrainerSpellData const* tSpells = creature->GetTrainerTemplateSpells();
-    if (!cSpells && !tSpells)
+    if (!HasTrainerSpellsCompat(creature))
     {
         if (!ai->GetMaster() || sServerFacade.getDistance2d(bot, ai->GetMaster()) < sPlayerbotAIConfig.reactDistance || ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
             ai->TellPlayerNoFacing(requester, "No spells can be learned from this trainer");
@@ -207,11 +223,11 @@ bool TrainerAction::Execute(Event& event)
     if (spell)
         spells.insert(spell);
 
-    if (text.find("learn") != std::string::npos || sRandomBotFacade.IsFreeBot(bot) || (sPlayerbotAIConfig.autoTrainSpells != "no" && (creature->GetCreatureInfo()->trainer_type != TRAINER_TYPE_TRADESKILLS || !ai->HasActivePlayerMaster()))) //Todo rewrite to only exclude start primary profession skills and make config dependent.
+    if (text.find("learn") != std::string::npos || sRandomBotFacade.IsFreeBot(bot) || (sPlayerbotAIConfig.autoTrainSpells != "no" && (GetTrainerTypeCompat(creature) != TRAINER_TYPE_TRADESKILLS || !ai->HasActivePlayerMaster()))) //Todo rewrite to only exclude start primary profession skills and make config dependent.
     {
         visitCheapestUnaffordable = UINT32_MAX;
         visitLearned = 0;
-        visitTrainerType = (TrainerType)creature->GetCreatureInfo()->trainer_type;
+        visitTrainerType = GetTrainerTypeCompat(creature);
         bool const hasTrainable = Iterate(requester, creature, &TrainerAction::Learn, spells);
         if (hasTrainable)
             context->ClearValues("item usage"); //Bot might be able to use new items.
@@ -253,7 +269,7 @@ bool TrainerAction::Execute(Event& event)
         bool const fruitless = visitLearned == 0 && nothingLearnable;
 
         if (fruitless && spells.empty() &&
-            creature->GetCreatureInfo()->trainer_type == TRAINER_TYPE_CLASS)
+            GetTrainerTypeCompat(creature) == TRAINER_TYPE_CLASS)
         {
             std::string const purposeKey = "trainer class";
             if (visitCheapestUnaffordable != UINT32_MAX &&

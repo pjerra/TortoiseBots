@@ -235,7 +235,9 @@ namespace ai
     inline bool SweepingStrikesNearCc(PlayerbotAI* ai, Player* bot, float radius)
     {
         CcGuard ccGuard(ai);
-        bool const protectedNear = ccGuard.ProtectedEnemyNear(bot, radius, true, bot->GetVictim());
+        // `.tb ignore`: the cleave copies swings onto a mob in melee reach, so a listed mob near the bot cancels it like a held mark does.
+        bool const protectedNear = ccGuard.ProtectedEnemyNear(bot, radius, true, bot->GetVictim()) ||
+            ccGuard.IgnoredMobNear(bot, radius);
         return CcCancelSwingSplashBuff(true, protectedNear, !protectedNear && ccGuard.ReadyCcMarkNear(bot, radius));
     }
 

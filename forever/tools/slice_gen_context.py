@@ -171,13 +171,38 @@ SLICE9_KEYS = {
     "trigger": "loot start roll, loot vote, loot roll",
     "value": "active rolls, seen need rolls, item usage, skip go loot list",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS)
+# W6a (package E6): auto-equip upgrades for free bots (`equipment audit` 300 s + `item push result` bag-generation poll).
+# Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `disenchant random item`,
+# `enchant random item`, `smart destroy item`, `pool gear top up`, `use random quest item`, `auto share quest`, `auto complete quest`)
+# stay unregistered and are skipped by the engine.
+W6_KEYS = {
+    "strategy": "maintenance",
+    "action": "equip upgrades",
+    "trigger": "equipment audit, item push result",
+    "value": "",
+}
+# W2 (D): vendor, repair, trainer, mail read (actions + budget values).
+W2_KEYS = {
+    "strategy": "",
+    "action": "sell, buy, repair, trainer, mail",
+    "trigger": "",
+    "value": "free money for, total money needed for, money needed for, repair cost, max repair cost, min repair cost, has all money for",
+}
+# W3 (package E): quests (accept, turn-in with reward choice, drop, share; quest strategies and actions).
+W3_KEYS = {
+    "strategy": "quest, accept all quests",
+    "action": "talk to quest giver, accept quest, accept all quests, accept quest share, drop, clean quest log, share, auto share quest, quest reward",
+    "trigger": "quest share",
+    "value": "quest reward",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
 BASE_T = {"strategy": "Strategy", "action": "Action", "trigger": "Trigger", "value": "UntypedValue"}
 LOCAL = {"StrategyContext": "SliceStrategyContext", "MovementStrategyContext": "SliceMovementStrategyContext",
-         "AssistStrategyContext": "SliceAssistStrategyContext", "ActionContext": "SliceActionContext",
+         "AssistStrategyContext": "SliceAssistStrategyContext", "QuestStrategyContext": "SliceQuestStrategyContext",
+         "ActionContext": "SliceActionContext",
          "ChatActionContext": "SliceChatActionContext", "WorldPacketActionContext": "SliceWorldPacketActionContext",
          "TriggerContext": "SliceTriggerContext", "ChatTriggerContext": "SliceChatTriggerContext",
          "WorldPacketTriggerContext": "SliceWorldPacketTriggerContext",

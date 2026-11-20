@@ -53,10 +53,10 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 
 Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src/host/TbH3.cpp`, and `.tb grammar selftest` prints fixed records so a client can test its parser against the module.
 
-* **Lines.** A reply line is words separated by ONE space. The first word is the record kind (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `error`). Every other word is `key=value`.
+* **Lines.** A reply line is words separated by ONE space. The first word is the record kind (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `error`). Every other word is `key=value`.
   The LAST word of every line of a tokened command is `#<token>` (the caller's last word of the command, `#` and 1 to 32 characters of `A-Za-z0-9_.:-`; a malformed one is refused with a note in the error's `msg=`).
 * **Markers.** ONLY `error` is a one-line reply. Every other tokened reply, an order's answer to one bot included, starts with `<command>-begin #token` and ends with `<command>-end count=<lines between> records=<records> ... #token`;
-  the markers are named after the COMMAND (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `grammar`), the data lines between them carry their own record kind as first word. `count=` counts every line between the markers, continuation lines included; `records=` counts the lines that are not continuations. Other totals on an end line (`bots=`, `resting=`) count records.
+  the markers are named after the COMMAND (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `grammar`), the data lines between them carry their own record kind as first word. `count=` counts every line between the markers, continuation lines included; `records=` counts the lines that are not continuations. Other totals on an end line (`bots=`, `resting=`) count records.
 * **Keys** are `[a-z][a-z0-9_]{0,23}`; a key appears at most once per line.
 * **Values are percent-encoded**: every byte outside `[A-Za-z0-9._-]` is written `%XX` (upper-case hex): space `%20`, `=` `%3D`, `:` `%3A`, `;` `%3B`, `,` `%2C`, `#` `%23`, `|` `%7C`, `%` `%25`, `+` `%2B`; `_` stays literal.
   **An empty value is the empty string** (`tgt=`); `none` has no special meaning anywhere and the module never writes `none`, `-1` or `0` for "no value" or "unknown". An unknown number is an omitted key (for example `manapct` is absent for a bot that has no mana). Hex is upper-case only.
@@ -70,7 +70,7 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
   Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-character`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
   `no-engine`, `queue-full`, `not-in-group`, `needs-player-sender`, `no-selection`, `mark-empty`, `no-such-spawn`, `target-not-found`, `target-dead`, `not-attackable`, `no-pull-strategy`, `no-commander`, `other-map`, `too-far`, `nothing-to-assist`, `self-master`, `missing-commander`,
   `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). Slice 4 adds (section 8): `no-trigger`, `not-allowed`, `leader-refused`, `leader-inside`, `not-leader`, `lfg-group`, `not-empty`, `locked`, `no-entrance`,
-`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`. A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
+`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`, and `ignored` (`.tb cc` names a `.tb ignore` mob, section 14). A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
 * **Addressing.** `<bot>` is a character name (a logged-in host bot). `party <leader>` is every host bot in the party of that character. `party` with no leader is, in this order: the bots bound (`.tb master`) to the sender, or to the one commander there is, or the members of the one bot-led party there is;
   anything else needs the leader's name (`error code=ambiguous-party`). Names are case-insensitive. The `target=` of a reply is `<name>`, `party:<leader>` or `party:commander:<name>` as parts.
   `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt` and `.tb power` also accept the character of the sender (the GM who typed the command), by name; another real player's
@@ -191,6 +191,7 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `rescue` `tele` | W1: ghost rescues so far (the host's only teleport besides the core's release) and every teleport the bot took, any cause (the core's release teleport counts) |
 | `sick` `dur` `bags` | W1: resurrection sickness is on the bot; the lowest equipped durability percent; free bag slots (`bags` is `bagfree` under the W1 name) |
 | `form` `totems` `imbue` `seal` `paura` | slice 10 (appended after `practice=`): `form` = the shapeshift form id the bot is in (bear 5, cat 1, ghost wolf 16) or `none`; `totems` = `<creature entry>:<seconds left>;...` for the bot's live totems (summon slots 1-4, read only), empty when none; `imbue` = `<enchant id>:<seconds left>` of the main-hand weapon's temporary enchantment, empty when none; `seal` = the aura id of a paladin's own active "Seal of ..." (empty for every other class), `paura` = the aura id of a paladin's own active "... Aura" (empty otherwise). The power type and amount stay in `power` `pw` `pwmax`; no second `power=` is added |
+| `spec` `gear` | W6a (appended after `money=`): `spec` = the bot's active weightscale spec name (empty when none); `gear` = `<slot>:<item>;...` for each occupied equipment slot (`0..18`), empty when none |
 
 End line: `state-end count=<lines> records=<records> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
 Slice 4 adds to the end line: `alive=<n> dead=<n> ghost=<n> wipe=yes|no whole=yes|no` (`dead` = bodies; `wipe` = nobody is alive; `whole` = every addressed bot is alive, on its leader's map and within 40 yd of it).
@@ -213,8 +214,10 @@ READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per
 * `.tb learn [<character>] <spell id>...`: `learn-begin`, `learn bot=.. spell=<id> result=<learned|known|unknown|invalid|not-learned> name=..`, `learn-end count=.. bot=.. learned=..`. Core path: `SpellMgr::IsSpellValid`, `Player::LearnSpell`. At most 40 ids.
 * `.tb equip [<character>] <item id> [replace]`: `equip-begin`, ONE record `equip bot=.. item=<id> name=.. result=<equipped|refused> [slot=..] why=<empty|EQUIP_ERR_...|unknown-item|bags-full|swap-failed> [code=..] [replaced=yes] [note=..]`, `equip-end count=1 records=1 bot=..`.
   `Player::CanEquipNewItem` then `Player::EquipNewItem`; a taken slot refuses (`EQUIP_ERR_NOT_EQUIPPABLE` or `EQUIP_ERR_NO_SLOT_AVAILABLE`); with `replace` the item is stored in the bags and the core's `Player::SwapItem` puts it on.
-* `.tb itemscan <bot> <item id>...`: `itemscan-begin`, per id `itemscan bot=.. item=<id> exists=<yes|no> [name= class=<c>:<sc> inv= req= quality= ilvl= canequip=<yes|no> slot=<n, only when yes> why=<empty|EQUIP_ERR_...>]`, `itemscan-end count=.. bot=.. exist=.. canequip=..`.
-  `canequip` is the core's check for THIS bot with swap = true. Nothing is created or changed. The ids come from the data collaborator's list; the module holds no id.
+* `.tb itemscan <bot> <item id>...`: `itemscan-begin`, per id `itemscan bot=.. item=<id> exists=<yes|no> [name= class=<c>:<sc> inv= req= quality= ilvl= canequip=<yes|no> slot=<n, only when yes> why=<empty|EQUIP_ERR_...> [usage=] w=<weight> [worn=<item> wornw=<weight>]]`, `itemscan-end count=.. bot=.. exist=.. canequip=..`.
+  `canequip` is the core's check for THIS bot with swap = true. `usage=` is `ItemUsageValue::QueryItemUsageForEquip` (omitted when the bot has no engine), `w=` is `RandomItemMgr::ItemStatWeight`, and `worn=` / `wornw=` are the currently equipped item in the candidate slot and its weight (omitted when the slot is empty or unusable). Nothing is created or changed. The ids come from the data collaborator's list; the module holds no id.
+* `.tb statcensus`: `statcensus-begin`, one `statcensus` record per `ItemStatType` id seen with a non-zero value across all loaded item templates: `statcensus id=<stat id> items=<count> min=<min> max=<max> sample=<item id> samplename=<name> sampleval=<val>`, `statcensus-end count=.. records=.. templates=.. with_stats=.. stat_ids=..`. One pass, read only.
+* `.tb gear <bot|party [leader]> upgrade [#token]`: `gear-begin`, runs `EquipUpgradesAction` synchronously on the world thread for each addressed bot (explicit order, so commanded bots also equip bag upgrades), and diffs equipment slots `0..18` before/after: one `gear bot=.. slot=<n> old=<item id or 0> new=<item id>` per changed slot, or `gear bot=.. changed=0` when nothing changed; `gear-end count=.. records=.. target=.. bots=.. changed=<total>`. Refuses before changing anything with `error code=no-engine` or `error code=in-combat`.
 
 ## 7. Config keys
 
@@ -370,6 +373,7 @@ plan-end count=103 records=103 verb=check plan=ragefire_chasm bot=Mtank map=389 
 
 ### `.tb plan reload [#token]`
 Reads the plan tables again through the loader (`ReloadDungeonPlans`) with every running run's plan pointer as `inUse`, and swaps them in only when every row passes (the loader's own rules). When the swap happened the unit rows are read again against the new table and the cached matches are dropped. No record lines: the end line says it. End: `verb=reload swapped=yes|no`, `why=` exactly when `swapped=no` (the loader's reason, free text), `changes=` (when swapped: how many plan changes the loader listed), `plans= steps=` of the table now in use, and `units= units_refused=` (the last unit-row read; absent when it was not read).
+The same all-or-nothing reload also runs by itself after a successful `reload all` (in game, console or remote), so a plan edited in the database is in use without the extra command: core pin d02645dd21 has the `OnAfterReload` hook (#374) and the module answers it. The outcome goes to the server log as one `TortoiseBots:` line (`reloaded <n> dungeon plans ...` or `the dungeon plans kept after reload all (<reason>)`); no other core `.reload` command touches module data, so none of them reloads anything here.
 ```
 plan-begin #p4
 plan-end count=0 records=0 verb=reload swapped=yes changes=0 plans=1 steps=80 units=103 units_refused=0 #r1
@@ -480,7 +484,6 @@ commander-end count=12 records=12 bindings=1 #c7
 One card while the run goes: the run's own orders (`move`, `pullback`, `focus`, `attack`) are in the same log. Without the engine a `stay` is logged `ok=no result=no-engine`. `.tb master party Mtank none` ends the card (`commander-begin` / `commander-end count=0 bindings=0`); `status Nobody` answers `error code=no-binding cmd=commander msg=Nobody%20commands%20no%20bots`.
 A run whose tank nobody commands is a system card: `binding cmd=Mtank ... system=yes inparty=no`, the run record after it.
 
-
 ## 12. Slice 9: doors, chests, loot and the bags (packages O9, F9, C9)
 
 The run leader's `open`, `loot` and `lootmethod` orders are carried out now (`forever/src/host/run/TbRunTasks.*`, package O9); before slice 9 they were refused `unsupported`. Nothing new is typed by hand: `.tb order` is unchanged and the verbs are reachable through the run only.
@@ -521,7 +524,73 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 ### `.tb state` keys for a hunter or a warlock (after `practice=`)
 `pet=<entry>:<alive|dead>:<hp pct>` (empty with no pet: the grammar has no `none` word and no 0 for "not there"; `dead` also when the body is gone and the stable row has Health 0: Call Pet refuses until the pet is revived), `petreact=<state>`, `petauto=<spell ids on autocast>`, `loyal=<level 1-6>` (a hunter's pet), `ammo=<item id>:<count>` (a hunter: the ammo slot's item and how many the bags hold; empty with no ammo set), `shards=<count>` (a warlock). Absent for other classes; `petreact` `petauto` `loyal` only with a live pet.
 
-## 13. Wailing Caverns: the gossip step, the event holds and the end of the plan
+## 14. Commander port, packages P3 & P6: `.tb cmd`
+
+`.tb cmd <verb> [args] [#token]` sends an order or task from the caller's character to its bound bots (`.tb master`).
+
+### Order verbs (P3: lifted `run::Issue` judge)
+
+Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
+
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`. (`summon` is refused `unsupported` per decision D3.)
+* **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
+* **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
+* **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
+* **Replies (grammar v2).**
+  * Accepted: `cmd-begin #token` / `cmd verb=<v> status=accepted bots=<n> result=<encoded> #token` / `cmd-end count=1 records=1 verb=<v> lead=<lead> bots=<n> #token`
+  * Refused: `error code=<code> cmd=cmd msg=<encoded> #token` (e.g. `needs-player-sender`, `not-bound`, `unreachable`, `no-ground`, `no-los`, `invalid-target`, `dead-target`, `no-tank`, `engine-not-built`).
+
+### Task verbs (P6: objects, loot windows, gossip)
+
+Bound commanders issue task orders on the shared `TbRunTasks` engine (`forever/src/host/cmd/TbCmdTasks.cpp`):
+
+* **`.tb cmd loot <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<itemId>] [#token]`**: walks the bot (or the binding's lead) to the corpse or chest, opens its loot window via `LootOpenCompat` / `open loot`, and stores loot through `StoreLootAction`. Refuses `busy`, `in-combat`, `not-bound`, `invalid-target`, `too-far`, `no-item`, `locked`. The asynchronous result (`done: <items/copper>` or `failed: <code>: <msg>`) is read from `.tb cmd state`.
+* **`.tb cmd open <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: walks to the door, lever, goober or chest and opens it (`HandleGameObjectUseOpcode` or `open loot`). A door not at rest is never toggled closed (`done: already open ...`).
+* **`.tb cmd use <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: uses a game object via `HandleGameObjectUseOpcode` (or `open loot` for chests). `.tb cmd use <itemId>` is refused `unsupported` (`item use except food and drink`).
+* **`.tb cmd gossip <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<index | "text" | text>] [#token]`**: walks to a `UNIT_NPC_FLAG_GOSSIP` NPC, calls `HandleGossipHelloOpcode`, and either lists the menu options (when no option is given) or validates the option via `GossipOrder::MatchOption` (refusing service/coded/missing options) and calls `HandleGossipSelectOptionOpcode`.
+* **`.tb cmd lootmethod <ffa|group|rr> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; `master` and `nbg` are refused `unsupported`.
+* **`.tb cmd state [<bot>] [#token]`**: reports each bound bot's active or last task (`task bot= busy= status=none|running|done|failed [verb=] [entry=] [text=]`).
+* **`.tb cmd ritual|scout ...`**: refused `unsupported` (decision D5).
+
+## 15. W3: Quests
+
+### `.tb quest <bot> status|accept <questId|*>|turnin [questId]|share <questId>|drop <questId|all>|reward <auto|list|ask|reset|?> [#token]`
+One host bot. Replies `quest-begin`, `quest` record(s), `quest-end` (grammar v2; `error code=engine-not-built` when `TORTOISEBOTS_SLICE1=OFF`).
+
+* `status`: lists the bot's quest log (`id=`, `title=`, `status=incomplete|complete|failed|none|rewarded`, `objectives=<done>/<amount>;...`).
+* `accept <questId|*>`: accepts a vanilla-eligible quest (`Expansion == 0` or `91xxx`/`99xxx` with spawned giver & ender) from a nearby giver (`status=accepted|refused`, `code=filtered` when refused by the vanilla filter).
+* `turnin [questId]`: turns in completed quests to a nearby quest taker (`status=ok|no-turnin`), picking multi-item rewards via `ItemUsageValue` + `RandomItemMgr::ItemStatWeight`.
+* `share <questId>`: shares a quest with the bot's party (`WorldPackets::Quest::PushQuestToParty`, `status=shared|refused`).
+* `drop <questId|all>`: abandons the quest (`Player::AbandonQuest`, `status=dropped|refused`).
+* `reward <auto|list|ask|reset|?>`: sets or queries the bot's `quest reward` option (`mode=auto|list|ask|config`).
+
+## 16. The leave-it-alone list: `.tb ignore`
+
+`.tb ignore <bot|party [leader]> add <guid> | remove <guid> | list | clear [#token]`
+
+The player marks a mob "leave it alone" (a beast to tame, an escort, a mob that must stay alive): none of the commander's bots picks it (dps, tank, assist, pull, defence, grind and guard picks all skip it, even while it attacks), and no area spell goes out near it: none while it stands within ~30 yd of a bot, and no blast whose centre plus its radius reaches within ~30 yd of it. Sweeping Strikes and Blade Flurry are cancelled beside it too. Memory only: up to 8 mobs per commander, each forgotten after 30 min or when it dies on a commanded bot's map.
+
+The owner is the bots' bound commander (`.tb master`), never the bots: every addressed bot must answer to the same commander (`no-commander`, `ambiguous-party`). `guid` is the 32 hex digits `.tb state` (`tgt=`) and `.tb threat` (`mob=`) print.
+
+An explicit attack, pull, assist (resolving onto it) or focus order on a listed mob takes it off the list and then runs (explicit order wins). `.tb cc` on one is refused (`ignored`).
+
+Replies are `ignore-begin`, one `ignore` record per entry (or per op), `ignore-end count=<lines> records=<records> verb= target= commander= ok= refused=`. `expires=` is the seconds left on the 30 min. In a build without the engine every form answers `error code=engine-not-built`.
+```
+ignore-begin #i1
+ignore commander=Mcmd verb=add status=ok guid=0000000000000000F130002C4A000001 name=Ashenvale%20Bear expires=1800 msg=Bots%20will%20leave%20Ashenvale%20Bear%20alone. #i1
+ignore-end count=1 records=1 verb=add target=party:Mtank commander=Mcmd ok=1 refused=0 #i1
+```
+```
+ignore-begin #i2
+ignore commander=Mcmd verb=list status=ok guid=0000000000000000F130002C4A000001 name=Ashenvale%20Bear expires=1710 #i2
+ignore-end count=1 records=1 verb=list target=Mtank commander=Mcmd ok=1 refused=0 #i2
+```
+```
+error code=duplicate cmd=ignore msg=the%20list%20already%20names%20that%20mob #i3
+```
+(The samples are specified, not yet live output: the first boot replaces them.)
+
+## 17. Wailing Caverns: the gossip step, the event holds and the end of the plan
 
 The run's plan grammar gains the two step kinds the Wailing Caverns event needed on ForeverCore (`forever/docs/RUN-WC-NOTES.md`).
 

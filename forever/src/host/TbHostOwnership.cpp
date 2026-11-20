@@ -13,6 +13,7 @@
 #include "behavior/PlayerConvenience.h"
 #include "runtime/AhBotSellerAccount.h"
 #include "runtime/BotActivityLease.h"
+#include "runtime/BotGearService.h"
 #include "runtime/ClaimLifecycle.h"
 #include "runtime/CommandedGroupQuery.h"
 #include "runtime/GuildOrderStore.h"
@@ -52,9 +53,28 @@ ClaimLifecycle& ClaimLifecycle::Instance()
     return instance;
 }
 
+bool ClaimLifecycle::IsClaimed(uint32_t /*botGuidLow*/) const
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
 bool ClaimLifecycle::IsClaimedByPlayer(uint32_t /*botGuidLow*/, uint32_t /*playerGuidLow*/) const
 {
     return false;
+}
+
+// ---- BotGearService (runtime/BotGearService.cpp): no pinned gear cap. ----
+BotGearService& BotGearService::Instance()
+{
+    static BotGearService instance;
+    return instance;
+}
+
+uint32_t BotGearService::PinnedCap(uint32_t /*guidLow*/) const
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return 0;
 }
 
 // ---- BotActivityLeaseManager (runtime/BotActivityLease.cpp): no bot holds a lease, every bot is Idle, except a COMMANDED bot (H4). ----
@@ -176,6 +196,30 @@ std::vector<DisenchantQueueEntry> DisenchantQueued(uint32_t /*botGuidLow*/)
 void NoteDeath(uint32_t /*botGuidLow*/)
 {
     tbcompat::Unported(tbcompat::Feature::PoolServices);
+}
+
+// The mail read: no relist ledger, so no mail is matched to one and none is claimed.
+void NoteTakenMailSender(uint32_t /*senderLow*/, uint32_t /*itemId*/, uint32_t /*count*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+}
+
+std::vector<RelistLedgerEntry> RelistEntries(uint32_t /*botGuidLow*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return {};
+}
+
+bool NoteRelistClaimed(uint32_t /*botGuidLow*/, uint32_t /*seq*/, uint32_t /*mailId*/, uint32_t /*gold*/, uint32_t /*items*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
+bool NoteRelistReceived(uint32_t /*botGuidLow*/, uint32_t /*seq*/, uint32_t /*gold*/, uint32_t /*items*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
 }
 
 void NoteDisenchantDropOff(uint32_t /*botGuidLow*/, uint32_t /*memberGuidLow*/, uint32_t /*nowMs*/)

@@ -5,9 +5,9 @@
 // and TbTestKit.cpp, which hold the engine-facing parts behind TORTOISEBOTS_SLICE1 exactly as TbEngineBrain.cpp does. Without the
 // option every handler answers "the engine is not built in".
 //
-// Threading: every function here runs on the world thread (a console command: World::ProcessCliCommands, World.cpp:3166, called at
-// World.cpp:2592; a GM chat command: World::UpdateSessions, World.cpp:3119, called at World.cpp:2421, the chat opcodes are
-// PROCESS_THREADUNSAFE, Opcodes.cpp:334-338; the engine tick: WorldScript::OnBeforeMapsUpdate, World.cpp:2470). The order queue is
+// Threading: every function here runs on the world thread (a console command: World::ProcessCliCommands, World.cpp:3182, called at
+// World.cpp:2608; a GM chat command: World::UpdateSessions, World.cpp:3135, called at World.cpp:2437, the chat opcodes are
+// PROCESS_THREADUNSAFE, Opcodes.cpp:334-338; the engine tick: WorldScript::OnBeforeMapsUpdate, World.cpp:2481). The order queue is
 // therefore plain data with no lock.
 #pragma once
 
@@ -38,6 +38,9 @@ bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     /
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb equip <bot> <item id> [replace] [#token]
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb itemscan <bot> <item id>... [#token]
+bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb statcensus [#token]
+bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb gear <bot|party [leader]> upgrade [#token]
+bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb quest <bot> status|accept|turnin|share|drop|reward ... [#token]
 
 // ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
 // Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.
@@ -57,6 +60,9 @@ uint8 WantedRole(ObjectGuid bot);
 // H4 (slice 4): the member of the dead bot's party (or its commander) that offered it a resurrection that is still pending; null when there is none or the
 // bot is alive. Defined with the slice only.
 Player* ResurrectOffererOf(Player* bot);
+// H6 (W6a): appends usage=, w=, worn=, wornw= to a `.tb itemscan` record. Defined with the slice only (TbPartyState.cpp).
+class Rec;
+void AppendItemScanEngine(Player* bot, uint32 itemId, Rec& rec);
 
 // ---- helpers shared by the three files (TbH3.cpp) ----
 // A command's words (whitespace separated) and its echo token: the last word that starts with '#' is taken out of the words and

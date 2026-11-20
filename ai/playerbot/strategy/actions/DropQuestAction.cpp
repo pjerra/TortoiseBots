@@ -62,37 +62,22 @@ bool CleanQuestLogAction::IsGreyIncomplete(Quest const* quest)
     // level, so such quests are never treated as grey.
     if (!quest || QuestLevelCompat(quest) <= 0)
         return false;
-    return bot->GetLevel() >= bot->GetQuestLevelForPlayer(quest) + 8;
+    return bot->GetLevel() >= QuestLevelForPlayerCompat(bot, quest) + 8;
 }
 
 bool CleanQuestLogAction::HasObjectiveProgress(Quest const* quest)
 {
-    auto const& statusMap = bot->getQuestStatusMap();
-    auto itr = statusMap.find(quest->GetQuestId());
-    if (itr == statusMap.end())
-        return false;
-    for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
-        if (itr->second.m_creatureOrGOcount[i] > 0)
-            return true;
-    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-        if (itr->second.m_itemcount[i] > 0)
-            return true;
-    return false;
+    return QuestHasObjectiveProgressCompat(bot, quest);
 }
 
 bool CleanQuestLogAction::HasRequiredDeliverItems(Quest const* quest)
 {
-    if (!quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
-        return true;
-    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-        if (quest->ReqItemCount[i] && bot->GetItemCount(quest->ReqItemId[i]) < quest->ReqItemCount[i])
-            return false;
-    return true;
+    return QuestHasRequiredDeliverItemsCompat(bot, quest);
 }
 
 bool CleanQuestLogAction::IsDroppable(Quest const* quest, QuestStatus status, bool upkeep, bool triage)
 {
-    if (!quest || quest->GetRequiredClasses())
+    if (!quest || QuestAllowableClassesCompat(quest))
         return false;
 
     // Refused quests (same predicate the accept gate uses, so the two
@@ -101,14 +86,8 @@ bool CleanQuestLogAction::IsDroppable(Quest const* quest, QuestStatus status, bo
     // holds can never pay off; COMPLETE war-effort turn-ins are never
     // dropped (a finished quest is finishable by definition - turn it in).
     {
-        bool hasItemObjective = false;
-        for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-            if (quest->ReqItemId[i] && quest->ReqItemCount[i])
-                hasItemObjective = true;
-        for (uint8 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
-            if (quest->ReqSourceId[i] && quest->ReqSourceCount[i])
-                hasItemObjective = true;
-        if (ai::IsBannedQuest(quest->GetQuestId(), !quest->IsActive()))
+        bool hasItemObjective = QuestHasItemObjectiveCompat(quest);
+        if (ai::IsBannedQuest(quest->GetQuestId(), !QuestIsActiveCompat(quest)))
             return true;
         if (upkeep && status != QUEST_STATUS_COMPLETE &&
             ai::IsWarEffortTurnIn(quest->GetZoneOrSort(), hasItemObjective))
@@ -122,7 +101,7 @@ bool CleanQuestLogAction::IsDroppable(Quest const* quest, QuestStatus status, bo
         return upkeep;
     if (status == QUEST_STATUS_INCOMPLETE)
     {
-        if (IsGreyIncomplete(quest) && !quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
+        if (IsGreyIncomplete(quest) && !QuestIsDeliverCompat(quest))
             return true;
         // Core reverts DELIVER quests to INCOMPLETE when the required items
         // are lost (Player::ItemRemovedQuestCheck), so plain !CanRewardQuest
@@ -139,15 +118,15 @@ bool CleanQuestLogAction::IsDroppable(Quest const* quest, QuestStatus status, bo
         // nearly full (Execute gates it); grey quests are left to the rules
         // above and COMPLETE quests never reach here.
         if (triage && upkeep && ai::QuestTriageShouldDrop((int)QuestLevelCompat(quest), bot->GetLevel(),
-            quest->GetType(), quest->GetSuggestedPlayers(), false,
+            QuestTypeCompat(quest), quest->GetSuggestedPlayers(), false,
             quest->GetZoneOrSort(), bot->GetZoneId()))
             return true;
         return false;
     }
-    if (status == QUEST_STATUS_COMPLETE && upkeep && !bot->CanRewardQuest(quest, false))
+    if (status == QUEST_STATUS_COMPLETE && upkeep && !CanRewardQuestCompat(bot, quest, false))
     {
-        if (quest->GetRewOrReqMoney() < 0 &&
-            bot->GetMoney() < uint32(-quest->GetRewOrReqMoney()))
+        if (QuestRewOrReqMoneyCompat(quest) < 0 &&
+            bot->GetMoney() < uint32(-QuestRewOrReqMoneyCompat(quest)))
             return false;
         return true;
     }
@@ -204,8 +183,8 @@ bool CleanQuestLogAction::Execute(Event& event)
         // is off or the bot is owned: they can never pay off, and IsDroppable
         // returns them before any upkeep-gated branch.
         bool drop = IsDroppable(quest, status, upkeep, false);
-        if (!drop && quest && ai::IsBannedQuest(questId, !quest->IsActive()))
-            drop = !quest->GetRequiredClasses();
+        if (!drop && quest && ai::IsBannedQuest(questId, !QuestIsActiveCompat(quest)))
+            drop = !QuestAllowableClassesCompat(quest);
         if (!drop)
             continue;
         // Issue #872: an autonomous alt only abandons quests it took itself.
@@ -241,7 +220,7 @@ bool CleanQuestLogAction::Execute(Event& event)
             if (!IsDroppable(quest, status, upkeep, true))
                 continue;
             int rank = ai::QuestTriageRank((int)QuestLevelCompat(quest), bot->GetLevel(),
-                quest->GetType(), quest->GetSuggestedPlayers(),
+                QuestTypeCompat(quest), quest->GetSuggestedPlayers(),
                 quest->GetZoneOrSort(), bot->GetZoneId(), HasObjectiveProgress(quest));
             // A quest IsDroppable accepts for another reason (rank 0) goes last.
             candidates.emplace_back(rank, questId);

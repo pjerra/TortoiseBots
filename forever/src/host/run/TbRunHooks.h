@@ -23,6 +23,8 @@ void LoadPlans();
 
 // Every run's plan pointer (`.tb plan reload` passes them as `inUse`, so a replaced table a run still reads is kept alive).
 std::vector<ai::DungeonPlan const*> PlansInUse();
+// The leader names of the runs that hold a plan (the same runs PlansInUse counts), by leader name: the `reload all` hook names them when it waits.
+std::vector<std::string> PlanRunLeaders();
 
 // S9 (C9): the group's loot method in the policy's words (group | ffa | rr | master | nbg; none for a method the policy does not know, the core's personal loot).
 std::string LootMethodWord(Group const* group);

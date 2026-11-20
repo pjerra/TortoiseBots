@@ -462,6 +462,66 @@ static void TestGossip()
     CHECK(m.ok && m.listIndex == 0);
 }
 
+static void TestGossipAndCommanderP6()
+{
+    namespace GO = ::TortoiseBots::GossipOrder;
+    // Plain gossip option vs service option (vendor = 3) vs coded option:
+    std::vector<GO::Option> menu = {
+        tk::MakeGossipOption("Open the gate", 0, false),
+        tk::MakeGossipOption("Browse your goods.", 3, false),
+        tk::MakeGossipOption("Enter secret code", 0, true),
+    };
+    GO::Request req;
+    req.entry = 7607;
+    req.bot = "Mtank";
+    // Valid plain option by 1-based index:
+    req.byIndex = true;
+    req.index = 1;
+    GO::Match m = GO::MatchOption(menu, req);
+    CHECK(m.ok && m.listIndex == 0);
+    // Service option refused:
+    req.index = 2;
+    m = GO::MatchOption(menu, req);
+    CHECK(!m.ok && m.code == GO::kCodeNoOption);
+    // Coded option refused:
+    req.index = 3;
+    m = GO::MatchOption(menu, req);
+    CHECK(!m.ok && m.code == GO::kCodeNoOption);
+    // Out-of-bounds option id refused (never selected):
+    req.index = 99;
+    m = GO::MatchOption(menu, req);
+    CHECK(!m.ok && m.code == GO::kCodeNoOption);
+    // By text:
+    req.byIndex = false;
+    req.text = "open the gate";
+    m = GO::MatchOption(menu, req);
+    CHECK(m.ok && m.listIndex == 0);
+
+    // Gossip task walk -> BeginAct -> final refusal (invalid option) or timeout:
+    tk::TaskRec g = tk::MakeRec(tk::Kind::Gossip, false, false, 0, 12.0f);
+    tk::Obs o = Walking(12.0f);
+    CHECK(tk::Advance(g, o, RC::kTaskTickMs).what == tk::Do::OrderWalk);
+    o.inRange = true;
+    o.distance = 2.0f;
+    CHECK(tk::Advance(g, o, RC::kTaskTickMs).what == tk::Do::BeginAct);
+    tk::NoteActStart(g, false, true, GO::kCodeNoOption, "No option 99.");
+    tk::Step s = tk::Advance(g, o, RC::kTaskTickMs);
+    CHECK(s.what == tk::Do::Fail && s.code == GO::kCodeNoOption);
+
+    // Already-looted corpse / empty loot -> ERR (never ACK):
+    tk::TaskRec emptyLoot = tk::MakeRec(tk::Kind::Loot, true, true, 0, 2.0f);
+    tk::Obs lo = Walking(2.0f);
+    lo.inRange = true;
+    CHECK(tk::Advance(emptyLoot, lo, RC::kTaskTickMs).what == tk::Do::BeginAct);
+    tk::NoteActStart(emptyLoot, false, true, RC::kCodeFailed, std::string(tk::LootEmptyText()) + " on this corpse.");
+    s = tk::Advance(emptyLoot, lo, RC::kTaskTickMs);
+    CHECK(s.what == tk::Do::Fail && s.code == RC::kCodeFailed && s.message.find(tk::LootEmptyText()) != std::string::npos);
+
+    // Verb names:
+    CHECK(std::string(tk::VerbName(tk::Verb::Gossip)) == "gossip");
+    CHECK(std::string(tk::VerbName(tk::Verb::Use)) == "use");
+}
+
 int main()
 {
     TestGrammar();
@@ -475,6 +535,8 @@ int main()
     TestChestCastBudget();
     TestTargets();
     TestExecutorTexts();
+    TestGossip();
+    TestGossipAndCommanderP6();
     std::printf("test_run_tasks: %d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

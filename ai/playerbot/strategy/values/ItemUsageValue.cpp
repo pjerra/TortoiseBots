@@ -802,7 +802,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
     ChatHelper* chat = ai->GetChatHelper();
     ItemPrototype const* itemProto = itemQualifier.GetProto();
 
-    if (bot->CanUseItem(GetItemTemplateCompat(itemProto)) != EQUIP_ERR_OK)
+    if (CanUseItemForEquipCompat(bot, itemProto) != EQUIP_ERR_OK)
         return ItemUsage::ITEM_USAGE_NONE;
 
     if (itemProto->InventoryType == INVTYPE_NON_EQUIP)

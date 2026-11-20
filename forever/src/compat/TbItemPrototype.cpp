@@ -390,8 +390,8 @@ ItemPrototype const* Find(uint32 entry)
 }
 }  // namespace
 
-// Filled once, from the item store that World::SetInitialWorldSettings has loaded (World.cpp:1608; item_classic_block at
-// World.cpp:1631) just before the world goes online (Main.cpp:372). The container is not modified again, so the lookups
+// Filled once, from the item store that World::SetInitialWorldSettings has loaded (World.cpp:1622; item_classic_block at
+// World.cpp:1645) just before the world goes online (Main.cpp:372). The container is not modified again, so the lookups
 // read it without the lock; the release store publishes the fill to the map threads.
 void FillAll()
 {

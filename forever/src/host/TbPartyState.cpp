@@ -3,6 +3,7 @@
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
 #include "host/TbPet.h"
+#include "host/TbHostTown.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbCc.h"
@@ -14,10 +15,12 @@
 #include "compat/botpch_forever.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <set>
 #include "Config.h"
 #include "Group.h"
+#include "Item.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "Corpse.h"
@@ -30,9 +33,12 @@
 #include "compat/TbCompat_Unit.h"
 #include "compat/TbCompat_P.h"
 #include "compat/TbCompat_V.h"
+#include "compat/TbCompat_W6.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/policy/death/SafeRevivePolicy.h"
 #include "PlayerbotAIStorage.h"
 
@@ -326,6 +332,16 @@ Rec StateRec(Player* bot, Readiness& ready)
     // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
     // a new slot when two or fewer are free.
     rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());
+    uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);
+    if (!specId)
+        specId = sRandomItemMgr.GetFallbackSpecId(bot->GetClass());
+    rec.S("spec", sRandomItemMgr.GetSpecName(specId));
+    std::vector<std::vector<std::string>> gear;
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            gear.push_back({std::to_string(slot), std::to_string(item->GetEntry())});
+    rec.LP("gear", gear);
+    rec.N("mail", tbhost::town::GetUnreadMailCount(bot));
 
     // ---- W1 (world life): the free flag and what the bot has done since login ----
     rec.B("free", lifeInfo.free).N("kills", lifeInfo.kills).N("deaths", lifeInfo.deaths);
@@ -640,6 +656,117 @@ bool MemberKnowsOocResurrection(Player* member)
         case CLASS_DRUID: return ai->HasSpell("revive");
         default: return false;
     }
+}
+
+namespace
+{
+char const* UsageName(ai::ItemUsage usage)
+{
+    switch (usage)
+    {
+        case ai::ItemUsage::ITEM_USAGE_NONE: return "NONE";
+        case ai::ItemUsage::ITEM_USAGE_EQUIP: return "EQUIP";
+        case ai::ItemUsage::ITEM_USAGE_BAD_EQUIP: return "BAD_EQUIP";
+        case ai::ItemUsage::ITEM_USAGE_BROKEN_EQUIP: return "BROKEN_EQUIP";
+        case ai::ItemUsage::ITEM_USAGE_QUEST: return "QUEST";
+        case ai::ItemUsage::ITEM_USAGE_SKILL: return "SKILL";
+        case ai::ItemUsage::ITEM_USAGE_USE: return "USE";
+        case ai::ItemUsage::ITEM_USAGE_GUILD_TASK: return "GUILD_TASK";
+        case ai::ItemUsage::ITEM_USAGE_DISENCHANT: return "DISENCHANT";
+        case ai::ItemUsage::ITEM_USAGE_AH: return "AH";
+        case ai::ItemUsage::ITEM_USAGE_BROKEN_AH: return "BROKEN_AH";
+        case ai::ItemUsage::ITEM_USAGE_KEEP: return "KEEP";
+        case ai::ItemUsage::ITEM_USAGE_VENDOR: return "VENDOR";
+        case ai::ItemUsage::ITEM_USAGE_AMMO: return "AMMO";
+        case ai::ItemUsage::ITEM_USAGE_FORCE_NEED: return "FORCE_NEED";
+        case ai::ItemUsage::ITEM_USAGE_FORCE_GREED: return "FORCE_GREED";
+    }
+    return "NONE";
+}
+}
+
+void AppendItemScanEngine(Player* bot, uint32 itemId, Rec& rec)
+{
+    ai::ItemQualifier qual(itemId);
+    if (PlayerbotAIStorage::Instance().GetAI(bot))
+        rec.S("usage", UsageName(ai::ItemUsageValue::QueryItemUsageForEquip(qual, bot)));
+    rec.N("w", sRandomItemMgr.ItemStatWeight(bot, qual));
+    ItemPrototype const* botProto = tbcompat::ItemProto(itemId);
+    if (Item* worn = botProto ? ai::ItemUsageValue::CurrentItemInSlot(botProto, bot) : nullptr)
+        rec.N("worn", worn->GetEntry()).N("wornw", sRandomItemMgr.ItemStatWeight(bot, worn));
+}
+
+// ---- `.tb gear <bot|party [leader]> upgrade [#token]` ----
+
+bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "gear"))
+        return false;
+    bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party" && Lower(args.w[1]) != "upgrade";
+    size_t pos = 0;
+    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
+    if (!who.ok())
+        return Fail(handler, args, "gear", who.code, who.detail);
+    if (pos >= args.w.size())
+        return Fail(handler, args, "gear", "missing-verb", "upgrade");
+    std::string const verb = Lower(args.w[pos++]);
+    if (verb != "upgrade")
+        return Fail(handler, args, "gear", "unknown-verb", args.w[pos - 1]);
+    if (pos < args.w.size())
+        return Fail(handler, args, "gear", "unexpected-argument", args.w[pos]);
+
+    for (Player* bot : who.bots)
+    {
+        PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+        if (!ai || !ai->GetAiObjectContext())
+            return Fail(handler, args, "gear", "no-engine", bot->GetName() + " has no running engine (`.tb engine <bot> on`)");
+        if (bot->IsInCombat())
+            return Fail(handler, args, "gear", "in-combat", bot->GetName() + " is in combat");
+    }
+
+    uint32 totalChanged = 0;
+    Reply reply(handler, args, "gear");
+    reply.Begin();
+    for (Player* bot : who.bots)
+    {
+        std::array<uint32, EQUIPMENT_SLOT_END> before{};
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                before[slot] = item->GetEntry();
+
+        PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+        {
+            // Explicit order: allow commanded bots through MayAutoEquipUpgradesCompat for this call only.
+            tbs_w6::ScopedExplicitEquipOrder explicitOrder;
+            ai->DoSpecificAction("equip upgrades", Event("tb gear", std::string(), bot), true);
+        }
+
+        uint32 botChanged = 0;
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        {
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            uint32 const afterId = item ? item->GetEntry() : 0;
+            if (afterId != before[slot])
+            {
+                ++botChanged;
+                ++totalChanged;
+                Rec rec("gear");
+                rec.S("bot", bot->GetName()).N("slot", slot).N("old", before[slot]).N("new", afterId);
+                reply.Line(rec);
+            }
+        }
+        if (botChanged == 0)
+        {
+            Rec rec("gear");
+            rec.S("bot", bot->GetName()).N("changed", 0);
+            reply.Line(rec);
+        }
+    }
+    Rec end("gear");
+    end.P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("changed", totalChanged);
+    reply.End(end);
+    return true;
 }
 }
 }

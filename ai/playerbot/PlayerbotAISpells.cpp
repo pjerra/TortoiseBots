@@ -19,6 +19,7 @@
 #include "playerbot/strategy/values/MountValues.h"
 #include "playerbot/MountDismountPolicy.h"
 #include "strategy/actions/BossTacticsActions.h"
+#include "playerbot/policy/combat/CcPermissionPolicy.h"
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -473,8 +474,25 @@ SpellCastResult PlayerbotAI::CheckSpellTargetAlignment(SpellEntry const* spellIn
     return SPELL_CAST_OK;
 }
 
+namespace
+{
+// A denied crowd-control kind refuses the cast before any other check, so the
+// rotation moves on to its next spell. The mask is 0 unless the host pushed
+// an order, which keeps this free for every bot that has no setting.
+bool CcKindDenied(PlayerbotAI* ai, std::uint32_t kind, SpellCastResult* checkResult)
+{
+    if (!ai || kind == 0 || (ai->GetCcDeniedMask() & kind) == 0)
+        return false;
+    if (checkResult)
+        *checkResult = SPELL_FAILED_NOT_READY;
+    return true;
+}
+} // namespace
+
 bool PlayerbotAI::CanCastSpell(std::string name, Unit* target, uint8 effectMask, Item* itemTarget, bool ignoreRange, bool ignoreInCombat, bool ignoreMount, SpellCastResult* checkResult)
 {
+    if (CcKindDenied(this, CcPermissions::KindFromSpellName(name), checkResult))
+        return false;
     return CanCastSpell(aiObjectContext->GetValue<uint32>("spell id", name)->Get(), target, 0, true, itemTarget, ignoreRange, ignoreInCombat, ignoreMount, checkResult);
 }
 
@@ -492,8 +510,18 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, uint8 effectMask, b
     return canCast;
 }
 
+
 bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMask, bool checkHasSpell, Item* itemTarget, bool ignoreRange, bool ignoreInCombat, bool ignoreMount, SpellCastResult* checkResult)
 {
+    // Denied crowd-control kinds first: before the pet bypass below (a
+    // succubus casts Seduction through its own spellbook) and before any
+    // other check. The name comes from the template, so its case varies.
+    if (GetCcDeniedMask() != 0 && spellid)
+    {
+        SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellid);
+        if (spellInfo && CcKindDenied(this, CcPermissions::KindFromSpellName(spellInfo->SpellName[0].c_str()), checkResult))
+            return false;
+    }
     // An opted-in Fankriss DPS casts no area, chain or swing-copy spell
     // while the boss is engaged.
     if (ViscidusBlocksSpell(this, spellid, target) || FankrissBlocksAoe(this, spellid) || PatchwerkOpeningBlocksSpell(this, spellid, target))
