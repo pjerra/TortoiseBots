@@ -30,8 +30,23 @@ inline std::string QuestTitleCompat(Quest const* quest)
 
 inline void RemoveQuestFromLogCompat(Player* bot, uint32 questId)
 {
-    if (bot)
-        bot->AbandonQuest(questId);
+    if (!bot || !questId)
+        return;
+    if (bot->GetSession())
+    {
+        for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            if (bot->GetQuestSlotQuestId(slot) == questId)
+            {
+                WorldPackets::Quest::QuestLogRemoveQuest packet{ WorldPacket(CMSG_QUEST_LOG_REMOVE_QUEST) };
+                packet.Entry = static_cast<uint8>(slot);
+                bot->GetSession()->HandleQuestLogRemoveQuest(packet);
+                return;
+            }
+        }
+    }
+    bot->RemoveActiveQuest(questId);
+    bot->AbandonQuest(questId);
 }
 
 inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* quest)
@@ -156,6 +171,7 @@ inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* bot, Quest const* q
 inline uint32 QuestMenuCountCompat(QuestMenu const& menu) { return menu.GetMenuItemCount(); }
 inline uint32 QuestMenuItemIdCompat(QuestMenuItem const& item) { return item.QuestId; }
 inline uint8 QuestMenuItemIconCompat(QuestMenuItem const& item) { return item.QuestIcon; }
+inline bool QuestMenuItemIsAvailableCompat(QuestMenuItem const& item) { return item.QuestIcon == 2; }
 
 inline bool ObjectHasQuestCompat(WorldObject const* obj, uint32 questId)
 {

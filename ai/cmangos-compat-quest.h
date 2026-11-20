@@ -101,6 +101,7 @@ inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* bot, Quest const* q
 inline uint32 QuestMenuCountCompat(QuestMenu const& menu) { return menu.MenuItemCount(); }
 inline uint32 QuestMenuItemIdCompat(QuestMenuItem const& item) { return item.m_qId; }
 inline uint8 QuestMenuItemIconCompat(QuestMenuItem const& item) { return item.m_qIcon; }
+inline bool QuestMenuItemIsAvailableCompat(QuestMenuItem const& item) { return item.m_qIcon == DIALOG_STATUS_AVAILABLE; }
 
 inline bool ObjectHasQuestCompat(WorldObject const* obj, uint32 questId)
 {

@@ -118,6 +118,14 @@ inline Result UnportedBlockResultCompat(tbcompat::Feature, Result, Block&& block
 inline void RegisterDirectPacketCasesCompat() {}
 
 inline uint32 WorldAverageDiffCompat() { return sWorld.GetAverageDiff(); }
+
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+{
+    char* source = (char*)str.c_str();
+    char* cId = handler->ExtractKeyFromLink(&source, "Hquest");
+    return cId ? atol(cId) : 0;
+}
 inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(z); }
 
 
