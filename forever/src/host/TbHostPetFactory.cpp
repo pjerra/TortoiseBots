@@ -189,10 +189,19 @@ void PlayerbotFactory::InitPet(bool saveToDb)
 {
     using TortoiseBots::p11::GiveResult;
     GiveResult const result = TortoiseBots::p11::GiveHunterPet(bot, saveToDb);
-    // Not a hunter, too low, a pet already out or stored are ordinary answers of the periodic "initialize pet" check; anything else is worth a line.
+    // Not a hunter, too low, a pet already out or stored are ordinary answers of the periodic "initialize pet" check; anything else is worth a line, once per bot
+    // and answer (the check asks again every few seconds while there is no pet).
     if (result != GiveResult::Ok && result != GiveResult::NotHunter && result != GiveResult::LevelTooLow && result != GiveResult::HasPet &&
         result != GiveResult::HasStoredPet)
-        TC_LOG_WARN("tortoisebots", "pet: no pet for {}: {}", bot->GetName(), TortoiseBots::p11::GiveResultText(result));
+    {
+        static std::map<ObjectGuid, GiveResult> logged;
+        auto const itr = logged.find(bot->GetGUID());
+        if (itr == logged.end() || itr->second != result)
+        {
+            logged[bot->GetGUID()] = result;
+            TC_LOG_WARN("tortoisebots", "pet: no pet for {}: {}", bot->GetName(), TortoiseBots::p11::GiveResultText(result));
+        }
+    }
 }
 
 // "Is this bot's pet trained by the module" (AiPlayerbot.PetAutoTrain, the key the legacy code names "pool bots and hires"; PetAutoTrainAlts is the player's
