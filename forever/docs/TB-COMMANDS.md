@@ -430,3 +430,23 @@ run-end count=2 records=2 verb=events lead=Mtank last=31 #r3
 error code=not-commanded cmd=run msg=Mdpsb%20has%20no%20commander%20yet%3A%20bind%20the%20party%20first%20%28.tb%20master%20party%20Mtank%20%3Ccommander%3E%29 #r4
 ```
 **The samples above were built by hand from the encoder's rules, as section 9's were; the first boot replaces them with real output.**
+
+## 11. Commander port, package P1: the binding card
+
+`.tb commander status [<commander>] [#token]` shows every commander card (or the one commander's). A card is read from h3's table (the bots `.tb master` bound, section 4) and from the run table (section 10); the module keeps beside them only when a card was first seen, the lead `.tb master party <leader> <commander>` named, and the log of the commander's last orders. Nothing here binds or releases: that stays `.tb master`.
+
+* **One card per commander.** The bots bound to one commander are one card wherever they stand; two commanders whose bots share a party are two cards.
+* **One card per run.** A run shows once. When nobody commands the run's tank bot the card is the run's own binding (`system=yes`, the tank is the `cmd=`); when the tank was commanded before the run (`.tb master party Mtank Mcmd`), the card is that commander's and the run's members are folded into it. The `run` record of `.tb run status` follows the card's own lines.
+* **Records.** `binding cmd= cguid= online= lead= [group=] bound= bots= system= inparty= raid= playerled= boundat= orders= [map= pos=]`: `bound` counts the guids bound, `bots` the ones in the world, `group` is the lead's party counter of this session (opaque: it restarts at 1 and is never stored), `boundat` unix seconds. `member cmd= bot= guid= class= role= level= hp= maxhp= power= maxpower= ptype= alive= lead= map= zone= pos= [sub=]` (the lead first; `sub` is the raid subgroup). `order cmd= at= verb= detail= ok= result=` (oldest first, at most 8; `ok=yes` means queued, `result` is `queued N of M[, refused K]` or `<code>: <message>`; the run's own orders are logged too, an exact repeat of the last one is not).
+* **Errors.** `missing-verb`, `unknown-verb`, `unexpected-argument`, `no-binding` (the named commander commands no bots), `engine-not-built`.
+* **The dashboard.** The COMMANDERS datagram for these cards is built by the Turtle builder (`runtime/CommanderTelemetry.h`) from `cmd::AppendBindings` (forever/src/host/cmd/TbCmdBinding.h); the dash-runs collector calls it (forever/docs/CMD-P1-NOTES.md).
+
+```
+commander-begin #c1
+binding cmd=Mcmd cguid=21 online=yes lead=Mtank group=3 bound=5 bots=5 system=no inparty=no raid=no playerled=no boundat=1763600000 orders=1 map=389 pos=3.5,-7.3,0.0 #c1
+member cmd=Mcmd bot=Mtank guid=10 class=warrior role=tank level=18 hp=900 maxhp=1000 power=20 maxpower=100 ptype=rage alive=yes lead=yes map=389 zone=2437 pos=1.0,2.0,3.0 #c1
+(... four more member records ...)
+order cmd=Mcmd at=1763600100 verb=stay detail= ok=yes result=queued%205%20of%205 #c1
+commander-end count=7 records=7 bindings=1 #c1
+```
+**The sample is built by hand from the encoder's rules; the live boot replaces it.**

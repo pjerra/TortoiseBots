@@ -1,0 +1,66 @@
+# Commander port, package P1: the binding card
+
+Spec: `~/TortoiseBots-audit/FOREVER-COMMANDER-PORT-SPEC.md` (P1, section 5; decisions D1 and D2 in "Lead decisions"). Branch `cmd/p1` from `tbf/main` feab6c882.
+Command reference: `forever/docs/TB-COMMANDS.md` section 11.
+
+## What it is
+
+`.tb commander status [<commander>] [#token]` shows a COMMANDER CARD per commander: the binding, its bots (class, role, level, hp, power, position, raid
+subgroup), the commander (online, map, position), the lead, the party counter, `boundat`, the last orders, and for a card that runs the `run` record of
+`.tb run status`. The same cards are available to the dashboard as the Turtle `CommanderTelemetry::BindingInfo` (`cmd::AppendBindings`).
+
+## Files
+
+| File | What |
+|---|---|
+| `forever/src/host/cmd/TbCmdBindingPure.h` | pure: `BuildCards` (pairs + runs + metas -> cards), `MakeOrder`, `SplitRunOrder`, `RoleOfBrainLines`, `BindingOf` (card -> `CT::BindingInfo`). Standard library + `runtime/CommanderTelemetry.h` only |
+| `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | reads h3's table, the run table and the live players; `.tb commander status`; the three hooks; `AppendBindings`. With the option OFF the command answers `engine-not-built` and the hooks do nothing |
+| `forever/tools/cmd_binding_check.cpp` | the standalone check (36 checks, incl. the golden COMMANDERS datagram) |
+| `forever/tools/test_cmd_p1_wiring.py` | wiring pins; with `CMD_P1_MUTATE=1` (run on the VM) three mutations of the pure half must FAIL the check |
+| `forever/docs/TB-COMMANDS.md` section 11 | the reply records |
+
+## Hooks into other files (one line each)
+
+| File | Line | Why |
+|---|---|---|
+| `host/TbOrders.cpp` HandleMaster | `cmd::NoteMaster(who.bots, who.leader, commander);` before the end record | the lead named and `boundAt`; a release drops the record |
+| `host/TbOrders.cpp` HandleOrder | `cmd::NoteOrder(who.bots, verb, rest, queued, refused, firstRefusal);` before the end record; `firstRefusal` is set in the `refuse` lambda | the order log |
+| `host/run/TbRun.cpp` (the run tick) | `cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);` right after `Issue`, plus the include | the run's own orders in the log. The spec named `Issue` itself; the one caller is the better place until P3 lifts `Issue` to a `Party` (then move it into `Issue`) |
+| `TbScripts.cpp` | the `commander` row of the `.tb` table, plus the include | the command |
+
+## The binding rules as built
+
+* **h3's table is the only owner (D1).** The card code never writes a binding (`SetCommander`, `BindBotMaster` do not occur in it; the wiring test pins it).
+  It reads `h3::CommanderBindings()`, which already drops a binding that BotMgr no longer backs (a re-login lapses it by itself).
+* **One card per commander.** Keyed by the commander guid counter, never by a group (mutation `key`). A commander with bots in two groups is one card; two
+  commanders in one party are two.
+* **One card per run (the failing case).** A running (not ended) run is a card: key = the commander of the run's leader when there is one (the run never
+  rebinds its own leader), else the leader (`system=yes`). The pairs the run made (members -> tank) are dropped, so a run shows once (mutation `twice`); a
+  card that runs keeps its commander's other bots. A run the card code skips would lose `run` and `system` (mutation `skiprun`).
+* **D2: guids only.** Nothing stores a group number. `group` in the reply and the JSON is `group->GetGUID().GetCounter()` (the value `GroupIdW2` returns; the
+  helper is inlined here because `TbCompat_W2.h` is not reachable from host files without the wide-pass wrapper) read from the LEAD's live group at each
+  read; the lead is found by guid. `GetDbStoreId` does not occur (pinned). No database call.
+* **What is kept beside the table:** per commander `{lead guid, boundAt}` (pruned at the next read once no bound bot is left, and at a release), the order
+  log (T `OrderLog`, 8 per commander, 20 commanders; an exact repeat of the last order is not noted), a role cache (10 s).
+* **The lead:** the one `.tb master party <leader> <commander>` named and still bound, else the leader of the first bound bot's party, else the first bot.
+* **Orders logged:** `.tb order` once per commander the addressed bots are bound to (a bot of a run counts for the run's card: the tank's own commander, else
+  the tank); `ok=yes` when at least one bot queued it. The run's orders are logged under the same key with the executor's answer.
+
+## What the dashboard collector needs (not done here: `forever/src/dash/*` is another package)
+
+`dash/runs` builds one binding per run from the run table and nothing for a plain commander. To show every binding with orders (spec section 5, P1):
+1. in `Cycle()` after the run loop: `cmd::AppendBindings(bindings, shownRunLeaders);` where `shownRunLeaders` are the leader guid counters of the runs the
+   loop pushed (the lingering ended ones included), so a card whose lead is one of them is not shown twice;
+2. for the run bindings it builds itself: copy `orders` from the card of the same commander (`BindingInfo::orders`), because the run feed leaves them empty;
+   the commander is `h3::CommanderGuid(leader)` there already, the same key as here.
+No other change: the format is the Turtle one (golden datagram in the check).
+
+## Stand-ins and limits (they make the card show LESS)
+
+* mobs, objects, bosses, bot extras (cast, cc, debuffs, ready check) are not reported (`mobsReported=false`...): the card greys those layers out until P4.
+* `view` is false (the TBM addon view is cut, D5); raid layout is empty (P7).
+* An offline commander is named `offline #<guid>` (or its real name from the character cache); an offline bot is not listed in `bots` (`bound` counts it).
+
+## Gates
+
+See the report of the worker; lines are in the commit message of the notes commit.

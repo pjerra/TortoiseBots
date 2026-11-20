@@ -6,6 +6,7 @@
 
 #include <cctype>
 #include <string>
+#include <string_view>
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -290,7 +291,7 @@ std::vector<HostCard> Read(int64 nowUnix, uint32 nowMs)
     return out;
 }
 
-void Log(ObjectGuid commander, CT::OrderRecord rec)
+void NoteLog(ObjectGuid commander, CT::OrderRecord rec)
 {
     if (commander.IsEmpty())
         return;
@@ -352,7 +353,7 @@ void NoteOrder(std::vector<Player*> const& bots, std::string const& verb, std::s
         text += ", refused " + std::to_string(refused);
     int64 const now = int64(GameTime::GetGameTime());
     for (ObjectGuid key : keys)
-        Log(key, P::MakeOrder(now, verb, arg, ok, firstRefusal, ok ? text : std::string()));
+        NoteLog(key, P::MakeOrder(now, verb, arg, ok, firstRefusal, ok ? text : std::string()));
 }
 
 void NoteRunOrder(ObjectGuid leader, std::string const& order, bool accepted, std::string const& code, std::string const& text)
@@ -360,7 +361,7 @@ void NoteRunOrder(ObjectGuid leader, std::string const& order, bool accepted, st
     ObjectGuid const above = h3::CommanderGuid(leader);
     std::string verb, detail;
     P::SplitRunOrder(order, verb, detail);
-    Log(above.IsEmpty() ? leader : above, P::MakeOrder(int64(GameTime::GetGameTime()), verb, detail, accepted, code, text));
+    NoteLog(above.IsEmpty() ? leader : above, P::MakeOrder(int64(GameTime::GetGameTime()), verb, detail, accepted, code, text));
 }
 
 void AppendBindings(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32> const& runLeadersShown)
