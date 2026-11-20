@@ -1074,6 +1074,15 @@ TickTotals const& TickCost()
 
 void Update(uint32 diffMs)
 {
+    static uint32 accumulatedMs = 0;
+    accumulatedMs += diffMs;
+    bool const tick = accumulatedMs >= DungeonRun::kTickMs;
+    if (tick)
+        accumulatedMs = 0;
+    // An ended run has no tick of its own, so its unfinished cc clears retry here: before the empty-table return below, since the last
+    // run leaving the table is exactly when a pending clear must still be driven.
+    if (tick)
+        RetryPendingCc();
     if (Table().empty())
         return;
     // S9 (O9): the tasks (open, loot) look at their bots every 250 ms; the `come` orders they queue are the run's own, so the outside-order baseline moves past them.
@@ -1081,13 +1090,7 @@ void Update(uint32 diffMs)
     for (auto const& entry : Table())
         if (!Ended(*entry.second) && tasks::TakeQueuedOrders(entry.first))
             BaselineOrders(*entry.second);
-    static uint32 accumulatedMs = 0;
-    accumulatedMs += diffMs;
-    if (accumulatedMs < DungeonRun::kTickMs)
-        return;
-    accumulatedMs = 0;
-    RetryPendingCc();           // an ended run has no tick of its own, so its unfinished cc clears retry here
-    if (Table().empty())
+    if (!tick)
         return;
     uint32 const nowMs = GameTime::GetGameTimeMS();
     std::vector<RunRec*> live;
