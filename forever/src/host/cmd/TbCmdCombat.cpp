@@ -593,12 +593,6 @@ public:
         // Member on member (a charm, Mind Control): not the fight's numbers on either side.
     }
 
-    void OnHeal(Unit* healer, Unit* /*receiver*/, uint32& /*gain*/) override
-    {
-        // The outcome hook below carries the raw heal and the part that landed; this one only exists so the service's numbers come from one
-        // path (OnHealOutcome) and never twice.
-    }
-
     void OnHealOutcome(Unit* healer, Unit* /*target*/, uint32 /*spellId*/, uint32 raw, uint32 effective) override
     {
         CombatMonitorService& service = CombatMonitorService::Instance();

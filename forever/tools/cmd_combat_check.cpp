@@ -2,7 +2,7 @@
 // section 7 (P5): the fight id is stable for one fight, a wipe and leaving combat each end it, and the fight JSON is the Turtle format byte for
 // byte (the golden below was captured from runtime/CombatMonitorService.cpp, the Turtle file this build compiles unchanged in its payloads).
 //
-//   g++ -std=c++17 -O0 -DCOMBAT_MONITOR_TEST_CONFIG -Itools/tsan_stubs -I. -I.. \
+//   g++ -std=c++17 -O0 -DCOMBAT_MONITOR_TEST_CONFIG -Itools/tsan_stubs -I. \
 //       forever/tools/cmd_combat_check.cpp runtime/CombatMonitorService.cpp -o /tmp/cmd_combat_check -pthread
 //   /tmp/cmd_combat_check            (--print-golden dumps the fixture fight instead of checking it)
 //
@@ -22,10 +22,10 @@ struct PlayerbotAIConfig
     bool combatTimeline = false;
 };
 #define COMBAT_MONITOR_TEST_CONFIG 1
-#include "../runtime/CombatMonitorService.h"
+#include "runtime/CombatMonitorService.h"
 #undef COMBAT_MONITOR_TEST_CONFIG
 
-#include "host/cmd/TbCmdCombatPure.h"
+#include "forever/src/host/cmd/TbCmdCombatPure.h"
 
 PlayerbotAIConfig sPlayerbotAIConfig;
 
@@ -37,7 +37,7 @@ namespace P = TortoiseBots::cmd::combat::pure;
 
 // The Turtle fight record of the fixture above (runtime/CombatMonitorService.cpp + CombatMonitorPolicy.h, captured with --print-golden): the
 // dashboard's fight debugger reads these keys, so a change to one of them must be a deliberate format change on both cores.
-static char const* const kGoldenFight = R"JSON()JSON";
+static char const* const kGoldenFight = R"JSON({"v":12,"session":77,"seq":1,"ts":1700013000,"type":"COMBAT_FIGHT","fight":{"id":"70-1","commander":"Mcmd","commander_guid":5,"group":70,"map":389,"plan":"ragefire_chasm","leg":"entrance","step":4,"kind":"boss","start":0,"dur_ms":8000,"outcome":"kill","boss":11517,"boss_name":"Oggleflint","boss_phase":1,"boss_phase_entry":11517,"planned":[11517],"engaged":[{"e":11517,"n":"Oggleflint","c":1}],"dropped":0,"bots":[{"name":"Tanky","guid":7,"class":"warrior","role":"tank","sub":-1,"dmg":150,"heal":0,"over":0,"taken":0,"casts":1,"heal_casts":0,"deaths":0,"spells":[{"n":"Sunder Armor","c":1}],"tail_spells":[]},{"name":"Healy","guid":9,"class":"priest","role":"healer","sub":-1,"dmg":0,"heal":200,"over":50,"taken":80,"casts":0,"heal_casts":0,"deaths":0,"spells":[],"tail_spells":[]}],"debuffs":{"sampled_s":4,"up_s":{"sunder":2}},"deaths":[]}})JSON";
 
 static int checks = 0;
 static int failed = 0;
@@ -83,7 +83,12 @@ static uint64_t NextSeq()
     return ++g_seq;
 }
 
-// The one COMBAT_FIGHT datagram of a group (the service may build several when the budget splits it: the check counts them).
+static std::string FightId(std::string const& payload);
+
+// The COMBAT_FIGHT datagrams of a group, each fight once: the service hands a finished fight out twice (UDP loss), and the dashboard's store
+// files a fight by its id, so the check does the same.
+static std::set<std::string> g_seenFights;
+
 static std::vector<std::string> FightsOf(CombatMonitorService& svc, uint32_t group, int64_t ts)
 {
     std::vector<std::string> out;
@@ -91,7 +96,8 @@ static std::vector<std::string> FightsOf(CombatMonitorService& svc, uint32_t gro
     std::vector<std::string> mine;
     for (std::string const& payload : out)
         if (payload.find("\"type\":\"COMBAT_FIGHT\"") != std::string::npos &&
-            payload.find("\"group\":" + std::to_string(group) + ",") != std::string::npos)
+            payload.find("\"group\":" + std::to_string(group) + ",") != std::string::npos &&
+            g_seenFights.insert(FightId(payload)).second)
             mine.push_back(payload);
     return mine;
 }
@@ -106,6 +112,22 @@ static std::vector<std::string> EventsOf(CombatMonitorService& svc, uint32_t gro
             payload.find("\"group\":" + std::to_string(group) + ",") != std::string::npos)
             mine.push_back(payload);
     return mine;
+}
+
+// The fight's `start` is the unix second the sample that opened it ran in: the one wall-clock field of the record. Both sides of the golden are
+// compared with it zeroed, so the fixture checks every other byte.
+static std::string NormalizeStart(std::string payload)
+{
+    std::string const tag = "\"start\":";
+    std::string::size_type pos = payload.find(tag);
+    if (pos == std::string::npos)
+        return payload;
+    pos += tag.size();
+    std::string::size_type end = pos;
+    while (end < payload.size() && payload[end] >= '0' && payload[end] <= '9')
+        ++end;
+    payload.replace(pos, end - pos, "0");
+    return payload;
 }
 
 static std::string FightId(std::string const& payload)
@@ -127,7 +149,8 @@ static void TestPure()
     CHECK(P::Due(1000, 0, P::kSampleMs));            // the first pass after a start
     CHECK(!P::Due(1999, 1000, P::kSampleMs));
     CHECK(P::Due(2000, 1000, P::kSampleMs));
-    CHECK(P::Due(5, 4294967290u, P::kCastPollMs));   // the world timer wrapped: 11 ms elapsed
+    CHECK(!P::Due(5, 4294967290u, P::kCastPollMs));  // the world timer wrapped: 11 ms of 250 elapsed
+    CHECK(P::Due(300, 4294967290u, P::kCastPollMs));   // ... and 306 ms of 250 after the same wrap
     CHECK(P::RankOf(true, true) == P::Rank::Boss);
     CHECK(P::RankOf(false, true) == P::Rank::Elite);
     CHECK(P::RankOf(false, false) == P::Rank::None);
@@ -199,7 +222,7 @@ static void TestGoldenFight()
     // The whole record: the Turtle format (one bot 150 damage done, one 80 taken, 200 healing with 50 overheal, one cast).
     std::string const golden =
         kGoldenFight;
-    if (fight != golden)
+    if (NormalizeStart(fight) != golden)
     {
         ++failed;
         std::fprintf(stderr, "FAIL golden fight\n  got:      %s\n  expected: %s\n", fight.c_str(), golden.c_str());
@@ -213,13 +236,14 @@ static void TestWipeEndsFight()
     uint32_t const group = 71;
     svc.Refresh(group, Members(), true, false, Ctx(), {}, 1000);
     svc.OnDamage(7, 0, 30, "Tanky", 11517, 4242, "Oggleflint");
-    CHECK(!svc.WindowJson(1000).empty());
+    CHECK(!svc.WindowJson(group).empty());
+    svc.Refresh(group, Members(), true, false, Ctx(), {}, 4000);
+    svc.Refresh(group, Members(), true, false, Ctx(), {}, 6000);
+    // The last member's death ends the fight at the last sample: 5 s, the shortest fight that is kept.
     svc.OnDeath(7, 0, "Oggleflint", 1.0f, 2.0f, 3.0f, 0, 0);
     svc.OnDeath(9, 0, "Oggleflint", 4.0f, 5.0f, 6.0f, 0, 0);
-    svc.Refresh(group, Members(), true, true, Ctx(), {}, 2000);   // both dead, still in combat
-    CHECK(!svc.InFight(group) || !svc.WindowJson(2000).empty());
-    svc.Refresh(group, Members(), false, true, Ctx(), {}, 3000);  // out of combat
-    svc.Refresh(group, Members(), false, true, Ctx(), {}, 7000);
+    CHECK(!svc.InFight(group) || !svc.WindowJson(group).empty());
+    svc.Refresh(group, Members(), false, true, Ctx(), {}, 7000);  // out of combat
     std::vector<std::string> fights = FightsOf(svc, group, 1700017000);
     CHECK_EQ(fights.size(), size_t(1));
     if (!fights.empty())
@@ -283,8 +307,9 @@ static void TestEventsAndTimeline()
     if (!fights.empty())
     {
         CHECK_EQ(FightId(fights.front()), std::string("73-1"));
-        CHECK(fights.front().find("\"timeline\":{") != std::string::npos);
-        CHECK(fights.front().find("\"24321\"") != std::string::npos);
+        CHECK(fights.front().find("\"boss_hp\":[") != std::string::npos);
+        CHECK(fights.front().find("\"auras\":[") != std::string::npos);
+        CHECK(fights.front().find(",24321,") != std::string::npos);
     }
     sPlayerbotAIConfig.combatTimeline = false;
     svc.SetTimelineWatch({});
@@ -297,7 +322,7 @@ int main(int argc, char** argv)
     if (print)
     {
         std::string const fight = Golden();
-        std::printf("%s\n", fight.c_str());
+        std::printf("%s\n", NormalizeStart(fight).c_str());
         return fight.empty() ? 1 : 0;
     }
     TestPure();
