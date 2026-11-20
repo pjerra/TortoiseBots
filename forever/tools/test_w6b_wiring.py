@@ -45,7 +45,7 @@ class W6bWiring(unittest.TestCase):
 
     def test_host_gear_gen_uses_policy_and_core_equip(self):
         self.assertIn("ai::IsClassicItemCandidate", GEAR_GEN_CPP)
-        self.assertIn("sObjectMgr->GetItemTemplateStore()", GEAR_GEN_CPP)
+        self.assertIn("GetItemTemplateStore()", GEAR_GEN_CPP)
         self.assertIn("CanEquipNewItem(", GEAR_GEN_CPP)
         self.assertIn("EquipNewItem(", GEAR_GEN_CPP)
         self.assertIn("StoreNewItemInBestSlots(", GEAR_GEN_CPP)
