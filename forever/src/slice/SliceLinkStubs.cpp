@@ -401,17 +401,7 @@ std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "ga
 // the "not there" value of the legacy code, so the item usage value classifies LESS: no equip upgrade is ever found (the stat weights are 0 and no
 // spec may wear anything), so nothing is looted or rolled for equipping, and no mount, auction listing or repair price is known.
 // =====================================================================================================================
-// RandomItemMgr.cpp (feature "random item tables"): the weights and the spec rules. Absent = weight 0, no spec wears the item, no spec at all.
-uint32 RandomItemMgr::ItemStatWeight(Player*, ai::ItemQualifier&) { NoteItems(); return 0; }
-uint32 RandomItemMgr::ItemStatWeight(Player*, Item*) { NoteItems(); return 0; }
-bool RandomItemMgr::ShouldEquipArmorForSpec(uint8, uint8, ItemPrototype const*) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSpec(Player const*, uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSpec(uint8, uint8, ItemPrototype const*, bool) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSlot(Player const*, uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
-bool RandomItemMgr::ShouldEquipWeaponForSlot(uint8, uint8, ItemPrototype const*, uint8, bool) { NoteItems(); return false; }
-uint32 RandomItemMgr::GetFallbackSpecId(uint8) { NoteItems(); return 0; }
-std::string RandomItemMgr::GetSpecName(uint32) { NoteItems(); return std::string(); }
-ai::ItemStatFamily RandomItemMgr::GetSpecStatFamily(uint32) { NoteItems(); return ai::ItemStatFamily::None; }
+// RandomItemMgr.cpp (feature "random item tables"): weights and spec rules now live in RandomItemWeights.cpp.
 // RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): the pool's price multipliers, trade discounts, auction prices and the unseen-item equip check. Absent =
 // neutral multipliers (1.0), no discount, no listing, the equip is refused.
 double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
@@ -440,10 +430,9 @@ bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 // =====================================================================================================================
 RandomItemMgr::RandomItemMgr() {}
 RandomItemMgr::~RandomItemMgr() {}
-void RandomItemMgr::Init() { NoteItems(); }
+void RandomItemMgr::Init() { LoadWeightScales(); }
 uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
-uint32 RandomItemMgr::GetPlayerSpecId(Player*) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
 
 // With no text table the real GetBotText(name) answers the empty text (PlayerbotTextMgr.cpp:65; R9: the old stand-in answered the key, so a bot whispered raw

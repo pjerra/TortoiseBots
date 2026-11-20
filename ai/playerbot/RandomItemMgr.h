@@ -175,6 +175,7 @@ class RandomItemMgr
 
 	public:
         void Init();
+        void LoadWeightScales();
         static bool HandleConsoleCommand(ChatHandler* handler, char const* args);
         // One gate for the item-exclusion rule (TransmogClonePolicy.h): a
         // transmog clone prototype, an id the core transmog map answers for
@@ -311,6 +312,7 @@ class RandomItemMgr
         void BuildPotionCache();
         void BuildTradeCache();
         void LoadRandomEnchantments();
+        void InitWeightLinks();
         bool CanEquipItemNew(ItemPrototype const* proto);
         void AddItemStats(uint32 mod, uint8 &sp, uint8 &ap, uint8 &tank);
         bool CheckItemStats(uint8 clazz, uint8 sp, uint8 ap, uint8 tank);
