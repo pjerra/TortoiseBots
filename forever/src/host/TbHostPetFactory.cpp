@@ -2,7 +2,7 @@
 //
 // The legacy PlayerbotFactory made a hunter's first pet and trained its spells through the 1.12 pet classes; on ForeverCore those five members were link stand-ins
 // that did nothing (SliceLinkStubs.cpp, slice 1). They are real here, written against the core's own pet API: a stable of active slots (PetDefines.h:40-48), the classic
-// hunter loyalty and training-point rules (Pet.h:108-124), `Unit::CreateTamedPetFrom` (Unit.cpp:11656) and the four steps of `Spell::EffectTameCreature`
+// hunter loyalty and training-point rules (Pet.h:108-124), `Unit::CreateTamedPetFrom` (Unit.cpp:11666) and the four steps of `Spell::EffectTameCreature`
 // (SpellEffects.cpp:2757-2774). Core read only at the pin; no core change. The ForeverCore team's own bot setup does the same for its hunters (~/ref-wfb,
 // BotSetupPipeline.cpp:735-830) and is the reference for the order of the steps and for why the pet number is written at once: read, never copied.
 //
