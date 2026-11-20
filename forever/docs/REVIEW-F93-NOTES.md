@@ -101,14 +101,15 @@ and repair spends from the full purse.
 - `slice_registry_check.py` (0, 228 later), `slice_gen_context.py --check`
   (up to date), `test_ignore13_wiring.py` OK, `test_w2_town_wiring.py` OK,
   `test_w1_wiring.py` OK, `git diff --check` clean.
-- `tbf-build.sh <wt> tortoisebots`: BUILD OK (see report).
-- `turtle-compile-check <wt> origin/main`: <result> (shared ai/ files
-  touched: TownErrandPolicy.h, TrainerAction.cpp, IgnoreMobPolicy.h,
-  PossibleAttackTargetsValue.h/.cpp, GrindTargetValue.cpp,
+- `tbf-build.sh <wt> tortoisebots`: BUILD OK (final pass re-run after the
+  include fix; first pass BUILD OK tortoisebots ON 29b37c626).
+- `turtle-compile-check <wt> origin/main`: COMPILE OK at 060c7d1e (the first
+  run caught a missing `SharedValueContext.h` include in DowntimeService.cpp;
+  shared ai/ files touched: TownErrandPolicy.h, TrainerAction.cpp,
+  IgnoreMobPolicy.h, PossibleAttackTargetsValue.h/.cpp, GrindTargetValue.cpp,
   DpsTargetValue.cpp, RtiTargetValue.h, TargetValue.cpp).
 
 ## Live checks (lead's combined run)
-
 - Order/ranks: poor bot with two due ranks and gold for the cheaper only,
   `.tb order Testbot train #o4` → learns the lower-level rank
   (`[W2] train ... spell=<low>`), purse kept for the rest; `.tb state`
