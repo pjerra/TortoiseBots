@@ -84,6 +84,27 @@ inline char const* ReasonName(Disposable reason)
     }
 }
 
+// What becomes of a displaced piece AFTER the swap. The handler remembers only the piece's GUID before the swap (a raw Item* can be freed by it:
+// SwapItem stores the old piece with StoreItem, which merges a stackable piece into an equal stack in the bags and frees the moved Item) and
+// re-resolves it by that GUID afterwards. `found`: the GUID still names an item of the character; `inBags`: it is in the inventory (not the slot just
+// equipped); `isWorn`: it is the piece just equipped; `count`: its stack size.
+enum class Fate : unsigned char
+{
+    Gone,        // merged away or freed by the swap: nothing to destroy, nothing to touch
+    Keep,        // stays where the swap put it (not disposable, or not in the bags)
+    KeepStack,   // disposable, but a stack of more than one: destroying it would throw away more than the one piece replaced; it stays in the bags
+    Destroy      // exactly one disposable item in the bags
+};
+
+inline Fate DisplacedFate(bool found, bool inBags, bool isWorn, std::uint32_t count, Disposable why)
+{
+    if (!found)
+        return Fate::Gone;
+    if (isWorn || !inBags || why == Disposable::No)
+        return Fate::Keep;
+    return count == 1 ? Fate::Destroy : Fate::KeepStack;
+}
+
 // The target may lose the replaced piece: it is a host bot, or the sender's own character and the sender is a GM.
 inline bool MayDestroyReplacedItem(bool targetIsHostBot, bool senderIsGm, bool senderIsTarget)
 {

@@ -37,7 +37,26 @@ class Joint3(unittest.TestCase):
         self.assertLess(kit.index("bot->SwapItem(fresh->GetPos(), swapDest);"),
                         kit.index("bool const equipped ="))
         self.assertLess(kit.index("bool const equipped ="), kit.index("if (equipped)"))
-        self.assertLess(kit.index("if (equipped)"), kit.index("dropIfDisposable(displaced);"))
+        self.assertLess(kit.index("if (equipped)"), kit.index("dropIfDisposable(displacedGuid);"))
+
+    def test_the_displaced_piece_is_re_resolved_by_guid_after_the_swap(self):
+        kit = text("host/TbTestKit.cpp")
+        # no raw Item* of the displaced piece is held across SwapItem
+        self.assertNotIn("Item* displaced", kit)
+        self.assertNotIn("Item* displacedOff", kit)
+        self.assertIn("ObjectGuid const displacedGuid", kit)
+        self.assertIn("ObjectGuid const displacedOffGuid", kit)
+        self.assertIn("bot->GetItemByGuid(guid)", kit)
+        self.assertIn("replace::DisplacedFate(", kit)
+        self.assertIn("replace::Fate::Destroy", kit)
+        self.assertIn("replace::Fate::KeepStack", kit)
+        swap = kit.index("bot->SwapItem(fresh->GetPos(), swapDest);")
+        self.assertLess(kit.index("ObjectGuid const displacedGuid"), swap)
+        self.assertLess(kit.index("ObjectGuid const displacedOffGuid"), swap)
+        self.assertLess(swap, kit.index("bot->GetItemByGuid(guid)"))
+        self.assertLess(kit.index("bot->GetItemByGuid(guid)"), kit.index("bot->DestroyItem(piece->GetBagSlot()"))
+        self.assertIn("dropIfDisposable(displacedGuid);", kit)
+        self.assertIn("dropIfDisposable(displacedOffGuid);", kit)
 
     def test_every_destroy_is_logged_at_info(self):
         kit = text("host/TbTestKit.cpp")
@@ -70,7 +89,7 @@ class Joint3(unittest.TestCase):
         self.assertIn("QUEST_STATUS_FAILED", kit)
         self.assertIn("bool const questItem = replace::IsQuestItem(piece->GetEntry(), oldProto->GetClass() == ITEM_CLASS_QUEST,", kit)
         self.assertIn("oldProto->GetBonding() == BIND_QUEST, oldProto->GetStartQuest() != 0, activeItems);", kit)
-        self.assertLess(kit.index("ActiveItemObjectives(bot)"), kit.index("dropIfDisposable(displaced);"))
+        self.assertLess(kit.index("ActiveItemObjectives(bot)"), kit.index("dropIfDisposable(displacedGuid);"))
 
     def test_the_replace_rule_is_pure(self):
         pure = text("host/cmd/TbReplacePure.h")
@@ -100,6 +119,7 @@ class Joint3(unittest.TestCase):
         self.assertIn("event ring of 1024", doc)
         self.assertIn("`oldest=`", doc)
         self.assertIn("destroyed_item", doc)
+        self.assertIn("kept-stack", doc)
 
 
 if __name__ == "__main__":

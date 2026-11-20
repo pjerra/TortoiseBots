@@ -219,7 +219,7 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 // Player::EquipNewItem (:1621) into the slot it found. A slot that is taken refuses with the core's reason (EQUIP_ERR_NO_SLOT_AVAILABLE). With
 // `replace` the item goes to the bags and the core's own swap (Player::SwapItem, the call of a client's equip click) puts it on and the old piece
 // into the bags, after the same check with swap = true. A displaced piece the equipment makes disposable (start-outfit gear, or poor quality) is
-// destroyed instead of kept, only once the incoming piece is confirmed in the slot; a quest item is never destroyed (TbReplacePure.h). The log line
+// destroyed instead of kept, only a single item (a stack stays in the bags, named in `note`), found again by GUID after the swap, only once the incoming piece is confirmed in the slot; a quest item is never destroyed (TbReplacePure.h). The log line
 // names a destroy and the record lists it.
 
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
@@ -315,11 +315,14 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return true;
     }
     // The pieces the swap will take off the body: the one in the named slot and, for a two-hander, the offhand (SwapItem's
-    // AutoUnequipOffhandIfNeed puts it in the bags).
-    Item* displaced = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
-    Item* displacedOff = ((swapDest & 255) == EQUIPMENT_SLOT_MAINHAND && proto->GetInventoryType() == INVTYPE_2HWEAPON)
+    // AutoUnequipOffhandIfNeed puts it in the bags). Only their GUIDs are kept: SwapItem stores the old piece with StoreItem, which merges a
+    // stackable piece into an equal stack in the bags and frees the moved Item, so a raw Item* would dangle. They are re-resolved after the swap.
+    Item const* const displacedItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(swapDest & 255));
+    ObjectGuid const displacedGuid = displacedItem ? displacedItem->GetGUID() : ObjectGuid::Empty;
+    Item const* const displacedOffItem = ((swapDest & 255) == EQUIPMENT_SLOT_MAINHAND && proto->GetInventoryType() == INVTYPE_2HWEAPON)
         ? bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND)
         : nullptr;
+    ObjectGuid const displacedOffGuid = displacedOffItem ? displacedOffItem->GetGUID() : ObjectGuid::Empty;
     Player* const sender = SenderPlayer(handler);
     bool const mayDestroy = replace::MayDestroyReplacedItem(IsHostBot(bot),
         !handler->GetSession() || handler->GetSession()->GetSecurity() >= SEC_GAMEMASTER, sender && (sender == bot));
@@ -330,12 +333,14 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     {
         std::vector<replace::ActiveObjective> const activeItems = ActiveItemObjectives(bot);
         std::vector<DestroyedPiece> destroyed;
-        auto const dropIfDisposable = [&](Item* piece)
+        std::string kept;   // a disposable stack that was left in the bags, named in the record
+        auto const dropIfDisposable = [&](ObjectGuid const& guid)
         {
-            if (!piece || piece == worn || !mayDestroy)
+            if (guid.IsEmpty() || !mayDestroy)
                 return;
-            // Only a piece that really moved into the bags: never the one just equipped.
-            if (!Player::IsInventoryPos(piece->GetBagSlot(), piece->GetSlot()))
+            // Re-resolved by GUID after the swap: a piece the swap merged into a bag stack is gone and nothing is destroyed.
+            Item* const piece = bot->GetItemByGuid(guid);
+            if (!piece)
                 return;
             ItemTemplate const* oldProto = piece->GetTemplate();
             if (!oldProto)
@@ -346,7 +351,20 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 oldProto->GetBonding() == BIND_QUEST, oldProto->GetStartQuest() != 0, activeItems);
             replace::Disposable const why = replace::DisposableReason(equipped,
                 replace::StartOutfitItem(bot, piece->GetEntry()), oldProto->GetQuality(), questItem, piece->IsNotEmptyBag());
-            if (why == replace::Disposable::No)
+            // Only a piece that really moved into the bags (never the one just equipped), and only a single item: a stack stays in the bags.
+            replace::Fate const fate = replace::DisplacedFate(true, Player::IsInventoryPos(piece->GetBagSlot(), piece->GetSlot()),
+                piece->GetGUID() == worn->GetGUID(), piece->GetCount(), why);
+            if (fate == replace::Fate::KeepStack)
+            {
+                TC_LOG_INFO("tortoisebots", "TestKit: .tb equip kept {} x{} ({}) of {} ({}) in the bags: disposable ({}) but a stack of more than one",
+                    piece->GetEntry(), piece->GetCount(), piece->GetGUID().ToString(), bot->GetName(), bot->GetGUID().ToString(),
+                    replace::ReasonName(why));
+                if (!kept.empty())
+                    kept += ';';
+                kept += "kept-stack:" + std::to_string(piece->GetEntry()) + "x" + std::to_string(piece->GetCount()) + " in bags";
+                return;
+            }
+            if (fate != replace::Fate::Destroy)
                 return;
             destroyed.push_back({piece->GetEntry(), piece->GetGUID().ToString(), replace::ReasonName(why)});
             // One durable line per destroy: what left the character, whose it was, and why it was not worth a bag slot.
@@ -355,9 +373,9 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 replace::ReasonName(why));
             bot->DestroyItem(piece->GetBagSlot(), piece->GetSlot(), true);
         };
-        dropIfDisposable(displaced);
-        dropIfDisposable(displacedOff);
-        say("equipped", "", int(swapDest & 255), -1, nullptr, true, &destroyed);
+        dropIfDisposable(displacedGuid);
+        dropIfDisposable(displacedOffGuid);
+        say("equipped", "", int(swapDest & 255), -1, kept.empty() ? nullptr : kept.c_str(), true, &destroyed);
     }
     else
         say("refused", "swap-failed", -1, -1, "item left in bags");
