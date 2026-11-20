@@ -36,6 +36,7 @@ Output folder: one per run, `yulon-ubuntu2:~/forever-build/census-runs/<name>/`,
 `<worktree>-s<slot>-<list or all>-<utc stamp>-<pid>`; it never collides with a build slot's folders (`census-N` is not written any more). The 120 MB precompiled header of a run is deleted when it ends.
 The tests prove: lock held at the moment of both uploads; a run killed in the middle of its census leaves the slot locked until that census ends (the next run uploads only after it); order lock, upload, upload, census start, census end; two runs on one slot do not overlap and each summary names its OWN tree;
 two different slots do run at the same time; a passed name is used and a bad name is refused; `files 0` fails; the lock is free after the run.
+Every census in the tables below ran through this script after the change, so the order and the per-run folders are exercised for real, not only against the fakes.
 
 ## Numbers (whole tree, default slot, `forever/tools/vm-census.sh "" 12`)
 
@@ -48,6 +49,7 @@ two different slots do run at the same time; a passed name is used and a bad nam
 | after family 3 (database reads) | `files 649  compile clean 364  with errors 285  error places 5649 (in 302 files)  ... 40` | -243 |
 | after family 4 (manager singletons) | `files 649  compile clean 364  with errors 285  error places 5600 (in 302 files)  ... 40` | -49 |
 | after family 5 (quest members) | `files 649  compile clean 364  with errors 285  error places 5533 (in 302 files)  ... 40` | -67 |
+| final, twice on the last code commit (`wide3-final1`, `wide3-final2`) | `files 649  compile clean 364  with errors 285  error places 5533 (in 302 files)  includes of a header ForeverCore does not have 40` | equal |
 
 462 places closed in all, 8 files clean. The baseline is 5995, not the 6004 of the last second-pass note: `tbf/main` carries the second pass as it was BEFORE its review (family 3 of that pass,
 `GroupIdW2`, is still in `runtime/BotLfgService.cpp` (8 sites) and `runtime/HireProvisionService.cpp:1485` (1 site)); the review's revert of those nine sites is only on `tbf/port/wide-pass-2`.
@@ -130,15 +132,16 @@ ForeverCore `q->RewardItemId`, `RewardItemCount`, `RewardChoiceItemId` (`std::ar
 |---|---|---|
 | whole-tree census, baseline x2 | `FOREVER_CENSUS_NAME=wide3-base1 forever/tools/vm-census.sh "" 12` (and `-base2`) | both `files 649  compile clean 356  with errors 293  error places 5995 (in 312 files)  includes of a header ForeverCore does not have 40` |
 | whole-tree census, after the five families | same | `files 649  compile clean 364  with errors 285  error places 5533 (in 302 files)  includes of a header ForeverCore does not have 40` (`wide3-f5`; the final pair on the last code commit is in the next row) |
-| whole-tree census, final x2 | FINALCENSUS |
+| whole-tree census, final x2 | `FOREVER_CENSUS_NAME=wide3-final1 forever/tools/vm-census.sh "" 12` (and `-final2`) | both `files 649  compile clean 364  with errors 285  error places 5533 (in 302 files)  includes of a header ForeverCore does not have 40` — equal line for line, run folders `~/forever-build/census-runs/wide3-final1` and `-final2` |
 | slice 4 | `FOREVER_CENSUS_LIST=forever/SLICE4.txt forever/tools/vm-census.sh "" 12` | `files 174  compile clean 174  with errors 0  error places 0` |
 | slice 3 | same with SLICE3.txt | `files 170  compile clean 170  with errors 0  error places 0` |
 | slice 2 | same with SLICE2.txt | `files 160  compile clean 160  with errors 0  error places 0` |
 | slice 1 | same with SLICE1.txt | `files 133  compile clean 133  with errors 0  error places 0` |
 | ForeverCore module, slice option OFF | `ssh yulon-ubuntu2 'FOREVER_SLOT= ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` (2 s: the default module build does not compile the files of this pass; the census is the compile check for them; the script's own rc=1 is its trailing `grep` finding no error line) |
-| wiring tests that name a changed file | `tools/test_*wiring*.py` found by file base name (41) | all pass; one re-pinned: `test_bot_area_trigger_wiring.py` `sScriptMgr.` -> `ScriptMgrW3().` in the same five expressions (nothing weakened) |
-| Turtle build | `vm-build ~/wt-wide3 --wait` | TURTLEBUILD |
-| Turtle tests | `vm-test tb ~/wt-wide3` | `RESULT: PASS  kind=tb wt=wt-wide3 sha=9b1fc997f`, `rc=0  vm_duration=1291s` (2659 unittest tests, 61 skipped). The first two runs found what the families broke and are fixed in this branch: 4 unit tests that compile or pin production text (`hire_deferred_dismissal_fixture.inc` and `test_raid_strategy_restore.py` got a double of the Turtle body of `GuidStringW3` / `DbEscapeW3`; `test_guild_order_status_honesty.py` and `test_guild_order_store_columns.py` pin `FieldTextW3(fields[...])` where they pinned `fields[...].GetCppString()`), and `runtime/CombatMonitorService.cpp`, which `tools/verify_all.sh` compiles with a test seam that has no `ai/` on its include path: the wrapper is now included only in the branch that has the world database |
-| helper files | `git diff --stat e57bd1849 HEAD -- forever/src/compat ai/cmangos-compat-w3.h ai/playerbot/TbCompatW3.h` | only the three new files; `forever/src/slice` is empty; no slice file and no `*Commander*` file is touched |
+| wiring tests that name a changed file | `ls tools/test_*wiring*.py \| xargs -P 8` (all 187 re-run on the final commit, stricter than the 41 found by file base name) | all 187 pass; one re-pinned: `test_bot_area_trigger_wiring.py` `sScriptMgr.` -> `ScriptMgrW3().` in the same five expressions (nothing weakened) |
+| Turtle build | `vm-build ~/wt-wide3 --wait` | `MAKE_RC=0` at `sha=96ddb8506`, 220 module files changed, `COMPILE_SECONDS=35  TOTAL_SECONDS=40`, job rc=0 |
+| rewrite check (all five families) | `forever/tools/rewrite_wide_pass3.py --family <f> --check` (guidstring and quest with `--errors` from the run-1 `errors.tsv`) | 0 rewrites: every site of every family is in the tree |
+| Turtle tests | `vm-test tb ~/wt-wide3` | `RESULT: PASS  kind=tb wt=wt-wide3 sha=96ddb8506 dirty=0 files=3796`, `rc=0  vm_duration=1442s` (2659 unittest tests, 61 skipped; `ALL TORTOISEBOTS CHECKS PASSED CLEANLY`). The first two runs found what the families broke and are fixed in this branch: 4 unit tests that compile or pin production text (`hire_deferred_dismissal_fixture.inc` and `test_raid_strategy_restore.py` got a double of the Turtle body of `GuidStringW3` / `DbEscapeW3`; `test_guild_order_status_honesty.py` and `test_guild_order_store_columns.py` pin `FieldTextW3(fields[...])` where they pinned `fields[...].GetCppString()`), and `runtime/CombatMonitorService.cpp`, which `tools/verify_all.sh` compiles with a test seam that has no `ai/` on its include path: the wrapper is now included only in the branch that has the world database |
+| helper files | `git diff --stat e57bd1849 HEAD -- forever/src/compat ai/cmangos-compat-w3.h ai/playerbot/TbCompatW3.h` | only the three new files (124 added lines); the pass's diff has nothing under `forever/src/slice`, no slice-listed file and no `*Commander*` file |
 
-Live tests on the VM: the Turtle gates were run only while `docker ps` showed no `forever-world` container (it flapped between 0 and 1 during the pass).
+Live tests on the VM: none were made in this pass (the Turtle gates are a compile and the unit/wiring suites; they ran while the VM's `forever-world` containers were up and touch neither).
