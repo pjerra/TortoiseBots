@@ -11,6 +11,8 @@
 #include "TbBotSession.h"
 #include "host/TbH3.h"
 #include "host/TbCc.h"
+#include "host/TbHostTaxi.h"
+#include "host/TbHostTransport.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -307,6 +309,8 @@ void Tick(Brain* brain, uint32 diff)
         BotSession::EngineTickScope tickScope(brain->session);
         DeliverCastResults(brain);
         TortoiseBots::h3::BeforeEngineTick(brain->bot, brain->ai);   // H3: the bot's queued orders, before its tick
+        tbhost::taxi::TickLandingWatch(brain->bot);
+        tbhost::ride::TickRide(brain->bot, diff);
         brain->ai->UpdateAI(diff);
     }
     catch (ByteBufferException const&)

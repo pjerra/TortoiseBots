@@ -7,6 +7,8 @@
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostTaxi.h"
+#include "host/TbHostTransport.h"
 #include "host/TbIgnore.h"   // I13: explicit orders take a listed mob off the commander's ignore list
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
 #include "MiscPackets.h"
@@ -121,7 +123,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft", "taxi-learn", "fly", "ride" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -445,6 +447,32 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
             count = 1;
         std::string code, detail;
         return tbhost::prof::Craft(bot, spellId, count, code, detail) ? "ok" : ("fail:" + code);
+    }
+    if (o.verb == "taxi-learn")
+    {
+        Creature* npc = tbhost::taxi::NearestFlightMaster(bot, 30.0f);
+        if (!npc)
+            return "fail:no-flightmaster";
+        return tbhost::taxi::Learn(bot, npc) ? "ok" : "fail:taxi-learn";
+    }
+    if (o.verb == "fly")
+    {
+        Creature* npc = tbhost::taxi::NearestFlightMaster(bot, 30.0f);
+        if (!npc)
+            return "fail:no-flightmaster";
+        uint32_t const toNode = tbhost::taxi::ResolveNodeArg(bot, o.arg);
+        if (!toNode)
+            return "fail:no-node";
+        std::string failCode;
+        return tbhost::taxi::Fly(bot, npc, toNode, &failCode) ? "ok" : ("fail:" + (failCode.empty() ? std::string("fly") : failCode));
+    }
+    if (o.verb == "ride")
+    {
+        uint32_t const entry = static_cast<uint32_t>(std::strtoul(o.arg.c_str(), nullptr, 10));
+        if (!entry)
+            return "fail:bad-entry";
+        std::string failCode;
+        return tbhost::ride::StartRide(bot, entry, &failCode) ? "ok" : ("fail:" + (failCode.empty() ? std::string("ride") : failCode));
     }
     if (o.verb == "hold")
     {
@@ -1020,12 +1048,14 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "order", "unknown-verb", verb);
     std::string const rest = JoinFrom(args.w, pos);
 
-    if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc" || verb == "learn-prof" || verb == "craft") && rest.empty())
+    if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc" || verb == "learn-prof" || verb == "craft" || verb == "fly" || verb == "ride") && rest.empty())
         return Fail(handler, args, "order", "missing-argument", verb == "assist" ? "assist <member name>" :
             (verb == "co" || verb == "nc") ? "co|nc <+strategy,-strategy>" :
             verb == "learn-prof" ? "learn-prof <skill>" :
-            verb == "craft" ? "craft <spell> [n]" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
-    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair" || verb == "gather") && !rest.empty())
+            verb == "craft" ? "craft <spell> [n]" :
+            verb == "fly" ? "fly <node id|name>" :
+            verb == "ride" ? "ride <transport entry>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
+    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair" || verb == "gather" || verb == "taxi-learn") && !rest.empty())
         return Fail(handler, args, "order", "unexpected-argument", rest);
     if (verb == "learn-prof" && TortoiseBots::prof::SkillIdFromName(rest) == 0)
         return Fail(handler, args, "order", "bad-argument", "unknown or unsupported profession (fishing is out)");
@@ -1035,6 +1065,12 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         std::istringstream iss(rest);
         if (!(iss >> spellId) || spellId == 0)
             return Fail(handler, args, "order", "bad-argument", "craft <spellId> [n]");
+    }
+    if (verb == "ride")
+    {
+        uint32_t const entry = static_cast<uint32_t>(std::strtoul(rest.c_str(), nullptr, 10));
+        if (!entry)
+            return Fail(handler, args, "order", "bad-argument", "ride <transport entry>");
     }
     if (verb == "co" || verb == "nc")
         for (char c : rest)
