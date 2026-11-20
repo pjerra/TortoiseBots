@@ -81,6 +81,7 @@ class Wiring(unittest.TestCase):
         self.pure = text(CMD / "TbCmdBindingLifePure.h")
         self.store = text(CMD / "TbCmdBindingStore.cpp")
         self.store_hdr = text(CMD / "TbCmdBindingStore.h")
+        self.char_guard = text(ROOT / "forever" / "src" / "compat" / "TbCompat_CharStore.h")
         self.scripts = text(ROOT / "forever" / "src" / "TbScripts.cpp")
         self.dash = text(ROOT / "forever" / "src" / "dash" / "TbDashRuns.cpp")
         self.orders = text(HOST / "run" / "TbRunOrders.cpp")
@@ -153,17 +154,20 @@ class Wiring(unittest.TestCase):
     def test_persistence_is_off_by_default_and_every_read_is_guarded(self):
         self.assertIn("TortoiseBots.Commander.KeepBindings = 0", self.conf)
         self.assertIn('GetBoolDefault("TortoiseBots.Commander.KeepBindings", false)', self.store)
-        # The ForeverCore schema guard: information_schema before any SELECT, and the CREATE on a synchronous connection before the check.
+        # The ForeverCore schema guard: information_schema before any SELECT, and the CREATE on a synchronous connection before the check. The raw
+        # characters statements live in compat/TbCompat_CharStore.h (compat/TbCompat_S5.h is the world twin), so the store itself makes none.
         guard = function_body(self.store, r"QueryResult CharacterQueryCompat\(char const\* sql, bool\* schemaMissing = nullptr\)\s*\{")
-        self.assertIn("information_schema.COLUMNS", guard)
         self.assertIn("WorldQueryNamesCompat", guard)                       # the same single-table parser as the world guard
-        self.assertIn("CharacterDatabase.Query(text.c_str())", guard)
+        self.assertIn("CharacterSchemaHasCompat(table, columns)", guard)   # the probe, before the select
+        self.assertIn("CharacterQueryGuardedCompat(text)", guard)
+        self.assertNotIn("CharacterDatabase", code(self.store))             # no raw statement in the store: all of them go through the guard
         table = function_body(self.store, r"bool CheckSchema\(State& s, bool create\)\s*\{")
-        self.assertIn("CharacterDatabase.DirectExecute(kCreate)", table)   # the CREATE only, once per config
-        self.assertIn("information_schema.COLUMNS", table)
+        self.assertIn("CharacterExecuteGuardedCompat(kCreate)", table)     # the CREATE only, once per config
+        self.assertIn("CharacterSchemaHasCompat(kTable, columns)", table)
         self.assertIn("if (create && !s.tableTried)", table)               # DDL is not retried on every write
-        # No query outside the guards: every CharacterDatabase.Query in the file is the column check or the guard (info_schema + select).
-        self.assertEqual(len(re.findall(r"CharacterDatabase\.Query\(", code(self.store))), 3)   # column check + guard (info_schema + select)
+        self.assertIn("information_schema.COLUMNS", self.char_guard)       # the probe asks before it names a table
+        self.assertEqual(len(re.findall(r"CharacterDatabase\.Query\(", self.char_guard)), 2)   # probe + guarded select
+        self.assertIn("CharacterDatabase.DirectExecute(sql.c_str())", self.char_guard)        # the one synchronous statement shape
         # The writes are one-way statements on a synchronous connection, never queued ones (a pool may reorder them), and every one of them is
         # preceded by the same five-column check: a cached `tableReady` is never trusted (the review's finding).
         self.assertNotIn("CharacterDatabase.Execute(", code(self.store))
@@ -177,10 +181,11 @@ class Wiring(unittest.TestCase):
         save = function_body(self.store, r"bool Save\(life::Stored const& stored\)\s*\{")
         self.assertIn("Writable(s)", save)
         self.assertIn("ON DUPLICATE KEY UPDATE", save)                       # one atomic statement: no DELETE and INSERT to split
-        self.assertIn("DirectExecute(sql.c_str())", save)
+        self.assertIn("CharacterExecuteGuardedCompat(sql)", save)            # one synchronous, guarded statement
         self.assertIn("ReadRows()", save)                                   # the in-memory view changes only after the read-back
         erase = function_body(self.store, r"bool Erase\(uint64_t commander\)\s*\{")
         self.assertIn("Writable(s)", erase)
+        self.assertIn("CharacterExecuteGuardedCompat(Trinity::StringFormat(\"DELETE FROM `tb_commander_binding`", erase)
         self.assertIn("ReadRows()", erase)
         # The guard only ever names this store's table: a table name can never be built from anywhere but this file.
         self.assertIn("table != kTable", guard)
@@ -357,7 +362,7 @@ class Mutations(unittest.TestCase):
     def build_store(self, store_text):
         tmp = Path(tempfile.mkdtemp(prefix="cmdp2-store-"))
         for rel in ("forever/src/host/cmd/TbCmdBindingStore.h", "forever/src/host/cmd/TbCmdBindingLifePure.h",
-                    "forever/src/compat/TbSqlNames.h", "runtime/RemoteCommanderPolicy.h",
+                    "forever/src/compat/TbSqlNames.h", "forever/src/compat/TbCompat_CharStore.h", "runtime/RemoteCommanderPolicy.h",
                     "forever/tools/cmd_binding_store_check.cpp"):
             (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
             (tmp / rel).write_text((ROOT / rel).read_text())

@@ -7,6 +7,7 @@
 #include "host/cmd/TbCmdBindingStore.h"
 
 #include "compat/TbSqlNames.h"
+#include "compat/TbCompat_CharStore.h"
 
 #include "Config.h"
 #include "DatabaseEnv.h"
@@ -71,21 +72,10 @@ bool CheckSchema(State& s, bool create)
     if (create && !s.tableTried)
     {
         s.tableTried = true;
-        CharacterDatabase.DirectExecute(kCreate);       // on a database whose user may not create tables the row is simply not stored
+        CharacterExecuteGuardedCompat(kCreate);        // on a database whose user may not create tables the row is simply not stored
     }
     std::set<std::string> const columns = { "commander_guid", "lead_guid", "members", "flags", "bound_at" };
-    std::string sql = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + std::string(kTable) +
-        "' AND COLUMN_NAME IN (";
-    bool first = true;
-    for (std::string const& column : columns)
-    {
-        sql += (first ? "'" : ", '") + column + "'";
-        first = false;
-    }
-    sql += ")";
-    QueryResult count = CharacterDatabase.Query(sql.c_str());
-    uint64 found = count ? count->Fetch()[0].GetUInt64() : 0;
-    s.tableReady = found == columns.size();
+    s.tableReady = CharacterSchemaHasCompat(kTable, columns);
     if (!s.tableReady && !s.tableWarned)
     {
         s.tableWarned = true;
@@ -111,27 +101,13 @@ QueryResult CharacterQueryCompat(char const* sql, bool* schemaMissing = nullptr)
             *schemaMissing = true;
         return QueryResult();
     }
-    std::string has = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + table + "'";
-    if (!columns.empty())
-    {
-        has += " AND COLUMN_NAME IN (";
-        bool first = true;
-        for (std::string const& column : columns)
-        {
-            has += (first ? "'" : ", '") + column + "'";
-            first = false;
-        }
-        has += ")";
-    }
-    QueryResult count = CharacterDatabase.Query(has.c_str());
-    uint64 found = count ? count->Fetch()[0].GetUInt64() : 0;
-    if (columns.empty() ? found == 0 : found != columns.size())
+    if (!CharacterSchemaHasCompat(table, columns))
     {
         if (schemaMissing)
             *schemaMissing = true;
         return QueryResult();
     }
-    return CharacterDatabase.Query(text.c_str());
+    return CharacterQueryGuardedCompat(text);
 }
 
 // Every stored row, read through the guard. Never touches `loadTried`: it is the one reader Rows() and the write confirmations share.
@@ -265,7 +241,7 @@ bool Save(life::Stored const& stored)
         "INSERT INTO `tb_commander_binding` ({}) VALUES ({}, {}, '{}', {}, {}) ON DUPLICATE KEY UPDATE "
         "`lead_guid` = VALUES(`lead_guid`), `members` = VALUES(`members`), `flags` = VALUES(`flags`), `bound_at` = VALUES(`bound_at`)",
         kColumns, stored.commander, stored.lead, life::EncodeMembers(stored.members), stored.flags, stored.boundAt);
-    CharacterDatabase.DirectExecute(sql.c_str());
+    CharacterExecuteGuardedCompat(sql);
     // A one-way statement cannot answer, so the row is read back: the in-memory view changes only after the database really holds it.
     std::vector<life::Stored> const rows = ReadRows();
     life::Stored const* now = Find(rows, stored.commander);
@@ -287,7 +263,7 @@ bool Erase(uint64_t commander)
         return false;
     if (!Writable(s))
         return false;
-    CharacterDatabase.DirectExecute(Trinity::StringFormat("DELETE FROM `tb_commander_binding` WHERE `commander_guid` = {}", commander).c_str());
+    CharacterExecuteGuardedCompat(Trinity::StringFormat("DELETE FROM `tb_commander_binding` WHERE `commander_guid` = {}", commander));
     std::vector<life::Stored> const rows = ReadRows();
     if (Find(rows, commander))
     {
