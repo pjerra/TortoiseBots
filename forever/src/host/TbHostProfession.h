@@ -39,6 +39,15 @@ bool LootOpenNode(Player* bot, ObjectGuid const& guid);
 // Craft a recipe spell (up to `count` times) using CraftForSelfPolicy + HandleCastSpellOpcode.
 bool Craft(Player* bot, uint32_t spellId, uint32_t count, std::string& code, std::string& detail);
 
+// Multi-tick gather/craft errand lifecycle (ordered gather/craft, free-kit gather, and W9 guild orders).
+bool StartGatherNearest(Player* bot, float maxDistYd, uint32_t orderSeq, std::string& stateOut, std::string& detail);
+bool StartCraft(Player* bot, uint32_t spellId, uint32_t count, uint32_t orderSeq, std::string& stateOut, std::string& detail);
+void TickErrands(Player* bot, uint32_t diffMs);
+bool PollOrderErrand(Player const* bot, uint32_t orderSeq, std::string& outResult);
+void CancelOrderErrand(Player const* bot);
+bool HasActiveErrand(Player const* bot);
+std::string ActiveErrandPhase(Player const* bot);
+
 // Helpers for guild orders (W9) and AH trade-good reserve (W8).
 bool HasGatherableNodeInSight(Player* bot, float maxDistYd);
 uint32_t FindCraftSpellForItem(Player* bot, uint32_t itemId);

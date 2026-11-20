@@ -81,5 +81,113 @@ inline GatherDecision EvaluateGatherNode(GatherNodeFacts const& f)
     return { true, "ok", ClassifyGatherDifficulty(f.botSkill, f.reqSkill) };
 }
 
+enum class GatherPhase : std::uint8_t
+{
+    Idle = 0,
+    Walking = 1,
+    Casting = 2,
+    Looting = 3,
+    Done = 4,
+    Failed = 5
+};
+
+struct GatherErrandFacts
+{
+    GatherPhase phase = GatherPhase::Idle;
+    bool inWorld = false;
+    bool alive = false;
+    bool inCombat = false;
+    bool nodeExists = false;
+    bool nodeReady = false;
+    bool inInteractRange = false;
+    bool isMoving = false;
+    bool isCasting = false;
+    bool lootAvailable = false;
+    bool lootAttempted = false;
+    std::uint32_t itemsGained = 0;
+    std::uint32_t phaseElapsedMs = 0;
+    std::uint32_t walkTimeoutMs = 20000;
+    std::uint32_t castTimeoutMs = 10000;
+    std::uint32_t lootTimeoutMs = 3000;
+};
+
+enum class GatherErrandAction : std::uint8_t
+{
+    None = 0,
+    MoveToNode = 1,
+    CastGather = 2,
+    Wait = 3,
+    LootNode = 4,
+    FinishOk = 5,
+    FinishFail = 6
+};
+
+struct GatherErrandStep
+{
+    GatherPhase nextPhase = GatherPhase::Idle;
+    GatherErrandAction action = GatherErrandAction::None;
+    char const* stateLabel = "";
+    char const* failCode = "";
+};
+
+inline GatherErrandStep StepGatherErrand(GatherErrandFacts const& f)
+{
+    if (!f.inWorld)
+        return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:not-in-world", "not-in-world" };
+    if (!f.alive)
+        return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:dead", "dead" };
+    if (f.inCombat)
+        return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:danger", "danger" };
+
+    switch (f.phase)
+    {
+        case GatherPhase::Walking:
+            if (!f.nodeExists || !f.nodeReady)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:node-gone", "node-gone" };
+            if (f.inInteractRange)
+                return { GatherPhase::Casting, GatherErrandAction::CastGather, "pending:casting", "" };
+            if (f.phaseElapsedMs >= f.walkTimeoutMs)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:timeout", "timeout" };
+            return {
+                GatherPhase::Walking,
+                f.isMoving ? GatherErrandAction::Wait : GatherErrandAction::MoveToNode,
+                "pending:walking",
+                ""
+            };
+
+        case GatherPhase::Casting:
+            if (f.lootAvailable)
+                return { GatherPhase::Looting, GatherErrandAction::LootNode, "pending:looting", "" };
+            if (!f.nodeExists)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:node-gone", "node-gone" };
+            if (f.phaseElapsedMs >= f.castTimeoutMs)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:timeout", "timeout" };
+            if (!f.isCasting && f.phaseElapsedMs >= 1500)
+                return {
+                    GatherPhase::Failed,
+                    GatherErrandAction::FinishFail,
+                    f.nodeReady ? "fail:timeout" : "fail:node-gone",
+                    f.nodeReady ? "timeout" : "node-gone"
+                };
+            return { GatherPhase::Casting, GatherErrandAction::Wait, "pending:casting", "" };
+
+        case GatherPhase::Looting:
+            if (f.itemsGained > 0)
+                return { GatherPhase::Done, GatherErrandAction::FinishOk, "ok", "" };
+            if (f.lootAttempted)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:no-loot", "no-loot" };
+            if (f.lootAvailable)
+                return { GatherPhase::Looting, GatherErrandAction::LootNode, "pending:looting", "" };
+            if (!f.nodeExists)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:node-gone", "node-gone" };
+            if (f.phaseElapsedMs >= f.lootTimeoutMs)
+                return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:timeout", "timeout" };
+            return { GatherPhase::Looting, GatherErrandAction::Wait, "pending:looting", "" };
+
+        default:
+            return { f.phase, GatherErrandAction::None, "", "" };
+    }
+}
+
 } // namespace prof
 } // namespace TortoiseBots

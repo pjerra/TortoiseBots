@@ -186,6 +186,14 @@ Item* FindBagItemByEntry(Player* bot, uint32_t itemId)
 
 class HostGatherCraftProvider final : public IGatherCraftProvider
 {
+    struct PendingStep
+    {
+        uint32_t itemId = 0;
+        uint32_t beforeCount = 0;
+        bool isCraft = false;
+    };
+    std::unordered_map<uint32_t, PendingStep> _pending;
+
 public:
     bool CanGather(uint32_t botGuidLow, uint32_t /*itemId*/) const override
     {
@@ -204,43 +212,51 @@ public:
         Player* bot = FindOnlineBot(botGuidLow);
         if (!bot)
         {
+            _pending.erase(botGuidLow);
             outReason = "not-in-world";
             return false;
         }
 
-        if (uint32_t const spellId = tbhost::prof::FindCraftSpellForItem(bot, itemId))
+        if (tbhost::prof::HasActiveErrand(bot))
         {
-            uint32_t const beforeCount = bot->GetItemCount(itemId, false);
-            std::string code, detail;
-            if (tbhost::prof::Craft(bot, spellId, 1, code, detail))
+            outReason = tbhost::prof::ActiveErrandPhase(bot);
+            return false;
+        }
+
+        if (auto it = _pending.find(botGuidLow); it != _pending.end() && it->second.itemId == itemId)
+        {
+            uint32_t const afterCount = bot->GetItemCount(itemId, false);
+            bool const gained = afterCount > it->second.beforeCount;
+            bool const wasCraft = it->second.isCraft;
+            _pending.erase(it);
+            if (gained)
             {
-                if (bot->GetItemCount(itemId, false) > beforeCount)
-                {
-                    outReason = "crafted";
-                    return true;
-                }
-                outReason = "craft-no-gain";
-                return false;
+                outReason = wasCraft ? "crafted" : "gathered";
+                return true;
             }
-            outReason = code.empty() ? "craft-failed" : code;
+            outReason = wasCraft ? "craft-no-gain" : "gather-no-item";
             return false;
         }
 
         uint32_t const beforeCount = bot->GetItemCount(itemId, false);
-        std::string code, detail;
-        if (tbhost::prof::GatherNearestInSight(bot, 150.0f, code, detail))
+        if (uint32_t const spellId = tbhost::prof::FindCraftSpellForItem(bot, itemId))
         {
-            if (code == "walking")
+            std::string stateOut, detail;
+            if (tbhost::prof::StartCraft(bot, spellId, 1, 0, stateOut, detail))
             {
-                outReason = "walking";
+                _pending[botGuidLow] = { itemId, beforeCount, true };
+                outReason = "casting";
                 return false;
             }
-            if (bot->GetItemCount(itemId, false) > beforeCount)
-            {
-                outReason = "gathered";
-                return true;
-            }
-            outReason = "gather-no-item";
+            outReason = stateOut.empty() ? "craft-failed" : stateOut;
+            return false;
+        }
+
+        std::string stateOut, detail;
+        if (tbhost::prof::StartGatherNearest(bot, 150.0f, 0, stateOut, detail))
+        {
+            _pending[botGuidLow] = { itemId, beforeCount, false };
+            outReason = tbhost::prof::ActiveErrandPhase(bot);
             return false;
         }
 

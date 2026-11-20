@@ -81,5 +81,79 @@ inline CraftDecision EvaluateCraftForSelf(CraftFacts const& f)
     return { true, "ok" };
 }
 
+enum class CraftPhase : std::uint8_t
+{
+    Idle = 0,
+    Casting = 1,
+    Done = 2,
+    Failed = 3
+};
+
+struct CraftErrandFacts
+{
+    CraftPhase phase = CraftPhase::Idle;
+    bool inWorld = false;
+    bool alive = false;
+    bool isCasting = false;
+    bool tracksOutputItem = false;
+    std::uint32_t itemsGainedThisRun = 0;
+    std::uint32_t completedRuns = 0;
+    std::uint32_t targetRuns = 1;
+    std::uint32_t phaseElapsedMs = 0;
+    std::uint32_t castTimeoutMs = 15000;
+};
+
+enum class CraftErrandAction : std::uint8_t
+{
+    None = 0,
+    Wait = 1,
+    CastNext = 2,
+    FinishOk = 3,
+    FinishFail = 4
+};
+
+struct CraftErrandStep
+{
+    CraftPhase nextPhase = CraftPhase::Idle;
+    CraftErrandAction action = CraftErrandAction::None;
+    char const* stateLabel = "";
+    char const* failCode = "";
+};
+
+inline CraftErrandStep StepCraftErrand(CraftErrandFacts const& f)
+{
+    if (!f.inWorld)
+        return { CraftPhase::Failed, CraftErrandAction::FinishFail, "fail:not-in-world", "not-in-world" };
+    if (!f.alive)
+        return { CraftPhase::Failed, CraftErrandAction::FinishFail, "fail:dead", "dead" };
+    if (f.phase != CraftPhase::Casting)
+        return { f.phase, CraftErrandAction::None, "", "" };
+
+    if (f.tracksOutputItem)
+    {
+        if (f.itemsGainedThisRun > 0)
+        {
+            if (f.completedRuns + 1 >= f.targetRuns)
+                return { CraftPhase::Done, CraftErrandAction::FinishOk, "ok", "" };
+            return { CraftPhase::Casting, CraftErrandAction::CastNext, "pending:casting", "" };
+        }
+        if (f.phaseElapsedMs >= f.castTimeoutMs)
+            return { CraftPhase::Failed, CraftErrandAction::FinishFail, "fail:timeout", "timeout" };
+        if (!f.isCasting && f.phaseElapsedMs >= 1000)
+            return { CraftPhase::Failed, CraftErrandAction::FinishFail, "fail:craft-no-item", "craft-no-item" };
+        return { CraftPhase::Casting, CraftErrandAction::Wait, "pending:casting", "" };
+    }
+
+    if (f.phaseElapsedMs >= f.castTimeoutMs)
+        return { CraftPhase::Failed, CraftErrandAction::FinishFail, "fail:timeout", "timeout" };
+    if (!f.isCasting && f.phaseElapsedMs >= 500)
+    {
+        if (f.completedRuns + 1 >= f.targetRuns)
+            return { CraftPhase::Done, CraftErrandAction::FinishOk, "ok", "" };
+        return { CraftPhase::Casting, CraftErrandAction::CastNext, "pending:casting", "" };
+    }
+    return { CraftPhase::Casting, CraftErrandAction::Wait, "pending:casting", "" };
+}
+
 } // namespace prof
 } // namespace TortoiseBots
