@@ -636,6 +636,12 @@ struct CappedUnitVisit
             for (GridReference<T> const& ref : manager)
             {
                 Unit* unit = ref.GetSource();
+                // Every unit looked at counts against the bound, skipped or not: the work is bounded even when most units are filtered out.
+                if (!sweep.Inspect())
+                {
+                    stopped = true;
+                    return;
+                }
                 if (!unit->IsInWorld() || !unit->IsAlive() || !unit->InSamePhase(lead) || lead->IsFriendlyTo(unit)
                     || !lead->IsWithinDist(unit, range))
                     continue;
@@ -857,7 +863,12 @@ void FillFeeds(std::vector<CT::BindingInfo>& out)
 {
     State& s = Get();
     if (!FeedsActive())
+    {
+        // Feeds off (or the bots off): nothing stays watched or ready, so a later re-enable starts from nothing instead of sending stale bots.
+        s.watched.clear();
+        s.ready.clear();
         return;
+    }
     // A plan reload (`.tb run reloadplans`) replaces the plan table: the boss roster is built again from the new rows, once, here rather than in
     // the reload command (that file belongs to another package).
     if (ai::GetDungeonPlans().Sealed() && ai::DungeonPlanTableGeneration().load(std::memory_order_acquire) != Bosses().generation)

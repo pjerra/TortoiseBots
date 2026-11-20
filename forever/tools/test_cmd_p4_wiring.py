@@ -85,12 +85,21 @@ class Wiring(unittest.TestCase):
         for name, done in (("CappedUnitVisit", "sweep.Exhausted()"), ("CappedObjectVisit", "sweep.Full()")):
             visit = function_body(self.cpp, "struct " + name + r"\s*\{")
             self.assertIn("if (stopped)", visit)                      # the rest of the visit is skipped once the cap is reached
-            self.assertGreater(visit.index("stopped = true;"), visit.index("sweep.Offer("))
+            self.assertGreater(visit.rindex("stopped = true;"), visit.index("sweep.Offer("))
             self.assertIn(done, visit)
+        unit_visit = function_body(self.cpp, r"struct CappedUnitVisit\s*\{")
+        self.assertIn("sweep.Inspect()", unit_visit)   # every unit looked at counts, skipped or not
+        self.assertLess(unit_visit.index("sweep.Inspect()"), unit_visit.index("IsInWorld()"))
         self.assertNotIn("FD::KeepNearest", self.cpp)
         self.assertNotIn("FD::KeepNearest", self.pure)
         self.assertNotIn("UnitListSearcher", self.cpp)
         self.assertNotIn("GameObjectListSearcher", self.cpp)
+
+    def test_feeds_off_clears_the_watched_and_ready_state(self):
+        fill = function_body(self.cpp, r"void FillFeeds\(std::vector<CT::BindingInfo>& out\)")
+        off = fill[fill.index("if (!FeedsActive())"):fill.index("BuildBossCache();")]
+        self.assertIn("s.watched.clear();", off)
+        self.assertIn("s.ready.clear();", off)
 
     def test_the_last_binding_released_leaves_nothing_to_send(self):
         # Cold review finding 1: FillFeeds used to return on an empty list before it forgot the watched bindings and the ready cache, so the
@@ -208,6 +217,7 @@ MUTATIONS = {
     "nearest": ("        if (!Less(entry, heap.front()))\n            return;\n", "        return;\n"),
     "bossrow": ("Keep(boss ? bosses_ : others_,", "Keep(others_,"),
     "wireid": ("    return (uint64_t(guidType & 0x3F) << 40) | (counter & 0xFFFFFFFFFFULL);", "    return counter & 0xFFFFFFFFFFULL;"),
+    "inspect": ("        if (inspected_ >= bound_)\n            return false;\n        ++inspected_;\n        return true;", "        ++inspected_;\n        return true;"),
     "standing": ("void KeepStanding(Map& state, Set const& standing)\n{\n", "void KeepStanding(Map& state, Set const& standing)\n{\n    if (standing.empty())\n        return;\n"),
 }
 
