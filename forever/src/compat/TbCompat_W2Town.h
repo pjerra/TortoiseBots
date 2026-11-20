@@ -47,6 +47,12 @@ inline bool HasVendorStockCompat(Creature* vendor)
     return tbhost::town::HasVendorStock(vendor);
 }
 
+// ForeverCore vendors carry no template list, so the explicit-item path keeps its single-list lookup.
+inline VendorItemData const* VendorTemplateItemsCompat(Creature*)
+{
+    return nullptr;
+}
+
 inline bool SellItemToVendorCompat(Player* bot, Creature* vendor, ObjectGuid const& /*vendorguid*/, Item* item, uint32 count)
 {
     return tbhost::town::SellItem(bot, vendor, item, count);
