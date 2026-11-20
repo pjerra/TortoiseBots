@@ -57,11 +57,16 @@ def check_row_columns(source):
     columns = re.findall(r"`([a-z_]+)`", select.group(1))
     if columns != ROW_COLUMNS:
         raise AssertionError(f"the stored row selects {columns}, not the five fields {ROW_COLUMNS}")
-    insert = re.search(r"INSERT INTO `tb_commander_binding` \((.+?)\) VALUES", source)
-    assert insert, "the stored row's insert is gone"
-    written = re.findall(r"`([a-z_]+)`", insert.group(1))
+    # The upsert's column list is the kColumns literal (one statement for a save and for a replace): both must be the same five fields.
+    named = re.search(r'kColumns = "(.+?)";', source)
+    assert named, "the stored row's write column list is gone"
+    written = re.findall(r"`([a-z_]+)`", named.group(1))
     if written != ROW_COLUMNS:
-        raise AssertionError(f"the stored row inserts {written}, not the five fields {ROW_COLUMNS}")
+        raise AssertionError(f"the stored row writes {written}, not the five fields {ROW_COLUMNS}")
+    insert = re.search(r"INSERT INTO `tb_commander_binding` \((?:\{\}|[^)]+)\) VALUES", source)
+    assert insert, "the stored row's insert is gone"
+    if "({})" not in insert.group(0):
+        raise AssertionError("the insert no longer writes the row through kColumns")
     for word in ("group", "dbstore", "db_store"):
         if word in " ".join(columns + written).lower():
             raise AssertionError(f"a group number is persisted ({word})")
@@ -104,10 +109,17 @@ class Wiring(unittest.TestCase):
         maintain = function_body(self.cpp, r"void Maintain\(\)\s*\{")
         self.assertIn("L::Decide(RowOf(commander, m), facts)", maintain)
         self.assertIn("ReleaseCommander(commander, end)", maintain)
+        # ... and it is 1 Hz, whatever rate the world tick runs at (the core calls Maintain on every tick): the throttle stands before the work.
+        self.assertIn("kMaintainMs", maintain)
+        self.assertLess(maintain.index("kMaintainMs", maintain.index("kMaintainMs") + 1), maintain.index("TryRestore()"))
+        # A card the read made for a run's tank has no lead: the release rule and the restore never touch it (its pairs belong to the run).
+        self.assertIn("!m.lead.IsEmpty()", maintain)
         release = function_body(self.cpp, r"void ReleaseCommander\(ObjectGuid commander, L::End end\)\s*\{")
         self.assertIn("h3::SetCommander(bot, ObjectGuid::Empty)", release)  # h3's table is the owner: a release clears its pairs
         self.assertIn("store::Erase(commander.GetCounter())", release)      # and the stored row
         self.assertIn("RestoreFollower(follower, m.lead)", release)         # the followers' own follow targets come back
+        self.assertIn("ClearBotMaster(bot)", release)                       # a released bot keeps its former commander as neither master nor...
+        self.assertIn("s.log.Retain(", release)                             # ...and the released card's order log goes with it at once
         self.assertIn("RC::DecideReleaseParty", function_body(self.cpp, r"void ApplyPartyAction\(ObjectGuid commander, Meta const& m, L::End end\)\s*\{"))
         # A shutdown keeps everything (that is what the next start restores); the two timers are the only delayed releases.
         logout = function_body(self.cpp, r"void NoteLogout\(Player\* player\)\s*\{")
@@ -139,25 +151,69 @@ class Wiring(unittest.TestCase):
         self.assertIn("information_schema.COLUMNS", guard)
         self.assertIn("WorldQueryNamesCompat", guard)                       # the same single-table parser as the world guard
         self.assertIn("CharacterDatabase.Query(text.c_str())", guard)
-        table = function_body(self.store, r"void EnsureTable\(State& s\)\s*\{")
-        self.assertIn("CharacterDatabase.DirectExecute(", table)
+        table = function_body(self.store, r"bool CheckSchema\(State& s, bool create\)\s*\{")
+        self.assertIn("CharacterDatabase.DirectExecute(kCreate)", table)   # the CREATE only, once per config
         self.assertIn("information_schema.COLUMNS", table)
-        # No query outside the guard/ensure: every CharacterDatabase.Query in the file is one of the two above.
-        self.assertEqual(len(re.findall(r"CharacterDatabase\.Query\(", code(self.store))), 3)   # guard (info_schema + select) + ensure table
-        self.assertEqual(len(re.findall(r"CharacterDatabase\.DirectExecute\(", code(self.store))), 1)
+        self.assertIn("if (create && !s.tableTried)", table)               # DDL is not retried on every write
+        # No query outside the guards: every CharacterDatabase.Query in the file is the column check or the guard (info_schema + select).
+        self.assertEqual(len(re.findall(r"CharacterDatabase\.Query\(", code(self.store))), 3)   # column check + guard (info_schema + select)
+        # The writes are one-way statements on a synchronous connection, never queued ones (a pool may reorder them), and every one of them is
+        # preceded by the same five-column check: a cached `tableReady` is never trusted (the review's finding).
+        self.assertNotIn("CharacterDatabase.Execute(", code(self.store))
+        self.assertNotIn("PExecute", code(self.store))
+        self.assertNotIn("PQuery", code(self.store))
+        writable = function_body(self.store, r"bool Writable\(State& s\)\s*\{")
+        self.assertIn("CheckSchema(s, true)", writable)
+        for name in ("Save", "Erase", "Rows"):
+            body = function_body(self.store, rf"(?:bool|std::vector<life::Stored>) {name}\(")
+            self.assertIn("if (!s.enabled", body, f"{name} must do nothing with the key off")
+        save = function_body(self.store, r"bool Save\(life::Stored const& stored\)\s*\{")
+        self.assertIn("Writable(s)", save)
+        self.assertIn("ON DUPLICATE KEY UPDATE", save)                       # one atomic statement: no DELETE and INSERT to split
+        self.assertIn("DirectExecute(sql.c_str())", save)
+        self.assertIn("ReadRows(s)", save)                                   # the in-memory view changes only after the read-back
+        erase = function_body(self.store, r"bool Erase\(uint64_t commander\)\s*\{")
+        self.assertIn("Writable(s)", erase)
+        self.assertIn("ReadRows(s)", erase)
+        # The guard only ever names this store's table: a table name can never be built from anywhere but this file.
+        self.assertIn("table != kTable", guard)
+        # A reload re-reads: the load state, the schema flag and the rows all start over.
+        config = function_body(self.store, r"void LoadConfig\(\)\s*\{")
+        for reset in ("s.loadTried = false", "s.tableReady = false", "s.rows.clear()"):
+            self.assertIn(reset, config)
         self.assertIn("CREATE TABLE IF NOT EXISTS `tb_commander_binding`", self.store)
 
     def test_the_restore_needs_the_commander_and_the_lead(self):
         restore = function_body(self.cpp, r"void RestoreOne\(ObjectGuid commander\)\s*\{")
-        self.assertIn("if (!commanderPlayer)", restore)                      # no restore with the commander offline
+        self.assertIn("if (!commanderPlayer || !AuthorizedCommander(commanderPlayer))", restore)   # a real player or our own bot, never a stranger
         self.assertIn("L::PlanRestore(row, true, online)", restore)
         self.assertIn("if (!plan.ready)", restore)                           # PlanRestore refuses a lead that is not in the world
         self.assertIn("BotMgr::Instance().GroupWith(bot, m.lead)", restore)  # the party is formed again through the lead
         self.assertIn("BotManager::Instance().BindBotMaster(bot, commander)", restore)
         self.assertIn("h3::SetCommander(bot, commander)", restore)
+        # The host's own tables authorize every stored member (never a bot of another commander, never a real player) before any grouping or bind.
+        self.assertIn("L::Claim(", restore)
+        self.assertIn("RefuseRow(", restore)
+        # An in-party binding puts the commander back into the party (otherwise the release rule ends it on the first tick).
+        self.assertIn("group->AddMember(commanderPlayer)", restore)
         load = function_body(self.cpp, r"void LoadBindings\(\)\s*\{")
         self.assertIn("store::Rows()", load)
         self.assertIn("m.restored = false", load)                             # a row is not a standing binding until its party is back
+
+    def test_a_restore_never_takes_a_bot_from_another_commander(self):
+        try_restore = function_body(self.cpp, r"void TryRestore\(\)\s*\{")
+        self.assertIn("h3::CommanderGuid(member).IsEmpty()", try_restore)   # only an UNBOUND member is joined again
+        self.assertNotIn("h3::CommanderGuid(member) != commander", try_restore)
+        restore = function_body(self.cpp, r"void RestoreOne\(ObjectGuid commander\)\s*\{")
+        self.assertIn("if (!h3::CommanderGuid(bot).IsEmpty())", restore)    # the last check before a bind: h3 still has no commander
+        self.assertIn("L::Owner", restore)
+        self.assertIn("MasterOf(member)", restore)                          # the master table authorizes a member too
+        self.assertIn("BotMgr::Instance().IsBot(member)", restore)
+        # A binding dropped without a release deletes its row (an orphan would restore a binding nobody stands behind after a restart).
+        prune = function_body(self.cpp, r"void PruneToStanding\(State& s\)\s*\{")
+        self.assertIn("store::Erase(Ctr(it->first))", prune)
+        commanded = function_body(self.cpp, r"bool IsCommandedBy\(Player\* commander, Player\* bot\)\s*\{")
+        self.assertIn("h3::CommanderGuid(bot->GetGUID()) != commander->GetGUID()", commanded)
 
     def test_the_dashboard_feeds_every_binding(self):
         self.assertIn("cmd::AppendBindings(bindings, shownRunLeaders);", self.dash)
@@ -191,8 +247,8 @@ class RowColumns(unittest.TestCase):
         source = text(CMD / "TbCmdBindingStore.cpp")
         check_row_columns(source)
         for mutation in (source.replace("`flags`, `bound_at` FROM", "`flags`, `bound_at`, `group_id` FROM"),
-                         source.replace("(`commander_guid`, `lead_guid`, `members`, `flags`, `bound_at`)",
-                                        "(`commander_guid`, `lead_guid`, `members`, `flags`, `bound_at`, `group_id`)")):
+                         source.replace('kColumns = "`commander_guid`, `lead_guid`, `members`, `flags`, `bound_at`"',
+                                        'kColumns = "`commander_guid`, `lead_guid`, `members`, `flags`, `bound_at`, `group_id`"')):
             with self.subTest(mutation=mutation[:60]):
                 with self.assertRaises(AssertionError):
                     check_row_columns(mutation)
@@ -204,6 +260,12 @@ MUTATIONS = {
                    "if (!facts.leadAlive)"),
     "away-grace": ("if (!facts.commanderOnline && facts.commanderGoneMs >= facts.commanderGraceMs && facts.commanderGraceMs >= 0)",
                    "if (!facts.commanderOnline)"),
+    "commander-member": ("if (std::find(stored.members.begin(), stored.members.end(), stored.commander) != stored.members.end())",
+                         "if (false)"),
+    "members-overflow": ("if (c < '0' || c > '9' || guid > (UINT64_MAX - 9) / 10)",
+                         "if (c < '0' || c > '9')"),
+    "claimed-steal": ("bool const foreign = owner && ((owner->commander && owner->commander != commander) ||",
+                      "bool const foreign = false && ((owner->commander && owner->commander != commander) ||"),
 }
 
 

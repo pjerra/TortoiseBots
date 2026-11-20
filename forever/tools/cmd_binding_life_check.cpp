@@ -63,6 +63,9 @@ void TestRow()
         row = party;
         row.flags = 16;           // a flag this build does not know
         CHECK(!L::Valid(row));
+        row = party;
+        row.members = { Tank, Cmd, Heal };    // the commander cannot be one of its own members (it would join its own party)
+        CHECK(!L::Valid(row));
     }
     // Members are written and read back in order, without zeroes or repeats.
     CHECK(L::EncodeMembers({ Tank, Heal, Dps }) == "10,11,12");
@@ -70,6 +73,10 @@ void TestRow()
     CHECK(L::DecodeMembers("").empty());
     // A malformed word is skipped, never guessed.
     CHECK((L::DecodeMembers("x,12") == std::vector<uint64_t>{ Dps }));
+    // A value past 64 bits is a bad word: it must never wrap into a small guid (18446744073709551617 would wrap to 1).
+    CHECK(L::DecodeMembers("18446744073709551617").empty());
+    CHECK(L::DecodeMembers("99999999999999999999,12").size() == 1);
+    CHECK((L::DecodeMembers("99999999999999999999,12") == std::vector<uint64_t>{ Dps }));
     // Flags round-trip.
     CHECK(L::FlagsOf(true, false, false, false) == L::FlagInParty);
     CHECK((L::FlagsOf(true, false, false, true) == (L::FlagInParty | L::FlagSystem)));
@@ -155,6 +162,41 @@ void TestReleaseReasons()
         facts.commanderInGroup = false;
         CHECK(L::Decide(inParty, facts) == L::End::CommanderLeftParty);
     }
+    // A raid binding: a raid group stands, a battleground group still ends it; a classic binding ends on any raid.
+    {
+        L::Stored raid = party;
+        raid.flags = L::FlagsOf(false, true, false, false);
+        L::Facts facts = Healthy();
+        facts.groupIsRaidOrBg = true;
+        CHECK(L::Decide(raid, facts) == L::End::None);
+        facts.groupIsBg = true;
+        CHECK(L::Decide(raid, facts) == L::End::GroupRaid);
+        facts = Healthy();
+        facts.groupIsRaidOrBg = true;
+        facts.memberCount = 10;
+        CHECK(L::Decide(party, facts) == L::End::GroupRaid);
+        facts = Healthy();
+        facts.memberCount = 6;
+        facts.groupIsRaidOrBg = true;
+        CHECK(L::Decide(raid, facts) == L::End::None);      // ten members fit a raid binding
+        facts.memberCount = 41;
+        CHECK(L::Decide(raid, facts) == L::End::GroupTooLarge);
+    }
+    // A player-led binding ignores who the group leader is (the player may lead); a system binding ignores a real player joining.
+    {
+        L::Stored playerLed = party;
+        playerLed.flags = L::FlagsOf(false, false, true, false);
+        L::Facts facts = Healthy();
+        facts.leadIsLeader = false;
+        CHECK(L::Decide(playerLed, facts) == L::End::None);
+        facts.realPlayerInGroup = true;
+        CHECK(L::Decide(playerLed, facts) == L::End::PlayerJoined);   // player-led is not in-party: a stranger still ends it
+        L::Stored system = party;
+        system.flags = L::FlagsOf(false, false, false, true);
+        facts = Healthy();
+        facts.realPlayerInGroup = true;
+        CHECK(L::Decide(system, facts) == L::End::None);
+    }
     // The most specific verdict wins: a lost group is reported as the group, not as the commander's absence.
     {
         L::Facts facts = Healthy();
@@ -210,12 +252,60 @@ void TestRestore()
         CHECK((plan.join == std::vector<uint64_t>{ Heal }));
         CHECK((plan.bind == std::vector<uint64_t>{ Tank, Heal }));
     }
-    // A group re-created after the restart: nothing in the row changes, because no group number is stored (a new counter is the live state's alone).
+    // A group re-created after the restart: the row itself is unchanged (no group number is stored), and the plan is the same after a round trip
+    // through the stored text - the value a restart really reads is the decoded one.
     {
         L::Stored const recreated = party;
         CHECK(recreated.members == party.members && recreated.flags == party.flags && recreated.boundAt == party.boundAt);
-        auto const plan = L::PlanRestore(recreated, true, { Tank, Heal, Dps });
-        CHECK(plan.ready && plan.bind.size() == 3);
+        L::Stored decoded;
+        decoded.commander = party.commander;
+        decoded.lead = party.lead;
+        decoded.members = L::DecodeMembers(L::EncodeMembers(party.members));
+        decoded.flags = party.flags;
+        decoded.boundAt = party.boundAt;
+        CHECK(L::Valid(decoded));
+        auto const plan = L::PlanRestore(decoded, true, { Tank, Heal, Dps });
+        CHECK(plan.ready && plan.bind.size() == 3 && plan.join.size() == 2);
+    }
+}
+
+void TestClaim()
+{
+    L::Stored const party = Party();
+    L::Owner tank; tank.member = Tank; tank.bot = true;
+    L::Owner heal; heal.member = Heal; heal.bot = true;
+    L::Owner dps; dps.member = Dps; dps.bot = true;
+    // Everything unbound and a host bot: the restore may take it all.
+    {
+        auto const claims = L::Claim(Cmd, party.members, { tank, heal, dps });
+        CHECK((claims.free == party.members) && claims.foreign.empty());
+    }
+    // A member bound to another commander is never taken (the review's steal): it is dropped from the row, the rest restores.
+    {
+        heal.commander = LeadOther;
+        auto const claims = L::Claim(Cmd, party.members, { tank, heal, dps });
+        CHECK((claims.free == std::vector<uint64_t>{ Tank, Dps }));
+        CHECK((claims.foreign == std::vector<uint64_t>{ Heal }));
+        heal.commander = 0;
+    }
+    // A member mastered by another character is never taken either (h3 may lag behind a `.tb master`), and neither is a real player.
+    {
+        dps.master = LeadOther;
+        heal.bot = false;
+        auto const claims = L::Claim(Cmd, party.members, { tank, heal, dps });
+        CHECK((claims.free == std::vector<uint64_t>{ Tank }));
+        CHECK((claims.foreign == std::vector<uint64_t>{ Dps, Heal }));
+        dps.master = 0;
+        heal.bot = true;
+    }
+    // Still this commander's: free. An unknown (offline) member contradicts nothing: free.
+    {
+        heal.commander = Cmd;
+        dps.master = Cmd;
+        auto const claims = L::Claim(Cmd, party.members, { tank, heal, dps });
+        CHECK((claims.free == party.members) && claims.foreign.empty());
+        auto const offline = L::Claim(Cmd, party.members, { tank });
+        CHECK((offline.free == party.members) && offline.foreign.empty());
     }
 }
 }
@@ -226,6 +316,7 @@ int main()
     TestReleaseReasons();
     TestDepartedFollowers();
     TestRestore();
+    TestClaim();
     std::printf("cmd_binding_life_check: %d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

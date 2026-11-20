@@ -84,6 +84,7 @@ struct State
     P::OrderStore log;                              // the cards' last orders, by card key; no whole-store commander cap
     struct Role { std::string role; uint32 atMs = 0; };
     std::map<ObjectGuid, Role> roles;
+    int64 maintainAtMs = 0;                         // the last 1 Hz upkeep tick (Maintain is called on every world tick)
     bool releasing = false;                         // this module's own party cleanup is running: its group events are not new release reasons
 };
 
@@ -387,6 +388,9 @@ void ApplyPartyAction(ObjectGuid commander, Meta const& m, L::End end)
     }
 }
 
+// The card keys that stand now (defined with the card read below): what a release must leave in the order log.
+std::unordered_set<uint64> StandingKeys();
+
 void ReleaseCommander(ObjectGuid commander, L::End end)
 {
     State& s = Get();
@@ -402,9 +406,16 @@ void ReleaseCommander(ObjectGuid commander, L::End end)
     for (Follower const& follower : m.followers)
         RestoreFollower(follower, m.lead);
     for (ObjectGuid bot : BoundTo(commander))
+    {
+        // A released bot must not keep its former commander as its master (review fix: it kept following and teleporting to him; the `.tb master
+        // none` command clears the master the same way).
+        TortoiseBots::BotManager::Instance().ClearBotMaster(bot);
         h3::SetCommander(bot, ObjectGuid::Empty);
+    }
     store::Erase(commander.GetCounter());
     s.releasing = wasReleasing;
+    // The released card's order log goes with it at once, whether the dashboard reads the cards or not.
+    s.log.Retain(StandingKeys());
     sLog.outString("TortoiseBots: the commander binding of %s was released: %s (%s)", NameOf(commander).c_str(), L::EndText(end), L::EndCode(end));
 }
 
@@ -477,6 +488,26 @@ L::Facts FactsFor(ObjectGuid commander, Meta& m, Player* commanderPlayer, Player
     return facts;
 }
 
+// May this character own bots at all? This host has no durable ownership table (BotManager::GetOwnedCharacter answers false), so the two
+// authoritative relations it does keep decide: a real network player session (never a headless or bot session), or a host bot of this module (the
+// master table a bot's followers read). Anything else named by a stored row is a stale, corrupted or hand-inserted commander and is refused.
+bool AuthorizedCommander(Player* player)
+{
+    if (!player || !player->GetSession())
+        return false;
+    if (HasNetworkTransportCompat(player->GetSession()))
+        return true;
+    return BotMgr::Instance().IsBot(player->GetGUID());
+}
+
+// The stored row is dead: nothing of it is restored, and the row goes with it (the same "do less" rule as a refused row).
+void RefuseRow(ObjectGuid commander, char const* why)
+{
+    sLog.outError("TortoiseBots: stored commander binding of %s: refused (%s)", NameOf(commander).c_str(), why);
+    Get().metas.erase(commander);
+    store::Erase(commander.GetCounter());
+}
+
 void RestoreOne(ObjectGuid commander)
 {
     State& s = Get();
@@ -484,12 +515,39 @@ void RestoreOne(ObjectGuid commander)
     if (it == s.metas.end())
         return;
     Meta& m = it->second;
+    if (m.lead.IsEmpty())
+        return;     // a card record made by Read (a run's tank), not a binding this module restores
     Player* commanderPlayer = InWorld(commander);
-    if (!commanderPlayer)
+    if (!commanderPlayer || !AuthorizedCommander(commanderPlayer))
         return;
+    // THE AUTHORIZATION (review fix): every stored member is checked against what the host says now. A member bound to another commander, mastered
+    // by another character, or not a host bot at all is never joined, grouped or bound by this row; it is dropped from the row instead. A lead the
+    // host no longer gives this commander ends the row whole.
+    std::vector<uint64_t> storedMembers;
+    std::vector<L::Owner> owners;
+    for (ObjectGuid member : m.members)
+    {
+        storedMembers.push_back(member.GetCounter());
+        if (Player* player = InWorld(member))
+            owners.push_back({ member.GetCounter(), h3::CommanderGuid(member).GetCounter(), BotMgr::Instance().MasterOf(member).GetCounter(),
+                BotMgr::Instance().IsBot(member) });
+    }
+    L::Claims const claims = L::Claim(commander.GetCounter(), storedMembers, owners);
+    if (std::find(claims.foreign.begin(), claims.foreign.end(), m.lead.GetCounter()) != claims.foreign.end())
+    {
+        RefuseRow(commander, "its lead is commanded elsewhere or is no host bot");
+        return;
+    }
+    if (!claims.foreign.empty())
+    {
+        m.members.erase(std::remove_if(m.members.begin(), m.members.end(), [&](ObjectGuid member) {
+            return std::find(claims.foreign.begin(), claims.foreign.end(), member.GetCounter()) != claims.foreign.end();
+        }), m.members.end());
+        SaveRow(commander, m);
+    }
     std::vector<uint64_t> online;
     for (ObjectGuid member : m.members)
-        if (Player* player = InWorld(member))
+        if (InWorld(member))
             online.push_back(member.GetCounter());
     L::Stored const row = RowOf(commander, m);
     L::RestorePlan const plan = L::PlanRestore(row, true, online);
@@ -520,10 +578,18 @@ void RestoreOne(ObjectGuid commander)
         ObjectGuid const bot = PlayerGuid(counter);
         if (!InWorld(bot) || h3::CommanderGuid(bot) == commander)
             continue;
+        if (!h3::CommanderGuid(bot).IsEmpty())
+            continue;       // handed to another commander between the check and the bind: never taken
         if (!TortoiseBots::BotManager::Instance().BindBotMaster(bot, commander))
             continue;
         h3::SetCommander(bot, commander);
     }
+    // An in-party binding puts the commander back into the party: without it the release rule reads him gone from the party and ends the binding
+    // on the next tick (review fix). A party that refuses him ends it honestly with the same reason.
+    if ((m.flags & L::FlagInParty) && commanderPlayer)
+        if (Group* group = InWorld(m.lead) ? InWorld(m.lead)->GetGroup() : nullptr)
+            if (!group->IsMember(commanderPlayer->GetGUID()) && group->IsCreated())
+                group->AddMember(commanderPlayer);
     // The binding stands once the party it was made on exists again: with the lead alone in the world (no group yet) the restore waits for the next
     // stored member's login, which forms the group - a party cannot be made of one bot, and the release rule would end a groupless binding.
     Player* restoredLead = InWorld(m.lead);
@@ -541,14 +607,17 @@ void TryRestore()
     std::vector<ObjectGuid> commanders;
     for (auto const& [commander, m] : Get().metas)
     {
+        if (m.lead.IsEmpty())
+            continue;
         if (!m.restored)
         {
             commanders.push_back(commander);
             continue;
         }
-        // A member of the stored row that is back in the world and not bound yet (it was offline at the restore): join it now.
+        // A member of the stored row that is back in the world and UNBOUND (it was offline at the restore): join it now. A member bound to some
+        // commander - this one or, after a `.tb master`, another - is never touched here: taking it back is the review's steal.
         for (ObjectGuid member : m.members)
-            if (InWorld(member) && h3::CommanderGuid(member) != commander)
+            if (InWorld(member) && h3::CommanderGuid(member).IsEmpty())
             {
                 commanders.push_back(commander);
                 break;
@@ -566,10 +635,19 @@ void Maintain()
     State& s = Get();
     if (s.metas.empty())
         return;
+    // The world tick calls this 20 times a second; a fourth of the releases it decides and every restore step only need one tick a second (review
+    // fix: an unrestored party re-ran GroupWith and its log line on every world tick).
+    static constexpr int64 kMaintainMs = 1000;
+    int64 const nowMs = NowMs();
+    if (s.maintainAtMs && nowMs >= s.maintainAtMs && nowMs - s.maintainAtMs < kMaintainMs)
+        return;
+    s.maintainAtMs = nowMs;
     TryRestore();
     std::vector<ObjectGuid> commanders;
     for (auto const& [commander, m] : s.metas)
-        if (m.restored)
+        // A record with no lead is a card the read made for a run's tank (no `.tb master` named its lead): its bindings belong to the run, and
+        // releasing them here would clear the run's h3 pairs (review fix).
+        if (m.restored && !m.lead.IsEmpty())
             commanders.push_back(commander);
     for (ObjectGuid commander : commanders)
     {
@@ -782,6 +860,10 @@ bool IsCommandedBy(Player* commander, Player* bot)
     auto const it = s.metas.find(commander->GetGUID());
     if (it == s.metas.end() || !it->second.restored)
         return false;
+    // The record is only half the answer: h3's table must bind this very bot to this very commander too (review fix: a party member commanded by
+    // someone else, or a real player in the lead's party, answered true).
+    if (h3::CommanderGuid(bot->GetGUID()) != commander->GetGUID())
+        return false;
     Player* lead = InWorld(it->second.lead);
     Group* group = lead ? lead->GetGroup() : nullptr;
     return group && group->IsMember(bot->GetGUID());
@@ -853,12 +935,24 @@ std::unordered_set<uint64> StandingKeys()
 }
 
 // A released binding (or a rebind that leaves a commander no bot) takes its record, its order log and its repeat suppression with it at once, not only at
-// the next read.
+// the next read. A dropped binding's stored row goes too: left behind, the next start would restore a binding nobody stands behind any more (a commander
+// displaced by another `.tb master`, review fix).
 void PruneToStanding(State& s)
 {
     std::unordered_set<uint64> const keep = StandingKeys();
     for (auto it = s.metas.begin(); it != s.metas.end();)
-        it = keep.count(Ctr(it->first)) ? std::next(it) : s.metas.erase(it);
+    {
+        if (keep.count(Ctr(it->first)))
+        {
+            ++it;
+            continue;
+        }
+        // Only a card with nothing behind it loses its row: a commander another commander's card folded in (a chain: T commands bots and C commands T)
+        // has no card key of its own, but its h3 pairs still stand and the next restart restores them from that row.
+        if (!it->second.lead.IsEmpty() && BoundTo(it->first).empty())
+            store::Erase(Ctr(it->first));
+        it = s.metas.erase(it);
+    }
     s.log.Retain(keep);
 }
 
@@ -982,6 +1076,10 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
     {
         // The command released the bots it addressed; a commander that has no bot left loses its record and its row now (the party action runs while
         // the group is still there).
+        std::vector<ObjectGuid> addressed;
+        for (Player* bot : bots)
+            if (bot)
+                addressed.push_back(bot->GetGUID());
         std::vector<ObjectGuid> commanders;
         for (auto const& [cmd, m] : s.metas)
             commanders.push_back(cmd);
@@ -991,14 +1089,30 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
             if (it == s.metas.end())
                 continue;
             Meta& m = it->second;
-            // A bot this command released is no longer part of the binding: the stored row follows h3's table, so a restart does not bring it back.
+            // A card the read made for a run's tank (no `.tb master` named its lead) is not a binding of this module: its h3 pairs belong to the run.
+            if (m.lead.IsEmpty() && m.members.empty())
+                continue;
+            // Only the bots this command really released leave the row: the stored row follows h3's table, so a restart does not bring one back, but a
+            // member that is merely offline (or another commander's) stays for its own restore.
             size_t const before = m.members.size();
             m.members.erase(std::remove_if(m.members.begin(), m.members.end(),
-                [&](ObjectGuid member) { return member != m.lead && h3::CommanderGuid(member) != cmd; }), m.members.end());
-            if (m.members.size() != before)
-                SaveRow(cmd, m);
-            if (BoundTo(cmd).empty())
+                [&](ObjectGuid member) {
+                    return std::find(addressed.begin(), addressed.end(), member) != addressed.end() && h3::CommanderGuid(member) != cmd;
+                }), m.members.end());
+            if (m.members.empty())
+            {
+                // h3 has no bot of this commander left: nothing stands behind the record, whatever the row said.
                 ReleaseCommander(cmd, L::End::Unbound);
+                continue;
+            }
+            // A released lead hands the binding to a follower that is still bound (the old code kept it in the row and in m.lead).
+            ObjectGuid const previousLead = m.lead;
+            if (h3::CommanderGuid(m.lead) != cmd)
+                m.lead = BoundTo(cmd).empty() ? m.members.front() : BoundTo(cmd).front();
+            if (m.lead != previousLead)
+                SyncFollowers(cmd, m, previousLead);       // the followers pointed at the released lead get their own targets back
+            if (m.members.size() != before || m.lead != previousLead)
+                SaveRow(cmd, m);
         }
         return;
     }
@@ -1007,6 +1121,17 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
     if (bound.empty())
         return;
     Meta& m = s.metas[commander->GetGUID()];
+    // A pending row whose party never came back is REPLACED by this explicit bind: its old (offline) lead is not part of what just bound, and keeping
+    // it would make the new row invalid and release the new binding at once (review fix).
+    if (!m.restored)
+    {
+        m.lead = ObjectGuid::Empty;
+        m.members.clear();
+        m.followers.clear();
+        m.leadDeadSinceMs = 0;
+        m.commanderGoneSinceMs = 0;
+        m.boundAt = 0;
+    }
     ObjectGuid const previousLead = m.lead;
     if (!m.boundAt)
         m.boundAt = now;

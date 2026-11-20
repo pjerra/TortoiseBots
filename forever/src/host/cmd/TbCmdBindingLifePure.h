@@ -12,7 +12,8 @@
 //    became a raid or grew beyond five, the commander left an in-party binding) plus the two timers P2 adds - a lead dead past its grace and a
 //    commander away past the mastered-bot grace. The timers never release sooner than their grace.
 //  * how a stored row is restored: only with the commander and the lead back in the world (the spec's mutation: restoring with the lead offline must
-//    not happen), then meetings to join and bots to bind, online ones only.
+//    not happen), then meetings to join and bots to bind, online ones only - and only the members the HOST says are still this commander's
+//    (`Claim`: a bot handed to another commander, or a character that is no host bot, is never taken).
 #pragma once
 
 #include "runtime/RemoteCommanderPolicy.h"
@@ -88,7 +89,7 @@ inline std::vector<uint64_t> DecodeMembers(std::string const& text)
             bool digits = true;
             for (char c : word)
             {
-                if (c < '0' || c > '9')
+                if (c < '0' || c > '9' || guid > (UINT64_MAX - 9) / 10)   // a value past 64 bits is a bad word, never a wrapped guid
                 {
                     digits = false;
                     break;
@@ -105,11 +106,14 @@ inline std::vector<uint64_t> DecodeMembers(std::string const& text)
     return members;
 }
 
-// The five fields of a row, checked as one: the lead is one of the members, the members are unique and non-zero, the flags are known. A row this
-// build did not write is refused whole (do less: none is restored); nothing else may be stored, so a group number can never come back from a database.
+// The five fields of a row, checked as one: the lead is one of the members, the members are unique and non-zero, the commander is not one of them
+// (a bot cannot command itself, and a row that says so would bind the commander into its own party), the flags are known. A row this build did not
+// write is refused whole (do less: none is restored); nothing else may be stored, so a group number can never come back from a database.
 inline bool Valid(Stored const& stored)
 {
     if (!stored.commander || !stored.lead || stored.commander == stored.lead)
+        return false;
+    if (std::find(stored.members.begin(), stored.members.end(), stored.commander) != stored.members.end())
         return false;
     if (stored.flags & ~(FlagInParty | FlagRaid | FlagPlayerLed | FlagSystem))
         return false;
@@ -268,6 +272,45 @@ struct RestorePlan
     std::vector<uint64_t> join;         // online members (the lead excluded) to put into the lead's party, stored order
     std::vector<uint64_t> bind;         // the lead first, then the online members: each one's commander is the stored commander
 };
+
+// What the host knows about one stored member now. `bot` is the module's host-bot table (only a bot may ever be grouped and bound), `commander`
+// h3's table and `master` the host master the bot follows. None of them is a value a row can write: the row names characters, the host says what
+// they are.
+struct Owner
+{
+    uint64_t member = 0;
+    uint64_t commander = 0;             // h3's commander now (0 = none)
+    uint64_t master = 0;                // the host master now (0 = none)
+    bool bot = false;                   // a host bot of this module
+};
+
+struct Claims
+{
+    std::vector<uint64_t> free;         // unclaimed by anyone else: the restore may join and bind them
+    std::vector<uint64_t> foreign;      // bound to another commander, mastered by another character, or not a host bot: dropped, never taken
+};
+
+// THE AUTHORIZATION of a restore: a stored member that the host says belongs to another commander (h3 or the master table) is never joined,
+// grouped or bound by this row, and a stored character that is not a host bot is never bound at all. The row follows the host: the foreign
+// entries are dropped from it. A member the caller does not describe (offline) is free: there is nothing to contradict the row.
+inline Claims Claim(uint64_t commander, std::vector<uint64_t> const& members, std::vector<Owner> const& current)
+{
+    Claims claims;
+    for (uint64_t member : members)
+    {
+        Owner const* owner = nullptr;
+        for (Owner const& candidate : current)
+            if (candidate.member == member)
+            {
+                owner = &candidate;
+                break;
+            }
+        bool const foreign = owner && ((owner->commander && owner->commander != commander) ||
+            (owner->master && owner->master != commander) || !owner->bot);
+        (foreign ? claims.foreign : claims.free).push_back(member);
+    }
+    return claims;
+}
 
 // `online`: the members (the lead included) that are in the world now. A member that is not online yet is skipped - the row stays and the next login
 // tries again - but the commander and the lead must both be there. An offline lead must never be "restored" by binding the others around a stale row.

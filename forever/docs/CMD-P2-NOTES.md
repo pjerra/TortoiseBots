@@ -26,8 +26,18 @@ Spec: `~/TortoiseBots-audit/FOREVER-COMMANDER-PORT-SPEC.md` (P2 row in section 5
   whenever the lead's group holds a bound follower, so a group re-created around the lead keeps the binding and the card reports the new counter.
 * **A fallback does less.** With the key off nothing is written or read. With the key on but the table missing (no privilege, no migration) one error
   line is logged and every read/write is skipped: persistence is off for the session, the in-memory binding is unaffected.
-* **Every characters query is guarded.** `CharacterQueryCompat` (TbCmdBindingStore.cpp) is `WorldQueryCompat`'s characters twin: it asks
-  information_schema for the table and the columns first, because a query naming a missing table aborts this core (MySQLConnection.cpp).
+* **Every characters statement is guarded, including the writes.** `CharacterQueryCompat` (TbCmdBindingStore.cpp) is `WorldQueryCompat`'s characters
+  twin: it asks information_schema for the table and the columns first, because a statement naming a missing table aborts this core
+  (MySQLConnection.cpp). The same five-column check runs before EVERY write (`Writable`/`CheckSchema`): a cached "the table is there" is never trusted,
+  so a table dropped or altered after the load disables persistence instead of reaching the core. The guard also refuses any table but this store's own.
+* **One atomic write.** A save is one `INSERT ... ON DUPLICATE KEY UPDATE` on a synchronous connection (the module's row has no prepared statement of
+  its own on this core), so there is no DELETE-then-INSERT window: a crash, a disconnect or a refused INSERT can never leave the binding deleted. The
+  in-memory view changes only after the row is read back; a write that did not land logs one line.
+* **A restore only takes what the host says is this commander's.** Every stored member is checked against h3's table, the host's master table and the
+  host-bot table (`life::Claim`): a bot bound or mastered elsewhere, or a character that is no host bot, is dropped from the row, never joined or bound.
+  A lead that is no longer this commander's ends the row (and deletes it); the commander itself must be a real network player session or a host bot.
+  An in-party binding puts the commander back into the party during the restore, and a released bot loses its master (`ClearBotMaster`), not only its
+  h3 pair.
 * **Nothing is written on a shutdown.** `NoteLogout` returns while `World::IsStopped()`: a server restart keeps the row and the next start restores it.
   A real logout starts the commander's grace (`TortoiseBots.Slice.MasterGraceSeconds`: the same grace the bots themselves wait for their master).
 * **The two timers.** A lead dead for `TortoiseBots.Slice.DeadBackstopSeconds` (the module's existing "a commanded bot's body lies dead" grace) releases
@@ -60,7 +70,7 @@ Two things the live run taught, both fixed here:
 | File | What |
 |---|---|
 | `forever/src/host/cmd/TbCmdBindingLifePure.h` | pure: the stored row's five fields and `Valid`, the release verdict `Decide` (the shared `CheckBinding`'s reasons plus the two graces), the party reason mapping, `Departed`, and the restore gate `PlanRestore` (commander AND lead in the world). Tested standalone |
-| `forever/src/host/cmd/TbCmdBindingStore.{h,cpp}` | the characters-database row: config, the guard `CharacterQueryCompat` (WorldQueryCompat's characters twin), the CREATE TABLE IF NOT EXISTS, load once, save/erase with `{}` formats |
+| `forever/src/host/cmd/TbCmdBindingStore.{h,cpp}` | the characters-database row: config (re-read on every reload), the guard `CharacterQueryCompat` (WorldQueryCompat's characters twin), the five-column check before every write, the CREATE TABLE IF NOT EXISTS once per config, one atomic upsert / one DELETE with a read-back, load once per load |
 | `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | the record beside h3's table (flags, members, followers and their saved follow targets, the in-memory group counter, the two timers), the release, the party action, the restore, the P1 card and the P2 hooks |
 | `forever/src/TbScripts.cpp` | the `GroupScript` row (`OnAddMember`/`OnRemoveMember`/`OnChangeLeader`/`OnDisband`), `PlayerScript` OnLogin/OnLogout, `UnitScript::OnUnitDeath`, `Maintain` in the tick, `LoadBindings` at world start and on a config reload |
 | `forever/src/host/TbHostOwnership.cpp` | `IsCommandedBy` / `IsInOwnBindingGroup` answer from the record |
@@ -112,8 +122,36 @@ four host bots (Mtank, Mpriest, Mdpsa, Mcmd; two fresh accounts) were created, l
 ## Limits (things that do less)
 
 * A binding of one bot with no party is released by the group rule (as T's), so a single-bot binding does not survive a restart.
-* A member that was offline at the restore is bound when it comes back in the same session; after a restart the row is what was bound then, and a bot
-  released by `.tb master <bot> none` is dropped from the row.
+* A member that was offline at the restore is joined when it comes back in the same session **and is still unbound**; a member bound to another
+  commander is never taken back. After a restart the row is what was bound then, and a bot released by `.tb master <bot> none` is dropped from the row.
 * The card's `boundat` and flags come from the bind; `group=` is always the lead's live counter (no group number is stored).
 * The threat-backoff and autonomy ledgers are not ported (dead weight on this port, see above); the slice factory already carries the commanded
   threat back-off and gives no open-world kit.
+* **The commander's ownership cannot be checked against an account.** This host has no durable ownership table (`BotManager::GetOwnedCharacter`
+  answers false), so the restore authorizes a commander that is a real network player session or a host bot of this module, and authorizes every
+  stored bot against h3's table, the master table and the host-bot table. A hand-inserted row naming an online human is still a binding to that human:
+  the row is the operator's, and the module has nothing else to compare it with.
+* A run's tank is a card record made by the read, not a binding this module restores: it has no `.tb master` lead, so `Maintain` and the release
+  commands leave its h3 pairs to the run (`TbRun.cpp`).
+
+## Fix round (reviews of 2026-11-20)
+
+Every finding was checked against the code first. `fix` means changed here with a check that fails on the previous code (`forever/tools/
+cmd_binding_life_check.cpp` and its mutations in `test_cmd_p2_wiring.py`, or a wiring pin on the C++ path).
+
+| Review | Finding | Verdict | Where / why |
+|---|---|---|---|
+| Codex | [critical] Restore can assign bots to an arbitrary online character | fix | `RestoreOne`: the commander must be a real network player session or a host bot (`AuthorizedCommander`) and every stored member must be free per `life::Claim` (h3 table, master table, host-bot table) before any grouping or bind; a foreign lead ends the row, which is deleted (`RefuseRow`). Pure check: `TestClaim`; mutation `claimed-steal`. Limit: no account ownership table exists to compare against (see Limits). |
+| Codex | [high] Writes bypass the missing-schema compatibility guard | fix | `store::Writable`/`CheckSchema` run the five-column check before EVERY write (no cached trust), `store::DirectExecute` only; the guard refuses any table but this store's own. Wiring pins in `test_persistence_is_off_by_default_and_every_read_is_guarded`. |
+| Codex | [high] Saving a binding can permanently lose its row | fix | one `INSERT ... ON DUPLICATE KEY UPDATE` in `store::Save`, read back before the in-memory view changes; `store::Erase` read back too; a write that did not land logs one line. No DELETE/INSERT pair is left. |
+| Gemini | [critical] `Read()` makes a record for a run's tank with no lead, so `Maintain` wipes the run's bindings | fix | `Maintain` (and `TryRestore`, the release walk) skip a record whose lead is empty: such a record is a card the read made, not a binding of this module. Wiring pin in `test_the_release_reasons...`. |
+| Gemini | [critical] `TryRestore`/`RestoreOne` steal bots from other commanders | fix | `TryRestore` only re-joins an UNBOUND member; `RestoreOne` re-checks h3 before each bind and cuts foreign members via `Claim`. Pins in `test_a_restore_never_takes_a_bot_from_another_commander`. |
+| Gemini | [high] An in-party binding never puts the commander back into the party | fix | `RestoreOne` adds the commander to the lead's group when the row says `FlagInParty`; the release rule then reads him present. Pin on `group->AddMember(commanderPlayer)`. |
+| Gemini | [high] `Save`/`Erase` are independent async statements that can reorder | fix | same as the Codex "lose its row": one synchronous atomic statement per write. |
+| Gemini | [high] `Maintain` runs on every world tick | fix | 1 Hz throttle (`kMaintainMs`) before the work; wiring pin asserts the throttle precedes `TryRestore`. |
+| Gemini | [high] `ReleaseCommander` leaves the bots' master bound | fix | `ClearBotMaster(bot)` for every released pair, as `.tb master none` does. Pin in the release assertions. |
+| Gemini | [medium] `NoteMaster` corrupts `m.lead`/`m.members` | fix | the release path removes only the addressed bots that h3 really released, promotes a released lead to a still-bound follower (and re-points the followers), and keeps offline stored members; a rebind over a pending row replaces it instead of keeping its offline lead. |
+| Gemini | [medium] Displaced rows and the order log grow without bound | fix | `PruneToStanding` deletes the row of a card with no bound bot left (it is not re-created after a restart); `ReleaseCommander` retains the log to the standing keys. Pin on `store::Erase` in `PruneToStanding`. |
+| Gemini | [medium] `Save`/`Erase` bypass the guard, `EnsureTable` retries DDL, `LoadConfig` never resets | fix | all three: `Writable` before each write, the CREATE only once per config (`tableTried`), `LoadConfig` clears `loadTried`, `tableReady`, the warning and the rows on a reload; `Save`/`Erase`/`Rows` configure first. |
+| Gemini | [medium] Tests leave invariants untested | fix | `cmd_binding_life_check.cpp`: the restore round-trips the stored text instead of comparing a copy; every release reason with `FlagRaid`/`FlagPlayerLed`/`FlagSystem`/`groupIsBg`; `Claim`; commander-in-members; a >64-bit member word. `test_cmd_p2_wiring.py`: the persistence, throttle, restore and steal pins above, three new mutations (`commander-member`, `members-overflow`, `claimed-steal`), each must FAIL the check. Limit: the core-facing C++ has no unit test (it needs a live core); the wiring pins are the check there. |
+| Gemini | [low] `IsCommandedBy` ignores h3 ownership; `Valid`/`DecodeMembers` edges; guard escaping | fix | `IsCommandedBy` requires `h3::CommanderGuid(bot) == commander`; `Valid` refuses the commander inside its own members; `DecodeMembers` drops a word past 64 bits instead of wrapping; `CharacterQueryCompat` refuses any table but this store's own literal, so no name can ever be escaped in. |
