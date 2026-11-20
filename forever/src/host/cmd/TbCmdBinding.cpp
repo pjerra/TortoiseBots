@@ -610,7 +610,8 @@ void LoadBindings()
 void NoteGroupAdd(Group* group, ObjectGuid guid)
 {
     State& s = Get();
-    if (s.releasing || !group)
+    // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
+    if (World::IsStopped() || s.releasing || !group)
         return;
     std::vector<ObjectGuid> releases;
     for (auto const& [commander, m] : s.metas)
@@ -632,7 +633,8 @@ void NoteGroupAdd(Group* group, ObjectGuid guid)
 void NoteGroupRemove(Group* group, ObjectGuid guid)
 {
     State& s = Get();
-    if (s.releasing || !group)
+    // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
+    if (World::IsStopped() || s.releasing || !group)
         return;
     std::vector<ObjectGuid> releases;
     std::vector<ObjectGuid> changed;
@@ -667,7 +669,8 @@ void NoteGroupRemove(Group* group, ObjectGuid guid)
 void NoteGroupLeader(Group* group, ObjectGuid newLeader)
 {
     State& s = Get();
-    if (s.releasing || !group)
+    // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
+    if (World::IsStopped() || s.releasing || !group)
         return;
     std::vector<ObjectGuid> releases;
     for (auto const& [commander, m] : s.metas)
@@ -687,7 +690,8 @@ void NoteGroupLeader(Group* group, ObjectGuid newLeader)
 void NoteGroupDisband(Group* group)
 {
     State& s = Get();
-    if (s.releasing || !group)
+    // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
+    if (World::IsStopped() || s.releasing || !group)
         return;
     std::vector<ObjectGuid> releases;
     for (auto const& [commander, m] : s.metas)
