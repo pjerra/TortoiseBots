@@ -48,6 +48,8 @@ check(set(s5) <= set(s11), "SLICE11.txt lacks paths of SLICE5.txt: " + ", ".join
 klass = [p for p in s11 if "/strategy/hunter/" in p or "/strategy/warlock/" in p]
 check(len(klass) == 22, "SLICE11.txt should hold 22 hunter and warlock .cpp, has %d" % len(klass))
 check(len(s11) - len(s5) == 25, "SLICE11.txt should add 25 paths to SLICE5.txt (22 class files + CancelChannelAction, CombatActions, ActiveSpellValue), adds %d" % (len(s11) - len(s5)))
+check("ai/playerbot/strategy/actions/EquipAction.cpp" not in s11, "SLICE11.txt must not carry EquipAction.cpp (it links RandomItemMgr, ItemUsageValue and three more owners outside the slice); the warlock stones use the StandIn in SliceLinkStubs.cpp")
+check("void ai::EquipAction::EquipItem(PlayerbotAI*, Player*, Item*, bool)" in read("forever/src/slice/SliceLinkStubs.cpp"), "SliceLinkStubs.cpp lacks the EquipAction::EquipItem StandIn the warlock stones link to")
 
 # ---- compat pairs ----
 HELPER = re.compile(r"\binline\s+[\w:<>&\*\s]+?\b(\w+Compat)\s*\(")
