@@ -47,77 +47,59 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
         return false;
     bool ok = false;
     auto const done = [&]() { if (outOk) *outOk = ok; return true; };
+    std::string orderText;
+    for (size_t i = 0; i < args.w.size(); ++i)
+        orderText += (i ? " " : "") + args.w[i];
+    auto const refuse = [&](std::string const& code, std::string const& detail)
+    {
+        NoteRunOrder(lead, orderText, false, code, detail);
+        h3::Fail(handler, args, "cmd", code, detail);
+        return done();
+    };
 
     if (!tactics::Enabled())
-    {
-        h3::Fail(handler, args, "cmd", "disabled", "TortoiseBots.Orders.Tactical is 0");
-        return done();
-    }
+        return refuse("disabled", "TortoiseBots.Orders.Tactical is 0");
 
     // The words after the verb: `stop [bot]`, `stance <word> [bot]`, `engage [seconds]`, the rest take none.
     std::string named, stanceWord, engageText;
     if (verb == "stop")
     {
         if (args.w.size() > 2)
-        {
-            h3::Fail(handler, args, "cmd", "bad-argument", "stop [bot]");
-            return done();
-        }
+            return refuse("bad-argument", "stop [bot]");
         if (args.w.size() == 2)
             named = args.w[1];
     }
     else if (verb == "stance")
     {
         if (args.w.size() < 2)
-        {
-            h3::Fail(handler, args, "cmd", "missing-argument", "stance <near|tank|turnback|turn|behind> [bot]");
-            return done();
-        }
+            return refuse("missing-argument", "stance <near|tank|turnback|turn|behind> [bot]");
         if (!tactics::NormaliseStance(args.w[1], stanceWord))
-        {
-            h3::Fail(handler, args, "cmd", "bad-argument", "stance <near|tank|turnback|turn|behind> [bot]");
-            return done();
-        }
+            return refuse("bad-argument", "stance <near|tank|turnback|turn|behind> [bot]");
         if (args.w.size() > 3)
-        {
-            h3::Fail(handler, args, "cmd", "bad-argument", "stance <near|tank|turnback|turn|behind> [bot]");
-            return done();
-        }
+            return refuse("bad-argument", "stance <near|tank|turnback|turn|behind> [bot]");
         if (args.w.size() == 3)
             named = args.w[2];
     }
     else if (verb == "engage")
     {
         if (args.w.size() > 2)
-        {
-            h3::Fail(handler, args, "cmd", "bad-argument", "engage [seconds 0-60]");
-            return done();
-        }
+            return refuse("bad-argument", "engage [seconds 0-60]");
         if (args.w.size() == 2)
             engageText = args.w[1];
     }
     else if (args.w.size() > 1)
-    {
-        h3::Fail(handler, args, "cmd", "unexpected-argument", verb + " takes no argument");
-        return done();
-    }
+        return refuse("unexpected-argument", verb + " takes no argument");
 
     unsigned engageSeconds = 0;
     if (verb == "engage" && !tactics::ParseEngageSeconds(engageText, engageSeconds))
-    {
-        h3::Fail(handler, args, "cmd", "bad-argument", "engage [seconds 0-60]");
-        return done();
-    }
+        return refuse("bad-argument", "engage [seconds 0-60]");
 
     std::vector<Player*> addressed;
     if (!named.empty())
     {
         Player* bot = BoundBot(named, lead, members);
         if (!bot)
-        {
-            h3::Fail(handler, args, "cmd", "no-bot", named + " is not a bot of your binding");
-            return done();
-        }
+            return refuse("no-bot", named + " is not a bot of your binding");
         addressed.push_back(bot);
     }
     else
@@ -132,15 +114,8 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
         for (ObjectGuid const& guid : members)
             add(guid);
         if (addressed.empty())
-        {
-            h3::Fail(handler, args, "cmd", "not-alive", "no bot of your binding is alive");
-            return done();
-        }
+            return refuse("not-alive", "no bot of your binding is alive");
     }
-
-    std::string orderText;
-    for (size_t i = 0; i < args.w.size(); ++i)
-        orderText += (i ? " " : "") + args.w[i];
 
     struct Refusal
     {
@@ -166,8 +141,7 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
     {
         // Nothing was queued: the reply is the one-line refusal.
         Refusal const& first = refusals.front();
-        h3::Fail(handler, args, "cmd", first.code.empty() ? "failed" : first.code, first.detail);
-        return done();
+        return refuse(first.code.empty() ? "failed" : first.code, first.detail);
     }
 
     h3::Reply reply(handler, args, "cmd");
