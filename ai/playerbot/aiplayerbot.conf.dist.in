@@ -3773,8 +3773,10 @@ AiPlayerbot.LootDelayDelay = 1000
 
 # A queued action basket expires after this many ms
 #AiPlayerbot.ExpireActionTime = 5000
-# Dispel is skipped for auras with less than this many ms left
+# Dispel is skipped for non-dangerous auras with less than this many ms left
 #AiPlayerbot.DispelAuraDuration = 2000
+# Minimum mana percent to dispel harmless/non-dangerous auras (0 disables)
+#AiPlayerbot.DispelMinMana = 25
 # Delay between flee/return attempts after a failed move home
 #AiPlayerbot.ReturnDelay = 7000
 
@@ -3857,6 +3859,8 @@ AiPlayerbot.EnableCustomRaidTactics = 1
 #AiPlayerbot.AlmostFullHealth = 90
 #AiPlayerbot.LowMana = 15
 #AiPlayerbot.MediumMana = 40
+# Mana percent below which a druid bot casts Innervate on a group member or self
+#AiPlayerbot.InnervateManaThreshold = 25
 
 # Ordered pull (".bot action pull [seconds]" / ".bot action pullback [seconds]").
 # The DPS join delay runs from the pull landing (pull) or from the tank back at

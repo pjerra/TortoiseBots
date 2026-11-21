@@ -4,6 +4,7 @@
 #include "playerbot/policy/class/BearRagePolicy.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
+#include "playerbot/strategy/druid/DruidInnervateHelper.h"
 
 namespace ai
 {
@@ -297,15 +298,10 @@ namespace ai
                 if (manual && IsTargetValid(manual))
                     return manual;
             }
-            // Turtle 29166 is a single-target healer battery: prefer the
-            // lowest-mana party healer under LowMana, fall back to self.
-            // Routed through the shared "healer low mana" value so trigger
-            // and action agree on the target (PR #650 unification with #615).
-            Unit* lowestHealer = AI_VALUE(Unit*, "healer low mana");
-            if (lowestHealer && IsTargetValid(lowestHealer))
-                return lowestHealer;
-            Unit* fallback = CastSpellAction::GetTarget();
-            return (fallback && IsTargetValid(fallback)) ? fallback : nullptr;
+            Unit* best = FindBestInnervateTarget(ai, bot);
+            if (best && bot->GetGroup() && best != bot)
+                BuffClaimRegistry::Claim(bot->GetObjectGuid(), best->GetObjectGuid(), "innervate");
+            return best;
         }
 
         bool IsTargetValid(Unit* target) override
@@ -314,7 +310,7 @@ namespace ai
                 return false;
             if (!target->GetMaxPower(POWER_MANA))
                 return false;
-            return ai->GetManaPercent(*target) < sPlayerbotAIConfig.lowMana;
+            return ai->GetManaPercent(*target) < sPlayerbotAIConfig.innervateManaThreshold;
         }
 
         bool isPossible() override

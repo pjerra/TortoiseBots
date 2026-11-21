@@ -2014,21 +2014,41 @@ bool PlayerbotAI::HasAuraToDispel(Unit* target, uint32 dispelType, const DispelO
 			if (!isPositiveSpell && !isFriend)
 				continue;
 
-			// A short aura (totem pulse, brief snare) is not worth a dispel,
-			// but it must not blind the rest of the scan: skip it and keep
-			// looking (donor `continue`s here; `return false` dropped every
-			// real debuff behind one short aura).
-			if (sPlayerbotAIConfig.dispelAuraDuration && aura->GetAuraDuration() && aura->GetAuraDuration() < (int32)sPlayerbotAIConfig.dispelAuraDuration)
-			    continue;
-
 			if (!canDispel(entry, dispelType, override))
+				continue;
+
+			bool const isSpreading = isFriend && IsSpreadingAura(entry);
+			bool isDangerous = false;
+			if (isFriend && !isSpreading)
+			{
+				DispelDebuffInput debuff;
+				debuff.mechanic = entry->Mechanic;
+				debuff.allMechanicMask = entry->GetAllSpellMechanicMask();
+				for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+				{
+					if (entry->EffectApplyAuraName[i])
+						debuff.effects.push_back({ entry->EffectApplyAuraName[i], entry->EffectBasePoints[i] + 1 });
+				}
+				isDangerous = IsDangerousDispelDebuff(debuff);
+			}
+
+			DispelWorthInput worth;
+			worth.isFriendlyTarget = isFriend;
+			worth.isDangerous = isDangerous;
+			worth.isSpreading = isSpreading;
+			worth.remainingDurationMs = aura->GetAuraDuration();
+			worth.minDurationMs = sPlayerbotAIConfig.dispelAuraDuration;
+			worth.casterHasMana = bot->GetMaxPower(POWER_MANA) > 0;
+			worth.casterManaPct = worth.casterHasMana ? GetManaPercent(*bot) : 100;
+			worth.minManaPct = static_cast<uint8>(std::min<uint32>(sPlayerbotAIConfig.dispelMinMana, 100u));
+			if (!IsDispelWorthMana(worth))
 				continue;
 
 			if (!outHasSpreading)
 				return true;
 
 			found = true;
-			if (IsSpreadingAura(entry))
+			if (isSpreading)
 			{
 				*outHasSpreading = true;
 				return true;
