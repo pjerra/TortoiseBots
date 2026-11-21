@@ -80,8 +80,18 @@ int main()
         CHECK(hy::PickSubstituteTankGuid(party, true) == 0);
         CHECK(hy::ResolveGroupRole(party[0], party, true) == hy::RoleHealer);
 
-        // With Righteous Fury / tankSignal, paladin tanks even without another healer.
+        // Without another healer, Righteous Fury / tankSignal alone must not trap the paladin in tank role.
         party[0].tankSignal = true;
+        CHECK(hy::PickSubstituteTankGuid(party, true) == 0);
+        CHECK(hy::ResolveGroupRole(party[0], party, true) == hy::RoleHealer);
+
+        // Solo paladin with Righteous Fury / tankSignal also stays healer.
+        std::vector<hy::GroupMemberRoleInfo> solo{party[0]};
+        CHECK(hy::PickSubstituteTankGuid(solo, true) == 0);
+        CHECK(hy::ResolveGroupRole(solo[0], solo, true) == hy::RoleHealer);
+
+        // With another healer present, tankSignal selects the paladin as substitute tank.
+        party.push_back({32, 5 /*priest*/, 0, false, false, false, false, true});
         CHECK(hy::PickSubstituteTankGuid(party, true) == 30);
         CHECK(hy::ResolveGroupRole(party[0], party, true) == hy::RoleTank);
     }
@@ -123,6 +133,14 @@ int main()
     };
     CHECK(tankOnly[ai::HealingAssignment(tankOnly, bands, 0, 2)].guid == 100);
     CHECK(tankOnly[ai::HealingAssignment(tankOnly, bands, 1, 2)].guid == 100);
+
+    // 2 healers, 2 tanks injured in same urgency band (no non-tanks injured): healers split tanks
+    std::vector<ai::HealingCandidate> const twoTanks{
+        {100, 7000, 10000, 0, true, false, false},
+        {101, 7200, 10000, 0, true, false, false},
+    };
+    CHECK(twoTanks[ai::HealingAssignment(twoTanks, bands, 0, 2)].guid == 100);
+    CHECK(twoTanks[ai::HealingAssignment(twoTanks, bands, 1, 2)].guid == 101);
 
     // 2 healers, tank at full health (no tank in candidates): healers split the group
     std::vector<ai::HealingCandidate> const noTank{
