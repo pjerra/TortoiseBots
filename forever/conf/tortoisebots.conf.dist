@@ -149,6 +149,22 @@ TortoiseBots.Dashboard.Runs = 1
 TortoiseBots.Dashboard.RunSummaryDir = ""
 
 #
+#    TortoiseBots.World.Professions
+#        Description: Allow free bots (`free`) to gather herb/ore nodes within 150 yd in the current zone.
+#        Default:     0
+#
+
+TortoiseBots.World.Professions = 0
+
+#
+#    TortoiseBots.World.Auction
+#        Description: Allow bots to use the faction auction house (`.tb order ... ah`).
+#        Default:     0
+#
+
+TortoiseBots.World.Auction = 0
+
+#
 #    TortoiseBots.Dashboard.TraceDir
 #        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
 #                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.

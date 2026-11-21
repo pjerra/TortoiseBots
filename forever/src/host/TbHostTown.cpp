@@ -1,8 +1,12 @@
 #include "host/TbHostTown.h"
 
+#include "CellImpl.h"
 #include "ConditionMgr.h"
 #include "Creature.h"
 #include "CreatureData.h"
+#include "GameObject.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 #include "Item.h"
 #include "ItemPackets.h"
 #include "ItemTemplate.h"
@@ -352,6 +356,46 @@ bool TeachTrainerSpell(Player* bot, Creature* creature, uint32_t spellId, std::s
     return false;
 }
 
+GameObject* FindNearestMailbox(Player* bot, float maxDistYd)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap())
+        return nullptr;
+    bool const requireInteract = maxDistYd <= 0.0f;
+    float const scanRange = requireInteract ? 15.0f : maxDistYd;
+    std::list<GameObject*> objects;
+    Trinity::GameObjectInRangeCheck check(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), scanRange, 0);
+    Trinity::GameObjectListSearcher<Trinity::GameObjectInRangeCheck> searcher(bot, objects, check);
+    Cell::VisitGridObjects(bot, searcher, scanRange);
+
+    GameObject* best = nullptr;
+    float bestDist = scanRange + 1.0f;
+    uint32_t const botZone = bot->GetZoneId();
+    for (GameObject* go : objects)
+    {
+        if (!go || !go->isSpawned() || go->GetGoType() != GAMEOBJECT_TYPE_MAILBOX)
+            continue;
+        if (requireInteract)
+        {
+            if (!bot->GetGameObjectIfCanInteractWith(go->GetGUID(), GAMEOBJECT_TYPE_MAILBOX))
+                continue;
+        }
+        else
+        {
+            if (go->GetZoneId() != botZone || !go->InSamePhase(bot))
+                continue;
+            if (!go->GetGOInfo() || go->GetGOInfo()->IconName == "Point")
+                continue;
+        }
+        float const d = bot->GetDistance(go);
+        if (d <= scanRange && d < bestDist)
+        {
+            bestDist = d;
+            best = go;
+        }
+    }
+    return best;
+}
+
 std::vector<MailView> GetMails(Player* bot)
 {
     std::vector<MailView> out;
@@ -405,7 +449,7 @@ uint32_t GetUnreadMailCount(Player* bot)
 
 bool TakeMailMoney(Player* bot, ObjectGuid const& mailboxGuid, uint64_t mailId, uint64_t money)
 {
-    if (!bot || !bot->GetSession() || !bot->IsInWorld())
+    if (!bot || !bot->GetSession() || !bot->IsInWorld() || mailboxGuid.IsEmpty())
         return false;
     uint64_t const before = bot->GetMoney();
     WorldPackets::Mail::MailTakeMoney packet{ WorldPacket(CMSG_MAIL_TAKE_MONEY) };
@@ -414,23 +458,30 @@ bool TakeMailMoney(Player* bot, ObjectGuid const& mailboxGuid, uint64_t mailId, 
     packet.Money = money;
     bot->GetSession()->HandleMailTakeMoney(packet);
     uint64_t const after = bot->GetMoney();
-    LogErrand("mail", bot, nullptr, before, after, "take=money mail=" + std::to_string(mailId));
-    return after > before;
+    bool const ok = ai::MailTakeMoneyConfirmed(before, after);
+    LogErrand("mail", bot, nullptr, before, after,
+        "take=money mail=" + std::to_string(mailId) + " mailbox=" + std::to_string(mailboxGuid.GetCounter()) + " ok=" + (ok ? "1" : "0"));
+    return ok;
 }
 
 bool TakeMailItem(Player* bot, ObjectGuid const& mailboxGuid, uint64_t mailId, uint64_t attachId)
 {
-    if (!bot || !bot->GetSession() || !bot->IsInWorld())
+    if (!bot || !bot->GetSession() || !bot->IsInWorld() || mailboxGuid.IsEmpty())
         return false;
+    Item* it = bot->GetMItem(attachId);
+    uint32_t const itemEntry = it ? it->GetEntry() : 0;
+    uint32_t const beforeCount = itemEntry ? bot->GetItemCount(itemEntry, false) : 0;
     uint64_t const before = bot->GetMoney();
     WorldPackets::Mail::MailTakeItem packet{ WorldPacket(CMSG_MAIL_TAKE_ITEM) };
     packet.Mailbox = mailboxGuid;
     packet.MailID = mailId;
     packet.AttachID = attachId;
     bot->GetSession()->HandleMailTakeItem(packet);
+    uint32_t const afterCount = itemEntry ? bot->GetItemCount(itemEntry, false) : 0;
+    bool const ok = ai::MailTakeItemConfirmed(itemEntry, beforeCount, afterCount);
     LogErrand("mail", bot, nullptr, before, bot->GetMoney(),
-        "take=item mail=" + std::to_string(mailId) + " attach=" + std::to_string(attachId));
-    return true;
+        "take=item mail=" + std::to_string(mailId) + " attach=" + std::to_string(attachId) + " mailbox=" + std::to_string(mailboxGuid.GetCounter()) + " ok=" + (ok ? "1" : "0"));
+    return ok;
 }
 
 bool DeleteMail(Player* bot, uint64_t mailId)

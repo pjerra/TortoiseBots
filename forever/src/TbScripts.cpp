@@ -11,10 +11,13 @@
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#include "host/TbHostGuildOrders.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
+#include "host/gear/TbGearGen.h"
+#include "host/TbHostProfession.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -208,8 +211,10 @@ public:
             if (BotMgr::Instance().Enabled())
             {
                 LoadEngineConfig();
+                TortoiseBots::gear::InitGearIndex();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
+                tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
             }
         }
 #endif
@@ -296,6 +301,9 @@ public:
         if (BotMgr::Instance().IsBot(player->GetGUID()))
         {
             TC_LOG_INFO("tortoisebots", "bot {} entered the world on map {}", player->GetName(), player->GetMapId());
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            tbhost::prof::ClearBotErrands(player->GetGUID());
+#endif
             // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1527). Only the preference:
             // nothing is added to the bags and the ammo slot is untouched.
             player->SetPreferDrawableAmmo(true);
@@ -381,6 +389,8 @@ public:
             { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -1392,6 +1402,25 @@ public:
             stats.empty() ? "none" : stats.c_str(), spells.empty() ? "none" : spells.c_str(),
             uint32(proto->HolyRes), uint32(proto->FireRes), uint32(proto->NatureRes), uint32(proto->FrostRes),
             uint32(proto->ShadowRes), uint32(proto->ArcaneRes));
+        return true;
+    }
+
+    // W7 test helper ONLY: .tb setskill <bot> <skill> <value> [max]
+    static bool HandleSetSkill(ChatHandler* handler, Tail args)
+    {
+        std::vector<std::string> const words = WordsOf(args);
+        if (words.size() < 3)
+            return Fail(handler, "usage: .tb setskill <bot> <skill> <value> [max]");
+        ObjectGuid const guid = GuidByName(words[0]);
+        Player* bot = guid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(guid);
+        if (!bot || !BotMgr::Instance().IsBot(guid))
+            return Fail(handler, "bot '" + words[0] + "' is not online.");
+        uint32 const skillId = uint32(std::strtoul(words[1].c_str(), nullptr, 10));
+        uint16 const val = uint16(std::strtoul(words[2].c_str(), nullptr, 10));
+        uint16 const maxVal = words.size() >= 4 ? uint16(std::strtoul(words[3].c_str(), nullptr, 10)) : std::max<uint16>(75, val);
+        uint16 const step = maxVal >= 300 ? 4 : maxVal >= 225 ? 3 : maxVal >= 150 ? 2 : 1;
+        bot->SetSkill(skillId, step, val, maxVal);
+        handler->PSendSysMessage("TortoiseBots: %s skill %u set to %u/%u (step %u).", bot->GetName().c_str(), skillId, val, maxVal, step);
         return true;
     }
 };
