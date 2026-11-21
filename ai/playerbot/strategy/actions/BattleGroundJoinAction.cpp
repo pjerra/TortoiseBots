@@ -76,12 +76,12 @@ bool BGLeaveAction::Execute(Event& event)
     else
     {
         uint32 mapId = GetBattleGrounMapIdByTypeId(bgType);
-        if (!mapId && event.GetSource().empty())
+        if (!mapId && event.getSource().empty())
             return false;
 
         WorldPacket packet(CMSG_BATTLEFIELD_PORT, 8);
         packet << mapId << uint8(0);
-        if (!event.GetSource().empty())
+        if (!event.getSource().empty())
             bot->GetSession()->HandleLeaveBattlefieldOpcode(packet);
         else
             bot->GetSession()->HandleBattleFieldPortOpcode(packet);

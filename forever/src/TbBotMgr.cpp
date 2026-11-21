@@ -1,10 +1,17 @@
 #include "TbBotMgr.h"
+#include "host/TbHostGroupQuestPure.h"
+#include "host/TbHostCapitalErrands.h"
+#include "host/TbHostGuildMail.h"
+#include "host/TbHostGuildOrders.h"
+#include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
 #include "CellImpl.h"
 #include "CharacterPackets.h"
 #include "DatabaseEnv.h"
+#include "GameTime.h"
+#include "QuestDef.h"
 #include "GridNotifiers.h"
 #include "Group.h"
 #include "GroupMgr.h"
@@ -16,15 +23,25 @@
 #include "Log.h"
 #include "StringFormat.h"
 #include "DB2Stores.h"
+#include "host/TbEngineMapPure.h"
+#include "host/chat/TbChatIn.h"
+#include "host/TbThrown.h"
 #include "Map.h"
 #include "MiscPackets.h"
 #include "MotionMaster.h"
+#include "Corpse.h"
+#include "compat/TbCompat_W1.h"
+#include "compat/TbCompat_WL0.h"
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "RealmList.h"
+#include "ScriptMgr.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include <algorithm>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -49,7 +66,7 @@ constexpr uint32 DeadBackstopDefaultMs = 180000;   // TortoiseBots.Slice.DeadBac
 // H4: the walk to the trigger makes no progress (the best distance does not shrink by a yard) for this long: `block=stuck`.
 constexpr uint32 EntryNoProgressMs = 20000;
 
-// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1829-1875), in words.
+// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1864-1910), in words.
 std::string AbortReasonText(TransferAbortParams const& denied)
 {
     char const* what = nullptr;
@@ -76,8 +93,8 @@ std::string AbortReasonText(TransferAbortParams const& denied)
 
 namespace
 {
-// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1843: no MapDifficulty row, id 0; Player::Satisfy,
-// Entities/Player/Player.cpp:21463: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
+// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1878: no MapDifficulty row, id 0; Player::Satisfy,
+// Entities/Player/Player.cpp:21473: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
 // minimum level the player is under is "level too low for this instance (needs N)" (measured live: level 9 refused, 10 allowed for Ragefire
 // Chasm); any other condition is "refused by an entry condition". The text of the other reasons is AbortReasonText's.
 std::string EntryRefusalText(TransferAbortParams const& denied, uint32 mapId, Player* who)
@@ -128,7 +145,7 @@ std::string EntryRefusalCode(TransferAbortParams const& denied, std::string cons
 }
 
 // N1 (package N): the ONE place the module asks the core whether a character may enter a map. Map::PlayerCannotEnter reaches InstanceMap::CannotEnter
-// (Maps/Map.cpp:2965-2971), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
+// (Maps/Map.cpp:3014-3020), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
 // question is never asked for a character that is not in the world, is being teleported, or whose map id IS the one asked about. Returns the code and the
 // reason in words; an empty code = the core has no objection (or the map is not a dungeon).
 // H4 (C1): CanEnterMap (below) and the entry code both go through here: `grep PlayerCannotEnter forever/src` finds this one call.
@@ -140,14 +157,43 @@ BotMgr::EntryCheck BotMgr::CheckEntry(Player* who, uint32 mapId)
         return { "teleporting", "the character is being teleported" };
     if (who->GetMapId() == mapId)
         return { "already-on-map", "already on that map" };
-    if (!sMapStore.LookupEntry(mapId))
+    MapEntry const* target = sMapStore.LookupEntry(mapId);
+    if (!target)
         return { "other", Trinity::StringFormat("map {} is not in the map store", mapId) };
     TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
     if (!denied)
+    {
+        // F-population: a free bot does not pile into a dungeon or raid past its size (dungeons 5, raids 10/20/40 by the map
+        // row's player count). Commanded bots enter as a group of their own, under the core's group rules, not this cap.
+        if (Instance().IsFreeBot(who->GetGUID()))
+        {
+            uint32 const cap = world::FreeMapCapFor(target->IsDungeon(), target->IsRaid(), target->MaxPlayers, Instance().GetFreeMapCaps());
+            if (cap)
+            {
+                uint32 const present = Instance().FreeBotsOnMap(mapId);
+                if (present >= cap)
+                    return { "map-cap", Trinity::StringFormat("map {} already holds {} free bot(s): the cap is {}", mapId, present, cap) };
+            }
+        }
         return {};
+    }
     std::string text = EntryRefusalText(denied, mapId, who);
     std::string code = EntryRefusalCode(denied, text);
     return { std::move(code), std::move(text) };
+}
+
+uint32 BotMgr::FreeBotsOnMap(uint32 mapId) const
+{
+    uint32 count = 0;
+    for (ObjectGuid const guid : BotGuids())
+    {
+        if (!IsFreeBot(guid))
+            continue;
+        Player const* bot = FindBot(guid);
+        if (bot && bot->GetMapId() == mapId)
+            ++count;
+    }
+    return count;
 }
 
 // Returns "" when the core has no objection (or the map is not a dungeon), else the reason in words.
@@ -155,6 +201,20 @@ std::string BotMgr::CanEnterMap(Player* who, uint32 mapId)
 {
     return CheckEntry(who, mapId).text;
 }
+
+// The record of a creation in flight. The session is declared before the player so the player goes first (it holds the session).
+struct BotMgr::PendingCreation
+{
+    uint32 accountId = 0;
+    std::string name;
+    uint8 race = 0;
+    uint8 playerClass = 0;
+    uint8 gender = 0;
+    std::shared_ptr<BotSession> session;
+    std::shared_ptr<Player> player;
+    LoginDatabaseTransaction loginTransaction;
+    std::future<bool> commit;
+};
 
 BotMgr& BotMgr::Instance()
 {
@@ -167,12 +227,23 @@ void BotMgr::LoadConfig()
     _enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Enable", false);
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
     _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
+    _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", true);
+    _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", true);
+    _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
+    _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
+    _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
     int32 const graceSeconds = sConfigMgr->GetIntDefault("TortoiseBots.Slice.MasterGraceSeconds", 300);
     _masterGraceMs = uint32(std::clamp<int32>(graceSeconds, 0, 3600)) * 1000;
     _deadBackstopMs = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", DeadBackstopDefaultMs / 1000), 10, 3600)) * 1000;
+    // F-population: how many free bots one map of each kind holds before another free bot is refused its entry (0 = no cap).
+    _freeMapCaps.dungeon = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Dungeon", 5), 0, 1000));
+    _freeMapCaps.raid10 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid10", 10), 0, 1000));
+    _freeMapCaps.raid20 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid20", 20), 0, 1000));
+    _freeMapCaps.raid40 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid40", 40), 0, 1000));
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
@@ -180,7 +251,26 @@ void BotMgr::LoadConfig()
     }
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
+bool BotMgr::AccountHasBot(uint32 accountId) const
+{
+    for (auto const& entry : _bots)
+        if (entry.second.session->GetAccountId() == accountId)
+            return true;
+    return false;
+}
+
+std::vector<uint32> BotMgr::BotAccounts() const
+{
+    std::vector<uint32> accounts;
+    accounts.reserve(_bots.size());
+    for (auto const& entry : _bots)
+        accounts.push_back(entry.second.session->GetAccountId());
+    std::sort(accounts.begin(), accounts.end());
+    accounts.erase(std::unique(accounts.begin(), accounts.end()), accounts.end());
+    return accounts;
+}
+
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -188,12 +278,20 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
         return "no such character";
     if (_bots.count(characterGuid))
         return "that bot is already logged in or loading";
+    if (free && !master.IsEmpty())
+        return "a free bot has no master";
+    if (pool && !free)
+        return "a pool bot is a free bot";
     if (ObjectAccessor::FindConnectedPlayer(characterGuid))
         return "that character is already in the world";
 
     uint32 const accountId = sCharacterCache->GetCharacterAccountIdByGuid(characterGuid);
     if (!accountId)
         return "that character has no account";
+    // D2: one session per account. The check is here, where the session is made, so no caller can put two characters of an
+    // account in the world at once (the pool's scheduler sees the same rule through AccountHasBot).
+    if (AccountHasBot(accountId))
+        return "another bot of that account is already logged in or loading";
 
     std::string accountName;
     if (!AccountMgr::GetName(accountId, accountName))
@@ -208,8 +306,11 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
             engine::HandleTeleportAck(itr->second.brain.get());
     });
     bot.master = master;
+    bot.free = free;
+    bot.pool = pool;
     bot.wantParty = !master.IsEmpty();
-    bot.useEngine = _engineByDefault;
+    // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
+    bot.useEngine = _engineByDefault || free;
     if (bot.wantParty)
     {
         // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
@@ -233,6 +334,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
         return "the login could not be started (see the server log)";
 
     _bots.emplace(characterGuid, std::move(bot));
+    _knownBots.insert(characterGuid);
     TC_LOG_INFO("tortoisebots", "BotMgr: login started for {} (account {})", characterGuid.ToString(), accountId);
     return {};
 }
@@ -325,6 +427,27 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
     return {};
 }
 
+// W1 (review): a bot has one identity, and a master wins. A free bot that is handed a master stops being free at that moment: the
+// autonomous kit and the ghost bookkeeping go, and it plays for the master until `.tb free on` says otherwise. Every path that binds a
+// master lands here (`.tb group`, the commander binding, a run, the engine's adoption), so none of them can leave a bot both commanded
+// and free. The engine needs the master pointer before its kit is rebuilt (the factory reads the free flag, so the flag goes first).
+void BotMgr::BindMaster(Bot& bot, ObjectGuid master)
+{
+    if (!master.IsEmpty() && bot.free)
+    {
+        bot.free = false;
+        bot.ghostRescue.Reset();
+        bot.ghostYd = -1.0f;
+        bot.rescuedThisDeath = false;
+        if (bot.brain)
+            engine::BindMaster(bot.brain.get(), ObjectAccessor::FindPlayer(master));
+        Player* me = bot.session->GetPlayer();
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} is no longer a free bot (a master is bound)", me ? me->GetName() : bot.session->GetCharacterGuid().ToString());
+    }
+    bot.master = master;
+    bot.masterAway = false;
+}
+
 std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
 {
     auto itr = _bots.find(botGuid);
@@ -339,9 +462,8 @@ std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
     std::string const error = JoinParty(bot, master);
     if (!error.empty())
         return error;
-    itr->second.master = masterGuid;
+    BindMaster(itr->second, masterGuid);
     itr->second.wantParty = false;
-    itr->second.masterAway = false;
     return {};
 }
 
@@ -512,6 +634,7 @@ void BotMgr::OnPlayerLogout(Player* player)
     // which the engine can still be taken down in the order the legacy code requires. Covers the logouts the core
     // starts by itself as well as ours.
     ObjectGuid const leaving = player->GetGUID();
+    kb::Forget(leaving);
 
     // The bots whose MASTER is the player logging out (R9, findings R1'): their engines hold a pointer to it (the engine re-checks it by guid
     // every tick, so it is safe today; this is the defence). R10 (S2): the original keeps hired bots through the master's disconnect and reunites them
@@ -535,11 +658,20 @@ void BotMgr::OnPlayerLogout(Player* player)
     auto itr = _bots.find(leaving);
     if (itr == _bots.end())
         return;
+    chatin::Forget(leaving);     // S1-R2: the bot's chat inbox and its counters go with it (a later bot reusing the guid starts clean)
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::prof::ClearBotErrands(leaving);
+    tbhost::errands::ClearBotCapitalErrands(leaving);
+    tbhost::guild_mail::ClearBotGuildMail(leaving);
+#endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
     // would count against the party's five seats at the next login and re-form a party nobody asked for.
     if (player->GetGroup())
         player->RemoveFromGroup(GROUP_REMOVEMETHOD_LEAVE);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::guild_orders::OnBotLogout(leaving.GetCounter());
+#endif
 }
 
 std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender)
@@ -554,26 +686,46 @@ std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, u
         return "that name is not allowed";
     if (!sCharacterCache->GetCharacterGuidByName(name).IsEmpty())
         return "that name is taken";
+    for (std::shared_ptr<PendingCreation> const& pending : _creating)
+        if (pending->name == name)
+            return "that name is taken";
 
     std::string accountName;
     if (!AccountMgr::GetName(accountId, accountName))
         return "no such account";
 
-    // A Player needs a session. This one lives only for the creation; nothing is logged in through it.
-    BotSession session(accountId, std::move(accountName));
+    // The realm's character count of the account after this one, as the core's own creation counts it (characters not deleted,
+    // plus this one, plus any creation of the account still in flight). A database that does not answer stops the creation:
+    // a count that is guessed is a wrong `realmcharacters` row.
+    std::uint64_t existing = 0;
+    if (!PoolRealmCharacterCountCompat(accountId, existing))
+        return "the characters database did not answer how many characters the account has";
+    for (std::shared_ptr<PendingCreation> const& pending : _creating)
+        if (pending->accountId == accountId)
+            ++existing;
+    uint32 const realmCharacters = uint32(existing + 1);
+
+    // A Player needs a session. This one lives as long as the creation does (the creation hooks may read it); nothing is
+    // logged in through it.
+    auto pending = std::make_shared<PendingCreation>();
+    pending->session = std::make_shared<BotSession>(accountId, std::move(accountName));
 
     WorldPackets::Character::CharacterCreateInfo info;
     info.Race = race;
     info.Class = playerClass;
     info.Sex = gender;
     info.Name = name;
+    // W0: a pool character is made in its race's own start position. The core's default is already false (CharacterPackets.h:67);
+    // written out because the pool's gate depends on the normal (not the NPE) create position.
+    info.UseNPE = false;
 
     // Made and destroyed the way the core's own character creation does it.
-    std::unique_ptr<Player, void (*)(Player*)> player(new Player(&session), [](Player* p)
+    pending->player = std::shared_ptr<Player>(new Player(pending->session.get()), [](Player* p)
     {
         p->CleanupsBeforeDelete();
         delete p;
     });
+    Player* const player = pending->player.get();
     player->GetMotionMaster()->Initialize();
     if (!player->Create(sObjectMgr->GetGenerator<HighGuid::Player>().Generate(), &info))
         return "the core refused to create it";
@@ -584,14 +736,34 @@ std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, u
     LoginDatabaseTransaction loginTransaction = LoginDatabase.BeginTransaction();
     CharacterDatabaseTransaction characterTransaction = CharacterDatabase.BeginTransaction();
     player->SaveToDB(loginTransaction, characterTransaction, true);
-    // The character statements are prepared for the asynchronous connections only, so the commit is queued, as in the core.
-    CharacterDatabase.CommitTransaction(characterTransaction);
-    LoginDatabase.CommitTransaction(loginTransaction);
+    LoginDatabasePreparedStatement* realmStmt = LoginDatabase.GetPreparedStatement(LOGIN_REP_REALM_CHARACTERS);
+    realmStmt->setUInt32(0, realmCharacters);
+    realmStmt->setUInt32(1, accountId);
+    realmStmt->setUInt32(2, sRealmList->GetCurrentRealmId().Realm);
+    loginTransaction->Append(realmStmt);
 
-    sCharacterCache->AddCharacterCacheEntry(player->GetGUID(), accountId, player->GetName(), player->GetNativeGender(), player->GetRace(),
-        player->GetClass(), player->GetLevel(), false);
-    TC_LOG_INFO("tortoisebots", "BotMgr: created {} ({}) on account {}", player->GetName(), player->GetGUID().ToString(), accountId);
+    // The character commit goes first and alone: the login side is committed only when it answers true (ConfirmCreations), so a
+    // failed character commit leaves no `realmcharacters` row and no account data behind. The character statements are prepared
+    // for the asynchronous connections only, so the commit is queued, as in the core.
+    pending->name = name;
+    pending->accountId = accountId;
+    pending->race = race;
+    pending->playerClass = playerClass;
+    pending->gender = gender;
+    pending->loginTransaction = loginTransaction;
+    TransactionCallback commit = CharacterDatabase.AsyncCommitTransaction(characterTransaction);
+    pending->commit = std::move(commit.m_future);
+    TC_LOG_INFO("tortoisebots", "BotMgr: creating {} ({}) on account {}: its saves are queued", name, player->GetGUID().ToString(), accountId);
+    _creating.push_back(std::move(pending));
     return {};
+}
+
+bool BotMgr::CreationInFlight(std::string const& name) const
+{
+    for (std::shared_ptr<PendingCreation> const& pending : _creating)
+        if (pending->name == name)
+            return true;
+    return false;
 }
 
 bool BotMgr::WalkBy(ObjectGuid characterGuid, float dx, float dy)
@@ -716,8 +888,7 @@ bool BotMgr::SetMaster(ObjectGuid characterGuid, ObjectGuid master)
     auto itr = _bots.find(characterGuid);
     if (itr == _bots.end())
         return false;
-    itr->second.master = master;
-    itr->second.masterAway = false;
+    BindMaster(itr->second, master);
     return true;
 }
 
@@ -728,7 +899,7 @@ void BotMgr::FailEntry(Bot& bot, std::string code, std::string text)
 {
     TC_LOG_INFO("tortoisebots", "BotMgr: the entry of {} (trigger {}) ended: {} ({})", bot.session->GetCharacterGuid().ToString(), bot.entry.triggerId, code, text);
     // N6: every exit of an entry stops the walk (the MovePoint generator would otherwise keep going, as M4-1 showed after a landing).
-    if (Player* walker = bot.session->GetPlayer(); walker && walker->IsInWorld() && !walker->IsBeingTeleported())
+    if (Player* walker = bot.session->GetPlayer(); walker && walker->IsInWorld() && !walker->IsBeingTeleported() && !engine::InFlight(bot.brain.get()))
     {
         walker->GetMotionMaster()->Clear();
         walker->StopMoving();
@@ -794,8 +965,11 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
     // Landed: the bot stands on the trigger's target map. (The caller made sure the bot is in the world and not being teleported.)
     if (me->GetMapId() == e.targetMap)
     {
-        me->GetMotionMaster()->Clear();   // nothing of the walk may carry over into the dungeon
-        me->StopMoving();
+        if (!engine::InFlight(bot.brain.get()))
+        {
+            me->GetMotionMaster()->Clear();   // nothing of the walk may carry over into the dungeon
+            me->StopMoving();
+        }
         // N6: only a landing the entry job itself started (its handler or direct teleport) is `entered=trigger|order`; any other way onto the map is `other`.
         bot.entered = e.teleporting ? (e.direct ? "order" : "trigger") : "other";
         bot.block.clear();
@@ -888,9 +1062,12 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
     }
 
     // M4 live finding: the walk's MovePoint generator survived the teleport and the bot kept walking toward the BOX'S map-1 coordinates inside the dungeon
-    // (a straight line, 200+ yd in 30 s). Stop it before the handler runs.
-    me->GetMotionMaster()->Clear();
-    me->StopMoving();
+    // (a straight line, 200+ yd in 30 s). Stop it before the handler runs. A flight in the air is not cut (S3).
+    if (!engine::InFlight(bot.brain.get()))
+    {
+        me->GetMotionMaster()->Clear();
+        me->StopMoving();
+    }
 
     // The entry check, behind the one guarded function (C1), then the core's own path.
     if (EntryCheck const check = CheckEntry(me, e.targetMap); !check.code.empty())
@@ -952,6 +1129,8 @@ void BotMgr::NoteTeleportStarted(ObjectGuid botGuid, char const* how, uint32 des
         return;
     itr->second.landing.pending = true;
     itr->second.landing.how = how;
+    ++itr->second.teleports;               // W1 `tele=`: every teleport the bot took, any cause
+
     itr->second.landing.mapId = destMapId;
     itr->second.block.clear();
     itr->second.blockText.clear();
@@ -970,7 +1149,7 @@ void BotMgr::MarkPractice(ObjectGuid botGuid)
 // D2 (the lead's decision of 2026-11-19): the entrance of a dungeon is given to the instance's script by the host, so a release inside revives the
 // bot at the entrance INSIDE the instance (Player::RepopAtGraveyard asks the script first, Player.cpp:5227-5228, and revives in place for every
 // non-raid dungeon, :5220; without an entrance it falls to the closest graveyard, which for Ragefire Chasm and an Alliance bot is Razor Hill).
-// InstanceScript::SetEntranceLocation is a public member (InstanceScript.h:289). Once per instance; the trigger the first entry used is the source, else
+// InstanceScript::SetEntranceLocation is a public member (InstanceScript.h:293). Once per instance; the trigger the first entry used is the source, else
 // ObjectMgr::GetMapEntranceTrigger(map) (the first areatrigger_teleport row that leads into the map; a dungeon with several entrances needs the entry's own).
 // N5: the host's own "commanded" test, engine-free (this file is in both builds): the bot's host master is a character OUTSIDE the bot's party (the commander,
 // `.tb master`). A bot led by its own party's leader is not commanded.
@@ -986,7 +1165,7 @@ bool BotMgr::IsCommandedHere(Bot const& bot, Player* me) const
 // real player's instance), the instance script's entrance is read; when it is 0 the entrance for THIS (map, instance) is worked out and set, and a failure is
 // retried at the next think (the log line is once per (map, instance)). The trigger of the last entry into the instance is used only when its target is this
 // map (a stale RFC trigger must not name an entrance for Deadmines); otherwise the first trigger that leads into the map (ObjectMgr::GetMapEntranceTrigger).
-// InstanceScript::SetEntranceLocation is public (InstanceScript.h:289). D2: the bot then revives at the entrance inside the instance after a release
+// InstanceScript::SetEntranceLocation is public (InstanceScript.h:293). D2: the bot then revives at the entrance inside the instance after a release
 // (Player::RepopAtGraveyard, Player.cpp:5227-5228) instead of at the zone's graveyard (Razor Hill for Ragefire Chasm).
 void BotMgr::EnsureEntrance(Bot const& bot, Player* me)
 {
@@ -1085,9 +1264,30 @@ void BotMgr::DeadBackstop(Bot& bot, Player* me)
 // leader without one); `.tb revive` marks `practice` until the next combat ends.
 void BotMgr::TrackLife(Bot& bot, Player* me)
 {
+    bool const ghost = !me->IsAlive() && me->HasPlayerFlag(PLAYER_FLAGS_GHOST);
     if (!me->IsAlive())
     {
-        bot.wasDead = true;
+        if (!bot.wasDead)
+        {
+            bot.wasDead = true;
+            ++bot.deaths;
+            bot.rescuedThisDeath = false;
+            bot.reviveHow = -1;
+            bot.ghostRescue.Reset();
+            bot.ghostYd = -1.0f;
+            bot.wasGhost = false;
+            bot.diedAt = time(nullptr);
+            if (bot.free)
+                TC_LOG_INFO("tortoisebots", "[W1] death bot={} level={}", me->GetName(), me->GetLevel());
+        }
+        // The core's release teleports the ghost to the graveyard: count it as the bot's first teleport of this death.
+        if (ghost && !bot.wasGhost)
+        {
+            bot.wasGhost = true;
+            ++bot.teleports;
+        }
+        if (bot.free)
+            GhostRescue(bot, me);
         bot.runBack = false;
         return;
     }
@@ -1100,7 +1300,17 @@ void BotMgr::TrackLife(Bot& bot, Player* me)
     if (bot.wasDead)
     {
         bot.wasDead = false;
+        bot.wasGhost = false;
         bot.runBack = follow && (follow->GetMap() != me->GetMap() || !me->IsWithinDist(follow, 30.0f));
+        if (bot.free)
+        {
+            char const* how = bot.rescuedThisDeath ? "rescue" : bot.reviveHow == 1 ? "healer" : "reclaim";
+            long secs = bot.diedAt ? long(time(nullptr) - bot.diedAt) : 0;
+            TC_LOG_INFO("tortoisebots", "[W1] revive bot={} how={} secs={} yd={:.1f}", me->GetName(), how, secs,
+                bot.ghostYd < 0.0f ? 0.0f : bot.ghostYd);
+            bot.ghostRescue.Reset();
+            bot.ghostYd = -1.0f;
+        }
     }
     if (bot.runBack && (!follow || (follow->GetMap() == me->GetMap() && me->IsWithinDist(follow, 20.0f))))
         bot.runBack = false;
@@ -1116,8 +1326,98 @@ void BotMgr::TrackLife(Bot& bot, Player* me)
     }
 }
 
+// W1 (spec D2): the ONE teleport of a free bot besides the core's release. A ghost that makes no headway toward its corpse or
+// toward the spirit healer for five minutes is rescued by the core's own repop (Player::RepopAtGraveyard), once per death, with
+// the reason in the log. Every read is in-memory (corpse position, the graveyard store); no pointer is kept between ticks.
+void BotMgr::GhostRescue(Bot& bot, Player* me)
+{
+    if (!me->HasPlayerFlag(PLAYER_FLAGS_GHOST) || me->IsBeingTeleported() || !me->FindMap())
+    {
+        bot.ghostRescue.Reset();
+        bot.ghostYd = -1.0f;
+        return;
+    }
+
+    Corpse* corpse = me->GetCorpse();
+    bool const corpseHere = corpse && corpse->GetMapId() == me->GetMapId();
+    float corpseYd = corpseHere ? me->GetDistance(corpse) : -1.0f;
+    bot.ghostYd = corpseYd;
+
+    // The spirit healer stands at the graveyard the core would send this ghost to: the corpse's (the only reference a dead bot
+    // always has), or the bot's own when the corpse is gone or on another map. Plain coordinates only: no legacy type enters the
+    // host file, so the option-OFF build stays clean.
+    uint32 const refMap = corpseHere ? corpse->GetMapId() : me->GetMapId();
+    float const refX = corpseHere ? corpse->GetPositionX() : me->GetPositionX();
+    float const refY = corpseHere ? corpse->GetPositionY() : me->GetPositionY();
+    float const refZ = corpseHere ? corpse->GetPositionZ() : me->GetPositionZ();
+    WorldSafeLocsEntry const* grave = ClosestGraveyardCompat(me, refMap, refX, refY, refZ, me->GetTeam());
+    float healerYd = -1.0f;
+    if (grave && SafeLocMapIdCompat(grave) == me->GetMapId())
+        healerYd = me->GetDistance(SafeLocXCompat(grave), SafeLocYCompat(grave), SafeLocZCompat(grave));
+
+    if (corpseYd < 0.0f && healerYd < 0.0f)
+        return;
+    if (corpseYd < 0.0f)
+        corpseYd = healerYd;
+    if (healerYd < 0.0f)
+        healerYd = corpseYd;
+
+    bot.ghostRescue.Observe(corpseYd, healerYd, ThinkIntervalMs);
+    if (!bot.ghostRescue.Due() || bot.rescuedThisDeath)
+        return;
+    if (!RepopAtGraveyardCompat(me))
+        return;
+    bot.rescuedThisDeath = true;
+    ++bot.rescues;
+    ++bot.teleports;
+    TC_LOG_INFO("tortoisebots", "[W1] rescue bot={} reason=ghost-stuck secs={} yd={:.1f}", me->GetName(),
+        TortoiseBots::GHOST_RESCUE_STALL_MS / 1000, corpseYd);
+}
+
+void BotMgr::ConfirmCreations()
+{
+    for (auto itr = _creating.begin(); itr != _creating.end();)
+    {
+        PendingCreation& creation = **itr;
+        if (!creation.commit.valid())
+        {
+            itr = _creating.erase(itr);
+            continue;
+        }
+        if (creation.commit.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        {
+            ++itr;
+            continue;
+        }
+
+        Player* const player = creation.player.get();
+        if (!creation.commit.get())
+        {
+            // The character side did not commit: the login side is never committed, the creation hooks never fire and the cache
+            // never hears of it. Nothing of it is left behind.
+            TC_LOG_ERROR("tortoisebots", "BotMgr: the character commit of {} on account {} failed; nothing was created and its login side was not committed",
+                creation.name, creation.accountId);
+            itr = _creating.erase(itr);
+            continue;
+        }
+
+        LoginDatabase.CommitTransaction(creation.loginTransaction);
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} ({}) is in the characters database on account {}: its creation is complete",
+            creation.name, player->GetGUID().ToString(), creation.accountId);
+        sScriptMgr->OnPlayerCreate(player);
+        sCharacterCache->AddCharacterCacheEntry(player->GetGUID(), creation.accountId, player->GetName(), player->GetNativeGender(), player->GetRace(),
+            player->GetClass(), player->GetLevel(), false);
+        itr = _creating.erase(itr);
+    }
+}
+
 void BotMgr::Update(uint32 diff)
 {
+    // S1-R2: the chat lines the hook queued since the last update, resolved and judged here, on the world thread, before any bot's
+    // engine step reads its inbox.
+    TortoiseBots::chatin::DrainArrivals();
+
+    ConfirmCreations();
     std::vector<ObjectGuid> finished;
 
     for (auto& [guid, bot] : _bots)
@@ -1144,11 +1444,16 @@ void BotMgr::Update(uint32 diff)
             continue;
         }
 
+        // S3: the flight watcher runs before the master-away gate: a bot knocked while its commander is away still flies and
+        // lands with the core's fall damage (without a brain it still lands; only the engine's hold is skipped).
+        Player* me = bot.session->GetPlayer();
+        if (me && me->IsInWorld() && !me->IsBeingTeleported())
+            kb::Update(me, bot.brain.get());
+
         // R10 (S2): a bot whose master is away does nothing (no Think, no engine) until it is back; the grace counts down meanwhile.
         if (bot.masterAway && !UpdateMasterAway(bot, diff))
             continue;
 
-        Player* me = bot.session->GetPlayer();
         if (!me || !me->IsInWorld() || me->IsBeingTeleported())
             continue;
 
@@ -1189,22 +1494,226 @@ void BotMgr::Update(uint32 diff)
         // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
         // Not in the update in which its logout was requested or its master was lost (R9): Think may have asked for the logout above, and
         // the brain is gone by then.
-        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::TickErrands(me, diff);
+        bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
+            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me));
+#else
+        bool const pauseEngineForErrand = false;
+#endif
+        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported() && !pauseEngineForErrand)
             engine::Tick(bot.brain.get(), diff);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+            tbhost::guild_orders::TickBotOrder(me);
+        if (bot.free && _professionsEnabled)
+        {
+            if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
+                tbhost::prof::TickFreeGather(me);
+        }
+        if (bot.free && _capitalErrandsEnabled)
+            tbhost::errands::TickCapitalErrands(me, diff);
+        if (bot.free && _guildMailEnabled)
+            tbhost::guild_mail::TickGuildMail(me, diff);
+#endif
     }
 
     for (ObjectGuid const& guid : finished)
     {
         TC_LOG_INFO("tortoisebots", "BotMgr: session of {} ended", guid.ToString());
         // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::ClearBotErrands(guid);
+        tbhost::errands::ClearBotCapitalErrands(guid);
+        tbhost::guild_mail::ClearBotGuildMail(guid);
+#endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);
         _bots.erase(guid);
+    }
+
+    TickQuestGroups(diff);
+}
+
+void BotMgr::TickQuestGroups(uint32 diff)
+{
+    if (!_groupQuestsEnabled)
+        return;
+
+    _questGroupTimerMs += diff;
+    if (_questGroupTimerMs < 10000)
+        return;
+    _questGroupTimerMs = 0;
+
+    uint64 const nowMs = GameTime::GetGameTimeMS();
+
+    // 1. Disband finished/broken quest groups.
+    for (auto it = _questGroups.begin(); it != _questGroups.end();)
+    {
+        Group* group = nullptr;
+        for (ObjectGuid const& mGuid : it->members)
+        {
+            if (Player* p = FindBot(mGuid))
+            {
+                if (Group* g = p->GetGroup(); g && g->GetGUID() == it->groupGuid)
+                {
+                    group = g;
+                    break;
+                }
+            }
+        }
+
+        tbhost::group_quest::QuestGroupState st;
+        st.questId = it->questId;
+        st.formedAtMs = it->formedAtMs;
+        ObjectGuid const leaderGuid = it->members.empty() ? ObjectGuid::Empty : it->members.front();
+        if (group)
+        {
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                auto bIt = _bots.find(slot.guid);
+                if (bIt == _bots.end())
+                {
+                    st.hasRealPlayer = true;
+                    break;
+                }
+                if (!bIt->second.free || !bIt->second.master.IsEmpty())
+                {
+                    // The engine adopts the party leader as master for grouped bots: the party working, not lost.
+                    if (!bIt->second.master.IsEmpty() && bIt->second.master == leaderGuid)
+                    {
+                        ++st.membersBoundToLeader;
+                        if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
+                        {
+                            if (p->GetQuestStatus(it->questId) == QUEST_STATUS_INCOMPLETE)
+                                ++st.membersStillIncomplete;
+                        }
+                        continue;
+                    }
+                    st.anyMemberLostFree = true;
+                    continue;
+                }
+                ++st.activeMemberCount;
+                if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
+                {
+                    if (p->GetQuestStatus(it->questId) == QUEST_STATUS_INCOMPLETE)
+                        ++st.membersStillIncomplete;
+                }
+            }
+        }
+
+        char const* reason = nullptr;
+        if (!group || tbhost::group_quest::ShouldDisbandQuestGroup(st, nowMs, &reason))
+        {
+            if (group && !st.hasRealPlayer)
+                group->Disband(true);
+            for (ObjectGuid const& mGuid : it->members)
+            {
+                auto bIt = _bots.find(mGuid);
+                if (bIt == _bots.end())
+                    continue;
+                if (!bIt->second.master.IsEmpty() && bIt->second.master == leaderGuid && !st.hasRealPlayer)
+                {
+                    // The engine adopted the party leader while questing: hand the bot back to the free kit
+                    // instead of stranding it master-bound. The AI pointer goes first so its master-strip
+                    // does not fire on the next tick and undo the free strategies.
+                    if (bIt->second.brain)
+                        engine::BindMaster(bIt->second.brain.get(), nullptr);
+                    bIt->second.master = ObjectGuid::Empty;
+                    bIt->second.free = true;
+                    bIt->second.useEngine = true;
+                    if (bIt->second.brain)
+                        engine::ReapplyStrategies(bIt->second.brain.get(), true);
+                    continue;
+                }
+                if (bIt->second.free && bIt->second.brain)
+                    engine::SetQuestGroupMember(bIt->second.brain.get(), false);
+            }
+            TC_LOG_INFO("tortoisebots", "[W3] group-quest disband quest={} reason={}",
+                it->questId, reason ? reason : "gone");
+            it = _questGroups.erase(it);
+        }
+        else
+            ++it;
+    }
+
+    // 2. Collect free bots holding incomplete group/elite quests (in-memory only, no world scan).
+    std::vector<tbhost::group_quest::BotQuestCandidate> candidates;
+    for (auto const& [guid, bot] : _bots)
+    {
+        if (!bot.free || !bot.master.IsEmpty())
+            continue;
+        Player* me = bot.session ? bot.session->GetPlayer() : nullptr;
+        if (!me || !me->IsInWorld() || !me->FindMap() || !me->IsAlive() || me->IsInCombat())
+            continue;
+        if (me->GetGroup() || me->GetGroupInvite())
+            continue;
+
+        tbhost::group_quest::BotQuestCandidate cand;
+        cand.guidLow = guid.GetCounter();
+        cand.mapId = me->GetMapId();
+        cand.x = me->GetPositionX();
+        cand.y = me->GetPositionY();
+        cand.level = me->GetLevel();
+        cand.alive = true;
+        cand.inCombat = false;
+        cand.inGroup = false;
+        cand.team = uint32_t(me->GetTeam());
+
+        for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 const qid = me->GetQuestSlotQuestId(slot);
+            if (!qid)
+                continue;
+            Quest const* q = sObjectMgr->GetQuestTemplate(qid);
+            if (!q || !tbhost::group_quest::IsGroupOrEliteQuest(q->GetQuestInfoID(), q->GetSuggestedPlayers()))
+                continue;
+            if (me->GetQuestStatus(qid) == QUEST_STATUS_INCOMPLETE)
+                cand.incompleteGroupQuests.push_back(qid);
+        }
+        if (!cand.incompleteGroupQuests.empty())
+            candidates.push_back(std::move(cand));
+    }
+
+    auto const plans = tbhost::group_quest::PlanQuestGroups(candidates);
+    for (auto const& plan : plans)
+    {
+        ObjectGuid const leaderGuid = ObjectGuid::Create<HighGuid::Player>(plan.leaderGuidLow);
+        Player* leader = FindBot(leaderGuid);
+        if (!leader)
+            continue;
+        std::vector<ObjectGuid> members{ leaderGuid };
+        for (uint32 mLow : plan.memberGuidLows)
+        {
+            ObjectGuid const mGuid = ObjectGuid::Create<HighGuid::Player>(mLow);
+            Player* member = FindBot(mGuid);
+            if (!member)
+                continue;
+            if (JoinParty(member, leader).empty())
+            {
+                members.push_back(mGuid);
+                if (auto bIt = _bots.find(mGuid); bIt != _bots.end() && bIt->second.brain)
+                    engine::SetQuestGroupMember(bIt->second.brain.get(), true);
+            }
+        }
+        if (Group* g = leader->GetGroup(); g && members.size() >= 2)
+        {
+            _questGroups.push_back({ g->GetGUID(), plan.questId, nowMs, std::move(members) });
+            TC_LOG_INFO("tortoisebots", "[W3] group-quest form leader={} members={} quest={}",
+                leader->GetName(), uint32(members.size()), plan.questId);
+        }
     }
 }
 
 void BotMgr::Think(Bot& bot, Player* me)
 {
+    // W1: a free bot has no master and no host steering: its engine plays the world (grind, food, loot, roll, buff) and the
+    // dead kit (release, corpse run, spirit healer). Think only builds the brain once and otherwise stays out of the way.
+    if (bot.free)
+    {
+        FreeThink(bot, me);
+        return;
+    }
     // No master: the bot only does what the console tells it (WalkBy, AttackNearest).
     if (bot.master.IsEmpty())
         return;
@@ -1332,9 +1841,29 @@ void BotMgr::Think(Bot& bot, Player* me)
             // back below once it stands on the master's map. A bot on the master's map keeps its engine (it is fighting or walking).
             // N2 (package N): a DEAD commanded bot keeps (or gets) its engine while its commander is on another map: the dead kit holds only the release and
             // the acceptance of a resurrection (no follow, no path), which are the lifecycle that must run so the body can come back. The bounded wait
-            // (DeadBackstop) covers a brain that cannot be built. An alive bot still loses its engine here and waits where it stands (no follow across maps).
+            // (DeadBackstop) covers a brain that cannot be built. An alive bot inside an instance its party stands in keeps its engine too
+            // (EngineKeptOnOtherMap): it follows the group's leader there, and the bots that entered while their commander stayed outside must go on.
+            bool kept = false;
             if (!sameMap)
             {
+                if (me->IsAlive())
+                {
+                    // A party stands beside the bot when one OTHER member is in the world, not between maps, on the bot's exact map (same instance): the
+                    // group's leader is no proxy for that. A bot that leads its own group (a run's leader) still has its party in the instance and keeps
+                    // its engine; a lone leader has nobody to follow and none (PartyMemberOnMap).
+                    bool partyHere = false;
+                    if (Group* group = me->GetGroup())
+                        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                        {
+                            Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                            if (member && PartyMemberOnMap(slot.guid == me->GetGUID(), member->IsInWorld(), member->IsBeingTeleported(), me->GetMap() == member->GetMap()))
+                            {
+                                partyHere = true;
+                                break;
+                            }
+                        }
+                    kept = EngineKeptOnOtherMap(me->IsAlive(), inInstance, partyHere);
+                }
                 if (!me->IsAlive() && IsCommandedHere(bot, me))
                 {
                     if (bot.useEngine && !bot.engineFailed && !bot.brain && !bot.deadEngineFailed)
@@ -1348,21 +1877,25 @@ void BotMgr::Think(Bot& bot, Player* me)
                         }
                     }
                 }
-                else
+                else if (!kept)
                 {
                     // An alive bot (or a bot that is not commanded) loses its engine here. Live (N4 boot): a bot raised by its engine while the commander was away
                     // kept the follow generator the engine had set and walked 60 yd through the first room: stop what the dropped engine started.
                     if (bot.brain && me->IsAlive())
                     {
-                        me->GetMotionMaster()->Clear();
-                        me->StopMoving();
+                        if (!engine::InFlight(bot.brain.get()))
+                        {
+                            me->GetMotionMaster()->Clear();
+                            me->StopMoving();
+                        }
                     }
                     DropBrain(bot);
                 }
             }
             if (changed)
                 TC_LOG_INFO("tortoisebots", "BotMgr: {} is not put next to its master {} (map {}, instance {}): {}", me->GetName(), master->GetName(), masterMap, masterInstance, reason);
-            if (!sameMap)
+            // The engine kept for an instance party falls through to the build/keep below (a bot whose brain went with the worldport gets it back at once).
+            if (!sameMap && !kept)
                 return;
         }
     }
@@ -1381,6 +1914,9 @@ void BotMgr::Think(Bot& bot, Player* me)
         }
     }
     if (bot.brain)
+        return;
+    // The bot kept its engine for its instance party but has none now (not marked, or a failed build): the spike does not act across maps either.
+    if (!sameMap)
         return;
 
     if (!me->IsAlive())
@@ -1429,4 +1965,101 @@ void BotMgr::Think(Bot& bot, Player* me)
         me->GetMotionMaster()->MoveFollow(master, _followDistance, ChaseAngle(float(M_PI)));
     }
 }
+
+void BotMgr::FreeThink(Bot& bot, Player* me)
+{
+    if (bot.entry.active)
+        return;
+    if (bot.useEngine && !bot.engineFailed && !bot.brain)
+    {
+        std::string error;
+        bot.brain.reset(engine::Create(me, nullptr, error, true));
+        if (!bot.brain)
+        {
+            bot.engineFailed = true;
+            bot.engineNote = error;
+            TC_LOG_ERROR("tortoisebots", "BotMgr: engine for free bot {} not started: {} (it stands where it is)", me->GetName(), error);
+        }
+    }
+}
+
+std::string BotMgr::SetFree(ObjectGuid characterGuid, bool on)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return "that character is not a logged-in host bot";
+    Bot& bot = itr->second;
+    if (on)
+    {
+        if (!bot.master.IsEmpty())
+            return "the bot has a master: `.tb ungroup` it first";
+        Player* me = bot.session->GetPlayer();
+        if (me && me->GetGroup())
+            return "the bot is in a party: a free bot plays alone";
+        if (bot.free)
+            return std::string();
+        bot.free = true;
+        bot.useEngine = true;
+        if (bot.brain)
+            engine::ReapplyStrategies(bot.brain.get(), true);
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} is a free bot (grind, food, loot, roll, buff; no master)", me ? me->GetName() : characterGuid.ToString());
+        return std::string();
+    }
+    if (!bot.free)
+        return std::string();
+    bot.free = false;
+    bot.ghostRescue.Reset();
+    bot.ghostYd = -1.0f;
+    bot.rescuedThisDeath = false;
+    if (bot.brain)
+    {
+        if (bot.master.IsEmpty())
+            DropBrain(bot);                    // no master and no free kit: it stands, as any console bot without a master
+        else
+            engine::ReapplyStrategies(bot.brain.get(), false);
+    }
+    Player* me = bot.session->GetPlayer();
+    TC_LOG_INFO("tortoisebots", "BotMgr: {} is no longer a free bot", me ? me->GetName() : characterGuid.ToString());
+    return std::string();
+}
+
+void BotMgr::NoteKill(ObjectGuid characterGuid)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr != _bots.end() && itr->second.free)
+        ++itr->second.kills;
+}
+
+void BotMgr::NoteReviveKind(ObjectGuid characterGuid, int kind)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr != _bots.end())
+        itr->second.reviveHow = kind;
+}
+
+BotMgr::LifeInfo BotMgr::GetLifeInfo(ObjectGuid characterGuid) const
+{
+    LifeInfo info;
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return info;
+    Bot const& bot = itr->second;
+    info.free = bot.free;
+    info.kills = bot.kills;
+    info.deaths = bot.deaths;
+    info.rescues = bot.rescues;
+    info.teleports = bot.teleports;
+    info.rescuedThisDeath = bot.rescuedThisDeath;
+    info.reviveHow = bot.reviveHow;
+    info.ghostYd = bot.ghostYd;
+    return info;
+}
+}
+
+// TbCompat_W1.h: the engine's revive paths (ReviveFromCorpseAction.cpp, ReviveFromCorpseAction's spirit healer leg) name how the
+// bot came back, for the host's `[W1] revive` line and `.tb state corpserun=`.
+void NoteReviveKindCompat(Player* bot, int kind)
+{
+    if (bot)
+        TortoiseBots::BotMgr::Instance().NoteReviveKind(bot->GetGUID(), kind);
 }

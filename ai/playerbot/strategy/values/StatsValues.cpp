@@ -3,6 +3,7 @@
 #include <memory>
 #include "StatsValues.h"
 #include "../../../runtime/HunterPetPolicy.h"
+#include "playerbot/TbCompatP11.h"
 
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/actions/CheckMountStateAction.h"
@@ -34,13 +35,8 @@ bool PetIsDeadValue::Calculate()
     if ((bot->GetLevel() < TortoiseBots::HUNTER_PET_MIN_LEVEL && bot->GetClass() == CLASS_HUNTER) || bot->IsMounted())
         return false;
 
-    if (bot->GetPet())
-        return sServerFacade.GetDeathState(bot->GetPet()) != ALIVE;
-
-    if (!bot->GetPetGuid().IsEmpty())
-        return true;
-
-    return false;
+    // T: the pet is not alive, or the pet guid is set with no object. F also reads the stable row of a hunter pet whose body is gone (P11, G2).
+    return PetDeadCompat(bot);
 }
 
 bool PetIsHappyValue::Calculate()

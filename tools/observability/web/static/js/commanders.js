@@ -856,13 +856,39 @@
     };
   }
 
+  // The notice a tab shows on a game core that does not feed it (GET /api/v1/core: {core, ported:{raids, coverage, commander_orders, combat}}).
+  // "" = no notice: the Turtle core, an older daemon without the route, or a tab the core does feed. `tab` is raids, coverage, commanders or
+  // commanders-empty (the how-to line of the empty Commanders page).
+  function coreNotice(core, tab) {
+    if (!core || !core.ported || typeof core.ported !== "object") return "";
+    const p = core.ported;
+    const name = core.core === "forever" ? "ForeverCore" : String(core.core || "this core");
+    if (tab === "raids" && p.raids === false) {
+      return "Raids are not ported to " + name + " yet: the bots run no raid logic here. A raid group with bots in it is listed as a roster only, with no fight, no boss and no layout.";
+    }
+    if (tab === "coverage" && p.coverage === false) {
+      return "Raids are not ported to " + name + ", so no bot acts on a boss tactic row. The rows listed here are data only, and every boss shows as a gap.";
+    }
+    if (tab === "commanders") {
+      const missing = [];
+      if (p.commander_orders === false) missing.push("orders");
+      if (p.combat === false) missing.push("the live combat window");
+      if (!missing.length) return "";
+      return "On " + name + " this page shows each dungeon run: its plan, step, phase, the steps coming up, the last events and the party. Not sent on this core: " + missing.join(", ") + ", and the mobs and objects on the map.";
+    }
+    if (tab === "commanders-empty" && p.commander_orders === false) {
+      return "A card appears here within a couple of seconds of a dungeon run starting (.tb run start) and goes away shortly after the run ends.";
+    }
+    return "";
+  }
+
   const api = {
     HEAL_RANGE_YD, FAR_YD, LOW_HP_PCT, STALE_WARN_SEC, pretty, plural, ageText, roleKey, roleLabel, distance, leadBot, partyRows, orderText, stateWord,
     headerText, headerParts, botHref, warnings, newTracker, note, context, prune, project, fitView, viewBox, zoomAt, panBy, pinch, gridStep, gridLines,
     trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureSlots, pictureChoice, pictureSelect, pictureRefreshAfter, PIC_RETRY_MS, PIC_MISSING_MS,
     raidBlocks, isRaid, layoutText, threatOffTanks, notesLog, deathsTimeline, controlLines, whyWaiting, labelFit,
     AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, threatLines, botTargetLines, aggroMobs, commanderPlace,
-    facingVec, shapePath, shapeSeg, castLeft, castFrac, angleLerp,
+    facingVec, shapePath, shapeSeg, castLeft, castFrac, angleLerp, coreNotice,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdView = api;
 })(typeof self !== "undefined" ? self : this);

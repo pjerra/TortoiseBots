@@ -460,7 +460,7 @@ Unit* CastBlessingOnPartyAction::GetTarget()
         // core drops them in Spell::CheckTarget after the cast starts, so
         // they read as "bare" forever and wedge the scan (PartyMemberValue::
         // Check skips them the same way; paladin loop 2026-10-11).
-        if (member != bot && member->GetVisibility() == VISIBILITY_OFF)
+        if (member != bot && PlayerHiddenGmCompat(member))
             continue;
         if (member == bot)
         {

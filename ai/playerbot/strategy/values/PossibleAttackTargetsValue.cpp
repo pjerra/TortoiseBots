@@ -13,6 +13,7 @@
 #include "Maps/CellImpl.h"
 #include "AttackersValue.h"
 #include "EnemyPlayerValue.h"
+#include "playerbot/policy/combat/IgnoreMobPolicy.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -291,6 +292,37 @@ bool PossibleAttackTargetsValue::IsTapped(Unit* target, Player* player)
     return false;
 }
 
+bool PossibleAttackTargetsValue::IgnoredMobAttacksParty(Unit* target, Player* player)
+{
+    if (!target || !player)
+        return false;
+
+    ObjectGuid const botGuid = player->getObjectGuid();
+    Unit* victim = target->GetVictim();
+    ObjectGuid const victimGuid = victim ? victim->getObjectGuid() : ObjectGuid();
+
+    // The party as plain guids for the pure rule: the bot plus every member.
+    std::vector<ObjectGuid> party;
+    party.push_back(botGuid);
+    bool threatOnBotOrParty = target->GetThreatManager().getThreat(player) > 0.0f;
+    if (Group* group = player->GetGroup())
+    {
+        Group::MemberSlotList const& slots = group->GetMemberSlots();
+        for (Group::member_citerator itr = slots.begin(); itr != slots.end(); ++itr)
+        {
+            if (itr->guid == botGuid)
+                continue;
+            party.push_back(itr->guid);
+            if (!threatOnBotOrParty)
+                if (Player* member = GetPlayerCompat(itr->guid))
+                    if (member->IsInWorld() && member->GetMapId() == target->GetMapId())
+                        threatOnBotOrParty = target->GetThreatManager().getThreat(member) > 0.0f;
+        }
+    }
+
+    return ai::IgnoreMobYieldsToDefence(victimGuid, botGuid, party, threatOnBotOrParty);
+}
+
 bool PossibleAttackTargetsValue::IsValid(Unit* target, Player* player, float range, bool ignoreCC, bool checkAttackerValid)
 {
     // Nothing about an evading creature makes it attackable: the core absorbs every point
@@ -303,6 +335,13 @@ bool PossibleAttackTargetsValue::IsValid(Unit* target, Player* player, float ran
     // AiPlayerbot.DungeonRunCharmYield: a group member a creature is charming is no target for any pick that bypasses
     // the attackers list either (the explicit order, the raid mark, the tank's victim).
     if (target && player && AttackersValue::CharmedAllyOffLimits(target, player))
+        return false;
+
+    // `.tb ignore`: a mob the bot's commander listed is no pick of any target tournament (dps, tank, assist, pull,
+    // defence) - unless it is attacking the bot or any party member (it attacks -> the bots defend). An explicit
+    // order on it takes it off the list before it runs, so this never refuses one.
+    if (target && player && IsIgnoredMobCompat(player, target->getObjectGuid()) &&
+        !IgnoredMobAttacksParty(target, player))
         return false;
 
     // A needs_aura entry (BossTacticsPolicy.h) is for the carriers of the row's aura alone: a Shade of Jin'do takes no

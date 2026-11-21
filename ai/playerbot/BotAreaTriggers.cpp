@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -32,7 +33,7 @@ namespace
             AreaTriggerEntry const& at = itr.second;
             MapEntry const* map = sMapStorage.LookupEntry<MapEntry>(at.mapid);
             // Listed or not: an unlisted one is armed only while a run's current move step names it.
-            if (!IsBotIndexableAreaTrigger(sScriptMgr.GetAreaTriggerScriptId(at.id) != 0,
+            if (!IsBotIndexableAreaTrigger(ScriptMgrW3().GetAreaTriggerScriptId(at.id) != 0,
                                            map && map->IsNonRaidDungeon(),
                                            sObjectMgr.GetAreaTriggerTeleport(at.id) != nullptr,
                                            sObjectMgr.IsTavernAreaTrigger(at.id),
@@ -131,7 +132,7 @@ void ai::UpdateBotAreaTriggers(Player* bot, BotAreaTriggerState& state, std::vec
             continue;
         sLog.outDetail("TortoiseBots: %s fires area trigger %u (map %u).", CStrCompat(bot->GetName()), id, bot->GetMapId());
         bool const armedByRun = std::find(armedIds.begin(), armedIds.end(), id) != armedIds.end();
-        bool const ran = sScriptMgr.OnAreaTrigger(bot, at);
+        bool const ran = ScriptMgrW3().OnAreaTrigger(bot, at);
         // A run-armed trigger counts as fired for the run (DungeonRun::NoteTriggerFired) only
         // when its script ran (at_zumrah returns false while Zum'rah is not within 30 yd);
         // a refusal keeps it armed and this bot tries again in kBotAreaTriggerRetryMs while

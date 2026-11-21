@@ -4,6 +4,7 @@
 #include "TargetValue.h"
 #include "ObjectAccessor.h"
 #include "playerbot/policy/combat/CcAreaGuardPolicy.h"
+#include "playerbot/policy/combat/IgnoreMobPolicy.h"
 #include "CcMarkHoldPolicy.h"
 #include "PeriodicDamageAura.h"
 
@@ -286,6 +287,29 @@ bool CcGuard::BreakableCcInArea(SpellEntry const* info, Unit* spellTarget)
         return false;
     return BreakableCcNear(center->GetPositionX(), center->GetPositionY(), center->GetPositionZ(),
         center->GetMapId(), radius);
+}
+
+bool CcGuard::IgnoredMobNear(WorldObject* blastCenter, float blastRadius)
+{
+    Player* const bot = ai->GetBot();
+    if (!bot || !blastCenter)
+        return false;
+    // The same wide list the crowd-control scan reads: a listed mob attacks
+    // nobody, so it is missing from "attackers".
+    std::list<ObjectGuid> const possible =
+        ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("possible targets no los")->Get();
+    for (ObjectGuid const& guid : possible)
+    {
+        Unit* unit = ai->GetUnit(guid);
+        if (!unit || !unit->IsAlive() || unit->GetMapId() != bot->GetMapId())
+            continue;
+        // A listed mob attacking the party is fought, not left alone: it guards nothing.
+        if (!IsIgnoredMobCompat(bot, unit->getObjectGuid()) || PossibleAttackTargetsValue::IgnoredMobAttacksParty(unit, bot))
+            continue;
+        if (ai::AoEBlockedByIgnored(blastRadius, bot->GetDistance(unit), blastCenter->GetDistance(unit)))
+            return true;
+    }
+    return false;
 }
 
 bool CcGuard::CcInRunningArea(Spell const* spell)

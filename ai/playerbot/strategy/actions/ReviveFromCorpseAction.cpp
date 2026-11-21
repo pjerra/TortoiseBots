@@ -9,11 +9,10 @@
 #include "playerbot/strategy/values/DeadValues.h"
 #include "playerbot/policy/death/SafeRevivePolicy.h"
 #include "Database/DBCStructure.h"
-// pi-lens-ignore: clang:pp_file_not_found
-#include "runtime/BotManager.h"
 #include "playerbot/policy/dungeon/GhostStallPolicy.h"
 #include "playerbot/policy/travel/GraveyardTeleportPolicy.h"
 #include "playerbot/CorpseEntrancePolicy.h"
+#include "playerbot/TbCompatW1.h"
 
 using namespace ai;
 // Ghost stall (m-stuck §5.2): the corpse-run spline is re-dispatched from IDLE
@@ -92,32 +91,43 @@ static bool FindEntranceTriggerByRules(uint32 corpseMapId, WorldPosition const& 
 {
     outAtEntry = nullptr;
     outAt = nullptr;
+    // W1: a corpse is never cross-map on ForeverCore (spec 1.4). The scan stays for the Turtle core, which keeps its doors.
+    if (!CorpseRunCrossMapEnabledCompat())
+        return false;
     std::vector<CorpseEntranceCandidate> candidates;
     std::vector<std::pair<AreaTriggerEntry const*, AreaTriggerTeleport const*>> doors;
 
-    for (uint32 i = 0; i < sAreaTriggerStore.GetNumRows(); ++i)
+    for (uint32 i = 0; i < AreaTriggerCountCompat(); ++i)
     {
-        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(i);
+        AreaTriggerEntry const* atEntry = AreaTriggerAtCompat(i);
         if (!atEntry)
             continue;
 
-        AreaTriggerTeleport const* at = sObjectMgr.GetAreaTriggerTeleport(i);
+        AreaTriggerTeleport const* at = AreaTriggerTeleportCompat(i);
         if (!at)
             continue;
 
-        if (at->destination.mapId != corpseMapId)
+        uint32 atMap = 0, destMap = 0;
+        float destX = 0.0f, destY = 0.0f, destZ = 0.0f;
+        float atX = 0.0f, atY = 0.0f, atZ = 0.0f;
+        destMap = AreaTeleportMapIdCompat(at);
+        AreaTeleportPosCompat(at, destX, destY, destZ);
+        AreaTriggerPosCompat(atEntry, atX, atY, atZ);
+        atMap = AreaTriggerMapIdCompat(atEntry);
+
+        if (destMap != corpseMapId)
             continue;
 
-        MapEntry const* sourceMap = sMapStorage.LookupEntry<MapEntry>(atEntry->mapid);
-        bool const onGhostMap = atEntry->mapid == rules.ghostMap;
+        MapEntry const* sourceMap = MapEntryCompat(atMap);
+        bool const onGhostMap = atMap == rules.ghostMap;
         CorpseEntranceCandidate c;
         c.triggerId = i;
-        c.sourceMap = atEntry->mapid;
+        c.sourceMap = atMap;
         c.sourceInstanceable = !sourceMap || sourceMap->Instanceable(); // unknown map: never a door
-        c.destX = at->destination.x;
-        c.destY = at->destination.y;
-        c.destZ = at->destination.z;
-        c.ghostSqYd = onGhostMap ? botPos.sqDistance2d(WorldPosition(atEntry->mapid, atEntry->x, atEntry->y, atEntry->z)) : -1.0f;
+        c.destX = destX;
+        c.destY = destY;
+        c.destZ = destZ;
+        c.ghostSqYd = onGhostMap ? botPos.sqDistance2d(WorldPosition(atMap, atX, atY, atZ)) : -1.0f;
         candidates.push_back(c);
         doors.emplace_back(atEntry, at);
     }
@@ -141,8 +151,7 @@ static bool FindInstanceEntranceTrigger(uint32 corpseMapId, uint32 botMapId, Wor
     rules.destMap = corpseMapId;
     rules.ghostMap = botMapId;
     rules.timeout = timeout;
-    if (MapEntry const* corpseMap = sMapStorage.LookupEntry<MapEntry>(corpseMapId))
-        rules.entranceMap = corpseMap->ghostEntranceMap;
+    rules.entranceMap = MapGhostEntranceMapCompat(corpseMapId);
     return FindEntranceTriggerByRules(corpseMapId, botPos, corpsePos, rules, outAtEntry, outAt);
 }
 
@@ -154,18 +163,18 @@ uint32 ai::PickRepopEntrance(Player* bot, uint32 dungeonMapId, float corpseX, fl
 {
     if (!bot || !RepopDoorMapValidated(dungeonMapId))
         return 0;
-    MapEntry const* dungeonMap = sMapStorage.LookupEntry<MapEntry>(dungeonMapId);
+    MapEntry const* dungeonMap = MapEntryCompat(dungeonMapId);
     if (!dungeonMap)
         return 0;
     AreaTriggerEntry const* atEntry = nullptr;
     AreaTriggerTeleport const* at = nullptr;
     WorldPosition const corpsePos(dungeonMapId, corpseX, corpseY, corpseZ);
     if (!FindEntranceTriggerByRules(dungeonMapId, WorldPosition(bot), corpsePos,
-            RepopEntranceRules(dungeonMapId, dungeonMap->ghostEntranceMap), atEntry, at))
+            RepopEntranceRules(dungeonMapId, MapGhostEntranceMapCompat(dungeonMapId)), atEntry, at))
         return 0;
     sLog.outBasic("[BOT REPOP] %s: released in map %u at %.1f %.1f %.1f, revives at entrance trigger %u",
-        bot->GetName(), dungeonMapId, corpseX, corpseY, corpseZ, atEntry->id);
-    return atEntry->id;
+        CStrCompat(bot->GetName()), dungeonMapId, corpseX, corpseY, corpseZ, AreaTriggerIdCompat(atEntry));
+    return AreaTriggerIdCompat(atEntry);
 }
 
 bool ReviveFromCorpseAction::Execute(Event& event)
@@ -254,11 +263,7 @@ bool ReviveFromCorpseAction::Execute(Event& event)
     sLog.outDetail("[BOT CORPSE] %s: revive from corpse - RECLAIMING corpse now", CStrCompat(bot->GetName()));
 
     ai->StopMoving();
-    WorldPacket packet(CMSG_RECLAIM_CORPSE);
-    packet << bot->getObjectGuid();
-    bot->GetSession()->HandleReclaimCorpseOpcode(packet);
-
-    if (!sServerFacade.IsAlive(bot))
+    if (!ReclaimCorpseCompat(bot))
     {
         sLog.outDetail("[BOT CORPSE] %s: revive from corpse - RECLAIM DROPPED by core (still dead), retrying next tick", CStrCompat(bot->GetName()));
         return false;
@@ -270,12 +275,12 @@ bool ReviveFromCorpseAction::Execute(Event& event)
     // Post-rez rescue (best-effort, fail-closed): a random bot that keeps dying
     // where its level cannot survive is relocated once to validated fitting
     // ground instead of GY-camping. Normal and owned flows are unaffected.
-    TortoiseBots::BotManager::Instance().RelocateHopelessBot(bot);
+    RelocateHopelessBotCompat(bot);
     // A sub-10 pool bot woken above its level (valley graveyard in the next
     // town) goes straight home instead of walking back through mobs it cannot
     // survive (LowbieGraveyardPolicy.h). Fires only on the area-level
     // evidence, needs no death count.
-    TortoiseBots::BotManager::Instance().SendStrandedLowbieHome(bot);
+    SendStrandedLowbieHomeCompat(bot);
     // Deliberately NOT resetting "death count" here. BestGraveyardValue only
     // switches to a graveyard outside the current zone once the count reaches
     // DEATH_COUNT_BEFORE_TRYING_ANOTHER_GRAVEYARD - but a bot resurrecting is
@@ -284,6 +289,7 @@ bool ReviveFromCorpseAction::Execute(Event& event)
     // an enemy town (Razor Hill, Aerie Peak) resurrected into the same guards
     // indefinitely. The count is still cleared by XpGainAction, i.e. once the
     // bot is alive and earning again.
+    NoteReviveKindCompat(bot, 0);   // 0: reclaimed at the body
     sPlayerbotAIConfig.logEvent(ai, "ReviveFromCorpseAction");
 
     return true;
@@ -311,16 +317,8 @@ bool FindCorpseAction::Execute(Event& event)
     float reclaimDist = CORPSE_RECLAIM_RADIUS - 5.0f;
     int64 deadTime = time(nullptr) - corpse->GetGhostTime();
 
-    bool corpseInDungeon = false;
-    uint32 dungeonMapId = 0;
-    if (MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(corpsePos.GetMapId()))
-    {
-        if (mapEntry->IsDungeon())
-        {
-            corpseInDungeon = true;
-            dungeonMapId = corpsePos.GetMapId();
-        }
-    }
+    bool corpseInDungeon = MapIsDungeonCompat(corpsePos.getMapId());
+    uint32 dungeonMapId = corpseInDungeon ? corpsePos.getMapId() : 0;
 
     // Bounded wait for a nearby resurrect-capable master. Past the timeout the run
     // goes anyway: the master may be the wrong class, OOM, mid-fight, or simply not
@@ -356,7 +354,7 @@ bool FindCorpseAction::Execute(Event& event)
         }
     }
 
-    if (corpseInDungeon && deadTime >= 5 * MINUTE)
+    if (CorpseRunTeleportsEnabledCompat() && corpseInDungeon && deadTime >= 5 * MINUTE)
     {
         // The external door nearest the corpse on the ghost's map or the map the
         // instance is entered from (CorpseEntrancePolicy.h); with none, the
@@ -368,7 +366,7 @@ bool FindCorpseAction::Execute(Event& event)
         if (entranceTeleport)
         {
             sLog.outBasic("[BOT CORPSE] %s: instance corpse run timeout (%llds >= 300s), appearing revived at dungeon entrance (map %u, trigger %u)",
-                bot->GetName(), (long long)deadTime, dungeonMapId, entranceTrigger ? entranceTrigger->id : 0u);
+                CStrCompat(bot->GetName()), (long long)deadTime, dungeonMapId, entranceTrigger ? AreaTriggerIdCompat(entranceTrigger) : 0u);
             bot->GetMotionMaster()->Clear();
             // Resurrect BEFORE the teleport. TeleportTo onto another map is async:
             // the player is pulled off its map and m_currMap is null until the
@@ -382,7 +380,10 @@ bool FindCorpseAction::Execute(Event& event)
                 return true;
             bot->ResurrectPlayer(0.5f, false);
             bot->SpawnCorpseBones();
-            bot->TeleportTo(entranceTeleport->destination.mapId, entranceTeleport->destination.x, entranceTeleport->destination.y, entranceTeleport->destination.z, entranceTeleport->destination.o);
+            float exitX = 0.0f, exitY = 0.0f, exitZ = 0.0f;
+            AreaTeleportPosCompat(entranceTeleport, exitX, exitY, exitZ);
+            bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport), exitX, exitY, exitZ,
+                AreaTeleportOrientationCompat(entranceTeleport));
             bot->SaveToDB();
             SET_AI_VALUE(bool, "corpse run", false);
             return true;
@@ -391,21 +392,34 @@ bool FindCorpseAction::Execute(Event& event)
 
     if (botPos.GetMapId() != corpsePos.GetMapId())
     {
+        // W1: a corpse is never cross-map on ForeverCore (spec 1.4). The ghost stays where it is; the host's rescue is the only
+        // way out of a body on another map.
+        if (!CorpseRunCrossMapEnabledCompat())
+        {
+            sLog.outDetail("[BOT CORPSE] %s: find corpse - corpse on map %u, the bot on %u: a cross-map corpse is not walked (W1)",
+                CStrCompat(bot->GetName()), corpsePos.GetMapId(), botPos.GetMapId());
+            return false;
+        }
         AreaTriggerEntry const* entranceTrigger = nullptr;
         AreaTriggerTeleport const* entranceTeleport = nullptr;
         if (FindInstanceEntranceTrigger(corpsePos.GetMapId(), botPos.GetMapId(), botPos, corpsePos, false, entranceTrigger, entranceTeleport))
         {
 
             // 2. Near entrance portal: step into instance
-            float triggerRadius = std::max(5.0f, entranceTrigger->radius);
-            WorldPosition portalPos(entranceTrigger->mapid, entranceTrigger->x, entranceTrigger->y, entranceTrigger->z);
+            float atX = 0.0f, atY = 0.0f, atZ = 0.0f;
+            AreaTriggerPosCompat(entranceTrigger, atX, atY, atZ);
+            float triggerRadius = std::max(5.0f, AreaTriggerRadiusCompat(entranceTrigger));
+            WorldPosition portalPos(AreaTriggerMapIdCompat(entranceTrigger), atX, atY, atZ);
             float distToPortal = botPos.fDist(portalPos);
             if (distToPortal <= triggerRadius + 2.0f)
             {
                 sLog.outBasic("[BOT CORPSE] %s: reached instance entrance portal %u (dist=%.1f <= %.1f), entering instance %u",
-                    bot->GetName(), entranceTrigger->id, distToPortal, triggerRadius + 2.0f, corpsePos.GetMapId());
+                    CStrCompat(bot->GetName()), AreaTriggerIdCompat(entranceTrigger), distToPortal, triggerRadius + 2.0f, corpsePos.GetMapId());
                 bot->GetMotionMaster()->Clear();
-                bot->TeleportTo(entranceTeleport->destination.mapId, entranceTeleport->destination.x, entranceTeleport->destination.y, entranceTeleport->destination.z, entranceTeleport->destination.o);
+                float enterX = 0.0f, enterY = 0.0f, enterZ = 0.0f;
+                AreaTeleportPosCompat(entranceTeleport, enterX, enterY, enterZ);
+                bot->TeleportTo(AreaTeleportMapIdCompat(entranceTeleport), enterX, enterY, enterZ,
+                    AreaTeleportOrientationCompat(entranceTeleport));
                 return true;
             }
 
@@ -603,7 +617,7 @@ bool FindCorpseAction::Execute(Event& event)
     // counts. Owned/hired bots (active player master) keep today's handling.
     // Only pool ghosts hop, and only while the corpse is on the same map
     // (cross-map legs are portal walks handled above).
-    if (!ai->HasActivePlayerMaster() && HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST) &&
+    if (CorpseRunTeleportsEnabledCompat() && !ai->HasActivePlayerMaster() && HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST) &&
         botPos.GetMapId() == corpsePos.GetMapId() &&
         !corpse->IsWithinDistInMap(bot, (float)CORPSE_RECLAIM_RADIUS, true))
     {
@@ -633,13 +647,13 @@ bool FindCorpseAction::Execute(Event& event)
             bot->GetMotionMaster()->Clear();
             bot->TeleportTo(moveToPos.GetMapId(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), 0);
             if (isRealPlayer_Helper(bot))
-                bot->SendHeartBeat();
+                HeartBeatCompat(bot);
             SET_AI_VALUE2(time_t, "manual time", "ghost stall anchor", now); // re-arm, the walk resumes after the hop
             return true;
         }
     }
 
-    if (!ai->AllowActivity(DETAILED_MOVE_ACTIVITY) && !ai->HasPlayerNearby(moveToPos))
+    if (CorpseRunTeleportsEnabledCompat() && !ai->AllowActivity(DETAILED_MOVE_ACTIVITY) && !ai->HasPlayerNearby(moveToPos))
     {
         uint32 delay = sServerFacade.getDistance2d(bot, moveToPos.getX(), moveToPos.getY()) / bot->GetSpeed(MOVE_RUN); //Time a bot would take to travel to destination.
         delay = std::min(delay, uint32(10 * MINUTE)); //Cap time to get to destination at 10 minutes.
@@ -651,7 +665,7 @@ bool FindCorpseAction::Execute(Event& event)
             bot->GetMotionMaster()->Clear();
             bot->TeleportTo(moveToPos.GetMapId(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), 0);
             if (isRealPlayer_Helper(bot))
-                bot->SendHeartBeat();
+                HeartBeatCompat(bot);
         }
         else
         {
@@ -699,7 +713,7 @@ bool FindCorpseAction::Execute(Event& event)
             moved = MoveTo(moveToPos.GetMapId(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(),
                 false, false, false, false, "move_revive");
             int32 movegenAfter = bot->GetMotionMaster() ? (int32)bot->GetMotionMaster()->GetCurrentMovementGeneratorType() : -1;
-            bool started = IsMovingCompat(bot) || (bot->GetMotionMaster() && !bot->GetMotionMaster()->empty() && movegenAfter != (int32)IDLE_MOTION_TYPE);
+            bool started = IsMovingCompat(bot) || (bot->GetMotionMaster() && !MotionStackEmptyCompat(bot->GetMotionMaster()) && movegenAfter != (int32)IDLE_MOTION_TYPE);
             float ghostDistAfter = WorldPosition(bot).distance(moveToPos);
             uint32 posUnchangedSec = AI_VALUE2(uint32, "time since last change", "current position");
             // Per-tick during a stall; failures drive the spirit-healer retry
@@ -761,6 +775,7 @@ bool SpiritHealerAction::ShouldApplyResurrectionSickness()
 bool SpiritHealerAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
+    SET_AI_VALUE2(int32, "manual int", "w1 ghost leg", 1);   // `.tb state corpserun=healer`
     Corpse* corpse = bot->GetCorpse();
     if (!corpse)
     {
@@ -769,6 +784,37 @@ bool SpiritHealerAction::Execute(Event& event)
         // Do what a player would: resurrect at the nearest spirit healer.
         if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
         {
+            // ForeverCore: a ghost without a corpse revives at a spirit healer through the core's handler, and walks to it
+            // when it is not in reach. With none around it does nothing; the host's ghost rescue is the way out (spec D2).
+            if (SpiritHealerCoreHandlerCompat())
+            {
+                Unit* healer = nullptr;
+                std::list<ObjectGuid> npcs = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
+                for (ObjectGuid const& guid : npcs)
+                {
+                    Unit* unit = ai->GetUnit(guid);
+                    if (!UnitIsSpiritHealerCompat(unit) || !bot->IsWithinDistInMap(unit, sPlayerbotAIConfig.sightDistance))
+                        continue;
+                    healer = unit;
+                    if (SpiritHealerInReachCompat(bot, unit))
+                        break;
+                }
+                if (healer && SpiritHealerInReachCompat(bot, healer) && ActivateSpiritHealerCompat(bot, healer))
+                {
+                    sLog.outDetail("Bot #%d <%s> is a ghost without a corpse, revived at a spirit healer", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
+                    SET_AI_VALUE(bool, "corpse run", false);
+                    SET_AI_VALUE2(int32, "manual int", "w1 ghost leg", 0);
+                    NoteReviveKindCompat(bot, 1);
+                    sPlayerbotAIConfig.logEvent(ai, "ReviveFromSpiritHealerAction", "no corpse");
+                    return true;
+                }
+                if (healer)
+                    return MoveTo(healer->GetMapId(), healer->GetPositionX(), healer->GetPositionY(), healer->GetPositionZ(),
+                        false, false, false, false, "move_healer");
+                sLog.outDetail("Bot #%d <%s> is a ghost without a corpse and no spirit healer is near", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
+                return false;
+            }
+
             sLog.outDetail("Bot #%d <%s> is a ghost without a corpse, reviving at the nearest graveyard", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
             bot->RepopAtGraveyard();
             bot->ResurrectPlayer(0.5f, ShouldApplyResurrectionSickness());
@@ -796,19 +842,19 @@ bool SpiritHealerAction::Execute(Event& event)
     // 35 of them at Tarren Mill/Southshore). The corpse position is the only
     // reference a dead bot always has.
     GuidPosition grave;
-    if (WorldSafeLocsEntry const* corpseGrave = sObjectMgr.GetClosestGraveYard(
-            corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), corpse->GetMapId(), bot->GetTeam()))
+    if (WorldSafeLocsEntry const* corpseGrave = ClosestGraveyardCompat(
+            bot, corpse->GetMapId(), corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), bot->GetTeam()))
     {
         // Same guard as RepopAction: the core lookup can return a linked
         // graveyard on another map (entryFar) when the corpse's zone links
         // nothing usable (GraveyardTeleportPolicy.h). Only follow the pick
         // when it shares the corpse's map and is reasonably near.
-        if (IsUsableGraveyardTarget(true, corpseGrave->map_id == corpse->GetMapId(),
+        if (IsUsableGraveyardTarget(true, SafeLocMapIdCompat(corpseGrave) == corpse->GetMapId(),
             WorldPosition(corpseGrave).fDist(WorldPosition(corpse))))
             grave = GuidPosition(0, corpseGrave);
         else
             sLog.outDetail("SpiritHealer: nearest graveyard for bot #%d <%s> corpse is off-map/far (map %u), trying best graveyard instead",
-                bot->GetGUIDLow(), bot->GetName(), corpseGrave->map_id);
+                bot->GetGUIDLow(), CStrCompat(bot->GetName()), SafeLocMapIdCompat(corpseGrave));
     }
 
     // "Best graveyard" runs the same unguarded core lookup (DeadValues.cpp),
@@ -818,11 +864,11 @@ bool SpiritHealerAction::Execute(Event& event)
     if (!grave)
     {
         GuidPosition bestGrave = AI_VALUE(GuidPosition, "best graveyard");
-        if (bestGrave && IsUsableGraveyardTarget(true, bestGrave.GetMapId() == bot->GetMapId(), bestGrave.fDist(bot)))
+        if (bestGrave && IsUsableGraveyardTarget(true, bestGrave.getMapId() == bot->GetMapId(), bestGrave.fDist(bot)))
             grave = bestGrave;
         else if (bestGrave)
             sLog.outDetail("SpiritHealer: best graveyard for bot #%d <%s> is off-map/far (map %u), evacuating instead",
-                bot->GetGUIDLow(), bot->GetName(), bestGrave.GetMapId());
+                bot->GetGUIDLow(), CStrCompat(bot->GetName()), bestGrave.getMapId());
     }
 
     //something went wrong
@@ -836,21 +882,25 @@ bool SpiritHealerAction::Execute(Event& event)
             bot->GetLevel(),
             CStrCompat(bot->GetName())
         );
-        ai->DoSpecificAction("repop");
+        if (!SpiritHealerCoreHandlerCompat())
+            ai->DoSpecificAction("repop");
         return false;
     }
 
     if (grave && grave.fDist(bot) < sPlayerbotAIConfig.sightDistance)
     {
         bool foundSpiritHealer = false;
+        Unit* spiritHealer = nullptr;
         std::list<ObjectGuid> npcs = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
         for (std::list<ObjectGuid>::iterator i = npcs.begin(); i != npcs.end(); i++)
         {
             Unit* unit = ai->GetUnit(*i);
-            if (unit && unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_SPIRITHEALER))
+            if (UnitIsSpiritHealerCompat(unit))
             {
                 foundSpiritHealer = true;
-                break;
+                spiritHealer = unit;
+                if (SpiritHealerInReachCompat(bot, unit))
+                    break;
             }
         }
 
@@ -860,6 +910,25 @@ bool SpiritHealerAction::Execute(Event& event)
             ai->TellPlayerNoFacing(requester, "Cannot find any spirit healer nearby");
         }
 
+
+        if (SpiritHealerCoreHandlerCompat())
+        {
+            if (spiritHealer && SpiritHealerInReachCompat(bot, spiritHealer) && ActivateSpiritHealerCompat(bot, spiritHealer))
+            {
+                sLog.outDetail("Bot #%d <%s> revives at spirit healer", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
+                SET_AI_VALUE(bool, "corpse run", false);
+                SET_AI_VALUE2(int32, "manual int", "w1 ghost leg", 0);
+                NoteReviveKindCompat(bot, 1);
+                sPlayerbotAIConfig.logEvent(ai, "ReviveFromSpiritHealerAction");
+                return true;
+            }
+            if (spiritHealer)
+                return MoveTo(spiritHealer->GetMapId(), spiritHealer->GetPositionX(), spiritHealer->GetPositionY(),
+                    spiritHealer->GetPositionZ(), false, false, false, false, "move_healer");
+            // No healer near the graveyard: wait where the ghost stands; the host's rescue covers a ghost that cannot get
+            // anywhere (it still walks to the graveyard below only when one is in sight).
+            return false;
+        }
 
         // Step off the spirit healer first: a revived bot eats and drinks where it
         // stands, so every revive piled up on the same spot. The ghost walks a few
@@ -890,9 +959,9 @@ bool SpiritHealerAction::Execute(Event& event)
         SET_AI_VALUE(bool, "corpse run", false);
         // Same post-rez rescue as the corpse path: hopeless mismatch relocates
         // once instead of GY-camping (see above).
-        TortoiseBots::BotManager::Instance().RelocateHopelessBot(bot);
+        RelocateHopelessBotCompat(bot);
         // Same lowbie-home net as the corpse path (see above).
-        TortoiseBots::BotManager::Instance().SendStrandedLowbieHome(bot);
+        SendStrandedLowbieHomeCompat(bot);
         // Deliberately NOT resetting "death count" here. BestGraveyardValue only
         // switches to a graveyard outside the current zone once the count reaches
         // DEATH_COUNT_BEFORE_TRYING_ANOTHER_GRAVEYARD - but a bot resurrecting is
@@ -915,10 +984,10 @@ bool SpiritHealerAction::Execute(Event& event)
 
     // Prevent taking too long to go to corpse (10 mins)
     // no need to wait longer, because bot is probably stuck in navigating issues
-    shouldTeleportToGY = deadTime > uint32(10 * MINUTE);
+    shouldTeleportToGY = CorpseRunTeleportsEnabledCompat() && deadTime > uint32(10 * MINUTE);
 
     // Check if we can teleport to the graveyard when nobody is looking
-    if (!shouldTeleportToGY && !ai->AllowActivity(DETAILED_MOVE_ACTIVITY) && !ai->HasPlayerNearby(WorldPosition(grave)))
+    if (CorpseRunTeleportsEnabledCompat() && !shouldTeleportToGY && !ai->AllowActivity(DETAILED_MOVE_ACTIVITY) && !ai->HasPlayerNearby(WorldPosition(grave)))
     {
         //Time a bot would take to travel to it's corpse.
         uint32 delay = sServerFacade.getDistance2d(bot, corpse) / bot->GetSpeed(MOVE_RUN);
@@ -955,7 +1024,7 @@ bool SpiritHealerAction::Execute(Event& event)
             anchor = now;
         }
 
-        if (anchor != 0 && now - anchor >= (time_t)kSpiritHealerStallSec)
+        if (CorpseRunTeleportsEnabledCompat() && anchor != 0 && now - anchor >= (time_t)kSpiritHealerStallSec)
         {
             sLog.outDetail("[BOT CORPSE] %s: spirit healer walk stalled %.1fy from the graveyard for %us, teleporting there",
                 CStrCompat(bot->GetName()), graveDist, kSpiritHealerStallSec);
@@ -977,31 +1046,33 @@ bool SpiritHealerAction::Execute(Event& event)
         // via repop instead of MoveTo-looping forever. The distance half of
         // the rule applies here too: a same-map outlier is a relocation,
         // not a repop.
-        if (!IsUsableGraveyardTarget(true, grave.GetMapId() == bot->GetMapId(), grave.fDist(bot)))
+        if (!IsUsableGraveyardTarget(true, grave.getMapId() == bot->GetMapId(), grave.fDist(bot)))
         {
             sLog.outDetail("SpiritHealer: graveyard for bot #%d <%s> is off-map/far (map %u), evacuating instead",
-                bot->GetGUIDLow(), bot->GetName(), grave.GetMapId());
-            ai->DoSpecificAction("repop");
+                bot->GetGUIDLow(), CStrCompat(bot->GetName()), grave.getMapId());
+            if (!SpiritHealerCoreHandlerCompat())
+                ai->DoSpecificAction("repop");
             return false;
         }
         bot->GetMotionMaster()->Clear();
-        bot->TeleportTo(grave.GetMapId(), grave.getX(), grave.getY(), grave.getZ(), 0);
+        bot->TeleportTo(grave.getMapId(), grave.getX(), grave.getY(), grave.getZ(), 0);
         if (isRealPlayer_Helper(bot))
-            bot->SendHeartBeat();
+            HeartBeatCompat(bot);
         return true;
     }
-    else if (grave.GetMapId() != bot->GetMapId())
+    else if (grave.getMapId() != bot->GetMapId())
     {
         // A ghost cannot walk across maps (no transports): MoveTo would
         // fail every tick and strand the bot in ghost form. Evacuate.
         sLog.outDetail("SpiritHealer: graveyard for bot #%d <%s> is on map %u, evacuating instead of walking cross-map",
-            bot->GetGUIDLow(), bot->GetName(), grave.GetMapId());
-        ai->DoSpecificAction("repop");
+            bot->GetGUIDLow(), CStrCompat(bot->GetName()), grave.getMapId());
+        if (!SpiritHealerCoreHandlerCompat())
+            ai->DoSpecificAction("repop");
         return false;
     }
     else
     {
-        return MoveTo(grave.GetMapId(), grave.getX(), grave.getY(), grave.getZ(), false, false, false, false,
+        return MoveTo(grave.getMapId(), grave.getX(), grave.getY(), grave.getZ(), false, false, false, false,
             "move_revive");
     }
 }

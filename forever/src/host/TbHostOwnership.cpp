@@ -13,6 +13,7 @@
 #include "behavior/PlayerConvenience.h"
 #include "runtime/AhBotSellerAccount.h"
 #include "runtime/BotActivityLease.h"
+#include "runtime/BotGearService.h"
 #include "runtime/ClaimLifecycle.h"
 #include "runtime/CommandedGroupQuery.h"
 #include "runtime/GuildOrderStore.h"
@@ -20,6 +21,8 @@
 #include "runtime/RandomBotAccountRegistry.h"
 #include "runtime/RunReleaseHold.h"
 #include "host/TbH3.h"
+#include "host/cmd/TbCmdBinding.h"
+#include "host/run/TbRunHooks.h"
 #include "TbBotMgr.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
@@ -50,9 +53,28 @@ ClaimLifecycle& ClaimLifecycle::Instance()
     return instance;
 }
 
+bool ClaimLifecycle::IsClaimed(uint32_t /*botGuidLow*/) const
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
 bool ClaimLifecycle::IsClaimedByPlayer(uint32_t /*botGuidLow*/, uint32_t /*playerGuidLow*/) const
 {
     return false;
+}
+
+// ---- BotGearService (runtime/BotGearService.cpp): no pinned gear cap. ----
+BotGearService& BotGearService::Instance()
+{
+    static BotGearService instance;
+    return instance;
+}
+
+uint32_t BotGearService::PinnedCap(uint32_t /*guidLow*/) const
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return 0;
 }
 
 // ---- BotActivityLeaseManager (runtime/BotActivityLease.cpp): no bot holds a lease, every bot is Idle, except a COMMANDED bot (H4). ----
@@ -176,6 +198,30 @@ void NoteDeath(uint32_t /*botGuidLow*/)
     tbcompat::Unported(tbcompat::Feature::PoolServices);
 }
 
+// The mail read: no relist ledger, so no mail is matched to one and none is claimed.
+void NoteTakenMailSender(uint32_t /*senderLow*/, uint32_t /*itemId*/, uint32_t /*count*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+}
+
+std::vector<RelistLedgerEntry> RelistEntries(uint32_t /*botGuidLow*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return {};
+}
+
+bool NoteRelistClaimed(uint32_t /*botGuidLow*/, uint32_t /*seq*/, uint32_t /*mailId*/, uint32_t /*gold*/, uint32_t /*items*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
+bool NoteRelistReceived(uint32_t /*botGuidLow*/, uint32_t /*seq*/, uint32_t /*gold*/, uint32_t /*items*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
 void NoteDisenchantDropOff(uint32_t /*botGuidLow*/, uint32_t /*memberGuidLow*/, uint32_t /*nowMs*/)
 {
     tbcompat::Unported(tbcompat::Feature::PoolServices);
@@ -190,33 +236,47 @@ void NoteEnchantReplaceConfirmed(uint32_t /*botGuidLow*/)
 // ---- BotCommands (commands/Commander.cpp, commands/BotCommands.cpp): the remote commander and `.bot run` are not ported. ----
 namespace BotCommands
 {
-// The bot is in no commander-bound group. (Findings: the host's masters are plain players.)
-// H3 (slice 3): except a bot that `.tb master` bound to a commander (host/TbOrders.cpp).
+// The bot stands in a group a commander bound. (Findings: the host's masters are plain players.)
+// H3 (slice 3): a bot that `.tb master` bound to a commander (host/TbOrders.cpp) answers yes.
+// P2: the binding record's lead's live group, like the two questions below (which read the same record).
 bool IsInCommandedGroup(Player* bot)
 {
     return TortoiseBots::h3::IsCommandedBot(bot);
 }
 
-bool IsInRunningDungeonRun(Player* /*bot*/)
+// P2: the commander's binding holds this bot in its group (the binding record beside h3's table; commands/BotCommands.h's two questions). Both are
+// one guid lookup and one group membership check; a released binding answers no at once.
+bool IsCommandedBy(Player* commander, Player* bot)
 {
-    return false;
+    return TortoiseBots::cmd::IsCommandedBy(commander, bot);
 }
 
-bool IsRunKillFirst(Player* /*bot*/, uint32_t /*entry*/)
+bool IsInOwnBindingGroup(Player* commander, Player* bot)
 {
-    return false;
+    return TortoiseBots::cmd::IsInOwnBindingGroup(commander, bot);
+}
+
+// S6: these four answer from the run of the bot's party (host/run/TbRunHooks.h); "no run" (false / null / 0) when it has none or it is not running.
+bool IsInRunningDungeonRun(Player* bot)
+{
+    return run::BotInRunningRun(bot);
+}
+
+bool IsRunKillFirst(Player* bot, uint32_t entry)
+{
+    return run::BotRunKillFirst(bot, entry);
 }
 
 // Null = "no armed area triggers".
-std::vector<uint32_t> const* RunArmedAreaTriggers(Player* /*bot*/)
+std::vector<uint32_t> const* RunArmedAreaTriggers(Player* bot)
 {
-    return nullptr;
+    return run::BotRunArmedTriggers(bot);
 }
 
 // 0 = "no bound run plan".
-uint32_t BoundRunPlanMap(Player* /*bot*/)
+uint32_t BoundRunPlanMap(Player* bot)
 {
-    return 0;
+    return run::BotRunPlanMap(bot);
 }
 
 // "Always true while no run exists" (runtime/CommandedGroupQuery.h): a chat order is never held back.

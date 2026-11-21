@@ -36,6 +36,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -807,7 +808,7 @@ private:
         uint32_t stackSize = proto ? proto->GetMaxStackSize() : 0;
         if (stackSize)
         {
-            std::unique_ptr<QueryResult> bankItems(CharacterDatabase.PQuery(
+            auto bankItems = QueryGuardCompat(CharacterPQueryCompat(
                 "SELECT `tab`, `slot`, `count` FROM `guild_bank` WHERE `guildid` = '%u' AND "
                 "`isInferno` = '0' AND `item_template` = '%u' ORDER BY `tab`, `slot`",
                 order->guildId, order->supplyItemId));

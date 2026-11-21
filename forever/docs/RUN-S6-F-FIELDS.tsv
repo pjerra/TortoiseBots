@@ -1,0 +1,252 @@
+field	decl	class	status	static_reads	source_or_reason
+players	1564	A	filled	33	slots of the lead's group that are not host bots (Group.h:341, ObjectAccessor::FindPlayer)
+itemPlayer	1566	no	skipped	10	not read by an RFC run (players in the group (player-led / mixed runs)): the Facts() default stands
+lootTurnPlayer	1567	no	skipped	2	not read by an RFC run (players in the group (player-led / mixed runs)): the Facts() default stands
+legNeedRead	1571	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+legNeedHolders	1576	no	skipped	3	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedRead	1581	no	skipped	4	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedState	1582	no	skipped	3	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedX	1583	no	skipped	3	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedY	1583	no	skipped	3	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedZ	1583	no	skipped	3	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedCarrier	1586	no	skipped	6	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+doorNeedLockpick	1589	no	skipped	1	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+botKeysForPlayers	1592	no	skipped	2	not read by an RFC run (config copy (aiplayerbot.conf key read once per tick)): the Facts() default stands
+total	1594	A	filled	6	the lead's group slots: a slot with no player in the world counts dead and 1000 yd away
+alive	1594	A	filled	5	the lead's group slots: a slot with no player in the world counts dead and 1000 yd away
+dead	1594	A	filled	22	the lead's group slots: a slot with no player in the world counts dead and 1000 yd away
+raid	1595	A	forced	52	raid.on stays false: a bot-led party is no raid binding (DungeonRunRaid not read)
+linkedDeath	1598	A	config	2	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+nearWipeStopCount	1601	A	config	2	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+nearWipeStopWindowMs	1602	A	config	4	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+leadAlive	1603	A	filled	63	the lead Player (Player::IsAlive, position, GetName, GetTeam)
+doors	1607	no	skipped	1	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+anyInCombat	1608	A	filled	49	Unit::getAttackers Unit.h:741, GetVictim :743, IsInCombat :1075 of the bots and their pets
+leadInCombat	1609	A	filled	7	Unit::getAttackers Unit.h:741, GetVictim :743, IsInCombat :1075 of the bots and their pets
+staleCombat	1613	A	filled	4	Unit::getAttackers Unit.h:741, GetVictim :743, IsInCombat :1075 of the bots and their pets
+engagedUnits	1617	A	filled	33	Unit::getAttackers Unit.h:741, GetVictim :743, IsInCombat :1075 of the bots and their pets
+engagedRead	1618	A	filled	13	Unit::getAttackers Unit.h:741, GetVictim :743, IsInCombat :1075 of the bots and their pets
+nestUnits	1622	no	skipped	1	not read by an RFC run (fight reads (engaged units, attackers, lead hit)): the Facts() default stands
+nestUnitsRead	1623	D	never	0	no read site in DungeonRunPolicy.h
+respawnNest	1625	no	forced	2	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+charmedFighting	1628	check	skipped	2	not read by an RFC run (other): the Facts() default stands
+ownFightUnits	1635	check	filled	1	one ObjectAccessor::GetUnit per remembered guid handle (Alive/Dead/Gone; a dropped handle stays Unknown)
+ownFightRead	1636	A	filled	2	one ObjectAccessor::GetUnit per remembered guid handle (Alive/Dead/Gone; a dropped handle stays Unknown)
+leadX	1637	A	filled	128	the lead Player (Player::IsAlive, position, GetName, GetTeam)
+leadY	1637	A	filled	128	the lead Player (Player::IsAlive, position, GetName, GetTeam)
+leadZ	1637	A	filled	131	the lead Player (Player::IsAlive, position, GetName, GetTeam)
+leadOffFloor	1641	A	filled	4	Map height read (GetHeightCompat, Map.h:330) and the navmesh presence (WorldPosition::isMmapLoaded); no feet probe: leadFloorZ is the height read
+leadFloorZ	1642	check	filled	1	Map height read (GetHeightCompat, Map.h:330) and the navmesh presence (WorldPosition::isMmapLoaded); no feet probe: leadFloorZ is the height read
+leadMoving	1643	check	filled	5	PlayerbotAI seated meal, Unit::GetStandState, IsNonMeleeSpellCast, isMoving, IsInWater; 'last movement' value
+leadResting	1646	A	filled	3	PlayerbotAI seated meal, Unit::GetStandState, IsNonMeleeSpellCast, isMoving, IsInWater; 'last movement' value
+leadCasting	1647	check	filled	1	PlayerbotAI seated meal, Unit::GetStandState, IsNonMeleeSpellCast, isMoving, IsInWater; 'last movement' value
+leadInWater	1652	check	filled	4	PlayerbotAI seated meal, Unit::GetStandState, IsNonMeleeSpellCast, isMoving, IsInWater; 'last movement' value
+leadMoveFailed	1653	check	filled	3	PlayerbotAI seated meal, Unit::GetStandState, IsNonMeleeSpellCast, isMoving, IsInWater; 'last movement' value
+leadMoveFailReason	1654	check	filled	5	PlayerbotAI seated meal, Unit::GetStandState, IsNonMeleeSpellCast, isMoving, IsInWater; 'last movement' value
+leadStayWalkResting	1657	check	notknown	1	default: the stall fallback reads (second island sign, stay-walk back-off, swim line) are not ported
+leadStayWalkFails	1658	check	notknown	1	default: the stall fallback reads (second island sign, stay-walk back-off, swim line) are not ported
+stallDirectRead	1662	check	notknown	1	default: the stall fallback reads (second island sign, stay-walk back-off, swim line) are not ported
+stallDirectClear	1663	check	notknown	1	default: the stall fallback reads (second island sign, stay-walk back-off, swim line) are not ported
+maxMemberYd	1664	A	filled	9	the lead's group slots: a slot with no player in the world counts dead and 1000 yd away
+raidIcons	1667	A	filled	5	Group::GetTargetIcon Group.h:362, each mark a guid handle
+raidIconsRead	1668	A	filled	3	Group::GetTargetIcon Group.h:362, each mark a guid handle
+members	1669	A	filled	78	the lead's group slots: a slot with no player in the world counts dead and 1000 yd away
+directJoinRead	1673	check	skipped	3	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+directJoinSupported	1676	no	skipped	1	not read by an RFC run (config copy (aiplayerbot.conf key read once per tick)): the Facts() default stands
+deadNames	1677	A	filled	11	the lead's group slots: a slot with no player in the world counts dead and 1000 yd away
+anchorPathRead	1681	A	filled	2	one PathGenerator query (PathGenerator.h:86), only on the tick after a gather asked
+anchorReachable	1682	yes	filled	1	one PathGenerator query (PathGenerator.h:86), only on the tick after a gather asked
+directPathCrossesPack	1686	A	notknown	1	false: the test needs the live list of uncleared packs along the path
+approachIncomplete	1692	A	filled	1	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+walkBackRescue	1695	A	forced	3	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+dryWalk	1698	no	forced	1	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+teleportReturnYd	1702	A	forced	2	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+reviveHoldYd	1705	A	forced	1	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+fetchRead	1708	no	skipped	1	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+rescueRead	1712	A	forced	1	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+rescueReadX	1713	no	skipped	1	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+rescueReadY	1713	no	skipped	1	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+rescueReadZ	1713	no	skipped	1	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+rescueReach	1714	no	skipped	1	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+fetchReach	1715	no	skipped	2	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+fetchSpots	1716	no	skipped	8	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+fightForward	1718	A	config	1	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+lightRest	1721	A	config	2	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+forwardRead	1728	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+forwardFor	1729	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+forwardPathOk	1730	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+forwardLos	1731	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+forwardHostileNear	1732	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+forwardHopAlive	1733	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+shortcutRead	1736	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+shortcutFor	1737	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+shortcutOk	1738	yes	filled	1	PathGenerator query and a hostile scan on the tick after the policy asked (Run::fightForwardWanted, shortcutWanted)
+killFirst	1741	A	filled	5	the engaged units whose entry the plan lists in kill_first (the grid read of a totem key is not ported)
+bossTacticNoCc	1744	no	skipped	2	not read by an RFC run (config copy (aiplayerbot.conf key read once per tick)): the Facts() default stands
+minHealthPct	1745	A	filled	3	Unit::GetHealth/GetPower of the living bots; priest, paladin or shaman out of combat
+minHealerManaPct	1746	A	filled	2	Unit::GetHealth/GetPower of the living bots; priest, paladin or shaman out of combat
+minManaPct	1747	A	filled	2	Unit::GetHealth/GetPower of the living bots; priest, paladin or shaman out of combat
+eating	1748	A	filled	4	PlayerbotAI::HasSeatedMeal(food/drink) PlayerbotAI.h:1060
+rezzer	1749	A	filled	1	Unit::GetHealth/GetPower of the living bots; priest, paladin or shaman out of combat
+rezHold	1754	A	forced	2	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+rezMembers	1755	check	skipped	7	not read by an RFC run (rez hold, resurrection): the Facts() default stands
+rezInProgress	1756	check	skipped	2	not read by an RFC run (rez hold, resurrection): the Facts() default stands
+team	1758	A	filled	19	the lead Player (Player::IsAlive, position, GetName, GetTeam)
+seen	1759	A	filled	14	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+approachKnown	1763	A	filled	5	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+approachRead	1770	yes	filled	2	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+approachX	1771	A	filled	5	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+approachY	1771	A	filled	5	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+approachZ	1771	A	filled	5	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+leadIsland	1776	A	filled	2	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+leadPathGood	1777	A	filled	1	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
+goodSpotCut	1781	check	notknown	1	default: the stall fallback reads (second island sign, stay-walk back-off, swim line) are not ported
+units	1782	A	filled	47	grid search of the step's entries, classified by the policy's own ClassifyPullRead; Creature::GetCreatureData spawnPoint, GetDefaultMovementType, GetFormation
+patrollers	1790	A	filled	11	grid search of the step's entries, classified by the policy's own ClassifyPullRead; Creature::GetCreatureData spawnPoint, GetDefaultMovementType, GetFormation
+standPatrols	1794	no	skipped	1	not read by an RFC run (step read: units, pack, approach, path, floor): the Facts() default stands
+standPullOwnRead	1798	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+standPullOwnAlive	1799	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+packResidue	1802	A	filled	13	grid search of the step's entries, classified by the policy's own ClassifyPullRead; Creature::GetCreatureData spawnPoint, GetDefaultMovementType, GetFormation
+packClearMarginYd	1805	A	config	12	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+packClearRepulls	1806	yes	config	4	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+stragglerPull	1809	no	forced	1	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+stragglerPathRead	1814	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+stragglerPathFor	1815	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+stragglerPathTank	1816	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+stragglerPathToUnit	1819	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+stragglerPathOk	1820	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+stragglerPathBlockEntry	1821	no	skipped	2	not read by an RFC run (other): the Facts() default stands
+stragglerPathBlockYd	1822	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+stragglerPathBlockReachYd	1823	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+packNearestLeft	1824	yes	filled	3	grid search of the step's entries, classified by the policy's own ClassifyPullRead; Creature::GetCreatureData spawnPoint, GetDefaultMovementType, GetFormation
+packNearestLeftRead	1825	yes	filled	1	grid search of the step's entries, classified by the policy's own ClassifyPullRead; Creature::GetCreatureData spawnPoint, GetDefaultMovementType, GetFormation
+hopUnits	1826	A	filled	3	Trinity::AnyUnfriendlyUnitInObjectRangeCheck Grids/Notifiers/GridNotifiers.h:1190 + Cell::VisitAllObjects, IsWithinLOSInMap Object.h:364, at most 4 path queries
+bossDeadNearSpot	1830	A	filled	1	grid search of the boss entry, WorldObject::GetCreatureListWithEntryInGrid Object.h:500; Creature::IsAlive
+bossDeadNearLead	1831	A	filled	1	grid search of the boss entry, WorldObject::GetCreatureListWithEntryInGrid Object.h:500; Creature::IsAlive
+bossCorpseGuid	1835	A	filled	2	grid search of the boss entry, WorldObject::GetCreatureListWithEntryInGrid Object.h:500; Creature::IsAlive
+bossCorpseX	1836	A	filled	1	grid search of the boss entry, WorldObject::GetCreatureListWithEntryInGrid Object.h:500; Creature::IsAlive
+bossCorpseY	1836	A	filled	1	grid search of the boss entry, WorldObject::GetCreatureListWithEntryInGrid Object.h:500; Creature::IsAlive
+bossCorpseZ	1836	A	filled	1	grid search of the boss entry, WorldObject::GetCreatureListWithEntryInGrid Object.h:500; Creature::IsAlive
+bossOwnDead	1841	A	filled	2	spawn id of the S5 unit row (role boss) -> Map::GetCreatureBySpawnId Map.h:453; not loaded: Map::GetCreatureRespawnTime Map.h:537 in the future = dead. No unit row matched: not known (false)
+bossOwnDeadEntry	1842	yes	filled	3	spawn id of the S5 unit row (role boss) -> Map::GetCreatureBySpawnId Map.h:453; not loaded: Map::GetCreatureRespawnTime Map.h:537 in the future = dead. No unit row matched: not known (false)
+bossSearchRead	1848	yes	filled	5	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchAlive	1849	yes	filled	1	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchAliveEntry	1852	yes	filled	4	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossAliveX	1853	yes	filled	3	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossAliveY	1853	yes	filled	3	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossAliveZ	1853	yes	filled	4	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchDead	1854	yes	filled	1	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchUnloaded	1856	yes	filled	1	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchOwnDead	1860	yes	filled	1	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchNoSpawn	1862	yes	notknown	1	false/0: no spawn-less or game-event read (the RFC bosses are plain spawns with unit rows)
+bossSearchEventOff	1868	yes	notknown	1	false/0: no spawn-less or game-event read (the RFC bosses are plain spawns with unit rows)
+bossSearchEventId	1869	yes	notknown	1	false/0: no spawn-less or game-event read (the RFC bosses are plain spawns with unit rows)
+bossSearchEventName	1870	yes	notknown	1	false/0: no spawn-less or game-event read (the RFC bosses are plain spawns with unit rows)
+bossSearchCorpseGuid	1871	yes	filled	2	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchCorpseX	1872	yes	filled	6	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchCorpseY	1872	yes	filled	6	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossSearchCorpseZ	1872	yes	filled	6	the matched spawns of the boss entry (S5 unit rows): Map::GetCreatureBySpawnId, respawn time, Map::IsGridLoaded Map.h:278
+bossGateStacks	1878	A	forced	2	no pull gate: ai_boss_tactic has no row for map 389 and boss tactics are not ported (stacks -1, rest 0/empty)
+bossGateSpell	1879	yes	forced	1	no pull gate: ai_boss_tactic has no row for map 389 and boss tactics are not ported (stacks -1, rest 0/empty)
+bossGateMax	1880	A	forced	2	no pull gate: ai_boss_tactic has no row for map 389 and boss tactics are not ported (stacks -1, rest 0/empty)
+bossGateHoldS	1881	yes	forced	1	no pull gate: ai_boss_tactic has no row for map 389 and boss tactics are not ported (stacks -1, rest 0/empty)
+bossGatePriests	1882	yes	forced	2	no pull gate: ai_boss_tactic has no row for map 389 and boss tactics are not ported (stacks -1, rest 0/empty)
+bossHpPct	1885	check	filled	2	Unit::GetHealthPct of the living plan boss
+bossBerserk	1886	check	notknown	1	false/0: Hakkar's enrage and siphon are map 309 only
+seekClockRead	1889	D	never	0	no read site in DungeonRunPolicy.h
+seekSiphonCycle	1890	A	forced	4	0: the seek-aura clock is Hakkar only (map 309)
+seekSiphonDosed	1891	check	notknown	1	false/0: Hakkar's enrage and siphon are map 309 only
+seekSiphonUndosed	1892	check	notknown	1	false/0: Hakkar's enrage and siphon are map 309 only
+objectState	1893	check	skipped	12	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+objectReadable	1898	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+eventDown	1901	no	skipped	2	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventData	1902	check	skipped	15	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcRead	1912	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcAlive	1913	check	skipped	5	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcX	1914	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcY	1914	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcZ	1914	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+clearUnits	1903	check	skipped	2	not read by an RFC run (hold, ritual, event): the Facts() default stands
+carrier	1906	A	filled	77	the lead Player (Player::IsAlive, position, GetName, GetTeam)
+itemsSplit	1909	no	skipped	4	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+taskActStarted	1913	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+objectReacted	1914	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+summonSeen	1915	no	skipped	1	not read by an RFC run (rescue, fetch, return, rejoin, summon): the Facts() default stands
+proofRead	1919	no	skipped	2	not read by an RFC run (other): the Facts() default stands
+proofUp	1920	no	skipped	2	not read by an RFC run (other): the Facts() default stands
+carrierHasItem	1921	no	skipped	5	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+carrierHasEntryItem	1922	no	skipped	1	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+carrierBusy	1923	no	skipped	10	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+partyHasItem	1925	no	skipped	3	not read by an RFC run (other): the Facts() default stands
+itemHolder	1926	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+lootTurn	1928	no	skipped	4	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+corpseChecked	1929	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+corpseHasItem	1930	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+taskReply	1931	check	skipped	14	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+taskText	1932	check	skipped	21	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+lootFfaOn	1934	no	forced	1	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+lootMethod	1935	no	skipped	6	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
+leadLeadsGroup	1936	no	skipped	1	not read by an RFC run (party roster and lead state): the Facts() default stands
+leadIsTank	1938	A	filled	11	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadStaying	1939	A	filled	10	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadStayKnown	1940	yes	filled	18	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadStayX	1941	yes	filled	6	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadStayY	1941	yes	filled	6	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadStayZ	1941	yes	filled	6	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadHit	1942	yes	filled	2	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadAttacker	1947	yes	filled	12	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadHasAttacker	1948	A	filled	11	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadAttackers	1952	no	skipped	1	not read by an RFC run (fight reads (engaged units, attackers, lead hit)): the Facts() default stands
+leadHeldEntries	1955	check	skipped	1	not read by an RFC run (other): the Facts() default stands
+partyAttackers	1959	A	filled	28	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+leadReaching	1964	A	filled	1	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+reachAggro	1965	check	filled	3	getAttackers of the lead and of the party bots within kGuardYd, Unit::CanReachWithMeleeAutoAttack, PlayerbotAI::IsTank, the 'stay' strategy and 'position' value, PullStrategy
+joinerCeiling	1969	A	forced	5	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+aggroWalkRing	1973	A	forced	3	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+aheadBodies	1976	no	skipped	2	not read by an RFC run (other): the Facts() default stands
+aheadCeiling	1977	no	skipped	3	not read by an RFC run (other): the Facts() default stands
+aheadStep	1978	no	skipped	4	not read by an RFC run (other): the Facts() default stands
+aheadGuids	1979	no	skipped	4	not read by an RFC run (other): the Facts() default stands
+aheadLosBudget	1980	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+aheadUnavailable	1981	no	skipped	1	not read by an RFC run (other): the Facts() default stands
+pullStand	1984	A	forced	5	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+standClearance	1988	A	forced	2	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+standDiscipline	1993	A	forced	4	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+walkBackAfterWonFight	1999	A	config	2	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+retreatAt2Dead	2002	A	config	1	PlayerbotAIConfig (aiplayerbot.conf keys DungeonRun*), copied once per read
+leadShotYd	2007	A	notknown	10	0: the tank's ranged shot range is not read (pull stand is forced off)
+shotStandGuid	2013	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandKnown	2014	no	skipped	5	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandX	2015	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandY	2015	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandZ	2015	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandYd	2016	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+standOthers	2022	D	never	0	no read site in DungeonRunPolicy.h
+shotStandBlocked	2023	no	skipped	3	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBestX	2024	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBestY	2024	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBestZ	2024	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBestYd	2025	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBlockEntry	2026	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBlockPatrols	2027	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBlockYd	2028	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+shotStandBlockNowClear	2029	no	skipped	1	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+standPackReach	2032	D	never	0	no read site in DungeonRunPolicy.h
+standPullPreCc	2037	A	forced	4	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+holdAheadReach	2038	D	never	0	no read site in DungeonRunPolicy.h
+holdAheadRead	2039	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+holdAheadKnown	2040	no	skipped	3	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+holdAheadX	2041	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+holdAheadY	2041	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+holdAheadZ	2041	no	skipped	2	not read by an RFC run (firing stand, shot, stand-pull): the Facts() default stands
+autoCc	2045	A	forced	13	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+autoCcRisky	2046	no	forced	1	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+autoCcAbove	2047	no	skipped	2	not read by an RFC run (config copy (aiplayerbot.conf key read once per tick)): the Facts() default stands
+leadTargetGuid	2048	no	skipped	3	not read by an RFC run (party roster and lead state): the Facts() default stands
+totemFocus	2052	A	forced	6	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+auraGatedTargets	2053	yes	forced	1	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+packFocusSparesTacticUnits	2056	A	forced	1	forced off whatever the conf says: the readers of these features (aggro estimate, firing stand, crowd control, totems, nests, straggler pull) are not ported
+dpsAlive	2060	check	filled	1	living bots that are neither tank nor healer
+ccHeld	2064	check	skipped	6	not read by an RFC run (fight reads (engaged units, attackers, lead hit)): the Facts() default stands
+ccHeldRead	2065	check	skipped	2	not read by an RFC run (fight reads (engaged units, attackers, lead hit)): the Facts() default stands
+pointLiquid	2070	A	filled	0	terrain liquid status at the point (TbCompat LiquidStatusCompat over TerrainInfo::GetLiquidStatus); an unreadable terrain refuses the point

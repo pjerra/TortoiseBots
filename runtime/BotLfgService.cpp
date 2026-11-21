@@ -56,6 +56,7 @@
 #include <utility>
 #include <vector>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -120,8 +121,7 @@ uint32 BotLfgService::LoadPlans()
         TB_LOG_BASIC("TortoiseBots: bot LFG: plans not read (needs AiPlayerbot.BotLfgGroups = 1 and the dungeon plans)");
         return 0;
     }
-    std::unique_ptr<QueryResult> rows(
-        WorldDatabase.Query("SELECT `plan`, `lft_code`, `teams` FROM `ai_bot_lfg_plan` ORDER BY `plan`"));
+    auto rows = QueryGuardCompat(WorldDatabase.Query("SELECT `plan`, `lft_code`, `teams` FROM `ai_bot_lfg_plan` ORDER BY `plan`"));
     if (!rows)
     {
         sLog.outError("TortoiseBots: bot LFG has no proven plans (ai_bot_lfg_plan did not answer)");
@@ -130,8 +130,8 @@ uint32 BotLfgService::LoadPlans()
     do
     {
         Field* fields = rows->Fetch();
-        std::string plan = fields[0].GetCppString();
-        std::string code = fields[1].GetCppString();
+        std::string plan = FieldTextW3(fields[0]);
+        std::string code = FieldTextW3(fields[1]);
         uint8 teams = fields[2].GetUInt8();
         ai::DungeonPlan const* def = ai::GetDungeonPlans().Find(plan);
         if (!def || def->steps.empty())

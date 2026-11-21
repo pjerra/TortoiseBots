@@ -3,6 +3,7 @@
 #include "playerbot/playerbot.h"
 #include "MailAction.h"
 #include "MapNodes/MasterPlayer.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/Helpers.h"
 #include "runtime/GuildOrderRelistPolicy.h"
@@ -18,7 +19,7 @@ namespace
 {
 MasterPlayer* GetMailOwner(Player* bot)
 {
-    return bot && bot->GetSession() ? bot->GetSession()->GetMasterPlayer() : nullptr;
+    return MailOwnerCompat(bot);
 }
 
 // The core's auction notification subject is "<item>:<random>:<state>"
@@ -68,16 +69,16 @@ void ParseAuctionSaleBody(std::string const& text, TortoiseBots::GuildOrders::Re
 TortoiseBots::GuildOrders::RelistMail MakeRelistMailView(Mail* mail, MasterPlayer* owner)
 {
     TortoiseBots::GuildOrders::RelistMail view;
-    view.auction = mail->stationery == MAIL_STATIONERY_AUCTION;
-    view.hasItems = mail->has_items && !mail->items.empty();
+    view.auction = MailIsAuctionCompat(mail);
+    view.hasItems = MailHasItemsCompat(mail);
     view.money = mail->money;
     ParseAuctionSubject(mail->subject, view.subjectItemId, view.subjectState);
     if (view.auction && view.subjectState == TortoiseBots::GuildOrders::kRelistMailSuccessful &&
-        mail->itemTextId)
-        ParseAuctionSaleBody(sObjectMgr.GetItemText(mail->itemTextId), view);
+        MailHasTextCompat(mail))
+        ParseAuctionSaleBody(MailBodyTextCompat(mail), view);
     if (view.hasItems)
     {
-        Item* item = owner->GetMItem(mail->items.front().item_guid);
+        Item* item = MailItemCompat(owner, mail->items.front().item_guid);
         if (item)
         {
             view.itemId = item->GetEntry();
@@ -111,7 +112,7 @@ public:
         int days = (cur_time - mail->deliver_time) / 3600 / 24;
         std::ostringstream out;
         out << "#" << (index+1) << " ";
-        if (!mail->money && !mail->has_items)
+        if (!mail->money && !MailHasItemsCompat(mail))
             out << "|cffffffff" << mail->subject;
 
         if (mail->money)
@@ -120,11 +121,11 @@ public:
             if (!mail->subject.empty()) out << " |cffa0a0a0(" << mail->subject << ")";
         }
 
-        if (mail->has_items)
+        if (MailHasItemsCompat(mail))
         {
             for (MailItemInfoVec::iterator i = mail->items.begin(); i != mail->items.end(); ++i)
             {
-                Item* item = mailOwner->GetMItem(i->item_guid);
+                Item* item = MailItemCompat(mailOwner, i->item_guid);
                 int count = item ? item->GetCount() : 1;
                 ItemPrototype const *proto = GetItemProtoByIdCompat(i->item_template);
                 if (proto)
@@ -164,6 +165,7 @@ public:
     bool Before(Player* requester, PlayerbotAI* ai) override
     {
         copper = 0;
+        confirmedTakes = 0;
         items.clear();
         return true;
     }
@@ -181,28 +183,28 @@ public:
         }
 
         ObjectGuid mailbox = FindMailbox(ai);
-        bool moneyTaken = false;
+        if (ai::MailProcessShouldAbortMissingMailbox(MailRequiresMailboxCompat(), mailbox.IsEmpty()))
+            return false;
+
         if (mail->money)
         {
-            std::ostringstream out;
-            if (event.GetSource() == "rpg action")
+            if (MailTakeMoneyCompat(bot, mailbox, mail))
             {
-                copper += mail->money;
+                ++confirmedTakes;
+                if (event.getSource() == "rpg action")
+                {
+                    copper += mail->money;
+                }
+                else
+                {
+                    std::ostringstream out;
+                    out << mail->subject << ", |cffffff00" << ChatHelper::formatMoney(mail->money) << "|cff00ff00 processed";
+                    ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                }
             }
-            else
-            {
-                out << mail->subject << ", |cffffff00" << ChatHelper::formatMoney(mail->money) << "|cff00ff00 processed";
-                ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-            }
-
-            WorldPacket packet;
-            packet << mailbox;
-            packet << mail->messageID;
-            bot->GetSession()->HandleMailTakeMoney(packet);
-            moneyTaken = true;
         }
 
-        if (mail->has_items)
+        if (MailHasItemsCompat(mail))
         {
             std::list<uint32> guids;
             for (MailItemInfoVec::iterator i = mail->items.begin(); i != mail->items.end(); ++i)
@@ -214,37 +216,38 @@ public:
 
             for (std::list<uint32>::iterator i = guids.begin(); i != guids.end(); ++i)
             {
-                WorldPacket packet;
-                packet << mailbox;
-                packet << mail->messageID;
-                Item* item = GetMailOwner(bot)->GetMItem(*i);
+                Item* item = MailItemCompat(GetMailOwner(bot), *i);
+                std::string const itemFormatted = item ? ChatHelper::formatItem(item) : std::string();
+                std::string const itemFormattedCount = item ? ChatHelper::formatItem(item, item->GetCount()) : std::string();
 
-                if (item)
+                if (MailTakeItemCompat(bot, mailbox, mail, *i))
                 {
-                    if (event.GetSource() == "rpg action")
+                    ++confirmedTakes;
+                    if (!itemFormatted.empty())
                     {
-                        items.push_back(ChatHelper::formatItem(item, item->GetCount()));
-                    }
-                    else
-                    {
-                        std::ostringstream out;
-                        out << mail->subject << ", " << ChatHelper::formatItem(item) << "|cff00ff00 processed";
-                        ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                        if (event.getSource() == "rpg action")
+                        {
+                            items.push_back(itemFormattedCount);
+                        }
+                        else
+                        {
+                            std::ostringstream out;
+                            out << mail->subject << ", " << itemFormatted << "|cff00ff00 processed";
+                            ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                        }
                     }
                 }
-
-                bot->GetSession()->HandleMailTakeItem(packet);
             }
         }
 
         // Only delete the mail if both money and items have been taken (or if it was an empty notification mail)
         MasterPlayer* mailOwner = GetMailOwner(bot);
-        Mail* currentMail = mailOwner ? mailOwner->GetMail(mail->messageID) : nullptr;
+        Mail* currentMail = mailOwner ? MailByIdCompat(mailOwner, mail->messageID) : nullptr;
         if (currentMail && currentMail->money == 0 && currentMail->items.empty() && !ai->HasActivePlayerMaster())
         {
             RemoveMail(bot, mail->messageID, mailbox);
         }
-        else if (mail->sender < 10 && !ai->HasActivePlayerMaster() && !mail->money && !mail->has_items)
+        else if (mail->sender < 10 && !ai->HasActivePlayerMaster() && !mail->money && !MailHasItemsCompat(mail))
         {
             RemoveMail(bot, mail->messageID, mailbox);
         }
@@ -278,7 +281,7 @@ public:
             ai->TellPlayer(requester, BOT_TEXT2("|cffffff00%money |cff00ff00recieved from mail.", args), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
 
-        return true;
+        return MailTakeAfterResultCompat(confirmedTakes);
     }
 
     static TakeMailProcessor instance;
@@ -309,6 +312,7 @@ private:
 
 private:
     uint32 copper = 0;
+    uint32 confirmedTakes = 0;
     std::vector<std::string> items;
 };
 
@@ -331,12 +335,12 @@ uint32_t ai::TakeOrderMail(PlayerbotAI* ai, uint32_t itemId)
         return 0;
     uint32_t taken = 0;
     time_t curTime = time(nullptr);
-    for (PlayerMails::iterator itr = owner->GetMailBegin(); itr != owner->GetMailEnd(); ++itr)
+    for (auto itr = MailBeginCompat(owner); itr != MailEndCompat(owner); ++itr)
     {
         Mail* mail = *itr;
         if (!mail || mail->state == MAIL_STATE_DELETED || curTime < mail->deliver_time)
             continue;
-        if (!mail->has_items)
+        if (!MailHasItemsCompat(mail))
             continue;
         uint32_t wantedGuid = 0;
         uint32_t senderLow = mail->sender;
@@ -348,27 +352,26 @@ uint32_t ai::TakeOrderMail(PlayerbotAI* ai, uint32_t itemId)
             }
         if (!wantedGuid)
             continue;
-        Item* item = owner->GetMItem(wantedGuid);
+        Item* item = MailItemCompat(owner, wantedGuid);
         if (!item)
             continue;
-        uint32_t count = item->GetCount();
         ItemPosCountVec dest;
         if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, item, false) != EQUIP_ERR_OK)
             break;
-        WorldPacket packet;
-        packet << mailbox;
-        packet << mail->messageID;
-        bot->GetSession()->HandleMailTakeItem(packet);
-        taken += count;
+        uint32_t const beforeInv = ai->GetInventoryItemsCountWithId(itemId);
+        if (!MailTakeItemCompat(bot, mailbox, mail, wantedGuid))
+            break;
+        uint32_t const afterInv = ai->GetInventoryItemsCountWithId(itemId);
+        if (afterInv <= beforeInv)
+            break;
+        uint32_t const gained = afterInv - beforeInv;
+        taken += gained;
         if (senderLow)
-            TortoiseBots::GuildOrders::NoteTakenMailSender(senderLow, itemId, count);
-        Mail* current = owner->GetMail(mail->messageID);
+            TortoiseBots::GuildOrders::NoteTakenMailSender(senderLow, itemId, gained);
+        Mail* current = MailByIdCompat(owner, mail->messageID);
         if (current && current->money == 0 && current->items.empty() && !ai->HasActivePlayerMaster())
         {
-            WorldPacket delPacket;
-            delPacket << mailbox;
-            delPacket << mail->messageID;
-            bot->GetSession()->HandleMailDelete(delPacket);
+            MailDeleteCompat(bot, mailbox, mail->messageID);
         }
     }
     return taken;
@@ -385,10 +388,8 @@ bool TakeRelistValue(PlayerbotAI* ai, Player* bot, ObjectGuid mailbox, Mail* mai
     if (kind == TortoiseBots::GuildOrders::RelistMailKind::Sold)
     {
         uint32_t before = bot->GetMoney();
-        WorldPacket packet;
-        packet << mailbox;
-        packet << mail->messageID;
-        bot->GetSession()->HandleMailTakeMoney(packet);
+        if (!MailTakeMoneyCompat(bot, mailbox, mail))
+            return false;
         uint32_t after = bot->GetMoney();
         if (after <= before)
             return false;
@@ -409,10 +410,8 @@ bool TakeRelistValue(PlayerbotAI* ai, Player* bot, ObjectGuid mailbox, Mail* mai
     if (!itemGuid)
         return false;
     uint32_t before = ai->GetInventoryItemsCountWithId(itemId);
-    WorldPacket packet;
-    packet << mailbox;
-    packet << mail->messageID;
-    bot->GetSession()->HandleMailTakeItem(packet);
+    if (!MailTakeItemCompat(bot, mailbox, mail, itemGuid))
+        return false;
     uint32_t after = ai->GetInventoryItemsCountWithId(itemId);
     if (after <= before)
         return false;
@@ -423,13 +422,10 @@ bool TakeRelistValue(PlayerbotAI* ai, Player* bot, ObjectGuid mailbox, Mail* mai
 void DeleteEmptyRelistMail(PlayerbotAI* ai, MasterPlayer* owner, ObjectGuid mailbox,
     uint32_t messageId)
 {
-    Mail* current = owner->GetMail(messageId);
+    Mail* current = MailByIdCompat(owner, messageId);
     if (current && current->money == 0 && current->items.empty() && !ai->HasActivePlayerMaster())
     {
-        WorldPacket delPacket;
-        delPacket << mailbox;
-        delPacket << messageId;
-        ai->GetBot()->GetSession()->HandleMailDelete(delPacket);
+        MailDeleteCompat(ai->GetBot(), mailbox, messageId);
     }
 }
 } // namespace
@@ -469,7 +465,7 @@ uint32_t ai::TakeRelistMail(PlayerbotAI* ai)
         RelistLedgerEntry& entry = entries[i];
         if (entry.state != RelistState::Claimed)
             continue;
-        Mail* mail = owner->GetMail(entry.claimMailId);
+        Mail* mail = MailByIdCompat(owner, entry.claimMailId);
         RelistMail view;
         if (mail && mail->state != MAIL_STATE_DELETED)
             view = MakeRelistMailView(mail, owner);
@@ -495,12 +491,12 @@ uint32_t ai::TakeRelistMail(PlayerbotAI* ai)
         DeleteEmptyRelistMail(ai, owner, mailbox, mail->messageID);
     }
 
-    for (PlayerMails::iterator itr = owner->GetMailBegin(); itr != owner->GetMailEnd(); ++itr)
+    for (auto itr = MailBeginCompat(owner); itr != MailEndCompat(owner); ++itr)
     {
         Mail* mail = *itr;
         if (!mail || mail->state == MAIL_STATE_DELETED || curTime < mail->deliver_time)
             continue;
-        if (!mail->money && !mail->has_items)
+        if (!mail->money && !MailHasItemsCompat(mail))
             continue;
         // A claimed row already owns this mail: its retry pass takes it.
         size_t claimed = 0;
@@ -573,9 +569,9 @@ public:
         std::ostringstream out, body;
         out << "|cffffffff" << mail->subject;
         ai->TellPlayer(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-        if (mail->itemTextId)
+        if (MailHasTextCompat(mail))
         {
-            body << "\n" << sObjectMgr.GetItemText(mail->itemTextId);
+            body << "\n" << MailBodyTextCompat(mail);
             ai->TellPlayer(requester, body.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
         return true;
@@ -592,10 +588,10 @@ ReadMailProcessor ReadMailProcessor::instance;
 bool MailAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
-    if (!requester && event.GetSource() != "rpg action")
+    if (!requester && event.getSource() != "rpg action")
         return false;
 
-    if (!MailProcessor::FindMailbox(ai) && event.GetSource() != "debug")
+    if (!MailProcessor::FindMailbox(ai) && event.getSource() != "debug")
     {
         ai->TellError(requester, "There is no mailbox nearby");
         return false;
@@ -641,7 +637,7 @@ bool MailAction::Execute(Event& event)
 
     std::vector<Mail*> mailList;
     time_t cur_time = time(0);
-    for (PlayerMails::iterator itr = mailOwner->GetMailBegin(); itr != mailOwner->GetMailEnd(); ++itr)
+    for (auto itr = MailBeginCompat(mailOwner); itr != MailEndCompat(mailOwner); ++itr)
     {
         if ((*itr)->state == MAIL_STATE_DELETED || cur_time < (*itr)->deliver_time)
             continue;
@@ -665,14 +661,19 @@ bool MailAction::Execute(Event& event)
 
 void MailProcessor::RemoveMail(Player* bot, uint32 id, ObjectGuid mailbox)
 {
-    WorldPacket packet;
-    packet << mailbox;
-    packet << id;
-    bot->GetSession()->HandleMailDelete(packet);
+    MailDeleteCompat(bot, mailbox, id);
 }
 
 ObjectGuid MailProcessor::FindMailbox(PlayerbotAI* ai)
 {
+    if (!ai || !ai->GetBot())
+        return ObjectGuid();
+
+    bool handled = false;
+    ObjectGuid const compatMailbox = FindNearestMailboxCompat(ai->GetBot(), &handled);
+    if (handled)
+        return compatMailbox;
+
     std::list<ObjectGuid> gos = *ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest game objects no los");
     ObjectGuid mailbox;
     for (std::list<ObjectGuid>::iterator i = gos.begin(); i != gos.end(); ++i)

@@ -27,7 +27,7 @@ Unit* ai::FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
     {
         if (!member || member == bot || !sServerFacade.IsAlive(member))
             continue;
-        if (member->GetMapId() != bot->GetMapId() || member->GetVisibility() == VISIBILITY_OFF)
+        if (member->GetMapId() != bot->GetMapId() || PlayerHiddenGmCompat(member))
             continue;
         if (member->GetHealthPercent() >= sPlayerbotAIConfig.almostFullHealth)
             continue;

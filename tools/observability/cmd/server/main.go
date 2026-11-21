@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -32,6 +33,7 @@ import (
 	"tortoise-observability/internal/combat"
 	"tortoise-observability/internal/control"
 	"tortoise-observability/internal/dungeons"
+	"tortoise-observability/internal/foreveritems"
 	"tortoise-observability/internal/history"
 	"tortoise-observability/internal/lanes"
 	"tortoise-observability/internal/live"
@@ -103,6 +105,10 @@ func main() {
 	dbChar := flag.String("db-char", getEnv("DB_CHAR", "tw_char"), "MariaDB / MySQL characters database name")
 	dbWorld := flag.String("db-world", getEnv("DB_WORLD", "tw_world"), "MariaDB / MySQL world database name")
 	dbcDir := flag.String("dbc-dir", getEnv("DBC_DIR", ""), "Optional operator DBC directory (same files mangosd reads); enables talent trees when world talent mirrors are empty")
+	dataDir := flag.String("data-dir", getEnv("TBDASH_DATA_DIR", ""), "Optional ForeverCore data directory containing tortoisebots-*.json (env TBDASH_DATA_DIR)")
+	itemsFile := flag.String("items-file", getEnv("TBDASH_ITEMS_FILE", ""), "Optional ForeverCore item catalog JSON (tortoisebots-items.json) for item names, quality and item level (env TBDASH_ITEMS_FILE)")
+	uimapsFile := flag.String("uimaps-file", getEnv("TBDASH_UIMAPS_FILE", ""), "Optional ForeverCore UiMap catalog JSON (tortoisebots-uimaps.json) for map names (env TBDASH_UIMAPS_FILE)")
+	artDir := flag.String("art-dir", getEnv("TBDASH_ART_DIR", ""), "Optional ForeverCore art folder containing maps/ and icons/ (env TBDASH_ART_DIR)")
 	issueMinAgeSec := flag.Int("issue-min-age-sec", getEnvInt("ISSUE_MIN_AGE_SEC", 300), "Only surface bot issues that persist at least this many seconds")
 	minGMLevel := flag.Int("min-gm-level", getEnvInt("MIN_GM_LEVEL", 2), "Minimum GM rank required for dashboard login (2 = gamemaster)")
 	// An optional external commander dashboard (for example turtle-agent's
@@ -248,15 +254,131 @@ func main() {
 	}
 	log.Printf("[Auth] %s MySQL authentication ready against %s:%d/%s", *core, *dbHost, *dbPort, *dbName)
 
+	effectiveDataDir := *dataDir
+	if effectiveDataDir == "" && *itemsFile != "" {
+		effectiveDataDir = filepath.Dir(*itemsFile)
+	}
+	resolvedItemsFile := *itemsFile
+	if resolvedItemsFile == "" && effectiveDataDir != "" {
+		candidate := filepath.Join(effectiveDataDir, "tortoisebots-items.json")
+		if _, err := os.Stat(candidate); err == nil {
+			resolvedItemsFile = candidate
+		}
+	}
+	resolvedUimapsFile := *uimapsFile
+	if resolvedUimapsFile == "" && effectiveDataDir != "" {
+		candidate := filepath.Join(effectiveDataDir, "tortoisebots-uimaps.json")
+		if _, err := os.Stat(candidate); err == nil {
+			resolvedUimapsFile = candidate
+		}
+	}
+	var itemCatalog *foreveritems.Store
+	if resolvedItemsFile != "" {
+		itemCatalog = foreveritems.New(resolvedItemsFile)
+	}
+	var foreverCatalog *armory.ForeverCatalog
+	var foreverLookups *foreveritems.Lookups
+	if *core == "forever" {
+		foreverLookups = foreveritems.NewLookups(effectiveDataDir, *artDir)
+		foreverCatalog = armory.LoadForeverCatalog(effectiveDataDir, *artDir, foreverLookups)
+	}
+
 	armoryService, err := armory.NewService(armory.Config{
-		DBHost:     *dbHost,
-		DBPort:     *dbPort,
-		DBUser:     *dbUser,
-		DBPassword: *dbPass,
-		CharDB:     *dbChar,
-		WorldDB:    *dbWorld,
-		LogonDB:    *dbName,
-		DBCDir:     *dbcDir,
+		Core:        *core,
+		DBHost:      *dbHost,
+		DBPort:      *dbPort,
+		DBUser:      *dbUser,
+		DBPassword:  *dbPass,
+		CharDB:      *dbChar,
+		WorldDB:     *dbWorld,
+		LogonDB:     *dbName,
+		DBCDir:      *dbcDir,
+		Items:       itemCatalog,
+		Lookups:     foreverLookups,
+		DataDir:     effectiveDataDir,
+		ArtDir:      *artDir,
+		ForeverData: foreverCatalog,
+		LiveAuras: func(guid uint32) [][]int64 {
+			if *core != "forever" {
+				return nil
+			}
+			bs, ok := store.BotStats(guid)
+			if !ok {
+				return nil
+			}
+			return bs.Auras
+		},
+		LiveGUIDs: func() []uint32 {
+			snap := store.Snapshot()
+			out := make([]uint32, 0, len(snap.Bots))
+			for _, b := range snap.Bots {
+				out = append(out, b.GUID)
+			}
+			return out
+		},
+		LiveStats: func(guid uint32) (armory.CharacterStats, bool) {
+			if *core != "forever" {
+				return armory.CharacterStats{}, false
+			}
+			bs, ok := store.BotStats(guid)
+			if !ok {
+				return armory.CharacterStats{}, false
+			}
+			return armory.CharacterStats{
+				Source:            "live",
+				MaxHealth:         bs.MaxHealth,
+				MaxPower1:         bs.MaxPower1,
+				MaxPower2:         bs.MaxPower2,
+				MaxPower3:         bs.MaxPower3,
+				MaxPower4:         bs.MaxPower4,
+				MaxPower5:         bs.MaxPower5,
+				Strength:          bs.Strength,
+				Agility:           bs.Agility,
+				Stamina:           bs.Stamina,
+				Intellect:         bs.Intellect,
+				Spirit:            bs.Spirit,
+				Armor:             bs.Armor,
+				ResHoly:           bs.ResHoly,
+				ResFire:           bs.ResFire,
+				ResNature:         bs.ResNature,
+				ResFrost:          bs.ResFrost,
+				ResShadow:         bs.ResShadow,
+				ResArcane:         bs.ResArcane,
+				BlockPct:          bs.BlockPct,
+				DodgePct:          bs.DodgePct,
+				ParryPct:          bs.ParryPct,
+				MeleeCritPct:      bs.MeleeCritPct,
+				RangedCritPct:     bs.RangedCritPct,
+				AttackPower:       bs.AttackPower,
+				RangedAttackPower: bs.RangedAttackPower,
+				MeleeDamage:       bs.MeleeDamage,
+				RangedDamage:      bs.RangedDamage,
+				MeleeSpeed:        bs.MeleeSpeed,
+				RangedSpeed:       bs.RangedSpeed,
+				CastSpeed:         bs.CastSpeed,
+				MeleeHit:          bs.MeleeHit,
+				RangedHit:         bs.RangedHit,
+				SpellHit:          bs.SpellHit,
+				SpellDamage:       bs.SpellDamage,
+				HealingPower:      bs.HealingPower,
+				SpellCritPct:      bs.SpellCritPct,
+				ManaRegen:         bs.ManaRegen,
+				SpellDmgFire:      bs.SpellDmgFire,
+				SpellDmgFrost:     bs.SpellDmgFrost,
+				SpellDmgShadow:    bs.SpellDmgShadow,
+				SpellDmgNature:    bs.SpellDmgNature,
+				SpellDmgArcane:    bs.SpellDmgArcane,
+				SpellDmgHoly:      bs.SpellDmgHoly,
+				ManaRegenCasting:  bs.ManaRegenCasting,
+				Defense:           bs.Defense,
+				DefenseMax:        bs.DefenseMax,
+				BlockValue:        bs.BlockValue,
+				SpellPenetration:  bs.SpellPenetration,
+				Expertise:         bs.Expertise,
+				Ratings:           bs.Ratings,
+				RatingBonus:       bs.RatingBonus,
+			}, true
+		},
 	})
 	if err != nil {
 		log.Fatalf("Failed to initialize armory service: %v", err)
@@ -328,6 +450,10 @@ func main() {
 	}
 
 	// Dungeon runs tab: one pass over the trace folder now, then a cheap directory check every few seconds. Requests read the in-memory index.
+	// ForeverCore: the module writes its run summaries to <LogsDir>/runs, next to the data tables, unless told otherwise.
+	if *traceDir == "" && *core == "forever" && effectiveDataDir != "" {
+		*traceDir = filepath.Join(effectiveDataDir, "runs")
+	}
 	dungeonIndex := dungeons.NewIndex(*traceDir)
 	dungeonIndex.Scan()
 	if m := dungeonIndex.Meta(); m.DirFound {
@@ -421,6 +547,7 @@ func main() {
 	}
 
 	udpListener := udp.NewListener(*udpHost, *udpPort, store, metricsRegistry, projectionEngine, hub)
+	udpListener.SetForever(*core == "forever")
 	udpListener.SetCombatStore(combatStore)
 	udpListener.SetLiveSink(liveHub)
 	if historyStore != nil {
@@ -515,6 +642,9 @@ func main() {
 
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		loginHTML, _ := web.FS.ReadFile("login.html")
+		if *core == "forever" {
+			loginHTML = bytes.ReplaceAll(loginHTML, []byte("Tortoise WoW"), []byte("ForeverCore"))
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(loginHTML)
 	})
@@ -585,6 +715,13 @@ func main() {
 	}
 
 	indexHTML, _ := web.FS.ReadFile("index.html")
+	if *core == "forever" {
+		s := string(indexHTML)
+		s = strings.Replace(s, "<title>TortoiseBots — Server & Bot Observability</title>", "<title>ForeverCore — Server & Bot Observability</title>", 1)
+		s = strings.Replace(s, `<span class="brand-title">Tortoise WoW</span>`, `<span class="brand-title">ForeverCore</span>`, 1)
+		s = strings.Replace(s, `<span class="brand-version">1.18.1</span>`, `<span class="brand-version" data-core="forever"></span>`, 1)
+		indexHTML = []byte(s)
+	}
 	dashboardHandler := requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
@@ -604,6 +741,31 @@ func main() {
 
 	mux.HandleFunc("/api/v1/bots", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, store.Snapshot().Bots)
+	}))
+
+	mux.Handle("/forever-art/maps/", requireAuth(noCache(serveArtSubdir(*artDir, "maps", "/forever-art/maps/")).ServeHTTP))
+	mux.Handle("/forever-art/icons/", requireAuth(noCache(serveArtSubdir(*artDir, "icons", "/forever-art/icons/")).ServeHTTP))
+
+	mux.HandleFunc("GET /api/v1/uimaps", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if resolvedUimapsFile == "" {
+			_, _ = w.Write([]byte(`{"maps":[]}`))
+			return
+		}
+		data, err := os.ReadFile(resolvedUimapsFile)
+		if err != nil {
+			_, _ = w.Write([]byte(`{"maps":[]}`))
+			return
+		}
+		_, _ = w.Write(data)
+	}))
+
+	mux.HandleFunc("GET /api/v1/areas", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if foreverLookups == nil {
+			writeJSON(w, map[string]interface{}{"areas": map[string]interface{}{}})
+			return
+		}
+		writeJSON(w, map[string]interface{}{"areas": foreverLookups.Areas()})
 	}))
 
 	mux.HandleFunc("/api/v1/grinding", requireAuth(func(w http.ResponseWriter, r *http.Request) {
@@ -703,6 +865,9 @@ func main() {
 		writeJSON(w, view)
 	}))
 	mux.HandleFunc("GET /api/v1/plans/{plan}", requireAuth(plans.Handler(planSvc)))
+
+	// Which tabs this core feeds (the Raids, Raid coverage and Commanders pages say so when it does not).
+	mux.HandleFunc("GET /api/v1/core", requireAuth(coreHandler(*core)))
 
 	// The boss tactic rows the coverage view compares with the boss table:
 	// read-only, one cached snapshot, filtered per map on the cached copy.
@@ -930,7 +1095,7 @@ func main() {
 		if v, err := strconv.Atoi(q.Get("quality")); err == nil {
 			quality = v
 		}
-		page, err := armoryService.ListAuctions(armory.AuctionFilter{
+		filter := armory.AuctionFilter{
 			Query:    q.Get("q"),
 			Quality:  quality,
 			MinLevel: qUint(q.Get("min_level")),
@@ -941,7 +1106,16 @@ func main() {
 			Sort:     q.Get("sort"),
 			Desc:     q.Get("dir") != "asc",
 			Page:     qUint(q.Get("page")),
-		})
+		}
+		var (
+			page *armory.AuctionPage
+			err  error
+		)
+		if *core == "forever" {
+			page, err = armoryService.ListAuctionsForever(filter, itemCatalog)
+		} else {
+			page, err = armoryService.ListAuctions(filter)
+		}
 		if err != nil {
 			log.Printf("[Auctions] list failed: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1236,5 +1410,27 @@ func combatFightsHandler(combatStore *combat.Store, historyStore *history.Store)
 			}
 		}
 		writeJSON(w, rows)
+	}
+}
+
+func serveArtSubdir(artDir, subdir, prefix string) http.HandlerFunc {
+	base := filepath.Join(artDir, subdir)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if artDir == "" {
+			http.NotFound(w, r)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, prefix)
+		if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+			http.NotFound(w, r)
+			return
+		}
+		full := filepath.Join(base, name)
+		info, err := os.Stat(full)
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, full)
 	}
 }

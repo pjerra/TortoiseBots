@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <sstream>
 #include <vector>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 using namespace TortoiseBots::GuildOrders;
@@ -186,7 +187,7 @@ uint32_t LowestListingUnitPrice(AuctionHouseObject* auctionHouse, uint32_t itemI
         AuctionEntry* auction = entry.second;
         if (!auction || !auction->buyout)
             continue;
-        Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
+        Item* item = AuctionMgrW3().GetAItem(auction->itemGuidLow);
         if (!item || GetItemProtoCompat(item)->ItemId != itemId || !item->GetCount())
             continue;
         uint32_t const unit = AuctionUnitPrice(auction->buyout, item->GetCount());
@@ -238,7 +239,7 @@ uint32_t RelistSurplus(PlayerbotAI* ai, Player* bot, Unit* auctioneer, uint32_t 
         return 0;
     AuctionHouseEntry const* ahEntry = bot->GetSession()->GetCheckedAuctionHouseForAuctioneer(
         auctioneer->getObjectGuid());
-    AuctionHouseObject* auctionHouse = ahEntry ? sAuctionMgr.GetAuctionsMap(ahEntry) : nullptr;
+    AuctionHouseObject* auctionHouse = ahEntry ? AuctionMgrW3().GetAuctionsMap(ahEntry) : nullptr;
     if (!ahEntry || !auctionHouse)
         return 0;
     Item* stack = FindRelistStack(bot, itemId, pendingCount);
@@ -368,7 +369,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
     }
 
     AuctionHouseEntry const* ahEntry = AuctionHouseMgr::GetAuctionHouseEntry(auctioneer);
-    AuctionHouseObject* auctionHouse = ahEntry ? sAuctionMgr.GetAuctionsMap(ahEntry) : nullptr;
+    AuctionHouseObject* auctionHouse = ahEntry ? AuctionMgrW3().GetAuctionsMap(ahEntry) : nullptr;
     std::vector<AuctionListing> candidates;
     uint32_t cash = bot->GetMoney();
     uint32_t heldGuildGold = std::min(stored->guildGoldHeld, cash);
@@ -386,7 +387,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
             if (!auction || !auction->buyout || auction->owner == botGuidLow || auction->Id == failedBid ||
                 auction->buyout > maxAffordable)
                 continue;
-            Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
+            Item* item = AuctionMgrW3().GetAItem(auction->itemGuidLow);
             if (!item || GetItemProtoCompat(item)->ItemId != itemId)
                 continue;
             uint32_t count = item->GetCount();
@@ -449,7 +450,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
     packet << auctioneer->GetObjectGuid() << best.auctionId << best.buyout;
     bot->GetSession()->HandleAuctionPlaceBid(packet);
     bool bought = auctionHouse->GetAuction(best.auctionId) == nullptr &&
-        sAuctionMgr.GetAItem(best.itemGuid) == nullptr;
+        AuctionMgrW3().GetAItem(best.itemGuid) == nullptr;
     ahLock.unlock();
 
     ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);

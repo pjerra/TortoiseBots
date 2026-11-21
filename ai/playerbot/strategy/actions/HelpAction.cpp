@@ -1,19 +1,17 @@
 
 #include "playerbot/playerbot.h"
 #include "HelpAction.h"
-#include "ChatActionContext.h"
+#include "playerbot/TbCompatCH.h"
 #include "playerbot/PlayerbotHelpMgr.h"
 
 using namespace ai;
 
-HelpAction::HelpAction(PlayerbotAI* ai) : ChatCommandAction(ai, "help")
+HelpAction::HelpAction(PlayerbotAI* ai) : ChatCommandAction(ai, "help"), chatCommands(ChatCommandKeys(ai))
 {
-    chatContext = new ChatActionContext();
 }
 
 HelpAction::~HelpAction()
 {
-    delete chatContext;
 }
 
 bool HelpAction::Execute(Event& event)
@@ -81,12 +79,9 @@ bool HelpAction::Execute(Event& event)
 
 void HelpAction::TellChatCommands(Player* requester)
 {
-    std::set<std::string> keys;
-    chatContext->GetSupportedKeys(keys);
-
     std::ostringstream out;
     out << "Whisper any of: ";
-    out << CombineSupported(keys);
+    out << CombineSupported(chatCommands);
     out << ", [item], [quest] or [object] link";
     ai->TellPlayer(requester, out.str());
 }

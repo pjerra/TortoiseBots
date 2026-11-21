@@ -22,6 +22,7 @@
 #include "playerbot/ThreatCapPolicy.h"
 #include "playerbot/BotAreaTriggerPolicy.h"
 #include "playerbot/FollowTrailPolicy.h"
+#include "playerbot/TbCompatCL.h"
 #include "../../runtime/PublicNotePolicy.h"
 #include "../../runtime/BotManager.h"
 
@@ -67,12 +68,12 @@ public:
     explicit PlayerbotChatHandler(Player* pMasterPlayer) : ChatHandler(pMasterPlayer->GetSession()) {}
     void sysmessage(std::string str) { SendSysMessage(str.c_str()); }
     uint32 extractQuestId(std::string str);
-    uint32 extractSpellId(std::string str)
-    {
-        char* source = (char*)str.c_str();
-        return UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, uint32(0),
-            [&](auto* self) -> uint32 { return self->ExtractSpellIdFromLink(&source); }, this);
-    }
+    uint32 extractSpellId(std::string str) { return ExtractSpellIdCompat(this, str); }
+    // The core's chat link extractors are protected; a helper outside the class reaches them as a friend, on either core.
+    template <class Handler>
+    friend std::uint32_t ExtractSpellIdCompat(Handler*, std::string);
+    template <class Handler>
+    friend std::uint32_t ExtractQuestIdCompat(Handler*, std::string);
 };
 
 class ChannelAcces
@@ -529,6 +530,12 @@ public:
     bool TellDebug(Player* player, std::string text, std::string strategy = "debug", BotState state = BotState::BOT_STATE_NON_COMBAT){ if (HasStrategy(strategy, state)) return TellPlayerNoFacing(player, text, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, true, false); return false;}
     bool TellError(Player* player, std::string text, PlayerbotSecurityLevel securityLevel = PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, bool ignoreSilent = false);
     void SpellInterrupted(uint32 spellid);
+    // A pushback the core reported on the bot's own cast bar (SMSG_SPELL_DELAYED): the engine waits that much longer before it plans again,
+    // so it does not act while the bar is still running. A delay of 0 adds nothing (the caller clamps what it does not trust).
+    void NoteSpellDelayed(uint32 delayMs) { if (delayMs) IncreaseAIInternalUpdateDelay(delayMs); }
+    // The ForeverCore host's re-arm after a cast of the bot ended badly: the engine's wait becomes `waitMs` (SetAIInternalUpdateDelay is protected in
+    // PlayerbotAIBase). Unused on Turtle, so no Turtle behaviour changes.
+    void NoteCastFailureWait(uint32 waitMs) { SetAIInternalUpdateDelay(waitMs); }
     int32 CalculateGlobalCooldown(uint32 spellid);
     // What is left of the global cooldown of the bot's last own cast
     // (StartRecoveryCategory 133); the core keeps the real one private.
@@ -833,6 +840,7 @@ public:
     bool IsJumping() { return jumpTime; }
     void SetFallAfterJump() { fallAfterJump = true; }
     void SetJumpTime(uint32 time) { jumpTime = time; }
+    uint32 GetJumpTime() const { return jumpTime; }
     // ignoreReturnHold: the body's own state only (facing an attacker is no move).
     bool CanMove(bool ignoreReturnHold = false);
     // The UpdateAI call this is (a scan cache's key): one bot updates at a time on a thread.
@@ -1084,6 +1092,10 @@ public:
         // when the bot joins the player's group.
         void SetForcedRole(uint8 role) { m_forcedRole = role; }
         uint8 GetForcedRole() const { return m_forcedRole; }
+        // Denied crowd-control kinds as CcPermissions bits. 0 allows everything; a side that never sets the mask keeps
+        // today's behaviour exactly (the cast check below returns before reading any kind).
+        void SetCcDeniedMask(uint32 mask) { m_ccDeniedMask = mask; }
+        uint32 GetCcDeniedMask() const { return m_ccDeniedMask; }
         // PET-3: set when the player orders `pet autocast` on a pet taunt
         // (Growl/Torment); the autocast sweep then leaves taunts to them.
         void SetPetTauntAutocastOrdered() { m_petTauntAutocastOrdered = true; }
@@ -1127,6 +1139,7 @@ protected:
 	Player* bot;
 	Player* master;
 	uint8 m_forcedRole = 0;
+	uint32 m_ccDeniedMask = 0;
 	bool m_petTauntAutocastOrdered = false;
 	time_t m_dungeonCatchUpAt = 0;
 	// Mage-portal follow: the party portal the master just stepped through

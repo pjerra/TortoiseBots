@@ -25,6 +25,7 @@
 #include <string>
 
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/TbCompatK11h.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/strategy/Value.h"
 

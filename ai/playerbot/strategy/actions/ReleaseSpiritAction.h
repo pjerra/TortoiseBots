@@ -12,9 +12,11 @@
 #include "MovementActions.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "ReviveFromCorpseAction.h"
+#include "playerbot/TbCompatW1.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/policy/travel/GraveyardTeleportPolicy.h"
 #include "playerbot/policy/rpg/GroupHygienePolicy.h"
+#include "playerbot/policy/death/DeathReleasePausePolicy.h"
 
 namespace ai
 {
@@ -35,6 +37,9 @@ namespace ai
                 ai->TellPlayerNoFacing(requester, "I am already a spirit", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
                 return false;
             }
+
+            // W1 (ForeverCore): a stale corpse on the bot's own map makes BuildPlayerRepop refuse; wake the body as bones first.
+            StaleCorpseBonesCompat(bot);
 
             WorldPacket& p = event.GetPacket();
             if (!p.empty() && p.getOpcode() == CMSG_REPOP_REQUEST)
@@ -126,6 +131,7 @@ namespace ai
 
         virtual bool Execute(Event& event) override
         {
+            TortoiseBots::ResetDeathReleasePause(deathPause_);
             sLog.outDetail("Bot #%d %s:%d <%s> auto released", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
             // Diagnosis: a dungeon crew member that releases costs its party a corpse run
             // from the instance entrance. Name what the predicates read when it happened.
@@ -136,6 +142,7 @@ namespace ai
                     bot->GetGroup() ? 1 : 0, DungeonCrewHasLivingResurrecter() ? 1 : 0, DungeonCrewInCombat() ? 1 : 0);
 
             // See ReleaseSpiritAction::Execute: false on ForeverCore when the core did not release (nothing is logged as a release then).
+            StaleCorpseBonesCompat(bot);
             if (!RepopRequestCompat(bot))
                 return false;
 
@@ -154,17 +161,28 @@ namespace ai
         virtual bool isUseful() override
         {
             if (!sServerFacade.UnitIsDead(bot))
+            {
+                TortoiseBots::ResetDeathReleasePause(deathPause_);
                 return false;
+            }
 
             if (bot->GetCorpse())
-                return false;
+            {
+                TortoiseBots::ResetDeathReleasePause(deathPause_);
+                // W1: a dead body with a stale corpse on its own map can release after the bones (ForeverCore's BuildPlayerRepop
+                // refuses otherwise). Turtle answers false here, so its rule is unchanged.
+                return StaleCorpsePresentCompat(bot);
+            }
 
 
             if (bot->InBattleGround())
                 return !bot->GetCorpse() || !HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST);
 
             if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
+            {
+                TortoiseBots::ResetDeathReleasePause(deathPause_);
                 return false;
+            }
             // ForeverCore: a player released inside a dungeon is revived at the instance script's entrance and, with none set, at the nearest
             // graveyard OUTSIDE (Player::RepopAtGraveyard); until the host has set the entrance the bot waits at its body (relhold=no-entrance).
             // Turtle: always known (ai/cmangos-compat-d4.h), nothing changes.
@@ -187,16 +205,16 @@ namespace ai
                 return true;
 
             if (!bot->GetGroup())
-                return true;
+                return !ShouldHoldFreeDeathRelease();
 
             if (!ai->GetGroupMaster())
-                return true;
+                return !ShouldHoldFreeDeathRelease();
 
             if (ai->GetGroupMaster() == bot)
-                return true;
+                return !ShouldHoldFreeDeathRelease();
 
             if (!ai->HasActivePlayerMaster())
-                return true;
+                return !ShouldHoldFreeDeathRelease();
 
             if (ai->HasActivePlayerMaster() && ai->GetGroupMaster()->GetMapId() == bot->GetMapId() && (bot->GetMap()->IsRaid() || bot->GetMap()->IsDungeon()))
                 return false;
@@ -209,6 +227,17 @@ namespace ai
 
             return false;
         }
+
+    private:
+        bool ShouldHoldFreeDeathRelease() const
+        {
+            return !ai->HasActivePlayerMaster() &&
+                TortoiseBots::ShouldHoldDeathRelease(deathPause_, WorldTimer::getMSTime(),
+                    sPlayerbotAIConfig.deathReleasePauseMinSec, sPlayerbotAIConfig.deathReleasePauseMaxSec,
+                    urand(0, 9999));
+        }
+
+        mutable TortoiseBots::DeathReleasePauseState deathPause_;
     };
 
     // "corpse run" chat command: set the "corpse run" flag so FindCorpseAction ignores the

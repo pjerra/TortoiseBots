@@ -28,9 +28,7 @@ bool ShareQuestAction::Execute(Event& event)
         uint32 logQuest = GetQuestSlotIdCompat(bot, slot);
         if (logQuest == entry)
         {
-            WorldPacket p;
-            p << entry;
-            bot->GetSession()->HandlePushQuestToParty(p);
+            PushQuestToPartyCompat(bot, entry);
             ai->TellPlayer(requester, "Quest shared", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
             return true;
         }
@@ -75,7 +73,7 @@ bool AutoShareQuestAction::Execute(Event& event)
             if (!player->SatisfyQuestLog(false))
                 continue;
 
-            if (player->GetDividerGuid())
+            if (PlayerSharingQuestCompat(player))
                 continue;
 
             if (PlayerbotAIStorage::Instance().GetAI(player))
@@ -94,9 +92,7 @@ bool AutoShareQuestAction::Execute(Event& event)
         if (!partyNeedsQuest)
             continue;
 
-        WorldPacket p;
-        p << logQuest;
-        bot->GetSession()->HandlePushQuestToParty(p);
+        PushQuestToPartyCompat(bot, logQuest);
         ai->TellPlayer(requester, "Quest shared", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         shared = true;
     }

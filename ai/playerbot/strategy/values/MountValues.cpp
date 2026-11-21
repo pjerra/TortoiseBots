@@ -13,6 +13,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -184,7 +185,7 @@ std::vector<std::pair<uint32, uint32>> const& ai::CollectionMounts()
         return mounts;
 
     loaded = true;
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT itemId, spellId FROM collection_mount"));
+    auto result = QueryGuardCompat(WorldDatabase.Query("SELECT itemId, spellId FROM collection_mount"));
     if (!result)
         return mounts;
 
@@ -224,7 +225,7 @@ namespace
         if (!built)
         {
             built = true;
-            std::unique_ptr<QueryResult> result(WorldDatabase.Query(
+            auto result = QueryGuardCompat(WorldDatabase.Query(
                 "SELECT DISTINCT c.itemId FROM collection_mount c WHERE "
                 "EXISTS (SELECT 1 FROM creature_loot_template l WHERE l.item = c.itemId) OR "
                 "EXISTS (SELECT 1 FROM gameobject_loot_template l WHERE l.item = c.itemId) OR "

@@ -11,6 +11,8 @@
 #define private public
 #include "runtime/HireLifecycle.h"
 #undef private
+// the Turtle body of the pass-3 helper (ai/cmangos-compat-w3.h): the production code reads a guid as text through it
+inline std::string GuidStringW3(ObjectGuid const& guid) { return guid.GetString(); }
 
 struct Session { bool headless = false; bool IsHeadless() const { return headless; } };
 inline bool IsHeadlessCompat(Session* session) { return session->IsHeadless(); }

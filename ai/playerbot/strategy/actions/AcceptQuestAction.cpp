@@ -8,13 +8,14 @@
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatW3.h"
 using namespace ai;
 
 static bool IsFixedRewardUpgrade(AiObjectContext* context, Quest const* quest)
 {
     for (uint8 i = 0; i < quest->GetRewItemsCount(); ++i)
     {
-        ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", quest->RewItemId[i]);
+        ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", QuestRewItemIdsW3(quest)[i]);
         if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
             return true;
     }
@@ -50,9 +51,12 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
     // log pass deletes. Grouped-and-able bots (can fight boss) keep them;
     // owned/hired bots follow the player. Donor mod-playerbots
     // IsQuestCapableDoing, same +3 / type / suggested numbers.
+    if (!QuestIsVanillaEligibleCompat(quest))
+        return false;
+
     if (sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
         !ai::QuestAcceptSoloCapable((int)QuestLevelCompat(quest), bot->GetLevel(),
-            quest->GetType(), quest->GetSuggestedPlayers(),
+            QuestTypeCompat(quest), quest->GetSuggestedPlayers(),
             AI_VALUE(bool, "can fight boss")))
         return false;
 
@@ -60,16 +64,10 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
     // war-effort item turn-ins never for upkeep bots (same predicate the
     // clean action drops with, so accept and drop cannot drift).
     {
-        bool hasItemObjective = false;
-        for (int i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-            if (quest->ReqItemId[i] && quest->ReqItemCount[i])
-                hasItemObjective = true;
-        for (int i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
-            if (quest->ReqSourceId[i] && quest->ReqSourceCount[i])
-                hasItemObjective = true;
+        bool hasItemObjective = QuestHasItemObjectiveCompat(quest);
         bool upkeepBot = sPlayerbotAIConfig.botQuestLogUpkeep &&
             !ai->HasActivePlayerMaster() && sRandomBotFacade.IsRandomBot(bot);
-        if (ai::ShouldRefuseQuestAtAccept(quest->GetQuestId(), !quest->IsActive(),
+        if (ai::ShouldRefuseQuestAtAccept(quest->GetQuestId(), !QuestIsActiveCompat(quest),
             quest->GetZoneOrSort(), hasItemObjective, upkeepBot))
             return false;
     }
@@ -106,9 +104,9 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
         !ai->HasActivePlayerMaster() &&
         (sRandomBotFacade.IsRandomBot(bot) ||
             TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid())) &&
-        !quest->GetRequiredClasses() &&
+        !QuestAllowableClassesCompat(quest) &&
         QuestLevelCompat(quest) > 0 &&
-        bot->GetLevel() > bot->GetQuestLevelForPlayer(quest) + (uint32)WorldI32ConfigW2(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF) + 1)
+        bot->GetLevel() > QuestLevelForPlayerCompat(bot, quest) + (uint32)WorldI32ConfigW2(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF) + 1)
     {
         if (!AI_VALUE2(bool, "need quest reward", (int32)quest->GetQuestId()) && !IsFixedRewardUpgrade(context, quest))
             return false;
@@ -140,14 +138,14 @@ bool AcceptAllQuestsAction::OffersAcceptableQuest(PlayerbotAI* ai, Player* bot, 
     bot->PrepareQuestMenu(questGiver->getObjectGuid());
     QuestMenu& menu = bot->PlayerTalkClass->GetQuestMenu();
 
-    for (uint32 i = 0; i < menu.MenuItemCount(); ++i)
+    for (uint32 i = 0; i < QuestMenuCountCompat(menu); ++i)
     {
         QuestMenuItem const& item = menu.GetItem(i);
 
-        if (item.m_qIcon != DIALOG_STATUS_AVAILABLE) //Only what the bot could take now.
+        if (!QuestMenuItemIsAvailableCompat(item)) //Only what the bot could take now.
             continue;
 
-        Quest const* quest = sObjectMgr.GetQuestTemplate(item.m_qId);
+        Quest const* quest = sObjectMgr.GetQuestTemplate(QuestMenuItemIdCompat(item));
 
         if (quest && WouldAcceptQuest(ai, bot, quest, questGiver))
             return true;
@@ -181,7 +179,7 @@ bool AcceptQuestAction::Execute(Event& event)
         return false;
 
     Player *bot = ai->GetBot();
-    uint64 guid = 0;
+    ObjectGuid guid;
     uint32 quest = 0;
 
     std::string text = event.GetParam();
@@ -196,9 +194,9 @@ bool AcceptQuestAction::Execute(Event& event)
         for (std::list<ObjectGuid>::iterator i = npcs.begin(); i != npcs.end(); i++)
         {
             Unit* unit = ai->GetUnit(*i);
-            if (unit && quest && unit->HasQuest(quest))
+            if (unit && quest && ObjectHasQuestCompat(unit, quest))
             {
-                guid = unit->getObjectGuid().GetRawValue();
+                guid = unit->getObjectGuid();
                 break;
             }
             if (unit && text == "*" && bot->GetDistance(unit) <= INTERACTION_DISTANCE)
@@ -208,14 +206,16 @@ bool AcceptQuestAction::Execute(Event& event)
         for (std::list<ObjectGuid>::iterator i = gos.begin(); i != gos.end(); i++)
         {
             GameObject* go = ai->GetGameObject(*i);
-            if (go && quest && go->HasQuest(quest))
+            if (go && quest && ObjectHasQuestCompat(go, quest))
             {
-                guid = go->getObjectGuid().GetRawValue();
+                guid = go->getObjectGuid();
                 break;
             }
             if (go && text == "*" && bot->GetDistance(go) <= INTERACTION_DISTANCE)
                 hasAccept |= QuestAction::ProcessQuests(go);
         }
+        if (text == "*")
+            return hasAccept;
     }
     else
     {
@@ -224,7 +224,7 @@ bool AcceptQuestAction::Execute(Event& event)
         p >> guid >> quest;
     }
 
-    if (!quest || !guid || quest == 80388)
+    if (!quest || guid.IsEmpty() || quest == 80388)
         return false;
 
     Quest const* qInfo = sObjectMgr.GetQuestTemplate(quest);
@@ -233,13 +233,13 @@ bool AcceptQuestAction::Execute(Event& event)
 
     // Raw-id path (master packet, explicit quest link): no menu walk ran
     // WouldAcceptQuest, so the banned-quest filter runs here too.
-    if (ai::IsBannedQuest(quest, !qInfo->IsActive()))
+    if (ai::IsBannedQuest(quest, !QuestIsActiveCompat(qInfo)) || !QuestIsVanillaEligibleCompat(qInfo))
         return false;
 
     hasAccept |= AcceptQuest(requester, qInfo, guid);
 
     if (hasAccept)
-        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", qInfo->GetTitle(), std::to_string(qInfo->GetQuestId()));
+        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", QuestTitleW3(qInfo), std::to_string(qInfo->GetQuestId()));
 
     return hasAccept;
 }
@@ -260,55 +260,26 @@ bool AcceptQuestShareAction::Execute(Event& event)
     p >> quest;
     Quest const* qInfo = sObjectMgr.GetQuestTemplate(quest);
 
-    if (!qInfo || !bot->GetDividerGuid())
+    if (!qInfo || !PlayerSharingQuestCompat(bot))
         return false;
 
     // Shared from a party member: banned quests are refused even when the
     // share popup fires.
-    if (ai::IsBannedQuest(qInfo->GetQuestId(), !qInfo->IsActive()))
+    if (ai::IsBannedQuest(qInfo->GetQuestId(), !QuestIsActiveCompat(qInfo)) || !QuestIsVanillaEligibleCompat(qInfo))
         return false;
 
     quest = qInfo->GetQuestId();
-    if( !bot->CanTakeQuest( qInfo, false ) )
+    if (!AcceptQuestShareDirectCompat(bot, requester, quest, qInfo))
     {
-        // can't take quest
-        bot->SetDividerGuid( ObjectGuid() );
         ai->TellError(requester, BOT_TEXT("quest_cant_take"));
         return false;
     }
 
-    if( !bot->GetDividerGuid().IsEmpty() )
-    {
-        // send msg to quest giving player
-        requester->SendPushToPartyResponse( bot, QUEST_PARTY_MSG_ACCEPT_QUEST );
-        bot->SetDividerGuid( ObjectGuid() );
-    }
-
-    if( bot->CanAddQuest( qInfo, false ) )
-    {
-        bot->AddQuest( qInfo, requester);
-        // Issue #872: remember quests the autonomous alt took itself.
-        TortoiseBots::AltBotService::Instance().AddTakenQuest(bot, quest);
-
-        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestShareAction", qInfo->GetTitle(), std::to_string(qInfo->GetQuestId()));
-
-        if( bot->CanCompleteQuest( quest ) )
-            bot->CompleteQuest( quest );
-
-        // Runsttren: did not add typeid switch from WorldSession::HandleQuestgiverAcceptQuestOpcode!
-        // I think it's not needed, cause typeid should be TYPEID_PLAYER - and this one is not handled
-        // there and there is no default case also.
-
-        if( qInfo->GetSrcSpell() > 0 )
-        {
-            bot->CastSpell(bot, qInfo->GetSrcSpell(), true);
-        }
-
-        ai->TellPlayer(requester, BOT_TEXT("quest_accept"), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-        return true;
-    }
-
-    return false;
+    // Issue #872: remember quests the autonomous alt took itself.
+    TortoiseBots::AltBotService::Instance().AddTakenQuest(bot, quest);
+    sPlayerbotAIConfig.logEvent(ai, "AcceptQuestShareAction", QuestTitleW3(qInfo), std::to_string(qInfo->GetQuestId()));
+    ai->TellPlayer(requester, BOT_TEXT("quest_accept"), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+    return true;
 }
 
 bool ConfirmQuestAction::Execute(Event& event)
@@ -328,7 +299,7 @@ bool ConfirmQuestAction::Execute(Event& event)
 
     // Party-confirm popup for PARTY_ACCEPT quests: banned quests are never
     // taken even when the popup fires.
-    if (ai::IsBannedQuest(qInfo->GetQuestId(), !qInfo->IsActive()))
+    if (ai::IsBannedQuest(qInfo->GetQuestId(), !QuestIsActiveCompat(qInfo)))
         return false;
 
     quest = qInfo->GetQuestId();
@@ -378,7 +349,7 @@ bool QuestDetailsAction::Execute(Event& event)
 
     // Gossip/quest-details path (single-entry menu auto-shows details):
     // banned quests are never taken here either.
-    if (ai::IsBannedQuest(qInfo->GetQuestId(), !qInfo->IsActive()))
+    if (ai::IsBannedQuest(qInfo->GetQuestId(), !QuestIsActiveCompat(qInfo)))
         return false;
 
     quest = qInfo->GetQuestId();
@@ -399,7 +370,7 @@ bool QuestDetailsAction::Execute(Event& event)
         // invisible in bot_events.csv (the emote-time hello makes the core send
         // the details page for a single-entry quest menu). Log it under the same
         // name QuestAction::AcceptQuest uses so the quest ledger counts it.
-        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", qInfo->GetTitle(), std::to_string(qInfo->GetQuestId()));
+        sPlayerbotAIConfig.logEvent(ai, "AcceptQuestAction", QuestTitleW3(qInfo), std::to_string(qInfo->GetQuestId()));
 
         if (bot->CanCompleteQuest(quest))
             bot->CompleteQuest(quest);

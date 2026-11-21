@@ -7,11 +7,15 @@
 #include "ObjectGuid.h"
 #include "ai/playerbot/FollowTrailPolicy.h"   // shared with the Turtle build, no core includes
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
+#include "ai/playerbot/policy/death/GhostRescuePolicy.h"   // W1: when a ghost may be rescued (core-free)
+#include "ai/playerbot/policy/world/FreeMapCapPolicy.h"     // F-population: the per-map free-bot cap (core-free)
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <ctime>
 #include <vector>
 
 class Player;
@@ -28,12 +32,23 @@ public:
     void LoadConfig();
     bool Enabled() const { return _enabled; }
     uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
+    uint8 BotAcceptDuelMinLevel() const { return _botAcceptDuelMinLevel; }
+    bool GuildMailAllowMixed() const { return _guildMailAllowMixed; }
 
-    // Empty string = started. Otherwise the reason it was refused. An empty master = the bot stands where it is.
-    std::string Login(ObjectGuid characterGuid, ObjectGuid master);
+    // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
+    // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
+    // started (W0): a pool bot is always a free bot, and IsPoolBot answers for the scheduler.
+    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false);
 
-    // Makes a new level 1 character on the account and saves it. Empty string = done.
+    // Makes a new level 1 character on the account the way the core's own creation does (realm character count, creation hooks).
+    // Empty string = the saves were QUEUED; the character commit is asynchronous, and only when it succeeds are the login side
+    // committed, OnPlayerCreate fired and the character cache told (ConfirmCreations in Update). A caller that needs a confirmed
+    // character reads the database (the pool's registry does; see host/pool/TbPoolCreate.cpp).
     std::string CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender);
+    // True from CreateCharacter until its creation is complete (the character commit answered, the login side committed and
+    // OnPlayerCreate fired). The pool marks a row ready only after that, so a crash in the window never leaves a ready pool
+    // character with no `realmcharacters` row.
+    bool CreationInFlight(std::string const& name) const;
 
     // Console test helpers for a bot without a master.
     bool WalkBy(ObjectGuid characterGuid, float dx, float dy);
@@ -58,6 +73,43 @@ public:
     // `.tb ungroup <bot>`: the bot leaves its party and has no master afterwards. Empty string = done, else the reason.
     std::string Ungroup(ObjectGuid botGuid);
 
+    // W1: a free bot has no master and plays the grind/live kit. `.tb free <bot> on|off`; empty string = done, else the reason.
+    std::string SetFree(ObjectGuid characterGuid, bool on);
+    bool IsFreeBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.free; }
+
+    // W0: a bot the pool scheduler logged in (Login(..., pool=true)), loading or in the world. The scheduler's own view of its
+    // online count and sessions is built from this; `IsFreeBot` tells a pool bot that is still playing free from one that got a
+    // master (BindMaster clears `free`, so it leaves the count and is never logged out by the pool).
+    bool IsPoolBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.pool; }
+
+    // W0 (D2): a bot of this manager (pool or not, loading or in the world) sits on that account. One session per account is
+    // the rule, so the scheduler counts the account as online and a second bot of it is refused.
+    bool AccountHasBot(uint32 accountId) const;
+    // W0: every account this manager holds a bot on, sorted and unique: the scheduler's once-a-pass account query.
+    std::vector<uint32> BotAccounts() const;
+
+    // W1: what `.tb state` keeps of a bot's life: the free flag, kills and deaths since login, ghost rescues and teleports taken,
+    // and whether the last revive was a reclaim (0), the spirit healer (1) or a rescue (2).
+    struct LifeInfo
+    {
+        bool free = false;
+        uint32 kills = 0;
+        uint32 deaths = 0;
+        uint32 rescues = 0;
+        uint32 teleports = 0;
+        bool rescuedThisDeath = false;
+        bool wasGhost = false;            // the release teleport was already counted for this death
+        time_t diedAt = 0;
+        int reviveHow = -1;
+        float ghostYd = -1.0f;            // yards to the corpse while a ghost on its map (-1 = no answer)
+        std::string phase;                // release | walk | delay | safe-spot | reclaim | healer | rescue (empty = alive)
+    };
+    LifeInfo GetLifeInfo(ObjectGuid characterGuid) const;
+    void NoteKill(ObjectGuid characterGuid);
+    // The engine's revive paths call this through TbCompat_W1.h: kind 0 = reclaimed at the body, 1 = the spirit healer.
+    void NoteReviveKind(ObjectGuid characterGuid, int kind);
+    // `.tb tele` counts in `tele=`: every teleport the bot took, any cause.
+
     // `.tb engine <character> on|off`: Empty string = done, else the reason it was refused.
     std::string SetEngine(ObjectGuid characterGuid, bool on);
     // Lines for `.tb where`: the first is `brain: engine` or `brain: spike`, then (engine only) state, strategies, target.
@@ -69,10 +121,13 @@ public:
     Player* FindBot(ObjectGuid characterGuid) const;
     // The in-world bots whose master is `master` (host/TbHostBotManager.cpp answers the legacy BotManager::GetBotsForMaster with it).
     std::vector<Player*> BotsOfMaster(ObjectGuid master) const;
-    // Re-binds a bot's master (empty = none). False when it is not a logged-in bot. The engine's own master pointer is the
-    // caller's (host/TbHostBotManager.cpp BindBotMaster/ClearBotMaster set it too).
+    // Re-binds a bot's master (empty = none). False when it is not a logged-in bot. A master and free mode are exclusive: a non-empty
+    // one ends free mode then and there (BindMaster). The engine's own master pointer is the caller's (host/TbHostBotManager.cpp
+    // BindBotMaster/ClearBotMaster set it too).
     bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
+    // A character ever logged in as a bot (live or since logged out): an offline bot is still a bot, not a real player.
+    bool IsKnownBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0 || _knownBots.count(characterGuid) != 0; }
     // Every logged-in bot (the dashboard roster).
     std::vector<ObjectGuid> BotGuids() const { std::vector<ObjectGuid> out; out.reserve(_bots.size()); for (auto const& [guid, bot] : _bots) out.push_back(guid); return out; }
     std::size_t Count() const { return _bots.size(); }
@@ -82,11 +137,16 @@ public:
 
     // ---- slice 4, host package H4: entering an instance as a group, the entrance rule, life state ----
     // The entry question with its code: `code` is empty when the core has no objection, else one of level full locked difficulty not-found teleporting
-    // in-combat dead other (the `block=` words of `.tb state`), `text` says it in words. This is CanEnterMap's answer in two parts (C1: the ONE place that
+    // in-combat dead other (the `block=` words of `.tb state`) or `map-cap` (F-population: the target map already holds its free bots),
+    // `text` says it in words. This is CanEnterMap's answer in two parts (C1: the ONE place that
     // calls Map::PlayerCannotEnter is still CanEnterMap).
     struct EntryCheck { std::string code; std::string text; };
     static EntryCheck CheckEntry(Player* who, uint32 mapId);
 
+    // F-population: the per-map free-bot cap. How many free bots stand in the world on that map now (the entering bot is never
+    // on it yet), and the configured caps by kind (TortoiseBots.Free.MaxPerMap.*). CheckEntry refuses a free bot past the cap.
+    uint32 FreeBotsOnMap(uint32 mapId) const;
+    world::FreeMapCaps GetFreeMapCaps() const { return _freeMapCaps; }
     // `.tb enter`: the bot walks into the area trigger's box (its engine is down meanwhile) and the core's own area-trigger handler is called for it
     // (WorldSession::HandleAreaTriggerOpcode, MiscHandler.cpp:538), which asks the core's entry rule and teleports it. `leader` (not empty) = the
     // party leader's guid: the bot calls the handler only after the leader stands on the trigger's target map (followers enter after their leader
@@ -177,6 +237,21 @@ private:
         std::string blockText;
         uint32 catchups = 0;
         bool wasDead = false;
+        // W1: a masterless bot that plays the world (free kit); its kills/deaths, the ghost rescue tracker and the counters of `.tb state`.
+        bool free = false;
+        // W0: logged in by the pool scheduler (`.tb pool start`). A master binding clears `free`; a pool bot without it has left
+        // the pool's count and is never logged out by the pool.
+        bool pool = false;
+        uint32 kills = 0;
+        uint32 deaths = 0;
+        uint32 rescues = 0;
+        uint32 teleports = 0;
+        bool rescuedThisDeath = false;
+        bool wasGhost = false;            // the release teleport was already counted for this death
+        time_t diedAt = 0;
+        int reviveHow = -1;
+        float ghostYd = -1.0f;
+        TortoiseBots::GhostRescueProgress ghostRescue;
         bool deadEngineFailed = false;  // N2: the dead engine could not be built while the commander is away (logged once per death)
         uint32 deadMs = 0;              // N2/N3: how long the body has lain (reset when alive): the bound after which a commanded bot releases itself
         bool runBack = false;
@@ -190,10 +265,16 @@ public:
     static std::string CanEnterMap(Player* who, uint32 mapId);
 private:
     static std::string JoinParty(Player* bot, Player* master);
+    // W1 (review): the ONE master-binding step. A master replaces free mode at that moment (the autonomous kit, the ghost bookkeeping),
+    // so every binding path lands here: `.tb group` (GroupWith), the commander binding, a run and the engine's own adoption (SetMaster).
+    void BindMaster(Bot& bot, ObjectGuid master);
     // H4 private steps
     void UpdateEntry(Bot& bot, Player* me, uint32 diff);
     void FailEntry(Bot& bot, std::string code, std::string text);
     void TrackLife(Bot& bot, Player* me);
+    void FreeThink(Bot& bot, Player* me);
+    void GhostRescue(Bot& bot, Player* me);
+    void TickQuestGroups(uint32 diff);
     void EnsureEntrance(Bot const& bot, Player* me);
     bool IsCommandedHere(Bot const& bot, Player* me) const;
     void DeadBackstop(Bot& bot, Player* me);
@@ -202,13 +283,38 @@ private:
     void DetachFromMaster(Bot& bot);
     // R10 (S2): one update of a bot whose master is away. True when the master is back in the world and the bot has been re-bound.
     bool UpdateMasterAway(Bot& bot, uint32 diff);
+    // A creation whose character commit is in flight (the core's own order, CharacterHandler.cpp): the login side (the realm's
+    // character count, the account data) is committed only after the character commit answered true, the creation hooks
+    // (OnPlayerCreate) and the character cache follow, and a failed character commit leaves nothing behind. The record and
+    // everything it holds is in TbBotMgr.cpp.
+    struct PendingCreation;
+    void ConfirmCreations();
+    std::vector<std::shared_ptr<PendingCreation>> _creating;
+
+    struct QuestGroupEntry
+    {
+        ObjectGuid groupGuid;
+        uint32 questId = 0;
+        uint64 formedAtMs = 0;
+        std::vector<ObjectGuid> members;
+    };
+    std::vector<QuestGroupEntry> _questGroups;
+    uint32 _questGroupTimerMs = 0;
 
     std::unordered_map<ObjectGuid, Bot> _bots;
+    std::unordered_set<ObjectGuid> _knownBots;
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    bool _capitalErrandsEnabled = false;
+    bool _guildMailEnabled = false;
+    bool _guildMailAllowMixed = false;
+    bool _groupQuestsEnabled = false;
+    bool _professionsEnabled = false;
+    uint8 _botAcceptDuelMinLevel = 10;
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
+    world::FreeMapCaps _freeMapCaps;  // F-population: TortoiseBots.Free.MaxPerMap.* (dungeon 5, raids 10/20/40, 0 = no cap)
     // N1 (package N): NO decision is cached by instance id alone (the core hands out ids from one pool for all maps and reuses them): what is kept is keyed by
     // (map id, instance id), and a cached trigger is used only when its target is that map. The entrance itself is read from the instance script every time.
     std::map<std::pair<uint32, uint32>, uint32> _entryTriggerByInstance;   // (map, instance) -> the area trigger the last entry into it used

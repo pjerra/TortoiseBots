@@ -143,7 +143,7 @@ namespace tbcompat
     void MarkSpellStoreReady();
 
     // Builds the index of DIFFICULTY_NONE spell ids and the dense slot array for their mirrors. Called from the module's
-    // WorldScript::OnWorldInitialized after MarkSpellStoreReady (the spell store is loaded by then: World.cpp:1471), and
+    // WorldScript::OnWorldInitialized after MarkSpellStoreReady (the spell store is loaded by then: World.cpp:1485), and
     // lazily from a lookup of the id bound or a first spell lookup after that flag. One builder at a time: the store scan
     // is inside the builder's lock. Returns without touching the store while the flag is unset, and builds nothing when
     // TortoiseBots.Enable = 0.

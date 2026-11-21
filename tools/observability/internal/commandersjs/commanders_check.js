@@ -596,4 +596,24 @@ assert.deepStrictEqual(C.labelFit([{ id: "a", name: "AAAAAAAAAA", x: 0, y: 0 }, 
   ["a"], "at twice the scale they collide");
 assert.deepStrictEqual(C.labelFit([{ name: "no id" }, { id: "x", name: "X", x: 0, y: 0 }], 1), ["x"], "an entry without an id is skipped");
 
- console.log("commanders.js ok");
+ // ---- the notice a tab shows on a core that does not feed it (ForeverCore)
+{
+  const forever = { core: "forever", ported: { raids: false, coverage: false, commander_orders: false, combat: false } };
+  const turtle = { core: "turtle", ported: { raids: true, coverage: true, commander_orders: true, combat: true } };
+  assert.ok(/Raids are not ported to ForeverCore/.test(C.coreNotice(forever, "raids")));
+  assert.ok(/no bot acts on a boss tactic row/.test(C.coreNotice(forever, "coverage")));
+  const cmd = C.coreNotice(forever, "commanders");
+  assert.ok(/orders, the live combat window/.test(cmd) && /plan, step, phase/.test(cmd));
+  assert.ok(/\.tb run start/.test(C.coreNotice(forever, "commanders-empty")));
+  // no notice on the Turtle core, on an unknown tab, with no answer (an older daemon) or with a malformed one
+  ["raids", "coverage", "commanders", "commanders-empty", "overview"].forEach((tab) => assert.strictEqual(C.coreNotice(turtle, tab), ""));
+  assert.strictEqual(C.coreNotice(forever, "overview"), "");
+  assert.strictEqual(C.coreNotice(null, "raids"), "");
+  assert.strictEqual(C.coreNotice({ core: "forever" }, "raids"), "");
+  assert.strictEqual(C.coreNotice({ core: "forever", ported: "no" }, "raids"), "");
+  // only what is reported missing is named
+  assert.strictEqual(C.coreNotice({ core: "forever", ported: { raids: true, coverage: true, commander_orders: true, combat: false } }, "commanders").includes("orders,"), false);
+  assert.ok(/live combat window/.test(C.coreNotice({ core: "forever", ported: { combat: false } }, "commanders")));
+}
+
+console.log("commanders.js ok");

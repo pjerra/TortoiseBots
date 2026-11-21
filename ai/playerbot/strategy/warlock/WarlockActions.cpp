@@ -33,7 +33,7 @@ bool CastChoicePetAction::isPossible()
     // item cheat, so a cheat bot gets the one shard the summon consumes.
     if (OrderedPetWord(ai) != "imp" && ai->HasCheat(BotCheatMask::item) &&
         bot->GetItemCount(TortoiseBots::WARLOCK_SOUL_SHARD_ITEM) == 0)
-        bot->StoreNewItemInInventorySlot(TortoiseBots::WARLOCK_SOUL_SHARD_ITEM, 1);
+        AddItemCompat(bot, TortoiseBots::WARLOCK_SOUL_SHARD_ITEM, 1);
     return CastSpellAction::isPossible();
 }
 

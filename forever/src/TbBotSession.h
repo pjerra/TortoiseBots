@@ -26,6 +26,7 @@ struct CastResult
     {
         SpellFailure,   // SMSG_SPELL_FAILURE whose CasterUnit is the bot: the cast was cancelled (Spell::SendInterrupted)
         CastFailed,     // SMSG_CAST_FAILED: the core refused or aborted the bot's own cast (Spell::SendCastResult)
+        SpellDelayed,   // SMSG_SPELL_DELAYED whose Caster is the bot: the core pushed its cast bar back (Spell::Delayed)
     };
 
     Kind kind = Kind::SpellFailure;
@@ -33,7 +34,8 @@ struct CastResult
     ObjectGuid castId;      // the core's cast id, the key that pairs the two packets of one failure
     uint32 spellId = 0;
     uint32 reason = 0;      // the core's SpellCastResult (SMSG_SPELL_FAILURE: uint16 on the wire, SMSG_CAST_FAILED: int32)
-    bool injected = false;  // `.tb castfail`, not the core
+    uint32 delayMs = 0;     // SpellDelayed only: the pushback the core reported (SMSG_SPELL_DELAYED ActualDelay)
+    bool injected = false;  // `.tb castfail` / `.tb pushback`, not the core
 };
 
 // What `.tb where` prints for a bot.
@@ -44,6 +46,7 @@ struct CastResultCounts
     uint64_t dropped = 0;        // the queue was full: the oldest entry was removed to make room
     uint64_t refusedInTick = 0;  // SMSG_CAST_FAILED sent while this bot's own engine tick ran: the engine got that result as the return value of its own call, not queued
     uint64_t malformed = 0;      // a packet that did not read as the core writes it
+    uint64_t delayed = 0;        // SpellDelayed results accepted into the queue (S2: the core pushed the bot's cast bar back)
     uint32_t pending = 0;        // queued, not delivered yet
 };
 
@@ -77,13 +80,13 @@ public:
     ObjectGuid GetCharacterGuid() const { return _characterGuid; }
 
     // Bots have no client: everything the server sends is dropped here, except (in a build with the engine, for a session
-    // whose cast-result sink is on) the asynchronous cast results, which are copied into the queue below. Called by the core
+    // whose cast-result sink is on) the asynchronous cast results and pushbacks, which are copied into the queue below. Called by the core
     // from any thread that sends to this player, so everything it touches is the queue's mutex or an atomic.
     void SendPacket(WorldPacket const* packet, bool forced = false) override;
 
-    // The cast-result queue (SMSG_SPELL_FAILURE of the bot's own casts, SMSG_CAST_FAILED). Bounded: CastResultCapacity entries;
-    // when full the OLDEST entry is removed and counted as dropped. Thread-safe. The engine is the only consumer and drains it
-    // on the world thread (host/TbEngineBrain.cpp); nothing in this class calls the engine.
+    // The cast-result queue (SMSG_SPELL_FAILURE of the bot's own casts, SMSG_CAST_FAILED, and SMSG_SPELL_DELAYED whose caster is the bot).
+    // Bounded: CastResultCapacity entries; when full the OLDEST entry is removed and counted as dropped. Thread-safe. The engine is the only
+    // consumer and drains it on the world thread (host/TbEngineBrain.cpp); nothing in this class calls the engine.
     static constexpr std::size_t CastResultCapacity = 32;
     void SetCastResultSink(bool on) { _castResultSink.store(on, std::memory_order_relaxed); }
     bool CastResultSink() const { return _castResultSink.load(std::memory_order_relaxed); }
@@ -98,6 +101,10 @@ public:
     // otherwise) and sends it through Player::SendDirectMessage -> SendPacket, the path the core takes, so the reader and the
     // queue are exercised end to end. World thread. Empty string = sent, else why not.
     std::string InjectCastResult(uint32 spellId, uint32 reason, bool interrupted);
+    // `.tb pushback`: builds the core's own typed packet (WorldPackets::Spells::SpellDelayed) for the bot's own cast and sends it through
+    // Player::SendDirectMessage -> SendPacket, the path Spell::Delayed takes, so the reader and the queue are exercised end to end. World
+    // thread. Empty string = sent, else why not.
+    std::string InjectSpellDelay(uint32 delayMs);
 
     // While one of these lives on the world thread, an SMSG_CAST_FAILED sent to `session` is a refusal of the engine's own
     // call (Spell::prepare answers synchronously and the engine reads the same result from its call): it is counted, not queued.
@@ -115,6 +122,7 @@ public:
 private:
     void AcknowledgeTeleports();
     void CaptureCastResult(WorldPacket const& packet);
+    void CaptureSpellDelay(WorldPacket const& packet);
 
     std::function<void()> _teleportAckHook;
     ObjectGuid _characterGuid;

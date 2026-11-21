@@ -46,7 +46,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         # loader reads a move_hop_exact row as a MoveDirect with exactLaunch (DungeonPlanPolicy.h ParsePlanStepRowKind).
         self.assertIn("f.leadMoving = IsMovingCompat(lead);", body(COMMANDS, "void ReadRunFacts(", "\n}\n"))
         loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
-        self.assertIn("ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);", loader)
+        self.assertIn("ParsePlanStepRowKind(FieldTextCompat(fields[3]), step.kind, step.exactLaunch, step.openProof);", loader)
         self.assertNotIn("step.kind = ParsePlanStepKind(", loader)
 
     def test_cmd_move_checks_the_lead_distance(self):
@@ -339,8 +339,8 @@ class RunLeaderWiringTest(unittest.TestCase):
         loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
         self.assertIn("SELECT `plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `cc_never` FROM `ai_dungeon_plan`", loader)
         self.assertRegex(loader,
-                         r"table\.SetUnits\(plan,\s*fields\[2\]\.GetCppString\(\),\s*fields\[3\]\.GetCppString\(\),\s*"
-                         r"fields\[4\]\.GetCppString\(\),\s*fields\[5\]\.GetCppString\(\),\s*\w+\)")
+                         r"table\.SetUnits\(plan,\s*FieldTextCompat\(fields\[2\]\),\s*FieldTextCompat\(fields\[3\]\),\s*"
+                         r"FieldTextCompat\(fields\[4\]\),\s*FieldTextCompat\(fields\[5\]\),\s*\w+\)")
 
     def test_auto_cc_is_wired(self):
         policy = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
@@ -497,7 +497,7 @@ class RunLeaderWiringTest(unittest.TestCase):
 
     def test_loader_reads_the_open_proof_kind(self):
         loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
-        self.assertIn("ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);", loader)
+        self.assertIn("ParsePlanStepRowKind(FieldTextCompat(fields[3]), step.kind, step.exactLaunch, step.openProof);", loader)
 
     def test_reload_compares_open_proof(self):
         reload = (ROOT / "ai/playerbot/DungeonPlanReloadPolicy.h").read_text()
@@ -1431,9 +1431,10 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), PathLengthCompat(path)))",
                       body(COMMANDS, "bool NearestReachablePoint(", "\n}\n"))
         self.assertIn("pathYd <= pointFromLeadYd + kDetourMaxPathYd &&", body(policy, "inline bool DetourPointReachable(", "\n}\n"))
-        # Every rewind of the step forgets the step's refusals.
-        for fn in ("inline void EventFailed(", "inline bool RearmEventOnWipe("):
+        # Every rewind of the step forgets the step's refusals; EventFailed uses the shared helper.
+        for fn in ("inline void EventFailedAt(", "inline bool RearmEventOnWipe("):
             self.assertIn("ForgetMoveRefusals(r);", body(policy, fn, "\n}\n"))
+        self.assertIn("EventFailedAt(r, EventStartStep(r), why);", body(policy, "inline void EventFailed(", "\n}\n"))
         self.assertIn("if (NeverSkipMove(r))\n        ForgetMoveRefusals(r);", body(policy, "inline bool Resume(", "\n}\n"))
         self.assertNotIn("UseDetour(", code)
         self.assertNotIn("15 yd of it either", code)

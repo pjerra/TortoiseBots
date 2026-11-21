@@ -33,11 +33,23 @@ std::string EnsureConfig();
 // Builds the brain for a bot that is in the world and placed next to `master`: PlayerbotAI, master, default strategies,
 // registration where the legacy code looks a bot's AI up. Null (with `error` set) when it could not be built; the
 // caller then keeps the spike behaviour for that bot.
-Brain* Create(Player* bot, Player* master, std::string& error);
+Brain* Create(Player* bot, Player* master, std::string& error, bool free = false);
+
+// W1: `.tb free <bot> on|off` on a live brain: rebuild the strategy kit for the new mode and set the movement mode ("free" for a
+// free bot, "follow" otherwise). No-op without a brain.
+void ReapplyStrategies(Brain* brain, bool free);
+
+// Enable or restore free-bot non-combat group follow/assist when grouped for a group/elite quest.
+void SetQuestGroupMember(Brain* brain, bool inGroup);
+
+// W1 (review): a master was bound to a live brain (the host ends free mode first). The engine takes the master pointer, then the full
+// reset the adoption path does (travel and grind targets purged, the current path stopped) and the commanded kit. No-op without a brain.
+void BindMaster(Brain* brain, Player* master);
 
 // One tick of the engine. `diff` is the world tick's elapsed milliseconds. Before the engine's UpdateAI the bot's queued cast
-// results (BotSession, TbBotSession.h) are handed to the engine: SPELL_FAILURE -> PlayerbotAI::SpellInterrupted, CAST_FAILED ->
-// the action log's CAST_FAILED_ASYNC line. The queue is filled only while the bot has a brain (SLICE2-R0-NOTES.md).
+// results (BotSession, TbBotSession.h) are handed to the engine: SPELL_FAILURE and an asynchronous CAST_FAILED -> PlayerbotAI::SpellInterrupted
+// (the wait for the bar is cut), SPELL_DELAYED -> the wait grows by the pushback (PlayerbotAI::NoteSpellDelayed), CAST_FAILED -> the action
+// log's CAST_FAILED_ASYNC line. The queue is filled only while the bot has a brain (SLICE2-R0-NOTES.md, S2-NOTES.md).
 void Tick(Brain* brain, uint32 diff);
 
 // R10 (S3): the bot's teleport is being acknowledged by the host session: PlayerbotAI::HandleTeleportAck (transition generation, teleport grace, stale
@@ -48,13 +60,31 @@ void HandleTeleportAck(Brain* brain);
 // Unregisters and deletes the brain. Must run before the bot's Player is deleted (see the logout paths in BotMgr).
 void Destroy(Brain* brain);
 
+// S3: a core-started flight (a knockback or another EFFECT_MOTION) began (`start`) or is still going. On a start the engine drops
+// its cast and its old jump target; both calls raise (never lower) the bot's jump time to `jumpUntilMs` (WorldTimer ms), so
+// PlayerbotAI::IsJumping holds its own StopMoving and its casts off the flight. No-op without a brain.
+void NoteThrown(Brain* brain, uint32 jumpUntilMs, bool start);
+
+// S3: a core-started flight is still in the air, so the engine holds its own moves and casts off it. The host's stops
+// are held the same way (Unit::StopMoving and MotionMaster::Clear cut the spline and leave the bot hovering). False
+// without a brain.
+bool InFlight(Brain* brain);
+
 // `.tb castfail <bot> <spell> <reason> [interrupt]`: sends the bot's session a real SMSG_CAST_FAILED (or, with `interrupt`, an
 // SMSG_SPELL_FAILURE of its own cast) through Player::SendDirectMessage, so it travels the path of a core failure: the session's
 // packet reader, the bounded queue, and the drain at the start of the next engine tick. Empty string = sent, else why not.
 std::string InjectCastResult(Player* bot, uint32 spellId, uint32 reason, bool interrupted);
 
+// `.tb pushback <bot> <ms>`: sends the bot's session a real SMSG_SPELL_DELAYED of its own cast through Player::SendDirectMessage, the packet
+// Spell::Delayed sends to the set. The session reads it, the bounded queue holds it, and the next engine tick lengthens the wait. Empty
+// string = sent, else why not.
+std::string InjectSpellDelay(Player* bot, uint32 delayMs);
+
 // What `.tb where` prints for an engine bot: one line each for state, strategies and current target, and the cast-result counts.
 std::vector<std::string> Describe(Brain const* brain);
+
+// Executes a legacy action by key for `bot` (used by host world-life errands).
+bool RunAction(Player* bot, char const* action, char const* param);
 
 struct BrainDeleter
 {

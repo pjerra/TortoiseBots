@@ -34,3 +34,21 @@ forced attack), no Sunder (Rend + Heroic Strike threat only).
 Ranks are all rank 1 in this bracket (rank-2+ starts at 20+ for most lines).
 
 Note (DeepSeek 70938 check): spell 5019 is named `Shoot (wand)` in the priest/mage CSVs vs DB2 `Shoot`; id present in both builds, annotation kept.
+
+## Mocking Blow 694 (the level-16 forced attack)
+
+- How learned: trainer only. `trainer_spell`: 26 rows, TrainerIds 1000913+ (warrior trainers), cost 2000 copper, ReqLevel 16, no ReqSkill/ReqAbility gates. Single rank (no higher-rank spell id; 70938 SpellName `Mocking Blow` matches).
+- Ranks: 1. Cooldown 2 min in classic; single-target forced attack for 6 s (taunt effect + damage). At 18 it is the ONLY forced attack available (Taunt 355 has no learn path - see above).
+
+## What a good tank does when a second mob turns (level 18 kit only)
+
+No Taunt, no Sunder, no Defensive Stance. Work with what exists:
+
+1. **Mocking Blow (694)** the turned mob if it is in melee range and the 2-min cooldown is up - the only hard redirect. Save it for healer aggro, not for a DPS's mob.
+2. **Challenging Shout is NOT available** (no learn path either - same gap class as Taunt; not in the 1-18 CSV for that reason). Do not plan around it.
+3. **Thunder Clap (6343)** for AoE threat when 2+ mobs are on the group; **Demoralizing Shout (1160)** lowers their damage while you rebuild.
+4. **Rend (772) + Heroic Strike (78)** tab-targeted onto the loose mob: Rend's bleed ticks hold a trickle of threat while you rebuild on it.
+5. **Shield Block (2565)** before the loose mob reaches you - the block value converts to threat on Shield Slam? No Shield Slam without the stance tree - Block still cuts incoming damage while the healer catches up.
+6. **Overpower (7384)** only helps on the mob already targeting you (dodge proc); do not chase procs on the wrong target.
+7. **Healer notes**: priest pre-shields (Power Word: Shield 17) the warrior before pulls; Renew (139) ticks instead of big Heal casts to avoid spike aggro; Fade (586) exists at 12 if the priest pulls.
+8. **CC notes**: mage Polymorph (118, level 8) takes one humanoid/beast out of the fight entirely - sheep the second mob BEFORE it turns, not after. Rogue Sap (6770, level 10) does the same pre-pull. At 18 both are trained and available; plan the pull around them, not around Taunt.

@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "SellAction.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/MaintenanceValues.h"
@@ -52,12 +53,12 @@ bool SellAction::Execute(Event& event)
     //so "should I walk to a vendor" and "what does the vendor buy" cannot drift
     //apart. The occasional AH-stock top-up on full bags stays as it was.
     std::list<Item*> items;
-    if (event.GetSource() == "rpg action" && text == "vendor")
+    if (event.getSource() == "rpg action" && text == "vendor")
         items = VendorSaleStock(ai, AI_VALUE(uint8, "bag space") > 80 && !urand(0, 10));
     else
         items = ai->InventoryParseItems(text, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
 
-    if (event.GetSource() == "rpg action")
+    if (event.getSource() == "rpg action")
     {
         items.sort([](Item* i, Item* j) {return GetItemProtoCompat(i)->SellPrice * i->GetCount() < GetItemProtoCompat(j)->SellPrice * j->GetCount(); }); //Sell cheapest items first.
     }
@@ -69,7 +70,7 @@ bool SellAction::Execute(Event& event)
     //made to fund a spell rank is pointless if it leaves the stock that still
     //covers the deficit behind: the bot would sell half, walk home and be sent
     //straight back. Liquidation is then all or nothing.
-    bool const allOrNothing = event.GetSource() == "rpg action" && ShouldSellValue::CantAffordNextSpell(ai);
+    bool const allOrNothing = event.getSource() == "rpg action" && ShouldSellValue::CantAffordNextSpell(ai);
 
     bool const isClaimed = TortoiseBots::ClaimLifecycle::Instance().IsClaimed(bot->GetGUIDLow());
     // Issue #872: an autonomous alt vendors only greys and unneeded whites
@@ -79,7 +80,7 @@ bool SellAction::Execute(Event& event)
     for (std::list<Item*>::iterator i = items.begin(); i != items.end(); ++i)
     {
         // Issue #489: Claimed bots never auto-vendor gear at level 60, and never vendor blue/epic items while leveling
-        if (isClaimed && event.GetSource() == "rpg action")
+        if (isClaimed && event.getSource() == "rpg action")
         {
             ItemPrototype const* proto = GetItemProtoCompat((*i));
             uint32 quality = proto ? proto->Quality : 0;
@@ -105,7 +106,7 @@ bool SellAction::Execute(Event& event)
         if (Sell(requester, *i))
             soldItems++;
 
-        if (!allOrNothing && event.GetSource() == "rpg action" && soldItems >= shouldSell)
+        if (!allOrNothing && event.getSource() == "rpg action" && soldItems >= shouldSell)
             break;
     }
 
@@ -114,7 +115,7 @@ bool SellAction::Execute(Event& event)
     //this stock" and "no vendor in reach" could not be told apart. One line per
     //five minutes per bot keeps a bot that cannot sell visible without flooding
     //bot_events.csv.
-    if (!soldItems && event.GetSource() == "rpg action")
+    if (!soldItems && event.getSource() == "rpg action")
     {
         uint32 sellable = 0;
         uint32 vendorUsage = 0;
@@ -180,11 +181,7 @@ bool SellAction::Sell(Player* requester, FindItemVisitor* visitor)
 
 bool SellAction::HasVendorStock(Creature* vendor)
 {
-    if (!vendor)
-        return false;
-    VendorItemData const* items = vendor->GetVendorItems();
-    VendorItemData const* templateItems = vendor->GetVendorTemplateItems();
-    return (items && !items->Empty()) || (templateItems && !templateItems->Empty());
+    return HasVendorStockCompat(vendor);
 }
 
 std::string SellAction::RefusalReason(PlayerbotAI* botAI)
@@ -196,7 +193,7 @@ std::string SellAction::RefusalReason(PlayerbotAI* botAI)
     std::list<ObjectGuid> vendors = botAI->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest npcs")->Get();
     for (ObjectGuid const& vendorguid : vendors)
     {
-        if (HasVendorStock(player->GetNPCIfCanInteractWith(vendorguid, UNIT_NPC_FLAG_VENDOR)))
+        if (HasVendorStock(VendorIfCanInteractCompat(player, vendorguid)))
         {
             vendorInReach = true;
             break;
@@ -279,7 +276,7 @@ bool SellAction::Sell(Player* requester, Item* item)
     for (std::list<ObjectGuid>::iterator i = vendors.begin(); i != vendors.end(); ++i)
     {
         ObjectGuid vendorguid = *i;
-        Creature *pCreature = bot->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
+        Creature *pCreature = VendorIfCanInteractCompat(bot, vendorguid);
         if (!pCreature)
             continue;
 
@@ -304,9 +301,8 @@ bool SellAction::Sell(Player* requester, Item* item)
 
         sPlayerbotAIConfig.logEvent(ai, "SellAction", GetItemProtoCompat(item)->Name1, std::to_string(GetItemProtoCompat(item)->ItemId));
 
-        WorldPacket p;
-        p << vendorguid << itemguid << count;
-        bot->GetSession()->HandleSellItemOpcode(p);
+        if (!SellItemToVendorCompat(bot, pCreature, vendorguid, item, count))
+            continue;
 
         if (ai->HasCheat(BotCheatMask::gold))
         {

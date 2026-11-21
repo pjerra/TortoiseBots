@@ -6,6 +6,7 @@
 #include <list>
 #include <map>
 #include <string_view>
+#include "playerbot/ChatLinkScan.h"
 
 namespace ai
 {
@@ -26,7 +27,7 @@ namespace ai
         static std::string MultiQualify(const std::vector<std::string>& qualifiers, const std::string& separator, const std::string_view brackets = "{}")
         {
             std::stringstream out;
-            for (uint8 i = 0; i < qualifiers.size(); i++)
+            for (size_t i = 0; i < qualifiers.size(); i++)
             {
                 const std::string& qualifier = qualifiers[i];
                 if (i == qualifiers.size() - 1)
@@ -74,9 +75,9 @@ namespace ai
             }
             else
             {
-                int8 level = 0;
+                int level = 0;   // not int8: a long run of '{' in chat text wrapped it
                 std::string sub;
-                while (next < view.size() || level < 0)
+                while (next < view.size())
                 {
                     if (view[next] == brackets[0])
                         level++;
@@ -133,7 +134,9 @@ namespace ai
             std::vector<std::string> qualifiers = getMultiQualifiers(qualifier1, separator);
             if (qualifiers.size() > pos && isValidNumberString(qualifiers[pos]))
             {
-                return stoi(qualifiers[pos]);
+                int32 value = 0;
+                if (ai::chatlink::ParseSigned(qualifiers[pos], value))   // no std::stoi: a long digit run in chat text threw
+                    return value;
             }
 
             return 0;

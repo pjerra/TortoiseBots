@@ -16,7 +16,11 @@
 // Included from forever-compat-shim.h at the end of the R4 block, so every type of the pre-included set is visible here.
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -101,7 +105,7 @@ inline void QueueUseItemPacketCompat(Player* /*bot*/, uint8 /*bagIndex*/, uint8 
     tbcompat::Unported(tbcompat::Feature::ItemUsePacket);
 }
 
-// Whether this prototype would go into the given equipment slot (T `slot == bot->FindEquipSlot(proto, NULL_SLOT, true)`). F's
+// Whether this prototype would go into the given equipment slot (T `bot->FindEquipSlot(proto, slot, true) == slot`). F's
 // FindEquipSlot takes an Item. Failure value: false ("not for that slot").
 inline bool ItemProtoFitsSlotCompat(Player* /*bot*/, ItemPrototype const* /*proto*/, uint32 /*slot*/) { tbcompat::Unported(tbcompat::Feature::ItemSlotOfPrototype); return false; }
 
@@ -126,6 +130,13 @@ inline int32 NewItemRandomPropertyIdCompat(uint32 /*itemId*/) { tbcompat::Unport
 struct AuctionEntry
 {
     uint32 itemTemplate = 0;
+    // The fields the price code of ItemUsageValue.cpp reads (slice 9, package L9). Never set: nothing creates a listing here, so every container of
+    // AuctionEntry is empty and these are only named, not read from a real auction.
+    uint32 Id = 0;
+    uint32 itemGuidLow = 0;
+    uint32 itemCount = 0;
+    uint32 buyout = 0;
+    uint32 owner = 0;
 };
 
 
@@ -235,9 +246,9 @@ inline void RegisterDirectPacketCasesCompat()
 // host provides one later, R4M request 5). Failure value: 0 (no allowance for server lag).
 inline uint32 WorldAverageDiffCompat() { tbcompat::Unported(tbcompat::Feature::WorldAverageDiff); return 0; }
 
-// Fall bookkeeping for fall damage: T `bot->SetFallInformation(z)` (time 0), F `SetFallInformation(time, z)` with a different
-// meaning of the pair. Failure value: nothing is recorded ("no fall damage is computed from this jump").
-inline void SetFallInformationCompat(Player* /*player*/, float /*z*/) { tbcompat::Unported(tbcompat::Feature::JumpFall); }
+// Fall bookkeeping for fall damage: T `bot->SetFallInformation(z)` (time 0), F `SetFallInformation(time, z)`: the same start
+// height the core's own CMSG_MOVE_FALL_LAND path writes, so HandleFall computes the damage (S3).
+inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(0, z); }
 
 
 // ===============================================================================================================
@@ -276,6 +287,28 @@ using BattleGroundQueueTypeId = BattlegroundQueueTypeId;
 // (The battleground type of a queue type id, and the chat link extractors of ChatHandler, are blocks: ServerFacade.h and
 // PlayerbotAI.h call them through UnportedBlockResultCompat with Feature::BattlegroundQueue / Feature::ChatLinks.)
 
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+{
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first != std::string::npos)
+    {
+        size_t last = str.find_last_not_of(" \t\r\n");
+        std::string trimmed = str.substr(first, last - first + 1);
+        if (!trimmed.empty() && trimmed.size() <= 9 &&
+            std::all_of(trimmed.begin(), trimmed.end(), [](unsigned char c) { return std::isdigit(c); }))
+        {
+            unsigned long const value = std::strtoul(trimmed.c_str(), nullptr, 10);
+            if (value > 0 && value <= std::numeric_limits<uint32>::max())
+                return static_cast<uint32>(value);
+        }
+    }
+    char* source = (char*)str.c_str();
+    char* cId = UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, static_cast<char*>(nullptr),
+        [&](auto* self) -> char* { return self->ExtractKeyFromLink(&source, "Hquest"); }, handler);
+    return cId ? static_cast<uint32>(std::strtoul(cId, nullptr, 10)) : 0u;
+}
+
 
 // ===============================================================================================================
 // PROPER both-core helpers added by R6A (ForeverCore has the thing: no Unported call)
@@ -296,12 +329,8 @@ inline bool SpellProhibitedCompat(Player const* player, SpellEntry const* spellI
 // ===============================================================================================================
 // PETS, GAME OBJECTS, ITEM CASTS, MISC FEATURES (the "Unported" helpers: failure value in each comment)
 // ===============================================================================================================
-// Pets. Failure values: nothing learned / toggled / sent / visited ("the action did not happen").
-inline void PetLearnSpellCompat(Pet* /*pet*/, uint32 /*spellId*/) { tbcompat::Unported(tbcompat::Feature::Pets); }
-inline void PetToggleAutocastCompat(Pet* /*pet*/, uint32 /*spellId*/, bool /*on*/) { tbcompat::Unported(tbcompat::Feature::Pets); }
-inline bool PetDismissCommandCompat(Player* /*bot*/, Pet* /*pet*/) { tbcompat::Unported(tbcompat::Feature::Pets); return false; }
-template <class Visitor>
-inline void ForAllGuardiansCompat(Player* /*bot*/, Visitor&&) { tbcompat::Unported(tbcompat::Feature::Pets); }
+// (Pets: PetLearnSpellCompat, PetToggleAutocastCompat, PetDismissCommandCompat, ForAllGuardiansCompat moved to TbCompat_P11.h in slice 11; found through
+// ai/playerbot/TbCompatP11.h.)
 
 // Use a game object by the 1.12 use packet. Failure value: false ("could not use it").
 inline bool UseGameObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
@@ -418,41 +447,15 @@ inline QueryResult CharacterPQueryCompat(char const* format, Args... args)
 inline QueryResult QueryGuardCompat(QueryResult result) { return result; }
 // Escapes a string for a query (T `CharacterDatabase.escape_string(s)`, F `EscapeString(s)`).
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.EscapeString(text); }
-
-
-// ===============================================================================================================
-// QUEST INTERNALS (PlayerbotAIQuests.cpp, GenericTriggers.h QuestLogNearlyFullTrigger)
-// ===============================================================================================================
-// What the quest triage reads of a quest template. T fills it from the 1.12 fields; F's Quest keeps objectives and a classic level
-// range, and the view is not ported: it is EMPTY (level 0 = "scaling quest, never grey", no item objectives, not inactive, no
-// money cost, no deliver flag). The trigger that uses it (quest log nearly full) is not registered in the slice.
-struct QuestTriageViewCompat
+// The pet a character brings back on login (characters.summonedPetNumber): the host writes it right after SavePetToDB, before a map change can put the
+// pet away. T queues the statement; F runs it at once (`DirectPExecute`) for that reason.
+inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
 {
-    struct Item { uint32 id = 0; uint32 count = 0; };
-    bool inactive = false;               // T: !quest->IsActive()
-    bool hasItemObjective = false;       // an item objective or a source item with a count
-    bool deliver = false;                // T: HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER)
-    uint32 level = 0;                     // T: GetQuestLevel()
-    uint32 levelForPlayer = 0;            // T: bot->GetQuestLevelForPlayer(quest)
-    uint32 type = 0;                     // T: GetType()
-    uint32 suggestedPlayers = 0;         // T: GetSuggestedPlayers()
-    int32 rewardOrRequiredMoney = 0;     // T: GetRewOrReqMoney() (negative = the quest costs money)
-    std::vector<Item> items;             // the required items with a count
-};
-inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* /*bot*/, Quest const* /*quest*/)
-{
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
-    return QuestTriageViewCompat();
+    CharacterDatabase.DirectPExecute("UPDATE characters SET summonedPetNumber = {} WHERE guid = {}", petNumber, guid);
 }
 
-// Quest log bookkeeping of PlayerbotAI. Failure values: no title (empty), nothing dropped, no required items.
-inline std::string QuestTitleCompat(Quest const* /*quest*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); return std::string(); }
-inline void RemoveQuestFromLogCompat(Player* /*bot*/, uint32 /*questId*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); }
-inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* /*quest*/)
-{
-    tbcompat::Unported(tbcompat::Feature::QuestInternals);
-    return {};
-}
+
+// Quest internals moved to TbCompat_Quest.h (W3).
 
 
 // ===============================================================================================================

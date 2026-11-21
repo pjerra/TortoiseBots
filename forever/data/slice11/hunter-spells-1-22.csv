@@ -1,0 +1,44 @@
+spell_id,name,rank,level_learned,how_learned,trainer_or_quest,source,client_build
+75,auto shot,,1,starting,playercreateinfo_action dwarf hunter,starting; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1494,(name: .tb spells),,1,trainer,trainer 20 (10 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+2973,(name: .tb spells),,1,starting,playercreateinfo_action dwarf hunter,starting; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1978,(name: .tb spells),,4,trainer,trainer 20 (100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+13163,Aspect of the Monkey (hotfixes.spell_name),,4,trainer,trainer 20 (100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1130,(name: .tb spells),,6,trainer,trainer 20 (100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+3044,(name: .tb spells),,6,trainer,trainer 20 (100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+3127,(name: .tb spells),,8,trainer,trainer 20 (200 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5116,(name: .tb spells),,8,trainer,trainer 20 (200 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14260,(name: .tb spells),,8,trainer,trainer 20 (200 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+883,call pet,,10,trainer,trainer 20 (10 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+982,revive pet,,10,spell_learn_spell,learned with 883 Call Pet or 1515 Tame Beast (Revive Pet),spell_learn_spell; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+2641,dismiss pet,,10,spell_learn_spell,learned with 883 or 1515 (Dismiss Pet),spell_learn_spell; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5149,(name: .tb spells),,10,spell_learn_spell,learned with 883 or 1515 (Beast Training),spell_learn_spell; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+6991,(name: .tb spells),,10,spell_learn_spell,learned with 883 or 1515 (Feed Pet),spell_learn_spell; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+13165,aspect of the hawk,,10,trainer,trainer 20 (400 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+13549,(name: .tb spells),,10,trainer,trainer 20 (400 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+19883,(name: .tb spells),,10,trainer,trainer 20 (400 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+136,mend pet,,12,trainer,trainer 20 (600 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+2974,(name: .tb spells),,12,trainer,trainer 20 (600 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14281,(name: .tb spells),,12,trainer,trainer 20 (600 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+20736,(name: .tb spells),,12,trainer,trainer 20 (600 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1515,tame beast,,13,trainer,trainer 40 (646 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1002,(name: .tb spells),,14,trainer,trainer 20 (1200 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1513,scare beast,,14,trainer,trainer 20 (1200 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+6197,(name: .tb spells),,14,trainer,trainer 20 (1200 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1495,Mongoose Bite (hotfixes.spell_name),,16,trainer,trainer 20 (1500 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+13795,(name: .tb spells),,16,trainer,trainer 20 (1500 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14261,(name: .tb spells),,16,trainer,trainer 20 (1500 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+2643,(name: .tb spells),,18,trainer,trainer 20 (1600 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+13550,(name: .tb spells),,18,trainer,trainer 20 (1600 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14318,aspect of the hawk,,18,trainer,trainer 20 (1600 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+19884,(name: .tb spells),,18,trainer,trainer 20 (1600 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+674,(name: .tb spells),,20,trainer,trainer 20 (2100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+781,disengage,,20,trainer,trainer 20 (2100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+1499,(name: .tb spells),,20,trainer,trainer 20 (2100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+3111,mend pet,,20,trainer,trainer 20 (2100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+5118,aspect of the cheetah,,20,trainer,trainer 20 (2100 copper),trainer; forever-spell-ids.csv,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14274,(name: .tb spells),,20,trainer,trainer 20 (2100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14282,(name: .tb spells),,20,trainer,trainer 20 (2100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+19434,(name: .tb spells),,20,trainer,trainer 20 (2100 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+3043,(name: .tb spells),,22,trainer,trainer 20 (7000 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14
+14323,(name: .tb spells),,22,trainer,trainer 20 (7000 copper),trainer; no name in the collaborator's table,client DB2 70938 (2026-11-17); world TDB 2026-10-14

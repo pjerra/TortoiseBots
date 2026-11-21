@@ -58,10 +58,12 @@ inline void QueueUseItemPacketCompat(Player* bot, uint8 bagIndex, uint8 slot, ui
     bot->GetSession()->QueuePacket(packet.release());
 }
 
+// Whether the prototype can go into the given equipment slot (T `slot == bot->FindEquipSlot(proto, slot, true)`: the slot is a hint
+// the core prefers, so a ring asked for finger2 answers finger2, while the same ring asked for finger1 answers finger1). The caller
+// that lists an item by its FIRST eligible slot asks EquipSlotOfProtoCompat (S9) instead.
 inline bool ItemProtoFitsSlotCompat(Player* bot, ItemPrototype const* proto, uint32 slot)
 {
-    uint8 eslot = bot->FindEquipSlot(proto, NULL_SLOT, true);
-    return slot == eslot;
+    return bot->FindEquipSlot(proto, slot, true) == slot;
 }
 
 inline bool ItemRandomPropertySuffixCompat(int32 randomPropertyId, int loc_idx, std::string& suffix)
@@ -118,6 +120,14 @@ inline Result UnportedBlockResultCompat(tbcompat::Feature, Result, Block&& block
 inline void RegisterDirectPacketCasesCompat() {}
 
 inline uint32 WorldAverageDiffCompat() { return sWorld.GetAverageDiff(); }
+
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
+{
+    char* source = (char*)str.c_str();
+    char* cId = handler->ExtractKeyFromLink(&source, "Hquest");
+    return cId ? atol(cId) : 0;
+}
 inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(z); }
 
 
@@ -163,22 +173,7 @@ inline bool SpellProhibitedCompat(Player* player, SpellEntry const* spellInfo) {
 // ===============================================================================================================
 // PETS, GAME OBJECTS, ITEM CASTS, MISC FEATURES
 // ===============================================================================================================
-inline void PetLearnSpellCompat(Pet* pet, uint32 spellId) { pet->LearnSpell(spellId); }
-inline void PetToggleAutocastCompat(Pet* pet, uint32 spellId, bool on) { pet->ToggleAutocast(spellId, on); }
-// GenericActions.cpp: the dismiss command of the pet action, sent as a pet action packet.
-inline bool PetDismissCommandCompat(Player* bot, Pet* pet)
-{
-    const ObjectGuid& petGuid = pet->getObjectGuid();
-    const ObjectGuid& targetGuid = ObjectGuid();
-    const uint8 flag = ACT_COMMAND;
-    const uint32 spellId = COMMAND_DISMISS;
-    const uint32 command = (flag << 24) | spellId;
-
-    HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
-    return true;
-}
-template <class Visitor>
-inline void ForAllGuardiansCompat(Player* bot, Visitor&& visitor) { bot->CallForAllControlledUnits(visitor, CONTROLLED_GUARDIANS); }
+// (Pets: PetLearnSpellCompat, PetToggleAutocastCompat, PetDismissCommandCompat, ForAllGuardiansCompat moved to cmangos-compat-p11.h in slice 11.)
 
 inline bool UseGameObjectCompat(Player* bot, GameObject* go)
 {
@@ -295,58 +290,14 @@ template <class... Args>
 inline auto CharacterPQueryCompat(char const* format, Args... args) { return CharacterDatabase.PQuery(format, args...); }
 inline std::unique_ptr<QueryResult> QueryGuardCompat(QueryResult* result) { return std::unique_ptr<QueryResult>(result); }
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.escape_string(text); }
-
-
-// ===============================================================================================================
-// QUEST INTERNALS
-// ===============================================================================================================
-struct QuestTriageViewCompat
+// The pet a character brings back on login: the original statement.
+inline void SaveSummonedPetNumberCompat(uint32 petNumber, uint32 guid)
 {
-    struct Item { uint32 id = 0; uint32 count = 0; };
-    bool inactive = false;
-    bool hasItemObjective = false;
-    bool deliver = false;
-    uint32 level = 0;
-    uint32 levelForPlayer = 0;
-    uint32 type = 0;
-    uint32 suggestedPlayers = 0;
-    int32 rewardOrRequiredMoney = 0;
-    std::vector<Item> items;
-};
-// The reads QuestLogNearlyFullTrigger::HasDroppableQuest made, in the same terms (all pure getters).
-inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* bot, Quest const* quest)
-{
-    QuestTriageViewCompat view;
-    view.inactive = !quest->IsActive();
-    bool hasItemObjective = false;
-    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-        if (quest->ReqItemId[i] && quest->ReqItemCount[i])
-            hasItemObjective = true;
-    for (uint8 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
-        if (quest->ReqSourceId[i] && quest->ReqSourceCount[i])
-            hasItemObjective = true;
-    view.hasItemObjective = hasItemObjective;
-    view.deliver = quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER);
-    view.level = quest->GetQuestLevel();
-    view.levelForPlayer = bot->GetQuestLevelForPlayer(quest);
-    view.type = quest->GetType();
-    view.suggestedPlayers = quest->GetSuggestedPlayers();
-    view.rewardOrRequiredMoney = quest->GetRewOrReqMoney();
-    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
-        if (quest->ReqItemCount[i])
-            view.items.push_back({ quest->ReqItemId[i], quest->ReqItemCount[i] });
-    return view;
+    CharacterDatabase.PExecute("UPDATE characters SET summonedPetNumber = '%u' WHERE guid = '%u'", petNumber, guid);
 }
 
-inline std::string QuestTitleCompat(Quest const* quest) { return quest->GetTitle(); }
-inline void RemoveQuestFromLogCompat(Player* bot, uint32 questId) { bot->RemoveQuest(questId); }
-inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* quest)
-{
-    std::vector<std::pair<uint32, uint32>> items;
-    for (uint8 i = 0; i < std::size(quest->ReqItemId); ++i)
-        items.push_back({ quest->ReqItemId[i], quest->ReqItemCount[i] });
-    return items;
-}
+
+// Quest internals moved to cmangos-compat-quest.h (W3).
 
 
 // ===============================================================================================================

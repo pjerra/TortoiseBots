@@ -25,7 +25,6 @@
 #include "playerbot/ChatFilter.h"
 #include "playerbot/DungeonPlanMgr.h"
 #include "playerbot/FankrissGauntletPolicy.h"
-#include "playerbot/FleeManager.h"
 #include "playerbot/GuildOrderEnchants.h"
 #include "playerbot/GuildOrderSources.h"
 #include "playerbot/LootObjectStack.h"
@@ -35,11 +34,10 @@
 #include "playerbot/PlayerbotTextMgr.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/Talentspec.h"
-#include "playerbot/TravelMgr.h"
-#include "playerbot/TravelNode.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/CheatAction.h"
 #include "playerbot/strategy/actions/EmoteAction.h"
+#include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FankrissFocusActions.h"
 #include "playerbot/strategy/actions/FankrissRaidActions.h"
 #include "playerbot/strategy/actions/FankrissTankActions.h"
@@ -47,6 +45,11 @@
 #include "playerbot/strategy/actions/PatchwerkSafety.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
+#include "playerbot/strategy/actions/QueryItemUsageAction.h"
+#include "playerbot/RandomBotFacade.h"
+#include "playerbot/strategy/values/MaintenanceValues.h"
+#include "playerbot/strategy/values/BudgetValues.h"
+#include "../../../runtime/GuildOrderStore.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
 #include "playerbot/strategy/actions/WorldBuffAction.h"
@@ -81,14 +84,12 @@ inline void NoteBoss()
     if (lastSecond.exchange(now) != now)
         tbcompat::Unported(tbcompat::Feature::BossTactics);
 }
-inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
 inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
 inline void NoteTexts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
 inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
 inline void NotePool()      { tbcompat::Unported(tbcompat::Feature::PoolServices); }
 inline void NoteFactory()   { tbcompat::Unported(tbcompat::Feature::BotFactory); }
 inline void NoteFilters()   { tbcompat::Unported(tbcompat::Feature::ChatFilters); }
-inline void NoteFlee()      { tbcompat::Unported(tbcompat::Feature::FleeManager); }
 inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacyServices); }
 }
 
@@ -100,24 +101,9 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 // =====================================================================================================================
 namespace ai
 {
-// BossTacticsMgr.cpp / DungeonPlanMgr.cpp: the tables stay empty (their Load* functions are stand-ins below).
-BossTacticTable& GetBossTactics()
-{
-    NoteBoss();
-    static BossTacticTable table;
-    return table;
-}
-
-DungeonPlanTable& GetDungeonPlans()
-{
-    NoteBoss();
-    static DungeonPlanTable table;
-    return table;
-}
-
-void LoadBossTactics() { NoteBoss(); }
+// BossTacticsMgr.cpp / DungeonPlanMgr.cpp are real files now (slice 5): GetBossTactics, GetDungeonPlans, LoadBossTactics and LoadDungeonPlans
+// are theirs. BossStandMgr.cpp is not in the slice: its loader stays a stand-in.
 void LoadBossStands() { NoteBoss(); }
-void LoadDungeonPlans() { NoteBoss(); }
 
 // BossTacticsActions.cpp
 // The per-update bracket PlayerbotAI::UpdateAI opens around the scan (PlayerbotAI.cpp:383): it opens no scan slot here, so it is not counted
@@ -255,28 +241,9 @@ BotCheatMask CheatAction::GetCheatMask(std::string) { NoteMisc(); return BotChea
 uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { NoteMisc(); return 1; }
 // MountValues.cpp
 bool MountValue::IsMountSpell(uint32) { NoteMisc(); return false; }
-// GrindTargetValue.cpp: "an instance target may be ground": no.
-// The real rule (GrindTargetValue.cpp:39): outside a grouped dungeon with a real player master every target is allowed. Inside one only a target the group
-// ordered (explicit attack target) is; the real rest (marked targets, the group's own threat and victim links) is not ported, so it answers "no" (less).
-bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI* ai, Unit* target)
-{
-    NoteMisc();
-    if (!target)
-        return false;
-    Player* bot = ai->GetBot();
-    Group* group = bot->GetGroup();
-    Player* master = ai->GetMaster();
-    if (!group || !ai->HasRealPlayerMaster() || !master || master->GetGroup() != group || !bot->IsInWorld() || !bot->GetMap()->IsDungeon())
-        return true;
-    AiObjectContext* context = ai->GetAiObjectContext();
-    return AI_VALUE(ObjectGuid, "explicit attack target") == target->GetObjectGuid();
-}
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
-void ItemUsageValue::PopulateProfessionReagentIds() { NoteItems(); }
-void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds() { NoteItems(); }
-void ItemUsageValue::PopulateSoldByVendorItemIds() { NoteItems(); }
 // EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
 // The real answer outside a battleground is 60 yd (EnemyPlayerValue.cpp:276). In one the real values are 40 (10 late in Alterac Valley); battlegrounds are
 // not ported, so the shortest of them answers (less).
@@ -304,11 +271,6 @@ std::string CompositeChatFilter::Filter(std::string message)
     return !message.empty() && message[0] == '@' ? std::string() : message;
 }
 
-// FleeManager.cpp: no destination is found, no mob veto.
-IdleMobVeto::IdleMobVeto(PlayerbotAI*, Player*, std::list<ObjectGuid> const&, Unit*, float) { NoteFlee(); }
-bool IdleMobVeto::Wakes(float, float) const { NoteFlee(); return false; }
-bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory const*, uint32) { NoteFlee(); return false; }
-bool FleeManager::isUseful() { NoteFlee(); return false; }
 
 // LootObjectStack.cpp (slice 2): the real file is in the slice now; its seven stand-ins and the `loot object stack` row are gone (R3).
 
@@ -338,86 +300,54 @@ ProtectionPotion BossRowProtectionPotion(PlayerbotAI*, Player*) { NoteBoss(); re
 // is never active; the trigger key itself is not registered in the slice either (LESS: no buff is asked for).
 std::vector<uint32> WorldBuffAction::NeedWorldBuffs(Unit*) { NoteMisc(); return {}; }
 
-// TellLosAction.cpp (feature "game object use"): the "use gos <modifiers>" form of the use command finds game objects by line-of-sight modifiers. Absent =
-// no game object matches. Value: empty modifier list / empty object list. Effect (UseItemAction.cpp:244): `gos` is empty, no target game object is set,
-// and the use command does nothing (game object use is refused on ForeverCore anyway, `GameObjectUseUnportedCompat`) (LESS).
-std::vector<LosModifierStruct> TellLosAction::ParseLosModifiers(const std::string&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
-std::list<GameObject*> TellLosAction::GoGuidListToObjList(PlayerbotAI*, const std::list<ObjectGuid>&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
-std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list<GameObject*>&, const std::vector<LosModifierStruct>&)
-{
-    tbcompat::Unported(tbcompat::Feature::GameObjectUse);
-    return {};
-}
+// TellLosAction.cpp's three stand-ins (ParseLosModifiers, GoGuidListToObjList, FilterGameObjects) are gone: S1-R2 compiles the real file for
+// the `los` chat command, so the "use gos <modifiers>" form of the use command reads the real ones too. The `GameObjectUse` counter itself
+// stays: the use command still refuses a game object on ForeverCore (`GameObjectUseUnportedCompat`).
 
-// ItemUsageValue.cpp (feature "item usage", lead decision D2: the item-usage value is a later slice; the `item usage` key is not registered, the
-// missing-key stand-in answers ITEM_USAGE_NONE).
-// IsNeededForQuest: absent = "no quest needs this item". Value: false. Effect (LootObjectStack.cpp:187): the corpse-refusal facts do not name a quest item
-// (a debug text), the game object branch (:521) is not reached on ForeverCore. No item is looted for a quest either way (items are not looted).
-bool ItemUsageValue::IsNeededForQuest(Player*, uint32, bool) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
-// IsFutureUpgrade: absent = "not an upgrade". Value: false. Effect (LootStrategyValue.cpp:25): a CanLoot answer that would wait for an upgrade is "no" (LESS).
-bool ItemUsageValue::IsFutureUpgrade(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
-// QueryItemUsageForEquip: absent = the item has no equip use. Value: ITEM_USAGE_NONE. Effect (LootValues.cpp HasUpgradeValue, not registered): no upgrade is found.
-ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return ItemUsage::ITEM_USAGE_NONE; }
-// GetRecipeSpell: absent = the item teaches no recipe. Value: 0. Effect (UseItemAction.cpp UseRandomRecipe): no recipe is picked, the action finds nothing to use (LESS).
-uint32 ItemUsageValue::GetRecipeSpell(ItemPrototype const*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return 0; }
+// ItemUsageValue.cpp is in the slice since slice 9 (package L9): its four stand-ins (IsNeededForQuest, IsFutureUpgrade, QueryItemUsageForEquip, GetRecipeSpell) are gone.
 
 // GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
 // Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
 bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
+
 // =====================================================================================================================
-// Travel (owner files: ai/playerbot/TravelMgr.cpp, TravelNode.cpp). No node map, no destinations, no route.
+// Slice 9 (package L9): ItemUsageValue.cpp and LootRollAction.cpp are in the slice, and what they call outside it is answered here. Every answer is
+// the "not there" value of the legacy code, so the item usage value classifies LESS: no equip upgrade is ever found (the stat weights are 0 and no
+// spec may wear anything), so nothing is looted or rolled for equipping, and no mount, auction listing or repair price is known.
 // =====================================================================================================================
-namespace ai
+// RandomItemMgr.cpp (feature "random item tables"): weights and spec rules now live in RandomItemWeights.cpp.
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): the pool's price multipliers, trade discounts, auction prices and the unseen-item equip check. Absent =
+// neutral multipliers (1.0), no discount, no listing, the equip is refused.
+double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
+double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
+void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
+std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
+// The core checks an item it has not created through a temporary Item (Player::CanEquipNewItem); swap=true as on Turtle:
+// the caller compares old and new itself, and an occupied slot must not reject every upgrade.
+InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, uint16& dest, uint32 item)
 {
-void TravelMgr::Clear() { NoteTravel(); }
-void TravelMgr::LoadAreaLevels() { NoteTravel(); }
-void TravelMgr::LoadQuestTravelTable() { NoteTravel(); }
-void TravelMgr::LoadTaxiNodeZones() { NoteTravel(); }
-int32 TravelMgr::GetAreaLevel(uint32) { NoteTravel(); return 0; }
-void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteTravel(); }
-// The real function clears the out list; on the same map the start itself is the one "portal" at distance 0; otherwise the transfer table answers, and it is empty.
-void TravelMgr::CollectMapTransferPortals(const WorldPosition& start, uint32 endMapId, std::vector<std::pair<WorldPosition, float>>& outPortals) const
-{
-    NoteTravel();
-    outPortals.clear();
-    if (start.GetMapId() == endMapId)
-        outPortals.emplace_back(start, 0.0f);
+    return player ? player->CanEquipNewItem(slot, dest, item, true) : EQUIP_ERR_ITEM_NOT_FOUND;
 }
-// The real distance (TravelMgr.cpp:3644): on one map the flat distance, across maps the distance through the nearest known transfer, FLT_MAX when there is
-// none. No transfer table is built here, so every cross-map distance is FLT_MAX (R9: 0.0f made it read "right here", 53 call sites).
-float TravelMgr::MapTransDistance(const WorldPosition& start, const WorldPosition& end, bool) const
-{
-    NoteTravel();
-    if (start.GetMapId() == end.GetMapId())
-        return std::sqrt(start.sqDistance2d(end));
-    return FLT_MAX;
-}
-
-TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
-TravelTarget::~TravelTarget() {}
-bool TravelTarget::IsActive() { NoteTravel(); return false; }
-void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
-
-// The real answer with no stored offset: the map with a zero position.
-WorldPosition TravelNodeMap::getMapOffset(uint32 mapId) { NoteTravel(); return WorldPosition(mapId, 0, 0, 0, 0); }
-TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
-void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTravel(); }
-bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
-bool TravelPath::cutTo(PathNodePoint, bool) { NoteTravel(); return false; }
-void TravelPath::makeShortCut(WorldPosition, float, Unit*) { NoteTravel(); }
-
-// The vtables of the destination classes TravelMgr's members construct: the key functions, with the "nothing is possible"
-// answers the base TravelDestination gives.
-std::string EntryTravelDestination::GetShortName() const { NoteTravel(); return ""; }
-bool GrindTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GrindTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GrindTravelDestination::GetTitle() const { NoteTravel(); return "grind"; }
-bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
-}
+// MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
+uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
+uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
+uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
+bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
+// GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
+namespace TortoiseBots { namespace GuildOrders {
+void RefreshOrderProtectedSet(Player*) { NotePool(); }
+void NoteBagsFull(uint32_t) { NotePool(); }
+} }
+// GuildOrderSources.cpp (same feature): no order is planned, so no bot carries a farm item, waits for a mail or uses a source.
+std::pair<uint32_t, uint32_t> ai::GuildOrderFarmItemFor(Player*) { NotePool(); return {}; }
+bool ai::GuildOrderMailWaiting(Player*) { NotePool(); return false; }
+bool ai::GuildOrderEntryUsableFor(uint32_t, int32_t, uint32_t, uint32_t, uint32_t, uint32_t, bool) { NotePool(); return false; }
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no teleport cache is built, so the overlay export writes nothing.
+void RandomBotFacade::PrintTeleportCache() { NotePool(); }
+// QueryItemUsageAction.cpp: the `query item usage` chat reply (a debug answer) is not built; the class is the base of the roll actions, which override Execute.
+bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 
 // =====================================================================================================================
 // Managers with tables (owner files: ai/playerbot/RandomItemMgr.cpp, PlayerbotTextMgr.cpp, PlayerbotHelpMgr.cpp,
@@ -425,11 +355,12 @@ std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "ga
 // =====================================================================================================================
 RandomItemMgr::RandomItemMgr() {}
 RandomItemMgr::~RandomItemMgr() {}
-void RandomItemMgr::Init() { NoteItems(); }
+void RandomItemMgr::Init() { LoadWeightScales(); }
 uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
-uint32 RandomItemMgr::GetPlayerSpecId(Player*) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetLiveStatWeight(Player*, uint32, uint32) { NoteItems(); return 0; }
+uint8 RandomItemMgr::GetSourceFlags(uint32) { NoteItems(); return ITEM_SOURCE_FLAG_NONE; }
 
 // With no text table the real GetBotText(name) answers the empty text (PlayerbotTextMgr.cpp:65; R9: the old stand-in answered the key, so a bot whispered raw
 // keys such as "hello"); every caller of it skips an empty text. The placeholder form falls back to the name with the placeholders replaced, as the real one does.
@@ -455,6 +386,18 @@ PlayerbotHelpMgr::PlayerbotHelpMgr() {}
 PlayerbotHelpMgr::~PlayerbotHelpMgr() {}
 void PlayerbotHelpMgr::LoadBotHelpTexts() { NoteTexts(); }
 
+// S1-R2 (chat commands in): the text side of the "help" chat command (HelpAction.cpp is in the build now). The texts are the "bot texts and help"
+// row (ai_playerbot_texts and help topics are not ported, R6B), so every lookup answers what the real manager answers with no rows: no text,
+// no topic, and the format helpers are unreachable (HelpAction calls them only for a text that came back). LESS: `help` whispers the command
+// and strategy lists, never the text topics.
+void PlayerbotHelpMgr::replace(std::string&, const std::string, const std::string) { NoteTexts(); }
+std::string PlayerbotHelpMgr::makeList(std::vector<std::string> const, std::string, uint32) { NoteTexts(); return std::string(); }
+void PlayerbotHelpMgr::FormatHelpTopic(std::string&) { NoteTexts(); }
+void PlayerbotHelpMgr::FormatHelpTopics() { NoteTexts(); }
+std::string PlayerbotHelpMgr::GetBotText(std::string) { NoteTexts(); return std::string(); }
+bool PlayerbotHelpMgr::GetBotText(std::string, std::string&) { NoteTexts(); return false; }
+std::vector<std::string> PlayerbotHelpMgr::FindBotText(std::string) { NoteTexts(); return {}; }
+
 // Talentspec.cpp: no spec is read, no spec checks pass or fail (the premade spec config is not loaded).
 void TalentSpec::GetTalents(uint32) { NoteSpecs(); }
 void TalentSpec::ReadTalents(std::string) { NoteSpecs(); }
@@ -464,15 +407,11 @@ bool TalentSpec::CheckTalentLink(std::string, std::ostringstream*) { NoteSpecs()
 uint32 TalentSpec::LeveltoPoints(uint32) { NoteSpecs(); return 0; }
 void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
-// PlayerbotFactory.cpp: no ammo and no pet set-up.
-void PlayerbotFactory::InitAmmo() { NoteFactory(); }
-void PlayerbotFactory::InitPet(bool) { NoteFactory(); }
-void PlayerbotFactory::InitPetSpells() { NoteFactory(); }
-bool PlayerbotFactory::PetAutoTrainAllowed(Player*) { NoteFactory(); return false; }
-bool PlayerbotFactory::TrainHunterPet(Player*, Pet*, bool, std::function<bool(uint32)> const&) { NoteFactory(); return false; }
+// PlayerbotFactory.cpp: the five pet and ammo members are real since slice 11 (forever/src/host/TbHostPetFactory.cpp).
 
-// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load finds nothing.
+// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load/save does nothing.
 void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
+void PlayerbotDbStore::Save(PlayerbotAI*, std::string) { NoteMisc(); }
 
 // RandomBotFacade loaders (runtime/PlayerbotRuntimeFacade.cpp): the pool caches are not built.
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
@@ -496,6 +435,18 @@ bool PatchwerkSoakersReadyForPull(PlayerbotAI*) { NoteBoss(); return true; }
 // exists here): the real function empties `out` and returns false when it holds no record of the fight, which is always the case without the
 // seek-cycle bookkeeping of the boss tactics. Same value, same effect ("no snapshot": the reset hold clears its latch and holds nothing).
 bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteBoss(); out = SeekCycleView(); return false; }
+
+}
+
+// =====================================================================================================================
+// W1 (world life, grind and live). Owned by W1: no other package edits this block (the slice-9 item stand-ins above belong to W6a).
+// =====================================================================================================================
+namespace ai
+{
+// `can fight elite` is MaintenanceValues.h's inline CanFightEliteValue; its Calculate names ShouldSellValue::GroupMemberLeavingForVendor,
+// which lives in MaintenanceValues.cpp (17 places, not in the slice). A free bot has no group, so the call is never reached; for any other
+// bot the answer "a group member is leaving" makes the value false, so no elite is ever picked (LESS).
+bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI*) { NoteMisc(); return true; }
 }
 
 // behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the
@@ -503,3 +454,47 @@ bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteB
 // the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
 // PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
 bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }
+
+// =====================================================================================================================
+// W2 (town: sell, buy, repair, trainer, mail read): symbols referenced by the W2 action files whose owners (MaintenanceValues,
+// GuildOrders, TravelMgr) are not in the slice yet (waits for W1/W4).
+// =====================================================================================================================
+#include "playerbot/strategy/values/MaintenanceValues.h"
+#include "compat/TbCompat_W2Town.h"
+#include "playerbot/strategy/values/TrainerValues.h"
+#include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/TravelMgr.h"
+namespace ai
+{
+bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
+void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
+// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these three are its plain helpers.
+uint32 TrainerSpellPrice(TrainerSpell const* tSpell, float discountMod) { return uint32(floor(tSpell->spellCost * discountMod)); }
+bool TrainerTrainsForFree(PlayerbotAI* ai) { return sPlayerbotAIConfig.autoTrainSpells == "free" || ai->HasCheat(BotCheatMask::gold); }
+uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
+{
+    if (TrainerTrainsForFree(ai))
+        return UINT32_MAX;
+    NeedMoneyFor budget = NeedMoneyFor::anything;
+    if (type == TRAINER_TYPE_CLASS)
+        budget = NeedMoneyFor::spells;
+    else if (type == TRAINER_TYPE_MOUNTS)
+        budget = NeedMoneyFor::mount;
+    else if (type == TRAINER_TYPE_TRADESKILLS)
+        budget = NeedMoneyFor::skilltraining;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE2(uint32, "free money for", (uint32)budget);
+}
+}
+
+// =====================================================================================================================
+// W3 (quests): the alt-bot service and the random-bot value store are not ported, so the quest actions record nothing in
+// them: no quest is "taken by an alt" and a drop leaves no pool value behind.
+// =====================================================================================================================
+#include "runtime/AltBotService.h"
+namespace TortoiseBots
+{
+void AltBotService::AddTakenQuest(Player*, uint32_t) { NotePool(); }
+bool AltBotService::IsTakenQuest(uint32_t, uint32_t) const { NotePool(); return false; }
+}
+void RandomBotFacade::SetValue(Player*, std::string, uint32, std::string, int32) { NotePool(); }

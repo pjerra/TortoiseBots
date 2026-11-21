@@ -105,14 +105,14 @@ public:
 	bool IsExtraTownGuard(uint32 entry) const;
 
     bool enabled;
-    uint32 globalCoolDown, reactDelay, maxWaitForMove, expireActionTime, dispelAuraDuration, passiveDelay, repeatDelay, errorRepeatDelay,
+    uint32 globalCoolDown, reactDelay, maxWaitForMove, expireActionTime, dispelAuraDuration, dispelMinMana, passiveDelay, repeatDelay, errorRepeatDelay,
         rpgDelay, sitDelay, returnDelay, lootDelay;
     float sightDistance, spellDistance, reactDistance, grindDistance, lootDistance, groupMemberLootDistance,
         gatheringDistance, groupMemberGatheringDistance, groupMemberGatheringDistanceWithActiveMaster, shootDistance,
         fleeDistance, tooCloseDistance, meleeDistance, followDistance, raidFollowDistance, wanderMinDistance, wanderMaxDistance, whisperDistance, contactDistance,
         aoeRadius, rpgDistance, targetPosRecalcDistance, farDistance, healDistance, healDistanceBg, aggroDistance, proximityDistance, walkDistance;
     uint32 criticalHealth, lowHealth, mediumHealth, almostFullHealth;
-    uint32 lowMana, mediumMana;
+    uint32 lowMana, mediumMana, innervateManaThreshold;
 
     uint32 openGoSpell;
     bool randomBotAutologin;
@@ -452,6 +452,14 @@ public:
     // with 2+ deaths and no master/group, teleport once to a validated
     // level-fitting point and reset the death count. Default on; fail-closed.
     bool relocateHopelessDeaths = true;
+    // Random pause in seconds (min..max) before a free bot releases spirit after dying (0 disables).
+    uint32 deathReleasePauseMinSec = 3;
+    uint32 deathReleasePauseMaxSec = 10;
+    // Maximum lateral offset in yards applied to long open-world walk destinations so bots
+    // do not walk single-file along the exact same line (0 disables).
+    float walkTargetOffset = 2.5f;
+    // Free bots prioritize living rare spawns of their level within sight distance.
+    bool huntRares = true;
     // Grace period in seconds before a masterless random or autonomous bot left
     // inside a dungeon or raid instance without a real player in its group is
     // teleported to its homebind. 0 disables. Default 90.
@@ -816,6 +824,7 @@ public:
     bool raidHealerSeatsByClass = false;
     // A layout tank healer's second seat on its tank helps the raid while the tank is quiet (default off).
     bool raidTankHealerAssist = false;
+    bool substituteTank = true;
     // The reaction engine's universal raid rows (environmental hazard step-away, raid bomb runout, Four Horsemen
     // mark rotation, dragon flank, ranged raid spread): on, the `react` strategy carries them (ReactionRowsPolicy.h)
     // and a live spread row outranks a stay in the spread action's own gate. Off, the rows are not built at all, so

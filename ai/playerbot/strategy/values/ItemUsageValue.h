@@ -150,7 +150,7 @@ namespace ai
         static bool IsItemSoldByAnyVendorButHasLimitedMaxCount(ItemPrototype const* proto);
         static bool IsItemSoldByAnyVendorWithoutLimit(ItemPrototype const* proto);
 
-        static bool IsItemUsedBySkill(ItemPrototype const* proto, SkillType skillType);
+        static bool IsItemUsedBySkill(ItemPrototype const* proto, uint32 skillType);
         static bool IsItemUsedToCraftAnything(ItemPrototype const* proto);
 
         /*

@@ -10,6 +10,7 @@
 #include "../../../runtime/policy/hire/HireSourceGuardPolicy.h"
 #include "../../../runtime/HireLifecycle.h"
 #include "../../../runtime/policy/hire/HireQuestPolicy.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -53,32 +54,24 @@ bool TalkToQuestGiverAction::ProcessQuest(Player* requester, Quest const* quest,
         }
     }
 
-    switch (status)
+    if (status == QUEST_STATUS_COMPLETE)
     {
-        case QUEST_STATUS_COMPLETE:
-        {
+        isCompleted |= TurnInQuest(requester, quest, questGiver, outputMessage);
+    }
+    else if (status == QUEST_STATUS_INCOMPLETE)
+    {
+        outputMessage = BOT_TEXT2("quest_status_incomplete", args);
+    }
+    else if (QuestIsAvailableStatusCompat(status))
+    {
+        if (QuestIsAutoCompleteCompat(quest) && bot->CanTakeQuest(quest, false) && CanRewardQuestCompat(bot, quest, false))
             isCompleted |= TurnInQuest(requester, quest, questGiver, outputMessage);
-            break;
-        }
-        case QUEST_STATUS_INCOMPLETE:
-        {
-            outputMessage = BOT_TEXT2("quest_status_incomplete", args);
-            break;
-        }
-        case QUEST_STATUS_AVAILABLE:
-        case QUEST_STATUS_NONE:
-        {
-            if (quest->IsAutoComplete() && bot->CanTakeQuest(quest, false) && bot->CanRewardQuest(quest, false))
-                isCompleted |= TurnInQuest(requester, quest, questGiver, outputMessage);
-            else
-                outputMessage = BOT_TEXT2("quest_status_available", args);
-            break;
-        }
-        case QUEST_STATUS_FAILED:
-        {
-            outputMessage = BOT_TEXT2("quest_status_failed", args);
-            break;
-        }
+        else
+            outputMessage = BOT_TEXT2("quest_status_available", args);
+    }
+    else if (status == QUEST_STATUS_FAILED)
+    {
+        outputMessage = BOT_TEXT2("quest_status_failed", args);
     }
 
     ai->TellPlayer(requester, outputMessage, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
@@ -117,7 +110,7 @@ bool TalkToQuestGiverAction::TurnInQuest(Player* requester, Quest const* quest, 
     // fallback in MoveToTravelTargetAction) writes QuestAutoHandIn instead, so a
     // "talked to the quest giver" count keeps meaning exactly that.
     if (!autoHandIn)
-        sPlayerbotAIConfig.logEvent(ai, "TalkToQuestGiverAction", quest->GetTitle(), std::to_string(quest->GetQuestId()));
+        sPlayerbotAIConfig.logEvent(ai, "TalkToQuestGiverAction", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
 
     if (quest->GetRewChoiceItemsCount() == 0)
     {
@@ -143,10 +136,10 @@ void TalkToQuestGiverAction::RewardNoItem(Quest const* quest, WorldObject* quest
     std::map<std::string, std::string> args;
     args["%quest"] = chat->formatQuest(quest);
 
-    if (bot->CanRewardQuest(quest, false))
+    if (CanRewardQuestCompat(bot, quest, false))
     {
-        bot->RewardQuest(quest, 0, questGiver, false);
-        sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", quest->GetTitle(), std::to_string(quest->GetQuestId()));
+        RewardQuestDirectCompat(bot, quest, 0, questGiver, false);
+        sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
         out = BOT_TEXT2("quest_status_completed", args);
     }
     else
@@ -158,16 +151,16 @@ void TalkToQuestGiverAction::RewardNoItem(Quest const* quest, WorldObject* quest
 void TalkToQuestGiverAction::RewardSingleItem(Quest const* quest, WorldObject* questGiver, std::string& out)
 {
     int index = 0;
-    ItemPrototype const *item = GetItemProtoByIdCompat(quest->RewChoiceItemId[index]);
+    ItemPrototype const *item = GetItemProtoByIdCompat(QuestRewChoiceItemIdsW3(quest)[index]);
 
     std::map<std::string, std::string> args;
     args["%quest"] = chat->formatQuest(quest);
     args["%item"] = chat->formatItem(item);
 
-    if (bot->CanRewardQuest(quest, index, false))
+    if (CanRewardQuestChoiceCompat(bot, quest, index, false))
     {
-        bot->RewardQuest(quest, index, questGiver, true);
-        sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", quest->GetTitle(), std::to_string(quest->GetQuestId()));
+        RewardQuestDirectCompat(bot, quest, index, questGiver, true);
+        sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
         out = BOT_TEXT2("quest_status_complete_single_reward", args);
     }
     else
@@ -209,9 +202,9 @@ ItemIds TalkToQuestGiverAction::BestRewards(Quest const* quest)
             ItemIds ids;
             for (uint8 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
             {
-                if (skipGated && gatedForHire(quest->RewChoiceItemId[i]))
+                if (skipGated && gatedForHire(QuestRewChoiceItemIdsW3(quest)[i]))
                     continue;
-                ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", quest->RewChoiceItemId[i]);
+                ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", QuestRewChoiceItemIdsW3(quest)[i]);
                 if (usage == ItemUsage::ITEM_USAGE_EQUIP)
                 {
                     best = ItemUsage::ITEM_USAGE_EQUIP;
@@ -227,9 +220,9 @@ ItemIds TalkToQuestGiverAction::BestRewards(Quest const* quest)
             }
             for (uint8 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
             {
-                if (skipGated && gatedForHire(quest->RewChoiceItemId[i]))
+                if (skipGated && gatedForHire(QuestRewChoiceItemIdsW3(quest)[i]))
                     continue;
-                ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", quest->RewChoiceItemId[i]);
+                ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", QuestRewChoiceItemIdsW3(quest)[i]);
                 if (usage == best)
                 {
                     ids.insert(i);
@@ -283,21 +276,21 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
         {
             std::vector<std::pair<uint32, int64>> scored;
             for (uint32 id : bestIds)
-                scored.emplace_back(id, RewardGain(quest->RewChoiceItemId[id]));
+                scored.emplace_back(id, RewardGain(QuestRewChoiceItemIdsW3(quest)[id]));
             rewardIndex = ai::QuestRewardTiebreak(scored);
             for (auto const& candidate : scored)
                 if (candidate.first == rewardIndex)
                     rewardScore = candidate.second;
         }
-        ItemPrototype const* proto = GetItemProtoByIdCompat(quest->RewChoiceItemId[rewardIndex]);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(QuestRewChoiceItemIdsW3(quest)[rewardIndex]);
         if (proto)
         {
             args["%item"] = chat->formatItem(proto);
             out = BOT_TEXT2("quest_status_complete_single_reward", args);
         }
 
-        bot->RewardQuest(quest, rewardIndex, questGiver, true);
-        sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", quest->GetTitle(),
+        RewardQuestDirectCompat(bot, quest, rewardIndex, questGiver, true);
+        sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest),
             std::to_string(quest->GetQuestId()) + (bestIds.size() > 1 ? " score " + std::to_string(rewardScore) : ""));
     }
     else if ((questRewardOption == QuestRewardOptionType::QUEST_REWARD_CONFIG_DRIVEN && sPlayerbotAIConfig.autoPickReward == "no") ||
@@ -317,15 +310,15 @@ void TalkToQuestGiverAction::RewardMultipleItem(Player* requester, Quest const* 
         else
         {
             uint32 rewardIndex = bestIds.empty() ? 0 : *bestIds.begin();
-            ItemPrototype const* proto = GetItemProtoByIdCompat(quest->RewChoiceItemId[rewardIndex]);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(QuestRewChoiceItemIdsW3(quest)[rewardIndex]);
             if (proto)
             {
                 args["%item"] = chat->formatItem(proto);
                 out = BOT_TEXT2("quest_status_complete_single_reward", args);
             }
 
-            bot->RewardQuest(quest, rewardIndex, questGiver, true);
-            sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", quest->GetTitle(), std::to_string(quest->GetQuestId()));
+            RewardQuestDirectCompat(bot, quest, rewardIndex, questGiver, true);
+            sPlayerbotAIConfig.logEvent(ai, "QuestRewarded", QuestTitleW3(quest), std::to_string(quest->GetQuestId()));
         }
     }
 }
@@ -335,8 +328,8 @@ void TalkToQuestGiverAction::AskToSelectReward(Player* requester, Quest const* q
     std::ostringstream msg;
     for (uint8 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
     {
-        ItemPrototype const* item = GetItemProtoByIdCompat(quest->RewChoiceItemId[i]);
-        ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", quest->RewChoiceItemId[i]);
+        ItemPrototype const* item = GetItemProtoByIdCompat(QuestRewChoiceItemIdsW3(quest)[i]);
+        ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", QuestRewChoiceItemIdsW3(quest)[i]);
 
         if (!forEquip || BestRewards(quest).count(i) > 0)
         {

@@ -71,7 +71,7 @@ namespace ai
                 if(group->IsRaidGroup())
                     return false;
 
-                if(event.GetSource() == "create group")
+                if(event.getSource() == "create group")
                     group->ConvertToRaid();
                 else
                     return false;
@@ -95,7 +95,7 @@ namespace ai
 
         bool invite = Invite(master, bot);
 
-        if (invite && (event.GetSource() == "create group"))
+        if (invite && (event.getSource() == "create group"))
         {
             if (!ai->DoSpecificAction("accept invitation", event, true))
                 return false;

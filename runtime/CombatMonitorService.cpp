@@ -15,6 +15,7 @@
 #include "../ai/playerbot/PlayerbotAIConfig.h"
 #include "Database/DatabaseEnv.h"
 #include "Log.h"
+#include "../ai/playerbot/TbCompatC5.h"
 #endif
 
 #include <memory>
@@ -244,7 +245,7 @@ void CombatMonitorService::LoadTimelineWatch()
 {
     // One pass at startup: the watch list is data (world table ai_combat_aura_watch), never a spell id in code.
     std::vector<uint32_t> ids;
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `spell_id` FROM `ai_combat_aura_watch`"));
+    auto result = AuraWatchRowsCompat();
     if (result)
     {
         do
@@ -255,8 +256,8 @@ void CombatMonitorService::LoadTimelineWatch()
         } while (result->NextRow());
     }
     SetTimelineWatch(std::move(ids));
-    sLog.outString(">> Loaded %u combat timeline aura watch rows", static_cast<uint32_t>(
-        std::atomic_load(&m_watchedAuras)->size()));
+    CombatMonitorLogCompat(false, ">> Loaded " + std::to_string(static_cast<uint32_t>(
+        std::atomic_load(&m_watchedAuras)->size())) + " combat timeline aura watch rows");
 }
 #endif
 
@@ -406,6 +407,8 @@ void CombatMonitorService::Forget(uint32_t groupId)
                 meta.commanderGuid = v->second;
             if (auto const v = m_mapId.find(groupId); v != m_mapId.end())
                 meta.mapId = v->second;
+            if (auto const v = m_worldGroup.find(groupId); v != m_worldGroup.end())
+                meta.worldGroup = v->second;
             m_retiredMeta[groupId] = std::move(meta);
             m_retired[groupId] = std::move(it->second);
             retired = true;
@@ -421,6 +424,7 @@ void CombatMonitorService::Forget(uint32_t groupId)
         m_commander.erase(groupId);
         m_commanderGuid.erase(groupId);
         m_mapId.erase(groupId);
+        m_worldGroup.erase(groupId);
         m_lastEventSend.erase(groupId);
     }
 }
@@ -578,12 +582,12 @@ void CombatMonitorService::TakePayloads(std::vector<std::string>& out, int proto
     out.clear();
     std::vector<std::string> oversize;
     std::lock_guard<std::mutex> lock(m_mutex);
-    auto drain = [&](uint32_t groupId, CombatMonitor::Book& book, std::string const& commander, uint32_t commanderGuid,
-                     uint32_t mapId) {
+    auto drain = [&](CombatMonitor::Book& book, std::string const& commander, uint32_t commanderGuid, uint32_t mapId,
+                     uint32_t worldGroup) {
         if (!book.HasTakeablePayloads())
             return;
         std::vector<std::string> payloads = book.TakeFightPayloads(protocolVersion, session, nextSeq, ts, commander,
-                                                                   commanderGuid, groupId, mapId, &oversize);
+                                                                   commanderGuid, worldGroup, mapId, &oversize);
         for (std::string& payload : payloads)
             out.push_back(std::move(payload));
     };
@@ -600,12 +604,17 @@ void CombatMonitorService::TakePayloads(std::vector<std::string>& out, int proto
         auto const it = m_mapId.find(groupId);
         return it != m_mapId.end() ? it->second : 0;
     };
+    auto worldGroupOf = [this](uint32_t groupId) -> uint32_t {
+        auto const it = m_worldGroup.find(groupId);
+        return it != m_worldGroup.end() ? it->second : groupId;
+    };
     for (auto& kv : m_books)
-        drain(kv.first, kv.second, commanderOf(kv.first), guidOf(kv.first), mapOf(kv.first));
+        drain(kv.second, commanderOf(kv.first), guidOf(kv.first), mapOf(kv.first), worldGroupOf(kv.first));
     for (auto it = m_retired.begin(); it != m_retired.end();)
     {
         RetiredMeta const& meta = m_retiredMeta[it->first];
-        drain(it->first, it->second, meta.commander, meta.commanderGuid, meta.mapId);
+        drain(it->second, meta.commander, meta.commanderGuid, meta.mapId,
+              meta.worldGroup ? meta.worldGroup : it->first);
         if (!it->second.HasTakeablePayloads() && !it->second.HasEvents())
         {
             if (!m_books.count(it->first))
@@ -613,6 +622,7 @@ void CombatMonitorService::TakePayloads(std::vector<std::string>& out, int proto
                 m_commander.erase(it->first);
                 m_commanderGuid.erase(it->first);
                 m_mapId.erase(it->first);
+                m_worldGroup.erase(it->first);
                 m_ctx.erase(it->first);
                 m_lastEventSend.erase(it->first);
             }
@@ -628,8 +638,8 @@ void CombatMonitorService::TakePayloads(std::vector<std::string>& out, int proto
         (void)id;
         g_oversizeDrops.fetch_add(1, std::memory_order_relaxed);
 #else
-        sLog.outError("TortoiseBots: combat monitor dropped fight %s: no payload form fits %zu bytes", id.c_str(),
-                      CombatMonitor::kPayloadByteBudget);
+        CombatMonitorLogCompat(true, "TortoiseBots: combat monitor dropped fight " + id + ": no payload form fits " +
+            std::to_string(CombatMonitor::kPayloadByteBudget) + " bytes");
 #endif
     }
 }
@@ -641,7 +651,7 @@ void CombatMonitorService::TakeEventPayloads(std::vector<std::string>& out, int 
     out.clear();
     std::lock_guard<std::mutex> lock(m_mutex);
     auto drain = [&](uint32_t groupId, CombatMonitor::Book& book, std::string const& commander, uint32_t commanderGuid,
-                     uint32_t mapId) {
+                     uint32_t mapId, uint32_t worldGroup) {
         bool const inFight = book.InFight();
         auto const sent = m_lastEventSend.find(groupId);
         uint32_t const last = sent != m_lastEventSend.end() ? sent->second : 0;
@@ -662,7 +672,7 @@ void CombatMonitorService::TakeEventPayloads(std::vector<std::string>& out, int 
         header.ctx = book.Context();
         size_t emitted = 0;
         out.push_back(CombatMonitor::BuildEventsJson(protocolVersion, session, nextSeq(), tsUnix, tsMs, commander,
-                                                     commanderGuid, groupId, mapId, header, events, dropped, &emitted));
+                                                     commanderGuid, worldGroup, mapId, header, events, dropped, &emitted));
         // The budget may have shrunk the datagram below what was taken: the rest
         // goes back in order for the next one instead of being lost.
         if (emitted < events.size())
@@ -674,20 +684,23 @@ void CombatMonitorService::TakeEventPayloads(std::vector<std::string>& out, int 
         auto const c = m_commander.find(kv.first);
         auto const g = m_commanderGuid.find(kv.first);
         auto const m = m_mapId.find(kv.first);
+        auto const w = m_worldGroup.find(kv.first);
         drain(kv.first, kv.second, c != m_commander.end() ? c->second : std::string(),
-              g != m_commanderGuid.end() ? g->second : 0, m != m_mapId.end() ? m->second : 0);
+              g != m_commanderGuid.end() ? g->second : 0, m != m_mapId.end() ? m->second : 0,
+              w != m_worldGroup.end() ? w->second : kv.first);
     }
     for (auto& kv : m_retired)
     {
         auto const meta = m_retiredMeta.find(kv.first);
         if (meta == m_retiredMeta.end())
             continue;
-        drain(kv.first, kv.second, meta->second.commander, meta->second.commanderGuid, meta->second.mapId);
+        drain(kv.first, kv.second, meta->second.commander, meta->second.commanderGuid, meta->second.mapId,
+              meta->second.worldGroup ? meta->second.worldGroup : kv.first);
     }
 }
 
 void CombatMonitorService::NoteBinding(uint32_t groupId, std::string const& commander,
-                              uint32_t commanderGuid, uint32_t mapId)
+                              uint32_t commanderGuid, uint32_t mapId, uint32_t worldGroup)
 {
     if (!Enabled() || groupId == 0)
         return;
@@ -695,6 +708,10 @@ void CombatMonitorService::NoteBinding(uint32_t groupId, std::string const& comm
     m_commander[groupId] = commander;
     m_commanderGuid[groupId] = commanderGuid;
     m_mapId[groupId] = mapId;
+    if (worldGroup)
+        m_worldGroup[groupId] = worldGroup;
+    else
+        m_worldGroup.erase(groupId);
 }
 
 std::string CombatMonitorService::WindowJson(uint32_t groupId)

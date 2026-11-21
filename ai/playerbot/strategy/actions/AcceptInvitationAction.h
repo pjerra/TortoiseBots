@@ -7,6 +7,7 @@
 #include "runtime/HireLifecycle.h"
 #include "../../../../runtime/AltBotService.h"
 #include "behavior/PlayerConvenience.h"
+#include "playerbot/TbCompatW3.h"
 
 namespace ai
 {
@@ -28,7 +29,7 @@ namespace ai
             if (!inviter)
             {
                 sLog.outDebug("TortoiseBots: AcceptInvitationAction %s cannot resolve inviter guid %s",
-                    bot->GetName(), grp->GetLeaderGuid().GetString().c_str());
+                    bot->GetName(), GuidStringW3(grp->GetLeaderGuid()).c_str());
                 return false;
             }
             // Bot-to-bot pool grouping is governed only by

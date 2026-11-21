@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "GenericActions.h"
 
 namespace ai
@@ -19,6 +20,7 @@ namespace ai
         // Trainer type of the visit, so Learn pays from the same budget the
         // trip decision and the rpg trigger checked (TrainerSpendableMoney).
         TrainerType visitTrainerType = TRAINER_TYPE_CLASS;
+        Creature* visitCreature = nullptr;
 
         typedef void (TrainerAction::*TrainerSpellAction)(uint32, ObjectGuid trainerGuid, uint32 spellId, TrainerSpell const*, std::ostringstream& msg);
         bool Iterate(Player* requester, Creature* creature, TrainerSpellAction action, SpellIds& spells);

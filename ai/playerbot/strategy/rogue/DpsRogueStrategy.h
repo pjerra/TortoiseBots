@@ -9,7 +9,7 @@
 #define PLAYERBOTS_DPSROGUESTRATEGY_H
 
 #include "CombatStrategy.h"
-#include "MeleeCombatStrategy.h"
+#include "playerbot/strategy/generic/MeleeCombatStrategy.h"
 
 class PlayerbotAI;
 

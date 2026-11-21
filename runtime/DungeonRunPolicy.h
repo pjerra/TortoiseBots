@@ -663,6 +663,15 @@ constexpr std::uint32_t kEventStartMs = 30000;    // an encounter hold whose dat
 // awake one, corpses in sight): it ends this long after the first look at the spot, on a tick with the spot in sight (HoldStep; ZF r15-19z33: Bly's crew
 // killed by the troll waves, "4 of 4 down" held the whole 300 s).
 constexpr std::uint32_t kHoldAllDeadMs = 10000;
+// A units hold with kPlanFlagEscortNpc whose event's start NPC (the gossip step before it: the Disciple of Naralex) is read dead or gone for this long
+// stops the event by itself: the escort cannot finish, so the run goes back to the gossip and pauses with that reason (a respawned NPC can start it
+// again once; after the one re-arm a further death pauses with the same words instead).
+constexpr std::uint32_t kEscortNpcGoneMs = 10000;
+constexpr float kEscortNpcRangeYd = 300.0f;   // the start NPC is looked for this far around the lead bot: the road's stand-to-ritual span is 274 yd, and the core fails the escort past 100 yd
+// A gossip that did not start the escort leaves the Disciple at his stand: an escort hold with no wave up and the start NPC still within this distance of
+// the gossip row's point after this long says so (a no-op select, a refused hello). The Disciple walks off within seconds of a real start.
+constexpr float kEscortStillYd = 5.0f;
+constexpr std::uint32_t kEscortStartMs = 30000;
 // A units hold (no done flag) that the script reset: it started (a unit was seen awake) and then the whole radius
 // went friendly again with the first entry's unit alive, no fight. This long so (with the spot in sight), the hold
 // goes back to the step that started it, not into its timeout (ZF Farraki Arena: a wipe or an evade turns Razjal,
@@ -1900,6 +1909,9 @@ struct Facts
     // friendly, still dormant ones too):
     std::uint32_t eventDown = 0;        // dead units of its `entries` within its radius
     long long eventData = -1;           // done by instance data: the value now; -1 the map has no instance data
+    bool eventNpcRead = false;          // a kPlanFlagEscortNpc hold: the event's start NPC (the gossip step's entry) was searched
+    bool eventNpcAlive = false;         // ... and one of it is alive and in the world
+    float eventNpcX = 0.0f, eventNpcY = 0.0f, eventNpcZ = 0.0f; // ... and where the living one stands (a gossip that did not start the escort leaves it at its stand)
     std::vector<HostileSpot> clearUnits; // wait_clear: the living hostiles within the 2D radius of the step's
                                          // point, with z and whether engaged with the party; the wait counts every
                                          // one, and only the timeout boundary drops all-off-floor bystanders.
@@ -3040,6 +3052,12 @@ struct Run
     bool eventOn = false;
     std::uint32_t eventResetWaitMs = 0; // a ritual waiting for its encounter to reset (kEventResetWaitMs)
     std::uint32_t eventMs = 0;
+    // The dead units of the hold's radius at its first read: only corpses newer than this end a units hold early (an old corpse of the entry from
+    // an earlier leg is no "every unit of it is dead").
+    std::uint32_t eventDownBase = 0;
+    bool eventDownBaseSet = false;
+    // A units hold of an event whose start NPC (the gossip step before it) is read dead or gone: kEscortNpcGoneMs of reads stops the event.
+    std::uint32_t eventNpcGoneMs = 0;
     bool eventStarted = false;   // the done data left "not started", or an event unit was seen awake
     // A kPlanFlagResetToGossip hold's event was seen awake this run. ResetStep does not clear it: a wipe clears
     // eventStarted and the reset read must still see that the event had started (a second wipe, a regroup tick
@@ -3918,6 +3936,9 @@ inline void ResetStep(Run& r)
     r.eventOn = false;
     r.eventResetWaitMs = 0;
     r.eventMs = 0;
+    r.eventDownBase = 0;
+    r.eventDownBaseSet = false;
+    r.eventNpcGoneMs = 0;
     r.eventStarted = false;
     r.holdUnitSeen = false;
     r.unitsResetMs = 0;
@@ -8771,6 +8792,80 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     r.speedLeashOrder = order;
     r.note = "test speed: the walk waits for the party (" + who + ")";
     return true;
+}
+
+// A wade row's permission (ai::kPlanFlagWadeOk) covers the whole hop, not just its ends: the run walks a long row in
+// approach hops and in `TooFar` legs, and every one of those points is a point of the row's own way. So an order may
+// wade when the current row carries the bit AND its point is the row's own point, the walk's own target, or a leg of
+// that walk, and that walk goes to the row's point or to an approach hop of it (`hopWalk`). Any other point keeps the
+// liquid rule as it was: a detour's stand-in, a walk-back, a gather, a walk of another row.
+inline bool RowHopWades(Run const& r, PlanStep const& s, float x, float y)
+{
+    if (s.kind != PlanStepKind::Move && s.kind != PlanStepKind::Pull && s.kind != PlanStepKind::Boss)
+        return false;                                       // the loader takes the bit on these kinds only
+    if (!(s.flags & ai::kPlanFlagWadeOk))
+        return false;
+    auto const at = [](float px, float py, float qx, float qy)
+    {
+        return std::fabs(px - qx) <= 0.2f && std::fabs(py - qy) <= 0.2f;
+    };
+    if (at(x, y, s.x, s.y))
+        return true;                                        // the row's own point
+    bool const rowWalk = r.phase == Phase::Walk && (at(r.walkX, r.walkY, s.x, s.y) ||
+        (r.hopWalk && at(r.walkX, r.walkY, r.hopX, r.hopY)));   // the walk under way is this row's own
+    if (!rowWalk)
+        return false;
+    if (at(x, y, r.walkX, r.walkY))
+        return true;                                        // the walk's target (also the fresh order)
+    return r.legOn && at(x, y, r.legX, r.legY);             // a leg of that walk
+}
+
+// The moves the run makes on its own inside a leg (a regroup's gather and its walk back to the anchor, an approach
+// stand, the return to the plan point, the follow-up after a pull) are no point of a row's own walk: RowHopWades says
+// no, and the move is refused "crosses or ends in liquid: no walkable path avoids it" although the leg's own hop wades
+// there. They may wade when they stay in the leg's wet area: within kWadeAreaYd of the own hop (the previous row to the
+// row) of a flagged row of the current step's leg. The probe's wet-hop list (forever/data/wc-wet-hops.tsv) is exactly
+// those hops, so a leg with no wet hop has no wet area and keeps the RFC rule; the depth is the core's own measured
+// reading (TbRunLiquid.h: a wade is at most kWadeDepthYd, never UNDER_WATER, deep water always pauses).
+constexpr float kWadeAreaYd = 12.0f;
+
+// Horizontal distance from (px, py) to the segment (ax, ay)-(bx, by).
+inline float WetAreaSegmentYd(float px, float py, float ax, float ay, float bx, float by)
+{
+    float const dx = bx - ax, dy = by - ay;
+    float const len2 = dx * dx + dy * dy;
+    float t = len2 > 0.0f ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0.0f;
+    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    float const nx = ax + t * dx - px, ny = ay + t * dy - py;
+    return std::sqrt(nx * nx + ny * ny);
+}
+
+// Whether (x, y) lies in the wet area of the current step's leg: within kWadeAreaYd of the own hop of one of the leg's
+// wade-flagged rows. The hop is the pair the probe read (this row and the plan row before it).
+inline bool LegWetAreaAt(Run const& r, float x, float y)
+{
+    if (!r.plan || r.step >= r.plan->steps.size())
+        return false;
+    std::uint8_t const leg = r.plan->steps[r.step].leg;
+    for (std::size_t i = 1; i < r.plan->steps.size(); ++i)
+    {
+        PlanStep const& row = r.plan->steps[i];
+        if (row.leg != leg || !(row.flags & ai::kPlanFlagWadeOk))
+            continue;
+        if (row.kind != PlanStepKind::Move && row.kind != PlanStepKind::Pull && row.kind != PlanStepKind::Boss)
+            continue;                                       // the loader takes the bit on these kinds only
+        PlanStep const& from = r.plan->steps[i - 1];
+        if (WetAreaSegmentYd(x, y, from.x, from.y, row.x, row.y) <= kWadeAreaYd)
+            return true;
+    }
+    return false;
+}
+
+// A move the run makes on its own may wade: a point of the current row's own walk (RowHopWades), or a point inside the
+// current leg's wet area (LegWetAreaAt). The executor asks this for the lead's move and the run's bot walks.
+inline bool MoveMayWade(Run const& r, PlanStep const& s, float x, float y)
+{
+    return RowHopWades(r, s, x, y) || LegWetAreaAt(r, x, y);
 }
 
 // Walks the party to a point. True once the lead bot is there; otherwise
@@ -17197,6 +17292,11 @@ inline void CountEvent(Run& r, const Facts& f, const PlanStep& s)
     }
     r.eventUp = up;
     r.eventDown = f.eventDown;
+    if (!r.eventDownBaseSet)
+    {
+        r.eventDownBase = f.eventDown;
+        r.eventDownBaseSet = true;
+    }
     r.eventTotal = counted + f.eventDown;
     // A hold done by its units (no done flag) starts once one of them is seen
     // awake, in a fight too: r14-19z32 Bly turned hostile and was in the fight
@@ -17274,11 +17374,21 @@ inline std::string EventProgress(const Run& r)
         (r.eventUp ? ", " + std::to_string(r.eventUp) + " awake" : std::string());
 }
 
-// The event reset (or never started): the run goes back to the step that
-// starts it and pauses, so `.bot run resume` regroups and starts it again.
-inline void EventFailed(Run& r, const std::string& why)
+// The nearest gossip row before the current step, whatever stands between it and the step (an escort hold, another hold, a move row): the step a
+// failed escort goes back to. The general EventStartStep stops at a hold, so a later wave hold could not find the gossip that started the event.
+inline std::size_t EventGossipStartStep(const Run& r)
 {
-    std::size_t const start = EventStartStep(r);
+    if (!r.plan)
+        return static_cast<std::size_t>(-1);
+    for (std::size_t i = r.step; i-- > 0;)
+        if (r.plan->steps[i].kind == PlanStepKind::Gossip)
+            return i;
+    return static_cast<std::size_t>(-1);
+}
+
+// The event reset (or never started): the run goes back to `start` and pauses, so `.bot run resume` regroups and starts it again.
+inline void EventFailedAt(Run& r, std::size_t start, const std::string& why)
+{
     std::string again = ": .bot run resume waits for it again, .bot run skip goes on without it";
     if (start != static_cast<std::size_t>(-1))
     {
@@ -17293,6 +17403,13 @@ inline void EventFailed(Run& r, const std::string& why)
     r.fighting = false;
     r.eventRetry = true;
     Pause(r, "event failed (" + why + ")" + again);
+}
+
+// The event reset (or never started): the run goes back to the step that
+// starts it and pauses, so `.bot run resume` regroups and starts it again.
+inline void EventFailed(Run& r, const std::string& why)
+{
+    EventFailedAt(r, EventStartStep(r), why);
 }
 
 // A wipe regroup inside a hold whose encounter has reset: the encounter is not
@@ -17647,9 +17764,54 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
                 return;
             }
         }
+        // The event's start NPC (the gossip row before this hold) is dead or gone: the escort cannot finish. A named stop, once per event (the
+        // run goes back to the gossip, so a respawned NPC can start it again); after the one re-arm a further death pauses with the same words.
+        if ((s.flags & ai::kPlanFlagEscortNpc) && f.eventNpcRead)
+        {
+            std::size_t const start = EventGossipStartStep(r);
+            bool refused = false;
+            r.eventNpcGoneMs = f.eventNpcAlive ? 0 : r.eventNpcGoneMs + dt;
+            if (r.eventNpcGoneMs >= kEscortNpcGoneMs)
+            {
+                refused = true;
+                std::string const why = "the event's NPC (the Disciple of Naralex) is dead or gone";
+                if (start != static_cast<std::size_t>(-1) && !r.eventRearmed.count(start))
+                {
+                    r.eventRearmed.insert(start);
+                    EventFailedAt(r, start, why);
+                }
+                else
+                    Pause(r, "event failed (" + why + "): .bot run resume waits for it again, .bot run skip goes on without it");
+            }
+            // A gossip that did not start the escort: the Disciple is still at his stand and no wave came.
+            else if (start != static_cast<std::size_t>(-1) && f.eventNpcAlive && !r.eventStarted && r.eventUp == 0 &&
+                r.eventMs >= kEscortStartMs)
+            {
+                PlanStep const& gossip = r.plan->steps[start];
+                if (ai::PlanDistance(f.eventNpcX, f.eventNpcY, f.eventNpcZ, gossip.x, gossip.y, gossip.z) <= kEscortStillYd)
+                {
+                    refused = true;
+                    std::string const why = "the Disciple did not leave his stand: the gossip did not start the escort";
+                    if (!r.eventRearmed.count(start))
+                    {
+                        r.eventRearmed.insert(start);
+                        EventFailedAt(r, start, why);
+                    }
+                    else
+                        Pause(r, "event failed (" + why + "): .bot run resume waits for it again, .bot run skip goes on without it");
+                }
+            }
+            if (refused)
+                return;
+        }
         if (r.eventUp)
             r.eventStarted = true;
-        if (r.eventStarted && f.units.empty())
+        // A units hold of an ESCORT event (kPlanFlagEscortNpc) ends "every unit of it is dead" only while its start NPC is
+        // read alive: when the Disciple dies mid-fight the summons vanish on the same tick, and that must not be taken for
+        // the event's success. The NPC's own 10 s gone timer above is the rule that names it; until it fires this hold keeps
+        // holding (the walk on to the next wave or into Mutanus's "not found" pause is what the timer exists to prevent).
+        bool const escortNpc = (s.flags & ai::kPlanFlagEscortNpc) != 0;
+        if (r.eventStarted && f.units.empty() && (!escortNpc || f.eventNpcAlive))
         {
             NextStep(r, "event done: every unit of it is dead" + tail);
             return;
@@ -17658,8 +17820,12 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
         // event can never start. Only kHoldAllDeadMs after the FIRST look at the spot (eventMs runs from that look and keeps running
         // while the spot is out of sight; this code runs only on a tick with the spot in sight), with corpses in sight (eventDown),
         // no unit ever alive in the radius this hold (holdUnitSeen) and none awake (eventStarted); units that are merely not spawned
-        // or not visible yet show no corpses and keep the 300 s ceiling.
-        if (!r.eventStarted && !r.holdUnitSeen && f.units.empty() && r.eventDown > 0 && r.eventMs >= kHoldAllDeadMs)
+        // or not visible yet show no corpses and keep the 300 s ceiling. A corpse from before the hold is a baseline and does not
+        // count, except after a gossip row that counted its dead starting NPC as done: the event's script can never run, so its
+        // baseline corpses are the event's own dead.
+        bool const deadStartNpc = r.startNpcDeadStep != static_cast<std::size_t>(-1) && r.startNpcDeadStep == EventStartStep(r);
+        if (!r.eventStarted && !r.holdUnitSeen && f.units.empty() && f.eventDown > 0 &&
+            (f.eventDown > r.eventDownBase || deadStartNpc) && r.eventMs >= kHoldAllDeadMs)
         {
             NextStep(r, "event done: none of its units is alive (they died before the hold)" + tail);
             return;

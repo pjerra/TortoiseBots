@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <typeindex>
 #include "Maps/MoveMap.h"
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -210,7 +211,7 @@ bool DebugAction::HandlePrintTravel(Event& event, Player* requester, const std::
                 {
                     uint32 questId = ((QuestTravelDestination*)dest)->GetQuestId();
                     Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
-                    out << quest->GetTitle();
+                    out << QuestTitleW3(quest);
                 }
                 else if (type != typeid(ExploreTravelDestination))
                 {

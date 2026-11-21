@@ -1,0 +1,156 @@
+# Slice 10, package H10 (host side of "druid, paladin, shaman")
+
+Branch `s10/h` (worktree `~/wt-s10-h`), build slot 5 (`FOREVER_SLOT=5`, `src-5` / `build-5` on `/mnt/forever`), base = `s10/k` (the class code, notes `SLICE10-K-NOTES.md`) with `tbf/main` (feab6c882, the self-led run) merged: no conflict. Spec: `~/TortoiseBots-audit/FOREVER-SLICE10-HYBRIDS-SPEC.md` with "Lead decisions" (D1-D6). Core read only at the pin 6517af05. Not pushed to a PR.
+
+`tbf/main` does NOT hold slice 8 (`s8/h`, `s8/k`, `s8/m` are separate branches): the factory here knows warrior, priest, druid, paladin, shaman. The merge with S8 touches the same lines (class-context `if` chain, `GetPlayerSpecTab`, `GetPlayerRoles`, the three `AddDefault*` functions, `slice_gen_context.py` KEYS, `CLASS_CONTEXTS`, the list name in CMake and the registry check): see "Needs at merge".
+
+## 1. What changed
+
+| Area | Files | Note |
+|---|---|---|
+| list | `forever/SLICE10.txt` (216 paths), `CMakeLists.txt` (`TB_SLICE_LIST` and its error text), `forever/tools/slice_registry_check.py` (`SLICE_LIST`, the three contexts in `CLASS_CONTEXTS`) | section 2 |
+| registry keys | `forever/tools/slice_gen_context.py` (`SLICE10_KEYS`), regenerated `forever/src/slice/SliceAiObjectContext.cpp` | section 3 |
+| factory | `forever/src/slice/SliceAiFactory.cpp` | section 4 |
+| state keys | NEW `forever/src/host/TbHybrid.h`, `TbHybrid.cpp`; `forever/src/host/TbPartyState.cpp` (include + 1 call), `forever/src/host/TbH3.cpp` (include + 1 selftest call); `forever/docs/TB-COMMANDS.md` (one row) | section 5 |
+| `forever/src/host/run/*` | **no file changed** (see section 6) | |
+
+## 2. SLICE10.txt rebuilt
+
+K10's `SLICE10.txt` was SLICE4.txt (174) + the 40 class files; `tbf/main` now has SLICE5.txt (176: SLICE4 + `DungeonPlanMgr.cpp`, `BossTacticsMgr.cpp`). Rebuilt: **SLICE5.txt (176 non-comment paths) + the 40 `.cpp` of `strategy/{druid,paladin,shaman}/` (druid 14, paladin 15, shaman 11) = 216 paths**, no duplicate, every path exists, SLICE1..SLICE5 are each a subset (`comm -23`: 0 each).
+
+## 3. Registry keys
+
+`slice: registered 17/48/75/170` (strategies/actions/triggers/values on `tbf/main`) becomes **17/50/88/176**: +2 actions, +13 triggers, +6 values = 21 keys. `slice_registry_check.py` against SLICE10.txt with the three contexts counted: `(a)=0`, **`(b)=231`** (252 with the contexts counted and no key added: the 21 are the difference). `slice_gen_context.py --check`: up to date.
+
+| Kind | Key | Creator in the full build |
+|---|---|---|
+| action | move out of enemy contact | actions/ActionContext.h:209 |
+| action | restore spec aura | :470 |
+| trigger | enemy too close for melee | triggers/TriggerContext.h:156 |
+| trigger | not facing target | :189 |
+| trigger | rooted, tank rooted, party member rooted | :259, :260, :261 |
+| trigger | enough mana | :86 |
+| trigger | healer low mana | :81 |
+| trigger | medium aoe heal | :212 |
+| trigger | ranged medium aoe and healer should attack | :91 |
+| trigger | target of attacker close | :249 |
+| trigger | loose adds near | :132 |
+| trigger | low mana, enemy is close | :80, :157 |
+| value | has own totem, have any own totem | values/ValueContext.h:261, :263 |
+| value | possible attack targets count | :208 |
+| value | revive targets, boost targets | :353, :352 |
+| value | healer low mana | :170 |
+
+The spec's table plus `low mana` (the restoration shaman's combat rows) and `enemy is close` (the holy paladin's): K10's notes list both as shared with slice 8's list (registered once there too; at the merge keep one). Left unregistered on purpose, each making the bot do less: values `manual saved string` (D5), `travel target traveling`, `enemy player target`, `has enemy player targets`, `grind target`; triggers `enemy flagcarrier near`, `player has flag`, `new pet`, `has (greater) blessing of salvation`, `resist aura swap over`, `not sensing undead`, `kick`, `aquatic form`, `behind target`, `not behind target` (the feral dps and the `behind` strategy: out of the slice, D2); actions `apply oil/stone`, `oil of immolation`, `throw grenade`, `mana potion`, `stoneshield potion`, `remove (greater) blessing of salvation`, `set pet stance`, `sense undead`, `switch to melee/ranged`, `cancel channel`, `powershift`, `reach party member for totem`, `repentance or shield`. Those named by a kit's own strategies (bear: `remove blessing of salvation`, `has blessing of salvation`; both druid generics: `new pet`, `set pet stance`, `apply oil/stone`, `aquatic form`; the paladin non-combat: `not sensing undead`, `sense undead`, `apply oil/stone`) print one `slice: missing ...` line each at boot (the engine skips them): expected, not errors. Every strategy name of every kit resolves (checked by script against the class context's own creators and the slice registry).
+
+## 4. Factory (`SliceAiFactory.cpp`)
+
+Contexts: `GuardedContext<DruidAiObjectContext>`, `<PaladinAiObjectContext>`, `<ShamanAiObjectContext>` (compiled as they are). The kit comes from ONE function, `HybridKitOf(player, orderedRole)`: only a **tank order** changes it (a druid ordered to tank is the bear, a paladin ordered to tank the protection paladin); every other order, or none, is the healer kit (restoration druid, holy paladin, restoration shaman). The ordered role is read as the warrior's is: the player-wide stored role (`.tb role`), else the bot's own forced role.
+
+| Kit | Combat | Non-combat | Reaction |
+|---|---|---|---|
+| bear druid (tab 1) | tank feral, tank assist, pull, close, tank face, cure, buff | tank feral, tank assist, follow, cure, buff, food, default | tank feral |
+| restoration druid (tab 2) | restoration, dps assist, ranged, cure, buff, cast time, heal interrupt (+ threat) | restoration, dps assist, follow, cure, buff, food, default | restoration |
+| holy paladin (tab 0) | holy, dps assist, ranged, cure, buff, aura, blessing, cast time, heal interrupt (+ threat) | holy, dps assist, follow, cure, buff, food, default, aura, blessing | holy |
+| protection paladin (tab 1, recorded only) | protection, tank assist, pull, close, tank face, cure, aura, blessing, buff | protection, tank assist, follow, cure, buff, food, default, aura, blessing | protection |
+| restoration shaman (tab 2) | restoration, dps assist, ranged, cure, totems, buff, cast time, heal interrupt (+ threat) | restoration, dps assist, follow, cure, buff, food, default | restoration |
+
+`(+ threat)` comes from the existing `KeepsPartyThreatBackoff` rule, as for the priest. **Deviation from the spec's two tank kits:** the spec lists `threat` in the bear and protection lists; the two tank kits here return before the threat rule, as the warrior's tank kit does (slice 3 decision: `KeepsPartyThreatBackoff` is false for a tank, a tank never backs off the threat it holds, and the legacy tank kits (AiFactory.cpp:807-853, :782-805) do not carry it). Add `threat` to the two lists if the live test shows a need (one word each). No `totems` in the shaman's non-combat kit (D5: totems drop in combat only; spec section 2's non-combat kit has none). Left out as the spec says: `aoe`, `cc`, `boost`, `flee`, `pull back`, `offheal/offdps`, `stealth`, `oom melee`, `loot`; and (not in the spec, same reason) the druid's under-level-10 `leveling` kit.
+
+Talent tab (`GetPlayerSpecTab`, read by `GenericDruidStrategy.cpp:68`, `GenericDruidNonCombatStrategy.cpp:173`, `GenericPaladinNonCombatStrategy.cpp:30`, `ShamanWeaponUpkeepAction.cpp:16`): druid bear 1 (feral), otherwise 2 (restoration); paladin protection 1, otherwise 0 (holy); shaman 2 (restoration: the weapon upkeep then starts at Flametongue, not Windfury); every other class 0 as before. The tab follows the ORDERED role (the same stored/own read as the kit), never talents.
+
+Roles (`GetPlayerRoles`): the ordered role first (unchanged); with none, a druid, a paladin and a shaman are HEALERS (the tabs above). A druid or shaman ordered to DPS keeps the healer kit (cat, balance, enhancement and elemental are out: D2) and reports the ordered role DPS; a **shaman ordered to tank keeps the restoration kit** (the Turtle shaman tank kit is out): do not give a shaman the tank order in this slice.
+
+## 5. State keys (`TbHybrid.cpp`, appended to every bot record after `practice=`)
+
+`form=<id|none>` (`Player::GetShapeshiftForm`), `totems=<entry>:<sec left>;...` (the four totem summon slots `m_SummonSlot[1..4]`, read only, `Totem::GetTotemDuration`), `imbue=<enchant id>:<sec>` (main-hand `TEMP_ENCHANTMENT_SLOT`: id and duration), `seal=<aura id>` (a paladin's own aura of the paladin family named "Seal of ..."), `paura=<aura id>` (its own "... Aura"). Core API only (no engine call), side-effect free, empty when there is nothing to report; the names, not ids, decide seal and aura (no id is written in the code). **`power=` is not added:** the record has carried `power=<mana|rage|energy>` with `pw=`/`pwmax=`/`manapct=` since slice 3 and a key appears once per line. `.tb grammar selftest` prints three examples (`state-h10-bear`, `-shaman`, `-paladin`; illustrative ids). Off-hand imbues are not reported (a restoration shaman wields a shield).
+
+## 6. The run's role mapping: no run file changed
+
+The run reads roles only through `PlayerbotAI::IsTank/IsHeal` (TbRunFacts.cpp:281-299, TbRunOrders.cpp:755 `no-tank`, TbPartyState.cpp:74): the stored/own forced role first, then `ContainsStrategy(STRATEGY_TYPE_TANK)` (the `tank feral` strategy is one), then `GetPlayerRoles`. `.tb role Mbear tank` therefore makes the bear the run's lead tank (the `no-tank` refusal passes) and its kit has `pull`, which TbOrders.cpp:844 requires of a tank. `canResurrect` already counts paladin and shaman (the druid's Rebirth is combat-only: out, as the spec says); `usesMana` is false for a bear (accepted, spec section 4). Nothing in `forever/src/host/run/*` was edited: zero one-line registrations there.
+
+## 7. Needs at merge
+
+* S8's H8 and this branch both edit the class-context chain, `GetPlayerSpecTab`, `GetPlayerRoles`, the three `AddDefault*` functions of `SliceAiFactory.cpp`, `KEYS` in `slice_gen_context.py`, `CLASS_CONTEXTS`, the list constant in `slice_registry_check.py` and `CMakeLists.txt`. Union: one list `SLICE10.txt` = S8's 199 + this branch's 40 class files (the 22 K8 files are disjoint from them); register `low mana` and `enemy is close` once.
+* `SliceAiFactory.cpp` combined: the S8 `GetPlayerSpecTab` returns 1 for a mage and a rogue; this branch's returns the hybrid tabs: one `switch` per class.
+
+## 8. Bear Form on this server: `.tb learn`, not the quest
+
+The druid Bear Form quest giver offers no quest on this server (checked live), and Bear Form (5487) is not a trainer spell at the pin: `.tb train` teaches the rest of the bear kit (Growl 6795, Maul 6807, Demoralizing Roar 99, Enrage 5229, Swipe 779), but Bear Form itself must be learned with `.tb learn Mbear 5487` (spec U1's gap path, TB-COMMANDS.md:199: `SpellMgr::IsSpellValid` then `Player::LearnSpell`). Without it the bear kit's `tank feral` strategy has no form to shift into (`form=` stays `none`) and the bot fights in caster form: the kit still runs, it just does less. The full bot factory (PlayerbotFactory.cpp:3609) teaches 5487 and 9634 itself, so only the sliced engine's live test needs the extra command. No code depends on the quest and no SQL is added (D3: trainer SQL only if a run needs it unattended).
+
+## 9. Gates
+
+Tested tree: `74f92174b` (the last code commit; the commits after it are notes only) plus this section.
+
+| Gate | Result |
+|---|---|
+| census, `SLICE10.txt`, slot 5, after the upload of this tree | `files 216  compile clean 216  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census, `SLICE1.txt` .. `SLICE5.txt` | `files 133 / 160 / 170 / 174 / 176  compile clean = files`, 0 error places, 0 missing headers in every one (each list is a subset of SLICE10.txt: `comm -23` empty) |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, slot 5) | `CMAKE_RC=0 MAKE_RC=0`; **0 undefined**: the only one seen on this branch was `undefined vtable for ai::RestoreSpecAuraAction`, removed by unregistering the key (commit `74f92174b`); no stub was needed in `SliceLinkStubs.cpp` |
+| option OFF `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` (SLICE10.txt + the three class contexts) | `(a)=0`, registers `17/49/88/176`, `(b)=232` (K10 measured 252 with the three contexts and no key added; the 20 registered keys close 20 of them, and `restore spec aura` stays listed there by design) |
+| policy/run/class tests (`policy-tests-s10h.sh`, the 478 of `clean_tests.txt`, current tree) | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`: the same counts and the same six names as the baseline `pt-9l`/`pt-s10k` |
+| wiring (`verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`, the 13 class wiring pins, `test_slice4_d4_wiring.py`, `test_run_review_wiring.py`) | all OK; `queued=1890 creators=2926 live-missing=0` |
+| OKF docs (`verify_okf.py`) | `PASSED (60 nodes validated, graph edges consistent)` |
+| Turtle `vm-build ~/wt-s10-h --wait` | `COMPILE_SECONDS=65 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb ~/wt-s10-h` | `RESULT: PASS  kind=tb wt=wt-s10-h sha=74f92174b dirty=1 files=3863` (`rc=0`, 1478 s) |
+
+The two Turtle gates were pending in `SLICE10-K-NOTES.md` (the VM had 4 GB free; it now has 23 GB): they ran here on the same unchanged class files and close that item too.
+
+## 10. Review fix round (2026-11-20)
+
+Two reviews (Codex, Gemini) read `tbf/main...HEAD`. Each finding below is verified against the code and answered with **fix** or **reject**.
+
+| # | Finding | Verdict | Evidence |
+|---|---|---|---|
+| C1 | [high] A shaman ordered tank is admitted as the run's lead tank; the protection paladin ("recorded only") likewise | **fix** | `GetPlayerRoles` returns the forced role first (SliceAiFactory.cpp:213-226) and `PlayerbotAI::IsTank` reads it first (PlayerbotAI.cpp:4337-4341), while `HybridKitOf` gives a shaman the restoration kit; `run::StartCheck` tested `IsTank` only (TbRunOrders.cpp:759-764). Now: `slice::hybrid::CanTakeTankOrder` (SliceHybridPolicy.h) refuses a tank order at `.tb role` for a class without a tank kit (`status=refused code=no-tank-kit`, TbOrders.cpp:1164-1174), and `StartCheck` independently requires `CanLeadRun` (warrior or bear druid) and a live `pull` combat strategy (TbRunOrders.cpp:765-776). Tests: `forever/tools/test_slice10_roles.cpp` (matrix: shaman refused, paladin recorded, bear and warrior lead, 14 checks) and `forever/tools/test_slice10_fix_wiring.py` (4 pins; all 4 FAIL on `09058f786`). The two together are the run-start proof: the policy answers no for a shaman and a protection paladin, and the pin proves `StartCheck` refuses exactly when the policy answers no (role, class, then the live `pull` kit) |
+| G1a | [minor] The bear's `"dire bear form"` pre-pull shift is cleared for faerie fire and suppressed during the pull, so the tank stays in caster form on the approach | **reject** | True but deliberate: the pull action is `faerie fire`, which needs caster form (`PullStrategy.cpp:290-296` clears the pre-action); the `ACTION_MOVE + 9` trigger is muted by `PullMultiplier` only while the pull is live (`PullStrategy.cpp:563-591`), and the bot shifts through the `"dire bear form"` -> `"bear form"` alternative at pull end. Shifting mid-pull would break the faerie-fire cast. No change (the command pull, where the shift IS wanted, is G1b) |
+| G1b | [minor] `PullStartAction` runs the pre-action through `DoSpecificAction`, which does not try `getAlternatives()`, so a level-18 bear (Bear Form 5487 only) never shifts before a command pull | **fix** | Verified: `DoSpecificAction` -> `Engine::ExecuteAction` has no alternatives path (Engine.cpp:739-789), and a command pull makes `GetPullActionName()` return `"reach pull"` (PullStrategy.cpp:188-190), so the druid branch no longer clears the pre-action. `GetPreActionName()` now falls back to `"bear form"` when `"dire bear form"` is unknown (PullStrategy.cpp:299-302), after the faerie-fire clear. Test: the same wiring pin (fails on the previous commit). Shared file: the Turtle side makes the same (intended) shift |
+
+## 11. Fix-round gates
+
+Tested tree: `75009e82b` (fixes, tests, docs, notes); the commit after it is notes only.
+
+| Gate | Result |
+|---|---|
+| census, `SLICE10.txt`, slot 5, after the upload of this tree | `files 216  compile clean 216  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| option ON `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` |
+| option OFF `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` |
+| `slice_gen_context.py --check` / `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date` / `(a)=0`, `(b)=232` (no key added or removed) |
+| `forever/tools/test_slice10_roles.cpp` (pure, VM: `g++ -std=c++17 -O1 -Wall -Wextra -I. …`) | `RESULT: PASS (14 checks)` |
+| `forever/tools/test_slice10_fix_wiring.py` | `Ran 4 tests … OK`; on `09058f786` the same file is `FAILED (failures=4)` |
+| policy/run/class tests (`policy-tests-s10h.sh`, 478 of `clean_tests.txt`) | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`: the baseline counts and the same six names |
+| wiring: `verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`, `test_slice4_d4_wiring.py`, `test_run_review_wiring.py` | all OK (`live-missing=0`, surface OK, 23 pin tests) |
+| Turtle `vm-build ~/wt-s10-h --wait` | `COMPILE_SECONDS=54 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb ~/wt-s10-h` | `RESULT: PASS  kind=tb wt=wt-s10-h sha=75009e82b dirty=1 files=3866` (`rc=0`, 1201 s) |
+
+## 12. Second review round (2026-11-20, final)
+
+One finding (Codex):
+
+| # | Finding | Verdict | Evidence |
+|---|---|---|---|
+| C2 | [medium] A refused tank order left an existing shaman tank role active: the guard emitted `no-tank-kit` and continued without clearing a stored or AI-level tank role, and the run's member reads still derived tank/dps/threat-victim/resurrection from `PlayerbotAI::IsTank`, so a restoration shaman with stale tank state could join under a valid leader as a run tank | **fix** | Verified: `IsTank` answers the player-wide stored bit first and the AI's own bit second (PlayerbotAI.cpp:4339-4346); a bit can be left by an older build, `.tb role` before this guard, or `.bot role <bot> tank`, which calls `SetForcedRole(1)` (commands/Party.cpp:896; its "tank shaman" strategies are not registered in this slice). `TbRunFacts.cpp` read every member through `IsTank` (:281, :299, :368, :590, :687) and `StartCheck`'s member loop (TbRunOrders.cpp:781-800) checks only bot + engine, so the stale bit classified the shaman as a run tank. Now: `hybrid::PlanTankOrder`/`CountsAsTank` (SliceHybridPolicy.h); the refusal clears the stored bit, the AI bit (kit rebuilt with `ApplyKit`) and the tick's `Roles()` map and says `cleared=yes`; `run::IsTankMember` (TbRunFacts.h/.cpp) is the one run/party tank read (`CountsAsTank(class, IsTank)`), used by the party split, member facts, rez roster, lead guard, attacker victim-tank, the party attack's leave-the-tank rule, the pull-hold anchor and `.tb pull`'s preflight. Tests: `test_slice10_roles.cpp` (28 checks; does not compile on `75009e82b`, which lacks the helpers) and `test_slice10_fix_wiring.py` (6 tests; on `75009e82b` `FAILED (failures=2)`). Docs: TB-COMMANDS.md role and `start` lines |
+
+Deviation from the recommendation, deliberate: the refusal clears only a tank bit (stored/AI) and rebuilds the kit; it does not overwrite a healer or damage role the bot already had, and it does not touch `commands/Party.cpp`'s `.bot role` (the full build gives a shaman its own tank kit there; this slice does not, and the run read is capability-aware now, so the bit is inert).
+
+### Gates
+
+Tested tree: `67d1f65fb` (fixes, tests, docs); the commit after it is notes only.
+
+| Gate | Result |
+|---|---|
+| census, `SLICE10.txt`, slot 5, after the upload of this tree | `files 216  compile clean 216  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census, `SLICE1.txt` .. `SLICE5.txt` | `files 133 / 160 / 170 / 174 / 176`, `compile clean = files`, 0 error places, 0 missing headers in every one. The first pass of this round (run beside the Turtle test, box at load 30+) failed SLICE1/2 (`126`/`159` files, 1/2 error places); the same tree re-ran `133/133` and `160/160`, and no changed file is in these lists |
+| option ON `worldserver` (`FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON`, slot 5) | `CMAKE_RC=0 MAKE_RC=0` (193 s; 167 module files synced) |
+| option OFF `worldserver`, slot 5 | `CMAKE_RC=0 MAKE_RC=0` (13 s) |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` | registers `17/49/88/176`, `(a)=0`, `(b)=232` (no key added or removed) |
+| `forever/tools/test_slice10_roles.cpp` (VM: `g++ -std=c++17 -O1 -Wall -Wextra -I. …`) | `RESULT: PASS (28 checks)`; on `75009e82b` the same file does not compile (`CountsAsTank`/`PlanTankOrder` absent) |
+| `forever/tools/test_slice10_fix_wiring.py` | `Ran 6 tests … OK`; on `75009e82b` `FAILED (failures=2)` |
+| policy/run/class tests (`policy-tests-s10h.sh`, 478 of `clean_tests.txt`, current tree) | `472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL`: the baseline counts and the same six names |
+| wiring: `verify_action_trigger_wiring.py`, `verify_tortoise_surface.sh`, `test_slice4_d4_wiring.py`, `test_run_review_wiring.py` | all OK (`queued=1890 creators=2926 live-missing=0`, surface OK, 23 pin tests) |
+| OKF docs (`verify_okf.py`) | `PASSED (60 nodes validated, graph edges consistent)` |
+| Turtle `vm-build ~/wt-s10-h --wait` | `COMPILE_SECONDS=23 CMAKE_RC=0 MAKE_RC=0` (`rc=0`) |
+| Turtle `vm-test tb ~/wt-s10-h` | `RESULT: PASS  kind=tb wt=wt-s10-h sha=67d1f65fb dirty=1 files=3866` (`rc=0`, 1087 s) |

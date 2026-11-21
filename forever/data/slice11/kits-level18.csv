@@ -1,0 +1,39 @@
+role,slot,item_id,name,source,reason
+marksmanship hunter,head,,,none,EMPTY: no wearable head for marksmanship hunter at <=18 with a source
+marksmanship hunter,neck,277204,Erudite's Amulet,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+marksmanship hunter,shoulder,270023,Tanned Shoulderpads,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,back,16990,Spritekin Cloak,quest (6283 Bloodfury Bloodline),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+marksmanship hunter,wrist,270021,Staghide Armguards,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+marksmanship hunter,hands,5299,Gloves of the Moon,quest (913 Cry of the Thunderhawk),"quest/vendor preferred, console-handable; ilvl 20 req 0"
+marksmanship hunter,waist,16659,Deftkin Belt,quest (824 Je'neu of the Earthen Ring),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,legs,279868,Duty Bound Leggings,quest (95195 Bloodied Insignia),"quest/vendor preferred, console-handable; ilvl 24 req 1"
+marksmanship hunter,feet,16977,Warsong Boots,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+marksmanship hunter,finger,20429,Legionnaire's Band,vendor (14754 Kelm Hargunth),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+marksmanship hunter,finger2,20439,Protector's Band,vendor (14753 Illiyana Moonblaze),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+marksmanship hunter,trinket,273298,Lookie's Spyglass,drop (645 Cookie),drop; no quest or vendor source at <=18 in the world DB; ilvl 23 req 18
+marksmanship hunter,trinket2,,,none,EMPTY: no wearable trinket2 for marksmanship hunter at <=18 with a source
+marksmanship hunter,main_hand,6505,Crescent Staff,quest (914 Leaders of the Fang),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+marksmanship hunter,off_hand,,,none,EMPTY: two-hander in the main hand
+marksmanship hunter,ranged,20437,Outrider's Bow,vendor (14754 Kelm Hargunth),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+marksmanship hunter,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+marksmanship hunter,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)
+affliction warlock,head,,,none,EMPTY: no wearable head for affliction warlock at <=18 with a source
+affliction warlock,neck,277203,Scholarly Pendant,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+affliction warlock,shoulder,5274,Rose Mantle,quest (249 Morganth),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+affliction warlock,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+affliction warlock,chest,270035,Reclaimer's Robes,quest (1059 Reclaiming the Charred Vale),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+affliction warlock,wrist,15452,Featherbead Bracers,quest (5724 Returning the Lost Satchel),"quest/vendor preferred, console-handable; ilvl 18 req 0"
+affliction warlock,hands,280096,Tomb Robber's Gloves,quest (96403 Important Heirlooms),"quest/vendor preferred, console-handable; ilvl 17 req 0"
+affliction warlock,waist,16975,Warsong Sash,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+affliction warlock,legs,271207,Rotmender's Leggings,drop (250631 The Abandoned),drop; no quest or vendor source at <=18 in the world DB; ilvl 22 req 17
+affliction warlock,feet,6095,Wandering Boots,quest (346 Return to Kristoff),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+affliction warlock,finger,1449,Minor Channeling Ring,quest (256 WANTED: Chok'sul),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+affliction warlock,finger2,20426,Advisor's Ring,vendor (14754 Kelm Hargunth),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+affliction warlock,trinket,273298,Lookie's Spyglass,drop (645 Cookie),drop; no quest or vendor source at <=18 in the world DB; ilvl 23 req 18
+affliction warlock,trinket2,,,none,EMPTY: no wearable trinket2 for affliction warlock at <=18 with a source
+affliction warlock,main_hand,15109,Staff of Soran'ruk,quest (1740 The Orb of Soran'ruk),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+affliction warlock,off_hand,,,none,EMPTY: two-hander in the main hand
+affliction warlock,ranged,8071,Sizzle Stick,quest (1487 Deviate Eradication),"quest/vendor preferred, console-handable; ilvl 23 req 0"
+affliction warlock,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+affliction warlock,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)

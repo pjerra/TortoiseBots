@@ -50,6 +50,7 @@
 #include <sstream>
 #include <unordered_set>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -109,7 +110,7 @@ std::vector<AuctionHouseObject*> CollectDistinctHouses()
         AuctionHouseEntry const* entry = sAuctionHouseStore.LookupEntry(i);
         if (!entry)
             continue;
-        if (AuctionHouseObject* house = sAuctionMgr.GetAuctionsMap(entry))
+        if (AuctionHouseObject* house = AuctionMgrW3().GetAuctionsMap(entry))
         {
             if (seen.insert(house).second)
                 houses.push_back(house);
@@ -126,10 +127,10 @@ bool RemoveAuctionFromHouse(AuctionHouseObject* house, AuctionEntry* auction, bo
     if (refundBidder && auction->bidder)
         SendBidderRefund(auction, AUCTION_CANCELLED_TO_BIDDER);
 
-    if (Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow))
+    if (Item* item = AuctionMgrW3().GetAItem(auction->itemGuidLow))
     {
         item->DeleteFromDB();
-        sAuctionMgr.RemoveAItem(auction->itemGuidLow);
+        AuctionMgrW3().RemoveAItem(auction->itemGuidLow);
         delete item;
     }
     else
@@ -347,7 +348,7 @@ void AhBotService::EnqueueSellCycle()
         AuctionHouseEntry const* ahEntry = sAuctionHouseStore.LookupEntry(houseId);
         if (!ahEntry)
             continue;
-        AuctionHouseObject* ahObject = sAuctionMgr.GetAuctionsMap(ahEntry);
+        AuctionHouseObject* ahObject = AuctionMgrW3().GetAuctionsMap(ahEntry);
         if (!ahObject)
             continue;
 
@@ -385,7 +386,7 @@ void AhBotService::EnqueueBuyCycle()
         AuctionHouseEntry const* ahEntry = sAuctionHouseStore.LookupEntry(houseId);
         if (!ahEntry)
             continue;
-        AuctionHouseObject* ahObject = sAuctionMgr.GetAuctionsMap(ahEntry);
+        AuctionHouseObject* ahObject = AuctionMgrW3().GetAuctionsMap(ahEntry);
         if (!ahObject || !ahObject->GetAuctions())
             continue;
 
@@ -481,7 +482,7 @@ bool AhBotService::StepSellOne()
         m_pendingSell.pop_front();
 
     AuctionHouseEntry const* ahEntry = sAuctionHouseStore.LookupEntry(houseId);
-    AuctionHouseObject* ahObject = ahEntry ? sAuctionMgr.GetAuctionsMap(ahEntry) : nullptr;
+    AuctionHouseObject* ahObject = ahEntry ? AuctionMgrW3().GetAuctionsMap(ahEntry) : nullptr;
     if (!ahEntry || !ahObject)
         return true;
 
@@ -551,7 +552,7 @@ bool AhBotService::StepSellOne()
     auction->SaveToDB();
     CharacterDatabase.CommitTransaction();
 
-    sAuctionMgr.AddAItem(item.release());
+    AuctionMgrW3().AddAItem(item.release());
     ahObject->AddAuction(auction.release());
     ++m_totalListed;
     return true;
@@ -579,7 +580,7 @@ bool AhBotService::StepBuyOne()
         m_pendingBuy.pop_front();
 
     AuctionHouseEntry const* ahEntry = sAuctionHouseStore.LookupEntry(houseId);
-    AuctionHouseObject* ahObject = ahEntry ? sAuctionMgr.GetAuctionsMap(ahEntry) : nullptr;
+    AuctionHouseObject* ahObject = ahEntry ? AuctionMgrW3().GetAuctionsMap(ahEntry) : nullptr;
     if (!ahObject)
         return true;
 
@@ -595,7 +596,7 @@ bool AhBotService::StepBuyOne()
     if (!sPlayerbotAIConfig.ahBotBuyerBidAgainstPlayers && (auction->bid != 0 || auction->bidder != 0))
         return true;
 
-    Item* pItem = sAuctionMgr.GetAItem(auction->itemGuidLow);
+    Item* pItem = AuctionMgrW3().GetAItem(auction->itemGuidLow);
     if (!pItem || pItem->GetCount() == 0)
         return true;
 
@@ -659,10 +660,10 @@ bool AhBotService::StepBuyOne()
         auction->bidder = buyerGuidLow;
         auction->bid = auction->buyout;
 
-        sAuctionMgr.SendAuctionSuccessfulMail(auction);
-        sAuctionMgr.SendAuctionWonMail(auction);
+        AuctionMgrW3().SendAuctionSuccessfulMail(auction);
+        AuctionMgrW3().SendAuctionWonMail(auction);
 
-        sAuctionMgr.RemoveAItem(auction->itemGuidLow);
+        AuctionMgrW3().RemoveAItem(auction->itemGuidLow);
         ahObject->RemoveAuction(auction);
         auction->DeleteFromDB();
         delete auction;
@@ -850,7 +851,7 @@ std::string AhBotService::GetStatus() const
     for (uint32_t houseId : EnabledHouseIds())
     {
         AuctionHouseEntry const* ahEntry = sAuctionHouseStore.LookupEntry(houseId);
-        AuctionHouseObject* ahObject = ahEntry ? sAuctionMgr.GetAuctionsMap(ahEntry) : nullptr;
+        AuctionHouseObject* ahObject = ahEntry ? AuctionMgrW3().GetAuctionsMap(ahEntry) : nullptr;
         uint32_t minItems = 0;
         uint32_t maxItems = 0;
         HouseTargets(houseId, minItems, maxItems);

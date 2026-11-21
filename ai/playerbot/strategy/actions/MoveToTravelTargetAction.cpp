@@ -27,6 +27,7 @@
 #include "runtime/AltBotService.h"
 #include <cstdlib>
 #include <iomanip>
+#include "playerbot/TbCompatW3.h"
 
 using namespace ai;
 
@@ -158,7 +159,7 @@ bool MoveToTravelTargetAction::SettleUnreachableTakerHandIn(PlayerbotAI* ai, uin
     if (!TalkToQuestGiverAction::RewardFinishedQuest(ai, quest, taker))
         return false;
 
-    sPlayerbotAIConfig.logEvent(ai, "QuestAutoHandIn", quest->GetTitle(),
+    sPlayerbotAIConfig.logEvent(ai, "QuestAutoHandIn", QuestTitleW3(quest),
         std::to_string(questId) + ":" + std::to_string(takerEntry) + ":" + reason);
 
     return true;

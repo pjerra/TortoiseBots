@@ -122,6 +122,7 @@
 #endif
 #include "strategy/values/GuildValues.h"
 #include "PlayerbotAIPackets.h"
+#include "playerbot/TbCompatP11.h"
 
 using namespace ai;
 
@@ -136,10 +137,7 @@ std::set<std::string> PlayerbotAI::unsecuredCommands;
 
 uint32 PlayerbotChatHandler::extractQuestId(std::string str)
 {
-    char* source = (char*)str.c_str();
-    char* cId = UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, static_cast<char*>(nullptr),
-        [&](auto* self) -> char* { return self->ExtractKeyFromLink(&source, "Hquest"); }, this);
-    return cId ? atol(cId) : 0;
+    return ExtractQuestIdCompat(this, str);
 }
 
 void PacketHandlingHelper::AddHandler(uint16 opcode, std::string handler, bool shouldDelay)

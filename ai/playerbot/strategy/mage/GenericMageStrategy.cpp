@@ -9,7 +9,7 @@
 #include "GenericMageStrategy.h"
 #include "AiFactory.h"
 #include "Playerbots.h"
-#include "RangedCombatStrategy.h"
+#include "playerbot/strategy/generic/RangedCombatStrategy.h"
 
 namespace
 {

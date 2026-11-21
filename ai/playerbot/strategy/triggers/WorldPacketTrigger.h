@@ -19,7 +19,12 @@ namespace ai
         virtual Event Check() override
         {
             if (!triggered)
-                return Event();
+            {
+                // T: the packet handler tables feed the trigger. F: the two loot events are read from the core's own state (TbCompat_S9.h).
+                PollPacketEventCompat(bot, getName(), *this);
+                if (!triggered)
+                    return Event();
+            }
 
             return Event(getName(), packet, owner);
         }

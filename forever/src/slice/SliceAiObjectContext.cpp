@@ -13,33 +13,65 @@
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/actions/AcceptQuestAction.h"
 #include "playerbot/strategy/actions/AcceptResurrectAction.h"
 #include "playerbot/strategy/actions/AddLootAction.h"
+#include "playerbot/strategy/actions/AhAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/BuyAction.h"
+#include "playerbot/strategy/actions/CancelChannelAction.h"
+#include "playerbot/strategy/actions/ChangeStrategyAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
+#include "playerbot/strategy/actions/CombatActions.h"
+#include "playerbot/strategy/actions/DropQuestAction.h"
+#include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
+#include "playerbot/strategy/actions/GiveItemAction.h"
+#include "playerbot/strategy/actions/HelpAction.h"
+#include "playerbot/strategy/actions/ListSpellsAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
+#include "playerbot/strategy/actions/LootRollAction.h"
+#include "playerbot/strategy/actions/MailAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
+#include "playerbot/strategy/actions/QuestRewardActions.h"
+#include "playerbot/strategy/actions/RangeAction.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
+#include "playerbot/strategy/actions/RepairAllAction.h"
+#include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
+#include "playerbot/strategy/actions/RtiAction.h"
+#include "playerbot/strategy/actions/SaveManaAction.h"
+#include "playerbot/strategy/actions/SellAction.h"
+#include "playerbot/strategy/actions/ShareQuestAction.h"
+#include "playerbot/strategy/actions/StatsAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
+#include "playerbot/strategy/actions/TalkToQuestGiverAction.h"
+#include "playerbot/strategy/actions/TellCastFailedAction.h"
+#include "playerbot/strategy/actions/TellLosAction.h"
+#include "playerbot/strategy/actions/TellTargetAction.h"
+#include "playerbot/strategy/actions/TrainerAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
+#include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
+#include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
+#include "playerbot/strategy/generic/GrindingStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
+#include "playerbot/strategy/generic/MaintenanceStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
+#include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
 #include "playerbot/strategy/generic/StayStrategy.h"
 #include "playerbot/strategy/generic/TankAssistStrategy.h"
@@ -47,12 +79,14 @@
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
+#include "playerbot/strategy/triggers/ChatCommandTrigger.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
 #include "playerbot/strategy/triggers/LootTriggers.h"
 #include "playerbot/strategy/triggers/PullTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
 #include "playerbot/strategy/triggers/WorldPacketTrigger.h"
+#include "playerbot/strategy/values/ActiveSpellValue.h"
 #include "playerbot/strategy/values/AlwaysLootListValue.h"
 #include "playerbot/strategy/values/AoeHealValues.h"
 #include "playerbot/strategy/values/AoeValues.h"
@@ -66,6 +100,7 @@
 #include "playerbot/strategy/values/CombatStartTimeValue.h"
 #include "playerbot/strategy/values/CurrentCcTargetValue.h"
 #include "playerbot/strategy/values/CurrentTargetValue.h"
+#include "playerbot/strategy/values/DeadValues.h"
 #include "playerbot/strategy/values/DistanceValue.h"
 #include "playerbot/strategy/values/DpsTargetValue.h"
 #include "playerbot/strategy/values/DuelTargetValue.h"
@@ -74,8 +109,10 @@
 #include "playerbot/strategy/values/EstimatedLifetimeValue.h"
 #include "playerbot/strategy/values/Formations.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
+#include "playerbot/strategy/values/GrindTargetValue.h"
 #include "playerbot/strategy/values/GroupValues.h"
 #include "playerbot/strategy/values/HasAvailableLootValue.h"
+#include "playerbot/strategy/values/HasOwnTotemValue.h"
 #include "playerbot/strategy/values/HasTotemValue.h"
 #include "playerbot/strategy/values/HazardsValue.h"
 #include "playerbot/strategy/values/InterruptTargetValue.h"
@@ -107,10 +144,12 @@
 #include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "playerbot/strategy/values/PartyMemberToResurrect.h"
 #include "playerbot/strategy/values/PartyMemberWithoutAuraValue.h"
+#include "playerbot/strategy/values/PartyMemberWithoutItemValue.h"
 #include "playerbot/strategy/values/PetTargetValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/strategy/values/RaidTargetValues.h"
 #include "playerbot/strategy/values/RandomBotUpdateValue.h"
 #include "playerbot/strategy/values/RangeValues.h"
@@ -136,7 +175,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (12 of its keys)
+    // the registry of StrategyContext (18 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -154,6 +193,12 @@ namespace slice
             creators["tank face"] = [](PlayerbotAI* ai) { return new TankFaceStrategy(ai); };
             creators["wait for attack"] = [](PlayerbotAI* ai) { return new WaitForAttackStrategy(ai); };
             creators["dead"] = [](PlayerbotAI* ai) { return new DeadStrategy(ai); };
+            creators["hold position"] = [](PlayerbotAI* ai) { return new HoldPositionStrategy(ai); };
+            creators["behind"] = [](PlayerbotAI* ai) { return new SetBehindCombatStrategy(ai); };
+            creators["roll"] = [](PlayerbotAI* ai) { return new RollStrategy(ai); };
+            creators["grind"] = [](PlayerbotAI* ai) { return new GrindingStrategy(ai); };
+            creators["maintenance"] = [](PlayerbotAI* ai) { return new MaintenanceStrategy(ai); };
+            creators["chat"] = [](PlayerbotAI* ai) { return new ChatCommandHandlerStrategy(ai); };
         }
     };
 
@@ -180,7 +225,18 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (39 of its keys)
+    // the registry of QuestStrategyContext (2 of its keys)
+    class SliceQuestStrategyContext : public NamedObjectContext<Strategy>
+    {
+    public:
+        SliceQuestStrategyContext() : NamedObjectContext<Strategy>(false, true)
+        {
+            creators["quest"] = [](PlayerbotAI* ai) { return new DefaultQuestStrategy(ai); };
+            creators["accept all quests"] = [](PlayerbotAI* ai) { return new AcceptAllQuestsStrategy(ai); };
+        }
+    };
+
+    // the registry of ActionContext (58 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -225,10 +281,29 @@ namespace slice
             creators["threat reset white stop noop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopNoopAction(ai); };
             creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
             creators["reach party member to resurrect"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToResurrectAction(ai); };
+            creators["give food"] = [](PlayerbotAI* ai) { return new GiveFoodAction(ai); };
+            creators["give water"] = [](PlayerbotAI* ai) { return new GiveWaterAction(ai); };
+            creators["cancel channel"] = [](PlayerbotAI* ai) { return new CancelChannelAction(ai); };
+            creators["set behind"] = [](PlayerbotAI* ai) { return new SetBehindTargetAction(ai); };
+            creators["rear flank"] = [](PlayerbotAI* ai) { return new RearFlankAction(ai); };
+            creators["reach cc"] = [](PlayerbotAI* ai) { return new ReachCcAction(ai); };
+            creators["move out of enemy contact"] = [](PlayerbotAI* ai) { return new MoveOutOfEnemyContactAction(ai); };
+            creators["initialize pet"] = [](PlayerbotAI* ai) { return new InitializePetAction(ai); };
+            creators["toggle pet spell"] = [](PlayerbotAI* ai) { return new TogglePetSpellAutoCastAction(ai); };
+            creators["set pet stance"] = [](PlayerbotAI* ai) { return new SetPetStanceAction(ai); };
+            creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackAction(ai); };
+            creators["switch to melee"] = [](PlayerbotAI* ai) { return new SwitchToMeleeAction(ai); };
+            creators["switch to ranged"] = [](PlayerbotAI* ai) { return new SwitchToRangedAction(ai); };
+            creators["auto loot roll"] = [](PlayerbotAI* ai) { return new AutoLootRollAction(ai); };
+            creators["release loot"] = [](PlayerbotAI* ai) { return new ReleaseLootAction(ai); };
+            creators["attack anything"] = [](PlayerbotAI* ai) { return new AttackAnythingAction(ai); };
+            creators["avoid elite"] = [](PlayerbotAI* ai) { return new AvoidEliteAction(ai); };
+            creators["idle wander"] = [](PlayerbotAI* ai) { return new IdleWanderAction(ai); };
+            creators["auto share quest"] = [](PlayerbotAI* ai) { return new AutoShareQuestAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (6 of its keys)
+    // the registry of ChatActionContext (38 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -240,10 +315,42 @@ namespace slice
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
+            creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
+            creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
+            creators["spirit healer"] = [](PlayerbotAI* ai) { return new SpiritHealerAction(ai); };
+            creators["equip upgrades"] = [](PlayerbotAI* ai) { return new EquipUpgradesAction(ai); };
+            creators["sell"] = [](PlayerbotAI* ai) { return new SellAction(ai); };
+            creators["buy"] = [](PlayerbotAI* ai) { return new BuyAction(ai); };
+            creators["repair"] = [](PlayerbotAI* ai) { return new RepairAllAction(ai); };
+            creators["trainer"] = [](PlayerbotAI* ai) { return new TrainerAction(ai); };
+            creators["mail"] = [](PlayerbotAI* ai) { return new MailAction(ai); };
+            creators["drop"] = [](PlayerbotAI* ai) { return new DropQuestAction(ai); };
+            creators["clean quest log"] = [](PlayerbotAI* ai) { return new CleanQuestLogAction(ai); };
+            creators["share"] = [](PlayerbotAI* ai) { return new ShareQuestAction(ai); };
+            creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardAction(ai); };
+            creators["ah"] = [](PlayerbotAI* ai) { return new AhAction(ai); };
+            creators["ah bid"] = [](PlayerbotAI* ai) { return new AhBidAction(ai); };
+            creators["ah cancel"] = [](PlayerbotAI* ai) { return new AhCancelAction(ai); };
+            creators["tank attack chat shortcut"] = [](PlayerbotAI* ai) { return new TankAttackChatShortcutAction(ai); };
+            creators["flee chat shortcut"] = [](PlayerbotAI* ai) { return new FleeChatShortcutAction(ai); };
+            creators["max dps chat shortcut"] = [](PlayerbotAI* ai) { return new MaxDpsChatShortcutAction(ai); };
+            creators["stats"] = [](PlayerbotAI* ai) { return new StatsAction(ai); };
+            creators["help"] = [](PlayerbotAI* ai) { return new HelpAction(ai); };
+            creators["spells"] = [](PlayerbotAI* ai) { return new ListSpellsAction(ai); };
+            creators["spell"] = [](PlayerbotAI* ai) { return new TellSpellAction(ai); };
+            creators["los"] = [](PlayerbotAI* ai) { return new TellLosAction(ai); };
+            creators["rti"] = [](PlayerbotAI* ai) { return new RtiAction(ai); };
+            creators["range"] = [](PlayerbotAI* ai) { return new RangeAction(ai); };
+            creators["save mana"] = [](PlayerbotAI* ai) { return new SaveManaAction(ai); };
+            creators["tell attackers"] = [](PlayerbotAI* ai) { return new TellAttackersAction(ai); };
+            creators["tell possible attack targets"] = [](PlayerbotAI* ai) { return new TellPossibleAttackTargetsAction(ai); };
+            creators["co"] = [](PlayerbotAI* ai) { return new ChangeCombatStrategyAction(ai); };
+            creators["nc"] = [](PlayerbotAI* ai) { return new ChangeNonCombatStrategyAction(ai); };
+            creators["formation"] = [](PlayerbotAI* ai) { return new SetFormationAction(ai); };
         }
     };
 
-    // the registry of WorldPacketActionContext (3 of its keys)
+    // the registry of WorldPacketActionContext (12 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -252,10 +359,19 @@ namespace slice
             creators["store loot"] = [](PlayerbotAI* ai) { return new StoreLootAction(ai); };
             creators["auto release"] = [](PlayerbotAI* ai) { return new AutoReleaseSpiritAction(ai); };
             creators["accept resurrect"] = [](PlayerbotAI* ai) { return new AcceptResurrectAction(ai); };
+            creators["loot start roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootStartRollAction(ai); };
+            creators["loot vote"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootVoteAction(ai); };
+            creators["loot roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootRollAction(ai); };
+            creators["find corpse"] = [](PlayerbotAI* ai) { return new FindCorpseAction(ai); };
+            creators["revive from corpse"] = [](PlayerbotAI* ai) { return new ReviveFromCorpseAction(ai); };
+            creators["talk to quest giver"] = [](PlayerbotAI* ai) { return new TalkToQuestGiverAction(ai); };
+            creators["accept quest"] = [](PlayerbotAI* ai) { return new AcceptQuestAction(ai); };
+            creators["accept all quests"] = [](PlayerbotAI* ai) { return new AcceptAllQuestsAction(ai); };
+            creators["accept quest share"] = [](PlayerbotAI* ai) { return new AcceptQuestShareAction(ai); };
         }
     };
 
-    // the registry of TriggerContext (74 of its keys)
+    // the registry of TriggerContext (107 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -335,20 +451,87 @@ namespace slice
             creators["threat reset white stop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopTrigger(ai); };
             creators["party member dead"] = [](PlayerbotAI* ai) { return new PartyMemberDeadTrigger(ai); };
             creators["resurrect"] = [](PlayerbotAI* ai) { return new ResurrectTrigger(ai); };
+            creators["give food"] = [](PlayerbotAI* ai) { return new GiveFoodTrigger(ai); };
+            creators["give water"] = [](PlayerbotAI* ai) { return new GiveWaterTrigger(ai); };
+            creators["low mana"] = [](PlayerbotAI* ai) { return new LowManaTrigger(ai); };
+            creators["enemy ten yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy ten yards", 10.0f); };
+            creators["enemy is close"] = [](PlayerbotAI* ai) { return new EnemyIsCloseTrigger(ai); };
+            creators["behind target"] = [](PlayerbotAI* ai) { return new IsBehindTargetTrigger(ai); };
+            creators["not behind target"] = [](PlayerbotAI* ai) { return new IsNotBehindTargetTrigger(ai); };
+            creators["high energy available"] = [](PlayerbotAI* ai) { return new HighEnergyAvailableTrigger(ai); };
+            creators["no energy available"] = [](PlayerbotAI* ai) { return new NoEnergyAvailableTrigger(ai); };
+            creators["has aggro in raid group"] = [](PlayerbotAI* ai) { return new HasAggroInRaidGroupTrigger(ai); };
+            creators["rear flank needed"] = [](PlayerbotAI* ai) { return new RearFlankNeededTrigger(ai); };
+            creators["enemy too close for melee"] = [](PlayerbotAI* ai) { return new EnemyTooCloseForMeleeTrigger(ai); };
+            creators["not facing target"] = [](PlayerbotAI* ai) { return new IsNotFacingTargetTrigger(ai); };
+            creators["rooted"] = [](PlayerbotAI* ai) { return new RootedTrigger(ai); };
+            creators["party member rooted"] = [](PlayerbotAI* ai) { return new PartyMemberRootedTrigger(ai); };
+            creators["tank rooted"] = [](PlayerbotAI* ai) { return new TankRootedTrigger(ai); };
+            creators["enough mana"] = [](PlayerbotAI* ai) { return new EnoughManaTrigger(ai); };
+            creators["healer low mana"] = [](PlayerbotAI* ai) { return new HealerLowManaTrigger(ai); };
+            creators["medium aoe heal"] = [](PlayerbotAI* ai) { return new AoeHealTrigger(ai, "medium aoe heal", "medium", 2); };
+            creators["ranged medium aoe and healer should attack"] = [](PlayerbotAI* ai) { return new TwoTriggers(ai, "ranged medium aoe", "healer should attack"); };
+            creators["target of attacker close"] = [](PlayerbotAI* ai) { return new TargetOfAttackerClose(ai); };
+            creators["loose adds near"] = [](PlayerbotAI* ai) { return new LooseAddsNearTrigger(ai); };
+            creators["no pet"] = [](PlayerbotAI* ai) { return new NoPetTrigger(ai); };
+            creators["has pet"] = [](PlayerbotAI* ai) { return new HasPetTrigger(ai); };
+            creators["new pet"] = [](PlayerbotAI* ai) { return new NewPetTrigger(ai); };
+            creators["pet attack"] = [](PlayerbotAI* ai) { return new PetAttackTrigger(ai); };
+            creators["enemy fifteen yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy fifteen yards", 15.0f); };
+            creators["no target"] = [](PlayerbotAI* ai) { return new NoTargetTrigger(ai); };
+            creators["dangerous elite near"] = [](PlayerbotAI* ai) { return new DangerousEliteNearTrigger(ai); };
+            creators["dead"] = [](PlayerbotAI* ai) { return new DeadTrigger(ai); };
+            creators["corpse near"] = [](PlayerbotAI* ai) { return new CorpseNearTrigger(ai); };
+            creators["val"] = [](PlayerbotAI* ai) { return new ValueTrigger(ai); };
+            creators["equipment audit"] = [](PlayerbotAI* ai) { return new EquipmentAuditTrigger(ai); };
         }
     };
 
-    // the registry of WorldPacketTriggerContext (1 of its keys)
+    // the registry of ChatTriggerContext (20 of its keys)
+    class SliceChatTriggerContext : public NamedObjectContext<Trigger>
+    {
+    public:
+        SliceChatTriggerContext()
+        {
+            creators["pet"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "pet"); };
+            creators["follow"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "follow"); };
+            creators["stay"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "stay"); };
+            creators["attack"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "attack"); };
+            creators["tank attack"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "tank attack"); };
+            creators["flee"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "flee"); };
+            creators["max dps"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "max dps"); };
+            creators["stats"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "stats"); };
+            creators["help"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "help"); };
+            creators["spells"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "spells"); };
+            creators["spell"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "spell"); };
+            creators["los"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "los"); };
+            creators["rti"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "rti"); };
+            creators["range"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "range"); };
+            creators["save mana"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "save mana"); };
+            creators["attackers"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "attackers"); };
+            creators["possible attack targets"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "possible attack targets"); };
+            creators["co"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "co"); };
+            creators["nc"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "nc"); };
+            creators["formation"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "formation"); };
+        }
+    };
+
+    // the registry of WorldPacketTriggerContext (6 of its keys)
     class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
         SliceWorldPacketTriggerContext()
         {
             creators["loot response"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot response"); };
+            creators["loot start roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot start roll"); };
+            creators["loot vote"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot vote"); };
+            creators["loot roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll"); };
+            creators["item push result"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "item push result"); };
+            creators["quest share"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "quest share"); };
         }
     };
 
-    // the registry of ValueContext (170 of its keys)
+    // the registry of ValueContext (201 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -524,11 +707,42 @@ namespace slice
             creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
             creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
             creators["party member to resurrect"] = [](PlayerbotAI* ai) { return new PartyMemberToResurrect(ai); };
+            creators["party member without item"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutItemValue(ai); };
+            creators["party member without food"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutFoodValue(ai); };
+            creators["party member without water"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutWaterValue(ai); };
+            creators["has own totem"] = [](PlayerbotAI* ai) { return new HasOwnTotemValue(ai); };
+            creators["have any own totem"] = [](PlayerbotAI* ai) { return new HaveAnyOwnTotemValue(ai); };
+            creators["possible attack targets count"] = [](PlayerbotAI* ai) { return new PossibleAttackTargetsCountValue(ai); };
+            creators["revive targets"] = [](PlayerbotAI* ai) { return new ReviveTargetsValue(ai); };
+            creators["boost targets"] = [](PlayerbotAI* ai) { return new BoostTargetsValue(ai); };
+            creators["healer low mana"] = [](PlayerbotAI* ai) { return new HealerLowMana(ai); };
+            creators["pet dead"] = [](PlayerbotAI* ai) { return new PetIsDeadValue(ai); };
+            creators["pet happy"] = [](PlayerbotAI* ai) { return new PetIsHappyValue(ai); };
+            creators["active spell"] = [](PlayerbotAI* ai) { return new ActiveSpellValue(ai); };
+            creators["active rolls"] = [](PlayerbotAI* ai) { return new ActiveRolls(ai); };
+            creators["seen need rolls"] = [](PlayerbotAI* ai) { return new SeenNeedRolls(ai); };
+            creators["item usage"] = [](PlayerbotAI* ai) { return new ItemUsageValue(ai); };
+            creators["skip go loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "skip go loot list"); };
+            creators["grind target"] = [](PlayerbotAI* ai) { return new GrindTargetValue(ai); };
+            creators["can fight elite"] = [](PlayerbotAI* ai) { return new CanFightEliteValue(ai); };
+            creators["dangerous elite"] = [](PlayerbotAI* ai) { return new DangerousEliteValue(ai); };
+            creators["graveyard"] = [](PlayerbotAI* ai) { return new GraveyardValue(ai); };
+            creators["best graveyard"] = [](PlayerbotAI* ai) { return new BestGraveyardValue(ai); };
+            creators["should spirit healer"] = [](PlayerbotAI* ai) { return new ShouldSpiritHealerValue(ai); };
+            creators["can move around"] = [](PlayerbotAI* ai) { return new CanMoveAroundValue(ai); };
+            creators["free money for"] = [](PlayerbotAI* ai) { return new FreeMoneyForValue(ai); };
+            creators["total money needed for"] = [](PlayerbotAI* ai) { return new TotalMoneyNeededForValue(ai); };
+            creators["money needed for"] = [](PlayerbotAI* ai) { return new MoneyNeededForValue(ai); };
+            creators["repair cost"] = [](PlayerbotAI* ai) { return new RepairCostValue(ai); };
+            creators["max repair cost"] = [](PlayerbotAI* ai) { return new MaxGearRepairCostValue(ai); };
+            creators["min repair cost"] = [](PlayerbotAI* ai) { return new MinRepairCostValue(ai); };
+            creators["has all money for"] = [](PlayerbotAI* ai) { return new HasAllMoneyForValue(ai); };
+            creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 17, kActions = 48, kTriggers = 75, kValues = 170;
+    constexpr unsigned kStrategies = 25, kActions = 108, kTriggers = 133, kValues = 201;
 }
 }
 
@@ -538,10 +752,12 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     strategyContexts.Add(new slice::SliceStrategyContext());
     strategyContexts.Add(new slice::SliceMovementStrategyContext());
     strategyContexts.Add(new slice::SliceAssistStrategyContext());
+    strategyContexts.Add(new slice::SliceQuestStrategyContext());
     actionContexts.Add(new slice::SliceActionContext());
     actionContexts.Add(new slice::SliceChatActionContext());
     actionContexts.Add(new slice::SliceWorldPacketActionContext());
     triggerContexts.Add(new slice::SliceTriggerContext());
+    triggerContexts.Add(new slice::SliceChatTriggerContext());
     triggerContexts.Add(new slice::SliceWorldPacketTriggerContext());
     valueContexts.Add(new slice::SliceValueContext());
 

@@ -2,13 +2,33 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "TbDashboard.h"
+#include "dash/TbDashRuns.h"
+#include "host/cmd/TbCmdBinding.h"
+#include "host/pool/TbPoolCreate.h"
+#include "host/pool/TbPoolRegistry.h"
+#include "host/pool/TbPoolScheduler.h"
+#include "host/cmd/TbCmdOrders.h"
+#include "host/cmd/TbPlace.h"
+#include "host/cmd/TbCmdFeeds.h"
+#include "host/cmd/TbCmdCombat.h"
+#include "host/run/TbPlanCommands.h"
+#include "host/run/TbRunCommands.h"
+#include "host/TbPet.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#include "host/TbHostGuildOrders.h"
+#include "ai/playerbot/DungeonPlanMgr.h"
+#include "host/run/TbPlanUnits.h"
+#include "host/run/TbRunHooks.h"
+#include "host/run/TbRunLiquid.h"
+#include "host/gear/TbGearGen.h"
+#include "host/TbHostProfession.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
+#include "Config.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
 #include "Unit.h"
@@ -22,6 +42,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <chrono>
+#include "Loot.h"
 #include <list>
 #include <set>
 #include <string>
@@ -35,6 +56,7 @@
 #include "RBAC.h"
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
+#include "Spell.h"
 #include "SpellInfo.h"
 #include "SpellAuraDefines.h"
 #include "Timer.h"
@@ -47,19 +69,60 @@
 #include "SpellPackets.h"
 #include "TbBotSession.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbSpellDelayPure.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
+#include "host/TbCc.h"
+#include "host/TbThrown.h"
+#include "host/cmd/TbTestTargetPure.h"
+#include "host/TbIgnore.h"
+#include "host/TbChatLinkCmd.h"
+#include "host/chat/TbChatCmd.h"
+#include "host/chat/TbChatIn.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
 
 namespace
 {
+namespace target = TortoiseBots::h3::target;
+
+// The words of a free-form tail (the splitter `.tb enter`, `.tb hurt` and `.tb power` parse their optional name with).
+std::vector<std::string> WordsOf(Tail const& args)
+{
+    std::vector<std::string> words;
+    std::string_view const text(args);
+    size_t i = 0;
+    while (i < text.size())
+    {
+        while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        size_t const start = i;
+        while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        if (i > start)
+            words.emplace_back(text.substr(start, i - start));
+    }
+    return words;
+}
+
 ObjectGuid GuidByName(std::string name)
 {
     if (!normalizePlayerName(name))
         return ObjectGuid::Empty;
     return sCharacterCache->GetCharacterGuidByName(name);
+}
+
+// The word `.tb castlog` prints for a queued cast result.
+char const* CastResultKindName(TortoiseBots::CastResult::Kind kind)
+{
+    switch (kind)
+    {
+        case TortoiseBots::CastResult::Kind::SpellFailure: return "SpellFailure";
+        case TortoiseBots::CastResult::Kind::CastFailed: return "CastFailed";
+        case TortoiseBots::CastResult::Kind::SpellDelayed: return "SpellDelayed";
+    }
+    return "Unknown";
 }
 
 // Tick cost window (`.tb perf`): the world's own update time (the previous update's duration, as `server info` prints it, sampled once per tick)
@@ -100,20 +163,79 @@ public:
     {
         BotMgr::Instance().LoadConfig();
         TortoiseBots::Dashboard::LoadConfig();
+        TortoiseBots::DashRuns::LoadConfig();
+        TortoiseBots::pool::LoadConfig();      // W0: the pool key, its rate and the registry rows (re-read on a reload)
+        TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B: the scheduler's target, window, session and offline times
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
             LoadEngineConfig();
+        if (reload)
+            TortoiseBots::cmd::LoadBindings();     // P2: the key or the graces changed, or persistence was just turned on
+        TortoiseBots::cmd::LoadFeeds();            // P4: the map layers' keys and ranges (the boss roster is built by the world start, below)
+    }
+
+    // `reload all` is the operator's "read the database again". The plan tables are the module's own (ai_dungeon_plan and
+    // ai_dungeon_step_unit in the world DB): no core reload reads them, so this hook (WorldScript::OnAfterReload, ScriptMgr.h:295)
+    // refreshes them through the same all-or-nothing path as `.tb plan reload`. The other core reloads do not touch anything the
+    // module caches: the item, spell and talent mirrors come from the DB2 stores (never reloaded), the commander bindings from the
+    // character DB (no core reload reads them) and the engine config through OnConfigLoad above.
+    void OnAfterReload(std::string_view command) override
+    {
+#ifdef TORTOISEBOTS_SLICE1
+        // The quest starter/ender tables feed the bots' quest eligibility sets. A reload while the module is off still drops
+        // them: the next check rebuilds, so a re-enable cannot read pre-reload rows.
+        if (command == "reload all" || command.find("quest") != std::string_view::npos)
+        {
+            if (BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
+                TortoiseBots::h3::RebuildQuestEligibility();
+            else
+                TortoiseBots::h3::ClearQuestEligibility();
+        }
+        if (command != "reload all" || !BotMgr::Instance().Enabled() || !ai::GetDungeonPlans().Sealed())
+            return;
+        // A run keeps the plan it started on and matches its units by (leg, seq): new unit rows under it could give it another step's
+        // spawns. So while any run holds a plan the reload waits; `.tb plan reload` does it once the runs end.
+        std::vector<std::string> const runs = TortoiseBots::run::PlanRunLeaders();
+        if (!runs.empty())
+        {
+            std::string names;
+            for (std::string const& leader : runs)
+            {
+                if (!names.empty())
+                    names += ", ";
+                names += leader;
+            }
+            TC_LOG_WARN("tortoisebots", "TortoiseBots: plans not reloaded: run(s) in progress ({}); use .tb plan reload after they end", names);
+            return;
+        }
+        ai::PlanReloadHost host;
+        TortoiseBots::run::FillUnitReloadHost(host);
+        ai::PlanReloadReport const report = ai::ReloadDungeonPlans(TortoiseBots::run::PlansInUse(), &host);
+        if (!report.outcome.swapped)
+            TC_LOG_WARN("tortoisebots", "TortoiseBots: the dungeon plans kept after {} ({})", command,
+                report.outcome.reason.empty() ? std::string("the reload was refused") : report.outcome.reason);
+        else
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: reloaded {} dungeon plans ({} steps, {} step units) after {}", ai::GetDungeonPlans().PlanCount(),
+                ai::GetDungeonPlans().StepCount(), TortoiseBots::run::LastStepUnitLoad().kept, command);
+#else
+        (void)command;
+#endif
     }
 
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
         TortoiseBots::Dashboard::LoadConfig();
-        // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
+        TortoiseBots::DashRuns::LoadConfig();
+        TortoiseBots::pool::LoadConfig();      // W0
+        TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B
+        TortoiseBots::pool::Reconcile();       // W0: the creations that stopped halfway (a claim row, no account or character yet)
+        // The item store is loaded by now (World.cpp:1622, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
-        // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
+        TortoiseBots::Dashboard::WriteItemsFile();
+        // The spell store is loaded too (World.cpp:1485). This hook is what tells the mirror so: it answers 0 and null
         // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
         // store into a table that is never rebuilt.
         tbcompat::MarkSpellStoreReady();
@@ -127,7 +249,15 @@ public:
             // The engine's own config (the 720-key read and the spell and talent tables) now, not on the first bot: it stalled the world
             // for 1.09 s at the first engine start (R8). Only when the module is on, as nothing builds an engine otherwise.
             if (BotMgr::Instance().Enabled())
+            {
                 LoadEngineConfig();
+                TortoiseBots::gear::InitGearIndex();
+                TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
+                TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
+                TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
+                tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
+                TortoiseBots::h3::RebuildQuestEligibility();
+            }
         }
 #endif
     }
@@ -136,6 +266,9 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        bool const poolLogin = TortoiseBots::pool::PoolScheduler::Update(diff);   // W0-B: the pool's logins and logouts, once a second
+        if (!poolLogin)
+            TortoiseBots::pool::CreateUpdate(diff);   // W0: at most one pool character per rate tick, and never in a tick with a login
         TortoiseBots::Dashboard::Update(diff);
         uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
         uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
@@ -145,6 +278,14 @@ public:
         perf.worldMaxMs = std::max(perf.worldMaxMs, worldMs);
         perf.botSumUs += us;
         perf.botMaxUs = std::max(perf.botMaxUs, us);
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
+        TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
+        TortoiseBots::cmd::Maintain();         // P2: the binding timers (dead lead, absent commander) and the stored rows whose party is back
+        TortoiseBots::place::Update();          // #15: the minimap-ping timeouts and the walk back of a placed bot that lost its slot
+        TortoiseBots::cmd::UpdateFeeds(diff);   // P4: the live position report (TortoiseBots.Commander.PosMs, 100 ms)
+        TortoiseBots::cmd::combat::Update(diff);   // P5: the fight monitor's 1 Hz sample, 250 ms cast poll and COMBAT_FIGHT/EVENTS
+#endif
     }
 
     void OnShutdown() override
@@ -155,24 +296,106 @@ public:
     }
 };
 
+// The dashboard's fight numbers: damage dealt and taken, healing and overhealing.
+class tortoisebots_unit : public UnitScript
+{
+public:
+    tortoisebots_unit() : UnitScript("tortoisebots_unit") { }
+    void OnDamageSpell(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spellInfo) override { TortoiseBots::Dashboard::OnDamage(attacker, victim, damage, spellInfo); }
+    void OnHealOutcome(Unit* healer, Unit* /*target*/, uint32 /*spellId*/, uint32 raw, uint32 effective) override { TortoiseBots::Dashboard::OnHealOutcome(healer, raw, effective); }
+    // P2: a dead lead bot starts its grace; the binding ends only after it (TortoiseBots.Slice.DeadBackstopSeconds).
+    void OnUnitDeath(Unit* victim, Unit* /*killer*/) override
+    {
+        if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+            TortoiseBots::cmd::NoteDeath(victim->ToPlayer());
+    }
+};
+
+// P2: the group events a commander binding ends on (the lead leaving, the group disbanding or losing its leader, another player joining). Called by the
+// core's Group methods, the same ones BotMgr uses to form a bot party, so robot groups fire them too.
+class tortoisebots_group : public GroupScript
+{
+public:
+    tortoisebots_group() : GroupScript("tortoisebots_group") { }
+
+    void OnAddMember(Group* group, ObjectGuid guid) override { TortoiseBots::cmd::NoteGroupAdd(group, guid); }
+    void OnRemoveMember(Group* group, ObjectGuid guid, RemoveMethod /*method*/, ObjectGuid /*kicker*/, char const* /*reason*/) override
+    {
+        TortoiseBots::cmd::NoteGroupRemove(group, guid);
+    }
+    void OnChangeLeader(Group* group, ObjectGuid newLeaderGuid, ObjectGuid /*oldLeaderGuid*/) override { TortoiseBots::cmd::NoteGroupLeader(group, newLeaderGuid); }
+    void OnDisband(Group* group) override { TortoiseBots::cmd::NoteGroupDisband(group); }
+};
+
 class tortoisebots_player : public PlayerScript
 {
 public:
     tortoisebots_player() : PlayerScript("tortoisebots_player") { }
 
+    void OnCreatureKill(Player* killer, Creature* killed) override
+    {
+        TortoiseBots::Dashboard::OnKill(killer, killed);
+        if (killer && BotMgr::Instance().IsBot(killer->GetGUID()))
+            BotMgr::Instance().NoteKill(killer->GetGUID());   // W1 `kills=`
+    }
+    void OnPlayerKilledByCreature(Creature* killer, Player* killed) override { TortoiseBots::Dashboard::OnKilledByCreature(killer, killed); }
+    void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
+    void OnLootItem(Player* player, Item* item) override { TortoiseBots::Dashboard::OnLootItem(player, item); }
+    void OnMoneyChanged(Player* player, int64& amount) override { TortoiseBots::Dashboard::OnMoneyChanged(player, amount); }
+    void OnSpellCast(Player* player, Spell* spell, bool /*skipCheck*/) override { TortoiseBots::Dashboard::OnSpellCast(player, spell && !spell->IsTriggered() ? spell->GetSpellInfo() : nullptr); }
+
+    // #15: a commander's whisper to one of its own bots is the same command `.tb cmd place|rally|fallback` takes.
+    void OnChatSent(Player* player, uint32 type, uint32 /*lang*/, std::string const& msg, Player* receiver) override
+    {
+        if (type != CHAT_MSG_WHISPER || !player || !receiver || BotMgr::Instance().IsBot(player->GetGUID()))
+            return;
+        if (!BotMgr::Instance().IsBot(receiver->GetGUID()) || !TortoiseBots::cmd::IsCommandedBy(player, receiver))
+            return;
+        TortoiseBots::place::HandleChat(player, msg);
+    }
+
+    // #15: the same words in the party or raid chat of a group the commander drives.
+    void OnChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* /*group*/) override
+    {
+        if (type != CHAT_MSG_PARTY && type != CHAT_MSG_PARTY_LEADER && type != CHAT_MSG_RAID && type != CHAT_MSG_RAID_LEADER)
+            return;
+        if (!player || BotMgr::Instance().IsBot(player->GetGUID()))
+            return;
+        TortoiseBots::place::HandleChat(player, msg);
+    }
+
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
+        {
             TC_LOG_INFO("tortoisebots", "bot {} entered the world on map {}", player->GetName(), player->GetMapId());
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            tbhost::prof::ClearBotErrands(player->GetGUID());
+#endif
+            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1527). Only the preference:
+            // nothing is added to the bags and the ammo slot is untouched.
+            player->SetPreferDrawableAmmo(true);
+        }
+        TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
 
     void OnLogout(Player* player) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
             TC_LOG_INFO("tortoisebots", "bot {} left the world", player->GetName());
+        TortoiseBots::cmd::NoteLogout(player);    // P2: a lead's departure, or the commander's grace (a shutdown keeps the binding)
+        TortoiseBots::place::NoteLogout(player);  // #15: a commander's rallies, holds and pending cursor request go with it
         // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
         BotMgr::Instance().OnPlayerLogout(player);
     }
+};
+
+// #15: the commander's minimap ping (CMSG_MINIMAP_PING) completes a pending `place ... cursor`. The packet is only read: its handler still runs.
+class tortoisebots_server : public ServerScript
+{
+public:
+    tortoisebots_server() : ServerScript("tortoisebots_server") { }
+    void OnPacketReceive(WorldSession* session, WorldPacket& packet) override { TortoiseBots::place::OnPacket(session, packet); }
 };
 
 class tortoisebots_commands : public CommandScript
@@ -182,9 +405,20 @@ public:
 
     std::span<ChatCommandBuilder const> GetCommands() const override
     {
+        // `create` makes accounts and `prune confirm` deletes them (and their characters): the permissions the core asks for
+        // `.account create` and `.account delete`, not the lowest GM one. The dry run of `prune` stays at the GM level.
+        static ChatCommandTable poolTable =
+        {
+            { "create", HandlePoolCreate, rbac::RBAC_PERM_COMMAND_ACCOUNT_CREATE, Console::Yes },
+            { "prune",  HandlePoolPrune,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "start",  HandlePoolStart,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // W0-B: the scheduler
+            { "stop",   HandlePoolStop,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "status", HandlePoolStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "population", HandlePoolPopulation, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // F-population: the online target at runtime
+        };
         static ChatCommandTable tbTable =
         {
-            { "create", HandleCreate, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "create", HandleCreate, rbac::RBAC_PERM_COMMAND_ACCOUNT_CREATE, Console::Yes },   // W0: makes characters, so it asks what `.tb pool create` asks
             { "login",  HandleLogin,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "group",  HandleGroup,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "ungroup", HandleUngroup, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -195,6 +429,7 @@ public:
             { "raid",   HandleRaid,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "enter",  HandleEnter,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H4: `.tb enter <bot|party> ...` is TortoiseBots::h4::HandleEnter (below)
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "lootnear", HandleLootNear, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -212,6 +447,7 @@ public:
             { "hurt",   HandleHurt,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "power",  HandlePower,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "removeitem", TortoiseBots::h3::HandleRemoveItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "use",    HandleUse,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "order",  TortoiseBots::h3::HandleOrder,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -224,6 +460,7 @@ public:
             { "learn",  TortoiseBots::h3::HandleLearn,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "equip",  TortoiseBots::h3::HandleEquip,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "itemscan", TortoiseBots::h3::HandleItemScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "statcensus", TortoiseBots::h3::HandleStatCensus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "grammar", TortoiseBots::h3::HandleGrammar, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "trigger", TortoiseBots::h4::HandleTrigger, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "instance", TortoiseBots::h4::HandleInstance, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -231,6 +468,26 @@ public:
             { "revive", TortoiseBots::h4::HandleRevive, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "kill",   TortoiseBots::h4::HandleKill,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cc",       TortoiseBots::h8::HandleCc,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: crowd-control mark of one bot
+            { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot> co|nc +name,-name` (SETUP)
+            { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
+            { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
+            { "pool",   poolTable },   // W0: `.tb pool create <n>`, `.tb pool prune [confirm]`
+            { "gear",   TortoiseBots::h3::HandleGear,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cmd",      TortoiseBots::cmd::HandleCmd,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "link",   TortoiseBots::chatlink::HandleLink, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // S1-R1: `.tb link <text> [#token]` (host/TbChatLinkCmd.cpp, both builds)
+            { "hear",   TortoiseBots::chatin::HandleHear, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },     // S1-R2: `.tb hear <bot> <sender> whisper|party <text> [#token]` (host/chat/TbChatCmd.cpp, engine build)
+            { "pushback", HandlePushback, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "knock",  TortoiseBots::kb::HandleKnock, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // S3: `.tb knock <bot> <speedXY> <speedZ>`
+            { "speed",  TortoiseBots::kb::HandleSpeed, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // S3: `.tb speed <bot> run|walk|swim <rate>`
+            { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -251,39 +508,188 @@ public:
         return false;
     }
 
+    static bool RequireOwnedBot(ChatHandler* handler, ObjectGuid botGuid)
+    {
+        if (botGuid.IsEmpty() || !BotMgr::Instance().IsBot(botGuid))
+            return true;
+        std::string code, detail;
+        if (!TortoiseBots::h3::CheckBotAccess(handler, botGuid, code, detail))
+            return Fail(handler, detail + " (" + code + ").");
+        return true;
+    }
+
     // .tb create <account> <name> <race id> <class id> [gender 0|1]: a new level 1 character for a bot.
     static bool HandleCreate(ChatHandler* handler, std::string account, std::string name, uint8 race, uint8 playerClass, Optional<uint8> gender)
     {
         if (!normalizePlayerName(name))
             return Fail(handler, "that name is not allowed.");
+        // Only a pool account or a test account the config names (TortoiseBots.Create.TestAccounts) takes a character from here;
+        // a real player's account never does.
+        if (!TortoiseBots::world::CreateAccountAllowed(account, sConfigMgr->GetStringDefault("TortoiseBots.Create.TestAccounts", "")))
+            return Fail(handler, account + " is not a pool account (TBPOOL<nnnn>) or a test account named in TortoiseBots.Create.TestAccounts: no character is made on it.");
         std::string const error = BotMgr::Instance().CreateCharacter(AccountMgr::GetId(account), name, race, playerClass, gender.value_or(0));
         if (!error.empty())
             return Fail(handler, name + " not created: " + error + ".");
-        handler->PSendSysMessage("TortoiseBots: %s created.", name.c_str());
+        // The saves are queued; the character cache learns of the character once the characters database has it.
+        handler->PSendSysMessage("TortoiseBots: %s created (its saves are queued; it is listed once the database has it).", name.c_str());
         return true;
     }
 
-    // .tb login <character> [master]: the character joins the world as a bot. It follows <master>, or the caller when
-    // no master is named and the command comes from a player. From the console without a master it stands still.
-    static bool HandleLogin(ChatHandler* handler, std::string name, Optional<std::string> masterName)
+    // .tb login <character> [master|free]: the character joins the world as a bot. It follows <master>, or the caller when
+    // no master is named and the command comes from a player. `free` = a masterless bot that grinds, loots and corpse-runs on
+    // its own (W1). From the console without a master it stands still.
+    static bool HandleLogin(ChatHandler* handler, std::string name, Optional<std::string> masterName, Optional<std::string> extra)
     {
         ObjectGuid master;
+        bool free = false;
+        std::vector<std::string> words;
         if (masterName)
+            words.push_back(*masterName);
+        if (extra)
+            words.push_back(*extra);
+        for (std::string const& word : words)
         {
-            master = GuidByName(*masterName);
+            if (Lower(word) == "free")
+            {
+                if (free)
+                    return Fail(handler, "`free` is named twice.");
+                free = true;
+                continue;
+            }
+            if (!master.IsEmpty())
+                return Fail(handler, "name one master (or `free`), not two.");
+            master = GuidByName(word);
             if (master.IsEmpty())
-                return Fail(handler, "no character named " + *masterName + ".");
+                return Fail(handler, "no character named " + word + ".");
             if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
-                return Fail(handler, *masterName + " is neither a host bot nor your own character: it cannot be the master of a bot.");
+                return Fail(handler, word + " is neither a host bot nor your own character: it cannot be the master of a bot.");
         }
-        else if (Player* caller = Caller(handler))
-            master = caller->GetGUID();
+        if (free && !master.IsEmpty())
+            return Fail(handler, "a free bot has no master: name `free` or a master, not both.");
+        if (!free && master.IsEmpty())
+            if (Player* caller = Caller(handler))
+                master = caller->GetGUID();
 
-        std::string const error = BotMgr::Instance().Login(GuidByName(name), master);
+        std::string const error = BotMgr::Instance().Login(GuidByName(name), master, free);
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
-        handler->PSendSysMessage("TortoiseBots: %s is logging in.", name.c_str());
+        handler->PSendSysMessage("TortoiseBots: %s is logging in%s.", name.c_str(), free ? " as a free bot" : "");
         return true;
+    }
+
+    // `.tb pool prune [confirm]` (W0): the failed rows of stopped creations, listed (a dry run) unless `confirm` re-verifies and
+    // removes them. A dry run needs the GM permission of the table; `confirm` deletes accounts and their characters, so it needs
+    // the permission of `.account delete` (the console has every permission). The scheduler's words (start, stop, status) are
+    // round W0-B's.
+    static bool HandlePoolPrune(ChatHandler* handler, Optional<std::string> argument)
+    {
+        bool confirm = false;
+        if (argument)
+        {
+            if (Lower(*argument) != "confirm")
+                return Fail(handler, "usage: `.tb pool prune` (a dry run) or `.tb pool prune confirm`.");
+            if (!handler->HasPermission(rbac::RBAC_PERM_COMMAND_ACCOUNT_DELETE))
+                return Fail(handler, "`.tb pool prune confirm` deletes accounts: it needs the permission of `.account delete`. `.tb pool prune` alone is the dry run.");
+            confirm = true;
+        }
+        TortoiseBots::pool::PruneReport const report = TortoiseBots::pool::Prune(confirm);
+        std::size_t const shown = report.lines.size() < 20 ? report.lines.size() : std::size_t(20);
+        for (std::size_t i = 0; i < shown; ++i)
+            handler->PSendSysMessage("TortoiseBots: %s", report.lines[i].c_str());
+        if (report.lines.size() > shown)
+            handler->PSendSysMessage("TortoiseBots: ... and %u more line(s).", uint32(report.lines.size() - shown));
+        if (!report.enabled)
+        {
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+        if (!report.applied)
+            handler->PSendSysMessage("TortoiseBots: prune dry run: %u account(s), %u character(s) and %u row(s) would be removed; run `.tb pool prune confirm` to remove them.",
+                report.accounts, report.characters, report.rows);
+        return true;
+    }
+
+    // `.tb pool create <n>` (W0): n level-1 pool characters, one at a time at TortoiseBots.Pool.CreatePerMinute per minute. It makes
+    // accounts, so the table row asks the permission of `.account create`.
+    static bool HandlePoolCreate(ChatHandler* handler, std::string argument)
+    {
+        std::uint32_t count = 0;
+        for (char const c : argument)
+        {
+            if (c < '0' || c > '9' || count > 99999)
+                return Fail(handler, "usage: `.tb pool create <n>`.");
+            count = count * 10 + std::uint32_t(c - '0');
+        }
+        if (!count)
+            return Fail(handler, "usage: `.tb pool create <n>`.");
+        TortoiseBots::pool::CreateStart const start = TortoiseBots::pool::StartCreate(count);
+        if (!start.started)
+            return Fail(handler, start.message);
+        handler->PSendSysMessage("TortoiseBots: %s.", start.message.c_str());
+        return true;
+    }
+
+    // `.tb pool start|stop|status` (W0-B): the scheduler of host/pool/TbPoolScheduler.h. Start is explicit; stop drains every
+    // pool bot at 5 logouts per second; status is one line for the console and the live checks.
+    static bool HandlePoolStart(ChatHandler* handler)
+    {
+        TortoiseBots::pool::PoolScheduler::SwitchResult const result = TortoiseBots::pool::PoolScheduler::Start();
+        handler->PSendSysMessage("TortoiseBots: %s", result.message.c_str());
+        if (!result.ok)
+            handler->SetSentErrorMessage(true);
+        return result.ok;
+    }
+
+    static bool HandlePoolStop(ChatHandler* handler)
+    {
+        TortoiseBots::pool::PoolScheduler::SwitchResult const result = TortoiseBots::pool::PoolScheduler::Stop();
+        handler->PSendSysMessage("TortoiseBots: %s", result.message.c_str());
+        if (!result.ok)
+            handler->SetSentErrorMessage(true);
+        return result.ok;
+    }
+
+    static bool HandlePoolStatus(ChatHandler* handler)
+    {
+        for (std::string const& line : TortoiseBots::pool::PoolScheduler::Status())
+            handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+        return true;
+    }
+
+    // `.tb pool population <n|low|high>` (F-population): the pool's online target at runtime. `low` and `high` are the
+    // TortoiseBots.Pool.PopulationLow/High presets; a number is used as-is. The pool adds or logs out bots gradually from the
+    // next pass (logins at LoginsPerMinute, logouts at 5 per second, never a dead or fighting bot); `.reload config` puts the
+    // configured TargetOnline back.
+    static bool HandlePoolPopulation(ChatHandler* handler, std::string word)
+    {
+        TortoiseBots::pool::PoolScheduler::SwitchResult const result = TortoiseBots::pool::PoolScheduler::SetPopulation(Lower(word));
+        handler->PSendSysMessage("TortoiseBots: %s", result.message.c_str());
+        if (!result.ok)
+            handler->SetSentErrorMessage(true);
+        return result.ok;
+    }
+
+    // .tb free <bot> on|off: a logged-in bot without a master plays the world on its own (W1). Off puts it back to standing.
+    static bool HandleFree(ChatHandler* handler, std::string name, std::string state)
+    {
+        std::string const word = Lower(state);
+        if (word != "on" && word != "off")
+            return Fail(handler, "usage: `.tb free <bot> on|off`.");
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().SetFree(guid, word == "on");
+        if (!error.empty())
+            return Fail(handler, name + " is not free: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s free is %s.", name.c_str(), word.c_str());
+        return true;
+    }
+
+    static std::string Lower(std::string text)
+    {
+        for (char& c : text)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return text;
     }
 
     // .tb group <bot> <master>: two logged-in characters: the bot joins the master's party (the master leads) and takes it as its master.
@@ -294,7 +700,12 @@ public:
             return Fail(handler, "no character named " + masterName + ".");
         if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
             return Fail(handler, masterName + " is neither a host bot nor your own character: bots do not join a real player's party.");
-        std::string const error = BotMgr::Instance().GroupWith(GuidByName(name), master);
+        if (BotMgr::Instance().IsBot(master) && !RequireOwnedBot(handler, master))
+            return false;
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().GroupWith(guid, master);
         if (!error.empty())
             return Fail(handler, name + " not grouped: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s joined the party of %s.", name.c_str(), masterName.c_str());
@@ -304,7 +715,10 @@ public:
     // .tb ungroup <bot>: the bot leaves its party and has no master afterwards.
     static bool HandleUngroup(ChatHandler* handler, std::string name)
     {
-        std::string const error = BotMgr::Instance().Ungroup(GuidByName(name));
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().Ungroup(guid);
         if (!error.empty())
             return Fail(handler, name + " not ungrouped: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s left its party.", name.c_str());
@@ -314,7 +728,10 @@ public:
     // .tb go <character> <dx> <dy>: the bot walks that many yards east/north of where it stands (no master only).
     static bool HandleGo(ChatHandler* handler, std::string name, float dx, float dy)
     {
-        if (!BotMgr::Instance().WalkBy(GuidByName(name), dx, dy))
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        if (!BotMgr::Instance().WalkBy(guid, dx, dy))
             return Fail(handler, name + " is not a logged-in bot.");
         handler->PSendSysMessage("TortoiseBots: %s walks.", name.c_str());
         return true;
@@ -323,7 +740,10 @@ public:
     // .tb hop <character> <dx> <dy>: the bot is teleported that many yards east/north on its own map (R10: the engine's teleport handler, `.tb where`).
     static bool HandleHop(ChatHandler* handler, std::string name, float dx, float dy)
     {
-        std::string const error = BotMgr::Instance().Hop(GuidByName(name), dx, dy);
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().Hop(guid, dx, dy);
         if (!error.empty())
             return Fail(handler, name + " not teleported: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s is teleported.", name.c_str());
@@ -333,7 +753,10 @@ public:
     // .tb raid <master>: converts the master's party into a raid (R10 test helper for the "no bot joins a raid" rule).
     static bool HandleRaid(ChatHandler* handler, std::string name)
     {
-        std::string const error = BotMgr::Instance().ConvertToRaid(GuidByName(name));
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().ConvertToRaid(guid);
         if (!error.empty())
             return Fail(handler, name + "'s party not converted: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: the party of %s is a raid now.", name.c_str());
@@ -345,21 +768,7 @@ public:
     // (host/TbH4.cpp). The old two-word form (a character and a map NUMBER) is kept as it was; every other shape is the new command.
     static bool HandleEnter(ChatHandler* handler, Tail args)
     {
-        std::vector<std::string> words;
-        {
-            std::string_view const text(args);
-            size_t i = 0;
-            while (i < text.size())
-            {
-                while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
-                    ++i;
-                size_t const start = i;
-                while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
-                    ++i;
-                if (i > start)
-                    words.emplace_back(text.substr(start, i - start));
-            }
-        }
+        std::vector<std::string> const words = WordsOf(args);
         bool legacy = words.size() == 2 && !words[1].empty();
         if (legacy)
         {
@@ -380,15 +789,49 @@ public:
     // .tb attack <character>: the bot attacks the nearest thing it may attack within 40 yards.
     static bool HandleAttack(ChatHandler* handler, std::string name)
     {
-        std::string const result = BotMgr::Instance().AttackNearest(GuidByName(name), 40.0f);
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const result = BotMgr::Instance().AttackNearest(guid, 40.0f);
         handler->PSendSysMessage("TortoiseBots: %s: %s.", name.c_str(), result.c_str());
+        return true;
+    }
+
+    // .tb lootnear <bot>: test helper; the bot takes every item it may take from the dead creatures within 10 yd through the
+    // core's own Player::StoreLootItem (what a client's loot-item request runs), so the item-loot path and its hooks run without
+    // the engine (whose item looting is not ported yet).
+    static bool HandleLootNear(ChatHandler* handler, std::string name)
+    {
+        Player* bot = RequireBot(handler, name);
+        if (!bot || !bot->FindMap() || bot->IsBeingTeleported())
+            return false;
+        FindCreatureOptions options;
+        options.IsAlive = FindCreatureAliveState::Dead;
+        std::list<Creature*> corpses;
+        bot->GetCreatureListWithOptionsInGrid(corpses, 10.0f, options);
+        uint32 stored = 0, seen = 0;
+        for (Creature* corpse : corpses)
+        {
+            Loot* loot = corpse->GetLootForPlayer(bot);
+            if (!loot)
+                continue;
+            ++seen;
+            for (uint8 slot = 0; slot < loot->items.size(); ++slot)
+            {
+                uint8 const before = loot->unlootedCount;
+                bot->StoreLootItem(corpse->GetGUID(), slot, loot);
+                if (loot->unlootedCount < before)
+                    ++stored;
+            }
+        }
+        handler->PSendSysMessage("TortoiseBots: %s: %u corpse(s) with loot within 10 yd, %u item(s) stored.", name.c_str(), seen, stored);
         return true;
     }
 
     // .tb where <character>: where the bot is and what it is doing.
     static bool HandleWhere(ChatHandler* handler, std::string name)
     {
-        Player* bot = RequireBot(handler, name);
+        Player* bot = RequireBot(handler, name, false);
         if (!bot)
             return false;
         Unit* victim = bot->GetVictim();
@@ -406,6 +849,13 @@ public:
         }
         for (std::string const& line : BotMgr::Instance().DescribeBrain(bot->GetGUID()))
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+#ifdef TORTOISEBOTS_SLICE1
+        // R6 live check: the liquid at the bot's feet and the nearest wet floor cells within 40 yd (the run's own liquid rule, TbRunLiquid.h).
+        // Review fix 3b: FindMap, not GetMap (which ASSERTs while the bot is between maps); no map, no liquid lines.
+        if (Map* map = bot->FindMap())
+            for (std::string const& line : TortoiseBots::run::liquid::DescribeAround(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 40.0f, 3.0f, 12))
+                handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+#endif
 
         // What the bot has around it: proves its part of the map is loaded and populated.
         std::list<Creature*> creatures;
@@ -466,6 +916,23 @@ public:
         return true;
     }
 
+    // .tb pushback <character> <ms>: sends the bot a real SMSG_SPELL_DELAYED of its own cast (the packet Spell::Delayed sends to the set when
+    // a hit pushes the bar back), so the reader, the queue and the engine's wait can be tested without a mob: the engine adds the delay to its
+    // own wait on the next tick and writes SPELL_DELAYED (SLICE-SD notes). 0 and values above 1000 add nothing, as the legacy handler had it.
+    static bool HandlePushback(ChatHandler* handler, std::string name, uint32 delayMs)
+    {
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+        std::string const error = TortoiseBots::engine::InjectSpellDelay(bot, delayMs);
+        if (!error.empty())
+            return Fail(handler, name + ": no pushback sent: " + error + ".");
+        uint32 const extra = TortoiseBots::sd::PushbackExtraMs(int64(delayMs));
+        handler->PSendSysMessage("TortoiseBots: %s: sent SMSG_SPELL_DELAYED %u ms; the engine adds %u ms to its wait (`.tb state` shows delayed=<n>).",
+            name.c_str(), delayMs, extra);
+        return true;
+    }
+
 
     // ---- Slice 2 test commands (FOREVER-SLICE2-SPEC section 7, R3). They exist for the live test of the engine's priest, so each refuses
     // in a build without the engine (the option TORTOISEBOTS_SLICE1 is off). `<name>` is a character that is logged in through `.tb login`.
@@ -479,11 +946,15 @@ public:
     // The character of a module bot or of a master that is a bot session (logged in with `.tb login`), or a clear refusal. The commands that CHANGE a
     // character (hurt, power, level, train, additem, use, rage, cast, castlog sink...) go through here: a real player's character is refused with a message
     // (a GM has the core's own commands for that), R5 item 6.
-    static Player* RequireBot(ChatHandler* handler, std::string const& name)
+    static Player* RequireBot(ChatHandler* handler, std::string const& name, bool requireControl = true)
     {
         ObjectGuid const guid = GuidByName(name);
         if (Player* bot = BotMgr::Instance().FindBot(guid))
+        {
+            if (requireControl && !RequireOwnedBot(handler, guid))
+                return nullptr;
             return bot;
+        }
         if (!guid.IsEmpty() && BotMgr::Instance().IsBot(guid))
             Fail(handler, name + " is a module bot that is not in the world yet.");
         else if (!guid.IsEmpty() && ObjectAccessor::FindPlayer(guid))
@@ -607,32 +1078,48 @@ public:
         return true;
     }
 
-    // .tb hurt <name> <percent>: sets the character's health to that percent of its maximum (1 at least). A module bot or a bot-session master only (R5 item 6).
-    static bool HandleHurt(ChatHandler* handler, std::string name, uint32 percent)
+    // .tb hurt <character> <percent> (the name left out: the sender's own character): sets the character's health to that percent of its maximum (1 at
+    // least). A module bot, or the sender's own character (TB-1); never another real player.
+    static bool HandleHurt(ChatHandler* handler, Tail args)
     {
         if (!RequireEngine(handler))
             return false;
-        Player* player = RequireBot(handler, name);
+        std::vector<std::string> const words = WordsOf(args);
+        size_t const first = !words.empty() && target::IsNumberWord(words[0]) ? 0 : 1;
+        if (words.size() != first + 1)
+            return Fail(handler, "usage: .tb hurt <character> <percent>.");
+        std::string code, detail;
+        Player* player = TortoiseBots::h3::ResolveTestTarget(handler, first ? std::string_view(words[0]) : std::string_view(), code, detail);
         if (!player)
-            return false;
+            return Fail(handler, detail + ".");
+        if (!target::IsNumberWord(words[first]))
+            return Fail(handler, "the percent must be 0 to 100.");
+        uint32 const percent = uint32(std::strtoul(words[first].c_str(), nullptr, 10));
         if (percent > 100)
             return Fail(handler, "the percent must be 0 to 100.");
         if (!player->IsAlive())
-            return Fail(handler, name + " is dead.");
+            return Fail(handler, std::string(player->GetName()) + " is dead.");
         player->SetHealth(std::max<uint32>(1u, uint32(uint64(player->GetMaxHealth()) * percent / 100)));
-        handler->PSendSysMessage("TortoiseBots: %s health is %u/%u.", name.c_str(), uint32(player->GetHealth()), uint32(player->GetMaxHealth()));
+        handler->PSendSysMessage("TortoiseBots: %s health is %u/%u.", player->GetName().c_str(), uint32(player->GetHealth()), uint32(player->GetMaxHealth()));
         return true;
     }
 
-    // .tb power <bot> mana|rage|energy <value>: sets that power to <value> percent of its maximum (rage: percent of 100 = rage points, the
-    // unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten; SetPower takes core units (Unit.h:839).
-    static bool HandlePower(ChatHandler* handler, std::string name, std::string kind, uint32 value)
+    // .tb power <character> mana|rage|energy <value> (the name left out: the sender's own character): sets that power to <value> percent of its
+    // maximum (rage: percent of 100 = rage points, the unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten;
+    // SetPower takes core units (Unit.h:839). A module bot, or the sender's own character (TB-1); never another real player.
+    static bool HandlePower(ChatHandler* handler, Tail args)
     {
         if (!RequireEngine(handler))
             return false;
-        Player* bot = RequireBot(handler, name);
+        std::vector<std::string> const words = WordsOf(args);
+        size_t const first = !words.empty() && target::IsPowerWord(TortoiseBots::h3::Lower(words[0])) ? 0 : 1;
+        if (words.size() != first + 2)
+            return Fail(handler, "usage: .tb power <character> mana|rage|energy <percent>.");
+        std::string code, detail;
+        Player* bot = TortoiseBots::h3::ResolveTestTarget(handler, first ? std::string_view(words[0]) : std::string_view(), code, detail);
         if (!bot)
-            return false;
+            return Fail(handler, detail + ".");
+        std::string const kind = TortoiseBots::h3::Lower(words[first]);
         Powers power;
         if (kind == "mana")
             power = POWER_MANA;
@@ -642,11 +1129,14 @@ public:
             power = POWER_ENERGY;
         else
             return Fail(handler, "usage: .tb power <character> mana|rage|energy <percent>.");
+        if (!target::IsNumberWord(words[first + 1]))
+            return Fail(handler, "the percent must be 0 to 100.");
+        uint32 const value = uint32(std::strtoul(words[first + 1].c_str(), nullptr, 10));
         int32 const max = bot->GetMaxPower(power);
         if (max <= 0)
-            return Fail(handler, name + " has no " + kind + ".");
+            return Fail(handler, std::string(bot->GetName()) + " has no " + kind + ".");
         bot->SetPower(power, int32(int64(max) * std::min<uint32>(value, 100) / 100));
-        handler->PSendSysMessage("TortoiseBots: %s %s is %d/%d (core units).", name.c_str(), kind.c_str(), bot->GetPower(power), max);
+        handler->PSendSysMessage("TortoiseBots: %s %s is %d/%d (core units).", bot->GetName().c_str(), kind.c_str(), bot->GetPower(power), max);
         return true;
     }
 
@@ -691,8 +1181,13 @@ public:
         std::vector<TortoiseBots::CastResult> results;
         session->PeekCastResults(results);
         for (TortoiseBots::CastResult const& r : results)
-            handler->PSendSysMessage("TortoiseBots: kind=%s spell=%u reason=%u cast=%s%s", r.kind == TortoiseBots::CastResult::Kind::SpellFailure ? "SpellFailure" : "CastFailed",
-                r.spellId, r.reason, r.castId.ToString().c_str(), r.injected ? " injected" : "");
+        {
+            if (r.kind == TortoiseBots::CastResult::Kind::SpellDelayed)
+                handler->PSendSysMessage("TortoiseBots: kind=%s delay=%u%s", CastResultKindName(r.kind), r.delayMs, r.injected ? " injected" : "");
+            else
+                handler->PSendSysMessage("TortoiseBots: kind=%s spell=%u reason=%u cast=%s%s", CastResultKindName(r.kind),
+                    r.spellId, r.reason, r.castId.ToString().c_str(), r.injected ? " injected" : "");
+        }
         handler->PSendSysMessage("TortoiseBots: %s: %u queued result(s) (a copy, the queue keeps them); sink %s; moving now %s; casting now %s.", name.c_str(), uint32(results.size()),
             session->CastResultSink() ? "on" : "off", bot->isMoving() ? "yes" : "no",
             bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ? "yes" : "no");
@@ -700,7 +1195,7 @@ public:
     }
 
     // .tb use <bot> <item id> [self]: the bot uses an item from its bags through the core's own item cast (Player::CastItemUseSpell, Player.h:2683:
-    // the call a client's use-item packet ends in, Player.cpp:33833), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
+    // the call a client's use-item packet ends in, Player.cpp:33843), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
     // flag, effects, on-use spell: a legacy item's effect is ignored by the core, Player.cpp:9718-9744), then mana, current cast and auras.
     // With the word `self` the cast carries the bot as its unit target; without, an empty target list (what a client sends for a self spell).
     static bool HandleUse(ChatHandler* handler, std::string name, uint32 entry, Optional<std::string> mode)
@@ -754,7 +1249,7 @@ public:
     // .tb spells <character>: the spells the bot's spell map holds (id and name), what the engine's "spell id" value searches.
     static bool HandleSpells(ChatHandler* handler, std::string name)
     {
-        Player* bot = RequireBot(handler, name);
+        Player* bot = RequireBot(handler, name, false);
         if (!bot)
             return false;
         std::string line;
@@ -948,7 +1443,10 @@ public:
             on = false;
         else
             return Fail(handler, "usage: .tb engine <character> on|off.");
-        std::string const error = BotMgr::Instance().SetEngine(GuidByName(name), on);
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().SetEngine(guid, on);
         if (!error.empty())
             return Fail(handler, name + ": engine not changed: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s engine %s.", name.c_str(), on ? "on" : "off");
@@ -958,7 +1456,10 @@ public:
     // .tb logout <character>
     static bool HandleLogout(ChatHandler* handler, std::string name)
     {
-        if (!BotMgr::Instance().Logout(GuidByName(name), "command"))
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        if (!BotMgr::Instance().Logout(guid, "command"))
         {
             handler->PSendSysMessage("TortoiseBots: %s is not a logged-in bot.", name.c_str());
             handler->SetSentErrorMessage(true);
@@ -1162,6 +1663,25 @@ public:
             uint32(proto->ShadowRes), uint32(proto->ArcaneRes));
         return true;
     }
+
+    // W7 test helper ONLY: .tb setskill <bot> <skill> <value> [max]
+    static bool HandleSetSkill(ChatHandler* handler, Tail args)
+    {
+        std::vector<std::string> const words = WordsOf(args);
+        if (words.size() < 3)
+            return Fail(handler, "usage: .tb setskill <bot> <skill> <value> [max]");
+        ObjectGuid const guid = GuidByName(words[0]);
+        Player* bot = guid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(guid);
+        if (!bot || !BotMgr::Instance().IsBot(guid))
+            return Fail(handler, "bot '" + words[0] + "' is not online.");
+        uint32 const skillId = uint32(std::strtoul(words[1].c_str(), nullptr, 10));
+        uint16 const val = uint16(std::strtoul(words[2].c_str(), nullptr, 10));
+        uint16 const maxVal = words.size() >= 4 ? uint16(std::strtoul(words[3].c_str(), nullptr, 10)) : std::max<uint16>(75, val);
+        uint16 const step = maxVal >= 300 ? 4 : maxVal >= 225 ? 3 : maxVal >= 150 ? 2 : 1;
+        bot->SetSkill(skillId, step, val, maxVal);
+        handler->PSendSysMessage("TortoiseBots: %s skill %u set to %u/%u (step %u).", bot->GetName().c_str(), skillId, val, maxVal, step);
+        return true;
+    }
 };
 }
 
@@ -1169,5 +1689,10 @@ void AddSC_tortoisebots()
 {
     new tortoisebots_world();
     new tortoisebots_player();
+    new tortoisebots_unit();
+    new tortoisebots_group();
+    new tortoisebots_server();
     new tortoisebots_commands();
+    TortoiseBots::chatin::AddScripts();     // S1-R2: PlayerScript::OnChat -> the bots' chat inboxes (host/chat/TbChatIn.cpp)
+    TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
 }

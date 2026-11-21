@@ -13,6 +13,7 @@
 #include "Player.h"
 #include "Log.h"
 #include "../host/ModuleLog.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots {
 
@@ -57,7 +58,7 @@ bool PlayerbotAIAdapter::Initialize()
     PlayerbotAIStorage::Instance().SetAI(bot_, ai_); // pi-lens-ignore: clang:all
     initialized_ = true;
     TB_LOG_DETAIL("TortoiseBots: PlayerbotAI attached for %s (%s) master %s", // pi-lens-ignore: clang:all
-        bot_->GetName(), bot_->GetObjectGuid().GetString().c_str(), // pi-lens-ignore: clang:all
+        bot_->GetName(), GuidStringW3(bot_->GetObjectGuid()).c_str(), // pi-lens-ignore: clang:all
         master_ ? master_->GetName() : "none"); // pi-lens-ignore: clang:all
     return true;
 }

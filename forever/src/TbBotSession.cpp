@@ -77,12 +77,14 @@ bool BotSession::BeginLogin(ObjectGuid characterGuid)
 void BotSession::SendPacket(WorldPacket const* packet, bool /*forced*/)
 {
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
-    // Everything is dropped except the two packets that tell the bot its own cast ended badly. The opcode test comes first and
-    // costs one load and two compares for every other packet; only a failure packet is copied and read.
+    // Everything is dropped except the packets that tell the bot about its own cast bar. The opcode test comes first and costs
+    // a few compares for every other packet; only a matching packet is copied and read.
     if (packet && _castResultSink.load(std::memory_order_relaxed))
     {
         uint32 const opcode = packet->GetOpcode();
-        if (opcode == SMSG_SPELL_FAILURE || opcode == SMSG_CAST_FAILED)
+        if (opcode == SMSG_SPELL_DELAYED)
+            CaptureSpellDelay(*packet);
+        else if (opcode == SMSG_SPELL_FAILURE || opcode == SMSG_CAST_FAILED)
             CaptureCastResult(*packet);
     }
 #else
@@ -149,9 +151,41 @@ void BotSession::CaptureCastResult(WorldPacket const& packet)
     PushCastResult(result);
 }
 
+void BotSession::CaptureSpellDelay(WorldPacket const& packet)
+{
+    // WorldPackets::Spells::SpellDelayed::Write (SpellPackets.cpp:1128-1134): ObjectGuid Caster, uint32 ActualDelay. Spell::Delayed sends it
+    // with SendMessageToSet(..., true), so it reaches the caster's own session too (Spell.cpp:8414-8418), and it is no failure: the cast goes
+    // on, just later. The packet is copied first: reading moves the read position, and the same packet object is also handed to the set's
+    // other receivers.
+    CastResult result;
+    try
+    {
+        WorldPacket in(packet);
+        in.rpos(0);
+        uint32 delayMs = 0;
+        in >> result.caster >> delayMs;
+        // A pushback of somebody else's cast that this bot "sees" is not this bot's bar.
+        if (result.caster != _characterGuid)
+            return;
+        result.kind = CastResult::Kind::SpellDelayed;
+        result.delayMs = delayMs;
+        result.injected = t_injecting;
+    }
+    catch (ByteBufferException const&)
+    {
+        std::lock_guard<std::mutex> lock(_castResultLock);
+        ++_castResultCounts.malformed;
+        return;
+    }
+
+    PushCastResult(result);
+}
+
 void BotSession::PushCastResult(CastResult const& result)
 {
     std::lock_guard<std::mutex> lock(_castResultLock);
+    if (result.kind == CastResult::Kind::SpellDelayed)
+        ++_castResultCounts.delayed;
     if (_castResults.size() >= CastResultCapacity)
     {
         _castResults.pop_front();
@@ -200,6 +234,33 @@ std::string BotSession::InjectCastResult(uint32 spellId, uint32 reason, bool int
     return {};
 #else
     (void)spellId; (void)reason; (void)interrupted;
+    return "this build has no engine (TORTOISEBOTS_SLICE1 is off)";
+#endif
+}
+
+std::string BotSession::InjectSpellDelay(uint32 delayMs)
+{
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    Player* player = GetPlayer();
+    if (!player || !player->IsInWorld())
+        return "the bot is not in the world";
+    if (!CastResultSink())
+        return "the cast-result queue is off (the bot has no running engine)";
+
+    struct InjectingScope
+    {
+        InjectingScope() { t_injecting = true; }
+        ~InjectingScope() { t_injecting = false; }
+    } scope;
+
+    // The caster is the bot itself, as Spell::Delayed writes it.
+    WorldPackets::Spells::SpellDelayed packet;
+    packet.Caster = _characterGuid;
+    packet.ActualDelay = int32(delayMs);
+    player->SendDirectMessage(packet.Write());
+    return {};
+#else
+    (void)delayMs;
     return "this build has no engine (TORTOISEBOTS_SLICE1 is off)";
 #endif
 }
@@ -290,6 +351,13 @@ void BotSession::AcknowledgeTeleports()
 
 bool BotSession::Tick(uint32 diff)
 {
+    // A kick (a GM's `.kick`, a ban, the account owner taking the character over) is a forceExit in the core and was invisible to a
+    // session without a socket; IsKickRequested() is the public read (WorldSession.h:1104). The reason is not kept, so the log line
+    // names the request only. The kick poll normally wins: the core sets the kick flag at once, so this sees it first. The account-owner
+    // case is the fallback: BotMgr::Update (ownerLoadingMs, 2 s) logs the bot out when the kick poll has not.
+    if (IsKickRequested() && !_logoutRequested)
+        RequestLogout("the core asked this session to leave (kick or ban)");
+
     // The base Update is safe without a socket: it reads no packets, runs the finished database callbacks (our login)
     // and the timed logout. It returns false for a session without a socket; that only means "drop me from the world's
     // session map", which a bot session is not in.

@@ -69,6 +69,7 @@
 #include <set>
 #include <thread>
 #include "../ai/playerbot/TbCompatW2.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -445,7 +446,7 @@ HireOutcome HireProvisionService::Hire(Player* requester, HireSelection const& s
         outcome.status = HireStatus::Failed;
         outcome.message = "Could not record your hire. No gold was taken.";
         sLog.outError("TortoiseBots: hire ledger unavailable; the hire of character %s (%u) was rolled back",
-            guid.GetString().c_str(), guid.GetCounter());
+            GuidStringW3(guid).c_str(), guid.GetCounter());
         return outcome;
     }
     if (BotRecord* record = BotManager::Instance().FindBot(guid))
@@ -895,7 +896,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
     {
         if (AhBotSellerAccount::Instance().IsSellerAccount(id))
             return false;
-        std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+        auto rows = QueryGuardCompat(CharacterPQueryCompat(
             "SELECT guid, race, account FROM characters WHERE account = '%u' AND deleteDate IS NULL", id));
         uint32_t count = 0;
         bool hasAlliance = false;
@@ -986,7 +987,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
                 snprintf(buf, sizeof(buf), "%06u", suffix);
                 std::string username = safePrefix + buf;
                 AccountMgr::normalizeString(username);
-                if (sAccountMgr.GetId(username) != 0)
+                if (AccountMgrW3().GetId(username) != 0)
                     continue;
                 static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
                 std::string password;
@@ -1003,7 +1004,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
                     for (int i = 0; i < 12; ++i)
                         password.push_back(charset[urand(0, uint32(sizeof(charset) - 2))]);
                 }
-                AccountOpResult created = sAccountMgr.CreateAccount(username, password);
+                AccountOpResult created = AccountMgrW3().CreateAccount(username, password);
                 if (created != AOR_OK)
                 {
                     sLog.outError("TortoiseBots: hire CreateAccount %s failed result %u", username.c_str(), uint32(created));
@@ -1016,7 +1017,7 @@ bool HireProvisionService::CreateCandidate(HireSelection const& sel, uint32_t re
                 uint32_t freshId = 0;
                 for (int wait = 0; wait < 10 && !freshId; ++wait)
                 {
-                    freshId = sAccountMgr.GetId(username);
+                    freshId = AccountMgrW3().GetId(username);
                     if (!freshId)
                         std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }
@@ -1533,7 +1534,7 @@ void HireProvisionService::CancelBoundSeatHire(PendingProvision const& pending, 
         if (master->IsInWorld() && master->GetSession())
             ChatHandler(master).PSendSysMessage("Your hire of %s was cancelled: %s.", cancel.name.c_str(), why.c_str());
     TB_LOG_BASIC("TortoiseBots: bound raid seat hire %s of %s cancelled (%s); deletion %s", cancel.name.c_str(),
-        pending.masterGuid.GetString().c_str(), why.c_str(), cancel.state.deletionQueued ? "recorded" : "not recorded yet, retried");
+        GuidStringW3(pending.masterGuid).c_str(), why.c_str(), cancel.state.deletionQueued ? "recorded" : "not recorded yet, retried");
     if (!SettleSeatCancel(cancel))
         m_seatCancels.push_back(cancel);
 }
@@ -1555,7 +1556,7 @@ bool HireProvisionService::SettleSeatCancel(SeatCancel& cancel)
             case SeatCancelAction::GiveUp:
                 sLog.outError("TortoiseBots: cancelled seat hire %s of %s: its deletion was never recorded after %u "
                     "attempts; no refund (the hire has ended, its character is left for the ledger recovery)",
-                    cancel.name.c_str(), cancel.masterGuid.GetString().c_str(), cancel.state.attempts);
+                    cancel.name.c_str(), GuidStringW3(cancel.masterGuid).c_str(), cancel.state.attempts);
                 return true;
         }
         return true;
@@ -1583,7 +1584,7 @@ void HireProvisionService::RefundSeatCancel(SeatCancel const& cancel)
             ChatHandler(master).PSendSysMessage("Your fee for %s was returned.", cancel.name.c_str());
     }
     TB_LOG_BASIC("TortoiseBots: cancelled seat hire %s of %s: fee %u %s", cancel.name.c_str(),
-        cancel.masterGuid.GetString().c_str(), cancel.cost, !cancel.cost ? "none" : inHand ? "refunded" : "mailed");
+        GuidStringW3(cancel.masterGuid).c_str(), cancel.cost, !cancel.cost ? "none" : inHand ? "refunded" : "mailed");
 }
 
 void HireProvisionService::SweepSeatCancels()
@@ -1847,7 +1848,7 @@ uint8_t HireProvisionService::HighestUnlockedHireTierFor(Player* player)
         uint32_t accountId = player->GetSession() ? player->GetSession()->GetAccountId() : 0;
         if (accountId)
         {
-            std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+            auto rows = QueryGuardCompat(CharacterPQueryCompat(
                 "SELECT q.quest FROM character_queststatus q INNER JOIN characters c ON c.guid = q.guid "
                 "WHERE c.account = '%u' AND q.rewarded <> 0 AND q.quest BETWEEN %u AND %u",
                 accountId, kHireUnlockQuestFirst, kHireUnlockQuestLast));

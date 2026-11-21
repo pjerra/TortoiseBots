@@ -76,7 +76,9 @@ bool BotManager::BindBotMaster(ObjectGuid botGuid, ObjectGuid masterGuid)
         return false;
     Player* bot = BotMgr::Instance().FindBot(botGuid);
     Player* master = ObjectAccessor::FindPlayer(masterGuid);
-    if (bot && master)
+    // Review fix 7: a master that is not online (a run gives a bot back to a master who logged out meanwhile) still replaces the engine's pointer, with null as
+    // ClearBotMaster does: leaving it alone kept the bot pointed at the player it was just released from.
+    if (bot)
         if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot))
             ai->SetMaster(master);
     return true;
@@ -123,14 +125,14 @@ bool RandomBotFacade::IsRandomBot(uint32 /*guid*/)
     return false;
 }
 
-bool RandomBotFacade::IsFreeBot(Player* /*bot*/)
+bool RandomBotFacade::IsFreeBot(Player* bot)
 {
-    return false;
+    return bot && IsFreeBot(bot->GetObjectGuid().GetCounter());
 }
 
-bool RandomBotFacade::IsFreeBot(uint32 /*guid*/)
+bool RandomBotFacade::IsFreeBot(uint32 guid)
 {
-    return false;
+    return TortoiseBots::BotMgr::Instance().IsFreeBot(ObjectGuid::Create<HighGuid::Player>(guid));
 }
 
 // RandomBotFacade::GetValue reads a per-bot value row of the random-bot tables (for example "always online"): there are none.

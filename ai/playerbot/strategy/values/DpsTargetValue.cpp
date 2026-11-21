@@ -476,6 +476,9 @@ namespace
             Unit* unit = ai->GetUnit(guid);
             if (!unit || unit->IsPlayer() || !unit->IsInWorld() || unit->GetMapId() != bot->GetMapId())
                 continue;
+            // `.tb ignore`: a listed mob is never chased down, even running - unless it is attacking the party (it attacks -> the bots defend).
+            if (IsIgnoredMobCompat(bot, guid) && !PossibleAttackTargetsValue::IgnoredMobAttacksParty(unit, bot))
+                continue;
             ai::RunnerFacts facts;
             facts.alive = unit->IsAlive();
             facts.inPartyFight = true;

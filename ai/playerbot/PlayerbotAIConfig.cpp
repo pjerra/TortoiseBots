@@ -135,6 +135,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunRaidBossRules = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidBossRules", false);
     raidHealerSeatsByClass = config.GetBoolDefault("AiPlayerbot.RaidHealerSeatsByClass", false);
     raidTankHealerAssist = config.GetBoolDefault("AiPlayerbot.RaidTankHealerAssist", false);
+    substituteTank = config.GetBoolDefault("AiPlayerbot.SubstituteTank", true);
     dungeonRunRaidHealerGuard = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidHealerGuard", false);
     interruptIgnoresThreat = config.GetBoolDefault("AiPlayerbot.InterruptIgnoresThreat", false);
     interruptAllowStun = config.GetBoolDefault("AiPlayerbot.InterruptAllowStun", false);
@@ -687,6 +688,7 @@ bool PlayerbotAIConfig::Initialize()
     maxWaitForMove = config.GetIntDefault("AiPlayerbot.MaxWaitForMove", 3000);
     expireActionTime = config.GetIntDefault("AiPlayerbot.ExpireActionTime", 5000);
     dispelAuraDuration = config.GetIntDefault("AiPlayerbot.DispelAuraDuration", 2000);
+    dispelMinMana = config.GetIntDefault("AiPlayerbot.DispelMinMana", 25);
     reactDelay = (uint32) config.GetIntDefault("AiPlayerbot.ReactDelay", 100);
     passiveDelay = (uint32) config.GetIntDefault("AiPlayerbot.PassiveDelay", 10000);
     repeatDelay = (uint32) config.GetIntDefault("AiPlayerbot.RepeatDelay", 5000);
@@ -736,6 +738,7 @@ bool PlayerbotAIConfig::Initialize()
     almostFullHealth = config.GetIntDefault("AiPlayerbot.AlmostFullHealth", 90);
     lowMana = config.GetIntDefault("AiPlayerbot.LowMana", 15);
     mediumMana = config.GetIntDefault("AiPlayerbot.MediumMana", 40);
+    innervateManaThreshold = config.GetIntDefault("AiPlayerbot.InnervateManaThreshold", 25);
 
     randomGearMaxLevel = config.GetIntDefault("AiPlayerbot.RandomGearMaxLevel", 100);
     randomGearMaxDiff = config.GetIntDefault("AiPlayerbot.RandomGearMaxDiff", 9);
@@ -966,6 +969,10 @@ bool PlayerbotAIConfig::Initialize()
     randomBotNamesFile = config.GetStringDefault("AiPlayerbot.RandomBotNamesFile", "");
     allowIsolatedCustomStartingZones = config.GetBoolDefault("AiPlayerbot.AllowIsolatedCustomStartingZones", false);
     relocateHopelessDeaths = config.GetBoolDefault("AiPlayerbot.RelocateHopelessDeaths", true);
+    deathReleasePauseMinSec = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.DeathReleasePauseMinSec", 3)));
+    deathReleasePauseMaxSec = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.DeathReleasePauseMaxSec", 10)));
+    walkTargetOffset = std::max(0.0f, config.GetFloatDefault("AiPlayerbot.WalkTargetOffset", 2.5f));
+    huntRares = config.GetBoolDefault("AiPlayerbot.HuntRares", true);
     abandonedInstanceGraceSec = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.AbandonedInstanceGraceSec", 90)));
     repopAtGraveyard = config.GetBoolDefault("AiPlayerbot.RepopAtGraveyard", true);
     turtleMountAtLevel = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.TurtleMountAtLevel", 18));

@@ -31,6 +31,7 @@
 #include "SharedDefines.h"
 #include "Log.h"
 #include "Database/DatabaseEnv.h"
+#include "../ai/playerbot/TbCompatW3.h"
 
 namespace TortoiseBots
 {
@@ -1053,14 +1054,14 @@ void HireRecruiterScript::SyncUnlockFees()
     {
         uint32 fee = IsRaidUnlockQuest(questId) ? sPlayerbotAIConfig.worldBuffsUnlockFeeRaidCopper
                                                 : sPlayerbotAIConfig.worldBuffsUnlockFeeCopper;
-        auto result = WorldDatabase.PQuery("SELECT RewOrReqMoney, Objectives FROM quest_template WHERE entry = %u", questId);
+        auto result = DbPQueryW3(WorldDatabase, "SELECT RewOrReqMoney, Objectives FROM quest_template WHERE entry = %u", questId);
         if (!result)
             continue;
         Field* fields = result->Fetch();
-        std::string objectives = WorldBuffObjectivesWithFee(fields[1].GetCppString(), fee);
-        if (fields[0].GetInt32() == -static_cast<int32>(fee) && objectives == fields[1].GetCppString())
+        std::string objectives = WorldBuffObjectivesWithFee(FieldTextW3(fields[1]), fee);
+        if (fields[0].GetInt32() == -static_cast<int32>(fee) && objectives == FieldTextW3(fields[1]))
             continue;
-        WorldDatabase.escape_string(objectives);
+        DbEscapeW3(WorldDatabase, objectives);
         WorldDatabase.PExecute("UPDATE quest_template SET RewOrReqMoney = %d, Objectives = '%s' WHERE entry = %u",
             -static_cast<int32>(fee), objectives.c_str(), questId);
         ++changed;
@@ -1078,7 +1079,7 @@ void HireRecruiterScript::SyncHireUnlockChain()
     {
         uint32 questId = HireUnlockQuestForTier(tier);
         int32 want = HireTierChainPrevQuest(tier, sPlayerbotAIConfig.hireGearAllQuestsAvailable);
-        auto result = WorldDatabase.PQuery("SELECT PrevQuestId FROM quest_template WHERE entry = %u", questId);
+        auto result = DbPQueryW3(WorldDatabase, "SELECT PrevQuestId FROM quest_template WHERE entry = %u", questId);
         if (!result)
             continue;
         if (result->Fetch()[0].GetInt32() == want)

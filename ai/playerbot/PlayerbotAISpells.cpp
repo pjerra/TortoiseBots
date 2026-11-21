@@ -1,5 +1,6 @@
 #include "playerbot/strategy/actions/ViscidusActions.h"
 #include "playerbot/playerbot.h"
+#include "playerbot/TbCompatK8.h"
 #include "PlayerbotAI.h"
 #include "playerbot/strategy/actions/FankrissFocusActions.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
@@ -18,6 +19,7 @@
 #include "playerbot/strategy/values/MountValues.h"
 #include "playerbot/MountDismountPolicy.h"
 #include "strategy/actions/BossTacticsActions.h"
+#include "playerbot/policy/combat/CcPermissionPolicy.h"
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -472,8 +474,25 @@ SpellCastResult PlayerbotAI::CheckSpellTargetAlignment(SpellEntry const* spellIn
     return SPELL_CAST_OK;
 }
 
+namespace
+{
+// A denied crowd-control kind refuses the cast before any other check, so the
+// rotation moves on to its next spell. The mask is 0 unless the host pushed
+// an order, which keeps this free for every bot that has no setting.
+bool CcKindDenied(PlayerbotAI* ai, std::uint32_t kind, SpellCastResult* checkResult)
+{
+    if (!ai || kind == 0 || (ai->GetCcDeniedMask() & kind) == 0)
+        return false;
+    if (checkResult)
+        *checkResult = SPELL_FAILED_NOT_READY;
+    return true;
+}
+} // namespace
+
 bool PlayerbotAI::CanCastSpell(std::string name, Unit* target, uint8 effectMask, Item* itemTarget, bool ignoreRange, bool ignoreInCombat, bool ignoreMount, SpellCastResult* checkResult)
 {
+    if (GetCcDeniedMask() != 0 && CcKindDenied(this, CcPermissions::KindFromSpellName(name), checkResult))
+        return false;
     return CanCastSpell(aiObjectContext->GetValue<uint32>("spell id", name)->Get(), target, 0, true, itemTarget, ignoreRange, ignoreInCombat, ignoreMount, checkResult);
 }
 
@@ -491,8 +510,18 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, uint8 effectMask, b
     return canCast;
 }
 
+
 bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMask, bool checkHasSpell, Item* itemTarget, bool ignoreRange, bool ignoreInCombat, bool ignoreMount, SpellCastResult* checkResult)
 {
+    // Denied crowd-control kinds first: before the pet bypass below (a
+    // succubus casts Seduction through its own spellbook) and before any
+    // other check. The name comes from the template, so its case varies.
+    if (GetCcDeniedMask() != 0 && spellid)
+    {
+        SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellid);
+        if (spellInfo && CcKindDenied(this, CcPermissions::KindFromSpellName(spellInfo->SpellName[0].c_str()), checkResult))
+            return false;
+    }
     // An opted-in Fankriss DPS casts no area, chain or swing-copy spell
     // while the boss is engaged.
     if (ViscidusBlocksSpell(this, spellid, target) || FankrissBlocksAoe(this, spellid) || PatchwerkOpeningBlocksSpell(this, spellid, target))
@@ -1833,7 +1862,7 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
             return nullptr;
         out.spell = current;
         out.channeledSlot = channeledSlot;
-        out.state = current->getState();
+        out.state = InterruptSpellStateCompat(current);
         out.castTime = current->GetCastTime();
         out.preventionType = GetSpellEntryCompat(current->m_spellInfo)->PreventionType;
         out.interruptFlags = GetSpellEntryCompat(current->m_spellInfo)->InterruptFlags;
@@ -1985,21 +2014,41 @@ bool PlayerbotAI::HasAuraToDispel(Unit* target, uint32 dispelType, const DispelO
 			if (!isPositiveSpell && !isFriend)
 				continue;
 
-			// A short aura (totem pulse, brief snare) is not worth a dispel,
-			// but it must not blind the rest of the scan: skip it and keep
-			// looking (donor `continue`s here; `return false` dropped every
-			// real debuff behind one short aura).
-			if (sPlayerbotAIConfig.dispelAuraDuration && aura->GetAuraDuration() && aura->GetAuraDuration() < (int32)sPlayerbotAIConfig.dispelAuraDuration)
-			    continue;
-
 			if (!canDispel(entry, dispelType, override))
+				continue;
+
+			bool const isSpreading = isFriend && IsSpreadingAura(entry);
+			bool isDangerous = false;
+			if (isFriend && !isSpreading)
+			{
+				DispelDebuffInput debuff;
+				debuff.mechanic = entry->Mechanic;
+				debuff.allMechanicMask = entry->GetAllSpellMechanicMask();
+				for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+				{
+					if (entry->EffectApplyAuraName[i])
+						debuff.effects.push_back({ entry->EffectApplyAuraName[i], entry->EffectBasePoints[i] + 1 });
+				}
+				isDangerous = IsDangerousDispelDebuff(debuff);
+			}
+
+			DispelWorthInput worth;
+			worth.isFriendlyTarget = isFriend;
+			worth.isDangerous = isDangerous;
+			worth.isSpreading = isSpreading;
+			worth.remainingDurationMs = aura->GetAuraDuration();
+			worth.minDurationMs = sPlayerbotAIConfig.dispelAuraDuration;
+			worth.casterHasMana = bot->GetMaxPower(POWER_MANA) > 0;
+			worth.casterManaPct = worth.casterHasMana ? GetManaPercent(*bot) : 100;
+			worth.minManaPct = static_cast<uint8>(std::min<uint32>(sPlayerbotAIConfig.dispelMinMana, 100u));
+			if (!IsDispelWorthMana(worth))
 				continue;
 
 			if (!outHasSpreading)
 				return true;
 
 			found = true;
-			if (IsSpreadingAura(entry))
+			if (isSpreading)
 			{
 				*outHasSpreading = true;
 				return true;

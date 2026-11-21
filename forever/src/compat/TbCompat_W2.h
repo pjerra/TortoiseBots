@@ -242,7 +242,7 @@
 // =====================================================================================================================
 #include <atomic>
 
-// Rates the core keeps behind World::getRate (World.h:482 enum Rates, World.cpp:1005-1056 each name and default 1.0). Same name
+// Rates the core keeps behind World::getRate (World.h:482 enum Rates, World.cpp:1017-1068 each name and default 1.0). Same name
 // without the type token, same meaning, same default 1.0 as the Turtle rate.
 #ifndef CONFIG_FLOAT_RATE_AUCTION_DEPOSIT
 #define CONFIG_FLOAT_RATE_AUCTION_DEPOSIT              RATE_AUCTION_DEPOSIT
@@ -296,20 +296,20 @@
 // Settings ForeverCore has no member for. The enumerator is the Turtle name; the helper below returns the Turtle default.
 enum TbW2U32Key : uint32
 {
-    CONFIG_UINT32_AUCTION_DEPOSIT_MIN,              // Turtle World.cpp:993 "Auction.Deposit.Min", default 0 (a floor on the deposit, in copper)
-    CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT, // Turtle World.cpp:994 "Auction.AccountConcurrentLimit", default 0 (0 = no limit)
-    CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE,          // Turtle World.cpp:1222 "Alterac.MinPlayersInQueue", default 0
+    CONFIG_UINT32_AUCTION_DEPOSIT_MIN,              // Turtle World.cpp:1005 "Auction.Deposit.Min", default 0 (a floor on the deposit, in copper)
+    CONFIG_UINT32_ACCOUNT_CONCURRENT_AUCTION_LIMIT, // Turtle World.cpp:1006 "Auction.AccountConcurrentLimit", default 0 (0 = no limit)
+    CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE,          // Turtle World.cpp:1234 "Alterac.MinPlayersInQueue", default 0
     TBW2_U32_KEYS
 };
 enum TbW2BoolKey : uint32
 {
-    CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS,            // Turtle World.cpp:1058 "AllowTwoSide.Accounts", default false
+    CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS,            // Turtle World.cpp:1070 "AllowTwoSide.Accounts", default false
     TBW2_BOOL_KEYS
 };
 enum TbW2FloatKey : uint32
 {
-    CONFIG_FLOAT_RATE_XP_KILL_ELITE,                // Turtle World.cpp:964 "Rate.XP.Kill.Elite", default 1.0 (ForeverCore has one kill rate, Rate.XP.Kill)
-    CONFIG_FLOAT_RATE_TALENT,                       // Turtle World.cpp:1001 "Rate.Talent", default 1.0; ForeverCore: the config key, TraitMgr.cpp:105
+    CONFIG_FLOAT_RATE_XP_KILL_ELITE,                // Turtle World.cpp:976 "Rate.XP.Kill.Elite", default 1.0 (ForeverCore has one kill rate, Rate.XP.Kill)
+    CONFIG_FLOAT_RATE_TALENT,                       // Turtle World.cpp:1013 "Rate.Talent", default 1.0; ForeverCore: the config key, TraitMgr.cpp:105
     TBW2_FLOAT_KEYS
 };
 
@@ -347,7 +347,7 @@ inline uint32 WorldU32ConfigW2(TbW2U32Key key)
 }
 
 // The Turtle int32 store. ForeverCore keeps every integer setting as uint32; Quests.LowLevelHideDiff is the one int32 key read
-// (default 4, World.cpp:835), so the value is read back as signed, as the Turtle getter returns it.
+// (default 4, World.cpp:847), so the value is read back as signed, as the Turtle getter returns it.
 inline int32 WorldI32ConfigW2(WorldIntConfigs key) { return int32(sWorld.getIntConfig(key)); }
 
 inline bool WorldBoolConfigW2(WorldBoolConfigs key) { return sWorld.getBoolConfig(key); }

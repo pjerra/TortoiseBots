@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/GroupMembers.h"
+#include "playerbot/TbCompatK8.h"
 #include "playerbot/CastCancelLog.h"
 #include "../../../runtime/policy/class/RogueSapApproachPolicy.h"
 #include "../../../runtime/policy/class/RogueThreatPolicy.h"
@@ -215,7 +216,9 @@ namespace ai
 	inline bool BladeFlurryNearCc(PlayerbotAI* ai, Player* bot, float radius)
 	{
 		CcGuard ccGuard(ai);
-		bool const protectedNear = ccGuard.ProtectedEnemyNear(bot, radius, true, bot->GetVictim());
+		// `.tb ignore`: the proc copies swings onto a mob in melee reach, so a listed mob near the bot cancels it like a held mark does.
+		bool const protectedNear = ccGuard.ProtectedEnemyNear(bot, radius, true, bot->GetVictim()) ||
+			ccGuard.IgnoredMobNear(bot, radius);
 		return CcCancelBladeFlurry(true, protectedNear,
 			!protectedNear && ccGuard.ReadyCcMarkNear(bot, radius));
 	}
@@ -295,7 +298,7 @@ namespace ai
         {
             const float edgeGap = 2.5f;
             float standDist = bot->GetObjectBoundingRadius() + target->GetObjectBoundingRadius() + edgeGap;
-            standDist = std::min(standDist, bot->GetCombatReach(target, false, 0.0f) - 1.0f);
+            standDist = std::min(standDist, GetCombatReachCompat(bot, target, false, 0.0f) - 1.0f);
 
             if (sPlayerbotAIConfig.sapApproachAvoidPack)
                 return ApproachAroundPack(target, standDist);
@@ -565,39 +568,10 @@ namespace ai
                     Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, weaponSlot);
                     if (weapon)
                     {
-                        SpellCastTargets targets;
-                        targets.setItemTarget(weapon);
-                        targets.m_targetMask = TARGET_FLAG_ITEM;
-
-                        int count = 0;
-                        for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
-                        {
-                            const _Spell& spellData = poisonProto->Spells[i];
-                            if (spellData.SpellId)
-                            {
-                                const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
-                                if (spellInfo)
-                                {
-                                    BotUseItemSpell* spell = new BotUseItemSpell(bot, spellInfo, (count > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
-                                    // NOTE: no manual cooldown here (see
-                                    // UseAction::UseItemInternal): the core
-                                    // applies it in Spell::SendSpellCooldown
-                                    // after validation.
-                                    if (spell->ForceSpellStart(&targets) == SPELL_CAST_OK)
-                                    {
-                                        SetDuration(3000);
-                                    }
-                                    else
-                                    {
-                                        return false;
-                                    }
-
-                                    ++count;
-                                }
-                            }
-                        }
-
-                        return count;
+                        // The item-cheat branch builds a Spell of its own per poison spell (T: the original loop, moved word for word into
+                        // PoisonItemCheatCastCompat; F: the named feature "item and totem casts", false = no cast started). Returns the
+                        // old `return count`: true when at least one poison spell started.
+                        return PoisonItemCheatCastCompat<BotUseItemSpell>(bot, weapon, poisonProto, [this]() { SetDuration(3000); });
                     }
                 }
                 else

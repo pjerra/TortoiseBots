@@ -9,7 +9,7 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
    both stay green on this branch. A change that breaks the Turtle build is not finished.
 3. The core pin (`forever/PINNED_CORE`) moves on purpose, in its own commit, with the gates re-run. The item mirror
    (`forever/src/compat/TbItemPrototype.*`) is filled once, from `WorldScript::OnWorldInitialized`: the core has no item
-   template reload at the pin (`LoadItemTemplates` is called once, `World.cpp:1608`), so a moved pin must re-check that
+   template reload at the pin (`LoadItemTemplates` is called once, `World.cpp:1622`), so a moved pin must re-check that
    the store is still loaded there and still not reloaded.
    The spell mirror (`forever/src/compat/TbSpellEntry.*`) is filled per spell on first use, after
    `tbcompat::InitSpellTable()` builds its sorted `DIFFICULTY_NONE` id index and slot array from the same hook. The hook
@@ -20,9 +20,31 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
    either at the pin:
    `LoadSpellInfoStore` and every pass that edits the `SpellInfo` objects (`LoadSpellInfoCorrections`,
    `LoadClassicSpellInfo`, `LoadSpellInfoCustomAttributes`) are called once from `World::SetInitialWorldSettings`
-   (`World.cpp:1471-1491`), and no `.reload` handler calls them again (`scripts/Commands/cs_reload.cpp` reloads
+   (`World.cpp:1485-1514`), and no `.reload` handler calls them again (`scripts/Commands/cs_reload.cpp` reloads
    `spell_required`, `spell_area`, `spell_proc` and the other side tables, never the store). A moved pin must re-check
    both halves of that: the store loaded before the hook, and no runtime path that rebuilds a `SpellInfo`.
+   Re-checked at 25fc7ca (the move from 6517af05, 2026-11-19; none of the core files this rule cites changed:
+   `Main.cpp`, `World.cpp`, `ObjectMgr.cpp`, `SpellMgr.cpp`, `SpellInfo.*` and `cs_reload.cpp` are not in the diff
+   6517af0..25fc7ca): `worldserver/Main.cpp:369` `SetInitialWorldSettings()`, then `:372` `ScriptMgr::OnWorldInitialized()`
+   (the hook, `ScriptMgr.cpp:1549`); inside it `World.cpp:1485` `LoadSpellInfoStore`, `:1474` serverside spells, `:1477`
+   `LoadSpellInfoCorrections`, `:1480-1485` `LoadClassicSpellInfo` / `TwinChannels` / `SpellEffects` / `SpellValues` /
+   `SpellCosts` / `ForeverVanillaAoe` (all edit `SpellInfo`, once), `:1491` `LoadSpellInfoCustomAttributes`, `:1494-1500`
+   diminishing, immunities, target caps; `:1608` `LoadItemTemplates` (definition `ObjectMgr.cpp:3649`, the only writer of
+   `_itemTemplateStore` besides `LoadClassicItemDurability`, `World.cpp:1628`, which only edits entries). A grep of `src/server` for every one of those loaders finds no caller outside
+   `World.cpp`; `cs_reload.cpp` (`:812-884`) reloads only the side tables, and `.reload all item` (`:328`) reloads page
+   texts and random bonus lists. `Main.cpp` calls `OnWorldInitialized` once, only after the world settings succeed.
+   Re-checked at d02645dd21 (2026-11-20; `World.cpp` is the only file of the set in the diff 25fc7ca..d02645dd21, which
+   adds `WorldThreadId` at the top and its store at the start of `SetInitialWorldSettings` and `World::Update`: the
+   loader lines move by 14, nothing else changes): `World.cpp:1499` `LoadSpellInfoStore`, `:1488` serverside spells,
+   `:1491` `LoadSpellInfoCorrections`, `:1494-1499` `LoadClassicSpellInfo` / `TwinChannels` / `SpellEffects` /
+   `SpellValues` / `SpellCosts` / `ForeverVanillaAoe`, `:1505` `LoadSpellInfoCustomAttributes`, `:1508-1514`
+   diminishing, immunities, target caps; `:1622` `LoadItemTemplates`, `:1628` `LoadClassicItemDurability`.
+   `Main.cpp:369/372`, `ObjectMgr.cpp:3649`, `SpellMgr.cpp` and `cs_reload.cpp` are unchanged. The new
+   `ScriptMgr::OnAfterReload` (`ChatCommand.cpp:326`) lets a module react to a successful `.reload`; it calls no loader
+   and no `.reload` handler gained one, so neither store is rebuilt at runtime.
+   The pin move added nothing that reloads either store. `forever/tools/check_core_cites.py` lists the `File.ext:LINE`
+   cites in `forever/` that point into a core file a pin move changed and where the cited line went: run it with
+   `--old <old pin> --new <new pin>` on every pin move.
 4. Game data is not ported blindly. Spell ids, talents, races, zones, travel nodes and boss data are re-derived from
    ForeverCore's DB2 and world database, feature by feature.
 

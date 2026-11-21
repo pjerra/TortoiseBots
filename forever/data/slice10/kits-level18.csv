@@ -1,0 +1,96 @@
+role,slot,item_id,name,source,reason
+bear druid,head,,,none,EMPTY: no wearable head for bear druid at <=18 with a source
+bear druid,neck,277204,Erudite's Amulet,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+bear druid,shoulder,270023,Tanned Shoulderpads,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+bear druid,back,279865,Grave Shroud,quest (95250 Abominable Creatures),"quest/vendor preferred, console-handable; ilvl 23 req 1"
+bear druid,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+bear druid,wrist,270021,Staghide Armguards,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+bear druid,hands,5299,Gloves of the Moon,quest (913 Cry of the Thunderhawk),"quest/vendor preferred, console-handable; ilvl 20 req 0"
+bear druid,waist,16659,Deftkin Belt,quest (824 Je'neu of the Earthen Ring),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+bear druid,legs,279868,Duty Bound Leggings,quest (95195 Bloodied Insignia),"quest/vendor preferred, console-handable; ilvl 24 req 1"
+bear druid,feet,16977,Warsong Boots,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+bear druid,finger,279867,Slain Baron's Signet,quest (95250 Abominable Creatures),"quest/vendor preferred, console-handable; ilvl 23 req 1"
+bear druid,finger2,6743,Sustaining Ring,quest (971 Knowledge in the Deeps),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+bear druid,trinket,,,none,EMPTY: no wearable trinket for bear druid at <=18 with a source
+bear druid,trinket2,,,none,EMPTY: no wearable trinket2 for bear druid at <=18 with a source
+bear druid,main_hand,270018,Hammerbone,quest (914 Leaders of the Fang),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+bear druid,off_hand,,,none,EMPTY: two-hander in the main hand
+bear druid,ranged,,,none,EMPTY: no relic (libram/idol/totem) with a source at <=18
+bear druid,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+bear druid,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)
+restoration druid,head,,,none,EMPTY: no wearable head for restoration druid at <=18 with a source
+restoration druid,neck,277203,Scholarly Pendant,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+restoration druid,shoulder,270023,Tanned Shoulderpads,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+restoration druid,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+restoration druid,chest,5316,Barkshell Tunic,quest (906 Betrayal from Within),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+restoration druid,wrist,270021,Staghide Armguards,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+restoration druid,hands,5630,Windfelt Gloves,quest (741 The Absent Minded Prospector),"quest/vendor preferred, console-handable; ilvl 20 req 0"
+restoration druid,waist,7000,Heartwood Girdle,quest (1199 Twilight Falls),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+restoration druid,legs,270016,Dreamer's Leggings,quest (2040 Underground Assault),"quest/vendor preferred, console-handable; ilvl 22 req 0"
+restoration druid,feet,270006,Boots of the People's Militia,quest (14 The People's Militia),"quest/vendor preferred, console-handable; ilvl 17 req 0"
+restoration druid,finger,1449,Minor Channeling Ring,quest (256 WANTED: Chok'sul),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+restoration druid,finger2,20426,Advisor's Ring,vendor (14754 Kelm Hargunth),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+restoration druid,trinket,273298,Lookie's Spyglass,drop (645 Cookie),drop; no quest or vendor source at <=18 in the world DB; ilvl 23 req 18
+restoration druid,trinket2,,,none,EMPTY: no wearable trinket2 for restoration druid at <=18 with a source
+restoration druid,main_hand,281297,Royal Dagger,quest (98191 A Friend of the Family),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+restoration druid,off_hand,273137,Skum's Bucket,drop (3674 Skum),drop; no quest or vendor source at <=18 in the world DB; ilvl 22 req 17
+restoration druid,ranged,,,none,EMPTY: no relic (libram/idol/totem) with a source at <=18
+restoration druid,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+restoration druid,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)
+holy paladin,head,,,none,EMPTY: no wearable head for holy paladin at <=18 with a source
+holy paladin,neck,277203,Scholarly Pendant,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+holy paladin,shoulder,270024,Bronzed Shoulderguards,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+holy paladin,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+holy paladin,chest,279869,Remembrance Armor,quest (95195 Bloodied Insignia),"quest/vendor preferred, console-handable; ilvl 24 req 1"
+holy paladin,wrist,270003,Garrison Cuffs,quest (5724 Returning the Lost Satchel),"quest/vendor preferred, console-handable; ilvl 18 req 0"
+holy paladin,hands,270025,Silvered Gauntlets,quest (1199 Twilight Falls),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+holy paladin,waist,276724,Trophy Belt,quest (501 Elixir of Pain),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+holy paladin,legs,15451,Gargoyle Leggings,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable; ilvl 18 req 0"
+holy paladin,feet,10658,Quagmire Galoshes,quest (3370 In Nightmares),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+holy paladin,finger,1449,Minor Channeling Ring,quest (256 WANTED: Chok'sul),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+holy paladin,finger2,20426,Advisor's Ring,vendor (14754 Kelm Hargunth),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+holy paladin,trinket,273298,Lookie's Spyglass,drop (645 Cookie),drop; no quest or vendor source at <=18 in the world DB; ilvl 23 req 18
+holy paladin,trinket2,,,none,EMPTY: no wearable trinket2 for holy paladin at <=18 with a source
+holy paladin,main_hand,270005,Monastic Hammer,quest (214 Red Silk Bandanas),"quest/vendor preferred, console-handable; ilvl 19 req 0"
+holy paladin,off_hand,16660,Driftmire Shield,quest (824 Je'neu of the Earthen Ring),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+holy paladin,ranged,,,none,EMPTY: no relic (libram/idol/totem) with a source at <=18
+holy paladin,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+holy paladin,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)
+protection paladin,head,,,none,EMPTY: no wearable head for protection paladin at <=18 with a source
+protection paladin,neck,277204,Erudite's Amulet,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+protection paladin,shoulder,270024,Bronzed Shoulderguards,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+protection paladin,back,279865,Grave Shroud,quest (95250 Abominable Creatures),"quest/vendor preferred, console-handable; ilvl 23 req 1"
+protection paladin,chest,279869,Remembrance Armor,quest (95195 Bloodied Insignia),"quest/vendor preferred, console-handable; ilvl 24 req 1"
+protection paladin,wrist,7003,Beetle Clasps,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+protection paladin,hands,270025,Silvered Gauntlets,quest (1199 Twilight Falls),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+protection paladin,waist,285339,Centaur War Chain,drop (5841 Rocklance),drop; no quest or vendor source at <=18 in the world DB; ilvl 19 req 14
+protection paladin,legs,17006,Cobalt Legguards,quest (6621 King of the Foulweald),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+protection paladin,feet,10658,Quagmire Galoshes,quest (3370 In Nightmares),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+protection paladin,finger,279867,Slain Baron's Signet,quest (95250 Abominable Creatures),"quest/vendor preferred, console-handable; ilvl 23 req 1"
+protection paladin,finger2,6743,Sustaining Ring,quest (971 Knowledge in the Deeps),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+protection paladin,trinket,,,none,EMPTY: no wearable trinket for protection paladin at <=18 with a source
+protection paladin,trinket2,,,none,EMPTY: no wearable trinket2 for protection paladin at <=18 with a source
+protection paladin,main_hand,6504,Wingblade,quest (914 Leaders of the Fang),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+protection paladin,off_hand,6676,Constable Buckler,quest (1059 Reclaiming the Charred Vale),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+protection paladin,ranged,,,none,EMPTY: no relic (libram/idol/totem) with a source at <=18
+protection paladin,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+protection paladin,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)
+restoration shaman,head,,,none,EMPTY: no wearable head for restoration shaman at <=18 with a source
+restoration shaman,neck,277203,Scholarly Pendant,quest (78150 Friend of the Library),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+restoration shaman,shoulder,270023,Tanned Shoulderpads,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+restoration shaman,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+restoration shaman,chest,5316,Barkshell Tunic,quest (906 Betrayal from Within),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+restoration shaman,wrist,270021,Staghide Armguards,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable; ilvl 26 req 0"
+restoration shaman,hands,5630,Windfelt Gloves,quest (741 The Absent Minded Prospector),"quest/vendor preferred, console-handable; ilvl 20 req 0"
+restoration shaman,waist,7000,Heartwood Girdle,quest (1199 Twilight Falls),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+restoration shaman,legs,270016,Dreamer's Leggings,quest (2040 Underground Assault),"quest/vendor preferred, console-handable; ilvl 22 req 0"
+restoration shaman,feet,270006,Boots of the People's Militia,quest (14 The People's Militia),"quest/vendor preferred, console-handable; ilvl 17 req 0"
+restoration shaman,finger,1449,Minor Channeling Ring,quest (256 WANTED: Chok'sul),"quest/vendor preferred, console-handable; ilvl 24 req 0"
+restoration shaman,finger2,20426,Advisor's Ring,vendor (14754 Kelm Hargunth),"quest/vendor preferred, console-handable; ilvl 23 req 18"
+restoration shaman,trinket,273298,Lookie's Spyglass,drop (645 Cookie),drop; no quest or vendor source at <=18 in the world DB; ilvl 23 req 18
+restoration shaman,trinket2,,,none,EMPTY: no wearable trinket2 for restoration shaman at <=18 with a source
+restoration shaman,main_hand,281297,Royal Dagger,quest (98191 A Friend of the Family),"quest/vendor preferred, console-handable; ilvl 25 req 0"
+restoration shaman,off_hand,16660,Driftmire Shield,quest (824 Je'neu of the Earthen Ring),"quest/vendor preferred, console-handable; ilvl 27 req 0"
+restoration shaman,ranged,,,none,EMPTY: no relic (libram/idol/totem) with a source at <=18
+restoration shaman,food,4542,Moist Cornbread,vendor (4 alliance vendors),widely stocked alliance vendor food/water (req 15)
+restoration shaman,drink,1205,Melon Juice,vendor (16 alliance vendors),widely stocked alliance vendor food/water (req 15)

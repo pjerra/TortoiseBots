@@ -1,9 +1,16 @@
 // Slice 3, host package H3: helpers shared by the order, state and test-kit commands (see TbH3.h). Core headers only: this file is
 // built with and without TORTOISEBOTS_SLICE1.
 #include "host/TbH3.h"
+#include "host/TbGuardPure.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbH4.h"
+#include "host/TbCc.h"
+#include "host/TbIgnore.h"            // I13: `.tb ignore` (self-test records here; the handler lives in TbIgnore.cpp)
+#include "host/TbHybrid.h"
+#include "host/TbPet.h"
+#include "host/cmd/TbTestTargetPure.h"
+#include "host/run/TbRunHooks.h"
 
 #include "CharacterCache.h"
 #include "Chat.h"
@@ -362,6 +369,11 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "freetext").T("msg", std::string(450, 'x') + " tail", 400));
     reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "unsplittable").S("value", std::string(3100, 'y')));
     h4::SelfTestRecords(reply);               // H4: one example of every record kind and key slice 4 adds
+    run::SelfTestRecords(reply);              // H5: one plan, leg, unit, run and event record
+    h8::SelfTestRecords(reply);               // H8: the cc and strategy records and the state keys slice 8 adds
+    h10::SelfTestRecords(reply);              // H10: the state keys slice 10 adds (form, totems, imbue, seal, paura)
+    p11::SelfTestRecords(reply);              // P11: the pet state keys and the `pet` record
+    i13::SelfTestRecords(reply);              // I13: the `ignore` records of `.tb ignore`
     Rec end("selftest");
     end.N("line_too_long", LineTooLongCount()).S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
     reply.End(end);
@@ -379,14 +391,6 @@ bool RequireBuilt(ChatHandler* handler, Words const& args, std::string_view cmd)
     if (args.badToken)
         return Fail(handler, args, cmd, "bad-token", "a token is # and 1 to 32 of A-Za-z0-9_.:-; nothing was done");
     return true;
-}
-
-std::string Lower(std::string_view text)
-{
-    std::string out(text);
-    for (char& c : out)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return out;
 }
 
 std::string GuidText(ObjectGuid guid)
@@ -436,14 +440,124 @@ bool IsHostBot(Player const* player)
     return player && BotMgr::Instance().IsBot(player->GetGUID());
 }
 
+namespace
+{
+target::Guid Identity(ObjectGuid guid)
+{
+    return { guid.GetRawValue(0), guid.GetRawValue(1) };
+}
+}
+
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character)
 {
-    if (character.IsEmpty())
-        return false;
-    if (BotMgr::Instance().IsBot(character))
-        return true;
     Player* sender = SenderPlayer(handler);
-    return sender && sender->GetGUID() == character;
+    return target::MayTarget(Identity(character), sender ? Identity(sender->GetGUID()) : target::Guid(),
+                             BotMgr::Instance().IsBot(character));
+}
+
+bool CheckBotAccess(Player const* sender, ObjectGuid botGuid, std::string& code, std::string& detail)
+{
+    if (!sender || botGuid.IsEmpty())
+        return true;
+
+    guard::Subject s;
+    s.caller = Identity(sender->GetGUID());
+
+    // A bot in a `.tb run` is temporarily bound to the run's tank bot; resolve one hop to the tank's commander so the owner
+    // can still intervene (`outside-order` pause) while another player is refused.
+    ObjectGuid binding = CommanderGuid(botGuid);
+    if (!binding.IsEmpty() && BotMgr::Instance().IsBot(binding))
+    {
+        ObjectGuid const leadCommander = CommanderGuid(binding);
+        if (!leadCommander.IsEmpty())
+            binding = leadCommander;
+    }
+    s.binding = Identity(binding);
+
+    ObjectGuid const master = BotMgr::Instance().MasterOf(botGuid);
+    s.master = Identity(master);
+    s.masterIsBot = !master.IsEmpty() && BotMgr::Instance().IsBot(master);
+
+    Player const* bot = ObjectAccessor::FindPlayer(botGuid);
+    if (bot)
+    {
+        if (Group const* group = bot->GetGroup())
+        {
+            ObjectGuid const leaderGuid = group->GetLeaderGUID();
+            s.partyLeader = Identity(leaderGuid);
+            s.partyLeaderIsBot = !leaderGuid.IsEmpty() && BotMgr::Instance().IsBot(leaderGuid);
+        }
+    }
+
+    guard::Verdict const verdict = guard::CheckControl(s);
+    if (verdict == guard::Verdict::Allowed)
+        return true;
+
+    code = guard::CodeOf(verdict);
+    std::string const botName = bot ? std::string(bot->GetName()) : GuidText(botGuid);
+    detail = verdict == guard::Verdict::ForeignBot
+        ? botName + " is owned by another commander"
+        : botName + " is in a party led by another player";
+    return false;
+}
+
+bool CheckBotAccess(ChatHandler* handler, ObjectGuid botGuid, std::string& code, std::string& detail)
+{
+    return CheckBotAccess(SenderPlayer(handler), botGuid, code, detail);
+}
+
+bool CheckBotAccess(ChatHandler* handler, Player const* bot, std::string& code, std::string& detail)
+{
+    return !bot || CheckBotAccess(SenderPlayer(handler), bot->GetGUID(), code, detail);
+}
+
+bool CheckPartyLeadAccess(Player const* sender, Player const* leader, std::string& code, std::string& detail)
+{
+    if (!sender || !leader)
+        return true;
+    if (IsHostBot(leader))
+        return CheckBotAccess(sender, leader->GetGUID(), code, detail);
+    if (leader->GetGUID() != sender->GetGUID())
+    {
+        code = "foreign-lead";
+        detail = std::string(leader->GetName()) + "'s party is led by another player";
+        return false;
+    }
+    return true;
+}
+
+bool CheckPartyLeadAccess(ChatHandler* handler, Player const* leader, std::string& code, std::string& detail)
+{
+    return CheckPartyLeadAccess(SenderPlayer(handler), leader, code, detail);
+}
+
+Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail)
+{
+    Player* sender = SenderPlayer(handler);
+    if (name.empty())
+    {
+        if (sender)
+            return sender;
+        code = "no-character";
+        detail = "the console has no character: name a host bot";
+        return nullptr;
+    }
+    Player* player = FindOnline(name);
+    if (!player)
+    {
+        code = "no-such-player";
+        detail = std::string(name) + " is not in the world";
+        return nullptr;
+    }
+    if (!MayLeadBots(handler, player->GetGUID()))
+    {
+        code = "not-a-bot";
+        detail = std::string(name) + " is neither a host bot nor your own character";
+        return nullptr;
+    }
+    if (IsHostBot(player) && !CheckBotAccess(handler, player, code, detail))
+        return nullptr;
+    return player;
 }
 
 Player* CommanderOf(Player* bot)
@@ -482,6 +596,12 @@ ObjectGuid CommanderGuid(ObjectGuid bot)
     return itr != Bindings().end() && Valid(bot, itr->second) ? itr->second : ObjectGuid::Empty;
 }
 
+ObjectGuid StoredCommander(ObjectGuid bot)
+{
+    auto itr = Bindings().find(bot);
+    return itr == Bindings().end() ? ObjectGuid::Empty : itr->second;
+}
+
 std::vector<std::pair<ObjectGuid, ObjectGuid>> CommanderBindings()
 {
     std::vector<std::pair<ObjectGuid, ObjectGuid>> out;
@@ -507,7 +627,7 @@ std::vector<Player*> BotsOfGroup(Group* group)
 }
 }
 
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows)
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender, bool requireControl)
 {
     Address result;
     if (pos >= args.w.size())
@@ -526,10 +646,14 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.code = "no-such-player";
             result.detail = name + " is not in the world";
         }
-        else if (!IsHostBot(bot))
+        else if (!IsHostBot(bot) && !(allowSender && sender && bot->GetGUID() == sender->GetGUID()))
         {
             result.code = "not-a-bot";
-            result.detail = name + " is not a logged-in host bot";
+            result.detail = allowSender ? name + " is neither a host bot nor your own character" : name + " is not a logged-in host bot";
+        }
+        else if (requireControl && IsHostBot(bot) && !CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+        {
+            return result;
         }
         else
         {
@@ -557,6 +681,8 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.detail = name + " is not in a party";
             return result;
         }
+        if (requireControl && !CheckPartyLeadAccess(sender, leader, result.code, result.detail))
+            return result;
         result.leader = leader;
         result.label = "party:" + leader->GetName();
         result.bots = BotsOfGroup(group);
@@ -564,6 +690,18 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
         {
             result.code = "no-bots";
             result.detail = "the party of " + name + " holds no host bot";
+            return result;
+        }
+        if (requireControl)
+        {
+            for (Player* bot : result.bots)
+            {
+                if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                {
+                    result.bots.clear();
+                    return result;
+                }
+            }
         }
         return result;
     }
@@ -579,6 +717,17 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
                     result.bots.push_back(bot);
         if (!result.bots.empty())
         {
+            if (requireControl)
+            {
+                for (Player* bot : result.bots)
+                {
+                    if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                    {
+                        result.bots.clear();
+                        return result;
+                    }
+                }
+            }
             result.label = "party:commander:" + sender->GetName();
             return result;
         }
@@ -593,6 +742,17 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
                 result.bots.push_back(bot);
         if (!result.bots.empty())
         {
+            if (requireControl)
+            {
+                for (Player* bot : result.bots)
+                {
+                    if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                    {
+                        result.bots.clear();
+                        return result;
+                    }
+                }
+            }
             if (Player* commander = ObjectAccessor::FindPlayer(*commanders.begin()))
                 result.label = "party:commander:" + commander->GetName();
             else
@@ -614,7 +774,25 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.label = "party:" + leader->GetName();
         }
         if (!result.bots.empty())
+        {
+            if (requireControl)
+            {
+                if (result.leader && !CheckPartyLeadAccess(sender, result.leader, result.code, result.detail))
+                {
+                    result.bots.clear();
+                    return result;
+                }
+                for (Player* bot : result.bots)
+                {
+                    if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                    {
+                        result.bots.clear();
+                        return result;
+                    }
+                }
+            }
             return result;
+        }
     }
     result.code = groups.empty() && bindings.empty() ? "no-bots" : "ambiguous-party";
     result.detail = "name the party leader: `party <leader>`";

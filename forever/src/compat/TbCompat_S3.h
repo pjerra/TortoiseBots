@@ -12,7 +12,7 @@
 // ForEachThreatenerThreatCompat (slice 1). The `getThreat` spelling is the shim's `#define getThreat GetThreat` (forever-compat-shim.h:148).
 //
 // THREAT CALLS OF THIS PACKAGE: every one is a pure READ of the core's ThreatManager (the engine runs on the world thread before the maps
-// update, World.cpp:2465-2475, and must not change the core's own choice of victim). See SLICE3-P-NOTES.md section 3 for the table.
+// update, World.cpp:2481-2491, and must not change the core's own choice of victim). See SLICE3-P-NOTES.md section 3 for the table.
 // ===============================================================================================================
 
 // The flat threat a spell adds on top of its damage or healing (the spell threat table). T `SpellThreatEntry::threat` (SpellMgr.h:108,
@@ -23,7 +23,7 @@ inline float SpellFlatThreatCompat(ThreatEntry const& entry) { return static_cas
 
 // A visual the `debug threat` strategy plays on the bot to show its threat band (high / medium). T `Unit::SendPlaySpellVisual(id)`
 // (Unit.cpp:11476: SMSG_PLAY_SPELL_VISUAL, guid + a SpellVisualKit.dbc index of the 1.12 client). F has no call with that meaning:
-// `Unit::SendPlaySpellVisual(target, spellVisualId, ...)` (Unit.cpp:12952) names a spell visual id of the new client and a target, and
+// `Unit::SendPlaySpellVisual(target, spellVisualId, ...)` (Unit.cpp:12962) names a spell visual id of the new client and a target, and
 // `SendPlaySpellVisualKit(id, type, duration)` (:12989) takes a kit id of the new client's DB2, so the two 1.12 numbers (6372, 5036)
 // would show nothing or something unrelated. Unported feature "debug spell visuals": counted, nothing shown (a debug aid; the bot does
 // less, never more).

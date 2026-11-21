@@ -3,6 +3,7 @@
 #include "playerbot/PerformanceMonitor.h"
 #include "BuyAction.h"
 #include "SellAction.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/strategy/values/BudgetValues.h"
@@ -47,7 +48,7 @@ bool BuyAction::Execute(Event& event)
     for (std::list<ObjectGuid>::iterator i = vendors.begin(); i != vendors.end(); ++i)
     {
         ObjectGuid vendorguid = *i;
-        Creature *pCreature = bot->GetNPCIfCanInteractWith(vendorguid, UNIT_NPC_FLAG_VENDOR);
+        Creature *pCreature = VendorIfCanInteractCompat(bot, vendorguid);
         if (!pCreature)
             continue;
         // #404: skip flagged-but-stockless NPCs (e.g. entry 1650, no npc_vendor rows) so bots
@@ -65,18 +66,11 @@ bool BuyAction::Execute(Event& event)
 
             VendorItemData const* tItems = pCreature->GetVendorItems();
             VendorItemData const* vItems = {};
-            if (!tItems && !vItems)
+            std::vector<VendorItem const*> m_items_sorted = CollectVendorItemsCompat(pCreature);
+            if (m_items_sorted.empty())
                 continue;
 
-            VendorItemList m_items_sorted;
-
-            if (tItems)
-                m_items_sorted.insert(m_items_sorted.begin(), tItems->m_items.begin(), tItems->m_items.end());
-            if (vItems)
-                m_items_sorted.insert(m_items_sorted.begin(), vItems->m_items.begin(), vItems->m_items.end());
-
-
-            m_items_sorted.erase(std::remove_if(m_items_sorted.begin(), m_items_sorted.end(), [](VendorItem* i) {ItemPrototype const* proto = GetItemProtoByIdCompat(i->item); return !proto; }), m_items_sorted.end());
+            m_items_sorted.erase(std::remove_if(m_items_sorted.begin(), m_items_sorted.end(), [](VendorItem const* i) {ItemPrototype const* proto = GetItemProtoByIdCompat(i->item); return !proto; }), m_items_sorted.end());
 
             if (m_items_sorted.empty())
                 continue;
@@ -93,9 +87,9 @@ bool BuyAction::Execute(Event& event)
                 !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
             std::unordered_map<uint32, uint32> vendorScores;
             vendorScores.reserve(m_items_sorted.size());
-            for (VendorItem* scored : m_items_sorted)
+            for (VendorItem const* scored : m_items_sorted)
                 vendorScores[scored->item] = sRandomItemMgr.GetLiveStatWeight(bot, scored->item);
-            std::sort(m_items_sorted.begin(), m_items_sorted.end(), [&vendorScores, buyShieldNeed](VendorItem* i, VendorItem* j)
+            std::sort(m_items_sorted.begin(), m_items_sorted.end(), [&vendorScores, buyShieldNeed](VendorItem const* i, VendorItem const* j)
             {
                 ItemPrototype const* pi = GetItemProtoByIdCompat(i->item);
                 ItemPrototype const* pj = GetItemProtoByIdCompat(j->item);
@@ -110,6 +104,8 @@ bool BuyAction::Execute(Event& event)
 
             for (auto& tItem : m_items_sorted)
             {
+                if (!VendorItemBuyAllowedCompat(bot, pCreature, tItem))
+                    continue;
                 ItemPrototype const* proto = GetItemProtoByIdCompat(tItem->item);
                 if (!proto)
                     continue;
@@ -149,7 +145,7 @@ bool BuyAction::Execute(Event& event)
                         uint32 spellReserve = AI_VALUE2(uint32, "total money needed for", (uint32)NeedMoneyFor::spells);
                         if (VendorWeaponUpgradeAffordable(price, bot->GetMoney(), spellReserve))
                         {
-                            if (BuyItem(requester, tItems, vendorguid, proto, bought, ItemUsage::ITEM_USAGE_EQUIP))
+                            if (BuyItem(requester, pCreature, tItems, vendorguid, proto, bought, ItemUsage::ITEM_USAGE_EQUIP))
                             {
                                 result = true;
                                 boughtWeapon = true;
@@ -202,7 +198,7 @@ bool BuyAction::Execute(Event& event)
                     // consumables, tradeskill stock or AH flips from a vendor.
                     // Trainer spells are taught by TrainerAction, not bought
                     // here, so refusing every usage in this loop is exact.
-                    if (isAltBot && event.GetSource() == "rpg action")
+                    if (isAltBot && event.getSource() == "rpg action")
                         break;
 
                     // Gold affordability
@@ -234,9 +230,9 @@ bool BuyAction::Execute(Event& event)
                         break;
 
                     bool didBuy = false;
-                    didBuy = BuyItem(requester, tItems, vendorguid, proto, bought, usage);
+                    didBuy = BuyItem(requester, pCreature, tItems, vendorguid, proto, bought, usage);
                     if (!didBuy)
-                        didBuy = BuyItem(requester, vItems, vendorguid, proto, bought, usage);
+                        didBuy = BuyItem(requester, pCreature, vItems, vendorguid, proto, bought, usage);
 
                     result |= didBuy;
                     if (!didBuy)
@@ -274,9 +270,9 @@ bool BuyAction::Execute(Event& event)
                 if (!proto)
                     continue;
 
-                result |= BuyItem(requester, pCreature->GetVendorItems(), vendorguid, proto, bought);
+                result |= BuyItem(requester, pCreature, pCreature->GetVendorItems(), vendorguid, proto, bought);
                 if (!result)
-                    result |= BuyItem(requester, pCreature->GetVendorTemplateItems(), vendorguid, proto, bought);
+                    result |= BuyItem(requester, pCreature, VendorTemplateItemsCompat(pCreature), vendorguid, proto, bought);
 
                 if (!result)
                 {
@@ -312,7 +308,7 @@ bool BuyAction::Execute(Event& event)
     return result;
 }
 
-bool BuyAction::BuyItem(Player* requester, VendorItemData const* tItems, ObjectGuid vendorguid, const ItemPrototype* proto, UsageBoughtList& bought, ItemUsage usage)
+bool BuyAction::BuyItem(Player* requester, Creature* vendor, VendorItemData const* tItems, ObjectGuid vendorguid, const ItemPrototype* proto, UsageBoughtList& bought, ItemUsage usage)
 {
     uint32 oldCount = AI_VALUE2(uint32, "item count", proto->Name1);
 
@@ -324,13 +320,16 @@ bool BuyAction::BuyItem(Player* requester, VendorItemData const* tItems, ObjectG
     {
         if (tItems->GetItem(slot)->item == itemId)
         {
+            if (!VendorItemBuyAllowedCompat(bot, vendor, tItems->GetItem(slot)))
+                return false;
+
             uint32 botMoney = bot->GetMoney();
             if (ai->HasCheat(BotCheatMask::gold))
             {
                 bot->SetMoney(10000000);
             }
 
-            bot->BuyItemFromVendor(vendorguid, itemId, 1, NULL_BAG, NULL_SLOT);
+            BuyItemFromVendorSlotCompat(bot, vendor, vendorguid, slot, itemId, 1);
             if (ai->HasCheat(BotCheatMask::gold))
             {
                 bot->SetMoney(botMoney);
@@ -394,7 +393,7 @@ bool BuyBackAction::Execute(Event& event)
     for (std::list<ObjectGuid>::iterator i = vendors.begin(); i != vendors.end(); ++i)
     {
         vendorguid = *i;
-        Creature* pCreature = bot->GetNPCIfCanInteractWith(vendorguid, UNIT_NPC_FLAG_VENDOR);
+        Creature* pCreature = VendorIfCanInteractCompat(bot, vendorguid);
         if (!pCreature)
             continue;
         if (!SellAction::HasVendorStock(pCreature))
@@ -423,14 +422,11 @@ bool BuyBackAction::Execute(Event& event)
         if (slot == BUYBACK_SLOT_END)
             continue;
 
-        uint32 price = bot->GetUInt32Value(PLAYER_FIELD_BUYBACK_PRICE_1 + slot - BUYBACK_SLOT_START);
+        uint32 price = BuyBackPriceCompat(bot, slot);
         if (bot->GetMoney() < price)
             continue;
 
-        WorldPacket p1(CMSG_BUYBACK_ITEM);
-        p1 << vendorguid;
-        p1 << slot;
-        bot->GetSession()->HandleBuybackItem(p1);
+        BuyBackItemCompat(bot, vendorguid, slot);
         if (bot->GetItemFromBuyBackSlot(slot) == nullptr)
             result = true;
     }
