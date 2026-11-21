@@ -38,13 +38,18 @@ def check(scripts, hdr, off, kit, docs):
         raise AssertionError("removeitem must not use the entry-based DestroyItemCount(entry, ...): it also destroys equipment and bank stacks")
     if "target::IsBagStack(" not in fn:
         raise AssertionError("removeitem must collect stacks with the pure target::IsBagStack rule")
+    # the entry filter, IsBagStack's arguments in order (bag, slot, backpack size, in-trade) and the trade flag exactly as written
+    if "it->GetEntry() == item && target::IsBagStack(it->GetBagSlot(), it->GetSlot(), backpackSlots, removable && it->IsInTrade())" not in fn:
+        raise AssertionError("removeitem's visit must keep the entry filter and call IsBagStack(bag, slot, backpackSlots, removable && IsInTrade())")
+    if "uint8 const backpackSlots = uint8(bot->GetInventorySlotCount());" not in fn:
+        raise AssertionError("removeitem must size the backpack from the target's inventory slot count")
     if "ItemSearchLocation::Inventory" not in fn or "ItemSearchLocation::ReagentBank" not in fn:
         raise AssertionError("removeitem must walk the worn bags and the reagent bag")
     for loc in ("Equipment", "Bank"):
         if f"ItemSearchLocation::{loc}" in fn:
             raise AssertionError(f"removeitem must not walk {loc}")
     # left is read again from the bags after the removal, never computed
-    if not re.search(r'uint32 const left = total\(collect\(\)\);', fn):
+    if not re.search(r'uint32 const left = total\(collect\(false\)\);', fn):
         raise AssertionError("removeitem's left must be re-read from the bags after the removal")
     if re.search(r'left\s*=\s*\w+\s*-', fn):
         raise AssertionError("removeitem's left must not be computed by subtraction")
@@ -77,9 +82,15 @@ class RemoveItemWiring(unittest.TestCase):
         with self.assertRaises(AssertionError):
             check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("bot->DestroyItemCount(it, remaining, true)", "bot->DestroyItem(it)"), DOCS)
         with self.assertRaises(AssertionError):
-            check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("uint32 const left = total(collect());", "uint32 const left = want - removed;"), DOCS)
+            check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("uint32 const left = total(collect(false));", "uint32 const left = want - removed;"), DOCS)
         with self.assertRaises(AssertionError):
             check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("target::IsBagStack(", "target::IsAnyStack("), DOCS)
+        with self.assertRaises(AssertionError):
+            check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("it->GetEntry() == item && target::IsBagStack(", "target::IsBagStack("), DOCS)
+        with self.assertRaises(AssertionError):
+            check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("target::IsBagStack(it->GetBagSlot(), it->GetSlot(), ", "target::IsBagStack(it->GetSlot(), it->GetBagSlot(), "), DOCS)
+        with self.assertRaises(AssertionError):
+            check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("backpackSlots, removable && it->IsInTrade())", "backpackSlots, false)"), DOCS)
         with self.assertRaises(AssertionError):
             check(SCRIPTS, H3_HDR, H3_OFF, KIT.replace("bot->ForEachItem(ItemSearchLocation::ReagentBank, visit);", "bot->ForEachItem(ItemSearchLocation::Bank, visit);"), DOCS)
         with self.assertRaises(AssertionError):
