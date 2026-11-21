@@ -182,15 +182,39 @@ void TestReleaseReasons()
         facts.memberCount = 41;
         CHECK(L::Decide(raid, facts) == L::End::GroupTooLarge);
     }
-    // A player-led binding ignores who the group leader is (the player may lead); a system binding ignores a real player joining.
+    // Leadership: the lead bot leading stands, and so does the binding's own commander leading his party (the live test's failing case: an in-party
+    // commander who binds his own party is its leader). Another character leading - a third real player, or a bot that is not this lead - ends it.
     {
-        L::Stored playerLed = party;
-        playerLed.flags = L::FlagsOf(false, false, true, false);
+        L::Stored inParty = party;
+        inParty.flags = L::FlagsOf(true, false, false, false);
         L::Facts facts = Healthy();
+        facts.commanderInGroup = true;
         facts.leadIsLeader = false;
+        facts.leaderGuid = Cmd;
+        CHECK(L::Decide(inParty, facts) == L::End::None);            // the commander leads: kept
+        facts.leadIsLeader = true;                                   // the lead bot itself leads
+        facts.leaderGuid = Tank;
+        CHECK(L::Decide(inParty, facts) == L::End::None);            // the lead bot leads: kept
+        facts.leadIsLeader = false;
+        facts.leaderGuid = LeadOther;
+        CHECK(L::Decide(inParty, facts) == L::End::LeaderChanged);   // a third character leads: released
+        // The stored player-led flag never excuses a foreign leader: only the commander's own lead counts.
+        L::Stored playerLed = inParty;
+        playerLed.flags = L::FlagsOf(true, false, true, false);
+        CHECK(L::Decide(playerLed, facts) == L::End::LeaderChanged);
+        facts.leaderGuid = Cmd;
         CHECK(L::Decide(playerLed, facts) == L::End::None);
-        facts.realPlayerInGroup = true;
-        CHECK(L::Decide(playerLed, facts) == L::End::PlayerJoined);   // player-led is not in-party: a stranger still ends it
+        // A commander outside the party: unchanged, any leader but the lead bot still ends a classic binding - and that includes the commander
+        // himself joining the party and taking the lead (the name was no permission to lead a binding he made from outside).
+        facts = Healthy();
+        facts.leadIsLeader = false;
+        facts.leaderGuid = LeadOther;
+        CHECK(L::Decide(party, facts) == L::End::LeaderChanged);
+        facts = Healthy();
+        facts.leadIsLeader = false;
+        facts.leaderGuid = Cmd;
+        CHECK(L::Decide(party, facts) == L::End::LeaderChanged);
+        // A system binding ignores a real player joining.
         L::Stored system = party;
         system.flags = L::FlagsOf(false, false, false, true);
         facts = Healthy();
@@ -213,6 +237,87 @@ void TestReleaseReasons()
     CHECK(L::PolicyReason(L::End::GroupChanged) == TortoiseBots::RemoteCommander::ReleaseReason::Unbound);
     CHECK(std::string(L::EndText(L::End::LeadDead)).find("dead") != std::string::npos);
     CHECK(std::string(L::EndCode(L::End::CommanderAway)) == "commander-away");
+}
+
+void TestDeferredRelease()
+{
+    // A group hook records its event; the tick releases only while the binding and the very group the hook saw still stand.
+    L::DeferredFacts facts;
+    facts.bindingStands = true;
+    facts.recordedGroup = 7;
+    facts.recordedGroupExists = true;
+    CHECK(L::DeferredRelease(facts) == L::Deferred::Release);
+    // The binding was released meanwhile (another verdict, a logout): the event has nothing to release.
+    facts.bindingStands = false;
+    CHECK(L::DeferredRelease(facts) == L::Deferred::Drop);
+    facts.bindingStands = true;
+    // THE CRASH'S FOLLOW-UP: the group the hook saw was disbanded and freed before the tick (Disband deletes it). The binding still
+    // ends with its recorded reason, but no group is reached into.
+    facts.recordedGroupExists = false;
+    CHECK(L::DeferredRelease(facts) == L::Deferred::WithoutParty);
+    // No counter recorded (the hook always has one; a zero means nothing to reach into): the release ends the binding without a
+    // party action - it must never fall back to the lead's or a member's current group, which can be another party by this tick.
+    facts.recordedGroup = 0;
+    CHECK(L::DeferredRelease(facts) == L::Deferred::WithoutParty);
+}
+
+void TestMayCommand()
+{
+    // A standing binding, a bot still bound to it and still in the lead's party: orders may use it.
+    CHECK(L::MayCommand(true, false, true, true));
+    // THE STALE WINDOW: a group hook recorded the release (a player joined, the lead left, the leader changed) and the tick has not run
+    // it yet - the change it recorded is already true, so nothing may be ordered through the binding.
+    CHECK(!L::MayCommand(true, true, true, true));
+    // The binding is gone or was never restored.
+    CHECK(!L::MayCommand(false, false, true, true));
+    // h3 binds the bot to another commander.
+    CHECK(!L::MayCommand(true, false, false, true));
+    // The bot is no longer a member of the lead's live party (it left, and only its own slot was erased): refused at once, not next tick.
+    CHECK(!L::MayCommand(true, false, true, false));
+}
+
+void TestPickLead()
+{
+    // A named host bot this commander commands is the lead the command asked for.
+    {
+        L::LeadFacts facts;
+        facts.namedLeader = Tank;
+        facts.namedLeaderIsBotOfCommander = true;
+        facts.bound = { Heal, Tank };
+        facts.partyBots = { Heal, Tank };
+        CHECK(L::PickLead(facts) == Tank);
+    }
+    // THE MUTATION (a player leading his own party): the commander names himself and h3 has no commander of his to compare, so the lead is a bot of
+    // his party - a tank first, then the party's order - never the arbitrary first bot h3 happens to hold.
+    {
+        L::LeadFacts facts;
+        facts.namedLeader = Cmd;
+        facts.bound = { Heal, Tank, Dps };
+        facts.partyBots = { Tank, Heal };
+        facts.partyTanks = { Tank };
+        CHECK(L::PickLead(facts) == Tank);
+        facts = L::LeadFacts();
+        facts.namedLeader = Cmd;
+        facts.bound = { Dps, Heal, Tank };
+        facts.partyBots = { Heal };
+        CHECK(L::PickLead(facts) == Heal);          // no tank in the party: its order, not the first bound bot
+    }
+    // A rebind keeps the previous lead while it is still bound.
+    {
+        L::LeadFacts facts;
+        facts.bound = { Heal, Dps };
+        facts.previousLead = Dps;
+        CHECK(L::PickLead(facts) == Dps);
+        facts.previousLead = Tank;                  // no longer bound: a stale lead is never resurrected
+        CHECK(L::PickLead(facts) == Heal);
+    }
+    // With no lead named or kept, the first bound bot; and nothing bound at all chooses nobody.
+    {
+        L::LeadFacts facts;
+        facts.bound = { Heal, Dps };
+        CHECK(L::PickLead(facts) == Heal);
+        CHECK(L::PickLead(L::LeadFacts()) == 0);
+    }
 }
 
 void TestDepartedFollowers()
@@ -314,6 +419,9 @@ int main()
 {
     TestRow();
     TestReleaseReasons();
+    TestDeferredRelease();
+    TestMayCommand();
+    TestPickLead();
     TestDepartedFollowers();
     TestRestore();
     TestClaim();

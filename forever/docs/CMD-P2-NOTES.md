@@ -8,9 +8,12 @@ Spec: `~/TortoiseBots-audit/FOREVER-COMMANDER-PORT-SPEC.md` (P2 row in section 5
 * **The record beside h3's table** now carries what a restart and a release need: the binding's flags (in-party, raid, player-led, system), the stored
   member list, the followers whose `manual follow target` the bind pointed at the lead (with their own value), the lead's live group counter (in memory
   only) and the two timers (a dead lead, an absent commander).
-* **Release from hooks, not a poll.** `GroupScript` (add/remove/leader/disband) ends a binding whose lead, group or leadership changed or whose party
-  gained a real player; `PlayerScript` OnLogin/OnLogout handles the commander's grace and the lead's departure; `UnitScript::OnUnitDeath` marks a dead
-  lead. A 1 Hz `Maintain` only enforces the two timers, the raid/size reasons and a pending restore.
+* **Release from hooks, then the next tick.** `GroupScript` (add/remove/leader/disband) notices a binding whose lead, group or leadership changed or
+  whose party gained a real player, and records the reason (character guid + live group counter) instead of releasing: the hook runs while the core is
+  still walking the group, and a release there removes members (the group can disband and delete itself under the core). `PlayerScript` OnLogin/OnLogout
+  handles the commander's grace and the lead's departure directly; `UnitScript::OnUnitDeath` marks a dead lead. `Maintain` (every world tick) runs the
+  recorded releases outside the core's group walk, re-finding the binding and its group by guid; the same pass enforces the two timers, the raid/size
+  reasons and a pending restore.
 * **Persistence (D3), off by default.** `TortoiseBots.Commander.KeepBindings = 1` writes one row per commander to `tb_commander_binding` in the
   characters database; the module creates the table itself (and `forever/sql/characters/2026_11_20_00_tb_commander_binding.sql` ships the same DDL).
   When the commander and the lead are back in the world the party is formed again through the lead and every member is bound to the commander.
@@ -45,17 +48,30 @@ Spec: `~/TortoiseBots-audit/FOREVER-COMMANDER-PORT-SPEC.md` (P2 row in section 5
 * **A restore only takes what the host says is this commander's.** Every stored member is checked against h3's table, the host's master table and the
   host-bot table (`life::Claim`): a bot bound or mastered elsewhere, or a character that is no host bot, is dropped from the row, never joined or bound.
   A lead that is no longer this commander's ends the row (and deletes it); the commander itself must be a real network player session or a host bot.
-  An in-party binding puts the commander back into the party during the restore, and a released bot loses its master (`ClearBotMaster`), not only its
-  h3 pair.
+  An in-party binding puts the commander back into the party during the restore and, when the row says he led it, puts him back at the party's head
+  (the recreated group would otherwise stay led by the bot); a released bot loses its master (`ClearBotMaster`), not only its h3 pair. The commander's
+  membership is read by guid from the group's own member list, so an offline or zoning commander still in the party is not "left" - his logout is the
+  grace timer's business. A leaving or kicked in-party commander is noticed in the removal hook and ends his binding with `commander-left-party` on the
+  next tick, before the core's promoted leader or disbanded party can report it as a leader/group change (and outside the removal, which goes on using
+  the group).
 * **Nothing is written on a shutdown.** `NoteLogout` returns while `World::IsStopped()`: a server restart keeps the row and the next start restores it.
   A real logout starts the commander's grace (`TortoiseBots.Slice.MasterGraceSeconds`: the same grace the bots themselves wait for their master).
 * **The two timers.** A lead dead for `TortoiseBots.Slice.DeadBackstopSeconds` (the module's existing "a commanded bot's body lies dead" grace) releases
   with `lead-dead`; a commander away for `MasterGraceSeconds` releases with `commander-away`.
 * **The release is T's.** Followers get their own follow target back unless something else changed it; h3's pairs are cleared; the row is deleted; an
   in-party binding uses `RemoteCommander::DecideReleaseParty` (the bots leave the party, or the lead goes back to the commander).
+* **Which bot is the lead.** `.tb master party <leader> <commander>` names a host bot this commander commands. When the addressed party's leader is
+  a player (a commander leading his own party names himself), there is no bot to name, so the lead is a bound bot of that party, a tank first and
+  otherwise in the party's order; a previous lead still bound is kept across a rebind. The arbitrary first bot h3 holds is the last resort only.
+* **Who leads the party.** The binding stands while the lead bot leads or, for a binding made IN the party, while its own commander leads (an
+  in-party commander binding his own party: released within seconds per leader change before this, live run 2026-11-21); leadership going to anyone
+  else - a third real player, or a bot that is not this lead - releases it with `leader-changed`. A binding made from outside the party keeps its old
+  rule in full: its commander joining the lead's party and taking the lead is a leader change. `FlagPlayerLed` records the in-party commander's own
+  lead: read from the group at the bind and in the 1 Hz fact read, and in the leader hook from the guid the hook is about to store (the core fires
+  `OnGroupChangeLeader` before it records the new leader, so `group->IsLeader` inside the hook answers the previous one).
 * **What was not ported here:** the threat-backoff and autonomy ledgers are dead weight on this port (the slice factory gives a commanded non-tank the
   threat back-off in its kit and never gives a bot the open-world kit), so no ledger is kept. No `.tb master ... inparty` command exists on ForeverCore;
-  the flag is read from what the bind saw (the commander in the lead's party).
+  the in-party and player-led flags are read from the live group (the commander is a member; the commander himself holds the lead).
 
 ## U6: do `GroupScript` hooks fire for the module's bot groups?
 
@@ -74,21 +90,38 @@ Two things the live run taught, both fixed here:
   member that is in the world and no host bot, and a real player logging into an already saved bound party is caught in `NoteLogin` (the core attaches
   saved members at login without an AddMember event).
 
+## Which group hooks may not release (audit)
+
+Every hook below is called by the core while it is still using the group, and the binding's release is not read-only: an in-party release removes
+every bound bot (`Group::RemoveMember`), which can take the group below two members, call `Disband()` and `delete this` (Group.cpp:786), after which
+the core keeps using the freed group. All four therefore record the event (`DeferRelease`) and never touch a group; `Maintain`'s `RunPendingReleases`
+does the work on the next tick, re-finding binding and group by guid (no `Group*` crosses a tick).
+
+| Hook | Core call site | Why a release there is unsafe |
+|---|---|---|
+| `OnRemoveMember` | `Group::RemoveMember`, the first statement (Group.cpp:565) | its own removal continues: leader promotion (`ChangeLeader`), member erase, `SendUpdate`, and `Disband()` when the group drops below two |
+| `OnAddMember` | `Group::AddMember`, mid-way (Group.cpp:506) | the core goes on with packets, pet updates and the member list of the group a release could have freed |
+| `OnChangeLeader` | `Group::ChangeLeader`, before the new leader is stored (Group.cpp:690) | the core then writes the leader, the DB row and broadcasts on the group a release could have freed; a nested `ChangeLeader` from `BotsLeave` also re-enters |
+| `OnDisband` | `Group::Disband`, its first statement (Group.cpp:724) | `Disband` ends with `RemoveGroup(this); delete this;` - any release (even a lookup of its members) runs on a group being deleted |
+
+The player hooks (`NoteLogin`, `NoteLogout`) and `Maintain` release directly: they run outside a group operation (login/logout/player removal), so the
+group they touch is not in an outer `Group` call.
+
 ## Files
 
 | File | What |
 |---|---|
-| `forever/src/host/cmd/TbCmdBindingLifePure.h` | pure: the stored row's five fields and `Valid`, the release verdict `Decide` (the shared `CheckBinding`'s reasons plus the two graces), the party reason mapping, `Departed`, and the restore gate `PlanRestore` (commander AND lead in the world). Tested standalone |
+| `forever/src/host/cmd/TbCmdBindingLifePure.h` | pure: the stored row's five fields and `Valid`, the release verdict `Decide` (the shared `CheckBinding`'s reasons plus the two graces), the party reason mapping, `DeferredRelease` (what a group hook's recorded event earns on its tick), the command gate `MayCommand`, `Departed`, and the restore gate `PlanRestore` (commander AND lead in the world). Tested standalone |
 | `forever/src/host/cmd/TbCmdBindingStore.{h,cpp}` | the characters-database row: config (re-read on every reload), the guard `CharacterQueryCompat` (query form, its own table, the five-column check before every write; the raw statements are `forever/src/compat/TbCompat_CharStore.h`'s), the CREATE TABLE IF NOT EXISTS once per config, one atomic upsert / one DELETE with a read-back, a failed DELETE kept pending (never offered to a restore, retried every second, replaced by a newer save), load once per load |
 | `forever/src/compat/TbCompat_CharStore.h` | the characters-database side of the schema guard: the information_schema probe, the guarded SELECT and the guarded synchronous statement (`forever/src/compat/TbCompat_S5.h` is the world twin) |
-| `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | the record beside h3's table (flags, members, followers and their saved follow targets, the in-memory group counter, the two timers), the release, the party action, the restore, the P1 card and the P2 hooks |
+| `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | the record beside h3's table (flags, members, followers and their saved follow targets, the in-memory group counter, the two timers), the release, the party action, the restore, the command gate (`HasPending`/`ResolveBinding`/`IsCommandedBy`), the P1 card and the P2 hooks |
 | `forever/src/TbScripts.cpp` | the `GroupScript` row (`OnAddMember`/`OnRemoveMember`/`OnChangeLeader`/`OnDisband`), `PlayerScript` OnLogin/OnLogout, `UnitScript::OnUnitDeath`, `Maintain` in the tick, `LoadBindings` at world start and on a config reload |
 | `forever/src/host/TbHostOwnership.cpp` | `IsCommandedBy` / `IsInOwnBindingGroup` answer from the record |
 | `forever/src/dash/TbDashRuns.cpp` | `cmd::AppendBindings` + `cmd::FillRunOrders` (every binding on the Commander tab, run cards keep their orders) |
 | `forever/src/host/run/TbRunOrders.cpp`, `TbRun.cpp` | the order-log hook moved into `Issue` |
 | `forever/sql/characters/2026_11_20_00_tb_commander_binding.sql`, `forever/sql/README.md` | the row's DDL and its delivery |
 | `forever/conf/tortoisebots.conf.dist` | `TortoiseBots.Commander.KeepBindings = 0` with its documentation |
-| `forever/tools/cmd_binding_life_check.cpp`, `test_cmd_p2_wiring.py` | the P2 check (73 checks) and the wiring pins/mutations |
+| `forever/tools/cmd_binding_life_check.cpp`, `test_cmd_p2_wiring.py` | the P2 check (89 checks) and the wiring pins/mutations |
 | `forever/tools/cmd_binding_store_check.cpp`, `forever/tools/cmd_binding_store_fakes/*` | the store's own TU compiled against fake `Config.h`/`DatabaseEnv.h`/`Log.h`/`StringFormat.h`, whose result set has the core's contract (`Query` answers a set already standing on its first row, and null for no rows): one and many rows, Save's read-back, a write/DELETE that did not land, a refused DELETE kept pending (out of `Rows()`, across a reload, retried, replaced by a newer save), refused rows, the key off, a missing column |
 
 ## Gates (slot 7, core pin 6517af05; counts are after the final fix round of 2026-11-20)
@@ -190,3 +223,58 @@ cmd_binding_life_check.cpp` / `cmd_binding_store_check.cpp` and their mutations 
 | Gemini | [medium] Tests leave invariants untested | fix | `cmd_binding_life_check.cpp`: the restore round-trips the stored text instead of comparing a copy; every release reason with `FlagRaid`/`FlagPlayerLed`/`FlagSystem`/`groupIsBg`; `Claim`; commander-in-members; a >64-bit member word. `test_cmd_p2_wiring.py`: the persistence, throttle, restore and steal pins above, three new mutations (`commander-member`, `members-overflow`, `claimed-steal`), each must FAIL the check. Limit at the time: the core-facing C++ had no unit test (it needs a live core); the store's own fake-core check was added in the re-check round below. |
 | Gemini | [low] `IsCommandedBy` ignores h3 ownership; `Valid`/`DecodeMembers` edges; guard escaping | fix | `IsCommandedBy` requires `h3::CommanderGuid(bot) == commander`; `Valid` refuses the commander inside its own members; `DecodeMembers` drops a word past 64 bits instead of wrapping; `CharacterQueryCompat` refuses any table but this store's own literal, so no name can ever be escaped in. |
 | Codex (final round) | [high] Release completes despite persistence deletion failure | fix | `store::Erase` marks a commander whose row survived the DELETE (`pendingErase`); `Rows()` never offers it, `Maintain` retries it once a second (`RetryErases`), a config reload keeps the mark, and `ReleaseCommander` logs `the release is not complete` instead of `released` while still clearing the live binding. `RestoreOne`/`TryRestore`/`LoadBindings` refuse a pending commander; a later `Save` of the same commander clears the mark. `RefuseRow`/`PruneToStanding` get the same store behaviour. Check: `cmd_binding_store_check` `TestAFailedEraseIsPendingNotGone` (the old code fails it at `Rows().empty()`); mutations `erase-forgotten`, `pending-restored`, `retry-deletes-a-rebind`; wiring pin `test_a_failed_delete_is_pending_and_never_restored`. Limit: the mark is in memory (see Limits). |
+
+## Fix round 3 (review of 2026-11-21)
+
+* **[high] the release ran inside `GroupScript::OnRemoveMember`.** `Group::RemoveMember` fires the hook as its first statement (Group.cpp:565), then
+  promotes a leader, erases the slot and may `Disband()` (which deletes the group at Group.cpp:786). The release's `BotsLeave` removes every bound
+  bot; a commander + lead + bots party drops below two and the outer `RemoveMember` goes on using the freed group. The hook now records the event
+  (binding guid, reason, live group counter) and `Maintain` releases it on the next tick (`RunPendingReleases`), re-finding binding and group by guid
+  (`life::DeferredRelease`); a group that is gone still ends the binding with its reason but skips the party action, and a binding released or rebound
+  meanwhile drops the event (`DropPending` on `.tb master`). Every other group hook was audited and defers for the same reason (see "Which group hooks
+  may not release"); `NoteLogin`/`NoteLogout`/`Maintain` run outside a group operation and release directly.
+* **The wiring pin is behavioural now.** The string pin that accepted an immediate `ReleaseCommander` inside `NoteGroupRemove` is replaced by: the
+  recorded `DeferRelease` (binding + reason + group counter), no release call in any of the four hooks, the drain before the 1 Hz gate, and the pure
+  `DeferredRelease` cases. Mutations prove each pin fails on the old shape: an immediate release in the removal or another hook, a missing drain, a
+  drain behind the gate, a stale event kept across a rebind. The round-1 crash shape (release in the removal hook) no longer passes.
+
+Gates (module builds slot 4, premerge slot 5; `df` before: `/mnt/tb` 8.7 G, `/mnt/forever` 6.6 G free):
+
+| Gate | Result |
+|---|---|
+| module ON, `tortoisebots` (`-DTORTOISEBOTS_SLICE1=ON`) | `CMAKE_RC=0` `MAKE_RC=0` (`TOTAL_SECONDS=55`) |
+| module OFF, `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0` `MAKE_RC=0` (`TOTAL_SECONDS=10`) |
+| full `worldserver` link, ON | `CMAKE_RC=0` `MAKE_RC=0`; `[2/2] Linking CXX executable bin/Release/bin/worldserver` (74,912,856 bytes, carries `cmd::(anonymous namespace)::DeferRelease` and `store::RetryErases`) |
+| `cmd_binding_check.cpp` / `cmd_binding_life_check.cpp` / `cmd_binding_store_check.cpp` | `57 checks, 0 failed` / `89 checks, 0 failed` / `66 checks, 0 failed` |
+| `test_cmd_p1_wiring.py` / `test_cmd_p2_wiring.py` (`CMD_P2_MUTATE=1`) | 12 tests OK / 23 tests OK |
+| `tbf-premerge <worktree>` | `merge: clean (5 commits over tbf/main)`; `turtle: PASS`; `slice1-ON: PASS`; `slice1-OFF: PASS`; `PREMERGE: PASS` |
+
+## Fix round 4 (reviews of 2026-11-21, part 2)
+
+* **[medium] an order still used a binding whose release a group hook had recorded.** The four group hooks record the event and `Maintain` drains it
+  on the next tick; until then `s.metas` and h3's table still bound the bots. `IsCommandedBy` and `ResolveBinding` now ask the pure gate
+  `life::MayCommand(stands, pending, bound, inParty)`: a binding with an event in `s.pending` (`HasPending`) commands nothing, and the bot must still
+  be a member of the lead's live group. `ResolveBinding` returns only those bots (a follower whose slot was erased, whose removal hook recorded
+  nothing for this commander, is refused at once) and refuses a meta that is not restored. `ReleaseCommander` drops the commander's event
+  (`DropPending`), so a hook's event can never end a later binding of the same commander. Core check: `Group::RemoveMember` fires the hook as its
+  first statement and `Group::ChangeLeader` before it stores the new leader (ForeverCore `Group.cpp`), so at hook time the change is already true.
+* **[medium] the hooks recorded the binding's remembered group counter.** All four `NoteGroup*` hooks now pass `Ctr(group->GetGUID())`, the group the
+  core handed them, never `m.groupId` (0 before the 1 Hz refresh, stale after the lead switched groups). `RunPendingReleases` only looks the
+  recorded counter up (`GetGroupByGUID`) and never falls back to `ReleaseGroup`, and `life::DeferredRelease` treats a zero counter as
+  `WithoutParty`: a recorded event can no longer run `BotsLeave`/`LeadToCommander` on another party.
+* **[low] the group-script overrides were outside the pin.** `check_group_hooks_defer` now also inspects `TbScripts.cpp`'s `tortoisebots_group`
+  (no `ReleaseCommander`/`ApplyPartyAction`, no `Group` mutator, the events still forwarded), forbids any `Release*` helper in the four hook bodies,
+  and pins every `DeferRelease` to the hook's own group counter; the drain fallback and the remembered counter are mutations that fail the pin.
+  The pure check covers the gate (`TestMayCommand`) and the zero counter (`TestDeferredRelease`), with the matching mutations
+  (`pending-commands`, `left-commands`, `zero-group-releases`).
+
+Gates (module builds slot 6, premerge slot 5; `df` before: `/mnt/tb` 14 G, `/mnt/forever` 6.4 G free):
+
+| Gate | Result |
+|---|---|
+| module ON, `tortoisebots` (`-DTORTOISEBOTS_SLICE1=ON`) | `CMAKE_RC=0` `MAKE_RC=0` (`TOTAL_SECONDS=64`) |
+| module OFF, `tortoisebots` (`-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0` `MAKE_RC=0` (`TOTAL_SECONDS=28`) |
+| full `worldserver` link, ON | `CMAKE_RC=0` `MAKE_RC=0`; `[2/2] Linking CXX executable bin/Release/bin/worldserver` (74,912,840 bytes, carries `cmd::IsCommandedBy`, `cmd::ResolveBinding`) |
+| `cmd_binding_check.cpp` / `cmd_binding_life_check.cpp` / `cmd_binding_store_check.cpp` | `57 checks, 0 failed` / `94 checks, 0 failed` / `66 checks, 0 failed` |
+| `test_cmd_p1_wiring.py` / `test_cmd_p2_wiring.py` (`CMD_P2_MUTATE=1`) | 12 tests OK / 24 tests OK; the cohort's `test_cmd_p3`..`p6` and `test_place_wiring.py` unchanged and OK |
+| `tbf-premerge <worktree>` | `merge: clean (7 commits over tbf/main)`; `turtle: PASS`; `slice1-ON: PASS`; `slice1-OFF: PASS`; `PREMERGE: PASS` |
