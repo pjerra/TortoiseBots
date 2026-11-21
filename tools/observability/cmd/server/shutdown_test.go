@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,11 +42,15 @@ func TestShutdownFlushesQueuedFight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := &http.Server{Addr: "127.0.0.1:0", Handler: http.NewServeMux()}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: http.NewServeMux()}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, server, listener, fights) }()
+	go func() { done <- serve(ctx, server, ln, listener, fights) }()
 
 	start := time.Now().Unix() - 60
 	fight := combat.Fight{ID: "f1", Commander: "Glacienne", Group: 1, Map: 249, Kind: "commander", Start: start, DurMS: 60000, Outcome: "kill"}
