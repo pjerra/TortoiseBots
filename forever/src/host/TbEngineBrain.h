@@ -39,6 +39,9 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free = false
 // free bot, "follow" otherwise). No-op without a brain.
 void ReapplyStrategies(Brain* brain, bool free);
 
+// Enable or restore free-bot non-combat group follow/assist when grouped for a group/elite quest.
+void SetQuestGroupMember(Brain* brain, bool inGroup);
+
 // W1 (review): a master was bound to a live brain (the host ends free mode first). The engine takes the master pointer, then the full
 // reset the adoption path does (travel and grind targets purged, the current path stopped) and the commanded kit. No-op without a brain.
 void BindMaster(Brain* brain, Player* master);

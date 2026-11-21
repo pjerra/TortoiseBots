@@ -1,4 +1,8 @@
+#include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostGuildOrders.h"
+
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 
 #include "TbBotMgr.h"
 #include "compat/TbCompat_CharStore.h"
@@ -270,6 +274,83 @@ public:
         uint32_t const beforeCount = BagItemCount(bot, itemId);
         if (uint32_t const spellId = tbhost::prof::FindCraftSpellForItem(bot, itemId))
         {
+            auto hasAllReagents = [&](uint32_t checkSpellId) -> bool
+            {
+                SpellInfo const* csi = sSpellMgr->GetSpellInfo(checkSpellId, DIFFICULTY_NONE);
+                if (!csi)
+                    return false;
+                for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                {
+                    if (csi->Reagent[i] > 0 && csi->ReagentCount[i] > 0)
+                    {
+                        if (BagItemCount(bot, uint32_t(csi->Reagent[i])) < uint32_t(csi->ReagentCount[i]))
+                            return false;
+                    }
+                }
+                return true;
+            };
+
+            if (SpellInfo const* si = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE))
+            {
+                std::vector<tbhost::craft_order::ReagentRequirement> reqs;
+                bool const gatherAvailable = tbhost::prof::HasGatherableNodeInSight(bot, 150.0f);
+                for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                {
+                    if (si->Reagent[i] <= 0 || si->ReagentCount[i] <= 0)
+                        continue;
+                    uint32_t const rId = uint32_t(si->Reagent[i]);
+                    uint32_t const need = uint32_t(si->ReagentCount[i]);
+                    uint32_t const have = BagItemCount(bot, rId);
+                    tbhost::craft_order::ReagentRequirement r;
+                    r.itemId = rId;
+                    r.needPerCraft = need;
+                    r.inBags = have;
+                    if (have < need)
+                    {
+                        uint32_t const subSpell = tbhost::prof::FindCraftSpellForItem(bot, rId);
+                        r.canCraftSub = (subSpell != 0 && hasAllReagents(subSpell));
+                        r.canGather = gatherAvailable;
+                        r.canBuyAh = AuctionBuy().CanBuyOnAuction(botGuidLow, rId, 0);
+                    }
+                    reqs.push_back(r);
+                }
+
+                tbhost::craft_order::CraftReagentDecision const rdec =
+                    tbhost::craft_order::DecideCraftReagentStep(reqs);
+                if (rdec.action == tbhost::craft_order::CraftReagentAction::CraftSub)
+                {
+                    uint32_t const subSpell = tbhost::prof::FindCraftSpellForItem(bot, rdec.reagentItemId);
+                    std::string stateOut, detail;
+                    if (subSpell && tbhost::prof::StartCraft(bot, subSpell, 1, 0, stateOut, detail))
+                    {
+                        _pending[botGuidLow] = { rdec.reagentItemId, BagItemCount(bot, rdec.reagentItemId), true };
+                        outReason = "casting";
+                        return false;
+                    }
+                    outReason = stateOut.empty() ? "craft-failed" : stateOut;
+                    return false;
+                }
+                if (rdec.action == tbhost::craft_order::CraftReagentAction::Gather)
+                {
+                    std::string stateOut, detail;
+                    if (tbhost::prof::StartGatherNearest(bot, 150.0f, 0, stateOut, detail))
+                    {
+                        _pending[botGuidLow] = { rdec.reagentItemId, BagItemCount(bot, rdec.reagentItemId), false };
+                        outReason = tbhost::prof::ActiveErrandPhase(bot);
+                        return false;
+                    }
+                    outReason = stateOut.empty() ? "gather-failed" : stateOut;
+                    return false;
+                }
+                if (rdec.action == tbhost::craft_order::CraftReagentAction::BuyAh)
+                    return AuctionBuy().StepBuyOnAuction(botGuidLow, rdec.reagentItemId, rdec.missingCount, 0, outReason);
+                if (rdec.action == tbhost::craft_order::CraftReagentAction::MissingReagents)
+                {
+                    outReason = "missing-reagents";
+                    return false;
+                }
+            }
+
             std::string stateOut, detail;
             if (tbhost::prof::StartCraft(bot, spellId, 1, 0, stateOut, detail))
             {
@@ -504,6 +585,7 @@ public:
         if (!deliveryItem)
             return false;
 
+        if (guildId != 0 && tbhost::guild::GetGuildId(bot) == guildId)
         if (GameObject* banker = FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_GUILD_BANK, kW2MaxVisitDistYd))
         {
             // Walk to the vault only when no mailbox can take the delivery where the bot stands: a guild without bank tabs (or a
@@ -690,7 +772,7 @@ std::vector<OrderRecord> ListOrdersForGuild(uint32_t guildId)
 
 bool GiveOrder(OrderRecord record)
 {
-    if (!record.botGuidLow || !record.guildId || !record.itemId || !record.amount)
+    if (!record.botGuidLow || !record.itemId || !record.amount)
         return false;
 
     StoreState& s = State();
@@ -1223,6 +1305,113 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     }
 
     return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
+}
+
+bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    Words const words = Split(std::string_view(args));
+    if (words.badToken)
+        return Fail(handler, words, "craftorder", "bad-token", "invalid #token");
+    if (!RequireBuilt(handler, words, "craftorder"))
+        return false;
+    if (words.w.empty())
+        return Fail(handler, words, "craftorder", "usage", "use: create|status|cancel");
+
+    std::string const sub = Lower(words.w[0]);
+    Player* sender = SenderPlayer(handler);
+
+    if (sub == "create")
+    {
+        if (words.w.size() < 4)
+            return Fail(handler, words, "craftorder", "usage", "create <bot> <item_id> <amount>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "craftorder", "no-bot", words.w[1]);
+        uint32_t const itemId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
+        uint32_t const amount = static_cast<uint32_t>(std::strtoul(words.w[3].c_str(), nullptr, 10));
+        if (!itemId || !tbcompat::ItemProto(itemId))
+            return Fail(handler, words, "craftorder", "bad-item", words.w[2]);
+        if (!amount)
+            return Fail(handler, words, "craftorder", "bad-amount", words.w[3]);
+        if (!tbhost::prof::FindCraftSpellForItem(bot, itemId))
+            return Fail(handler, words, "craftorder", "no-recipe", words.w[2]);
+        if (!tbhost::guild_orders::IsOrderStoreAvailable())
+            return Fail(handler, words, "craftorder", "store-unavailable", "tortoise_bots_guild_order missing");
+
+        GuildOrders::OrderRecord rec;
+        rec.botGuidLow = bot->GetGUID().GetCounter();
+        rec.guildId = 0; // personal craft order: deliver by mail to giverGuidLow
+        rec.giverGuidLow = sender ? sender->GetGUID().GetCounter() : rec.botGuidLow;
+        rec.rootGiverGuidLow = rec.giverGuidLow;
+        rec.type = GuildOrders::OrderType::Craft;
+        rec.itemId = itemId;
+        rec.amount = amount;
+        rec.hours = GuildOrders::kDefaultOrderHours;
+        rec.state = GuildOrders::OrderState::Working;
+        rec.reason = GuildOrders::OrderReason::None;
+        if (!tbhost::guild_orders::GiveOrder(rec))
+            return Fail(handler, words, "craftorder", "store-write-failed", bot->GetName());
+
+        tbhost::guild_orders::SetOrderWorking(rec.botGuidLow, true);
+        TC_LOG_INFO("tortoisebots", "[W9] craftorder id={} bot={} item={} done=0 total={} recipient={}",
+            itemId, bot->GetName(), itemId, amount, rec.giverGuidLow);
+
+        Reply reply(handler, words, "craftorder");
+        reply.Begin();
+        Rec r("craftorder");
+        r.S("op", "create").S("bot", bot->GetName()).N("item", itemId).N("done", 0).N("total", amount)
+            .S("state", GuildOrders::StateToken(rec.state));
+        reply.Line(r);
+        reply.End(Rec("craftorder-end"));
+        return true;
+    }
+
+    if (sub == "status")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "craftorder", "usage", "status <bot>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "craftorder", "no-bot", words.w[1]);
+        auto const ord = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
+        Reply reply(handler, words, "craftorder");
+        reply.Begin();
+        Rec r("craftorder");
+        r.S("op", "status").S("bot", bot->GetName());
+        if (ord)
+        {
+            r.N("item", ord->itemId).N("done", ord->delivered).N("total", ord->amount)
+                .S("state", GuildOrders::StateToken(ord->state))
+                .S("reason", GuildOrders::ReasonToken(ord->reason));
+        }
+        else
+            r.S("state", "none");
+        reply.Line(r);
+        reply.End(Rec("craftorder-end"));
+        return true;
+    }
+
+    if (sub == "cancel")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "craftorder", "usage", "cancel <bot>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "craftorder", "no-bot", words.w[1]);
+        if (!tbhost::guild_orders::CancelOrder(bot->GetGUID().GetCounter()))
+            return Fail(handler, words, "craftorder", "not-found", bot->GetName());
+        tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), false);
+
+        Reply reply(handler, words, "craftorder");
+        reply.Begin();
+        Rec r("craftorder");
+        r.S("op", "cancel").S("bot", bot->GetName()).S("state", "cancelled");
+        reply.Line(r);
+        reply.End(Rec("craftorder-end"));
+        return true;
+    }
+
+    return Fail(handler, words, "craftorder", "usage", "use: create|status|cancel");
 }
 
 } // namespace h3

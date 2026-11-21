@@ -431,6 +431,21 @@ void ReapplyStrategies(Brain* brain, bool free)
     brain->ai->SetMovementStrategy(free ? "free" : "follow");
 }
 
+void SetQuestGroupMember(Brain* brain, bool inGroup)
+{
+    if (!brain || !brain->ai)
+        return;
+    if (inGroup)
+    {
+        brain->ai->ChangeStrategy("+follow,+dps assist", BotState::BOT_STATE_NON_COMBAT);
+        brain->ai->SetMovementStrategy("follow");
+    }
+    else
+    {
+        ReapplyStrategies(brain, true);
+    }
+}
+
 void BindMaster(Brain* brain, Player* master)
 {
     if (!brain || !brain->ai)
@@ -605,6 +620,7 @@ Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
     return nullptr;
 }
 void ReapplyStrategies(Brain*, bool) {}
+void SetQuestGroupMember(Brain*, bool) {}
 void BindMaster(Brain*, Player*) {}
 void Tick(Brain*, uint32) {}
 void HandleTeleportAck(Brain*) {}

@@ -474,6 +474,7 @@ public:
             { "speed",  TortoiseBots::kb::HandleSpeed, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // S3: `.tb speed <bot> run|walk|swim <rate>`
             { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
