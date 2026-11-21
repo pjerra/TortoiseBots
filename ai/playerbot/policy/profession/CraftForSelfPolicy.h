@@ -65,7 +65,8 @@ inline CraftDecision EvaluateCraftForSelf(CraftFacts const& f)
     }
     if (f.freeBagSlots == 0)
         return { false, "bags" };
-    if (f.createsBag && !f.hasFreeEquipBagSlot)
+    // A bag the bot crafts for itself must have a slot to be worn in; an explicit craft (an order) keeps the bag in the bags.
+    if (f.createsBag && !f.hasFreeEquipBagSlot && f.purpose != CraftPurpose::Explicit)
         return { false, "bags" };
 
     if (f.purpose != CraftPurpose::Explicit)
