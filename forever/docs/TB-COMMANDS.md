@@ -748,3 +748,18 @@ The run's plan grammar gains the two step kinds the Wailing Caverns event needed
 * **`gossip <npc entry> <bot> <option>`** (a plan's `gossip` row: the policy sends it with the row's `param` as the menu number): the bot walks to the NPC and talks through the two packets a client sends — `CMSG_GOSSIP_HELLO`, then `CMSG_GOSSIP_SELECT_OPTION` with the menu id and the option id of the line picked from the menu the core built (`GossipOrder::MatchOption`: a vendor, trainer, flight, bank or other service line is never picked). Only the NPC a `gossip` step of the bot's own run names, or an entry in `AiPlayerbot.BotGossipNpcs`, is talked to: anything else is refused `not-allowed` before a packet is sent. The answer text is the menu line; a menu without the named option is `no-option: No option N. The menu offers: ...`, no NPC `no-npc`. The `run` record's `event kind=gossip` marks the end. On this core a database menu option carries sender = the menu id and action = the order index, so the option's own type is what tells a service line (`MakeGossipOption`): a make-inn, auction, battlemaster, stablemaster, banker, mailbox or talent line is refused, a plain line beside them is picked.
 * **`hold` rows ended by instance data** (`flags` 8, `entry` = the data id, `param` = the value) and **by its units** (`entries` + `radius`: every unit dead after one was seen awake): `eventData` is the instance's own `GetData(entry)` (no instance script: -1, and the hold pauses saying so), a units hold lists the living creatures of `entries` within the radius with `eventDown` counting the dead. Wailing Caverns reads data 4 = 4 for the gate: the four Fanglords' own smart_scripts set Enc 0-3 = 3 on death, and the instance then sets data 4 = SPECIAL. It does not wait on data 5: on the pinned core Mutanus's smart_script sets boss state 4 (type 1), not instance data 5, so data 5 never reads 3; his boss step's own kill read ends the run. An escort hold with `flags` 65536 (`kPlanFlagEscortNpc`) reads the event's start NPC (the gossip row before it) around the lead bot: dead or gone for 10 s it stops the event with that reason, once (the run goes back to the gossip, so a respawned Disciple can start it again); alive but still within 5 yd of his stand after 30 s of the hold with no wave up, the gossip did not start the escort and the run stops with that reason too. The gossip looks back to the nearest gossip row through the holds between them (`EventGossipStartStep`). A hold unit's x, y and its engaged/victim reads are filled, so the ranged stand on the side the event comes from.
 
+
+## Onyxia observation
+
+`.tb onyxia <bot> observe <32-hex-boss-guid> | status | off [#token]`
+adds opt-in, read-only encounter observation for a host bot with its engine
+running. It accepts only entry 10184 in that bot's map-249 instance. Replies
+are `onyxia-begin`, `onyxia` records and `onyxia-end` with the normal counts and
+echo token. The engine-off build returns `engine-not-built`.
+See [ONYXIA.md](ONYXIA.md) for fields, cleanup and sampling limitations.
+
+`.tb onyxia <bot> ground <32-hex-boss-guid> <tank-name> [#token]`
+enables the opt-in ground strategy. Configure the named host tank first, then
+its same-group participants. Explicitly pull using that owner's host order;
+configuration alone does not pull. Other accepted orders release control.
+See [ONYXIA.md](ONYXIA.md) for damage gates, checked routes and live-test limits.

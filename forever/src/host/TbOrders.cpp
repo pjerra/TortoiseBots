@@ -13,6 +13,7 @@
 #include "host/TbHostTransport.h"
 #include "host/TbIgnore.h"   // I13: explicit orders take a listed mob off the commander's ignore list
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
+#include "host/TbOnyxiaGround.h"
 #include "MiscPackets.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -1353,12 +1354,16 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (missing)
             continue;
 
+        bool const ownPull = verb == "pull" && onyxia::GroundBoss(bot->GetGUID()) == order.unit &&
+            onyxia::GroundOwner(bot->GetGUID()) == bot->GetGUID();
         uint32 seq = 0;
         if (!Enqueue(bot, std::move(order), code, detail, seq))
         {
             refuse(code, detail);
             continue;
         }
+        if (!ownPull)
+            onyxia::ForgetGround(bot->GetGUID());
         ++queued;
         outcomes.push_back({ bot, std::string() });
         Rec rec("order");
