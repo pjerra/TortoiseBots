@@ -1200,7 +1200,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         }
 
         tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), true);
-        uint32_t const have = ord->delivered + BagItemCount(bot, ord->itemId);
+        uint32_t const have = ord->delivered + tbhost::guild_orders::BagItemCount(bot, ord->itemId);
         TC_LOG_INFO("tortoisebots", "[W9] order id={} bot={} item={} have={} want={} type={}",
             ord->itemId, bot->GetName(), ord->itemId, have, ord->amount, GuildOrders::TypeToken(ord->type));
 
