@@ -687,6 +687,7 @@ bool PlayerbotAIConfig::Initialize()
     maxWaitForMove = config.GetIntDefault("AiPlayerbot.MaxWaitForMove", 3000);
     expireActionTime = config.GetIntDefault("AiPlayerbot.ExpireActionTime", 5000);
     dispelAuraDuration = config.GetIntDefault("AiPlayerbot.DispelAuraDuration", 2000);
+    dispelMinMana = config.GetIntDefault("AiPlayerbot.DispelMinMana", 25);
     reactDelay = (uint32) config.GetIntDefault("AiPlayerbot.ReactDelay", 100);
     passiveDelay = (uint32) config.GetIntDefault("AiPlayerbot.PassiveDelay", 10000);
     repeatDelay = (uint32) config.GetIntDefault("AiPlayerbot.RepeatDelay", 5000);
@@ -736,6 +737,7 @@ bool PlayerbotAIConfig::Initialize()
     almostFullHealth = config.GetIntDefault("AiPlayerbot.AlmostFullHealth", 90);
     lowMana = config.GetIntDefault("AiPlayerbot.LowMana", 15);
     mediumMana = config.GetIntDefault("AiPlayerbot.MediumMana", 40);
+    innervateManaThreshold = config.GetIntDefault("AiPlayerbot.InnervateManaThreshold", 25);
 
     randomGearMaxLevel = config.GetIntDefault("AiPlayerbot.RandomGearMaxLevel", 100);
     randomGearMaxDiff = config.GetIntDefault("AiPlayerbot.RandomGearMaxDiff", 9);
