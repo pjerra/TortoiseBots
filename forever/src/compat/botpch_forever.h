@@ -90,6 +90,7 @@
 #include "TerrainMgr.h"
 #include "Timer.h"
 #include "Totem.h"
+#include "TransmogMgr.h"
 #include "Transport.h"
 #include "Unit.h"
 #include "Util.h"

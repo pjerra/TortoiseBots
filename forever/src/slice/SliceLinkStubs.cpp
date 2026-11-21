@@ -359,6 +359,7 @@ void RandomItemMgr::Init() { LoadWeightScales(); }
 uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetRandomPotion(uint32, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetLiveStatWeight(Player*, uint32, uint32) { NoteItems(); return 0; }
 uint8 RandomItemMgr::GetSourceFlags(uint32) { NoteItems(); return ITEM_SOURCE_FLAG_NONE; }
 

@@ -371,7 +371,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         combatEngine->addStrategies("fire", "dps assist", "ranged", "cc", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_ROGUE)
         // "cc" gives the rogue Kick (RogueCcStrategy: kick, kick on enemy healer; its Sap rows need a real player master and stay silent): M8 live test.
-        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", NULL);
+        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", "poisons", NULL);
     else if (player && player->GetClass() == CLASS_HUNTER)
         combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff", NULL);
     else if (player && player->GetClass() == CLASS_WARLOCK)
@@ -438,7 +438,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     }
     if (player && player->GetClass() == CLASS_ROGUE)
     {
-        nonCombatEngine->addStrategies("combat", "dps assist", "follow", "buff", "food", "default", NULL);
+        nonCombatEngine->addStrategies("combat", "dps assist", "follow", "buff", "food", "poisons", "default", NULL);
         return;
     }
     if (player && player->GetClass() == CLASS_HUNTER)
@@ -488,7 +488,7 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // S1-R2: the chat strategy runs beside the class kit on every class (the full factory's reaction set, AiFactory.cpp:1988, without "react",
     // "avoid aoe" and "potions", which are out of the slice). Its triggers are the commands a player whispers or says in party chat
     // (ChatCommandHandlerStrategy.cpp, chat/PlayerbotAI::HandleCommands); the command the host queued reaches it at the next reaction pass.
-    reactionEngine->addStrategy("chat");
+    reactionEngine->addStrategies("chat", "potions", NULL);
     if (char const* hybrid = HybridSpecStrategy(HybridKitOf(player, EffectiveRole(player, facade))))
     {
         reactionEngine->addStrategy(hybrid);
