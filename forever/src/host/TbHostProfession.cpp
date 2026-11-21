@@ -36,6 +36,7 @@
 #include <list>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace tbhost
 {
@@ -371,11 +372,22 @@ bool LootOpenNodeWithStats(Player* bot, ObjectGuid const& guid, uint32_t& outIte
             beforeCounts.emplace(li.itemid, bot->GetItemCount(li.itemid, false));
     }
 
-    uint32_t const totalSlots = uint32_t(loot->items.size());
-    for (uint32_t i = 0; i < totalSlots; ++i)
+    std::vector<uint8> listIds;
+    for (LootItem const& li : loot->items)
+        if (!li.is_looted)
+            listIds.push_back(uint8(li.LootListId));
+    // The core keys the bot's loot view by the Loot's own guid, not the node's: a request naming the node was refused and the window released.
+    // Looked up again per take: the core may release the window after the last item.
+    for (uint8 listId : listIds)
     {
+        Loot* current = bot->GetLootByWorldObjectGUID(guid);
+        if (!current)
+            break;
         WorldPackets::Loot::LootItem packet{ WorldPacket(CMSG_LOOT_ITEM) };
-        packet.Loot.push_back({ guid, uint8(i) });
+        WorldPackets::Loot::LootRequest request;
+        request.Object = current->GetGUID();
+        request.LootListID = listId;
+        packet.Loot.push_back(request);
         bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
     }
 
