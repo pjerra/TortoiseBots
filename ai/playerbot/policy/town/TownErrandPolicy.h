@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <vector>
 #include <string>
 
 namespace ai
@@ -188,6 +189,80 @@ inline SupplyTargetW2 SupplyTargetForLevelAndClass(uint8_t level, uint8_t player
         out.ammoItemId = 11285; // Jagged Arrow
     }
     return out;
+}
+
+// One rank the trainer visit considers, as plain data so the learning order is
+// pinned without a server (test_w2_town.cpp). reqLevel is the row's required
+// level, moneyCost the discounted price the visit pays.
+struct TrainerVisitRank
+{
+    uint32_t spellId = 0;
+    uint32_t reqLevel = 0;
+    uint32_t moneyCost = 0;
+};
+
+// Learning order for several affordable ranks: lowest required level first
+// (chain order: a rank that needs another lists the higher level), then
+// cheapest, then spell id for ties. A purse that covers only some ranks then
+// keeps the foundational ones, and a rank never jumps ahead of its own
+// prerequisite mid-visit.
+inline bool TrainerVisitRankLess(TrainerVisitRank const& a, TrainerVisitRank const& b)
+{
+    if (a.reqLevel != b.reqLevel)
+        return a.reqLevel < b.reqLevel;
+    if (a.moneyCost != b.moneyCost)
+        return a.moneyCost < b.moneyCost;
+    return a.spellId < b.spellId;
+}
+
+// Sorts the visit's ranks into learning order (above).
+inline void SortTrainerVisitRanks(std::vector<TrainerVisitRank>& ranks)
+{
+    std::sort(ranks.begin(), ranks.end(), TrainerVisitRankLess);
+}
+
+inline bool MailTakeMoneyConfirmed(uint64_t beforeMoney, uint64_t afterMoney)
+{
+    return afterMoney > beforeMoney;
+}
+
+inline bool MailTakeItemConfirmed(uint32_t itemEntry, uint32_t beforeBagCount, uint32_t afterBagCount)
+{
+    return itemEntry != 0 && afterBagCount > beforeBagCount;
+}
+
+inline bool MailSendConfirmed(
+    uint32_t trackItemEntry,
+    uint32_t beforeItemCount,
+    uint32_t afterItemCount,
+    uint64_t copperPlusPostage,
+    uint64_t beforeMoney,
+    uint64_t afterMoney)
+{
+    if (trackItemEntry != 0)
+        return afterItemCount < beforeItemCount;
+    if (copperPlusPostage > 0)
+        return afterMoney < beforeMoney;
+    return true;
+}
+
+inline std::string MailOrderResult(bool hasMailbox, uint32_t confirmedTakes, std::string const& arg)
+{
+    if (!hasMailbox)
+        return "fail:no-mailbox";
+    if (confirmedTakes > 0)
+        return "ok";
+    return (arg.empty() || arg.rfind("take", 0) == 0) ? "fail:mail-none-taken" : "fail:mail";
+}
+
+inline bool MailProcessShouldAbortMissingMailbox(bool requireMailbox, bool mailboxEmpty)
+{
+    return requireMailbox && mailboxEmpty;
+}
+
+inline bool MailTakeAfterResult(bool requireConfirmedTakes, uint32_t confirmedTakes)
+{
+    return requireConfirmedTakes ? (confirmedTakes > 0) : true;
 }
 
 } // namespace ai

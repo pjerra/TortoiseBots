@@ -16,6 +16,7 @@
 #include "playerbot/strategy/actions/AcceptQuestAction.h"
 #include "playerbot/strategy/actions/AcceptResurrectAction.h"
 #include "playerbot/strategy/actions/AddLootAction.h"
+#include "playerbot/strategy/actions/AhAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
 #include "playerbot/strategy/actions/BuyAction.h"
@@ -290,7 +291,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (19 of its keys)
+    // the registry of ChatActionContext (22 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -315,6 +316,9 @@ namespace slice
             creators["clean quest log"] = [](PlayerbotAI* ai) { return new CleanQuestLogAction(ai); };
             creators["share"] = [](PlayerbotAI* ai) { return new ShareQuestAction(ai); };
             creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardAction(ai); };
+            creators["ah"] = [](PlayerbotAI* ai) { return new AhAction(ai); };
+            creators["ah bid"] = [](PlayerbotAI* ai) { return new AhBidAction(ai); };
+            creators["ah cancel"] = [](PlayerbotAI* ai) { return new AhCancelAction(ai); };
         }
     };
 
@@ -691,7 +695,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 24, kActions = 89, kTriggers = 114, kValues = 201;
+    constexpr unsigned kStrategies = 24, kActions = 92, kTriggers = 114, kValues = 201;
 }
 }
 

@@ -109,6 +109,50 @@ int main()
         assert(hunter20.ammoItemId == 3030 && hunter20.targetStacks == 2);
         ++passed;
     }
+    // 8. Visit learning order: lowest required level first, then cheapest,
+    // then spell id. A purse covering only some ranks keeps the foundational ones.
+    {
+        std::vector<ai::TrainerVisitRank> ranks = {
+            {857, 10, 90},   // listed first (trainer DB order), learned last
+            {238, 8, 20},    // cheapest foundational rank: learned first
+            {861, 8, 60},    // same level, pricier: second
+        };
+        ai::SortTrainerVisitRanks(ranks);
+        assert(ranks.size() == 3);
+        assert(ranks[0].spellId == 238);
+        assert(ranks[1].spellId == 861);
+        assert(ranks[2].spellId == 857);
+        // Ties break on spell id, not on input order.
+        std::vector<ai::TrainerVisitRank> tie = { {5, 8, 20}, {4, 8, 20} };
+        ai::SortTrainerVisitRanks(tie);
+        assert(tie[0].spellId == 4 && tie[1].spellId == 5);
+        // Already ordered input stays put; empty input is fine.
+        std::vector<ai::TrainerVisitRank> ordered = { {1, 4, 10}, {2, 10, 90} };
+        ai::SortTrainerVisitRanks(ordered);
+        assert(ordered[0].spellId == 1 && ordered[1].spellId == 2);
+        std::vector<ai::TrainerVisitRank> empty;
+        ai::SortTrainerVisitRanks(empty);
+        assert(empty.empty());
+        ++passed;
+    }
+
+    // 8. Mail take proof rules: money must rise, item must arrive in bags, send must remove item/money.
+    {
+        assert(!ai::MailTakeMoneyConfirmed(1604, 1604));
+        assert(ai::MailTakeMoneyConfirmed(1604, 2103));
+        assert(!ai::MailTakeItemConfirmed(14723, 0, 0));
+        assert(!ai::MailTakeItemConfirmed(0, 0, 1));
+        assert(ai::MailTakeItemConfirmed(14723, 0, 1));
+        assert(ai::MailTakeItemConfirmed(14723, 2, 3));
+        assert(!ai::MailSendConfirmed(4234, 5, 5, 30, 1000, 970));
+        assert(ai::MailSendConfirmed(4234, 5, 4, 30, 1000, 970));
+        assert(!ai::MailSendConfirmed(0, 0, 0, 30, 1000, 1000));
+        assert(ai::MailSendConfirmed(0, 0, 0, 30, 1000, 970));
+        assert(ai::MailOrderResult(false, 1, "take") == "fail:no-mailbox");
+        assert(ai::MailOrderResult(true, 0, "take") == "fail:mail-none-taken");
+        assert(ai::MailOrderResult(true, 1, "take") == "ok");
+        ++passed;
+    }
 
     std::cout << "PASS: test_w2_town (" << passed << " checks, 0 failed)\n";
     return 0;

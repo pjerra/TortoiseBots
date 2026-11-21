@@ -346,8 +346,10 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             logGrind(unit, "ignored (tapped, cced or out of range).");
             continue;
         }
-        // `.tb ignore`: a listed mob is never a new pull (nor a hostile pick above: the list never reaches "possible attack targets").
-        if (IsIgnoredMobCompat(bot, unit->getObjectGuid()))
+        // `.tb ignore`: a listed mob is never a new pull (nor a hostile pick above: the list never reaches "possible attack targets") -
+        // unless it is attacking the bot or any party member (it attacks -> the bots defend).
+        if (IsIgnoredMobCompat(bot, unit->getObjectGuid()) &&
+            !PossibleAttackTargetsValue::IgnoredMobAttacksParty(unit, bot))
         {
             logGrind(unit, "ignored (on the commander's ignore list).");
             continue;

@@ -15,6 +15,8 @@
 #include "host/run/TbRunStands.h"
 
 #include "GameTime.h"
+#include "Group.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 
 #include <algorithm>
@@ -122,6 +124,20 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             return Fail(handler, args, "run", "not-bot", leaderName + " is not in the world");
         if (!IsHostBot(leader) || !MayLeadBots(handler, leader->GetGUID()))
             return Fail(handler, args, "run", "not-bot", leaderName + " is not a host bot: a run is led by a bot");
+        {
+            std::string code, detail;
+            if (!h3::CheckPartyLeadAccess(handler, leader, code, detail))
+                return Fail(handler, args, "run", code, detail);
+            if (Group* group = leader->GetGroup())
+            {
+                for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                {
+                    Player* m = ObjectAccessor::FindPlayer(slot.guid);
+                    if (m && m->IsInWorld() && h3::IsHostBot(m) && !h3::CheckBotAccess(handler, m, code, detail))
+                        return Fail(handler, args, "run", code, detail);
+                }
+            }
+        }
         ai::DungeonPlanTable& table = ai::GetDungeonPlans();
         if (!table.Sealed())
             return Fail(handler, args, "run", "not-loaded", "the dungeon plans are not loaded (the plan loader has not run, or the module is off)");
@@ -189,6 +205,9 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
     if (verb == "stop")
     {
+        std::string code, detail;
+        if (!h3::CheckBotAccess(handler, rec->leader, code, detail))
+            return Fail(handler, args, "run", code, detail);
         StopOutcome const stopped = StopRun(*rec, nowMs, reason.empty() ? std::string("by .tb run stop") : reason);
         if (!stopped.code.empty())
             return Fail(handler, args, "run", stopped.code, stopped.detail);
@@ -198,6 +217,11 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             end.N("stayed", stopped.stayed);
         ReplyRun(handler, args, *rec, nowMs, end);
         return true;
+    }
+    {
+        std::string code, detail;
+        if (!h3::CheckBotAccess(handler, rec->leader, code, detail))
+            return Fail(handler, args, "run", code, detail);
     }
     StateOutcome const changed = verb == "pause" ? PauseRun(*rec, nowMs) : ResumeRun(*rec, nowMs);
     if (!changed.code.empty())
