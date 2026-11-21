@@ -76,11 +76,20 @@ bool AhAction::Execute(Event& event)
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
     std::string text = TrimCopy(event.GetParam());
 
+    AhSetLastFailCodeCompat(bot, "");
+    if (!AhIsWorldAuctionEnabledCompat())
+    {
+        AhSetLastFailCodeCompat(bot, "auction-disabled");
+        ai->TellPlayerNoFacing(requester, "Auction house is disabled");
+        return false;
+    }
+
     tbhost::ah::ConfirmPendingPosts(bot);
 
     Creature* auctioneer = FindNearbyAuctioneer(ai, bot);
     if (!auctioneer)
     {
+        AhSetLastFailCodeCompat(bot, "no-auctioneer");
         ai->TellPlayerNoFacing(requester, "Cannot find faction auctioneer nearby");
         return false;
     }
@@ -113,9 +122,13 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
     else if (LowerCopy(itemFilter).rfind("sell ", 0) == 0)
         itemFilter = TrimCopy(itemFilter.substr(5));
 
+    std::string const lowerFilter = LowerCopy(itemFilter);
+    bool const isExplicitSell = !itemFilter.empty() && lowerFilter != "vendor" && lowerFilter != "all";
+
     std::list<Item*> items = AI_VALUE2(std::list<Item*>, "inventory items", "all");
     uint32 freeMoney = AI_VALUE2(uint32, "free money for", static_cast<uint32>(NeedMoneyFor::ah));
     bool postedAny = false;
+    std::string lastSellFail;
 
     for (Item* item : items)
     {
@@ -126,6 +139,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         if (!proto)
             continue;
 
+        RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
         ItemUsage const usage = AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
         bool const isUpgrade = (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP);
         bool const isCommodity = proto->Stackable > 1;
@@ -150,10 +164,18 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         in.isW6aUpgrade = isUpgrade;
         in.blacklisted = AhItemSellBlacklisted(proto->ItemId, sPlayerbotAIConfig.ahSellBlacklist);
         in.reservedTradeGood = AhIsTradeGoodReservedCompat(bot, proto->ItemId, proto->Class);
+        in.explicitItem = isExplicitSell;
+        in.isUsageAh = (usage == ItemUsage::ITEM_USAGE_AH);
+        in.isProfessionTool = IsAhProfessionTool(proto->ItemId, ItemUsageValue::IsCraftingTool(proto->ItemId));
+        in.worldAuctionEnabled = AhIsWorldAuctionEnabledCompat();
 
         AhSellDecision const decision = DecideAhSell(in);
         if (!decision.shouldPost)
+        {
+            if (isExplicitSell)
+                lastSellFail = decision.reason;
             continue;
+        }
 
         std::string failReason;
         if (AhPostFromDecisionCompat(bot, auctioneer, item, count, decision, &failReason))
@@ -163,10 +185,17 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
                 freeMoney -= static_cast<uint32>(deposit);
             else
                 freeMoney = 0;
-            if (!itemFilter.empty() && itemFilter != "vendor")
+            if (isExplicitSell)
                 break;
         }
+        else if (!failReason.empty())
+        {
+            lastSellFail = failReason;
+        }
     }
+
+    if (!postedAny && !lastSellFail.empty())
+        AhSetLastFailCodeCompat(bot, lastSellFail);
 
     return postedAny;
 }
@@ -204,12 +233,38 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
 
     std::vector<tbhost::ah::AhListingView> listings;
     if (std::all_of(query.begin(), query.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
+    {
         listings = AhQueryMarketByItemIdCompat(bot, auctioneer, static_cast<uint32>(std::stoul(query)));
+    }
     else
-        listings = AhQueryMarketByNameCompat(bot, auctioneer, query);
+    {
+        std::vector<tbhost::ah::AhListingView> const raw = AhQueryMarketByNameCompat(bot, auctioneer, query);
+        std::vector<AhItemCandidate> candidates;
+        candidates.reserve(raw.size());
+        for (tbhost::ah::AhListingView const& l : raw)
+        {
+            ItemPrototype const* proto = GetItemProtoByIdCompat(l.itemId);
+            if (!proto)
+                continue;
+            candidates.push_back({ l.itemId, proto->Name1 });
+        }
+        AhResolveItemResult const resolved = ResolveAhBuyItemId(query, candidates);
+        if (!resolved.ok)
+        {
+            AhSetLastFailCodeCompat(bot, resolved.failCode);
+            ai->TellPlayerNoFacing(requester, std::string("AH buy failed: ") + resolved.failCode);
+            return false;
+        }
+        for (tbhost::ah::AhListingView const& l : raw)
+            if (l.itemId == resolved.itemId)
+                listings.push_back(l);
+    }
 
     if (listings.empty())
+    {
+        AhSetLastFailCodeCompat(bot, "no-match");
         return false;
+    }
 
     std::sort(listings.begin(), listings.end(), [](tbhost::ah::AhListingView const& a, tbhost::ah::AhListingView const& b)
     {
@@ -217,11 +272,18 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
     });
 
     uint32 const budget = AI_VALUE2(uint32, "free money for", static_cast<uint32>(NeedMoneyFor::anything));
+    bool const worldAuctionEnabled = AhIsWorldAuctionEnabledCompat();
+    std::string lastFailReason;
 
     for (tbhost::ah::AhListingView const& l : listings)
     {
         if (l.isOwn || l.unitPrice == 0)
             continue;
+
+        ItemPrototype const* proto = GetItemProtoByIdCompat(l.itemId);
+        uint64 const unitValue = proto ? AhUnitValueCompat(GetItemTemplateCompat(proto)) : 0;
+        uint64 const buyPrice = proto ? proto->BuyPrice : 0;
+        uint64 const sellPrice = proto ? proto->SellPrice : 0;
 
         AhBuyInput in;
         in.auctionId = l.auctionId;
@@ -231,6 +293,8 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
         in.buyoutOrUnitPrice = l.isCommodity ? l.unitPrice : l.buyoutPrice;
         in.isNeededMatOrExplicit = true;
         in.budgetCopper = budget;
+        in.maxUnitPrice = AhComputeMaxUnitPrice(unitValue, buyPrice, sellPrice);
+        in.worldAuctionEnabled = worldAuctionEnabled;
 
         if (l.isCommodity)
         {
@@ -244,7 +308,10 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
 
         AhBuyDecision const decision = DecideAhBuy(in);
         if (!decision.shouldBuy)
+        {
+            lastFailReason = decision.reason;
             continue;
+        }
 
         std::string failReason;
         if (AhBuyFromDecisionCompat(bot, auctioneer, l, decision, &failReason))
@@ -254,7 +321,12 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
             ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
             return true;
         }
+        if (!failReason.empty())
+            lastFailReason = failReason;
     }
+
+    if (!lastFailReason.empty())
+        AhSetLastFailCodeCompat(bot, lastFailReason);
 
     return false;
 }

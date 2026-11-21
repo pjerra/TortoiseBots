@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS `tortoise_bots_guild_order` (
   `carried` int unsigned NOT NULL DEFAULT '0',
   `bring` varchar(1024) NOT NULL DEFAULT '',
   `given` varchar(1024) NOT NULL DEFAULT '',
+  `ah_gold_spent` int unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`bot_guid`),
   KEY `idx_guild` (`guild_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -6,6 +6,7 @@
 #include "DB2Structure.h"
 #include "Mail.h"
 #include "host/TbHostTown.h"
+#include "playerbot/policy/town/TownErrandPolicy.h"
 #include "TbItemPrototype.h"
 
 #include <cmath>
@@ -220,4 +221,14 @@ inline bool MailTakeItemCompat(Player* bot, ObjectGuid const& mailbox, Mail cons
 inline void MailDeleteCompat(Player* bot, ObjectGuid const& /*mailbox*/, uint64 mailId)
 {
     tbhost::town::DeleteMail(bot, mailId);
+}
+
+inline bool MailRequiresMailboxCompat()
+{
+    return true;
+}
+
+inline bool MailTakeAfterResultCompat(uint32 confirmedTakes)
+{
+    return ai::MailTakeAfterResult(true, confirmedTakes);
 }

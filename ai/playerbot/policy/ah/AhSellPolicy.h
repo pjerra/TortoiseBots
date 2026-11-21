@@ -30,6 +30,39 @@ inline bool ShouldReserveTradeGood(std::uint32_t itemId, std::uint32_t itemClass
     return neededByOwnProfessions || neededByGuildOrder;
 }
 
+inline bool IsAhProfessionTool(std::uint32_t itemId, bool isCraftingTool)
+{
+    if (isCraftingTool)
+        return true;
+    switch (itemId)
+    {
+        case 2901:  // Mining Pick
+        case 5956:  // Blacksmith Hammer
+        case 6218:  // Runed Copper Rod
+        case 6219:  // Arclight Spanner
+        case 6256:  // Fishing Pole
+        case 6339:  // Runed Silver Rod
+        case 7005:  // Skinning Knife
+        case 11130: // Runed Golden Rod
+        case 11145: // Runed Truesilver Rod
+        case 16207: // Runed Arcanite Rod
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline bool MatchesPendingPost(std::uint64_t pendingItemGuid, std::uint32_t pendingItemId,
+    std::uint32_t pendingCount, std::uint64_t pendingPrice,
+    std::uint64_t ownedItemGuid, std::uint32_t ownedItemId,
+    std::uint32_t ownedCount, std::uint64_t ownedPrice, bool ownedIsCommodity)
+{
+    if (pendingItemGuid != 0)
+        return !ownedIsCommodity && ownedItemGuid == pendingItemGuid;
+    return ownedIsCommodity && ownedItemId == pendingItemId &&
+           ownedCount >= pendingCount && ownedPrice == pendingPrice;
+}
+
 struct AhSellInput
 {
     std::uint32_t itemId = 0;
@@ -48,6 +81,10 @@ struct AhSellInput
     bool isW6aUpgrade = false;
     bool blacklisted = false;
     bool reservedTradeGood = false;
+    bool explicitItem = false;
+    bool isUsageAh = false;
+    bool isProfessionTool = false;
+    bool worldAuctionEnabled = true;
 };
 
 struct AhSellDecision
@@ -64,9 +101,24 @@ struct AhSellDecision
 inline AhSellDecision DecideAhSell(AhSellInput const& in)
 {
     AhSellDecision out;
+    if (!in.worldAuctionEnabled)
+    {
+        out.reason = "auction-disabled";
+        return out;
+    }
     if (in.itemId == 0 || in.count == 0)
     {
         out.reason = "invalid-item";
+        return out;
+    }
+    if (in.isProfessionTool)
+    {
+        out.reason = "profession-tool";
+        return out;
+    }
+    if (!in.explicitItem && !in.isUsageAh)
+    {
+        out.reason = "not-ah-usage";
         return out;
     }
     if (in.soulbound || in.equipped)

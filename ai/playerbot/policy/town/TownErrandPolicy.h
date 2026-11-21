@@ -224,4 +224,14 @@ inline std::string MailOrderResult(bool hasMailbox, uint32_t confirmedTakes, std
     return (arg.empty() || arg.rfind("take", 0) == 0) ? "fail:mail-none-taken" : "fail:mail";
 }
 
+inline bool MailProcessShouldAbortMissingMailbox(bool requireMailbox, bool mailboxEmpty)
+{
+    return requireMailbox && mailboxEmpty;
+}
+
+inline bool MailTakeAfterResult(bool requireConfirmedTakes, uint32_t confirmedTakes)
+{
+    return requireConfirmedTakes ? (confirmedTakes > 0) : true;
+}
+
 } // namespace ai

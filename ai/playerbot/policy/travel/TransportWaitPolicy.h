@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ai
@@ -25,13 +28,61 @@ struct TransportWaitInput
     float distanceToDeck = 0.0f;
     float maxBoardRange = 15.0f;
     float approachRange = 60.0f;
+    bool hasDeckZ = true;
+    float botZ = 0.0f;
+    float deckZ = 0.0f;
+    float maxDeckZDiff = 2.5f;
+    bool approachPathFailed = false;
     std::uint32_t waitedMs = 0;
     std::uint32_t totalPathTimeMs = 0;
     std::uint32_t marginMs = 15000;
+    std::uint32_t missingTimeoutMs = 30000;
 };
 
+inline bool IsOnTransportDeck(bool hasDeckZ, float botZ, float deckZ, float maxZDiff)
+{
+    if (!hasDeckZ)
+        return false;
+    return std::fabs(botZ - deckZ) <= maxZDiff;
+}
+
+inline bool IsApproachPathUsable(std::uint32_t pathType, std::size_t pointCount)
+{
+    constexpr std::uint32_t kNoPath = 0x08;
+    return (pathType & kNoPath) == 0 && pointCount >= 2;
+}
+
+inline bool ShouldRescanTransport(
+    bool transportFound,
+    bool boarded,
+    std::uint32_t waitedMs,
+    std::uint32_t nextRescanMs)
+{
+    return !transportFound && !boarded && waitedMs >= nextRescanMs;
+}
+
+inline std::string RideOrderResult(
+    bool active,
+    bool boarded,
+    bool arrived,
+    bool offDeckRefused,
+    std::string const& failCode)
+{
+    if (!failCode.empty())
+        return "fail:" + failCode;
+    if (arrived)
+        return "ok";
+    if (boarded)
+        return "pending:aboard";
+    if (offDeckRefused)
+        return "pending:off-deck";
+    if (active)
+        return "pending:waiting";
+    return {};
+}
+
 // Pure decision for waiting at a dock, boarding a stopped transport, leaving at the destination,
-// or giving up after one full transport cycle plus margin.
+// or giving up after one full transport cycle plus margin (or missingTimeoutMs when cycle is unknown).
 inline TransportWaitStep DecideTransportWait(TransportWaitInput const& in)
 {
     if (!in.mapReady)
@@ -44,14 +95,21 @@ inline TransportWaitStep DecideTransportWait(TransportWaitInput const& in)
         return TransportWaitStep::Wait;
     }
 
-    if (in.transportFound && in.transportStopped && !in.atDestinationDock && in.distanceToDeck <= in.maxBoardRange)
+    if (in.approachPathFailed)
+        return TransportWaitStep::GiveUp;
+
+    bool const onDeck = IsOnTransportDeck(in.hasDeckZ, in.botZ, in.deckZ, in.maxDeckZDiff);
+    if (in.transportFound && in.transportStopped && !in.atDestinationDock && in.distanceToDeck <= in.maxBoardRange && onDeck)
         return TransportWaitStep::Board;
+
+    std::uint32_t const timeoutMs = (in.totalPathTimeMs > 0)
+        ? (in.totalPathTimeMs + in.marginMs)
+        : in.missingTimeoutMs;
+    if (timeoutMs > 0 && in.waitedMs >= timeoutMs)
+        return TransportWaitStep::GiveUp;
 
     if (in.transportFound && in.transportStopped && !in.atDestinationDock && in.distanceToDeck <= in.approachRange)
         return TransportWaitStep::Approach;
-
-    if (in.totalPathTimeMs > 0 && in.waitedMs >= in.totalPathTimeMs + in.marginMs)
-        return TransportWaitStep::GiveUp;
 
     return TransportWaitStep::Wait;
 }

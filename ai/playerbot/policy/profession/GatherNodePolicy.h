@@ -4,6 +4,8 @@
 // Core-free so forever/tools/test_w7_professions.cpp tests it standalone.
 
 #include <cstdint>
+#include <unordered_map>
+#include <vector>
 
 namespace TortoiseBots
 {
@@ -80,6 +82,87 @@ inline GatherDecision EvaluateGatherNode(GatherNodeFacts const& f)
 
     return { true, "ok", ClassifyGatherDifficulty(f.botSkill, f.reqSkill) };
 }
+
+struct GatherCandidateInput
+{
+    std::uint32_t id = 0;
+    float distanceYd = 0.0f;
+    GatherNodeFacts facts;
+};
+
+struct GatherSelectionResult
+{
+    bool found = false;
+    std::uint32_t chosenId = 0;
+    char const* skipCode = "not-found";
+    std::uint32_t dangerChecksRun = 0;
+};
+
+template <typename DangerFn>
+inline GatherSelectionResult SelectBestGatherNode(std::vector<GatherCandidateInput> const& candidates, DangerFn&& isDangerNearby)
+{
+    GatherSelectionResult res;
+    float bestDist = 1e9f;
+    float nearestAnyDist = 1e9f;
+    for (GatherCandidateInput const& c : candidates)
+    {
+        GatherNodeFacts f = c.facts;
+        f.dangerNearby = false;
+        GatherDecision const dec = EvaluateGatherNode(f);
+        if (dec.allow)
+        {
+            if (c.distanceYd < bestDist)
+            {
+                bestDist = c.distanceYd;
+                res.found = true;
+                res.chosenId = c.id;
+                res.skipCode = "ok";
+            }
+        }
+        else if (c.distanceYd < nearestAnyDist)
+        {
+            nearestAnyDist = c.distanceYd;
+            res.skipCode = dec.code;
+        }
+    }
+    if (res.found)
+    {
+        ++res.dangerChecksRun;
+        if (isDangerNearby(res.chosenId))
+        {
+            res.found = false;
+            res.chosenId = 0;
+            res.skipCode = "danger";
+        }
+    }
+    return res;
+}
+
+class FreeGatherCooldownTracker
+{
+public:
+    bool Advance(std::uint64_t botGuid, std::uint32_t diffMs, std::uint32_t intervalMs = 5000)
+    {
+        std::uint32_t& elapsed = _elapsedByBot[botGuid];
+        elapsed += diffMs;
+        if (elapsed >= intervalMs)
+        {
+            elapsed = 0;
+            return true;
+        }
+        return false;
+    }
+
+    void Clear(std::uint64_t botGuid)
+    {
+        _elapsedByBot.erase(botGuid);
+    }
+
+    std::size_t Size() const { return _elapsedByBot.size(); }
+
+private:
+    std::unordered_map<std::uint64_t, std::uint32_t> _elapsedByBot;
+};
 
 enum class GatherPhase : std::uint8_t
 {
@@ -187,6 +270,47 @@ inline GatherErrandStep StepGatherErrand(GatherErrandFacts const& f)
         default:
             return { f.phase, GatherErrandAction::None, "", "" };
     }
+}
+
+class GatherErrandRegistry
+{
+public:
+    void SetActive(std::uint64_t botGuid, GatherPhase phase) { _phaseByBot[botGuid] = phase; }
+    bool HasActive(std::uint64_t botGuid) const
+    {
+        auto it = _phaseByBot.find(botGuid);
+        return it != _phaseByBot.end() && it->second != GatherPhase::Idle && it->second != GatherPhase::Done && it->second != GatherPhase::Failed;
+    }
+    void Clear(std::uint64_t botGuid) { _phaseByBot.erase(botGuid); }
+
+private:
+    std::unordered_map<std::uint64_t, GatherPhase> _phaseByBot;
+};
+
+// What the bags gained between two snapshots (entry -> count): the proof a gather worked when the core stored the loot itself
+// before the errand could read the loot window. Returns the first entry that rose and the total rise.
+struct BagGain
+{
+    std::uint32_t itemId = 0;
+    std::uint32_t gained = 0;
+};
+
+inline BagGain BagGainSince(std::unordered_map<std::uint32_t, std::uint32_t> const& before,
+    std::unordered_map<std::uint32_t, std::uint32_t> const& after)
+{
+    BagGain g;
+    for (auto const& [entry, count] : after)
+    {
+        auto it = before.find(entry);
+        std::uint32_t const was = it == before.end() ? 0 : it->second;
+        if (count > was)
+        {
+            if (g.itemId == 0 || entry < g.itemId)
+                g.itemId = entry;
+            g.gained += count - was;
+        }
+    }
+    return g;
 }
 
 } // namespace prof

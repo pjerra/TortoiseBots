@@ -1,6 +1,7 @@
 #include "host/TbHostProfession.h"
 
 #include "host/TbHostTown.h"
+#include "host/run/TbRunTasks.h"
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
 #include "playerbot/policy/profession/GatherNodePolicy.h"
 #include "playerbot/policy/profession/CraftForSelfPolicy.h"
@@ -35,6 +36,7 @@
 #include <list>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace tbhost
 {
@@ -158,7 +160,7 @@ void LogSkillUpIfChanged(Player const* bot, uint32_t skillId, uint16_t beforeVal
     }
 }
 
-TortoiseBots::prof::GatherNodeFacts BuildGoNodeFacts(Player const* bot, GameObject const* go, float maxDistYd)
+TortoiseBots::prof::GatherNodeFacts BuildGoNodeFacts(Player const* bot, GameObject const* go, float maxDistYd, bool checkDanger = false)
 {
     TortoiseBots::prof::GatherNodeFacts f;
     if (!bot || !go || !go->GetGOInfo())
@@ -170,7 +172,7 @@ TortoiseBots::prof::GatherNodeFacts BuildGoNodeFacts(Player const* bot, GameObje
     f.distanceYd = bot->GetDistance(go);
     f.maxDistanceYd = maxDistYd;
     f.freeBagSlots = bot->GetFreeInventorySlotCount();
-    f.dangerNearby = HasDangerNearby(bot);
+    f.dangerNearby = checkDanger ? HasDangerNearby(bot) : false;
 
     LockEntry const* lock = sLockStore.LookupEntry(go->GetGOInfo()->GetLockId());
     if (lock)
@@ -336,11 +338,19 @@ void CastGatherOnNode(Player* bot, GameObject* go, uint32_t lockSkillId)
     }
     else
     {
-        // Reuse slice 9 chest/object path for unlocked chests.
-        WorldPackets::GameObject::GameObjUse packet{ WorldPacket(CMSG_GAME_OBJ_USE) };
-        packet.Guid = go->GetGUID();
-        session->HandleGameObjectUseOpcode(packet);
+        TortoiseBots::run::tasks::SendGameObjectUse(bot, go);
     }
+}
+
+std::unordered_map<uint32_t, uint32_t> BagCounts(Player const* bot)
+{
+    std::unordered_map<uint32_t, uint32_t> counts;
+    bot->ForEachItem(ItemSearchLocation::Inventory, [&counts](Item* item)
+    {
+        counts[item->GetEntry()] += item->GetCount();
+        return ItemSearchCallbackResult::Continue;
+    });
+    return counts;
 }
 
 bool LootOpenNodeWithStats(Player* bot, ObjectGuid const& guid, uint32_t& outItemId, std::string& outItemName, uint32_t& outGained)
@@ -362,11 +372,22 @@ bool LootOpenNodeWithStats(Player* bot, ObjectGuid const& guid, uint32_t& outIte
             beforeCounts.emplace(li.itemid, bot->GetItemCount(li.itemid, false));
     }
 
-    uint32_t const totalSlots = uint32_t(loot->items.size());
-    for (uint32_t i = 0; i < totalSlots; ++i)
+    std::vector<uint8> listIds;
+    for (LootItem const& li : loot->items)
+        if (!li.is_looted)
+            listIds.push_back(uint8(li.LootListId));
+    // The core keys the bot's loot view by the Loot's own guid, not the node's: a request naming the node was refused and the window released.
+    // Looked up again per take: the core may release the window after the last item.
+    for (uint8 listId : listIds)
     {
+        Loot* current = bot->GetLootByWorldObjectGUID(guid);
+        if (!current)
+            break;
         WorldPackets::Loot::LootItem packet{ WorldPacket(CMSG_LOOT_ITEM) };
-        packet.Loot.push_back({ guid, uint8(i) });
+        WorldPackets::Loot::LootRequest request;
+        request.Object = current->GetGUID();
+        request.LootListID = listId;
+        packet.Loot.push_back(request);
         bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
     }
 
@@ -411,6 +432,8 @@ struct GatherErrandState
     uint32_t itemsGained = 0;
     uint32_t gainedItemId = 0;
     std::string gainedItemName;
+    bool bagsTaken = false;
+    std::unordered_map<uint32_t, uint32_t> bagsBefore;
 };
 
 struct CraftErrandState
@@ -469,7 +492,7 @@ GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots
     {
         if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
             continue;
-        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
+        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
         if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)
             continue;
         TortoiseBots::prof::GatherDecision const dec = TortoiseBots::prof::EvaluateGatherNode(facts);
@@ -488,6 +511,12 @@ GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots
             nearestAnyDist = d;
             outSkipCode = dec.code;
         }
+    }
+    if (bestGo && HasDangerNearby(bot))
+    {
+        outFacts.dangerNearby = true;
+        outSkipCode = "danger";
+        return nullptr;
     }
     return bestGo;
 }
@@ -633,8 +662,13 @@ bool OpenNode(Player* bot, ObjectGuid const& guid, float maxDistYd, std::string&
         return false;
     }
 
-    TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
-    TortoiseBots::prof::GatherDecision const decision = TortoiseBots::prof::EvaluateGatherNode(facts);
+    TortoiseBots::prof::GatherNodeFacts facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
+    TortoiseBots::prof::GatherDecision decision = TortoiseBots::prof::EvaluateGatherNode(facts);
+    if (decision.allow && HasDangerNearby(bot))
+    {
+        facts.dangerNearby = true;
+        decision = TortoiseBots::prof::EvaluateGatherNode(facts);
+    }
     if (!decision.allow)
     {
         code = decision.code;
@@ -851,6 +885,11 @@ void TickErrands(Player* bot, uint32_t diffMs)
                 break;
 
             case TortoiseBots::prof::GatherErrandAction::CastGather:
+                if (!g.bagsTaken)
+                {
+                    g.bagsBefore = BagCounts(bot);
+                    g.bagsTaken = true;
+                }
                 if (go)
                     CastGatherOnNode(bot, go, g.lockSkillId);
                 if (g.orderSeq != 0)
@@ -868,7 +907,20 @@ void TickErrands(Player* bot, uint32_t diffMs)
                 uint32_t itemId = 0;
                 std::string itemName;
                 uint32_t gained = 0;
-                if (LootOpenNodeWithStats(bot, g.nodeGuid, itemId, itemName, gained) && gained > 0)
+                bool looted = LootOpenNodeWithStats(bot, g.nodeGuid, itemId, itemName, gained) && gained > 0;
+                if (!looted && g.bagsTaken)
+                {
+                    TortoiseBots::prof::BagGain const bagGain = TortoiseBots::prof::BagGainSince(g.bagsBefore, BagCounts(bot));
+                    if (bagGain.gained > 0)
+                    {
+                        looted = true;
+                        gained = bagGain.gained;
+                        itemId = bagGain.itemId;
+                        if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId))
+                            itemName = proto->GetName(LOCALE_enUS);
+                    }
+                }
+                if (looted)
                 {
                     g.itemsGained += gained;
                     if (g.gainedItemId == 0)
@@ -1041,6 +1093,31 @@ std::string ActiveErrandPhase(Player const* bot)
     return {};
 }
 
+namespace
+{
+TortoiseBots::prof::FreeGatherCooldownTracker& FreeGatherTimers()
+{
+    static TortoiseBots::prof::FreeGatherCooldownTracker tracker;
+    return tracker;
+}
+} // namespace
+
+bool AdvanceFreeGatherTimer(uint64_t botGuidCounter, uint32_t diffMs)
+{
+    return FreeGatherTimers().Advance(botGuidCounter, diffMs, 5000);
+}
+
+void ClearFreeGatherTimer(uint64_t botGuidCounter)
+{
+    FreeGatherTimers().Clear(botGuidCounter);
+}
+
+void ClearBotErrands(ObjectGuid const& botGuid)
+{
+    Errands().erase(botGuid);
+    FreeGatherTimers().Clear(botGuid.GetCounter());
+}
+
 void TickFreeGather(Player* bot)
 {
     if (!bot || !bot->IsAlive() || bot->IsInCombat() || bot->isMoving() || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
@@ -1125,11 +1202,11 @@ bool HasGatherableNodeInSight(Player* bot, float maxDistYd)
     {
         if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
             continue;
-        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd);
+        TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
         if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)
             continue;
         if (TortoiseBots::prof::EvaluateGatherNode(facts).allow)
-            return true;
+            return !HasDangerNearby(bot);
     }
     return false;
 }
@@ -1139,79 +1216,86 @@ uint32_t FindCraftSpellForItem(Player* bot, uint32_t itemId)
     if (!bot || !bot->IsInWorld() || !bot->FindMap() || !itemId)
         return 0;
 
-    static uint32_t const kCraftSkills[] = {
-        TortoiseBots::prof::SkillBlacksmithing,
-        TortoiseBots::prof::SkillLeatherworking,
-        TortoiseBots::prof::SkillAlchemy,
-        TortoiseBots::prof::SkillTailoring,
-        TortoiseBots::prof::SkillEngineering,
-        TortoiseBots::prof::SkillEnchanting,
-        TortoiseBots::prof::SkillFirstAid,
-        TortoiseBots::prof::SkillCooking
-    };
-
-    for (uint32_t sid : kCraftSkills)
+    // Walk the bot's own known spells, not the profession's skill line: on this client a recipe's ability row can sit on a
+    // sub-profession line (its skill-up line), so the main line's list missed Linen Bag although the bot knew it.
+    for (auto const& [spellId, playerSpell] : bot->GetSpellMap())
     {
-        if (!bot->HasSkill(sid))
+        if (playerSpell.state == PLAYERSPELL_REMOVED || playerSpell.disabled)
             continue;
-        auto const* list = sDB2Manager.GetSkillLineAbilitiesBySkill(sid);
-        if (!list)
+        SpellInfo const* si = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
+        if (!si)
             continue;
-        for (SkillLineAbilityEntry const* ab : *list)
+        bool createsTarget = false;
+        bool createsBag = false;
+        for (SpellEffectInfo const& eff : si->GetEffects())
         {
-            if (!ab)
-                continue;
-            uint32_t const spellId = uint32_t(ab->Spell);
-            if (!bot->HasSpell(spellId))
-                continue;
-            SpellInfo const* si = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
-            if (!si)
-                continue;
-            bool createsTarget = false;
-            bool createsBag = false;
-            for (SpellEffectInfo const& eff : si->GetEffects())
+            if (eff.Effect == SPELL_EFFECT_CREATE_ITEM && uint32_t(eff.ItemType) == itemId)
             {
-                if (eff.Effect == SPELL_EFFECT_CREATE_ITEM && uint32_t(eff.ItemType) == itemId)
-                {
-                    createsTarget = true;
-                    if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(eff.ItemType))
-                        createsBag = (proto->GetClass() == ITEM_CLASS_CONTAINER);
-                }
+                createsTarget = true;
+                if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(eff.ItemType))
+                    createsBag = (proto->GetClass() == ITEM_CLASS_CONTAINER);
             }
-            if (!createsTarget)
-                continue;
-
-            TortoiseBots::prof::CraftFacts facts;
-            facts.spellId = spellId;
-            facts.known = true;
-            facts.skillId = sid;
-            facts.reqSkill = ab->MinSkillLineRank > 0 ? uint32_t(ab->MinSkillLineRank) : 0;
-            facts.botSkill = bot->GetSkillValue(sid);
-            facts.freeBagSlots = bot->GetFreeInventorySlotCount();
-            facts.createsBag = createsBag;
-            facts.hasFreeEquipBagSlot = createsBag ? HasFreeEquipBagSlot(bot) : false;
-            facts.purpose = TortoiseBots::prof::CraftPurpose::Explicit;
-            for (uint32_t i = 0; i < MAX_SPELL_TOTEMS; ++i)
-            {
-                if (si->Totem[i] > 0 && !bot->HasItemCount(uint32_t(si->Totem[i]), 1, false))
-                    facts.hasRequiredTool = false;
-                if (si->TotemCategory[i] > 0 && !bot->HasItemTotemCategory(si->TotemCategory[i]))
-                    facts.hasRequiredTool = false;
-            }
-            for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
-            {
-                if (si->Reagent[i] > 0 && si->ReagentCount[i] > 0)
-                {
-                    TortoiseBots::prof::ReagentCheck rc;
-                    rc.itemId = uint32_t(si->Reagent[i]);
-                    rc.need = uint32_t(si->ReagentCount[i]);
-                    rc.have = bot->GetItemCount(rc.itemId, false);
-                    facts.reagents.push_back(rc);
-                }
-            }
-            if (TortoiseBots::prof::EvaluateCraftForSelf(facts).allow)
-                return spellId;
         }
+        if (!createsTarget)
+            continue;
+
+        uint32_t skillId = 0;
+        uint32_t reqSkill = 0;
+        SkillLineAbilityMapBounds const bounds = sSpellMgr->GetSkillLineAbilityMapBounds(spellId);
+        for (auto it = bounds.first; it != bounds.second && !skillId; ++it)
+        {
+            SkillLineAbilityEntry const* ab = it->second;
+            uint32_t const candidates[] = { uint32_t(ab->SkillupSkillLineID), uint32_t(ab->SkillLine) };
+            for (uint32_t line : candidates)
+            {
+                if (!line)
+                    continue;
+                uint32_t owned = bot->HasSkill(line) ? line : 0;
+                if (!owned)
+                    if (SkillLineEntry const* entry = sSkillLineStore.LookupEntry(line))
+                        if (entry->ParentSkillLineID && bot->HasSkill(entry->ParentSkillLineID))
+                            owned = entry->ParentSkillLineID;
+                if (owned)
+                {
+                    skillId = owned;
+                    reqSkill = ab->MinSkillLineRank > 0 ? uint32_t(ab->MinSkillLineRank) : 0;
+                    break;
+                }
+            }
+        }
+        if (!skillId)
+            continue;
+
+        TortoiseBots::prof::CraftFacts facts;
+        facts.spellId = spellId;
+        facts.known = true;
+        facts.skillId = skillId;
+        facts.reqSkill = reqSkill;
+        facts.botSkill = bot->GetSkillValue(skillId);
+        facts.freeBagSlots = bot->GetFreeInventorySlotCount();
+        facts.createsBag = createsBag;
+        facts.hasFreeEquipBagSlot = createsBag ? HasFreeEquipBagSlot(bot) : false;
+        facts.purpose = TortoiseBots::prof::CraftPurpose::Explicit;
+        for (uint32_t i = 0; i < MAX_SPELL_TOTEMS; ++i)
+        {
+            if (si->Totem[i] > 0 && !bot->HasItemCount(uint32_t(si->Totem[i]), 1, false))
+                facts.hasRequiredTool = false;
+            if (si->TotemCategory[i] > 0 && !bot->HasItemTotemCategory(si->TotemCategory[i]))
+                facts.hasRequiredTool = false;
+        }
+        for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
+        {
+            if (si->Reagent[i] > 0 && si->ReagentCount[i] > 0)
+            {
+                TortoiseBots::prof::ReagentCheck rc;
+                rc.itemId = uint32_t(si->Reagent[i]);
+                rc.need = uint32_t(si->ReagentCount[i]);
+                rc.have = bot->GetItemCount(rc.itemId, false);
+                facts.reagents.push_back(rc);
+            }
+        }
+        if (TortoiseBots::prof::EvaluateCraftForSelf(facts).allow)
+            return spellId;
     }
     return 0;
 }
