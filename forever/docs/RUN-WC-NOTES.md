@@ -111,12 +111,17 @@ a wade hop only when every sample of the walked route is dry or wading depth (su
 shallows, never in swimming water. The permission belongs to the **whole hop**, not its ends: the run walks a long row in
 approach hops of at most 40 yd (`ApproachHop`) and in `TooFar` legs, and every one of those order points is a point of the
 row's own way (`DungeonRun::RowHopWades`), so each of them inherits the bit and is judged by the same wade rule; the
-wading depth at each sample is the core's own reading (its liquid surface minus the ground under it). A point that is not
-that way (a walk-back, a detour, a stand, a gather, another row's walk) never wades: **a row without the bit keeps exactly
-the RFC rule** (the prefix escape, the dry destination, the pause "unreachable: ... crosses or ends in liquid"). Deep
-water, lava and every other plan (RFC, Deadmines) behave exactly as before; `test_run_liquid` pins the shallow, deep,
-flagless and middle-point cases, and `test_run_orders` pins `RowHopWades` (the row's own point, an approach hop, a leg, a
-foreign walk, a hold row).
+wading depth at each sample is the core's own reading (its liquid surface minus the ground under it). A move the run
+makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan point, the follow-up after a
+pull, a `walk <bot>`) never is a point of a row's own way; it may wade too when it stays in the leg's **wet area** --
+within `kWadeAreaYd` 12 yd of a flagged row's own hop of the current leg (`DungeonRun::LegWetAreaAt`, section 9) -- and
+only shallow. A row without the bit has no wet area, so **a dry plan keeps exactly the RFC rule** (the prefix escape, the
+dry destination, the pause "unreachable: ... crosses or ends in liquid"); so does a player's `.bot cmd move` (the
+permission is the run's own orders only). Deep water, lava and every other plan (RFC, Deadmines) behave exactly as
+before; `test_run_liquid` pins the shallow, deep, flagless and middle-point cases plus the leg move (a shallow bank
+crossing on a wading leg passes, the same move on a dry leg pauses, deep water always pauses), and `test_run_orders` pins
+`RowHopWades` (the row's own point, an approach hop, a leg, a foreign walk, a hold row). Every liquid refusal now logs
+the sampled depth, the core's status and the position (section 9).
 
 The first sub-hop of a wet row logs once what it sampled, so the next live run's log says why a river hop walked or
 paused:
@@ -313,3 +318,99 @@ For the live steps: log every member in, group them and have each one **commande
 party <lead bot>` — the run's own expectation — or the player's character, which the run rebinds to the lead); a bot with
 no commander is not bound by the run and pauses the first party move. Keep every member in the instance, and re-bind a
 member that was re-logged (a re-login loses its commander) before resuming.
+
+## 9. The fix round after live run 2 (2026-11-21)
+
+Evidence: `~/TortoiseBots-audit/notes/live-wc-run2-2026-11-21.md` (run 2, code 366a4a420, core d02645dd21) and run 1's
+`live-wc-2026-11-21.md`. Branch `run/wc`, zero core changes, no live run in this round (the lead queues run 3).
+
+### 9.1 The run's own moves wade the leg's wet area (the run-2 pause)
+
+Run 2 paused after the Druid fight on
+`cmd move -37.2 291.3 -104.8 refused: unreachable: The lead bot's way to that point crosses or ends in liquid (lava or
+water) at -35.9 289.0 -105.4: no walkable path avoids it`, with the lead at -21.6 251.4 -104.2 (`.tb where`: dry). The
+move is one the run makes on its own inside the leg (a regroup/approach move after a pull), not a point of a row's own
+walk, so `RowHopWades` said no although the leg's flagged hop (leg 4 seq 0, -3.641 229.268 to -61.367 323.721) is the
+shallow river crossing there -- both points stand 4-6 yd off that hop's line.
+
+What changed:
+
+* `runtime/DungeonRunPolicy.h`: `kWadeAreaYd` (12.0 yd), `WetAreaSegmentYd` (horizontal point-to-segment),
+  `LegWetAreaAt` (within 12 yd of the own hop -- the row and the plan row before it -- of a `kPlanFlagWadeOk` row of the
+  current step's leg; move/pull/boss rows only), and `MoveMayWade` = `RowHopWades || LegWetAreaAt`.
+* `forever/src/host/run/TbRunOrders.cpp`: `WadeOrder` asks `MoveMayWade` for the lead's `cmd move` and the run's own
+  `walk <bot>`; a player's order (`fromRun` false) and a plan whose leg has no flagged row keep the RFC rule. The wade
+  rule itself is untouched: every sample of the walked route must be dry or shallow (depth at most `kWadeDepthYd` 1.5 yd,
+  never `UNDER_WATER`), so deep water still pauses even inside a wet area.
+* Every liquid refusal now logs the core's sample once (`TbRunLiquid.h` `LiquidProbe` / `ProbeOnMap`), for the lead's
+  move, a bot walk and a direct step:
+
+```
+TortoiseBots run: Wctank move refused: liquid depth=0.5 yd status=0x01 level=-105.9 at -35.9 289.0 -105.4 (step=50 leg=5)
+```
+
+(`depth` is surface minus the ground under it, `status` the core's bits, `level` the surface; a move with no terrain to ask
+logs `liquid no terrain at ...`.)
+
+Tests (`forever/tools/test_run_liquid.cpp`, composed exactly as the executor chooses): a regroup move across shallow
+water on a wading leg passes (`MoveMayWade` true + `PathWadeRefused` false); the same move on a dry leg over water pauses
+(`MoveMayWade` false + the RFC prefix rule true); deep water always pauses (permission true + `PathWadeRefused` true).
+
+### 9.2 Step 7 (Deviate Guardians): the pull spot stood between two packs
+
+Run 2's deaths at step 7 (leg 0 `anacondra_a` seq 7, pull group 4): **Wctank, Wcpri, Wcrog, Wcmag, then Wcdpsa, all
+five**, at party level 28 with green gear. The row is the agent's group centroid -35.1 203.85 radius 21.4 entries
+`3637,3636`; the live spawns around it (map 43 dump) are:
+
+| spawn | entry | position | from the agent's point |
+|---|---|---|---|
+| 20026217 | 3637 Deviate Guardian | -35.194 198.074 -96.579 | 5.8 yd |
+| 20026227 | 3636 Deviate Ravager | -35.020 209.613 -96.363 | 5.8 yd |
+| 20026229 | 3640 Evolving Ectoplasm (patrol) | -34.646 211.374 -96.066 | 7.5 yd (1.8 yd from the Ravager) |
+| 20026221 | 3637 Deviate Guardian | -32.535 173.325 -96.311 | 30.6 yd (step 8's pack) |
+
+So the agent's point is the centroid of two sub-packs 11.5 yd apart, and a patrolling Evolving Ectoplasm (an entry the row
+does not name) stands inside the Ravager's pack: the party stood in the middle and woke all three (the core's family
+assistance radius is 10 yd; the third is 13.4 yd from the Guardian but 1.8 yd from the Ravager). That is the "more mobs
+than the plan intends" case, not a radius artefact.
+
+The correction (`PULL_SPOT_ADJUST` in `forever/tools/wc_plan_rows.py`, applied after the route is read; the route file
+stays the agent's export): the stand moves 11.3 yd south to **-34.700 192.600 -96.370** (on the route's next hop,
+step 7 -> step 8; dry; 5.5 yd from the Guardian, 17.0 yd from the Ravager, 18.8 yd from the Ectoplasm) and the reach
+drops from 21.4 to **18.0 yd** so the next Guardian spawn at 19.4 yd stays step 8's pack and the unit rows do not move
+(still 2 for the row, 193 in all). Both hops (step 6 -> the stand 44.5 yd, the stand -> step 8 24.9 yd) plan `complete` on
+the ForeverCore mmaps, and `test_wc_plan_rows.py` pins the plan row to the corrected stand while the fixture keeps the
+agent's point (one documented exemption, checked by the test). Pulling the Guardian alone wakes nothing (its assist ring
+is empty); the Ravager and the Ectoplasm are fought together afterwards, as they would have been. Entries, units and the
+route are unchanged.
+
+### 9.3 The whole-route probe over all 302 steps
+
+Two probes on the server's own ForeverCore v16 mmaps (`~/wcprobe-mmaps`, the same geometry as
+`forever/data/wc-wet-hops.tsv`), over the regenerated 302 steps:
+
+* **The hop probe** (every consecutive pair, the run's point rule, path vertices and ground samples every <= 1.5 yd)
+  lists the **same 21 wet hops** as `wc-wet-hops.tsv`, i.e. the moved step 7 and its two new hops are dry and no other
+  wet hop appeared or disappeared (the file is still exact).
+* **The wet-area probe** (every step point, a 25 yd disc at 2.5 yd, the same liquid read at the step's own height -- the
+  approach stand's reach): **149 wet cells; 62 inside a flagged hop's 12 yd area, 87 outside**. Every one of the 87 is
+  **deep**: no floor within 40 yd under the water (the river and pool cells at the Kresh/cobrahn_b/pythas_a crossings and
+  the Skum pit) or 1.9-4.2 yd deep (the Mutanus chamber's pond, 34 cells around the boss row). **Zero shallow wet cells
+  lie outside a flagged wet area**, so no regroup/approach move can wade where the leg did not flag -- and every deep one
+  still pauses by the unchanged wade rule. Listed by step (outside cells): leg 3 seq 0 (1), seq 1 (1); leg 4 seq 0 (4);
+  leg 6 seq 1 (3), seq 3 (8), seq 4 (6), seq 7 (3), seq 8 (8), seq 9 (10), seq 10 (8); leg 9 seq 11 (1); leg 30 seq 0
+  (34).
+
+### 9.4 Gates (build VM, core d02645dd21, slot 4)
+
+| gate | exact line |
+|---|---|
+| build ON, slot 4: `~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 2 of 3 (slot 4)` / `module sync: 306 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=93` |
+| build OFF, slot 4: `~/forever-build/slot-sync-build.sh 4 tortoisebots` | `combined build: slot 4 key core-9b88bd2d6584-opt-78bf025f` / `build token 2 of 3 (slot 4)` / `module sync: 370 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=15` |
+| `test_run_orders` | `RESULT: PASS (276 checks)` |
+| `test_run_liquid` | `RESULT: PASS (test_run_liquid)` |
+| `test_run_facts` (Ragefire Chasm, unchanged rows) | `RESULT: PASS` |
+| `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
+| `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3507 checks, 0 failed` |
+| `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
+| `git diff --check` | clean |

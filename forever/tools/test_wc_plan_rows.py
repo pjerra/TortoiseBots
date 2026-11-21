@@ -163,13 +163,28 @@ def main():
             fixture_names.append(f['name'])
     check(fixture_names == [name for _, name, _ in legs[:13]], 'the fixture legs are the plan\'s base legs in order')
     base = legs[:13]
+    adjusted_seen = 0
     for f in fixture:
         if f['leg'] >= len(base):
             check(False, 'fixture leg %d is one of the 13 base legs' % f['leg'])
             continue
         near = [s for s in base[f['leg']][2] if s.kind == f['kind'] and
                 abs(s.x - f['x']) <= 0.15 and abs(s.y - f['y']) <= 0.15 and abs(s.z - f['z']) <= 0.15]
+        if not near:
+            # A documented live-run correction (wc.PULL_SPOT_ADJUST): the fixture keeps the agent's point and the plan
+            # carries the corrected stand. Every other row is still the fixture's own.
+            at = (f['x'], f['y'], f['z'])
+            for (adj_leg, adj_seq), (what, old, new, _radius) in wc.PULL_SPOT_ADJUST.items():
+                if adj_leg != f['leg'] or f['kind'] != 'pull' or not all(abs(a - b) <= 0.15 for a, b in zip(at, old)):
+                    continue
+                near = [s for s in base[f['leg']][2] if s.kind == 'pull' and s.seq == adj_seq and
+                        abs(s.x - new[0]) <= 0.15 and abs(s.y - new[1]) <= 0.15 and abs(s.z - new[2]) <= 0.15]
+                check(bool(near), 'the corrected stand of %s (leg %d seq %d) is the plan\'s row' % (what, adj_leg, adj_seq))
+                adjusted_seen += 1
+                break
         check(bool(near), 'fixture %s row %d %s at %.1f %.1f is in the plan' % (f['name'], f['leg'], f['kind'], f['x'], f['y']))
+    check(adjusted_seen == len(wc.PULL_SPOT_ADJUST),
+          'every pull-spot correction is matched to its fixture row (%d/%d)' % (adjusted_seen, len(wc.PULL_SPOT_ADJUST)))
     base_pulls = [s for _, _, rows in base for s in rows if s.kind == 'pull']
     base_moves = [s for _, _, rows in base for s in rows if s.kind == 'move' and s.seq == 0]
     base_bosses = [s for _, _, rows in base for s in rows if s.kind == 'boss']

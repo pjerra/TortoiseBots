@@ -27,6 +27,21 @@ bool PointRefusedOnMap(Map* map, float x, float y, float z)
     return PointRefused(static_cast<std::uint32_t>(status), data.level, z);
 }
 
+LiquidProbe ProbeOnMap(Map* map, float x, float y, float z)
+{
+    LiquidProbe probe;
+    TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;
+    if (!terrain)
+        return probe;                       // no terrain to ask: the rule refuses (do less), the log says so
+    GridMapLiquidData data;
+    std::uint32_t const status = static_cast<std::uint32_t>(LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, &data));
+    probe.known = true;
+    probe.status = status;
+    probe.level = data.level;
+    probe.depthLevel = data.depth_level;
+    return probe;
+}
+
 WadeWay WadePointOnMap(Map* map, float x, float y, float z)
 {
     TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;

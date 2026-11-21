@@ -265,6 +265,19 @@ inline bool PathPrefixRefused(Points const& p, std::size_t n, Refused&& refused,
 
 // ---- the core half (TbRunLiquid.cpp, TORTOISEBOTS_SLICE1 only): the same rules over the map's terrain ----
 bool PointRefusedOnMap(Map* map, float x, float y, float z);
+
+// One point's liquid as the core reads it: its status, the surface level and the ground under the liquid (the core's
+// depth_level). A move refused for liquid logs these at the sampled point, so the live log says what it met (depth and
+// status) and not only where. `known` is false when there is no terrain to ask (the rule refuses, do less).
+struct LiquidProbe
+{
+    bool known = false;
+    std::uint32_t status = 0;
+    float level = 0.0f;
+    float depthLevel = 0.0f;
+    float Depth() const { return status != 0 ? level - depthLevel : 0.0f; }
+};
+LiquidProbe ProbeOnMap(Map* map, float x, float y, float z);
 bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);
 WadeWay WadePointOnMap(Map* map, float x, float y, float z);
 bool SegmentWadeRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);

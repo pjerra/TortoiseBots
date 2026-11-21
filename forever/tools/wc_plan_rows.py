@@ -53,6 +53,19 @@ DEFAULT_WET = os.path.join(ROOT, 'data', 'wc-wet-hops.tsv')
 PLAN = 'wailing_caverns'
 MAP = 43
 
+# The live runs' corrections to the agent's pull spots (the route file is the agent's export and stays unedited: the
+# generator applies these after reading it). leg 0 pull group 4 (run 2, 2026-11-21: all five of a level-28 party died
+# there): the agent's point is the centroid of two sub-packs -- Deviate Guardian 3637 at -35.2 198.1 and Deviate Ravager
+# 3636 at -35.0 209.6, 11.5 yd apart, with an Evolving Ectoplasm 3640 patrolling 1.8 yd from the Ravager and 7.5 yd
+# from the point -- so the party stood between the packs and woke all three. The stand moves 11.3 yd south onto the
+# route's next hop (dry, 5.5 yd from the Guardian and 17.0 yd from the Ravager+Ectoplasm; both hops plan complete on the
+# ForeverCore mmaps) and the reach drops from 21.4 to 18.0 yd so the next Guardian spawn, 19.4 yd on, stays step 8's
+# pack and no unit row moves. Entries, units and the route's own point stay the agent's; the way back is generated from the corrected point.
+# Each value: (the row's comment, the route point it replaces, the new point, the new radius).
+PULL_SPOT_ADJUST = {
+    (0, 7): ('pull group 4', (-35.100, 203.850, -96.500), (-34.700, 192.600, -96.370), 18.0),
+}
+
 # `ai_dungeon_plan.source` is varchar(64): the row says where the route came from, in the room the column has.
 PLAN_SOURCE = 'forever-agent 109a2496 route export + core scripts'
 
@@ -157,6 +170,18 @@ def base_legs(route):
         if leg_no == 3 and rows and rows[1].kind == 'boss' and rows[1].entry == KRESH:
             rows[1].flags |= FLAG_SKIP_UNREACHABLE
             rows[1].comment = "boss (his waypoint 3 of the loop; skipped, not cleared, when he is alive elsewhere after the 300 s wait)"
+        # The live-run pull-spot corrections: the plan's stand moves, the route's own point stays the agent's.
+        for (adj_leg, adj_seq), (what, old, new, new_radius) in PULL_SPOT_ADJUST.items():
+            if adj_leg != leg_no:
+                continue
+            for s in rows:
+                if s.seq != adj_seq:
+                    continue
+                if not all(abs(a - b) <= 0.001 for a, b in zip(old, (s.x, s.y, s.z))):
+                    raise SystemExit('pull-spot correction %s no longer starts from the route point it was made for' % what)
+                s.x, s.y, s.z = new
+                s.radius = new_radius
+                s.comment = what + ' (stand moved south: the agent\'s centroid stands between two packs)'
         legs.append((leg_no, names[leg_no], rows))
     return legs
 

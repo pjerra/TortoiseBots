@@ -8820,6 +8820,54 @@ inline bool RowHopWades(Run const& r, PlanStep const& s, float x, float y)
     return r.legOn && at(x, y, r.legX, r.legY);             // a leg of that walk
 }
 
+// The moves the run makes on its own inside a leg (a regroup's gather and its walk back to the anchor, an approach
+// stand, the return to the plan point, the follow-up after a pull) are no point of a row's own walk: RowHopWades says
+// no, and the move is refused "crosses or ends in liquid: no walkable path avoids it" although the leg's own hop wades
+// there. They may wade when they stay in the leg's wet area: within kWadeAreaYd of the own hop (the previous row to the
+// row) of a flagged row of the current step's leg. The probe's wet-hop list (forever/data/wc-wet-hops.tsv) is exactly
+// those hops, so a leg with no wet hop has no wet area and keeps the RFC rule; the depth is the core's own measured
+// reading (TbRunLiquid.h: a wade is at most kWadeDepthYd, never UNDER_WATER, deep water always pauses).
+constexpr float kWadeAreaYd = 12.0f;
+
+// Horizontal distance from (px, py) to the segment (ax, ay)-(bx, by).
+inline float WetAreaSegmentYd(float px, float py, float ax, float ay, float bx, float by)
+{
+    float const dx = bx - ax, dy = by - ay;
+    float const len2 = dx * dx + dy * dy;
+    float t = len2 > 0.0f ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0.0f;
+    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    float const nx = ax + t * dx - px, ny = ay + t * dy - py;
+    return std::sqrt(nx * nx + ny * ny);
+}
+
+// Whether (x, y) lies in the wet area of the current step's leg: within kWadeAreaYd of the own hop of one of the leg's
+// wade-flagged rows. The hop is the pair the probe read (this row and the plan row before it).
+inline bool LegWetAreaAt(Run const& r, float x, float y)
+{
+    if (!r.plan || r.step >= r.plan->steps.size())
+        return false;
+    std::uint8_t const leg = r.plan->steps[r.step].leg;
+    for (std::size_t i = 1; i < r.plan->steps.size(); ++i)
+    {
+        PlanStep const& row = r.plan->steps[i];
+        if (row.leg != leg || !(row.flags & ai::kPlanFlagWadeOk))
+            continue;
+        if (row.kind != PlanStepKind::Move && row.kind != PlanStepKind::Pull && row.kind != PlanStepKind::Boss)
+            continue;                                       // the loader takes the bit on these kinds only
+        PlanStep const& from = r.plan->steps[i - 1];
+        if (WetAreaSegmentYd(x, y, from.x, from.y, row.x, row.y) <= kWadeAreaYd)
+            return true;
+    }
+    return false;
+}
+
+// A move the run makes on its own may wade: a point of the current row's own walk (RowHopWades), or a point inside the
+// current leg's wet area (LegWetAreaAt). The executor asks this for the lead's move and the run's bot walks.
+inline bool MoveMayWade(Run const& r, PlanStep const& s, float x, float y)
+{
+    return RowHopWades(r, s, x, y) || LegWetAreaAt(r, x, y);
+}
+
 // Walks the party to a point. True once the lead bot is there; otherwise
 // `order` may hold the move to send. Pauses after kWalkTries moves without
 // progress.
