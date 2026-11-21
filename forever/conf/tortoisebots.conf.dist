@@ -204,6 +204,33 @@ TortoiseBots.World.Auction = 0
 TortoiseBots.World.GroupQuests = 0
 
 #
+#    TortoiseBots.World.CapitalErrands
+#        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
+#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates).
+#        Default:     0
+#
+
+TortoiseBots.World.CapitalErrands = 0
+
+#
+#    TortoiseBots.World.GuildMail
+#        Description: Allow free bots in a bot guild to mail surplus gold to the poorest online bot member and unused
+#                     crafting materials to online bot crafters who use them. Never mails real players' items or gold.
+#        Default:     0
+#
+
+TortoiseBots.World.GuildMail = 0
+
+#
+#    TortoiseBots.World.GuildMail.AllowMixedGuild
+#        Description: When TortoiseBots.World.GuildMail = 1, allow bots in guilds that also contain real players to
+#                     exchange guild mail with other bot members (real players are still never mailed or touched).
+#        Default:     0
+#
+
+TortoiseBots.World.GuildMail.AllowMixedGuild = 0
+
+#
 #    TortoiseBots.Dashboard.TraceDir
 #        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
 #                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.
