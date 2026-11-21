@@ -195,6 +195,10 @@ void BotMgr::LoadConfig()
     _enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Enable", false);
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
     _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
+    _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", false);
+    _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", false);
+    _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
@@ -1463,9 +1467,9 @@ void BotMgr::Update(uint32 diff)
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
                 tbhost::prof::TickFreeGather(me);
         }
-        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", false))
+        if (bot.free && _capitalErrandsEnabled)
             tbhost::errands::TickCapitalErrands(me, diff);
-        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", false))
+        if (bot.free && _guildMailEnabled)
             tbhost::guild_mail::TickGuildMail(me, diff);
 #endif
     }

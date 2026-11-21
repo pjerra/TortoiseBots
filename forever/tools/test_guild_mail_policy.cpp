@@ -80,6 +80,23 @@ int main()
         ++checks;
     }
 
+    // 5. Offline unverified member fails closed as real player and blocks AllowMixedGuild=0.
+    {
+        std::vector<GuildMemberMailView> members = {
+            { 1, "SenderBot", true, true, 500000 },
+            { 2, "PoorBot", true, true, 100 },
+            { 3, "OfflineUnknown", false, false, 0 }
+        };
+        assert(HasRealGuildPlayers(members));
+        assert(!PlanGuildGoldGift(1, true, 500000, HasRealGuildPlayers(members), false, members).shouldSend);
+        assert(PickMaterialRecipient(1, true, HasRealGuildPlayers(members), false, members) == nullptr);
+
+        members[2].isBot = true;
+        assert(!HasRealGuildPlayers(members));
+        assert(PlanGuildGoldGift(1, true, 500000, HasRealGuildPlayers(members), false, members).shouldSend);
+        ++checks;
+    }
+
     std::printf("PASS: test_guild_mail_policy (%d checks, 0 failed)\n", checks);
     return 0;
 }

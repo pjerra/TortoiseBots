@@ -31,6 +31,16 @@ struct GuildMemberMailView
     uint64_t moneyCopper = 0;
 };
 
+inline bool HasRealGuildPlayers(std::vector<GuildMemberMailView> const& members)
+{
+    for (GuildMemberMailView const& m : members)
+    {
+        if (!m.isBot)
+            return true;
+    }
+    return false;
+}
+
 struct GuildGoldGiftPlan
 {
     bool shouldSend = false;
