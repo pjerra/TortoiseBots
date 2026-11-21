@@ -306,6 +306,7 @@ private:
     bool _guildMailEnabled = false;
     bool _guildMailAllowMixed = false;
     bool _groupQuestsEnabled = false;
+    bool _professionsEnabled = false;
     uint8 _botAcceptDuelMinLevel = 10;
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds

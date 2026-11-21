@@ -231,6 +231,7 @@ void BotMgr::LoadConfig()
     _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", false);
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", false);
+    _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
     _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
@@ -1504,7 +1505,7 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
             tbhost::guild_orders::TickBotOrder(me);
-        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
+        if (bot.free && _professionsEnabled)
         {
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
                 tbhost::prof::TickFreeGather(me);
