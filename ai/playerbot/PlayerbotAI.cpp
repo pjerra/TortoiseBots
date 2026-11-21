@@ -137,10 +137,7 @@ std::set<std::string> PlayerbotAI::unsecuredCommands;
 
 uint32 PlayerbotChatHandler::extractQuestId(std::string str)
 {
-    // The link extractor is a protected base member: the call travels as a block, whose body is compiled in this member's
-    // context (as extractSpellId's does). ForeverCore parses the id itself and never runs the block.
-    char* source = (char*)str.c_str();
-    return ExtractQuestIdCompat(this, str, [&](auto* self) -> char* { return self->ExtractKeyFromLink(&source, "Hquest"); });
+    return ExtractQuestIdCompat(this, str);
 }
 
 void PacketHandlingHelper::AddHandler(uint16 opcode, std::string handler, bool shouldDelay)

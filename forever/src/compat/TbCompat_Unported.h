@@ -287,8 +287,8 @@ using BattleGroundQueueTypeId = BattlegroundQueueTypeId;
 // (The battleground type of a queue type id, and the chat link extractors of ChatHandler, are blocks: ServerFacade.h and
 // PlayerbotAI.h call them through UnportedBlockResultCompat with Feature::BattlegroundQueue / Feature::ChatLinks.)
 
-template <class Handler, class Block>
-inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str, Block&& /*block*/)
+template <class Handler>
+inline uint32 ExtractQuestIdCompat(Handler* handler, std::string str)
 {
     size_t first = str.find_first_not_of(" \t\r\n");
     if (first != std::string::npos)
