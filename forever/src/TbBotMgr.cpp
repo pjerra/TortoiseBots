@@ -1,5 +1,6 @@
 #include "TbBotMgr.h"
-#include "host/TbHostGuildOrders.h"
+#include "host/TbHostCapitalErrands.h"
+#include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
@@ -616,6 +617,8 @@ void BotMgr::OnPlayerLogout(Player* player)
     chatin::Forget(leaving);     // S1-R2: the bot's chat inbox and its counters go with it (a later bot reusing the guid starts clean)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     tbhost::prof::ClearBotErrands(leaving);
+    tbhost::errands::ClearBotCapitalErrands(leaving);
+    tbhost::guild_mail::ClearBotGuildMail(leaving);
 #endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
@@ -1460,6 +1463,10 @@ void BotMgr::Update(uint32 diff)
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
                 tbhost::prof::TickFreeGather(me);
         }
+        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", false))
+            tbhost::errands::TickCapitalErrands(me, diff);
+        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", false))
+            tbhost::guild_mail::TickGuildMail(me, diff);
 #endif
     }
 
@@ -1469,6 +1476,8 @@ void BotMgr::Update(uint32 diff)
         // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::ClearBotErrands(guid);
+        tbhost::errands::ClearBotCapitalErrands(guid);
+        tbhost::guild_mail::ClearBotGuildMail(guid);
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);

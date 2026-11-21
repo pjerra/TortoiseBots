@@ -80,6 +80,9 @@ std::string InjectSpellDelay(Player* bot, uint32 delayMs);
 // What `.tb where` prints for an engine bot: one line each for state, strategies and current target, and the cast-result counts.
 std::vector<std::string> Describe(Brain const* brain);
 
+// Executes a legacy action by key for `bot` (used by host world-life errands).
+bool RunAction(Player* bot, char const* action, char const* param);
+
 struct BrainDeleter
 {
     void operator()(Brain* brain) const { Destroy(brain); }

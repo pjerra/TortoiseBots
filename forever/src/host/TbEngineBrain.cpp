@@ -588,6 +588,16 @@ std::vector<std::string> Describe(Brain const* brain)
     }
     return lines;
 }
+
+bool RunAction(Player* bot, char const* action, char const* param)
+{
+    if (!bot || !action)
+        return false;
+    PlayerbotAI* pai = PlayerbotAIStorage::Instance().GetAI(bot->GetGUID());
+    if (!pai)
+        return false;
+    return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
+}
 }
 }
 
@@ -614,6 +624,7 @@ bool InFlight(Brain*) { return false; }
 std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
+bool RunAction(Player*, char const*, char const*) { return false; }
 }
 }
 
