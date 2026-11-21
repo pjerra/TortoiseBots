@@ -136,6 +136,24 @@ int main()
         ++passed;
     }
 
+    // 8. Mail take proof rules: money must rise, item must arrive in bags, send must remove item/money.
+    {
+        assert(!ai::MailTakeMoneyConfirmed(1604, 1604));
+        assert(ai::MailTakeMoneyConfirmed(1604, 2103));
+        assert(!ai::MailTakeItemConfirmed(14723, 0, 0));
+        assert(!ai::MailTakeItemConfirmed(0, 0, 1));
+        assert(ai::MailTakeItemConfirmed(14723, 0, 1));
+        assert(ai::MailTakeItemConfirmed(14723, 2, 3));
+        assert(!ai::MailSendConfirmed(4234, 5, 5, 30, 1000, 970));
+        assert(ai::MailSendConfirmed(4234, 5, 4, 30, 1000, 970));
+        assert(!ai::MailSendConfirmed(0, 0, 0, 30, 1000, 1000));
+        assert(ai::MailSendConfirmed(0, 0, 0, 30, 1000, 970));
+        assert(ai::MailOrderResult(false, 1, "take") == "fail:no-mailbox");
+        assert(ai::MailOrderResult(true, 0, "take") == "fail:mail-none-taken");
+        assert(ai::MailOrderResult(true, 1, "take") == "ok");
+        ++passed;
+    }
+
     std::cout << "PASS: test_w2_town (" << passed << " checks, 0 failed)\n";
     return 0;
 }

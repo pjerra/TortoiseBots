@@ -1,13 +1,13 @@
 -- TortoiseBots spec weight scales (final state of Turtle world migrations).
 
-CREATE TABLE IF NOT EXISTS `world`.`ai_playerbot_weightscales` (
+CREATE TABLE IF NOT EXISTS `ai_playerbot_weightscales` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(32) NOT NULL,
   `class` tinyint unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 
-CREATE TABLE IF NOT EXISTS `world`.`ai_playerbot_weightscale_data` (
+CREATE TABLE IF NOT EXISTS `ai_playerbot_weightscale_data` (
   `id` int unsigned NOT NULL,
   `field` varchar(32) NOT NULL,
   `val` smallint unsigned NOT NULL,
@@ -15,10 +15,11 @@ CREATE TABLE IF NOT EXISTS `world`.`ai_playerbot_weightscale_data` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 
 -- Only the module's own scale ids are replaced; scales a server added under other ids stay.
-DELETE FROM `world`.`ai_playerbot_weightscale_data` WHERE `id` IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32);
-DELETE FROM `world`.`ai_playerbot_weightscales` WHERE `id` IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32);
+START TRANSACTION;
+DELETE FROM `ai_playerbot_weightscale_data` WHERE `id` IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32);
+DELETE FROM `ai_playerbot_weightscales` WHERE `id` IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32);
 
-INSERT INTO `world`.`ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
+INSERT INTO `ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
   (1, 'arms', 1),
   (2, 'fury', 1),
   (3, 'prot', 1),
@@ -49,7 +50,7 @@ INSERT INTO `world`.`ai_playerbot_weightscales` (`id`, `name`, `class`) VALUES
   (31, 'resto', 11),
   (32, 'feraldps', 11);
 
-INSERT INTO `world`.`ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
+INSERT INTO `ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
   (1, 'agi', 3),
   (1, 'atkpwr', 2),
   (1, 'critstrkrtng', 56),
@@ -273,3 +274,4 @@ INSERT INTO `world`.`ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUE
   (32, 'hitrtng', 68),
   (32, 'sta', 1),
   (32, 'str', 11);
+COMMIT;

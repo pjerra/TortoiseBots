@@ -1,4 +1,7 @@
 #include "TbBotMgr.h"
+#include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrders.h"
+#include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -562,11 +565,17 @@ void BotMgr::OnPlayerLogout(Player* player)
     auto itr = _bots.find(leaving);
     if (itr == _bots.end())
         return;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::prof::ClearBotErrands(leaving);
+#endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
     // would count against the party's five seats at the next login and re-form a party nobody asked for.
     if (player->GetGroup())
         player->RemoveFromGroup(GROUP_REMOVEMETHOD_LEAVE);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::guild_orders::OnBotLogout(leaving.GetCounter());
+#endif
 }
 
 std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender)
@@ -1296,14 +1305,29 @@ void BotMgr::Update(uint32 diff)
         // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
         // Not in the update in which its logout was requested or its master was lost (R9): Think may have asked for the logout above, and
         // the brain is gone by then.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::TickErrands(me, diff);
+#endif
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
             engine::Tick(bot.brain.get(), diff);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+            tbhost::guild_orders::TickBotOrder(me);
+        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
+        {
+            if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
+                tbhost::prof::TickFreeGather(me);
+        }
+#endif
     }
 
     for (ObjectGuid const& guid : finished)
     {
         TC_LOG_INFO("tortoisebots", "BotMgr: session of {} ended", guid.ToString());
         // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::prof::ClearBotErrands(guid);
+#endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);
         _bots.erase(guid);

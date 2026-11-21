@@ -221,4 +221,48 @@ inline void SortTrainerVisitRanks(std::vector<TrainerVisitRank>& ranks)
     std::sort(ranks.begin(), ranks.end(), TrainerVisitRankLess);
 }
 
+inline bool MailTakeMoneyConfirmed(uint64_t beforeMoney, uint64_t afterMoney)
+{
+    return afterMoney > beforeMoney;
+}
+
+inline bool MailTakeItemConfirmed(uint32_t itemEntry, uint32_t beforeBagCount, uint32_t afterBagCount)
+{
+    return itemEntry != 0 && afterBagCount > beforeBagCount;
+}
+
+inline bool MailSendConfirmed(
+    uint32_t trackItemEntry,
+    uint32_t beforeItemCount,
+    uint32_t afterItemCount,
+    uint64_t copperPlusPostage,
+    uint64_t beforeMoney,
+    uint64_t afterMoney)
+{
+    if (trackItemEntry != 0)
+        return afterItemCount < beforeItemCount;
+    if (copperPlusPostage > 0)
+        return afterMoney < beforeMoney;
+    return true;
+}
+
+inline std::string MailOrderResult(bool hasMailbox, uint32_t confirmedTakes, std::string const& arg)
+{
+    if (!hasMailbox)
+        return "fail:no-mailbox";
+    if (confirmedTakes > 0)
+        return "ok";
+    return (arg.empty() || arg.rfind("take", 0) == 0) ? "fail:mail-none-taken" : "fail:mail";
+}
+
+inline bool MailProcessShouldAbortMissingMailbox(bool requireMailbox, bool mailboxEmpty)
+{
+    return requireMailbox && mailboxEmpty;
+}
+
+inline bool MailTakeAfterResult(bool requireConfirmedTakes, uint32_t confirmedTakes)
+{
+    return requireConfirmedTakes ? (confirmedTakes > 0) : true;
+}
+
 } // namespace ai
