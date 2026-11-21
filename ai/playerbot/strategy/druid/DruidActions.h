@@ -298,10 +298,16 @@ namespace ai
                 if (manual && IsTargetValid(manual))
                     return manual;
             }
-            Unit* best = FindBestInnervateTarget(ai, bot);
-            if (best && bot->GetGroup() && best != bot)
-                BuffClaimRegistry::Claim(bot->GetObjectGuid(), best->GetObjectGuid(), "innervate");
-            return best;
+            return FindBestInnervateTarget(ai, bot);
+        }
+
+        bool Execute(Event& event) override
+        {
+            Unit* target = GetTarget();
+            bool ok = CastSpellTargetAction::Execute(event);
+            if (ok && target && bot->GetGroup() && target != bot)
+                BuffClaimRegistry::Claim(bot->GetObjectGuid(), target->GetObjectGuid(), "innervate");
+            return ok;
         }
 
         bool IsTargetValid(Unit* target) override
