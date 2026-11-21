@@ -77,6 +77,11 @@ bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { re
 bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "quest"); }
 bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "guildorder"); }
 bool MayLeadBots(ChatHandler* /*handler*/, ObjectGuid /*character*/) { return true; }   // N5 is an engine-build rule: the default build keeps the older commands as they were
+bool CheckBotAccess(Player const* /*sender*/, ObjectGuid /*botGuid*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+bool CheckBotAccess(ChatHandler* /*handler*/, ObjectGuid /*botGuid*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+bool CheckBotAccess(ChatHandler* /*handler*/, Player const* /*bot*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+bool CheckPartyLeadAccess(Player const* /*sender*/, Player const* /*leader*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+bool CheckPartyLeadAccess(ChatHandler* /*handler*/, Player const* /*leader*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 // TB-1: `.tb hurt` and `.tb power` (TbScripts.cpp, compiled in both builds) stop at RequireEngine before they ask who the target is, and
 // `.tb role`, `.tb equip` and `.tb learn` are the NotBuilt stubs above, so this rule is never reached here. The symbol has to exist for the
 // option-OFF link all the same; it answers what the real handlers answer without the engine.

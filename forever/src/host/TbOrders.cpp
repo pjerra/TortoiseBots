@@ -1478,6 +1478,12 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "master", "no-such-player", name + " is not in the world");
     if (!release && !MayLeadBots(handler, commander->GetGUID()))   // N5
         return Fail(handler, args, "master", "not-allowed", name + " is neither a host bot nor your own character: it cannot be made the commander of bots");
+    if (!release && IsHostBot(commander))
+    {
+        std::string code, detail;
+        if (!CheckBotAccess(handler, commander, code, detail))
+            return Fail(handler, args, "master", code, detail);
+    }
     for (Player* bot : who.bots)
         if (bot == commander)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");

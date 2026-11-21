@@ -411,6 +411,16 @@ public:
         return false;
     }
 
+    static bool RequireOwnedBot(ChatHandler* handler, ObjectGuid botGuid)
+    {
+        if (botGuid.IsEmpty() || !BotMgr::Instance().IsBot(botGuid))
+            return true;
+        std::string code, detail;
+        if (!TortoiseBots::h3::CheckBotAccess(handler, botGuid, code, detail))
+            return Fail(handler, detail + " (" + code + ").");
+        return true;
+    }
+
     // .tb create <account> <name> <race id> <class id> [gender 0|1]: a new level 1 character for a bot.
     static bool HandleCreate(ChatHandler* handler, std::string account, std::string name, uint8 race, uint8 playerClass, Optional<uint8> gender)
     {
@@ -471,7 +481,10 @@ public:
         std::string const word = Lower(state);
         if (word != "on" && word != "off")
             return Fail(handler, "usage: `.tb free <bot> on|off`.");
-        std::string const error = BotMgr::Instance().SetFree(GuidByName(name), word == "on");
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().SetFree(guid, word == "on");
         if (!error.empty())
             return Fail(handler, name + " is not free: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s free is %s.", name.c_str(), word.c_str());
@@ -493,7 +506,12 @@ public:
             return Fail(handler, "no character named " + masterName + ".");
         if (!TortoiseBots::h3::MayLeadBots(handler, master))   // N5
             return Fail(handler, masterName + " is neither a host bot nor your own character: bots do not join a real player's party.");
-        std::string const error = BotMgr::Instance().GroupWith(GuidByName(name), master);
+        if (BotMgr::Instance().IsBot(master) && !RequireOwnedBot(handler, master))
+            return false;
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().GroupWith(guid, master);
         if (!error.empty())
             return Fail(handler, name + " not grouped: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s joined the party of %s.", name.c_str(), masterName.c_str());
@@ -503,7 +521,10 @@ public:
     // .tb ungroup <bot>: the bot leaves its party and has no master afterwards.
     static bool HandleUngroup(ChatHandler* handler, std::string name)
     {
-        std::string const error = BotMgr::Instance().Ungroup(GuidByName(name));
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().Ungroup(guid);
         if (!error.empty())
             return Fail(handler, name + " not ungrouped: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s left its party.", name.c_str());
@@ -513,7 +534,10 @@ public:
     // .tb go <character> <dx> <dy>: the bot walks that many yards east/north of where it stands (no master only).
     static bool HandleGo(ChatHandler* handler, std::string name, float dx, float dy)
     {
-        if (!BotMgr::Instance().WalkBy(GuidByName(name), dx, dy))
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        if (!BotMgr::Instance().WalkBy(guid, dx, dy))
             return Fail(handler, name + " is not a logged-in bot.");
         handler->PSendSysMessage("TortoiseBots: %s walks.", name.c_str());
         return true;
@@ -522,7 +546,10 @@ public:
     // .tb hop <character> <dx> <dy>: the bot is teleported that many yards east/north on its own map (R10: the engine's teleport handler, `.tb where`).
     static bool HandleHop(ChatHandler* handler, std::string name, float dx, float dy)
     {
-        std::string const error = BotMgr::Instance().Hop(GuidByName(name), dx, dy);
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().Hop(guid, dx, dy);
         if (!error.empty())
             return Fail(handler, name + " not teleported: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s is teleported.", name.c_str());
@@ -532,7 +559,10 @@ public:
     // .tb raid <master>: converts the master's party into a raid (R10 test helper for the "no bot joins a raid" rule).
     static bool HandleRaid(ChatHandler* handler, std::string name)
     {
-        std::string const error = BotMgr::Instance().ConvertToRaid(GuidByName(name));
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().ConvertToRaid(guid);
         if (!error.empty())
             return Fail(handler, name + "'s party not converted: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: the party of %s is a raid now.", name.c_str());
@@ -565,7 +595,10 @@ public:
     // .tb attack <character>: the bot attacks the nearest thing it may attack within 40 yards.
     static bool HandleAttack(ChatHandler* handler, std::string name)
     {
-        std::string const result = BotMgr::Instance().AttackNearest(GuidByName(name), 40.0f);
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const result = BotMgr::Instance().AttackNearest(guid, 40.0f);
         handler->PSendSysMessage("TortoiseBots: %s: %s.", name.c_str(), result.c_str());
         return true;
     }
@@ -604,7 +637,7 @@ public:
     // .tb where <character>: where the bot is and what it is doing.
     static bool HandleWhere(ChatHandler* handler, std::string name)
     {
-        Player* bot = RequireBot(handler, name);
+        Player* bot = RequireBot(handler, name, false);
         if (!bot)
             return false;
         Unit* victim = bot->GetVictim();
@@ -702,11 +735,15 @@ public:
     // The character of a module bot or of a master that is a bot session (logged in with `.tb login`), or a clear refusal. The commands that CHANGE a
     // character (hurt, power, level, train, additem, use, rage, cast, castlog sink...) go through here: a real player's character is refused with a message
     // (a GM has the core's own commands for that), R5 item 6.
-    static Player* RequireBot(ChatHandler* handler, std::string const& name)
+    static Player* RequireBot(ChatHandler* handler, std::string const& name, bool requireControl = true)
     {
         ObjectGuid const guid = GuidByName(name);
         if (Player* bot = BotMgr::Instance().FindBot(guid))
+        {
+            if (requireControl && !RequireOwnedBot(handler, guid))
+                return nullptr;
             return bot;
+        }
         if (!guid.IsEmpty() && BotMgr::Instance().IsBot(guid))
             Fail(handler, name + " is a module bot that is not in the world yet.");
         else if (!guid.IsEmpty() && ObjectAccessor::FindPlayer(guid))
@@ -996,7 +1033,7 @@ public:
     // .tb spells <character>: the spells the bot's spell map holds (id and name), what the engine's "spell id" value searches.
     static bool HandleSpells(ChatHandler* handler, std::string name)
     {
-        Player* bot = RequireBot(handler, name);
+        Player* bot = RequireBot(handler, name, false);
         if (!bot)
             return false;
         std::string line;
@@ -1190,7 +1227,10 @@ public:
             on = false;
         else
             return Fail(handler, "usage: .tb engine <character> on|off.");
-        std::string const error = BotMgr::Instance().SetEngine(GuidByName(name), on);
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        std::string const error = BotMgr::Instance().SetEngine(guid, on);
         if (!error.empty())
             return Fail(handler, name + ": engine not changed: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s engine %s.", name.c_str(), on ? "on" : "off");
@@ -1200,7 +1240,10 @@ public:
     // .tb logout <character>
     static bool HandleLogout(ChatHandler* handler, std::string name)
     {
-        if (!BotMgr::Instance().Logout(GuidByName(name), "command"))
+        ObjectGuid const guid = GuidByName(name);
+        if (!RequireOwnedBot(handler, guid))
+            return false;
+        if (!BotMgr::Instance().Logout(guid, "command"))
         {
             handler->PSendSysMessage("TortoiseBots: %s is not a logged-in bot.", name.c_str());
             handler->SetSentErrorMessage(true);
