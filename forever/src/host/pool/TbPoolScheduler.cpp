@@ -448,7 +448,7 @@ SwitchResult SetPopulation(std::string const& word)
     char const* then = s.stopping ? "the pool is stopping: it applies at the next start"
         : (!s.running ? "the pool is not running: run `.tb pool start`" : "the pool adds or logs out bots gradually");
     result.ok = true;
-    result.message = Trinity::StringFormat("pool population target %u (was %u); %s", resolved.target, previous, then);
+    result.message = Trinity::StringFormat("pool population target {} (was {}); {}", resolved.target, previous, then);
     TC_LOG_INFO("tortoisebots", "TortoiseBots: {}", result.message);
     return result;
 }
