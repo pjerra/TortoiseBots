@@ -11,16 +11,20 @@ spawns (no Turtle-only geometry), every back leg starts where the previous one
 ended (the way back is the route walked again, not a gap), the one-way ramp hop
 is the exact/hop pair, Kresh carries the skip-unreachable bit, the escort holds
 carry kPlanFlagEscortNpc, there is no data-5 wait (the pinned core never sets
-it), and every unit row stands on a spawn of its entry (what `.tb plan check`
-matches).
+it), that every unit row stands on a spawn of its entry (what `.tb plan check`
+matches), and that every generated text field fits the varchar the plan tables'
+own schema gives it (the live updater refused the row with error 1406 when one
+did not).
 """
 import importlib.util
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GENERATOR = os.path.join(ROOT, 'tools', 'wc_plan_rows.py')
 MIGRATION = os.path.join(ROOT, 'sql', 'world', '2026_11_20_12_tortoisebots_plan_wailing_caverns.sql')
+SCHEMA = os.path.join(ROOT, 'sql', 'world', '2026_11_20_00_tortoisebots_plans.sql')
 FIXTURE = os.path.join(ROOT, 'data', 'wc-agent-route-fixture.tsv')
 
 failures = []
@@ -33,6 +37,55 @@ def check(cond, what):
     if not cond:
         failures.append(what)
         print('FAIL: %s' % what)
+
+
+def schema_text_widths():
+    """table -> {column: characters} for every varchar of the plan tables' own CREATE TABLE."""
+    text = open(SCHEMA, encoding='utf-8').read()
+    widths = {}
+    for table, body in re.findall(r'CREATE TABLE IF NOT EXISTS `(\w+)` \((.*?)\n\) ENGINE', text, re.S):
+        widths[table.lower()] = {c.lower(): int(n) for c, n in re.findall(r'`(\w+)` varchar\((\d+)\)', body)}
+    return widths
+
+
+def split_values(row):
+    """One INSERT row's values as ('text'|'number', value): quoted strings ('' escapes) and bare numbers."""
+    out = []
+    i, n = 0, len(row)
+    while i < n:
+        while i < n and row[i] in ' ,':
+            i += 1
+        if i >= n:
+            break
+        if row[i] == "'":
+            i += 1
+            buf = []
+            while i < n:
+                if row[i] == "'":
+                    if i + 1 < n and row[i + 1] == "'":
+                        buf.append("'")
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                buf.append(row[i])
+                i += 1
+            out.append(('text', ''.join(buf)))
+        else:
+            j = i
+            while j < n and row[j] != ',':
+                j += 1
+            out.append(('number', row[i:j].strip()))
+            i = j
+    return out
+
+
+def inserts(sql):
+    """Every INSERT of the generated plan as (table, columns, [(kind, value), ...])."""
+    for table, cols, body in re.findall(r'INSERT INTO `(\w+)` \(([^)]*)\) VALUES\n(.*?);\n', sql, re.S):
+        columns = [c.strip().strip('`') for c in cols.split(',')]
+        for row in re.findall(r'^\((.*)\),?$', body, re.M):
+            yield table, columns, split_values(row)
 
 
 def load():
@@ -172,6 +225,25 @@ def main():
 
     header = '%d legs, %d steps, %d unit rows, %d bosses, %d wade hops' % (len(legs), len(steps), len(units), len(bosses), len(wet))
     generated = wc.emit_sql(legs, units, bosses, header)
+
+    # Every text the generator writes fits its column: the schema is the plan tables' own CREATE TABLE (varchar sizes), read once here.
+    widths = schema_text_widths()
+    check(widths.get('ai_dungeon_plan', {}).get('source') == 64, 'the schema gives ai_dungeon_plan.source varchar(64)')
+    check(len(wc.PLAN_SOURCE) <= widths.get('ai_dungeon_plan', {}).get('source', 0),
+          'the plan source text fits its column (%d chars)' % len(wc.PLAN_SOURCE))
+    rows_checked = 0
+    for table, columns, values in inserts(generated):
+        check(table in widths, 'the insert target %s is a plan table' % table)
+        check(len(columns) == len(values), '%s row has %d values for %d columns' % (table, len(values), len(columns)))
+        for column, (kind, value) in zip(columns, values):
+            if kind != 'text':
+                continue
+            limit = widths.get(table, {}).get(column)
+            check(limit is not None and len(value) <= limit,
+                  '%s.%s text is %d chars, the column holds %s' % (table, column, len(value), limit))
+        rows_checked += 1
+    check(rows_checked > 300, 'every generated row was checked (%d)' % rows_checked)
+
     check(os.path.exists(MIGRATION), 'the migration exists')
     if os.path.exists(MIGRATION):
         shipped = open(MIGRATION, encoding='utf-8').read()

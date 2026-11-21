@@ -53,6 +53,9 @@ DEFAULT_WET = os.path.join(ROOT, 'data', 'wc-wet-hops.tsv')
 PLAN = 'wailing_caverns'
 MAP = 43
 
+# `ai_dungeon_plan.source` is varchar(64): the row says where the route came from, in the room the column has.
+PLAN_SOURCE = 'forever-agent 109a2496 route export + core scripts'
+
 # The Disciple of Naralex (npc 3678) and his script (classic_wailing_caverns.cpp,
 # ClassicDiscipleWaypoints): the points the escort pauses at are 7, 15 and 30.
 DISCIPLE = 3678
@@ -408,7 +411,7 @@ def emit_sql(legs, units, bosses, header):
     lines.append('INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, '
                  '`comment`) VALUES')
     lines.append('(%s, %d, %s, %s, %s, %s, %s);' % (sql_quote(PLAN), MAP, sql_quote('3840'), sql_quote(''),
-                                                sql_quote('3671'), sql_quote('forever-agent 109a2496 dungeons/wailing_caverns.json (route walk confirmed) + core scripts'),
+                                                sql_quote('3671'), sql_quote(PLAN_SOURCE),
                                                 sql_quote(header)))
     lines.append('INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES')
     leg_rows = []
