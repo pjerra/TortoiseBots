@@ -6,6 +6,7 @@
 #include "playerbot/policy/gear/SpellRankPolicy.h"
 #include "playerbot/strategy/values/TrainerValues.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/policy/town/TownErrandPolicy.h"
 #include "../../../../runtime/policy/provision/TradeTrainerPolicy.h"
 
 using namespace ai;
@@ -84,6 +85,16 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
     std::vector<TrainerSpell> trainer_spells = CollectTrainerSpellsCompat(creature);
     visitCreature = creature;
 
+    // Learn order: lowest required level, then cheapest (TownErrandPolicy.h).
+    // A purse that covers only some ranks keeps the foundational ones, and a
+    // rank never jumps ahead of its own prerequisite mid-visit.
+    std::sort(trainer_spells.begin(), trainer_spells.end(),
+        [fDiscountMod](TrainerSpell const& a, TrainerSpell const& b)
+        {
+            return TrainerVisitRankLess(
+                { a.spell, a.reqLevel, TrainerSpellPrice(&a, fDiscountMod) },
+                { b.spell, b.reqLevel, TrainerSpellPrice(&b, fDiscountMod) });
+        });
     for (std::vector<TrainerSpell>::const_iterator itr = trainer_spells.begin(); itr != trainer_spells.end(); ++itr)
     {
         TrainerSpell const* tSpell = &(*itr);
