@@ -319,5 +319,10 @@ void RebuildQuestEligibility()
     RebuildQuestEligibilityCompat();
 }
 
+void ClearQuestEligibility()
+{
+    ClearQuestEligibilityCompat();
+}
+
 } // namespace h3
 } // namespace TortoiseBots

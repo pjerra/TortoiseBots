@@ -45,6 +45,8 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); /
 
 // Rebuilds the quest eligibility sets (TbCompat_Quest.h): at world load and after a quest reload.
 void RebuildQuestEligibility();
+// Drops the quest eligibility sets (TbCompat_Quest.h): on a quest reload while the module is off, so the next check rebuilds them.
+void ClearQuestEligibility();
 
 // ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
 // Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.

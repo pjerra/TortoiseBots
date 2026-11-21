@@ -74,7 +74,11 @@ class FreeHost(unittest.TestCase):
 
     def test_the_console_commands_lead_to_the_host(self):
         self.assertIn('{ "free",   HandleFree,', SCRIPTS)
-        self.assertIn("BotMgr::Instance().SetFree(GuidByName(name), word == \"on\")", func(SCRIPTS, "static bool HandleFree("))
+        free = func(SCRIPTS, "static bool HandleFree(")
+        self.assertIn("ObjectGuid const guid = GuidByName(name);", free)
+        self.assertIn("RequireOwnedBot(handler, guid)", free)
+        self.assertIn("BotMgr::Instance().SetFree(guid, word == \"on\")", free)
+        self.assertLess(free.index("RequireOwnedBot(handler, guid)"), free.index("BotMgr::Instance().SetFree(guid"))
         self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free)", func(SCRIPTS, "static bool HandleLogin("))
         self.assertIn("BotMgr::Instance().IsFreeBot(ObjectGuid::Create<HighGuid::Player>(guid))", HOSTBOTS)
 

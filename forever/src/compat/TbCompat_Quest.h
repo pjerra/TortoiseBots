@@ -274,6 +274,13 @@ inline void RebuildQuestEligibilityCompat()
     s.built = true;
 }
 
+// Drops the sets without rebuilding: the next eligibility check rebuilds them. A quest-table reload while the module is
+// off takes this path, so a re-enable cannot read pre-reload rows.
+inline void ClearQuestEligibilityCompat()
+{
+    QuestEligibilitySetsCompat() = QuestEligibilitySets();
+}
+
 inline bool QuestIsVanillaEligibleCompat(Quest const* quest)
 {
     if (!quest)
