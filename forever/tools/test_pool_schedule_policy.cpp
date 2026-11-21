@@ -245,6 +245,76 @@ int main()
         CHECK(pass.eligible == 0);
     }
 
+    // (3a) a bind frees the pool's slot: the next pass logs another bot in (one login inside the 60 s window), on an account no
+    // pool bot holds, and the bound bot is never logged out — not at its session's end, not on a lowered target, not on a stop.
+    {
+        Sim sim;
+        sim.settings.targetOnline = 10;
+        sim.now = 10 * kMinute;
+        // Ten accounts with a character online each, ten characters per account, and ten more accounts the pool can still use.
+        for (std::uint64_t account = 1; account <= 20; ++account)
+            for (std::uint64_t character = 0; character < 10; ++character)
+            {
+                std::uint64_t const guid = account * 100 + character;
+                std::uint8_t const race = std::uint8_t(1 + account % 8);
+                w::PoolBotState bot = (account <= 10 && character == 0)
+                    ? OnlineBot(guid, race, sim.now - kMinute, sim.now + 30 * kMinute)
+                    : OfflineBot(guid, race, 0);
+                bot.accountId = std::uint32_t(account);
+                sim.bots.push_back(bot);
+            }
+        CHECK(sim.Pass().logins.empty());                    // at the target: nothing to do
+        w::PoolBotState* bound = sim.Find(100);              // `.tb group` takes the bot on account 1
+        CHECK(bound != nullptr);
+        bound->bound = true;
+        w::PoolPass pass = sim.Pass();
+        CHECK(pass.counted == 9);                            // the bound bot leaves the count
+        CHECK(pass.logins.size() == 1);                      // one more, at once (the window has room)
+        w::PoolBotState const* replacement = sim.Find(pass.logins[0]);
+        CHECK(replacement != nullptr && replacement->accountId > 10);   // on an account no pool bot holds
+        sim.Apply(pass);
+        CHECK(sim.logins.back() == sim.now);
+        bound->sessionEndsMs = sim.now - 1;                  // its session ends; the target drops to 0
+        sim.settings.targetOnline = 0;
+        sim.now += kSecond;
+        w::PoolPass lowered = sim.Pass();
+        CHECK(!lowered.logouts.empty());                     // the free bots go ...
+        CHECK(std::find(lowered.logouts.begin(), lowered.logouts.end(), std::uint64_t(100)) == lowered.logouts.end());   // ... it does not
+        w::PoolPass stopped = sim.Pass(true);
+        CHECK(std::find(stopped.logouts.begin(), stopped.logouts.end(), std::uint64_t(100)) == stopped.logouts.end());
+    }
+
+    // (3b) the account cap is the one thing that can block the refill: the live pool's shape (ten accounts, ten characters
+    // each, target 10) has every account held when one bot gets bound, so nine pool bots are the most it can run and the cap
+    // says 9 — `.tb pool status`'s ` capped by accounts: 9`, not a silent shortfall.
+    {
+        Sim sim;
+        sim.settings.targetOnline = 10;
+        sim.now = 10 * kMinute;
+        for (std::uint64_t account = 1; account <= 10; ++account)
+            for (std::uint64_t character = 0; character < 10; ++character)
+            {
+                std::uint64_t const guid = account * 100 + character;
+                std::uint8_t const race = std::uint8_t(1 + account % 8);
+                w::PoolBotState bot = character == 0
+                    ? OnlineBot(guid, race, sim.now - kMinute, sim.now + 30 * kMinute)
+                    : OfflineBot(guid, race, 0);
+                bot.accountId = std::uint32_t(account);
+                sim.bots.push_back(bot);
+            }
+        CHECK(sim.Pass().counted == 10);
+        CHECK(w::PoolAccountCount(sim.bots) == 10);
+        sim.Find(100)->bound = true;
+        w::PoolPass pass = sim.Pass();
+        CHECK(pass.counted == 9);
+        CHECK(pass.eligible == 0);                           // every account holds a session: the bound bot's own too
+        CHECK(pass.logins.empty());
+        CHECK(w::PoolAccountCount(sim.bots) == 9);           // the cap the status line reports
+        // Unbound, the account is the pool's again.
+        sim.Find(100)->bound = false;
+        CHECK(w::PoolAccountCount(sim.bots) == 10);
+    }
+
     // (4) a bot offline less than OfflineMinutes.Min is not picked.
     {
         Sim sim;

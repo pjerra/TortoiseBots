@@ -33,13 +33,19 @@ control first). With the key on and the tables there, the schedule runs from the
   path that clears the master (`BotManager::ClearBotMaster`, a run handing the bot back). A cleared bot rejoins the count with
   a fresh session, so a bot that spent hours bound does not end the moment it rejoins. A bound bot that leaves the world (the
   master grace, the owner's login, a shutdown) is offline and unbound, and the pool logs it in again after its offline time. A
-  bound bot is never logged out by the pool (not on its session's end, not on a lowered target, not on a stop).
+  bound bot is never logged out by the pool (not on its session's end, not on a lowered target, not on a stop). Its slot is
+  refilled: the bind leaves the count on the pass that sees it, and that same pass plans one login for another due bot on an
+  account no bot holds. If every account already holds a session (the live pool's ten accounts for a target of ten), no extra
+  session can be started without two characters of one account in the world (D2), the pass plans nothing, and the cap says why
+  (`capped by accounts`, the bind's log line).
 - **One session per account (D2).** A bot that is `Loading`, `Online` or `Leaving` occupies its account for every other
   character of it; the host also marks the account online when the world has a session on it (`sWorld->FindSession`) or any
   bot of the module sits on it (`BotMgr::BotAccounts`, asked for once per pass: pool or not, loading or in the world).
   `BotMgr::Login` refuses a second bot of an account for the same reason (`AccountHasBot`). The pool puts up to ten characters on one account, so the online count is
-  capped by the number of accounts the pool's characters sit on; `.tb pool status` appends ` capped by accounts: N` when the
-  target is above it. The pool's own tracks derive the occupancy in the policy (the test compiles that rule with ten
+  capped by the number of accounts the pool's characters sit on. A bound bot keeps its account's session for as long as the
+  binding lasts and the pool never logs it out, so that account is out of the pool's reach: the cap leaves it out
+  (`PoolAccountCount`), and `.tb pool status` appends ` capped by accounts: N` when the target is above what is left, as the
+  bind's own log line says. The pool's own tracks derive the occupancy in the policy (the test compiles that rule with ten
   characters per account).
 - **Logins.** At most one per pass (a pass is a second), at most `LoginsPerMinute` in any 60 s window (sliding, half-open), and
   only under the target. Candidates are `Offline`, not bound, due (`now >= offlineUntil`) and on an account no character of
@@ -116,7 +122,11 @@ account in the world, 20 sessions, `counted == 20` — the policy derives the oc
 `FindSession`-only host would fail it); a living bot **in combat** is not logged out at its session's end, and a lowered
 target skips a corpse and a fighter (the stop does not); a pending **shutdown** plans no logins while a session's end still
 logs out; the **bound transitions** (a master seen on `Loading → Online`, `.tb free on` and `.tb ungroup` clearing `bound`
-with a fresh session, the master-grace logout clearing it for the pool); a **vanished row** keeping an online bot's track; the alternation and the
+with a fresh session, the master-grace logout clearing it for the pool); the **refill after a bind** (ten accounts with a
+character online each, ten characters per account, target 10: a bind logs one more in on the free accounts, at the same pass
+inside the 60 s window, and the bound bot is in no logout of a session end, a target drop to 0 or a stop); the **account cap
+after a bind** (the live shape, ten accounts × ten characters: a bind leaves nine usable accounts, `eligible` 0, no login,
+and `PoolAccountCount` 9 — the status line's ` capped by accounts: 9`, 10 again once it is unbound); a **vanished row** keeping an online bot's track; the alternation and the
 fallback, oldest `last_logout` first, an account with a session (the host's own flag) skipped, the corpse's ten minutes, the
 rolled ranges (both ends, nothing outside, a reversed range), `LoginsPerMinute = 0` and `target = 0`, the stop's 5 per second,
 and the pass cost over 2000 bots (`average < 500.0` µs; measured ~6 µs average on the build host).
@@ -129,7 +139,8 @@ the stop's pacing. All are caught.
 
 Wiring pins (`Scheduler` class): the tick order and the no-creation-in-a-login-tick rule, the `// W0` marks and the pool flags,
 `AccountHasBot`/`BotAccounts` and the account refusal in `Login`, the account seed (`FindSession || BotAccounts`) and the shutdown flag, the
-three console words, the status keys and the account cap, the scheduler's calls into the policy and the registry, the six config
+three console words, the status keys and the account cap, the scheduler's calls into the policy and the registry, the bind's
+`UsableAccounts(s)` / `{} account(s) left for a target of {}` line, the six config
 keys with their shipped defaults (a fallback equal to the template), and the policy test's case sentences.
 
 ## 5. Gates
@@ -137,27 +148,28 @@ keys with their shipped defaults (a fallback equal to the template), and the pol
 Slot 6 through the slot lock (`~/forever-build/slot-sync-build.sh 6 ...`), core `d02645dd21`; the shared tree key is
 `core-9b88bd2d6584-opt-85c8cb4e` (ON) / `core-9b88bd2d6584-opt-78bf025f` (OFF). The shared tree is shared with other rounds of
 this core, so each gate's evidence is the slot's own mirror (`~/forever-build/build-6/...`), checked by content after the build.
-The lines below are this fix round's, after every edit.
+The branch merged `tbf/main` first (W8's `ai/playerbot/strategy/actions/AhAction.cpp` is now in `forever/SLICE-W0.txt`: without
+that line the link read `undefined reference to vtable for ai::AhAction`, while `tbf/main` alone linked because its build list
+is `forever/SLICE-W1.txt`). The rows marked *this round* are the refill fix's, after every edit; the others are the first
+round's and were not rerun here.
 
 | Gate | Exact line |
 |---|---|
-| Module ON, build (`tar ... \| ssh ... "~/forever-build/slot-sync-build.sh 6 tortoisebots -DTORTOISEBOTS_SLICE1=ON"`) | `combined build: slot 6 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 2 of 3 (slot 6)` / `module sync: 2 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=6` |
-| Module ON, objects | `libtortoisebots.a` holds `TbPoolCreate.cpp.o`, `TbPoolRegistry.cpp.o`, `TbPoolScheduler.cpp.o` (the ON archive of the first build of the round; the OFF rebuild replaces the slot mirror) |
-| Module OFF (`... slot-sync-build.sh 6 tortoisebots`) | `combined build: slot 6 key core-9b88bd2d6584-opt-78bf025f` / `build token 2 of 3 (slot 6)` / `module sync: 2 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=4`; the mirror's `TbPoolScheduler.cpp.o` carries only the off stubs (`LoadConfig`, `Start`, `Stop`, `Status`, `Update`), `pool login of` 0 times, `pool logout` 0 times, and `pool: state=off` once |
-| Policy test (`g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_pool_schedule_policy.cpp`) | `pass cost over 2000 bots: average 4.8 us, worst 16.1 us` / `RESULT: PASS (3834 checks)` |
-| Wiring (`python3 -m unittest forever.tools.test_wl0_wiring`) | `Ran 37 tests in 43.860s` / `OK (skipped=3)` |
-| Mutations (`POOL_SCHEDULE_MUTATE=1 python3 -m unittest forever.tools.test_wl0_wiring.ScheduleMutations`) | `Ran 1 test in 166.665s` / `OK` — 22 mutations, each one caught by the policy test (the baseline passes first) |
-| Whole tools discovery (`python3 -m unittest discover -s forever/tools -p "test_*.py"`) | `Ran 246 tests in 101.038s` / `OK (skipped=9)` |
-| Generator (`python3 forever/tools/slice_gen_context.py --check`) | `SliceAiObjectContext.cpp is up to date` |
-| Registry (`python3 forever/tools/slice_registry_check.py`) | `summary: (a)=0  (b)=228 keys to register or stub later` |
-| Direct queries (`python3 tools/test_forever_no_direct_queries.py`) | `Ran 5 tests in 0.487s` / `OK` |
-| Turtle build (`vm-build` / `vm-test tb`) | **waits on PR #99**: not merged on `tbf/main` (`5f1ac1dae`, #104/#105). Nothing of this round is compiled by the Turtle build (the scheduler, the pool files and the test are under `forever/`; the one file outside it, `ai/playerbot/policy/world/PoolSchedulePolicy.h`, is core-free, header-only and included by no Turtle TU, so Turtle behaviour cannot change) |
+| Worldserver link, module ON (`... slot-sync-build.sh 6 worldserver -DTORTOISEBOTS_SLICE1=ON`) — *this round* | `combined build: slot 6 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 2 of 3 (slot 6)` / `module sync: 363 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=15`; `[316/329] Building CXX object src/server/modules/TortoiseBots/CMakeFiles/tortoisebots.dir/ai/playerbot/strategy/actions/AhAction.cpp.o` / `[329/329] Linking CXX executable bin/Release/bin/worldserver`; sha1 `e8f39ac7fefe59bfcb327cd7f0e8ce9e92b95a68`, and the binary holds the new bind line once |
+| Module ON (`... slot-sync-build.sh 6 tortoisebots -DTORTOISEBOTS_SLICE1=ON`) — *this round* | `combined build: slot 6 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 2 of 3 (slot 6)` / `module sync: 0 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=2` (the same tree the link build compiled) |
+| Module ON, objects — *this round* | `libtortoisebots.a` holds `TbPoolCreate.cpp.o`, `TbPoolRegistry.cpp.o`, `TbPoolScheduler.cpp.o`; the scheduler object's strings hold `... {} account(s) left for a target of {}, so its slot stays empty while it is bound` once and ` capped by accounts: {}` once (checked with `ar x` + `strings` before the OFF rebuild replaced the mirror) |
+| Module OFF (`... slot-sync-build.sh 6 tortoisebots`) — *this round* | `combined build: slot 6 key core-9b88bd2d6584-opt-78bf025f` / `build token 3 of 3 (slot 6)` / `module sync: 363 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=4`; the mirror's `TbPoolScheduler.cpp.o` carries only the off stubs (`took a master` 0 times, `pool login of` 0 times, `pool: state=off` once) |
+| Policy test (`g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_pool_schedule_policy.cpp`) — *this round* | `pass cost over 2000 bots: average 5.5 us, worst 5.7 us` / `RESULT: PASS (3852 checks)` |
+| Wiring (`python3 -m unittest forever.tools.test_wl0_wiring`) — *this round* | `Ran 37 tests in 12.187s` / `OK (skipped=3)` |
+| Whole tools discovery (`python3 -m unittest discover -s forever/tools -p "test_*.py"`) — *this round* | `Ran 277 tests in 33.083s` / `FAILED (failures=1, skipped=9)`: `test_w1_wiring.FreeHost.test_the_console_commands_lead_to_the_host` — its test wants `SetFree(GuidByName(name), ...)` and `HandleFree` passes `guid`; it fails on a pristine `tbf/main` worktree too. An earlier run of this round also failed `test_vm_census_order.VmCensusOrder.test_files_zero_is_not_a_measurement` (the census took the build box's slot lock and exited 1 where the test wants 3); it passes when the box is quiet. Both are outside W0-B |
+| Mutations (`POOL_SCHEDULE_MUTATE=1 python3 -m unittest forever.tools.test_wl0_wiring.ScheduleMutations`) — first round, not rerun | `Ran 1 test in 166.665s` / `OK` — 22 mutations, each one caught by the policy test (the baseline passes first); the new cap rule has no mutation entry |
+| Generator (`python3 forever/tools/slice_gen_context.py --check`) — *this round* | `SliceAiObjectContext.cpp is up to date` |
+| Registry (`python3 forever/tools/slice_registry_check.py`) — *this round* | `summary: (a)=0  (b)=228 keys to register or stub later` |
+| Direct queries (`python3 tools/test_forever_no_direct_queries.py`) — *this round* | `Ran 5 tests in 0.505s` / `OK` |
+| Turtle build (`vm-build` / `vm-test tb`) — first round, not rerun | **waits on PR #99**: not merged on `tbf/main` (`5f1ac1dae`, #104/#105). Nothing of this round is compiled by the Turtle build (the scheduler, the pool files and the test are under `forever/`; the one file outside it, `ai/playerbot/policy/world/PoolSchedulePolicy.h`, is core-free, header-only and included by no Turtle TU, so Turtle behaviour cannot change) |
 
-Not rerun in this fix round: the `worldserver` link (the first pass's `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=13` stands; no
-core seam or link input changed — `BotMgr`/the scheduler are module-internal and the policy is a header).
-
-Not run: the legacy census (`forever/tools/port_census.py`) — no file in `forever/SLICE-W0.txt` changed; no live server (round
-rule).
+Not run: the legacy census (`forever/tools/port_census.py`) — the one new line in `forever/SLICE-W0.txt` only adds an
+already-ported file to the build; no live server (round rule).
 
 ## 6. Live checks (nothing run this round)
 
@@ -175,8 +187,14 @@ The round is engine-side only: no live server was started. The checks for the li
 4. Inside 1-3 minutes: `pool logout <name>: reason=session, session 1 min` (or 2), and the same bot back after 1-2 minutes
    (`pool login`); `SELECT name,last_login,last_logout FROM tb_pool_character` moves for it, and no logout line reports a
    session length outside 1..2 min.
-5. A master: `.tb group <one pool bot> <gm character>` → `online` drops by one, the pool fills the slot with another bot, and
-   no `pool logout` line names the bound bot; `.tb state <bot>` shows `free=no`. `.tb ungroup` ends the binding: the bot rejoins
+5. A master: `.tb group <one pool bot> <gm character>` → `online` drops by one, and the pool fills the slot with another bot on
+   the next pass, unless every account holds a session. **The live pool's shape has exactly ten accounts for a target of ten**,
+   so the bound bot's account is all that is left and no second character of an account may log in (D2): online stays 9 and
+   `.tb pool status` must say `target=10 online=9 ... capped by accounts: 9`, with the bind's log line naming the accounts left:
+   `... took a master: it leaves the pool's count and is never logged out by the pool; 9 account(s) left for a target of 10, so
+   its slot stays empty while it is bound`. To see the refill itself, start a pool with more accounts than the target (200
+   characters on 20 accounts, `.TargetOnline = 10`): the same bind then logs one more in on the very next pass. No `pool
+   logout` line names the bound bot; `.tb state <bot>` shows `free=no`. `.tb ungroup` ends the binding: the bot rejoins
    the count with a fresh session (the next stop drains it too).
 6. Target up: set `.TargetOnline = 20`, `.reload config` → logins continue up to 20 and stop there; no 60 s window with more
    than 20 `pool login` lines.
@@ -204,6 +222,10 @@ The round is engine-side only: no live server was started. The checks for the li
   combat has no such cap: its session is ended only once the fight is over.
 - A vanished registry row is not forgotten while its bot is online; the track goes when the bot is offline, after the logout
   the session end or stop asked for. The row itself is not recreated: the registry's next reconciliation owns that.
+- An account a bound bot sits on is out of the pool's reach until the binding ends: the pool never logs that bot out, and one
+  session per account means no second character of the account may enter. A pool with as many accounts as its target (the live
+  pool: ten accounts, target 10) therefore runs one short while a bot is bound; the status line's `capped by accounts` and the
+  bind's log line say so. With more accounts than the target, the next pass refills the slot.
 
 ## 8. The review's findings and their fixes
 
@@ -216,3 +238,4 @@ The round is engine-side only: no live server was started. The checks for the li
 | `Refresh` dropped an online bot's track | `PoolTrackKept` keeps it until the bot is offline | the `PoolTrackKept` case + `track-dropped-while-online` |
 | no shutdown guard | `PoolPassInput::shuttingDown` from `sWorld->IsShuttingDown()` plans no logins; logouts still run | the shutdown case + `shutdown-logins` |
 | the restart note claimed more than it does | section 2 and 7 now state exactly what a restart reconstructs (minimum from boot or stamp, all due together, fresh session) | the notes text and the conf's `OfflineMinutes` comment |
+| the live check's deviation: `online` 10 → 9 after a bind and no refill in the next 3 min | not the count (the status read 9) and not the event hooking (the plan runs every pass): the live pool had ten accounts for a target of ten, the bound bot keeps its account's session, and one session per account leaves no account to add a tenth bot on. The refill happens on the next pass whenever an account is free; the cap now leaves out the accounts bound bots hold, so `.tb pool status` reads `capped by accounts: 9` and the bind's log line names the accounts left | the refill case (20 accounts, one online each, a bind → one login in the same pass, no logout of the bound bot) and the cap case (10 accounts × 10 characters, a bind → `eligible` 0, `PoolAccountCount` 9) |

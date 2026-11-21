@@ -529,6 +529,9 @@ class Scheduler(unittest.TestCase):
         self.assertIn("BotMgr::Instance().MasterOf(guid)", sync)
         self.assertIn("player->IsInCombat()", sync)
         self.assertNotIn("IsBot(guid)", sync)
+        # A bind that leaves the pool no account to refill from says so; the cap counts the accounts left to it.
+        self.assertIn("UsableAccounts(s)", sync)
+        self.assertIn("{} account(s) left for a target of {}", sync)
 
     def test_start_stop_status_are_console_commands(self):
         table = SCRIPTS[SCRIPTS.index("static ChatCommandTable poolTable"):]

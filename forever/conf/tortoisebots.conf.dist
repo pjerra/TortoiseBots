@@ -241,9 +241,12 @@ TortoiseBots.Pool.MaxCharacters = 50
 #        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the
 #                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule
 #                     (the pool puts up to ten characters on an account), so the online count is capped by the number of accounts
-#                     the pool's characters sit on; `.tb pool status` adds `capped by accounts: N` when the target is above it.
-#                     Logins alternate factions and take the bot offline longest first; a bot that got a master leaves the
-#                     count. A lowered target logs out the newest sessions first, never a dead or fighting bot. 0 to 5000.
+#                     the pool's characters sit on. A bot that got a master keeps its account for as long as the binding lasts,
+#                     and the pool cannot end it: that account is out of reach, so the pool needs more accounts than the target to
+#                     refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when the target is above the
+#                     accounts left. Logins alternate factions and take the bot offline longest first; a bot that got a master
+#                     leaves the count. A lowered target logs out the newest sessions first, never a dead or fighting bot.
+#                     0 to 5000.
 #        Default:     0
 #
 

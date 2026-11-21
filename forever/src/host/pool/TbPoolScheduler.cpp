@@ -137,6 +137,17 @@ void Refresh(State& s, std::int64_t now)
     }
 }
 
+// The accounts a bind leaves the pool: the policy's cap over the tracks as they stand. Asked only when a bot gets a master (the
+// one moment the answer changes), so the pass allocates nothing for it.
+std::uint32_t UsableAccounts(State const& s)
+{
+    std::vector<world::PoolBotState> states;
+    states.reserve(s.bots.size());
+    for (auto const& tracked : s.bots)
+        states.push_back(tracked.second.state);
+    return world::PoolAccountCount(states);
+}
+
 // The bot manager's answer for one track, turned into the pass's state by the policy (the phase, `bound`, the session clocks):
 // the host only gathers the facts and writes the stamp of a logout. A bound bot logged out by the master's grace comes back to
 // the pool's count (the policy clears `bound` when it leaves the world).
@@ -160,7 +171,16 @@ void Sync(State& s, Tracked& track, std::int64_t now)
     if (outcome.wentOffline && Enabled())
         MarkLogout(track.name, UnixNow());   // with the key or the tables gone the schedule still drains, without a stamp
     if (outcome.boundSet)
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool", track.name);
+    {
+        // The bound bot keeps its account's session, so the pool can only refill the slot on another account. Say it when there
+        // is none left: the count then stays short for as long as the binding lasts, and `.tb pool status` shows the cap.
+        std::uint32_t const usable = UsableAccounts(s);
+        if (s.settings.targetOnline > usable)
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool; {} account(s) left for a target of {}, so its slot stays empty while it is bound",
+                track.name, usable, s.settings.targetOnline);
+        else
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool", track.name);
+    }
     if (outcome.boundCleared)
         TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} is free again: back in the pool's count with a fresh session", track.name);
 }

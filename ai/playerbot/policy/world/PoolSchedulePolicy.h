@@ -174,6 +174,8 @@ inline bool PoolAccountBusy(PoolBotState const& bot, std::vector<std::uint32_t> 
 }
 
 // The distinct accounts the pool's characters sit on: one session each caps the online count here. 0 (unknown) is no account.
+// An account a bound bot holds is out of reach — the pool never logs that bot out, so its session lasts as long as the binding —
+// and leaving it in would promise a target the pool cannot reach.
 inline std::uint32_t PoolAccountCount(std::vector<PoolBotState> const& bots)
 {
     std::vector<std::uint32_t> accounts;
@@ -182,7 +184,11 @@ inline std::uint32_t PoolAccountCount(std::vector<PoolBotState> const& bots)
         if (bot.accountId)
             accounts.push_back(bot.accountId);
     std::sort(accounts.begin(), accounts.end());
-    return std::uint32_t(std::unique(accounts.begin(), accounts.end()) - accounts.begin());
+    accounts.erase(std::unique(accounts.begin(), accounts.end()), accounts.end());
+    for (PoolBotState const& bot : bots)
+        if (bot.accountId && bot.bound)
+            accounts.erase(std::remove(accounts.begin(), accounts.end(), bot.accountId), accounts.end());
+    return std::uint32_t(accounts.size());
 }
 
 // The facts the host has of one track this pass: the bot manager's answer and, once it is in the world, the Player's life state.
