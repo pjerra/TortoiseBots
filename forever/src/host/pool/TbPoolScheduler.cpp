@@ -137,6 +137,17 @@ void Refresh(State& s, std::int64_t now)
     }
 }
 
+// The accounts a bind leaves the pool: the policy's cap over the tracks as they stand. Asked only when a bot gets a master (the
+// one moment the answer changes), so the pass allocates nothing for it.
+std::uint32_t UsableAccounts(State const& s)
+{
+    std::vector<world::PoolBotState> states;
+    states.reserve(s.bots.size());
+    for (auto const& tracked : s.bots)
+        states.push_back(tracked.second.state);
+    return world::PoolAccountCount(states);
+}
+
 // The bot manager's answer for one track, turned into the pass's state by the policy (the phase, `bound`, the session clocks):
 // the host only gathers the facts and writes the stamp of a logout. A bound bot logged out by the master's grace comes back to
 // the pool's count (the policy clears `bound` when it leaves the world).
@@ -160,7 +171,16 @@ void Sync(State& s, Tracked& track, std::int64_t now)
     if (outcome.wentOffline && Enabled())
         MarkLogout(track.name, UnixNow());   // with the key or the tables gone the schedule still drains, without a stamp
     if (outcome.boundSet)
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool", track.name);
+    {
+        // The bound bot keeps its account's session, so the pool can only refill the slot on another account. Say it when there
+        // is none left: the count then stays short for as long as the binding lasts, and `.tb pool status` shows the cap.
+        std::uint32_t const usable = UsableAccounts(s);
+        if (s.settings.targetOnline > usable)
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool; {} account(s) left for a target of {}, so its slot stays empty while it is bound",
+                track.name, usable, s.settings.targetOnline);
+        else
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool", track.name);
+    }
     if (outcome.boundCleared)
         TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} is free again: back in the pool's count with a fresh session", track.name);
 }
@@ -312,7 +332,9 @@ void LoadConfig()
 {
     State& s = Get();
     s.configured = true;
-    s.settings.targetOnline = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.TargetOnline", 0), 0, 5000));
+    s.settings.targetOnline = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.TargetOnline", 0), 0, std::int32_t(world::kPoolTargetMax)));
+    s.settings.populationLow = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.PopulationLow", 10), 0, std::int32_t(world::kPoolTargetMax)));
+    s.settings.populationHigh = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.PopulationHigh", 50), 0, std::int32_t(world::kPoolTargetMax)));
     s.settings.loginsPerMinute = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.LoginsPerMinute", 20), 0, 600));
     s.settings.sessionMinMs = MinutesMs(sConfigMgr->GetIntDefault("TortoiseBots.Pool.SessionMinutes.Min", 30));
     s.settings.sessionMaxMs = MinutesMs(sConfigMgr->GetIntDefault("TortoiseBots.Pool.SessionMinutes.Max", 90));
@@ -409,6 +431,28 @@ SwitchResult Stop()
     return result;
 }
 
+SwitchResult SetPopulation(std::string const& word)
+{
+    State& s = Get();
+    if (!s.configured)
+        LoadConfig();
+    SwitchResult result;
+    world::PoolPopulationTarget const resolved = world::PoolResolvePopulationTarget(word, s.settings.populationLow, s.settings.populationHigh);
+    if (!resolved.ok)
+    {
+        result.message = resolved.error;
+        return result;
+    }
+    std::uint32_t const previous = s.settings.targetOnline;
+    s.settings.targetOnline = resolved.target;
+    char const* then = s.stopping ? "the pool is stopping: it applies at the next start"
+        : (!s.running ? "the pool is not running: run `.tb pool start`" : "the pool adds or logs out bots gradually");
+    result.ok = true;
+    result.message = Trinity::StringFormat("pool population target {} (was {}); {}", resolved.target, previous, then);
+    TC_LOG_INFO("tortoisebots", "TortoiseBots: {}", result.message);
+    return result;
+}
+
 std::vector<std::string> Status()
 {
     State& s = Get();
@@ -469,6 +513,13 @@ SwitchResult Stop()
 {
     SwitchResult result;
     result.message = "the bot engine is not built in (TORTOISEBOTS_SLICE1 is off): the pool is not running";
+    return result;
+}
+
+SwitchResult SetPopulation(std::string const& /*word*/)
+{
+    SwitchResult result;
+    result.message = "the bot engine is not built in (TORTOISEBOTS_SLICE1 is off): the pool has no target";
     return result;
 }
 

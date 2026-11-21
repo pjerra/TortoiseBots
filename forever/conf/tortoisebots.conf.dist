@@ -196,6 +196,41 @@ TortoiseBots.World.Professions = 0
 TortoiseBots.World.Auction = 0
 
 #
+#    TortoiseBots.World.GroupQuests
+#        Description: Allow nearby free bots holding the same group or elite quest to form a party and disband when done.
+#        Default:     1
+#
+
+TortoiseBots.World.GroupQuests = 1
+
+#
+#    TortoiseBots.World.CapitalErrands
+#        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
+#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates).
+#        Default:     1
+#
+
+TortoiseBots.World.CapitalErrands = 1
+
+#
+#    TortoiseBots.World.GuildMail
+#        Description: Allow free bots in a bot guild to mail surplus gold to the poorest online bot member and unused
+#                     crafting materials to online bot crafters who use them. Never mails real players' items or gold.
+#        Default:     1
+#
+
+TortoiseBots.World.GuildMail = 1
+
+#
+#    TortoiseBots.World.GuildMail.AllowMixedGuild
+#        Description: When TortoiseBots.World.GuildMail = 1, allow bots in guilds that also contain real players to
+#                     exchange guild mail with other bot members (real players are still never mailed or touched).
+#        Default:     0
+#
+
+TortoiseBots.World.GuildMail.AllowMixedGuild = 0
+
+#
 #    TortoiseBots.Dashboard.TraceDir
 #        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
 #                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.
@@ -241,9 +276,13 @@ TortoiseBots.Pool.MaxCharacters = 50
 #        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the
 #                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule
 #                     (the pool puts up to ten characters on an account), so the online count is capped by the number of accounts
-#                     the pool's characters sit on; `.tb pool status` adds `capped by accounts: N` when the target is above it.
-#                     Logins alternate factions and take the bot offline longest first; a bot that got a master leaves the
-#                     count. A lowered target logs out the newest sessions first, never a dead or fighting bot. 0 to 5000.
+#                     the pool's characters sit on. A bot that got a master keeps its account for as long as the binding lasts,
+#                     and the pool cannot end it: that account is out of reach, so the pool needs more accounts than the target to
+#                     refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when the target is above the
+#                     accounts left. Logins alternate factions and take the bot offline longest first; a bot that got a master
+#                     leaves the count. A lowered target logs out the newest sessions first, never a dead or fighting bot.
+#                     0 to 5000.
+#                     `.tb pool population <n|low|high>` changes the target at runtime; `.reload config` puts this value back.
 #        Default:     0
 #
 
@@ -279,6 +318,32 @@ TortoiseBots.Pool.SessionMinutes.Max = 90
 
 TortoiseBots.Pool.OfflineMinutes.Min = 5
 TortoiseBots.Pool.OfflineMinutes.Max = 20
+
+#
+#    TortoiseBots.Pool.PopulationLow / .PopulationHigh
+#        Description: The two presets of `.tb pool population low|high`: a quiet and a busy online target, changed at runtime
+#                     without touching TargetOnline. Each clamps to 0..5000 like TargetOnline.
+#        Default:     Low 10, High 50
+#
+
+TortoiseBots.Pool.PopulationLow = 10
+TortoiseBots.Pool.PopulationHigh = 50
+
+#
+#    --- Free bots: per-map cap ---
+#
+#    TortoiseBots.Free.MaxPerMap.Dungeon / .Raid10 / .Raid20 / .Raid40
+#        Description: How many free bots one map of each kind holds: a dungeon takes the Dungeon cap, a raid the cap of its
+#                     size (10, 20 or 40 by the map row's player count, unknown reads as 40). A free bot is refused entry
+#                     (`.tb enter`, `.tb tele`, the follow catch-up) once its map is at the cap; commanded bots enter as a
+#                     group of their own, under the core's group rules. 0 switches that kind off.
+#        Default:     Dungeon 5, Raid10 10, Raid20 20, Raid40 40
+#
+
+TortoiseBots.Free.MaxPerMap.Dungeon = 5
+TortoiseBots.Free.MaxPerMap.Raid10 = 10
+TortoiseBots.Free.MaxPerMap.Raid20 = 20
+TortoiseBots.Free.MaxPerMap.Raid40 = 40
 
 #
 #    TortoiseBots.Create.TestAccounts

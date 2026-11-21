@@ -47,7 +47,7 @@ enum Flags : uint32_t
 {
     FlagInParty = 1,
     FlagRaid = 2,
-    FlagPlayerLed = 4,
+    FlagPlayerLed = 4,                  // the commander himself holds the party's lead (a live fact, refreshed with the group)
     FlagSystem = 8,
 };
 
@@ -57,6 +57,14 @@ inline bool HasFlag(Stored const& stored, uint32_t flag) { return (stored.flags 
 inline uint32_t FlagsOf(bool inParty, bool raid, bool playerLed, bool system)
 {
     return (inParty ? FlagInParty : 0u) | (raid ? FlagRaid : 0u) | (playerLed ? FlagPlayerLed : 0u) | (system ? FlagSystem : 0u);
+}
+
+// May a commander's order use this bot right now? Only while the binding stands, no group hook has recorded its release (the hook's
+// event is drained on the next tick, and the change it recorded - a player joined, the lead left - is already true), the bot is still
+// bound to this commander, and it is still a member of the lead's live party. A bot that left the party is refused before the tick.
+inline bool MayCommand(bool bindingStands, bool releasePending, bool boundToCommander, bool inLeadGroup)
+{
+    return bindingStands && !releasePending && boundToCommander && inLeadGroup;
 }
 
 // ---- the row text (one line per field group, no escaping: guids and numbers only) ----
@@ -158,6 +166,7 @@ struct Facts
     bool leadGroup = true;              // the lead is in a live group
     bool leadGroupHoldsFollower = true; // that group holds a bound follower (true when the binding has none besides the lead)
     bool leadIsLeader = true;
+    uint64_t leaderGuid = 0;            // the lead's live group leader (a character guid counter; 0 = no group)
     bool groupIsRaidOrBg = false;
     bool groupIsBg = false;
     size_t memberCount = 0;
@@ -183,7 +192,10 @@ inline End Decide(Stored const& stored, Facts const& facts)
         return End::GroupChanged;
     if (HasFlag(stored, FlagInParty) && !facts.commanderInGroup)
         return End::CommanderLeftParty;
-    if (!HasFlag(stored, FlagPlayerLed) && !facts.leadIsLeader)
+    // The lead bot leading stands; so does a binding made IN THE PARTY while its own commander holds the party's lead. A binding made from outside
+    // the party keeps its old rule: its commander joining the lead's party and taking the lead is a leader change, not a reason to stand.
+    bool const commanderLeads = HasFlag(stored, FlagInParty) && facts.leaderGuid == stored.commander;
+    if (!facts.leadIsLeader && !commanderLeads)
         return End::LeaderChanged;
     if (facts.groupIsRaidOrBg && (!HasFlag(stored, FlagRaid) || facts.groupIsBg))
         return End::GroupRaid;
@@ -251,6 +263,40 @@ inline RC::ReleaseReason PolicyReason(End end)
         case End::CommanderLeftParty: return RC::ReleaseReason::CommanderLeftParty;
         default: return RC::ReleaseReason::Unbound;
     }
+}
+
+// ---- a group hook's deferred release ----
+
+// A GroupScript hook (OnAddMember, OnRemoveMember, OnChangeLeader, OnDisband) runs while the core is still walking the group:
+// Group::RemoveMember fires it before it changes anything, Group::ChangeLeader before it stores the leader, and Group::Disband
+// fires it at the start and then deletes the group. A release there removes members (BotsLeave), which can re-enter the group
+// and free it under the core. The hooks only record the event; the next upkeep tick releases it. Nothing but character guids and
+// the group's session counter may cross the tick - never a Group*, which the core can free.
+struct DeferredFacts
+{
+    bool bindingStands = false;         // the binding is still recorded when the tick comes
+    uint32_t recordedGroup = 0;         // the group counter the hook saw (a hook always has one; 0 = none recorded, no party action)
+    bool recordedGroupExists = false;   // a group with the recorded counter is still in GroupMgr
+};
+
+enum class Deferred : uint8_t
+{
+    Release,        // release with the recorded reason, party action included
+    WithoutParty,   // the recorded group is gone: release with its reason, but never reach into a group
+    Drop,           // the binding is gone: another verdict (or a release) already dealt with it
+};
+
+// The release a pending event earns on its tick. The binding and the group are looked up by guid again: a binding that was
+// released meanwhile has nothing left to do, and a group that is gone still ends the binding with the recorded reason, but the
+// party action is skipped - there is nothing left to clean, and the counter names nothing at all (a hook records the group it saw).
+// The group counter is monotonic for the process (GroupMgr::GenerateGroupId), so an existing counter is the same group the hook saw.
+inline Deferred DeferredRelease(DeferredFacts const& facts)
+{
+    if (!facts.bindingStands)
+        return Deferred::Drop;
+    if (!facts.recordedGroup || !facts.recordedGroupExists)
+        return Deferred::WithoutParty;
+    return Deferred::Release;
 }
 
 // Followers a binding put on the lead that its group no longer holds (kicked, invited elsewhere, left): their follow target goes back now, the rest
@@ -329,6 +375,41 @@ inline RestorePlan PlanRestore(Stored const& stored, bool commanderInWorld, std:
             plan.bind.push_back(member);
         }
     return plan;
+}
+
+// ---- which bot leads the binding ----
+
+// What a bind knows when it picks the lead. `namedLeader` is the `who.leader` the command was addressed through. A host bot this commander commands is
+// the lead the command named. A player (the commander leading his own party, or another player's party the bots were joined to) names no bot at all,
+// and h3 cannot answer for a player, so the lead is a bot of the party the bind was addressed through: a tank first, then the party's order. The
+// previous lead is kept while it is still bound (a rebind must not shuffle the card), and the first bound bot is the last resort.
+struct LeadFacts
+{
+    uint64_t namedLeader = 0;
+    bool namedLeaderIsBotOfCommander = false;
+    std::vector<uint64_t> bound;            // every bot h3 binds to the commander now
+    std::vector<uint64_t> partyBots;        // the bound bots in the named leader's party
+    std::vector<uint64_t> partyTanks;       // ...and those of them whose role is tank
+    uint64_t previousLead = 0;
+};
+
+inline uint64_t PickLead(LeadFacts const& facts)
+{
+    auto const isBound = [&](uint64_t guid) { return std::find(facts.bound.begin(), facts.bound.end(), guid) != facts.bound.end(); };
+    if (facts.namedLeader && facts.namedLeaderIsBotOfCommander)
+        return facts.namedLeader;
+    if (facts.namedLeader)
+    {
+        for (uint64_t tank : facts.partyTanks)
+            if (isBound(tank))
+                return tank;
+        for (uint64_t bot : facts.partyBots)
+            if (isBound(bot))
+                return bot;
+    }
+    if (facts.previousLead && isBound(facts.previousLead))
+        return facts.previousLead;
+    return facts.bound.empty() ? 0 : facts.bound.front();
 }
 
 } // namespace life

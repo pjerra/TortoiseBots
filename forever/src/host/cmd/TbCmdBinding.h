@@ -60,11 +60,13 @@ void NoteLogout(Player* player);                                                
 void Maintain();                                                                     // once a second: the timers, and the stored rows whose party is back
 void LoadBindings();                                                                 // world start / config reload: the key, the graces and the stored rows
 
-// The legacy host stand-ins (TbHostOwnership.cpp, commands/BotCommands.h): the commander commands this bot (h3 binds it and it stands in the lead's
-// live group), and the bot is a member of the commander's own binding group. World thread, cheap, no database.
+// The legacy host stand-ins (TbHostOwnership.cpp, commands/BotCommands.h): the commander commands this bot (h3 binds it, it stands in the lead's
+// live group, and no group hook has recorded the binding's release for the next tick), and the bot is a member of the commander's own binding group.
+// World thread, cheap, no database.
 bool IsCommandedBy(Player* commander, Player* bot);
 bool IsInOwnBindingGroup(Player* commander, Player* bot);
-// P3: resolves `commander`'s standing binding (lead guid + bound member guids from h3's table). False when `commander` commands no bots.
+// P3: resolves `commander`'s standing binding (lead guid + the bound member guids that are still in the lead's live party). False when `commander`
+// commands no bots, or a group hook recorded its release for the next tick.
 bool ResolveBinding(ObjectGuid commander, ObjectGuid& lead, std::vector<ObjectGuid>& members);
 
 // The cards as the dashboard's bindings, one per commander (a run's card included, without its `run` section: the run feed fills that, matched by the

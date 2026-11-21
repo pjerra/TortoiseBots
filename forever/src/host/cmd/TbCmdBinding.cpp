@@ -79,9 +79,20 @@ struct Meta
     bool restored = true;                   // false: a stored row whose party is not back yet
 };
 
+// A release a GroupScript hook asked for. The hook runs while the core is walking the group (and Group::Disband deletes it), so
+// nothing is released there: the event is recorded by character guid, plus the live group counter the hook saw - never a Group*,
+// which the core can free before the next tick.
+struct PendingRelease
+{
+    ObjectGuid commander;
+    L::End end = L::End::None;
+    uint32 groupId = 0;
+};
+
 struct State
 {
     std::map<ObjectGuid, Meta> metas;               // by commander
+    std::vector<PendingRelease> pending;            // releases a group hook recorded: run by the next Maintain tick
     P::OrderStore log;                              // the cards' last orders, by card key; no whole-store commander cap
     struct Role { std::string role; uint32 atMs = 0; };
     std::map<ObjectGuid, Role> roles;
@@ -339,10 +350,10 @@ Group* ReleaseGroup(ObjectGuid commander, Meta const& m)
 }
 
 // An in-party binding's end: with the commander gone the bots leave the party (so no other player becomes their master) and the lead goes to a living
-// player of it; with him there the lead goes back to him. A classic binding has nothing to do.
-void ApplyPartyAction(ObjectGuid commander, Meta const& m, L::End end)
+// player of it; with him there the lead goes back to him. A classic binding has nothing to do. `group` is the group the release may touch now (looked
+// up by counter for a deferred hook event, never held across a tick); null means the party is already gone.
+void ApplyPartyAction(ObjectGuid commander, Meta const& m, L::End end, Group* group)
 {
-    Group* group = ReleaseGroup(commander, m);
     if (!group)
         return;
     Player* commanderPlayer = InWorld(commander);
@@ -391,10 +402,14 @@ void ApplyPartyAction(ObjectGuid commander, Meta const& m, L::End end)
 
 // The card keys that stand now (defined with the card read below): what a release must leave in the order log.
 std::unordered_set<uint64> StandingKeys();
+void DropPending(ObjectGuid commander);
 
-void ReleaseCommander(ObjectGuid commander, L::End end)
+void ReleaseCommander(ObjectGuid commander, L::End end, Group* partyGroup = nullptr, bool partyKnown = false)
 {
     State& s = Get();
+    // Whatever a group hook recorded for this commander describes the binding this release ends: the event must not outlive it and
+    // release a later binding of the same commander on the next tick.
+    DropPending(commander);
     auto it = s.metas.find(commander);
     if (it == s.metas.end())
         return;
@@ -403,7 +418,7 @@ void ReleaseCommander(ObjectGuid commander, L::End end)
     bool const wasReleasing = s.releasing;
     s.releasing = true;
     if (m.flags & L::FlagInParty)
-        ApplyPartyAction(commander, m, end);
+        ApplyPartyAction(commander, m, end, partyKnown ? partyGroup : ReleaseGroup(commander, m));
     for (Follower const& follower : m.followers)
         RestoreFollower(follower, m.lead);
     for (ObjectGuid bot : BoundTo(commander))
@@ -424,6 +439,36 @@ void ReleaseCommander(ObjectGuid commander, L::End end)
         sLog.outString("TortoiseBots: the commander binding of %s was released: %s (%s)", NameOf(commander).c_str(), L::EndText(end), L::EndCode(end));
 }
 
+// The GroupScript hooks never release inside the hook: the core is still using the group (Group::Disband even deletes it), so a
+// release's BotsLeave would remove members and free the group under it. Record why, and let the next Maintain tick release it.
+void DeferRelease(ObjectGuid commander, L::End end, uint32 groupId)
+{
+    State& s = Get();
+    for (PendingRelease const& pending : s.pending)
+        if (pending.commander == commander)
+            return;     // the first reason of the tick stands (the most specific one a hook saw)
+    s.pending.push_back({ commander, end, groupId });
+}
+
+// An explicit bind supersedes a group event recorded for the same commander: the command is the newer intent, and the event's
+// reason (and group) describes the binding it replaced.
+void DropPending(ObjectGuid commander)
+{
+    State& s = Get();
+    s.pending.erase(std::remove_if(s.pending.begin(), s.pending.end(), [&](PendingRelease const& pending) { return pending.commander == commander; }),
+        s.pending.end());
+}
+
+// A group hook recorded this binding's release and the tick has not run it yet: the change it saw is already true, so nothing may
+// be commanded through the binding until RunPendingReleases has ended it.
+bool HasPending(ObjectGuid commander)
+{
+    for (PendingRelease const& pending : Get().pending)
+        if (pending.commander == commander)
+            return true;
+    return false;
+}
+
 // ---- the live facts and the 1 Hz upkeep ----
 
 // The lead's live group is the binding's group (spec section 4): a group re-created around the lead and a bound follower keeps the binding, and only the
@@ -442,6 +487,17 @@ void RefreshGroupId(Meta& m, Player* lead)
         }
     if (holdsFollower)
         m.groupId = Ctr(group->GetGUID());
+}
+
+// FlagPlayerLed is a live fact like the group id: the commander of an in-party binding holds the party's lead. The leader guid comes from whoever saw
+// the change: the group-leader hook passes the leader it is about to store, never the group, because Group::ChangeLeader fires the hook before it
+// records the new leader. Read again at the bind and in the 1 Hz fact read, so the card and the release's party rule see the truth after a hand-over.
+bool RefreshPlayerLed(Meta& m, uint64_t leaderGuid, ObjectGuid commander)
+{
+    uint32 const before = m.flags;
+    bool const playerLed = (m.flags & L::FlagInParty) && leaderGuid == commander.GetCounter();
+    m.flags = (m.flags & ~uint32(L::FlagPlayerLed)) | (playerLed ? uint32(L::FlagPlayerLed) : 0u);
+    return m.flags != before;
 }
 
 L::Facts FactsFor(ObjectGuid commander, Meta& m, Player* commanderPlayer, Player* lead)
@@ -466,10 +522,13 @@ L::Facts FactsFor(ObjectGuid commander, Meta& m, Player* commanderPlayer, Player
                     break;
                 }
             facts.leadIsLeader = group->IsLeader(lead->GetGUID());
+            facts.leaderGuid = group->GetLeaderGUID().GetCounter();
             facts.groupIsRaidOrBg = group->isRaidGroup() || group->isBGGroup();
             facts.groupIsBg = group->isBGGroup();
             facts.memberCount = group->GetMembersCount();
-            facts.commanderInGroup = commanderPlayer && group->IsMember(commanderPlayer->GetGUID());
+            // By guid from the group's own member list: an offline or zoning commander who is still a member has not left the party (his logout is
+            // the grace timer's business), and no in-world Player pointer can answer for him.
+            facts.commanderInGroup = group->IsMember(commander);
             // A real player is a member IN THE WORLD who is no host bot: a saved group can hold a bot character that has not logged in yet
             // (BotMgr only knows the bots that are in), and that member cannot act in the party either.
             for (Group::MemberSlot const& slot : group->GetMemberSlots())
@@ -483,6 +542,7 @@ L::Facts FactsFor(ObjectGuid commander, Meta& m, Player* commanderPlayer, Player
                     }
                 }
         }
+        RefreshPlayerLed(m, group ? group->GetLeaderGUID().GetCounter() : 0, commander);
     }
     facts.leadDeadGraceMs = store::LeadDeadGraceMs();
     facts.commanderOnline = commanderPlayer != nullptr;
@@ -597,6 +657,13 @@ void RestoreOne(ObjectGuid commander)
         if (Group* group = InWorld(m.lead) ? InWorld(m.lead)->GetGroup() : nullptr)
             if (!group->IsMember(commanderPlayer->GetGUID()) && group->IsCreated())
                 group->AddMember(commanderPlayer);
+    // An in-party binding whose commander held the party's lead puts him back at its head: the restored party is formed around the lead bot, so
+    // without this he would lose the lead on every restart. ChangeLeader refuses a new leader who is not an online member; the next fact read
+    // corrects the flag from the group either way.
+    if (m.flags & L::FlagPlayerLed)
+        if (Group* group = InWorld(m.lead) ? InWorld(m.lead)->GetGroup() : nullptr)
+            if (group->IsMember(commander) && !group->IsLeader(commander))
+                group->ChangeLeader(commander);
     // The binding stands once the party it was made on exists again: with the lead alone in the world (no group yet) the restore waits for the next
     // stored member's login, which forms the group - a party cannot be made of one bot, and the release rule would end a groupless binding.
     Player* restoredLead = InWorld(m.lead);
@@ -635,6 +702,44 @@ void TryRestore()
     for (ObjectGuid commander : commanders)
         RestoreOne(commander);
 }
+
+// The deferred group-hook releases, on the tick after the hook: the core has finished walking the group, so the party action may
+// remove members. The binding and its group are re-found by guid (a group the hook saw can be freed before this tick); a binding
+// that is gone, was not restored, or whose group moved on is left to the ordinary rule.
+void RunPendingReleases()
+{
+    State& s = Get();
+    if (s.pending.empty())
+        return;
+    std::vector<PendingRelease> pending;
+    pending.swap(s.pending);
+    if (World::IsStopped())
+        return;     // the shutdown keeps every binding and its row; the hooks record nothing then either
+    for (PendingRelease const& p : pending)
+    {
+        auto const it = s.metas.find(p.commander);
+        if (it == s.metas.end() || !it->second.restored)
+            continue;
+        // The hook recorded the group it saw; a counter that names nothing now (or none at all) stays out of every party: the
+        // release still records the reason, but never reaches into whatever group the lead or a bound bot may hold by then.
+        Group* group = p.groupId ? sGroupMgr->GetGroupByGUID(ObjectGuid::Create<HighGuid::Party>(p.groupId)) : nullptr;
+        L::DeferredFacts facts;
+        facts.bindingStands = true;
+        facts.recordedGroup = p.groupId;
+        facts.recordedGroupExists = group != nullptr;
+        switch (L::DeferredRelease(facts))
+        {
+            case L::Deferred::Release:
+                ReleaseCommander(p.commander, p.end, group, true);
+                break;
+            case L::Deferred::WithoutParty:
+                ReleaseCommander(p.commander, p.end, nullptr, true);
+                break;
+            case L::Deferred::Drop:
+                break;
+        }
+    }
+}
 }
 
 // ---- P2 hooks ----
@@ -642,6 +747,8 @@ void TryRestore()
 void Maintain()
 {
     State& s = Get();
+    // A group hook only recorded its event; the next tick (20 a second) releases it, outside the core's group walk.
+    RunPendingReleases();
     // The world tick calls this 20 times a second; a fourth of the releases it decides and every restore step only need one tick a second (review
     // fix: an unrestored party re-ran GroupWith and its log line on every world tick).
     static constexpr int64 kMaintainMs = 1000;
@@ -672,13 +779,16 @@ void Maintain()
             m.commanderGoneSinceMs = 0;
         if (lead && lead->IsAlive())
             m.leadDeadSinceMs = 0;
-        L::Facts const facts = FactsFor(commander, m, commanderPlayer, lead);
+        uint32 const flagsBefore = m.flags;
+        L::Facts const facts = FactsFor(commander, m, commanderPlayer, lead);   // also refreshes the live player-led flag
         L::End const end = L::Decide(RowOf(commander, m), facts);
         if (end != L::End::None)
         {
             ReleaseCommander(commander, end);
             continue;
         }
+        if (m.flags != flagsBefore)
+            SaveRow(commander, m);
     }
 }
 
@@ -713,7 +823,6 @@ void NoteGroupAdd(Group* group, ObjectGuid guid)
     // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
     if (World::IsStopped() || s.releasing || !group)
         return;
-    std::vector<ObjectGuid> releases;
     for (auto const& [commander, m] : s.metas)
     {
         if (!m.restored)
@@ -724,10 +833,8 @@ void NoteGroupAdd(Group* group, ObjectGuid guid)
             continue;
         if (m.flags & L::FlagInParty)
             continue;
-        releases.push_back(commander);
+        DeferRelease(commander, L::End::PlayerJoined, Ctr(group->GetGUID()));
     }
-    for (ObjectGuid commander : releases)
-        ReleaseCommander(commander, L::End::PlayerJoined);
 }
 
 void NoteGroupRemove(Group* group, ObjectGuid guid)
@@ -736,7 +843,6 @@ void NoteGroupRemove(Group* group, ObjectGuid guid)
     // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
     if (World::IsStopped() || s.releasing || !group)
         return;
-    std::vector<ObjectGuid> releases;
     std::vector<ObjectGuid> changed;
     for (auto& [commander, m] : s.metas)
     {
@@ -746,8 +852,16 @@ void NoteGroupRemove(Group* group, ObjectGuid guid)
         bool const sameGroup = (m.groupId && Ctr(group->GetGUID()) == m.groupId) || (lead && lead->GetGroup() == group);
         if (!sameGroup)
             continue;
+        // The commander of an in-party binding leaving (or being kicked) ends it with his own reason, before the core can turn the removal into a
+        // leader promotion or a disbandment of the party. The release itself waits for the next tick: this hook runs at the top of
+        // Group::RemoveMember, which goes on using the group (and Disband deletes it).
+        if ((m.flags & L::FlagInParty) && guid == commander)
+        {
+            DeferRelease(commander, L::End::CommanderLeftParty, Ctr(group->GetGUID()));
+            continue;
+        }
         if (guid == m.lead)
-            releases.push_back(commander);
+            DeferRelease(commander, L::End::GroupChanged, Ctr(group->GetGUID()));
         else
             for (auto it = m.followers.begin(); it != m.followers.end(); ++it)
                 if (it->guid == guid)
@@ -759,8 +873,6 @@ void NoteGroupRemove(Group* group, ObjectGuid guid)
                     break;
                 }
     }
-    for (ObjectGuid commander : releases)
-        ReleaseCommander(commander, L::End::GroupChanged);
     for (ObjectGuid commander : changed)
         if (auto it = s.metas.find(commander); it != s.metas.end())
             SaveRow(commander, it->second);
@@ -772,19 +884,30 @@ void NoteGroupLeader(Group* group, ObjectGuid newLeader)
     // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
     if (World::IsStopped() || s.releasing || !group)
         return;
-    std::vector<ObjectGuid> releases;
-    for (auto const& [commander, m] : s.metas)
+    std::vector<ObjectGuid> changed;
+    for (auto& [commander, m] : s.metas)
     {
         if (!m.restored)
             continue;
         Player* lead = InWorld(m.lead);
         bool const sameGroup = (m.groupId && Ctr(group->GetGUID()) == m.groupId) || (lead && lead->GetGroup() == group);
-        if (!sameGroup || newLeader == m.lead || (m.flags & L::FlagPlayerLed))
+        if (!sameGroup)
             continue;
-        releases.push_back(commander);
+        // The lead bot leading stands, and so does the commander of an IN-PARTY binding leading it; anyone else leading ends it.
+        bool const commanderLeads = (m.flags & L::FlagInParty) && newLeader == commander;
+        if (newLeader != m.lead && !commanderLeads)
+        {
+            // Group::ChangeLeader fires this hook before it stores the new leader and then keeps using the group: the release waits for the tick.
+            DeferRelease(commander, L::End::LeaderChanged, Ctr(group->GetGUID()));
+            continue;
+        }
+        // The hook fires before Group stores the new leader, so the flag is taken from the hook's guid, never from group->IsLeader().
+        if (RefreshPlayerLed(m, newLeader.GetCounter(), commander))
+            changed.push_back(commander);
     }
-    for (ObjectGuid commander : releases)
-        ReleaseCommander(commander, L::End::LeaderChanged);
+    for (ObjectGuid commander : changed)
+        if (auto it = s.metas.find(commander); it != s.metas.end())
+            SaveRow(commander, it->second);
 }
 
 void NoteGroupDisband(Group* group)
@@ -793,7 +916,6 @@ void NoteGroupDisband(Group* group)
     // The world's own shutdown takes the bots out of their groups: that is not a release, the row is what the next start restores.
     if (World::IsStopped() || s.releasing || !group)
         return;
-    std::vector<ObjectGuid> releases;
     for (auto const& [commander, m] : s.metas)
     {
         if (!m.restored)
@@ -801,10 +923,11 @@ void NoteGroupDisband(Group* group)
         Player* lead = InWorld(m.lead);
         bool const sameGroup = (m.groupId && Ctr(group->GetGUID()) == m.groupId) || (lead && lead->GetGroup() == group);
         if (sameGroup)
-            releases.push_back(commander);
+        {
+            // Group::Disband fires this hook and then deletes the group: nothing may be released (or even looked up) from inside.
+            DeferRelease(commander, L::End::GroupChanged, Ctr(group->GetGUID()));
+        }
     }
-    for (ObjectGuid commander : releases)
-        ReleaseCommander(commander, L::End::GroupChanged);
 }
 
 void NoteDeath(Player* player)
@@ -871,15 +994,14 @@ bool IsCommandedBy(Player* commander, Player* bot)
         return false;
     State const& s = Get();
     auto const it = s.metas.find(commander->GetGUID());
-    if (it == s.metas.end() || !it->second.restored)
-        return false;
+    bool const stands = it != s.metas.end() && it->second.restored;
     // The record is only half the answer: h3's table must bind this very bot to this very commander too (review fix: a party member commanded by
-    // someone else, or a real player in the lead's party, answered true).
-    if (h3::CommanderGuid(bot->GetGUID()) != commander->GetGUID())
-        return false;
-    Player* lead = InWorld(it->second.lead);
+    // someone else, or a real player in the lead's party, answered true). The bot must still be a member of the lead's live party, and the binding
+    // must not have a group hook's release waiting for its tick (review fix: an order in that one-tick window reached a bot that had already left).
+    Player* lead = stands ? InWorld(it->second.lead) : nullptr;
     Group* group = lead ? lead->GetGroup() : nullptr;
-    return group && group->IsMember(bot->GetGUID());
+    return L::MayCommand(stands, HasPending(commander->GetGUID()), h3::CommanderGuid(bot->GetGUID()) == commander->GetGUID(),
+        group && group->IsMember(bot->GetGUID()));
 }
 
 bool IsInOwnBindingGroup(Player* commander, Player* bot)
@@ -1148,14 +1270,32 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
     ObjectGuid const previousLead = m.lead;
     if (!m.boundAt)
         m.boundAt = now;
-    if (leader && h3::CommanderGuid(leader->GetGUID()) == commander->GetGUID())
-        m.lead = leader->GetGUID();
-    if (m.lead.IsEmpty())
-        m.lead = bound.front();
+    // The lead the bind named: the host bot it addressed, when that bot is bound to this commander. A player addressed through `party <player>` (a
+    // commander leading his own party names himself) has no commander of his own for h3 to answer with, so the lead is a bot of the party instead -
+    // a tank first, then the party's order - never an arbitrary bot bound elsewhere.
+    L::LeadFacts leadFacts;
+    leadFacts.namedLeader = leader ? leader->GetGUID().GetCounter() : 0;
+    leadFacts.namedLeaderIsBotOfCommander = leader && h3::CommanderGuid(leader->GetGUID()) == commander->GetGUID();
+    leadFacts.previousLead = previousLead.GetCounter();
+    Group* leaderGroup = leader && !leadFacts.namedLeaderIsBotOfCommander ? leader->GetGroup() : nullptr;
+    uint32 const nowMs = uint32(NowMs());
+    for (ObjectGuid bot : bound)
+    {
+        leadFacts.bound.push_back(bot.GetCounter());
+        Player* player = InWorld(bot);
+        if (!leaderGroup || !player || player->GetGroup() != leaderGroup)
+            continue;
+        leadFacts.partyBots.push_back(bot.GetCounter());
+        if (RoleOf(player, nowMs) == "tank")
+            leadFacts.partyTanks.push_back(bot.GetCounter());
+    }
+    m.lead = PlayerGuid(L::PickLead(leadFacts));
     Group* group = InWorld(m.lead) ? InWorld(m.lead)->GetGroup() : nullptr;
-    m.flags = L::FlagsOf(group && group->IsMember(commander->GetGUID()), group && group->isRaidGroup(), false, false);
+    bool const inParty = group && group->IsMember(commander->GetGUID());
+    m.flags = L::FlagsOf(inParty, group && group->isRaidGroup(), inParty && group->IsLeader(commander->GetGUID()), false);
     m.groupId = GroupKey(group);
     m.restored = true;
+    DropPending(commander->GetGUID());
     m.commanderGoneSinceMs = 0;
     m.members = bound;
     // A lead change first puts the followers' own targets back (they were pointed at the old lead), then the new lead is pointed at.
@@ -1204,16 +1344,28 @@ bool ResolveBinding(ObjectGuid commander, ObjectGuid& lead, std::vector<ObjectGu
     members.clear();
     if (commander.IsEmpty())
         return false;
-    members = BoundTo(commander);
-    if (members.empty())
+    // A group hook recorded this binding's release and the tick has not run it yet: the binding is on its way out, so no order may
+    // use it (a leader change, a player joining and the lead leaving are all already true when the hook fires).
+    if (HasPending(commander))
+        return false;
+    std::vector<ObjectGuid> const bound = BoundTo(commander);
+    if (bound.empty())
         return false;
     State const& s = Get();
     auto const it = s.metas.find(commander);
-    if (it != s.metas.end() && it->second.restored && !it->second.lead.IsEmpty() && h3::CommanderGuid(it->second.lead) == commander)
+    bool const stands = it != s.metas.end() && it->second.restored;
+    if (stands && !it->second.lead.IsEmpty() && h3::CommanderGuid(it->second.lead) == commander)
         lead = it->second.lead;
     else
-        lead = members.front();
-    return true;
+        lead = bound.front();
+    // Only the bots still in the lead's live party: a follower that left (its removal hook may not have been recorded for this commander)
+    // is not ordered at once, and neither is a member bound elsewhere.
+    Player* leadPlayer = InWorld(lead);
+    Group* group = leadPlayer ? leadPlayer->GetGroup() : nullptr;
+    for (ObjectGuid bot : bound)
+        if (L::MayCommand(stands, false, h3::CommanderGuid(bot) == commander, group && group->IsMember(bot)))
+            members.push_back(bot);
+    return !members.empty();
 }
 
 std::vector<P::CardView> StandingCards()

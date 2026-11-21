@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -42,6 +43,8 @@ inline constexpr std::int64_t kPoolLoginWindowMs = kPoolMinuteMs;
 inline constexpr std::int64_t kPoolLogoutWindowMs = 1000;
 inline constexpr std::uint32_t kPoolLogoutsPerSecond = 5;
 inline constexpr std::uint32_t kPoolLoginsPerPass = 1;
+// The config ceiling of the online target (TortoiseBots.Pool.TargetOnline clamps here) and of `.tb pool population`.
+inline constexpr std::uint32_t kPoolTargetMax = 5000;
 
 // A dead pool bot whose session has ended keeps its body this long before the pool logs it out anyway: W1's corpse run has the
 // time it needs, and a bot that could not get back waits no longer.
@@ -99,6 +102,8 @@ struct PoolScheduleSettings
 {
     std::uint32_t targetOnline = 0;
     std::uint32_t loginsPerMinute = 20;
+    std::uint32_t populationLow = 10;
+    std::uint32_t populationHigh = 50;
     std::int64_t sessionMinMs = 30 * kPoolMinuteMs;
     std::int64_t sessionMaxMs = 90 * kPoolMinuteMs;
     std::int64_t offlineMinMs = 5 * kPoolMinuteMs;
@@ -152,6 +157,37 @@ inline std::int64_t PoolOfflineLengthMs(PoolScheduleSettings const& settings, st
     return RollPoolLengthMs(settings.offlineMinMs, settings.offlineMaxMs, roll);
 }
 
+// `.tb pool population <n|low|high>`: the runtime word to an online target. `low` and `high` are the configured presets; a
+// number is used as-is. Anything else, an empty word or a number past the ceiling is refused with the words for the reply.
+struct PoolPopulationTarget
+{
+    bool ok = false;
+    std::uint32_t target = 0;
+    std::string error;
+};
+
+inline PoolPopulationTarget PoolResolvePopulationTarget(std::string const& word, std::uint32_t low, std::uint32_t high)
+{
+    if (word == "low")
+        return { true, low, {} };
+    if (word == "high")
+        return { true, high, {} };
+    if (!word.empty() && std::all_of(word.begin(), word.end(), [](char c) { return c >= '0' && c <= '9'; }))
+    {
+        std::uint64_t value = 0;
+        for (char c : word)
+        {
+            value = value * 10 + std::uint32_t(c - '0');
+            if (value > kPoolTargetMax)
+                break;
+        }
+        if (value <= kPoolTargetMax)
+            return { true, std::uint32_t(value), {} };
+        return { false, 0, "a population of 0 to 5000" };
+    }
+    return { false, 0, "usage: `.tb pool population <n|low|high>`" };
+}
+
 // D2: one session per account. A bot that is Loading, Online or Leaving occupies its account for every other character of it;
 // `accountOnline` carries what these tracks cannot show (the world's own session and the module's other bots on the account).
 inline std::vector<std::uint32_t> PoolOccupiedAccounts(std::vector<PoolBotState> const& bots)
@@ -174,6 +210,8 @@ inline bool PoolAccountBusy(PoolBotState const& bot, std::vector<std::uint32_t> 
 }
 
 // The distinct accounts the pool's characters sit on: one session each caps the online count here. 0 (unknown) is no account.
+// An account a bound bot holds is out of reach — the pool never logs that bot out, so its session lasts as long as the binding —
+// and leaving it in would promise a target the pool cannot reach.
 inline std::uint32_t PoolAccountCount(std::vector<PoolBotState> const& bots)
 {
     std::vector<std::uint32_t> accounts;
@@ -182,7 +220,11 @@ inline std::uint32_t PoolAccountCount(std::vector<PoolBotState> const& bots)
         if (bot.accountId)
             accounts.push_back(bot.accountId);
     std::sort(accounts.begin(), accounts.end());
-    return std::uint32_t(std::unique(accounts.begin(), accounts.end()) - accounts.begin());
+    accounts.erase(std::unique(accounts.begin(), accounts.end()), accounts.end());
+    for (PoolBotState const& bot : bots)
+        if (bot.accountId && bot.bound)
+            accounts.erase(std::remove(accounts.begin(), accounts.end(), bot.accountId), accounts.end());
+    return std::uint32_t(accounts.size());
 }
 
 // The facts the host has of one track this pass: the bot manager's answer and, once it is in the world, the Player's life state.

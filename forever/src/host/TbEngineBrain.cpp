@@ -16,6 +16,8 @@
 #include "host/TbThrownPure.h"
 #include "host/TbHostTaxi.h"
 #include "host/TbHostTransport.h"
+#include "host/TbOnyxia.h"
+#include "host/TbOnyxiaGround.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -53,6 +55,7 @@ namespace engine
 struct Brain
 {
     Player* bot = nullptr;       // only compared and passed back to the registry after the Player is gone, never dereferenced then
+    ObjectGuid guid;
     uint32 guidLow = 0;          // the bot's low guid: the action log is closed by it (the Player may be gone)
     PlayerbotAI* ai = nullptr;
     BotSession* session = nullptr;   // the bot's session (owned by BotMgr, which drops the brain before the session); its cast-result queue is on while the brain lives
@@ -195,6 +198,7 @@ void DeliverCastResults(Brain* brain)
 
 void Dispose(Brain* brain)
 {
+    onyxia::Forget(brain->guid);
     // The session's queue is only filled while the brain lives (no consumer afterwards).
     if (brain->session)
         brain->session->SetCastResultSink(false);
@@ -294,6 +298,7 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free)
         auto const lap = [&started]() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count(); };
         pai = new PlayerbotAI(bot);
         auto const constructedMs = lap();
+        onyxia::InstallGround(pai);
         pai->SetMaster(master);
         // The crowd-control permissions the commander ordered (or the fear-denied default for a fresh bot): the cast
         // check reads the mask, so push the owner's setting before the first tick runs.
@@ -332,6 +337,7 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free)
 
     std::unique_ptr<Brain> brain = std::make_unique<Brain>();
     brain->bot = bot;
+    brain->guid = bot->GetGUID();
     brain->guidLow = bot->GetGUID().GetCounter();
     brain->ai = pai;
     brain->session = BotSessionOf(bot);
@@ -389,6 +395,7 @@ void Tick(Brain* brain, uint32 diff)
         TortoiseBots::h3::BeforeEngineTick(brain->bot, brain->ai);   // H3: the bot's queued orders, before its tick
         tbhost::taxi::TickLandingWatch(brain->bot);
         tbhost::ride::TickRide(brain->bot, diff);
+        onyxia::Tick(brain->bot, brain->ai, diff);
         brain->ai->UpdateAI(diff);
         NoteCastStart(brain);
     }
@@ -429,6 +436,21 @@ void ReapplyStrategies(Brain* brain, bool free)
         return;
     brain->ai->ResetStrategies();
     brain->ai->SetMovementStrategy(free ? "free" : "follow");
+}
+
+void SetQuestGroupMember(Brain* brain, bool inGroup)
+{
+    if (!brain || !brain->ai)
+        return;
+    if (inGroup)
+    {
+        brain->ai->ChangeStrategy("+follow,+dps assist", BotState::BOT_STATE_NON_COMBAT);
+        brain->ai->SetMovementStrategy("follow");
+    }
+    else
+    {
+        ReapplyStrategies(brain, true);
+    }
 }
 
 void BindMaster(Brain* brain, Player* master)
@@ -588,6 +610,16 @@ std::vector<std::string> Describe(Brain const* brain)
     }
     return lines;
 }
+
+bool RunAction(Player* bot, char const* action, char const* param)
+{
+    if (!bot || !action)
+        return false;
+    PlayerbotAI* pai = PlayerbotAIStorage::Instance().GetAI(bot->GetGUID());
+    if (!pai)
+        return false;
+    return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
+}
 }
 }
 
@@ -605,6 +637,7 @@ Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
     return nullptr;
 }
 void ReapplyStrategies(Brain*, bool) {}
+void SetQuestGroupMember(Brain*, bool) {}
 void BindMaster(Brain*, Player*) {}
 void Tick(Brain*, uint32) {}
 void HandleTeleportAck(Brain*) {}
@@ -614,6 +647,7 @@ bool InFlight(Brain*) { return false; }
 std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
+bool RunAction(Player*, char const*, char const*) { return false; }
 }
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/strategy/triggers/GenericTriggers.h"
+#include "playerbot/strategy/druid/DruidInnervateHelper.h"
 
 namespace ai
 {
@@ -509,10 +510,24 @@ namespace ai
         {
             if (SpellTargetTrigger::IsTargetValid(target))
             {
-                return ai->GetManaPercent(*target) < sPlayerbotAIConfig.lowMana;
+                return ai->GetManaPercent(*target) < sPlayerbotAIConfig.innervateManaThreshold;
             }
 
             return false;
+        }
+
+        bool IsActive() override
+        {
+            if (!IsSpellReady())
+                return false;
+            const std::list<ObjectGuid>& assigned = AI_VALUE(std::list<ObjectGuid>, "boost targets");
+            for (const ObjectGuid& guid : assigned)
+            {
+                Unit* manual = ai->GetUnit(guid);
+                if (manual && IsTargetValid(manual))
+                    return true;
+            }
+            return FindBestInnervateTarget(ai, bot) != nullptr;
         }
     };
 

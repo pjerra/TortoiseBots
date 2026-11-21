@@ -39,19 +39,34 @@ int main()
     }
 
     // Finding 3b: never mail a real player (non-bot) by default on console-created orders,
-    // unless the requester is the receiver who asked.
+    // unless the requester is the receiver who asked. Personal craft orders (guild 0)
+    // always mail the ordering player, even when the console defaulted it to the bot itself.
     {
-        MailRecipientDecision const consoleToRealLeader = DecideMailRecipient(101, 101, 5, false);
+        MailRecipientDecision const consoleToRealLeader = DecideMailRecipient(101, 101, 5, false, 7);
         CHECK(!consoleToRealLeader.allowed && std::string(consoleToRealLeader.reason) == "real-player-mail-refused",
             "F3b: console order must refuse mailing real-player guild leader");
 
-        MailRecipientDecision const consoleToBotLeader = DecideMailRecipient(101, 101, 102, true);
+        MailRecipientDecision const consoleToBotLeader = DecideMailRecipient(101, 101, 102, true, 7);
         CHECK(consoleToBotLeader.allowed && consoleToBotLeader.targetGuidLow == 102,
             "F3b: console order may mail bot guild leader");
 
-        MailRecipientDecision const playerRequested = DecideMailRecipient(101, 5, 5, false);
+        MailRecipientDecision const playerRequested = DecideMailRecipient(101, 5, 5, false, 7);
         CHECK(playerRequested.allowed && playerRequested.targetGuidLow == 5,
             "F3b: player-created order may mail the requester who asked");
+
+        // Live item 10: console-created personal order (giver defaulted to the bot
+        // itself) must mail the bot instead of refusing for no recipient.
+        MailRecipientDecision const personalSelf = DecideMailRecipient(2846, 2846, 0, true, 0);
+        CHECK(personalSelf.allowed && personalSelf.targetGuidLow == 2846,
+            "fix2: personal order must mail the giver even when it is the bot itself");
+
+        MailRecipientDecision const personalPlayer = DecideMailRecipient(101, 5, 0, false, 0);
+        CHECK(personalPlayer.allowed && personalPlayer.targetGuidLow == 5,
+            "fix2: personal order must mail the ordering player");
+
+        MailRecipientDecision const personalNone = DecideMailRecipient(101, 0, 0, false, 0);
+        CHECK(!personalNone.allowed && std::string(personalNone.reason) == "no-recipient",
+            "fix2: personal order without giver must still refuse");
     }
 
     // Finding 4: AH gold cap applies across the whole order, not per purchase.

@@ -1073,3 +1073,19 @@ Example payload:
 - `hp_sample` is the victim's health when the packet-send hook executes.
 - `hp_est = max(0, hp_sample - reported_damage)`. **Neither health field is exact post-hit health.** The normal direct-damage path sends the packet before applying damage; procs occur between packet send and application. Immunity/god mode, prevention, intervening heals/damage, and other packet-emission paths can make the estimate wrong. It is never used for bot decisions.
 - The name `BossSpellHit` means an observed damage-log packet, not an independently verified successful reduction in health.
+
+### Forever Onyxia observer
+
+The Forever-only `host/TbOnyxia` observer runs from the existing
+`engine::Tick` and is forgotten by `engine::Dispose` using a saved full GUID.
+It introduces no core hook. It resolves only an explicitly named map-249
+Onyxia in the bot's instance, and never mutates gameplay during observation.
+See `forever/docs/ONYXIA.md` for the opt-in command, sampling and cleanup.
+
+The optional `host/TbOnyxiaGround` integration installs per-AI strategy/action/
+trigger contexts at engine creation. `ConfigureGround` validates an explicit
+same-instance boss and grouped host tank; `GroundTick` maintains ownership,
+threat holds and checked movement. `ForgetGround` releases owned movement and
+pet state, including followers when the owner leaves control. Successful manual
+orders release control except the owner's explicit pull of the configured boss.
+This is a controller seam, not a replacement for the pending `TbRun` slices.

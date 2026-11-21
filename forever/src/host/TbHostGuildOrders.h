@@ -30,7 +30,8 @@ public:
     virtual ~IGatherCraftProvider() = default;
     virtual bool CanGather(uint32_t botGuidLow, uint32_t itemId) const = 0;
     virtual bool CanCraft(uint32_t botGuidLow, uint32_t itemId) const = 0;
-    virtual bool StepGatherOrCraft(uint32_t botGuidLow, uint32_t itemId, uint32_t wantCount, std::string& outReason) = 0;
+    virtual bool StepGatherOrCraft(uint32_t botGuidLow, uint32_t itemId, uint32_t wantCount, std::string& outReason,
+        bool hasGoldCap = false, uint32_t remainingCopper = 0) = 0;
 };
 
 class IAuctionBuyProvider

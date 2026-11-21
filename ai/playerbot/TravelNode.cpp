@@ -228,6 +228,10 @@ float TravelNodePath::getCost(TravelCostContext& context, uint32 cGold)
 
             if (taxiPath)
             {
+                // W5T: on ForeverCore a flight link carries the bot only when it knows both ends and can pay the fare
+                // (faction and classic maps feed the same pure decision); Turtle's helper passes and the legacy checks run.
+                if (!TravelFlightLinkUsableCompat(bot, taxiPath, cGold))
+                    return -1;
 
                 if (!bot->IsTaxiCheater() && TaxiPathPriceCompat(taxiPath) > cGold)
                     return -1;

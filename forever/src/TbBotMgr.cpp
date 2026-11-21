@@ -1,5 +1,7 @@
 #include "TbBotMgr.h"
-#include "host/TbHostGuildOrders.h"
+#include "host/TbHostGroupQuestPure.h"
+#include "host/TbHostCapitalErrands.h"
+#include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
@@ -8,6 +10,8 @@
 #include "CellImpl.h"
 #include "CharacterPackets.h"
 #include "DatabaseEnv.h"
+#include "GameTime.h"
+#include "QuestDef.h"
 #include "GridNotifiers.h"
 #include "Group.h"
 #include "GroupMgr.h"
@@ -153,14 +157,43 @@ BotMgr::EntryCheck BotMgr::CheckEntry(Player* who, uint32 mapId)
         return { "teleporting", "the character is being teleported" };
     if (who->GetMapId() == mapId)
         return { "already-on-map", "already on that map" };
-    if (!sMapStore.LookupEntry(mapId))
+    MapEntry const* target = sMapStore.LookupEntry(mapId);
+    if (!target)
         return { "other", Trinity::StringFormat("map {} is not in the map store", mapId) };
     TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
     if (!denied)
+    {
+        // F-population: a free bot does not pile into a dungeon or raid past its size (dungeons 5, raids 10/20/40 by the map
+        // row's player count). Commanded bots enter as a group of their own, under the core's group rules, not this cap.
+        if (Instance().IsFreeBot(who->GetGUID()))
+        {
+            uint32 const cap = world::FreeMapCapFor(target->IsDungeon(), target->IsRaid(), target->MaxPlayers, Instance().GetFreeMapCaps());
+            if (cap)
+            {
+                uint32 const present = Instance().FreeBotsOnMap(mapId);
+                if (present >= cap)
+                    return { "map-cap", Trinity::StringFormat("map {} already holds {} free bot(s): the cap is {}", mapId, present, cap) };
+            }
+        }
         return {};
+    }
     std::string text = EntryRefusalText(denied, mapId, who);
     std::string code = EntryRefusalCode(denied, text);
     return { std::move(code), std::move(text) };
+}
+
+uint32 BotMgr::FreeBotsOnMap(uint32 mapId) const
+{
+    uint32 count = 0;
+    for (ObjectGuid const guid : BotGuids())
+    {
+        if (!IsFreeBot(guid))
+            continue;
+        Player const* bot = FindBot(guid);
+        if (bot && bot->GetMapId() == mapId)
+            ++count;
+    }
+    return count;
 }
 
 // Returns "" when the core has no objection (or the map is not a dungeon), else the reason in words.
@@ -194,12 +227,23 @@ void BotMgr::LoadConfig()
     _enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Enable", false);
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
     _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
+    _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", true);
+    _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", true);
+    _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
+    _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
+    _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
     int32 const graceSeconds = sConfigMgr->GetIntDefault("TortoiseBots.Slice.MasterGraceSeconds", 300);
     _masterGraceMs = uint32(std::clamp<int32>(graceSeconds, 0, 3600)) * 1000;
     _deadBackstopMs = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", DeadBackstopDefaultMs / 1000), 10, 3600)) * 1000;
+    // F-population: how many free bots one map of each kind holds before another free bot is refused its entry (0 = no cap).
+    _freeMapCaps.dungeon = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Dungeon", 5), 0, 1000));
+    _freeMapCaps.raid10 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid10", 10), 0, 1000));
+    _freeMapCaps.raid20 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid20", 20), 0, 1000));
+    _freeMapCaps.raid40 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid40", 40), 0, 1000));
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
@@ -290,6 +334,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         return "the login could not be started (see the server log)";
 
     _bots.emplace(characterGuid, std::move(bot));
+    _knownBots.insert(characterGuid);
     TC_LOG_INFO("tortoisebots", "BotMgr: login started for {} (account {})", characterGuid.ToString(), accountId);
     return {};
 }
@@ -616,6 +661,8 @@ void BotMgr::OnPlayerLogout(Player* player)
     chatin::Forget(leaving);     // S1-R2: the bot's chat inbox and its counters go with it (a later bot reusing the guid starts clean)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     tbhost::prof::ClearBotErrands(leaving);
+    tbhost::errands::ClearBotCapitalErrands(leaving);
+    tbhost::guild_mail::ClearBotGuildMail(leaving);
 #endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
@@ -1449,17 +1496,25 @@ void BotMgr::Update(uint32 diff)
         // the brain is gone by then.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
+        bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
+            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me));
+#else
+        bool const pauseEngineForErrand = false;
 #endif
-        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
+        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported() && !pauseEngineForErrand)
             engine::Tick(bot.brain.get(), diff);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
             tbhost::guild_orders::TickBotOrder(me);
-        if (bot.free && sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false))
+        if (bot.free && _professionsEnabled)
         {
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
                 tbhost::prof::TickFreeGather(me);
         }
+        if (bot.free && _capitalErrandsEnabled)
+            tbhost::errands::TickCapitalErrands(me, diff);
+        if (bot.free && _guildMailEnabled)
+            tbhost::guild_mail::TickGuildMail(me, diff);
 #endif
     }
 
@@ -1469,10 +1524,184 @@ void BotMgr::Update(uint32 diff)
         // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::ClearBotErrands(guid);
+        tbhost::errands::ClearBotCapitalErrands(guid);
+        tbhost::guild_mail::ClearBotGuildMail(guid);
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);
         _bots.erase(guid);
+    }
+
+    TickQuestGroups(diff);
+}
+
+void BotMgr::TickQuestGroups(uint32 diff)
+{
+    if (!_groupQuestsEnabled)
+        return;
+
+    _questGroupTimerMs += diff;
+    if (_questGroupTimerMs < 10000)
+        return;
+    _questGroupTimerMs = 0;
+
+    uint64 const nowMs = GameTime::GetGameTimeMS();
+
+    // 1. Disband finished/broken quest groups.
+    for (auto it = _questGroups.begin(); it != _questGroups.end();)
+    {
+        Group* group = nullptr;
+        for (ObjectGuid const& mGuid : it->members)
+        {
+            if (Player* p = FindBot(mGuid))
+            {
+                if (Group* g = p->GetGroup(); g && g->GetGUID() == it->groupGuid)
+                {
+                    group = g;
+                    break;
+                }
+            }
+        }
+
+        tbhost::group_quest::QuestGroupState st;
+        st.questId = it->questId;
+        st.formedAtMs = it->formedAtMs;
+        ObjectGuid const leaderGuid = it->members.empty() ? ObjectGuid::Empty : it->members.front();
+        if (group)
+        {
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                auto bIt = _bots.find(slot.guid);
+                if (bIt == _bots.end())
+                {
+                    st.hasRealPlayer = true;
+                    break;
+                }
+                if (!bIt->second.free || !bIt->second.master.IsEmpty())
+                {
+                    // The engine adopts the party leader as master for grouped bots: the party working, not lost.
+                    if (!bIt->second.master.IsEmpty() && bIt->second.master == leaderGuid)
+                    {
+                        ++st.membersBoundToLeader;
+                        if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
+                        {
+                            if (p->GetQuestStatus(it->questId) == QUEST_STATUS_INCOMPLETE)
+                                ++st.membersStillIncomplete;
+                        }
+                        continue;
+                    }
+                    st.anyMemberLostFree = true;
+                    continue;
+                }
+                ++st.activeMemberCount;
+                if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
+                {
+                    if (p->GetQuestStatus(it->questId) == QUEST_STATUS_INCOMPLETE)
+                        ++st.membersStillIncomplete;
+                }
+            }
+        }
+
+        char const* reason = nullptr;
+        if (!group || tbhost::group_quest::ShouldDisbandQuestGroup(st, nowMs, &reason))
+        {
+            if (group && !st.hasRealPlayer)
+                group->Disband(true);
+            for (ObjectGuid const& mGuid : it->members)
+            {
+                auto bIt = _bots.find(mGuid);
+                if (bIt == _bots.end())
+                    continue;
+                if (!bIt->second.master.IsEmpty() && bIt->second.master == leaderGuid && !st.hasRealPlayer)
+                {
+                    // The engine adopted the party leader while questing: hand the bot back to the free kit
+                    // instead of stranding it master-bound. The AI pointer goes first so its master-strip
+                    // does not fire on the next tick and undo the free strategies.
+                    if (bIt->second.brain)
+                        engine::BindMaster(bIt->second.brain.get(), nullptr);
+                    bIt->second.master = ObjectGuid::Empty;
+                    bIt->second.free = true;
+                    bIt->second.useEngine = true;
+                    if (bIt->second.brain)
+                        engine::ReapplyStrategies(bIt->second.brain.get(), true);
+                    continue;
+                }
+                if (bIt->second.free && bIt->second.brain)
+                    engine::SetQuestGroupMember(bIt->second.brain.get(), false);
+            }
+            TC_LOG_INFO("tortoisebots", "[W3] group-quest disband quest={} reason={}",
+                it->questId, reason ? reason : "gone");
+            it = _questGroups.erase(it);
+        }
+        else
+            ++it;
+    }
+
+    // 2. Collect free bots holding incomplete group/elite quests (in-memory only, no world scan).
+    std::vector<tbhost::group_quest::BotQuestCandidate> candidates;
+    for (auto const& [guid, bot] : _bots)
+    {
+        if (!bot.free || !bot.master.IsEmpty())
+            continue;
+        Player* me = bot.session ? bot.session->GetPlayer() : nullptr;
+        if (!me || !me->IsInWorld() || !me->FindMap() || !me->IsAlive() || me->IsInCombat())
+            continue;
+        if (me->GetGroup() || me->GetGroupInvite())
+            continue;
+
+        tbhost::group_quest::BotQuestCandidate cand;
+        cand.guidLow = guid.GetCounter();
+        cand.mapId = me->GetMapId();
+        cand.x = me->GetPositionX();
+        cand.y = me->GetPositionY();
+        cand.level = me->GetLevel();
+        cand.alive = true;
+        cand.inCombat = false;
+        cand.inGroup = false;
+        cand.team = uint32_t(me->GetTeam());
+
+        for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 const qid = me->GetQuestSlotQuestId(slot);
+            if (!qid)
+                continue;
+            Quest const* q = sObjectMgr->GetQuestTemplate(qid);
+            if (!q || !tbhost::group_quest::IsGroupOrEliteQuest(q->GetQuestInfoID(), q->GetSuggestedPlayers()))
+                continue;
+            if (me->GetQuestStatus(qid) == QUEST_STATUS_INCOMPLETE)
+                cand.incompleteGroupQuests.push_back(qid);
+        }
+        if (!cand.incompleteGroupQuests.empty())
+            candidates.push_back(std::move(cand));
+    }
+
+    auto const plans = tbhost::group_quest::PlanQuestGroups(candidates);
+    for (auto const& plan : plans)
+    {
+        ObjectGuid const leaderGuid = ObjectGuid::Create<HighGuid::Player>(plan.leaderGuidLow);
+        Player* leader = FindBot(leaderGuid);
+        if (!leader)
+            continue;
+        std::vector<ObjectGuid> members{ leaderGuid };
+        for (uint32 mLow : plan.memberGuidLows)
+        {
+            ObjectGuid const mGuid = ObjectGuid::Create<HighGuid::Player>(mLow);
+            Player* member = FindBot(mGuid);
+            if (!member)
+                continue;
+            if (JoinParty(member, leader).empty())
+            {
+                members.push_back(mGuid);
+                if (auto bIt = _bots.find(mGuid); bIt != _bots.end() && bIt->second.brain)
+                    engine::SetQuestGroupMember(bIt->second.brain.get(), true);
+            }
+        }
+        if (Group* g = leader->GetGroup(); g && members.size() >= 2)
+        {
+            _questGroups.push_back({ g->GetGUID(), plan.questId, nowMs, std::move(members) });
+            TC_LOG_INFO("tortoisebots", "[W3] group-quest form leader={} members={} quest={}",
+                leader->GetName(), uint32(members.size()), plan.questId);
+        }
     }
 }
 

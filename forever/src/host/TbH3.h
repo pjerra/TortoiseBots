@@ -33,6 +33,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args);      /
 bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role [<bot|character|party [leader]>] tank|healer|dps|none [#token]
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb master <bot|party [leader]> <commander|none> [#token]
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb party <leader> | .tb party <leader> <member>... [#token]
+bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb state <bot|party [leader]> [#token]
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb threat <bot|party [leader]> [#token]
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]
@@ -43,6 +44,12 @@ bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args); /
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb gear <bot|party [leader]> upgrade [#token]
 bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb quest <bot> status|accept|turnin|share|drop|reward ... [#token]
 bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb guildorder create|list|cancel|status ... [#token]
+bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb craftorder create|status|cancel ... [#token]
+
+// Rebuilds the quest eligibility sets (TbCompat_Quest.h): at world load and after a quest reload.
+void RebuildQuestEligibility();
+// Drops the quest eligibility sets (TbCompat_Quest.h): on a quest reload while the module is off, so the next check rebuilds them.
+void ClearQuestEligibility();
 
 // ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
 // Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.

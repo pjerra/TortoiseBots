@@ -240,6 +240,15 @@ AiPlayerbot.RepopAtGraveyard = 1
 # Teleport a dead bot out of a hopeless corpse run (grim clueless solo graveyard
 # with no reachable spirit) to the graveyard it would repop at
 #AiPlayerbot.RelocateHopelessDeaths = 1
+# Random pause in seconds [min, max] before a free bot releases spirit after dying.
+# 0 disables. Default 3..10.
+AiPlayerbot.DeathReleasePauseMinSec = 3
+AiPlayerbot.DeathReleasePauseMaxSec = 10
+# Maximum lateral offset in yards added to open-world walk destinations >= 15 yd away
+# so bots spread out instead of walking the exact same line. 0 disables. Default 2.5.
+AiPlayerbot.WalkTargetOffset = 2.5
+# Free bots prioritize living rare spawns of their level within sight distance. Default 1.
+AiPlayerbot.HuntRares = 1
 # Grace period in seconds before a masterless random or autonomous bot left
 # inside a dungeon or raid instance without a real player in its group is
 # teleported back to its homebind. 0 disables. Default 90.
@@ -2293,6 +2302,11 @@ AiPlayerbot.RaidHealerSeatsByClass = 0
 # 1 - on
 AiPlayerbot.RaidTankHealerAssist = 0
 
+# Allow a paladin or druid to take the tank role when a bot party has no warrior tank and another healer is present.
+# 0 - off
+# 1 - on (Default)
+AiPlayerbot.SubstituteTank = 1
+
 # The reaction engine's universal raid answers: step out of an environmental hazard (a brazier, a ground effect),
 # run a bomb debuff carrier 30 yd clear of the living group, rotate a Four Horsemen mark carrier (3+ stacks) to the
 # next horseman's corner, flank a dragon's breath/cleave cone, and keep the ranged raid spread while a stack would
@@ -3773,8 +3787,10 @@ AiPlayerbot.LootDelayDelay = 1000
 
 # A queued action basket expires after this many ms
 #AiPlayerbot.ExpireActionTime = 5000
-# Dispel is skipped for auras with less than this many ms left
+# Dispel is skipped for non-dangerous auras with less than this many ms left
 #AiPlayerbot.DispelAuraDuration = 2000
+# Minimum mana percent to dispel harmless/non-dangerous auras (0 disables)
+#AiPlayerbot.DispelMinMana = 25
 # Delay between flee/return attempts after a failed move home
 #AiPlayerbot.ReturnDelay = 7000
 
@@ -3857,6 +3873,8 @@ AiPlayerbot.EnableCustomRaidTactics = 1
 #AiPlayerbot.AlmostFullHealth = 90
 #AiPlayerbot.LowMana = 15
 #AiPlayerbot.MediumMana = 40
+# Mana percent below which a druid bot casts Innervate on a group member or self
+#AiPlayerbot.InnervateManaThreshold = 25
 
 # Ordered pull (".bot action pull [seconds]" / ".bot action pullback [seconds]").
 # The DPS join delay runs from the pull landing (pull) or from the tank back at

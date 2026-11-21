@@ -1,3 +1,4 @@
+#include "host/TbOnyxia.h"
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "TbDashboard.h"
@@ -182,6 +183,15 @@ public:
     void OnAfterReload(std::string_view command) override
     {
 #ifdef TORTOISEBOTS_SLICE1
+        // The quest starter/ender tables feed the bots' quest eligibility sets. A reload while the module is off still drops
+        // them: the next check rebuilds, so a re-enable cannot read pre-reload rows.
+        if (command == "reload all" || command.find("quest") != std::string_view::npos)
+        {
+            if (BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
+                TortoiseBots::h3::RebuildQuestEligibility();
+            else
+                TortoiseBots::h3::ClearQuestEligibility();
+        }
         if (command != "reload all" || !BotMgr::Instance().Enabled() || !ai::GetDungeonPlans().Sealed())
             return;
         // A run keeps the plan it started on and matches its units by (leg, seq): new unit rows under it could give it another step's
@@ -246,6 +256,7 @@ public:
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
                 tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
+                TortoiseBots::h3::RebuildQuestEligibility();
             }
         }
 #endif
@@ -403,6 +414,7 @@ public:
             { "start",  HandlePoolStart,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // W0-B: the scheduler
             { "stop",   HandlePoolStop,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandlePoolStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "population", HandlePoolPopulation, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // F-population: the online target at runtime
         };
         static ChatCommandTable tbTable =
         {
@@ -442,6 +454,7 @@ public:
             { "role",   TortoiseBots::h3::HandleRole,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "master", TortoiseBots::h3::HandleMaster, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "party",  TortoiseBots::h3::HandleParty,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "onyxia", TortoiseBots::onyxia::HandleCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "state",  TortoiseBots::h3::HandleState,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "threat", TortoiseBots::h3::HandleThreat, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "learn",  TortoiseBots::h3::HandleLearn,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -474,6 +487,7 @@ public:
             { "speed",  TortoiseBots::kb::HandleSpeed, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // S3: `.tb speed <bot> run|walk|swim <rate>`
             { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -640,6 +654,19 @@ public:
         for (std::string const& line : TortoiseBots::pool::PoolScheduler::Status())
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
         return true;
+    }
+
+    // `.tb pool population <n|low|high>` (F-population): the pool's online target at runtime. `low` and `high` are the
+    // TortoiseBots.Pool.PopulationLow/High presets; a number is used as-is. The pool adds or logs out bots gradually from the
+    // next pass (logins at LoginsPerMinute, logouts at 5 per second, never a dead or fighting bot); `.reload config` puts the
+    // configured TargetOnline back.
+    static bool HandlePoolPopulation(ChatHandler* handler, std::string word)
+    {
+        TortoiseBots::pool::PoolScheduler::SwitchResult const result = TortoiseBots::pool::PoolScheduler::SetPopulation(Lower(word));
+        handler->PSendSysMessage("TortoiseBots: %s", result.message.c_str());
+        if (!result.ok)
+            handler->SetSentErrorMessage(true);
+        return result.ok;
     }
 
     // .tb free <bot> on|off: a logged-in bot without a master plays the world on its own (W1). Off puts it back to standing.
