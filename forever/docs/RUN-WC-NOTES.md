@@ -514,7 +514,8 @@ What changed:
   the lead's `move`/`move direct` and the run's `walk <bot>` use it. The wade trace still logs the deepest wet sample once
   per step.
 * `forever/src/host/run/TbRunLiquid.h`: `kSwimDepthYd` 2.03128 (the core's `UNDER_WATER` band) replaces `kWadeDepthYd`
-  1.5; the `UNDER_WATER` refusal is unchanged.
+  1.5; the `UNDER_WATER` refusal is unchanged, and a wade may only cross water or ocean (lava, slime and dark water are
+  refused at any depth, so RFC's lava rule is unchanged).
 * `forever/tools/test_run_liquid.cpp`: the step-60 move (`-8.7 157.1` to `-30.3 133.5`, 0.2 yd at -28.5 135.4) passes for
   a run-issued move on an unflagged leg, the same move over deep water pauses, the same 0.2 yd cell from a human commander
   follows the RFC rule; the depth cases move to the 2.03128 band.
@@ -530,7 +531,7 @@ was 28 with the green kit, so the level advice is met on every row and is not th
 | step | row (leg seq, entries, spot, radius) | units in radius | deaths (victims) | plan row the likely cause? |
 |---|---|---|---|---|
 | 4 | 0/4, 3636, -106.250 234.450 -91.350, r 16.0 | 2x 3636, 1x 2914 | 2 (Wctank, Wcpri) | no: the row is the two Ravagers; the 2914 inside 4.7 yd is an unlisted add, and 2 deaths on a 2-unit row is the pack strength, not the row |
-| 10 | 0/10, 3636, -53.600 119.100 -89.500, r 11.1 | 1x 3636 | 5 (all) = **wipe 1** | no clear defect: the row is the smallest pull of the leg (one unit), its spot is the spawn, and the nearest other pack (3671 at 14.6 yd, 5053 at 15.6 yd) is outside the radius. Why a single Ravager wiped the party is an open question (section 11.3) |
+| 10 | 0/10, 3636, -53.600 119.100 -89.500, r 11.1 | 1x 3636 | 5 (all) = **wipe 1** | no clear defect: the row is the smallest pull of the leg (one unit), its spot is the spawn, and the nearest other pack (3671 at 14.6 yd, 5053 at 15.6 yd) is outside the radius. Why a single Ravager wiped the party is an open question (section 11.2) |
 | 14 | 1/1, 3637,3636, -26.450 91.100 -90.950, r 23.0 | 1x 3636, 1x 3637 | 1 (Wctank) | no: a 2-unit row at a wide agent centroid; the deaths are the pack |
 | 21 | 1/8, 3637, 30.500 269.400 -87.200, r 11.3 | 1x 3637 | 1 (Wctank) | no: a one-unit row at its spawn |
 | 39 | 4/7, 3840,5755, 6.100 447.600 -76.300, r 10.2 | 1x 3840, 1x 5755 | 1 (Wctank) | no: the row's own 2 units |
@@ -561,6 +562,16 @@ Open questions (for the next live run's log):
 
 | gate | exact line |
 |---|---|
-| `test_run_orders` (local) | `RESULT: PASS (270 checks)` |
-| `test_run_liquid` (local) | `RESULT: PASS (test_run_liquid)` |
+| module ON, slot 4: `tar -C ~/wt-run-wc --exclude=.git -cf - . \| ssh yulon-ubuntu2 "~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON"` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 4)` / `module sync: 28 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=82` |
+| module OFF, slot 5: `... slot-sync-build.sh 5 tortoisebots` | `combined build: slot 5 key core-9b88bd2d6584-opt-78bf025f` / `build token 1 of 3 (slot 5)` / `module sync: 475 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=14` |
+| worldserver link, slot 7: `... slot-sync-build.sh 7 worldserver -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 7 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 7)` / `module sync: 1 changed/new/deleted files` (the shared key tree already held the module from slot 4) / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=10`; `make.log`: `[2/2] Linking CXX executable bin/Release/bin/worldserver`, 0 `error:`/`FAILED:` (74,904,128-byte binary) |
+| `test_run_orders` (VM, slot 4 tree) | `RESULT: PASS (270 checks)` |
+| `test_run_liquid` (VM, slot 4 tree) | `RESULT: PASS (test_run_liquid)` |
+| `test_run_facts` (Ragefire Chasm, unchanged rows) | `RESULT: PASS` (`table: 251 fields; config 9, filled 98, forced 27, never 5, notknown 14, skipped 98`) |
+| `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
+| `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3507 checks, 0 failed` |
+| `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
+| `git diff --check` | clean |
+
+Disk before the gates: `/mnt/tb` 59G, 11G available (81% used); `/mnt/forever` 79G, 7.1G available (91% used); no gate refused for space.
 

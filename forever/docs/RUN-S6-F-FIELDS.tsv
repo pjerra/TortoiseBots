@@ -161,6 +161,11 @@ objectState	1893	check	skipped	12	not read by an RFC run (doors, objects, loot, 
 objectReadable	1898	no	skipped	2	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
 eventDown	1901	no	skipped	2	not read by an RFC run (hold, ritual, event): the Facts() default stands
 eventData	1902	check	skipped	15	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcRead	1912	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcAlive	1913	check	skipped	5	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcX	1914	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcY	1914	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
+eventNpcZ	1914	no	skipped	3	not read by an RFC run (hold, ritual, event): the Facts() default stands
 clearUnits	1903	check	skipped	2	not read by an RFC run (hold, ritual, event): the Facts() default stands
 carrier	1906	A	filled	77	the lead Player (Player::IsAlive, position, GetName, GetTeam)
 itemsSplit	1909	no	skipped	4	not read by an RFC run (doors, objects, loot, items, gossip, tasks): the Facts() default stands
