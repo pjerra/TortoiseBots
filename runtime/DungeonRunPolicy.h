@@ -8794,12 +8794,14 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     return true;
 }
 
-// The run-issued move gate is the order's origin flag alone (DungeonRun::MoveMayWade): a run's own move may wade
-// shallow water anywhere, and the wade rule itself (TbRunLiquid.h) judges every sample. The per-row
-// `ai::kPlanFlagWadeOk` stays plan data (the probe's record of the shallow hops); it no longer gates the wade.
-inline bool MoveMayWade(bool runIssued)
+// The wade permission of an order (TbRunOrders.cpp WadeOrder): a move may wade shallow water only when the run issued it
+// for itself (`runIssued`, the order's origin flag) and the run has a live plan step to act for (`liveStep`). A player's
+// `.tb cmd move` and a run with no live step keep the RFC liquid rule. The depth is not an input: the wade rule judges
+// every sample (TbRunLiquid.h WadePointOf), so deep or swimming water pauses for any origin. The per-row
+// `ai::kPlanFlagWadeOk` stays plan data (the probe's record of the shallow hops); it does not gate the wade.
+inline bool MoveMayWade(bool runIssued, bool liveStep)
 {
-    return runIssued;
+    return runIssued && liveStep;
 }
 
 // Walks the party to a point. True once the lead bot is there; otherwise

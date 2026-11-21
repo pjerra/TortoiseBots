@@ -118,9 +118,10 @@ The order's own origin flag (`Party::fromRun`) is the gate: only the run's self-
 `walk <bot>`), never an order matched by its text, so a player's `.bot cmd move` keeps the RFC rule (the prefix escape,
 the dry destination, the pause "unreachable: ... crosses or ends in liquid"). The per-row wet bit
 (`ai::kPlanFlagWadeOk`) is plan data now, not the gate: live run 4's step 60 crossed a 0.2 yd cell on a leg with no bit.
-Deep water, lava, RFC and every other plan behave exactly as before; `test_run_liquid` pins the shallow, deep and
-swim-band cases, the step-60 cell and the cross-leg regroup for a run-issued move (pass) against the same move from a
-human commander (pauses), and `test_run_orders` pins the origin gate and the loader's flag kinds. Every liquid refusal logs
+Deep water and lava keep their refusals at any origin, and RFC's tests and results must not regress (the RFC policy tests
+and `test_run_facts` pass on this branch, section 11.4). `test_run_liquid` pins the shallow, deep and swim-band cases, the
+step-60 cell and the cross-leg regroup for a run-issued move (pass) against the same move from a human commander (pauses),
+and `test_run_orders` pins the permission (origin flag and live step) and the loader's flag kinds. Every liquid refusal logs
 the sampled depth, the core's status and the position (section 9).
 
 The first sub-hop of a wet row logs once what it sampled, so the next live run's log says why a river hop walked or
@@ -233,7 +234,7 @@ Mutanus's `bossOwnDead` stays false (no spawn row) and the corpse/grid fields ce
 | `python3 forever/tools/test_wc_plan_rows.py` | 3505 checks, 0 failed |
 | `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
 | `git diff --check` | clean |
-| the run/policy/wiring tests incl. the WC ones and RFC's unchanged | PASS (section 5) |
+| the run/policy/wiring tests incl. the WC ones and RFC's tests (no regression) | PASS (section 5) |
 
 ### The fix round after the live run (2026-11-21, this head)
 
@@ -498,8 +499,8 @@ carries no wet bit, so the run-3 area rule refused a 0.2 yd puddle.
 The binding decision replaces the wet-area gate: a move the **run issues for itself** (`Party::fromRun`) may wade shallow
 water on **any** leg of a dungeon run. The per-row wet bit `ai::kPlanFlagWadeOk` stays plan data (the probe's record);
 it no longer gates. The wade rule judges every sample of the walked route: dry, or at most `kSwimDepthYd` deep, never
-`UNDER_WATER`; deep water and swimming still pause. A human's `.tb cmd move` (`fromRun` false) keeps the RFC liquid rule;
-RFC and the other plans keep their rows and their tests.
+`UNDER_WATER`; deep water and swimming still pause. A human's `.tb cmd move` (`fromRun` false) keeps the RFC liquid rule.
+RFC's tests and results must not regress (section 11.4).
 
 `kSwimDepthYd` is ForeverCore's own swim threshold, not a guess: `GridMap::GetLiquidStatus` marks a unit `UNDER_WATER`
 when the liquid surface is more than its collision height above it (`GridMap.cpp:677-680`, `delta > collisionHeight`), and
@@ -509,18 +510,21 @@ the module's liquid read asks with the core's default `DEFAULT_COLLISION_HEIGHT`
 What changed:
 
 * `runtime/DungeonRunPolicy.h`: the plan-wide/per-leg wet-area helpers (`kWadeAreaYd`, `WetAreaSegmentYd`, `PlanWetAreaAt`,
-  `LegWetAreaAt`, `RowHopWades`) are gone; `MoveMayWade(bool runIssued)` is the origin gate.
+  `LegWetAreaAt`, `RowHopWades`) are gone; `MoveMayWade(runIssued, liveStep)` is the gate (the origin flag and a live plan step).
 * `forever/src/host/run/TbRunOrders.cpp`: `WadeOrder(ctx)` is `ctx.fromRun` with a live plan/step, no point or leg test;
   the lead's `move`/`move direct` and the run's `walk <bot>` use it. The wade trace still logs the deepest wet sample once
   per step.
 * `forever/src/host/run/TbRunLiquid.h`: `kSwimDepthYd` 2.03128 (the core's `UNDER_WATER` band) replaces `kWadeDepthYd`
-  1.5; the `UNDER_WATER` refusal is unchanged, and a wade may only cross water or ocean (lava, slime and dark water are
-  refused at any depth, so RFC's lava rule is unchanged).
+  1.5; the `UNDER_WATER` refusal stays, and a wade may only cross water or ocean (lava, slime and dark water are refused
+  at any depth).
 * `forever/tools/test_run_liquid.cpp`: the step-60 move (`-8.7 157.1` to `-30.3 133.5`, 0.2 yd at -28.5 135.4) passes for
   a run-issued move on an unflagged leg, the same move over deep water pauses, the same 0.2 yd cell from a human commander
   follows the RFC rule; the depth cases move to the 2.03128 band.
 * `forever/tools/test_run_orders.cpp`: the `RowHopWades` section becomes the origin-gate check plus the loader's flag
   kinds (`ai::kPlanFlagWadeOk` still accepted on move/pull/boss, refused on a hold).
+
+This supersedes sections 9.1 and 10.1: their wet-area gate (`MoveMayWade(runIssued, run, row, x, y)`) is gone, and a plan
+with no flagged row no longer keeps the RFC rule for a run-issued move.
 
 ### 11.2 The 31 deaths and 2 wipes: per pull, and the plan rows
 
@@ -574,4 +578,42 @@ Open questions (for the next live run's log):
 | `git diff --check` | clean |
 
 Disk before the gates: `/mnt/tb` 59G, 11G available (81% used); `/mnt/forever` 79G, 7.1G available (91% used); no gate refused for space.
+
+### 11.4 Review round on run 4 (2026-11-21, cold review `claude-wc-live4`)
+
+The cold review of 11.1-11.3 (`~/TortoiseBots-audit/reviews/claude-wc-live4.md`) gave FIX FIRST: two mediums, two lows.
+
+* Finding 1 (the "RFC unchanged" claim): the origin gate stays the permission for every dungeon run (Ragefire Chasm and
+  Deadmines included); shallow water below the swim depth is normal for a bot in any dungeon. The notes and comments now
+  say that RFC's tests and results must not regress, and the RFC policy tests pass on this branch (table below).
+* Finding 2 (a test that cannot fail): `MoveMayWade(bool)` was the identity. It now takes the origin flag and a live plan
+  step (`MoveMayWade(runIssued, liveStep)`), and `WadeOrder` passes both. `test_run_orders` `TestWadeGate` pins the four
+  cases (a human order never, a run with no live step never, a run-issued move with a step yes). `test_run_liquid` runs
+  the permission through the real wade rule on a synthetic bed: 1 yd of water walks, 3 yd refuses, and a human's move over
+  the same hop pauses. The unused `dryRun` block is dropped. Mutants on scratch copies (origin ignored, live step ignored,
+  deep water allowed) each fail a test.
+* Low 3: the step-60 cell is checked at the logged level (status 0x01, level -105.9, depth 0.2) and through `WadePointOf`
+  (shallow).
+* Low 4 (noted, not changed): the swim depth is the default collision height 2.03128 for every race. A gnome or goblin
+  swims at its own, lower height, so 1.5-2.0 yd of water can already be swim water for a short model. The per-race height
+  would need passing through the wade rule and its callers, so it is not a one-liner; `TbRunLiquid.h` records the limit.
+
+Gates on this head. The module builds ran through `slot-sync-build.sh` under the slot lock; the tests ran on the slot-4
+tree under the same lock. The `ssh` exit 1 after each build is `build.sh`'s last `grep` finding no error lines under its
+`pipefail`; the `CMAKE_RC` and `MAKE_RC` lines are the result.
+
+| gate | result |
+|---|---|
+| disk before the gates | `/mnt/tb` 15G available (74% used); `/mnt/forever` 5.5G available (93% used); no gate refused for space |
+| module ON, slot 4 (`-DTORTOISEBOTS_SLICE1=ON`) | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 4)` / `module sync: 43 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=100` |
+| module OFF, slot 6 | `combined build: slot 6 key core-9b88bd2d6584-opt-78bf025f` / `build token 2 of 3 (slot 6)` / `module sync: 7 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=16` |
+| `test_run_orders` (slot 4 tree) | `RESULT: PASS (272 checks)`, 0 warnings |
+| `test_run_liquid` | `RESULT: PASS (test_run_liquid)`, 0 warnings |
+| `test_run_facts` (Ragefire Chasm) | `RESULT: PASS`, 0 warnings |
+| `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
+| `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3507 checks, 0 failed` |
+| RFC policy: `test_dungeon_run_policy` | `test_dungeon_run_policy: ok` |
+| RFC policy: `test_system_run_policy` | `system run policy: 109 checks passed` |
+| RFC policy: `test_forever_plan_match` | `test_forever_plan_match: ok, 38 checks passed` |
+| `git diff --check` | clean |
 

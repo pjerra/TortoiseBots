@@ -319,11 +319,13 @@ static void TestSettle()
 
 static void TestWadeGate()
 {
-    // The wet bit (ai::kPlanFlagWadeOk) is plan data now: a move the run issues for itself may wade shallow water on any
-    // leg, and the wade rule (TbRunLiquid.h, test_run_liquid) judges the depth of every sample. A player's `.tb cmd move`
-    // (fromRun false) keeps the RFC liquid rule.
-    CHECK(DR::MoveMayWade(true));
-    CHECK(!DR::MoveMayWade(false));
+    // WadeOrder's permission (DungeonRun::MoveMayWade: the origin flag and a live plan step): a move the run issues for
+    // itself may wade shallow water on any leg. The wet bit (ai::kPlanFlagWadeOk) is plan data, not an input, and the wade
+    // rule (TbRunLiquid.h, test_run_liquid) judges the depth of every sample, so the permission never lets deep water by.
+    CHECK(DR::MoveMayWade(true, true));
+    CHECK(!DR::MoveMayWade(false, true));                     // a player's `.tb cmd move`: never the permission (RFC rule)
+    CHECK(!DR::MoveMayWade(false, false));                    // a player's order with no run behind it
+    CHECK(!DR::MoveMayWade(true, false));                     // the run has no plan, or its step is past the plan's end
     // The bit still marks the probed shallow hops, and the loader keeps refusing it on other row kinds.
     ai::PlanStep move;
     move.kind = ai::PlanStepKind::Move;

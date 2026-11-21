@@ -48,6 +48,8 @@ inline bool PointRefused(std::uint32_t status, float level, float z)
 // height above its position (GridMap.cpp:677-680, `delta > collisionHeight`), and the liquid read the module makes asks
 // with the core's default collision height (DEFAULT_COLLISION_HEIGHT 2.03128, Object.h:78). Water no deeper than that
 // (surface minus the bed, GridMapLiquidData::depth_level) is walked; deeper is swim water and pauses the move.
+// Known limit (review low 4): every race uses this default height. A shorter model (gnome, goblin) swims at its own, so
+// 1.5-2.0 yd of water can already be swim water for it. Read per race in a later round (RUN-WC-NOTES.md 11.4).
 constexpr float kSwimDepthYd = 2.03128f;
 
 // The liquid types a wade may cross: the compat encoding's WATER 0x08 and OCEAN 0x02 (TbCompat_Unit.h

@@ -198,16 +198,13 @@ void LogLiquidRefusal(Party const& ctx, std::string const& who, liquid::LiquidPr
 // A move the run issues for itself may wade: every leg of a dungeon run, not only a leg whose rows carry the wet bit
 // (live run 4: step 60 of leg 6, the run's move to -30.3 133.5 refused over a 0.2 yd cell outside every flagged hop,
 // -28.5 135.4). The bit stays plan data; the wade rule is the judge at every sample of the walked route
-// (TbRunLiquid.h: dry or at most the core's swim depth, never UNDER_WATER), so deep water still pauses. `ctx.fromRun` is
-// the order's origin flag: a `cmd move` a player sends keeps the RFC liquid rule.
+// (TbRunLiquid.h: dry or at most the core's swim depth, never UNDER_WATER), so deep water still pauses. The permission is
+// DungeonRun::MoveMayWade: the order's origin flag (`ctx.fromRun`; a `cmd move` a player sends has none and keeps the RFC
+// liquid rule) and a live plan step for the run to act for.
 bool WadeOrder(Party const& ctx)
 {
-    if (!ctx.fromRun || !ctx.runRec)
-        return false;
-    RunRec const& rec = *ctx.runRec;
-    if (!rec.run.plan || rec.run.step >= rec.run.plan->steps.size())
-        return false;
-    return DungeonRun::MoveMayWade(ctx.fromRun);
+    bool const liveStep = ctx.runRec && ctx.runRec->run.plan && ctx.runRec->run.step < ctx.runRec->run.plan->steps.size();
+    return DungeonRun::MoveMayWade(ctx.fromRun, liveStep);
 }
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
