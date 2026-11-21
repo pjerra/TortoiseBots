@@ -336,12 +336,14 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
 
 void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* combatEngine)
 {
+    if (combatEngine)
+        combatEngine->addStrategy("racials");
     if (player && player->GetClass() == CLASS_PRIEST)
     {
         // "heal interrupt": the overheal cancel (a heal in its cast bar is cancelled when the patient no longer needs it), added by the full factory
         // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3 of slice 2. The priest falls through to the `threat` block below
         // (slice 3: a commanded healer backs off the tank's threat).
-        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
+        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "flee", "cure", "buff", "cast time", "heal interrupt", NULL);
     }
     else if (HybridKitOf(player, EffectiveRole(player, facade)) != HybridKit::None)
     {
@@ -355,27 +357,33 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
                 combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff protection pve", NULL);
                 return;
             case HybridKit::RestoDruid:
-                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "flee", "cure", "buff", "cast time", "heal interrupt", NULL);
                 break;
             case HybridKit::HolyPaladin:
-                combatEngine->addStrategies("holy", "dps assist", "ranged", "cure", "buff", "aura", "blessing", "cast time", "heal interrupt", NULL);
+                combatEngine->addStrategies("holy", "dps assist", "ranged", "flee", "cure", "buff", "aura", "blessing", "cast time", "heal interrupt", NULL);
                 break;
             case HybridKit::RestoShaman:
-                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt", NULL);
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "flee", "cure", "totems", "buff", "cast time", "heal interrupt", NULL);
                 break;
             default:
                 break;
         }
     }
     else if (player && player->GetClass() == CLASS_MAGE)
-        combatEngine->addStrategies("fire", "dps assist", "ranged", "cc", "buff", "boost", NULL);
+        combatEngine->addStrategies("fire", "dps assist", "ranged", "flee", "cc", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_ROGUE)
         // "cc" gives the rogue Kick (RogueCcStrategy: kick, kick on enemy healer; its Sap rows need a real player master and stay silent): M8 live test.
         combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_HUNTER)
+    {
         combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff", NULL);
+        combatEngine->addStrategy("flee");
+    }
     else if (player && player->GetClass() == CLASS_WARLOCK)
+    {
         combatEngine->addStrategies("affliction", "dps assist", "ranged", "pet", "curse", "buff", NULL);
+        combatEngine->addStrategy("flee");
+    }
     else if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.
@@ -406,7 +414,10 @@ static_assert(TortoiseBots::world::ClassDruid == CLASS_DRUID, "FreeKitPolicy.h: 
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
     if (nonCombatEngine)
+    {
         nonCombatEngine->addStrategy("maintenance");
+        nonCombatEngine->addStrategy("racials");
+    }
     // A free bot plays the world on its own: grind targets, food, loot, rolls, the class spec and the engine's default handler.
     if (player && sRandomBotFacade.IsFreeBot(player) && !facade->HasRealPlayerMaster())
     {
@@ -489,6 +500,7 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // "avoid aoe" and "potions", which are out of the slice). Its triggers are the commands a player whispers or says in party chat
     // (ChatCommandHandlerStrategy.cpp, chat/PlayerbotAI::HandleCommands); the command the host queued reaches it at the next reaction pass.
     reactionEngine->addStrategy("chat");
+    reactionEngine->addStrategies("react", "avoid aoe", NULL);
     if (char const* hybrid = HybridSpecStrategy(HybridKitOf(player, EffectiveRole(player, facade))))
     {
         reactionEngine->addStrategy(hybrid);

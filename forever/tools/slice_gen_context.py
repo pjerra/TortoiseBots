@@ -225,7 +225,19 @@ W8_KEYS = {
     "trigger": "",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, WL0_KEYS)
+# Reactions: flee, kite, runaway, avoid aoe, racials, mark rti, focus, spread distance, fear/stun/threat triggers, target values.
+REACTIONS_KEYS = {
+    "strategy": "flee, flee from adds, kite, runaway, react, avoid aoe, racials, mark rti, focus, focus heal targets, focus rti targets",
+    "action": "avoid aoe, flee from area, runaway, mark rti, spread distance, "
+              "war stomp, berserking, blood fury, cannibalize, escape artist, shadowmeld, stoneform, "
+              "perception, will of the forsaken, mana tap, arcane torrent",
+    "trigger": "feared, stunned, fear sleep sap, low tank threat, some threat, no threat, "
+               "panic, outnumbered, critical health no master, has nearest adds, aoe threat nearby, has area debuff, no rti target, "
+               "berserking, blood fury, generic boost, cannibalize, will of the forsaken, stoneform, shadowmeld, "
+               "mana tap, arcane torrent, war stomp, perception",
+    "value": "least hp target, attacker without aura, attacker without my aura, spread distance",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, WL0_KEYS, REACTIONS_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
@@ -261,6 +273,8 @@ def find_class_headers():
             for m in re.finditer(r'^[ \t]*(?:class|struct)\s+(\w+)\b([^;{]*)(\{|$)', text, re.M):
                 if m.group(3) == "{" or ":" in m.group(2):
                     defs.setdefault(m.group(1), set()).add(os.path.relpath(p, base))
+            for m in re.finditer(r'^[ \t]*(?:BEGIN_TRIGGER|BUFF_ACTION(?:_U)?|HEAL_ACTION)\(\s*(\w+)\s*,', text, re.M):
+                defs.setdefault(m.group(1), set()).add(os.path.relpath(p, base))
     return defs
 
 
