@@ -1,7 +1,7 @@
 # Hunter and warlock first pets on Forever
 
-Data: TDB 2026-10-14 quest/creature tables + client DB2 70959 (`SpellName`, `SkillLineAbility`).
-No live DB was available; values below are the data state, not a fresh-client confirmation.
+Data: TDB 2026-10-14 quest/creature tables + client DB2 70959 (`SpellName`, `SkillLineAbility`),
+plus Audrey's in-game check on Nov 21 (repack 0.1.37.4, client 71037).
 
 ## Hunter — first pet at level 10
 
@@ -40,3 +40,13 @@ No live DB was available; values below are the data state, not a fresh-client co
 - Test: `.go xyz 1711.59 57.167 -62.206 0` (Carendin), `.quest add 1471`, `.additem 6284`,
   `.quest complete 1471`; check Summon Voidwalker 697. For Imp: `.learn 688` and `.cast 688` on a fresh
   warlock; if 688 is absent from the spellbook/trainer, it is the missing data flagged above.
+
+## In-game check (Nov 21, repack 0.1.37.4, client 71037)
+
+- **Hunter: fully works.** Tame Beast and Call Pet are present and usable; the Taming quest completed,
+  the beast was tamed, dismissed and called back with no issue.
+- **Warlock Imp 688: confirmed MISSING.** A new level-1 warlock has no Summon Imp in the spellbook,
+  matching the data gap (no quest/trainer/action entry). Classic expects it at level 1.
+- **Warlock Voidwalker: works.** Level-10 quest 1471 via `.quest add`/`.quest complete` + turn-in taught
+  Summon Voidwalker; it was summoned with a Soul Shard (`.additem 6265`).
+- So the only first-pet blocker is the missing Imp 688; hunter and Voidwalker are verified.
