@@ -34,6 +34,9 @@ public:
     void SetPlayerForcedRole(ObjectGuid guid, uint8 role);
     uint8 GetPlayerForcedRole(ObjectGuid guid) const;
     void ClearPlayerForcedRole(ObjectGuid guid);
+    void SetPlayerForcedSpecTab(ObjectGuid guid, int8 tab);
+    int8 GetPlayerForcedSpecTab(ObjectGuid guid) const;
+    void ClearPlayerForcedSpecTab(ObjectGuid guid);
 
 private:
     mutable std::mutex mutex_;
@@ -43,6 +46,7 @@ private:
     std::unordered_map<Player const*, TortoiseBots::BotChatGate> chatGateByPlayer_;
     // Human role overrides stay separate from the PlayerbotAI registries.
     std::unordered_map<ObjectGuid, uint8> playerForcedRoles_;
+    std::unordered_map<ObjectGuid, int8> playerForcedSpecTabs_;
 };
 
 #ifndef GET_PLAYERBOT_AI

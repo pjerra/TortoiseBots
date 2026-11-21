@@ -488,6 +488,7 @@ public:
             { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
