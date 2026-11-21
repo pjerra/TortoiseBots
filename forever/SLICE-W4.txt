@@ -1,4 +1,4 @@
-# Travel slice W4 (travel on foot and RPG visits): the merged list (every path of forever/SLICE-W1.txt, the world-life slice W1)
+# Travel slice W4 (travel on foot and RPG visits): the merged list (every path of forever/SLICE-W1.txt, the world-life slice W1, incl. AhAction.cpp from W8 now carried by W1)
 # plus the files of the W4 rounds of FOREVER-W0-W4-SPEC part 2.2 as each round lands. This is the list the ForeverCore build reads.
 #
 # Round W4-A1 (the node graph): ai/playerbot/TravelNode.cpp.
@@ -294,3 +294,4 @@ ai/playerbot/strategy/actions/QuestRewardActions.cpp
 ai/playerbot/TravelMgr.cpp
 ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/TravelNode.cpp
+ai/playerbot/strategy/actions/AhAction.cpp
