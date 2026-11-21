@@ -27,6 +27,27 @@ inline constexpr uint32_t kBankFreeSlotsThreshold = 6;
 inline constexpr uint64_t kDuelCooldownMs = 120000;
 inline constexpr uint64_t kDuelScanIntervalMs = 5000;
 
+inline bool IsCapitalZoneId(uint32_t zoneId)
+{
+    switch (zoneId)
+    {
+        case 1497: // Undercity
+        case 1519: // Stormwind City
+        case 1537: // Ironforge
+        case 1637: // Orgrimmar
+        case 1638: // Thunder Bluff
+        case 1657: // Darnassus
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline bool IsCapitalAreaOrZone(bool areaHasLinkedChat, bool zoneHasLinkedChat, uint32_t zoneId)
+{
+    return areaHasLinkedChat || zoneHasLinkedChat || IsCapitalZoneId(zoneId);
+}
+
 inline uint64_t CooldownMsForErrand(CapitalErrandKind kind)
 {
     switch (kind)

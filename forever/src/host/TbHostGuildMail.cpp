@@ -1,6 +1,7 @@
 #include "host/TbHostGuildMail.h"
 
 #include "TbBotMgr.h"
+#include "host/TbHostCapitalErrands.h"
 #include "host/TbHostGuild.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
@@ -36,8 +37,9 @@ namespace
 
 using namespace TortoiseBots::world;
 
-constexpr float kMaxMailboxWalkDistYd = 300.0f;
+constexpr float kMaxMailboxWalkDistYd = 500.0f;
 constexpr uint64_t kMailboxWalkTimeoutMs = 45000;
+constexpr uint64_t kGuildMailDebugIntervalMs = 60000;
 
 struct BotGuildMailState
 {
@@ -45,6 +47,7 @@ struct BotGuildMailState
     uint64_t nextCheckMs = 0;
     uint64_t goldCooldownUntilMs = 0;
     uint64_t matsCooldownUntilMs = 0;
+    uint64_t nextDebugLogMs = 0;
     bool walkingToMailbox = false;
     ObjectGuid mailboxGuid;
     uint64_t walkStartedAtMs = 0;
@@ -318,18 +321,39 @@ void TickGuildMail(Player* bot, uint32_t diffMs)
             else
                 st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
         }
+        else if (!bot->isMoving())
+        {
+            bot->GetMotionMaster()->MovePoint(0, mailbox->GetPositionX(), mailbox->GetPositionY(), mailbox->GetPositionZ());
+        }
         return;
     }
 
-    if (!bot->IsAlive() || bot->IsInCombat() || bot->isMoving() ||
+    auto logRefusal = [&](char const* reason)
+    {
+        if (st.nowMs >= st.nextDebugLogMs)
+        {
+            st.nextDebugLogMs = st.nowMs + kGuildMailDebugIntervalMs;
+            TC_LOG_DEBUG("tortoisebots", "[W9] guild-mail-skip bot={} reason={}", bot->GetName(), reason);
+        }
+    };
+
+    if (!bot->IsAlive() || bot->IsInCombat() ||
         bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) || bot->duel != nullptr)
+    {
+        logRefusal(!bot->IsAlive() ? "dead" : bot->IsInCombat() ? "combat" : bot->duel ? "duel" : "casting");
         return;
-    if (tbhost::prof::HasActiveErrand(bot) || tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
+    }
+    if (tbhost::prof::HasActiveErrand(bot) || tbhost::errands::HasActiveErrand(bot) ||
+        tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
+    {
+        logRefusal("busy-errand-or-order");
         return;
+    }
     if (st.nowMs < st.nextCheckMs)
         return;
     if (st.nowMs < st.goldCooldownUntilMs && st.nowMs < st.matsCooldownUntilMs)
     {
+        logRefusal("cooldown");
         st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
         return;
     }
@@ -337,6 +361,7 @@ void TickGuildMail(Player* bot, uint32_t diffMs)
     GuildMailPlan const plan = PrepareGuildMailPlan(bot, st);
     if (!plan.hasWork)
     {
+        logRefusal("no-work");
         st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
         return;
     }
@@ -351,14 +376,25 @@ void TickGuildMail(Player* bot, uint32_t diffMs)
     GameObject* farMailbox = tbhost::town::FindNearestMailbox(bot, kMaxMailboxWalkDistYd);
     if (!farMailbox)
     {
+        logRefusal("no-mailbox");
         st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
         return;
     }
 
+    if (bot->isMoving())
+        bot->StopMoving();
     st.walkingToMailbox = true;
     st.mailboxGuid = farMailbox->GetGUID();
     st.walkStartedAtMs = st.nowMs;
     bot->GetMotionMaster()->MovePoint(0, farMailbox->GetPositionX(), farMailbox->GetPositionY(), farMailbox->GetPositionZ());
+}
+
+bool HasActiveErrand(Player const* bot)
+{
+    if (!bot)
+        return false;
+    auto const itr = States().find(bot->GetGUID());
+    return itr != States().end() && itr->second.walkingToMailbox;
 }
 
 void ClearBotGuildMail(ObjectGuid const& botGuid)

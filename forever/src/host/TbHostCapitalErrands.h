@@ -12,6 +12,7 @@ namespace errands
 {
 
 void TickCapitalErrands(Player* bot, uint32_t diffMs);
+bool HasActiveErrand(Player const* bot);
 void ClearBotCapitalErrands(ObjectGuid const& botGuid);
 
 } // namespace errands

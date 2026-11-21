@@ -3,6 +3,7 @@
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbHostAuction.h"
+#include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
@@ -43,9 +44,10 @@ namespace
 
 using namespace TortoiseBots::world;
 
-constexpr float kMaxTownVisitDistYd = 300.0f;
+constexpr float kMaxTownVisitDistYd = 500.0f;
 constexpr float kDuelSearchDistYd = 30.0f;
 constexpr uint64_t kErrandWalkTimeoutMs = 45000;
+constexpr uint64_t kDebugRefusalIntervalMs = 60000;
 constexpr uint32_t kSpellDuel = 7266;
 
 struct ActiveErrand
@@ -66,6 +68,7 @@ struct BotErrandState
     uint64_t bankCooldownUntilMs = 0;
     uint64_t ahCooldownUntilMs = 0;
     uint64_t duelCooldownUntilMs = 0;
+    uint64_t nextDebugLogMs = 0;
     ActiveErrand current;
 };
 
@@ -91,13 +94,13 @@ bool IsInCapitalArea(Player const* bot)
 {
     if (!bot)
         return false;
+    bool areaLinkedChat = false;
     if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(bot->GetAreaId()))
-        if (area->GetFlags().HasFlag(AreaFlags::LinkedChat))
-            return true;
+        areaLinkedChat = area->GetFlags().HasFlag(AreaFlags::LinkedChat);
+    bool zoneLinkedChat = false;
     if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(bot->GetZoneId()))
-        if (zone->GetFlags().HasFlag(AreaFlags::LinkedChat))
-            return true;
-    return false;
+        zoneLinkedChat = zone->GetFlags().HasFlag(AreaFlags::LinkedChat);
+    return IsCapitalAreaOrZone(areaLinkedChat, zoneLinkedChat, bot->GetZoneId());
 }
 
 bool IsInDuelingArea(Player const* bot)
@@ -504,20 +507,48 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
             SetKindCooldown(st, st.current.kind, nowMs);
             st.current = ActiveErrand{};
         }
+        else if (!bot->isMoving())
+        {
+            bot->GetMotionMaster()->MovePoint(0, target->GetPositionX(), target->GetPositionY(), target->GetPositionZ());
+        }
         return;
     }
 
-    if (!bot->IsAlive() || bot->IsInCombat() || bot->isMoving() ||
+    auto logRefusal = [&](char const* reason)
+    {
+        if (nowMs >= st.nextDebugLogMs)
+        {
+            st.nextDebugLogMs = nowMs + kDebugRefusalIntervalMs;
+            TC_LOG_DEBUG("tortoisebots", "[W2] capital-errand-skip bot={} reason={}", bot->GetName(), reason);
+        }
+    };
+
+    if (!bot->IsAlive() || bot->IsInCombat() ||
         bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) || bot->duel != nullptr)
+    {
+        logRefusal(!bot->IsAlive() ? "dead" : bot->IsInCombat() ? "combat" : bot->duel ? "duel" : "casting");
         return;
-    if (tbhost::prof::HasActiveErrand(bot) || tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
+    }
+    if (tbhost::prof::HasActiveErrand(bot) || tbhost::guild_mail::HasActiveErrand(bot) ||
+        tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
+    {
+        logRefusal("busy-errand-or-order");
         return;
+    }
     if (nowMs < st.nextGlobalTryMs)
         return;
 
     bool const inCapital = IsInCapitalArea(bot);
     if (!inCapital)
+    {
+        if (nowMs >= st.nextDebugLogMs)
+        {
+            st.nextDebugLogMs = nowMs + kDebugRefusalIntervalMs;
+            TC_LOG_DEBUG("tortoisebots", "[W2] capital-errand-skip bot={} reason=not-capital zone={} area={}",
+                bot->GetName(), bot->GetZoneId(), bot->GetAreaId());
+        }
         return;
+    }
 
     Creature* classTrainer = (nowMs >= st.trainerCooldownUntilMs) ? FindNearestClassTrainer(bot, kMaxTownVisitDistYd) : nullptr;
     bool const hasTrainable = classTrainer && HasTrainableClassSpell(bot, classTrainer);
@@ -547,6 +578,14 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     CapitalErrandKind const pick = PickCapitalErrand(in);
     if (pick == CapitalErrandKind::None)
     {
+        if (nowMs >= st.nextDebugLogMs)
+        {
+            st.nextDebugLogMs = nowMs + kDebugRefusalIntervalMs;
+            TC_LOG_DEBUG("tortoisebots",
+                "[W2] capital-errand-skip bot={} reason=none-picked unread={} train={} freeSlots={} bankable={} ahEnabled={} ahSellable={}",
+                bot->GetName(), in.unreadMailCount, hasTrainable ? 1 : 0, in.freeBagSlots,
+                in.bankableItemCount, in.auctionEnabled ? 1 : 0, in.ahSellableItemCount);
+        }
         st.nextGlobalTryMs = nowMs + kErrandGlobalIntervalMs;
         return;
     }
@@ -574,12 +613,19 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
 
     if (!dest)
     {
+        if (nowMs >= st.nextDebugLogMs)
+        {
+            st.nextDebugLogMs = nowMs + kDebugRefusalIntervalMs;
+            TC_LOG_DEBUG("tortoisebots", "[W2] capital-errand-skip bot={} reason=no-dest kind={}",
+                bot->GetName(), KindName(pick));
+        }
         SetKindCooldown(st, pick, nowMs);
         return;
     }
 
     if (bot->GetDistance(dest) <= INTERACTION_DISTANCE)
     {
+        bot->StopMoving();
         bool const ok = ExecuteErrandAtTarget(bot, pick, dest->GetGUID());
         TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
             bot->GetName(), KindName(pick), ok ? 1 : 0);
@@ -587,12 +633,22 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         return;
     }
 
+    if (bot->isMoving())
+        bot->StopMoving();
     st.current.active = true;
     st.current.kind = pick;
     st.current.targetGuid = dest->GetGUID();
     st.current.targetIsGameObject = isGo;
     st.current.startedAtMs = nowMs;
     bot->GetMotionMaster()->MovePoint(0, dest->GetPositionX(), dest->GetPositionY(), dest->GetPositionZ());
+}
+
+bool HasActiveErrand(Player const* bot)
+{
+    if (!bot)
+        return false;
+    auto const itr = States().find(bot->GetGUID());
+    return itr != States().end() && itr->second.current.active;
 }
 
 void ClearBotCapitalErrands(ObjectGuid const& botGuid)

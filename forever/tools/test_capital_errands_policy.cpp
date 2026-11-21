@@ -155,6 +155,22 @@ int main()
         ++checks;
     }
 
+    // 7. Classic capital zone fallback recognizes Stormwind/Orgrimmar/etc. even without LinkedChat flag.
+    {
+        assert(IsCapitalZoneId(1519));  // Stormwind
+        assert(IsCapitalZoneId(1637));  // Orgrimmar
+        assert(IsCapitalZoneId(1537));  // Ironforge
+        assert(IsCapitalZoneId(1657));  // Darnassus
+        assert(IsCapitalZoneId(1497));  // Undercity
+        assert(IsCapitalZoneId(1638));  // Thunder Bluff
+        assert(!IsCapitalZoneId(12));   // Elwynn Forest
+        assert(IsCapitalAreaOrZone(false, false, 1519));
+        assert(IsCapitalAreaOrZone(true, false, 12));
+        assert(IsCapitalAreaOrZone(false, true, 12));
+        assert(!IsCapitalAreaOrZone(false, false, 12));
+        ++checks;
+    }
+
     std::printf("PASS: test_capital_errands_policy (%d checks, 0 failed)\n", checks);
     return 0;
 }

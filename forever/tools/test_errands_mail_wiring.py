@@ -39,6 +39,12 @@ def check_wiring(bot_mgr, conf_dist, errands_cpp, guild_mail_cpp):
         raise AssertionError("TbHostGuildMail.cpp missing offline guild member classification")
     if "PrepareGuildMailPlan" not in guild_mail_cpp:
         raise AssertionError("TbHostGuildMail.cpp missing pre-walk guild mail plan check")
+    if "IsCapitalAreaOrZone" not in errands_cpp or "HasActiveErrand" not in errands_cpp:
+        raise AssertionError("TbHostCapitalErrands.cpp missing capital zone fallback or HasActiveErrand")
+    if "HasActiveErrand" not in guild_mail_cpp:
+        raise AssertionError("TbHostGuildMail.cpp missing HasActiveErrand")
+    if "pauseEngineForErrand" not in bot_mgr or "tbhost::errands::HasActiveErrand" not in bot_mgr or "tbhost::guild_mail::HasActiveErrand" not in bot_mgr:
+        raise AssertionError("TbBotMgr.cpp missing engine pause during active errand/guild-mail walk")
 
 
 class TestErrandsMailWiring(unittest.TestCase):

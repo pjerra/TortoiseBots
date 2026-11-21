@@ -1494,8 +1494,12 @@ void BotMgr::Update(uint32 diff)
         // the brain is gone by then.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
+        bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
+            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me));
+#else
+        bool const pauseEngineForErrand = false;
 #endif
-        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
+        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported() && !pauseEngineForErrand)
             engine::Tick(bot.brain.get(), diff);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
