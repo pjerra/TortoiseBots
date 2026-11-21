@@ -65,6 +65,7 @@ Then:
 
 1. **Restart `mangosd` once**, so it picks up the telemetry setting the script turned on. Without that you can sign in, but the dashboard stays empty.
 2. Open `http://localhost:8095` in your browser and sign in with your GM account.
+   If another program (for example Docker) already uses port `8095`, the dashboard takes the next free port (`8096`, `8097`, ... up to `8104`); its log shows the address.
 
 The program keeps running in the background. Its log is `dashboard.log` next to the script (on Windows also `dashboard.err.log`). Running the script again while the dashboard is up does nothing: stop the dashboard first if you want to update it.
 

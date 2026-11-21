@@ -1197,12 +1197,18 @@ func main() {
 		hub.Serve(w, r, upgrader, initial...)
 	})
 
-	serverAddr := net.JoinHostPort(*httpHost, strconv.Itoa(*httpPort))
-	log.Printf("[HTTP] Dashboard & API running at http://localhost:%d/dashboard", *httpPort)
-	log.Printf("[HTTP] Prometheus metrics available at http://localhost:%d/metrics", *httpPort)
+	httpListener, port, err := listenHTTP(*httpHost, *httpPort)
+	if err != nil {
+		log.Fatalf("HTTP server failed: %v", err)
+	}
+	if port != *httpPort {
+		log.Printf("[HTTP] Port %d is used by another program; the dashboard uses port %d instead", *httpPort, port)
+	}
+	log.Printf("[HTTP] Dashboard & API running at http://localhost:%d/dashboard", port)
+	log.Printf("[HTTP] Prometheus metrics available at http://localhost:%d/metrics", port)
 
 	server := &http.Server{
-		Addr:         serverAddr,
+		Addr:         httpListener.Addr().String(),
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -1213,7 +1219,7 @@ func main() {
 	// waiting in the history writer.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := serve(ctx, server, udpListener, historyStore); err != nil {
+	if err := serve(ctx, server, httpListener, udpListener, historyStore); err != nil {
 		log.Fatalf("HTTP server failed: %v", err)
 	}
 }
@@ -1242,10 +1248,34 @@ func shutdown(server *http.Server, udpListener *udp.Listener, fights *history.St
 	fights.Close(deadline)
 }
 
-// serve runs the HTTP server until it fails or ctx is cancelled, then shuts everything down and returns the server's error.
-func serve(ctx context.Context, server *http.Server, udpListener *udp.Listener, fights *history.Store) error {
+// httpPortSpan is how many ports, starting at the configured one, the dashboard may take.
+const httpPortSpan = 10
+
+// listenHTTP opens the dashboard's web port: the configured one, or the next free one (up to httpPortSpan-1 higher) when
+// another program holds it. Port 0 asks the system for any free port.
+func listenHTTP(host string, port int) (net.Listener, int, error) {
+	var lastErr error
+	for i := 0; i < httpPortSpan; i++ {
+		candidate := port + i
+		if candidate > 65535 {
+			break
+		}
+		ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(candidate)))
+		if err == nil {
+			return ln, ln.Addr().(*net.TCPAddr).Port, nil
+		}
+		lastErr = err
+		if port == 0 {
+			break
+		}
+	}
+	return nil, 0, fmt.Errorf("ports %d-%d are all in use (set HTTP_PORT or -http-port to a free port): %w", port, port+httpPortSpan-1, lastErr)
+}
+
+// serve runs the HTTP server on ln until it fails or ctx is cancelled, then shuts everything down and returns the server's error.
+func serve(ctx context.Context, server *http.Server, ln net.Listener, udpListener *udp.Listener, fights *history.Store) error {
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.ListenAndServe() }()
+	go func() { serveErr <- server.Serve(ln) }()
 	var err error
 	select {
 	case err = <-serveErr:
