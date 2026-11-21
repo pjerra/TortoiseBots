@@ -132,6 +132,9 @@ struct QuestGroupState
     uint32_t membersStillIncomplete = 0;
     bool hasRealPlayer = false;
     bool anyMemberLostFree = false;
+    // Members the engine adopted to the party leader as master: still in the
+    // party and questing, not lost.
+    uint32_t membersBoundToLeader = 0;
 };
 
 inline bool ShouldDisbandQuestGroup(QuestGroupState const& s, uint64_t nowMs, char const** outReason = nullptr)
@@ -151,7 +154,7 @@ inline bool ShouldDisbandQuestGroup(QuestGroupState const& s, uint64_t nowMs, ch
         setReason("member-not-free");
         return true;
     }
-    if (s.activeMemberCount < 2)
+    if (s.activeMemberCount + s.membersBoundToLeader < 2)
     {
         setReason("too-few-members");
         return true;

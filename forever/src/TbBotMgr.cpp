@@ -1560,6 +1560,7 @@ void BotMgr::TickQuestGroups(uint32 diff)
         tbhost::group_quest::QuestGroupState st;
         st.questId = it->questId;
         st.formedAtMs = it->formedAtMs;
+        ObjectGuid const leaderGuid = it->members.empty() ? ObjectGuid::Empty : it->members.front();
         if (group)
         {
             for (Group::MemberSlot const& slot : group->GetMemberSlots())
@@ -1572,6 +1573,17 @@ void BotMgr::TickQuestGroups(uint32 diff)
                 }
                 if (!bIt->second.free || !bIt->second.master.IsEmpty())
                 {
+                    // The engine adopts the party leader as master for grouped bots: the party working, not lost.
+                    if (!bIt->second.master.IsEmpty() && bIt->second.master == leaderGuid)
+                    {
+                        ++st.membersBoundToLeader;
+                        if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
+                        {
+                            if (p->GetQuestStatus(it->questId) == QUEST_STATUS_INCOMPLETE)
+                                ++st.membersStillIncomplete;
+                        }
+                        continue;
+                    }
                     st.anyMemberLostFree = true;
                     continue;
                 }
@@ -1591,7 +1603,24 @@ void BotMgr::TickQuestGroups(uint32 diff)
                 group->Disband(true);
             for (ObjectGuid const& mGuid : it->members)
             {
-                if (auto bIt = _bots.find(mGuid); bIt != _bots.end() && bIt->second.free && bIt->second.brain)
+                auto bIt = _bots.find(mGuid);
+                if (bIt == _bots.end())
+                    continue;
+                if (!bIt->second.master.IsEmpty() && bIt->second.master == leaderGuid && !st.hasRealPlayer)
+                {
+                    // The engine adopted the party leader while questing: hand the bot back to the free kit
+                    // instead of stranding it master-bound. The AI pointer goes first so its master-strip
+                    // does not fire on the next tick and undo the free strategies.
+                    if (bIt->second.brain)
+                        engine::BindMaster(bIt->second.brain.get(), nullptr);
+                    bIt->second.master = ObjectGuid::Empty;
+                    bIt->second.free = true;
+                    bIt->second.useEngine = true;
+                    if (bIt->second.brain)
+                        engine::ReapplyStrategies(bIt->second.brain.get(), true);
+                    continue;
+                }
+                if (bIt->second.free && bIt->second.brain)
                     engine::SetQuestGroupMember(bIt->second.brain.get(), false);
             }
             TC_LOG_INFO("tortoisebots", "[W3] group-quest disband quest={} reason={}",

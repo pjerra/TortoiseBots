@@ -605,7 +605,7 @@ class HostDeliveryProvider final : public IDeliveryProvider
         bool const targetIsBot = probeGuidLow != 0 &&
             TortoiseBots::BotMgr::Instance().IsBot(ObjectGuid::Create<HighGuid::Player>(probeGuidLow));
         tbhost::guild::MailRecipientDecision const dec =
-            tbhost::guild::DecideMailRecipient(botGuidLow, giverGuidLow, leaderLow, targetIsBot);
+            tbhost::guild::DecideMailRecipient(botGuidLow, giverGuidLow, leaderLow, targetIsBot, guildId);
         if (!dec.allowed)
         {
             outReason = dec.reason;
