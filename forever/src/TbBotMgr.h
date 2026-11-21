@@ -31,6 +31,8 @@ public:
     void LoadConfig();
     bool Enabled() const { return _enabled; }
     uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
+    uint8 BotAcceptDuelMinLevel() const { return _botAcceptDuelMinLevel; }
+    bool GuildMailAllowMixed() const { return _guildMailAllowMixed; }
 
     // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
     // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
@@ -300,6 +302,10 @@ private:
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    bool _capitalErrandsEnabled = false;
+    bool _guildMailEnabled = false;
+    bool _guildMailAllowMixed = false;
+    uint8 _botAcceptDuelMinLevel = 10;
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
     world::FreeMapCaps _freeMapCaps;  // F-population: TortoiseBots.Free.MaxPerMap.* (dungeon 5, raids 10/20/40, 0 = no cap)

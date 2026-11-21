@@ -133,6 +133,16 @@ int main()
 
         d.challengerCooldownUntilMs = d.nowMs + 1000;
         assert(!CanInitiateBotDuel(d));
+        d.challengerCooldownUntilMs = 0;
+
+        // Shared-clock target cooldown blocks initiation until nowMs >= targetCooldownUntilMs.
+        d.targetCooldownUntilMs = d.nowMs + 1000;
+        assert(!CanInitiateBotDuel(d));
+        d.nowMs = d.targetCooldownUntilMs;
+        assert(CanInitiateBotDuel(d));
+
+        static_assert(kDuelScanIntervalMs > 0 && kDuelScanIntervalMs <= kDuelCooldownMs,
+            "Duel scan throttle must be positive and within duel cooldown");
         ++checks;
     }
 

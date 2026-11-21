@@ -9,11 +9,11 @@
 
 #include "Bag.h"
 #include "CellImpl.h"
-#include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
 #include "DuelPackets.h"
 #include "GameObject.h"
+#include "GameTime.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Item.h"
@@ -31,6 +31,7 @@
 #include "playerbot/policy/world/CapitalErrandPolicy.h"
 
 #include <algorithm>
+#include <list>
 #include <unordered_map>
 
 namespace tbhost
@@ -58,8 +59,8 @@ struct ActiveErrand
 
 struct BotErrandState
 {
-    uint64_t nowMs = 0;
     uint64_t nextGlobalTryMs = 0;
+    uint64_t nextDuelScanMs = 0;
     uint64_t mailboxCooldownUntilMs = 0;
     uint64_t trainerCooldownUntilMs = 0;
     uint64_t bankCooldownUntilMs = 0;
@@ -323,7 +324,21 @@ bool ExecuteErrandAtTarget(Player* bot, CapitalErrandKind kind, ObjectGuid const
         case CapitalErrandKind::Mailbox:
             return TortoiseBots::engine::RunAction(bot, "mail", "take");
         case CapitalErrandKind::Trainer:
-            return TortoiseBots::engine::RunAction(bot, "trainer", "learn");
+        {
+            Creature* trainer = tbhost::town::NpcIfCanInteract(bot, targetGuid, UNIT_NPC_FLAG_TRAINER);
+            if (!trainer || !tbhost::town::IsTrainer(trainer) || !tbhost::town::IsTrainerOf(trainer, bot))
+                return false;
+            float const discountMod = bot->GetReputationPriceDiscount(trainer);
+            uint32_t learned = 0;
+            for (tbhost::town::TrainerSpellView const& sp : tbhost::town::GetTrainerSpells(trainer))
+            {
+                if (!tbhost::town::CanTeachTrainerSpell(bot, trainer, sp, discountMod))
+                    continue;
+                if (tbhost::town::TeachTrainerSpell(bot, trainer, sp.spellId))
+                    ++learned;
+            }
+            return learned > 0;
+        }
         case CapitalErrandKind::Bank:
         {
             Creature* banker = tbhost::town::NpcIfCanInteract(bot, targetGuid, UNIT_NPC_FLAG_BANKER);
@@ -336,9 +351,9 @@ bool ExecuteErrandAtTarget(Player* bot, CapitalErrandKind kind, ObjectGuid const
     }
 }
 
-void SetKindCooldown(BotErrandState& st, CapitalErrandKind kind)
+void SetKindCooldown(BotErrandState& st, CapitalErrandKind kind, uint64_t nowMs)
 {
-    uint64_t const until = st.nowMs + CooldownMsForErrand(kind);
+    uint64_t const until = nowMs + CooldownMsForErrand(kind);
     switch (kind)
     {
         case CapitalErrandKind::Mailbox: st.mailboxCooldownUntilMs = until; break;
@@ -347,12 +362,13 @@ void SetKindCooldown(BotErrandState& st, CapitalErrandKind kind)
         case CapitalErrandKind::AuctionHouse: st.ahCooldownUntilMs = until; break;
         default: break;
     }
-    st.nextGlobalTryMs = st.nowMs + kErrandGlobalIntervalMs;
+    st.nextGlobalTryMs = nowMs + kErrandGlobalIntervalMs;
 }
 
-void HandleDuels(Player* bot, BotErrandState& st)
+void HandleDuels(Player* bot, BotErrandState& st, uint64_t nowMs)
 {
-    uint8_t const minDuelLevel = static_cast<uint8_t>(std::max<int32>(1, sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10)));
+    auto const& mgr = TortoiseBots::BotMgr::Instance();
+    uint8_t const minDuelLevel = mgr.BotAcceptDuelMinLevel();
     uint8_t const myHpPct = static_cast<uint8_t>(std::clamp<float>(bot->GetHealthPct(), 0.0f, 100.0f));
 
     if (bot->duel)
@@ -360,7 +376,7 @@ void HandleDuels(Player* bot, BotErrandState& st)
         if (bot->duel->State == DUEL_STATE_CHALLENGED && bot != bot->duel->Initiator)
         {
             Player* initiator = bot->duel->Initiator;
-            bool const initiatorIsBot = initiator && TortoiseBots::BotMgr::Instance().IsBot(initiator->GetGUID());
+            bool const initiatorIsBot = initiator && mgr.IsBot(initiator->GetGUID());
             bool const accept = ShouldAcceptBotDuel(
                 true,
                 bot->IsAlive(),
@@ -375,7 +391,7 @@ void HandleDuels(Player* bot, BotErrandState& st)
             resp.Accepted = accept;
             resp.Forfeited = !accept;
             bot->GetSession()->HandleDuelResponseOpcode(resp);
-            st.duelCooldownUntilMs = st.nowMs + kDuelCooldownMs;
+            st.duelCooldownUntilMs = nowMs + kDuelCooldownMs;
             TC_LOG_INFO("tortoisebots", "[W2] duel-response bot={} initiator={} accept={}",
                 bot->GetName(), initiator ? initiator->GetName() : "?", accept ? 1 : 0);
         }
@@ -388,18 +404,25 @@ void HandleDuels(Player* bot, BotErrandState& st)
 
     if (!bot->IsAlive() || bot->IsInCombat() || bot->isMoving() || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         return;
-    if (st.nowMs < st.duelCooldownUntilMs || !IsInDuelingArea(bot))
+    if (nowMs < st.nextDuelScanMs || nowMs < st.duelCooldownUntilMs || !IsInDuelingArea(bot))
         return;
+    st.nextDuelScanMs = nowMs + kDuelScanIntervalMs;
 
-    auto& mgr = TortoiseBots::BotMgr::Instance();
-    for (ObjectGuid const& targetGuid : mgr.BotGuids())
+    std::list<Player*> nearbyPlayers;
+    Trinity::AnyUnitInObjectRangeCheck check(bot, kDuelSearchDistYd);
+    Trinity::PlayerListSearcher<Trinity::AnyUnitInObjectRangeCheck> searcher(bot, nearbyPlayers, check);
+    Cell::VisitWorldObjects(bot, searcher, kDuelSearchDistYd);
+
+    for (Player* target : nearbyPlayers)
     {
-        if (targetGuid == bot->GetGUID())
+        if (!target || target == bot || !target->IsInWorld() || target->FindMap() != bot->FindMap())
             continue;
-        Player* target = ObjectAccessor::FindPlayer(targetGuid);
-        if (!target || !target->IsInWorld() || target->FindMap() != bot->FindMap())
+        if (!mgr.IsFreeBot(target->GetGUID()))
             continue;
-        BotErrandState const& targetState = States()[target->GetGUID()];
+
+        auto const targetItr = States().find(target->GetGUID());
+        uint64_t const targetCooldownUntilMs = (targetItr != States().end()) ? targetItr->second.duelCooldownUntilMs : 0;
+
         DuelCandidateInput din;
         din.challengerIsFreeBot = true;
         din.challengerAlive = bot->IsAlive();
@@ -408,8 +431,8 @@ void HandleDuels(Player* bot, BotErrandState& st)
         din.challengerIsMoving = bot->isMoving();
         din.challengerLevel = bot->GetLevel();
         din.challengerHealthPct = myHpPct;
-        din.targetIsBot = mgr.IsBot(target->GetGUID());
-        din.targetIsFreeBot = mgr.IsFreeBot(target->GetGUID());
+        din.targetIsBot = true;
+        din.targetIsFreeBot = true;
         din.targetAlive = target->IsAlive();
         din.targetInCombat = target->IsInCombat();
         din.targetInDuel = (target->duel != nullptr);
@@ -419,40 +442,43 @@ void HandleDuels(Player* bot, BotErrandState& st)
         din.minDuelLevel = minDuelLevel;
         din.distanceYd = bot->GetDistance(target);
         din.maxRangeYd = kDuelSearchDistYd;
-        din.nowMs = st.nowMs;
+        din.nowMs = nowMs;
         din.challengerCooldownUntilMs = st.duelCooldownUntilMs;
-        din.targetCooldownUntilMs = targetState.duelCooldownUntilMs;
+        din.targetCooldownUntilMs = targetCooldownUntilMs;
 
         if (!CanInitiateBotDuel(din))
             continue;
 
         bot->CastSpell(target, kSpellDuel, false);
-        st.duelCooldownUntilMs = st.nowMs + kDuelCooldownMs;
-        States()[target->GetGUID()].duelCooldownUntilMs = targetState.nowMs + kDuelCooldownMs;
-        TC_LOG_INFO("tortoisebots", "[W2] duel-challenge bot={} target={}", bot->GetName(), target->GetName());
+        if (bot->duel != nullptr)
+        {
+            st.duelCooldownUntilMs = nowMs + kDuelCooldownMs;
+            States()[target->GetGUID()].duelCooldownUntilMs = nowMs + kDuelCooldownMs;
+            TC_LOG_INFO("tortoisebots", "[W2] duel-challenge bot={} target={}", bot->GetName(), target->GetName());
+        }
         break;
     }
 }
 
 } // namespace
 
-void TickCapitalErrands(Player* bot, uint32_t diffMs)
+void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
 {
     if (!bot || !bot->IsInWorld() || !bot->FindMap() || bot->IsBeingTeleported())
         return;
 
+    uint64_t const nowMs = GameTime::GetGameTimeMS();
     BotErrandState& st = States()[bot->GetGUID()];
-    st.nowMs += diffMs;
 
-    HandleDuels(bot, st);
+    HandleDuels(bot, st, nowMs);
 
     if (st.current.active)
     {
         if (!bot->IsAlive() || bot->IsInCombat() || bot->duel != nullptr ||
-            (st.nowMs - st.current.startedAtMs) >= kErrandWalkTimeoutMs)
+            (nowMs - st.current.startedAtMs) >= kErrandWalkTimeoutMs)
         {
             st.current = ActiveErrand{};
-            st.nextGlobalTryMs = st.nowMs + kErrandFailBackoffMs;
+            st.nextGlobalTryMs = nowMs + kErrandFailBackoffMs;
             return;
         }
 
@@ -465,7 +491,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
         if (!target || !target->IsInWorld() || target->GetMap() != bot->FindMap())
         {
             st.current = ActiveErrand{};
-            st.nextGlobalTryMs = st.nowMs + kErrandFailBackoffMs;
+            st.nextGlobalTryMs = nowMs + kErrandFailBackoffMs;
             return;
         }
 
@@ -475,7 +501,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
             bool const ok = ExecuteErrandAtTarget(bot, st.current.kind, st.current.targetGuid);
             TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
                 bot->GetName(), KindName(st.current.kind), ok ? 1 : 0);
-            SetKindCooldown(st, st.current.kind);
+            SetKindCooldown(st, st.current.kind, nowMs);
             st.current = ActiveErrand{};
         }
         return;
@@ -486,14 +512,14 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
         return;
     if (tbhost::prof::HasActiveErrand(bot) || tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
         return;
-    if (st.nowMs < st.nextGlobalTryMs)
+    if (nowMs < st.nextGlobalTryMs)
         return;
 
     bool const inCapital = IsInCapitalArea(bot);
     if (!inCapital)
         return;
 
-    Creature* classTrainer = (st.nowMs >= st.trainerCooldownUntilMs) ? FindNearestClassTrainer(bot, kMaxTownVisitDistYd) : nullptr;
+    Creature* classTrainer = (nowMs >= st.trainerCooldownUntilMs) ? FindNearestClassTrainer(bot, kMaxTownVisitDistYd) : nullptr;
     bool const hasTrainable = classTrainer && HasTrainableClassSpell(bot, classTrainer);
 
     CapitalErrandInput in;
@@ -511,7 +537,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
     in.freeBagSlots = CountFreeBagSlots(bot);
     in.bankableItemCount = (in.freeBagSlots <= kBankFreeSlotsThreshold) ? CountBankableItems(bot) : 0;
     in.ahSellableItemCount = in.auctionEnabled ? CountAhSellableItems(bot) : 0;
-    in.nowMs = st.nowMs;
+    in.nowMs = nowMs;
     in.nextGlobalTryMs = st.nextGlobalTryMs;
     in.mailboxCooldownUntilMs = st.mailboxCooldownUntilMs;
     in.trainerCooldownUntilMs = st.trainerCooldownUntilMs;
@@ -521,7 +547,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
     CapitalErrandKind const pick = PickCapitalErrand(in);
     if (pick == CapitalErrandKind::None)
     {
-        st.nextGlobalTryMs = st.nowMs + kErrandGlobalIntervalMs;
+        st.nextGlobalTryMs = nowMs + kErrandGlobalIntervalMs;
         return;
     }
 
@@ -548,7 +574,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
 
     if (!dest)
     {
-        SetKindCooldown(st, pick);
+        SetKindCooldown(st, pick, nowMs);
         return;
     }
 
@@ -557,7 +583,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
         bool const ok = ExecuteErrandAtTarget(bot, pick, dest->GetGUID());
         TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
             bot->GetName(), KindName(pick), ok ? 1 : 0);
-        SetKindCooldown(st, pick);
+        SetKindCooldown(st, pick, nowMs);
         return;
     }
 
@@ -565,7 +591,7 @@ void TickCapitalErrands(Player* bot, uint32_t diffMs)
     st.current.kind = pick;
     st.current.targetGuid = dest->GetGUID();
     st.current.targetIsGameObject = isGo;
-    st.current.startedAtMs = st.nowMs;
+    st.current.startedAtMs = nowMs;
     bot->GetMotionMaster()->MovePoint(0, dest->GetPositionX(), dest->GetPositionY(), dest->GetPositionZ());
 }
 

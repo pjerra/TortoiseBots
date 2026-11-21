@@ -5,9 +5,11 @@
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
+#include "host/pool/TbPoolRegistry.h"
 
+#include "AccountMgr.h"
 #include "Bag.h"
-#include "Config.h"
+#include "CharacterCache.h"
 #include "GameObject.h"
 #include "Guild.h"
 #include "GuildMgr.h"
@@ -20,6 +22,7 @@
 
 #include "playerbot/policy/ah/AhSellPolicy.h"
 #include "playerbot/policy/world/GuildMailPolicy.h"
+#include "playerbot/policy/world/PoolRegistryPolicy.h"
 
 #include <unordered_map>
 #include <vector>
@@ -78,15 +81,25 @@ void CollectGuildMembers(Guild const* guild, std::vector<GuildMemberMailView>& o
 {
     outMembers.clear();
     outOnlineBots.clear();
-    outHasRealPlayers = false;
 
     auto const& mgr = TortoiseBots::BotMgr::Instance();
     for (auto const& [memberGuid, member] : guild->GetMembers())
     {
         Player* mp = ObjectAccessor::FindPlayer(memberGuid);
-        bool const isBot = mgr.IsBot(memberGuid);
-        if (mp && !isBot)
-            outHasRealPlayers = true;
+        bool isBot = mgr.IsBot(memberGuid);
+        if (!isBot && !mp)
+        {
+            uint32_t const accountId = sCharacterCache->GetCharacterAccountIdByGuid(memberGuid);
+            if (accountId != 0)
+            {
+                std::string accountName;
+                if (TortoiseBots::pool::AccountRegistered(accountId) ||
+                    (AccountMgr::GetName(accountId, accountName) && IsPoolAccountName(accountName)))
+                {
+                    isBot = true;
+                }
+            }
+        }
 
         GuildMemberMailView view;
         view.guidLow = memberGuid.GetCounter();
@@ -99,54 +112,51 @@ void CollectGuildMembers(Guild const* guild, std::vector<GuildMemberMailView>& o
         if (mp && mp->IsInWorld() && isBot)
             outOnlineBots.push_back(mp);
     }
+    outHasRealPlayers = HasRealGuildPlayers(outMembers);
 }
 
-void TrySendGuildMailAtMailbox(Player* bot, GameObject* mailbox, BotGuildMailState& st)
+struct GuildMailPlan
 {
+    bool hasWork = false;
+    bool sendGold = false;
+    GuildGoldGiftPlan goldPlan;
+    bool sendMats = false;
+    std::string matsRecipientName;
+    std::vector<ObjectGuid> attachments;
+};
+
+GuildMailPlan PrepareGuildMailPlan(Player* bot, BotGuildMailState const& st)
+{
+    GuildMailPlan plan;
     uint64_t const guildId = bot->GetGuildId();
     Guild const* guild = guildId ? sGuildMgr->GetGuildById(guildId) : nullptr;
     if (!guild)
-    {
-        st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
-        return;
-    }
+        return plan;
 
-    bool const allowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    bool const allowMixed = TortoiseBots::BotMgr::Instance().GuildMailAllowMixed();
     std::vector<GuildMemberMailView> members;
     std::vector<Player*> onlineBots;
     bool hasRealPlayers = false;
     CollectGuildMembers(guild, members, onlineBots, hasRealPlayers);
 
     if (hasRealPlayers && !allowMixed)
-    {
-        st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
-        return;
-    }
+        return plan;
 
     // 1. Gold to poorest online bot guildmate.
     if (st.nowMs >= st.goldCooldownUntilMs)
     {
-        GuildGoldGiftPlan const plan = PlanGuildGoldGift(
+        plan.goldPlan = PlanGuildGoldGift(
             bot->GetGUID().GetCounter(),
             true,
             bot->GetMoney(),
             hasRealPlayers,
             allowMixed,
             members);
-        if (plan.shouldSend)
+        if (plan.goldPlan.shouldSend)
         {
-            std::string failReason;
-            if (tbhost::guild::SendMail(bot, mailbox->GetGUID(), plan.recipientName,
-                    "Guild Aid", "For supplies.", plan.copper, {}, &failReason))
-            {
-                st.goldCooldownUntilMs = st.nowMs + kGuildMailGoldCooldownMs;
-                st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
-                TC_LOG_INFO("tortoisebots", "[W9] guild-mail-gold bot={} to={} copper={}",
-                    bot->GetName(), plan.recipientName, plan.copper);
-                return;
-            }
-            st.nextCheckMs = st.nowMs + kGuildMailFailBackoffMs;
-            return;
+            plan.hasWork = true;
+            plan.sendGold = true;
+            return plan;
         }
     }
 
@@ -221,20 +231,50 @@ void TrySendGuildMailAtMailbox(Player* bot, GameObject* mailbox, BotGuildMailSta
             uint64_t const postage = kGuildMailPostageCopper * attachments.size();
             if (bot->HasEnoughMoney(postage))
             {
-                std::string failReason;
-                if (tbhost::guild::SendMail(bot, mailbox->GetGUID(), chosenRecipient->name,
-                        "Guild Materials", "Crafting supplies.", 0, attachments, &failReason))
-                {
-                    st.matsCooldownUntilMs = st.nowMs + kGuildMailMatsCooldownMs;
-                    st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
-                    TC_LOG_INFO("tortoisebots", "[W9] guild-mail-mats bot={} to={} items={}",
-                        bot->GetName(), chosenRecipient->name, uint32_t(attachments.size()));
-                    return;
-                }
-                st.nextCheckMs = st.nowMs + kGuildMailFailBackoffMs;
-                return;
+                plan.hasWork = true;
+                plan.sendMats = true;
+                plan.matsRecipientName = chosenRecipient->name;
+                plan.attachments = std::move(attachments);
+                return plan;
             }
         }
+    }
+
+    return plan;
+}
+
+void ExecuteGuildMailPlan(Player* bot, GameObject* mailbox, BotGuildMailState& st, GuildMailPlan const& plan)
+{
+    if (plan.sendGold)
+    {
+        std::string failReason;
+        if (tbhost::guild::SendMail(bot, mailbox->GetGUID(), plan.goldPlan.recipientName,
+                "Guild Aid", "For supplies.", plan.goldPlan.copper, {}, &failReason))
+        {
+            st.goldCooldownUntilMs = st.nowMs + kGuildMailGoldCooldownMs;
+            st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
+            TC_LOG_INFO("tortoisebots", "[W9] guild-mail-gold bot={} to={} copper={}",
+                bot->GetName(), plan.goldPlan.recipientName, plan.goldPlan.copper);
+            return;
+        }
+        st.nextCheckMs = st.nowMs + kGuildMailFailBackoffMs;
+        return;
+    }
+
+    if (plan.sendMats && !plan.attachments.empty())
+    {
+        std::string failReason;
+        if (tbhost::guild::SendMail(bot, mailbox->GetGUID(), plan.matsRecipientName,
+                "Guild Materials", "Crafting supplies.", 0, plan.attachments, &failReason))
+        {
+            st.matsCooldownUntilMs = st.nowMs + kGuildMailMatsCooldownMs;
+            st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
+            TC_LOG_INFO("tortoisebots", "[W9] guild-mail-mats bot={} to={} items={}",
+                bot->GetName(), plan.matsRecipientName, uint32_t(plan.attachments.size()));
+            return;
+        }
+        st.nextCheckMs = st.nowMs + kGuildMailFailBackoffMs;
+        return;
     }
 
     st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
@@ -244,14 +284,11 @@ void TrySendGuildMailAtMailbox(Player* bot, GameObject* mailbox, BotGuildMailSta
 
 void TickGuildMail(Player* bot, uint32_t diffMs)
 {
-    if (!bot || !bot->IsInWorld() || !bot->FindMap() || bot->IsBeingTeleported())
+    if (!bot || !bot->IsInWorld() || !bot->FindMap() || bot->IsBeingTeleported() || bot->GetGuildId() == 0)
         return;
 
     BotGuildMailState& st = States()[bot->GetGUID()];
     st.nowMs += diffMs;
-
-    if (bot->GetGuildId() == 0)
-        return;
 
     if (st.walkingToMailbox)
     {
@@ -275,7 +312,11 @@ void TickGuildMail(Player* bot, uint32_t diffMs)
         {
             bot->StopMoving();
             st.walkingToMailbox = false;
-            TrySendGuildMailAtMailbox(bot, mailbox, st);
+            GuildMailPlan const plan = PrepareGuildMailPlan(bot, st);
+            if (plan.hasWork)
+                ExecuteGuildMailPlan(bot, mailbox, st, plan);
+            else
+                st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
         }
         return;
     }
@@ -293,10 +334,17 @@ void TickGuildMail(Player* bot, uint32_t diffMs)
         return;
     }
 
+    GuildMailPlan const plan = PrepareGuildMailPlan(bot, st);
+    if (!plan.hasWork)
+    {
+        st.nextCheckMs = st.nowMs + kGuildMailCheckIntervalMs;
+        return;
+    }
+
     GameObject* mailbox = tbhost::town::FindNearestMailbox(bot);
     if (mailbox)
     {
-        TrySendGuildMailAtMailbox(bot, mailbox, st);
+        ExecuteGuildMailPlan(bot, mailbox, st, plan);
         return;
     }
 

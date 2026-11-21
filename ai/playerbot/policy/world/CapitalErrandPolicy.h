@@ -25,6 +25,7 @@ inline constexpr uint64_t kAuctionCooldownMs = 180000;
 inline constexpr uint32_t kBankFreeSlotsThreshold = 6;
 
 inline constexpr uint64_t kDuelCooldownMs = 120000;
+inline constexpr uint64_t kDuelScanIntervalMs = 5000;
 
 inline uint64_t CooldownMsForErrand(CapitalErrandKind kind)
 {
