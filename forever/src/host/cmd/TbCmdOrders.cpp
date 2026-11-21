@@ -7,6 +7,7 @@
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdTactics.h"
 #include "host/cmd/TbPlace.h"
 #include "host/run/TbRunOrders.h"
 
@@ -61,6 +62,11 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     bool taskOk = false;
     if (TryHandleTaskVerb(handler, args, verb, 1, &taskOk))
         return taskOk;
+
+    // Issue #131: the tactical orders are settings and direct actions the judge does not know; they answer their own `cmd` reply.
+    bool tacticalOk = false;
+    if (TryHandleTacticalVerb(handler, args, verb, lead, members, sender, &tacticalOk))
+        return tacticalOk;
 
     std::string order;
     for (size_t i = 0; i < args.w.size(); ++i)
