@@ -37,6 +37,36 @@ inline TaxiChoiceDecision DecideTaxiChoice(bool fromKnown, bool toKnown, std::si
     return { TaxiChoiceResult::Fly, {} };
 }
 
+// Whether one stored flight link (a single taxi path edge of the travel graph) may carry this bot.
+// Same four answers the runtime link builder (BuildClassicFlightLinks) filters on when it enumerates links, asked here
+// per bot at route cost time: unknown ends refuse (the bot boards at the from node, so it must know that one too, not
+// just the destination), then faction, then classic maps, then the fare against the bot's copper. Never flies on any
+// refusal; the A* routes around the link instead.
+struct FlightLinkAccess
+{
+    bool fromKnown = false;
+    bool toKnown = false;
+    std::uint64_t fareCopper = 0;
+    std::uint64_t botMoneyCopper = 0;
+    bool fromFactionOk = false;
+    bool toFactionOk = false;
+    bool fromClassic = false;
+    bool toClassic = false;
+};
+
+inline TaxiChoiceDecision DecideFlightLinkUsable(FlightLinkAccess const& access)
+{
+    if (!access.fromKnown || !access.toKnown)
+        return { TaxiChoiceResult::Walk, "unknown-node" };
+    if (!access.fromFactionOk || !access.toFactionOk)
+        return { TaxiChoiceResult::Walk, "faction" };
+    if (!access.fromClassic || !access.toClassic)
+        return { TaxiChoiceResult::Walk, "no-route" };
+    if (access.fareCopper > access.botMoneyCopper)
+        return { TaxiChoiceResult::Walk, "money" };
+    return { TaxiChoiceResult::Fly, {} };
+}
+
 inline bool IsClassicContinentMap(std::uint32_t mapId)
 {
     return mapId == 0 || mapId == 1;

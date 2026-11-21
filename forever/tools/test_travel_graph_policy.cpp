@@ -2,9 +2,10 @@
 //   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_travel_graph_policy.cpp -o /tmp/test_travel_graph_policy && /tmp/test_travel_graph_policy
 //
 // The graph below is the two-continent one the review asked for: Azeroth (map 0) and Kalimdor (map 1), joined ONLY by a
-// zeppelin link (transport) and a flight path. On ForeverCore neither is a route (W5), so a Kalimdor bot must not see Stormwind as
-// reachable, and neither link may become a map transfer. The node walk is the production one (CollectReachable is what
-// TravelNode::getNodeMap runs); the link rules are the ones TravelLinkUsableCompat and TravelMgr::LoadMapTransfers call.
+// zeppelin link (transport) and a flight path. On ForeverCore both are routes (W5T: flights board through tbhost::taxi::Fly,
+// rides through tbhost::ride), so a Kalimdor bot reaches Stormwind, and both links become map transfers. The node walk is the
+// production one (CollectReachable is what TravelNode::getNodeMap runs); the link rules are the ones
+// TravelLinkUsableCompat and TravelMgr::LoadMapTransfers call.
 #include "ai/playerbot/policy/travel/CreatureLevelPolicy.h"
 #include "ai/playerbot/policy/travel/TravelGraphPolicy.h"
 #include "ai/playerbot/GrindSpotPolicy.h"
@@ -72,31 +73,34 @@ int main()
     CHECK(Has(legacy, stormwind));
     CHECK(legacy.size() == 5);
 
-    // ForeverCore: the Kalimdor bot reaches only Kalimdor.
+    // ForeverCore: the Kalimdor bot reaches Azeroth through the zeppelin and the taxi.
     std::vector<Node*> fromKalimdor = Reach(razorHill, tg::LinkUsableOnForever);
-    CHECK(fromKalimdor.size() == 3);
+    CHECK(fromKalimdor.size() == 5);
     CHECK(Has(fromKalimdor, orgrimmar) && Has(fromKalimdor, crossroads) && Has(fromKalimdor, razorHill));
-    CHECK(!Has(fromKalimdor, stormwind));
-    CHECK(!Has(fromKalimdor, goldshire));
+    CHECK(Has(fromKalimdor, stormwind));
+    CHECK(Has(fromKalimdor, goldshire));
 
     // And the Azeroth side the other way round.
     std::vector<Node*> fromAzeroth = Reach(stormwind, tg::LinkUsableOnForever);
-    CHECK(fromAzeroth.size() == 2);
-    CHECK(!Has(fromAzeroth, orgrimmar));
+    CHECK(fromAzeroth.size() == 5);
+    CHECK(Has(fromAzeroth, orgrimmar));
 
     // The walk keeps its discovery order and its filters exactly: the nodes below are the same set the old loop closed on.
     CHECK(fromKalimdor.front() == &razorHill);
     std::vector<Node*> important = Reach(razorHill, tg::LinkUsableOnForever, true);
-    CHECK(important.size() == 1 && important.front() == &orgrimmar);
+    CHECK(important.size() == 2 && important.front() == &orgrimmar);
+    CHECK(Has(important, stormwind));
     std::vector<Node*> ignoring = Reach(razorHill, tg::LinkUsableOnForever, false, false, { &orgrimmar });
-    CHECK(ignoring.size() == 1); // orgrimmar is the only way on, and it is ignored
+    CHECK(ignoring.size() == 4); // orgrimmar is ignored, the rest joins over the zeppelin and the taxi
+    CHECK(Has(ignoring, stormwind) && Has(ignoring, goldshire) && Has(ignoring, crossroads));
     // An area trigger across the maps is a usable link (the core teleports on the trigger): the continents join and mapOnly cuts it.
     Node dungeonDoor{ "Door", 0, false, {} }, dungeonInside{ "Inside", 34, false, {} };
     Link(dungeonDoor, dungeonInside, tg::kAreaTrigger);
     CHECK(Reach(dungeonDoor, tg::LinkUsableOnForever).size() == 2);
     CHECK(Reach(dungeonDoor, tg::LinkUsableOnForever, false, true).size() == 1);
 
-    // The link rule itself: only walks and area triggers are routes on ForeverCore (D4 and W5).
+    // The link rule itself: walks, area triggers, transport legs and flight paths are routes on ForeverCore (W5T);
+    // teleports stay refused (D4).
     CHECK(!tg::LinkUsableOnForever(tg::kNone)); // review medium: an invalid type is no route
     CHECK(!tg::LinkUsableOnForever(7));
     CHECK(!tg::LinkUsableOnForever(255));
@@ -105,8 +109,8 @@ int main()
     CHECK(tg::LinkTypeKnown(tg::kWalk) && tg::LinkTypeKnown(tg::kStaticPortal));
     CHECK(tg::LinkUsableOnForever(tg::kWalk));
     CHECK(tg::LinkUsableOnForever(tg::kAreaTrigger));
-    CHECK(!tg::LinkUsableOnForever(tg::kTransport));
-    CHECK(!tg::LinkUsableOnForever(tg::kFlightPath));
+    CHECK(tg::LinkUsableOnForever(tg::kTransport));   // W5T: boarded through tbhost::ride
+    CHECK(tg::LinkUsableOnForever(tg::kFlightPath));  // W5T: flown through tbhost::taxi::Fly
     CHECK(!tg::LinkUsableOnForever(tg::kTeleportSpell)); // D4: no teleport outside the logged rescue
     CHECK(!tg::LinkUsableOnForever(tg::kStaticPortal));  // D4
 
@@ -117,16 +121,17 @@ int main()
     CHECK(!tg::MapTransferWanted(tg::LinkUsableOnForever(tg::kNone), 0, 1));
     CHECK(!tg::MapTransferWanted(tg::LinkUsableOnForever(9), 0, 1));
 
-    // Map transfers (LoadMapTransfers): the zeppelin and the flight path add none, the area trigger does, a same-map link never does.
+    // Map transfers (LoadMapTransfers): the zeppelin and the flight path join Kalimdor to Azeroth now (W5T),
+    // the area trigger does, a same-map link never does.
     std::map<std::pair<std::uint32_t, std::uint32_t>, int> transfers;
     struct Row { std::uint8_t type; std::uint32_t from, to; };
     for (Row r : { Row{ tg::kTransport, 1, 0 }, Row{ tg::kFlightPath, 1, 0 }, Row{ tg::kTeleportSpell, 0, 1 },
         Row{ tg::kStaticPortal, 0, 1 }, Row{ tg::kAreaTrigger, 0, 34 }, Row{ tg::kWalk, 0, 0 } })
         if (tg::MapTransferWanted(tg::LinkUsableOnForever(r.type), r.from, r.to))
             ++transfers[{ r.from, r.to }];
-    CHECK(transfers.size() == 1);
+    CHECK(transfers.size() == 2);
     CHECK((transfers[{ 0, 34 }] == 1));
-    CHECK((transfers.find({ 1, 0 }) == transfers.end())); // no Kalimdor -> Azeroth shortcut: the cross-continent goal stays unreachable
+    CHECK((transfers[{ 1, 0 }] == 2)); // the zeppelin and the taxi both join Kalimdor to Azeroth
 
     // The loader's walk rule (review low): a "walk" between two maps, or through a point on another map, is refused.
     CHECK(tg::WalkLinkMapsConsistent(tg::kWalk, 0, 0));

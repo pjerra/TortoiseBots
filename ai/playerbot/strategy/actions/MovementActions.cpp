@@ -20,6 +20,7 @@
 #include "Movement/spline/MoveSplineInit.h"
 #include "Movement/spline/MoveSpline.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatWL4n.h"
 #include "playerbot/GrindSpotPolicy.h"
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/TravelRouteCachePolicy.h"
@@ -552,6 +553,14 @@ bool MovementAction::FlyDirect(const WorldPosition &startPosition, const WorldPo
 
 bool MovementAction::UseTaxi(PlayerbotAI* ai, uint32 entry, bool needNpc)
 {
+    // W5T: on ForeverCore a graph flight leg boards through the W5 host seam (the core's ActivateTaxi opcode,
+    // never instant flight or teleport); a refusal fails the move so the travel layer drops the target.
+    // Turtle's helper never handles and the legacy body runs.
+    bool handled = false;
+    if (TravelTaxiFlyCompat(ai, entry, &handled))
+        return true;
+    if (handled)
+        return false;
     return UnportedBlockResultCompat(tbcompat::Feature::Taxi, false, [&](auto* ai, auto& taxiPathStore) -> bool
     {
         AiObjectContext* context = ai->GetAiObjectContext();
@@ -749,6 +758,13 @@ bool MovementAction::MoveOffTransport(PlayerbotAI* ai, WorldPosition exitPos, bo
 
 bool MovementAction::UseTransport(PlayerbotAI* ai, uint32 entry, WorldPosition dockPosition, WorldPosition exitPosition, bool doTeleport)
 {
+    // W5T: on ForeverCore a graph transport leg arms the W5 ride (the engine tick boards, rides and leaves);
+    // the bot waits at the dock while TickRide works. Turtle's helper never handles and the legacy body runs.
+    bool handled = false;
+    if (TravelRideBoardCompat(ai, entry, &handled))
+        return true;
+    if (handled)
+        return false;
     return UnportedBlockResultCompat(tbcompat::Feature::TransportBoarding, false, [&](auto* ai) -> bool
     {
         AiObjectContext* context = ai->GetAiObjectContext();
@@ -1193,7 +1209,13 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
         else
         {
             if (!bot->GetTransport())
+            {
+                // W5T: on ForeverCore the bot rides (TickRide boards and leaves), so the legacy teleport to the
+                // far dock never runs in travel; the bot stays dispatched at the dock. Turtle keeps its teleport.
+                if (!TravelTransportTeleportCompat())
+                    return true;
                 return TeleportToCompat(bot, nextPoint.point.GetMapId(), nextPoint.point.getX(), nextPoint.point.getY(), nextPoint.point.getZ(), nextPoint.point.getO(), 0) ? true : false;
+            }
 
             lastTransportEntry = nextPoint.entry;
         }
