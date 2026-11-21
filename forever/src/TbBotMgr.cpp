@@ -1524,7 +1524,7 @@ void BotMgr::TickQuestGroups(uint32 diff)
                 if (!bIt->second.free || !bIt->second.master.IsEmpty())
                 {
                     st.anyMemberLostFree = true;
-                    break;
+                    continue;
                 }
                 ++st.activeMemberCount;
                 if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
@@ -1574,6 +1574,7 @@ void BotMgr::TickQuestGroups(uint32 diff)
         cand.alive = true;
         cand.inCombat = false;
         cand.inGroup = false;
+        cand.team = uint32_t(me->GetTeam());
 
         for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
         {

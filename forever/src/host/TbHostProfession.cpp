@@ -1,5 +1,6 @@
 #include "host/TbHostProfession.h"
 
+#include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostTown.h"
 #include "host/run/TbRunTasks.h"
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
@@ -9,6 +10,8 @@
 #include "CellImpl.h"
 #include "Creature.h"
 #include "DB2Stores.h"
+#include "DatabaseEnv.h"
+#include "compat/TbCompat_S5.h"
 #include "GameObject.h"
 #include "GameObjectPackets.h"
 #include "GridNotifiers.h"
@@ -473,7 +476,57 @@ std::unordered_map<ObjectGuid, BotProfessionErrands>& Errands()
     return map;
 }
 
-GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots::prof::GatherNodeFacts& outFacts, std::string& outSkipCode)
+struct NodeLootCache
+{
+    std::unordered_map<uint32_t, tbhost::craft_order::LootTemplateItems> goLoot;
+    std::unordered_map<uint32_t, tbhost::craft_order::LootTemplateItems> refLoot;
+};
+
+void LoadLootTableCache(char const* tableName, std::unordered_map<uint32_t, tbhost::craft_order::LootTemplateItems>& out)
+{
+    std::string const sql = std::string("SELECT `Entry`, `ItemType`, `Item` FROM `") + tableName + "`";
+    bool schemaMissing = false;
+    QueryResult res = WorldQueryCompat(sql.c_str(), &schemaMissing);
+    if (schemaMissing || !res)
+        return;
+    do
+    {
+        Field* f = res->Fetch();
+        uint32_t const entry = f[0].GetUInt32();
+        int32_t const itemType = f[1].GetInt8();
+        uint32_t const item = f[2].GetUInt32();
+        if (itemType == 0 && item != 0)
+            out[entry].items.push_back(item);
+        else if (itemType == 1 && item != 0)
+            out[entry].refIds.push_back(item);
+    } while (res->NextRow());
+}
+
+NodeLootCache const& GetNodeLootCache()
+{
+    static NodeLootCache const cache = []()
+    {
+        NodeLootCache c;
+        LoadLootTableCache("gameobject_loot_template", c.goLoot);
+        LoadLootTableCache("reference_loot_template", c.refLoot);
+        return c;
+    }();
+    return cache;
+}
+
+bool GameObjectYieldsItem(GameObject const* go, uint32_t targetItemId)
+{
+    if (!targetItemId)
+        return true;
+    GameObjectTemplate const* info = go ? go->GetGOInfo() : nullptr;
+    uint32_t const lootId = info ? info->GetLootId() : 0;
+    if (!lootId)
+        return false;
+    NodeLootCache const& cache = GetNodeLootCache();
+    return tbhost::craft_order::LootContainsItem(cache.goLoot, cache.refLoot, lootId, targetItemId);
+}
+
+GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots::prof::GatherNodeFacts& outFacts, std::string& outSkipCode, uint32_t targetItemId = 0)
 {
     outSkipCode = "not-found";
     if (!bot || !bot->IsInWorld() || !bot->FindMap())
@@ -491,6 +544,8 @@ GameObject* FindBestGatherNodeInSight(Player* bot, float maxDistYd, TortoiseBots
     for (GameObject* go : objects)
     {
         if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
+            continue;
+        if (!GameObjectYieldsItem(go, targetItemId))
             continue;
         TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
         if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)
@@ -718,7 +773,7 @@ bool GatherNearestInSight(Player* bot, float maxDistYd, std::string& code, std::
     return StartGatherNearest(bot, maxDistYd, 0, code, detail);
 }
 
-bool StartGatherNearest(Player* bot, float maxDistYd, uint32_t orderSeq, std::string& stateOut, std::string& detail)
+bool StartGatherNearest(Player* bot, float maxDistYd, uint32_t orderSeq, std::string& stateOut, std::string& detail, uint32_t targetItemId)
 {
     if (!bot || !bot->IsInWorld() || !bot->FindMap() || !bot->GetSession())
     {
@@ -729,7 +784,7 @@ bool StartGatherNearest(Player* bot, float maxDistYd, uint32_t orderSeq, std::st
 
     TortoiseBots::prof::GatherNodeFacts facts;
     std::string skipCode;
-    GameObject* bestGo = FindBestGatherNodeInSight(bot, maxDistYd, facts, skipCode);
+    GameObject* bestGo = FindBestGatherNodeInSight(bot, maxDistYd, facts, skipCode, targetItemId);
     if (!bestGo)
     {
         stateOut = skipCode;
@@ -1188,7 +1243,7 @@ CraftReagentCache const& GetCraftReagentCache()
 }
 } // namespace
 
-bool HasGatherableNodeInSight(Player* bot, float maxDistYd)
+bool HasGatherableNodeInSight(Player* bot, float maxDistYd, uint32_t targetItemId)
 {
     if (!bot || !bot->IsInWorld() || !bot->FindMap())
         return false;
@@ -1201,6 +1256,8 @@ bool HasGatherableNodeInSight(Player* bot, float maxDistYd)
     for (GameObject* go : objects)
     {
         if (!go || !go->GetGOInfo() || go->GetGoType() != GAMEOBJECT_TYPE_CHEST)
+            continue;
+        if (!GameObjectYieldsItem(go, targetItemId))
             continue;
         TortoiseBots::prof::GatherNodeFacts const facts = BuildGoNodeFacts(bot, go, maxDistYd, false);
         if (facts.lockSkillId != TortoiseBots::prof::SkillMining && facts.lockSkillId != TortoiseBots::prof::SkillHerbalism)

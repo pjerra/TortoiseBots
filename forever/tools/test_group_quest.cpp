@@ -79,6 +79,29 @@ int main()
         ++passed;
     }
 
+    // 6. Cross-faction bots (Alliance vs Horde) must NOT group even on the same neutral quest.
+    {
+        BotQuestCandidate ally{ 201, 0, 100.0f, 100.0f, 10, true, false, false, { 176 }, 469 };
+        BotQuestCandidate horde{ 202, 0, 110.0f, 100.0f, 10, true, false, false, { 176 }, 67 };
+        assert(PlanQuestGroups({ ally, horde }).empty());
+
+        BotQuestCandidate ally2{ 203, 0, 115.0f, 100.0f, 10, true, false, false, { 176 }, 469 };
+        auto plans = PlanQuestGroups({ ally, horde, ally2 });
+        assert(plans.size() == 1);
+        assert(plans[0].leaderGuidLow == 201);
+        assert(plans[0].memberGuidLows.size() == 1 && plans[0].memberGuidLows[0] == 203);
+        ++passed;
+    }
+
+    // 7. When both hasRealPlayer and anyMemberLostFree are set, hasRealPlayer wins (never disband real player's party).
+    {
+        char const* reason = nullptr;
+        QuestGroupState mixed{ 176, 1000, 2, 2, true, true };
+        assert(ShouldDisbandQuestGroup(mixed, 5000, &reason));
+        assert(std::string(reason) == "real-player-joined");
+        ++passed;
+    }
+
     std::cout << "PASS: test_group_quest (" << passed << " checks, 0 failed)\n";
     return 0;
 }

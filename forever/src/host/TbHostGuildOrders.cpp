@@ -224,14 +224,113 @@ class HostGatherCraftProvider final : public IGatherCraftProvider
         bool isCraft = false;
     };
     std::unordered_map<uint32_t, PendingStep> _pending;
+    std::unordered_map<uint32_t, uint32_t> _pendingAhMail;
+
+    static bool HasMailWithItem(Player* bot, uint32_t itemId)
+    {
+        if (!bot || !itemId)
+            return false;
+        for (tbhost::town::MailView const& mv : tbhost::town::GetMails(bot))
+        {
+            if (mv.state == 2)
+                continue;
+            for (auto const& [itemGuid, itemTemplate] : mv.items)
+            {
+                if (itemTemplate == itemId)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    bool TryCollectPendingAhMail(Player* bot, uint32_t botGuidLow, uint32_t mailItemId, std::string& outReason, bool& outCollected)
+    {
+        outCollected = false;
+        if (!bot || !mailItemId)
+        {
+            _pendingAhMail.erase(botGuidLow);
+            return false;
+        }
+        time_t const now = std::time(nullptr);
+        bool anyMatchingMail = false;
+        bool anyDeliverable = false;
+        for (tbhost::town::MailView const& mv : tbhost::town::GetMails(bot))
+        {
+            if (mv.state == 2)
+                continue;
+            for (auto const& [itemGuid, itemTemplate] : mv.items)
+            {
+                if (itemTemplate == mailItemId)
+                {
+                    anyMatchingMail = true;
+                    if (now >= mv.deliverTime)
+                        anyDeliverable = true;
+                }
+            }
+        }
+        if (!anyMatchingMail)
+        {
+            _pendingAhMail.erase(botGuidLow);
+            return false;
+        }
+        if (!anyDeliverable)
+        {
+            outReason = "walking";
+            return true;
+        }
+
+        GameObject* mailbox = tbhost::town::FindNearestMailbox(bot);
+        if (!mailbox)
+            mailbox = tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd);
+        if (!mailbox)
+        {
+            _pendingAhMail.erase(botGuidLow);
+            outReason = "cannot: travel";
+            return true;
+        }
+        if (!bot->GetGameObjectIfCanInteractWith(mailbox->GetGUID(), GAMEOBJECT_TYPE_MAILBOX))
+        {
+            bot->GetMotionMaster()->MovePoint(0, mailbox->GetPositionX(), mailbox->GetPositionY(), mailbox->GetPositionZ());
+            outReason = "walking";
+            return true;
+        }
+
+        bool tookAny = false;
+        for (tbhost::town::MailView const& mv : tbhost::town::GetMails(bot))
+        {
+            if (mv.state == 2 || now < mv.deliverTime)
+                continue;
+            for (auto const& [itemGuid, itemTemplate] : mv.items)
+            {
+                if (itemTemplate == mailItemId)
+                {
+                    if (tbhost::town::TakeMailItem(bot, mailbox->GetGUID(), mv.messageId, itemGuid))
+                        tookAny = true;
+                }
+            }
+        }
+        _pendingAhMail.erase(botGuidLow);
+        if (tookAny)
+        {
+            outCollected = true;
+            outReason = "mail-collected";
+            return true;
+        }
+        outReason = "mail-collect-failed";
+        return true;
+    }
 
 public:
-    void ClearPending(uint32_t botGuidLow) { _pending.erase(botGuidLow); }
+    void ClearPending(uint32_t botGuidLow)
+    {
+        _pending.erase(botGuidLow);
+        _pendingAhMail.erase(botGuidLow);
+    }
 
-    bool CanGather(uint32_t botGuidLow, uint32_t /*itemId*/) const override
+    bool CanGather(uint32_t botGuidLow, uint32_t itemId) const override
     {
         Player* bot = FindOnlineBot(botGuidLow);
-        return bot && tbhost::prof::HasGatherableNodeInSight(bot, 150.0f);
+        return bot && tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId);
     }
 
     bool CanCraft(uint32_t botGuidLow, uint32_t itemId) const override
@@ -240,12 +339,13 @@ public:
         return bot && tbhost::prof::FindCraftSpellForItem(bot, itemId) != 0;
     }
 
-    bool StepGatherOrCraft(uint32_t botGuidLow, uint32_t itemId, uint32_t /*wantCount*/, std::string& outReason) override
+    bool StepGatherOrCraft(uint32_t botGuidLow, uint32_t itemId, uint32_t /*wantCount*/, std::string& outReason,
+        bool hasGoldCap = false, uint32_t remainingCopper = 0) override
     {
         Player* bot = FindOnlineBot(botGuidLow);
         if (!bot)
         {
-            _pending.erase(botGuidLow);
+            ClearPending(botGuidLow);
             outReason = "not-in-world";
             return false;
         }
@@ -256,19 +356,21 @@ public:
             return false;
         }
 
-        if (auto it = _pending.find(botGuidLow); it != _pending.end() && it->second.itemId == itemId)
+        if (auto it = _pending.find(botGuidLow); it != _pending.end())
         {
-            uint32_t const afterCount = BagItemCount(bot, itemId);
-            bool const gained = afterCount > it->second.beforeCount;
-            bool const wasCraft = it->second.isCraft;
+            uint32_t const afterCount = BagItemCount(bot, it->second.itemId);
+            tbhost::craft_order::PendingStepOutcome const outcome =
+                tbhost::craft_order::EvaluatePendingStep(it->second.beforeCount, afterCount, it->second.isCraft);
             _pending.erase(it);
-            if (gained)
-            {
-                outReason = wasCraft ? "crafted" : "gathered";
-                return true;
-            }
-            outReason = wasCraft ? "craft-no-gain" : "gather-no-item";
-            return false;
+            outReason = outcome.reason;
+            return outcome.ok;
+        }
+
+        if (auto mit = _pendingAhMail.find(botGuidLow); mit != _pendingAhMail.end())
+        {
+            bool collected = false;
+            if (TryCollectPendingAhMail(bot, botGuidLow, mit->second, outReason, collected))
+                return collected;
         }
 
         uint32_t const beforeCount = BagItemCount(bot, itemId);
@@ -293,7 +395,8 @@ public:
             if (SpellInfo const* si = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE))
             {
                 std::vector<tbhost::craft_order::ReagentRequirement> reqs;
-                bool const gatherAvailable = tbhost::prof::HasGatherableNodeInSight(bot, 150.0f);
+                tbhost::craft_order::CraftAhBudget const ahBudget =
+                    tbhost::craft_order::ResolveCraftAhBudget(hasGoldCap, remainingCopper);
                 for (uint32_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
                 {
                     if (si->Reagent[i] <= 0 || si->ReagentCount[i] <= 0)
@@ -301,6 +404,13 @@ public:
                     uint32_t const rId = uint32_t(si->Reagent[i]);
                     uint32_t const need = uint32_t(si->ReagentCount[i]);
                     uint32_t const have = BagItemCount(bot, rId);
+                    if (have < need && HasMailWithItem(bot, rId))
+                    {
+                        _pendingAhMail[botGuidLow] = rId;
+                        bool collected = false;
+                        if (TryCollectPendingAhMail(bot, botGuidLow, rId, outReason, collected))
+                            return collected;
+                    }
                     tbhost::craft_order::ReagentRequirement r;
                     r.itemId = rId;
                     r.needPerCraft = need;
@@ -309,8 +419,8 @@ public:
                     {
                         uint32_t const subSpell = tbhost::prof::FindCraftSpellForItem(bot, rId);
                         r.canCraftSub = (subSpell != 0 && hasAllReagents(subSpell));
-                        r.canGather = gatherAvailable;
-                        r.canBuyAh = AuctionBuy().CanBuyOnAuction(botGuidLow, rId, 0);
+                        r.canGather = tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, rId);
+                        r.canBuyAh = ahBudget.canBuy && AuctionBuy().CanBuyOnAuction(botGuidLow, rId, ahBudget.maxCopper);
                     }
                     reqs.push_back(r);
                 }
@@ -333,7 +443,7 @@ public:
                 if (rdec.action == tbhost::craft_order::CraftReagentAction::Gather)
                 {
                     std::string stateOut, detail;
-                    if (tbhost::prof::StartGatherNearest(bot, 150.0f, 0, stateOut, detail))
+                    if (tbhost::prof::StartGatherNearest(bot, 150.0f, 0, stateOut, detail, rdec.reagentItemId))
                     {
                         _pending[botGuidLow] = { rdec.reagentItemId, BagItemCount(bot, rdec.reagentItemId), false };
                         outReason = tbhost::prof::ActiveErrandPhase(bot);
@@ -343,7 +453,14 @@ public:
                     return false;
                 }
                 if (rdec.action == tbhost::craft_order::CraftReagentAction::BuyAh)
-                    return AuctionBuy().StepBuyOnAuction(botGuidLow, rdec.reagentItemId, rdec.missingCount, 0, outReason);
+                {
+                    if (AuctionBuy().StepBuyOnAuction(botGuidLow, rdec.reagentItemId, rdec.missingCount, ahBudget.maxCopper, outReason))
+                    {
+                        _pendingAhMail[botGuidLow] = rdec.reagentItemId;
+                        outReason = "walking";
+                    }
+                    return false;
+                }
                 if (rdec.action == tbhost::craft_order::CraftReagentAction::MissingReagents)
                 {
                     outReason = "missing-reagents";
@@ -363,7 +480,7 @@ public:
         }
 
         std::string stateOut, detail;
-        if (tbhost::prof::StartGatherNearest(bot, 150.0f, 0, stateOut, detail))
+        if (tbhost::prof::StartGatherNearest(bot, 150.0f, 0, stateOut, detail, itemId))
         {
             _pending[botGuidLow] = { itemId, beforeCount, false };
             outReason = tbhost::prof::ActiveErrandPhase(bot);
@@ -1021,7 +1138,16 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::Craft:
         case OrderStepAction::Gather:
         {
-            bool const ok = GatherCraft().StepGatherOrCraft(botGuidLow, rec.itemId, dec.remaining, reason);
+            uint64_t const moneyBefore = bot->GetMoney();
+            bool const ok = GatherCraft().StepGatherOrCraft(botGuidLow, rec.itemId, dec.remaining, reason,
+                budget.capped, budget.remainingCopper);
+            uint64_t const moneyAfter = bot->GetMoney();
+            if (moneyBefore > moneyAfter)
+            {
+                uint32_t const spent = static_cast<uint32_t>(std::min<uint64_t>(moneyBefore - moneyAfter, UINT32_MAX));
+                rec.ahGoldSpent = (spent > UINT32_MAX - rec.ahGoldSpent) ? UINT32_MAX : (rec.ahGoldSpent + spent);
+                GiveOrder(rec);
+            }
             uint32_t const inBagsAfter = BagItemCount(bot, rec.itemId);
             uint32_t const haveAfter = rec.delivered + inBagsAfter;
             if (ok)
