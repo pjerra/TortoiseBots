@@ -33,14 +33,19 @@ def check_all(overrides=None):
     assert "ShouldOffsetWalkTarget" in move, "MovementActions.cpp missing ShouldOffsetWalkTarget"
     assert "ComputeWalkTargetOffset" in move, "MovementActions.cpp missing ComputeWalkTargetOffset"
     assert "walkTargetOffset" in move
+    assert "bot->GetMap()->Instanceable()" not in move, "MovementActions.cpp still calls bot->GetMap()->Instanceable() without FindMap()"
+    assert "bot->FindMap()" in move, "MovementActions.cpp missing bot->FindMap() guard"
 
     grind = read("ai/playerbot/strategy/values/GrindTargetValue.cpp")
     assert "ShouldHuntRare" in grind, "GrindTargetValue.cpp missing ShouldHuntRare"
     assert "resultIsRare" in grind, "GrindTargetValue.cpp missing resultIsRare priority"
     assert "huntRares" in grind
 
+    cfg_h = read("ai/playerbot/PlayerbotAIConfig.h")
     cfg = read("ai/playerbot/PlayerbotAIConfig.cpp")
+    conf_in = read("ai/playerbot/aiplayerbot.conf.dist.in")
     conf = read("forever/conf/aiplayerbot.conf.dist")
+    doc = read("docs/server/settings/world-population.md")
     for key in (
         "AiPlayerbot.DeathReleasePauseMinSec",
         "AiPlayerbot.DeathReleasePauseMaxSec",
@@ -49,6 +54,12 @@ def check_all(overrides=None):
     ):
         assert key in cfg, f"PlayerbotAIConfig.cpp missing {key}"
         assert f"{key} =" in conf, f"aiplayerbot.conf.dist missing {key} ="
+
+    assert "bool huntRares = true;" in cfg_h, "PlayerbotAIConfig.h huntRares default must be true"
+    assert 'GetBoolDefault("AiPlayerbot.HuntRares", true)' in cfg, "PlayerbotAIConfig.cpp HuntRares default must be true"
+    assert "AiPlayerbot.HuntRares = 1" in conf_in, "aiplayerbot.conf.dist.in HuntRares default must be 1"
+    assert "AiPlayerbot.HuntRares = 1" in conf, "forever/conf/aiplayerbot.conf.dist HuntRares default must be 1"
+    assert "| [`AiPlayerbot.HuntRares`](#aiplayerbothuntrares) | `1` |" in doc, "world-population.md HuntRares table default must be 1"
 
 
 def main():
