@@ -701,3 +701,32 @@ seq 2`, `20.1 523.1` r12.9) were one fight -- step 50's `step` event came one se
 found nothing alive (all four of its camp had been killed as step 49's adds). The spots are 20.6 yd apart and the
 closest members of the two camps 16.2 yd; splitting or merging them is a route change this evidence does not decide
 (the run rested after the chain anyway), so the rows stay.
+
+### 12.4 Gates (this head, core d02645dd21)
+
+Disk before the gates (build VM): `/mnt/tb` 9.3G available (84% used), `/mnt/forever` 5.2G available (94%).
+
+| gate | exact line |
+|---|---|
+| module ON, slot 4: `tar -C ~/wt-run-wc --exclude=.git -cf - . \| ssh yulon-ubuntu2 "~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON"` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 4)` / `module sync: 382 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=890`; on the final head: `module sync: 1 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=5` |
+| module OFF, slot 6: `... slot-sync-build.sh 6 tortoisebots` | `combined build: slot 6 key core-9b88bd2d6584-opt-78bf025f` / `build token 1 of 3 (slot 6)` / `module sync: 388 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=27`; on the final head: `module sync: 1` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=3` |
+| worldserver link, slot 7: `... slot-sync-build.sh 7 worldserver -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 7 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 7)` / `module sync: 0 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=8`; `build-7/make.log`: `[2/2] Linking CXX executable bin/Release/bin/worldserver` (75,065,704 bytes) |
+| `test_run_orders` | `RESULT: PASS (272 checks)` |
+| `test_run_liquid` | `RESULT: PASS (test_run_liquid)` |
+| `test_run_facts` (Ragefire Chasm) | `RESULT: PASS` |
+| `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
+| `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3507 checks, 0 failed` |
+| RFC policy: `test_dungeon_run_policy` | `test_dungeon_run_policy: ok` |
+| RFC policy: `test_system_run_policy` | `system run policy: 109 checks passed` |
+| RFC policy: `test_forever_plan_match` | `test_forever_plan_match: ok, 38 checks passed` |
+| `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
+| Python unit suite (`python3 -m unittest discover -s tools -p 'test_*.py'`) | `Ran 2673 tests ... OK (skipped=19)` |
+| `tbf-premerge ~/wt-run-wc` | `merge: clean (29 commits over tbf/main)` / `COMPILE_SECONDS=2389 CMAKE_RC=0 MAKE_RC=0 turtle: PASS` / `slice1-OFF: PASS` / `slice1-ON: FAIL` (`TbCompat_Unported.h:391: no member named 'ClassicRollsWholeAmount' in 'SpellEffectInfo'`) / `PREMERGE: FAIL slice1-ON` |
+
+The premerge's `slice1-ON` failure is not this branch's: the premerge fetches `tbf/main`, which moved past this round's
+base while it ran. Its commit `5a9b5f4fc` ("forever: heal estimate keeps the whole-amount roll of a spell-school heal",
+after `4dc8cc225` "pin ForeverCore 0.1.39 (d3358c21dc)") calls `SpellEffectInfo::ClassicRollsWholeAmount()`, and none
+of the build VM's core trees (`src-4`..`src-7`, all copied 2026-11-20) has that member: they are the pinned
+d02645dd21 this brief names. The merge's other incompatible hunk count is in the pin batch (`TbSpellEntry.*`,
+`TbItemPrototype.*`, 56 files). The tree gated here is the one built by the three build gates above, and `turtle: PASS`
+is this round's cmangos twin fix (`ai/cmangos-compat-quest.h`: one name for the struct and the accessor cannot compile).
