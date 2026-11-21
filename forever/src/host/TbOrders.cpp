@@ -343,11 +343,12 @@ void RelaxTankForPull(Player* tank, PlayerbotAI* ai, bool fromRun)
 // Role: the forced role of the AI, then a rebuild of the kit from it (the slice's AiFactory reads it), then the movement mode back as it was.
 void ApplyKit(PlayerbotAI* ai, uint8 role, bool setRole)
 {
+    bool const freeMove = ai->HasStrategy("free", BotState::BOT_STATE_NON_COMBAT);
     bool const stay = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
     if (setRole)
         ai->SetForcedRole(role);
     ai->ResetStrategies();
-    ai->SetMovementStrategy(stay ? "stay" : "follow");
+    ai->SetMovementStrategy(freeMove ? "free" : (stay ? "stay" : "follow"));
 }
 
 std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
@@ -793,9 +794,16 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         bool const hasTankKit = ai->ContainsStrategy(STRATEGY_TYPE_TANK);
         if (bot->GetGroup() || hasTankKit)
         {
-            bool const shouldTank = (AiFactory::GetPlayerRoles(bot) & BOT_ROLE_TANK) != 0;
-            if (shouldTank != hasTankKit)
-                ApplyKit(ai, 0, false);
+            static std::map<ObjectGuid, uint32> lastRoleCheck;
+            uint32 const nowMs = NowMs();
+            uint32& last = lastRoleCheck[guid];
+            if (!last || nowMs - last >= 1000)
+            {
+                last = nowMs;
+                bool const shouldTank = (AiFactory::GetPlayerRoles(bot) & BOT_ROLE_TANK) != 0;
+                if (shouldTank != hasTankKit)
+                    ApplyKit(ai, 0, false);
+            }
         }
     }
 

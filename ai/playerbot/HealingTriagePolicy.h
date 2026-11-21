@@ -181,7 +181,7 @@ namespace ai
             }
         }
         if (firstOther == candidates.size())
-            return HealingAssignment(candidates, bands, healerOrdinal - 1);
+            return HealingAssignment(candidates, bands, healerOrdinal);
 
         unsigned const urgency = HealingUrgency(candidates[firstOther], bands);
         bool const los = candidates[firstOther].inLos;

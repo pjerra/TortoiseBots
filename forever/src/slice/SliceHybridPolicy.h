@@ -99,11 +99,28 @@ inline std::uint8_t DefaultClassRole(unsigned classId)
     }
 }
 
+inline bool HasOtherHealer(std::vector<GroupMemberRoleInfo> const& members, std::uint64_t excludeGuid)
+{
+    for (GroupMemberRoleInfo const& m : members)
+    {
+        if (m.guid == excludeGuid)
+            continue;
+        bool const isHealer = m.forcedRole == RoleHealer ||
+            (m.forcedRole == RoleNone && (m.lfgHealer || (m.canHeal && !m.lfgDps)));
+        if (isHealer)
+            return true;
+    }
+    return false;
+}
+
 // When a party has no warrior tank and no explicit/LFG tank, a paladin or druid
-// takes the tank role if they show a tank signal (Righteous Fury / Bear Form)
-// or if the group has another healer so promoting them does not leave 0 healers.
+// takes the tank role if the group has at least 2 members and another healer
+// (preferring one who already shows Righteous Fury / Bear Form).
 inline std::uint64_t PickSubstituteTankGuid(std::vector<GroupMemberRoleInfo> const& members, bool allowSubstitute)
 {
+    if (members.size() < 2)
+        return 0;
+
     for (GroupMemberRoleInfo const& m : members)
     {
         if (m.forcedRole == RoleTank)
@@ -119,7 +136,8 @@ inline std::uint64_t PickSubstituteTankGuid(std::vector<GroupMemberRoleInfo> con
     for (GroupMemberRoleInfo const& m : members)
     {
         if ((m.classId == ClassPaladin || m.classId == ClassDruid) &&
-            m.forcedRole == RoleNone && !m.lfgHealer && !m.lfgDps && m.tankSignal)
+            m.forcedRole == RoleNone && !m.lfgHealer && !m.lfgDps && m.tankSignal &&
+            HasOtherHealer(members, m.guid))
         {
             if (signalCandidate == 0 || m.guid < signalCandidate)
                 signalCandidate = m.guid;
@@ -148,20 +166,7 @@ inline std::uint64_t PickSubstituteTankGuid(std::vector<GroupMemberRoleInfo> con
     if (bestCandidate == 0)
         return 0;
 
-    bool hasOtherHealer = false;
-    for (GroupMemberRoleInfo const& m : members)
-    {
-        if (m.guid == bestCandidate)
-            continue;
-        bool const isHealer = m.forcedRole == RoleHealer ||
-            (m.forcedRole == RoleNone && (m.lfgHealer || (m.canHeal && !m.lfgDps)));
-        if (isHealer)
-        {
-            hasOtherHealer = true;
-            break;
-        }
-    }
-    return hasOtherHealer ? bestCandidate : 0;
+    return HasOtherHealer(members, bestCandidate) ? bestCandidate : 0;
 }
 
 inline std::uint8_t ResolveGroupRole(GroupMemberRoleInfo const& self,
