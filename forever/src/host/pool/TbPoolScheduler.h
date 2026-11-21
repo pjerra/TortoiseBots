@@ -47,6 +47,10 @@ SwitchResult Stop();
 // above the number of accounts the pool's characters sit on.
 std::vector<std::string> Status();
 
+// `.tb pool population <n|low|high>`: a new online target at runtime (`low`/`high` are the PopulationLow/High presets, a number
+// is used as-is). The pool adds or logs out bots gradually from the next pass; `.reload config` puts the configured TargetOnline back.
+SwitchResult SetPopulation(std::string const& word);
+
 } // namespace PoolScheduler
 } // namespace pool
 } // namespace TortoiseBots

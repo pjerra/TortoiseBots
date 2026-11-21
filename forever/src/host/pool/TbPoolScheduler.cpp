@@ -312,7 +312,9 @@ void LoadConfig()
 {
     State& s = Get();
     s.configured = true;
-    s.settings.targetOnline = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.TargetOnline", 0), 0, 5000));
+    s.settings.targetOnline = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.TargetOnline", 0), 0, std::int32_t(world::kPoolTargetMax)));
+    s.settings.populationLow = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.PopulationLow", 10), 0, std::int32_t(world::kPoolTargetMax)));
+    s.settings.populationHigh = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.PopulationHigh", 50), 0, std::int32_t(world::kPoolTargetMax)));
     s.settings.loginsPerMinute = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.LoginsPerMinute", 20), 0, 600));
     s.settings.sessionMinMs = MinutesMs(sConfigMgr->GetIntDefault("TortoiseBots.Pool.SessionMinutes.Min", 30));
     s.settings.sessionMaxMs = MinutesMs(sConfigMgr->GetIntDefault("TortoiseBots.Pool.SessionMinutes.Max", 90));
@@ -409,6 +411,28 @@ SwitchResult Stop()
     return result;
 }
 
+SwitchResult SetPopulation(std::string const& word)
+{
+    State& s = Get();
+    if (!s.configured)
+        LoadConfig();
+    SwitchResult result;
+    world::PoolPopulationTarget const resolved = world::PoolResolvePopulationTarget(word, s.settings.populationLow, s.settings.populationHigh);
+    if (!resolved.ok)
+    {
+        result.message = resolved.error;
+        return result;
+    }
+    std::uint32_t const previous = s.settings.targetOnline;
+    s.settings.targetOnline = resolved.target;
+    char const* then = s.stopping ? "the pool is stopping: it applies at the next start"
+        : (!s.running ? "the pool is not running: run `.tb pool start`" : "the pool adds or logs out bots gradually");
+    result.ok = true;
+    result.message = Trinity::StringFormat("pool population target %u (was %u); %s", resolved.target, previous, then);
+    TC_LOG_INFO("tortoisebots", "TortoiseBots: {}", result.message);
+    return result;
+}
+
 std::vector<std::string> Status()
 {
     State& s = Get();
@@ -469,6 +493,13 @@ SwitchResult Stop()
 {
     SwitchResult result;
     result.message = "the bot engine is not built in (TORTOISEBOTS_SLICE1 is off): the pool is not running";
+    return result;
+}
+
+SwitchResult SetPopulation(std::string const& /*word*/)
+{
+    SwitchResult result;
+    result.message = "the bot engine is not built in (TORTOISEBOTS_SLICE1 is off): the pool has no target";
     return result;
 }
 
