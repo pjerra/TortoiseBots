@@ -40,7 +40,7 @@ bool LootOpenNode(Player* bot, ObjectGuid const& guid);
 bool Craft(Player* bot, uint32_t spellId, uint32_t count, std::string& code, std::string& detail);
 
 // Multi-tick gather/craft errand lifecycle (ordered gather/craft, free-kit gather, and W9 guild orders).
-bool StartGatherNearest(Player* bot, float maxDistYd, uint32_t orderSeq, std::string& stateOut, std::string& detail);
+bool StartGatherNearest(Player* bot, float maxDistYd, uint32_t orderSeq, std::string& stateOut, std::string& detail, uint32_t targetItemId = 0);
 bool StartCraft(Player* bot, uint32_t spellId, uint32_t count, uint32_t orderSeq, std::string& stateOut, std::string& detail);
 void TickErrands(Player* bot, uint32_t diffMs);
 bool PollOrderErrand(Player const* bot, uint32_t orderSeq, std::string& outResult);
@@ -49,7 +49,7 @@ bool HasActiveErrand(Player const* bot);
 std::string ActiveErrandPhase(Player const* bot);
 
 // Helpers for guild orders (W9) and AH trade-good reserve (W8).
-bool HasGatherableNodeInSight(Player* bot, float maxDistYd);
+bool HasGatherableNodeInSight(Player* bot, float maxDistYd, uint32_t targetItemId = 0);
 uint32_t FindCraftSpellForItem(Player* bot, uint32_t itemId);
 bool IsReagentForBotProfessions(Player const* bot, uint32_t itemId);
 bool IsReagentForItem(uint32_t craftedItemId, uint32_t reagentItemId);

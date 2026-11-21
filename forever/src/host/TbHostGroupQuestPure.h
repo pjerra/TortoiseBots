@@ -41,6 +41,7 @@ struct BotQuestCandidate
     bool inCombat = false;
     bool inGroup = false;
     std::vector<uint32_t> incompleteGroupQuests;
+    uint32_t team = 0;
 };
 
 struct QuestGroupPlan
@@ -94,7 +95,7 @@ inline std::vector<QuestGroupPlan> PlanQuestGroups(std::vector<BotQuestCandidate
                 BotQuestCandidate const& m = candidates[j];
                 if (!m.guidLow || !m.alive || m.inCombat || m.inGroup)
                     continue;
-                if (m.mapId != leader.mapId)
+                if (m.mapId != leader.mapId || m.team != leader.team)
                     continue;
                 int32_t const lvlDiff = std::abs(int32_t(m.level) - int32_t(leader.level));
                 if (lvlDiff > kMaxLevelDiff)

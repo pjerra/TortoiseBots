@@ -94,6 +94,15 @@ class TestW9GuildWiring(unittest.TestCase):
         self.assertIn("IsReagentForBotProfessions", wl8)
         self.assertIn("IsItemNeededByGuildOrder", wl8)
 
+    def test_craft_order_reagent_mail_budget_and_node_pins(self):
+        orders_cpp = read("forever/src/host/TbHostGuildOrders.cpp")
+        if MUTATE:
+            orders_cpp = orders_cpp.replace("TryCollectPendingAhMail", "SkipMail")
+        self.assertIn("TryCollectPendingAhMail", orders_cpp)
+        self.assertIn("ResolveCraftAhBudget", orders_cpp)
+        self.assertIn("EvaluatePendingStep", orders_cpp)
+        self.assertIn("HasGatherableNodeInSight(bot, 150.0f, rId)", orders_cpp)
+
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:

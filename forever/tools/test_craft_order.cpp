@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <string>
 
 int main()
 {
@@ -70,6 +71,48 @@ int main()
         assert(d.action == CraftReagentAction::MissingReagents);
         assert(d.reagentItemId == 2320);
         assert(d.missingCount == 1);
+        ++passed;
+    }
+
+    // 6. Craft AH budget respects goldCap.
+    {
+        CraftAhBudget const uncapped = ResolveCraftAhBudget(false, 0);
+        assert(uncapped.canBuy && uncapped.maxCopper == 0);
+
+        CraftAhBudget const cappedZero = ResolveCraftAhBudget(true, 0);
+        assert(!cappedZero.canBuy && cappedZero.maxCopper == 0);
+
+        CraftAhBudget const cappedSome = ResolveCraftAhBudget(true, 5000);
+        assert(cappedSome.canBuy && cappedSome.maxCopper == 5000);
+        ++passed;
+    }
+
+    // 7. Pending sub-craft/gather verification produces exact gain/no-gain reasons.
+    {
+        PendingStepOutcome const craftOk = EvaluatePendingStep(1, 2, true);
+        assert(craftOk.ok && std::string(craftOk.reason) == "crafted");
+        PendingStepOutcome const craftFail = EvaluatePendingStep(1, 1, true);
+        assert(!craftFail.ok && std::string(craftFail.reason) == "craft-no-gain");
+
+        PendingStepOutcome const gatherOk = EvaluatePendingStep(0, 1, false);
+        assert(gatherOk.ok && std::string(gatherOk.reason) == "gathered");
+        PendingStepOutcome const gatherFail = EvaluatePendingStep(2, 2, false);
+        assert(!gatherFail.ok && std::string(gatherFail.reason) == "gather-no-item");
+        ++passed;
+    }
+
+    // 8. Node loot matching checks direct items, reference loot, missing items, and cycles.
+    {
+        std::unordered_map<uint32_t, LootTemplateItems> goLoot;
+        std::unordered_map<uint32_t, LootTemplateItems> refLoot;
+        goLoot[10] = { { 2770 }, { 500 } };      // Copper Vein -> Copper Ore + ref 500
+        refLoot[500] = { { 2771 }, { 501 } };     // ref 500 -> Tin Ore + ref 501
+        refLoot[501] = { {}, { 500 } };           // cycle back to 500
+
+        assert(LootContainsItem(goLoot, refLoot, 10, 2770));
+        assert(LootContainsItem(goLoot, refLoot, 10, 2771));
+        assert(!LootContainsItem(goLoot, refLoot, 10, 2320)); // Coarse Thread not in Copper Vein
+        assert(!LootContainsItem(goLoot, refLoot, 99, 2770)); // unknown lootId
         ++passed;
     }
 
