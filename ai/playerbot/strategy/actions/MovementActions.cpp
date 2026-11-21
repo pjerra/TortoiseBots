@@ -33,6 +33,7 @@
 #include "playerbot/SwimPathPolicy.h"
 #include "playerbot/MoveFailNotePolicy.h"
 #include "playerbot/PlaceUnstickPolicy.h"
+#include "playerbot/policy/travel/WalkTargetOffsetPolicy.h"
 #include "UseMeetingStoneAction.h"
 #include "Maps/PathFinder.h"
 #include "Maps/MoveMap.h" // the navmesh-island unstick's isolation query
@@ -2490,7 +2491,26 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
 
 bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, const char* castCancelSite)
 {
-    return MoveTo2(WorldPosition(mapId, x, y, z), idle, react, noPath, ignoreEnemyTargets, nullptr, castCancelSite);
+    WorldPosition endPos(mapId, x, y, z);
+    if (endPos.isValid() && mapId == bot->GetMapId())
+    {
+        float const totalDistance = WorldPosition(bot).distance(endPos);
+        bool const isTravelSite = castCancelSite && std::strcmp(castCancelSite, "move_travel") == 0;
+        bool const exactSite = (castCancelSite != nullptr && !isTravelSite) || (isTravelSite && totalDistance < 100.0f);
+        if (ai::ShouldOffsetWalkTarget(bot->GetMap() && bot->GetMap()->Instanceable(), false, exactSite, totalDistance, sPlayerbotAIConfig.walkTargetOffset))
+        {
+            float dx = 0.0f, dy = 0.0f;
+            ai::ComputeWalkTargetOffset(bot->GetGUIDLow(), x, y, sPlayerbotAIConfig.walkTargetOffset, dx, dy);
+            WorldPosition candidate(mapId, x + dx, y + dy, z);
+            if (candidate.isMmapLoaded(bot->GetInstanceId()) &&
+                candidate.ClosestCorrectPoint(sPlayerbotAIConfig.walkTargetOffset, sPlayerbotAIConfig.walkTargetOffset, bot->GetInstanceId()) &&
+                std::fabs(candidate.getZ() - z) <= sPlayerbotAIConfig.walkTargetOffset)
+            {
+                endPos = candidate;
+            }
+        }
+    }
+    return MoveTo2(endPos, idle, react, noPath, ignoreEnemyTargets, nullptr, castCancelSite);
 }
 
 

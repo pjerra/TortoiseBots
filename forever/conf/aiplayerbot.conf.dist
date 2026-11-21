@@ -3,7 +3,7 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 696 keys, 686 with a literal default, 10 computed; 18 reads with a non-literal key are not listed.
+# 700 keys, 690 with a literal default, 10 computed; 18 reads with a non-literal key are not listed.
 
 [AiPlayerbotConf]
 
@@ -1367,740 +1367,752 @@ AiPlayerbot.AllowIsolatedCustomStartingZones = 0
 # AiPlayerbot.RelocateHopelessDeaths  (bool, PlayerbotAIConfig.cpp:968)
 AiPlayerbot.RelocateHopelessDeaths = 1
 
-# AiPlayerbot.AbandonedInstanceGraceSec  (int, PlayerbotAIConfig.cpp:969)
+# AiPlayerbot.DeathReleasePauseMinSec  (int, PlayerbotAIConfig.cpp:969)
+AiPlayerbot.DeathReleasePauseMinSec = 3
+
+# AiPlayerbot.DeathReleasePauseMaxSec  (int, PlayerbotAIConfig.cpp:970)
+AiPlayerbot.DeathReleasePauseMaxSec = 10
+
+# AiPlayerbot.WalkTargetOffset  (float, PlayerbotAIConfig.cpp:971)
+AiPlayerbot.WalkTargetOffset = 2.5
+
+# AiPlayerbot.HuntRares  (bool, PlayerbotAIConfig.cpp:972)
+AiPlayerbot.HuntRares = 0
+
+# AiPlayerbot.AbandonedInstanceGraceSec  (int, PlayerbotAIConfig.cpp:973)
 AiPlayerbot.AbandonedInstanceGraceSec = 90
 
-# AiPlayerbot.RepopAtGraveyard  (bool, PlayerbotAIConfig.cpp:970)
+# AiPlayerbot.RepopAtGraveyard  (bool, PlayerbotAIConfig.cpp:974)
 AiPlayerbot.RepopAtGraveyard = 1
 
-# AiPlayerbot.TurtleMountAtLevel  (int, PlayerbotAIConfig.cpp:971)
+# AiPlayerbot.TurtleMountAtLevel  (int, PlayerbotAIConfig.cpp:975)
 AiPlayerbot.TurtleMountAtLevel = 18
 
-# AiPlayerbot.LevelUpMounts  (bool, PlayerbotAIConfig.cpp:972)
+# AiPlayerbot.LevelUpMounts  (bool, PlayerbotAIConfig.cpp:976)
 AiPlayerbot.LevelUpMounts = 1
 
-# AiPlayerbot.RandomBotShopMounts  (bool, PlayerbotAIConfig.cpp:973)
+# AiPlayerbot.RandomBotShopMounts  (bool, PlayerbotAIConfig.cpp:977)
 AiPlayerbot.RandomBotShopMounts = 0
 
-# AiPlayerbot.PoolGearTopUpOnLevel  (bool, PlayerbotAIConfig.cpp:974)
+# AiPlayerbot.PoolGearTopUpOnLevel  (bool, PlayerbotAIConfig.cpp:978)
 AiPlayerbot.PoolGearTopUpOnLevel = 0
 
-# AiPlayerbot.PoolMoneyTopUp  (bool, PlayerbotAIConfig.cpp:975)
+# AiPlayerbot.PoolMoneyTopUp  (bool, PlayerbotAIConfig.cpp:979)
 AiPlayerbot.PoolMoneyTopUp = 0
 
-# AiPlayerbot.MountBreakEvenFactor  (float, PlayerbotAIConfig.cpp:976)
+# AiPlayerbot.MountBreakEvenFactor  (float, PlayerbotAIConfig.cpp:980)
 AiPlayerbot.MountBreakEvenFactor = 1.5
 
-# AiPlayerbot.AvoidHostileTowns  (bool, PlayerbotAIConfig.cpp:977)
+# AiPlayerbot.AvoidHostileTowns  (bool, PlayerbotAIConfig.cpp:981)
 AiPlayerbot.AvoidHostileTowns = 1
 
-# AiPlayerbot.UnstuckHearthLevelFit  (bool, PlayerbotAIConfig.cpp:978)
+# AiPlayerbot.UnstuckHearthLevelFit  (bool, PlayerbotAIConfig.cpp:982)
 AiPlayerbot.UnstuckHearthLevelFit = 1
 
-# AiPlayerbot.UnstuckHearthMinDistance  (float, PlayerbotAIConfig.cpp:979)
+# AiPlayerbot.UnstuckHearthMinDistance  (float, PlayerbotAIConfig.cpp:983)
 AiPlayerbot.UnstuckHearthMinDistance = 300.0
 
-# AiPlayerbot.StuckTravelTeleport  (bool, PlayerbotAIConfig.cpp:980)
+# AiPlayerbot.StuckTravelTeleport  (bool, PlayerbotAIConfig.cpp:984)
 AiPlayerbot.StuckTravelTeleport = 1
 
-# AiPlayerbot.GuildOrderAuctionVisits  (int, PlayerbotAIConfig.cpp:981)
+# AiPlayerbot.GuildOrderAuctionVisits  (int, PlayerbotAIConfig.cpp:985)
 AiPlayerbot.GuildOrderAuctionVisits = 3
 
-# AiPlayerbot.BotQuestLogUpkeep  (bool, PlayerbotAIConfig.cpp:982)
+# AiPlayerbot.BotQuestLogUpkeep  (bool, PlayerbotAIConfig.cpp:986)
 AiPlayerbot.BotQuestLogUpkeep = 1
 
-# AiPlayerbot.LeaveOutgrownZones  (bool, PlayerbotAIConfig.cpp:983)
+# AiPlayerbot.LeaveOutgrownZones  (bool, PlayerbotAIConfig.cpp:987)
 AiPlayerbot.LeaveOutgrownZones = 1
 
-# AiPlayerbot.VendorBatchMinCount  (int, PlayerbotAIConfig.cpp:984)
+# AiPlayerbot.VendorBatchMinCount  (int, PlayerbotAIConfig.cpp:988)
 AiPlayerbot.VendorBatchMinCount = 8
 
-# AiPlayerbot.VendorBatchMinBagSpace  (int, PlayerbotAIConfig.cpp:985)
+# AiPlayerbot.VendorBatchMinBagSpace  (int, PlayerbotAIConfig.cpp:989)
 AiPlayerbot.VendorBatchMinBagSpace = 60
 
-# AiPlayerbot.LowLevelVendorBatchMinCount  (int, PlayerbotAIConfig.cpp:986)
+# AiPlayerbot.LowLevelVendorBatchMinCount  (int, PlayerbotAIConfig.cpp:990)
 AiPlayerbot.LowLevelVendorBatchMinCount = 3
 
-# AiPlayerbot.LowLevelVendorBatchMinBagSpace  (int, PlayerbotAIConfig.cpp:987)
+# AiPlayerbot.LowLevelVendorBatchMinBagSpace  (int, PlayerbotAIConfig.cpp:991)
 AiPlayerbot.LowLevelVendorBatchMinBagSpace = 25
 
-# AiPlayerbot.LowLevelVendorMaxDistance  (float, PlayerbotAIConfig.cpp:988)
+# AiPlayerbot.LowLevelVendorMaxDistance  (float, PlayerbotAIConfig.cpp:992)
 AiPlayerbot.LowLevelVendorMaxDistance = 600.0
 
-# AiPlayerbot.TravelPickBudgetUs  (int, PlayerbotAIConfig.cpp:989)
+# AiPlayerbot.TravelPickBudgetUs  (int, PlayerbotAIConfig.cpp:993)
 AiPlayerbot.TravelPickBudgetUs = 4000
 
-# AiPlayerbot.BotLootRateUncommon  (float, PlayerbotAIConfig.cpp:990)
+# AiPlayerbot.BotLootRateUncommon  (float, PlayerbotAIConfig.cpp:994)
 AiPlayerbot.BotLootRateUncommon = 1.0
 
-# AiPlayerbot.BotLootRateRare  (float, PlayerbotAIConfig.cpp:991)
+# AiPlayerbot.BotLootRateRare  (float, PlayerbotAIConfig.cpp:995)
 AiPlayerbot.BotLootRateRare = 1.0
 
-# AiPlayerbot.RandomBotLftEnabled  (bool, PlayerbotAIConfig.cpp:992)
+# AiPlayerbot.RandomBotLftEnabled  (bool, PlayerbotAIConfig.cpp:996)
 AiPlayerbot.RandomBotLftEnabled = 1
 
-# AiPlayerbot.RandomBotLftUpdateInterval  (int, PlayerbotAIConfig.cpp:993)
+# AiPlayerbot.RandomBotLftUpdateInterval  (int, PlayerbotAIConfig.cpp:997)
 AiPlayerbot.RandomBotLftUpdateInterval = 15000
 
-# AiPlayerbot.RandomBotLftMaxFillsPerInterval  (int, PlayerbotAIConfig.cpp:994)
+# AiPlayerbot.RandomBotLftMaxFillsPerInterval  (int, PlayerbotAIConfig.cpp:998)
 AiPlayerbot.RandomBotLftMaxFillsPerInterval = 1
 
-# AiPlayerbot.RandomBotLftAllowRoleBorrow  (bool, PlayerbotAIConfig.cpp:995)
+# AiPlayerbot.RandomBotLftAllowRoleBorrow  (bool, PlayerbotAIConfig.cpp:999)
 AiPlayerbot.RandomBotLftAllowRoleBorrow = 0
 
-# AiPlayerbot.HireEnabled  (bool, PlayerbotAIConfig.cpp:999)
+# AiPlayerbot.HireEnabled  (bool, PlayerbotAIConfig.cpp:1003)
 AiPlayerbot.HireEnabled = 1
 
-# AiPlayerbot.HireMinAccountSecurity  (int, PlayerbotAIConfig.cpp:1000)
+# AiPlayerbot.HireMinAccountSecurity  (int, PlayerbotAIConfig.cpp:1004)
 AiPlayerbot.HireMinAccountSecurity = 0
 
-# AiPlayerbot.HireMaxBotsPerPlayer  (int, PlayerbotAIConfig.cpp:1003)
+# AiPlayerbot.HireMaxBotsPerPlayer  (int, PlayerbotAIConfig.cpp:1007)
 AiPlayerbot.HireMaxBotsPerPlayer = 4
 
-# AiPlayerbot.HireMaxLevelAboveHirer  (int, PlayerbotAIConfig.cpp:1009)
+# AiPlayerbot.HireMaxLevelAboveHirer  (int, PlayerbotAIConfig.cpp:1013)
 AiPlayerbot.HireMaxLevelAboveHirer = 0
 
-# AiPlayerbot.HireFreeMinSecurity  (int, PlayerbotAIConfig.cpp:1012)
+# AiPlayerbot.HireFreeMinSecurity  (int, PlayerbotAIConfig.cpp:1016)
 AiPlayerbot.HireFreeMinSecurity = 0
 
-# AiPlayerbot.HireAnywhere  (bool, PlayerbotAIConfig.cpp:1013)
+# AiPlayerbot.HireAnywhere  (bool, PlayerbotAIConfig.cpp:1017)
 AiPlayerbot.HireAnywhere = 0
 
-# AiPlayerbot.HireAllowPvP  (bool, PlayerbotAIConfig.cpp:1014)
+# AiPlayerbot.HireAllowPvP  (bool, PlayerbotAIConfig.cpp:1018)
 AiPlayerbot.HireAllowPvP = 0
 
-# AiPlayerbot.HireCrossFactionNeutralInns  (bool, PlayerbotAIConfig.cpp:1015)
+# AiPlayerbot.HireCrossFactionNeutralInns  (bool, PlayerbotAIConfig.cpp:1019)
 AiPlayerbot.HireCrossFactionNeutralInns = 0
 
-# AiPlayerbot.HireLoot  (bool, PlayerbotAIConfig.cpp:1016)
+# AiPlayerbot.HireLoot  (bool, PlayerbotAIConfig.cpp:1020)
 AiPlayerbot.HireLoot = 0
 
-# AiPlayerbot.ShamanTankEnabled  (bool, PlayerbotAIConfig.cpp:1017)
+# AiPlayerbot.ShamanTankEnabled  (bool, PlayerbotAIConfig.cpp:1021)
 AiPlayerbot.ShamanTankEnabled = 1
 
-# AiPlayerbot.CampEnabled  (bool, PlayerbotAIConfig.cpp:1018)
+# AiPlayerbot.CampEnabled  (bool, PlayerbotAIConfig.cpp:1022)
 AiPlayerbot.CampEnabled = 1
 
-# AiPlayerbot.CampChancePct  (int, PlayerbotAIConfig.cpp:1019)
+# AiPlayerbot.CampChancePct  (int, PlayerbotAIConfig.cpp:1023)
 AiPlayerbot.CampChancePct = 15
 
-# AiPlayerbot.CampNightChancePct  (int, PlayerbotAIConfig.cpp:1020)
+# AiPlayerbot.CampNightChancePct  (int, PlayerbotAIConfig.cpp:1024)
 AiPlayerbot.CampNightChancePct = 30
 
-# AiPlayerbot.CampMinLevel  (int, PlayerbotAIConfig.cpp:1021)
+# AiPlayerbot.CampMinLevel  (int, PlayerbotAIConfig.cpp:1025)
 AiPlayerbot.CampMinLevel = 10
 
-# AiPlayerbot.CampSitDurationSec  (int, PlayerbotAIConfig.cpp:1022)
+# AiPlayerbot.CampSitDurationSec  (int, PlayerbotAIConfig.cpp:1026)
 AiPlayerbot.CampSitDurationSec = 1200
 
-# AiPlayerbot.CampKeepRestedXp  (bool, PlayerbotAIConfig.cpp:1023)
+# AiPlayerbot.CampKeepRestedXp  (bool, PlayerbotAIConfig.cpp:1027)
 AiPlayerbot.CampKeepRestedXp = 0
 
-# AiPlayerbot.CampJoinChancePct  (int, PlayerbotAIConfig.cpp:1024)
+# AiPlayerbot.CampJoinChancePct  (int, PlayerbotAIConfig.cpp:1028)
 AiPlayerbot.CampJoinChancePct = 10
 
-# AiPlayerbot.CampJoinMinSec  (int, PlayerbotAIConfig.cpp:1025)
+# AiPlayerbot.CampJoinMinSec  (int, PlayerbotAIConfig.cpp:1029)
 AiPlayerbot.CampJoinMinSec = 60
 
-# AiPlayerbot.CampJoinMaxSec  (int, PlayerbotAIConfig.cpp:1026)
+# AiPlayerbot.CampJoinMaxSec  (int, PlayerbotAIConfig.cpp:1030)
 AiPlayerbot.CampJoinMaxSec = 180
 
-# AiPlayerbot.CampGreetChancePct  (int, PlayerbotAIConfig.cpp:1027)
+# AiPlayerbot.CampGreetChancePct  (int, PlayerbotAIConfig.cpp:1031)
 AiPlayerbot.CampGreetChancePct = 15
 
-# AiPlayerbot.CampGreetCooldownSec  (int, PlayerbotAIConfig.cpp:1028)
+# AiPlayerbot.CampGreetCooldownSec  (int, PlayerbotAIConfig.cpp:1032)
 AiPlayerbot.CampGreetCooldownSec = 120
 
-# AiPlayerbot.HireBaseCostCopper  (int, PlayerbotAIConfig.cpp:1029)
+# AiPlayerbot.HireBaseCostCopper  (int, PlayerbotAIConfig.cpp:1033)
 AiPlayerbot.HireBaseCostCopper = 15000
 
-# AiPlayerbot.HirePartyMult2  (float, PlayerbotAIConfig.cpp:1032)
+# AiPlayerbot.HirePartyMult2  (float, PlayerbotAIConfig.cpp:1036)
 AiPlayerbot.HirePartyMult2 = 1.66
 
-# AiPlayerbot.HirePartyMult3  (float, PlayerbotAIConfig.cpp:1037)
+# AiPlayerbot.HirePartyMult3  (float, PlayerbotAIConfig.cpp:1041)
 AiPlayerbot.HirePartyMult3 = 2.66
 
-# AiPlayerbot.HirePartyMult4  (float, PlayerbotAIConfig.cpp:1042)
+# AiPlayerbot.HirePartyMult4  (float, PlayerbotAIConfig.cpp:1046)
 AiPlayerbot.HirePartyMult4 = 4.66
 
-# AiPlayerbot.HireRaidFlatCostCopper  (int, PlayerbotAIConfig.cpp:1047)
+# AiPlayerbot.HireRaidFlatCostCopper  (int, PlayerbotAIConfig.cpp:1051)
 AiPlayerbot.HireRaidFlatCostCopper = 10000
 
-# AiPlayerbot.HireDisconnectGracePeriod  (int, PlayerbotAIConfig.cpp:1050)
+# AiPlayerbot.HireDisconnectGracePeriod  (int, PlayerbotAIConfig.cpp:1054)
 AiPlayerbot.HireDisconnectGracePeriod = 300
 
-# AiPlayerbot.HireRaidSpread  (string, PlayerbotAIConfig.cpp:1055)
+# AiPlayerbot.HireRaidSpread  (string, PlayerbotAIConfig.cpp:1059)
 #   default is computed in the code: TortoiseBots::kHireRaidSpreadDefault
 # AiPlayerbot.HireRaidSpread =
 
-# AiPlayerbot.HireRaidPresets  (string, PlayerbotAIConfig.cpp:1064)
+# AiPlayerbot.HireRaidPresets  (string, PlayerbotAIConfig.cpp:1068)
 #   default is computed in the code: TortoiseBots::kHireRaidPresetsDefault
 # AiPlayerbot.HireRaidPresets =
 
-# AiPlayerbot.BotGearPresets  (string, PlayerbotAIConfig.cpp:1073)
+# AiPlayerbot.BotGearPresets  (string, PlayerbotAIConfig.cpp:1077)
 #   default is computed in the code: TortoiseBots::BotGear::kPresetsDefault
 # AiPlayerbot.BotGearPresets =
 
-# AiPlayerbot.HireGearTiersEnabled  (bool, PlayerbotAIConfig.cpp:1082)
+# AiPlayerbot.HireGearTiersEnabled  (bool, PlayerbotAIConfig.cpp:1086)
 AiPlayerbot.HireGearTiersEnabled = 1
 
-# AiPlayerbot.HireGearStartTier  (int, PlayerbotAIConfig.cpp:1083)
+# AiPlayerbot.HireGearStartTier  (int, PlayerbotAIConfig.cpp:1087)
 AiPlayerbot.HireGearStartTier = 0
 
-# AiPlayerbot.HireGearUnlockAccountWide  (bool, PlayerbotAIConfig.cpp:1086)
+# AiPlayerbot.HireGearUnlockAccountWide  (bool, PlayerbotAIConfig.cpp:1090)
 AiPlayerbot.HireGearUnlockAccountWide = 0
 
-# AiPlayerbot.HireGearAllQuestsAvailable  (bool, PlayerbotAIConfig.cpp:1087)
+# AiPlayerbot.HireGearAllQuestsAvailable  (bool, PlayerbotAIConfig.cpp:1091)
 AiPlayerbot.HireGearAllQuestsAvailable = 0
 
-# AiPlayerbot.HireGearOptionalMaps  (string, PlayerbotAIConfig.cpp:1090)
+# AiPlayerbot.HireGearOptionalMaps  (string, PlayerbotAIConfig.cpp:1094)
 AiPlayerbot.HireGearOptionalMaps = 
 
-# AiPlayerbot.HireGearTierCostMultipliers  (string, PlayerbotAIConfig.cpp:1092)
+# AiPlayerbot.HireGearTierCostMultipliers  (string, PlayerbotAIConfig.cpp:1096)
 AiPlayerbot.HireGearTierCostMultipliers = 1,1.5,2,3,4,5,6,6
 
-# AiPlayerbot.WorldBuffsEnabled  (bool, PlayerbotAIConfig.cpp:1098)
+# AiPlayerbot.WorldBuffsEnabled  (bool, PlayerbotAIConfig.cpp:1102)
 AiPlayerbot.WorldBuffsEnabled = 1
 
-# AiPlayerbot.WorldBuffsKeepInRaids  (bool, PlayerbotAIConfig.cpp:1099)
+# AiPlayerbot.WorldBuffsKeepInRaids  (bool, PlayerbotAIConfig.cpp:1103)
 AiPlayerbot.WorldBuffsKeepInRaids = 0
 
-# AiPlayerbot.WorldBuffsMinLevel  (int, PlayerbotAIConfig.cpp:1100)
+# AiPlayerbot.WorldBuffsMinLevel  (int, PlayerbotAIConfig.cpp:1104)
 AiPlayerbot.WorldBuffsMinLevel = 60
 
-# AiPlayerbot.WorldBuffsPriceBaseCopper  (int, PlayerbotAIConfig.cpp:1103)
+# AiPlayerbot.WorldBuffsPriceBaseCopper  (int, PlayerbotAIConfig.cpp:1107)
 AiPlayerbot.WorldBuffsPriceBaseCopper = 100000
 
-# AiPlayerbot.WorldBuffsPricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1106)
+# AiPlayerbot.WorldBuffsPricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1110)
 AiPlayerbot.WorldBuffsPricePerPersonCopper = 20000
 
-# AiPlayerbot.WorldBuffsSaygePriceBaseCopper  (int, PlayerbotAIConfig.cpp:1109)
+# AiPlayerbot.WorldBuffsSaygePriceBaseCopper  (int, PlayerbotAIConfig.cpp:1113)
 AiPlayerbot.WorldBuffsSaygePriceBaseCopper = 60000
 
-# AiPlayerbot.WorldBuffsSaygePricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1112)
+# AiPlayerbot.WorldBuffsSaygePricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1116)
 AiPlayerbot.WorldBuffsSaygePricePerPersonCopper = 10000
 
-# AiPlayerbot.WorldBuffsSongflowerPriceBaseCopper  (int, PlayerbotAIConfig.cpp:1115)
+# AiPlayerbot.WorldBuffsSongflowerPriceBaseCopper  (int, PlayerbotAIConfig.cpp:1119)
 AiPlayerbot.WorldBuffsSongflowerPriceBaseCopper = 40000
 
-# AiPlayerbot.WorldBuffsSongflowerPricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1118)
+# AiPlayerbot.WorldBuffsSongflowerPricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1122)
 AiPlayerbot.WorldBuffsSongflowerPricePerPersonCopper = 10000
 
-# AiPlayerbot.WorldBuffsSilithystPriceBaseCopper  (int, PlayerbotAIConfig.cpp:1121)
+# AiPlayerbot.WorldBuffsSilithystPriceBaseCopper  (int, PlayerbotAIConfig.cpp:1125)
 AiPlayerbot.WorldBuffsSilithystPriceBaseCopper = 20000
 
-# AiPlayerbot.WorldBuffsSilithystPricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1124)
+# AiPlayerbot.WorldBuffsSilithystPricePerPersonCopper  (int, PlayerbotAIConfig.cpp:1128)
 AiPlayerbot.WorldBuffsSilithystPricePerPersonCopper = 4000
 
-# AiPlayerbot.WorldBuffsUnlockFeeRaidCopper  (int, PlayerbotAIConfig.cpp:1127)
+# AiPlayerbot.WorldBuffsUnlockFeeRaidCopper  (int, PlayerbotAIConfig.cpp:1131)
 AiPlayerbot.WorldBuffsUnlockFeeRaidCopper = 2000000
 
-# AiPlayerbot.WorldBuffsUnlockFeeCopper  (int, PlayerbotAIConfig.cpp:1130)
+# AiPlayerbot.WorldBuffsUnlockFeeCopper  (int, PlayerbotAIConfig.cpp:1134)
 AiPlayerbot.WorldBuffsUnlockFeeCopper = 1000000
 
-# AiPlayerbot.AmmoStacksNonHunter  (int, PlayerbotAIConfig.cpp:1134)
+# AiPlayerbot.AmmoStacksNonHunter  (int, PlayerbotAIConfig.cpp:1138)
 #   default is computed in the code: static_cast<int>(ai::kAmmoStacksNonHunterDefault)
 # AiPlayerbot.AmmoStacksNonHunter =
 
-# AiPlayerbot.OwnedBotMaintenanceEnabled  (bool, PlayerbotAIConfig.cpp:1136)
+# AiPlayerbot.OwnedBotMaintenanceEnabled  (bool, PlayerbotAIConfig.cpp:1140)
 AiPlayerbot.OwnedBotMaintenanceEnabled = 0
 
-# AiPlayerbot.OwnedBotAutogearEnabled  (bool, PlayerbotAIConfig.cpp:1137)
+# AiPlayerbot.OwnedBotAutogearEnabled  (bool, PlayerbotAIConfig.cpp:1141)
 AiPlayerbot.OwnedBotAutogearEnabled = 0
 
-# AiPlayerbot.OwnedBotAutogearQualityCap  (int, PlayerbotAIConfig.cpp:1138)
+# AiPlayerbot.OwnedBotAutogearQualityCap  (int, PlayerbotAIConfig.cpp:1142)
 AiPlayerbot.OwnedBotAutogearQualityCap = 2
 
-# AiPlayerbot.OwnedBotAutogearIlvlCap  (int, PlayerbotAIConfig.cpp:1141)
+# AiPlayerbot.OwnedBotAutogearIlvlCap  (int, PlayerbotAIConfig.cpp:1145)
 AiPlayerbot.OwnedBotAutogearIlvlCap = 0
 
-# AiPlayerbot.PlayerAutogearForAll  (bool, PlayerbotAIConfig.cpp:1142)
+# AiPlayerbot.PlayerAutogearForAll  (bool, PlayerbotAIConfig.cpp:1146)
 AiPlayerbot.PlayerAutogearForAll = 0
 
-# AiPlayerbot.OwnedBotSummonWhenGroup  (bool, PlayerbotAIConfig.cpp:1143)
+# AiPlayerbot.OwnedBotSummonWhenGroup  (bool, PlayerbotAIConfig.cpp:1147)
 AiPlayerbot.OwnedBotSummonWhenGroup = 0
 
-# AiPlayerbot.OwnedBotSummonAllowInCombat  (bool, PlayerbotAIConfig.cpp:1144)
+# AiPlayerbot.OwnedBotSummonAllowInCombat  (bool, PlayerbotAIConfig.cpp:1148)
 AiPlayerbot.OwnedBotSummonAllowInCombat = 0
 
-# AiPlayerbot.OwnedBotSummonAllowMasterDead  (bool, PlayerbotAIConfig.cpp:1145)
+# AiPlayerbot.OwnedBotSummonAllowMasterDead  (bool, PlayerbotAIConfig.cpp:1149)
 AiPlayerbot.OwnedBotSummonAllowMasterDead = 0
 
-# AiPlayerbot.OwnedBotSummonAllowBotDead  (bool, PlayerbotAIConfig.cpp:1146)
+# AiPlayerbot.OwnedBotSummonAllowBotDead  (bool, PlayerbotAIConfig.cpp:1150)
 AiPlayerbot.OwnedBotSummonAllowBotDead = 0
 
-# AiPlayerbot.OwnedBotSummonRevive  (bool, PlayerbotAIConfig.cpp:1147)
+# AiPlayerbot.OwnedBotSummonRevive  (bool, PlayerbotAIConfig.cpp:1151)
 AiPlayerbot.OwnedBotSummonRevive = 0
 
-# AiPlayerbot.OwnedBotSummonRepair  (bool, PlayerbotAIConfig.cpp:1148)
+# AiPlayerbot.OwnedBotSummonRepair  (bool, PlayerbotAIConfig.cpp:1152)
 AiPlayerbot.OwnedBotSummonRepair = 0
 
-# AiPlayerbot.OwnedBotSummonCooldown  (int, PlayerbotAIConfig.cpp:1149)
+# AiPlayerbot.OwnedBotSummonCooldown  (int, PlayerbotAIConfig.cpp:1153)
 AiPlayerbot.OwnedBotSummonCooldown = 300
 
-# AiPlayerbot.RemoteCommander  (bool, PlayerbotAIConfig.cpp:1153)
+# AiPlayerbot.RemoteCommander  (bool, PlayerbotAIConfig.cpp:1157)
 AiPlayerbot.RemoteCommander = 0
 
-# AiPlayerbot.RemoteCommanderViewMs  (int, PlayerbotAIConfig.cpp:1156)
+# AiPlayerbot.RemoteCommanderViewMs  (int, PlayerbotAIConfig.cpp:1160)
 #   default is computed in the code: static_cast<int>(TortoiseBots::RemoteCommander::View::kDefaultIntervalMs)
 # AiPlayerbot.RemoteCommanderViewMs =
 
-# AiPlayerbot.RaidEntryByCommander  (bool, PlayerbotAIConfig.cpp:1158)
+# AiPlayerbot.RaidEntryByCommander  (bool, PlayerbotAIConfig.cpp:1162)
 AiPlayerbot.RaidEntryByCommander = 1
 
-# AiPlayerbot.RunTrace.Enabled  (bool, PlayerbotAIConfig.cpp:1160)
+# AiPlayerbot.RunTrace.Enabled  (bool, PlayerbotAIConfig.cpp:1164)
 AiPlayerbot.RunTrace.Enabled = 0
 
-# AiPlayerbot.RunTrace.IntervalMs  (int, PlayerbotAIConfig.cpp:1162)
+# AiPlayerbot.RunTrace.IntervalMs  (int, PlayerbotAIConfig.cpp:1166)
 #   default is computed in the code: static_cast<int>(TortoiseBots::RunTrace::kDefaultIntervalMs)
 # AiPlayerbot.RunTrace.IntervalMs =
 
-# AiPlayerbot.RunTrace.Dir  (string, PlayerbotAIConfig.cpp:1164)
+# AiPlayerbot.RunTrace.Dir  (string, PlayerbotAIConfig.cpp:1168)
 AiPlayerbot.RunTrace.Dir = traces
 
-# AiPlayerbot.RunTrace.GmOnly  (bool, PlayerbotAIConfig.cpp:1165)
+# AiPlayerbot.RunTrace.GmOnly  (bool, PlayerbotAIConfig.cpp:1169)
 AiPlayerbot.RunTrace.GmOnly = 1
 
-# AiPlayerbot.RunTrace.MaxFileMb  (int, PlayerbotAIConfig.cpp:1167)
+# AiPlayerbot.RunTrace.MaxFileMb  (int, PlayerbotAIConfig.cpp:1171)
 #   default is computed in the code: static_cast<int>(TortoiseBots::RunTrace::kDefaultMaxFileMb)
 # AiPlayerbot.RunTrace.MaxFileMb =
 
-# AiPlayerbot.DecisionCapture.Enabled  (bool, PlayerbotAIConfig.cpp:1170)
+# AiPlayerbot.DecisionCapture.Enabled  (bool, PlayerbotAIConfig.cpp:1174)
 AiPlayerbot.DecisionCapture.Enabled = 0
 
-# AiPlayerbot.DecisionCapture.Dir  (string, PlayerbotAIConfig.cpp:1171)
+# AiPlayerbot.DecisionCapture.Dir  (string, PlayerbotAIConfig.cpp:1175)
 AiPlayerbot.DecisionCapture.Dir = decisions
 
-# AiPlayerbot.DecisionCapture.SegmentMiB  (int, PlayerbotAIConfig.cpp:1173)
+# AiPlayerbot.DecisionCapture.SegmentMiB  (int, PlayerbotAIConfig.cpp:1177)
 AiPlayerbot.DecisionCapture.SegmentMiB = 32
 
-# AiPlayerbot.DecisionCapture.CaptureMiB  (int, PlayerbotAIConfig.cpp:1175)
+# AiPlayerbot.DecisionCapture.CaptureMiB  (int, PlayerbotAIConfig.cpp:1179)
 AiPlayerbot.DecisionCapture.CaptureMiB = 512
 
-# AiPlayerbot.DecisionCapture.TotalMiB  (int, PlayerbotAIConfig.cpp:1177)
+# AiPlayerbot.DecisionCapture.TotalMiB  (int, PlayerbotAIConfig.cpp:1181)
 AiPlayerbot.DecisionCapture.TotalMiB = 4096
 
-# AiPlayerbot.DecisionCapture.RecordKiB  (int, PlayerbotAIConfig.cpp:1179)
+# AiPlayerbot.DecisionCapture.RecordKiB  (int, PlayerbotAIConfig.cpp:1183)
 AiPlayerbot.DecisionCapture.RecordKiB = 512
 
-# AiPlayerbot.DecisionCapture.KeyframeEvery  (int, PlayerbotAIConfig.cpp:1181)
+# AiPlayerbot.DecisionCapture.KeyframeEvery  (int, PlayerbotAIConfig.cpp:1185)
 AiPlayerbot.DecisionCapture.KeyframeEvery = 60
 
-# AiPlayerbot.BotGossipNpcs  (string, PlayerbotAIConfig.cpp:1184)
+# AiPlayerbot.BotGossipNpcs  (string, PlayerbotAIConfig.cpp:1188)
 AiPlayerbot.BotGossipNpcs = 
 
-# AiPlayerbot.OpenGoSpell  (int, PlayerbotAIConfig.cpp:1191)
+# AiPlayerbot.OpenGoSpell  (int, PlayerbotAIConfig.cpp:1195)
 AiPlayerbot.OpenGoSpell = 6477
 
-# AiPlayerbot.RandomChangeMultiplier  (float, PlayerbotAIConfig.cpp:1193)
+# AiPlayerbot.RandomChangeMultiplier  (float, PlayerbotAIConfig.cpp:1197)
 AiPlayerbot.RandomChangeMultiplier = 1.0
 
-# AiPlayerbot.RandomBotCombatStrategies  (string, PlayerbotAIConfig.cpp:1195)
+# AiPlayerbot.RandomBotCombatStrategies  (string, PlayerbotAIConfig.cpp:1199)
 AiPlayerbot.RandomBotCombatStrategies = +dps assist,-threat
 
-# AiPlayerbot.RandomBotNonCombatStrategies  (string, PlayerbotAIConfig.cpp:1196)
+# AiPlayerbot.RandomBotNonCombatStrategies  (string, PlayerbotAIConfig.cpp:1200)
 AiPlayerbot.RandomBotNonCombatStrategies = +grind,+loot,+custom::say,+tfish,+wander,+rpg craft
 
-# AiPlayerbot.RandomBotReactStrategies  (string, PlayerbotAIConfig.cpp:1197)
+# AiPlayerbot.RandomBotReactStrategies  (string, PlayerbotAIConfig.cpp:1201)
 AiPlayerbot.RandomBotReactStrategies = 
 
-# AiPlayerbot.RandomBotDeadStrategies  (string, PlayerbotAIConfig.cpp:1198)
+# AiPlayerbot.RandomBotDeadStrategies  (string, PlayerbotAIConfig.cpp:1202)
 AiPlayerbot.RandomBotDeadStrategies = 
 
-# AiPlayerbot.CombatStrategies  (string, PlayerbotAIConfig.cpp:1199)
+# AiPlayerbot.CombatStrategies  (string, PlayerbotAIConfig.cpp:1203)
 AiPlayerbot.CombatStrategies = 
 
-# AiPlayerbot.NonCombatStrategies  (string, PlayerbotAIConfig.cpp:1200)
+# AiPlayerbot.NonCombatStrategies  (string, PlayerbotAIConfig.cpp:1204)
 AiPlayerbot.NonCombatStrategies = +return,+delayed roll,+loot
 
-# AiPlayerbot.ReactStrategies  (string, PlayerbotAIConfig.cpp:1201)
+# AiPlayerbot.ReactStrategies  (string, PlayerbotAIConfig.cpp:1205)
 AiPlayerbot.ReactStrategies = 
 
-# AiPlayerbot.DeadStrategies  (string, PlayerbotAIConfig.cpp:1202)
+# AiPlayerbot.DeadStrategies  (string, PlayerbotAIConfig.cpp:1206)
 AiPlayerbot.DeadStrategies = 
 
-# AiPlayerbot.CommandPrefix  (string, PlayerbotAIConfig.cpp:1204)
+# AiPlayerbot.CommandPrefix  (string, PlayerbotAIConfig.cpp:1208)
 AiPlayerbot.CommandPrefix = 
 
-# AiPlayerbot.CommandSeparator  (string, PlayerbotAIConfig.cpp:1205)
+# AiPlayerbot.CommandSeparator  (string, PlayerbotAIConfig.cpp:1209)
 #   default is computed in the code: "\\\\"
 # AiPlayerbot.CommandSeparator =
 
-# AiPlayerbot.PerfMonEnabled  (bool, PlayerbotAIConfig.cpp:1207)
+# AiPlayerbot.PerfMonEnabled  (bool, PlayerbotAIConfig.cpp:1211)
 AiPlayerbot.PerfMonEnabled = 0
 
-# AiPlayerbot.ExplicitDbStoreSave  (bool, PlayerbotAIConfig.cpp:1208)
+# AiPlayerbot.ExplicitDbStoreSave  (bool, PlayerbotAIConfig.cpp:1212)
 AiPlayerbot.ExplicitDbStoreSave = 0
 
-# AiPlayerbot.RandomBotLoginWithPlayer  (bool, PlayerbotAIConfig.cpp:1210)
+# AiPlayerbot.RandomBotLoginWithPlayer  (bool, PlayerbotAIConfig.cpp:1214)
 AiPlayerbot.RandomBotLoginWithPlayer = 0
 
-# AiPlayerbot.RandomBotBgEnabled  (bool, PlayerbotAIConfig.cpp:1218)
+# AiPlayerbot.RandomBotBgEnabled  (bool, PlayerbotAIConfig.cpp:1222)
 AiPlayerbot.RandomBotBgEnabled = 1
 
-# AiPlayerbot.RandomBotBgQueueInterval  (int, PlayerbotAIConfig.cpp:1219)
+# AiPlayerbot.RandomBotBgQueueInterval  (int, PlayerbotAIConfig.cpp:1223)
 AiPlayerbot.RandomBotBgQueueInterval = 30000
 
-# AiPlayerbot.RandomBotBgMaxQueuePerInterval  (int, PlayerbotAIConfig.cpp:1220)
+# AiPlayerbot.RandomBotBgMaxQueuePerInterval  (int, PlayerbotAIConfig.cpp:1224)
 AiPlayerbot.RandomBotBgMaxQueuePerInterval = 1
 
-# AiPlayerbot.RandomBotBgAutonomous  (bool, PlayerbotAIConfig.cpp:1221)
+# AiPlayerbot.RandomBotBgAutonomous  (bool, PlayerbotAIConfig.cpp:1225)
 AiPlayerbot.RandomBotBgAutonomous = 1
 
-# AiPlayerbot.RandomBotBgAutonomousMaxInstances  (int, PlayerbotAIConfig.cpp:1222)
+# AiPlayerbot.RandomBotBgAutonomousMaxInstances  (int, PlayerbotAIConfig.cpp:1226)
 AiPlayerbot.RandomBotBgAutonomousMaxInstances = 1
 
-# AiPlayerbot.WsgFlagRoles  (bool, PlayerbotAIConfig.cpp:1223)
+# AiPlayerbot.WsgFlagRoles  (bool, PlayerbotAIConfig.cpp:1227)
 AiPlayerbot.WsgFlagRoles = 0
 
-# AiPlayerbot.ClassRace.UseFixedClassRaceCounts  (bool, PlayerbotAIConfig.cpp:1229)
+# AiPlayerbot.ClassRace.UseFixedClassRaceCounts  (bool, PlayerbotAIConfig.cpp:1233)
 AiPlayerbot.ClassRace.UseFixedClassRaceCounts = 0
 
-# AiPlayerbot.BotCheats  (string, PlayerbotAIConfig.cpp:1335)
+# AiPlayerbot.BotCheats  (string, PlayerbotAIConfig.cpp:1339)
 AiPlayerbot.BotCheats = repair,breath
 
-# AiPlayerbot.RndBotCheats  (string, PlayerbotAIConfig.cpp:1337)
+# AiPlayerbot.RndBotCheats  (string, PlayerbotAIConfig.cpp:1341)
 AiPlayerbot.RndBotCheats = repair,breath,item
 
-# AiPlayerbot.CombatMonitor  (bool, PlayerbotAIConfig.cpp:1339)
+# AiPlayerbot.CombatMonitor  (bool, PlayerbotAIConfig.cpp:1343)
 AiPlayerbot.CombatMonitor = 0
 
-# AiPlayerbot.CombatTimeline  (bool, PlayerbotAIConfig.cpp:1340)
+# AiPlayerbot.CombatTimeline  (bool, PlayerbotAIConfig.cpp:1344)
 AiPlayerbot.CombatTimeline = 0
 
-# AiPlayerbot.RaidBossDiagnostics  (bool, PlayerbotAIConfig.cpp:1341)
+# AiPlayerbot.RaidBossDiagnostics  (bool, PlayerbotAIConfig.cpp:1345)
 AiPlayerbot.RaidBossDiagnostics = 0
 
-# AiPlayerbot.AllowedLogFiles  (string, PlayerbotAIConfig.cpp:1342)
+# AiPlayerbot.AllowedLogFiles  (string, PlayerbotAIConfig.cpp:1346)
 AiPlayerbot.AllowedLogFiles = bot_events.csv,deaths.csv
 
-# AiPlayerbot.LogRetentionDays  (int, PlayerbotAIConfig.cpp:1343)
+# AiPlayerbot.LogRetentionDays  (int, PlayerbotAIConfig.cpp:1347)
 AiPlayerbot.LogRetentionDays = 3
 
-# AiPlayerbot.UpdateCheck  (bool, PlayerbotAIConfig.cpp:1344)
+# AiPlayerbot.UpdateCheck  (bool, PlayerbotAIConfig.cpp:1348)
 AiPlayerbot.UpdateCheck = 1
 
-# AiPlayerbot.DebugFilter  (string, PlayerbotAIConfig.cpp:1345)
+# AiPlayerbot.DebugFilter  (string, PlayerbotAIConfig.cpp:1349)
 AiPlayerbot.DebugFilter = add gathering loot,check values,emote,check mount state,jump
 
-# AiPlayerbot.RandomBotAccountPrefix  (string, PlayerbotAIConfig.cpp:1382)
+# AiPlayerbot.RandomBotAccountPrefix  (string, PlayerbotAIConfig.cpp:1386)
 AiPlayerbot.RandomBotAccountPrefix = RNDBOT
 
-# AiPlayerbot.RandomBotPoolReset  (string, PlayerbotAIConfig.cpp:1386)
+# AiPlayerbot.RandomBotPoolReset  (string, PlayerbotAIConfig.cpp:1390)
 AiPlayerbot.RandomBotPoolReset = off
 
-# AiPlayerbot.RandomBotShowCloak  (bool, PlayerbotAIConfig.cpp:1387)
+# AiPlayerbot.RandomBotShowCloak  (bool, PlayerbotAIConfig.cpp:1391)
 AiPlayerbot.RandomBotShowCloak = 1
 
-# AiPlayerbot.RandomBotShowHelmet  (bool, PlayerbotAIConfig.cpp:1388)
+# AiPlayerbot.RandomBotShowHelmet  (bool, PlayerbotAIConfig.cpp:1392)
 AiPlayerbot.RandomBotShowHelmet = 1
 
-# AiPlayerbot.EnableGreet  (bool, PlayerbotAIConfig.cpp:1391)
+# AiPlayerbot.EnableGreet  (bool, PlayerbotAIConfig.cpp:1395)
 AiPlayerbot.EnableGreet = 1
 
-# AiPlayerbot.GreetCooldown  (int, PlayerbotAIConfig.cpp:1392)
+# AiPlayerbot.GreetCooldown  (int, PlayerbotAIConfig.cpp:1396)
 AiPlayerbot.GreetCooldown = 600
 
-# AiPlayerbot.RandomBotGreet  (bool, PlayerbotAIConfig.cpp:1393)
+# AiPlayerbot.RandomBotGreet  (bool, PlayerbotAIConfig.cpp:1397)
 AiPlayerbot.RandomBotGreet = 0
 
-# AiPlayerbot.PassingBuffs  (bool, PlayerbotAIConfig.cpp:1394)
+# AiPlayerbot.PassingBuffs  (bool, PlayerbotAIConfig.cpp:1398)
 AiPlayerbot.PassingBuffs = 1
 
-# AiPlayerbot.XPRate  (float, PlayerbotAIConfig.cpp:1395)
+# AiPlayerbot.XPRate  (float, PlayerbotAIConfig.cpp:1399)
 AiPlayerbot.XPRate = 3.0
 
-# AiPlayerbot.DisableActivityPriorities  (bool, PlayerbotAIConfig.cpp:1396)
+# AiPlayerbot.DisableActivityPriorities  (bool, PlayerbotAIConfig.cpp:1400)
 AiPlayerbot.DisableActivityPriorities = 1
 
-# AiPlayerbot.ForceActiveWhenNearPlayer  (bool, PlayerbotAIConfig.cpp:1397)
+# AiPlayerbot.ForceActiveWhenNearPlayer  (bool, PlayerbotAIConfig.cpp:1401)
 AiPlayerbot.ForceActiveWhenNearPlayer = 0
 
-# AiPlayerbot.LimitCombatActivity  (bool, PlayerbotAIConfig.cpp:1398)
+# AiPlayerbot.LimitCombatActivity  (bool, PlayerbotAIConfig.cpp:1402)
 AiPlayerbot.LimitCombatActivity = 0
 
-# AiPlayerbot.GuildOrderAlwaysActive  (bool, PlayerbotAIConfig.cpp:1399)
+# AiPlayerbot.GuildOrderAlwaysActive  (bool, PlayerbotAIConfig.cpp:1403)
 AiPlayerbot.GuildOrderAlwaysActive = 1
 
-# AiPlayerbot.GuildOrderBankWithdraw  (bool, PlayerbotAIConfig.cpp:1400)
+# AiPlayerbot.GuildOrderBankWithdraw  (bool, PlayerbotAIConfig.cpp:1404)
 AiPlayerbot.GuildOrderBankWithdraw = 1
 
-# AiPlayerbot.CraftToolsAlways  (bool, PlayerbotAIConfig.cpp:1401)
+# AiPlayerbot.CraftToolsAlways  (bool, PlayerbotAIConfig.cpp:1405)
 AiPlayerbot.CraftToolsAlways = 1
 
-# AiPlayerbot.GuildOrderBankGold  (bool, PlayerbotAIConfig.cpp:1402)
+# AiPlayerbot.GuildOrderBankGold  (bool, PlayerbotAIConfig.cpp:1406)
 AiPlayerbot.GuildOrderBankGold = 1
 
-# AiPlayerbot.GuildOrderPlayerBuy  (bool, PlayerbotAIConfig.cpp:1403)
+# AiPlayerbot.GuildOrderPlayerBuy  (bool, PlayerbotAIConfig.cpp:1407)
 AiPlayerbot.GuildOrderPlayerBuy = 0
 
-# AiPlayerbot.GuildOrderSubOrders  (bool, PlayerbotAIConfig.cpp:1404)
+# AiPlayerbot.GuildOrderSubOrders  (bool, PlayerbotAIConfig.cpp:1408)
 AiPlayerbot.GuildOrderSubOrders = 1
 
-# AiPlayerbot.GuildOrderSubOrderDepth  (int, PlayerbotAIConfig.cpp:1405)
+# AiPlayerbot.GuildOrderSubOrderDepth  (int, PlayerbotAIConfig.cpp:1409)
 AiPlayerbot.GuildOrderSubOrderDepth = 3
 
-# AiPlayerbot.GuildOrderBotRank  (bool, PlayerbotAIConfig.cpp:1407)
+# AiPlayerbot.GuildOrderBotRank  (bool, PlayerbotAIConfig.cpp:1411)
 AiPlayerbot.GuildOrderBotRank = 1
 
-# AiPlayerbot.botActiveAlone  (int, PlayerbotAIConfig.cpp:1408)
+# AiPlayerbot.botActiveAlone  (int, PlayerbotAIConfig.cpp:1412)
 AiPlayerbot.botActiveAlone = 10
 
-# AiPlayerbot.RandombotsWalkingRPG  (bool, PlayerbotAIConfig.cpp:1409)
+# AiPlayerbot.RandombotsWalkingRPG  (bool, PlayerbotAIConfig.cpp:1413)
 AiPlayerbot.RandombotsWalkingRPG = 0
 
-# AiPlayerbot.minEnchantingBotLevel  (int, PlayerbotAIConfig.cpp:1410)
+# AiPlayerbot.minEnchantingBotLevel  (int, PlayerbotAIConfig.cpp:1414)
 AiPlayerbot.minEnchantingBotLevel = 10
 
-# AiPlayerbot.PullDpsJoinDelay  (int, PlayerbotAIConfig.cpp:1411)
+# AiPlayerbot.PullDpsJoinDelay  (int, PlayerbotAIConfig.cpp:1415)
 AiPlayerbot.PullDpsJoinDelay = 10
 
-# AiPlayerbot.PullBackDpsJoinDelay  (int, PlayerbotAIConfig.cpp:1412)
+# AiPlayerbot.PullBackDpsJoinDelay  (int, PlayerbotAIConfig.cpp:1416)
 AiPlayerbot.PullBackDpsJoinDelay = 5
 
-# AiPlayerbot.PullBackMaxReturnTime  (int, PlayerbotAIConfig.cpp:1413)
+# AiPlayerbot.PullBackMaxReturnTime  (int, PlayerbotAIConfig.cpp:1417)
 AiPlayerbot.PullBackMaxReturnTime = 15
 
-# AiPlayerbot.RangedPull  (bool, PlayerbotAIConfig.cpp:1414)
+# AiPlayerbot.RangedPull  (bool, PlayerbotAIConfig.cpp:1418)
 AiPlayerbot.RangedPull = 1
 
-# AiPlayerbot.RangedPullMeleeApproach  (float, PlayerbotAIConfig.cpp:1415)
+# AiPlayerbot.RangedPullMeleeApproach  (float, PlayerbotAIConfig.cpp:1419)
 AiPlayerbot.RangedPullMeleeApproach = 20.0
 
-# AiPlayerbot.RandomBotStartLevelMin  (int, PlayerbotAIConfig.cpp:1416)
+# AiPlayerbot.RandomBotStartLevelMin  (int, PlayerbotAIConfig.cpp:1420)
 AiPlayerbot.RandomBotStartLevelMin = 5
 
-# AiPlayerbot.RandomBotStartLevelMax  (int, PlayerbotAIConfig.cpp:1417)
+# AiPlayerbot.RandomBotStartLevelMax  (int, PlayerbotAIConfig.cpp:1421)
 AiPlayerbot.RandomBotStartLevelMax = 60
 
-# AiPlayerbot.GearScoreCheck  (bool, PlayerbotAIConfig.cpp:1418)
+# AiPlayerbot.GearScoreCheck  (bool, PlayerbotAIConfig.cpp:1422)
 AiPlayerbot.GearScoreCheck = 0
 
-# AiPlayerbot.LevelCheck  (int, PlayerbotAIConfig.cpp:1419)
+# AiPlayerbot.LevelCheck  (int, PlayerbotAIConfig.cpp:1423)
 AiPlayerbot.LevelCheck = 30
 
-# AiPlayerbot.PoolBotTradeMode  (int, PlayerbotAIConfig.cpp:1422)
+# AiPlayerbot.PoolBotTradeMode  (int, PlayerbotAIConfig.cpp:1426)
 AiPlayerbot.PoolBotTradeMode = 0
 
-# AiPlayerbot.TradeActionExcludedPrefixes  (string, PlayerbotAIConfig.cpp:1423)
+# AiPlayerbot.TradeActionExcludedPrefixes  (string, PlayerbotAIConfig.cpp:1427)
 AiPlayerbot.TradeActionExcludedPrefixes = RPLL_H_,DBMv4
 
-# AiPlayerbot.RandomBotInvitePlayer  (bool, PlayerbotAIConfig.cpp:1424)
+# AiPlayerbot.RandomBotInvitePlayer  (bool, PlayerbotAIConfig.cpp:1428)
 AiPlayerbot.RandomBotInvitePlayer = 0
 
-# AiPlayerbot.RandomBotGroupNearby  (bool, PlayerbotAIConfig.cpp:1425)
+# AiPlayerbot.RandomBotGroupNearby  (bool, PlayerbotAIConfig.cpp:1429)
 AiPlayerbot.RandomBotGroupNearby = 0
 
-# AiPlayerbot.RandomBotRaidNearby  (bool, PlayerbotAIConfig.cpp:1426)
+# AiPlayerbot.RandomBotRaidNearby  (bool, PlayerbotAIConfig.cpp:1430)
 AiPlayerbot.RandomBotRaidNearby = 1
 
-# AiPlayerbot.RandomBotGuildNearby  (bool, PlayerbotAIConfig.cpp:1427)
+# AiPlayerbot.RandomBotGuildNearby  (bool, PlayerbotAIConfig.cpp:1431)
 AiPlayerbot.RandomBotGuildNearby = 1
 
-# AiPlayerbot.Observability  (bool, PlayerbotAIConfig.cpp:1428)
+# AiPlayerbot.Observability  (bool, PlayerbotAIConfig.cpp:1432)
 AiPlayerbot.Observability = 1
 
-# AiPlayerbot.ObservabilityPort  (int, PlayerbotAIConfig.cpp:1429)
+# AiPlayerbot.ObservabilityPort  (int, PlayerbotAIConfig.cpp:1433)
 AiPlayerbot.ObservabilityPort = 9195
 
-# AiPlayerbot.ObservabilityHost  (string, PlayerbotAIConfig.cpp:1430)
+# AiPlayerbot.ObservabilityHost  (string, PlayerbotAIConfig.cpp:1434)
 AiPlayerbot.ObservabilityHost = 
 
-# AiPlayerbot.ObservabilityDungeonMobs  (bool, PlayerbotAIConfig.cpp:1431)
+# AiPlayerbot.ObservabilityDungeonMobs  (bool, PlayerbotAIConfig.cpp:1435)
 AiPlayerbot.ObservabilityDungeonMobs = 1
 
-# AiPlayerbot.EnableActionLog  (bool, PlayerbotAIConfig.cpp:1433)
+# AiPlayerbot.EnableActionLog  (bool, PlayerbotAIConfig.cpp:1437)
 AiPlayerbot.EnableActionLog = 1
 
-# AiPlayerbot.ActionLogScope  (string, PlayerbotAIConfig.cpp:1437)
+# AiPlayerbot.ActionLogScope  (string, PlayerbotAIConfig.cpp:1441)
 AiPlayerbot.ActionLogScope = commanded
 
-# AiPlayerbot.ActionLogMaxAgeDays  (int, PlayerbotAIConfig.cpp:1441)
+# AiPlayerbot.ActionLogMaxAgeDays  (int, PlayerbotAIConfig.cpp:1445)
 AiPlayerbot.ActionLogMaxAgeDays = 3
 
-# AiPlayerbot.ActionLogMaxTotalMB  (int, PlayerbotAIConfig.cpp:1442)
+# AiPlayerbot.ActionLogMaxTotalMB  (int, PlayerbotAIConfig.cpp:1446)
 AiPlayerbot.ActionLogMaxTotalMB = 2048
 
-# AiPlayerbot.ActionLogMaxFileMB  (int, PlayerbotAIConfig.cpp:1443)
+# AiPlayerbot.ActionLogMaxFileMB  (int, PlayerbotAIConfig.cpp:1447)
 AiPlayerbot.ActionLogMaxFileMB = 100
 
-# AiPlayerbot.ActionCountsLog  (bool, PlayerbotAIConfig.cpp:1444)
+# AiPlayerbot.ActionCountsLog  (bool, PlayerbotAIConfig.cpp:1448)
 AiPlayerbot.ActionCountsLog = 0
 
-# AiPlayerbot.HealerDiagnostics  (bool, PlayerbotAIConfig.cpp:1445)
+# AiPlayerbot.HealerDiagnostics  (bool, PlayerbotAIConfig.cpp:1449)
 AiPlayerbot.HealerDiagnostics = 0
 
-# AiPlayerbot.BotLogFile  (string, PlayerbotAIConfig.cpp:1446)
+# AiPlayerbot.BotLogFile  (string, PlayerbotAIConfig.cpp:1450)
 AiPlayerbot.BotLogFile = 
 
-# AiPlayerbot.BotLogDebug  (bool, PlayerbotAIConfig.cpp:1449)
+# AiPlayerbot.BotLogDebug  (bool, PlayerbotAIConfig.cpp:1453)
 AiPlayerbot.BotLogDebug = 0
 
-# AiPlayerbot.EnableOffSpecStrategies  (bool, PlayerbotAIConfig.cpp:1452)
+# AiPlayerbot.EnableOffSpecStrategies  (bool, PlayerbotAIConfig.cpp:1456)
 AiPlayerbot.EnableOffSpecStrategies = 1
 
-# AiPlayerbot.UseWanderAsDefaultFollowStrategy  (bool, PlayerbotAIConfig.cpp:1453)
+# AiPlayerbot.UseWanderAsDefaultFollowStrategy  (bool, PlayerbotAIConfig.cpp:1457)
 AiPlayerbot.UseWanderAsDefaultFollowStrategy = 1
 
-# AiPlayerbot.DefaultFormation  (string, PlayerbotAIConfig.cpp:1454)
+# AiPlayerbot.DefaultFormation  (string, PlayerbotAIConfig.cpp:1458)
 AiPlayerbot.DefaultFormation = chaos
 
-# AiPlayerbot.GuildMaxBotLimit  (int, PlayerbotAIConfig.cpp:1456)
+# AiPlayerbot.GuildMaxBotLimit  (int, PlayerbotAIConfig.cpp:1460)
 AiPlayerbot.GuildMaxBotLimit = 1000
 
-# AiPlayerbot.BotAcceptDuelMinimumLevel  (int, PlayerbotAIConfig.cpp:1458)
+# AiPlayerbot.BotAcceptDuelMinimumLevel  (int, PlayerbotAIConfig.cpp:1462)
 AiPlayerbot.BotAcceptDuelMinimumLevel = 10
 
-# AiPlayerbot.RandomBotFormGuild  (bool, PlayerbotAIConfig.cpp:1460)
+# AiPlayerbot.RandomBotFormGuild  (bool, PlayerbotAIConfig.cpp:1464)
 AiPlayerbot.RandomBotFormGuild = 0
 
-# AiPlayerbot.BoostFollow  (bool, PlayerbotAIConfig.cpp:1462)
+# AiPlayerbot.BoostFollow  (bool, PlayerbotAIConfig.cpp:1466)
 AiPlayerbot.BoostFollow = 1
 
-# AiPlayerbot.RaidFollowWedge  (bool, PlayerbotAIConfig.cpp:1463)
+# AiPlayerbot.RaidFollowWedge  (bool, PlayerbotAIConfig.cpp:1467)
 AiPlayerbot.RaidFollowWedge = 0
 
-# AiPlayerbot.DungeonFollowHoldBeforePacks  (bool, PlayerbotAIConfig.cpp:1464)
+# AiPlayerbot.DungeonFollowHoldBeforePacks  (bool, PlayerbotAIConfig.cpp:1468)
 AiPlayerbot.DungeonFollowHoldBeforePacks = 0
 
-# AiPlayerbot.WarlockPetBySpec  (bool, PlayerbotAIConfig.cpp:1465)
+# AiPlayerbot.WarlockPetBySpec  (bool, PlayerbotAIConfig.cpp:1469)
 AiPlayerbot.WarlockPetBySpec = 1
 
-# AiPlayerbot.WarlockRaidRotation  (bool, PlayerbotAIConfig.cpp:1466)
+# AiPlayerbot.WarlockRaidRotation  (bool, PlayerbotAIConfig.cpp:1470)
 AiPlayerbot.WarlockRaidRotation = 0
 
-# AiPlayerbot.RogueDungeonThreatDrops  (bool, PlayerbotAIConfig.cpp:1467)
+# AiPlayerbot.RogueDungeonThreatDrops  (bool, PlayerbotAIConfig.cpp:1471)
 AiPlayerbot.RogueDungeonThreatDrops = 1
 
-# AiPlayerbot.SapApproachAvoidPack  (bool, PlayerbotAIConfig.cpp:1468)
+# AiPlayerbot.SapApproachAvoidPack  (bool, PlayerbotAIConfig.cpp:1472)
 AiPlayerbot.SapApproachAvoidPack = 0
 
-# AiPlayerbot.WarriorGapCloser  (bool, PlayerbotAIConfig.cpp:1469)
+# AiPlayerbot.WarriorGapCloser  (bool, PlayerbotAIConfig.cpp:1473)
 AiPlayerbot.WarriorGapCloser = 0
 
-# AiPlayerbot.AnnounceSunderStacks  (bool, PlayerbotAIConfig.cpp:1470)
+# AiPlayerbot.AnnounceSunderStacks  (bool, PlayerbotAIConfig.cpp:1474)
 AiPlayerbot.AnnounceSunderStacks = 0
 
-# AiPlayerbot.HunterViperOnLowMana  (bool, PlayerbotAIConfig.cpp:1471)
+# AiPlayerbot.HunterViperOnLowMana  (bool, PlayerbotAIConfig.cpp:1475)
 AiPlayerbot.HunterViperOnLowMana = 1
 
-# AiPlayerbot.HunterCarveInReachOnly  (bool, PlayerbotAIConfig.cpp:1472)
+# AiPlayerbot.HunterCarveInReachOnly  (bool, PlayerbotAIConfig.cpp:1476)
 AiPlayerbot.HunterCarveInReachOnly = 0
 
-# AiPlayerbot.PaladinJudgementUpkeep  (bool, PlayerbotAIConfig.cpp:1473)
+# AiPlayerbot.PaladinJudgementUpkeep  (bool, PlayerbotAIConfig.cpp:1477)
 AiPlayerbot.PaladinJudgementUpkeep = 1
 
-# AiPlayerbot.OnyxiaWhelpsAndEggs  (bool, PlayerbotAIConfig.cpp:1474)
+# AiPlayerbot.OnyxiaWhelpsAndEggs  (bool, PlayerbotAIConfig.cpp:1478)
 AiPlayerbot.OnyxiaWhelpsAndEggs = 1
 
-# AiPlayerbot.DungeonTactics  (bool, PlayerbotAIConfig.cpp:1475)
+# AiPlayerbot.DungeonTactics  (bool, PlayerbotAIConfig.cpp:1479)
 AiPlayerbot.DungeonTactics = 1
 
-# AiPlayerbot.RaidReactions  (bool, PlayerbotAIConfig.cpp:1478)
+# AiPlayerbot.RaidReactions  (bool, PlayerbotAIConfig.cpp:1482)
 AiPlayerbot.RaidReactions = 0
 
-# AiPlayerbot.AvoidCreatureAuras  (bool, PlayerbotAIConfig.cpp:1480)
+# AiPlayerbot.AvoidCreatureAuras  (bool, PlayerbotAIConfig.cpp:1484)
 AiPlayerbot.AvoidCreatureAuras = 1
 
-# AiPlayerbot.AllowRepairedTaxiPaths  (bool, PlayerbotAIConfig.cpp:1481)
+# AiPlayerbot.AllowRepairedTaxiPaths  (bool, PlayerbotAIConfig.cpp:1485)
 AiPlayerbot.AllowRepairedTaxiPaths = 0
 
-# AiPlayerbot.BotInstantFlight  (bool, PlayerbotAIConfig.cpp:1482)
+# AiPlayerbot.BotInstantFlight  (bool, PlayerbotAIConfig.cpp:1486)
 AiPlayerbot.BotInstantFlight = 0
 
-# AiPlayerbot.TurnInRpg  (bool, PlayerbotAIConfig.cpp:1483)
+# AiPlayerbot.TurnInRpg  (bool, PlayerbotAIConfig.cpp:1487)
 AiPlayerbot.TurnInRpg = 0
 
-# AiPlayerbot.ShareTargets  (bool, PlayerbotAIConfig.cpp:1484)
+# AiPlayerbot.ShareTargets  (bool, PlayerbotAIConfig.cpp:1488)
 AiPlayerbot.ShareTargets = 1
 
-# AiPlayerbot.GlobalSoundEffects  (bool, PlayerbotAIConfig.cpp:1485)
+# AiPlayerbot.GlobalSoundEffects  (bool, PlayerbotAIConfig.cpp:1489)
 AiPlayerbot.GlobalSoundEffects = 0
 
-# AiPlayerbot.NonGmFreeSummon  (bool, PlayerbotAIConfig.cpp:1486)
+# AiPlayerbot.NonGmFreeSummon  (bool, PlayerbotAIConfig.cpp:1490)
 AiPlayerbot.NonGmFreeSummon = 0
 
-# AiPlayerbot.AutoPickReward  (string, PlayerbotAIConfig.cpp:1489)
+# AiPlayerbot.AutoPickReward  (string, PlayerbotAIConfig.cpp:1493)
 AiPlayerbot.AutoPickReward = yes
 
-# AiPlayerbot.AutoEquipUpgradeLoot  (bool, PlayerbotAIConfig.cpp:1490)
+# AiPlayerbot.AutoEquipUpgradeLoot  (bool, PlayerbotAIConfig.cpp:1494)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
 
-# AiPlayerbot.ClaimedBotSelfEquip  (bool, PlayerbotAIConfig.cpp:1491)
+# AiPlayerbot.ClaimedBotSelfEquip  (bool, PlayerbotAIConfig.cpp:1495)
 AiPlayerbot.ClaimedBotSelfEquip = 1
 
-# AiPlayerbot.EquipUpgradeThreshold  (float, PlayerbotAIConfig.cpp:1492)
+# AiPlayerbot.EquipUpgradeThreshold  (float, PlayerbotAIConfig.cpp:1496)
 AiPlayerbot.EquipUpgradeThreshold = 1.1
 
-# AiPlayerbot.SyncQuestWithPlayer  (bool, PlayerbotAIConfig.cpp:1493)
+# AiPlayerbot.SyncQuestWithPlayer  (bool, PlayerbotAIConfig.cpp:1497)
 AiPlayerbot.SyncQuestWithPlayer = 0
 
-# AiPlayerbot.SyncQuestForPlayer  (bool, PlayerbotAIConfig.cpp:1494)
+# AiPlayerbot.SyncQuestForPlayer  (bool, PlayerbotAIConfig.cpp:1498)
 AiPlayerbot.SyncQuestForPlayer = 0
 
-# AiPlayerbot.AutoTrainSpells  (string, PlayerbotAIConfig.cpp:1495)
+# AiPlayerbot.AutoTrainSpells  (string, PlayerbotAIConfig.cpp:1499)
 AiPlayerbot.AutoTrainSpells = yes
 
-# AiPlayerbot.AutoPickTalents  (string, PlayerbotAIConfig.cpp:1496)
+# AiPlayerbot.AutoPickTalents  (string, PlayerbotAIConfig.cpp:1500)
 AiPlayerbot.AutoPickTalents = full
 
-# AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1497)
+# AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1501)
 AiPlayerbot.AutoLearnTrainerSpells = 1
 
-# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1498)
+# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1502)
 AiPlayerbot.AutoLearnQuestSpells = 1
 
-# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1499)
+# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1503)
 AiPlayerbot.AutoLearnQuestSpellsAlts = 0
 
-# AiPlayerbot.AutoLearnDroppedSpells  (bool, PlayerbotAIConfig.cpp:1500)
+# AiPlayerbot.AutoLearnDroppedSpells  (bool, PlayerbotAIConfig.cpp:1504)
 AiPlayerbot.AutoLearnDroppedSpells = 0
 
-# AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1501)
+# AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1505)
 AiPlayerbot.PetAutoTrain = 1
 
-# AiPlayerbot.PetAutoTrainAlts  (bool, PlayerbotAIConfig.cpp:1502)
+# AiPlayerbot.PetAutoTrainAlts  (bool, PlayerbotAIConfig.cpp:1506)
 AiPlayerbot.PetAutoTrainAlts = 0
 
-# AiPlayerbot.AutoDoQuests  (bool, PlayerbotAIConfig.cpp:1503)
+# AiPlayerbot.AutoDoQuests  (bool, PlayerbotAIConfig.cpp:1507)
 AiPlayerbot.AutoDoQuests = 1
 
-# AiPlayerbot.AutoShareConjuredOnTrade  (bool, PlayerbotAIConfig.cpp:1504)
+# AiPlayerbot.AutoShareConjuredOnTrade  (bool, PlayerbotAIConfig.cpp:1508)
 AiPlayerbot.AutoShareConjuredOnTrade = 1
 
-# AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1505)
+# AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1509)
 AiPlayerbot.GenerateTravelNodes = 0
 
-# AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1506)
+# AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1510)
 AiPlayerbot.GenerateFishLocations = 0
 
-# AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1507)
+# AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1511)
 AiPlayerbot.AsyncTravelPartitions = 0
 
-# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1514)
+# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1518)
 AiPlayerbot.SyncAltLevelToMaster = 0
 
-# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1515)
+# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1519)
 AiPlayerbot.TalentsInPublicNote = 1
 
-# AiPlayerbot.ProfessionsGrowWithLevel  (bool, PlayerbotAIConfig.cpp:1516)
+# AiPlayerbot.ProfessionsGrowWithLevel  (bool, PlayerbotAIConfig.cpp:1520)
 AiPlayerbot.ProfessionsGrowWithLevel = 1
 
-# AiPlayerbot.BotProfessionSpecializations  (int, PlayerbotAIConfig.cpp:1517)
+# AiPlayerbot.BotProfessionSpecializations  (int, PlayerbotAIConfig.cpp:1521)
 AiPlayerbot.BotProfessionSpecializations = 2
 
-# AiPlayerbot.GearProgressionSystem.Enable  (bool, PlayerbotAIConfig.cpp:1520)
+# AiPlayerbot.GearProgressionSystem.Enable  (bool, PlayerbotAIConfig.cpp:1524)
 AiPlayerbot.GearProgressionSystem.Enable = 0
 
-# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1547)
+# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1551)
 #   default is computed in the code: uint32(BotSelfBotLevel::GM_ONLY)
 # AiPlayerbot.SelfBotLevel =
 
-# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1548)
+# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1552)
 AiPlayerbot.ToggleAlwaysOnlineAccounts = 
 
-# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1549)
+# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1553)
 AiPlayerbot.ToggleAlwaysOnlineChars = 
 
-# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1568)
+# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1572)
 AiPlayerbot.TargetPosRecalcDistance = 0.1
