@@ -125,6 +125,24 @@ int main()
     std::vector<P> one = { {1, 2, 3} };
     CHECK(!L::PathWadeRefused(one, one.size(), [](float, float, float) { return L::WadeWay::Shallow; }));
     CHECK(L::PathWadeRefused(one, one.size(), [](float, float, float) { return L::WadeWay::Refused; }));
+    // The hop's MIDDLE point (a path vertex between dry ends), the point the live river hop is walked in parts through: shallow
+    // passes with the wade bit, deep refuses, and shallow without the bit still pauses with the RFC rule.
+    std::vector<P> middles = { {0, 0, 0}, {10, 0, 0}, {20, 0, 0} };
+    auto midShallow = [](float x, float, float) { return x > 9.0f && x < 11.0f ? L::WadeWay::Shallow : L::WadeWay::Dry; };
+    auto midDeep = [](float x, float, float) { return x > 9.0f && x < 11.0f ? L::WadeWay::Refused : L::WadeWay::Dry; };
+    CHECK(!L::PathWadeRefused(middles, middles.size(), midShallow));             // flagged hop, shallow middle: walked
+    CHECK(L::PathWadeRefused(middles, middles.size(), midDeep));                 // flagged hop, deep middle: pauses
+    CHECK(L::PathPrefixRefused(middles, middles.size(), wetStrip));              // flagless hop over the same shallow water: pauses
+    // The log's kept sample is the deepest wet one (a refused sample wins over a wading one, deeper within the same kind).
+    L::WadeSample trace;
+    trace.Keep(L::WadeWay::Dry, 0, 0.0f, 1.0f, 1.0f, 1.0f);
+    trace.Keep(L::WadeWay::Shallow, 0x01, 0.3f, 10.0f, 0.0f, 0.0f);
+    trace.Keep(L::WadeWay::Shallow, 0x04, 1.1f, 11.0f, 0.0f, 0.0f);
+    CHECK(trace.samples == 3 && trace.wetSamples == 2 && !trace.refused && trace.depth == 1.1f && trace.status == 0x04);
+    trace.Keep(L::WadeWay::Refused, 0x08, 2.0f, 12.0f, 0.0f, 0.0f);
+    CHECK(trace.refused && trace.depth == 2.0f && trace.x == 12.0f);
+    trace.Keep(L::WadeWay::Refused, 0x04, 1.9f, 13.0f, 0.0f, 0.0f);
+    CHECK(trace.refused && trace.depth == 2.0f && trace.x == 12.0f);            // a shallower refusal does not replace it
 
     if (failures)
         return 1;

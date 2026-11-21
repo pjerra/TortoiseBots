@@ -101,6 +101,59 @@ inline bool PathWadeRefused(Points const& p, std::size_t n, Read&& read)
     return false;
 }
 
+// A wade hop's samples, with the deepest wet one kept: the live log line of a wet hop (the sampled depth and the core's
+// liquid status there), so the next live run says what it waded instead of only that it walked.
+struct WadeSample
+{
+    std::uint32_t samples = 0;          // every point sampled
+    std::uint32_t wetSamples = 0;       // the samples with liquid at the walked height
+    bool refused = false;               // kept is a refused sample (swimming or deeper than kWadeDepthYd)
+    std::uint32_t status = 0;           // the core's status at the kept sample
+    float depth = 0.0f;                 // its surface minus the ground under it: the water the bot would stand in
+    float x = 0.0f, y = 0.0f, z = 0.0f; // the kept sample
+    // A refused sample replaces a wading one; between samples of the same kind the deeper stays.
+    void Keep(WadeWay way, std::uint32_t statusAt, float depthAt, float px, float py, float pz)
+    {
+        ++samples;
+        if (way == WadeWay::Dry)
+            return;
+        ++wetSamples;
+        bool const refuse = way == WadeWay::Refused;
+        bool const better = wetSamples == 1 || (refuse != refused ? refuse : depthAt > depth);
+        if (refuse)
+            refused = true;
+        if (!better)
+            return;
+        status = statusAt;
+        depth = depthAt;
+        x = px;
+        y = py;
+        z = pz;
+    }
+};
+
+// A wade hop's line a -> b, sampled like SegmentWadeRefused, accumulating into `out`: true when it refuses.
+bool SegmentWadeTraceOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz, WadeSample& out);
+
+// A wade hop's path p[0..n) walked in order (vertices and legs).
+template <class Points>
+inline bool PathWadeTraceOnMap(Map* map, Points const& p, std::size_t n, WadeSample& out)
+{
+    if (n == 0)
+        return false;
+    if (n == 1)
+    {
+        WadeSample one;
+        SegmentWadeTraceOnMap(map, p[0].x, p[0].y, p[0].z, p[0].x, p[0].y, p[0].z, one);
+        out = one;
+        return one.refused;
+    }
+    bool refused = false;
+    for (std::size_t i = 1; i < n; ++i)
+        refused = SegmentWadeTraceOnMap(map, p[i - 1].x, p[i - 1].y, p[i - 1].z, p[i].x, p[i].y, p[i].z, out) || refused;
+    return refused;
+}
+
 // The samples of a line a -> b: ceil(length / kSegmentSampleYd) + 1 points, both ends included. `refused(x, y, z)` is the point rule.
 template <class Refused>
 inline bool SegmentRefused(float ax, float ay, float az, float bx, float by, float bz, Refused&& refused)

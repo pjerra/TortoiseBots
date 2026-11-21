@@ -121,8 +121,10 @@ bool ReadParty(Party const& ctx, ResolvedParty& party, OrderAnswer& refusal)
         return false;
     }
     party.lead = lead;
-    ObjectGuid const leadCmd = h3::CommanderGuid(lead->GetGUID());
-    party.expectedCommander = ctx.fromRun ? (leadCmd.IsEmpty() ? lead->GetGUID() : leadCmd) : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
+    // A run binds every member to the lead bot itself (SyncBinding -> BindMember), whatever commander the lead may have of its
+    // own; that is the binding the members' orders must line up with, and what the "not-bound" refusal names. Outside a run the
+    // player's own commander stands.
+    party.expectedCommander = ctx.fromRun ? lead->GetGUID() : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
     party.bots.push_back(lead);
     if (ctx.members.empty())
     {
@@ -169,12 +171,13 @@ struct MoveCheck
     bool pathRead = false;
     bool liquidOnWay = false;       // R6: the point, or the walked route to it, is in or on liquid (TbRunLiquid.h rule)
     std::string liquidAt;           // where the route was refused ("x y z"), for the answer's text
+    liquid::WadeSample wadeTrace;   // a wade hop's deepest wet sample (the live log line), empty on any other order
 };
 
-// The run's current plan row lets this order's hop wade (ai::kPlanFlagWadeOk): the row is a move, pull or boss row (the
-// loader refuses the flag on any other kind) and the order goes to the row's own point. The plan point is what the leader
-// emits (MoveOrder prints 0.1 yd) and the row's own way is the one the probe checked; an approach hop, a stand or a
-// walk-back point is not that way and keeps the liquid rule as it was.
+// The run's current plan row lets this order's hop wade (ai::kPlanFlagWadeOk): the row is a move, pull or boss row, and
+// the order's point is the row's own point or one of the points its walk samples on the way there (DungeonRun::RowHopWades:
+// an approach hop or a `TooFar` leg). The hop the probe checked is walked in parts, so the permission covers them all;
+// a stand, a detour or a walk-back point is not that way and keeps the liquid rule as it was.
 bool WadeOrder(Party const& ctx, float x, float y)
 {
     if (!ctx.fromRun || !ctx.runRec)
@@ -182,12 +185,7 @@ bool WadeOrder(Party const& ctx, float x, float y)
     RunRec const& rec = *ctx.runRec;
     if (!rec.run.plan || rec.run.step >= rec.run.plan->steps.size())
         return false;
-    ai::PlanStep const& s = rec.run.plan->steps[rec.run.step];
-    if (s.kind != ai::PlanStepKind::Move && s.kind != ai::PlanStepKind::Pull && s.kind != ai::PlanStepKind::Boss)
-        return false;
-    if (!(s.flags & ai::kPlanFlagWadeOk))
-        return false;
-    return std::fabs(s.x - x) <= 0.2f && std::fabs(s.y - y) <= 0.2f;
+    return DungeonRun::RowHopWades(rec.run, rec.run.plan->steps[rec.run.step], x, y);
 }
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
@@ -232,13 +230,14 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         // points: no route at all) falls back to the straight line, which is what a shortcut walks.
         Movement::PointsArray const& way = PathPointsCompat(path);
         auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
-        auto const wadeAt = [map](float x, float y, float z) { return liquid::WadePointOnMap(map, x, y, z); };
         if (wade)
         {
-            // A row's own wade hop (ai::kPlanFlagWadeOk, WadeOrder): every sample of the walked route may be dry or wading
-            // depth; a swimming sample (UNDER_WATER) or water deeper than kWadeDepthYd refuses it, exactly as a wet hop does today.
-            check.liquidOnWay = way.size() >= 2 ? liquid::PathWadeRefused(way, way.size(), wadeAt)
-                                                : liquid::SegmentWadeRefused(ox, oy, oz, point.x, point.y, point.z, wadeAt);
+            // A wade row's own hop (ai::kPlanFlagWadeOk, WadeOrder): every sample of the walked route may be dry or wading
+            // depth; a swimming sample (UNDER_WATER) or water deeper than kWadeDepthYd refuses it. The deepest wet sample stays
+            // in the check, so the live log of a wet hop can quote its depth and liquid status.
+            check.liquidOnWay = way.size() >= 2
+                ? liquid::PathWadeTraceOnMap(map, way, way.size(), check.wadeTrace)
+                : liquid::SegmentWadeTraceOnMap(map, ox, oy, oz, point.x, point.y, point.z, check.wadeTrace);
         }
         else
         {
@@ -509,6 +508,19 @@ OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     }
 
     MoveCheck const check = CheckLeadMove(lead, wanted, ctx.fromRun, gather, wade);
+    // A wet hop says once what it waded (the live evidence of the next run): the deepest sample's depth (the core's surface minus
+    // the ground under it) and liquid status there, and whether the wade rule refused that point.
+    if (wade && check.wadeTrace.wetSamples != 0 && ctx.runRec && ctx.runRec->run.plan &&
+        ctx.runRec->run.step < ctx.runRec->run.plan->steps.size() && ctx.runRec->wadeLoggedStep != ctx.runRec->run.step)
+    {
+        ctx.runRec->wadeLoggedStep = ctx.runRec->run.step;
+        ai::PlanStep const& row = ctx.runRec->run.plan->steps[ctx.runRec->run.step];
+        liquid::WadeSample const& wet = check.wadeTrace;
+        sLog.outString("TortoiseBots run: %s wade hop step=%u leg=%u: depth=%.1f yd status=0x%02x at %.1f %.1f %.1f "
+                       "(%u of %u samples wet, %s)", NameOf(lead).c_str(), unsigned(ctx.runRec->run.step), unsigned(row.leg),
+            wet.depth, wet.status, wet.x, wet.y, wet.z, wet.wetSamples, wet.samples,
+            wet.refused ? "refused" : "waded");
+    }
     answer.movePathRead = check.pathRead;
     answer.movePathType = check.facts.pathType;
     od::Judged const judged = od::JudgeMove(check.facts);

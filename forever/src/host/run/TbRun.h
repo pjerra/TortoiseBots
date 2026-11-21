@@ -94,6 +94,7 @@ struct RunRec
     std::map<std::string, std::string> ccOwned;
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
+    size_t wadeLoggedStep = size_t(-1);          // the step whose wet wade hop was logged (one line per wet hop, not per order)
 
     // ---- S9 (package C9): what the run keys and the step-end events read. Plain data from the last tick's facts: the facts the policy decided on. ----
     std::string carrier;                         // the bot a loot / open / use_item step goes to (empty on any other step)

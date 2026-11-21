@@ -43,7 +43,10 @@ The way back retraces the proven points in reverse (13 `back_*` legs), the one-w
 lip (-287.5 5 -63.6, exact) then `move_hop_exact` to the foot (-293.3 0.5 -58) - probed 3 of 3 from the lip and 3 of 3
 from the foot on 2026-10-22 (forever-agent `dungeons/wailing_caverns-extra.json`).
 
-Re-running `python3 forever/tools/wc_plan_rows.py --out <file>` rewrites the same rows from the same inputs.
+Re-running `python3 forever/tools/wc_plan_rows.py --out <file>` rewrites the same rows from the same inputs. The plan row's
+`source` is `forever-agent 109a2496 route export + core scripts` (50 characters, inside the column's varchar(64)); the
+generator's every text field is checked against the plan tables' own schema by `test_wc_plan_rows.py`, after the live
+updater refused the first, 90-character text with MySQL error 1406.
 
 ### The navmesh check of the new legs (offline, the server's own Forever v16 mmaps)
 
@@ -105,10 +108,25 @@ the row's own hop still equals the probed pair (leg, seq, both points); a stale 
 The run judge (`forever/src/host/run/TbRunOrders.cpp`, `forever/src/host/run/TbRunLiquid.h`) skips the liquid refusal for
 a wade hop only when every sample of the walked route is dry or wading depth (surface minus the liquid's own
 `depth_level` at most `kWadeDepthYd` 1.5 yd) and none is `UNDER_WATER` (swimming); the destination may stand in the
-shallows, never in swimming water. Everything else is unchanged: **a row without the bit keeps exactly the RFC rule** (the
-prefix escape, the dry destination, the pause "unreachable: ... crosses or ends in liquid"), and a hop that is not the
-row's own point (an approach stand, a walk-back, a detour) never wades. Deep water, lava and every other plan (RFC,
-Deadmines) behave exactly as before; `test_run_liquid` pins the shallow/deep/flagless cases.
+shallows, never in swimming water. The permission belongs to the **whole hop**, not its ends: the run walks a long row in
+approach hops of at most 40 yd (`ApproachHop`) and in `TooFar` legs, and every one of those order points is a point of the
+row's own way (`DungeonRun::RowHopWades`), so each of them inherits the bit and is judged by the same wade rule; the
+wading depth at each sample is the core's own reading (its liquid surface minus the ground under it). A point that is not
+that way (a walk-back, a detour, a stand, a gather, another row's walk) never wades: **a row without the bit keeps exactly
+the RFC rule** (the prefix escape, the dry destination, the pause "unreachable: ... crosses or ends in liquid"). Deep
+water, lava and every other plan (RFC, Deadmines) behave exactly as before; `test_run_liquid` pins the shallow, deep,
+flagless and middle-point cases, and `test_run_orders` pins `RowHopWades` (the row's own point, an approach hop, a leg, a
+foreign walk, a hold row).
+
+The first sub-hop of a wet row logs once what it sampled, so the next live run's log says why a river hop walked or
+paused:
+
+```
+TortoiseBots run: Wctank wade hop step=32 leg=4: depth=0.4 yd status=0x01 at -30.7 281.3 -105.1 (12 of 34 samples wet, waded)
+```
+
+(`depth` is the deepest wet sample's surface minus the ground under it, `status` the core's liquid bits there, `refused`
+when that sample is swimming water or deeper than 1.5 yd. One line per row: the step index dedupes the sub-hops.)
 
 ## 3. The Naralex event (the end of the run)
 
@@ -193,11 +211,11 @@ Mutanus's `bossOwnDead` stays false (no spawn row) and the corpse/grid fields ce
 |---|---|
 | `forever/tools/test_run_wc.cpp` (new; `python3 forever/tools/wc_plan_rows.py --tsv /tmp/wc_rows.tsv` first) | 727 checks, 0 failed: every row accepted, the plan shape (31 legs, 302 steps, 87 pulls, 5 holds, 2 hop rows), the run walks the whole plan to `Done` with the seven bosses, one `gossip 3678 Mtank 1`, the real unit rows listed at their spawn positions for every pull (within its radius), a wave unit east of the spot puts the ranged row west, a dead Disciple stops the event at the gossip (the first hold and a later one, across the holds between), a gossip that did not start the escort stops there too, **a Disciple who dies mid-fight does not end the hold on the units rule (holds 1-3 still end on time with him alive; the last hold names him and goes back to the gossip instead of the Mutanus step)**, and an old corpse does not end a hold (a new one does) |
 | `test_run_tasks` (gossip clock, grammar, matcher, service types: binder/auction/battlemaster/stable) | 197 checks, 0 failed |
-| `test_run_orders` (the gossip verb) | PASS, 266 checks |
+| `test_run_orders` (the gossip verb; the wade-hop predicate) | PASS, 276 checks (`RowHopWades`: the row's own point, an approach hop's middle point, a `TooFar` leg, a foreign walk, a flagless row, a hold row) |
 | `test_run_facts` (Ragefire Chasm, unchanged) | PASS |
-| `test_run_facts_s9`, `test_run_liquid`, `test_run_cancel`, `test_run_binding`, `test_run_gather`, `test_run_c6` | PASS (`test_run_liquid` now pins the wade rule: shallow wades, deep/swimming refuses, a wet shallow hop without the flag still pauses) |
+| `test_run_facts_s9`, `test_run_liquid`, `test_run_cancel`, `test_run_binding`, `test_run_gather`, `test_run_c6` | PASS (`test_run_liquid` pins the wade rule: shallow wades, deep/swimming refuses, **a shallow middle point of the path wades while a deep one pauses**, and a wet shallow hop without the flag still pauses; the kept log sample is the deepest wet one) |
 | `test_dungeon_plan_policy` | PASS (the wade bit on move/pull/boss only, its own bit, and with the skip-unreachable bit) |
-| `test_wc_plan_rows.py` | 541 checks, 0 failed (the committed SQL is the generator output; extent, back-leg continuity, flags, 193 spawns; the base rows pinned to the agent route fixture at 0.15 yd; the 21 wade hops are exactly the rows with the bit) |
+| `test_wc_plan_rows.py` | 3505 checks, 0 failed (the committed SQL is the generator output; extent, back-leg continuity, flags, 193 spawns; the base rows pinned to the agent route fixture at 0.15 yd; the 21 wade hops are exactly the rows with the bit; **every generated text field fits its varchar from the plan tables' own schema**) |
 
 ## 6. Gates (build VM, core d02645dd21, this worktree)
 
@@ -207,10 +225,24 @@ Mutanus's `bossOwnDead` stays false (no spawn row) and the corpse/grid fields ce
 | build OFF (`slot-sync-build.sh 4 tortoisebots`) | `CMAKE_RC=0`, `MAKE_RC=0`, 17 s; key `core-9b88bd2d6584-opt-78bf025f` |
 | slot 8 (the brief's slot number) | **not a core this branch builds on**: `~/forever-build/src-8` holds the older 25fc7ca core (no `WorldSession::IsKickRequested`, no `ScriptMgr::OnAfterReload(std::string_view)`), so `TbBotSession.cpp:297` and `TbScripts.cpp:152` (both untouched by this round) fail with `MAKE_RC=1`. The pinned d02645dd21 core is in slots 1, 2 and 4, as the last round used (slot 4) |
 | `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; the registry check unchanged (228 keys to register or stub later) |
-| `python3 forever/tools/test_wc_plan_rows.py` | 541 checks, 0 failed |
+| `python3 forever/tools/test_wc_plan_rows.py` | 3505 checks, 0 failed |
 | `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
 | `git diff --check` | clean |
 | the run/policy/wiring tests incl. the WC ones and RFC's unchanged | PASS (section 5) |
+
+### The fix round after the live run (2026-11-21, this head)
+
+| gate | exact line |
+|---|---|
+| build ON, slot 4: `~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 4)` / `module sync: 5 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=44` |
+| build OFF, slot 5: `~/forever-build/slot-sync-build.sh 5 tortoisebots` | `combined build: slot 5 key core-9b88bd2d6584-opt-78bf025f` / `build token 1 of 3 (slot 5)` / `module sync: 300 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=24` |
+| `test_run_orders` | `RESULT: PASS (276 checks)` |
+| `test_run_liquid` | `RESULT: PASS (test_run_liquid)` |
+| `test_run_facts` (Ragefire Chasm, unchanged rows) | `RESULT: PASS` |
+| `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
+| `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3505 checks, 0 failed` |
+| `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
+| `git diff --check` | clean |
 
 ## 7. The live run (run 2, core 25fc7ca, the previous worker's build) and this round
 
@@ -218,10 +250,14 @@ The earlier live run covered 6 of 490 steps (4 pulls, 1 wipe, stopped by hand on
 event and the gossip were **not** reached live. The route then was the Turtle navmesh route; this round replaces it with
 the route the ForeverCore server proved (section 2), adds the escort failure, and fixes the hold facts. **No live run was
 made in this round** (the brief: the lead runs it next on a test server away from the build VM). The first live check
-should be `.tb plan wailing_caverns check` (expect units 193 matched 193) and then `.tb run start ... wailing_caverns`.
+should be `.tb plan wailing_caverns check` (expect units 193 matched 193) and then `.tb run start ... wailing_caverns`,
+after the setup contract of section 8 (party level and kit, bags, binding, everything logged in and in the instance). The
+live run of 2026-11-21 (run 3) used this route on the previous head; what it did, the deaths and the fixes it drove are
+section 8.
 The river hops are wade rows now (section 2): the run walks its first 21 wet hops instead of pausing, and still pauses
 with the unchanged "unreachable: ... crosses or ends in liquid" if the core's own liquid read finds one of them deeper
-than 1.5 yd or swimming (the probe could only read the mmaps' water surface, not the core's depth).
+than 1.5 yd or swimming; the wade permission now covers every sampled point of the hop, and the first wet sub-hop logs
+its depth and liquid status.
 
 The server was stopped after the earlier run, the dump restored (`zstd -dc dumps/wc-20261120T212230Z.sql.zst | mysql`),
 the previous binary put back, the new plan SQL removed from `sqlsrc` (0 files left), `etc/worldserver.conf` restored
@@ -231,3 +267,49 @@ gear went back with the dump.
 
 **Slots:** builds in this round go only through `~/forever-build/slot-sync-build.sh 4` on yulon-ubuntu2 (the brief's
 slot lock); no build ran outside it.
+
+## 8. The live run of 2026-11-21 (run 3, code 3b5b41f76) and the deaths
+
+Result: PARTIAL, 32 of 302 steps, 23 of 87 pulls, 7 deaths, 1 wipe, 4 pauses; Kresh dead (leg 3 boss step), stopped
+at leg 4 `cobrahn_b` step 32 (the first river hop, 4/0) by the liquid pause the wade fix in section 2 now removes. The
+run's own record (`notes/live-wc-2026-11-21.md`) itemizes two of the seven deaths; the total is its own counter.
+
+| deaths | where | what killed whom | verdict |
+|---|---|---|---|
+| 5 (the wipe, 03:41-03:44) | step 5 = leg 0 `anacondra_a` seq 5, `pull group 2` at -72.2 214.8 | two **Deviate Ravagers 3636** (18-19 elite, spawns 4.8 and 11.8 yd from the pull point); no other elite pack within 20 yd (a lvl-1 Snake at 8.6 and a lvl-1 Biletoad at 15.7) | not the plan: a 2-unit pull, no missing hold (the run rests between pulls), the spot is the agent's centroid. Five level-25 bots dying to two 18-19 elites is a party failure |
+| 1 (Wctank, step 26) | step 26 = leg 2 `cobrahn_a` seq 2, `pull group 1` at -52.33 266.97, radius 23.1 | the **Anacondra group**: Lady Anacondra 3671 + two Druid of the Fang 3840 + one Ravager 3636, 3.5-13 yd from the spot (4 elites, one a boss) | mostly party: a 4-elite pull needs a tank that holds and a healer that sustains. The group is the agent's and the Druids heal, but `kill_first = 3671` (Anacondra first) was kept: moving the Druids ahead of her in `kill_first` was rejected because a kill_first entry also forbids deferring every pull that contains it (`PullMayBeDeferred`), and the evidence does not show the Druids out-healing the damage |
+| 1 (not itemized) | not named by the evidence | — | the run's counter is 7; only the wipe's 5 and Wctank's 1 are named, and this one is not claimed |
+
+So both named events say the same thing: the pulls were the agent's own (2 and 4 units, correct radii and entries), so
+the plan is not the cause, and the party was under-equipped: 13 gear slots upgraded for the whole five-bot party, and
+the priest's bags still held junk (the start was refused once for 11 free slots where 12 are needed). No plan row was
+changed for these deaths.
+
+### Party advice for the next run (not class code, a setup contract)
+
+* Level **26-28** before the run (`.tb level 28` + `.tb train` after it), and let each bot's engine settle at that level
+  before the start (engine on, one full tick, then the run). Level 25 with the last run's gear is not enough for a 4-elite
+  pull.
+* A **full kit in the bags first**, then `.tb gear party upgrade`: it only equips what the bots' bags hold, and the last
+  run's bags held a weapon and a few pieces, so it filled 13 slots for the whole party. Add every armour slot at the
+  party's level (green), a weapon each and a shield for the warrior tank (`.tb additem`), and verify the equipped slots
+  before the start.
+* Consumables: health/mana potions and bandages on every bot (the healer's mana pool is the Anacondra group's fight).
+* Empty the bags (12 free slots on the priest is the start's own gate), and make sure no bot is re-logged after the run
+  starts.
+* Then `.tb plan wailing_caverns check` (expect `units 193 matched 193 near 0 missing 0`), `.tb run start ...
+  wailing_caverns`, and watch the first river hop's new line (section 2): `wade hop step=32 leg=4: depth=... status=...`.
+
+### The setup step the "not-bound" pause was missing
+
+The run binds the members it finds **commanded** to **the lead bot** (`SyncBinding` -> `BindMember`), but the move judge
+expected the lead's own `.tb master` commander when the lead had one: with the live setup's `.tb master party <player>`
+(which binds the lead too), the first party move after the start paused `not-bound: Wcdpsa is not bound to the lead bot
+as its commander`; the second `.tb master party` re-bound the members to the player, which the run then left alone
+(`SyncBindingAction`: a commander someone else set is `Other` -> `Keep`), and the run held. The judge's expectation is now
+always the lead bot, the binding the run makes and the one the refusal names, so either setup works.
+
+For the live steps: log every member in, group them and have each one **commanded before `.tb run start`** (`.tb master
+party <lead bot>` — the run's own expectation — or the player's character, which the run rebinds to the lead); a bot with
+no commander is not bound by the run and pauses the first party move. Keep every member in the instance, and re-bind a
+member that was re-logged (a re-login loses its commander) before resuming.

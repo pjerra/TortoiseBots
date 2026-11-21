@@ -8794,6 +8794,32 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     return true;
 }
 
+// A wade row's permission (ai::kPlanFlagWadeOk) covers the whole hop, not just its ends: the run walks a long row in
+// approach hops and in `TooFar` legs, and every one of those points is a point of the row's own way. So an order may
+// wade when the current row carries the bit AND its point is the row's own point, the walk's own target, or a leg of
+// that walk, and that walk goes to the row's point or to an approach hop of it (`hopWalk`). Any other point keeps the
+// liquid rule as it was: a detour's stand-in, a walk-back, a gather, a walk of another row.
+inline bool RowHopWades(Run const& r, PlanStep const& s, float x, float y)
+{
+    if (s.kind != PlanStepKind::Move && s.kind != PlanStepKind::Pull && s.kind != PlanStepKind::Boss)
+        return false;                                       // the loader takes the bit on these kinds only
+    if (!(s.flags & ai::kPlanFlagWadeOk))
+        return false;
+    auto const at = [](float px, float py, float qx, float qy)
+    {
+        return std::fabs(px - qx) <= 0.2f && std::fabs(py - qy) <= 0.2f;
+    };
+    if (at(x, y, s.x, s.y))
+        return true;                                        // the row's own point
+    bool const rowWalk = r.phase == Phase::Walk && (at(r.walkX, r.walkY, s.x, s.y) ||
+        (r.hopWalk && at(r.walkX, r.walkY, r.hopX, r.hopY)));   // the walk under way is this row's own
+    if (!rowWalk)
+        return false;
+    if (at(x, y, r.walkX, r.walkY))
+        return true;                                        // the walk's target (also the fresh order)
+    return r.legOn && at(x, y, r.legX, r.legY);             // a leg of that walk
+}
+
 // Walks the party to a point. True once the lead bot is there; otherwise
 // `order` may hold the move to send. Pauses after kWalkTries moves without
 // progress.
