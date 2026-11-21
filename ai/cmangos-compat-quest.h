@@ -3,6 +3,7 @@
 #pragma once
 
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 struct QuestTriageViewCompat
@@ -168,6 +169,34 @@ inline void PushQuestToPartyCompat(Player* bot, uint32 questId)
     WorldPacket p;
     p << questId;
     bot->GetSession()->HandlePushQuestToParty(p);
+}
+
+// The spawned-giver/ender sets live only on the ForeverCore side (TbCompat_Quest.h), which has the relation tables;
+// here they are inert twins keeping the compat pair equal. Eligibility on this side stays always-true below.
+struct QuestEligibilitySetsCompat
+{
+    std::unordered_set<uint32> spawnedCreatures;
+    std::unordered_set<uint32> spawnedGOs;
+    std::unordered_set<uint32> questsWithGiver;
+    bool built = false;
+};
+
+inline QuestEligibilitySetsCompat& QuestEligibilitySetsCompat()
+{
+    static QuestEligibilitySetsCompat sets;
+    return sets;
+}
+
+inline void RebuildQuestEligibilityCompat()
+{
+    QuestEligibilitySetsCompat& sets = QuestEligibilitySetsCompat();
+    sets = QuestEligibilitySetsCompat();
+    sets.built = true;
+}
+
+inline void ClearQuestEligibilityCompat()
+{
+    QuestEligibilitySetsCompat() = QuestEligibilitySetsCompat();
 }
 
 inline bool QuestIsVanillaEligibleCompat(Quest const* /*quest*/) { return true; }

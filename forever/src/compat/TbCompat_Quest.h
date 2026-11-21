@@ -235,37 +235,64 @@ inline void PushQuestToPartyCompat(Player* bot, uint32 questId)
     bot->GetSession()->HandlePushQuestToParty(packet);
 }
 
+// Spawned creature/GO entry sets (O(spawns) to build) so every quest filter check is O(1).
+struct QuestEligibilitySets
+{
+    std::unordered_set<uint32> spawnedCreatures;
+    std::unordered_set<uint32> spawnedGOs;
+    std::unordered_set<uint32> questsWithGiver;
+    bool built = false;
+};
+
+inline QuestEligibilitySets& QuestEligibilitySetsCompat()
+{
+    static QuestEligibilitySets sets;
+    return sets;
+}
+
+// Called at world load and after quest reloads, so no bot tick pays for the build.
+inline void RebuildQuestEligibilityCompat()
+{
+    QuestEligibilitySets& s = QuestEligibilitySetsCompat();
+    s = QuestEligibilitySets();
+    for (auto const& pair : ObjectMgr::instance()->GetAllCreatureData())
+        s.spawnedCreatures.insert(pair.second.id);
+    for (auto const& pair : ObjectMgr::instance()->GetAllGameObjectData())
+        s.spawnedGOs.insert(pair.second.id);
+    if (QuestRelations const* cRel = ObjectMgr::instance()->GetCreatureQuestRelationMapHACK())
+    {
+        for (auto const& kv : *cRel)
+            if (s.spawnedCreatures.count(kv.first))
+                s.questsWithGiver.insert(kv.second);
+    }
+    if (QuestRelations const* gRel = ObjectMgr::instance()->GetGOQuestRelationMapHACK())
+    {
+        for (auto const& kv : *gRel)
+            if (s.spawnedGOs.count(kv.first))
+                s.questsWithGiver.insert(kv.second);
+    }
+    s.built = true;
+}
+
+// Drops the sets without rebuilding: the next eligibility check rebuilds them. A quest-table reload while the module is
+// off takes this path, so a re-enable cannot read pre-reload rows.
+inline void ClearQuestEligibilityCompat()
+{
+    QuestEligibilitySetsCompat() = QuestEligibilitySets();
+}
+
 inline bool QuestIsVanillaEligibleCompat(Quest const* quest)
 {
     if (!quest)
         return false;
     uint32 const questId = quest->GetQuestId();
 
-    // Build spawned creature/GO entry sets once (O(spawns)) so every quest filter check is O(1).
-    static std::unordered_set<uint32> spawnedCreatures;
-    static std::unordered_set<uint32> spawnedGOs;
-    static std::unordered_set<uint32> questsWithGiver;
-    static bool initialized = false;
-    if (!initialized)
-    {
-        initialized = true;
-        for (auto const& pair : ObjectMgr::instance()->GetAllCreatureData())
-            spawnedCreatures.insert(pair.second.id);
-        for (auto const& pair : ObjectMgr::instance()->GetAllGameObjectData())
-            spawnedGOs.insert(pair.second.id);
-        if (QuestRelations const* cRel = ObjectMgr::instance()->GetCreatureQuestRelationMapHACK())
-        {
-            for (auto const& kv : *cRel)
-                if (spawnedCreatures.count(kv.first))
-                    questsWithGiver.insert(kv.second);
-        }
-        if (QuestRelations const* gRel = ObjectMgr::instance()->GetGOQuestRelationMapHACK())
-        {
-            for (auto const& kv : *gRel)
-                if (spawnedGOs.count(kv.first))
-                    questsWithGiver.insert(kv.second);
-        }
-    }
+    QuestEligibilitySets& sets = QuestEligibilitySetsCompat();
+    if (!sets.built)
+        RebuildQuestEligibilityCompat();
+    std::unordered_set<uint32> const& spawnedCreatures = sets.spawnedCreatures;
+    std::unordered_set<uint32> const& spawnedGOs = sets.spawnedGOs;
+    std::unordered_set<uint32> const& questsWithGiver = sets.questsWithGiver;
 
     bool const hasGiver = questsWithGiver.count(questId) > 0;
     bool hasEnder = false;

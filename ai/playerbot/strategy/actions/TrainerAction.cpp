@@ -170,6 +170,7 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
         }
         ai->TellPlayer(requester, out, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
     }
+    visitCreature = nullptr;
 
     if(hasHeader)
         TellFooter(requester, totalCost);

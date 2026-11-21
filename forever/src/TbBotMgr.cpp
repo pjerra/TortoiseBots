@@ -290,6 +290,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         return "the login could not be started (see the server log)";
 
     _bots.emplace(characterGuid, std::move(bot));
+    _knownBots.insert(characterGuid);
     TC_LOG_INFO("tortoisebots", "BotMgr: login started for {} (account {})", characterGuid.ToString(), accountId);
     return {};
 }

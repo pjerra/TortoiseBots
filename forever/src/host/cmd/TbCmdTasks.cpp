@@ -187,6 +187,9 @@ bool ResolveCmdTarget(Player* anchor, Player* sender, run::tasks::Verb verb, std
                     return true;
                 }
             }
+            code = run::tasks::RC::kCodeInvalidTarget;
+            detail = "your selection is not a valid target for this verb";
+            return false;
         }
         if (isGossip)
         {

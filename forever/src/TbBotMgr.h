@@ -10,6 +10,7 @@
 #include "ai/playerbot/policy/death/GhostRescuePolicy.h"   // W1: when a ghost may be rescued (core-free)
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -122,6 +123,8 @@ public:
     // BindBotMaster/ClearBotMaster set it too).
     bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
+    // A character ever logged in as a bot (live or since logged out): an offline bot is still a bot, not a real player.
+    bool IsKnownBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0 || _knownBots.count(characterGuid) != 0; }
     // Every logged-in bot (the dashboard roster).
     std::vector<ObjectGuid> BotGuids() const { std::vector<ObjectGuid> out; out.reserve(_bots.size()); for (auto const& [guid, bot] : _bots) out.push_back(guid); return out; }
     std::size_t Count() const { return _bots.size(); }
@@ -280,6 +283,7 @@ private:
     std::vector<std::shared_ptr<PendingCreation>> _creating;
 
     std::unordered_map<ObjectGuid, Bot> _bots;
+    std::unordered_set<ObjectGuid> _knownBots;
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
