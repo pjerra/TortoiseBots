@@ -102,8 +102,10 @@ The loader skips rows it cannot use and names them in the server log: an unknown
 | `gossip` | NPC entry, near point, option 1-15 | Talks to the NPC and picks one menu option, searched within 40 yd after the lead bot walks within 30 yd first. |
 
 A walk refuses a route that crosses or ends in liquid: any liquid at the walked height or up to 0.6 yd below it, and swimming water.
-A row with flag `131072` may cross water on its own hop only, when every sample is wading depth (at most 1.5 yd of water above the ground) and none is swimming; deeper water, lava, and any other hop (an approach stand, a walk back, a detour) keep the refusal.
-Wailing Caverns' river hops carry it; no other shipped plan does.
+A row with flag `131072` may cross water on its own hop, when every sample is wading depth (at most 1.5 yd of water above the ground) and none is swimming.
+A move the run issues for itself (a regroup, an approach stand, a return to the plan point, a follow-up, a bot walk) may wade too, inside any of the plan's wet areas: within 12 yd of a wade-flagged row's own hop, of any leg.
+Deeper water, lava, and a move a player types (`.bot cmd move`) keep the refusal.
+Wailing Caverns' river hops carry the flag; no other shipped plan does.
 
 ## Joining a bot LFG group
 

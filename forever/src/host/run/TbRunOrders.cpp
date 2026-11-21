@@ -199,17 +199,19 @@ void LogLiquidRefusal(Party const& ctx, std::string const& who, liquid::LiquidPr
 // the order's point is the row's own point or one of the points its walk samples on the way there (DungeonRun::RowHopWades:
 // an approach hop or a `TooFar` leg). The hop the probe checked is walked in parts, so the permission covers them all.
 // A move the run makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan point, the
-// follow-up after a pull) is no point of a row's walk: it keeps that permission when it stays in the leg's wet area
-// (DungeonRun::LegWetAreaAt, kWadeAreaYd of a flagged row's own hop). Both are the same shallow rule: the core's measured
-// depth, never swimming water. A `cmd move` a player sends (fromRun false) and every dry plan keep the RFC rule.
+// follow-up after a pull) is no point of a row's walk: it keeps that permission when it stays in one of the plan's wet
+// areas (DungeonRun::PlanWetAreaAt, kWadeAreaYd of a flagged row's own hop), also when the hop belongs to another leg
+// (the lead's return from the graveyard after a death). Both are the same shallow rule: the core's measured depth, never
+// swimming water. `ctx.fromRun` is the order's origin flag: a `cmd move` a player sends and every dry plan keep the RFC
+// rule.
 bool WadeOrder(Party const& ctx, float x, float y)
 {
-    if (!ctx.fromRun || !ctx.runRec)
+    if (!ctx.runRec)
         return false;
     RunRec const& rec = *ctx.runRec;
     if (!rec.run.plan || rec.run.step >= rec.run.plan->steps.size())
         return false;
-    return DungeonRun::MoveMayWade(rec.run, rec.run.plan->steps[rec.run.step], x, y);
+    return DungeonRun::MoveMayWade(ctx.fromRun, rec.run, rec.run.plan->steps[rec.run.step], x, y);
 }
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the

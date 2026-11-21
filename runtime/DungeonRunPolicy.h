@@ -8822,11 +8822,15 @@ inline bool RowHopWades(Run const& r, PlanStep const& s, float x, float y)
 
 // The moves the run makes on its own inside a leg (a regroup's gather and its walk back to the anchor, an approach
 // stand, the return to the plan point, the follow-up after a pull) are no point of a row's own walk: RowHopWades says
-// no, and the move is refused "crosses or ends in liquid: no walkable path avoids it" although the leg's own hop wades
-// there. They may wade when they stay in the leg's wet area: within kWadeAreaYd of the own hop (the previous row to the
-// row) of a flagged row of the current step's leg. The probe's wet-hop list (forever/data/wc-wet-hops.tsv) is exactly
-// those hops, so a leg with no wet hop has no wet area and keeps the RFC rule; the depth is the core's own measured
-// reading (TbRunLiquid.h: a wade is at most kWadeDepthYd, never UNDER_WATER, deep water always pauses).
+// no, and the move is refused "crosses or ends in liquid: no walkable path avoids it" although the plan's own hop wades
+// there. They may wade when they stay in a wet area: within kWadeAreaYd of the own hop (the previous row to the row) of
+// any flagged row of the plan, not only of the current step's leg. A dead lead bot comes back at the graveyard and the
+// run's return to the party crosses the river flagged by another leg (live run 3: step 52 of leg 5, the regroup move at
+// -37.2 291.3 over the leg 4 river hop, sampled 0.5 yd); a per-leg area refused it. The probe's wet-hop list
+// (forever/data/wc-wet-hops.tsv) is exactly those hops, and its wet-area probe found every shallow wet cell of the plan
+// inside some flagged hop's 12 yd area, so a plan with no flagged row has no wet area and keeps the RFC rule. The depth
+// is still the core's own measured reading (TbRunLiquid.h: a wade is at most kWadeDepthYd, never UNDER_WATER, deep water
+// always pauses).
 constexpr float kWadeAreaYd = 12.0f;
 
 // Horizontal distance from (px, py) to the segment (ax, ay)-(bx, by).
@@ -8840,17 +8844,17 @@ inline float WetAreaSegmentYd(float px, float py, float ax, float ay, float bx, 
     return std::sqrt(nx * nx + ny * ny);
 }
 
-// Whether (x, y) lies in the wet area of the current step's leg: within kWadeAreaYd of the own hop of one of the leg's
-// wade-flagged rows. The hop is the pair the probe read (this row and the plan row before it).
-inline bool LegWetAreaAt(Run const& r, float x, float y)
+// Whether (x, y) lies in one of the plan's wet areas: within kWadeAreaYd of the own hop of a wade-flagged row. The hop is
+// the pair the probe read (this row and the plan row before it). Any leg's row counts: the run's own moves can cross a
+// river whose flagged hop belongs to a leg it already walked (the note above).
+inline bool PlanWetAreaAt(Run const& r, float x, float y)
 {
     if (!r.plan || r.step >= r.plan->steps.size())
         return false;
-    std::uint8_t const leg = r.plan->steps[r.step].leg;
     for (std::size_t i = 1; i < r.plan->steps.size(); ++i)
     {
         PlanStep const& row = r.plan->steps[i];
-        if (row.leg != leg || !(row.flags & ai::kPlanFlagWadeOk))
+        if (!(row.flags & ai::kPlanFlagWadeOk))
             continue;
         if (row.kind != PlanStepKind::Move && row.kind != PlanStepKind::Pull && row.kind != PlanStepKind::Boss)
             continue;                                       // the loader takes the bit on these kinds only
@@ -8861,11 +8865,14 @@ inline bool LegWetAreaAt(Run const& r, float x, float y)
     return false;
 }
 
-// A move the run makes on its own may wade: a point of the current row's own walk (RowHopWades), or a point inside the
-// current leg's wet area (LegWetAreaAt). The executor asks this for the lead's move and the run's bot walks.
-inline bool MoveMayWade(Run const& r, PlanStep const& s, float x, float y)
+// A move the run makes on its own may wade: a point of the current row's own walk (RowHopWades), or a point inside one
+// of the plan's wet areas (PlanWetAreaAt). The executor asks this for the lead's move and the run's bot walks.
+// `runIssued` is the order's origin flag (Party::fromRun), set where the run's executor builds the order, never read from
+// the order's text: only a move the run issues for itself (regroup, approach, return, follow-up) may wade; a `cmd move`
+// a player types keeps the RFC liquid rule.
+inline bool MoveMayWade(bool runIssued, Run const& r, PlanStep const& s, float x, float y)
 {
-    return RowHopWades(r, s, x, y) || LegWetAreaAt(r, x, y);
+    return runIssued && (RowHopWades(r, s, x, y) || PlanWetAreaAt(r, x, y));
 }
 
 // Walks the party to a point. True once the lead bot is there; otherwise

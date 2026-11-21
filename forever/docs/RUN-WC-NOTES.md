@@ -113,14 +113,16 @@ approach hops of at most 40 yd (`ApproachHop`) and in `TooFar` legs, and every o
 row's own way (`DungeonRun::RowHopWades`), so each of them inherits the bit and is judged by the same wade rule; the
 wading depth at each sample is the core's own reading (its liquid surface minus the ground under it). A move the run
 makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan point, the follow-up after a
-pull, a `walk <bot>`) never is a point of a row's own way; it may wade too when it stays in the leg's **wet area** --
-within `kWadeAreaYd` 12 yd of a flagged row's own hop of the current leg (`DungeonRun::LegWetAreaAt`, section 9) -- and
-only shallow. A row without the bit has no wet area, so **a dry plan keeps exactly the RFC rule** (the prefix escape, the
-dry destination, the pause "unreachable: ... crosses or ends in liquid"); so does a player's `.bot cmd move` (the
-permission is the run's own orders only). Deep water, lava and every other plan (RFC, Deadmines) behave exactly as
-before; `test_run_liquid` pins the shallow, deep, flagless and middle-point cases plus the leg move (a shallow bank
-crossing on a wading leg passes, the same move on a dry leg pauses, deep water always pauses), and `test_run_orders` pins
-`RowHopWades` (the row's own point, an approach hop, a leg, a foreign walk, a hold row). Every liquid refusal now logs
+pull, a `walk <bot>`) never is a point of a row's own way; it may wade too when it stays in one of the plan's **wet
+areas** -- within `kWadeAreaYd` 12 yd of a flagged row's own hop, of any leg (`DungeonRun::PlanWetAreaAt`, section 10;
+the lead's return from the graveyard after a death can cross a river whose hop belongs to a leg already walked) -- and
+only shallow. The order's own origin flag (`Party::fromRun`) decides: only the run's self-issued moves carry the
+permission, never an order matched by its text, so a player's `.bot cmd move` keeps the RFC rule. A plan without the bit
+has no wet area, so **a dry plan keeps exactly the RFC rule** (the prefix escape, the dry destination, the pause
+"unreachable: ... crosses or ends in liquid"). Deep water, lava and every other plan (RFC, Deadmines) behave exactly as
+before; `test_run_liquid` pins the shallow, deep, flagless and middle-point cases, the run's cross-leg regroup (passes)
+against the same move from a human commander (pauses), and the plan-wide wet area, and `test_run_orders` pins
+`RowHopWades` (the row's own point, an approach hop, a leg, a foreign walk, a hold row). Every liquid refusal logs
 the sampled depth, the core's status and the position (section 9).
 
 The first sub-hop of a wet row logs once what it sampled, so the next live run's log says why a river hop walked or
@@ -410,6 +412,73 @@ Two probes on the server's own ForeverCore v16 mmaps (`~/wcprobe-mmaps`, the sam
 | `test_run_orders` | `RESULT: PASS (276 checks)` |
 | `test_run_liquid` | `RESULT: PASS (test_run_liquid)` |
 | `test_run_facts` (Ragefire Chasm, unchanged rows) | `RESULT: PASS` |
+| `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
+| `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3507 checks, 0 failed` |
+| `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |
+| `git diff --check` | clean |
+
+## 10. The fix round after live run 3 (2026-11-21, code 6c7434317, core d02645dd21)
+
+Evidence: `~/TortoiseBots-audit/notes/live-wc-run3-2026-11-21.md` (live run 3; 52 of 302 steps, 38 of 87 pulls,
+15 deaths, 0 wipes, 2 pauses, Kresh dead). Branch `run/wc` first merged `tbf/main` (#97, #99, #100, #101; both sides
+kept), zero core changes, no live run in this round. Section 9 is the earlier round's history; the function it names
+(`LegWetAreaAt`) is now `PlanWetAreaAt`.
+
+### 10.1 The run's own regroup wades the plan's wet area (the run-3 pause)
+
+The run paused at 09:17:45 on step 52 (leg 5 `cobrahn_c`) with
+`cmd move -37.2 291.3 -104.8 refused: unreachable: The lead bot's way to that point crosses or ends in liquid (lava or
+water) at -35.9 289.0 -105.4: no walkable path avoids it`, the refusal logging `liquid depth=0.5 yd status=0x01
+level=-105.9`. The lead stood dry at -21.6 251.4. The move is the run's own return from the south bank after the lead
+was revived away from the party; it crosses the river hop flagged in **leg 4** (seq 0, -3.641 229.268 to -61.367
+323.721) while the current step is **leg 5**, so the per-leg `LegWetAreaAt` found no flagged row and the RFC rule
+refused a 0.5 yd wade (same move as run 2).
+
+What changed:
+
+* `runtime/DungeonRunPolicy.h`: `LegWetAreaAt` -> **`PlanWetAreaAt`** (within `kWadeAreaYd` 12 yd of the own hop of any
+  `kPlanFlagWadeOk` row of the plan, any leg), and `MoveMayWade` now takes the **order's origin flag**:
+  `MoveMayWade(runIssued, run, row, x, y) = runIssued && (RowHopWades || PlanWetAreaAt)`. The flag is set where the
+  executor builds the order, never read from its text.
+* `forever/src/host/run/TbRunOrders.cpp`: `WadeOrder` passes `ctx.fromRun` (the origin flag, `Party::fromRun`) to
+  `MoveMayWade`, for the lead's `move`/`move direct` and the run's own `walk <bot>`. A `.tb cmd move` a player sends
+  (`fromRun` false) keeps the RFC rule; so does a plan with no flagged row.
+* `forever/src/host/run/TbRunOrders.h`: `Party::fromRun` is documented as the order's origin (run-issued vs a player's).
+* The wade rule itself is unchanged: every sample dry or shallow (at most `kWadeDepthYd` 1.5 yd, never `UNDER_WATER`),
+  the destination dry or in the shallows. Deep water and swimming still pause.
+* Safety of the wider area: section 9.3's wet-area probe over the whole plan found 149 wet cells, 62 inside a flagged
+  hop's 12 yd area and **87 outside, every one deep** (zero shallow). So the plan-wide area adds exactly the shallow
+  cells a flagged river hop already wades; the deep ones still pause by the wade rule.
+
+Tests (`forever/tools/test_run_liquid.cpp`): the run's regroup move at -37.2 291.3 passes (`MoveMayWade(true, ...)` +
+`PathWadeRefused` false) on the same leg and on the live cross-leg shape (step in leg 1, hop in leg 0); the same move
+from a human commander pauses (`MoveMayWade(false, ...)` false + the RFC prefix rule true); deep water always pauses;
+a flagless plan has no wet area and the same move pauses. `test_run_orders` pins `RowHopWades` unchanged.
+
+### 10.2 The 15 deaths (what the evidence names, and the plan rows)
+
+The run's counter is 15 deaths, 0 wipes. The notes name two groups and no individual deaths beyond that:
+
+| deaths | step / pull | killer named by the evidence | plan row the cause? |
+|---|---|---|---|
+| 1-5 | step 7, leg 0 `anacondra_a` seq 7, pull group 4 (entries 3637, 3636) at the corrected stand -34.700 192.600, r 18.0 | the Deviate Guardians pack ("Deviate Guardians pack"; run 2 named Deviate Guardian 3637 as the killer) | **no**: the row was corrected in section 9.2 (stand moved 11.3 yd south, radius 21.4 -> 18.0; the Ravager 17.0 yd, the patrolling Ectoplasm 18.8 yd stays outside, the next Guardian 19.4 yd is step 8's). Run 3's 5 deaths have no killer/add detail; the row still pulls the same 2 units, so no further row change is justified by this evidence |
+| 6-10 | legs 2 and 4, pull rows not named | not named (the notes say "the rest across legs 2, 4 and 5, mostly Wctank") | cannot be judged: no killer, no pull, no victim list in the evidence; **no change** |
+| 11-15 | step 50, leg 5 `cobrahn_c` seq 2, pull group 1 (entries 3840, 5048) at 20.100 523.100, r 12.9 | the Druid of the Fang 3840 + Deviate Viper 5048 pack (the notes name "step 50 pull 5048"; run 2 named the Druids) | **no**: the map-43 spawn dump puts exactly 4 units inside the 12.9 yd radius (2x 3840 at 9.2/9.3 yd, 2x 5048 at 5.7/5.0 yd); the next 3840 at 20.5 yd and a 2914 at 19.0 yd are outside, so no linked pack joins by the row's radius. The named pack is a 4-unit pull with `3840` in the plan's CC priority; the evidence shows no add and no row defect |
+
+No plan row was changed this round: the one clear row defect (step 7's stand) was already fixed in section 9.2, and the
+step 50 pull is the row's own 4 units (no linked pack) at the agent's point. The remaining deaths have no killer or pull
+in the evidence to attribute, and adding a guess would move the plan on no data.
+
+### 10.3 Gates and tests
+
+| gate | exact line |
+|---|---|
+| build ON, slot 4: `~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 2 of 3 (slot 4)` / `module sync: 363 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=391` (`make.log`: 0 `error:`/`FAILED:`, 1 pre-existing `sTerrainMgr` macro warning) |
+| build OFF, slot 5: `~/forever-build/slot-sync-build.sh 5 tortoisebots` | `combined build: slot 5 key core-9b88bd2d6584-opt-78bf025f` / `build token 3 of 3 (slot 5)` / `module sync: 363 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=37` (`make.log`: 0 `error:`/`FAILED:`) |
+| worldserver link, slot 7: `~/forever-build/slot-sync-build.sh 7 worldserver -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 7 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 2 of 3 (slot 7)` / `module sync: 363 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=90`; `make.log`: `[56/56] Linking CXX executable bin/Release/bin/worldserver`, 0 `error:`/`FAILED:` (73,107,896-byte binary in `build-7/bin/Release/bin/worldserver`) |
+| `test_run_orders` | `RESULT: PASS (276 checks)` |
+| `test_run_liquid` | `RESULT: PASS (test_run_liquid)` |
+| `test_run_facts` (Ragefire Chasm, unchanged rows) | `RESULT: PASS` (`plan=1 leg=9 step=84 boss=4`) |
 | `test_run_wc` | `test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)` |
 | `python3 forever/tools/test_wc_plan_rows.py` | `test_wc_plan_rows: 3507 checks, 0 failed` |
 | `python3 tools/verify_okf.py` | `OKF verification PASSED (60 nodes validated, graph edges consistent)` |

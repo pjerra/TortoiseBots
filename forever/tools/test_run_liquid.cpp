@@ -147,10 +147,11 @@ int main()
     CHECK(trace.refused && trace.depth == 2.0f && trace.x == 12.0f);            // a shallower refusal does not replace it
 
     // ---- a move the run makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan
-    // point, the follow-up after a pull): it is no point of a row's own walk, so DungeonRun::MoveMayWade adds the leg's
-    // wet area (kWadeAreaYd of a flagged row's own hop) and the executor then asks the wade rule above. Live case: the
-    // run-2 pause "cmd move -37.2 291.3 refused: crosses or ends in liquid" after the Druid fight, a regroup move across
-    // the shallow river beside the leg's flagged hop.
+    // point, the follow-up after a pull): it is no point of a row's own walk, so DungeonRun::MoveMayWade adds the plan's
+    // wet areas (kWadeAreaYd of a flagged row's own hop) and the executor then asks the wade rule above. The order's
+    // origin flag (Party::fromRun) is the judge: only a move the run issued for itself may wade. Live case: the run-3
+    // pause "cmd move -37.2 291.3 refused: crosses or ends in liquid" after the Druid fight, the run's return from the
+    // graveyard across the shallow river hop that a walked leg (4) flags, on step 52 of leg 5.
     ai::DungeonPlan plan;
     auto row = [&plan](std::uint8_t leg, std::uint16_t seq, ai::PlanStepKind kind, float x, float y, float z, std::uint32_t flags)
     {
@@ -167,28 +168,39 @@ int main()
     row(0, 0, ai::PlanStepKind::Move, -3.641f, 229.268f, -106.189f, 0);        // the row before the river hop
     row(0, 1, ai::PlanStepKind::Pull, -61.367f, 323.721f, -106.561f, ai::kPlanFlagWadeOk);   // the first river hop (flagged)
     row(0, 2, ai::PlanStepKind::Pull, -63.800f, 417.300f, -106.700f, 0);       // a dry row of the same leg
+    row(1, 0, ai::PlanStepKind::Move, -21.600f, 251.400f, -104.200f, 0);       // the next leg's own (dry) move: the regroup's leg
     DR::Run run;
     run.plan = &plan;
     run.step = 2;                                                              // after the fight on the dry row: a regroup
     CHECK(run.phase != DR::Phase::Walk);
-    // The point the live regroup move was refused on: ~6 yd off the flagged hop, inside the wet area. Shallow -> the move goes.
-    CHECK(DR::LegWetAreaAt(run, -37.2f, 291.3f));
-    CHECK(DR::MoveMayWade(run, plan.steps[run.step], -37.2f, 291.3f));
+    // The point the live regroup move was refused on: ~6 yd off the flagged hop, inside the wet area.
+    CHECK(DR::PlanWetAreaAt(run, -37.2f, 291.3f));
+    // A run-issued move wades; the same move typed by a player keeps the RFC rule (the origin flag, not the text).
+    CHECK(DR::MoveMayWade(true, run, plan.steps[run.step], -37.2f, 291.3f));
+    CHECK(!DR::MoveMayWade(false, run, plan.steps[run.step], -37.2f, 291.3f));
     std::vector<P> regroup = { {-21.6f, 251.4f, -104.2f}, {-37.2f, 291.3f, -104.8f} };
     auto shallow = [](float, float, float) { return L::WadeWay::Shallow; };
     auto deep = [](float, float, float) { return L::WadeWay::Refused; };
     CHECK(!L::PathWadeRefused(regroup, regroup.size(), shallow));              // the regroup move across shallow water passes
-    // The same move on a dry leg (the flagged row's own point, but the bit gone): no wet area, the RFC rule pauses.
-    CHECK(!DR::LegWetAreaAt(run, -63.8f, 417.3f));                              // the leg's dry end: never in the wet area
+    CHECK(L::PathPrefixRefused(regroup, regroup.size(), [](float, float, float) { return true; }));   // the human `cmd move` pauses
+    // The live case's cross-leg hop: step 52 is leg 5, the river hop flagged in leg 4. The plan's wet area covers it (the
+    // 12 yd area of any flagged row), so the run's own return move wades; a player's still keeps the RFC rule.
+    run.step = 3;
+    CHECK(plan.steps[run.step].leg == 1);
+    CHECK(DR::PlanWetAreaAt(run, -37.2f, 291.3f));
+    CHECK(DR::MoveMayWade(true, run, plan.steps[run.step], -37.2f, 291.3f));
+    CHECK(!DR::MoveMayWade(false, run, plan.steps[run.step], -37.2f, 291.3f));
+    // The same move on a dry plan (the bit gone): no wet area, the run's own move keeps the RFC rule.
+    CHECK(!DR::PlanWetAreaAt(run, -63.8f, 417.3f));                             // the dry end: never in a wet area
     plan.steps[1].flags = 0;
-    CHECK(!DR::MoveMayWade(run, plan.steps[run.step], -37.2f, 291.3f));
+    CHECK(!DR::MoveMayWade(true, run, plan.steps[run.step], -37.2f, 291.3f));
     CHECK(L::PathPrefixRefused(regroup, regroup.size(), [](float, float, float) { return true; }));   // the RFC pause
     // Deep water always pauses, permission or not (the core's measured depth is the judge).
     plan.steps[1].flags = ai::kPlanFlagWadeOk;
-    CHECK(DR::MoveMayWade(run, plan.steps[run.step], -37.2f, 291.3f));
+    CHECK(DR::MoveMayWade(true, run, plan.steps[run.step], -37.2f, 291.3f));
     CHECK(L::PathWadeRefused(regroup, regroup.size(), deep));
-    // A point outside the leg's wet area keeps the rule even with the bit on the leg.
-    CHECK(!DR::LegWetAreaAt(run, -120.0f, 40.0f));
+    // A point outside every wet area keeps the rule even with the bit on a row.
+    CHECK(!DR::PlanWetAreaAt(run, -120.0f, 40.0f));
 
     if (failures)
         return 1;
