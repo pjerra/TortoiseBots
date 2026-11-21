@@ -21,6 +21,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GENERATOR = os.path.join(ROOT, 'tools', 'wc_plan_rows.py')
 MIGRATION = os.path.join(ROOT, 'sql', 'world', '2026_11_20_12_tortoisebots_plan_wailing_caverns.sql')
+FIXTURE = os.path.join(ROOT, 'data', 'wc-agent-route-fixture.tsv')
 
 failures = []
 checks = 0
@@ -47,6 +48,8 @@ def main():
     check(len(route) == 126, 'the proven route has its 126 steps (%d)' % len(route))
     legs = wc.base_legs(route)
     legs += wc.event_legs(len(legs), legs)
+    wet = wc.load_wet_hops(wc.DEFAULT_WET)
+    check(wc.apply_wade_flags(legs, wet) == len(wet), 'the generator sets the wade bit on every wet hop')
     spawns = wc.load_spawns(wc.DEFAULT_SPAWNS)
     units = wc.unit_rows(legs, spawns)
     bosses = wc.boss_rows(legs)
@@ -91,6 +94,56 @@ def main():
     check(len(kresh) == 1 and (kresh[0].flags & wc.FLAG_SKIP_UNREACHABLE) and kresh[0].timeout == 300,
           'Kresh carries flags 4096 and the 300 s away-wait')
 
+    # N2: the base rows are the agent's public route. The fixture is the hand-copied needed rows (its legs' `to` moves, its
+    # pull-group centroids and its boss positions, forever/data/wc-agent-route-fixture.tsv), never a capture of a run.
+    fixture = []
+    for line in open(FIXTURE, encoding='utf-8'):
+        if line.startswith('#') or not line.strip():
+            continue
+        parts = line.rstrip('\n').split('\t')
+        fixture.append(dict(leg=int(parts[0]), name=parts[1], kind=parts[2], x=float(parts[3]), y=float(parts[4]),
+                            z=float(parts[5]), entry=parts[6]))
+    check(len(fixture) == 106, 'the fixture has the 106 needed rows (%d)' % len(fixture))
+    fixture_names = []
+    for f in fixture:
+        if f['name'] not in fixture_names:
+            fixture_names.append(f['name'])
+    check(fixture_names == [name for _, name, _ in legs[:13]], 'the fixture legs are the plan\'s base legs in order')
+    base = legs[:13]
+    for f in fixture:
+        if f['leg'] >= len(base):
+            check(False, 'fixture leg %d is one of the 13 base legs' % f['leg'])
+            continue
+        near = [s for s in base[f['leg']][2] if s.kind == f['kind'] and
+                abs(s.x - f['x']) <= 0.15 and abs(s.y - f['y']) <= 0.15 and abs(s.z - f['z']) <= 0.15]
+        check(bool(near), 'fixture %s row %d %s at %.1f %.1f is in the plan' % (f['name'], f['leg'], f['kind'], f['x'], f['y']))
+    base_pulls = [s for _, _, rows in base for s in rows if s.kind == 'pull']
+    base_moves = [s for _, _, rows in base for s in rows if s.kind == 'move' and s.seq == 0]
+    base_bosses = [s for _, _, rows in base for s in rows if s.kind == 'boss']
+    check(len(base_pulls) == 87 and len(base_moves) == 13 and len(base_bosses) == 6,
+          'the base legs hold the fixture\'s 87 pulls, 13 leg moves and 6 bosses (%d/%d/%d)' % (len(base_pulls), len(base_moves), len(base_bosses)))
+
+    # The wade bit: only the hops the mmaps probe found wet carry it, and those all do.
+    check(len(wet) == 21, 'the probe\'s wet hops are the 21 of forever/data/wc-wet-hops.tsv (%d)' % len(wet))
+    flagged = [s for _, _, rows in legs for s in rows if s.flags & wc.FLAG_WADE_OK]
+    check(len(flagged) == len(wet), 'every wet hop\'s row carries the wade bit and no other row does (%d/%d)' % (len(flagged), len(wet)))
+    by_key = {(w['leg'], w['seq']): w for w in wet}
+    prev = None
+    flagged_keys = set()
+    for _, _, rows in legs:
+        for s in rows:
+            w = by_key.get((s.leg, s.seq))
+            if prev is not None and w is not None and w['kind'] == s.kind and all(
+                    abs(a - b) <= 0.01 for a, b in ((prev[0], w['fx']), (prev[1], w['fy']), (prev[2], w['fz']),
+                                                    (s.x, w['tx']), (s.y, w['ty']), (s.z, w['tz']))):
+                check(bool(s.flags & wc.FLAG_WADE_OK), 'wet hop leg %d seq %d carries the wade bit' % (s.leg, s.seq))
+                flagged_keys.add((s.leg, s.seq))
+            prev = (s.x, s.y, s.z)
+    check(len(flagged_keys) == len(wet), 'each wet hop matched a row (%d/%d)' % (len(flagged_keys), len(wet)))
+    for s in flagged:
+        check(s.kind in wc.WADE_KINDS, 'the wade bit is on a move, pull or boss row only (leg %d seq %d %s)' % (s.leg, s.seq, s.kind))
+        check((s.leg, s.seq) in flagged_keys, 'no wade bit on a hop the probe did not list (leg %d seq %d)' % (s.leg, s.seq))
+
     # The event: the gate, the gossip, the escort holds with the escort-NPC flag, Mutanus; no data-5 wait.
     holds = [s for s in steps if s.kind == 'hold']
     check(any(h.entry == 4 and h.param == 4 for h in holds), 'the Disciple gate reads data 4 = 4')
@@ -117,7 +170,7 @@ def main():
                 if abs(s['x'] - u['x']) < 0.01 and abs(s['y'] - u['y']) < 0.01 and abs(s['z'] - u['z']) < 0.01]
         check(bool(near) or u['role'] == 'boss', 'unit row entry %d at %.1f %.1f is a spawn' % (u['entry'], u['x'], u['y']))
 
-    header = '%d legs, %d steps, %d unit rows, %d bosses' % (len(legs), len(steps), len(units), len(bosses))
+    header = '%d legs, %d steps, %d unit rows, %d bosses, %d wade hops' % (len(legs), len(steps), len(units), len(bosses), len(wet))
     generated = wc.emit_sql(legs, units, bosses, header)
     check(os.path.exists(MIGRATION), 'the migration exists')
     if os.path.exists(MIGRATION):

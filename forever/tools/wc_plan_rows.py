@@ -24,7 +24,10 @@ What this script adds, from the core's own data:
     kPlanFlagEscortNpc (65536): a dead or gone Disciple stops the event with its
     name instead of timing out;
   * the unit rows of every pull (each pack member at its spawn position, from a
-    dump of map 43's `creature` rows), which is what `.tb plan check` matches.
+    dump of map 43's `creature` rows), which is what `.tb plan check` matches;
+  * the wade bit (kPlanFlagWadeOk, 131072) on the rows whose own hop the mmaps
+    probe found wet (`forever/data/wc-wet-hops.tsv`), so the rivers on the way
+    can be waded where the water is shallow, and nowhere else.
 
 No trailing "data 5 = 3" / "data 4 = 3" holds: on the pinned core Mutanus's own
 smart_script sets BOSS STATE 4, not instance data 5 (`SMART_ACTION_SET_INST_DATA`
@@ -45,6 +48,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_ROUTE = os.path.join(ROOT, 'data', 'wc-route-forevercore.tsv')
 DEFAULT_SPAWNS = os.path.join(ROOT, 'data', 'wc-map43-spawns.tsv')
+DEFAULT_WET = os.path.join(ROOT, 'data', 'wc-wet-hops.tsv')
 
 PLAN = 'wailing_caverns'
 MAP = 43
@@ -66,6 +70,8 @@ KRESH_TO = (-18.0, 234.0, -104.5)
 FLAG_EXACT = 64
 FLAG_SKIP_UNREACHABLE = 4096
 FLAG_ESCORT_NPC = 65536       # DungeonPlanPolicy.h kPlanFlagEscortNpc
+FLAG_WADE_OK = 131072         # DungeonPlanPolicy.h kPlanFlagWadeOk: the row's own hop may wade shallow water
+WADE_KINDS = ('move', 'pull', 'boss')   # the kinds the loader accepts the wade flag on
 
 # The Disciple's road (script_waypoint 3678, the core's ClassicDiscipleWaypoints), point ids 1..30.
 ROAD = {
@@ -238,8 +244,10 @@ def event_legs(first_leg, base):
     for p in range(16, 31):
         rows.append(Step(leg, seq, 'move', x=ROAD[p][0], y=ROAD[p][1], z=ROAD[p][2], comment='road'))
         seq += 1
+    # 300 s, not the wave's 240/180: the Disciple needs about 105 s for stops 15 -> 30 and 12 s more to the summon, and the party may
+    # fight on the road meanwhile; a 180 s ceiling left about 60 s of margin and a slow road would pause a hold that was still coming.
     rows.append(Step(leg, seq, 'hold', 0, RITUAL_STAND[0], RITUAL_STAND[1], RITUAL_STAND[2], 45.0, 0, 0, FLAG_ESCORT_NPC,
-                     180, '5762', 'the Moccasins of the ritual (a dead Disciple stops the event here)'))
+                     300, '5762', 'the Moccasins of the ritual (a dead Disciple stops the event here; 300 s: the road is ~105 s and a fight adds time)'))
     seq += 1
     rows.append(Step(leg, seq, 'hold', 0, RITUAL_STAND[0], RITUAL_STAND[1], RITUAL_STAND[2], 45.0, 0, 0, FLAG_ESCORT_NPC,
                      300, '5763', 'the Nightmare Ectoplasm wave (a dead Disciple stops the event here)'))
@@ -252,6 +260,45 @@ def event_legs(first_leg, base):
     ]
     legs.append((leg, 'mutanus', rows))
     return legs
+
+
+def load_wet_hops(path):
+    """The probe's wet hops: leg, seq, kind, from xyz, to xyz (forever/data/wc-wet-hops.tsv, made on the server's mmaps)."""
+    out = []
+    for line in open(path, encoding='utf-8'):
+        if not line.strip() or line.startswith('#'):
+            continue
+        parts = line.rstrip('\n').split('\t')
+        if len(parts) < 9:
+            continue
+        out.append(dict(leg=int(parts[0]), seq=int(parts[1]), kind=parts[2],
+                        fx=float(parts[3]), fy=float(parts[4]), fz=float(parts[5]),
+                        tx=float(parts[6]), ty=float(parts[7]), tz=float(parts[8])))
+    return out
+
+
+def apply_wade_flags(legs, wet):
+    """Sets ai::kPlanFlagWadeOk on the row of every hop the probe found wet, and on no other row.
+
+    The hop is the row's own way: from the previous row's point (the row the party stands on before it) to this row's
+    point. A listed hop that no longer matches its row by leg, seq, kind and both points sets nothing: a stale probe
+    never flags a row it did not check. A row whose kind the loader does not take the flag on would be refused there;
+    it is left unset and counted as unmatched.
+    """
+    by_key = {(w['leg'], w['seq']): w for w in wet}
+    matched = 0
+    prev = None
+    for _, _, steps in legs:
+        for s in steps:
+            if prev is not None:
+                w = by_key.get((s.leg, s.seq))
+                if (w is not None and w['kind'] == s.kind and s.kind in WADE_KINDS and
+                        all(abs(a - b) <= 0.01 for a, b in ((prev[0], w['fx']), (prev[1], w['fy']), (prev[2], w['fz']),
+                                                            (s.x, w['tx']), (s.y, w['ty']), (s.z, w['tz'])))):
+                    s.flags |= FLAG_WADE_OK
+                    matched += 1
+            prev = (s.x, s.y, s.z)
+    return matched
 
 
 def load_spawns(path):
@@ -411,6 +458,7 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument('--route', default=DEFAULT_ROUTE)
     ap.add_argument('--spawns', default=DEFAULT_SPAWNS)
+    ap.add_argument('--wet', default=DEFAULT_WET)
     ap.add_argument('--out', default='')
     ap.add_argument('--tsv', default='')
     args = ap.parse_args(argv)
@@ -420,11 +468,19 @@ def main(argv):
         return 1
     legs = base_legs(route)
     legs += event_legs(len(legs), legs)
+    wet = load_wet_hops(args.wet)
+    if not wet:
+        print('no wet hops in %s' % args.wet, file=sys.stderr)
+        return 1
+    applied = apply_wade_flags(legs, wet)
+    if applied != len(wet):
+        print('%d of %d wet hops did not match their row' % (len(wet) - applied, len(wet)), file=sys.stderr)
+        return 1
     spawns = load_spawns(args.spawns)
     units = unit_rows(legs, spawns)
     bosses = boss_rows(legs)
     steps = sum(len(s) for _, _, s in legs)
-    header = '%d legs, %d steps, %d unit rows, %d bosses' % (len(legs), steps, len(units), len(bosses))
+    header = '%d legs, %d steps, %d unit rows, %d bosses, %d wade hops' % (len(legs), steps, len(units), len(bosses), applied)
     if args.out:
         open(args.out, 'w', encoding='utf-8').write(emit_sql(legs, units, bosses, header))
         print('wrote %s: %s' % (args.out, header))

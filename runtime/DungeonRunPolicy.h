@@ -17732,7 +17732,12 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
         }
         if (r.eventUp)
             r.eventStarted = true;
-        if (r.eventStarted && f.units.empty())
+        // A units hold of an ESCORT event (kPlanFlagEscortNpc) ends "every unit of it is dead" only while its start NPC is
+        // read alive: when the Disciple dies mid-fight the summons vanish on the same tick, and that must not be taken for
+        // the event's success. The NPC's own 10 s gone timer above is the rule that names it; until it fires this hold keeps
+        // holding (the walk on to the next wave or into Mutanus's "not found" pause is what the timer exists to prevent).
+        bool const escortNpc = (s.flags & ai::kPlanFlagEscortNpc) != 0;
+        if (r.eventStarted && f.units.empty() && (!escortNpc || f.eventNpcAlive))
         {
             NextStep(r, "event done: every unit of it is dead" + tail);
             return;

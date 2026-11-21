@@ -26,6 +26,21 @@ bool PointRefusedOnMap(Map* map, float x, float y, float z)
     return PointRefused(static_cast<std::uint32_t>(status), data.level, z);
 }
 
+WadeWay WadePointOnMap(Map* map, float x, float y, float z)
+{
+    TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;
+    if (!terrain)
+        return WadeWay::Refused;            // no terrain to ask: refused (do less)
+    GridMapLiquidData data;
+    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, &data);
+    return WadePointOf(static_cast<std::uint32_t>(status), data.level, data.depth_level, z);
+}
+
+bool SegmentWadeRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz)
+{
+    return SegmentWadeRefused(ax, ay, az, bx, by, bz, [map](float x, float y, float z) { return WadePointOnMap(map, x, y, z); });
+}
+
 bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz)
 {
     return SegmentRefused(ax, ay, az, bx, by, bz, [map](float x, float y, float z) { return PointRefusedOnMap(map, x, y, z); });

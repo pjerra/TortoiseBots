@@ -150,7 +150,7 @@ namespace ai
     // otherwise deferred when nothing later in the plan needs it gone (runtime/DungeonRunPolicy.h PullMayBeDeferred,
     // DeferUnreachablePack); with this flag it pauses the run as before. Any other kind with this flag is refused (BadParam).
     constexpr std::uint32_t kPlanFlagNoDefer = 1024;
-    // open_proof only: the proof entry is a creature (alive). The next free bit: 131072 (8192 is kPlanFlagStandPull, a boss or a
+    // open_proof only: the proof entry is a creature (alive). The next free bit: 262144 (8192 is kPlanFlagStandPull, a boss or a
     // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold; 65536 kPlanFlagEscortNpc).
     constexpr std::uint32_t kPlanFlagProofCreature = 2048;
     // boss only: the boss may stand out of the party's reach by design (Stormwrought Ruins' Eldermaw 62661 swims a
@@ -182,6 +182,11 @@ namespace ai
     // alive for the escort to finish. The run reads that NPC around the lead bot; dead or gone for 10 s it stops the event with a named reason and goes
     // back to the gossip once (DungeonRunPolicy.h kEscortNpcGoneMs, EventFailed), so a respawned NPC can start it again. Any other kind is refused.
     constexpr std::uint32_t kPlanFlagEscortNpc = 65536;
+    // move, pull or boss only: the hop to this row's own point may wade SHALLOW water. The liquid rule of the run judge (forever/src/host/run/TbRunLiquid.h)
+    // lets a row's own hop cross a liquid only when every sample of it is wading depth (the core's IsSwimmable radius, 1.5 yd) and none is swimming
+    // (UNDER_WATER); deep water, lava and a hop that is not this row's own point (an approach hop, a stand, a walk back) keep the rule as it was.
+    // The generator sets it only on a row whose own hop a probe found wet (Wailing Caverns' rivers); a row without it pauses on liquid exactly as before.
+    constexpr std::uint32_t kPlanFlagWadeOk = 131072;
     constexpr std::uint32_t kPlanEncounterNotStarted = 0;
     constexpr std::uint32_t kPlanEncounterFail = 2;
     constexpr std::uint32_t kPlanEncounterMax = 4;
@@ -499,6 +504,7 @@ namespace ai
                           // the exact flag on a step that is not a move; gossip with an option
                           // outside 1-15 or with any flag; use_on with any flag or param;
                           // a stand_pull pull with param above kPlanMaxStandPullClear;
+                          // the wade flag on a kind other than move, pull or boss;
                           // a pull row whose item (the bodies ceiling) is above kPlanMaxPullBodies;
                           // an open_proof whose proof equals its entry (no 2048), with param, a flag but 2048,
                           // or 2048 on any row that is not open_proof
@@ -560,6 +566,9 @@ namespace ai
         if ((step.flags & kPlanFlagDeadGossipOk) && step.kind != PlanStepKind::Hold)
             return PlanStepRefusal::BadParam;
         if ((step.flags & kPlanFlagEscortNpc) && step.kind != PlanStepKind::Hold)
+            return PlanStepRefusal::BadParam;
+        if ((step.flags & kPlanFlagWadeOk) && step.kind != PlanStepKind::Move && step.kind != PlanStepKind::Pull &&
+            step.kind != PlanStepKind::Boss)
             return PlanStepRefusal::BadParam;
         if (step.exactLaunch && step.kind != PlanStepKind::MoveDirect)
             return PlanStepRefusal::BadParam;

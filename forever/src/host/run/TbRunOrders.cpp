@@ -171,11 +171,30 @@ struct MoveCheck
     std::string liquidAt;           // where the route was refused ("x y z"), for the answer's text
 };
 
+// The run's current plan row lets this order's hop wade (ai::kPlanFlagWadeOk): the row is a move, pull or boss row (the
+// loader refuses the flag on any other kind) and the order goes to the row's own point. The plan point is what the leader
+// emits (MoveOrder prints 0.1 yd) and the row's own way is the one the probe checked; an approach hop, a stand or a
+// walk-back point is not that way and keeps the liquid rule as it was.
+bool WadeOrder(Party const& ctx, float x, float y)
+{
+    if (!ctx.fromRun || !ctx.runRec)
+        return false;
+    RunRec const& rec = *ctx.runRec;
+    if (!rec.run.plan || rec.run.step >= rec.run.plan->steps.size())
+        return false;
+    ai::PlanStep const& s = rec.run.plan->steps[rec.run.step];
+    if (s.kind != ai::PlanStepKind::Move && s.kind != ai::PlanStepKind::Pull && s.kind != ai::PlanStepKind::Boss)
+        return false;
+    if (!(s.flags & ai::kPlanFlagWadeOk))
+        return false;
+    return std::fabs(s.x - x) <= 0.2f && std::fabs(s.y - y) <= 0.2f;
+}
+
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
 // water, it is lifted to the surface like any point with no floor under it, and then judged by its path), and the path is one query with no steep-slope
 // exclusion and no permissive retry (ExcludeSteepSlopes is not ported: the path may use a slope Turtle excludes, the verdict is never stricter than
 // the mesh).
-MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gather)
+MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gather, bool wade)
 {
     MoveCheck check;
     Map* map = mover->GetMap();
@@ -213,22 +232,35 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         // points: no route at all) falls back to the straight line, which is what a shortcut walks.
         Movement::PointsArray const& way = PathPointsCompat(path);
         auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
-        liquid::PrefixState where;
-        check.liquidOnWay = way.size() >= 2 ? liquid::PathPrefixRefused(way, way.size(), wet, &where) : liquid::SegmentPrefixRefused(ox, oy, oz, point.x, point.y, point.z, wet, &where);
-        if (check.liquidOnWay)
+        auto const wadeAt = [map](float x, float y, float z) { return liquid::WadePointOnMap(map, x, y, z); };
+        if (wade)
         {
-            float wx, wy, wz;
-            where.Where(wx, wy, wz);
-            char buffer[80];
-            std::snprintf(buffer, sizeof buffer, "%.1f %.1f %.1f", wx, wy, wz);
-            check.liquidAt = buffer;
+            // A row's own wade hop (ai::kPlanFlagWadeOk, WadeOrder): every sample of the walked route may be dry or wading
+            // depth; a swimming sample (UNDER_WATER) or water deeper than kWadeDepthYd refuses it, exactly as a wet hop does today.
+            check.liquidOnWay = way.size() >= 2 ? liquid::PathWadeRefused(way, way.size(), wadeAt)
+                                                : liquid::SegmentWadeRefused(ox, oy, oz, point.x, point.y, point.z, wadeAt);
+        }
+        else
+        {
+            liquid::PrefixState where;
+            check.liquidOnWay = way.size() >= 2 ? liquid::PathPrefixRefused(way, way.size(), wet, &where) : liquid::SegmentPrefixRefused(ox, oy, oz, point.x, point.y, point.z, wet, &where);
+            if (check.liquidOnWay)
+            {
+                float wx, wy, wz;
+                where.Where(wx, wy, wz);
+                char buffer[80];
+                std::snprintf(buffer, sizeof buffer, "%.1f %.1f %.1f", wx, wy, wz);
+                check.liquidAt = buffer;
+            }
         }
     }
     else
-        check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);      // already at the point: it must not be liquid
-    // A wet destination always refuses (also when no path was read).
+        check.liquidOnWay = wade ? liquid::WadePointOnMap(map, point.x, point.y, point.z) == liquid::WadeWay::Refused
+                                 : liquid::PointRefusedOnMap(map, point.x, point.y, point.z);      // already at the point
+    // A wet destination always refuses (also when no path was read): a wade hop may stand in the shallows, never in swimming water.
     if (!check.liquidOnWay)
-        check.liquidOnWay = liquid::PointRefusedOnMap(map, point.x, point.y, point.z);
+        check.liquidOnWay = wade ? liquid::WadePointOnMap(map, point.x, point.y, point.z) == liquid::WadeWay::Refused
+                                 : liquid::PointRefusedOnMap(map, point.x, point.y, point.z);
     return check;
 }
 
@@ -409,6 +441,7 @@ OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     wanted.x = p.x;
     wanted.y = p.y;
     wanted.z = p.z;
+    bool const wade = WadeOrder(ctx, p.x, p.y);
     OrderAnswer answer;
 
     if (p.direct)
@@ -449,8 +482,11 @@ OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed cons
             return Refuse(judged);
         // R6 (review item 7): a direct step walks the straight line, so the whole line is read, not its end: any liquid on it (lava, water: TbRunLiquid.h rule,
         // sampled every <= 1.5 yd, both ends; wet only as the prefix that holds the lead's own spot, the end dry) refuses the step with the code a point with no safe ground gets.
-        if (liquid::SegmentPrefixRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground))
-            return Refuse("no-ground", "The straight line to the point crosses or ends in liquid (lava or water): a direct step does not walk through it.");
+        bool const wetLine = wade ? liquid::SegmentWadeRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground)
+                                  : liquid::SegmentPrefixRefusedOnMap(lead->GetMap(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), p.x, p.y, ground);
+        if (wetLine)
+            return Refuse("no-ground", wade ? "The straight line to the point crosses swimming water (deeper than a wade): a direct step does not walk through it."
+                                           : "The straight line to the point crosses or ends in liquid (lava or water): a direct step does not walk through it.");
         Batch batch(ctx.fromRun);
         batch.Add(lead, "move-direct", true, true);
         batch.Back().x = p.x;
@@ -472,7 +508,7 @@ OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed cons
         return Accept(answer, "party", answer.bots);
     }
 
-    MoveCheck const check = CheckLeadMove(lead, wanted, ctx.fromRun, gather);
+    MoveCheck const check = CheckLeadMove(lead, wanted, ctx.fromRun, gather, wade);
     answer.movePathRead = check.pathRead;
     answer.movePathType = check.facts.pathType;
     od::Judged const judged = od::JudgeMove(check.facts);
@@ -525,7 +561,7 @@ OrderAnswer DoWalk(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     wanted.x = p.x;
     wanted.y = p.y;
     wanted.z = p.z;
-    MoveCheck const check = CheckLeadMove(bot, wanted, ctx.fromRun, false);
+    MoveCheck const check = CheckLeadMove(bot, wanted, ctx.fromRun, false, false);
     od::Judged const judged = od::JudgeMove(check.facts);
     if (!judged.ok)
         return Refuse(judged);

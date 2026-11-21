@@ -335,6 +335,22 @@ Result Walk(ai::DungeonPlan const* plan, int maxTicks)
     for (int tick = 0; tick < maxTicks && !res.done; ++tick)
     {
         w.Prepare(r);
+        // The event's start NPC walks his road alive through the escort (kPlanFlagEscortNpc): a units hold of the escort ends only
+        // while he is read alive, and the real event has him there.
+        if (w.step && w.step->kind == PlanStepKind::Hold && (w.step->flags & ai::kPlanFlagEscortNpc))
+        {
+            bool have = false;
+            for (Mob const& m : w.mobs)
+                have = have || m.entry == 3678;
+            if (!have)
+            {
+                Mob d;
+                d.handle = w.nextHandle++;
+                d.entry = 3678;
+                d.x = w.step->x + 2.0f; d.y = w.step->y; d.z = w.step->z;
+                w.mobs.push_back(d);
+            }
+        }
         // The script's own progress, as the instance would show it.
         if (w.step)
         {
@@ -465,18 +481,20 @@ Result Walk(ai::DungeonPlan const* plan, int maxTicks)
             --w.fightTicks;
             if (w.fightTicks == 0)
                 for (Mob& m : w.mobs)
-                {
-                    m.alive = false;
-                    if (m.boss && m.entry)
-                        res.bossesKilled.insert(m.entry);
-                }
+                    if (m.entry != 3678)          // the Disciple is not one of the packs the run fights (kPlanFlagEscortNpc)
+                    {
+                        m.alive = false;
+                        if (m.boss && m.entry)
+                            res.bossesKilled.insert(m.entry);
+                    }
         }
         // A units hold: the wave is fought and dies while it is held.
         if (w.step && w.step->kind == PlanStepKind::Hold && !(w.step->flags & (ai::kPlanFlagDoneData | ai::kPlanFlagDoneObject)))
             if (r.step == w.stepIndex && ++w.fightTicks >= 6)
             {
                 for (Mob& m : w.mobs)
-                    m.alive = false;
+                    if (m.entry != 3678)          // the wave dies; the Disciple walks his road alive (kPlanFlagEscortNpc)
+                        m.alive = false;
             }
         if (r.step != w.stepIndex)
             w.fightTicks = 0;
@@ -808,6 +826,104 @@ void TestEscortNpcGone(ai::DungeonPlan const* plan)
     CHECK(plan->steps[at3.step].kind == PlanStepKind::Gossip);
 }
 
+// N1: a Disciple who dies mid-fight. The summons vanish on the tick he dies, so the hold must not take "every unit of it is dead" for
+// the event's success: its own 10 s gone timer names him, and the last hold goes back to the gossip instead of walking on into Mutanus.
+void TestDiscipleDiesMidFight(ai::DungeonPlan const* plan)
+{
+    std::vector<std::size_t> holds;
+    for (std::size_t i = 0; i < plan->steps.size(); ++i)
+        if (plan->steps[i].kind == PlanStepKind::Hold && (plan->steps[i].flags & ai::kPlanFlagEscortNpc))
+            holds.push_back(i);
+    CHECK(holds.size() == 4);
+    if (holds.size() != 4)
+        return;
+
+    auto readNow = [](World& w, Run& at) {
+        Facts f;
+        BuildPartyFacts(f, w);
+        fx::LeadView lead;
+        lead.x = w.x; lead.y = w.y; lead.z = w.z; lead.alive = true; lead.mapId = 43; lead.name = "Mtank";
+        DungeonRun::MoveProbeCache probe;
+        fx::ReadStepFacts(f, at, lead, probe, w);
+        return f;
+    };
+    auto arm = [](World& w, ai::DungeonPlan const* plan, std::size_t hold, bool waveAlive, bool discipleAlive) {
+        w.mobs.clear();
+        Mob disciple;
+        disciple.entry = 3678;
+        disciple.x = -134.965f; disciple.y = 125.402f; disciple.z = -78.094f;
+        disciple.alive = discipleAlive;
+        w.mobs.push_back(disciple);
+        if (!plan->steps[hold].entries.empty())
+        {
+            Mob wave;
+            wave.entry = plan->steps[hold].entries.front();
+            wave.x = w.x + 1.0f; wave.y = w.y + 1.0f; wave.z = w.z;
+            wave.alive = waveAlive;
+            w.mobs.push_back(wave);
+        }
+    };
+
+    // Holds 1-3: the wave dies while the Disciple lives. The hold ends on that tick, as it always did.
+    for (std::size_t h = 0; h + 1 < holds.size(); ++h)
+    {
+        World w;
+        Run at;
+        Facts f = ReadAt(plan, holds[h], w, at);
+        arm(w, plan, holds[h], true, true);
+        Tick(at, readNow(w, at), 1000);
+        arm(w, plan, holds[h], false, true);
+        Tick(at, readNow(w, at), 1000);
+        CHECK(at.step == holds[h] + 1);
+        CHECK(at.state == State::Running);
+        CHECK(at.eventNpcGoneMs == 0);
+    }
+
+    // The Disciple dies on the tick his wave dies: the hold keeps holding (no "event done"), and after kEscortNpcGoneMs it names him
+    // and goes back to the gossip.
+    {
+        World w;
+        Run at;
+        Facts f = ReadAt(plan, holds[0], w, at);
+        arm(w, plan, holds[0], true, true);
+        Tick(at, readNow(w, at), 1000);
+        CHECK(at.step == holds[0]);
+        arm(w, plan, holds[0], false, false);
+        Tick(at, readNow(w, at), 1000);
+        CHECK(at.step == holds[0]);             // the old rule advanced here ("every unit of it is dead")
+        CHECK(at.state == State::Running);
+        for (int t = 0; t < 12 && at.step == holds[0]; ++t)
+            Tick(at, readNow(w, at), 1000);
+        CHECK(plan->steps[at.step].kind == PlanStepKind::Gossip);
+        for (int t = 0; t < 20 && at.state == State::Running; ++t)
+            Tick(at, readNow(w, at), 1000);
+        CHECK(at.state == State::Paused);
+        CHECK(at.note.find("Disciple of Naralex") != std::string::npos);
+    }
+
+    // The last hold (the Ectoplasm wave before Mutanus): the same death must go back to the gossip, never on to the Mutanus boss step
+    // that would wait its 300 s and pause "not found".
+    {
+        World w;
+        Run at;
+        Facts f = ReadAt(plan, holds.back(), w, at);
+        arm(w, plan, holds.back(), true, true);
+        Tick(at, readNow(w, at), 1000);
+        arm(w, plan, holds.back(), false, false);
+        Tick(at, readNow(w, at), 1000);
+        CHECK(at.step == holds.back());
+        for (int t = 0; t < 12 && at.step == holds.back(); ++t)
+            Tick(at, readNow(w, at), 1000);
+        CHECK(at.step != holds.back() + 1);     // not the Mutanus boss step
+        CHECK(plan->steps[at.step].kind == PlanStepKind::Gossip);
+        for (int t = 0; t < 20 && at.state == State::Running; ++t)
+            Tick(at, readNow(w, at), 1000);
+        CHECK(at.state == State::Paused);
+        CHECK(at.note.find("Disciple of Naralex") != std::string::npos);
+        CHECK(at.note.find("not found") == std::string::npos);
+    }
+}
+
 // An old corpse of the entry (a Ravager pack killed on the way in) does not end a hold early; a corpse this hold saw die does.
 void TestOldCorpseHold(ai::DungeonPlan const* plan)
 {
@@ -905,6 +1021,7 @@ int main(int argc, char** argv)
     TestRealUnitRows(plan, unitsByStep);
     TestHoldStandsSide(plan);
     TestEscortNpcGone(plan);
+    TestDiscipleDiesMidFight(plan);
     TestOldCorpseHold(plan);
     std::printf("test_run_wc: %d checks, %d failed (plan: %zu steps, %zu legs, %d unit rows)\n", g_checks, g_fail,
         plan->steps.size(), plan->legs.size(), unitRows);
