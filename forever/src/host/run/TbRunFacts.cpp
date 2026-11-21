@@ -207,7 +207,7 @@ bool KnowsPolymorph(Player const* bot)
 }
 
 // ---- paths: one PathGenerator query on the lead (or another member), the result as plain data ----
-// PathGenerator.h:76/86 CalculatePath, :102 GetPathType, :100 GetPathLength; the type bits NOPATH 8, INCOMPLETE 4, SHORTCUT 2, NOT_USING_PATH 0x10
+// PathGenerator.h:78/86 CalculatePath, :102 GetPathType, :100 GetPathLength; the type bits NOPATH 8, INCOMPLETE 4, SHORTCUT 2, NOT_USING_PATH 0x10
 // are the Turtle ones (TbCompat_Unit.h section 6).
 fx::PathObs QueryPath(Ctx& c, Player* who, float x, float y, float z)
 {
@@ -822,7 +822,7 @@ void ReadLead(Ctx& c, Facts& f)
     }
     g.onTransport = lead->GetTransport() != nullptr;
     g.inWater = lo.inWater;
-    // The group's raid icons (Group.h:362): a mark is a handle.
+    // The group's raid icons (Group.h:365): a mark is a handle.
     if (Group* group = lead->GetGroup())
     {
         for (uint8 i = 0; i < 8; ++i)

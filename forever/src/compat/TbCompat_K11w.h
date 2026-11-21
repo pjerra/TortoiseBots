@@ -5,7 +5,7 @@
 #pragma once
 
 // Put `count` new items of `itemId` into the bags. T `Player::StoreNewItemInInventorySlot(id, count)` (the result is not used by the caller);
-// F `Player::StoreNewItemInBestSlots(id, count, ItemContext)` (Player.h:1626), the call `.tb additem` makes (TbScripts.cpp:731): false when
+// F `Player::StoreNewItemInBestSlots(id, count, ItemContext)` (Player.h:1627), the call `.tb additem` makes (TbScripts.cpp:731): false when
 // the bags have no room or the item does not exist. Reached only under the item cheat (CastChoicePetAction::isPossible, one Soul Shard
 // before a summon), which the slice keeps off (lead decision D3: shards are real); on F nothing else calls it.
 inline bool AddItemCompat(Player* bot, uint32 itemId, uint32 count) { return bot->StoreNewItemInBestSlots(itemId, count, ItemContext::NONE); }

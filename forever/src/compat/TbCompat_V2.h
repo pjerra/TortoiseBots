@@ -8,13 +8,13 @@
 // skinning", "loot tables (drop maps)"). Rule for those: the failure value makes the bot do LESS (no item, no object, no drop known).
 //
 // Core facts used below (F = pinned ForeverCore, src/server/game; T = Turtle core):
-//  * A corpse's loot is a Loot object. In the open world every tapper has a personal one (Creature::m_personalLoot, Unit.cpp:11975-11993);
-//    a grouped kill in a dungeon is one shared Loot (Creature::m_loot, Unit.cpp:11906-11932). Creature::GetLootForPlayer (Creature.cpp:1438)
+//  * A corpse's loot is a Loot object. In the open world every tapper has a personal one (Creature::m_personalLoot, Unit.cpp:12135-12153);
+//    a grouped kill in a dungeon is one shared Loot (Creature::m_loot, Unit.cpp:12066-12092). Creature::GetLootForPlayer (Creature.cpp:1459)
 //    returns the one a player may see, nullptr when this player has none. T keeps one public Loot per creature (Creature::loot).
-//  * Player::isAllowedToLoot (Player.cpp:20256) is the core's own entitlement test, the one that masks the lootable dynamic flag per viewer
+//  * Player::isAllowedToLoot (Player.cpp:20370) is the core's own entitlement test, the one that masks the lootable dynamic flag per viewer
 //    (ViewerDependentValues.h:76) and that CMSG_LOOT applies (LootHandler.cpp:61, :214).
 //  * The loot handlers run on the world thread (PROCESS_THREADUNSAFE, Opcodes.cpp:689-693) and need no map context. Everything in this file
-//    is a READ: it takes no map lock, writes nothing, and the engine ticks on the world thread outside the map update (World.cpp:2478-2491,
+//    is a READ: it takes no map lock, writes nothing, and the engine ticks on the world thread outside the map update (World.cpp:2487-2500,
 //    findings item 2 still holds: nothing here proves a map thread cannot touch the same corpse while a tick runs).
 #pragma once
 
@@ -48,16 +48,16 @@ inline ObjectGuid GuidFromQualifierCompat(std::string const& text)
 // Whose corpse is it. T ObjectGuid / Loot calls under the same names as the lines they replace in LootObjectStack.cpp (MayLootCorpse).
 // ---------------------------------------------------------------------------------------------------------------------
 // The core's own test: may this player open this corpse's loot. T `Player::IsAllowedToLoot(creature)`, F `Player::isAllowedToLoot`
-// (Player.h:2962, body Player.cpp:20256): dead, no pending bind, a Loot for this player that is not looted, the player in its allowed
-// looters, something in it for all or for the player (gold counts: Loot::hasItemForAll, Loot.cpp:1186), then the loot method's turn rule.
+// (Player.h:2963, body Player.cpp:20370): dead, no pending bind, a Loot for this player that is not looted, the player in its allowed
+// looters, something in it for all or for the player (gold counts: Loot::hasItemForAll, Loot.cpp:1200), then the loot method's turn rule.
 inline bool CorpseAllowedToLootCompat(Player* bot, Creature* creature) { return bot->isAllowedToLoot(creature); }
 
 // The loot of a corpse as this bot sees it (nullptr: this bot has none). T `&creature->loot` (always present), F GetLootForPlayer
-// (Creature.h:318-319 / Creature.cpp:1438). This is the same answer the core's CMSG_LOOT gives (LootHandler.cpp:253).
+// (Creature.h:318-319 / Creature.cpp:1459). This is the same answer the core's CMSG_LOOT gives (LootHandler.cpp:253).
 inline Loot* CreatureLootForCompat(Creature const* creature, Player const* bot) { return creature->GetLootForPlayer(bot); }
 
 // The player whose turn the corpse is (round robin owner); empty when released or when there is none. T `Loot::roundRobinPlayer` (a raw
-// 64-bit guid), F Loot::roundRobinPlayer (Loot.h:299, an ObjectGuid, set to the loot owner at generation, Loot.cpp:959).
+// 64-bit guid), F Loot::roundRobinPlayer (Loot.h:299, an ObjectGuid, set to the loot owner at generation, Loot.cpp:973).
 inline ObjectGuid CorpseRoundRobinGuidCompat(Creature const* creature, Player const* bot)
 {
     Loot const* loot = creature->GetLootForPlayer(bot);
@@ -65,13 +65,13 @@ inline ObjectGuid CorpseRoundRobinGuidCompat(Creature const* creature, Player co
 }
 
 // The group's assigned master looter. T `Group::GetLooterGuid()` is the master looter under MASTER_LOOT (Group.h:223); F keeps the master
-// looter apart (Group.h:316 GetMasterLooterGuid; GetLooterGuid there is the round robin pointer, empty under free-for-all, Group.cpp:1675).
+// looter apart (Group.h:316 GetMasterLooterGuid; GetLooterGuid there is the round robin pointer, empty under free-for-all, Group.cpp:1706).
 inline ObjectGuid GroupMasterLooterGuidCompat(Group const* group) { return group->GetMasterLooterGuid(); }
 
 // "Another member's turn: does the corpse show a personal item (quest, free-for-all, conditional) to this bot". T asks
 // ai::HasVisiblePersonalItemFor(creature->loot, bot) (policy/loot/CorpseLootPolicy.h, passed in as `visible`). F (slice 9): Loot::hasItemFor
-// (Loot.cpp:1197: the player's quest items and free-for-all items), the very test Player::isAllowedToLoot ends in for a member whose turn it is not
-// (Player.cpp:20284). The policy's own T algorithm is not run.
+// (Loot.cpp:1211: the player's quest items and free-for-all items), the very test Player::isAllowedToLoot ends in for a member whose turn it is not
+// (Player.cpp:20398). The policy's own T algorithm is not run.
 template <class VisibleFn>
 inline bool CorpseHasVisiblePersonalItemForCompat(Creature* creature, Player* bot, VisibleFn&& /*visible*/)
 {
@@ -157,7 +157,7 @@ inline Loot* LootOfObjectCompat(WorldObject* object, Player* bot)
 
 // What "no loot object" means for the caller. T: nothing (a creature always has its Loot; a game object without one falls to the goober test). F: true,
 // "nothing to take": for a creature that is "this bot has no loot here"; for a game object it is a chest or other object that was not opened yet (no loot
-// is generated before the first use, GameObject.cpp:2749), and the caller's goober test is not ported: LESS. A chest is looted through the loot object
+// is generated before the first use, GameObject.cpp:2752), and the caller's goober test is not ported: LESS. A chest is looted through the loot object
 // stack (the opening cast), not through this value.
 inline bool AbsentLootMeansNothingToTakeCompat(WorldObject* object)
 {

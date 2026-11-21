@@ -30,7 +30,7 @@ std::deque<ItemPrototype> g_mirrors;
 std::unordered_map<uint32, ItemPrototype const*> g_mirrorByEntry;
 std::atomic<bool> g_filled{false};
 
-// The stat value the core computes for an item at its base item level: Item::GetItemStatValue (Item.cpp:2432) is
+// The stat value the core computes for an item at its base item level: Item::GetItemStatValue (Item.cpp:2472) is
 // StatPercentEditor * GetRandomPropertyPoints(itemLevel, quality, inventoryType, subClass) * 0.0001. Per-item scaling and
 // the socket-cost subtraction are left out: there is no Item instance here, and classic items have no sockets.
 int32 StatValue(ItemTemplate const* tpl, uint32 index)
@@ -121,7 +121,7 @@ uint32 BagFamilyNumber(uint32 mask, uint32 itemClass)
     return 0;
 }
 
-// ItemTemplate::GetDPS (ItemTemplate.cpp:210-260) indexes one of five client damage tables with AssertEntry(itemLevel): a
+// ItemTemplate::GetTableDPS (ItemTemplate.cpp:210-260, which GetDPS calls when the item has no classic damage row) indexes one of five client damage tables with AssertEntry(itemLevel): a
 // row the client data does not have aborts the server, and the eager fill would meet it for every weapon in the store.
 // This is GetDPS's own early return (not a weapon, quality past artifact with heirloom read as rare, an inventory type it
 // does not handle), so the fill only checks the tables where the core would actually read one.
@@ -287,9 +287,9 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     mirror.Damage[0].DamageType = tpl->GetDamageType();
 
     // The shield's own block value is the classic column: ForeverCore keeps it in item_classic_block and adds it to the
-    // shield's block (ObjectMgr.cpp:808-833, Player.cpp:8972-8984), the same place the old core's item_template.block went
-    // (ObjectMgr.cpp:2301, Player.cpp:8478-8479). The ITEM_MOD_BLOCK_VALUE stat is a separate bonus on this core
-    // (Player.cpp:8871-8873) and was an equip spell on the old core - never part of its Block column - so it is not added;
+    // shield's block (ObjectMgr.cpp:808-833, Player.cpp:9054-9066), the same place the old core's item_template.block went
+    // (ObjectMgr.cpp:2301, Player.cpp:8507-8508). The ITEM_MOD_BLOCK_VALUE stat is a separate bonus on this core
+    // (Player.cpp:8903-8905) and was an equip spell on the old core - never part of its Block column - so it is not added;
     // BlockStat keeps it for the live check. The resistances are item stats on ForeverCore where cmangos had a column each.
     mirror.BlockBase = sObjectMgr->GetItemClassicBlock(tpl->GetId());
     mirror.BlockStat = uint32(std::max<int32>(0, StatTotal(tpl, ITEM_MOD_BLOCK_VALUE)));
@@ -307,7 +307,7 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
         AddIncomplete(mirror, armorMissing);
     }
     int32 const allSchools = StatTotal(tpl, ITEM_MOD_CLASSIC_RESISTANCE_ALL_SCHOOLS);
-    // "+X to all resistances" reaches fire, nature, frost, shadow and arcane, but not holy (Player.cpp:8930-8932).
+    // "+X to all resistances" reaches fire, nature, frost, shadow and arcane, but not holy (Player.cpp:9012-9014).
     mirror.HolyRes = StatTotal(tpl, ITEM_MOD_HOLY_RESISTANCE);
     mirror.FireRes = StatTotal(tpl, ITEM_MOD_FIRE_RESISTANCE) + allSchools;
     mirror.NatureRes = StatTotal(tpl, ITEM_MOD_NATURE_RESISTANCE) + allSchools;
@@ -316,7 +316,7 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     mirror.ArcaneRes = StatTotal(tpl, ITEM_MOD_ARCANE_RESISTANCE) + allSchools;
 
     // The five spell slots cmangos had as item_template.spells[0..4] are the item's effects, one per LegacySlotIndex, in
-    // the core's own order (ObjectMgr.cpp:3741 sorts them by that index).
+    // the core's own order (ObjectMgr.cpp:3743 sorts them by that index).
     for (ItemEffectEntry const* effect : tpl->Effects)
     {
         if (!effect || effect->LegacySlotIndex >= MAX_ITEM_PROTO_SPELLS)
@@ -390,8 +390,8 @@ ItemPrototype const* Find(uint32 entry)
 }
 }  // namespace
 
-// Filled once, from the item store that World::SetInitialWorldSettings has loaded (World.cpp:1622; item_classic_block at
-// World.cpp:1645) just before the world goes online (Main.cpp:372). The container is not modified again, so the lookups
+// Filled once, from the item store that World::SetInitialWorldSettings has loaded (World.cpp:1625; item_classic_block at
+// World.cpp:1654) just before the world goes online (Main.cpp:372). The container is not modified again, so the lookups
 // read it without the lock; the release store publishes the fill to the map threads.
 void FillAll()
 {

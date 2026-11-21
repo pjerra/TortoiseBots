@@ -1,9 +1,9 @@
 // The module's guarded access to the core's start-outfit data: whether an item entry is one of the items the core creates a character with.
 //
 // The data: `PlayerInfo::item` (ObjectMgr.h:716), filled at load from the DB2 character loadouts for new characters (`CharacterLoadoutItem` by
-// `CharacterLoadoutID`, `CharacterLoadout::IsForNewCharacter`, ObjectMgr.cpp:4352-4391) and then from the world-table overrides
-// `playercreateinfo_item` (ObjectMgr.cpp:4393-4451); Player::Create stores each of them with `StoreNewItemInBestSlots` (Player.cpp:544-546). This
-// core keys the record by race and class only (ObjectMgr::GetPlayerInfo, ObjectMgr.cpp:10996-10998, the `_playerInfo` map is {race, class}); the
+// `CharacterLoadoutID`, `CharacterLoadout::IsForNewCharacter`, ObjectMgr.cpp:4400-4439) and then from the world-table overrides
+// `playercreateinfo_item` (ObjectMgr.cpp:4441-4499); Player::Create stores each of them with `StoreNewItemInBestSlots` (Player.cpp:545-547). This
+// core keys the record by race and class only (ObjectMgr::GetPlayerInfo, ObjectMgr.cpp:11044-11046, the `_playerInfo` map is {race, class}); the
 // gender of a character does not change its starting items, so it is not part of the data or of this signature.
 //
 // The guard: GetPlayerInfo answers nullptr for a race/class the core has no row for, and the miss is answered false here, never dereferenced. The

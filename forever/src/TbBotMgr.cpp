@@ -66,7 +66,7 @@ constexpr uint32 DeadBackstopDefaultMs = 180000;   // TortoiseBots.Slice.DeadBac
 // H4: the walk to the trigger makes no progress (the best distance does not shrink by a yard) for this long: `block=stuck`.
 constexpr uint32 EntryNoProgressMs = 20000;
 
-// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1864-1910), in words.
+// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1978-2024), in words.
 std::string AbortReasonText(TransferAbortParams const& denied)
 {
     char const* what = nullptr;
@@ -93,8 +93,8 @@ std::string AbortReasonText(TransferAbortParams const& denied)
 
 namespace
 {
-// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1878: no MapDifficulty row, id 0; Player::Satisfy,
-// Entities/Player/Player.cpp:21473: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
+// L8 (package L): reason TRANSFER_ABORT_DIFFICULTY has two sources (Maps/Map.cpp:1992: no MapDifficulty row, id 0; Player::Satisfy,
+// Entities/Player/Player.cpp:21587: a failed MapDifficultyXCondition, id != 0). For the second, read the failed condition's PlayerCondition: a
 // minimum level the player is under is "level too low for this instance (needs N)" (measured live: level 9 refused, 10 allowed for Ragefire
 // Chasm); any other condition is "refused by an entry condition". The text of the other reasons is AbortReasonText's.
 std::string EntryRefusalText(TransferAbortParams const& denied, uint32 mapId, Player* who)
@@ -145,7 +145,7 @@ std::string EntryRefusalCode(TransferAbortParams const& denied, std::string cons
 }
 
 // N1 (package N): the ONE place the module asks the core whether a character may enter a map. Map::PlayerCannotEnter reaches InstanceMap::CannotEnter
-// (Maps/Map.cpp:3014-3020), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
+// (Maps/Map.cpp:3138-3144), which ABORTS the server when the player already stands in the instance it is asked about (live: package L, twice). So the
 // question is never asked for a character that is not in the world, is being teleported, or whose map id IS the one asked about. Returns the code and the
 // reason in words; an empty code = the core has no objection (or the map is not a dungeon).
 // H4 (C1): CanEnterMap (below) and the entry code both go through here: `grep PlayerCannotEnter forever/src` finds this one call.
@@ -1147,7 +1147,7 @@ void BotMgr::MarkPractice(ObjectGuid botGuid)
 }
 
 // D2 (the lead's decision of 2026-11-19): the entrance of a dungeon is given to the instance's script by the host, so a release inside revives the
-// bot at the entrance INSIDE the instance (Player::RepopAtGraveyard asks the script first, Player.cpp:5227-5228, and revives in place for every
+// bot at the entrance INSIDE the instance (Player::RepopAtGraveyard asks the script first, Player.cpp:5248-5249, and revives in place for every
 // non-raid dungeon, :5220; without an entrance it falls to the closest graveyard, which for Ragefire Chasm and an Alliance bot is Razor Hill).
 // InstanceScript::SetEntranceLocation is a public member (InstanceScript.h:293). Once per instance; the trigger the first entry used is the source, else
 // ObjectMgr::GetMapEntranceTrigger(map) (the first areatrigger_teleport row that leads into the map; a dungeon with several entrances needs the entry's own).
@@ -1166,7 +1166,7 @@ bool BotMgr::IsCommandedHere(Bot const& bot, Player* me) const
 // retried at the next think (the log line is once per (map, instance)). The trigger of the last entry into the instance is used only when its target is this
 // map (a stale RFC trigger must not name an entrance for Deadmines); otherwise the first trigger that leads into the map (ObjectMgr::GetMapEntranceTrigger).
 // InstanceScript::SetEntranceLocation is public (InstanceScript.h:293). D2: the bot then revives at the entrance inside the instance after a release
-// (Player::RepopAtGraveyard, Player.cpp:5227-5228) instead of at the zone's graveyard (Razor Hill for Ragefire Chasm).
+// (Player::RepopAtGraveyard, Player.cpp:5248-5249) instead of at the zone's graveyard (Razor Hill for Ragefire Chasm).
 void BotMgr::EnsureEntrance(Bot const& bot, Player* me)
 {
     Map* map = me->GetMap();
@@ -1228,7 +1228,7 @@ bool BotMgr::ReleaseHasEntrance(Player* bot) const
     if (!map || !map->ToInstanceMap() || !map->IsDungeon())
         return true;                      // not inside a dungeon: the stock rules (a graveyard is where the core sends a ghost)
     // The stricter of the two entrance checks (P4's InstanceEntranceKnownCompat names a real world_safe_locs row, H4's was only non-zero): the core's own
-    // lookup (RepopAtGraveyard, Player.cpp:5230) uses the row, so an id with no row would fall back to the zone's graveyard outside.
+    // lookup (RepopAtGraveyard, Player.cpp:5251) uses the row, so an id with no row would fall back to the zone's graveyard outside.
     uint32 const entrance = InstanceEntrance(bot);
     return entrance != 0 && sObjectMgr->GetWorldSafeLoc(entrance) != nullptr;
 }

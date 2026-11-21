@@ -231,11 +231,11 @@ public:
         TortoiseBots::pool::LoadConfig();      // W0
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B
         TortoiseBots::pool::Reconcile();       // W0: the creations that stopped halfway (a claim row, no account or character yet)
-        // The item store is loaded by now (World.cpp:1622, and item_classic_block at :1631); fill every mirror once so the
+        // The item store is loaded by now (World.cpp:1625, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
         TortoiseBots::Dashboard::WriteItemsFile();
-        // The spell store is loaded too (World.cpp:1485). This hook is what tells the mirror so: it answers 0 and null
+        // The spell store is loaded too (World.cpp:1487). This hook is what tells the mirror so: it answers 0 and null
         // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
         // store into a table that is never rebuilt.
         tbcompat::MarkSpellStoreReady();
@@ -372,7 +372,7 @@ public:
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             tbhost::prof::ClearBotErrands(player->GetGUID());
 #endif
-            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1527). Only the preference:
+            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1528). Only the preference:
             // nothing is added to the bags and the ammo slot is untouched.
             player->SetPreferDrawableAmmo(true);
         }
@@ -989,7 +989,7 @@ public:
 
     // .tb train <bot>: teaches the bot, free and without an NPC, the class spells it may know at its level, from the core's own data, in two passes
     // (no spell id is written in this module):
-    //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1628, the world database's trainer and trainer_spell tables) and the core's own
+    //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1629, the world database's trainer and trainer_spell tables) and the core's own
     //     per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A trainer is
     //     used when its type is a class trainer and its class mask (Trainer::GetClassMask) IS the bot's class (a mask of several classes is a trainer whose
     //     data names no class: riding, recipes; the first boot of R3 taught a priest riding passives and a tailoring recipe through them). The type of a class trainer in this
@@ -1106,7 +1106,7 @@ public:
 
     // .tb power <character> mana|rage|energy <value> (the name left out: the sender's own character): sets that power to <value> percent of its
     // maximum (rage: percent of 100 = rage points, the unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten;
-    // SetPower takes core units (Unit.h:839). A module bot, or the sender's own character (TB-1); never another real player.
+    // SetPower takes core units (Unit.h:849). A module bot, or the sender's own character (TB-1); never another real player.
     static bool HandlePower(ChatHandler* handler, Tail args)
     {
         if (!RequireEngine(handler))
@@ -1140,7 +1140,7 @@ public:
         return true;
     }
 
-    // .tb additem <bot> <item id> [count]: a new item into the bags (Player::StoreNewItemInBestSlots, Player.h:1626). The id is looked up
+    // .tb additem <bot> <item id> [count]: a new item into the bags (Player::StoreNewItemInBestSlots, Player.h:1627). The id is looked up
     // with `.tb item <id>` first: no id is known from memory.
     static bool HandleAddItem(ChatHandler* handler, std::string name, uint32 entry, Optional<uint32> count)
     {
@@ -1194,9 +1194,9 @@ public:
         return true;
     }
 
-    // .tb use <bot> <item id> [self]: the bot uses an item from its bags through the core's own item cast (Player::CastItemUseSpell, Player.h:2683:
-    // the call a client's use-item packet ends in, Player.cpp:33843), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
-    // flag, effects, on-use spell: a legacy item's effect is ignored by the core, Player.cpp:9718-9744), then mana, current cast and auras.
+    // .tb use <bot> <item id> [self]: the bot uses an item from its bags through the core's own item cast (Player::CastItemUseSpell, Player.h:2684:
+    // the call a client's use-item packet ends in, Player.cpp:33996), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
+    // flag, effects, on-use spell: a legacy item's effect is ignored by the core, Player.cpp:9814-9840), then mana, current cast and auras.
     // With the word `self` the cast carries the bot as its unit target; without, an empty target list (what a client sends for a self spell).
     static bool HandleUse(ChatHandler* handler, std::string name, uint32 entry, Optional<std::string> mode)
     {

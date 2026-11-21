@@ -735,7 +735,7 @@ std::string JoinFrom(std::vector<std::string> const& words, size_t from)
 
 // H4 (slice 4, spec section 2): who offered the dead bot a resurrection, when that is a member of its party or its commander (a stranger's offer is
 // DECLINED: the bot does nothing, the offer lapses by itself; the legacy action would accept any). The core keeps the pending offer on the Player
-// (Player::SetResurrectRequestData, Player.cpp:25480); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
+// (Player::SetResurrectRequestData, Player.cpp:25625); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
 // of SMSG_RESURRECT_REQUEST in the session: the same fact, on the world thread, with no packet to parse.
 Player* ResurrectOffererOf(Player* bot)
 {
@@ -775,7 +775,7 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         }
 
     // N7 (package N): a resurrection request that is NOT from the bot's party or its commander (a GM or a player outside) is DECLINED, not left pending: the core
-    // keeps one request per player and refuses a second caster's while one is stored (Spell::EffectResurrect, SpellEffects.cpp:3825), so a stranger's request
+    // keeps one request per player and refuses a second caster's while one is stored (Spell::EffectResurrect, SpellEffects.cpp:3833), so a stranger's request
     // would block the party priest and the body would wait. The core's own decline: ResurrectResponse with Response != 0 clears the request whoever sent it
     // (WorldSession::HandleResurrectResponse, MiscHandler.cpp:511-515).
     if (!bot->IsAlive() && bot->IsResurrectRequested() && !ResurrectOffererOf(bot) && bot->GetSession())
@@ -1300,7 +1300,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         else if (verb == "release")
         {
             needAction[0] = "release";
-            // D2: no entrance on the instance = the core would revive the bot at a graveyard OUTSIDE (Player::RepopAtGraveyard, Player.cpp:5237-5242): refused.
+            // D2: no entrance on the instance = the core would revive the bot at a graveyard OUTSIDE (Player::RepopAtGraveyard, Player.cpp:5258-5263): refused.
             if (!BotMgr::Instance().ReleaseHasEntrance(bot))
             {
                 refuse("no-entrance", "the instance has no entrance point (no script or no trigger target): a release would revive the bot outside, so it is held");

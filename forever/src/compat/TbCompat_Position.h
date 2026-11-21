@@ -76,7 +76,7 @@ inline Position TbCorePosition(TbLegacyWorldLocation const& loc) { return Positi
 // built from the same facts: the map, the point, and the orientation only where the Turtle code read one.
 //   Position + map            T Position {x,y,z,o} / F Position::GetPosition{X,Y,Z}, GetOrientation
 //   CreatureData/GameObjectData  T `position` member / F SpawnData::mapId + spawnPoint (Maps/SpawnData.h:136)
-//   SpellTargetPosition       T and F both name a WorldLocation (F SpellMgr.h:370); the Turtle code dropped the orientation
+//   SpellTargetPosition       T and F both name a WorldLocation (F SpellMgr.h:374); the Turtle code dropped the orientation
 //   TaxiNodesEntry            T map_id,x,y,z / F ContinentID, Pos.X/Y/Z (DB2Structure.h:4383-4390); orientation 0 as before
 //   WorldSafeLocsEntry        T map_id,x,y,z (no orientation: 0) / F Loc (ObjectMgr.h:886-891)
 //   PlayerInfo                T mapId,positionX,Y,Z,orientation / F createPosition.Loc (ObjectMgr.h:704-709)

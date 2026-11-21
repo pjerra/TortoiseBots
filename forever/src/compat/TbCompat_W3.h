@@ -60,7 +60,7 @@ inline void DbEscapeW3(Db& db, std::string& text) { db.EscapeString(text); }
 
 // =====================================================================================================================
 // Family 4: the singletons. T: `extern AuctionHouseMgr sAuctionMgr;` (an object). F: `#define sAuctionMgr AuctionHouseMgr::instance()`
-// (a pointer; AuctionHouseMgr.h:439, AccountMgr.h:105, ScriptMgr.h:1570). The helper is the object on both.
+// (a pointer; AuctionHouseMgr.h:439, AccountMgr.h:105, ScriptMgr.h:1595). The helper is the object on both.
 // =====================================================================================================================
 #define AuctionMgrW3() (*sAuctionMgr)
 #define AccountMgrW3() (*sAccountMgr)

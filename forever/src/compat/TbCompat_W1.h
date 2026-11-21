@@ -44,7 +44,7 @@ inline bool KillLowersReputationCompat(uint32 entry)
 }
 
 // Whether the unit offers a service (UNIT_NPC_FLAG_*): a vendor, trainer, quest giver, flight master or innkeeper. T reads the update
-// field the old names use; F has Unit::HasNpcFlag (Unit.h:1013) over the same flag.
+// field the old names use; F has Unit::HasNpcFlag (Unit.h:1026) over the same flag.
 inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)
 {
     return unit && unit->HasNpcFlag(static_cast<NPCFlags>(flag));
@@ -200,7 +200,7 @@ inline bool ReclaimCorpseCompat(Player* bot)
     return bot->IsAlive();
 }
 
-// F revives a ghost through the core's spirit-healer handler (sickness, 25% durability, bones, Player.cpp:4949) instead of a
+// F revives a ghost through the core's spirit-healer handler (sickness, 25% durability, bones, Player.cpp:4966) instead of a
 // direct ResurrectPlayer. Turtle keeps the direct revive: this answers false there and the legacy block runs.
 inline bool SpiritHealerCoreHandlerCompat()
 {
@@ -212,7 +212,7 @@ inline bool UnitIsSpiritHealerCompat(Unit* unit)
     return unit && unit->IsSpiritHealer();
 }
 
-// The core's own interact reach (GetNPCIfCanInteractWith: combat reach + 4 yd, Player.cpp:1986).
+// The core's own interact reach (GetNPCIfCanInteractWith: combat reach + 4 yd, Player.cpp:1990).
 inline bool SpiritHealerInReachCompat(Player* bot, Unit* healer)
 {
     Creature* creature = healer ? healer->ToCreature() : nullptr;
@@ -239,7 +239,7 @@ inline bool RepopAtGraveyardCompat(Player* bot)
     return true;
 }
 
-// F's BuildPlayerRepop refuses a dead, non-ghost player that still has a corpse on the same map (Player.cpp:4697-4702): the bot
+// F's BuildPlayerRepop refuses a dead, non-ghost player that still has a corpse on the same map (Player.cpp:4714-4719): the bot
 // would wedge in front of its own body after a relogin. A player wakes up as bones first. Turtle never had the guard.
 inline bool StaleCorpseBonesCompat(Player* bot)
 {

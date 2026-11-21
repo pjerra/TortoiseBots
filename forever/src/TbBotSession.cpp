@@ -154,7 +154,7 @@ void BotSession::CaptureCastResult(WorldPacket const& packet)
 void BotSession::CaptureSpellDelay(WorldPacket const& packet)
 {
     // WorldPackets::Spells::SpellDelayed::Write (SpellPackets.cpp:1128-1134): ObjectGuid Caster, uint32 ActualDelay. Spell::Delayed sends it
-    // with SendMessageToSet(..., true), so it reaches the caster's own session too (Spell.cpp:8414-8418), and it is no failure: the cast goes
+    // with SendMessageToSet(..., true), so it reaches the caster's own session too (Spell.cpp:8470-8474), and it is no failure: the cast goes
     // on, just later. The packet is copied first: reading moves the read position, and the same packet object is also handed to the set's
     // other receivers.
     CastResult result;

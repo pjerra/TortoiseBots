@@ -5,21 +5,21 @@
 #pragma once
 
 // A stunned unit, or one about to be stunned. T tests UNIT_STAT_STUNNED | UNIT_STAT_PENDING_STUNNED (a Sapped pack mate detects nothing, so the
-// Sap approach may pass close to it). F has no pending-stun state: Unit.h:281 `UNIT_STATE_STUNNED` only, set while a stun aura is on the unit.
+// Sap approach may pass close to it). F has no pending-stun state: Unit.h:289 `UNIT_STATE_STUNNED` only, set while a stun aura is on the unit.
 // "Different answer" (less, never more): a mate whose stun is queued but not applied reads as awake, so the approach keeps its clearance.
 // (Sap itself is out of slice 8 (decision D3); the rule is compiled and unreachable.)
 inline bool StunnedOrPendingStunCompat(Unit const* unit) { return unit->HasUnitState(UNIT_STATE_STUNNED); }
 
-// Hand a stack over: the item's owner field becomes the receiver. T `Item::SetOwnerGuid(ObjectGuid)`; F `Item::SetOwnerGUID(ObjectGuid)` (Item.h:205),
-// the same field (UF::ItemData::Owner). F's `Player::MoveItemToInventory` sets it again when the owner differs (Player.cpp:13096-13097), so the
+// Hand a stack over: the item's owner field becomes the receiver. T `Item::SetOwnerGuid(ObjectGuid)`; F `Item::SetOwnerGUID(ObjectGuid)` (Item.h:206),
+// the same field (UF::ItemData::Owner). F's `Player::MoveItemToInventory` sets it again when the owner differs (Player.cpp:13192-13193), so the
 // call is redundant there and harmless.
 inline void ItemSetOwnerCompat(Item* item, Unit const* owner) { item->SetOwnerGUID(owner->GetGUID()); }
 
 // The spell state a bot's interrupt rule reads off a victim's cast. The rule (ai/playerbot/InterruptCastingPolicy.h:57-61) numbers PREPARING = 1
-// and CASTING = 2 (Turtle: SPELL_STATE_CASTING is a CHANNEL in progress, Spell.cpp:3999; a missile in flight is DELAYED = 3). F numbers
-// PREPARING 1, LAUNCHED 2, CHANNELING 3 (Spell.h:254-262); the raw F state would turn a missile in flight (LAUNCHED, Spell.cpp:3945: the bar is
+// and CASTING = 2 (Turtle: SPELL_STATE_CASTING is a CHANNEL in progress, Spell.cpp:4004; a missile in flight is DELAYED = 3). F numbers
+// PREPARING 1, LAUNCHED 2, CHANNELING 3 (Spell.h:254-262); the raw F state would turn a missile in flight (LAUNCHED, Spell.cpp:3950: the bar is
 // over, the effects are on their way) into "casting", and a real channel (3) into nothing. So: PREPARING -> 1, CHANNELING -> 2, every other state
-// -> 0 (not on a bar: not interruptible), which is also the core's own gate for Interrupt Cast (SpellEffects.cpp:3128-3129: CHANNELING, or
+// -> 0 (not on a bar: not interruptible), which is also the core's own gate for Interrupt Cast (SpellEffects.cpp:3136-3137: CHANNELING, or
 // PREPARING with a cast time).
 inline uint32 InterruptSpellStateCompat(Spell const* spell)
 {
