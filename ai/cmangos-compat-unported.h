@@ -58,10 +58,12 @@ inline void QueueUseItemPacketCompat(Player* bot, uint8 bagIndex, uint8 slot, ui
     bot->GetSession()->QueuePacket(packet.release());
 }
 
+// Whether the prototype can go into the given equipment slot (T `slot == bot->FindEquipSlot(proto, slot, true)`: the slot is a hint
+// the core prefers, so a ring asked for finger2 answers finger2, while the same ring asked for finger1 answers finger1). The caller
+// that lists an item by its FIRST eligible slot asks EquipSlotOfProtoCompat (S9) instead.
 inline bool ItemProtoFitsSlotCompat(Player* bot, ItemPrototype const* proto, uint32 slot)
 {
-    uint8 eslot = bot->FindEquipSlot(proto, NULL_SLOT, true);
-    return slot == eslot;
+    return bot->FindEquipSlot(proto, slot, true) == slot;
 }
 
 inline bool ItemRandomPropertySuffixCompat(int32 randomPropertyId, int loc_idx, std::string& suffix)

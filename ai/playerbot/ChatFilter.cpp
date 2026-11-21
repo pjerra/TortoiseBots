@@ -4,6 +4,7 @@
 #include "strategy/values/RtiTargetValue.h"
 #include "strategy/values/ItemUsageValue.h"
 #include "ChatHelper.h"
+#include "playerbot/ChatLinkScan.h"
 #include "Guild/GuildMgr.h"
 
 using namespace ai;
@@ -1103,7 +1104,8 @@ public:
         if (message.find("@random=") == 0)
         {
             std::string num = message.substr(message.find("=") + 1, message.find(" ") - message.find("=")-1);
-            if (urand(0, 100) < stoul(num))
+            uint32 percent = 0;
+            if (ai::chatlink::ParseUnsigned(num, percent) && urand(0, 100) < percent)
                 return ChatFilter::Filter(message);
 
             return message;
@@ -1116,7 +1118,8 @@ public:
         if (message.find("@fixedrandom=") == 0)
         {
             std::string num = message.substr(message.find("=") + 1, message.find(" ") - message.find("=") - 1);
-            if (ai->GetFixedBotNumber(BotTypeNumber::CHATFILTER_NUMBER) < stoul(num))
+            uint32 limit = 0;
+            if (ai::chatlink::ParseUnsigned(num, limit) && ai->GetFixedBotNumber(BotTypeNumber::CHATFILTER_NUMBER) < limit)
                 return ChatFilter::Filter(message);
 
             return message;
@@ -1179,8 +1182,12 @@ public:
 
             std::set<uint32> questIds = ChatHelper::ExtractAllQuestIds(questString);
 
+            int32 questNumber = 0;
             if (questIds.empty() && Qualified::isValidNumberString(questString))
-                questIds.insert(stoi(questString));
+            {
+                if (ai::chatlink::ParseSigned(questString, questNumber))
+                    questIds.insert(static_cast<uint32>(questNumber));
+            }
             else
             {
                 for (auto& questId : questIds)

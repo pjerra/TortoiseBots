@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <vector>
 #include <map>
 #include <set>
 
@@ -81,16 +82,11 @@ std::string ResultName(InventoryResult result)
     }
 }
 
+// Digits only (target::ParseIdWord): strtoul used to take "-1" (wrapping to 4294967295, "all" for removeitem), "+3" and " 5". Used by learn, equip and
+// removeitem, which now refuse those words. additem does not use this: it takes the core's command parser (TbScripts.cpp:888).
 bool ParseId(std::string const& word, uint32& out)
 {
-    if (word.empty() || word.size() > 9)
-        return false;
-    char* end = nullptr;
-    unsigned long const value = std::strtoul(word.c_str(), &end, 10);
-    if (!end || *end != '\0' || !value)
-        return false;
-    out = uint32(value);
-    return true;
+    return target::ParseIdWord(word, out);
 }
 
 // The bot named by the first word: an in-world host bot.
@@ -383,6 +379,89 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
     else
         say("refused", "swap-failed", -1, -1, "item left in bags");
+    return true;
+}
+
+// ---- `.tb removeitem [<character>] <item id> [count] [#token]` ----
+// The inverse of `.tb additem`: takes up to `count` (no count = all) of the item out of the target's BAGS (backpack, the worn bags and the reagent bag),
+// through the core's Item*-based Player::DestroyItemCount(Item*, uint32&, bool) (Player.h:1678: quest bookkeeping included). The stacks are collected
+// first, by the pure rule target::IsBagStack (never equipped, bank, keyring, child-equipment, the worn bags themselves, nor a stack in an open trade), and
+// only those Items are destroyed, so nothing outside the bags can be touched (the core's entry-based DestroyItemCount sweeps equipment and bank too).
+// Only the item named is touched, so a quest item goes only when it is the one asked for. One record `removeitem bot=.. item=<id> removed=<n> left=<n>`
+// (left = what the bags hold AFTER the removal, read again, not computed; an open-trade stack is still in its bag slot, so it counts in left but not in
+// removed); errors are typed: missing-bot / no-such-player / not-a-bot / no-character /
+// engine-not-built / missing-argument / bad-id / unknown-item / unexpected-argument.
+// Persistence: like the core's own `.additem` (cs_misc.cpp HandleAddItemCommandHelper, which calls no save), the change is written by the next
+// autosave or logout (DestroyItem marks the row removed); this test kit does not force a save, a crash before then brings the item back.
+
+static_assert(target::kBagZero == INVENTORY_SLOT_BAG_0, "bag-stack rule: bag 0");
+static_assert(target::kBagStart == INVENTORY_SLOT_BAG_START, "bag-stack rule: first worn bag");
+static_assert(target::kReagentBagEnd == REAGENT_BAG_SLOT_END, "bag-stack rule: end of the reagent bag");
+static_assert(target::kBackpackStart == INVENTORY_SLOT_ITEM_START, "bag-stack rule: backpack start");
+
+bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "removeitem"))
+        return false;
+    size_t start = 1;
+    Player* bot = TargetArg(handler, args, "removeitem", start);
+    if (!bot)
+        return false;
+    if (args.w.size() <= start)
+        return Fail(handler, args, "removeitem", "missing-argument", ".tb removeitem <character> <item id> [count]");
+    uint32 item = 0;
+    if (!ParseId(args.w[start], item))
+        return Fail(handler, args, "removeitem", "bad-id", args.w[start]);
+    uint32 requested = 0;
+    if (args.w.size() > start + 1 && !ParseId(args.w[start + 1], requested))
+        return Fail(handler, args, "removeitem", "bad-id", args.w[start + 1]);
+    if (args.w.size() > start + 2)
+        return Fail(handler, args, "removeitem", "unexpected-argument", args.w[start + 2]);
+    if (!sObjectMgr->GetItemTemplate(item))
+        return Fail(handler, args, "removeitem", "unknown-item", args.w[start]);
+
+    // The exact stacks in the bags (pure rule target::IsBagStack). ForEachItem(Inventory) walks the backpack and the worn bags' contents, the
+    // ReagentBank location walks the reagent bag's; the rule drops everything else it also returns (equipped bags, keyring slots).
+    uint8 const backpackSlots = uint8(bot->GetInventorySlotCount());
+    // removable: the stacks that may be destroyed (an open-trade stack is skipped); otherwise every matching stack still in a bag slot, trade included.
+    auto collect = [&](bool removable)
+    {
+        std::vector<Item*> stacks;
+        auto visit = [&](Item* it)
+        {
+            if (it->GetEntry() == item && target::IsBagStack(it->GetBagSlot(), it->GetSlot(), backpackSlots, removable && it->IsInTrade()))
+                stacks.push_back(it);
+            return ItemSearchCallbackResult::Continue;
+        };
+        bot->ForEachItem(ItemSearchLocation::Inventory, visit);
+        bot->ForEachItem(ItemSearchLocation::ReagentBank, visit);
+        return stacks;
+    };
+    auto total = [](std::vector<Item*> const& stacks)
+    {
+        uint32 sum = 0;
+        for (Item* it : stacks)
+            sum += it->GetCount();
+        return sum;
+    };
+
+    std::vector<Item*> const stacks = collect(true);
+    uint32 const want = target::RemoveAmount(total(stacks), requested);
+    uint32 remaining = want;
+    for (Item* it : stacks)
+    {
+        if (!remaining)
+            break;
+        bot->DestroyItemCount(it, remaining, true);   // an Item* destroyed here is never read again; the other collected Items are separate objects
+    }
+    uint32 const removed = want - remaining;
+    uint32 const left = total(collect(false));
+
+    Reply reply(handler, args, "removeitem");
+    reply.Begin();
+    reply.Line(Rec("removeitem").S("bot", bot->GetName()).N("item", item).N("removed", removed).N("left", left));
+    reply.End(Rec("removeitem").S("bot", bot->GetName()));
     return true;
 }
 

@@ -2,6 +2,8 @@
 #include "playerbot/playerbot.h"
 #include "ChatHelper.h"
 #include "playerbot/AiFactory.h"
+#include "playerbot/TbCompatCL.h"
+#include "playerbot/ChatLinkScan.h"
 #include "strategy/values/ItemUsageValue.h"
 #include <numeric>
 #include <iomanip>
@@ -241,37 +243,8 @@ std::string ChatHelper::formatMoney(uint32 copper)
 
 uint32 ChatHelper::parseMoney(const std::string& text)
 {
-    // if user specified money in ##g##s##c format
-    std::string acum = "";
-    uint32 copper = 0;
-    for (uint8 i = 0; i < text.length(); i++)
-    {
-        if (text[i] == 'g')
-        {
-            copper += (atol(acum.c_str()) * 100 * 100);
-            acum = "";
-        }
-        else if (text[i] == 'c')
-        {
-            copper += atol(acum.c_str());
-            acum = "";
-        }
-        else if (text[i] == 's')
-        {
-            copper += (atol(acum.c_str()) * 100);
-            acum = "";
-        }
-        else if (text[i] == ' ')
-            break;
-        else if (text[i] >= 48 && text[i] <= 57)
-            acum += text[i];
-        else
-        {
-            copper = 0;
-            break;
-        }
-    }
-    return copper;
+    // if user specified money in ##g##s##c format (size_t indexes and saturating sums: ai::chatlink::ParseMoney)
+    return ai::chatlink::ParseMoney(text);
 }
 
 std::set<uint32> ChatHelper::ExtractAllQuestIds(const std::string& text)
@@ -284,7 +257,9 @@ std::set<uint32> ChatHelper::ExtractAllQuestIds(const std::string& text)
     for (std::sregex_iterator i = begin; i != end; ++i)
     {
         std::smatch match = *i;
-        ids.insert(std::stoi(match.str().erase(0, 7)));
+        uint32 id = 0;
+        if (ai::chatlink::ParseUnsigned(std::string_view(match.str()).substr(7), id))
+            ids.insert(id);
     }
 
     return ids;
@@ -300,7 +275,9 @@ std::set<uint32> ChatHelper::ExtractAllItemIds(const std::string& text)
     for (std::sregex_iterator i = begin; i != end; ++i)
     {
         std::smatch match = *i;
-        ids.insert(std::stoi(match.str().erase(0, 6)));
+        uint32 id = 0;
+        if (ai::chatlink::ParseUnsigned(std::string_view(match.str()).substr(6), id))
+            ids.insert(id);
     }
 
     return ids;
@@ -316,7 +293,9 @@ std::set<uint32> ChatHelper::ExtractAllSkillIds(const std::string& text)
     for (std::sregex_iterator i = begin; i != end; ++i)
     {
         std::smatch match = *i;
-        ids.insert(std::stoi(match.str().erase(0, 7)));
+        uint32 id = 0;
+        if (ai::chatlink::ParseUnsigned(std::string_view(match.str()).substr(7), id))
+            ids.insert(id);
     }
 
     return ids;
@@ -332,7 +311,9 @@ std::set<uint32> ChatHelper::ExtractAllFactionIds(const std::string& text)
     for (std::sregex_iterator i = begin; i != end; ++i)
     {
         std::smatch match = *i;
-        ids.insert(std::stoi(match.str().erase(0, 9)));
+        uint32 id = 0;
+        if (ai::chatlink::ParseUnsigned(std::string_view(match.str()).substr(9), id))
+            ids.insert(id);
     }
 
     return ids;
@@ -349,7 +330,7 @@ std::vector<uint32> ChatHelper::parseItemsUnordered(const std::string& text, boo
     std::string textCpy = text;
 
     // Remove gameobject links
-    if (textCpy.find("Hfound:") != -1)
+    if (textCpy.find("Hfound:") != std::string::npos)
     {
         std::vector<std::string> goLinks = findSubstringsBetween(textCpy, "|c", "|r", true);
         for (const std::string& goLink : goLinks)
@@ -363,7 +344,7 @@ std::vector<uint32> ChatHelper::parseItemsUnordered(const std::string& text, boo
     }
 
     // Replace all item links with item ids
-    if (textCpy.find("Hitem:") != -1)
+    if (textCpy.find("Hitem:") != std::string::npos)
     {
         std::vector<std::string> itemLinks = findSubstringsBetween(textCpy, "|c", "|r", true);
         for (const std::string& itemLink : itemLinks)
@@ -388,10 +369,10 @@ std::vector<uint32> ChatHelper::parseItemsUnordered(const std::string& text, boo
 
         if (IsNumericCompat(itemStr))
         {
-            const uint32 itemID = std::stoi(itemStr);
-            if (!validate || GetItemProtoByIdCompat(itemID) != nullptr)
+            uint32 itemID = 0;
+            if (ai::chatlink::ParseUnsigned(itemStr, itemID) && (!validate || GetItemProtoByIdCompat(itemID) != nullptr))
             {
-                itemIds.push_back(std::stoi(itemStr));
+                itemIds.push_back(itemID);
             }
         }
     }
@@ -403,21 +384,8 @@ std::set<std::string> ChatHelper::parseItemQualifiers(const std::string& text)
 {
     std::set<std::string> qualifiers;
 
-    uint8 pos = 0;
-    while (true)
-    {
-        int i = text.find("Hitem:", pos);
-        if (i == -1)
-            break;
-        pos = i + 6;
-        int endPos = text.find('|', pos);
-        if (endPos == -1)
-            break;
-
-        std::string qualifierString = text.substr(pos, endPos - pos);
-
-        qualifiers.insert(qualifierString);
-    }
+    for (ai::chatlink::ItemLink const& link : ai::chatlink::ItemLinks(text))
+        qualifiers.insert(ItemLinkQualifierCompat(link.qualifier));
 
     return qualifiers;
 }
@@ -745,17 +713,17 @@ std::list<ObjectGuid> ChatHelper::parseGameobjects(const std::string& text)
     //    |cFFFFFF00|Hfound:" << guid << ':'  << entry << ':'  <<  "|h[" << gInfo->name << "]|h|r";
     //    |cFFFFFF00|Hfound:9582:1731|h[Copper Vein]|h|r
 
-    uint8 pos = 0;
+    std::size_t pos = 0;
     while (true)
     {
         // extract GO guid
-        int i = text.find("Hfound:", pos);     // base H = 11
-        if (i == -1)     // break if error
+        std::size_t i = text.find("Hfound:", pos);     // base H = 11
+        if (i == std::string::npos)     // break if error
             break;
 
         pos = i + 7;     //start of window in text 11 + 7 = 18
-        int endPos = text.find(':', pos);     // end of window in text 22
-        if (endPos == -1)     //break if error
+        std::size_t endPos = text.find(':', pos);     // end of window in text 22
+        if (endPos == std::string::npos)     //break if error
             break;
         std::istringstream stream(text.substr(pos, endPos - pos));
         ObjectGuid lootCurrent = GuidReadCompat(stream);
@@ -763,7 +731,7 @@ std::list<ObjectGuid> ChatHelper::parseGameobjects(const std::string& text)
         // extract GO entry
         pos = endPos + 1;
         endPos = text.find(':', pos);     // end of window in text
-        if (endPos == -1)     //break if error
+        if (endPos == std::string::npos)     //break if error
             break;
 
         std::string entryC = text.substr(pos, endPos - pos);     // get std::string within window i.e entry
@@ -783,17 +751,17 @@ std::list<int32> ChatHelper::parseWorldEntries(const std::string& text)
     //    |cFFFFFF00|Hentry:" << entry << ':'  <<  "|h[" << gInfo->name << "]|h|r";
     //    |cFFFFFF00|Hfound:9582:1731|h[Copper Vein]|h|r
 
-    uint8 pos = 0;
+    std::size_t pos = 0;
     while (true)
     {
         // extract GO guid
-        int i = text.find("Hentry:", pos);     // base H = 11
-        if (i == -1)     // break if error
+        std::size_t i = text.find("Hentry:", pos);     // base H = 11
+        if (i == std::string::npos)     // break if error
             break;
 
         pos = i + 7;     //start of window in text 11 + 7 = 18
-        int endPos = text.find(':', pos);     // end of window in text 22
-        if (endPos == -1)     //break if error
+        std::size_t endPos = text.find(':', pos);     // end of window in text 22
+        if (endPos == std::string::npos)     //break if error
             break;
         std::string entryC = text.substr(pos, endPos - pos);     // get std::string within window i.e entry
         uint32 entry = std::atol(entryC.c_str());     // convert ascii to float
@@ -826,14 +794,14 @@ std::string ChatHelper::parseValue(const std::string& type, const std::string& t
 
     std::string pattern = "Hvalue:" + type + ":";
 
-    int pos = text.find(pattern, 0);
-    if (pos == -1)
+    std::size_t pos = text.find(pattern, 0);
+    if (pos == std::string::npos)
         return retString;
 
     pos += pattern.size();
 
-    int endPos = text.find('|', pos);
-    if (endPos == -1)
+    std::size_t endPos = text.find('|', pos);
+    if (endPos == std::string::npos)
         return retString;
 
     retString = text.substr(pos, endPos - pos);
@@ -972,7 +940,10 @@ uint32 ChatHelper::parseGender(const std::string& text)
         return GENDER_FEMALE;
     else if (Qualified::isValidNumberString(text))
     {
-        uint8 gender = static_cast<uint32>(stoi(text));
+        int32 value = 0;
+        if (!ai::chatlink::ParseSigned(text, value))
+            return GENDER_NONE;
+        uint8 gender = static_cast<uint32>(value);
         if (gender == GENDER_MALE || gender == GENDER_FEMALE)
             return gender;
     }
@@ -998,7 +969,10 @@ Team ChatHelper::parseTeam(const std::string& text)
         return HORDE;
     else if (Qualified::isValidNumberString(text))
     {
-        uint8 team = static_cast<uint32>(stoi(text));
+        int32 value = 0;
+        if (!ai::chatlink::ParseSigned(text, value))
+            return TEAM_BOTH_ALLOWED;
+        uint8 team = static_cast<uint32>(value);
         if (team == ALLIANCE || team == HORDE)
             return (Team)team;
     }
@@ -1024,7 +998,10 @@ uint32 ChatHelper::parseClass(const std::string& text)
 
     if (Qualified::isValidNumberString(text))
     {
-        uint32 id = static_cast<uint32>(stoi(text));
+        int32 value = 0;
+        if (!ai::chatlink::ParseSigned(text, value))
+            return 0;
+        uint32 id = static_cast<uint32>(value);
         if (classes.count(id))
             return id;
     }
@@ -1045,7 +1022,10 @@ uint32 ChatHelper::parseRace(const std::string& text)
 
     if (Qualified::isValidNumberString(text))
     {
-        uint32 id = static_cast<uint32>(stoi(text));
+        int32 value = 0;
+        if (!ai::chatlink::ParseSigned(text, value))
+            return 0;
+        uint32 id = static_cast<uint32>(value);
         if (races.count(id))
             return id;
     }

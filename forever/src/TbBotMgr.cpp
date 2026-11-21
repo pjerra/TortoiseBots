@@ -20,17 +20,24 @@
 #include "StringFormat.h"
 #include "DB2Stores.h"
 #include "host/TbEngineMapPure.h"
+#include "host/chat/TbChatIn.h"
+#include "host/TbThrown.h"
 #include "Map.h"
 #include "MiscPackets.h"
 #include "MotionMaster.h"
 #include "Corpse.h"
 #include "compat/TbCompat_W1.h"
+#include "compat/TbCompat_WL0.h"
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "RealmList.h"
+#include "ScriptMgr.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include <algorithm>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -162,6 +169,20 @@ std::string BotMgr::CanEnterMap(Player* who, uint32 mapId)
     return CheckEntry(who, mapId).text;
 }
 
+// The record of a creation in flight. The session is declared before the player so the player goes first (it holds the session).
+struct BotMgr::PendingCreation
+{
+    uint32 accountId = 0;
+    std::string name;
+    uint8 race = 0;
+    uint8 playerClass = 0;
+    uint8 gender = 0;
+    std::shared_ptr<BotSession> session;
+    std::shared_ptr<Player> player;
+    LoginDatabaseTransaction loginTransaction;
+    std::future<bool> commit;
+};
+
 BotMgr& BotMgr::Instance()
 {
     static BotMgr instance;
@@ -186,7 +207,26 @@ void BotMgr::LoadConfig()
     }
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free)
+bool BotMgr::AccountHasBot(uint32 accountId) const
+{
+    for (auto const& entry : _bots)
+        if (entry.second.session->GetAccountId() == accountId)
+            return true;
+    return false;
+}
+
+std::vector<uint32> BotMgr::BotAccounts() const
+{
+    std::vector<uint32> accounts;
+    accounts.reserve(_bots.size());
+    for (auto const& entry : _bots)
+        accounts.push_back(entry.second.session->GetAccountId());
+    std::sort(accounts.begin(), accounts.end());
+    accounts.erase(std::unique(accounts.begin(), accounts.end()), accounts.end());
+    return accounts;
+}
+
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -196,12 +236,18 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         return "that bot is already logged in or loading";
     if (free && !master.IsEmpty())
         return "a free bot has no master";
+    if (pool && !free)
+        return "a pool bot is a free bot";
     if (ObjectAccessor::FindConnectedPlayer(characterGuid))
         return "that character is already in the world";
 
     uint32 const accountId = sCharacterCache->GetCharacterAccountIdByGuid(characterGuid);
     if (!accountId)
         return "that character has no account";
+    // D2: one session per account. The check is here, where the session is made, so no caller can put two characters of an
+    // account in the world at once (the pool's scheduler sees the same rule through AccountHasBot).
+    if (AccountHasBot(accountId))
+        return "another bot of that account is already logged in or loading";
 
     std::string accountName;
     if (!AccountMgr::GetName(accountId, accountName))
@@ -217,6 +263,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     });
     bot.master = master;
     bot.free = free;
+    bot.pool = pool;
     bot.wantParty = !master.IsEmpty();
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
     bot.useEngine = _engineByDefault || free;
@@ -542,6 +589,7 @@ void BotMgr::OnPlayerLogout(Player* player)
     // which the engine can still be taken down in the order the legacy code requires. Covers the logouts the core
     // starts by itself as well as ours.
     ObjectGuid const leaving = player->GetGUID();
+    kb::Forget(leaving);
 
     // The bots whose MASTER is the player logging out (R9, findings R1'): their engines hold a pointer to it (the engine re-checks it by guid
     // every tick, so it is safe today; this is the defence). R10 (S2): the original keeps hired bots through the master's disconnect and reunites them
@@ -565,6 +613,7 @@ void BotMgr::OnPlayerLogout(Player* player)
     auto itr = _bots.find(leaving);
     if (itr == _bots.end())
         return;
+    chatin::Forget(leaving);     // S1-R2: the bot's chat inbox and its counters go with it (a later bot reusing the guid starts clean)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     tbhost::prof::ClearBotErrands(leaving);
 #endif
@@ -590,26 +639,46 @@ std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, u
         return "that name is not allowed";
     if (!sCharacterCache->GetCharacterGuidByName(name).IsEmpty())
         return "that name is taken";
+    for (std::shared_ptr<PendingCreation> const& pending : _creating)
+        if (pending->name == name)
+            return "that name is taken";
 
     std::string accountName;
     if (!AccountMgr::GetName(accountId, accountName))
         return "no such account";
 
-    // A Player needs a session. This one lives only for the creation; nothing is logged in through it.
-    BotSession session(accountId, std::move(accountName));
+    // The realm's character count of the account after this one, as the core's own creation counts it (characters not deleted,
+    // plus this one, plus any creation of the account still in flight). A database that does not answer stops the creation:
+    // a count that is guessed is a wrong `realmcharacters` row.
+    std::uint64_t existing = 0;
+    if (!PoolRealmCharacterCountCompat(accountId, existing))
+        return "the characters database did not answer how many characters the account has";
+    for (std::shared_ptr<PendingCreation> const& pending : _creating)
+        if (pending->accountId == accountId)
+            ++existing;
+    uint32 const realmCharacters = uint32(existing + 1);
+
+    // A Player needs a session. This one lives as long as the creation does (the creation hooks may read it); nothing is
+    // logged in through it.
+    auto pending = std::make_shared<PendingCreation>();
+    pending->session = std::make_shared<BotSession>(accountId, std::move(accountName));
 
     WorldPackets::Character::CharacterCreateInfo info;
     info.Race = race;
     info.Class = playerClass;
     info.Sex = gender;
     info.Name = name;
+    // W0: a pool character is made in its race's own start position. The core's default is already false (CharacterPackets.h:67);
+    // written out because the pool's gate depends on the normal (not the NPE) create position.
+    info.UseNPE = false;
 
     // Made and destroyed the way the core's own character creation does it.
-    std::unique_ptr<Player, void (*)(Player*)> player(new Player(&session), [](Player* p)
+    pending->player = std::shared_ptr<Player>(new Player(pending->session.get()), [](Player* p)
     {
         p->CleanupsBeforeDelete();
         delete p;
     });
+    Player* const player = pending->player.get();
     player->GetMotionMaster()->Initialize();
     if (!player->Create(sObjectMgr->GetGenerator<HighGuid::Player>().Generate(), &info))
         return "the core refused to create it";
@@ -620,14 +689,34 @@ std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, u
     LoginDatabaseTransaction loginTransaction = LoginDatabase.BeginTransaction();
     CharacterDatabaseTransaction characterTransaction = CharacterDatabase.BeginTransaction();
     player->SaveToDB(loginTransaction, characterTransaction, true);
-    // The character statements are prepared for the asynchronous connections only, so the commit is queued, as in the core.
-    CharacterDatabase.CommitTransaction(characterTransaction);
-    LoginDatabase.CommitTransaction(loginTransaction);
+    LoginDatabasePreparedStatement* realmStmt = LoginDatabase.GetPreparedStatement(LOGIN_REP_REALM_CHARACTERS);
+    realmStmt->setUInt32(0, realmCharacters);
+    realmStmt->setUInt32(1, accountId);
+    realmStmt->setUInt32(2, sRealmList->GetCurrentRealmId().Realm);
+    loginTransaction->Append(realmStmt);
 
-    sCharacterCache->AddCharacterCacheEntry(player->GetGUID(), accountId, player->GetName(), player->GetNativeGender(), player->GetRace(),
-        player->GetClass(), player->GetLevel(), false);
-    TC_LOG_INFO("tortoisebots", "BotMgr: created {} ({}) on account {}", player->GetName(), player->GetGUID().ToString(), accountId);
+    // The character commit goes first and alone: the login side is committed only when it answers true (ConfirmCreations), so a
+    // failed character commit leaves no `realmcharacters` row and no account data behind. The character statements are prepared
+    // for the asynchronous connections only, so the commit is queued, as in the core.
+    pending->name = name;
+    pending->accountId = accountId;
+    pending->race = race;
+    pending->playerClass = playerClass;
+    pending->gender = gender;
+    pending->loginTransaction = loginTransaction;
+    TransactionCallback commit = CharacterDatabase.AsyncCommitTransaction(characterTransaction);
+    pending->commit = std::move(commit.m_future);
+    TC_LOG_INFO("tortoisebots", "BotMgr: creating {} ({}) on account {}: its saves are queued", name, player->GetGUID().ToString(), accountId);
+    _creating.push_back(std::move(pending));
     return {};
+}
+
+bool BotMgr::CreationInFlight(std::string const& name) const
+{
+    for (std::shared_ptr<PendingCreation> const& pending : _creating)
+        if (pending->name == name)
+            return true;
+    return false;
 }
 
 bool BotMgr::WalkBy(ObjectGuid characterGuid, float dx, float dy)
@@ -763,7 +852,7 @@ void BotMgr::FailEntry(Bot& bot, std::string code, std::string text)
 {
     TC_LOG_INFO("tortoisebots", "BotMgr: the entry of {} (trigger {}) ended: {} ({})", bot.session->GetCharacterGuid().ToString(), bot.entry.triggerId, code, text);
     // N6: every exit of an entry stops the walk (the MovePoint generator would otherwise keep going, as M4-1 showed after a landing).
-    if (Player* walker = bot.session->GetPlayer(); walker && walker->IsInWorld() && !walker->IsBeingTeleported())
+    if (Player* walker = bot.session->GetPlayer(); walker && walker->IsInWorld() && !walker->IsBeingTeleported() && !engine::InFlight(bot.brain.get()))
     {
         walker->GetMotionMaster()->Clear();
         walker->StopMoving();
@@ -829,8 +918,11 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
     // Landed: the bot stands on the trigger's target map. (The caller made sure the bot is in the world and not being teleported.)
     if (me->GetMapId() == e.targetMap)
     {
-        me->GetMotionMaster()->Clear();   // nothing of the walk may carry over into the dungeon
-        me->StopMoving();
+        if (!engine::InFlight(bot.brain.get()))
+        {
+            me->GetMotionMaster()->Clear();   // nothing of the walk may carry over into the dungeon
+            me->StopMoving();
+        }
         // N6: only a landing the entry job itself started (its handler or direct teleport) is `entered=trigger|order`; any other way onto the map is `other`.
         bot.entered = e.teleporting ? (e.direct ? "order" : "trigger") : "other";
         bot.block.clear();
@@ -923,9 +1015,12 @@ void BotMgr::UpdateEntry(Bot& bot, Player* me, uint32 diff)
     }
 
     // M4 live finding: the walk's MovePoint generator survived the teleport and the bot kept walking toward the BOX'S map-1 coordinates inside the dungeon
-    // (a straight line, 200+ yd in 30 s). Stop it before the handler runs.
-    me->GetMotionMaster()->Clear();
-    me->StopMoving();
+    // (a straight line, 200+ yd in 30 s). Stop it before the handler runs. A flight in the air is not cut (S3).
+    if (!engine::InFlight(bot.brain.get()))
+    {
+        me->GetMotionMaster()->Clear();
+        me->StopMoving();
+    }
 
     // The entry check, behind the one guarded function (C1), then the core's own path.
     if (EntryCheck const check = CheckEntry(me, e.targetMap); !check.code.empty())
@@ -1232,8 +1327,50 @@ void BotMgr::GhostRescue(Bot& bot, Player* me)
         TortoiseBots::GHOST_RESCUE_STALL_MS / 1000, corpseYd);
 }
 
+void BotMgr::ConfirmCreations()
+{
+    for (auto itr = _creating.begin(); itr != _creating.end();)
+    {
+        PendingCreation& creation = **itr;
+        if (!creation.commit.valid())
+        {
+            itr = _creating.erase(itr);
+            continue;
+        }
+        if (creation.commit.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        {
+            ++itr;
+            continue;
+        }
+
+        Player* const player = creation.player.get();
+        if (!creation.commit.get())
+        {
+            // The character side did not commit: the login side is never committed, the creation hooks never fire and the cache
+            // never hears of it. Nothing of it is left behind.
+            TC_LOG_ERROR("tortoisebots", "BotMgr: the character commit of {} on account {} failed; nothing was created and its login side was not committed",
+                creation.name, creation.accountId);
+            itr = _creating.erase(itr);
+            continue;
+        }
+
+        LoginDatabase.CommitTransaction(creation.loginTransaction);
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} ({}) is in the characters database on account {}: its creation is complete",
+            creation.name, player->GetGUID().ToString(), creation.accountId);
+        sScriptMgr->OnPlayerCreate(player);
+        sCharacterCache->AddCharacterCacheEntry(player->GetGUID(), creation.accountId, player->GetName(), player->GetNativeGender(), player->GetRace(),
+            player->GetClass(), player->GetLevel(), false);
+        itr = _creating.erase(itr);
+    }
+}
+
 void BotMgr::Update(uint32 diff)
 {
+    // S1-R2: the chat lines the hook queued since the last update, resolved and judged here, on the world thread, before any bot's
+    // engine step reads its inbox.
+    TortoiseBots::chatin::DrainArrivals();
+
+    ConfirmCreations();
     std::vector<ObjectGuid> finished;
 
     for (auto& [guid, bot] : _bots)
@@ -1260,11 +1397,16 @@ void BotMgr::Update(uint32 diff)
             continue;
         }
 
+        // S3: the flight watcher runs before the master-away gate: a bot knocked while its commander is away still flies and
+        // lands with the core's fall damage (without a brain it still lands; only the engine's hold is skipped).
+        Player* me = bot.session->GetPlayer();
+        if (me && me->IsInWorld() && !me->IsBeingTeleported())
+            kb::Update(me, bot.brain.get());
+
         // R10 (S2): a bot whose master is away does nothing (no Think, no engine) until it is back; the grace counts down meanwhile.
         if (bot.masterAway && !UpdateMasterAway(bot, diff))
             continue;
 
-        Player* me = bot.session->GetPlayer();
         if (!me || !me->IsInWorld() || me->IsBeingTeleported())
             continue;
 
@@ -1512,8 +1654,11 @@ void BotMgr::Think(Bot& bot, Player* me)
                     // kept the follow generator the engine had set and walked 60 yd through the first room: stop what the dropped engine started.
                     if (bot.brain && me->IsAlive())
                     {
-                        me->GetMotionMaster()->Clear();
-                        me->StopMoving();
+                        if (!engine::InFlight(bot.brain.get()))
+                        {
+                            me->GetMotionMaster()->Clear();
+                            me->StopMoving();
+                        }
                     }
                     DropBrain(bot);
                 }

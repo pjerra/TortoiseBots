@@ -43,6 +43,7 @@ enum class Verb : uint8_t
     Loot,           // S9 (O9): loot <corpse or object> <bot> [item]
     LootMethod,     // S9 (O9): lootmethod <ffa|group|rr> [threshold]
     Use,            // S9 (O9): use <item> <bot>: parsed, refused `unsupported` by the executor (the item-use path is not ported)
+    Gossip,         // WC: gossip <npc entry> <bot> <option>: the plan's own gossip step (TbRunTasks, GossipOrder)
     Unsupported,    // a verb of the grammar the module does not carry out on ForeverCore
 };
 
@@ -278,14 +279,16 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
         return true;
     }
     // S9 (O9): the four task verbs have a grammar and an executor (TbRunTasks); `use` is parsed and then refused by the executor with its own reason.
-    if (verb == "loot" || verb == "open" || verb == "lootmethod" || verb == "use")
+    if (verb == "loot" || verb == "open" || verb == "lootmethod" || verb == "use" || verb == "gossip")
     {
         if (!tasks::ParseTaskOrder(verb, args, out.task, code, message))
             return false;
-        out.verb = verb == "loot" ? Verb::Loot : verb == "open" ? Verb::Open : verb == "lootmethod" ? Verb::LootMethod : Verb::Use;
+        out.verb = verb == "loot" ? Verb::Loot : verb == "open" ? Verb::Open : verb == "lootmethod" ? Verb::LootMethod
+                 : verb == "gossip" ? Verb::Gossip : Verb::Use;
+        out.bot = out.task.bot;
         return true;
     }
-    for (char const* known : { "escape", "rescue", "fetch", "return", "rejoin", "ritual", "gossip", "state", "enter" })
+    for (char const* known : { "escape", "rescue", "fetch", "return", "rejoin", "ritual", "state", "enter" })
         if (verb == known)
         {
             out.verb = Verb::Unsupported;

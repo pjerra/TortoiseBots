@@ -32,11 +32,19 @@ public:
     uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
 
     // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
-    // loots and corpse-runs on its own (W1); without `free` it stands where it is.
-    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false);
+    // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
+    // started (W0): a pool bot is always a free bot, and IsPoolBot answers for the scheduler.
+    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false);
 
-    // Makes a new level 1 character on the account and saves it. Empty string = done.
+    // Makes a new level 1 character on the account the way the core's own creation does (realm character count, creation hooks).
+    // Empty string = the saves were QUEUED; the character commit is asynchronous, and only when it succeeds are the login side
+    // committed, OnPlayerCreate fired and the character cache told (ConfirmCreations in Update). A caller that needs a confirmed
+    // character reads the database (the pool's registry does; see host/pool/TbPoolCreate.cpp).
     std::string CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender);
+    // True from CreateCharacter until its creation is complete (the character commit answered, the login side committed and
+    // OnPlayerCreate fired). The pool marks a row ready only after that, so a crash in the window never leaves a ready pool
+    // character with no `realmcharacters` row.
+    bool CreationInFlight(std::string const& name) const;
 
     // Console test helpers for a bot without a master.
     bool WalkBy(ObjectGuid characterGuid, float dx, float dy);
@@ -64,6 +72,17 @@ public:
     // W1: a free bot has no master and plays the grind/live kit. `.tb free <bot> on|off`; empty string = done, else the reason.
     std::string SetFree(ObjectGuid characterGuid, bool on);
     bool IsFreeBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.free; }
+
+    // W0: a bot the pool scheduler logged in (Login(..., pool=true)), loading or in the world. The scheduler's own view of its
+    // online count and sessions is built from this; `IsFreeBot` tells a pool bot that is still playing free from one that got a
+    // master (BindMaster clears `free`, so it leaves the count and is never logged out by the pool).
+    bool IsPoolBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.pool; }
+
+    // W0 (D2): a bot of this manager (pool or not, loading or in the world) sits on that account. One session per account is
+    // the rule, so the scheduler counts the account as online and a second bot of it is refused.
+    bool AccountHasBot(uint32 accountId) const;
+    // W0: every account this manager holds a bot on, sorted and unique: the scheduler's once-a-pass account query.
+    std::vector<uint32> BotAccounts() const;
 
     // W1: what `.tb state` keeps of a bot's life: the free flag, kills and deaths since login, ghost rescues and teleports taken,
     // and whether the last revive was a reclaim (0), the spirit healer (1) or a rescue (2).
@@ -209,6 +228,9 @@ private:
         bool wasDead = false;
         // W1: a masterless bot that plays the world (free kit); its kills/deaths, the ghost rescue tracker and the counters of `.tb state`.
         bool free = false;
+        // W0: logged in by the pool scheduler (`.tb pool start`). A master binding clears `free`; a pool bot without it has left
+        // the pool's count and is never logged out by the pool.
+        bool pool = false;
         uint32 kills = 0;
         uint32 deaths = 0;
         uint32 rescues = 0;
@@ -249,6 +271,13 @@ private:
     void DetachFromMaster(Bot& bot);
     // R10 (S2): one update of a bot whose master is away. True when the master is back in the world and the bot has been re-bound.
     bool UpdateMasterAway(Bot& bot, uint32 diff);
+    // A creation whose character commit is in flight (the core's own order, CharacterHandler.cpp): the login side (the realm's
+    // character count, the account data) is committed only after the character commit answered true, the creation hooks
+    // (OnPlayerCreate) and the character cache follow, and a failed character commit leaves nothing behind. The record and
+    // everything it holds is in TbBotMgr.cpp.
+    struct PendingCreation;
+    void ConfirmCreations();
+    std::vector<std::shared_ptr<PendingCreation>> _creating;
 
     std::unordered_map<ObjectGuid, Bot> _bots;
     bool _enabled = false;

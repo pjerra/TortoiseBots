@@ -48,6 +48,10 @@ bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::stri
 uint32 CancelRunOrders(ObjectGuid bot);
 void EndRunPull(Player* bot);
 
+// Issue #15: clears the stay a `place`/`fall back` `come` order wrote, but only while that order (by `seq`) is still the bot's last one and it was a
+// `come`: a bot whose commander changed is left to its new master, never given an order by the old one. Safe with no engine.
+bool ReleasePlaceStay(Player* bot, uint32 seq);
+
 // R6 (review item 5): registers (on) or drops (off) a run's leader: while registered, the bot's engine hook keeps it from following its commander when it is out of
 // combat with no pull under way (it holds on `stay` where it stands). The run calls it at start and at its end.
 void HoldRunLead(ObjectGuid bot, bool on);

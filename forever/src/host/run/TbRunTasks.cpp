@@ -73,6 +73,7 @@ struct Task
     uint32 entry = 0;               // the target's entry (for the events and the texts)
     bool goTarget = false;          // a game object
     bool npcTarget = false;         // a living NPC (gossip)
+    GossipOrder::Request gossip;    // Gossip: the entry, the bot and the menu line the order named (both empty: list the menu)
     uint32 walkSeq = 0;             // the order seq of the newest `come`
     std::string order;              // the order the policy sent
     uint32 startedMs = 0;
@@ -297,7 +298,8 @@ void Finish(ObjectGuid owner, RunTasks& rt, Task const& task, bool ok, std::stri
         ++totals.failed;
     if (task.ownerKind == OwnerKind::Run)
         if (RunRec* rec = Find(owner))
-            NoteTaskEvent(*rec, nowMs, task.rec.lootLike ? "loot" : "open", int32(task.entry), (ok ? "done: " : "failed: ") + text);
+            NoteTaskEvent(*rec, nowMs, task.rec.kind == Kind::Gossip ? "gossip" : task.rec.lootLike ? "loot" : "open",
+                int32(task.entry), (ok ? "done: " : "failed: ") + text);
 }
 
 // ---- the act ----
@@ -421,22 +423,34 @@ ActResult BeginLootAct(Task& task, Player* bot, PlayerbotAI* ai, Player* lead, T
 }
 
 // Gossip on an NPC: HandleGossipHelloOpcode -> PrepareGossipMenu -> match option via GossipOrderPolicy -> HandleGossipSelectOptionOpcode.
-ActResult BeginGossipAct(Task& task, Player* bot, PlayerbotAI* ai, Creature* npc)
+// The menu is the core's own (Player::PrepareGossipMenu and AddMenuItem(item, MenuID, OrderIndex) here: a database option's sender is the menu id and its
+// action the order index, so the option's TYPE (GossipOptionNpc) is what tells a service line; MakeGossipOption maps it, never the sender). The guards of
+// the Turtle act are kept: the run's own gossip step is re-checked at act time, the NPC must take interaction, and the bot faces it.
+ActResult BeginGossipAct(Task& task, Player* bot, PlayerbotAI* ai, Creature* npc, ObjectGuid owner)
 {
-    if (!npc->IsAlive())
-        return ActFailed(GossipOrder::kCodeNoNpc, "The NPC is dead.");
+    if (!npc || !npc->IsAlive())
+        return ActFailed(GossipOrder::kCodeNoNpc, "The NPC died or despawned.");
+    if (task.ownerKind == OwnerKind::Run)
+    {
+        RunRec* rec = Find(owner);
+        if (rec && !GossipOrder::MayTalkTo(sPlayerbotAIConfig.botGossipNpcs, DungeonRun::RunGossipStepOf(&rec->run), npc->GetEntry()))
+            return ActFailed(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
+    }
     if (!npc->IsWithinDistInMap(bot, INTERACTION_DISTANCE))
         return ActFailed(RC::kCodeUnreachable, "The bot is not within the NPC's interaction range.", ActStart::Retry);
     if (!bot->GetNPCIfCanInteractWith(npc->GetGUID(), UNIT_NPC_FLAG_GOSSIP, UNIT_NPC_FLAG_2_NONE))
-        return ActFailed(GossipOrder::kCodeNoNpc, "The bot cannot interact with that NPC (not a gossip NPC, hostile, or busy).");
-    if (!sPlayerbotAIConfig.botGossipNpcs.empty() && !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, npc->GetEntry()))
+        return ActFailed(GossipOrder::kCodeNpcBusy, "The bot cannot interact with that NPC (not a gossip NPC, hostile, or busy).");
+    if (task.ownerKind == OwnerKind::Commander && !sPlayerbotAIConfig.botGossipNpcs.empty() &&
+        !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, npc->GetEntry()))
         return ActFailed(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
     if (bot->IsMounted())
         ai->Unmount();
+    bot->SetFacingToObject(npc);
     WorldSession* session = bot->GetSession();
     if (!session)
         return ActFailed(RC::kCodeFailed, "The bot has no session.");
 
+    bot->PlayerTalkClass->ClearMenus();
     WorldPackets::NPC::Hello hello{ WorldPacket(CMSG_TALK_TO_GOSSIP) };
     hello.Unit = npc->GetGUID();
     session->HandleGossipHelloOpcode(hello);
@@ -447,7 +461,7 @@ ActResult BeginGossipAct(Task& task, Player* bot, PlayerbotAI* ai, Creature* npc
     for (GossipMenuItem const& item : menu.GetMenuItems())
         options.push_back(MakeGossipOption(item.OptionText, uint32(item.OptionNpc), item.BoxCoded));
 
-    if (!task.rec.gossipHasOption)
+    if (!task.gossip.byIndex && task.gossip.text.empty())
     {
         ActResult r;
         r.how = ActStart::Done;
@@ -455,20 +469,20 @@ ActResult BeginGossipAct(Task& task, Player* bot, PlayerbotAI* ai, Creature* npc
         return r;
     }
 
-    GossipOrder::Request req;
+    GossipOrder::Request req = task.gossip;
     req.entry = npc->GetEntry();
     req.bot = task.botName;
-    req.byIndex = task.rec.gossipByIndex;
-    req.index = task.rec.gossipIndex;
-    req.text = task.rec.gossipText;
     GossipOrder::Match const match = GossipOrder::MatchOption(options, req);
     if (!match.ok)
+    {
+        bot->PlayerTalkClass->SendCloseGossip();
         return ActFailed(match.code.c_str(), match.message);
-
+    }
     GossipMenuItem const* item = menu.GetItemByIndex(match.listIndex);
     if (!item)
         return ActFailed(GossipOrder::kCodeNoOption, "The selected gossip option is no longer in the menu.");
 
+    task.rec.gossipPicked = item->OptionText;
     WorldPackets::NPC::GossipSelectOption sel{ WorldPacket(CMSG_GOSSIP_SELECT_OPTION) };
     sel.GossipUnit = npc->GetGUID();
     sel.GossipID = int32(menu.GetMenuId());
@@ -476,8 +490,7 @@ ActResult BeginGossipAct(Task& task, Player* bot, PlayerbotAI* ai, Creature* npc
     session->HandleGossipSelectOptionOpcode(sel);
 
     ActResult r;
-    r.how = ActStart::Done;
-    r.payload = "selected " + std::to_string(match.listIndex + 1) + " \"" + item->OptionText + "\"";
+    r.how = ActStart::Started;      // the core runs the choice inside the select handler: the act is over at the next look
     return r;
 }
 
@@ -491,7 +504,9 @@ bool HoldForAct(PlayerbotAI* ai, Player* bot)
     if (bot->IsNonMeleeSpellCast(false))
         bot->InterruptNonMeleeSpells(false);
     bool const moving = RC::ActWaitsForStop(sServerFacade.isMoving(bot), !bot->movespline->Finalized());
-    if (moving)
+    // A flight in the air is not the bot's walk: stopping it cuts the spline and leaves it hovering. `moving` still holds
+    // this look, and the next sees a landed bot.
+    if (moving && !ai->IsJumping())
         ai->StopMoving();
     return moving;
 }
@@ -630,7 +645,7 @@ bool Look(ObjectGuid owner, RunTasks& rt, Task& task, uint32 diffMs, uint32 nowM
             else if (task.rec.kind == Kind::Gossip)
             {
                 if (target.npc)
-                    result = BeginGossipAct(task, bot, ai, target.npc);
+                    result = BeginGossipAct(task, bot, ai, target.npc, owner);
                 else
                     result = ActFailed(GossipOrder::kCodeNoNpc, "The NPC is gone.");
             }
@@ -657,6 +672,27 @@ bool Look(ObjectGuid owner, RunTasks& rt, Task& task, uint32 diffMs, uint32 nowM
     }
     return false;
 }
+}
+
+// The nearest living creature of the entry around the bot (a run's own NPC, by what a client would see in range).
+bool FindNpcByEntry(Player* bot, uint32 entry, float yd, ObjectGuid& out)
+{
+    std::vector<RC::EntryCandidate> found;
+    std::map<uint64, ObjectGuid> keys;
+    std::list<Creature*> bodies;
+    bot->GetCreatureListWithEntryInGrid(bodies, entry, yd + 1.0f);
+    for (Creature* creature : bodies)
+        if (creature && creature->IsAlive() && creature->IsInWorld())
+        {
+            uint64 const key = GuidKeyCompat(creature->GetGUID());
+            keys[key] = creature->GetGUID();
+            found.push_back(RC::EntryCandidate{ key, bot->GetDistance(creature) });
+        }
+    uint64 key = 0;
+    if (!RC::PickNearestEntry(found, yd, key))
+        return false;
+    out = keys[key];
+    return true;
 }
 
 // ======================================================================================================================================================
@@ -696,7 +732,13 @@ OrderAnswer BeginTask(OwnerKind ownerKind, ObjectGuid owner, Player* lead, std::
             float const pz = order.spec.hasPoint ? order.spec.point.z : bot->GetPositionZ();
             if (!RC::EntryPointInReach(bot->GetDistance(px, py, pz), sPlayerbotAIConfig.reactDistance))
                 return Refuse(RC::kCodeTooFar, "That point is farther from the bot than AiPlayerbot.ReactDistance. Move the group closer first.");
-            if (!FindByEntry(bot, order.spec, isLoot, guid))
+            if (isGossip)
+            {
+                if (!FindNpcByEntry(bot, order.spec.entry, GossipOrder::kSearchYards, guid))
+                    return Refuse(GossipOrder::kCodeNoNpc, "No living NPC of entry " + std::to_string(order.spec.entry) +
+                        " is within " + std::to_string(int(GossipOrder::kSearchYards)) + " yd of " + NameOf(bot) + ".");
+            }
+            else if (!FindByEntry(bot, order.spec, isLoot, guid))
                 return Refuse(RC::kCodeInvalidTarget, NotFoundText(order.spec.entry));
         }
         else if (!ResolveHandle(owner, order.spec.guid, guid))
@@ -719,7 +761,9 @@ OrderAnswer BeginTask(OwnerKind ownerKind, ObjectGuid owner, Player* lead, std::
         if (!lock.ok)
             return Refuse(lock.code, lock.text);
     }
-    if (target.npc && !sPlayerbotAIConfig.botGossipNpcs.empty() && !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, target.npc->GetEntry()))
+    // A run's own gossip step passed MayTalkTo (BeginGossip), which knows the step's NPC; a commander's gossip needs the allowlist.
+    if (ownerKind == OwnerKind::Commander && target.npc && !sPlayerbotAIConfig.botGossipNpcs.empty() &&
+        !GossipOrder::IsAllowedNpc(sPlayerbotAIConfig.botGossipNpcs, target.npc->GetEntry()))
         return Refuse(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
 
     Task task;
@@ -736,10 +780,7 @@ OrderAnswer BeginTask(OwnerKind ownerKind, ObjectGuid owner, Player* lead, std::
     Kind const kind = isGossip ? Kind::Gossip : (isLoot ? Kind::Loot : Kind::Open);
     task.rec = MakeRec(kind, lootLike, target.corpse != nullptr, isLoot ? order.itemId : 0, distance,
         target.go && target.go->GetGoType() == GAMEOBJECT_TYPE_GOOBER && !lootLike);
-    task.rec.gossipHasOption = order.gossipHasOption;
-    task.rec.gossipByIndex = order.gossipByIndex;
-    task.rec.gossipIndex = order.gossipIndex;
-    task.rec.gossipText = order.gossipText;
+    task.gossip = order.gossip;
     task.startedMs = nowMs;
     rt.byBot[task.bot] = task;
     rt.state.carrier = task.bot;
@@ -766,6 +807,14 @@ OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, T
 OrderAnswer BeginCommander(ObjectGuid commander, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, ObjectGuid resolvedTarget, uint32 nowMs)
 {
     return BeginTask(OwnerKind::Commander, commander, lead, bots, order, resolvedTarget, nowMs);
+}
+
+OrderAnswer BeginGossip(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs)
+{
+    // The gate before the walk: the NPC of the run's own gossip step, or one of AiPlayerbot.BotGossipNpcs. The hello runs the NPC's scripts.
+    if (!GossipOrder::MayTalkTo(sPlayerbotAIConfig.botGossipNpcs, DungeonRun::RunGossipStepOf(&rec.run), order.gossip.entry))
+        return Refuse(GossipOrder::kCodeNotAllowed, GossipOrder::NotAllowedText(sPlayerbotAIConfig.botGossipNpcs));
+    return BeginTask(OwnerKind::Run, rec.leader, lead, bots, order, ObjectGuid::Empty, nowMs);
 }
 
 OrderAnswer SetLootMethodForParty(Player* lead, std::vector<Player*> const& bots, TaskOrder const& order)
