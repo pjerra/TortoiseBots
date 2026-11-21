@@ -234,8 +234,8 @@ Mutanus's `bossOwnDead` stays false (no spawn row) and the corpse/grid fields ce
 
 | gate | exact line |
 |---|---|
-| build ON, slot 4: `~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 4)` / `module sync: 5 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=44` |
-| build OFF, slot 5: `~/forever-build/slot-sync-build.sh 5 tortoisebots` | `combined build: slot 5 key core-9b88bd2d6584-opt-78bf025f` / `build token 1 of 3 (slot 5)` / `module sync: 300 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=24` |
+| build ON, slot 4: `~/forever-build/slot-sync-build.sh 4 tortoisebots -DTORTOISEBOTS_SLICE1=ON` | `combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e` / `build token 1 of 3 (slot 4)` / `module sync: 5 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=44`; re-run on the committed tree (docs only): `build token 2 of 3 (slot 4)` / `module sync: 2 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=3` |
+| build OFF, slot 5: `~/forever-build/slot-sync-build.sh 5 tortoisebots` | `combined build: slot 5 key core-9b88bd2d6584-opt-78bf025f` / `build token 1 of 3 (slot 5)` / `module sync: 300 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=24`; re-run on the committed tree: `build token 2 of 3 (slot 5)` / `module sync: 2 changed/new/deleted files` / `CMAKE_RC=0` / `MAKE_RC=0` / `TOTAL_SECONDS=5` |
 | `test_run_orders` | `RESULT: PASS (276 checks)` |
 | `test_run_liquid` | `RESULT: PASS (test_run_liquid)` |
 | `test_run_facts` (Ragefire Chasm, unchanged rows) | `RESULT: PASS` |
