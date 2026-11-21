@@ -44,40 +44,40 @@ using SpellEffectIndex = SpellEffIndex;
 struct SpellEntry
 {
     // -- what the bot reads -------------------------------------------------------------------------------------------------
-    uint32    Id = 0;                                     // T :529  DBC spell id                  F Id                          SpellInfo.h:335
-    uint32    School = 0;                                 // T :530  single school id 0..6         F lowest set bit of SchoolMask SpellInfo.h:427
-    uint32    Category = 0;                               // T :531  SpellCategory id              F GetCategory()               SpellInfo.cpp:2136
-    uint32    Dispel = 0;                                 // T :533  DispelType                  F Dispel                      SpellInfo.h:336
-    uint32    Mechanic = 0;                               // T :534  Mechanics                   F Mechanic                    SpellInfo.h:337
-    uint32    Attributes = 0;                             // T :535  Attr0 bits                  F Attributes                  SpellInfo.h:338
-    uint32    AttributesEx = 0;                           // T :536  Attr1 bits                  F AttributesEx                SpellInfo.h:339
-    uint32    AttributesEx2 = 0;                          // T :537  Attr2 bits                  F AttributesEx2               SpellInfo.h:340
-    uint32    AttributesEx3 = 0;                          // T :538  Attr3 bits                  F AttributesEx3               SpellInfo.h:341
-    uint32    AttributesEx4 = 0;                          // T :539  Attr4 bits                  F AttributesEx4               SpellInfo.h:342
-    uint32    Targets = 0;                                // T :542  TARGET_FLAG_* mask          F Targets                     SpellInfo.h:436
-    uint32    TargetCreatureType = 0;                     // T :543  creature type mask          F TargetCreatureType          SpellInfo.h:437
-    uint32    RequiresSpellFocus = 0;                     // T :544  spell focus object id       F RequiresSpellFocus          SpellInfo.h:438
-    uint32    RecoveryTime = 0;                           // T :548  ms, own cooldown            F RecoveryTime                SpellInfo.h:414
-    uint32    CategoryRecoveryTime = 0;                   // T :549  ms, category cooldown       F CategoryRecoveryTime       SpellInfo.h:415
-    uint32    InterruptFlags = 0;                         // T :550  SpellInterruptFlags bits    F InterruptFlags raw          SpellInfo.h:422
-    uint32    AuraInterruptFlags = 0;                     // T :551  SpellAuraInterruptFlags     F AuraInterruptFlags raw      SpellInfo.h:423
-    uint32    ChannelInterruptFlags = 0;                  // T :552  SpellChannelInterruptFlags  F ChannelInterruptFlags raw   SpellInfo.h:425
-    uint32    procChance = 0;                             // T :554  percent                     F ProcChance                  SpellInfo.h:430
-    uint32    procCharges = 0;                            // T :555  0 = unlimited               F ProcCharges                 SpellInfo.h:431
-    uint32    maxLevel = 0;                               // T :556  last level the spell scales to  F MaxLevel                SpellInfo.h:435
-    uint32    baseLevel = 0;                              // T :557  level the spell starts at   F BaseLevel                   SpellInfo.h:436
-    uint32    spellLevel = 0;                             // T :558  level it is learned at      F SpellLevel                  SpellInfo.h:437
-    uint32    powerType = 0;                              // T :560  Powers of the first cost row  F PowerCosts[0]->PowerType  SpellInfo.h:401
+    uint32    Id = 0;                                     // T :529  DBC spell id                  F Id                          SpellInfo.h:338
+    uint32    School = 0;                                 // T :530  single school id 0..6         F lowest set bit of SchoolMask SpellInfo.h:430
+    uint32    Category = 0;                               // T :531  SpellCategory id              F GetCategory()               SpellInfo.cpp:2172
+    uint32    Dispel = 0;                                 // T :533  DispelType                  F Dispel                      SpellInfo.h:339
+    uint32    Mechanic = 0;                               // T :534  Mechanics                   F Mechanic                    SpellInfo.h:340
+    uint32    Attributes = 0;                             // T :535  Attr0 bits                  F Attributes                  SpellInfo.h:341
+    uint32    AttributesEx = 0;                           // T :536  Attr1 bits                  F AttributesEx                SpellInfo.h:342
+    uint32    AttributesEx2 = 0;                          // T :537  Attr2 bits                  F AttributesEx2               SpellInfo.h:343
+    uint32    AttributesEx3 = 0;                          // T :538  Attr3 bits                  F AttributesEx3               SpellInfo.h:344
+    uint32    AttributesEx4 = 0;                          // T :539  Attr4 bits                  F AttributesEx4               SpellInfo.h:345
+    uint32    Targets = 0;                                // T :542  TARGET_FLAG_* mask          F Targets                     SpellInfo.h:439
+    uint32    TargetCreatureType = 0;                     // T :543  creature type mask          F TargetCreatureType          SpellInfo.h:440
+    uint32    RequiresSpellFocus = 0;                     // T :544  spell focus object id       F RequiresSpellFocus          SpellInfo.h:441
+    uint32    RecoveryTime = 0;                           // T :548  ms, own cooldown            F RecoveryTime                SpellInfo.h:417
+    uint32    CategoryRecoveryTime = 0;                   // T :549  ms, category cooldown       F CategoryRecoveryTime       SpellInfo.h:418
+    uint32    InterruptFlags = 0;                         // T :550  SpellInterruptFlags bits    F InterruptFlags raw          SpellInfo.h:425
+    uint32    AuraInterruptFlags = 0;                     // T :551  SpellAuraInterruptFlags     F AuraInterruptFlags raw      SpellInfo.h:426
+    uint32    ChannelInterruptFlags = 0;                  // T :552  SpellChannelInterruptFlags  F ChannelInterruptFlags raw   SpellInfo.h:428
+    uint32    procChance = 0;                             // T :554  percent                     F ProcChance                  SpellInfo.h:433
+    uint32    procCharges = 0;                            // T :555  0 = unlimited               F ProcCharges                 SpellInfo.h:434
+    uint32    maxLevel = 0;                               // T :556  last level the spell scales to  F MaxLevel                SpellInfo.h:438
+    uint32    baseLevel = 0;                              // T :557  level the spell starts at   F BaseLevel                   SpellInfo.h:439
+    uint32    spellLevel = 0;                             // T :558  level it is learned at      F SpellLevel                  SpellInfo.h:440
+    uint32    powerType = 0;                              // T :560  Powers of the first cost row  F PowerCosts[0]->PowerType  SpellInfo.h:404
     uint32    manaCost = 0;                               // T :561  flat mana, 0 = none         F see Fill (classic cost row, else PowerCosts[0]->ManaCost)
-    uint32    rangeIndex = 1;                             // T :565  SpellRange id, looked up in the store  F RangeEntry->ID     SpellInfo.h:402
-    float     speed = 0.f;                                // T :566  missile speed, y/s          F Speed                       SpellInfo.h:403
-    uint32    StackAmount = 0;                            // T :568  max stacks                  F StackAmount                 SpellInfo.h:406
-    uint32    Totem[MAX_SPELL_TOTEMS] = {};               // T :569  totem item ids              F Totem                       SpellInfo.h:407
-    int32     Reagent[MAX_SPELL_REAGENTS] = {};           // T :570  item ids                    F Reagent                     SpellInfo.h:409
-    uint32    ReagentCount[MAX_SPELL_REAGENTS] = {};      // T :571  counts                      F ReagentCount                SpellInfo.h:410
-    int32     EquippedItemClass = -1;                     // T :572  required item class         F EquippedItemClass           SpellInfo.h:413
-    int32     EquippedItemSubClassMask = 0;               // T :573                          F EquippedItemSubClassMask    SpellInfo.h:414
-    int32     EquippedItemInventoryTypeMask = 0;          // T :574                          F EquippedItemInventoryTypeMask SpellInfo.h:415
+    uint32    rangeIndex = 1;                             // T :565  SpellRange id, looked up in the store  F RangeEntry->ID     SpellInfo.h:405
+    float     speed = 0.f;                                // T :566  missile speed, y/s          F Speed                       SpellInfo.h:406
+    uint32    StackAmount = 0;                            // T :568  max stacks                  F StackAmount                 SpellInfo.h:409
+    uint32    Totem[MAX_SPELL_TOTEMS] = {};               // T :569  totem item ids              F Totem                       SpellInfo.h:410
+    int32     Reagent[MAX_SPELL_REAGENTS] = {};           // T :570  item ids                    F Reagent                     SpellInfo.h:412
+    uint32    ReagentCount[MAX_SPELL_REAGENTS] = {};      // T :571  counts                      F ReagentCount                SpellInfo.h:413
+    int32     EquippedItemClass = -1;                     // T :572  required item class         F EquippedItemClass           SpellInfo.h:416
+    int32     EquippedItemSubClassMask = 0;               // T :573                          F EquippedItemSubClassMask    SpellInfo.h:417
+    int32     EquippedItemInventoryTypeMask = 0;          // T :574                          F EquippedItemInventoryTypeMask SpellInfo.h:418
     uint32    Effect[MAX_EFFECT_INDEX] = {};              // T :575  SPELL_EFFECT_*              F GetEffects()[i].Effect      SpellInfo.h:236
     int32     EffectDieSides[MAX_EFFECT_INDEX] = {};      // T :576  die sides of the roll       F classic_spell_value die_sides (else 1)
     uint32    EffectBaseDice[MAX_EFFECT_INDEX] = {};      // T :577  dice count (1 in vanilla)   F 1: no core column (Known differences)
@@ -93,17 +93,17 @@ struct SpellEntry
     int32     EffectMiscValue[MAX_EFFECT_INDEX] = {};     // T :610  effect-specific value       F MiscValue                   SpellInfo.h:245
     uint32    EffectTriggerSpell[MAX_EFFECT_INDEX] = {};  // T :611  triggered spell id          F TriggerSpell                SpellInfo.h:260
     float     EffectPointsPerComboPoint[MAX_EFFECT_INDEX] = {}; // T :614  T :614 F classic row points_per_combo (else PointsPerResource)
-    std::array<std::string, MAX_DBC_LOCALE> SpellName{};  // T :630  the name, per locale        F SpellName->Str[locale]      SpellInfo.h:420
+    std::array<std::string, MAX_DBC_LOCALE> SpellName{};  // T :630  the name, per locale        F SpellName->Str[locale]      SpellInfo.h:423
     std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F ChainEntry->rank, else the chain table (R5: the core's chain or the SkillLineAbility links; none = empty)
     uint32    ManaCostPercentage = 0;                     // T :666  percent of the caster's base mana  F see Fill (classic cost row, else PowerCosts[0]->PowerCostPct)
-    uint32    StartRecoveryCategory = 0;                  // T :667  GCD category                F StartRecoveryCategory       SpellInfo.h:418
-    uint32    StartRecoveryTime = 0;                      // T :668  GCD in ms                  F StartRecoveryTime           SpellInfo.h:419
-    uint32    MaxTargetLevel = 0;                         // T :670  0 = no cap                  F MaxTargetLevel              SpellInfo.h:447
-    uint32    SpellFamilyName = 0;                        // T :671  SpellFamily                 F SpellFamilyName             SpellInfo.h:449
-    uint64    SpellFamilyFlags = 0;                       // T :672  low 64 bits of the class mask  F SpellFamilyFlags[0..1]    SpellInfo.h:450
-    uint32    MaxAffectedTargets = 0;                     // T :673  0 = no cap                  F MaxAffectedTargets          SpellInfo.h:448
-    uint32    DmgClass = 0;                               // T :674  SpellDmgClass               F DmgClass                    SpellInfo.h:451
-    uint32    PreventionType = 0;                         // T :675  SpellPreventionType         F PreventionType              SpellInfo.h:452
+    uint32    StartRecoveryCategory = 0;                  // T :667  GCD category                F StartRecoveryCategory       SpellInfo.h:421
+    uint32    StartRecoveryTime = 0;                      // T :668  GCD in ms                  F StartRecoveryTime           SpellInfo.h:422
+    uint32    MaxTargetLevel = 0;                         // T :670  0 = no cap                  F MaxTargetLevel              SpellInfo.h:450
+    uint32    SpellFamilyName = 0;                        // T :671  SpellFamily                 F SpellFamilyName             SpellInfo.h:452
+    uint64    SpellFamilyFlags = 0;                       // T :672  low 64 bits of the class mask  F SpellFamilyFlags[0..1]    SpellInfo.h:453
+    uint32    MaxAffectedTargets = 0;                     // T :673  0 = no cap                  F MaxAffectedTargets          SpellInfo.h:451
+    uint32    DmgClass = 0;                               // T :674  SpellDmgClass               F DmgClass                    SpellInfo.h:454
+    uint32    PreventionType = 0;                         // T :675  SpellPreventionType         F PreventionType              SpellInfo.h:455
 
     // -- diagnostics ---------------------------------------------------------------------------------------------------------
     SpellInfo const* Core = nullptr;                      // the core record this mirror was filled from
@@ -143,7 +143,7 @@ namespace tbcompat
     void MarkSpellStoreReady();
 
     // Builds the index of DIFFICULTY_NONE spell ids and the dense slot array for their mirrors. Called from the module's
-    // WorldScript::OnWorldInitialized after MarkSpellStoreReady (the spell store is loaded by then: World.cpp:1485), and
+    // WorldScript::OnWorldInitialized after MarkSpellStoreReady (the spell store is loaded by then: World.cpp:1487), and
     // lazily from a lookup of the id bound or a first spell lookup after that flag. One builder at a time: the store scan
     // is inside the builder's lock. Returns without touching the store while the flag is unset, and builds nothing when
     // TortoiseBots.Enable = 0.

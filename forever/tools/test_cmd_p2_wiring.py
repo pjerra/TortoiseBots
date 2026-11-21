@@ -423,7 +423,7 @@ def check_player_led(source):
         raise AssertionError("the leader hook keeps a binding made outside the party")
     if "RefreshPlayerLed(m, newLeader.GetCounter(), commander)" not in leader:
         raise AssertionError("the leader hook does not refresh the player-led flag from the leader it is about to store")
-    # The hook fires BEFORE Group records the new leader (Group.cpp:690 vs :711): group->IsLeader() inside it answers the PREVIOUS leader, so
+    # The hook fires BEFORE Group records the new leader (Group.cpp:721 vs :711): group->IsLeader() inside it answers the PREVIOUS leader, so
     # the flag must never be read from the group here (a hand-over to the lead would leave it stale for up to a second, and the release rule with it).
     if "group->IsLeader" in code(leader):
         raise AssertionError("the leader hook reads the group's leader, which still holds the previous leader inside the hook")

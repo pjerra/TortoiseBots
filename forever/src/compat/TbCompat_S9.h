@@ -6,14 +6,14 @@
 //  * the items of a loot window are read from the core's Loot object and put into the packet shape StoreLootAction reads (TbCompat_I2.h
 //    LootWindowReadCompat), taken through WorldSession::HandleAutostoreLootItemOpcode (LootHandler.cpp:77, LootAutostoreCompat), with the
 //    slot rights the core itself gives (LootItem::GetUiTypeForPlayer, Loot.cpp:212);
-//  * a group-loot roll the core starts for this bot (Player::GetLootRolls, Player.h:2358: the core's own read-only list of the rolls waiting for
+//  * a group-loot roll the core starts for this bot (Player::GetLootRolls, Player.h:2359: the core's own read-only list of the rolls waiting for
 //    this player's answer) is announced to the engine as the "loot start roll" event, and the bot's vote goes through WorldSession::
-//    HandleLootRoll (LootHandler.cpp:507). THE POLICY (lead decision 2026-11-20): group loot, GREED ONLY: never need, never pass on its own
+//    HandleLootRoll (LootHandler.cpp:510). THE POLICY (lead decision 2026-11-20): group loot, GREED ONLY: never need, never pass on its own
 //    (so no item times out), no auto-equip (the trigger `loot roll won` and the action `equip upgrades` are not registered);
 //  * the loot tables (creature / game object / reference / item) are copied from the world database through the guarded reader below
 //    (LootTemplate::Entries and ::Groups are private, LootMgr.h:150-151).
 //
-// Threading: the engine ticks on the world thread outside the map update (World.cpp:2478-2491, findings item 2). Everything here that
+// Threading: the engine ticks on the world thread outside the map update (World.cpp:2487-2500, findings item 2). Everything here that
 // reads a Loot, a LootRoll or a bot's roll list is a READ made on that thread; the memo below is touched only there.
 #pragma once
 
@@ -261,8 +261,8 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
 inline bool LootBagFloorCompat(Player* bot, uint32 itemId, uint32 count);
 
 // The vote. T `Group::CountRollVote(bot, lootGuid, slot, vote)` (the entry point CMSG_LOOT_ROLL ends in). F: the typed packet into
-// WorldSession::HandleLootRoll (LootHandler.cpp:507), which finds the roll in the player's own list (Player::GetLootRoll, Player.cpp:9936) and calls
-// LootRoll::PlayerVote (Loot.cpp:541: refused when the player has already voted or is not a voter of this roll). `lootGuid` is the owner (corpse or
+// WorldSession::HandleLootRoll (LootHandler.cpp:510), which finds the roll in the player's own list (Player::GetLootRoll, Player.cpp:10032) and calls
+// LootRoll::PlayerVote (Loot.cpp:550: refused when the player has already voted or is not a voter of this roll). `lootGuid` is the owner (corpse or
 // chest) the engine keys its rolls by; the packet wants the Loot's own guid. Returns false when the bot holds no roll on that slot (any more).
 // The HANDLER returns nothing: a vote the core refuses (already voted) is not seen here. That cannot loop: the roll leaves the engine's own list at
 // once (RollOnItemInSlot), and the poll announces a roll once.
@@ -334,7 +334,7 @@ inline bool LootItemAllowedForCompat(LootItem const* item, Player const* member,
     return item && member && loot && item->AllowedForPlayer(member, loot);
 }
 
-// T `member->IsWithinLootXPDist(target)`: the group reward distance. F: Player::IsAtGroupRewardDistance (Player.h:2553, same rule: same map, 74 yd).
+// T `member->IsWithinLootXPDist(target)`: the group reward distance. F: Player::IsAtGroupRewardDistance (Player.h:2554, same rule: same map, 74 yd).
 inline bool MemberInLootRangeCompat(Player* member, Creature* target) { return target && member->IsAtGroupRewardDistance(target); }
 
 // T `creature->GetGroupLootTimer()` (ms left of the roll). F keeps the roll's end time private (LootRoll::m_endTime): 0, which the caller reads as
@@ -390,7 +390,7 @@ inline uint32 AuctionItemCountCompat(AuctionEntry const& auction)
     return 0;
 }
 
-// Is the quest in the bot's log still incomplete (T `getQuestStatusMap()[id].m_status == QUEST_STATUS_INCOMPLETE`, F `GetQuestStatus`, Player.h:1811).
+// Is the quest in the bot's log still incomplete (T `getQuestStatusMap()[id].m_status == QUEST_STATUS_INCOMPLETE`, F `GetQuestStatus`, Player.h:1812).
 inline bool QuestIncompleteCompat(Player* player, Quest const* quest) { return player->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_INCOMPLETE; }
 
 // The items a quest hands out at its start (T ReqSourceId / ReqSourceCount, four slots; F keeps one: GetSrcItemId / GetSrcItemCount, QuestDef.h:670).

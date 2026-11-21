@@ -103,7 +103,7 @@ inline bool TravelGenParallelCompat()
 }
 
 // Load the map data under one grid of a map, the way the core loads it when an object is added to that grid
-// (Map::EnsureGridCreated, Map.cpp:298-299: TerrainInfo::LoadMapAndVMap + LoadMMap). ForeverCore loads it per instance id.
+// (Map::EnsureGridCreated, Map.cpp:300-301: TerrainInfo::LoadMapAndVMap + LoadMMap). ForeverCore loads it per instance id.
 // Used by the generation boot (round B) for the far ends of the paths it builds: PathGenerator needs the navmesh tile and the
 // terrain grid of both ends. False when the map has no terrain (the caller does less: no path from that tile).
 inline bool MmapTileLoadCompat(uint32 mapId, uint32 instanceId, int x, int y)
@@ -239,7 +239,7 @@ inline uint32 GameObjectSpellcasterSpellCompat(GameObjectInfo const* data) { ret
 inline uint32 GameObjectMoTransportTaxiPathCompat(GameObjectInfo const* data) { return data->moTransport.taxiPathID; }
 
 // The landing position of a spell: T `GetSpellTargetPosition(id)` (the first effect), F takes the effect index too
-// (SpellMgr.h:691); effect 0 is the one the legacy call answered.
+// (SpellMgr.h:695); effect 0 is the one the legacy call answered.
 inline SpellTargetPosition const* SpellTargetPositionCompat(uint32 spellId)
 {
     return sSpellMgr.GetSpellTargetPosition(spellId, EFFECT_0);

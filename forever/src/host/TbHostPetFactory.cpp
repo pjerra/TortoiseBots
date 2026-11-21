@@ -2,8 +2,8 @@
 //
 // The legacy PlayerbotFactory made a hunter's first pet and trained its spells through the 1.12 pet classes; on ForeverCore those five members were link stand-ins
 // that did nothing (SliceLinkStubs.cpp, slice 1). They are real here, written against the core's own pet API: a stable of active slots (PetDefines.h:40-48), the classic
-// hunter loyalty and training-point rules (Pet.h:108-124), `Unit::CreateTamedPetFrom` (Unit.cpp:11666) and the four steps of `Spell::EffectTameCreature`
-// (SpellEffects.cpp:2757-2774). Core read only at the pin; no core change. The ForeverCore team's own bot setup does the same for its hunters (~/ref-wfb,
+// hunter loyalty and training-point rules (Pet.h:108-124), `Unit::CreateTamedPetFrom` (Unit.cpp:11817) and the four steps of `Spell::EffectTameCreature`
+// (SpellEffects.cpp:2765-2782). Core read only at the pin; no core change. The ForeverCore team's own bot setup does the same for its hunters (~/ref-wfb,
 // BotSetupPipeline.cpp:735-830) and is the reference for the order of the steps and for why the pet number is written at once: read, never copied.
 //
 // Rules this file keeps (forever/docs/SLICE1-FINDINGS.md): a call that cannot be made does LESS (no pet, nothing learned), never something else, and the answer a
@@ -207,7 +207,7 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
 // =====================================================================================================================
 
 // No ammo is handed out (lead decision D3: the kit carries the stock, the shots take it). What this does is let the core pick the ammo the bot carries: a bot has
-// no client to choose it, so it prefers a stack drawn with a model (Player.h:1527) and takes one (Player::AutoSelectAmmo, Player.cpp:10586).
+// no client to choose it, so it prefers a stack drawn with a model (Player.h:1528) and takes one (Player::AutoSelectAmmo, Player.cpp:10682).
 void PlayerbotFactory::InitAmmo()
 {
     if (bot->GetClass() != CLASS_HUNTER)
@@ -344,7 +344,7 @@ bool PlayerbotFactory::TrainHunterPet(Player* bot, Pet* pet, bool apply, std::fu
             PetToggleAutocastCompat(pet, wanted.spellId, autocastDefault(wanted.spellId));
     }
 
-    // The core counts the points itself (Pet::UpdateTrainingPoints, Pet.cpp:1116: one cost per spell chain): refresh the pet's fields once after the unlearns.
+    // The core counts the points itself (Pet::UpdateTrainingPoints, Pet.cpp:1125: one cost per spell chain): refresh the pet's fields once after the unlearns.
     pet->UpdateTrainingPoints();
     return true;
 }

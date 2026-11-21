@@ -27,7 +27,7 @@
 void PoolGuardLogCompat(std::string const& message);
 
 // The name check of runtime/BotNameService.cpp, with the core's create-time rules. T `ObjectMgr::CheckPlayerName(name, true)`
-// (ObjectMgr.h:1306); F adds the locale (ObjectMgr.h:1609).
+// (ObjectMgr.h:1306); F adds the locale (ObjectMgr.h:1610).
 inline bool CheckPlayerNameCompat(std::string const& name)
 {
     return ObjectMgr::CheckPlayerName(name, LOCALE_enUS, true) == CHAR_NAME_SUCCESS;

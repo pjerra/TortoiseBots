@@ -16,7 +16,7 @@ inline bool IsWithinLOSInMapCompat(WorldObject const* from, WorldObject const* t
     return from->IsWithinLOSInMap(to, checkDynLos ? LINEOFSIGHT_ALL_CHECKS : LINEOFSIGHT_CHECK_VMAP);
 }
 
-// Line of sight between two points of a map. T Map.cpp:3047 `isInLineOfSight(x1..z2, checkDynLos)`; F Map.h:509 also asks
+// Line of sight between two points of a map. T Map.cpp:3047 `isInLineOfSight(x1..z2, checkDynLos)`; F Map.h:512 also asks
 // for a phase shift and the ignore flags. A map-only caller has no viewer, so the empty phase shift (what a viewer without
 // phases sees) and no ignored models.
 inline bool IsInLineOfSightCompat(Map const* map, float x1, float y1, float z1, float x2, float y2, float z2, bool checkDynLos = true)
@@ -25,7 +25,7 @@ inline bool IsInLineOfSightCompat(Map const* map, float x1, float y1, float z1, 
         checkDynLos ? LINEOFSIGHT_ALL_CHECKS : LINEOFSIGHT_CHECK_VMAP, VMAP::ModelIgnoreFlags::Nothing);
 }
 
-// Height of the ground at a point. T Map.h:568 `GetHeight(x, y, z, vmap, maxSearchDist)`, F Map.h:330 the same plus the phase
+// Height of the ground at a point. T Map.h:568 `GetHeight(x, y, z, vmap, maxSearchDist)`, F Map.h:333 the same plus the phase
 // shift (the game-object floors depend on it); the default search distance is 10 yards in both (T GridMap.h:38).
 // Different answer, found live (R8): T's TerrainInfo::GetHeightStatic (GridMap.cpp:776) looks for the floor from z + 2, and when the vmap search
 // finds none within maxSearchDist it searches again with an infinite range; F's TerrainInfo::GetStaticHeight (TerrainMgr.cpp:924) searches from z
@@ -66,7 +66,7 @@ inline void GetRespawnCoordCompat(Creature const* creature, float& x, float& y, 
 }
 
 // How far a melee swing from `self` reaches `victim`. T Unit.cpp:11035 `GetCombatReach(victim, ability, flat_mod)`: both
-// combat reaches plus a flat part plus the melee-leeway bonus; F Unit.cpp:757 `GetMeleeRange(victim)`: both combat reaches
+// combat reaches plus a flat part plus the melee-leeway bonus; F Unit.cpp:759 `GetMeleeRange(victim)`: both combat reaches
 // plus 4/3, at least the nominal melee range. The core's own answer to the same question; the flat part is added on top,
 // the ability flag only selects Turtle's leeway and has no ForeverCore counterpart.
 inline float GetCombatReachCompat(Unit const* self, Unit const* victim, bool /*ability*/, float flatMod)
@@ -91,9 +91,9 @@ inline bool IsInGroup_Helper(Player* a, Player* b, bool sameGroup = false)
 }
 
 // "How far apart are these two objects": T Object.h:137 SizeFactor picks what is taken off the centre distance
-// (Object.cpp:1383-1426): None nothing, BoundingRadius both bounding radii, CombatReach both combat reaches,
+// (Object.cpp:1387-1430): None nothing, BoundingRadius both bounding radii, CombatReach both combat reaches,
 // CombatReachWithMelee both combat reaches raised to at least 1.5; the result is never negative. F has the combat-reach
-// form as GetDistance(obj) (Object.cpp:431-435) and no enum, so the enum is declared here and the others are computed from
+// form as GetDistance(obj) (Object.cpp:432-436) and no enum, so the enum is declared here and the others are computed from
 // the same members the Turtle code reads.
 enum class SizeFactor
 {
@@ -138,7 +138,7 @@ inline bool HasInArcCompat(WorldObject const* self, WorldObject const* target, f
 
 // Whether a melee SPELL of `bot` (a spell whose range is the combat range) reaches `target` now. T ReachTargetActions.h
 // (before R3) asked Unit::CanReachWithMeleeSpellAttack with a modifier built from the caster's range spell mods and range
-// auras; F answers it where the cast does: Spell::CalcMinMaxRange (Spell.cpp:7691), the numbers CheckRange tests, which
+// auras; F answers it where the cast does: Spell::CalcMinMaxRange (Spell.cpp:7748), the numbers CheckRange tests, which
 // start from the caster's melee range to this target and apply the range spell mods itself.
 inline bool MeleeSpellReachCompat(Player* bot, SpellEntry const* spell, Unit* target)
 {
@@ -149,7 +149,7 @@ inline bool MeleeSpellReachCompat(Player* bot, SpellEntry const* spell, Unit* ta
     return bot->GetExactDistSq(target) <= range.Max * range.Max;
 }
 
-// The weapon in a hand. T Player.h:1281 `GetWeaponForAttack(type, nonbroken, useable)`, F Player.h:1514 `GetWeaponForAttack(type,
+// The weapon in a hand. T Player.h:1281 `GetWeaponForAttack(type, nonbroken, useable)`, F Player.h:1515 `GetWeaponForAttack(type,
 // useable)`: F's `useable` is "not broken and the hand may be used" (the Turtle pair together), so either flag asks it.
 inline Item* GetWeaponForAttackCompat(Player const* player, WeaponAttackType attackType, bool nonBroken, bool useable)
 {
@@ -157,7 +157,7 @@ inline Item* GetWeaponForAttackCompat(Player const* player, WeaponAttackType att
 }
 
 // Whether the creature carries a weapon. T Creature.cpp:3981 reads the item class of its main-hand virtual item; F keeps the
-// virtual item as an item id (Unit.h:1893), whose template has the class.
+// virtual item as an item id (Unit.h:1913), whose template has the class.
 inline bool CreatureHasWeaponCompat(Creature const* creature)
 {
     uint32 const itemId = creature->GetVirtualItemId(0);
@@ -227,8 +227,8 @@ inline uint32 FirstInstanceIdCompat(uint32 mapId)
 }
 
 // How far a client sees on this map: T `Map::GetVisibilityDistance()` (with `World::GetMaxVisibleDistance*` when the map is
-// not loaded: the continent or the instance range), F `Map::GetVisibilityRange()` (Map.h:257) and the same two configured ranges
-// (World.h:248-249).
+// not loaded: the continent or the instance range), F `Map::GetVisibilityRange()` (Map.h:260) and the same two configured ranges
+// (World.h:250-251).
 inline float VisibilityDistanceCompat(Map const* map, bool overworld)
 {
     if (map)
@@ -244,7 +244,7 @@ inline bool AreaHasFlagsCompat(AreaTableEntry const* area, AreaFlags mask)
 }
 
 // The point a ray from the source to the destination stops at. T `Map::GetLosHitPosition(src, dest&, modifyDist)` moves the
-// destination to the hit point and says whether it did; F `Map::getObjectHitPos` (Map.h:523) returns the hit point apart.
+// destination to the hit point and says whether it did; F `Map::getObjectHitPos` (Map.h:536) returns the hit point apart.
 inline bool GetLosHitPositionCompat(Map* map, float srcX, float srcY, float srcZ, float& destX, float& destY, float& destZ, float modifyDist)
 {
     float hitX = destX, hitY = destY, hitZ = destZ;
@@ -356,7 +356,7 @@ inline char const* CStrCompat(std::string const& text) { return text.c_str(); }
 inline uint32 PlayerXPCompat(Player const* player) { return player->GetXP(); }
 inline uint32 PlayerLifetimeHonorableKillsCompat(Player const* player) { return player->m_activePlayerData->LifetimeHonorableKills; }
 
-// A unit's main-hand damage range. T reads UNIT_FIELD_MINDAMAGE / UNIT_FIELD_MAXDAMAGE; F GetWeaponDamageRange (Unit.h:1606),
+// A unit's main-hand damage range. T reads UNIT_FIELD_MINDAMAGE / UNIT_FIELD_MAXDAMAGE; F GetWeaponDamageRange (Unit.h:1622),
 // the unit's base damage range for the attack type.
 inline float UnitMinDamageCompat(Unit const* unit) { return unit->GetWeaponDamageRange(BASE_ATTACK, MINDAMAGE); }
 inline float UnitMaxDamageCompat(Unit const* unit) { return unit->GetWeaponDamageRange(BASE_ATTACK, MAXDAMAGE); }
@@ -369,7 +369,7 @@ inline uint32 WorldIntConfigCompat(WorldIntConfigs index) { return sWorld.getInt
 inline uint32 GameObjectTrapSpellIdCompat(GameObjectTemplate const* info) { return info->trap.spell; }
 
 // The quest in a quest-log slot (0 = empty), with the Turtle helper's own bounds check (ai/cmangos-compat-shim.h:36-41). T reads
-// the slot's update field; F asks the player (Player.h:1831). The log has more slots on F (40 against 20).
+// the slot's update field; F asks the player (Player.h:1832). The log has more slots on F (40 against 20).
 inline uint32 GetQuestSlotIdCompat(Player const* player, uint16 slot)
 {
     return player && slot < MAX_QUEST_LOG_SIZE ? player->GetQuestSlotQuestId(slot) : 0;
@@ -414,7 +414,7 @@ inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
 }
 
 // The raid's Main Tank / Main Assist. T Group.h:284-285 keeps one guid each; F keeps them as member flags (Group.h:76-78,
-// MemberSlot::flags), set through SetGroupMemberFlag which removes the flag from the previous holder (Group.cpp:1775), so
+// MemberSlot::flags), set through SetGroupMemberFlag which removes the flag from the previous holder (Group.cpp:1806), so
 // the first slot that carries the flag is the one holder. Empty when nobody holds it.
 inline ObjectGuid GroupFlagHolderCompat(Group const* group, uint8 flag)
 {
@@ -428,8 +428,8 @@ inline ObjectGuid GroupMainTankGuidCompat(Group const* group) { return GroupFlag
 
 inline ObjectGuid GroupMainAssistGuidCompat(Group const* group) { return GroupFlagHolderCompat(group, MEMBER_FLAG_MAINASSIST); }
 
-// A player flag (T `HasFlag(PLAYER_FLAGS, flag)` on the object, F Player::HasPlayerFlag, Player.h:1306) and a unit flag (T
-// `HasFlag(UNIT_FIELD_FLAGS, flag)`, F Unit.h:862 HasUnitFlag). The flag names the bot uses (PLAYER_FLAGS_GHOST, UNIT_FLAG_NOT_SELECTABLE)
+// A player flag (T `HasFlag(PLAYER_FLAGS, flag)` on the object, F Player::HasPlayerFlag, Player.h:1307) and a unit flag (T
+// `HasFlag(UNIT_FIELD_FLAGS, flag)`, F Unit.h:872 HasUnitFlag). The flag names the bot uses (PLAYER_FLAGS_GHOST, UNIT_FLAG_NOT_SELECTABLE)
 // exist on both cores with the same meaning. A non-player object has no player flags.
 inline bool HasPlayerFlagCompat(WorldObject const* obj, uint32 flag)
 {
@@ -443,12 +443,12 @@ inline bool HasUnitFlagCompat(Unit const* unit, uint32 flag)
 }
 
 // An item's durability and its maximum. T update fields ITEM_FIELD_DURABILITY / ITEM_FIELD_MAXDURABILITY, F the item data
-// (Item.h:274-276: Durability, MaxDurability).
+// (Item.h:275-277: Durability, MaxDurability).
 inline uint32 ItemDurabilityCompat(Item const* item) { return *item->m_itemData->Durability; }
 inline uint32 ItemMaxDurabilityCompat(Item const* item) { return *item->m_itemData->MaxDurability; }
 
 // One aura effect of a type, as the loops over `GetAurasByType` read it. T: one Aura per effect (Unit.h GetAurasByType, the list
-// of Aura*), F: one AuraEffect per effect of an Aura (Unit.h:1366 GetAuraEffectsByType, AuraEffect::GetBase/GetEffIndex).
+// of Aura*), F: one AuraEffect per effect of an Aura (Unit.h:1382 GetAuraEffectsByType, AuraEffect::GetBase/GetEffIndex).
 struct AuraOfTypeCompat
 {
     SpellEntry const* spell;   // the spell, mirror entry on F (null when the core has no such spell)
@@ -477,7 +477,7 @@ inline bool ForEachAuraOfTypeCompat(Unit const* unit, AuraType type, Fn&& fn)
 }
 
 // Is the aura a beneficial one. T Aura::IsPositive is the per-effect flag, F's Aura has none (the AuraApplication has it, per
-// target): the spell's own classification, SpellInfo::IsPositive (SpellInfo.h:520).
+// target): the spell's own classification, SpellInfo::IsPositive (SpellInfo.h:523).
 inline bool AuraIsPositiveCompat(Aura const* aura) { return aura->GetSpellInfo()->IsPositive(); }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -502,7 +502,7 @@ enum CreatureEliteType
 };
 
 // The rank of a creature. T creature_template.rank (CreatureEliteType); F: the classification mapped to the same numbers, the world
-// boss being the boss type flag of the creature's difficulty (Creature.cpp:2637 isWorldBoss) which F keeps apart.
+// boss being the boss type flag of the creature's difficulty (Creature.cpp:2658 isWorldBoss) which F keeps apart.
 inline uint32 CreatureRankCompat(Creature const* creature)
 {
     if (creature->isWorldBoss())
@@ -516,7 +516,7 @@ inline uint32 CreatureRankCompat(Creature const* creature)
     }
 }
 
-// The cost of a spell in its own power type. T Spell::CalculatePowerCost (Spell.h:373); F SpellInfo::CalcPowerCost (SpellInfo.h:578),
+// The cost of a spell in its own power type. T Spell::CalculatePowerCost (Spell.h:373); F SpellInfo::CalcPowerCost (SpellInfo.h:581),
 // asked for the spell's power type, 0 when the spell has no cost in it.
 inline uint32 SpellPowerCostCompat(SpellEntry const* spell, Unit const* caster)
 {
@@ -538,7 +538,7 @@ inline int32 SpellCalculateDamageCompat(Spell* spell, uint32 effect, Unit* targe
     return static_cast<int32>(spell->CalculateDamage(info->GetEffect(static_cast<SpellEffIndex>(effect)), target));
 }
 
-// A spell's range after the player's own modifiers. T `ApplySpellMod(spellId, SPELLMOD_RANGE, range)`; F Player.h:2142
+// A spell's range after the player's own modifiers. T `ApplySpellMod(spellId, SPELLMOD_RANGE, range)`; F Player.h:2143
 // ApplySpellMod(SpellInfo const*, SpellModOp::Range, range).
 inline void ApplySpellModRangeCompat(Player* player, uint32 spellId, float& range)
 {
@@ -561,22 +561,22 @@ inline bool IsWithinLOSCompat(WorldObject const* from, float x, float y, float z
 // ---------------------------------------------------------------------------------------------------------------
 // 9. SMALL SHAPE DIFFERENCES found in the actions, triggers and warrior files.
 // ---------------------------------------------------------------------------------------------------------------
-// "Is the unit under water". T Unit.h:679 IsUnderwater(), F Unit.h:1115 IsUnderWater() (the bot's ServerFacade has a member
+// "Is the unit under water". T Unit.h:679 IsUnderwater(), F Unit.h:1128 IsUnderWater() (the bot's ServerFacade has a member
 // IsUnderwater of its own, so the name cannot be a macro).
 inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderWater(); }
 // "Is the unit rooted by an aura". T Unit.h:930 IsInRoots() (HasAuraType(SPELL_AURA_MOD_ROOT)); F has no IsInRoots, its own name for the question is
-// HasRootAura() (Unit.h:1108), which also counts SPELL_AURA_MOD_ROOT_2 and the gravity-less root (R9: the bot no longer carries a copy of the T body).
+// HasRootAura() (Unit.h:1121), which also counts SPELL_AURA_MOD_ROOT_2 and the gravity-less root (R9: the bot no longer carries a copy of the T body).
 // DIFFERENT ANSWER: a root of the two extra kinds reads as rooted on F.
 inline bool RootedCompat(Unit const* unit) { return unit->HasRootAura(); }
 
 // ---------------------------------------------------------------------------------------------------------------
-// 6. PATHS. T PathFinder (= PathInfo, Maps/PathFinder.h:146) and F PathGenerator (Movement/PathGenerator.h:63); the alias is in
+// 6. PATHS. T PathFinder (= PathInfo, Maps/PathFinder.h:146) and F PathGenerator (Movement/PathGenerator.h:65); the alias is in
 //    TbCompat_Unit.h. The path types NORMAL 1, SHORTCUT 2, INCOMPLETE 4, NOPATH 8, NOT_USING_PATH 0x10 are the same on both;
 //    DIFFERENT ANSWER: the higher bits (T 0x20 forced destination, 0x40 fly path, 0x80 underwater, 0x100 caster; F 0x20 short,
 //    0x40/0x80 start/end far from the polygon).
 // ---------------------------------------------------------------------------------------------------------------
 // T PathInfo::calculate(x, y, z, forceDest) (PathFinder.h:66) from the owner's position; F CalculatePath(x, y, z, forceDest)
-// (PathGenerator.h:104).
+// (PathGenerator.h:119).
 inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest = false)
 {
     return path.CalculatePath(x, y, z, forceDest);
@@ -740,8 +740,8 @@ inline void CombatStartPositionCompat(Creature const* creature, float& x, float&
 inline time_t CombatTimeCompat(Creature const* /*creature*/) { return time_t(-1); }
 
 // Does an applied aura (T: the spell's aura holder) carry one of the mechanics in a legacy mask (bit `mechanic - 1`). T
-// SpellAuraHolder::HasMechanicMask (SpellAuras.cpp:7392: the spell's mechanic, or the mechanic of an effect the holder applied); F
-// SpellInfo::GetAllEffectsMechanicMask (SpellInfo.cpp:2800), whose bit is `mechanic` (not `mechanic - 1`), hence the shift. The mechanic ids
+// SpellAuraHolder::HasMechanicMask (SpellAuras.cpp:7443: the spell's mechanic, or the mechanic of an effect the holder applied); F
+// SpellInfo::GetAllEffectsMechanicMask (SpellInfo.cpp:2836), whose bit is `mechanic` (not `mechanic - 1`), hence the shift. The mechanic ids
 // are the same numbers on both (SLEEP 10). DIFFERENT ANSWER: F reads the spell's effects, not the effects this application applied.
 inline bool AuraHasMechanicMaskCompat(Aura const* aura, uint32 legacyMask)
 {

@@ -94,7 +94,7 @@ struct ItemPrototype
     uint32 MaxCount;                                        // T :449 unique limit, 0 = none         F GetMaxCount()           :891
     uint32 Stackable;                                       // T :450 stack size                     F GetMaxStackSize()       :945
     uint32 ContainerSlots;                                  // T :451                               F GetContainerSlots()     :892
-    _ItemStat ItemStat[MAX_ITEM_PROTO_STATS];               // T :452 stat type + value              F GetStatModifierBonusStat()/:893, GetItemStatValue (Item.cpp:2432)
+    _ItemStat ItemStat[MAX_ITEM_PROTO_STATS];               // T :452 stat type + value              F GetStatModifierBonusStat()/:893, GetItemStatValue (Item.cpp:2472)
     uint32 Delay;                                           // T :453 milliseconds                   F GetDelay()              :902
     float  RangedModRange;                                  // T :454 percent, ranged attack range   F GetRangedModRange()     :903
     _ItemDamage Damage[MAX_ITEM_PROTO_DAMAGES];             // T :456 per-school damage lines        F GetDamage()/:994, GetDamageType()/:901

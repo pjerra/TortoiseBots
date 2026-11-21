@@ -8,7 +8,7 @@
 
 // ---------------------------------------------------------------------------------------------------------------
 // Unit state flags. The Turtle names (UNIT_STAT_*) are single bits of one persistent-state word (T Objects/UnitDefines.h
-// :308-379); ForeverCore keeps the same facts as UNIT_STATE_* bits (F Entities/Unit/Unit.h:277-323). The numbers differ, so
+// :308-379); ForeverCore keeps the same facts as UNIT_STATE_* bits (F Entities/Unit/Unit.h:285-331). The numbers differ, so
 // each Turtle bit is the ForeverCore bit of the same fact and every Turtle mask is the same union of those facts. The bot
 // only hands them to HasUnitState / ClearUnitState, which take the core's own words.
 //   ROOT, STUNNED, CONFUSED, FLEEING, CHASE, FOLLOW, POSSESSED: the same state (a root/stun aura, a confused/flee/chase/
@@ -89,16 +89,16 @@ enum TbLegacyUnitState : uint32
 // ---------------------------------------------------------------------------------------------------------------
 // "Is this unit rooted": T Unit.h:701 reads the root movement flag; the same flag, through the same member, here.
 #define IsRooted() m_movementInfo.HasMovementFlag(MOVEMENTFLAG_ROOT)
-// "Is this unit on a taxi flight": T Unit.h:632 is the taxi-flight unit state, F Unit.h:1044 IsInFlight() the in-flight unit state.
+// "Is this unit on a taxi flight": T Unit.h:632 is the taxi-flight unit state, F Unit.h:1057 IsInFlight() the in-flight unit state.
 #define IsTaxiFlying() IsInFlight()
-// The set of units attacking this one (T Unit.h:1236, F Unit.h:741); both are std::set<Unit*> (AttackerSet).
+// The set of units attacking this one (T Unit.h:1236, F Unit.h:749); both are std::set<Unit*> (AttackerSet).
 #define GetAttackers getAttackers
-// "Is this a world boss": T Creature.h:648 (rank WORLDBOSS, never a pet), F Creature.cpp:2637 (the boss type flag, never a pet).
+// "Is this a world boss": T Creature.h:648 (rank WORLDBOSS, never a pet), F Creature.cpp:2658 (the boss type flag, never a pet).
 #define IsWorldBoss isWorldBoss
 // "Has the core given up reaching its target": T Creature.h:953 (target unreachable for > 3 s), F Creature.h:392 (cannot-reach flag).
 // The timers differ; the answer is each core's own.
 #define IsEvadeBecauseTargetNotReachable CanNotReachTarget
-// "Can this unit's auto attack reach that unit now": T Unit.cpp:11056 (combat reaches + leeway, z-reach), F Unit.cpp:734
+// "Can this unit's auto attack reach that unit now": T Unit.cpp:11056 (combat reaches + leeway, z-reach), F Unit.cpp:736
 // (the core's melee range between the two, same map and phase). The core's own answer on each; the numbers differ by design.
 #define CanReachWithMeleeAutoAttack IsWithinMeleeRange
 
@@ -113,7 +113,7 @@ enum TbLegacyUnitState : uint32
 // Assertion: T `MANGOS_ASSERT(x)` aborts when x is false (shared/Errors.h:62); F's ASSERT(x) does the same.
 #define MANGOS_ASSERT(...) ASSERT(__VA_ARGS__)
 
-// The mask of a dispel type: T SpellEntry.h:417 (DISPEL_ALL gives DISPEL_ALL_MASK, any other 1 << type), F SpellInfo.h:561.
+// The mask of a dispel type: T SpellEntry.h:417 (DISPEL_ALL gives DISPEL_ALL_MASK, any other 1 << type), F SpellInfo.h:564.
 #define GetDispellMask SpellInfo::GetDispelMask
 
 // The creature template's NPC flag word: T `npc_flags` (uint32), F `npcflag` (uint64, CreatureData.h). The classic bits the
@@ -145,7 +145,7 @@ public:
 #define GetAuraMaxDuration GetMaxDuration
 // Time left of a cast in ms. T Spell.h:429 (m_timer), F Spell.h:728 GetTimer (m_timer).
 #define GetCastedTime GetTimer
-// Unit state: "melee attacking someone". T UnitDefines.h:312 (0x1), F Unit.h:279 (0x2), the same fact; the bot only hands it to
+// Unit state: "melee attacking someone". T UnitDefines.h:312 (0x1), F Unit.h:287 (0x2), the same fact; the bot only hands it to
 // HasUnitState, which takes the core's own word.
 #define UNIT_STAT_MELEE_ATTACKING UNIT_STATE_MELEE_ATTACKING
 // A cast in progress. T's SPELL_STATE_CASTING is set only when a CHANNELED spell starts channeling (T Spell.cpp:3996-3999, the
@@ -165,7 +165,7 @@ public:
 #define MOVEFLAG_JUMPING MOVEMENTFLAG_FALLING
 
 // First Aid, the skill line 129 on both cores (T SharedDefines.h; F has no name for it in its SkillType enum, but its own
-// Player.cpp:6478 says "First Aid 129" for the same line).
+// Player.cpp:6507 says "First Aid 129" for the same line).
 inline constexpr uint32 SKILL_FIRST_AID = 129;
 
 // Resurrection Sickness: T SharedDefines.h:1342 constexpr 15007; F has no name for it (the number is the Classic spell, checked live with `.tb spell 15007`

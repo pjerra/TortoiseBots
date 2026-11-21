@@ -5,12 +5,12 @@
 // Reused, not added: PetSpellIdsCompat (TbCompat_V.h:198, the spells of a pet that are not removed), HandlePetActionCompat (TbCompat_A.h:284).
 #pragma once
 
-// Teach the pet a spell. T `Pet::LearnSpell(id)`; F `Pet::learnSpell` (Pet.cpp:1962): adds the spell, and for a pet that is not loading tells the owner,
+// Teach the pet a spell. T `Pet::LearnSpell(id)`; F `Pet::learnSpell` (Pet.cpp:1971): adds the spell, and for a pet that is not loading tells the owner,
 // re-sends the pet bar and refreshes the training points. A spell the core refuses (already known, no spell entry) changes nothing.
 inline void PetLearnSpellCompat(Pet* pet, uint32 spellId) { pet->learnSpell(spellId); }
 
 // Switch a pet spell's autocast. T `Pet::ToggleAutocast(id, on)`. F: the same two calls the client's autocast opcode makes (PetHandler.cpp:668-675):
-// `Pet::ToggleAutocast(SpellInfo const*, bool)` (Pet.cpp:2136, keeps m_autospells and the spell's active state) and `CharmInfo::SetSpellAutocast`
+// `Pet::ToggleAutocast(SpellInfo const*, bool)` (Pet.cpp:2145, keeps m_autospells and the spell's active state) and `CharmInfo::SetSpellAutocast`
 // (the action bar button). The opcode's own refusals come first: a spell the pet does not know, or that is not autocastable (a passive), is left alone.
 inline void PetToggleAutocastCompat(Pet* pet, uint32 spellId, bool on)
 {
@@ -36,7 +36,7 @@ inline bool PetDismissCommandCompat(Player* bot, Pet* pet)
 }
 
 // Visit every guardian the bot controls except its pet and totems, with a snapshot of the list (a visitor may dismiss one). T
-// `CallForAllControlledUnits(visitor, CONTROLLED_GUARDIANS)`; F `Unit::m_Controlled` (Unit.h:1256, one set of pets, guardians, totems, charms).
+// `CallForAllControlledUnits(visitor, CONTROLLED_GUARDIANS)`; F `Unit::m_Controlled` (Unit.h:1271, one set of pets, guardians, totems, charms).
 // The visitor is called as visitor(Unit*).
 template <class Visitor>
 inline void ForAllGuardiansCompat(Player* bot, Visitor&& visitor)
@@ -48,8 +48,8 @@ inline void ForAllGuardiansCompat(Player* bot, Visitor&& visitor)
 }
 
 // Is the bot's pet dead. T (StatsValues.cpp PetIsDeadValue): the pet object is not alive, or the pet guid is set with no object. F removes a dead
-// hunter pet's body after its timer (Pet.cpp:670-677, saved PET_SAVE_NOT_IN_SLOT) and then keeps only the stable row with Health 0; Call Pet refuses
-// with SPELL_FAILED_DONT_REPORT while any active pet is dead (Spell.cpp:6779-6787) and Revive Pet reads that row (Spell.cpp:6692-6715), so the value
+// hunter pet's body after its timer (Pet.cpp:679-686, saved PET_SAVE_NOT_IN_SLOT) and then keeps only the stable row with Health 0; Call Pet refuses
+// with SPELL_FAILED_DONT_REPORT while any active pet is dead (Spell.cpp:6836-6844) and Revive Pet reads that row (Spell.cpp:6749-6772), so the value
 // must read true for it or "no pet" fires and Call Pet fails silently for ever (G2). A pet that is out reads by its own state.
 inline bool PetDeadCompat(Player const* bot)
 {
@@ -64,7 +64,7 @@ inline bool PetDeadCompat(Player const* bot)
 
 // Does the bot own a pet that Call Pet could bring out: an active-slot row of its pet stable whose creature template exists. T asked the
 // `character_pet` table for the current slot or a stable slot (GenericActions.cpp, the "initialize pet" check). F's current slot is -3 and its active
-// slots 0-4 (PetDefines.h:40-48), so that query finds nothing there (G1); `Player::GetPetStable` (Player.h:1384) is the same fact in memory. A
+// slots 0-4 (PetDefines.h:40-48), so that query finds nothing there (G1); `Player::GetPetStable` (Player.h:1385) is the same fact in memory. A
 // stabled pet (slot 5 and up) is not callable and does not count.
 inline bool HasStoredPetCompat(Player const* bot)
 {

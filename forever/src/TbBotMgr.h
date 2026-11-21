@@ -177,7 +177,7 @@ public:
     // D2: the entrance the host gave an instance (world_safe_locs id), 0 = none. `entranceFor(instance id)` is what the landing of an entry recorded.
     uint32 InstanceEntrance(Player* player) const;   // the instance script's entrance location for the map the player is on (0 = none, or not an instance)
     // `.tb order <bot> release` and the release rule read this: false while the instance the bot is in has NO entrance (no script or no trigger target),
-    // a release there would revive the bot at a graveyard outside (Player::RepopAtGraveyard, Player.cpp:5237-5242).
+    // a release there would revive the bot at a graveyard outside (Player::RepopAtGraveyard, Player.cpp:5258-5263).
     bool ReleaseHasEntrance(Player* bot) const;
 
     void Update(uint32 diff);

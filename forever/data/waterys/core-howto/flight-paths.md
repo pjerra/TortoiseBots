@@ -21,27 +21,27 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
    taximask (`m_taxi.IsTaximaskNodeKnown`, else `ERR_TAXINOTVISITED`, `TaxiHandler.cpp:180`), then the node
    list is expanded by `TaxiPathGraph::GetCompleteNodeRoute` (`Entities/Taxi/TaxiPathGraph.cpp:198` —
    direct edge if one exists, otherwise Dijkstra over the taxi graph) and handed to
-   `Player::ActivateTaxiPathTo` (`Entities/Player/Player.cpp:24504`).
-4. **Server-side validation and charging** (`Player::ActivateTaxiPathTo`, `Player.cpp:24504`): at least two
-   nodes (`:24497`), refuses while logging out / in combat / stunned / rooted (`Player.cpp:24514`), strips mount and
-   shapeshift at the flight master (`Player.cpp:24527`), walks the route adding destinations with
+   `Player::ActivateTaxiPathTo` (`Entities/Player/Player.cpp:24649`).
+4. **Server-side validation and charging** (`Player::ActivateTaxiPathTo`, `Player.cpp:24649`): at least two
+   nodes (`:24497`), refuses while logging out / in combat / stunned / rooted (`Player.cpp:24659`), strips mount and
+   shapeshift at the flight master (`Player.cpp:24672`), walks the route adding destinations with
    `PlayerTaxi::AddTaxiDestination` (`PlayerTaxi.cpp:150`) and summing the per-hop cost, picks the mount
    display (`GetTaxiMountDisplayId`), applies the reputation discount and the classic perk price modifier
-   (`Player.cpp:24649` / `:24649`), checks money (`Player.cpp:24662`) and then either teleports (only with
-   `CONFIG_INSTANT_TAXI`, `Player.cpp:24675`) or replies `SMSG_ACTIVATE_TAXI_REPLY` / `ERR_TAXIOK`
-   (`Player.cpp:24689`) and starts the flight through `StartTaxiMovement` (`Player.cpp:24771`).
+   (`Player.cpp:24794` / `:24649`), checks money (`Player.cpp:24807`) and then either teleports (only with
+   `CONFIG_INSTANT_TAXI`, `Player.cpp:24820`) or replies `SMSG_ACTIVATE_TAXI_REPLY` / `ERR_TAXIOK`
+   (`Player.cpp:24834`) and starts the flight through `StartTaxiMovement` (`Player.cpp:24916`).
 5. **Movement**. `StartTaxiMovement` mounts the player and calls `MotionMaster::MoveTaxiFlight`
-   (`Movement/MotionMaster.cpp:1158`), which installs a `FlightPathMovementGenerator`
+   (`Movement/MotionMaster.cpp:1172`), which installs a `FlightPathMovementGenerator`
    (`Movement/MovementGenerators/FlightPathMovementGenerator.h:33`); `LoadPath`
    (`FlightPathMovementGenerator.cpp:218`) builds the spline and per-node events fire in `DoEventIfAny`
-   (`:278`). Arrival runs `DoFinalize` (`:161`) → `Player::FinishTaxiFlight` (`Player.cpp:24705`) and
-   `CleanupAfterTaxiFlight` (`Player.cpp:24714`, dismount + clear taxi flags).
+   (`:278`). Arrival runs `DoFinalize` (`:161`) → `Player::FinishTaxiFlight` (`Player.cpp:24850`) and
+   `CleanupAfterTaxiFlight` (`Player.cpp:24859`, dismount + clear taxi flags).
 6. **Early landing ("stop here")**. `CMSG_TAXI_REQUEST_EARLY_LANDING` (`Opcodes.cpp:1119`) →
    `HandleTaxiRequestEarlyLanding` (`TaxiHandler.cpp:218`): `PlayerTaxi::RequestEarlyLanding`
    (`PlayerTaxi.cpp:175`) truncates the destination deque at the first already-known node, then the
    generator is reloaded and reset (`TaxiHandler.cpp:222`).
 7. **Scripted / spell taxi** uses the second overload `Player::ActivateTaxiPathTo(taxi_path_id, ...)`
-   (`Player.cpp:24695`), which resolves one `TaxiPathEntry` and calls the same routine with `npc == nullptr`
+   (`Player.cpp:24840`), which resolves one `TaxiPathEntry` and calls the same routine with `npc == nullptr`
    (no reputation discount, no mount display fallback restrictions).
 
 ## Notes / limits
@@ -51,7 +51,7 @@ Client build **1.60.1.70938** (Interface **16001**), 2026-11-17. Core: TrinityCo
   `PlayerTaxi::LoadTaxiMask`, `PlayerTaxi.cpp:51`).
 - Cost is computed from `TaxiPathEntry::Price` per hop, scaled by `GetReputationPriceDiscount(npc)` and the
   classic "Frequent Flier" modifier; the client shows the same total because it uses the same table.
-- `CONFIG_INSTANT_TAXI` (`Player.cpp:24675`) short-circuits the whole movement generator with a teleport —
+- `CONFIG_INSTANT_TAXI` (`Player.cpp:24820`) short-circuits the whole movement generator with a teleport —
   worth knowing when a flight "takes no time" on a test realm.
 - `CMSG_ENABLE_TAXI_NODE` (`Opcodes.cpp:457`, handler `TaxiHandler.cpp:35`) is the GM/unlock path, not part
   of a normal client flight.

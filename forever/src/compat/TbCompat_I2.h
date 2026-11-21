@@ -21,7 +21,7 @@ inline void NoteLootWindowAnnouncedCompat(Player const* bot, ObjectGuid const& o
 // LOOT: money first (lead decision D2), items since slice 9 (package L9). The bot opens a corpse, reads its money from the core's Loot object, takes it and releases
 // the window, through the core's own handlers (the calls a client's packets end in). Everything that takes ITEMS out of a window
 // is the named feature "loot: items, quest items and rolls".
-// Threading: the engine ticks on the world thread, before the maps update (World.cpp:2481, :2475). The loot handlers are
+// Threading: the engine ticks on the world thread, before the maps update (World.cpp:2490, :2475). The loot handlers are
 // PROCESS_THREADUNSAFE (Opcodes.cpp:689-693), i.e. the world thread is where the core itself runs them, and they read the map
 // (ObjectAccessor::GetCreature, Cell::VisitGridObjects, GetMap()->GetCreature) which no map thread writes while the engine runs.
 // ===============================================================================================================
@@ -29,8 +29,8 @@ inline void NoteLootWindowAnnouncedCompat(Player const* bot, ObjectGuid const& o
 // Open the loot window of a corpse: WorldSession::HandleLootOpcode(LootUnit&) (LootHandler.cpp:213-259). It checks, in this order,
 // that the player is alive and the guid is a creature (:216), that the creature exists (:219), AELootCreatureCheck::IsValidLootTarget
 // (:223: the corpse is dead, within 30 yards of the player (LootHandler.cpp:46,:55), and Player::isAllowedToLoot = this player is an
-// allowed looter and has something to loot, Player.cpp:20256-20298), then interrupts a running cast (:228-229), and calls
-// Player::SendLoot(*creature->GetLootForPlayer(player)) (:254), which puts the loot into the player's loot view (Player.cpp:10019-10046:
+// allowed looter and has something to loot, Player.cpp:20370-20412), then interrupts a running cast (:228-229), and calls
+// Player::SendLoot(*creature->GetLootForPlayer(player)) (:254), which puts the loot into the player's loot view (Player.cpp:10115-10142:
 // SetLootGUID, m_AELootView[loot guid], UNIT_FLAG_LOOTING). A refusal sends NOTHING (the handler returns), so the answer here is read
 // back from the loot view. With AE loot on (CONFIG_ENABLE_AE_LOOT) the core also opens up to 49 other corpses of the area (:233-251);
 // their money is taken with the first one's (HandleLootMoneyOpcode walks the whole view) and Release below only closes the named one.
@@ -68,7 +68,7 @@ inline bool LootOpenCompat(AiType* ai, Player* bot, ObjectGuid const& guid)
 }
 
 // Release a window: WorldSession::HandleLootReleaseOpcode(LootRelease&) (LootHandler.cpp:261-267) finds the loot by the OWNER guid in the
-// player's view (Player::GetLootByWorldObjectGUID, Player.cpp:9927) and calls DoLootRelease (:269-404: SetLootGUID(empty), RemoveLooter,
+// player's view (Player::GetLootByWorldObjectGUID, Player.cpp:10023) and calls DoLootRelease (:269-404: SetLootGUID(empty), RemoveLooter,
 // the view entry, UNIT_FLAG_LOOTING, and for a corpse that is fully looted the lootable flag). A guid with no window does nothing.
 inline void LootReleaseCompat(Player* bot, ObjectGuid const& guid)
 {
@@ -97,7 +97,7 @@ inline void LootReleaseAllCompat(Player* bot, ObjectGuid const& guid)
 // WHOLE loot view; for a corpse window of a player in a group the money is split between the group members that are allowed looters
 // of that loot and within the group reward distance (:151-179), everybody else's share goes to them with their own money messages;
 // alone, or for a non-corpse window, the player takes all of it (:181-191). The split divides by the number of such members (:162):
-// with none the core would divide by zero. The looter itself always counts (IsAtGroupRewardDistance(self) is true, Player.cpp:28062-28075)
+// with none the core would divide by zero. The looter itself always counts (IsAtGroupRewardDistance(self) is true, Player.cpp:28205-28218)
 // as long as it is an allowed looter of the loot, which opening the window already required; the same test is made here first, and a
 // window that fails it is not taken (false) instead of reaching the division. Different answer: a bot in a party shares the money
 // with the party (the master gets a part of the bot's corpse gold), as every player of this core does.
@@ -134,7 +134,7 @@ inline bool LootMoneyCompat(Player* bot)
 // owner guid (LootOpenCompat, or the poll of a game object's window, TbCompat_S9.h); the money is read from the core's Loot object in the player's view
 // (Loot::gold, Loot.h:298) and the ITEM ROWS are rebuilt into `p` in the layout StoreLootAction's loop reads (T: [slot u8][item id u32][count u32]
 // [display id u32][random suffix u32][random property id u32][slot type u8]), one row per item the core would show this player in its loot window
-// (Loot::BuildLootResponse, Loot.cpp:1229: LootItem::GetUiTypeForPlayer has a value). The slot type is the loop's: 0 = this bot may take it (the core's
+// (Loot::BuildLootResponse, Loot.cpp:1243: LootItem::GetUiTypeForPlayer has a value). The slot type is the loop's: 0 = this bot may take it (the core's
 // ALLOW_LOOT and OWNER), anything else is skipped by the loop (1 a roll is running, 2 locked, 3 master loot). The slot number is the core's loot list id,
 // the very number HandleAutostoreLootItemOpcode takes. Currencies and tracking quests are not rows (a Classic corpse holds none). The display id and the
 // random suffix / property are 0 (F has item bonus lists, Unported "item random properties"). Returns false when the player has no window of that guid
@@ -177,7 +177,7 @@ inline bool LootWindowReadCompat(Player* bot, WorldPacket& p, ObjectGuid& guid, 
     return true;
 }
 
-// The loot of the open window (Player::GetLootByWorldObjectGUID) and the loot target: the core's SendLoot already set it (Player.cpp:10027).
+// The loot of the open window (Player::GetLootByWorldObjectGUID) and the loot target: the core's SendLoot already set it (Player.cpp:10123).
 inline Loot* LootOfWindowCompat(Player* bot, ObjectGuid const& guid) { return bot->GetLootByWorldObjectGUID(guid); }
 inline void SetLootGuidCompat(Player* /*bot*/, ObjectGuid const& /*guid*/) {}
 
@@ -208,7 +208,7 @@ inline uint32 GetRequiredLootSkillCompat(CreatureTemplate const* tpl)
 // ALLOW_LOOT / OWNER = the bot may take it (sharedAllowed), ROLL_ONGOING = blocked (a roll runs), LOCKED / MASTER = no right (it never reaches here: the
 // window rows skip them). allowedForPlayer is true for every slot with a UI type (the core only shows an item to its allowed looters, Loot.cpp:217);
 // a personal quest copy is `needs_quest` outside the loot rules, a free-for-all copy is `freeforall` (Loot.h:187-190). The take itself is made by
-// the core (Player::StoreLootItem, Player.cpp:28834), which repeats every check.
+// the core (Player::StoreLootItem, Player.cpp:28977), which repeats every check.
 inline bool LootSlotFactsCompat(Player* bot, Loot* loot, uint8 itemindex, bool& allowedForPlayer, bool& isQuest, bool& isFfa,
     bool& isBlocked, bool& sharedAllowed)
 {
@@ -228,7 +228,7 @@ inline bool LootSlotFactsCompat(Player* bot, Loot* loot, uint8 itemindex, bool& 
 }
 
 // Take one item of the window: CMSG_LOOT_ITEM into WorldSession::HandleAutostoreLootItemOpcode (LootHandler.cpp:77). The request names the Loot's own
-// guid (the key of the player's loot view, Player.cpp:10042) and the loot list id. The core checks the loot view, the distance of a game object or
+// guid (the key of the player's loot view, Player.cpp:10138) and the loot list id. The core checks the loot view, the distance of a game object or
 // corpse, then Player::StoreLootItem: the free bag slot (CanStoreNewItem), the allowed-looter and roll-winner rules, and tells the player. An item
 // that cannot be stored is left in the window (the core sends an equip error to the headless session). The caller counts the take; whether the item
 // reached the bags is read from the item count by the commander's order code.
@@ -280,8 +280,8 @@ inline float DropRateOfQualityCompat(LootStoreType& /*creatureLootStore*/, uint3
 inline bool RollChanceCompat(float /*chance*/) { tbcompat::Unported(tbcompat::Feature::LootBoost); return false; }
 
 // Whether a corpse still has loot this bot may take. T: the raw lootable flag OR the viewer's own right. F: the core's own right
-// Player::isAllowedToLoot (Player.cpp:20256-20298: dead, the viewer's loot exists and is not looted, the viewer is an allowed looter,
-// gold always counts (Loot.cpp:1184-1188), and the round-robin / group-loot turn). Different answer: the raw lootable dynamic flag is not
+// Player::isAllowedToLoot (Player.cpp:20370-20412: dead, the viewer's loot exists and is not looted, the viewer is an allowed looter,
+// gold always counts (Loot.cpp:1198-1202), and the round-robin / group-loot turn). Different answer: the raw lootable dynamic flag is not
 // read (on T the core masks it per viewer so it mostly equalled the right; on F it is one value for everybody, so it would also say
 // yes for a corpse another player tapped).
 // R3 merge: the same core call as V2's CorpseAllowedToLootCompat (TbCompat_V2.h, included first): one F definition. On T the two differ
@@ -289,8 +289,8 @@ inline bool RollChanceCompat(float /*chance*/) { tbcompat::Unported(tbcompat::Fe
 inline bool CorpseHasBodyLootForCompat(Player* bot, Creature* creature) { return CorpseAllowedToLootCompat(bot, creature); }
 
 // ai::HasVisiblePersonalItemFor: the personal items (quest, free-for-all) the viewer may see while another member holds the turn.
-// F: Loot::hasItemFor(viewer) (Loot.cpp:1197-1209: quest items of the viewer and its free-for-all items), the very test
-// Player::isAllowedToLoot makes for the same situation (Player.cpp:20281, :20294). The policy's own T algorithm (`body`) is not run.
+// F: Loot::hasItemFor(viewer) (Loot.cpp:1211-1223: quest items of the viewer and its free-for-all items), the very test
+// Player::isAllowedToLoot makes for the same situation (Player.cpp:20395, :20294). The policy's own T algorithm (`body`) is not run.
 template <class LootType, class ViewerType, class Body>
 inline bool PersonalItemVisibleCompat(LootType const& loot, ViewerType* viewer, Body&&) { return loot.hasItemFor(viewer); }
 
@@ -310,7 +310,7 @@ struct ItemSpellUseCompat
 };
 
 // An item of the bags by its entry (T: the same scan of the backpack and the bags, ai/cmangos-compat-shim.h:69). Player::GetItemByEntry
-// with ItemSearchLocation::Inventory is the backpack and the bags (Player.h:1507, :853-863), without the equipment and the bank.
+// with ItemSearchLocation::Inventory is the backpack and the bags (Player.h:1508, :853-863), without the equipment and the bank.
 inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
 {
     return player ? player->GetItemByEntry(itemEntry, ItemSearchLocation::Inventory) : nullptr;
@@ -321,8 +321,8 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
 // the caster. Everything else counts "item use except food and drink" and answers "the cast did not start" (the loop stops, the action
 // reports failure): the bot does less.
 //
-// The core call: Player::CastItemUseSpell(item, spellId, targets, castId, misc) (Player.cpp:9707-9757), the call ProcessItemCast ends in
-// when the client sends CMSG_USE_ITEM (Player.cpp:33761-33847, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
+// The core call: Player::CastItemUseSpell(item, spellId, targets, castId, misc) (Player.cpp:9803-9853), the call ProcessItemCast ends in
+// when the client sends CMSG_USE_ITEM (Player.cpp:33914-34000, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
 // that the spell is an ON_USE effect of a non-LEGACY item, or a use-spell enchantment (:9716-9744, an error line and no cast otherwise),
 // builds `Spell(this, spellInfo, TRIGGERED_NONE)` with m_CastItem = the item and calls prepare(targets) (:9746-9756); prepare checks the
 // cast (CheckCast), refuses with SendCastResult and otherwise queues the cast, which consumes the item when it finishes. The call
@@ -362,7 +362,7 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
         return out;
     }
 
-    // The core's own validity test of the use effect (Player.cpp:9716-9744), made first so that a refused item is not an error line per tick.
+    // The core's own validity test of the use effect (Player.cpp:9812-9840), made first so that a refused item is not an error line per tick.
     ItemTemplate const* tpl = itemUsed->GetTemplate();
     bool onUseEffect = false;
     if (!tpl->HasFlag(ITEM_FLAG_LEGACY))
