@@ -16,6 +16,7 @@
 #include "host/TbCc.h"
 #include "host/TbThrown.h"
 #include "host/TbHybrid.h"
+#include "host/TbTactics.h"
 #include "host/run/TbRunHooks.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -247,7 +248,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.S("tgthp", target ? std::to_string(PercentOf(uint64(target->GetHealth()), uint64(target->GetMaxHealth()))) : std::string());
     rec.S("victim", victim ? GuidText(victim->GetGUID()) : std::string());
     rec.B("hold", ai && ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT));
-    rec.S("mv", !ai ? "" : ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ? "follow" : ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? "stay" : "");
+    rec.S("mv", !ai ? "" : ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ? "follow" : ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? "stay" : ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT) ? "guard" : "");
     if (away)
         rec.P("stuck", {"away", std::to_string(awaySeconds)});
     else if (blocked)
@@ -337,6 +338,7 @@ Rec StateRec(Player* bot, Readiness& ready)
         rec.T("blockmsg", entry.blockText);
     rec.N("catchup", entry.catchups).B("practice", BotMgr::Instance().Practice(guid));
     h8::AppendCcState(rec, bot);                              // H8 (slice 8): rticc, ccfam, held, combo (appended: the older keys are unchanged)
+    tactics::AppendState(rec, bot);                           // Issue #131 M1: stance=, rebuff= (appended after the h8 keys)
     h10::AppendHybridState(rec, bot);                         // H10 (slice 10): form, totems, imbue, seal, paura (appended: the older keys are unchanged)
     p11::AppendPetState(rec, bot);                            // P11 (slice 11): pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
     kb::AppendThrownState(rec, bot);                          // S3: thrown=, falldmg=, runrate= (appended: the older keys are unchanged)

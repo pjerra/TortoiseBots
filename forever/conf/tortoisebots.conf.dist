@@ -129,6 +129,16 @@ TortoiseBots.Commander.ObjectRange = 40
 TortoiseBots.Commander.PosMs = 100
 
 #
+#    TortoiseBots.Orders.Tactical
+#        Description: The tactical orders of `.tb order` and `.tb cmd` (issue #131): stop, flee, guard, stance, engage and rebuff. At 0 every one
+#                     of them answers `error code=disabled` and nothing is queued; the engine still runs an order that was queued before the
+#                     switch went off. Read on each use, so a config reload counts at once.
+#        Default:     1
+#
+
+TortoiseBots.Orders.Tactical = 1
+
+#
 #    TortoiseBots.Dashboard.Enable
 #        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
 #        Default:     1

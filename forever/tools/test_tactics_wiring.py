@@ -80,15 +80,19 @@ def check_run_dispatch(src):
         raise AssertionError("PreflightOrder does not dispatch tactics::Preflight")
 
 
+def tactics_run_body(src):
+    return function_body(strip_comments(src), "std::string Run(Player* bot")
+
+
 def check_stop_run(src):
-    body = function_body(strip_comments(src), 'if (verb == "stop")')
+    body = function_body(tactics_run_body(src), 'if (verb == "stop")')
     for pin in ("CombatStopWithPets(true)", "GetMotionMaster()->Clear()"):
         if pin not in body:
             raise AssertionError(f"stop does not call {pin}")
 
 
 def check_engage_window_end(src):
-    c = strip_comments(src)
+    c = tactics_run_body(src)
     if 'if (verb != "engage" && ai->HasEngagePullWindow())' not in c:
         raise AssertionError("tactics::Run lacks the D4 guard (verb != engage && HasEngagePullWindow)")
     if 'EndPullWindow("order")' not in c:
@@ -96,22 +100,30 @@ def check_engage_window_end(src):
 
 
 def check_rebuff_window(src):
-    c = strip_comments(src)
-    if '"force rebuff begin ms"' not in c:
+    body = function_body(tactics_run_body(src), 'if (verb == "rebuff")')
+    if '"force rebuff begin ms"' not in body:
         raise AssertionError("rebuff does not write the force rebuff window anchor")
 
 
-def check_slice_keys(src):
-    c = src
-    strategy = re.search(r'^SLICE_KEYS = \{.*?"strategy":\s*"([^"]*)"', c, re.S | re.M)
-    action = re.search(r'^SLICE_KEYS = \{.*?"action":\s*"([^"]*)"', c, re.S | re.M)
-    if not strategy or not action:
+def slice_key_values(src):
+    block = re.search(r"^SLICE_KEYS = \{(.*?)^\}", src, re.S | re.M)
+    if not block:
         raise AssertionError("slice_gen_context.py SLICE_KEYS block not found")
-    if "guard" not in [x.strip() for x in strategy.group(1).split(",")]:
+    out = {}
+    for key in ("strategy", "action"):
+        matches = re.findall(rf'"{key}":\s*((?:"[^"]*"\s*)+)', block.group(1), re.S)
+        if not matches:
+            raise AssertionError(f"SLICE_KEYS {key} list not found")
+        out[key] = [word.strip() for literal in re.findall(r'"([^"]*)"', matches[0]) for word in literal.split(",") if word.strip()]
+    return out
+
+
+def check_slice_keys(src):
+    keys = slice_key_values(src)
+    if "guard" not in keys["strategy"]:
         raise AssertionError("SLICE_KEYS strategy lacks `guard`")
-    actions = [x.strip() for x in action.group(1).split(",")]
     for key in ("guard chat shortcut", "guard", "stance"):
-        if key not in actions:
+        if key not in keys["action"]:
             raise AssertionError(f"SLICE_KEYS action lacks `{key}`")
 
 
@@ -128,7 +140,7 @@ def check_need_action(src):
 
 def check_applykit_keeps_guard(src):
     body = function_body(strip_comments(src), "void ApplyKit(")
-    if '"guard"' not in body:
+    if 'HasStrategy("guard",' not in body:
         raise AssertionError("ApplyKit does not keep the guard movement mode")
 
 
