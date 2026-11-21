@@ -14,8 +14,8 @@
 // Defaults, from the spec: combat "arms", "dps assist", "close", "buff"; non-combat "arms", "dps assist", "follow";
 // the reaction engine gets only the class strategy and the dead engine only "dead" (slice 4); the talent tab is 0 (arms) whatever the bot's talents.
 // Slice 2 (FOREVER-SLICE2-SPEC section 3): a priest gets its own context (PriestAiObjectContext, compiled as it is) and, on tab 0
-// (discipline: the slice never reads talents), combat "discipline", "offdps", "dps assist", "ranged", "buff", "cast time"; non-combat
-// "discipline", "dps assist", "follow", "buff", "food", "loot", "default"; reaction "discipline". The full factory's "flee", "cure",
+// (discipline: the slice never reads talents), combat "discipline", "offdps", "dps assist", "ranged", "cure", "buff", "cast time"; non-combat
+// "discipline", "dps assist", "follow", "cure", "buff", "food", "loot", "default"; reaction "discipline". The full factory's "flee",
 // "cc", "aoe" and "boost" are left out on purpose (the spec's list). The warrior's non-combat set gains "loot" and "default" (the
 // money looting and its "loot response" event; live test observation k has both bots open their corpse), its combat set is unchanged. A strategy name the
 // context does not know is skipped by the engine, and logged once by the guard (SliceMissingKeyGuard.h).
@@ -341,7 +341,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         // "heal interrupt": the overheal cancel (a heal in its cast bar is cancelled when the patient no longer needs it), added by the full factory
         // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3 of slice 2. The priest falls through to the `threat` block below
         // (slice 3: a commanded healer backs off the tank's threat).
-        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", "heal interrupt", NULL);
+        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
     }
     else if (HybridKitOf(player, EffectiveRole(player, facade)) != HybridKit::None)
     {
@@ -417,7 +417,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     }
     if (player && player->GetClass() == CLASS_PRIEST)
     {
-        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "roll", "default", NULL);
+        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", NULL);
         return;
     }
     if (HybridKit const kit = HybridKitOf(player, EffectiveRole(player, facade)); kit != HybridKit::None)

@@ -25,7 +25,7 @@ def check_wiring(bot_mgr, conf_dist, errands_cpp, guild_mail_cpp):
         raise AssertionError("TbBotMgr.cpp missing GuildMail tick wiring")
     if "_capitalErrandsEnabled" not in bot_mgr or "_guildMailEnabled" not in bot_mgr or "_botAcceptDuelMinLevel" not in bot_mgr:
         raise AssertionError("TbBotMgr.cpp missing cached config flags in LoadConfig")
-    if "TortoiseBots.World.CapitalErrands = 0" not in conf_dist or "TortoiseBots.World.GuildMail = 0" not in conf_dist:
+    if "TortoiseBots.World.CapitalErrands = 1" not in conf_dist or "TortoiseBots.World.GuildMail = 1" not in conf_dist:
         raise AssertionError("tortoisebots.conf.dist missing CapitalErrands/GuildMail defaults")
     if "PickCapitalErrand" not in errands_cpp or "CanInitiateBotDuel" not in errands_cpp:
         raise AssertionError("TbHostCapitalErrands.cpp missing policy calls")

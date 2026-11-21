@@ -198,28 +198,28 @@ TortoiseBots.World.Auction = 0
 #
 #    TortoiseBots.World.GroupQuests
 #        Description: Allow nearby free bots holding the same group or elite quest to form a party and disband when done.
-#        Default:     0
+#        Default:     1
 #
 
-TortoiseBots.World.GroupQuests = 0
+TortoiseBots.World.GroupQuests = 1
 
 #
 #    TortoiseBots.World.CapitalErrands
 #        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
 #                     and challenge/accept bot-vs-bot duels in dueling areas (city gates).
-#        Default:     0
+#        Default:     1
 #
 
-TortoiseBots.World.CapitalErrands = 0
+TortoiseBots.World.CapitalErrands = 1
 
 #
 #    TortoiseBots.World.GuildMail
 #        Description: Allow free bots in a bot guild to mail surplus gold to the poorest online bot member and unused
 #                     crafting materials to online bot crafters who use them. Never mails real players' items or gold.
-#        Default:     0
+#        Default:     1
 #
 
-TortoiseBots.World.GuildMail = 0
+TortoiseBots.World.GuildMail = 1
 
 #
 #    TortoiseBots.World.GuildMail.AllowMixedGuild
