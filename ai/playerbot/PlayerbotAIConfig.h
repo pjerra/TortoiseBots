@@ -459,7 +459,7 @@ public:
     // do not walk single-file along the exact same line (0 disables).
     float walkTargetOffset = 2.5f;
     // Free bots prioritize living rare spawns of their level within sight distance.
-    bool huntRares = false;
+    bool huntRares = true;
     // Grace period in seconds before a masterless random or autonomous bot left
     // inside a dungeon or raid instance without a real player in its group is
     // teleported to its homebind. 0 disables. Default 90.

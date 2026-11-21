@@ -2497,7 +2497,8 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
         float const totalDistance = WorldPosition(bot).distance(endPos);
         bool const isTravelSite = castCancelSite && std::strcmp(castCancelSite, "move_travel") == 0;
         bool const exactSite = (castCancelSite != nullptr && !isTravelSite) || (isTravelSite && totalDistance < 100.0f);
-        if (ai::ShouldOffsetWalkTarget(bot->GetMap() && bot->GetMap()->Instanceable(), false, exactSite, totalDistance, sPlayerbotAIConfig.walkTargetOffset))
+        Map const* map = bot->FindMap();
+        if (ai::ShouldOffsetWalkTarget(map && map->Instanceable(), false, exactSite, totalDistance, sPlayerbotAIConfig.walkTargetOffset))
         {
             float dx = 0.0f, dy = 0.0f;
             ai::ComputeWalkTargetOffset(bot->GetGUIDLow(), x, y, sPlayerbotAIConfig.walkTargetOffset, dx, dy);
