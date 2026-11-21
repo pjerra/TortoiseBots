@@ -527,7 +527,11 @@ public:
         if (!targetLow)
             return false;
 
-        GameObject* mailbox = tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd);
+        // A mailbox the core accepts right here wins; the far search can name one the bot never reaches (two spawns on one spot,
+        // a box behind geometry), and walking to it every tick kept the bot from mailing at the box it stood at.
+        GameObject* mailbox = tbhost::town::FindNearestMailbox(bot);
+        if (!mailbox)
+            mailbox = tbhost::town::FindNearestMailbox(bot, kW2MaxVisitDistYd);
         if (!mailbox)
         {
             outReason = "cannot: travel";
