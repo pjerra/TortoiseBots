@@ -295,3 +295,4 @@ ai/playerbot/strategy/actions/QuestRewardActions.cpp
 # core only through the WL4 pair (TbCompat_WL4.h + ai/cmangos-compat-wl4.h).
 ai/playerbot/TravelMgr.cpp
 ai/playerbot/strategy/values/TravelValues.cpp
+ai/playerbot/strategy/actions/AhAction.cpp

@@ -41,6 +41,7 @@ bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args);   /
 bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb statcensus [#token]
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb gear <bot|party [leader]> upgrade [#token]
 bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb quest <bot> status|accept|turnin|share|drop|reward ... [#token]
+bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb guildorder create|list|cancel|status ... [#token]
 
 // ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
 // Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.
@@ -162,6 +163,11 @@ bool MemberKnowsOocResurrection(Player* member);      // N3: the party member kn
 // N5 (package N): who may be made the leader or master of host bots: a host bot, or the character of the GM who typed the command. A real player's
 // character is never taken over (from the console only host bots qualify). Used by `.tb party`, `.tb master`, `.tb login <bot> <master>`, `.tb group`.
 bool MayLeadBots(ChatHandler* handler, ObjectGuid character);                      // the in-world player the bot's host master guid names, or null
+bool CheckBotAccess(Player const* sender, ObjectGuid botGuid, std::string& code, std::string& detail);
+bool CheckBotAccess(ChatHandler* handler, ObjectGuid botGuid, std::string& code, std::string& detail);
+bool CheckBotAccess(ChatHandler* handler, Player const* bot, std::string& code, std::string& detail);
+bool CheckPartyLeadAccess(Player const* sender, Player const* leader, std::string& code, std::string& detail);
+bool CheckPartyLeadAccess(ChatHandler* handler, Player const* leader, std::string& code, std::string& detail);
 
 // TB-1: the character a test-kit command changes: a host bot, or the sender's own character; another real player's character is refused. An empty `name`
 // means the sender (the no-name form of `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt`, `.tb power`). On a refusal `code`/`detail` say why and it returns null.
@@ -180,7 +186,7 @@ struct Address
 // Reads the address at words[pos] and advances pos past it. `party` takes the next word as the leader's name when `leaderFollows` says
 // so (the caller knows whether the word after `party` could be the leader or is already the next argument). `allowSender` also accepts the
 // sender's own character as a single name (`MayLeadBots`); the other commands keep bots only.
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender = false);
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender = false, bool requireControl = true);
 
 // Every in-world host bot (for `party` with no leader).
 std::vector<Player*> AllHostBots();

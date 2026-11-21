@@ -39,6 +39,15 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!ResolveBinding(sender->GetGUID(), lead, members) || lead.IsEmpty())
         return h3::Fail(handler, args, "cmd", "not-bound", "you have no bound bots (`.tb master <bot|party> <commander>`)");
 
+    {
+        std::string code, detail;
+        if (!h3::CheckBotAccess(handler, lead, code, detail))
+            return h3::Fail(handler, args, "cmd", code, detail);
+        for (ObjectGuid const& m : members)
+            if (!h3::CheckBotAccess(handler, m, code, detail))
+                return h3::Fail(handler, args, "cmd", code, detail);
+    }
+
     std::string const verb = h3::Lower(args.w[0]);
     bool taskOk = false;
     if (TryHandleTaskVerb(handler, args, verb, 1, &taskOk))

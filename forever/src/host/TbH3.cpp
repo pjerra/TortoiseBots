@@ -1,6 +1,7 @@
 // Slice 3, host package H3: helpers shared by the order, state and test-kit commands (see TbH3.h). Core headers only: this file is
 // built with and without TORTOISEBOTS_SLICE1.
 #include "host/TbH3.h"
+#include "host/TbGuardPure.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbH4.h"
@@ -454,6 +455,82 @@ bool MayLeadBots(ChatHandler* handler, ObjectGuid character)
                              BotMgr::Instance().IsBot(character));
 }
 
+bool CheckBotAccess(Player const* sender, ObjectGuid botGuid, std::string& code, std::string& detail)
+{
+    if (!sender || botGuid.IsEmpty())
+        return true;
+
+    guard::Subject s;
+    s.caller = Identity(sender->GetGUID());
+
+    // A bot in a `.tb run` is temporarily bound to the run's tank bot; resolve one hop to the tank's commander so the owner
+    // can still intervene (`outside-order` pause) while another player is refused.
+    ObjectGuid binding = CommanderGuid(botGuid);
+    if (!binding.IsEmpty() && BotMgr::Instance().IsBot(binding))
+    {
+        ObjectGuid const leadCommander = CommanderGuid(binding);
+        if (!leadCommander.IsEmpty())
+            binding = leadCommander;
+    }
+    s.binding = Identity(binding);
+
+    ObjectGuid const master = BotMgr::Instance().MasterOf(botGuid);
+    s.master = Identity(master);
+    s.masterIsBot = !master.IsEmpty() && BotMgr::Instance().IsBot(master);
+
+    Player const* bot = ObjectAccessor::FindPlayer(botGuid);
+    if (bot)
+    {
+        if (Group const* group = bot->GetGroup())
+        {
+            ObjectGuid const leaderGuid = group->GetLeaderGUID();
+            s.partyLeader = Identity(leaderGuid);
+            s.partyLeaderIsBot = !leaderGuid.IsEmpty() && BotMgr::Instance().IsBot(leaderGuid);
+        }
+    }
+
+    guard::Verdict const verdict = guard::CheckControl(s);
+    if (verdict == guard::Verdict::Allowed)
+        return true;
+
+    code = guard::CodeOf(verdict);
+    std::string const botName = bot ? std::string(bot->GetName()) : GuidText(botGuid);
+    detail = verdict == guard::Verdict::ForeignBot
+        ? botName + " is owned by another commander"
+        : botName + " is in a party led by another player";
+    return false;
+}
+
+bool CheckBotAccess(ChatHandler* handler, ObjectGuid botGuid, std::string& code, std::string& detail)
+{
+    return CheckBotAccess(SenderPlayer(handler), botGuid, code, detail);
+}
+
+bool CheckBotAccess(ChatHandler* handler, Player const* bot, std::string& code, std::string& detail)
+{
+    return !bot || CheckBotAccess(SenderPlayer(handler), bot->GetGUID(), code, detail);
+}
+
+bool CheckPartyLeadAccess(Player const* sender, Player const* leader, std::string& code, std::string& detail)
+{
+    if (!sender || !leader)
+        return true;
+    if (IsHostBot(leader))
+        return CheckBotAccess(sender, leader->GetGUID(), code, detail);
+    if (leader->GetGUID() != sender->GetGUID())
+    {
+        code = "foreign-lead";
+        detail = std::string(leader->GetName()) + "'s party is led by another player";
+        return false;
+    }
+    return true;
+}
+
+bool CheckPartyLeadAccess(ChatHandler* handler, Player const* leader, std::string& code, std::string& detail)
+{
+    return CheckPartyLeadAccess(SenderPlayer(handler), leader, code, detail);
+}
+
 Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail)
 {
     Player* sender = SenderPlayer(handler);
@@ -478,6 +555,8 @@ Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::stri
         detail = std::string(name) + " is neither a host bot nor your own character";
         return nullptr;
     }
+    if (IsHostBot(player) && !CheckBotAccess(handler, player, code, detail))
+        return nullptr;
     return player;
 }
 
@@ -548,7 +627,7 @@ std::vector<Player*> BotsOfGroup(Group* group)
 }
 }
 
-Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender)
+Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool leaderFollows, bool allowSender, bool requireControl)
 {
     Address result;
     if (pos >= args.w.size())
@@ -571,6 +650,10 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
         {
             result.code = "not-a-bot";
             result.detail = allowSender ? name + " is neither a host bot nor your own character" : name + " is not a logged-in host bot";
+        }
+        else if (requireControl && IsHostBot(bot) && !CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+        {
+            return result;
         }
         else
         {
@@ -598,6 +681,8 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.detail = name + " is not in a party";
             return result;
         }
+        if (requireControl && !CheckPartyLeadAccess(sender, leader, result.code, result.detail))
+            return result;
         result.leader = leader;
         result.label = "party:" + leader->GetName();
         result.bots = BotsOfGroup(group);
@@ -605,6 +690,18 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
         {
             result.code = "no-bots";
             result.detail = "the party of " + name + " holds no host bot";
+            return result;
+        }
+        if (requireControl)
+        {
+            for (Player* bot : result.bots)
+            {
+                if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                {
+                    result.bots.clear();
+                    return result;
+                }
+            }
         }
         return result;
     }
@@ -620,6 +717,17 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
                     result.bots.push_back(bot);
         if (!result.bots.empty())
         {
+            if (requireControl)
+            {
+                for (Player* bot : result.bots)
+                {
+                    if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                    {
+                        result.bots.clear();
+                        return result;
+                    }
+                }
+            }
             result.label = "party:commander:" + sender->GetName();
             return result;
         }
@@ -634,6 +742,17 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
                 result.bots.push_back(bot);
         if (!result.bots.empty())
         {
+            if (requireControl)
+            {
+                for (Player* bot : result.bots)
+                {
+                    if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                    {
+                        result.bots.clear();
+                        return result;
+                    }
+                }
+            }
             if (Player* commander = ObjectAccessor::FindPlayer(*commanders.begin()))
                 result.label = "party:commander:" + commander->GetName();
             else
@@ -655,7 +774,25 @@ Address ResolveAddress(Words const& args, size_t& pos, Player* sender, bool lead
             result.label = "party:" + leader->GetName();
         }
         if (!result.bots.empty())
+        {
+            if (requireControl)
+            {
+                if (result.leader && !CheckPartyLeadAccess(sender, result.leader, result.code, result.detail))
+                {
+                    result.bots.clear();
+                    return result;
+                }
+                for (Player* bot : result.bots)
+                {
+                    if (!CheckBotAccess(sender, bot->GetGUID(), result.code, result.detail))
+                    {
+                        result.bots.clear();
+                        return result;
+                    }
+                }
+            }
             return result;
+        }
     }
     result.code = groups.empty() && bindings.empty() ? "no-bots" : "ambiguous-party";
     result.detail = "name the party leader: `party <leader>`";

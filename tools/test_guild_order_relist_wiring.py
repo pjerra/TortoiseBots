@@ -43,8 +43,8 @@ class GuildOrderRelistWiringTest(unittest.TestCase):
         self.assertIn("NoteRelistClaimed(bot->GetGUIDLow(), entry.seq,", take)
         self.assertIn("NoteRelistReceived(bot->GetGUIDLow(), entry.seq, gold, items)", take)
         helper = body(MAIL, "bool TakeRelistValue(", "void DeleteEmptyRelistMail(")
-        self.assertIn("HandleMailTakeMoney(", helper)
-        self.assertIn("HandleMailTakeItem(", helper)
+        self.assertIn("MailTakeMoneyCompat(", helper)
+        self.assertIn("MailTakeItemCompat(", helper)
         self.assertIn("TakeRelistValue(ai, bot, mailbox, mail, entry.itemId, kind, gold, items)", take)
         # The claim write lands before the take, and the received write after
         # it: a failed claim leaves the mail untouched, a failed received
@@ -59,7 +59,7 @@ class GuildOrderRelistWiringTest(unittest.TestCase):
         # already owns never matches a second row.
         self.assertIn("RelistClaimedIndex(entries, mail->messageID, claimed)", take)
         self.assertIn("RelistNoteClaimSettled(entry)", take)
-        self.assertIn("owner->GetMail(entry.claimMailId)", take)
+        self.assertIn("MailByIdCompat(owner, entry.claimMailId)", take)
         # A claim settles once its mail no longer carries the row's value (the
         # core keeps has_items set after the stack is taken) and is retried
         # only while it still does.
@@ -68,9 +68,9 @@ class GuildOrderRelistWiringTest(unittest.TestCase):
         self.assertIn("view = MakeRelistMailView(mail, owner)", retry)
         self.assertLess(retry.index("view = MakeRelistMailView(mail, owner)"),
             retry.index("RelistClaimMailHoldsValue(entry, view)"))
-        self.assertIn("MAIL_STATIONERY_AUCTION", MAIL)
+        self.assertIn("MailIsAuctionCompat(mail)", MAIL)
         self.assertIn("ParseAuctionSubject(mail->subject", MAIL)
-        self.assertIn("ParseAuctionSaleBody(sObjectMgr.GetItemText(mail->itemTextId), view)", MAIL)
+        self.assertIn("ParseAuctionSaleBody(MailBodyTextCompat(mail), view)", MAIL)
 
     def test_order_mail_leg_settles_before_taking_order_stock(self):
         execute = BUY[BUY.index("bool GuildOrderTakeMailAction::Execute("):]

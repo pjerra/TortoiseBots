@@ -299,6 +299,16 @@ inline bool PlayerSharingQuestCompat(Player* player)
     return player && !player->GetPlayerSharingQuest().IsEmpty();
 }
 
+inline Object* QuestGiverObjectCompat(Player* bot, ObjectGuid giverGuid)
+{
+    return bot ? ObjectAccessor::GetWorldObject(*bot, giverGuid) : nullptr;
+}
+
+inline bool AcceptQuestByGiverCompat(Player* bot, Quest const* quest, ObjectGuid giverGuid)
+{
+    return bot && AcceptQuestDirectCompat(bot, quest, ObjectAccessor::GetWorldObject(*bot, giverGuid));
+}
+
 inline bool SyncQuestWithPlayerAllowedCompat() { return false; }
 
 template <class TriggerType>

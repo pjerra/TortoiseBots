@@ -195,7 +195,14 @@ W3_KEYS = {
     "trigger": "quest share",
     "value": "quest reward",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS)
+# W8 (auction house): ah sell/list, ah buy, ah cancel.
+W8_KEYS = {
+    "strategy": "",
+    "action": "ah, ah bid, ah cancel",
+    "trigger": "",
+    "value": "",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

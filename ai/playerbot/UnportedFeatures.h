@@ -15,9 +15,8 @@
     X(LootObjects, "loot objects", "the loot of a creature or game object as a public member (1.12 Creature::loot); ForeverCore keeps loot per looting player") \
     X(ItemDisplayId, "item display id", "ItemPrototype::DisplayInfoID, used to find consumables that look the same; the mirror prototype has no display id") \
     X(ItemUsePacket, "item use packet", "imbue / use an item by queueing a CMSG_USE_ITEM packet with a packed guid (1.12 layout)") \
-    X(ItemSlotOfPrototype, "equip slot of an item prototype", "Player::FindEquipSlot on a prototype; ForeverCore asks about an Item") \
+    X(ItemSlotOfPrototype, "equip slot of an item prototype", "Player::FindEquipSlot on a prototype; ForeverCore asks about an Item (W6b gear generation uses GearSetPolicy::InventoryTypeFitsSlot)") \
     X(Companions, "companions", "spells with the summon critter effect (1.12 SPELL_EFFECT_SUMMON_CRITTER); ForeverCore has no such effect") \
-    X(Auction, "auction (type only)", "AuctionEntry named in the declarations of the auction code (RandomBotFacade.h, ItemUsageValue.h); the slice never reaches that code and ForeverCore has AuctionPosting instead") \
     X(IncomingLoot, "incoming: loot vote and roll won", "the loot vote (another roller's vote) and loot roll won packets (1.12 layouts) are not fed on ForeverCore; the start of a group-loot roll and the bot's own vote are real since slice 9 (the roll list of Player::GetLootRolls is polled, the vote goes through HandleLootRoll, greed only), the loot window is read from the core's Loot object") \
     X(IncomingTaxi, "incoming: taxi", "activate taxi and taxi node packets") \
     X(IncomingGroup, "incoming: group and party", "group invite, uninvite, set leader, party command, ready check, summon request and duel request packets") \
@@ -64,7 +63,7 @@
     X(SpellData, "spell data (icon ids, item charges)", "SpellEntry::SpellIconID and Item::GetSpellCharges(index) on the mirror spell entry; ForeverCore reads them from SpellInfo / ItemEffectEntry") \
     X(BossTactics, "boss and raid tactics", "boss-specific hold, taunt, heal, position and spawn rules (BossTacticsActions, Fankriss, Patchwerk, Viscidus, Solnius, meet-and-heal holds, boss stands, boss tactics and dungeon plan tables); the link stand-ins answer: no boss rule applies (R6B)") \
     X(TravelMgr, "travel and exploration", "TravelMgr, the travel node map, paths, travel targets and destinations, area levels, quest travel table, taxi node zones; nothing is loaded and every query answers: no route, no target (R6B)") \
-    X(RandomItems, "random item tables", "RandomItemMgr (stat weights, food picks), the item usage reagent and vendor tables; no table is built (R6B)") \
+    X(RandomItems, "random item tables", "RandomItemMgr food picks, reagent and vendor tables; gear generation is handled by W6b TbGearGen + GearSetPolicy") \
     X(BotTexts, "bot texts and help", "PlayerbotTextMgr and PlayerbotHelpMgr (ai_playerbot_texts, help topics); the text lookups answer the text name itself (R6B)") \
     X(TalentSpecs, "talent spec tables", "TalentSpec and ClassSpecs, the premade talent specs and their checks; no spec is read (R6B)") \
     X(PoolServices, "pool and hire services", "the random-bot pool tables (RandomBotFacade caches, RandomBotAccountRegistry, AhBotSellerAccount), HireLifecycle, ClaimLifecycle, BotGearService (pinned cap), AltBotService (autonomous alts), the activity leases and the guild order store (TortoiseBots::GuildOrders); answers: not a pool bot, not hired, not claimed, no pinned cap, not autonomous, no order (R6B)") \
@@ -77,7 +76,7 @@
     /* --- slice 2, packages V2 and I2 (merged: one row per feature) --- */ \
     X(LootBoost, "loot: bot-only drop boost", "the extra roll of green and blue drops for random (pool) bots (ApplyBotLootBonus); a host bot is never a random bot. Item loot itself (the window, the take through the autostore handler, quest and free-for-all copies) and the group-loot roll are real since slice 9") \
     X(LootTables, "loot tables: shared drop maps", "the drop maps built from the loot templates through the shared value context (entry loot list, item drop list, loot chance); the shared context is not built on ForeverCore. The templates themselves (creature, game object, reference, item) are copied from the world database since slice 9 and read by the chest check") \
-    X(GatheringLoot, "loot: gathering and skinning", "gathering a herb or ore node, skinning a corpse, pickpocketing and fishing loot, and the loot templates of those types; a chest is opened and looted since slice 9 (a game object chest in its ready state)") \
+    X(GatheringLoot, "loot: gathering and skinning", "skinning a corpse, pickpocketing, fishing and disenchant loot, and the loot templates of those types; chests (slice 9) and herb/ore nodes (W7) are opened and looted") \
     X(ItemUseOther, "item use except food and drink", "using an item on a target, an item, a game object or a lock, potions, scrolls, gems, quest-giver items, hearthstone, bandages, mounts: only food and drink on the bot itself go through the core's own item cast (slice 2, I2)") \
     /* --- slice 3, porting worker (threat/tank, pull, orders) --- */ \
     X(DebugVisuals, "debug spell visuals", "the spell visuals the `debug threat` strategy plays on a bot (Unit::SendPlaySpellVisual(kit id) on T plays a SpellVisualKit.dbc index; ForeverCore sends a spell visual with a target and its own numbering); debug aid only, nothing is shown (slice 3)") \
