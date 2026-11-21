@@ -43,6 +43,7 @@
 #include "Player.h"
 #include "Unit.h"
 
+#include "playerbot/AiFactory.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/PullStartPolicy.h"
@@ -787,6 +788,16 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     // before its first tick, so the kit it runs is the one the role asks for.
     if (auto role = Roles().find(guid); role != Roles().end() && ai->GetForcedRole() != role->second)
         ApplyKit(ai, role->second, true);
+    else if (ai->GetForcedRole() == 0 && Roles().find(guid) == Roles().end())
+    {
+        bool const hasTankKit = ai->ContainsStrategy(STRATEGY_TYPE_TANK);
+        if (bot->GetGroup() || hasTankKit)
+        {
+            bool const shouldTank = (AiFactory::GetPlayerRoles(bot) & BOT_ROLE_TANK) != 0;
+            if (shouldTank != hasTankKit)
+                ApplyKit(ai, 0, false);
+        }
+    }
 
     // R6 (review item 5): a run's leader out of combat with no pull under way never follows its commander (ShouldHoldLead): it holds where it stands.
     if (RunLeads().count(guid))

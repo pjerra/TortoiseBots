@@ -221,6 +221,7 @@ Unit* PartyMemberToHeal::Calculate()
     std::map<ObjectGuid, uint32> const incomingHeals =
         ai->GetAiObjectContext()->GetValue<std::map<ObjectGuid, uint32>>("incoming heals")->Get();
     std::size_t healerOrdinal = 0;
+    std::size_t totalHealers = 1;
 
     // One bounded raid-roster pass, including human healers. No nearby-world scan
     // per candidate. Focused healers own their assignment rather than a raid slot.
@@ -233,9 +234,12 @@ Unit* PartyMemberToHeal::Calculate()
             !peer->HasStrategy("focus heal targets", BotState::BOT_STATE_COMBAT) &&
             !player->HasUnitState(UNIT_STAT_CAN_NOT_REACT) && !player->IsNonMeleeSpellCasted(true) &&
             player->GetMaxPower(POWER_MANA) &&
-            100.0f * player->GetPower(POWER_MANA) / player->GetMaxPower(POWER_MANA) > sPlayerbotAIConfig.lowMana &&
-            player->GetObjectGuid() < bot->GetObjectGuid())
-            ++healerOrdinal;
+            100.0f * player->GetPower(POWER_MANA) / player->GetMaxPower(POWER_MANA) > sPlayerbotAIConfig.lowMana)
+        {
+            ++totalHealers;
+            if (player->GetObjectGuid() < bot->GetObjectGuid())
+                ++healerOrdinal;
+        }
     }
 
     // t1105h J1: a member a needs_aura unit attacks (a Shade of Jin'do, only in his fight) is weighted up. Only on a
@@ -363,7 +367,7 @@ Unit* PartyMemberToHeal::Calculate()
     CapHuntedBoost(candidates, bands);
     std::sort(candidates.begin(), candidates.end(), [&](HealingCandidate const& left, HealingCandidate const& right)
         { return HealingPriority(left, right, bands); });
-    return targets.at(candidates[HealingAssignment(candidates, bands, healerOrdinal)].guid);
+    return targets.at(candidates[HealingAssignment(candidates, bands, healerOrdinal, totalHealers)].guid);
 }
 
 bool PartyMemberToHeal::CanHealPet(Pet* pet)

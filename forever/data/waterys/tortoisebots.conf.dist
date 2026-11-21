@@ -1397,6 +1397,10 @@ AiPlayerbot.RaidHealerSeatsByClass = 0
 # generic bot behaviour/timing/threshold; ports unchanged
 AiPlayerbot.RaidTankHealerAssist = 0
 
+# --- SubstituteTank ---
+# Allow a paladin or druid to take the tank role when a bot party has no warrior tank and another healer is present.
+AiPlayerbot.SubstituteTank = 1
+
 # --- RaidReactions ---
 # generic bot behaviour/timing/threshold; ports unchanged
 AiPlayerbot.RaidReactions = 0

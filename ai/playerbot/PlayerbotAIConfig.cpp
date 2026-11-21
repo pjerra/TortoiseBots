@@ -135,6 +135,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunRaidBossRules = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidBossRules", false);
     raidHealerSeatsByClass = config.GetBoolDefault("AiPlayerbot.RaidHealerSeatsByClass", false);
     raidTankHealerAssist = config.GetBoolDefault("AiPlayerbot.RaidTankHealerAssist", false);
+    substituteTank = config.GetBoolDefault("AiPlayerbot.SubstituteTank", true);
     dungeonRunRaidHealerGuard = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidHealerGuard", false);
     interruptIgnoresThreat = config.GetBoolDefault("AiPlayerbot.InterruptIgnoresThreat", false);
     interruptAllowStun = config.GetBoolDefault("AiPlayerbot.InterruptAllowStun", false);
