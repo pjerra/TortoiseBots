@@ -190,6 +190,27 @@ Item* FindBagItemByEntry(Player* bot, uint32_t itemId)
     return best;
 }
 
+// Items the order can hand over: the backpack and the bags' contents, never the bags the bot wears (GetItemCount counts those too,
+// so a Linen Bag order was "done" while every bag was equipped).
+uint32_t BagItemCount(Player* bot, uint32_t itemId)
+{
+    if (!bot || !itemId)
+        return 0;
+    uint32_t total = 0;
+    auto add = [&](Item* item)
+    {
+        if (item && item->GetEntry() == itemId)
+            total += item->GetCount();
+    };
+    for (uint8_t slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        add(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+    for (uint8_t bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+        if (Bag* pBag = bot->GetBagByPos(bag))
+            for (uint32_t slot = 0; slot < pBag->GetBagSize(); ++slot)
+                add(pBag->GetItemByPos(slot));
+    return total;
+}
+
 class HostGatherCraftProvider final : public IGatherCraftProvider
 {
     struct PendingStep
@@ -233,7 +254,7 @@ public:
 
         if (auto it = _pending.find(botGuidLow); it != _pending.end() && it->second.itemId == itemId)
         {
-            uint32_t const afterCount = bot->GetItemCount(itemId, false);
+            uint32_t const afterCount = BagItemCount(bot, itemId);
             bool const gained = afterCount > it->second.beforeCount;
             bool const wasCraft = it->second.isCraft;
             _pending.erase(it);
@@ -246,7 +267,7 @@ public:
             return false;
         }
 
-        uint32_t const beforeCount = bot->GetItemCount(itemId, false);
+        uint32_t const beforeCount = BagItemCount(bot, itemId);
         if (uint32_t const spellId = tbhost::prof::FindCraftSpellForItem(bot, itemId))
         {
             std::string stateOut, detail;
@@ -526,7 +547,7 @@ public:
             return false;
         }
 
-        uint32_t const beforeCount = bot->GetItemCount(itemId, false);
+        uint32_t const beforeCount = BagItemCount(bot, itemId);
         std::vector<ObjectGuid> attachments;
         attachments.push_back(deliveryItem->GetGUID());
         std::string failReason;
@@ -535,7 +556,7 @@ public:
             outReason = failReason.empty() ? "mail-failed" : failReason;
             return false;
         }
-        if (bot->GetItemCount(itemId, false) >= beforeCount)
+        if (BagItemCount(bot, itemId) >= beforeCount)
         {
             outReason = "mail-refused";
             return false;
@@ -817,7 +838,7 @@ void TickBotOrder(Player* bot)
     }
 
     OrderRecord rec = *ordOpt;
-    uint32_t const inBagsBefore = bot->GetItemCount(rec.itemId, false);
+    uint32_t const inBagsBefore = BagItemCount(bot, rec.itemId);
     tbhost::guild::OrderGoldBudget const budget =
         tbhost::guild::RemainingOrderGoldCap(rec.hasGoldCap, rec.goldCap, rec.ahGoldSpent);
 
@@ -888,7 +909,7 @@ void TickBotOrder(Player* bot)
                 return;
             }
             recordTick(true, false, "");
-            uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
+            uint32_t const inBagsAfter = BagItemCount(bot, rec.itemId);
             uint32_t const moved = (inBagsBefore > inBagsAfter) ? (inBagsBefore - inBagsAfter) : 0;
             if (moved > 0)
             {
@@ -912,7 +933,7 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::Gather:
         {
             bool const ok = GatherCraft().StepGatherOrCraft(botGuidLow, rec.itemId, dec.remaining, reason);
-            uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
+            uint32_t const inBagsAfter = BagItemCount(bot, rec.itemId);
             uint32_t const haveAfter = rec.delivered + inBagsAfter;
             if (ok)
             {
@@ -956,7 +977,7 @@ void TickBotOrder(Player* bot)
                     GiveOrder(rec);
                 }
             }
-            uint32_t const inBagsAfter = bot->GetItemCount(rec.itemId, false);
+            uint32_t const inBagsAfter = BagItemCount(bot, rec.itemId);
             uint32_t const haveAfter = rec.delivered + inBagsAfter;
             std::string const res = ok ? reason : (reason.empty() ? "fail" : reason);
             bool const inProgress = !ok && (res == "walking");
@@ -1179,7 +1200,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         }
 
         tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), true);
-        uint32_t const have = ord->delivered + bot->GetItemCount(ord->itemId, false);
+        uint32_t const have = ord->delivered + BagItemCount(bot, ord->itemId);
         TC_LOG_INFO("tortoisebots", "[W9] order id={} bot={} item={} have={} want={} type={}",
             ord->itemId, bot->GetName(), ord->itemId, have, ord->amount, GuildOrders::TypeToken(ord->type));
 

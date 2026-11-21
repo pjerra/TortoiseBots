@@ -287,5 +287,31 @@ private:
     std::unordered_map<std::uint64_t, GatherPhase> _phaseByBot;
 };
 
+// What the bags gained between two snapshots (entry -> count): the proof a gather worked when the core stored the loot itself
+// before the errand could read the loot window. Returns the first entry that rose and the total rise.
+struct BagGain
+{
+    std::uint32_t itemId = 0;
+    std::uint32_t gained = 0;
+};
+
+inline BagGain BagGainSince(std::unordered_map<std::uint32_t, std::uint32_t> const& before,
+    std::unordered_map<std::uint32_t, std::uint32_t> const& after)
+{
+    BagGain g;
+    for (auto const& [entry, count] : after)
+    {
+        auto it = before.find(entry);
+        std::uint32_t const was = it == before.end() ? 0 : it->second;
+        if (count > was)
+        {
+            if (g.itemId == 0 || entry < g.itemId)
+                g.itemId = entry;
+            g.gained += count - was;
+        }
+    }
+    return g;
+}
+
 } // namespace prof
 } // namespace TortoiseBots

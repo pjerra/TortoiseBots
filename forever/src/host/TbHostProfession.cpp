@@ -341,6 +341,17 @@ void CastGatherOnNode(Player* bot, GameObject* go, uint32_t lockSkillId)
     }
 }
 
+std::unordered_map<uint32_t, uint32_t> BagCounts(Player const* bot)
+{
+    std::unordered_map<uint32_t, uint32_t> counts;
+    bot->ForEachItem(ItemSearchLocation::Inventory, [&counts](Item* item)
+    {
+        counts[item->GetEntry()] += item->GetCount();
+        return ItemSearchCallbackResult::Continue;
+    });
+    return counts;
+}
+
 bool LootOpenNodeWithStats(Player* bot, ObjectGuid const& guid, uint32_t& outItemId, std::string& outItemName, uint32_t& outGained)
 {
     outItemId = 0;
@@ -409,6 +420,8 @@ struct GatherErrandState
     uint32_t itemsGained = 0;
     uint32_t gainedItemId = 0;
     std::string gainedItemName;
+    bool bagsTaken = false;
+    std::unordered_map<uint32_t, uint32_t> bagsBefore;
 };
 
 struct CraftErrandState
@@ -860,6 +873,11 @@ void TickErrands(Player* bot, uint32_t diffMs)
                 break;
 
             case TortoiseBots::prof::GatherErrandAction::CastGather:
+                if (!g.bagsTaken)
+                {
+                    g.bagsBefore = BagCounts(bot);
+                    g.bagsTaken = true;
+                }
                 if (go)
                     CastGatherOnNode(bot, go, g.lockSkillId);
                 if (g.orderSeq != 0)
@@ -877,7 +895,20 @@ void TickErrands(Player* bot, uint32_t diffMs)
                 uint32_t itemId = 0;
                 std::string itemName;
                 uint32_t gained = 0;
-                if (LootOpenNodeWithStats(bot, g.nodeGuid, itemId, itemName, gained) && gained > 0)
+                bool looted = LootOpenNodeWithStats(bot, g.nodeGuid, itemId, itemName, gained) && gained > 0;
+                if (!looted && g.bagsTaken)
+                {
+                    TortoiseBots::prof::BagGain const bagGain = TortoiseBots::prof::BagGainSince(g.bagsBefore, BagCounts(bot));
+                    if (bagGain.gained > 0)
+                    {
+                        looted = true;
+                        gained = bagGain.gained;
+                        itemId = bagGain.itemId;
+                        if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId))
+                            itemName = proto->GetName(LOCALE_enUS);
+                    }
+                }
+                if (looted)
                 {
                     g.itemsGained += gained;
                     if (g.gainedItemId == 0)

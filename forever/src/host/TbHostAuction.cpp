@@ -228,7 +228,11 @@ std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctio
         wname.clear();
 
     WorldPackets::AuctionHouse::AuctionListBucketsResult bucketsResult;
-    house->BuildListBuckets(bucketsResult, bot, wname, 0, MAX_LEVEL, AuctionHouseFilterMask::None,
+    // The core keeps only buckets whose quality bit is in the mask (the client always sends every quality); None matched nothing.
+    EnumFlag<AuctionHouseFilterMask> const everyQuality = AuctionHouseFilterMask::PoorQuality | AuctionHouseFilterMask::CommonQuality
+        | AuctionHouseFilterMask::UncommonQuality | AuctionHouseFilterMask::RareQuality | AuctionHouseFilterMask::EpicQuality
+        | AuctionHouseFilterMask::LegendaryQuality | AuctionHouseFilterMask::ArtifactQuality;
+    house->BuildListBuckets(bucketsResult, bot, wname, 0, MAX_LEVEL, everyQuality,
         std::nullopt, {}, 0, 0, {});
 
     std::string const lowerSub = LowerAscii(nameSubstr);
