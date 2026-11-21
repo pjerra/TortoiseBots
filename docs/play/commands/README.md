@@ -75,7 +75,7 @@ A refused `.bot` line answers `TortoiseBots: <verb>: refused <code>: <text>`.
 
 | Group | Examples |
 | :--- | :--- |
-| Bots and groups | `.tb login <character> [master\|free]`, `.tb logout`, `.tb group` / `.tb ungroup`, `.tb free <bot> on\|off`, `.tb status`, `.tb where <bot>` |
+| Bots and groups | `.tb login <character> [master\|free]`, `.tb logout`, `.tb group` / `.tb ungroup`, `.tb layout <leader>`, `.tb free <bot> on\|off`, `.tb status`, `.tb where <bot>` |
 | Pool and population | `.tb pool create\|start\|stop\|status\|population\|prune` |
 | Dungeon plans and runs | `.tb plan list`, `.tb plan <plan> info`, `.tb plan <plan> check <character>`, `.tb plan reload`, `.tb run start\|stop\|pause\|resume\|status\|events` |
 | Commander bonds | `.tb commander status [<commander>]`, `.tb cmd ...`, `.tb master ...`, `.tb party ...` |
@@ -84,6 +84,8 @@ A refused `.bot` line answers `TortoiseBots: <verb>: refused <code>: <text>`.
 | Test helpers | `.tb level`, `.tb train`, `.tb mount`, `.tb cast`, `.tb additem`, `.tb setskill`, `.tb knock`, `.tb speed` |
 
 The full row-by-row list, with every argument and refusal, is `forever/docs/TB-COMMANDS.md`. `.tb plan` and `.tb run` are documented on the [Dungeon Run Leader](../dungeon-run-leader.md) page; `.tb los` (the server line-of-sight query) is on the [Line of Sight Query](los-query.md) page.
+
+Forever raid groups: with `TortoiseBots.Raid.Enable = 1` the host's party commands (`.tb login` with a master, `.tb group`, `.tb party`) form raids up to 40 bots, and `.tb layout <leader>` puts a raid into subgroups with a main tank, off-tanks and tank healers. See `forever/docs/RAID-GROUPS.md`.
 
 ## Addon channel (TBM)
 
