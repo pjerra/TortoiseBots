@@ -227,6 +227,8 @@ namespace ai
                 creators["hunter dead zone step out"] = [](PlayerbotAI* ai) { return new HunterDeadZoneStepOutTrigger(ai); };
                 creators["feign death"] = [](PlayerbotAI* ai) { return new FeignDeathTrigger(ai); };
                 creators["scatter shot on snare target"] = [](PlayerbotAI* ai) { return new ScatterShotSnareTrigger(ai); };
+                creators["scatter shot interrupt"] = [](PlayerbotAI* ai) { return new ScatterShotInterruptTrigger(ai); };
+                creators["scatter shot on enemy healer"] = [](PlayerbotAI* ai) { return new ScatterShotInterruptEnemyHealerSpellTrigger(ai); };
                 creators["multi-shot"] = [](PlayerbotAI* ai) { return new HunterMultiShotTrigger(ai); };
                 creators["intimidation"] = [](PlayerbotAI* ai) { return new IntimidationTrigger(ai); };
                 creators["intimidation on snare target"] = [](PlayerbotAI* ai) { return new IntimidationSnareTrigger(ai); };
@@ -299,6 +301,8 @@ namespace ai
                 creators["scare beast on cc"] = [](PlayerbotAI* ai) { return new CastScareBeastCcAction(ai); };
                 creators["remove feign death"] = [](PlayerbotAI* ai) { return new RemoveFeignDeathAction(ai); };
                 creators["scatter shot"] = [](PlayerbotAI* ai) { return new CastScatterShotAction(ai); };
+                creators["scatter shot on interrupt target"] = [](PlayerbotAI* ai) { return new CastScatterShotInterruptAction(ai); };
+                creators["scatter shot on enemy healer"] = [](PlayerbotAI* ai) { return new CastScatterShotOnEnemyHealerAction(ai); };
                 creators["scatter shot on closest attacker targeting me"] = [](PlayerbotAI* ai) { return new CastScatterShotAction(ai); };
                 creators["intimidation"] = [](PlayerbotAI* ai) { return new IntimidationAction(ai); };
                 creators["deterrence"] = [](PlayerbotAI* ai) { return new DeterrenceAction(ai); };

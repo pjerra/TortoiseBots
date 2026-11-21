@@ -88,6 +88,15 @@ public:
         virtual bool isUseful() override { return HunterHasRangedAmmo(ai) && CastRangedDebuffSpellAction::isUseful(); }
     END_SPELL_ACTION()
 
+    class CastScatterShotInterruptAction : public CastInterruptSpellAction
+    {
+    public:
+        CastScatterShotInterruptAction(PlayerbotAI* ai) : CastInterruptSpellAction(ai, "scatter shot") {}
+        bool isUseful() override { return HunterHasRangedAmmo(ai) && CastInterruptSpellAction::isUseful(); }
+    };
+
+    ENEMY_HEALER_ACTION(CastScatterShotOnEnemyHealerAction, "scatter shot");
+
     class CastScatterShotOnClosestAttackerTargetingMeAction : public CastRangedDebuffSpellAction
     {
     public:
