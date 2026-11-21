@@ -30,6 +30,7 @@
 #include "Loot.h"
 #include "Map.h"
 #include "MapManager.h"
+#include "InstanceScript.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Pet.h"
@@ -273,6 +274,12 @@ fx::CreatureObs ObserveCreature(Ctx& c, Creature* creature)
     o.ccRemainMs = o.polymorphed ? RunCcRemainingMs(creature) : 0;
     o.ccImmune = RunCcImmune(creature);
     o.healthPct = creature->GetHealthPct();
+    // A units hold's wave unit: awake and fighting (the tank takes it), and whom it is on (the lead bot keeps what it holds, the healer's attacker
+    // comes first). The same three reads the Turtle glue makes for its hold units.
+    Unit* const victim = creature->GetVictim();
+    o.engaged = o.hostile && creature->IsInCombat() && victim;
+    o.victimLead = victim == c.lead;
+    o.victimHealer = victim && victim->IsPlayer() && PlayerbotAI::IsHeal(static_cast<Player*>(victim));
     return o;
 }
 
@@ -1105,6 +1112,18 @@ public:
             o.coreState = uint32(best->GetGoState());
         }
         return o;
+    }
+
+    // WC: the instance's own data by id (a hold step done by data: the Disciple of Naralex's state, Mutanus's). A map without an instance
+    // script answers "not known" (eventData -1: the policy pauses and says the map has none).
+    bool InstanceData(std::uint32_t id, long long& out) override
+    {
+        InstanceMap* instance = _c.map ? _c.map->ToInstanceMap() : nullptr;
+        InstanceScript* script = instance ? instance->GetInstanceScript() : nullptr;
+        if (!script)
+            return false;
+        out = static_cast<long long>(script->GetData(id));
+        return true;
     }
 
     // wait_clear: the living hostile creatures within `range` of the lead (HostileCreaturesAround), engaged = in a fight with a party bot or its pet.

@@ -9,6 +9,7 @@
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TbCompatW3.h"
+#include "playerbot/ChatLinkScan.h"
 #include "playerbot/TbCompatWL8.h"
 
 using namespace ai;
@@ -513,7 +514,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         return postedItem;
     }
 
-    int pos = text.find(" ");
+    size_t pos = text.find(" ");
     if (pos == std::string::npos) return false;
 
     std::string priceStr = text.substr(0, pos);
@@ -752,7 +753,7 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
         return bidItems;
     }
 
-    int pos = text.find(" ");
+    size_t pos = text.find(" ");
     if (pos == std::string::npos) return false;
 
     std::string priceStr = text.substr(0, pos);
@@ -875,7 +876,12 @@ bool AhCancelAction::ExecuteCommand(Player* requester, std::string text, Unit* a
     uint32 targetAuctionId = 0;
     if (!cancelAll && std::all_of(text.begin(), text.end(), ::isdigit))
     {
-        targetAuctionId = std::stoul(text);
+        // Non-throwing: a digit run that is not a 32-bit id (overflow) is no such auction, so it gets the not-found reply.
+        if (!ai::chatlink::ParseUnsigned(text, targetAuctionId))
+        {
+            ai->TellPlayerNoFacing(requester, "No matching auctions found to cancel.");
+            return false;
+        }
     }
 
     std::vector<AuctionEntry*> toCancel;

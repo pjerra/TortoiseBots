@@ -30,7 +30,7 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 | Command | What it does |
 |---|---|
 | `.tb status` | module enabled?, number of bot sessions |
-| `.tb create <account> <name> <race id> <class id> [gender]` | a new level 1 character for a bot |
+| `.tb create <account> <name> <race id> <class id> [gender]` | a new level 1 character for a bot. Needs the account-create right (as `.tb pool create`), and only a pool account (`TBPOOL<nnnn>`) or an account named in `TortoiseBots.Create.TestAccounts` takes one; any other account is refused |
 | `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run) |
 | `.tb free <bot> on\|off` | W1: turns the free kit on or off for a logged-in host bot (on: it must have no master and be in no party; off: a masterless bot stands again). Giving a bot a master (`.tb group`, the commander binding, a run) turns free off by itself. A free bot only starts fights with ordinary hostile or neutral NPCs: never a player or anything a player controls, a quest giver, vendor, trainer, flight master, innkeeper, guard or civilian, a kill that lowers a standing, or a mob another player tapped (it still defends itself) |
 | `.tb logout <character>` | the bot leaves |
@@ -44,19 +44,21 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 | `.tb enter <character> <map id>` | what `Map::PlayerCannotEnter` says |
 | `.tb cast <bot> <spell id>` | the core's own cast on the sender's target |
 | `.tb castfail <bot> <spell> <reason> [interrupt]`, `.tb castlog <bot> [on\|off]` | inject / read cast results |
+| `.tb pushback <bot> <ms>` | inject a real `SMSG_SPELL_DELAYED` of the bot's own cast (a pushback): the engine's wait grows by the reported delay on its next tick and the action log writes `SPELL_DELAYED`; 0 or more than 1000 ms adds nothing, as the legacy handler had it |
 | `.tb level <bot> <1-60>`, `.tb train <bot>`, `.tb hurt [<character>] <pct>`, `.tb power [<character>] mana\|rage\|energy <pct>`, `.tb rage <bot> <points>` | test setup (`hurt`/`power` with the name left out act on the sender's own character) |
-| `.tb additem <bot> <item id> [count]`, `.tb use <bot> <item id> [self]` | items |
+| `.tb additem <bot> <item id> [count]`, `.tb removeitem [<character>] <item id> [count]`, `.tb use <bot> <item id> [self]` | items |
 | `.tb spells <bot>`, `.tb spell <id>`, `.tb spellscan`, `.tb item <id>` | what the spell and item mirrors hold |
+| `.tb pool create <n>` / `.tb pool prune [confirm]` / `.tb pool start` / `.tb pool stop` / `.tb pool status` | the bot pool (W0): make n level-1 pool characters at `TortoiseBots.Pool.CreatePerMinute`; list (`confirm` = remove) the unfinished creation rows; start the scheduler (target `TortoiseBots.Pool.TargetOnline`, alternating factions, `LoginsPerMinute` per 60 s, sessions and offline times rolled inside the configured ranges); stop it (every pool bot logs out, 5 per second); one status line (`state= target= online= alliance= horde= size= due= logins_60s= drain= last_pass_us=`, plus `capped by accounts: <n>` when the target is above the accounts left to the pool). One session per account, so the pool holds at most one character of each account; a bot that got a master (`.tb group`, a commander binding) leaves the pool's count and is never logged out by it, and its account is out of the pool's reach until the binding ends (a target above the accounts left shows in `capped by accounts`); a lowered target never logs out a dead or fighting bot |
 | `.tb perf`, `.tb unported` | tick cost window / the unported-feature counters |
 
 ## 3. Reply grammar, version 2 (every tokened reply of the commands below)
 
 Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src/host/TbH3.cpp`, and `.tb grammar selftest` prints fixed records so a client can test its parser against the module.
 
-* **Lines.** A reply line is words separated by ONE space. The first word is the record kind (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `error`). Every other word is `key=value`.
+* **Lines.** A reply line is words separated by ONE space. The first word is the record kind (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `ignore`, `link`, `error`). Every other word is `key=value`.
   The LAST word of every line of a tokened command is `#<token>` (the caller's last word of the command, `#` and 1 to 32 characters of `A-Za-z0-9_.:-`; a malformed one is refused with a note in the error's `msg=`).
 * **Markers.** ONLY `error` is a one-line reply. Every other tokened reply, an order's answer to one bot included, starts with `<command>-begin #token` and ends with `<command>-end count=<lines between> records=<records> ... #token`;
-  the markers are named after the COMMAND (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `grammar`), the data lines between them carry their own record kind as first word. `count=` counts every line between the markers, continuation lines included; `records=` counts the lines that are not continuations. Other totals on an end line (`bots=`, `resting=`) count records.
+  the markers are named after the COMMAND (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `grammar`, `ignore`, `link`, `hear`), the data lines between them carry their own record kind as first word. `count=` counts every line between the markers, continuation lines included; `records=` counts the lines that are not continuations. Other totals on an end line (`bots=`, `resting=`) count records.
 * **Keys** are `[a-z][a-z0-9_]{0,23}`; a key appears at most once per line.
 * **Values are percent-encoded**: every byte outside `[A-Za-z0-9._-]` is written `%XX` (upper-case hex): space `%20`, `=` `%3D`, `:` `%3A`, `;` `%3B`, `,` `%2C`, `#` `%23`, `|` `%7C`, `%` `%25`, `+` `%2B`; `_` stays literal.
   **An empty value is the empty string** (`tgt=`); `none` has no special meaning anywhere and the module never writes `none`, `-1` or `0` for "no value" or "unknown". An unknown number is an omitted key (for example `manapct` is absent for a bot that has no mana). Hex is upper-case only.
@@ -76,7 +78,8 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
   `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt` and `.tb power` also accept the character of the sender (the GM who typed the command), by name; another real player's
   character is refused (`not-a-bot`), and the console can only name host bots. With the name left out, the first word is already the command's own argument (a role, a power
   kind, an id or a percent) and the target is the sender's own character: `.tb role tank`, `.tb equip <item id>`, `.tb learn <spell id>`, `.tb hurt <pct>`, `.tb power mana <pct>`.
-* **In a build without the engine** every command below (and `grammar`) answers `error code=engine-not-built cmd=<command> msg=...`.
+* **In a build without the engine** every command below (and `grammar`) answers `error code=engine-not-built cmd=<command> msg=...`; the one exception is `.tb link` (section 17), which
+  parses text and needs no engine.
 * **GUID text.** `32 uppercase hex digits`: the two 64-bit words of the `ObjectGuid`, high word first, as `tgt=`, `victim=` and `mob=` print them and as `.tb order ... attack|pull` reads them (a leading `0x` is accepted); empty for none. Another way to name a creature: `spawn:<database spawn id>` (a creature of the bot's map).
 
 ### `.tb grammar selftest [#token]`
@@ -176,6 +179,7 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `ord` `lastorder` | `<seq>:<ok\|queued\|fail%3A<code>>` of the last order, and its verb; both empty when the bot has had no order |
 | `co` `nc` | combat and non-combat strategies, a `;` list |
 | `cast_queued` `cast_delivered` `cast_dropped` `cast_pending` | the cast-result queue counters (absent without a bot session) |
+| `delayed` | S2: pushbacks (`SMSG_SPELL_DELAYED` of the bot's own cast) the session accepted since the engine started (absent without a bot session) |
 | `eating` `drinking` | a seated food / drink aura is on the bot |
 | `resting` `rest_why` | the rest gate: `resting=no` means out of the old rest conditions; `rest_why` is a `;` list of `dead`, `combat`, `hp`, `mana`, `eating`, `drinking` |
 | `life` | slice 4: `alive`; `dead` (a body that will release); `awaiting-res` (a body held by the crew rule, or with a resurrection pending); `ghost`; `running-back` (alive again, more than 30 yd from its commander or leader, until it is within 20 yd) |
@@ -192,6 +196,7 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `sick` `dur` `bags` | W1: resurrection sickness is on the bot; the lowest equipped durability percent; free bag slots (`bags` is `bagfree` under the W1 name) |
 | `form` `totems` `imbue` `seal` `paura` | slice 10 (appended after `practice=`): `form` = the shapeshift form id the bot is in (bear 5, cat 1, ghost wolf 16) or `none`; `totems` = `<creature entry>:<seconds left>;...` for the bot's live totems (summon slots 1-4, read only), empty when none; `imbue` = `<enchant id>:<seconds left>` of the main-hand weapon's temporary enchantment, empty when none; `seal` = the aura id of a paladin's own active "Seal of ..." (empty for every other class), `paura` = the aura id of a paladin's own active "... Aura" (empty otherwise). The power type and amount stay in `power` `pw` `pwmax`; no second `power=` is added |
 | `spec` `gear` | W6a (appended after `money=`): `spec` = the bot's active weightscale spec name (empty when none); `gear` = `<slot>:<item>;...` for each occupied equipment slot (`0..18`), empty when none |
+| `chatin` `chatlast` | S1-R2 (appended after `ghostyd=`): `chatin` = `<accepted>:<refused>:<dropped>` of the bot's chat inbox (lines the filter accepted, lines it refused, lines dropped — a full inbox of 16 drops its oldest, and a line dropped on its way to the engine counts here too); `chatlast` = the word of the last decision: `accepted`, `kind`, `addon`, `self`, `not-real`, `length`, `not-authorized`, `other-subgroup`, `no-engine`, `dropped` (empty until a line was judged) |
 
 End line: `state-end count=<lines> records=<records> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
 Slice 4 adds to the end line: `alive=<n> dead=<n> ghost=<n> wipe=yes|no whole=yes|no` (`dead` = bodies; `wipe` = nobody is alive; `whole` = every addressed bot is alive, on its leader's map and within 40 yd of it).
@@ -210,11 +215,12 @@ READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per
 `threat mob=<GUID text> entry=426 name=Redridge%20Brute hppct=100 victim=Mtank target=Mtank size=3 top=Mtank:343;Mdpsb:338;Mdpsc:196 pos=-9091.12,-2001.40,131.00 flee=no #token` (`victim` is the mob's current threat victim, `target` what the mob is fighting, `top` the first three of the sorted list; slice 4 adds `pos=x,y,z` of the mob and `flee=yes|no`: the mob is in the fear state of a flee, or walks to the nearest helper as the core's `DoFleeToGetAssistance` makes it).
 
 ## 6. Test kit
-* Who may be named: a host bot, or the sender's own character (`.tb learn`, `.tb equip`, `.tb hurt`, `.tb power`, and `.tb role`); another real player's character is refused (`not-a-bot`). The name may be left out when the first word is already the command's own argument, and then the command acts on the sender's own character. `.tb itemscan` stays bot-only.
+* Who may be named: a host bot, or the sender's own character (`.tb learn`, `.tb equip`, `.tb removeitem`, `.tb hurt`, `.tb power`, and `.tb role`); another real player's character is refused (`not-a-bot`). The name may be left out when the first word is already the command's own argument, and then the command acts on the sender's own character. `.tb itemscan` stays bot-only.
 * `.tb learn [<character>] <spell id>...`: `learn-begin`, `learn bot=.. spell=<id> result=<learned|known|unknown|invalid|not-learned> name=..`, `learn-end count=.. bot=.. learned=..`. Core path: `SpellMgr::IsSpellValid`, `Player::LearnSpell`. At most 40 ids.
 * `.tb equip [<character>] <item id> [replace]`: `equip-begin`, ONE record `equip bot=.. item=<id> name=.. result=<equipped|refused> [slot=..] why=<empty|EQUIP_ERR_...|unknown-item|bags-full|swap-failed> [code=..] [replaced=yes] [destroyed=<n> destroyed_item=<entry>:<item guid>:<reason>[;...]] [note=..]`, `equip-end count=1 records=1 bot=..`.
   `Player::CanEquipNewItem` then `Player::EquipNewItem`; a taken slot refuses (`EQUIP_ERR_NOT_EQUIPPABLE` or `EQUIP_ERR_NO_SLOT_AVAILABLE`); with `replace` the item is stored in the bags and the core's `Player::SwapItem` puts it on.
   A replaced piece is DESTROYED instead of put in the bags only when the new piece is confirmed in the slot AND the old piece is one of the items the core creates that character with (its start-outfit data: the items the core itself creates the race and class with, the in-memory `PlayerInfo::item` list that `Player::Create` stores, read through the module's guarded access) or poor (grey) quality; it then does not take a bag slot. Everything else goes to the bags as before: quality alone does not make a piece disposable. A quest item is never destroyed: an item in the quest item class, one that bonds as a quest item, one that starts a quest, and one an item objective of a quest still in the character's log (incomplete, complete or failed) requires. Together with a bag that still holds items these go to the bags. `destroyed` is how many pieces were destroyed and `destroyed_item` their `entry:item guid:reason` (`;`-joined, `reason` is `start-outfit` or `poor`; a two-hander can displace the offhand too). Each destroy also writes one INFO server log line naming the character (guid and name), the item (entry, guid, count) and the reason. The displaced piece is remembered by GUID and found again after the swap (the swap can merge a stackable piece into a bag stack and free it: then nothing is destroyed); only a single item is destroyed, a disposable stack of more than one stays in the bags and the record says `note=kept-stack:<entry>x<count> in bags` (also an INFO log line). Only a host bot's pieces, or the sender's own character's when the sender is a GM, are ever destroyed; another real player's character is refused before anything changes.
+* `.tb removeitem [<character>] <item id> [count]`: `removeitem-begin`, ONE record `removeitem bot=.. item=<id> removed=<n> left=<n>`, `removeitem-end count=1 records=1 bot=..`. The inverse of `.tb additem`: it first collects the exact stacks of that item in the target's bags (the backpack, the four worn bags and the reagent bag; never equipped pieces, the worn bags themselves, the bank, the keyring or child-equipment slots, nor a stack in an open trade) and destroys only those, through the core's Item*-based `Player::DestroyItemCount` (quest bookkeeping included), up to `count` (no count = all). Nothing outside the bags can be touched. `left` is what the bags hold after the removal, read again, never computed; it includes a stack in an open trade (the item is still in its bag slot until the trade closes), which `removed` never takes. Only the item named is touched (a quest item goes only when it is the one named). Same targets as `.tb learn` (a host bot or the sender's own character). The count is digits only, 1 to 999999999: `-1`, `+3`, `0`, `3x` and anything longer are `bad-id` (`.tb equip` and `.tb learn` take the same digits-only ids; `.tb additem` keeps the core's own parser). Persistence matches the core's `.additem` (it calls no save): the change is written with the next autosave or at logout. Errors: `missing-bot`, `no-such-player`, `not-a-bot`, `no-character`, `engine-not-built`, `missing-argument`, `bad-id`, `unknown-item`, `unexpected-argument`.
 * `.tb itemscan <bot> <item id>...`: `itemscan-begin`, per id `itemscan bot=.. item=<id> exists=<yes|no> [name= class=<c>:<sc> inv= req= quality= ilvl= canequip=<yes|no> slot=<n, only when yes> why=<empty|EQUIP_ERR_...> [usage=] w=<weight> [worn=<item> wornw=<weight>]]`, `itemscan-end count=.. bot=.. exist=.. canequip=..`.
   `canequip` is the core's check for THIS bot with swap = true. `usage=` is `ItemUsageValue::QueryItemUsageForEquip` (omitted when the bot has no engine), `w=` is `RandomItemMgr::ItemStatWeight`, and `worn=` / `wornw=` are the currently equipped item in the candidate slot and its weight (omitted when the slot is empty or unusable). Nothing is created or changed. The ids come from the data collaborator's list; the module holds no id.
 * `.tb statcensus`: `statcensus-begin`, one `statcensus` record per `ItemStatType` id seen with a non-zero value across all loaded item templates: `statcensus id=<stat id> items=<count> min=<min> max=<max> sample=<item id> samplename=<name> sampleval=<val>`, `statcensus-end count=.. records=.. templates=.. with_stats=.. stat_ids=..`. One pass, read only.
@@ -534,7 +540,7 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
 
-* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`. (`summon` is refused `unsupported` per decision D3.)
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.)
 * **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
 * **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
 * **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
@@ -591,3 +597,152 @@ ignore-end count=1 records=1 verb=list target=Mtank commander=Mcmd ok=1 refused=
 error code=duplicate cmd=ignore msg=the%20list%20already%20names%20that%20mob #i3
 ```
 (The samples are specified, not yet live output: the first boot replaces them.)
+
+## 17. S1-R1: chat links, `.tb link <text> [#token]`
+
+Reads chat text with the parser the bot brain itself reads it with on ForeverCore (`forever/src/compat/TbChatLinkPure.h`, through the
+compat pair `TbCompat_CL.h`), so the console answers exactly what a bot would get. It runs in BOTH builds: no bot, no engine.
+
+`quest=` and `spell=` are the ids the parser answers (0 when the text holds no such link and is no bare number); `items=` is every
+`|Hitem:` link's id and `quals=` every item qualifier in the 1.12 layout the bot's `ItemQualifier` reads, both from the same single scan,
+so a link is never in one list and not the other. The modern item link puts a GEM in field 3, where 1.12 has the random property, so a
+modern link's qualifier is `id:enchant:0` (this port has no random properties); a 1.12 qualifier of 3 or 4 fields keeps its fields, each
+written as a number (1-9 digits, else 0), the same non-throwing rule the bot's `ItemQualifier` reads fields with. Every reply value is
+grammar-encoded, so a space, `=` or newline in the text cannot add a key or split the record. Talent and trade links answer 0 spell (the
+talent RankID lookup and the trade layout are not ported).
+A missing text is `error code=missing-argument`; a malformed `#` word `error code=bad-token`.
+Real output (console, the first boot of the round):
+```
+link-begin #l1
+link quest=0 spell=0 items=19019 quals=19019:0:0 #l1
+link-end count=1 records=1 #l1
+link-begin
+link quest=783 spell=0 items= quals=
+link-end count=1 records=1
+error code=missing-argument cmd=link msg=.tb%20link%20%3Ctext%3E
+error code=bad-token cmd=link msg=a%20token%20is%20%23%20and%201%20to%2032%20of%20A-Za-z0-9_.%3A-%3B%20nothing%20was%20done
+```
+
+## 18. S1-R2: chat commands in, `.tb hear <bot> <sender> whisper|party <text> [#token]`
+
+A real player's whisper or party line reaches a bot through the core's chat hooks (`PlayerScript::OnChat`), not through a packet: the hook
+copies the guids and the text into a queue, and the world thread (the top of `BotMgr::Update`) resolves them, judges the line once per
+receiving bot and queues it in that bot's inbox; the engine hands it to `PlayerbotAI::HandleCommand` at the start of its next tick
+(`forever/src/host/chat/TbChatIn.cpp`, `forever/docs/S1-R2-NOTES.md`). `.tb hear` makes the same line without a client: it
+runs the same rule with the `injected` marker (the sender has no session, so exactly the `not-real` test is skipped), queues it in the same
+inbox, and replies with the verdict — so a console can prove what a bot would do with a line, and the delivery path itself is the live one.
+
+The reply is `hear-begin`, one `hear` record, `hear-end count=1 records=1`:
+`hear bot=Mtank sender=Mcmd kind=whisper verdict=accepted queued=yes #h1`.
+
+The command is engine-only: without the engine there is no brain to deliver to, so `.tb hear` answers `error code=engine-not-built`. A
+target that is not a host bot is `error code=not-a-bot`; a missing text `error code=missing-argument`; a kind other than `whisper` or
+`party` `error code=bad-argument`; an unknown name `error code=no-such-player`.
+
+What a bot accepts (the rule of `host/chat/TbChatInPure.h`, refusal words in this order): a whisper, a party line or a party-leader line
+(delivered as a party line) — not say, yell, raid, guild or channel (`kind`); not addon traffic (`addon`); not its own line (`self`); only
+from a player with a network session, so a bot's own reply never commands another bot (`not-real`); 1 to 255 bytes (`length`); only from
+its master, the commander a binding names, or a member of its own group (`not-authorized`); a party line only to its own subgroup of
+that group, as the core broadcasts it (`other-subgroup`); and only when it has an engine brain (`no-engine`). A line that is accepted and
+never runs (its sender logged out, lost the right to command the bot, or the bot may not act this tick) is counted in `dropped` and
+`chatlast` reads `dropped`. `PlayerbotAI::HandleCommand` keeps its own rules on top (security level, command separator and prefix, `.tb`
+lines are the core's and never reach a bot).
+
+Real output:
+```
+hear-begin #h1
+hear bot=Mtank sender=Mcmd kind=whisper verdict=accepted queued=yes #h1
+hear-end count=1 records=1 #h1
+hear-begin
+hear bot=Mtank sender=Mstranger kind=whisper verdict=not-authorized queued=no
+hear-end count=1 records=1
+```
+
+## 19. S3 (ForeverCore): throws, falls and forced speed
+
+### `.tb knock <bot> <speedXY> <speedZ>` and `.tb speed <bot> run|walk|swim <rate>`
+Test setup, both builds. `.tb knock` calls the core's `Unit::KnockbackFrom` with an origin one yard in front of the bot, so the bot flies
+backwards: the core moves it server-side (a bot has no client to answer `SMSG_MOVE_KNOCK_BACK`), and the host watcher waits the flight out
+(no engine `StopMoving`, no cast) and applies the core's own fall damage from the flight's highest point. `.tb speed` calls
+`Unit::SetSpeedRate`; it shows in the bot's state as `runrate=`.
+
+Both print one `TortoiseBots:` line. The state record's new keys (appended after the P11 keys):
+`thrown=<flights seen>` `falldmg=<health the last landing cost>` `runrate=<run speed rate, two decimals>`.
+
+```
+.tb knock Mwar 10 7
+TortoiseBots: Mwar knocked back (speedXY 10.0, speedZ 7.0); the host watches the flight and lands it with the core's fall damage.
+.tb speed Mwar run 0.5
+TortoiseBots: Mwar run rate is 0.50 (runrate=0.50).
+```
+
+## 20. Place, rally and fall back (issue #15)
+
+`.tb cmd` verbs that move the commander's bound bots into a shape and keep them there. They follow the grammar of section 3 (markers named after the command, `cmd-begin` / `cmd-end`, `count=` / `records=`, one `error` line, the token last) and the record kind is `cmd` (the existing `verb=`, `bot=`, `status=`, `code=`, `msg=`, `seq=` keys). The same words work as a **whisper to one of the commander's own bots** or in the **party/raid chat of the group the commander drives** — the reply lines then arrive as system messages. In chat only a commander's words count, and the bare aliases (`back`, `fallback`, `resume`, `rally`) only when the whole message is the command, so ordinary conversation is never an order; a malformed `place ...` still answers with a typed error.
+
+### `.tb cmd place <shape> [tight|normal|wide] [here|target|cursor] [who...] [#token]`
+
+Shapes: `close` (block two wide), `circle`, `arc` (half ring), `spread` (grid 2.5 gaps apart, no shared splash), `line` (one row, tanks in the middle), `column` (single file), `spear` (wedge, tip first), `arrow` (V, tip first). Gaps: `tight` 2.5 yd, `normal` 4 yd (default), `wide` 8 yd. Anchors:
+
+* `here` (default): the whole shape along the player's facing, its nearest slot 2 yd from the player and never on the player's own spot.
+* `target`: a ring is centred on the player's creature target, its first slot on the player's side (the tank between the player and the target, the group wrapping round it), and is never smaller than the target's size (its combat reach) plus one gap, so no slot is inside the target. The row shapes stand between the player and the target, the tank row one gap clear of the target's size (nearest the target) and the rest behind it on the player's side.
+* `cursor`: waits up to 30 s for the player's minimap ping (`CMSG_MINIMAP_PING`, read only), centres the shape there and faces it away from the player. A ping that never comes is `error code=timeout`, and no bot moves.
+
+Who: a bot's name, `all`, `tanks`, `healers`, `melee`, `ranged`, `dps`, a class (`warrior`, `paladin`, ...), `group1`..`group8`; none = every bot the player commands. The options may come in any order between the shape and the first who word. Slot order is always tanks, melee, ranged, healers (the name breaks a tie), and the front slot goes to the first tank. A ring more than 35 yd wide (a huge target, or more bots than the circumference holds) is refused `too-far`; a slot past 35 yd from the anchor centre is skipped (`too-far` on that bot's row).
+
+Placed bots keep their slot after every fight: the slot is the bot's stay position (movement `stay`, the engine's own `return to stay position` walk, and the module walks a bot back that lost the slot outside combat; the walk-back re-checks the path and gives up after three failed checks, saying so once). `place follow` or `follow` releases it; `attack`, `pull` and `pullback` do not.
+
+A placement replaces only the rows of the bots it addressed: `place line tanks` then `place arc healers` keeps the tanks' rows, and a placement that put nobody leaves the old hold exactly as it was. A bot whose row is replaced or refused is released (`follow`, or only the placement's own stay when it changed commander). No slot ever stands on the commander's own spot: a circle turns by half a slot, the row shapes leave that slot empty (its bot answers `no-slot`).
+
+```
+cmd-begin #t1
+cmd verb=place status=accepted bots=5 shape=circle gap=normal anchor=here radius=6.4 slots=5 #t1
+cmd bot=Mtank verb=place role=tank slot=0 pos=-18.24,-46.69,-21.85 seq=41 #t1
+cmd bot=Mrogue verb=place role=melee slot=1 pos=-16.10,-45.02,-21.85 seq=42 #t1
+cmd bot=Mmage verb=place role=ranged slot=2 pos=-14.50,-48.10,-21.85 seq=43 #t1
+cmd bot=Mpriest verb=place role=healer slot=3 status=refused code=unreachable msg=no%20walkable%20path%20to%20the%20slot #t1
+cmd bot=Mdps verb=place role=melee slot=4 pos=-21.90,-48.10,-21.85 seq=44 #t1
+cmd-end count=6 records=6 verb=place lead=Mtank bots=5 placed=4 refused=1 #t1
+```
+(The markers are the command's (`cmd`), as for every `.tb cmd` verb; the sample lines are specified, not yet live output.)
+
+A `cursor` placement answers in two replies with the same token: at once `cmd verb=place status=waiting anchor=cursor shape=.. gap=.. wait=30` and `cmd-end ... pending=yes`; then, on the ping, the normal `status=accepted` reply, or `error code=timeout cmd=cmd msg=no%20minimap%20ping%20within%2030%20s%3A%20nothing%20was%20moved #token`. A later command from the commander (any `.tb cmd`, `.tb order` or place/chat command) ends the waiting request first: its token gets `error code=cancelled cmd=cmd msg=a%20later%20command%20from%20the%20commander%20replaced%20this%20cursor%20request`, so a ping can never complete a command the commander replaced.
+
+Per-bot refusals (`status=refused code=`): `no-character` (a bound bot not in the world), `not-in-group` (it no longer answers to this commander), `dead`, `other-map`, `no-ground` (no floor, or outside the map), `unreachable` (no walkable path), `too-far`, and the order queue's own codes (`no-engine`, `queue-full`, ...). Typed errors (`error code= cmd=cmd msg=`): `needs-player-sender`, `not-bound`, `missing-argument`, `bad-argument` (an unknown shape/gap/anchor word, or a bad `rally` word), `duplicate` (a gap or anchor word twice), `unexpected-argument`, `bad-target` (a who name that is not one of your bots; a player/bot as the `target` anchor), `no-selection` (the `target` anchor with no target), `other-map` (the target is elsewhere), `teleporting`, `no-bots` (the selection matches nobody), `too-far`, `timeout`, `no-fallback`.
+
+### `.tb cmd place follow [who...] [#token]`
+
+Releases the selected bots (`all` when no who word): each gets the engine's `follow` order and leaves the hold. `cmd verb=place status=accepted follow=yes bots=..`, one `cmd bot=.. follow=yes status=queued seq=..` per bot, `cmd-end ... released= refused=`.
+
+### `.tb cmd rally here [#token]`
+
+The fall-back point is where the player stands (memory, map and instance included). Nothing moves.
+```
+cmd verb=rally status=accepted lead=Mcmd pos=-9100.80,-2005.30,132.90 map=1 inst=0 #r1
+cmd-end count=1 records=1 verb=rally set=1 #r1
+```
+
+### `.tb cmd fallback` (`fall back`, `back`) [#token]
+
+Every bot the player commands drops its target (the `come` order resets the AI) and runs to the rally point — or to the player's position when no `rally here` was given or the stored point is on another map/instance — and forms up there in the normal gap: tanks in a front row facing the threat, melee just behind them, ranged and healers on an arc behind (the healers at its ends). With a stored rally point the front is the direction from the point towards the commander (the side the group came from, so the tanks are nearest the enemy); without one it is the commander's facing. Nobody stands on the rally point, and no slot is on the commander's own spot. The formation holds (the same stay slot and walk-back as `place`) until `attack`, `pull`, `pullback`, `resume` or `follow`; a replaced fall back releases every bot whose old row it dropped. The reply says where it formed and whether the point came from memory or the player:
+```
+cmd verb=fallback status=accepted bots=5 gap=normal from=memory rally=-9098.20,-2001.10,132.90 slots=5 #f1
+cmd bot=Mtank verb=fallback role=tank slot=0 pos=-9098.20,-1993.10,132.90 seq=51 #f1
+...
+cmd-end count=7 records=7 verb=fallback lead=Mtank bots=5 placed=5 refused=0 #f1
+```
+`attack`, `pull` and `pullback` end the hold by themselves (the order is carried out as usual and no fall back walks the bots anywhere afterwards); `follow` ends it and returns the bots to following.
+
+### `.tb cmd resume [#token]`
+
+Ends a fall back and puts the bots that formed up back on follow (`cmd verb=resume`, one row per bot, `cmd-end ... released= refused=`). Before a historical row turns into an order the bot is re-checked: if it no longer answers to this commander it is `status=refused code=not-in-group` and its row is dropped (only the placement's stay is cleared, never an order to the old commander's bot). A `place` hold is not touched — that is `place follow` or `follow`. With no fall back standing: `error code=no-fallback cmd=cmd msg=the%20bots%20are%20not%20holding%20a%20fall%20back ...`.
+
+The add-on "Positions" tab (shape, gap, who, Here/Target/At cursor buttons) is **not** part of this round; it stays an add-on round of its own.
+
+## 21. Wailing Caverns: the gossip step, the event holds and the end of the plan
+
+The run's plan grammar gains the two step kinds the Wailing Caverns event needed on ForeverCore (`forever/docs/RUN-WC-NOTES.md`).
+
+* **`gossip <npc entry> <bot> <option>`** (a plan's `gossip` row: the policy sends it with the row's `param` as the menu number): the bot walks to the NPC and talks through the two packets a client sends — `CMSG_GOSSIP_HELLO`, then `CMSG_GOSSIP_SELECT_OPTION` with the menu id and the option id of the line picked from the menu the core built (`GossipOrder::MatchOption`: a vendor, trainer, flight, bank or other service line is never picked). Only the NPC a `gossip` step of the bot's own run names, or an entry in `AiPlayerbot.BotGossipNpcs`, is talked to: anything else is refused `not-allowed` before a packet is sent. The answer text is the menu line; a menu without the named option is `no-option: No option N. The menu offers: ...`, no NPC `no-npc`. The `run` record's `event kind=gossip` marks the end. On this core a database menu option carries sender = the menu id and action = the order index, so the option's own type is what tells a service line (`MakeGossipOption`): a make-inn, auction, battlemaster, stablemaster, banker, mailbox or talent line is refused, a plain line beside them is picked.
+* **`hold` rows ended by instance data** (`flags` 8, `entry` = the data id, `param` = the value) and **by its units** (`entries` + `radius`: every unit dead after one was seen awake): `eventData` is the instance's own `GetData(entry)` (no instance script: -1, and the hold pauses saying so), a units hold lists the living creatures of `entries` within the radius with `eventDown` counting the dead. Wailing Caverns reads data 4 = 4 for the gate: the four Fanglords' own smart_scripts set Enc 0-3 = 3 on death, and the instance then sets data 4 = SPECIAL. It does not wait on data 5: on the pinned core Mutanus's smart_script sets boss state 4 (type 1), not instance data 5, so data 5 never reads 3; his boss step's own kill read ends the run. An escort hold with `flags` 65536 (`kPlanFlagEscortNpc`) reads the event's start NPC (the gossip row before it) around the lead bot: dead or gone for 10 s it stops the event with that reason, once (the run goes back to the gossip, so a respawned Disciple can start it again); alive but still within 5 yd of his stand after 30 s of the hold with no wave up, the gossip did not start the escort and the run stops with that reason too. The gossip looks back to the nearest gossip row through the holds between them (`EventGossipStartStep`). A hold unit's x, y and its engaged/victim reads are filled, so the ranged stand on the side the event comes from.
+

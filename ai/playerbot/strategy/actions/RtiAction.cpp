@@ -3,6 +3,7 @@
 #include "RtiAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/strategy/values/RtiTargetValue.h"
+#include "playerbot/TbCompatCH.h"
 
 using namespace ai;
 
@@ -86,6 +87,6 @@ bool MarkRtiAction::Execute(Event& event)
     // Auto mark always places Skull, never the bot's own focus mark: the
     // other marks are the player's to hand out.
     int index = RtiTargetValue::GetRtiIndex("skull");
-    group->SetTargetIcon(index, target->getObjectGuid());
+    SetTargetIconCompat(group, index, target->getObjectGuid(), bot->getObjectGuid());
     return true;
 }

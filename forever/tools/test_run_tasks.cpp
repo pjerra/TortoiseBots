@@ -410,6 +410,58 @@ static void TestExecutorTexts()
     CHECK(std::fabs(p.y - 1.5f) < 0.001f && std::fabs(p.z - 3.0f) < 0.001f);
 }
 
+// WC: the gossip task of the Naralex event. The act is over at once (the core runs the choice inside the select handler), the payload is the menu line
+// the matcher picked, and the two refusal texts are GossipOrder's own.
+static void TestGossip()
+{
+    tk::TaskRec rec = tk::MakeRec(tk::Kind::Gossip, false, false, 0, 3.0f);
+    CHECK(rec.state.kind == RC::TaskKind::Gossip);
+    tk::Obs o;
+    o.botAvailable = true;
+    o.inRange = true;
+    o.distance = 3.0f;
+    tk::Step begin = tk::Advance(rec, o, 500);
+    CHECK(begin.what == tk::Do::BeginAct);              // in range: the gossip act starts at once
+    tk::NoteActStart(rec, true, false, "", "");
+    rec.gossipPicked = "Let the event begin!";
+    tk::Step step = tk::Advance(rec, o, 500);
+    CHECK(step.what == tk::Do::Succeed && step.message == "Let the event begin!");
+    // not started yet: the walk stage keeps it waiting, the act stage answers once it started
+    tk::TaskRec walk = tk::MakeRec(tk::Kind::Gossip, false, false, 0, 12.0f);
+    tk::Obs far;
+    far.distance = 12.0f;
+    tk::Step s2 = tk::Advance(walk, far, 500);
+    CHECK(s2.what != tk::Do::Succeed);
+    // the grammar the policy sends: "gossip <entry> <bot> <index>"
+    od::Parsed p = Parse("gossip 3678 Mtank 1");
+    CHECK(p.verb == od::Verb::Gossip && p.task.verb == tk::Verb::Gossip && p.task.bot == "Mtank");
+    CHECK(p.task.gossip.entry == 3678 && p.task.gossip.byIndex && p.task.gossip.index == 1);
+    Parse("gossip 3678 Mtank 0", false);
+    Parse("gossip 3678 Mtank 16", false);
+    Parse("gossip 0 Mtank 1", false);
+    Parse("gossip 3678 1", false);
+    p = Parse("gossip 3678 Mtank \"Let the event begin!\"");
+    CHECK(!p.task.gossip.byIndex && p.task.gossip.text == "Let the event begin!");
+    // the matcher: by index (1-based), and a service line is never picked
+    std::vector<TortoiseBots::GossipOrder::Option> menu(2);
+    menu[0].text = "Let the event begin!";
+    menu[0].sender = 202;
+    menu[1].text = "Let me browse your goods.";
+    menu[1].icon = 1;             // GOSSIP_OPTION_VENDOR
+    TortoiseBots::GossipOrder::Request byIndex;
+    byIndex.byIndex = true;
+    byIndex.index = 1;
+    TortoiseBots::GossipOrder::Match m = TortoiseBots::GossipOrder::MatchOption(menu, byIndex);
+    CHECK(m.ok && m.listIndex == 0);
+    byIndex.index = 2;
+    m = TortoiseBots::GossipOrder::MatchOption(menu, byIndex);
+    CHECK(!m.ok && m.code == std::string(TortoiseBots::GossipOrder::kCodeNoOption));
+    TortoiseBots::GossipOrder::Request byText;
+    byText.text = "begin";
+    m = TortoiseBots::GossipOrder::MatchOption(menu, byText);
+    CHECK(m.ok && m.listIndex == 0);
+}
+
 static void TestGossipAndCommanderP6()
 {
     namespace GO = ::TortoiseBots::GossipOrder;
@@ -465,6 +517,29 @@ static void TestGossipAndCommanderP6()
     s = tk::Advance(emptyLoot, lo, RC::kTaskTickMs);
     CHECK(s.what == tk::Do::Fail && s.code == RC::kCodeFailed && s.message.find(tk::LootEmptyText()) != std::string::npos);
 
+    // The core's database options carry sender = menu id and action = order index, so the option's TYPE is what tells a service line:
+    // a binder (inn), auctioneer, battlemaster and stablemaster line are all refused, a plain line beside them is picked.
+    std::vector<GO::Option> db = {
+        tk::MakeGossipOption("Make this inn your home", 5, false),     // GossipOptionNpc::Binder
+        tk::MakeGossipOption("I want to browse your goods", 10, false), // Auctioneer
+        tk::MakeGossipOption("I wish to fight in the battlegrounds", 9, false),
+        tk::MakeGossipOption("I want to stable my pet", 12, false),
+        tk::MakeGossipOption("Let the event begin!", 0, false),
+    };
+    GO::Request svc;
+    svc.entry = 3678;
+    svc.bot = "Mtank";
+    svc.byIndex = true;
+    for (std::uint32_t i = 1; i <= 4; ++i)
+    {
+        svc.index = i;
+        GO::Match const sm = GO::MatchOption(db, svc);
+        CHECK(!sm.ok && sm.code == GO::kCodeNoOption);
+    }
+    svc.index = 5;
+    GO::Match const okm = GO::MatchOption(db, svc);
+    CHECK(okm.ok && okm.listIndex == 4);
+
     // Verb names:
     CHECK(std::string(tk::VerbName(tk::Verb::Gossip)) == "gossip");
     CHECK(std::string(tk::VerbName(tk::Verb::Use)) == "use");
@@ -473,6 +548,7 @@ static void TestGossipAndCommanderP6()
 int main()
 {
     TestGrammar();
+    TestGossip();
     TestMethod();
     TestLock();
     TestDoor();
@@ -482,6 +558,7 @@ int main()
     TestChestCastBudget();
     TestTargets();
     TestExecutorTexts();
+    TestGossip();
     TestGossipAndCommanderP6();
     std::printf("test_run_tasks: %d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;

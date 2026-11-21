@@ -19,6 +19,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbPlace.h"
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/run/TbRunFacts.h"
@@ -858,6 +859,21 @@ uint8 WantedRole(ObjectGuid bot)
     return role == Roles().end() ? uint8(0) : role->second;
 }
 
+bool ReleasePlaceStay(Player* bot, uint32 seq)
+{
+    if (!bot)
+        return false;
+    OrderStatus const last = LastOrder(bot->GetGUID());
+    if (last.seq != seq || last.verb != "come")
+        return false;      // another order owns the bot now: only the placement's own stay is ours to clear
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    ai->Reset();
+    ai->SetMovementStrategy("follow");
+    return true;
+}
+
 // ---- O6: the queue as a call (TbOrdersApi.h) ----
 
 namespace
@@ -1086,6 +1102,10 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!RequireBuilt(handler, args, "order"))
         return false;
     Player* sender = SenderPlayer(handler);
+
+    // A later command from the commander ends a pending `place ... cursor` request.
+    if (sender)
+        place::CancelPending(sender->GetGUID(), handler);
 
     // `party` takes the next word as the leader unless that word is already the verb.
     bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party" && !IsVerb(Lower(args.w[1]));

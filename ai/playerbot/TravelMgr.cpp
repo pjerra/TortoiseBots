@@ -26,6 +26,9 @@
 #include "Formulas.h"
 #include "playerbot/TbCompatW2.h"
 #include "playerbot/TbCompatW3.h"
+#include "playerbot/TbCompatWL4.h"
+#include "playerbot/TbCompatWL4n.h"
+#include "playerbot/policy/travel/TravelGraphPolicy.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -39,7 +42,7 @@ PlayerTravelInfo::PlayerTravelInfo(Player* player)
     AiObjectContext* context = ai->GetAiObjectContext();
 
     position = player;
-    homebind = WorldPosition(player->GetHomeBindLocation());
+    homebind = WorldPosition(PlayerHomeBindWL4(player));
 
     team = player->GetTeam();
     level = player->GetLevel();
@@ -51,10 +54,10 @@ PlayerTravelInfo::PlayerTravelInfo(Player* player)
     currentSkill[SKILL_FISHING] = player->GetSkillValue(SKILL_FISHING);
     currentSkill[SKILL_SKINNING] = player->GetSkillValue(SKILL_SKINNING);
 
-    skillMax[SKILL_MINING] = player->GetSkillMax(SKILL_MINING);
-    skillMax[SKILL_HERBALISM] = player->GetSkillMax(SKILL_HERBALISM);
-    skillMax[SKILL_FISHING] = player->GetSkillMax(SKILL_FISHING);
-    skillMax[SKILL_SKINNING] = player->GetSkillMax(SKILL_SKINNING);
+    skillMax[SKILL_MINING] = PlayerSkillMaxWL4(player, SKILL_MINING);
+    skillMax[SKILL_HERBALISM] = PlayerSkillMaxWL4(player, SKILL_HERBALISM);
+    skillMax[SKILL_FISHING] = PlayerSkillMaxWL4(player, SKILL_FISHING);
+    skillMax[SKILL_SKINNING] = PlayerSkillMaxWL4(player, SKILL_SKINNING);
 
     money = player->GetMoney();
 
@@ -183,12 +186,12 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
         // quest searches came back with an empty list, although 15-42 giver
         // (npc, quest) pairs whose quest-level window a sampled level 1-4 bot fits
         // sit within 1500 yd of it.
-        if ((int32)info.GetLevel() < quest->GetMinLevel() ||
+        if ((int32)info.GetLevel() < QuestMinLevelWL4(quest) ||
             (quest->GetMaxLevel() && (int32)info.GetLevel() > quest->GetMaxLevel()))
             return false;
 
         if (OnMap(info.getPosition())) //CanTakeQuest will check required conditions which will fail on a different map.
-            if (quest->GetRequiredCondition())          //So we skip this quest for now.
+            if (QuestHasRequiredConditionWL4(quest))    //So we skip this quest for now.
                 return false;
 
         if (!info.HasFocusQuest())
@@ -205,14 +208,14 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
             }
 
             //Do not try to pick up dungeon/elite quests in instances without a group.
-            if ((quest->GetType() == QUEST_TYPE_ELITE || quest->GetType() == QUEST_TYPE_DUNGEON) && !info.GetBoolValue("can fight boss"))
+            if ((QuestIsEliteWL4(quest) || QuestIsDungeonWL4(quest)) && !info.GetBoolValue("can fight boss"))
                 return false;
         }
     }
     else
     {
         //Do not try to hand-in dungeon/elite quests in instances without a group.
-        if ((quest->GetType() == QUEST_TYPE_ELITE || quest->GetType() == QUEST_TYPE_DUNGEON) && !info.GetBoolValue("can fight boss"))
+        if ((QuestIsEliteWL4(quest) || QuestIsDungeonWL4(quest)) && !info.GetBoolValue("can fight boss"))
         {
             if (IsOverWorld(info.getPosition()))
                 return false;
@@ -230,7 +233,7 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
         {
             AreaTableEntry const* takerArea = takerPoint->GetArea();
             AreaTableEntry const* botArea = info.getPosition().GetArea();
-            bool const takerElsewhere = takerArea && botArea && takerArea->Id != botArea->Id;
+            bool const takerElsewhere = takerArea && botArea && AreaIdWL4(takerArea) != AreaIdWL4(botArea);
             if (!ai::QuestTakerTripFits((int)QuestLevelCompat(quest),
                 takerElsewhere, info.GetLevel(), info.IsMasterlessRandom()))
                 return false;
@@ -286,8 +289,8 @@ bool QuestRelationTravelDestination::IsActive(Player* bot, const PlayerTravelInf
         // offers any quest; this quest itself may sit behind an unfinished
         // chain (Virulence 60113 behind 367) and never show in the menu.
         if (Quest const* quest = sObjectMgr.GetQuestTemplate(GetQuestId()))
-            if (!bot->SatisfyQuestPreviousQuest(quest, false) || !bot->SatisfyQuestPrevChain(quest, false) ||
-                bot->GetLevel() < quest->GetMinLevel())
+            if (!bot->SatisfyQuestPreviousQuest(quest, false) || !PlayerSatisfyQuestPrevChainWL4(bot, quest) ||
+                bot->GetLevel() < QuestMinLevelWL4(quest))
                 return false;
 
         std::string const backoffKey = ai::QuestGiverBackoffKey(GetEntry(), GetQuestId());
@@ -298,7 +301,7 @@ bool QuestRelationTravelDestination::IsActive(Player* bot, const PlayerTravelInf
 
     if (GetRelation() == 0)
     {
-        if (!bot->GetMap()->IsContinent() && (GetClosestPoint(bot)->GetMapId() != bot->GetMapId())) //This gives issues for bot->CanTakeQuest so stop here.
+        if (!MapIsContinentWL4(bot->GetMap()) && (GetClosestPoint(bot)->GetMapId() != bot->GetMapId())) //This gives issues for bot->CanTakeQuest so stop here.
             return false;
 
         if (forceThisQuest)
@@ -380,7 +383,7 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
             return false;
     }
 
-    if (info.IsInRaid() != (GetQuestTemplate()->GetType() == QUEST_TYPE_RAID))
+    if (info.IsInRaid() != QuestIsRaidWL4(GetQuestTemplate()))
         return false;
 
 
@@ -392,10 +395,10 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
 
         CreatureInfo const* cInfo = GetCreatureInfo();
 
-        if (cInfo->npc_flags & UNIT_NPC_FLAG_VENDOR && GetQuestTemplate()->ReqItemId[GetObjective()])
+        if (CreatureNpcFlagsWL4(cInfo) & UNIT_NPC_FLAG_VENDOR && QuestReqItemIdWL4(GetQuestTemplate(), GetObjective()))
         {
-            ItemPrototype const* proto = GetItemProtoByIdCompat(GetQuestTemplate()->ReqItemId[GetObjective()]);
-            if (GetQuestTemplate()->ReqItemCount[GetObjective()] * proto->BuyPrice > info.GetMoney()) //Need more money.
+            ItemPrototype const* proto = GetItemProtoByIdCompat(QuestReqItemIdWL4(GetQuestTemplate(), GetObjective()));
+            if (QuestReqItemCountWL4(GetQuestTemplate(), GetObjective()) * proto->BuyPrice > info.GetMoney()) //Need more money.
                 return false;
 
             skipKillableCheck = true;
@@ -411,16 +414,16 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
             // parks the purpose instead. Vendors are exempt (buying needs no
             // fight); owned/hired bots keep today's behaviour. Matches the donor
             // mod-playerbots shape (its +4 mob check) at the pool's +1 number.
-            if (cInfo && !ai::QuestObjectiveLevelFits((int)cInfo->level_max, info.GetLevel(),
+            if (cInfo && !ai::QuestObjectiveLevelFits((int)CreatureLevelMaxWL4(GetEntry()), info.GetLevel(),
                 info.IsMasterlessRandom(),
-                (cInfo->npc_flags & UNIT_NPC_FLAG_VENDOR) != 0))
+                (CreatureNpcFlagsWL4(cInfo) & UNIT_NPC_FLAG_VENDOR) != 0))
                 return false;
 
-            if (cInfo && (int)cInfo->level_max - (int)info.GetLevel() > 4)
+            if (cInfo && (int)CreatureLevelMaxWL4(GetEntry()) - (int)info.GetLevel() > 4)
                 return false;
 
             //Do not try to hand-in dungeon/elite quests in instances without a group.
-            if (cInfo->rank > CREATURE_ELITE_NORMAL)
+            if (CreatureRankWL4(cInfo) > CREATURE_ELITE_NORMAL)
             {
                 if (!IsOverWorld(info.getPosition()) && info.getPosition().GetMapId() != 609 && !info.GetBoolValue("can fight boss"))
                     return false;
@@ -432,18 +435,18 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
 
     if (!forceThisQuest)
     {
-        if (!skipKillableCheck && GetQuestTemplate()->GetType() == QUEST_TYPE_ELITE && !info.GetBoolValue("can fight elite"))
+        if (!skipKillableCheck && QuestIsEliteWL4(GetQuestTemplate()) && !info.GetBoolValue("can fight elite"))
             return false;
 
         //Do not try to do dungeon/elite quests in instances without a group.
-        if ((GetQuestTemplate()->GetType() == QUEST_TYPE_ELITE || GetQuestTemplate()->GetType() == QUEST_TYPE_DUNGEON || GetQuestTemplate()->GetType() == QUEST_TYPE_RAID) && !info.GetBoolValue("can fight boss"))
+        if ((QuestIsEliteWL4(GetQuestTemplate()) || QuestIsDungeonWL4(GetQuestTemplate()) || QuestIsRaidWL4(GetQuestTemplate())) && !info.GetBoolValue("can fight boss"))
         {
             if (!IsOverWorld(info.getPosition()))
                 return false;
         }
 
         //Do not try to do pvp quests in bg's (no way to travel there).
-        if (GetQuestTemplate()->GetType() == QUEST_TYPE_PVP)
+        if (QuestIsPvpWL4(GetQuestTemplate()))
         {
             if (!IsOverWorld(info.getPosition()))
                 return false;
@@ -481,7 +484,7 @@ bool QuestObjectiveTravelDestination::IsActive(Player* bot, const PlayerTravelIn
 
         CreatureInfo const* cInfo = GetCreatureInfo();
 
-        if (!skipKillableCheck && cInfo->npc_flags & UNIT_NPC_FLAG_VENDOR && GetQuestTemplate()->ReqItemId[GetObjective()] &&
+        if (!skipKillableCheck && CreatureNpcFlagsWL4(cInfo) & UNIT_NPC_FLAG_VENDOR && QuestReqItemIdWL4(GetQuestTemplate(), GetObjective()) &&
             !GuidPosition(HIGHGUID_UNIT, GetEntry()).IsHostileTo(bot))
         {
             skipKillableCheck = true;
@@ -518,8 +521,8 @@ bool QuestObjectiveTravelDestination::IsActive(Player* bot, const PlayerTravelIn
 std::string QuestObjectiveTravelDestination::GetTitle() const {
     std::ostringstream out;
 
-    if (GetQuestTemplate()->ReqItemCount[GetObjective()] > 0)
-        out << "loot " << ChatHelper::formatItem(GetItemProtoByIdCompat(GetQuestTemplate()->ReqItemId[GetObjective()]), 0, 0) << " from";
+    if (QuestReqItemCountWL4(GetQuestTemplate(), GetObjective()) > 0)
+        out << "loot " << ChatHelper::formatItem(GetItemProtoByIdCompat(QuestReqItemIdWL4(GetQuestTemplate(), GetObjective())), 0, 0) << " from";
     else if (GetEntry() > 0)
         out << "kill";
     else
@@ -580,9 +583,9 @@ bool RpgTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (point)
     {
         AreaTableEntry const* area = point->GetArea();
-        uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+        uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area)) : 0;
         if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
-            (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
+            (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(area)))))
             return false;
 
         int32 destAreaLevel = point->GetAreaLevel();
@@ -608,9 +611,9 @@ bool RpgTravelDestination::IsPossible(const PlayerTravelInfo& info) const
         if (!orderMailbox && info.IsMasterlessRandom() && sPlayerbotAIConfig.leaveOutgrownZones &&
             destAreaLevel > 0 && destAreaLevel + 10 < (int32)info.GetLevel())
         {
-            uint32 destZoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+            uint32 destZoneId = area ? (AreaZoneIdOrSelfWL4(area)) : 0;
             AreaTableEntry const* destZone = destZoneId ? GetAreaEntryByAreaID(destZoneId) : nullptr;
-            if (!destZone || !(destZone->Flags & AREA_FLAG_CAPITAL))
+            if (!destZone || !AreaHasFlagsCompat(destZone, AREA_FLAG_CAPITAL))
                 return false;
         }
 
@@ -706,16 +709,7 @@ std::string RpgTravelDestination::GetTitle() const
 
 AreaTableEntry const* ZoneTravelDestination::GetArea() const
 {
-    for (uint32 areaid = 0; areaid < sAreaStore.GetMaxEntry(); ++areaid)
-    {
-        AreaTableEntry const* areaEntry = sAreaStore.LookupEntry<AreaEntry>(areaid);
-        if (areaEntry && areaEntry->Id == GetEntry())
-        {
-            return areaEntry;
-        }
-    }
-
-    return nullptr;
+    return AreaDbEntryWL4(GetEntry());
 }
 
 bool ExploreTravelDestination::IsPossible(const PlayerTravelInfo& info) const
@@ -724,22 +718,22 @@ bool ExploreTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (!area)
         return false;
 
-    uint32 zoneId = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
+    uint32 zoneId = AreaZoneIdOrSelfWL4(area);
     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
-        (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
+        (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(area)))))
         return false;
 
-    if (GetLevel() && (uint32)GetLevel() > info.GetLevel() && info.GetLevel() < DEFAULT_MAX_LEVEL)
+    if (GetLevel() && (uint32)GetLevel() > info.GetLevel() && info.GetLevel() < DefaultMaxLevelWL4())
         return false;
 
     if (info.IsMasterlessRandom())
     {
         // Enemy home zone, same rule as WorldPosition::isEnemyHomeZoneFor:
         // sub-areas usually carry no team and inherit their zone's.
-        uint32 areaTeam = area->Team;
+        uint32 areaTeam = AreaTeamWL4(area);
         if (areaTeam == AREATEAM_NONE && AreaZoneIdCompat(area))
-            if (AreaEntry const* zone = AreaEntry::GetById(area->ZoneId))
-                areaTeam = zone->Team;
+            if (AreaTableEntry const* zone = AreaDbEntryWL4(AreaZoneIdCompat(area)))
+                areaTeam = AreaTeamWL4(zone);
         Team const botTeam = info.GetTeam();
         if ((areaTeam == AREATEAM_ALLY && botTeam == HORDE) || (areaTeam == AREATEAM_HORDE && botTeam == ALLIANCE))
             return false;
@@ -755,14 +749,7 @@ bool ExploreTravelDestination::IsActive(Player* bot, const PlayerTravelInfo& inf
 
     AreaTableEntry const* area = GetArea();
 
-    if (area->ExploreFlag == 0xffff)
-        return false;
-    int offset = area->ExploreFlag / 32;
-
-    uint32 val = (uint32)(1 << (area->ExploreFlag % 32));
-    uint32 currFields = bot->GetUInt32Value(PLAYER_EXPLORED_ZONES_1 + offset);
-
-    return !(currFields & val);
+    return !AreaExploredWL4(bot, area);
 }
 
 bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
@@ -776,7 +763,7 @@ bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
         CreatureInfo const* orderInfo = GetCreatureInfo();
         if (!orderInfo)
             return false;
-        if (orderInfo->rank > CREATURE_ELITE_NORMAL && !info.GetBoolValue("can fight elite"))
+        if (CreatureRankWL4(orderInfo) > CREATURE_ELITE_NORMAL && !info.GetBoolValue("can fight elite"))
             return false;
         return ai::GuildOrderEntryUsableFor(info.GetOrderItem(), GetEntry(), info.GetLevel(),
             uint32_t(info.GetTeam()), info.GetOrderZone(), info.GetCurrentSkill(SKILL_SKINNING),
@@ -810,7 +797,7 @@ bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     bool const beginner = botLevel <= 4;
     GrindLevelBand const band = GetGrindLevelBand((uint32)botLevel, info.GetUint8Value("durability"), info.IsMasterlessRandom());
 
-    if (!GrindLevelFits(band, (int32)cInfo->level_max)) //level 5: [3,6] where it used to be [3,3]
+    if (!GrindLevelFits(band, (int32)CreatureLevelMaxWL4(GetEntry()))) //level 5: [3,6] where it used to be [3,3]
         return false;
 
     // Autonomous bots hunt coinless wildlife (wolves, boars, spiders, scorpids)
@@ -818,10 +805,10 @@ bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     // and skins, and they are the open-field hunt that keeps bots out of the
     // humanoid camps. Critters (zero XP) are never worth the walk. Owned bots keep
     // the old copper-only rule, with the beginner allowance they always had.
-    if (!GrindPreyAllowed((int32)cInfo->gold_min, cInfo->type == CREATURE_TYPE_CRITTER, info.IsMasterlessRandom(), beginner))
+    if (!GrindPreyAllowed((int32)CreatureGoldMinWL4(GetEntry()), cInfo->type == CREATURE_TYPE_CRITTER, info.IsMasterlessRandom(), beginner))
         return false;
 
-    if (cInfo->rank > CREATURE_ELITE_NORMAL && !info.GetBoolValue("can fight elite"))
+    if (CreatureRankWL4(cInfo) > CREATURE_ELITE_NORMAL && !info.GetBoolValue("can fight elite"))
         return false;
 
     // Don't send a bot to a grind creature located in a zone far above its level
@@ -829,9 +816,9 @@ bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (point)
     {
         AreaTableEntry const* area = point->GetArea();
-        uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+        uint32 zoneId = area ? (AreaZoneIdOrSelfWL4(area)) : 0;
         if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
-            (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
+            (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(area)))))
             return false;
 
         // Autonomous bots take the measured ceiling (GrindSpotPolicy.h): the first
@@ -917,17 +904,17 @@ bool GrindTravelDestination::IsActive(Player* bot, const PlayerTravelInfo& info)
         // PlayerbotAI.h). Missing rows fail open: a template or faction the
         // core never loaded cannot carry a reputation list, so the core AT_WAR
         // check in IsValidAttackTarget cannot refuse it either.
-        if (FactionTemplateEntry const* preyTemplate = sObjectMgr.GetFactionTemplateEntry(preyInfo->faction))
-            if (FactionEntry const* preyFaction = sObjectMgr.GetFactionEntry(preyTemplate->faction))
-                noReputation = !preyFaction->CanHaveReputation();
+        if (FactionTemplateEntry const* preyTemplate = FactionTemplateWL4(preyInfo->faction))
+            if (FactionEntry const* preyFaction = FactionWL4(FactionOfTemplateWL4(preyTemplate)))
+                noReputation = !FactionCanHaveReputationWL4(preyFaction);
     }
     return GrindHostilityAllowed(botPos.IsHostileTo(preyPos, bot->GetInstanceId()),
         botPos.IsFriendlyTo(preyPos, bot->GetInstanceId()),
-        preyInfo ? preyInfo->npc_flags : 0,
-        preyInfo && preyInfo->xp_multiplier != 0.0f,
+        CreatureNpcFlagsWL4(preyInfo),
+        CreaturePaysXpWL4(preyInfo),
         noReputation,
         preyInfo ? preyInfo->unit_flags : 0,
-        preyInfo ? preyInfo->rank : 0);
+        preyInfo ? CreatureRankWL4(preyInfo) : 0);
 }
 
 std::string GrindTravelDestination::GetTitle() const
@@ -946,9 +933,7 @@ bool BossTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (!info.GetBoolValue("can fight boss"))
         return false;
 
-    CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(GetEntry());
-
-    if ((int32)cInfo->level_max > info.GetLevel() + 3)
+    if ((int32)CreatureLevelMaxWL4(GetEntry()) > info.GetLevel() + 3)
         return false;
 
     const MapEntry* mapEntry = ClosetMapEntry(info.getPosition());
@@ -1091,7 +1076,7 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     {
         skillId = SKILL_FISHING;
 
-        int32 reqSkillValue = sObjectMgr.GetFishingBaseSkillLevel(GetEntry());
+        int32 reqSkillValue = FishingBaseSkillWL4(GetEntry());
 
         if (!reqSkillValue) //no fishable zone or area should be 0
             return false;
@@ -1107,7 +1092,7 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo& info) const
             return false;
 
         skillId = GetRequiredLootSkillCompat(cInfo);
-        uint32 targetLevel = cInfo->level_max;
+        uint32 targetLevel = uint32(CreatureLevelMaxWL4(GetEntry()));
         reqSkillValue = targetLevel < 10 ? 1 : targetLevel < 20 ? (targetLevel - 10) * 10 : targetLevel * 5;
     }
     else
@@ -1128,7 +1113,7 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo& info) const
                 if (SkillByLockType(LockType(lockInfo->Index[i])) > 0)
                 {
                     skillId = SkillByLockType(LockType(lockInfo->Index[i]));
-                    reqSkillValue = std::max((uint32)1, lockInfo->Skill[i]);
+                    reqSkillValue = std::max<uint32>(1, lockInfo->Skill[i]);
                     break;
                 }
         }
@@ -1167,7 +1152,7 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo& info) const
                 GetPurpose() == TravelDestinationPurpose::GatherHerbalism))
         {
             AreaTableEntry const* area = point->GetArea();
-            uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+            uint32 zoneId = area ? (AreaZoneIdOrSelfWL4(area)) : 0;
             if (zoneId)
             {
                 int32 pointZoneLevel = 0;
@@ -1347,7 +1332,7 @@ void TravelTarget::SetStatus(TravelStatus status) {
 static bool GatherNodeAtPoint(PlayerbotAI* ai, WorldPosition const& point)
 {
     AiObjectContext* context = ai->GetAiObjectContext();
-    EntryTravelPurposeMap const& purposes = GAI_VALUE_REF(EntryTravelPurposeMap, "entry travel purpose");
+    EntryTravelPurposeMap const& purposes = TravelEntryPurposeMapCompat();
     uint32 const gatherMask = (uint32)TravelDestinationPurpose::GatherMining | (uint32)TravelDestinationPurpose::GatherHerbalism;
     float const radiusSq = ai::kEmptyGatherSpotRadiusYd * ai::kEmptyGatherSpotRadiusYd;
 
@@ -1458,7 +1443,7 @@ namespace
             return false;
 
         return !GrindLevelFits(GetGrindLevelBand((uint32)info.GetLevel(), info.GetUint8Value("durability"), info.IsMasterlessRandom()),
-            (int32)grind->GetCreatureInfo()->level_max);
+            (int32)CreatureLevelMaxWL4(grind->GetEntry()));
     }
 }
 
@@ -1731,10 +1716,8 @@ TravelState TravelTarget::GetTravelState() {
 
 void TravelMgr::Clear()
 {
-    HashMapHolder<Player>::ReadGuard g(HashMapHolder<Player>::GetLock());
-    HashMapHolder<Player>::MapType& m = sObjectAccessor.GetPlayers();
-    for (HashMapHolder<Player>::MapType::iterator itr = m.begin(); itr != m.end(); ++itr)
-        TravelMgr::SetNullTravelTarget(itr->second);
+    for (Player* player : TravelPlayersCompat())
+        TravelMgr::SetNullTravelTarget(player);
     for (auto& [purpose, entries] : destinationMap)
         for (auto& [id, dests] : entries)
             for (auto& dest : dests)
@@ -1752,6 +1735,11 @@ int32 TravelMgr::GetAreaLevel(uint32 area_id)
     if (lev != areaLevels.end())
         return lev->second;
 
+    // Frozen (ForeverCore, after the boot fill): the cache is read-only from here on, because bot ticks reach this from the parallel
+    // map threads and an unlocked insert would race. An id the fill never saw is an area the DBC does not know: -2, as below.
+    if (areaLevelsFrozen)
+        return -2;
+
     AreaTableEntry const* area = GetAreaEntryByAreaID(area_id);
 
     if (!area)
@@ -1760,26 +1748,45 @@ int32 TravelMgr::GetAreaLevel(uint32 area_id)
         return -2;
     }
 
-    //Get exploration level
-    if (area->AreaLevel)
-    {
-        areaLevels[area_id] = area->AreaLevel;
-        return area->AreaLevel;
-    }
-
-
     int32 level = 0;
     uint32 cnt = 0;
 
-    //Get sub-area's
-    for (uint32 i = 0; i < sAreaStore.GetMaxEntry(); i++)
+    // ForeverCore resolves the parent zone before the DBC level and has no sub-area average: the average reads area levels
+    // that are themselves unknown, and the parent zone is the generated zone level's own fallback (W4 rule 2.3).
+    if (AreaPreferParentCompat())
     {
-        AreaTableEntry const* subArea = GetAreaEntryByAreaID(i);
+        if (AreaZoneIdCompat(area))
+        {
+            areaLevels[area_id] = 0; //Set a temporary value so it wont be counted.
+            int32 const parentLevel = GetAreaLevel(AreaZoneIdCompat(area));
+            if (parentLevel > 0)
+            {
+                areaLevels[area_id] = parentLevel;
+                return parentLevel;
+            }
+        }
 
-        if (!subArea || AreaZoneIdCompat(subArea) != area->Id)
+        int32 const explorationLevel = AreaLevelCompat(area) > 0 ? AreaLevelCompat(area) : -1;
+        areaLevels[area_id] = explorationLevel;
+        return explorationLevel;
+    }
+
+    //Get exploration level
+    if (AreaLevelCompat(area))
+    {
+        areaLevels[area_id] = AreaLevelCompat(area);
+        return AreaLevelCompat(area);
+    }
+
+    //Get sub-area's
+    for (uint32 i = 0; i < AreaStoreCountWL4(); i++)
+    {
+        AreaTableEntry const* subArea = AreaStoreLookupWL4(i);
+
+        if (!subArea || AreaZoneIdCompat(subArea) != AreaIdWL4(area))
             continue;
 
-        int32 subLevel = GetAreaLevel(subArea->Id);
+        int32 subLevel = GetAreaLevel(AreaIdWL4(subArea));
 
         if (!subLevel)
             continue;
@@ -1833,17 +1840,17 @@ bool TravelMgr::TryGetValidatedAreaLevel(uint32 areaId, int32& outLevel) const
             return true;
         }
     }
-    if (area->AreaLevel > 0)
+    if (AreaLevelCompat(area) > 0)
     {
-        outLevel = area->AreaLevel;
+        outLevel = AreaLevelCompat(area);
         return true;
     }
     if (AreaZoneIdCompat(area))
     {
         if (AreaTableEntry const* parent = GetAreaEntryByAreaID(AreaZoneIdCompat(area)))
-            if (parent->AreaLevel > 0)
+            if (AreaLevelCompat(parent) > 0)
             {
-                outLevel = parent->AreaLevel;
+                outLevel = AreaLevelCompat(parent);
                 return true;
             }
     }
@@ -1852,29 +1859,10 @@ bool TravelMgr::TryGetValidatedAreaLevel(uint32 areaId, int32& outLevel) const
 
 void TravelMgr::LoadTaxiNodeZones()
 {
-	if (!taxiNodeZones.empty())
-		return;
-
-	// One pass over the DBC taxi-node table at startup, while the world is
-	// still loading: resolves each node's zone id from loaded terrain and
-	// caches it, so travel ticks never call WorldPosition::GetArea (which
-	// loads that tile's vmap on the world thread). Terrain lookups here are
-	// in-memory grid reads; a node whose tile is not loaded yet records 0
-	// and fails closed at use (no flight through an unknown zone).
-	uint32 const maxNode = sObjectMgr.GetMaxTaxiNodeId();
-	for (uint32 nodeId = 1; nodeId < maxNode; ++nodeId)
-	{
-		TaxiNodesEntry const* node = sObjectMgr.GetTaxiNodeEntry(nodeId);
-		if (!node)
-			continue;
-
-		uint32 zoneId = 0;
-		uint32 areaId = 0;
-		sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, node->map_id, node->x, node->y, node->z);
-		taxiNodeZones[nodeId] = zoneId;
-	}
-
-	sLog.outString(">> Loaded " SIZEFMTD " taxi node zones.", taxiNodeZones.size());
+    // One pass over the DBC taxi-node table at startup, while the world is still loading: each node's zone id is resolved
+    // from loaded terrain and cached, so travel ticks never load a tile on the world thread (no flight through an unknown
+    // zone). ForeverCore builds no cache: taxi legs are refused until W5 (the pair answers an empty cache).
+    TravelLoadTaxiZonesCompat(taxiNodeZones);
 }
 
 uint32 TravelMgr::GetTaxiNodeZoneId(uint32 taxiNodeId) const
@@ -1888,6 +1876,33 @@ void TravelMgr::LoadAreaLevels()
     if (!areaLevels.empty())
         return;
 
+    LoadAreaLevelRows();
+    FreezeAreaLevels();
+}
+
+void TravelMgr::FreezeAreaLevels()
+{
+    // Turtle keeps its lazy cache; ForeverCore fills every area now, on the loading thread, and never writes the map again.
+    if (!TravelPrecomputeAreaLevelsCompat() || areaLevelsFrozen)
+        return;
+
+    uint32 filled = 0;
+    for (uint32 areaId = 0; areaId < AreaStoreCountWL4(); ++areaId)
+    {
+        if (!AreaStoreLookupWL4(areaId))
+            continue;
+
+        GetAreaLevel(areaId);
+        ++filled;
+    }
+
+    areaLevelsFrozen = true;
+    sLog.outString(">> Resolved %u area levels at boot (%u cached in all).", filled, uint32(areaLevels.size()));
+}
+
+void TravelMgr::LoadAreaLevelRows()
+{
+
     // The module migration owns this table. Do not create or bulk-populate it
     // during world startup: a missing migration must be visible, and an empty
     // cache should fall back to the in-memory area-level calculation instead of
@@ -1896,16 +1911,20 @@ void TravelMgr::LoadAreaLevels()
     // AreaTable AreaLevel / parent fallback, so an empty ai_playerbot_zone_level
     // on a stock install does not make EnableRandomTeleports permanently no-op
     // while still avoiding creature scans and DB writes.
-    if (!WorldDatabase.PQuery("SHOW TABLES LIKE 'ai_playerbot_zone_level'"))
+    if (TravelWorldTableMissingCompat("ai_playerbot_zone_level"))
     {
         sLog.outErrorDb("TortoiseBots: ai_playerbot_zone_level is missing; using uncached area levels");
         return;
     }
 
-    auto result = WorldDatabase.PQuery("SELECT id, level FROM ai_playerbot_zone_level");
+    bool schemaMissing = false;
+    auto result = TravelWorldQueryCompat("SELECT `id`, `level` FROM `ai_playerbot_zone_level`", &schemaMissing);
     if (!result)
     {
-        sLog.outString(">> No cached area levels found; using in-memory calculation.");
+        if (schemaMissing)
+            sLog.outErrorDb("TortoiseBots: ai_playerbot_zone_level is missing; using uncached area levels");
+        else
+            sLog.outString(">> No cached area levels found; using in-memory calculation.");
         return;
     }
 
@@ -1917,7 +1936,7 @@ void TravelMgr::LoadAreaLevels()
         areaLevels[fields[0].GetUInt32()] = fields[1].GetInt32();
     } while (result->NextRow());
 
-    sLog.outString(">> Loaded " SIZEFMTD " area levels.", areaLevels.size());
+    sLog.outString(">> Loaded %u area levels.", uint32(areaLevels.size()));
 }
 
 void TravelMgr::LoadQuestTravelTable()
@@ -1929,16 +1948,15 @@ void TravelMgr::LoadQuestTravelTable()
     Clear();
 
     sLog.outString("Loading trainable spells.");
-    GAI_VALUE(trainableSpellMap*, "trainable spell map");
-    GAI_VALUE(std::vector<MountValue>, "full mount list");
+    TravelWarmSharedValuesCompat();
 
     sLog.outString("Loading object locations.");
 
-    EntryGuidps const& guidpMap = GAI_VALUE_REF(EntryGuidps, "entry guidps");
+    EntryGuidps const& guidpMap = TravelEntryGuidpsCompat();
 
     sLog.outString("Finding possible travel destinations.");
 
-    EntryQuestRelationMap const& eMap = GAI_VALUE_REF(EntryQuestRelationMap, "entry quest relation");
+    EntryQuestRelationMap const& eMap = TravelQuestRelationMapCompat();
 
     sLog.outString("Creating travel destinations.");
 
@@ -1979,11 +1997,11 @@ void TravelMgr::LoadQuestTravelTable()
             {
                 for (auto const& guidP : guidpMap.at(entry))
                 {
-                    pointsMap.insert(std::make_pair(guidP.GetRawValue(), guidP));
+                    pointsMap.insert(std::make_pair(GuidKeyWL4(guidP), guidP));
 
                     for (auto tLoc : locs)
                     {
-                        tLoc->AddPoint(&pointsMap.at(guidP.GetRawValue()));
+                        tLoc->AddPoint(&pointsMap.at(GuidKeyWL4(guidP)));
                     }
                 }
             }
@@ -1992,7 +2010,7 @@ void TravelMgr::LoadQuestTravelTable()
 
     sLog.outString("Loading all travel locations.");
 
-    for (auto const& [entry, purpose] : GAI_VALUE_REF(EntryTravelPurposeMap, "entry travel purpose"))
+    for (auto const& [entry, purpose] : TravelEntryPurposeMapCompat())
     {
         std::vector<TravelDestination*> dests;
 
@@ -2036,11 +2054,11 @@ void TravelMgr::LoadQuestTravelTable()
 
         for (auto& guidP : guidpMap.at(entry))
         {
-            pointsMap.insert(std::make_pair(guidP.GetRawValue(), guidP));
+            pointsMap.insert(std::make_pair(GuidKeyWL4(guidP), guidP));
 
             for (auto tLoc : dests)
             {
-                tLoc->AddPoint(&pointsMap.at(guidP.GetRawValue()));
+                tLoc->AddPoint(&pointsMap.at(GuidKeyWL4(guidP)));
             }
         }
     }
@@ -2048,7 +2066,7 @@ void TravelMgr::LoadQuestTravelTable()
     sLog.outString("Loading Explore locations.");
 
     //Explore points
-    for (auto& creatureDataPair : WorldPosition().GetCreaturesNear())
+    for (auto& creatureDataPair : TravelExploreSpawnsCompat())
     {
         ExploreTravelDestination* loc;
 
@@ -2062,18 +2080,23 @@ void TravelMgr::LoadQuestTravelTable()
         if (!area)
             continue;
 
-        if (!area->ExploreFlag)
+        if (!AreaDiscoverableWL4(area))
             continue;
 
         point.FetchArea();
 
-        pointsMap.insert_or_assign(point.GetRawValue(), point);
+        pointsMap.insert_or_assign(GuidKeyWL4(point), point);
 
-        loc = AddDestination<ExploreTravelDestination>(area->Id, TravelDestinationPurpose::Explore);
-        loc->AddPoint(&pointsMap.at(point.GetRawValue()));
+        loc = AddDestination<ExploreTravelDestination>(AreaIdWL4(area), TravelDestinationPurpose::Explore);
+        loc->AddPoint(&pointsMap.at(GuidKeyWL4(point)));
     }
 
     GetPopulatedGrids();
+
+    // The destinations hold their own copies of the points they use: the boot spawn index is no longer needed (ForeverCore
+    // frees it here; Turtle's index is a shared value other code reads, so its release is a no-op).
+    TravelEntryGuidpsReleaseCompat();
+    sLog.outString(">> travel destinations keep %u spawn points.", uint32(pointsMap.size()));
 
     //Analyse log files
     if (sPlayerbotAIConfig.hasLog("log_analysis.csv"))
@@ -2083,44 +2106,15 @@ void TravelMgr::LoadQuestTravelTable()
 
     sLog.outString("Opening log files (previous run retained as .1).");
 
-     //Clear these logs files
-     // Start fresh per-run logs; openLog preserves the previous run.
-    sPlayerbotAIConfig.openLog("zones.csv", "w");
-    sPlayerbotAIConfig.openLog("creatures.csv", "w");
-    sPlayerbotAIConfig.openLog("gos.csv", "w");
-    sPlayerbotAIConfig.openLog("bot_movement.csv", "w");
-    sPlayerbotAIConfig.openLog("bot_pathfinding.csv", "w");
-    sPlayerbotAIConfig.openLog("pathfind_attempt.csv", "w");
-    sPlayerbotAIConfig.openLog("pathfind_attempt_point.csv", "w");
-    sPlayerbotAIConfig.openLog("pathfind_result.csv", "w");
-    sPlayerbotAIConfig.openLog("load_map_grid.csv", "w");
-    sPlayerbotAIConfig.openLog("strategy.csv", "w");
-
-    sPlayerbotAIConfig.openLog("unload_grid.csv", "w");
-    sPlayerbotAIConfig.openLog("unload_obj.csv", "w");
-    sPlayerbotAIConfig.openLog("bot_events.csv", "w");
-    sPlayerbotAIConfig.openLog("travel_map.csv", "w");
-    sPlayerbotAIConfig.openLog("quest_map.csv", "w");
-    // deaths.csv is an event history, not a per-run dump like the files above:
-    // opening it in append keeps every death across a pool reset (and across a
-    // full restart when the file already exists), so before/after comparisons
-    // stay possible.
-    sPlayerbotAIConfig.openLog("deaths.csv", "a");
-    sPlayerbotAIConfig.openLog("player_paths.csv", "w");
-    sPlayerbotAIConfig.openLog("travel_destinations.csv", "w");
-    sPlayerbotAIConfig.openLog("deadzone.csv", "w");
-
+    // Start fresh per-run logs; openLog preserves the previous run.
+    TravelOpenRunLogsCompat();
 
     sLog.outString("Loading travel nodes.");
 
-    sTravelNodeMap.loadNodeStore();
-    sTravelNodeMap.generateAll();
-    sTravelNodeMap.printMap();
-    sTravelNodeMap.printNodeStore();
-    if (sPlayerbotAIConfig.generateTravelNodes)
-        sTravelNodeMap.saveNodeStore();
+    TravelGraphLoadCompat();
 
-    LoadFishLocations();
+    if (TravelFishingCompat())
+        LoadFishLocations();
 
     //Creature/gos/zone export.
     if (sPlayerbotAIConfig.hasLog("creatures.csv"))
@@ -2130,24 +2124,24 @@ void TravelMgr::LoadQuestTravelTable()
         for (auto& creaturePair : WorldPosition().GetCreaturesNear())
         {
             CreatureData const cData = creaturePair->second;
-            CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(cData.creature_id[0]);
+            CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(SpawnCreatureEntryWL4(cData));
 
             if (!cInfo)
                 continue;
 
             WorldPosition point = WorldPosition(SpawnMapIdW2(cData), SpawnXW2(cData), SpawnYW2(cData), SpawnZW2(cData), SpawnOW2(cData));
 
-            std::string name = cInfo->name;
+            std::string name = CreatureNameCompat(cInfo);
             name.erase(remove(name.begin(), name.end(), ','), name.end());
             name.erase(remove(name.begin(), name.end(), '\"'), name.end());
 
             std::ostringstream out;
             out << name << ",";
             point.printWKT(out);
-            out << cInfo->level_max << ",";
-            out << cInfo->rank << ",";
+            out << CreatureLevelMaxWL4(SpawnCreatureEntryWL4(cData)) << ",";
+            out << CreatureRankWL4(cInfo) << ",";
             out << cInfo->faction << ",";
-            out << cInfo->npc_flags << ",";
+            out << CreatureNpcFlagsWL4(cInfo) << ",";
             out << point.GetAreaName() << ",";
             out << std::fixed;
 
@@ -2721,7 +2715,7 @@ void TravelMgr::LoadQuestTravelTable()
         }
     }
 
-    sTerrainMgr.Update(60 * 60 * 24);
+    TravelTerrainTrimCompat();
 }
 
 void TravelMgr::GetPopulatedGrids()
@@ -2737,7 +2731,7 @@ void TravelMgr::GetPopulatedGrids()
         if (!sMapStore.LookupEntry(i))
             continue;
 
-        uint32 mapId = sMapStore.LookupEntry(i)->id;
+        uint32 mapId = MapEntryIdWL4(sMapStore.LookupEntry(i));
 
         GetPopulatedGrids(mapId);
     }
@@ -2745,15 +2739,15 @@ void TravelMgr::GetPopulatedGrids()
 
 void TravelMgr::GetPopulatedGrids(uint32 mapId)
 {
-    EntryGuidps const& guidpMap = GAI_VALUE_REF(EntryGuidps, "entry guidps");
+    EntryGuidps const& guidpMap = TravelEntryGuidpsCompat();
 
     for (auto const& [entry, guidPs] : guidpMap)
     {
         for (auto const& guidP : guidPs)
         {
-            if (guidP.GetMapId() == mapId)
+            if (guidP.WorldPosition::GetMapId() == mapId)
             {
-                populatedGrids[guidP.GetMapId()][guidP.getGridPair().x_coord][guidP.getGridPair().y_coord] = true;
+                populatedGrids[mapId][guidP.getGridPair().x_coord][guidP.getGridPair().y_coord] = true;
             }
         }
     }
@@ -2773,22 +2767,14 @@ bool TravelMgr::IsUnreachablePointRefused(WorldPosition const& pos) const
 
 uint32 TravelMgr::GetFishZone(const AsyncGuidPosition& pos) const
 {
-    uint32 zone, subzone;
-    int32 areaFlag = pos.GetAreaFlag();
-
-    TerrainManager::GetZoneAndAreaIdByAreaFlag(zone, subzone, areaFlag, pos.GetMapId());
-
-    if (sObjectMgr.GetFishingBaseSkillLevel(subzone))
-        return subzone;
-
-    if (sObjectMgr.GetFishingBaseSkillLevel(zone))
-        return zone;
-
-    return 0;
+    return FishingZoneOfWL4(pos);
 }
 
 void TravelMgr::LoadFishLocations()
 {
+    if (!TravelFishingCompat())
+        return;
+
     sLog.outString("Loading Fish locations.");
 
     fishPoints.clear();
@@ -2796,7 +2782,7 @@ void TravelMgr::LoadFishLocations()
     fishSpotsByZone.clear();
     destinationMap[TravelDestinationPurpose::GatherFishing].clear();
 
-    auto result = WorldDatabase.Query("SELECT `name`, `map_id`, `position_x`, `position_y`, `position_z`, `orientation`, `description` FROM `ai_playerbot_named_location` WHERE `name` LIKE 'FISH_LOCATION%'");
+    auto result = TravelWorldQueryCompat("SELECT `name`, `map_id`, `position_x`, `position_y`, `position_z`, `orientation`, `description` FROM `ai_playerbot_named_location` WHERE `name` LIKE 'FISH_LOCATION%'");
 
     if (!result)
     {
@@ -2862,16 +2848,19 @@ void TravelMgr::GetFishLocations(uint32 mapId)
 
 void TravelMgr::SaveFishLocations()
 {
+    if (!TravelFishingCompat())
+        return;
+
     sLog.outString("Saving Fish locations.");
 
     //Save fishpoints sorted by mapId, areaFlag, X, Y.
     fishPoints.sort([](AsyncGuidPosition i, AsyncGuidPosition j) {
-        if (i.GetMapId() != j.GetMapId()) return i.GetMapId() > j.GetMapId();
+        if (i.WorldPosition::GetMapId() != j.WorldPosition::GetMapId()) return i.WorldPosition::GetMapId() > j.WorldPosition::GetMapId();
         if (i.GetAreaFlag() != j.GetAreaFlag()) return i.GetAreaFlag() > j.GetAreaFlag();
         if (i.getX() != j.getX()) return i.getX() > j.getX();
         return i.getY() > j.getY(); });
 
-    WorldDatabase.BeginTransaction();
+    TravelBeginTransactionCompat();
 
     BarGoLink bar(fishPoints.size());
 
@@ -2879,18 +2868,18 @@ void TravelMgr::SaveFishLocations()
 
     for (auto& fishPoint : fishPoints)
     {
-        std::string name = "FISH_LOCATION_" + std::to_string(fishPoint.GetMapId()) + "_" + std::to_string(fishPoint.GetAreaFlag()) + "_" + std::to_string(count);
+        std::string name = "FISH_LOCATION_" + std::to_string(fishPoint.WorldPosition::GetMapId()) + "_" + std::to_string(fishPoint.GetAreaFlag()) + "_" + std::to_string(count);
         std::string description = std::to_string(fishPoint.GetAreaFlag());
         name.erase(remove(name.begin(), name.end(), '\''), name.end());
 
         WorldDatabase.PExecute("INSERT INTO `ai_playerbot_named_location` (`name`, `map_id`, `position_x`, `position_y`, `position_z`, `orientation`, `description`) VALUES ('%s', '%d', '%f', '%f', '%f', '%f', '%s')"
-            , name.c_str(), fishPoint.GetMapId(), fishPoint.getX(), fishPoint.getY(), fishPoint.getZ(), fishPoint.getO(), description.c_str());
+            , name.c_str(), fishPoint.WorldPosition::GetMapId(), fishPoint.getX(), fishPoint.getY(), fishPoint.getZ(), fishPoint.getO(), description.c_str());
 
         bar.step();
         count++;
     }
 
-    WorldDatabase.CommitTransaction();
+    TravelCommitTransactionCompat();
 }
 
 WorldPosition* TravelMgr::GetFishSpot(WorldPosition start, bool onlyNearestGrid)
@@ -3040,8 +3029,8 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     AreaTableEntry const* posArea = position.GetArea();
     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones && posArea)
     {
-        uint32 posZoneId = AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id;
-        if (PlayerbotAIConfig::IsIsolatedCustomZone(posZoneId) || PlayerbotAIConfig::IsIsolatedCustomZone(posArea->Id))
+        uint32 posZoneId = AreaZoneIdOrSelfWL4(posArea);
+        if (PlayerbotAIConfig::IsIsolatedCustomZone(posZoneId) || PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(posArea)))
             return false;
     }
 
@@ -3054,7 +3043,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
         (uint32)TravelDestinationPurpose::GatherFishing |
         (uint32)TravelDestinationPurpose::Explore;
     if ((purposeFlag & levellingPurposes) && posArea &&
-        ai::IsNoLevellingZone(AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id))
+        ai::IsNoLevellingZone(AreaZoneIdOrSelfWL4(posArea)))
         return false;
 
     // A beginner vendor trip is the one RPG errand a level 1-4 bot may make (see
@@ -3108,8 +3097,8 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     if (beginnerGrind || beginnerQuest)
     {
         AreaTableEntry const* botArea = info.getPosition().GetArea();
-        uint32 const botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : botArea->Id) : 0;
-        uint32 const pointZoneId = posArea ? (AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id) : 0;
+        uint32 const botZoneId = botArea ? AreaZoneIdOrSelfWL4(botArea) : 0;
+        uint32 const pointZoneId = posArea ? (AreaZoneIdOrSelfWL4(posArea)) : 0;
         WorldPosition const& home = info.GetHomebind();
         bool const homeOnSameMap = home.GetMapId() == position.GetMapId();
         if (!ai::BeginnerValleyLeashAllows(true, botZoneId, pointZoneId, homeOnSameMap,
@@ -3197,7 +3186,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
         // capital-idle leaves pass 0 and skip this entirely.
         if (excludeZoneId)
         {
-            uint32 pointZoneId = posArea ? (AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id) : 0;
+            uint32 pointZoneId = posArea ? (AreaZoneIdOrSelfWL4(posArea)) : 0;
             if (pointZoneId == excludeZoneId)
                 return false;
         }
@@ -3206,7 +3195,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
         TortoiseBots::GuildOrders::OutgrownFloorApplies(info.IsOrderMode()) &&
         info.IsMasterlessRandom() && info.GetLevel() > 10)
     {
-        uint32 pointZoneId = posArea ? (AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id) : 0;
+        uint32 pointZoneId = posArea ? (AreaZoneIdOrSelfWL4(posArea)) : 0;
         if (pointZoneId)
         {
             int32 pointZoneLevel = 0;
@@ -3392,7 +3381,7 @@ PartitionedTravelList TravelMgr::GetOrderZonePartitions(const WorldPosition& cen
             if (found != bestByBand.end() && distance >= std::get<2>(found->second))
                 continue;
             AreaTableEntry const* area = position->GetArea();
-            uint32 pointZoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+            uint32 pointZoneId = area ? (AreaZoneIdOrSelfWL4(area)) : 0;
             if (pointZoneId != zoneId)
                 continue;
             if (!IsLocationLevelValid(*position, info, purposeFlag))
@@ -3575,6 +3564,13 @@ void TravelMgr::LoadMapTransfers()
     {
         for (auto& [endNode, path] : *startNode->GetLinks())
         {
+            // A link the A* refuses (taxi and transport legs, teleports on ForeverCore) is no way to get to the other map: with a
+            // transfer for it MapTransDistance would call a cross-continent goal reachable and the bot would re-pick it on
+            // every pick (ai/playerbot/policy/travel/TravelGraphPolicy.h).
+            if (!ai::travel_graph::MapTransferWanted(TravelLinkUsableCompat(uint8(path->getPathType())),
+                startNode->getPosition()->GetMapId(), endNode->getPosition()->GetMapId()))
+                continue;
+
             AddMapTransfer(*startNode->getPosition(), *endNode->getPosition(), path->getDistance());
         }
     }

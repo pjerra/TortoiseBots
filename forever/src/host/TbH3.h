@@ -37,6 +37,7 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      /
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb threat <bot|party [leader]> [#token]
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb equip <bot> <item id> [replace] [#token]
+bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail args);  // .tb removeitem [<character>] <item id> [count] [#token]
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb itemscan <bot> <item id>... [#token]
 bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb statcensus [#token]
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb gear <bot|party [leader]> upgrade [#token]

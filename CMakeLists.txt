@@ -38,10 +38,11 @@ option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SL
 # needs (the R4C helpers, the legacy ini reader, the unported-feature counters) are not compiled into it. TbScripts.cpp and TbEngineBrain.cpp
 # answer `.tb engine` / `.tb unported` with "the engine is not built in" and never name them without the option.
 # Slice 3 (M): the nine group-fight commands (host/TbH3, TbOrders, TbPartyState, TbTestKit) are engine-facing code; the default build compiles ONE stub
-# (host/TbH3Off.cpp) that gives their "the engine is not built in" answers, and the slice build compiles the real four instead.
+# (host/TbH3Off.cpp) that gives their "the engine is not built in" answers, and the slice build compiles the real four instead. S1-R2's `.tb hear`
+# follows the same rule (host/chat/TbChatCmd.cpp: it names the engine's reply types); the chat hook itself (TbChatIn.cpp) is in both builds and inert here.
 if(NOT TORTOISEBOTS_SLICE1)
-  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported)\\.cpp$")
-  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit)\\.cpp$")
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported|TbCompat_WL4)\\.cpp$")
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit|chat/TbChatCmd)\\.cpp$")
 else()
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/TbH3Off\\.cpp$")
 endif()
@@ -68,12 +69,12 @@ set_target_properties(tortoisebots
     FOLDER "src/modules/TortoiseBots")
 
 if(TORTOISEBOTS_SLICE1)
-  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the newest list (forever/SLICE-W1.txt: the slice-9 list plus the W1 world-life files),
+  # Slice 2 (R3): the option keeps its name TORTOISEBOTS_SLICE1 (the macro of the host code and the build scripts) and reads the newest list (forever/SLICE-W4.txt: the W1 list plus the W4 travel files),
   # which holds every file of SLICE1.txt .. SLICE5.txt (the plan loader DungeonPlanMgr.cpp, BossTacticsMgr.cpp; forever/docs/RUN-S5-P-NOTES.md), the L9 files of
   # slice 9 (LootRollAction.cpp, ItemUsageValue.cpp; forever/docs/SLICE9-L-NOTES.md; the doors package adds no legacy file), and every file of the slice-8, slice-10
   # and slice-11 lists that integration batch 2 brought in (mage, rogue, give item, the 40 druid/paladin/shaman files, hunter, warlock, pets:
   # forever/docs/SLICE8-K-NOTES.md, SLICE10-K-NOTES.md, SLICE11-NOTES.md). It is the newest list; SLICE5, SLICE8, SLICE10 and SLICE11 are subsets of it.
-  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE-W1.txt)
+  set(TB_SLICE_LIST ${CMAKE_CURRENT_SOURCE_DIR}/forever/SLICE-W4.txt)
   set(TB_SLICE_PREINCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/compat/botpch_forever.h)
   # Re-run CMake when the list changes.
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TB_SLICE_LIST})
@@ -96,7 +97,7 @@ if(TORTOISEBOTS_SLICE1)
       continue()
     endif()
     if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${line})
-      message(FATAL_ERROR "TortoiseBots: forever/SLICE-W1.txt names ${line}, which does not exist")
+      message(FATAL_ERROR "TortoiseBots: forever/SLICE-W4.txt names ${line}, which does not exist")
     endif()
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()

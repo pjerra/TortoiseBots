@@ -71,6 +71,7 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { re
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "threat"); }
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "learn"); }
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "equip"); }
+bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "removeitem"); }
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "itemscan"); }
 bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "statcensus"); }
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "gear"); }
@@ -98,6 +99,14 @@ namespace cmd
 bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 {
     return h3::NotBuilt(handler, args, "cmd");
+}
+}
+namespace chatin
+{
+// S1-R2: `.tb hear` needs an engine brain to deliver to; the hook itself is inert in this build (TbChatIn.cpp).
+bool HandleHear(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    return h3::NotBuilt(handler, args, "hear");
 }
 }
 }

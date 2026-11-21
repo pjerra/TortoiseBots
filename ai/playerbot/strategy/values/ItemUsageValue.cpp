@@ -17,6 +17,7 @@
 #include "../../../../runtime/policy/ah/AhReadModelPolicy.h"
 #include "../../../../runtime/policy/ah/AhSellPolicy.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/ChatLinkScan.h"
 
 using namespace ai;
 
@@ -74,16 +75,13 @@ ItemQualifier::ItemQualifier(std::string qualifier) : itemId(0), enchantId(0), r
     if (numbers.empty())
         return;
 
-    if (!std::all_of(numbers[0].begin(), numbers[0].end(), ::isdigit))
-        return;
+    itemId = ai::chatlink::FieldValue(numbers[0]);
 
-    itemId = stoi(numbers[0]);
+    if (numbers.size() > 1)
+        enchantId = ai::chatlink::FieldValue(numbers[1]);
 
-    if (numbers.size() > 1 && !numbers[1].empty())
-        enchantId = stoi(numbers[1]);
-
-    if (numbers.size() > 2 && !numbers[2].empty())
-        randomPropertyId = stoi(numbers[2]);
+    if (numbers.size() > 2)
+        randomPropertyId = ai::chatlink::SignedFieldValue(numbers[2]);   // int32: negative for "of the X" suffix items, kept on every core
 
 }
 

@@ -12,7 +12,9 @@
 #include "host/TbHostGuildOrders.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/chat/TbChatIn.h"
 #include "host/TbCc.h"
+#include "host/TbThrown.h"
 #include "host/TbHybrid.h"
 #include "host/run/TbRunHooks.h"
 
@@ -267,6 +269,8 @@ Rec StateRec(Player* bot, Readiness& ready)
     {
         CastResultCounts const counts = session->GetCastResultCounts();
         rec.N("cast_queued", counts.queued).N("cast_delivered", counts.delivered).N("cast_dropped", counts.dropped).N("cast_pending", counts.pending);
+        // S2 (appended after the cast-result counters): pushbacks the core reported (SMSG_SPELL_DELAYED) and the session accepted into its queue.
+        rec.N("delayed", counts.delayed);
     }
     rec.B("eating", eating).B("drinking", drinking);
     rec.B("resting", ready.rest).L("rest_why", restWhy);
@@ -335,6 +339,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     h8::AppendCcState(rec, bot);                              // H8 (slice 8): rticc, ccfam, held, combo (appended: the older keys are unchanged)
     h10::AppendHybridState(rec, bot);                         // H10 (slice 10): form, totems, imbue, seal, paura (appended: the older keys are unchanged)
     p11::AppendPetState(rec, bot);                            // P11 (slice 11): pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
+    kb::AppendThrownState(rec, bot);                          // S3: thrown=, falldmg=, runrate= (appended: the older keys are unchanged)
     // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
     // a new slot when two or fewer are free.
     rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());
@@ -393,6 +398,7 @@ Rec StateRec(Player* bot, Readiness& ready)
     rec.S("corpserun", phase);
     if (ghostYd >= 0.0f)
         rec.N("ghostyd", static_cast<int32>(ghostYd + 0.5f));
+    chatin::AppendState(rec, guid);                           // S1-R2: chatin=, chatlast= (appended: the older keys are unchanged)
     rec.S("prof", tbhost::prof::FormatStateProf(bot));
     rec.N("taxi", tbhost::taxi::KnownNodeCount(bot)).B("onTaxi", tbhost::taxi::InFlight(bot));
     ObjectGuid const trGuid = tbhost::ride::CurrentTransportGuid(bot);

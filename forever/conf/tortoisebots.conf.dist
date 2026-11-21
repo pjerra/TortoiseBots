@@ -204,3 +204,90 @@ TortoiseBots.World.Auction = 0
 #
 
 TortoiseBots.Dashboard.TraceDir = ""
+
+#
+#    --- W0 pool (FOREVER-W0-W4-SPEC.md, round W0-A) ---
+#
+#    TortoiseBots.Pool.Enable
+#        Description: The bot pool: a set of level-1 characters the module creates itself and logs in as free bots on a schedule.
+#                     Off by default. With the key on but its tables missing, the pool is off and one error line names
+#                     forever/sql/characters/2026_11_20_01_tb_pool.sql. The schedule itself starts only with `.tb pool start`.
+#        Default:     0
+#
+
+TortoiseBots.Pool.Enable = 0
+
+#
+#    TortoiseBots.Pool.CreatePerMinute
+#        Description: How many pool characters `.tb pool create <n>` may make per minute (one per world tick at most, never a burst).
+#                     0 = nothing may be created. 1 to 600.
+#        Default:     30
+#
+
+TortoiseBots.Pool.CreatePerMinute = 30
+
+#
+#    TortoiseBots.Pool.MaxCharacters
+#        Description: The ceiling on the pool's total size: characters already made plus the ones being created. `.tb pool create`
+#                     refuses when the pool is at the cap and creates only what still fits when it asks for more. The per-command
+#                     count alone does not bound the table: the pool cannot grow past this number. 0 = nothing may be created.
+#        Default:     50
+#
+
+TortoiseBots.Pool.MaxCharacters = 50
+
+#
+#    TortoiseBots.Pool.TargetOnline
+#        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the
+#                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule
+#                     (the pool puts up to ten characters on an account), so the online count is capped by the number of accounts
+#                     the pool's characters sit on. A bot that got a master keeps its account for as long as the binding lasts,
+#                     and the pool cannot end it: that account is out of reach, so the pool needs more accounts than the target to
+#                     refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when the target is above the
+#                     accounts left. Logins alternate factions and take the bot offline longest first; a bot that got a master
+#                     leaves the count. A lowered target logs out the newest sessions first, never a dead or fighting bot.
+#                     0 to 5000.
+#        Default:     0
+#
+
+TortoiseBots.Pool.TargetOnline = 0
+
+#
+#    TortoiseBots.Pool.LoginsPerMinute
+#        Description: At most this many pool logins in any 60 s window, and at most one per second. 0 = no logins. 1 to 600.
+#        Default:     20
+#
+
+TortoiseBots.Pool.LoginsPerMinute = 20
+
+#
+#    TortoiseBots.Pool.SessionMinutes.Min / .Max
+#        Description: A pool bot's session lasts a length rolled uniformly between these, in minutes, decided when it logs in.
+#                     A living bot in combat keeps its session until the fight ends (`.tb pool stop` is the exception).
+#                     `.Max` below `.Min` reads as `.Min`. 0 to 1440.
+#        Default:     Min 30, Max 90
+#
+
+TortoiseBots.Pool.SessionMinutes.Min = 30
+TortoiseBots.Pool.SessionMinutes.Max = 90
+
+#
+#    TortoiseBots.Pool.OfflineMinutes.Min / .Max
+#        Description: After its session a pool bot stays away for a length rolled uniformly between these, in minutes (written
+#                     as `last_logout`). Only the login/logout stamps are stored: after a restart the minimum holds, so offline
+#                     periods are shortened and every bot falls due together. `.Max` below `.Min` reads as `.Min`. 0 to 1440.
+#                     A bot whose body is still there at its session's end (a corpse run) waits until it is alive again or 10 min.
+#        Default:     Min 5, Max 20
+#
+
+TortoiseBots.Pool.OfflineMinutes.Min = 5
+TortoiseBots.Pool.OfflineMinutes.Max = 20
+
+#
+#    TortoiseBots.Create.TestAccounts
+#        Description: Accounts besides the pool's own (TBPOOL<nnnn>) that `.tb create <account> <name> <race> <class>` may put a
+#                     character on, comma separated. Any other account is refused. `.tb create` needs the account-create right.
+#        Default:     "" (pool accounts only)
+#
+
+TortoiseBots.Create.TestAccounts = ""

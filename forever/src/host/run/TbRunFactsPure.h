@@ -253,6 +253,10 @@ struct CreatureObs
     bool caster = false;
     bool normalRank = false;
     std::uint32_t level = 0;
+    // A units hold's wave unit: awake and fighting (a victim), and whom it is on: the lead bot, a healer (HoldEngageTarget sends the tank at it).
+    bool engaged = false;
+    bool victimLead = false;
+    bool victimHealer = false;
     std::uint32_t creatureType = 0;
     // G8 crowd control: a run crowd-control aura on it (polymorph family), its soonest-ending remaining time (0: none or not read) and the families it is immune to (CcBit).
     bool polymorphed = false;
@@ -428,6 +432,8 @@ inline void ReadStepCreatures(Facts& f, DungeonRun::Run const& run, ai::PlanStep
         u.entry = c.entry;
         u.formOf = c.formOf;
         u.distLead = c.distLead;
+        u.x = c.x;              // the side the event comes from (HoldStands), and where the tank is sent
+        u.y = c.y;
         u.z = c.z;
         u.hostile = c.hostile;
         u.stealthed = c.stealthed;
@@ -963,6 +969,92 @@ inline bool ReadTaskFacts(Facts& f, DungeonRun::Run const& run, ai::PlanStep con
     return false;
 }
 
+// A gossip step's carrier and answer (WC: the Disciple of Naralex). The policy talks with the bot it reads in `carrier`; the lead bot unless an
+// order went to another. True when the order has to be RETIRED (its bot left, died or is off the map: the answer would never come).
+inline bool ReadGossipFacts(Facts& f, DungeonRun::Run const& run, std::string const& leadName, TaskView const& v)
+{
+    using namespace DungeonRun;
+    std::vector<BagFact> bags;
+    for (BagObs const& b : v.bags)
+        bags.push_back(b.fact);
+    std::string name = leadName;
+    CarrierVerdict const verdict = OutstandingCarrierVerdict(run.orderSent, v.taskCarrierKey, bags, &name);
+    if (verdict == CarrierVerdict::Retire)
+        return true;
+    if (verdict == CarrierVerdict::NoOrder)
+    {
+        // The lead bot, or the first available one when it is dead or off the lead's map.
+        bool leadOk = false;
+        for (BagFact const& b : bags)
+            leadOk = leadOk || (b.name == leadName && b.away.empty());
+        if (!leadOk)
+            for (BagFact const& b : bags)
+                if (b.away.empty())
+                {
+                    name = b.name;
+                    break;
+                }
+    }
+    f.carrier = name;
+    for (BagObs const& b : v.bags)
+        if (b.fact.name == name)
+        {
+            for (std::uint64_t key : v.busyKeys)
+                f.carrierBusy = f.carrierBusy || key == b.fact.guid;
+            if (v.taskCarrierKey && v.taskCarrierKey == b.fact.guid)
+            {
+                f.taskReply = v.reply;
+                f.taskText = v.replyText;
+            }
+        }
+    return false;
+}
+
+// A units hold (a wave of the Naralex event): the living ones of the step's entries within its radius, the friendly, still dormant ones too
+// (the policy's EventUnitCounts decides which count), and the dead ones counted in `eventDown` (EventProgress "2 of 4 down").
+inline void ReadHoldUnits(Facts& f, ai::PlanStep const& step, std::vector<CreatureObs> const& creatures)
+{
+    using namespace DungeonRun;
+    for (CreatureObs const& c : creatures)
+    {
+        if (Dist3(c.x, c.y, c.z, step.x, step.y, step.z) > step.radius)
+            continue;
+        if (!c.alive)
+        {
+            ++f.eventDown;
+            continue;
+        }
+        bool known = false;
+        for (UnitFact const& have : f.units)
+            known = known || have.guid == c.handle;
+        if (known || f.units.size() >= kMaxListed)
+            continue;
+        UnitFact u;
+        u.guid = c.handle;
+        u.entry = c.entry;
+        u.formOf = c.formOf;
+        u.distLead = c.distLead;
+        u.x = c.x;              // the side the event comes from (HoldStands), and where the tank is sent
+        u.y = c.y;
+        u.z = c.z;
+        u.hostile = c.hostile;
+        u.stealthed = c.stealthed;
+        u.evading = c.evading;
+        u.creatureType = c.creatureType;
+        u.normalRank = c.normalRank;
+        u.caster = c.caster;
+        u.level = c.level;
+        u.polymorphed = c.polymorphed;
+        u.ccRemainMs = c.ccRemainMs;
+        u.ccImmune = c.ccImmune;
+        u.attackable = c.attackable;
+        u.engaged = c.engaged;
+        u.victimLead = c.victimLead;
+        u.victimHealer = c.victimHealer;
+        f.units.push_back(u);
+    }
+}
+
 // ---- the step read: the dispatch of ReadRunFacts (Commander.cpp:12170-12440 and :7367-7440) as ONE function over a small world interface ----
 // The core implements StepWorld with its grid, path and line-of-sight calls (TbRunFacts.cpp); the unit test implements it with a scripted world. Which
 // reads happen on which tick, in which order and with which radius is therefore the same code in both.
@@ -1008,6 +1100,8 @@ public:
     virtual ObjectObs ObjectAt(ai::PlanStep const& /*step*/) { NotKnown("objectState"); return ObjectObs(); }
     virtual void ClearHostiles(float /*range*/, std::vector<ClearObs>& /*out*/) { NotKnown("clearUnits"); }
     virtual bool TaskBags(ai::PlanStep const& /*step*/, TaskView& /*out*/) { NotKnown("carrier"); return false; }
+    // WC: a hold step done by instance data (the row's `entry` is the data id: CWC_TYPE_DISCIPLE and the like).
+    virtual bool InstanceData(std::uint32_t /*id*/, long long& /*out*/) { NotKnown("eventData"); return false; }
     // The task module's order for the retire (an order whose bot is gone): the world drops its task and its answer.
     virtual void RetireTask() {}
     // A fact the world could not answer this tick (the "do less" value stands).
@@ -1176,9 +1270,82 @@ inline void ReadStepFacts(Facts& f, DungeonRun::Run const& run, LeadView const& 
             }
             break;
         }
+        case ai::PlanStepKind::Gossip:
+        {
+            TaskView view;
+            if (!w.TaskBags(*step, view))
+                break;
+            if (ReadGossipFacts(f, run, lead.name, view))
+            {
+                w.RetireTask();
+                f.carrier.clear();
+                TaskView again;
+                if (w.TaskBags(*step, again))
+                    ReadGossipFacts(f, run, lead.name, again);
+            }
+            break;
+        }
+        case ai::PlanStepKind::Hold:
+        {
+            // What ends the event: the instance's data (the row's `entry` is the data id), an object's state, or every unit of it dead.
+            bool const byData = (step->flags & ai::kPlanFlagDoneData) != 0;
+            bool const byObject = (step->flags & ai::kPlanFlagDoneObject) != 0;
+            // The approach is read for every hold (data, object and units): a wipe or a resume with the lead far from the spot must not find
+            // "no walkable path toward the event spot" while the data is all the hold needs.
+            if (!f.seen)
+            {
+                if (wantsApproach)
+                    approach(step->x, step->y, step->z, true, false);
+                break;
+            }
+            if (byData)
+            {
+                long long value = -1;
+                if (w.InstanceData(step->entry, value))
+                    f.eventData = value;
+                else
+                    w.NotKnown("eventData");
+            }
+            if (byObject)
+                ReadWaitObject(f, w.ObjectAt(*step));
+            if (byData || byObject)
+                break;
+            if (step->flags & ai::kPlanFlagEscortNpc)
+            {
+                // The NPC that started the event (the gossip row before this hold): alive around the lead, or dead and gone.
+                std::size_t const start = DungeonRun::EventGossipStartStep(run);
+                if (start != static_cast<std::size_t>(-1) && run.plan && start < run.plan->steps.size() &&
+                    run.plan->steps[start].kind == ai::PlanStepKind::Gossip && run.plan->steps[start].entry)
+                {
+                    bool alive = false;
+                    for (CreatureObs const& c : w.CreaturesOfEntry(run.plan->steps[start].entry, DungeonRun::kEscortNpcRangeYd))
+                        if (c.alive && !alive)
+                        {
+                            alive = true;
+                            f.eventNpcX = c.x;
+                            f.eventNpcY = c.y;
+                            f.eventNpcZ = c.z;
+                        }
+                    f.eventNpcRead = true;
+                    f.eventNpcAlive = alive;
+                }
+            }
+            float const range = std::min(toPoint + step->radius + kPatrolSeeYd, 2.0f * kSeeYd);
+            std::vector<CreatureObs> creatures;
+            for (std::uint32_t entry : step->entries)
+                for (CreatureObs const& c : w.CreaturesOfEntry(entry, range))
+                {
+                    bool dup = false;
+                    for (CreatureObs const& have : creatures)
+                        dup = dup || have.handle == c.handle;
+                    if (!dup && creatures.size() < 4 * kMaxListed)
+                        creatures.push_back(c);
+                }
+            ReadHoldUnits(f, *step, creatures);
+            break;
+        }
         default:
-            // hold, ritual, gossip, use_on: not read (no plan of the two dungeons has one); such a step reads as "nothing there" and the policy waits its
-            // own timeout and pauses.
+            // ritual, use_on: not read (no plan of this slice has one); such a step reads as "nothing there" and the policy waits its own timeout and pauses.
             w.NotKnown("stepKind");
             break;
     }

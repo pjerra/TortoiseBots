@@ -8,6 +8,9 @@ namespace ai
     public:
         ChatCommandHandlerStrategy(PlayerbotAI* ai);
         std::string getName() override { return "chat"; }
+        // The commands this strategy answers (the pass-through list): `help` lists them (S1-R2: ForeverCore's ChatActionContext header does not
+        // compile, so the whisper list there is this one — forever/src/compat/TbCompat_CH.h).
+        std::list<std::string> const& GetSupported() const { return supported; }
 
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "chat"; } //Must equal internal name

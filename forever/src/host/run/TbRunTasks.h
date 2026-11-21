@@ -39,6 +39,10 @@ namespace tasks
 // lead's map and instance, the lead first (the executor's party). A refusal changes nothing.
 OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
 
+// `gossip`: the bot talks to the NPC through the two packets a client sends (hello, then the option), the choice judged on the menu the core built
+// (GossipOrder). Only the NPC a gossip step of the run's own plan names, or one of AiPlayerbot.BotGossipNpcs, may be talked to.
+OrderAnswer BeginGossip(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
+
 // Commander P6: shared task entry points for `.tb cmd loot|open|use|gossip|lootmethod|state` on the same task engine.
 // `resolvedTarget` is the pre-resolved object/corpse/NPC guid (when `my`, `32-hex`, or `entry:<id>` without `@x,y,z` was resolved by the caller).
 OrderAnswer BeginCommander(ObjectGuid commander, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, ObjectGuid resolvedTarget, uint32 nowMs);

@@ -3,6 +3,7 @@
 #include "BotNames.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "ObjectMgr.h"
+#include "playerbot/TbCompatWL0.h"
 #include "Pet.h"
 #include "Log.h"
 #include "Util.h"
@@ -73,7 +74,7 @@ std::string FallbackName()
 bool UsableCharacterName(std::string const& name)
 {
     return !name.empty() &&
-        ObjectMgr::CheckPlayerName(name, true) == CHAR_NAME_SUCCESS &&
+        CheckPlayerNameCompat(name) &&
         !sObjectMgr.IsReservedName(name) &&
         !PlayerGuidByNameCompat(name);
 }

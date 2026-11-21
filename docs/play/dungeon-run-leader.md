@@ -67,7 +67,7 @@ One row is one thing to do, run in `(leg, seq)` order with primary key `(plan, l
 | `radius` | Yards, by kind, at most 100. |
 | `item` | Item entry, by kind, `0` for none. |
 | `param` | By kind: `wait_object` state to wait for, `ritual` bot count (`0` = 3), `gossip` menu option (1-15), `hold` done value. |
-| `flags` | `1` ambush, `2` Alliance, `4` Horde; `64` exact waypoint on `move`; `256` gone-is-done on `loot`, `open`, and `wait_object`; `512` dead-is-done on `gossip`; `8` data, `16` object state, `32` encounter state, `16384` reset-to-gossip, and `32768` dead-gossip-ok on `hold`; `2048` living-creature proof on `open_proof`; `1024` on `pull` never defers unreachable but pauses instead; `4096` on `boss` ends skipped not paused when out of reach; `8192` pulls from the prior move stand. |
+| `flags` | `1` ambush, `2` Alliance, `4` Horde; `64` exact waypoint on `move`; `256` gone-is-done on `loot`, `open`, and `wait_object`; `512` dead-is-done on `gossip`; `8` data, `16` object state, `32` encounter state, `16384` reset-to-gossip, and `32768` dead-gossip-ok on `hold`; `2048` living-creature proof on `open_proof`; `1024` on `pull` never defers unreachable but pauses instead; `4096` on `boss` ends skipped not paused when out of reach; `8192` pulls from the prior move stand; `131072` on `move`, `pull` or `boss` lets every point of that row's own hop wade shallow water (the whole hop, including the approach hops and legs it is walked in; the first wet sub-hop logs its sampled depth and liquid status; deeper than 1.5 yd or swimming still refuses). |
 | `timeout_s` | `0` means 60, at most 600 s, and hold steps up to 1800 s. |
 | `entries` | Comma creature entry list, at most 16, by kind. |
 | `comment` | Free text. |
@@ -78,7 +78,7 @@ Defaults by kind: pull radius `0` means 15, boss radius `0` means 30, hold radiu
 `open_proof` needs a proof radius over 0 and at most 20.
 `use_on` reads no flag or param.
 
-The loader skips rows it cannot use and names them in the server log: an unknown kind, a `pull` without entries, a `boss`, `loot`, `open`, `use_item`, `wait_object`, `ritual`, `gossip`, or `use_on` without `entry`, a `gossip` with `param` outside 1-15 or any flag but 512, a `use_on` with any flag or param, a `use_on` without `item` or without a point, a negative or over-100 radius, a `wait_clear` without a radius, a timeout over the cap, a `wait_object` state above 2, a stand pull with `param` over 60, a pull with `item` over 80, an `open_proof` with proof equal to entry, with `param` or timeout set, or with 2048 misused, or the exact flag on a non-`move` step.
+The loader skips rows it cannot use and names them in the server log: an unknown kind, a `pull` without entries, a `boss`, `loot`, `open`, `use_item`, `wait_object`, `ritual`, `gossip`, or `use_on` without `entry`, a `gossip` with `param` outside 1-15 or any flag but 512, a `use_on` with any flag or param, a `use_on` without `item` or without a point, a negative or over-100 radius, a `wait_clear` without a radius, a timeout over the cap, a `wait_object` state above 2, a stand pull with `param` over 60, a pull with `item` over 80, an `open_proof` with proof equal to entry, with `param` or timeout set, or with 2048 misused, or the exact flag on a non-`move` step, or a wade flag on a kind other than `move`, `pull` or `boss`.
 
 ### Step kinds
 
@@ -100,6 +100,10 @@ The loader skips rows it cannot use and names them in the server log: an unknown
 | `ritual` | Entry, near point, bot count | Several bots use the object together, and its answer starts the event or pauses. |
 | `hold` | Spot, radius, units, done condition, timeout | Stands on the spot and fights what comes until the done condition reads true (see Events). |
 | `gossip` | NPC entry, near point, option 1-15 | Talks to the NPC and picks one menu option, searched within 40 yd after the lead bot walks within 30 yd first. |
+
+A walk refuses a route that crosses or ends in liquid: any liquid at the walked height or up to 0.6 yd below it, and swimming water.
+A row with flag `131072` may cross water on its own hop only, when every sample is wading depth (at most 1.5 yd of water above the ground) and none is swimming; deeper water, lava, and any other hop (an approach stand, a walk back, a detour) keep the refusal.
+Wailing Caverns' river hops carry it; no other shipped plan does.
 
 ## Joining a bot LFG group
 
