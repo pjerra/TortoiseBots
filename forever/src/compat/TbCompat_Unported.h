@@ -333,7 +333,8 @@ inline bool SpellProhibitedCompat(Player const* player, SpellEntry const* spellI
 // ai/playerbot/TbCompatP11.h.)
 
 // Use a game object by the 1.12 use packet. Failure value: false ("could not use it").
-inline bool UseGameObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+namespace tbcompat { bool UseGameObject(Player* bot, GameObject* object); }
+inline bool UseGameObjectCompat(Player* bot, GameObject* object) { return tbcompat::UseGameObject(bot, object); }
 
 // The skill ForeverCore does not name. Failure value: false ("not trained").
 template <class AI>

@@ -47,3 +47,34 @@ inline bool IsImmobilizedStateCompat(Unit const* unit)
 {
     return unit && (unit->IsRooted() || unit->HasUnitState(UNIT_STATE_STUNNED) || unit->HasAuraType(SPELL_AURA_MOD_ROOT));
 }
+
+inline bool IsTameBeastSpellCompat(SpellEntry const* spell)
+{
+    if (!spell)
+        return false;
+    SpellInfo const* si = sSpellMgr.GetSpellInfo(spell->Id, DIFFICULTY_NONE);
+    return si && si->HasEffect(SPELL_EFFECT_TAMECREATURE);
+}
+
+inline std::string CreatureFamilyNameCompat(CreatureInfo const* info)
+{
+    CreatureFamilyEntry const* family = info ? sCreatureFamilyStore.LookupEntry(info->family) : nullptr;
+    return (family && family->Name[LOCALE_enUS]) ? std::string(family->Name[LOCALE_enUS]) : std::string();
+}
+
+inline bool IsReservedNameCompat(std::string const& name)
+{
+    return sObjectMgr.IsReservedName(name);
+}
+
+inline void SetPetNameTimestampCompat(Pet* pet, uint32 ts)
+{
+    if (pet)
+        pet->SetPetNameTimestamp(ts);
+}
+
+inline void RemovePetCompat(Player* bot)
+{
+    if (bot)
+        bot->RemovePet(nullptr, PET_SAVE_NOT_IN_SLOT);
+}

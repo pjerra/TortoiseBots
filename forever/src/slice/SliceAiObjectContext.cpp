@@ -52,6 +52,7 @@
 #include "playerbot/strategy/actions/StatsAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
 #include "playerbot/strategy/actions/TalkToQuestGiverAction.h"
+#include "playerbot/strategy/actions/TameAction.h"
 #include "playerbot/strategy/actions/TellCastFailedAction.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/TellTargetAction.h"
@@ -92,6 +93,7 @@
 #include "playerbot/strategy/values/AoeValues.h"
 #include "playerbot/strategy/values/AttackerCountValues.h"
 #include "playerbot/strategy/values/AttackerOfNonTankTargetValue.h"
+#include "playerbot/strategy/values/AttackerWithoutAuraTargetValue.h"
 #include "playerbot/strategy/values/AttackersValue.h"
 #include "playerbot/strategy/values/AvailableLootValue.h"
 #include "playerbot/strategy/values/BudgetValues.h"
@@ -236,7 +238,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (58 of its keys)
+    // the registry of ActionContext (59 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -300,10 +302,11 @@ namespace slice
             creators["avoid elite"] = [](PlayerbotAI* ai) { return new AvoidEliteAction(ai); };
             creators["idle wander"] = [](PlayerbotAI* ai) { return new IdleWanderAction(ai); };
             creators["auto share quest"] = [](PlayerbotAI* ai) { return new AutoShareQuestAction(ai); };
+            creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (38 of its keys)
+    // the registry of ChatActionContext (39 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -347,6 +350,7 @@ namespace slice
             creators["co"] = [](PlayerbotAI* ai) { return new ChangeCombatStrategyAction(ai); };
             creators["nc"] = [](PlayerbotAI* ai) { return new ChangeNonCombatStrategyAction(ai); };
             creators["formation"] = [](PlayerbotAI* ai) { return new SetFormationAction(ai); };
+            creators["tame"] = [](PlayerbotAI* ai) { return new TameAction(ai); };
         }
     };
 
@@ -371,7 +375,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (107 of its keys)
+    // the registry of TriggerContext (108 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -484,6 +488,7 @@ namespace slice
             creators["corpse near"] = [](PlayerbotAI* ai) { return new CorpseNearTrigger(ai); };
             creators["val"] = [](PlayerbotAI* ai) { return new ValueTrigger(ai); };
             creators["equipment audit"] = [](PlayerbotAI* ai) { return new EquipmentAuditTrigger(ai); };
+            creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
         }
     };
 
@@ -531,7 +536,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (201 of its keys)
+    // the registry of ValueContext (204 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -738,11 +743,14 @@ namespace slice
             creators["min repair cost"] = [](PlayerbotAI* ai) { return new MinRepairCostValue(ai); };
             creators["has all money for"] = [](PlayerbotAI* ai) { return new HasAllMoneyForValue(ai); };
             creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardValue(ai); };
+            creators["warlock spread attacker my aura"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker my aura", true, true, false, false); };
+            creators["warlock spread attacker"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker", false, false, true, false); };
+            creators["warlock spread attacker manual"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker manual", false, false, true, true); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 25, kActions = 108, kTriggers = 133, kValues = 201;
+    constexpr unsigned kStrategies = 25, kActions = 110, kTriggers = 134, kValues = 204;
 }
 }
 

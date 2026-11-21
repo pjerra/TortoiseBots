@@ -162,6 +162,8 @@ ai/playerbot/strategy/values/LootStrategyValue.cpp
 ai/playerbot/LootObjectStack.cpp
 ai/playerbot/strategy/actions/LootAction.cpp
 ai/playerbot/strategy/actions/AddLootAction.cpp
+ai/playerbot/strategy/actions/TameAction.cpp
+ai/playerbot/strategy/values/AttackerWithoutAuraTargetValue.cpp
 ai/playerbot/strategy/actions/UseItemAction.cpp
 ai/playerbot/strategy/actions/PositionAction.cpp
 ai/playerbot/strategy/generic/ThreatStrategy.cpp

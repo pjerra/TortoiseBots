@@ -429,6 +429,8 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             nonCombatEngine->addStrategies("aura", "blessing", NULL);
         else if (kit == HybridKit::ProtPaladin)
             nonCombatEngine->addStrategies("aura", "blessing", "buff protection pve", NULL);
+        else if (kit == HybridKit::RestoShaman)
+            nonCombatEngine->addStrategies("totems", NULL);
         return;
     }
     if (player && player->GetClass() == CLASS_MAGE)
