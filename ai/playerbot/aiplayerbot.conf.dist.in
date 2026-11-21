@@ -2293,6 +2293,11 @@ AiPlayerbot.RaidHealerSeatsByClass = 0
 # 1 - on
 AiPlayerbot.RaidTankHealerAssist = 0
 
+# Allow a paladin or druid to take the tank role when a bot party has no warrior tank and another healer is present.
+# 0 - off
+# 1 - on (Default)
+AiPlayerbot.SubstituteTank = 1
+
 # The reaction engine's universal raid answers: step out of an environmental hazard (a brazier, a ground effect),
 # run a bomb debuff carrier 30 yd clear of the living group, rotate a Four Horsemen mark carrier (3+ stacks) to the
 # next horseman's corner, flank a dragon's breath/cleave cone, and keep the ranged raid spread while a stack would

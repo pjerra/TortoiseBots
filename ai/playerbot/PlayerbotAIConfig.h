@@ -816,6 +816,7 @@ public:
     bool raidHealerSeatsByClass = false;
     // A layout tank healer's second seat on its tank helps the raid while the tank is quiet (default off).
     bool raidTankHealerAssist = false;
+    bool substituteTank = true;
     // The reaction engine's universal raid rows (environmental hazard step-away, raid bomb runout, Four Horsemen
     // mark rotation, dragon flank, ranged raid spread): on, the `react` strategy carries them (ReactionRowsPolicy.h)
     // and a live spread row outranks a stay in the spread action's own gate. Off, the rows are not built at all, so
