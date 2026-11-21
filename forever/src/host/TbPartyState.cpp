@@ -4,6 +4,8 @@
 #include "host/TbH3.h"
 #include "host/TbResistGear.h"     // #20: the resist set a bot holds (rgear=)
 #include "host/TbRaidConsumables.h"   // #22: cons= / consmiss= (the raid consumables a bot holds and lacks)
+#include "host/TbRaidLayout.h"
+#include "host/TbRaidGroupsPure.h"
 #include "host/TbPet.h"
 #include "host/TbHostTaxi.h"
 #include "host/TbHostTown.h"
@@ -634,8 +636,10 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         // N5: bots join only a bot's party or the sender's own character's party, never a real player's.
         if (!MayLeadBots(handler, leader->GetGUID()))
             return Fail(handler, args, "party", "not-allowed", args.w[0] + " is neither a host bot nor your own character: bots do not join a real player's party");
-        if (args.w.size() > 5)
-            return Fail(handler, args, "party", "too-many", "a party holds five: the leader and four members");
+        bool const raids = BotMgr::Instance().RaidsEnabled();
+        if (args.w.size() - 1 > raidgroups::MaxNamedMembers(raids))
+            return Fail(handler, args, "party", "too-many", raids ? "a raid holds 40: the leader and 39 members"
+                : "a party holds five: the leader and four members (TortoiseBots.Raid.Enable = 1 lets it become a raid)");
         std::set<ObjectGuid> seen;
         seen.insert(leader->GetGUID());
         for (size_t i = 1; i < args.w.size(); ++i)
@@ -685,13 +689,22 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             {
                 ++joined;
                 rec.S("status", "joined");
+                if (Group* group = member->GetGroup(); group && group->isRaidGroup())
+                {
+                    // A raid with a layout seats the newcomer by its role; without one it stays where the core put it (the first free seat).
+                    PlaceJoiner(group, member);
+                    rec.N("sub", group->GetMemberGroup(member->GetGUID()) + 1);
+                }
             }
             else
                 rec.S("status", "refused").S("code", "party-refused").T("msg", error);
             reply.Line(rec);
         }
         Rec end("party");
-        end.S("leader", leader->GetName()).N("joined", joined).N("asked", args.w.size() - 1).S("note", "the host master is the leader: run .tb master next");
+        Group const* formed = leader->GetGroup();
+        bool const raid = formed && formed->isRaidGroup();
+        end.S("leader", leader->GetName()).N("joined", joined).N("asked", args.w.size() - 1).B("raid", raid)
+            .S("note", raid ? "the host master is the leader: run .tb layout, then .tb master" : "the host master is the leader: run .tb master next");
         reply.End(end);
         return true;
     }
@@ -709,6 +722,14 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         bool const online = member && member->IsInWorld();
         Rec rec("party");
         rec.S("member", slot.name).B("leader", group->IsLeader(slot.guid)).B("online", online);
+        if (group->isRaidGroup())
+        {
+            rec.N("sub", slot.group + 1);
+            if (slot.flags & MEMBER_FLAG_MAINTANK)
+                rec.S("mark", "maintank");
+            else if (slot.flags & MEMBER_FLAG_ASSISTANT)
+                rec.S("mark", "assistant");
+        }
         if (online)
         {
             bool const bot = IsHostBot(member);

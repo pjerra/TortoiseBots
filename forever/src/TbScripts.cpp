@@ -111,6 +111,7 @@
 #include "host/TbRaidConsumables.h"
 #include "host/TbMountShop.h"
 #include "host/TbH3.h"
+#include "host/TbRaidLayout.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
 #include "host/TbThrown.h"
@@ -770,6 +771,7 @@ public:
             { "lfg",    TortoiseBots::lfg::HandleLfg,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "master", TortoiseBots::h3::HandleMaster, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "party",  TortoiseBots::h3::HandleParty,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "layout", TortoiseBots::h3::HandleLayout, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "onyxia", TortoiseBots::onyxia::HandleCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "state",  TortoiseBots::h3::HandleState,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "threat", TortoiseBots::h3::HandleThreat, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
