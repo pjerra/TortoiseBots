@@ -91,6 +91,11 @@ class W3QuestsWiring(unittest.TestCase):
         for key in ("quest", "accept all quests", "talk to quest giver", "accept quest", "accept quest share", "quest share", "quest reward"):
             self.assertIn(key, GEN)
 
+    def test_quest_group_disband_and_team_pins(self):
+        bot_mgr = (ROOT / "forever/src/TbBotMgr.cpp").read_text()
+        self.assertIn("cand.team = uint32_t(me->GetTeam())", bot_mgr)
+        self.assertIn("st.anyMemberLostFree = true;\n                    continue;", bot_mgr)
+
     def test_mutation_fails(self):
         with self.assertRaises(AssertionError):
             check_no_gm_quest_shortcut(HOST_QUEST + "\n// .quest add", ACCEPT)

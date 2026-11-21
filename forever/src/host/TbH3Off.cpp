@@ -77,6 +77,7 @@ bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args) { 
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "gear"); }
 bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "quest"); }
 bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "guildorder"); }
+bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "craftorder"); }
 bool MayLeadBots(ChatHandler* /*handler*/, ObjectGuid /*character*/) { return true; }   // N5 is an engine-build rule: the default build keeps the older commands as they were
 bool CheckBotAccess(Player const* /*sender*/, ObjectGuid /*botGuid*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 bool CheckBotAccess(ChatHandler* /*handler*/, ObjectGuid /*botGuid*/, std::string& /*code*/, std::string& /*detail*/) { return true; }

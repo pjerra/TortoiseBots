@@ -8,6 +8,7 @@
 #include "ai/playerbot/FollowTrailPolicy.h"   // shared with the Turtle build, no core includes
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
 #include "ai/playerbot/policy/death/GhostRescuePolicy.h"   // W1: when a ghost may be rescued (core-free)
+#include "ai/playerbot/policy/world/FreeMapCapPolicy.h"     // F-population: the per-map free-bot cap (core-free)
 #include <map>
 #include <set>
 #include <unordered_set>
@@ -31,6 +32,8 @@ public:
     void LoadConfig();
     bool Enabled() const { return _enabled; }
     uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
+    uint8 BotAcceptDuelMinLevel() const { return _botAcceptDuelMinLevel; }
+    bool GuildMailAllowMixed() const { return _guildMailAllowMixed; }
 
     // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
     // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
@@ -134,11 +137,16 @@ public:
 
     // ---- slice 4, host package H4: entering an instance as a group, the entrance rule, life state ----
     // The entry question with its code: `code` is empty when the core has no objection, else one of level full locked difficulty not-found teleporting
-    // in-combat dead other (the `block=` words of `.tb state`), `text` says it in words. This is CanEnterMap's answer in two parts (C1: the ONE place that
+    // in-combat dead other (the `block=` words of `.tb state`) or `map-cap` (F-population: the target map already holds its free bots),
+    // `text` says it in words. This is CanEnterMap's answer in two parts (C1: the ONE place that
     // calls Map::PlayerCannotEnter is still CanEnterMap).
     struct EntryCheck { std::string code; std::string text; };
     static EntryCheck CheckEntry(Player* who, uint32 mapId);
 
+    // F-population: the per-map free-bot cap. How many free bots stand in the world on that map now (the entering bot is never
+    // on it yet), and the configured caps by kind (TortoiseBots.Free.MaxPerMap.*). CheckEntry refuses a free bot past the cap.
+    uint32 FreeBotsOnMap(uint32 mapId) const;
+    world::FreeMapCaps GetFreeMapCaps() const { return _freeMapCaps; }
     // `.tb enter`: the bot walks into the area trigger's box (its engine is down meanwhile) and the core's own area-trigger handler is called for it
     // (WorldSession::HandleAreaTriggerOpcode, MiscHandler.cpp:538), which asks the core's entry rule and teleports it. `leader` (not empty) = the
     // party leader's guid: the bot calls the handler only after the leader stands on the trigger's target map (followers enter after their leader
@@ -266,6 +274,7 @@ private:
     void TrackLife(Bot& bot, Player* me);
     void FreeThink(Bot& bot, Player* me);
     void GhostRescue(Bot& bot, Player* me);
+    void TickQuestGroups(uint32 diff);
     void EnsureEntrance(Bot const& bot, Player* me);
     bool IsCommandedHere(Bot const& bot, Player* me) const;
     void DeadBackstop(Bot& bot, Player* me);
@@ -282,13 +291,30 @@ private:
     void ConfirmCreations();
     std::vector<std::shared_ptr<PendingCreation>> _creating;
 
+    struct QuestGroupEntry
+    {
+        ObjectGuid groupGuid;
+        uint32 questId = 0;
+        uint64 formedAtMs = 0;
+        std::vector<ObjectGuid> members;
+    };
+    std::vector<QuestGroupEntry> _questGroups;
+    uint32 _questGroupTimerMs = 0;
+
     std::unordered_map<ObjectGuid, Bot> _bots;
     std::unordered_set<ObjectGuid> _knownBots;
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    bool _capitalErrandsEnabled = false;
+    bool _guildMailEnabled = false;
+    bool _guildMailAllowMixed = false;
+    bool _groupQuestsEnabled = false;
+    bool _professionsEnabled = false;
+    uint8 _botAcceptDuelMinLevel = 10;
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
+    world::FreeMapCaps _freeMapCaps;  // F-population: TortoiseBots.Free.MaxPerMap.* (dungeon 5, raids 10/20/40, 0 = no cap)
     // N1 (package N): NO decision is cached by instance id alone (the core hands out ids from one pool for all maps and reuses them): what is kept is keyed by
     // (map id, instance id), and a cached trigger is used only when its target is that map. The entrance itself is read from the instance script every time.
     std::map<std::pair<uint32, uint32>, uint32> _entryTriggerByInstance;   // (map, instance) -> the area trigger the last entry into it used

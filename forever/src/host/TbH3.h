@@ -43,6 +43,7 @@ bool HandleStatCensus(ChatHandler* handler, Trinity::ChatCommands::Tail args); /
 bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb gear <bot|party [leader]> upgrade [#token]
 bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb quest <bot> status|accept|turnin|share|drop|reward ... [#token]
 bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb guildorder create|list|cancel|status ... [#token]
+bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb craftorder create|status|cancel ... [#token]
 
 // Rebuilds the quest eligibility sets (TbCompat_Quest.h): at world load and after a quest reload.
 void RebuildQuestEligibility();

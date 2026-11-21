@@ -15,6 +15,7 @@
 #include "playerbot/TbCompatW1.h"
 #include "playerbot/policy/travel/PointDangerPolicy.h"
 #include "playerbot/policy/world/FreeGrindPolicy.h"
+#include "playerbot/policy/world/RareHuntPolicy.h"
 #include "playerbot/GrindSpotPolicy.h"
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
@@ -229,6 +230,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
 
     float distance = 0;
     Unit* result = NULL;
+    bool resultIsRare = false;
 
     bool travelTargetWorking = AI_VALUE(bool, "travel target working");
     bool travelTargetTraveling = AI_VALUE(bool, "travel target traveling");
@@ -313,7 +315,12 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         }
 
         Creature* creature = dynamic_cast<Creature*>(unit);
-        if (creature && creature->GetCreatureInfo() && CreatureRankCompat(creature) > CREATURE_ELITE_NORMAL && !AI_VALUE(bool, "can fight elite"))
+        uint32 const rank = (creature && creature->GetCreatureInfo()) ? CreatureRankCompat(creature) : 0;
+        bool const canFightElite = AI_VALUE(bool, "can fight elite");
+        bool const isRareHunt = creature && TortoiseBots::world::ShouldHuntRare(
+            sPlayerbotAIConfig.huntRares, sRandomBotFacade.IsFreeBot(bot), ai->HasRealPlayerMaster(),
+            bot->InBattleGround(), rank, canFightElite, bot->GetLevel(), unit->GetLevel(), maxLevelOver);
+        if (creature && creature->GetCreatureInfo() && rank > CREATURE_ELITE_NORMAL && !canFightElite && !isRareHunt)
         {
             logGrind(unit, "ignored (can not fight elites currently).");
             continue;
@@ -394,7 +401,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             // almost exclusively instead of grinding on anything nearby. Lowered so
             // bots still lean toward quest-relevant kills when traveling somewhere
             // specific, but no longer skip everything else 99% of the time.
-            if (urand(0, 100) < 20 && travelTargetWorking && !isGrindTravelDest)
+            if (!isRareHunt && urand(0, 100) < 20 && travelTargetWorking && !isGrindTravelDest)
             {
                 logGrind(unit, "ignored (not needed for active quest).");
                 continue;
@@ -472,19 +479,22 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                     continue;
 
                 newdistance = sServerFacade.getDistance2d(member, unit);
-                if (!result || newdistance < distance)
+                if (!result || (isRareHunt && !resultIsRare) || (isRareHunt == resultIsRare && newdistance < distance))
                 {
                     distance = newdistance;
                     result = unit;
+                    resultIsRare = isRareHunt;
                 }
             }
         }
         else
         {
-            if (!result || (newdistance < distance && urand(0, abs(distance - newdistance)) > sPlayerbotAIConfig.sightDistance * 0.1))
+            if (!result || (isRareHunt && !resultIsRare) ||
+                (isRareHunt == resultIsRare && newdistance < distance && urand(0, abs(distance - newdistance)) > sPlayerbotAIConfig.sightDistance * 0.1))
             {
                 distance = newdistance;
                 result = unit;
+                resultIsRare = isRareHunt;
             }
         }
     }

@@ -43,6 +43,7 @@
 #include "Player.h"
 #include "Unit.h"
 
+#include "playerbot/AiFactory.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/PullStartPolicy.h"
@@ -342,11 +343,12 @@ void RelaxTankForPull(Player* tank, PlayerbotAI* ai, bool fromRun)
 // Role: the forced role of the AI, then a rebuild of the kit from it (the slice's AiFactory reads it), then the movement mode back as it was.
 void ApplyKit(PlayerbotAI* ai, uint8 role, bool setRole)
 {
+    bool const freeMove = ai->HasStrategy("free", BotState::BOT_STATE_NON_COMBAT);
     bool const stay = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
     if (setRole)
         ai->SetForcedRole(role);
     ai->ResetStrategies();
-    ai->SetMovementStrategy(stay ? "stay" : "follow");
+    ai->SetMovementStrategy(freeMove ? "free" : (stay ? "stay" : "follow"));
 }
 
 std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
@@ -787,6 +789,23 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     // before its first tick, so the kit it runs is the one the role asks for.
     if (auto role = Roles().find(guid); role != Roles().end() && ai->GetForcedRole() != role->second)
         ApplyKit(ai, role->second, true);
+    else if (ai->GetForcedRole() == 0 && Roles().find(guid) == Roles().end())
+    {
+        bool const hasTankKit = ai->ContainsStrategy(STRATEGY_TYPE_TANK);
+        if (bot->GetGroup() || hasTankKit)
+        {
+            static std::map<ObjectGuid, uint32> lastRoleCheck;
+            uint32 const nowMs = NowMs();
+            uint32& last = lastRoleCheck[guid];
+            if (!last || nowMs - last >= 1000)
+            {
+                last = nowMs;
+                bool const shouldTank = (AiFactory::GetPlayerRoles(bot) & BOT_ROLE_TANK) != 0;
+                if (shouldTank != hasTankKit)
+                    ApplyKit(ai, 0, false);
+            }
+        }
+    }
 
     // R6 (review item 5): a run's leader out of combat with no pull under way never follows its commander (ShouldHoldLead): it holds where it stands.
     if (RunLeads().count(guid))

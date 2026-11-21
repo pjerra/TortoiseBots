@@ -25,6 +25,7 @@ SCHED_TEST = (ROOT / "forever/tools/test_pool_schedule_policy.cpp").read_text()
 MGR_H = (ROOT / "forever/src/TbBotMgr.h").read_text()
 REGISTRY_POLICY = (ROOT / "ai/playerbot/policy/world/PoolRegistryPolicy.h").read_text()
 REGISTRY_POLICY_TEST = (ROOT / "forever/tools/test_pool_registry_policy.cpp").read_text()
+MAPCAP_POLICY = (ROOT / "ai/playerbot/policy/world/FreeMapCapPolicy.h").read_text()
 COMPAT_F = (ROOT / "forever/src/compat/TbCompat_WL0.h").read_text()
 COMPAT_T = (ROOT / "ai/cmangos-compat-wl0.h").read_text()
 WRAPPER = (ROOT / "ai/playerbot/TbCompatWL0.h").read_text()
@@ -595,6 +596,45 @@ class Scheduler(unittest.TestCase):
             self.assertIn(text, SCHED_TEST)
         self.assertIn("PlanPoolPass", SCHED_TEST)
 
+    def test_population_changes_the_target_at_runtime(self):
+        table = SCRIPTS[SCRIPTS.index("static ChatCommandTable poolTable"):]
+        table = table[:table.index("};")]
+        self.assertRegex(table, r'\{ +"population", +HandlePoolPopulation, +rbac::RBAC_PERM_COMMAND_GM, +Console::Yes +\}')
+        handler = func(SCRIPTS, "static bool HandlePoolPopulation(")
+        self.assertIn("TortoiseBots::pool::PoolScheduler::SetPopulation(Lower(word))", handler)
+        population = func(SCHED, "SwitchResult SetPopulation(")
+        self.assertIn("world::PoolResolvePopulationTarget(word, s.settings.populationLow, s.settings.populationHigh)", population)
+        self.assertIn("s.settings.targetOnline = resolved.target;", population)
+        self.assertIn("the pool adds or logs out bots gradually", population)
+        self.assertIn("run `.tb pool start`", population)
+        load = func(SCHED, "void LoadConfig()")
+        self.assertIn('GetIntDefault("TortoiseBots.Pool.PopulationLow", 10)', load)
+        self.assertIn('GetIntDefault("TortoiseBots.Pool.PopulationHigh", 50)', load)
+        for key, value in (("TortoiseBots.Pool.PopulationLow", 10), ("TortoiseBots.Pool.PopulationHigh", 50)):
+            self.assertIn(f"{key} = {value}", CONF)
+        # The runtime word and its presets live in the policy and its test.
+        self.assertIn("PoolResolvePopulationTarget", SCHED_POLICY)
+        self.assertIn("`.tb pool population <n|low|high>`", SCHED_TEST)
+
+    def test_the_map_cap_refuses_a_full_dungeon(self):
+        # The table: dungeons 5, raids by size, nothing outside an instance, 0 switches a kind off.
+        for text in ("FreeMapCapFor(bool isDungeon, bool isRaid", "dungeon = 5", "raid10 = 10",
+                     "raid20 = 20", "raid40 = 40", "if (!isDungeon)", "if (!isRaid)"):
+            self.assertIn(text, MAPCAP_POLICY)
+        # The host: the cap is asked in the entry check, only for free bots, and counted on the target map.
+        check = func(MGR_CPP, "BotMgr::EntryCheck BotMgr::CheckEntry(")
+        self.assertIn("Instance().IsFreeBot(who->GetGUID())", check)
+        self.assertIn("world::FreeMapCapFor(target->IsDungeon(), target->IsRaid(), target->MaxPlayers", check)
+        self.assertIn("Instance().FreeBotsOnMap(mapId)", check)
+        self.assertIn('"map-cap"', check)
+        self.assertIn("uint32 BotMgr::FreeBotsOnMap(uint32 mapId) const", MGR_CPP)
+        self.assertIn("uint32 FreeBotsOnMap(uint32 mapId) const;", MGR_H)
+        self.assertIn("GetFreeMapCaps()", MGR_H)
+        for key, value in (("TortoiseBots.Free.MaxPerMap.Dungeon", 5), ("TortoiseBots.Free.MaxPerMap.Raid10", 10),
+                           ("TortoiseBots.Free.MaxPerMap.Raid20", 20), ("TortoiseBots.Free.MaxPerMap.Raid40", 40)):
+            self.assertIn(f'GetIntDefault("{key}", {value})', MGR_CPP)
+            self.assertIn(f"{key} = {value}", CONF)
+
 
 class ScheduleBehaviour(unittest.TestCase):
     """The policy test as the gate runs it: g++ on the round's own test, no build tree."""
@@ -608,6 +648,20 @@ class ScheduleBehaviour(unittest.TestCase):
             exe = tmp_path / "test_pool_schedule_policy"
             subprocess.run([gxx, "-std=c++17", "-O1", "-Wall", "-Wextra", "-I", str(ROOT),
                             str(ROOT / "forever/tools/test_pool_schedule_policy.cpp"), "-o", str(exe)],
+                           check=True, capture_output=True, text=True)
+            out = subprocess.run([str(exe)], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("RESULT: PASS", out.stdout)
+
+    def test_the_map_cap_policy_test_passes(self):
+        gxx = shutil.which("g++")
+        if not gxx:
+            self.skipTest("no g++")
+        with tempfile.TemporaryDirectory(prefix="map-cap-") as tmp:
+            tmp_path = pathlib.Path(tmp)
+            exe = tmp_path / "test_free_map_cap_policy"
+            subprocess.run([gxx, "-std=c++17", "-O1", "-Wall", "-Wextra", "-I", str(ROOT),
+                            str(ROOT / "forever/tools/test_free_map_cap_policy.cpp"), "-o", str(exe)],
                            check=True, capture_output=True, text=True)
             out = subprocess.run([str(exe)], capture_output=True, text=True)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)

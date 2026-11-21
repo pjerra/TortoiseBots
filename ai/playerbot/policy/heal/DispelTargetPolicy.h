@@ -225,4 +225,151 @@ namespace ai
     {
         return "dispel:" + dispelTypeQualifier;
     }
+
+    // --- Dispel mana-worth & danger rules (no core includes) -------------------------------------------------------
+    constexpr std::uint32_t kDispelMechanicCharm       = 1;
+    constexpr std::uint32_t kDispelMechanicDisoriented = 2;
+    constexpr std::uint32_t kDispelMechanicFear        = 5;
+    constexpr std::uint32_t kDispelMechanicRoot        = 7;
+    constexpr std::uint32_t kDispelMechanicSilence     = 9;
+    constexpr std::uint32_t kDispelMechanicSleep       = 10;
+    constexpr std::uint32_t kDispelMechanicStun        = 12;
+    constexpr std::uint32_t kDispelMechanicFreeze      = 13;
+    constexpr std::uint32_t kDispelMechanicKnockout    = 14;
+    constexpr std::uint32_t kDispelMechanicPolymorph   = 17;
+    constexpr std::uint32_t kDispelMechanicBanish      = 18;
+    constexpr std::uint32_t kDispelMechanicShackle     = 20;
+    constexpr std::uint32_t kDispelMechanicTurn        = 23;
+    constexpr std::uint32_t kDispelMechanicHorror      = 24;
+
+    constexpr std::uint32_t kDispelAuraPeriodicDamage        = 3;
+    constexpr std::uint32_t kDispelAuraModConfuse            = 5;
+    constexpr std::uint32_t kDispelAuraModCharm              = 6;
+    constexpr std::uint32_t kDispelAuraModFear               = 7;
+    constexpr std::uint32_t kDispelAuraModStun               = 12;
+    constexpr std::uint32_t kDispelAuraModPacify             = 25;
+    constexpr std::uint32_t kDispelAuraModRoot               = 26;
+    constexpr std::uint32_t kDispelAuraModSilence            = 27;
+    constexpr std::uint32_t kDispelAuraPeriodicLeech         = 53;
+    constexpr std::uint32_t kDispelAuraModPacifySilence      = 60;
+    constexpr std::uint32_t kDispelAuraPeriodicDamagePercent = 89;
+
+    constexpr std::int32_t kBigDotTickDamage = 150;
+
+    struct DispelDebuffEffectInput
+    {
+        std::uint32_t auraName = 0;
+        std::int32_t tickDamage = 0;
+    };
+
+    struct DispelDebuffInput
+    {
+        std::uint32_t mechanic = 0;
+        std::uint32_t allMechanicMask = 0;  // bits are (mechanic - 1), matching SpellEntry::GetAllSpellMechanicMask()
+        std::vector<DispelDebuffEffectInput> effects;
+    };
+
+    inline bool IsDangerousDispelMechanic(std::uint32_t mechanic)
+    {
+        switch (mechanic)
+        {
+            case kDispelMechanicCharm:
+            case kDispelMechanicDisoriented:
+            case kDispelMechanicFear:
+            case kDispelMechanicRoot:
+            case kDispelMechanicSilence:
+            case kDispelMechanicSleep:
+            case kDispelMechanicStun:
+            case kDispelMechanicFreeze:
+            case kDispelMechanicKnockout:
+            case kDispelMechanicPolymorph:
+            case kDispelMechanicBanish:
+            case kDispelMechanicShackle:
+            case kDispelMechanicTurn:
+            case kDispelMechanicHorror:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    inline bool IsDangerousDispelDebuff(DispelDebuffInput const& debuff)
+    {
+        if (IsDangerousDispelMechanic(debuff.mechanic))
+            return true;
+
+        if (debuff.allMechanicMask != 0)
+        {
+            constexpr std::uint32_t kDangerousMask =
+                (1u << (kDispelMechanicCharm - 1)) |
+                (1u << (kDispelMechanicDisoriented - 1)) |
+                (1u << (kDispelMechanicFear - 1)) |
+                (1u << (kDispelMechanicRoot - 1)) |
+                (1u << (kDispelMechanicSilence - 1)) |
+                (1u << (kDispelMechanicSleep - 1)) |
+                (1u << (kDispelMechanicStun - 1)) |
+                (1u << (kDispelMechanicFreeze - 1)) |
+                (1u << (kDispelMechanicKnockout - 1)) |
+                (1u << (kDispelMechanicPolymorph - 1)) |
+                (1u << (kDispelMechanicBanish - 1)) |
+                (1u << (kDispelMechanicShackle - 1)) |
+                (1u << (kDispelMechanicTurn - 1)) |
+                (1u << (kDispelMechanicHorror - 1));
+            if ((debuff.allMechanicMask & kDangerousMask) != 0)
+                return true;
+        }
+
+        for (DispelDebuffEffectInput const& eff : debuff.effects)
+        {
+            switch (eff.auraName)
+            {
+                case kDispelAuraModConfuse:
+                case kDispelAuraModCharm:
+                case kDispelAuraModFear:
+                case kDispelAuraModStun:
+                case kDispelAuraModPacify:
+                case kDispelAuraModRoot:
+                case kDispelAuraModSilence:
+                case kDispelAuraModPacifySilence:
+                case kDispelAuraPeriodicDamagePercent:
+                    return true;
+                case kDispelAuraPeriodicDamage:
+                case kDispelAuraPeriodicLeech:
+                    if (eff.tickDamage >= kBigDotTickDamage)
+                        return true;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    struct DispelWorthInput
+    {
+        bool isFriendlyTarget = true;
+        bool isDangerous = false;
+        bool isSpreading = false;
+        std::int32_t remainingDurationMs = 0;  // 0 = permanent/unknown
+        std::uint32_t minDurationMs = 2000;
+        bool casterHasMana = true;
+        std::uint8_t casterManaPct = 100;
+        std::uint8_t minManaPct = 25;
+    };
+
+    // True when a dispellable aura is worth spending a dispel cast on.
+    // Dangerous friendly debuffs (CC, big DoTs, spreading auras) bypass the
+    // low-mana and short-duration gates so Polymorph/Fear/deadly DoTs still
+    // get cleansed.
+    inline bool IsDispelWorthMana(DispelWorthInput const& in)
+    {
+        if (in.isFriendlyTarget && (in.isDangerous || in.isSpreading))
+            return true;
+        if (in.minDurationMs > 0 && in.remainingDurationMs > 0 &&
+            static_cast<std::uint32_t>(in.remainingDurationMs) < in.minDurationMs)
+            return false;
+        if (in.minManaPct > 0 && in.casterHasMana && in.casterManaPct < in.minManaPct)
+            return false;
+        return true;
+    }
 } // namespace ai

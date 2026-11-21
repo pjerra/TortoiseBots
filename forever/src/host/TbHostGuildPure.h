@@ -44,11 +44,19 @@ struct MailRecipientDecision
     char const* reason = "";
 };
 
-// Never mail a real player (non-bot) by default (e.g. console-created orders
-// that fall back to the guild leader), unless that player is the requester
-// who explicitly gave the order.
-inline MailRecipientDecision DecideMailRecipient(uint32_t botGuidLow, uint32_t giverGuidLow, uint32_t leaderGuidLow, bool targetIsBot)
+// Personal craft order (guildId == 0): the recipient is the ordering player.
+// A console-created order defaults the giver to the bot itself; mailing the
+// bot's own crafts back to itself is safe (no real player is mailed without
+// asking), so the order stays deliverable instead of refusing for no recipient.
+inline MailRecipientDecision DecideMailRecipient(uint32_t botGuidLow, uint32_t giverGuidLow, uint32_t leaderGuidLow, bool targetIsBot, uint64_t guildId)
 {
+    if (guildId == 0)
+    {
+        if (!giverGuidLow)
+            return { false, 0, "no-recipient" };
+        return { true, giverGuidLow, "ok" };
+    }
+    // Guild order: never mail a real player by default; the requester who asked is the exception.
     if (giverGuidLow != 0 && giverGuidLow != botGuidLow)
         return { true, giverGuidLow, "ok" };
 
