@@ -133,6 +133,8 @@ namespace ai
         //Setters
         void setComplete(bool complete1) { complete = complete1; }
         void setPath(std::vector<WorldPosition> path1) { path = path1; }
+        // The node store appends one ordered row per point: appending in place keeps a path's load O(its points).
+        void appendPathPoint(WorldPosition const& point) { path.push_back(point); }
         void setPathAndCost(std::vector<WorldPosition> path1, float speed) { setPath(path1); calculateCost(true); extraCost = distance / speed; }
         //void setPortal(bool portal1, uint32 portalId1 = 0) { portal = portal1; portalId = portalId1; }
         //void setTransport(bool transport1) { transport = transport1; }

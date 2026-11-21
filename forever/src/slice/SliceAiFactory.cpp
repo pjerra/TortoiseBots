@@ -433,6 +433,10 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // Slice 8: the mage's "fire" and the rogue's "combat" (AiFactory.cpp:2015-2060, tab 1).
     // Slice 10: the bear's "tank feral", the restoration druid's and shaman's "restoration", the paladin's "holy" or "protection" (AiFactory.cpp:1990-2125).
     // Slice 11: the hunter's "marksmanship" and the warlock's "affliction" (AiFactory.cpp:2034-2060 and :2138-2152, tab 1 and tab 0).
+    // S1-R2: the chat strategy runs beside the class kit on every class (the full factory's reaction set, AiFactory.cpp:1988, without "react",
+    // "avoid aoe" and "potions", which are out of the slice). Its triggers are the commands a player whispers or says in party chat
+    // (ChatCommandHandlerStrategy.cpp, chat/PlayerbotAI::HandleCommands); the command the host queued reaches it at the next reaction pass.
+    reactionEngine->addStrategy("chat");
     if (char const* hybrid = HybridSpecStrategy(HybridKitOf(player, OrderedRole(player, facade))))
     {
         reactionEngine->addStrategy(hybrid);

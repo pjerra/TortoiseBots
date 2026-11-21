@@ -8794,85 +8794,12 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     return true;
 }
 
-// A wade row's permission (ai::kPlanFlagWadeOk) covers the whole hop, not just its ends: the run walks a long row in
-// approach hops and in `TooFar` legs, and every one of those points is a point of the row's own way. So an order may
-// wade when the current row carries the bit AND its point is the row's own point, the walk's own target, or a leg of
-// that walk, and that walk goes to the row's point or to an approach hop of it (`hopWalk`). Any other point keeps the
-// liquid rule as it was: a detour's stand-in, a walk-back, a gather, a walk of another row.
-inline bool RowHopWades(Run const& r, PlanStep const& s, float x, float y)
+// The run-issued move gate is the order's origin flag alone (DungeonRun::MoveMayWade): a run's own move may wade
+// shallow water anywhere, and the wade rule itself (TbRunLiquid.h) judges every sample. The per-row
+// `ai::kPlanFlagWadeOk` stays plan data (the probe's record of the shallow hops); it no longer gates the wade.
+inline bool MoveMayWade(bool runIssued)
 {
-    if (s.kind != PlanStepKind::Move && s.kind != PlanStepKind::Pull && s.kind != PlanStepKind::Boss)
-        return false;                                       // the loader takes the bit on these kinds only
-    if (!(s.flags & ai::kPlanFlagWadeOk))
-        return false;
-    auto const at = [](float px, float py, float qx, float qy)
-    {
-        return std::fabs(px - qx) <= 0.2f && std::fabs(py - qy) <= 0.2f;
-    };
-    if (at(x, y, s.x, s.y))
-        return true;                                        // the row's own point
-    bool const rowWalk = r.phase == Phase::Walk && (at(r.walkX, r.walkY, s.x, s.y) ||
-        (r.hopWalk && at(r.walkX, r.walkY, r.hopX, r.hopY)));   // the walk under way is this row's own
-    if (!rowWalk)
-        return false;
-    if (at(x, y, r.walkX, r.walkY))
-        return true;                                        // the walk's target (also the fresh order)
-    return r.legOn && at(x, y, r.legX, r.legY);             // a leg of that walk
-}
-
-// The moves the run makes on its own inside a leg (a regroup's gather and its walk back to the anchor, an approach
-// stand, the return to the plan point, the follow-up after a pull) are no point of a row's own walk: RowHopWades says
-// no, and the move is refused "crosses or ends in liquid: no walkable path avoids it" although the plan's own hop wades
-// there. They may wade when they stay in a wet area: within kWadeAreaYd of the own hop (the previous row to the row) of
-// any flagged row of the plan, not only of the current step's leg. A dead lead bot comes back at the graveyard and the
-// run's return to the party crosses the river flagged by another leg (live run 3: step 52 of leg 5, the regroup move at
-// -37.2 291.3 over the leg 4 river hop, sampled 0.5 yd); a per-leg area refused it. The probe's wet-hop list
-// (forever/data/wc-wet-hops.tsv) is exactly those hops, and its wet-area probe found every shallow wet cell of the plan
-// inside some flagged hop's 12 yd area, so a plan with no flagged row has no wet area and keeps the RFC rule. The depth
-// is still the core's own measured reading (TbRunLiquid.h: a wade is at most kWadeDepthYd, never UNDER_WATER, deep water
-// always pauses).
-constexpr float kWadeAreaYd = 12.0f;
-
-// Horizontal distance from (px, py) to the segment (ax, ay)-(bx, by).
-inline float WetAreaSegmentYd(float px, float py, float ax, float ay, float bx, float by)
-{
-    float const dx = bx - ax, dy = by - ay;
-    float const len2 = dx * dx + dy * dy;
-    float t = len2 > 0.0f ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0.0f;
-    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-    float const nx = ax + t * dx - px, ny = ay + t * dy - py;
-    return std::sqrt(nx * nx + ny * ny);
-}
-
-// Whether (x, y) lies in one of the plan's wet areas: within kWadeAreaYd of the own hop of a wade-flagged row. The hop is
-// the pair the probe read (this row and the plan row before it). Any leg's row counts: the run's own moves can cross a
-// river whose flagged hop belongs to a leg it already walked (the note above).
-inline bool PlanWetAreaAt(Run const& r, float x, float y)
-{
-    if (!r.plan || r.step >= r.plan->steps.size())
-        return false;
-    for (std::size_t i = 1; i < r.plan->steps.size(); ++i)
-    {
-        PlanStep const& row = r.plan->steps[i];
-        if (!(row.flags & ai::kPlanFlagWadeOk))
-            continue;
-        if (row.kind != PlanStepKind::Move && row.kind != PlanStepKind::Pull && row.kind != PlanStepKind::Boss)
-            continue;                                       // the loader takes the bit on these kinds only
-        PlanStep const& from = r.plan->steps[i - 1];
-        if (WetAreaSegmentYd(x, y, from.x, from.y, row.x, row.y) <= kWadeAreaYd)
-            return true;
-    }
-    return false;
-}
-
-// A move the run makes on its own may wade: a point of the current row's own walk (RowHopWades), or a point inside one
-// of the plan's wet areas (PlanWetAreaAt). The executor asks this for the lead's move and the run's bot walks.
-// `runIssued` is the order's origin flag (Party::fromRun), set where the run's executor builds the order, never read from
-// the order's text: only a move the run issues for itself (regroup, approach, return, follow-up) may wade; a `cmd move`
-// a player types keeps the RFC liquid rule.
-inline bool MoveMayWade(bool runIssued, Run const& r, PlanStep const& s, float x, float y)
-{
-    return runIssued && (RowHopWades(r, s, x, y) || PlanWetAreaAt(r, x, y));
+    return runIssued;
 }
 
 // Walks the party to a point. True once the lead bot is there; otherwise
@@ -17827,8 +17754,12 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
         // event can never start. Only kHoldAllDeadMs after the FIRST look at the spot (eventMs runs from that look and keeps running
         // while the spot is out of sight; this code runs only on a tick with the spot in sight), with corpses in sight (eventDown),
         // no unit ever alive in the radius this hold (holdUnitSeen) and none awake (eventStarted); units that are merely not spawned
-        // or not visible yet show no corpses and keep the 300 s ceiling.
-        if (!r.eventStarted && !r.holdUnitSeen && f.units.empty() && f.eventDown > r.eventDownBase && r.eventMs >= kHoldAllDeadMs)
+        // or not visible yet show no corpses and keep the 300 s ceiling. A corpse from before the hold is a baseline and does not
+        // count, except after a gossip row that counted its dead starting NPC as done: the event's script can never run, so its
+        // baseline corpses are the event's own dead.
+        bool const deadStartNpc = r.startNpcDeadStep != static_cast<std::size_t>(-1) && r.startNpcDeadStep == EventStartStep(r);
+        if (!r.eventStarted && !r.holdUnitSeen && f.units.empty() && f.eventDown > 0 &&
+            (f.eventDown > r.eventDownBase || deadStartNpc) && r.eventMs >= kHoldAllDeadMs)
         {
             NextStep(r, "event done: none of its units is alive (they died before the hold)" + tail);
             return;

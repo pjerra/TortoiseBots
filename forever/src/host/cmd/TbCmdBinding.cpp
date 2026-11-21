@@ -2,6 +2,7 @@
 // TbCmdBindingLifePure.h and TbCmdBindingPure.h and are tested standalone; this file reads the live objects, runs the lifecycle hooks and writes the
 // replies.
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdCombat.h"
 
 #include "Chat.h"
 
@@ -1215,6 +1216,59 @@ bool ResolveBinding(ObjectGuid commander, ObjectGuid& lead, std::vector<ObjectGu
     return true;
 }
 
+std::vector<P::CardView> StandingCards()
+{
+    State& s = Get();
+    uint32 const nowMs = uint32(NowMs());
+    std::vector<P::Pair> pairs;
+    for (auto const& [bot, commander] : h3::CommanderBindings())
+        pairs.push_back({ Ctr(bot), Ctr(commander) });
+    std::vector<P::RunIn> runs;
+    for (run::RunRec* rec : run::All())
+    {
+        if (run::Ended(*rec))
+            continue;
+        P::RunIn r;
+        r.leader = Ctr(rec->leader);
+        r.leaderCommander = Ctr(h3::CommanderGuid(rec->leader));
+        r.index = runs.size();
+        if (Player* lead = InWorld(rec->leader))
+            if (Group* group = lead->GetGroup())
+                for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                    P::AddUnique(r.members, Ctr(slot.guid));
+        for (auto const& member : rec->bound)
+            P::AddUnique(r.members, Ctr(member.first));
+        runs.push_back(std::move(r));
+    }
+    std::vector<P::MetaIn> metas;
+    for (auto const& [commander, m] : s.metas)
+        if (m.restored)
+            metas.push_back({ Ctr(commander), Ctr(m.lead), m.boundAt });
+    std::map<uint32, uint32> groupLeader;
+    for (P::Pair const& p : pairs)
+        if (Player* bot = InWorld(PlayerGuid(p.bot)))
+            if (Group* group = bot->GetGroup())
+                groupLeader[p.bot] = Ctr(group->GetLeaderGUID());
+    std::vector<P::Card> const cards = P::BuildCards(pairs, runs, metas, groupLeader);
+    std::vector<P::CardView> out;
+    out.reserve(cards.size());
+    for (P::Card const& c : cards)
+    {
+        P::CardView v;
+        v.commanderGuid = c.commander;
+        v.commanderName = NameOf(PlayerGuid(c.commander));
+        Player* lead = InWorld(PlayerGuid(c.lead));
+        v.groupId = GroupKey(lead ? lead->GetGroup() : nullptr);
+        v.leadName = NameOf(PlayerGuid(c.lead));
+        v.boundAt = c.boundAt;
+        for (uint32 guid : c.bots)
+            if (Player* bot = InWorld(PlayerGuid(guid)))
+                v.bots.push_back(BotOf(bot, bot->GetGroup(), guid == c.lead, nowMs));
+        out.push_back(std::move(v));
+    }
+    return out;
+}
+
 void AppendBindings(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32> const& runLeadersShown)
 {
     for (HostCard const& h : Read(NowUnix(), uint32(NowMs())))
@@ -1225,6 +1279,7 @@ void AppendBindings(std::vector<pure::CT::BindingInfo>& out, std::vector<uint32>
         if (out.size() >= CT::kMaxCommandersReported)
             return;
         out.push_back(P::BindingOf(h.view));
+        combat::FillWindow(out.back());   // P5: the live fight window of this card's group
     }
 }
 
@@ -1378,6 +1433,7 @@ bool IsCommandedBy(Player*, Player*) { return false; }
 bool IsInOwnBindingGroup(Player*, Player*) { return false; }
 void AppendBindings(std::vector<pure::CT::BindingInfo>&, std::vector<uint32> const&) {}
 void FillRunOrders(std::vector<pure::CT::BindingInfo>&) {}
+std::vector<pure::CardView> StandingCards() { return {}; }
 }
 }
 

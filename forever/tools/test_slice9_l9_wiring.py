@@ -128,12 +128,12 @@ class L9Wiring(unittest.TestCase):
         self.assertNotIn("Unported(tbcompat::Feature::LootTables)", body(V2, "ReferenceLootTemplateCompat"))
 
     def test_the_slice_list_and_the_build(self):
-        listed = [l.strip() for l in (ROOT / "forever/SLICE-W1.txt").read_text().splitlines() if l.strip() and not l.startswith("#")]
+        listed = [l.strip() for l in (ROOT / "forever/SLICE-W4.txt").read_text().splitlines() if l.strip() and not l.startswith("#")]
         for path in ("ai/playerbot/strategy/actions/LootRollAction.cpp", "ai/playerbot/strategy/values/ItemUsageValue.cpp"):
             self.assertIn(path, listed)
         slice4 = [l.strip() for l in (ROOT / "forever/SLICE4.txt").read_text().splitlines() if l.strip() and not l.startswith("#")]
         self.assertTrue(set(slice4) <= set(listed))
-        self.assertIn("forever/SLICE-W1.txt", (ROOT / "CMakeLists.txt").read_text())
+        self.assertIn("forever/SLICE-W4.txt", (ROOT / "CMakeLists.txt").read_text())
         stubs = (ROOT / "forever/src/slice/SliceLinkStubs.cpp").read_text()
         self.assertNotIn("bool ItemUsageValue::IsNeededForQuest", stubs)
 

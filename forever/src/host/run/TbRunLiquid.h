@@ -43,13 +43,21 @@ inline bool PointRefused(std::uint32_t status, float level, float z)
     return InWaterBits(status) || level >= z - kLevelSlackYd;
 }
 
-// ---- wading (a plan row's own hop, ai::kPlanFlagWadeOk) ----
-// The core's IsSwimmable radius: water no deeper than this (surface minus the bed) is walked, deeper is swum
-// (TerrainIsSwimmableCompat, TbCompat_Unit.h:701-710; F's GridMapLiquidData::depth_level is the ground under the liquid).
-constexpr float kWadeDepthYd = 1.5f;
+// ---- wading (a run-issued move; the per-row ai::kPlanFlagWadeOk is data, not the gate) ----
+// The core's swim threshold: ForeverCore marks a unit UNDER_WATER when the liquid surface is more than its collision
+// height above its position (GridMap.cpp:677-680, `delta > collisionHeight`), and the liquid read the module makes asks
+// with the core's default collision height (DEFAULT_COLLISION_HEIGHT 2.03128, Object.h:78). Water no deeper than that
+// (surface minus the bed, GridMapLiquidData::depth_level) is walked; deeper is swim water and pauses the move.
+constexpr float kSwimDepthYd = 2.03128f;
 
-// What a wade hop sees at one sample: dry (no liquid at the walked height, so nothing to wade), shallow (liquid up to
-// kWadeDepthYd deep and the sample not under its surface), or refused (swimming water, or deeper than wading).
+// The liquid types a wade may cross: the compat encoding's WATER 0x08 and OCEAN 0x02 (TbCompat_Unit.h
+// MAP_LIQUID_TYPE_*). Lava, slime and dark water keep the RFC refusal at any depth: a run's move never wades them.
+constexpr std::uint32_t kWadeTypeWater = 0x08;
+constexpr std::uint32_t kWadeTypeOcean = 0x02;
+
+// What a wade move sees at one sample: dry (no liquid at the walked height, so nothing to wade), shallow (liquid up to
+// kSwimDepthYd deep and the sample not under its surface), or refused (swimming water, a non-water liquid, or deeper
+// than a walk).
 enum class WadeWay : std::uint8_t
 {
     Dry,
@@ -57,15 +65,17 @@ enum class WadeWay : std::uint8_t
     Refused,
 };
 
-inline WadeWay WadePointOf(std::uint32_t status, float level, float depthLevel, float z)
+inline WadeWay WadePointOf(std::uint32_t status, float level, float depthLevel, float z, std::uint32_t typeFlags)
 {
     if (status == 0)
         return WadeWay::Dry;
     if (!InWaterBits(status) && level < z - kLevelSlackYd)
         return WadeWay::Dry;                                        // the surface lies below the walked point: the rule as before
+    if (!(typeFlags & (kWadeTypeWater | kWadeTypeOcean)))
+        return WadeWay::Refused;                                    // lava, slime, dark water: never a wade, however shallow
     if (status & kUnderWaterBit)
         return WadeWay::Refused;                                    // swimming, or a point under a liquid it is not walking on
-    if (level - depthLevel > kWadeDepthYd)
+    if (level - depthLevel > kSwimDepthYd)
         return WadeWay::Refused;                                    // deeper than a wade: the bot would swim
     return WadeWay::Shallow;
 }
@@ -107,7 +117,7 @@ struct WadeSample
 {
     std::uint32_t samples = 0;          // every point sampled
     std::uint32_t wetSamples = 0;       // the samples with liquid at the walked height
-    bool refused = false;               // kept is a refused sample (swimming or deeper than kWadeDepthYd)
+    bool refused = false;               // kept is a refused sample (swimming or deeper than kSwimDepthYd)
     std::uint32_t status = 0;           // the core's status at the kept sample
     float depth = 0.0f;                 // its surface minus the ground under it: the water the bot would stand in
     float x = 0.0f, y = 0.0f, z = 0.0f; // the kept sample

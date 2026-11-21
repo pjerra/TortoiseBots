@@ -504,7 +504,9 @@ bool HoldForAct(PlayerbotAI* ai, Player* bot)
     if (bot->IsNonMeleeSpellCast(false))
         bot->InterruptNonMeleeSpells(false);
     bool const moving = RC::ActWaitsForStop(sServerFacade.isMoving(bot), !bot->movespline->Finalized());
-    if (moving)
+    // A flight in the air is not the bot's walk: stopping it cuts the spline and leaves it hovering. `moving` still holds
+    // this look, and the next sees a landed bot.
+    if (moving && !ai->IsJumping())
         ai->StopMoving();
     return moving;
 }

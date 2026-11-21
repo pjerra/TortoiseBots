@@ -195,23 +195,19 @@ void LogLiquidRefusal(Party const& ctx, std::string const& who, liquid::LiquidPr
             who.c_str(), p.Depth(), p.status, p.level, x, y, z, step, leg);
 }
 
-// The run's current plan row lets this order's hop wade (ai::kPlanFlagWadeOk): the row is a move, pull or boss row, and
-// the order's point is the row's own point or one of the points its walk samples on the way there (DungeonRun::RowHopWades:
-// an approach hop or a `TooFar` leg). The hop the probe checked is walked in parts, so the permission covers them all.
-// A move the run makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan point, the
-// follow-up after a pull) is no point of a row's walk: it keeps that permission when it stays in one of the plan's wet
-// areas (DungeonRun::PlanWetAreaAt, kWadeAreaYd of a flagged row's own hop), also when the hop belongs to another leg
-// (the lead's return from the graveyard after a death). Both are the same shallow rule: the core's measured depth, never
-// swimming water. `ctx.fromRun` is the order's origin flag: a `cmd move` a player sends and every dry plan keep the RFC
-// rule.
-bool WadeOrder(Party const& ctx, float x, float y)
+// A move the run issues for itself may wade: every leg of a dungeon run, not only a leg whose rows carry the wet bit
+// (live run 4: step 60 of leg 6, the run's move to -30.3 133.5 refused over a 0.2 yd cell outside every flagged hop,
+// -28.5 135.4). The bit stays plan data; the wade rule is the judge at every sample of the walked route
+// (TbRunLiquid.h: dry or at most the core's swim depth, never UNDER_WATER), so deep water still pauses. `ctx.fromRun` is
+// the order's origin flag: a `cmd move` a player sends keeps the RFC liquid rule.
+bool WadeOrder(Party const& ctx)
 {
-    if (!ctx.runRec)
+    if (!ctx.fromRun || !ctx.runRec)
         return false;
     RunRec const& rec = *ctx.runRec;
     if (!rec.run.plan || rec.run.step >= rec.run.plan->steps.size())
         return false;
-    return DungeonRun::MoveMayWade(ctx.fromRun, rec.run, rec.run.plan->steps[rec.run.step], x, y);
+    return DungeonRun::MoveMayWade(ctx.fromRun);
 }
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
@@ -258,8 +254,8 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
         if (wade)
         {
-            // A wade row's own hop (ai::kPlanFlagWadeOk, WadeOrder): every sample of the walked route may be dry or wading
-            // depth; a swimming sample (UNDER_WATER) or water deeper than kWadeDepthYd refuses it. The deepest wet sample stays
+            // A run-issued move (WadeOrder): every sample of the walked route may be dry or wading
+            // depth; a swimming sample (UNDER_WATER) or water deeper than kSwimDepthYd refuses it. The deepest wet sample stays
             // in the check, so the live log of a wet hop can quote its depth and liquid status.
             check.liquidOnWay = way.size() >= 2
                 ? liquid::PathWadeTraceOnMap(map, way, way.size(), check.wadeTrace)
@@ -489,7 +485,7 @@ OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     wanted.x = p.x;
     wanted.y = p.y;
     wanted.z = p.z;
-    bool const wade = WadeOrder(ctx, p.x, p.y);
+    bool const wade = WadeOrder(ctx);
     OrderAnswer answer;
 
     if (p.direct)
@@ -644,8 +640,8 @@ OrderAnswer DoWalk(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     wanted.y = p.y;
     wanted.z = p.z;
     // The run's own `walk <bot>` (a straggler to the lead, a carrier to a stand) is a move inside the leg too: the same
-    // wet-area permission, and the same shallow rule.
-    bool const wade = WadeOrder(ctx, p.x, p.y);
+    // origin gate and the same shallow rule.
+    bool const wade = WadeOrder(ctx);
     MoveCheck const check = CheckLeadMove(bot, wanted, ctx.fromRun, false, wade);
     od::Judged const judged = od::JudgeMove(check.facts);
     if (!judged.ok)

@@ -77,7 +77,7 @@ class RevFix1(unittest.TestCase):
         self.assertIn("FindMap()", helper)
 
     def test_6_too_far_before_path_and_liquid(self):
-        body = function_body(text("run/TbRunOrders.cpp"), r"MoveCheck CheckLeadMove\(Player\* mover, MovePoint point, bool fromRun, bool gather\)\s*\{")
+        body = function_body(text("run/TbRunOrders.cpp"), r"MoveCheck CheckLeadMove\(Player\* mover, MovePoint point, bool fromRun, bool gather, bool wade\)\s*\{")
         far = body.index("MoveVerdict::TooFar")
         self.assertLess(far, body.index("PathFinder path(mover)"))
         self.assertLess(far, body.index("PathPrefixRefused"))

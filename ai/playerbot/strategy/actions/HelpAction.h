@@ -31,7 +31,9 @@ namespace ai
         virtual std::vector<std::string> GetUsedValues() { return {}; }
 #endif
     private:
-        NamedObjectContext<Action>* chatContext;
+        // The commands a player may whisper at a bot (`ChatCommandKeys`, playerbot/TbCompatCH.h): on Turtle the chat action context's keys,
+        // on ForeverCore the chat strategy's own list (that context header does not compile there).
+        std::set<std::string> chatCommands;
     };
 
 }

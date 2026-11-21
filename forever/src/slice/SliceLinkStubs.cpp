@@ -34,8 +34,6 @@
 #include "playerbot/PlayerbotTextMgr.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/Talentspec.h"
-#include "playerbot/TravelMgr.h"
-#include "playerbot/TravelNode.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/CheatAction.h"
 #include "playerbot/strategy/actions/EmoteAction.h"
@@ -86,7 +84,6 @@ inline void NoteBoss()
     if (lastSecond.exchange(now) != now)
         tbcompat::Unported(tbcompat::Feature::BossTactics);
 }
-inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
 inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
 inline void NoteTexts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
 inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
@@ -303,16 +300,9 @@ ProtectionPotion BossRowProtectionPotion(PlayerbotAI*, Player*) { NoteBoss(); re
 // is never active; the trigger key itself is not registered in the slice either (LESS: no buff is asked for).
 std::vector<uint32> WorldBuffAction::NeedWorldBuffs(Unit*) { NoteMisc(); return {}; }
 
-// TellLosAction.cpp (feature "game object use"): the "use gos <modifiers>" form of the use command finds game objects by line-of-sight modifiers. Absent =
-// no game object matches. Value: empty modifier list / empty object list. Effect (UseItemAction.cpp:244): `gos` is empty, no target game object is set,
-// and the use command does nothing (game object use is refused on ForeverCore anyway, `GameObjectUseUnportedCompat`) (LESS).
-std::vector<LosModifierStruct> TellLosAction::ParseLosModifiers(const std::string&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
-std::list<GameObject*> TellLosAction::GoGuidListToObjList(PlayerbotAI*, const std::list<ObjectGuid>&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
-std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list<GameObject*>&, const std::vector<LosModifierStruct>&)
-{
-    tbcompat::Unported(tbcompat::Feature::GameObjectUse);
-    return {};
-}
+// TellLosAction.cpp's three stand-ins (ParseLosModifiers, GoGuidListToObjList, FilterGameObjects) are gone: S1-R2 compiles the real file for
+// the `los` chat command, so the "use gos <modifiers>" form of the use command reads the real ones too. The `GameObjectUse` counter itself
+// stays: the use command still refuses a game object on ForeverCore (`GameObjectUseUnportedCompat`).
 
 // ItemUsageValue.cpp is in the slice since slice 9 (package L9): its four stand-ins (IsNeededForQuest, IsFutureUpgrade, QueryItemUsageForEquip, GetRecipeSpell) are gone.
 
@@ -321,58 +311,6 @@ std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list
 bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
-// =====================================================================================================================
-// Travel (owner files: ai/playerbot/TravelMgr.cpp, TravelNode.cpp). No node map, no destinations, no route.
-// =====================================================================================================================
-namespace ai
-{
-void TravelMgr::Clear() { NoteTravel(); }
-void TravelMgr::LoadAreaLevels() { NoteTravel(); }
-void TravelMgr::LoadQuestTravelTable() { NoteTravel(); }
-void TravelMgr::LoadTaxiNodeZones() { NoteTravel(); }
-int32 TravelMgr::GetAreaLevel(uint32) { NoteTravel(); return 0; }
-void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteTravel(); }
-// The real function clears the out list; on the same map the start itself is the one "portal" at distance 0; otherwise the transfer table answers, and it is empty.
-void TravelMgr::CollectMapTransferPortals(const WorldPosition& start, uint32 endMapId, std::vector<std::pair<WorldPosition, float>>& outPortals) const
-{
-    NoteTravel();
-    outPortals.clear();
-    if (start.GetMapId() == endMapId)
-        outPortals.emplace_back(start, 0.0f);
-}
-// The real distance (TravelMgr.cpp:3644): on one map the flat distance, across maps the distance through the nearest known transfer, FLT_MAX when there is
-// none. No transfer table is built here, so every cross-map distance is FLT_MAX (R9: 0.0f made it read "right here", 53 call sites).
-float TravelMgr::MapTransDistance(const WorldPosition& start, const WorldPosition& end, bool) const
-{
-    NoteTravel();
-    if (start.GetMapId() == end.GetMapId())
-        return std::sqrt(start.sqDistance2d(end));
-    return FLT_MAX;
-}
-
-TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
-TravelTarget::~TravelTarget() {}
-bool TravelTarget::IsActive() { NoteTravel(); return false; }
-void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
-
-// The real answer with no stored offset: the map with a zero position.
-WorldPosition TravelNodeMap::getMapOffset(uint32 mapId) { NoteTravel(); return WorldPosition(mapId, 0, 0, 0, 0); }
-TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
-void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTravel(); }
-bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
-bool TravelPath::cutTo(PathNodePoint, bool) { NoteTravel(); return false; }
-void TravelPath::makeShortCut(WorldPosition, float, Unit*) { NoteTravel(); }
-
-// The vtables of the destination classes TravelMgr's members construct: the key functions, with the "nothing is possible"
-// answers the base TravelDestination gives.
-std::string EntryTravelDestination::GetShortName() const { NoteTravel(); return ""; }
-bool GrindTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GrindTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GrindTravelDestination::GetTitle() const { NoteTravel(); return "grind"; }
-bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
-bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
-std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
-}
 
 // =====================================================================================================================
 // Slice 9 (package L9): ItemUsageValue.cpp and LootRollAction.cpp are in the slice, and what they call outside it is answered here. Every answer is
@@ -402,6 +340,12 @@ namespace TortoiseBots { namespace GuildOrders {
 void RefreshOrderProtectedSet(Player*) { NotePool(); }
 void NoteBagsFull(uint32_t) { NotePool(); }
 } }
+// GuildOrderSources.cpp (same feature): no order is planned, so no bot carries a farm item, waits for a mail or uses a source.
+std::pair<uint32_t, uint32_t> ai::GuildOrderFarmItemFor(Player*) { NotePool(); return {}; }
+bool ai::GuildOrderMailWaiting(Player*) { NotePool(); return false; }
+bool ai::GuildOrderEntryUsableFor(uint32_t, int32_t, uint32_t, uint32_t, uint32_t, uint32_t, bool) { NotePool(); return false; }
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no teleport cache is built, so the overlay export writes nothing.
+void RandomBotFacade::PrintTeleportCache() { NotePool(); }
 // QueryItemUsageAction.cpp: the `query item usage` chat reply (a debug answer) is not built; the class is the base of the roll actions, which override Execute.
 bool ai::QueryItemUsageAction::Execute(Event&) { NoteMisc(); return false; }
 
@@ -441,6 +385,18 @@ int32 PlayerbotTextMgr::GetLocalePriority() { return -1; }
 PlayerbotHelpMgr::PlayerbotHelpMgr() {}
 PlayerbotHelpMgr::~PlayerbotHelpMgr() {}
 void PlayerbotHelpMgr::LoadBotHelpTexts() { NoteTexts(); }
+
+// S1-R2 (chat commands in): the text side of the "help" chat command (HelpAction.cpp is in the build now). The texts are the "bot texts and help"
+// row (ai_playerbot_texts and help topics are not ported, R6B), so every lookup answers what the real manager answers with no rows: no text,
+// no topic, and the format helpers are unreachable (HelpAction calls them only for a text that came back). LESS: `help` whispers the command
+// and strategy lists, never the text topics.
+void PlayerbotHelpMgr::replace(std::string&, const std::string, const std::string) { NoteTexts(); }
+std::string PlayerbotHelpMgr::makeList(std::vector<std::string> const, std::string, uint32) { NoteTexts(); return std::string(); }
+void PlayerbotHelpMgr::FormatHelpTopic(std::string&) { NoteTexts(); }
+void PlayerbotHelpMgr::FormatHelpTopics() { NoteTexts(); }
+std::string PlayerbotHelpMgr::GetBotText(std::string) { NoteTexts(); return std::string(); }
+bool PlayerbotHelpMgr::GetBotText(std::string, std::string&) { NoteTexts(); return false; }
+std::vector<std::string> PlayerbotHelpMgr::FindBotText(std::string) { NoteTexts(); return {}; }
 
 // Talentspec.cpp: no spec is read, no spec checks pass or fail (the premade spec config is not loaded).
 void TalentSpec::GetTalents(uint32) { NoteSpecs(); }

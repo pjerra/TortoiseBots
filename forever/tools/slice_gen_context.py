@@ -146,6 +146,16 @@ W1_KEYS = {
     "trigger": "no target, dangerous elite near, dead, corpse near, val",
     "value": "grind target, can fight elite, dangerous elite, graveyard, best graveyard, should spirit healer, can move around",
 }
+# World slice W0-A (FOREVER-W0-W4-SPEC.md, round W0-A): the pool composes and creates characters host-side (host/pool), so it registers
+# no context key. The block stands so the later W0 rounds and W4 add theirs next to it instead of starting a second list.
+WL0_KEYS = {
+    "strategy": "",
+    "action": "",
+    "trigger": "",
+    "value": "",
+}
+
+
 def _join(*ds):
     # One entry per key and kind: a key two slice lists both name (slice 8's and slice 10's `low mana`, `enemy is close`) is
     # registered once, in the order of the first list that names it.
@@ -195,6 +205,19 @@ W3_KEYS = {
     "trigger": "quest share",
     "value": "quest reward",
 }
+# S1-R2 (chat commands in, FOREVER-SMALL-SLICES-SPEC section 3): the `chat` strategy and the keys of the commands the spec's
+# table registers. Every other trigger the strategy names stays unregistered on purpose (each one does less): the quest, item, trade
+# and guild commands belong to their own packages (`accept`, `q`, `e`, `t`, `s`, `b`, `u`, the guild orders), `cast`/`castnc` name the
+# 1,186-line CastCustomSpellAction.cpp, `jump` is out by D5, and the rest (`pet`, `talk`, `grind`, `wander`, `portal`, `summon`, `who`,
+# `where`, `stance`, ...) are the kits this slice does not have. Creator file:line of every key here: forever/docs/S1-R2-NOTES.md.
+CH_KEYS = {
+    "strategy": "chat",
+    "action": "tank attack chat shortcut, flee chat shortcut, max dps chat shortcut, "
+              "stats, help, spells, spell, los, rti, range, save mana, tell attackers, tell possible attack targets, co, nc, formation",
+    "trigger": "follow, stay, attack, tank attack, flee, max dps, "
+               "stats, help, spells, spell, los, rti, range, save mana, attackers, possible attack targets, co, nc, formation",
+    "value": "",
+}
 # W8 (auction house): ah sell/list, ah buy, ah cancel.
 W8_KEYS = {
     "strategy": "",
@@ -202,7 +225,7 @@ W8_KEYS = {
     "trigger": "",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, WL0_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

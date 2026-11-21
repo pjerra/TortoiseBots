@@ -291,7 +291,7 @@ namespace ai
 
         virtual bool Accept(const ItemPrototype* proto) override
         {
-            return ItemProtoFitsSlotCompat(bot, proto, slot);
+            return slot == EquipSlotOfProtoCompat(bot, proto);
         }
 
     private:
