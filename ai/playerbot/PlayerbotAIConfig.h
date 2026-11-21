@@ -452,6 +452,14 @@ public:
     // with 2+ deaths and no master/group, teleport once to a validated
     // level-fitting point and reset the death count. Default on; fail-closed.
     bool relocateHopelessDeaths = true;
+    // Random pause in seconds (min..max) before a free bot releases spirit after dying (0 disables).
+    uint32 deathReleasePauseMinSec = 3;
+    uint32 deathReleasePauseMaxSec = 10;
+    // Maximum lateral offset in yards applied to long open-world walk destinations so bots
+    // do not walk single-file along the exact same line (0 disables).
+    float walkTargetOffset = 2.5f;
+    // Free bots prioritize living rare spawns of their level within sight distance.
+    bool huntRares = false;
     // Grace period in seconds before a masterless random or autonomous bot left
     // inside a dungeon or raid instance without a real player in its group is
     // teleported to its homebind. 0 disables. Default 90.
