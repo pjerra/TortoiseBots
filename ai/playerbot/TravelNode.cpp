@@ -3642,7 +3642,7 @@ void TravelNodeMap::loadNodeStore()
 
         if (result)
         {
-            uint32 skippedUnknownNode = 0, skippedCrossMapWalk = 0;
+            uint32 skippedUnknownNode = 0, skippedCrossMapWalk = 0, skippedInvalidType = 0;
             BarGoLink bar(result->GetRowCount());
             do
             {
@@ -3660,6 +3660,13 @@ void TravelNodeMap::loadNodeStore()
                 TravelNode* startNode = startIt->second;
                 TravelNode* endNode = endIt->second;
 
+                // An unknown or invalid link type is no route (ForeverCore): refused here, counted, logged once below.
+                if (TravelLoaderChecksLinkTypeCompat() && !ai::travel_graph::LinkTypeKnown(fields[2].GetUInt8()))
+                {
+                    ++skippedInvalidType;
+                    continue;
+                }
+
                 // A walk link joins two nodes of one map (ForeverCore: the loader trusts no data a walk cannot follow).
                 if (TravelLoaderChecksWalkMapsCompat() &&
                     !ai::travel_graph::WalkLinkMapsConsistent(fields[2].GetUInt8(), startNode->GetMapId(), endNode->GetMapId()))
@@ -3676,6 +3683,8 @@ void TravelNodeMap::loadNodeStore()
             } while (result->NextRow());
 
             sLog.outString(">> Loaded " SIZEFMTD " travelNode paths.", result->GetRowCount());
+            if (skippedInvalidType)
+                sLog.outString(">> Skipped %u travelNode links with an unknown or invalid link type.", skippedInvalidType);
             if (skippedUnknownNode || skippedCrossMapWalk)
                 sLog.outString(">> Skipped %u travelNode links to an unknown node and %u walk links between two maps.",
                     skippedUnknownNode, skippedCrossMapWalk);

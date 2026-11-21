@@ -97,13 +97,25 @@ int main()
     CHECK(Reach(dungeonDoor, tg::LinkUsableOnForever, false, true).size() == 1);
 
     // The link rule itself: only walks and area triggers are routes on ForeverCore (D4 and W5).
-    CHECK(tg::LinkUsableOnForever(tg::kNone));
+    CHECK(!tg::LinkUsableOnForever(tg::kNone)); // review medium: an invalid type is no route
+    CHECK(!tg::LinkUsableOnForever(7));
+    CHECK(!tg::LinkUsableOnForever(255));
+    CHECK(!tg::LinkTypeKnown(tg::kNone));
+    CHECK(!tg::LinkTypeKnown(7));
+    CHECK(tg::LinkTypeKnown(tg::kWalk) && tg::LinkTypeKnown(tg::kStaticPortal));
     CHECK(tg::LinkUsableOnForever(tg::kWalk));
     CHECK(tg::LinkUsableOnForever(tg::kAreaTrigger));
     CHECK(!tg::LinkUsableOnForever(tg::kTransport));
     CHECK(!tg::LinkUsableOnForever(tg::kFlightPath));
     CHECK(!tg::LinkUsableOnForever(tg::kTeleportSpell)); // D4: no teleport outside the logged rescue
     CHECK(!tg::LinkUsableOnForever(tg::kStaticPortal));  // D4
+
+    // A cross-map link of an invalid type gives no route and no map transfer.
+    Node inv1{ "InvA", 0, true, {} }, inv2{ "InvB", 1, true, {} };
+    Link(inv1, inv2, tg::kNone);
+    CHECK(Reach(inv1, tg::LinkUsableOnForever).size() == 1);
+    CHECK(!tg::MapTransferWanted(tg::LinkUsableOnForever(tg::kNone), 0, 1));
+    CHECK(!tg::MapTransferWanted(tg::LinkUsableOnForever(9), 0, 1));
 
     // Map transfers (LoadMapTransfers): the zeppelin and the flight path add none, the area trigger does, a same-map link never does.
     std::map<std::pair<std::uint32_t, std::uint32_t>, int> transfers;
