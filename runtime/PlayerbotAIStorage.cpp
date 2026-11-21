@@ -114,3 +114,25 @@ void PlayerbotAIStorage::ClearPlayerForcedRole(ObjectGuid guid)
     std::lock_guard<std::mutex> lock(mutex_);
     playerForcedRoles_.erase(guid);
 }
+
+void PlayerbotAIStorage::SetPlayerForcedSpecTab(ObjectGuid guid, int8 tab)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (tab < 0 || tab > 2)
+        playerForcedSpecTabs_.erase(guid);
+    else
+        playerForcedSpecTabs_[guid] = tab;
+}
+
+int8 PlayerbotAIStorage::GetPlayerForcedSpecTab(ObjectGuid guid) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = playerForcedSpecTabs_.find(guid);
+    return it != playerForcedSpecTabs_.end() ? it->second : -1;
+}
+
+void PlayerbotAIStorage::ClearPlayerForcedSpecTab(ObjectGuid guid)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    playerForcedSpecTabs_.erase(guid);
+}

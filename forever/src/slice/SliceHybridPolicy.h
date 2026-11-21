@@ -83,6 +83,7 @@ struct GroupMemberRoleInfo
     bool lfgDps = false;
     bool tankSignal = false;
     bool canHeal = false;
+    std::uint8_t defaultRole = RoleNone;
 };
 
 inline std::uint8_t DefaultClassRole(unsigned classId)
@@ -106,7 +107,7 @@ inline bool HasOtherHealer(std::vector<GroupMemberRoleInfo> const& members, std:
         if (m.guid == excludeGuid)
             continue;
         bool const isHealer = m.forcedRole == RoleHealer ||
-            (m.forcedRole == RoleNone && (m.lfgHealer || (m.canHeal && !m.lfgDps)));
+            (m.forcedRole == RoleNone && (m.lfgHealer || (m.canHeal && !m.lfgDps && (m.defaultRole == RoleNone || m.defaultRole == RoleHealer))));
         if (isHealer)
             return true;
     }
@@ -185,7 +186,7 @@ inline std::uint8_t ResolveGroupRole(GroupMemberRoleInfo const& self,
         return RoleTank;
     if (PickSubstituteTankGuid(members, allowSubstitute) == self.guid && self.guid != 0)
         return RoleTank;
-    return DefaultClassRole(self.classId);
+    return self.defaultRole != RoleNone ? self.defaultRole : DefaultClassRole(self.classId);
 }
 }
 }

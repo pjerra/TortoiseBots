@@ -31,6 +31,7 @@ namespace h3
 // ---- command handlers (rows of the `.tb` table in TbScripts.cpp) ----
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb order <bot|party [leader]> <verb> [arg] [#token]
 bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb role [<bot|character|party [leader]>] tank|healer|dps|none [#token]
+bool HandleSpec(ChatHandler* handler, Trinity::ChatCommands::Tail args);       // .tb spec <bot|party [leader]> <tab|spec|none> [#token]
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb master <bot|party [leader]> <commander|none> [#token]
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb party <leader> | .tb party <leader> <member>... [#token]
 bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args);

@@ -25,6 +25,7 @@
 #include "host/run/TbRunLiquid.h"
 #include "host/run/TbRunFacts.h"
 #include "slice/SliceHybridPolicy.h"
+#include "slice/SliceSpecPolicy.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -551,6 +552,13 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     }
     if (o.verb == "rekit")
     {
+        ApplyKit(ai, ai->GetForcedRole(), false);
+        return "ok";
+    }
+    if (o.verb == "spec")
+    {
+        int8 const tab = int8(std::atoi(o.arg.c_str()));
+        PlayerbotAIStorage::Instance().SetPlayerForcedSpecTab(bot->GetGUID(), tab);
         ApplyKit(ai, ai->GetForcedRole(), false);
         return "ok";
     }
@@ -1596,6 +1604,77 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     reply.End(end);
     return true;
 }
+
+// ---- `.tb spec <bot|party [leader]> <tab|spec|none> [#token]` ----
+
+bool HandleSpec(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "spec"))
+        return false;
+    bool const leaderFollows = args.w.size() >= 3 && Lower(args.w[0]) == "party";
+    size_t pos = 0;
+    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
+    if (!who.ok())
+        return Fail(handler, args, "spec", who.code, who.detail);
+    if (pos >= args.w.size())
+        return Fail(handler, args, "spec", "missing-argument", "specify tab (0, 1, 2), spec name, or none");
+
+    std::string word = Lower(args.w[pos]);
+    for (size_t i = pos + 1; i < args.w.size(); ++i)
+        word += "_" + Lower(args.w[i]);
+
+    for (Player* bot : who.bots)
+    {
+        int checkTab = -1;
+        if (!TortoiseBots::slice::spec::ParseSpecArg(unsigned(bot->GetClass()), word, checkTab))
+            return Fail(handler, args, "spec", "bad-argument", args.w[pos]);
+    }
+
+    uint32 queued = 0;
+    Reply reply(handler, args, "spec");
+    reply.Begin();
+    for (Player* bot : who.bots)
+    {
+        int tab = -1;
+        TortoiseBots::slice::spec::ParseSpecArg(unsigned(bot->GetClass()), word, tab);
+        Rec rec("spec");
+        rec.S("bot", bot->GetName());
+        if (tab < 0)
+            rec.S("tab", "auto").S("spec", "auto");
+        else
+            rec.N("tab", tab).S("spec", TortoiseBots::slice::spec::SpecTabName(unsigned(bot->GetClass()), tab));
+
+        PlayerbotAI* ai = AiOf(bot);
+        if (!ai)
+        {
+            PlayerbotAIStorage::Instance().SetPlayerForcedSpecTab(bot->GetGUID(), int8(tab));
+            rec.S("status", "stored");
+            reply.Line(rec);
+            continue;
+        }
+        Order order;
+        order.verb = "spec";
+        order.arg = std::to_string(tab);
+        Player* commander = CommanderOf(bot);
+        order.owner = commander ? commander->GetGUID() : bot->GetGUID();
+        std::string code, detail;
+        uint32 seq = 0;
+        if (!Enqueue(bot, std::move(order), code, detail, seq))
+        {
+            rec.S("status", "refused").S("code", code).T("msg", detail);
+            reply.Line(rec);
+            continue;
+        }
+        ++queued;
+        rec.N("seq", seq).S("status", "queued");
+        reply.Line(rec);
+    }
+    Rec end("spec");
+    end.P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("queued", queued);
+    reply.End(end);
+    return true;
+}
 }
 }
 
@@ -1615,6 +1694,12 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
     Words const args = Split(tail);
     return RequireBuilt(handler, args, "role");
+}
+
+bool HandleSpec(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    return RequireBuilt(handler, args, "spec");
 }
 
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
