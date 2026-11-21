@@ -230,6 +230,7 @@ void BotMgr::LoadConfig()
     _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", false);
     _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", false);
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", false);
     _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
@@ -1530,7 +1531,7 @@ void BotMgr::Update(uint32 diff)
 
 void BotMgr::TickQuestGroups(uint32 diff)
 {
-    if (!sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", false))
+    if (!_groupQuestsEnabled)
         return;
 
     _questGroupTimerMs += diff;
