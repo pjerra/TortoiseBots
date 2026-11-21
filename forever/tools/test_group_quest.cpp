@@ -102,6 +102,25 @@ int main()
         ++passed;
     }
 
+    // 8. Live item 11: the engine adopts the party leader as master for grouped
+    // bots. A member bound to the quest leader is still questing, not lost: a
+    // leader plus one adopted member keeps the party, and a real loss still ends it.
+    {
+        char const* reason = nullptr;
+        QuestGroupState adopted{ 176, 1000, 1, 2, false, false, 1 };
+        assert(!ShouldDisbandQuestGroup(adopted, 5000, &reason));
+
+        QuestGroupState stolen = adopted;
+        stolen.anyMemberLostFree = true;
+        assert(ShouldDisbandQuestGroup(stolen, 5000, &reason));
+        assert(std::string(reason) == "member-not-free");
+
+        QuestGroupState loneAdopted{ 176, 1000, 0, 1, false, false, 1 };
+        assert(ShouldDisbandQuestGroup(loneAdopted, 5000, &reason));
+        assert(std::string(reason) == "too-few-members");
+        ++passed;
+    }
+
     std::cout << "PASS: test_group_quest (" << passed << " checks, 0 failed)\n";
     return 0;
 }

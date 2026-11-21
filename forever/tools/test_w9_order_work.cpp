@@ -108,6 +108,23 @@ int main()
         ++passed;
     }
 
+    // 7. Live item 10: a personal craft order with everything crafted delivers by
+    // mail (no guild bank exists); a reachable mailbox must decide DeliverMail.
+    {
+        OrderStepInput in;
+        in.type = OrderType::Craft;
+        in.delivered = 0;
+        in.inBags = 2;
+        in.want = 2;
+        in.canCraft = true;
+        in.canDeliverBank = false;
+        in.canDeliverMail = true;
+        OrderStepDecision const d = DecideOrderStep(in);
+        assert(d.have == 2);
+        assert(d.action == OrderStepAction::DeliverMail);
+        ++passed;
+    }
+
     std::cout << "PASS: test_w9_order_work (" << passed << " checks, 0 failed)\n";
     return 0;
 }
