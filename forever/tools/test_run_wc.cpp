@@ -534,6 +534,10 @@ void TestPlanShape(ai::DungeonPlan const* plan, int unitRows)
     CHECK(bosses == want);
     CHECK(bosses.count(3671) == 0);     // Lady Anacondra: a pool boss inside a pack, kill_first 3671
     CHECK(std::find(plan->killFirst.begin(), plan->killFirst.end(), 3671u) != plan->killFirst.end());
+    // Live run 5: the Druids of the Fang (3840) are the kill-first units, ahead of Anacondra, and are never in the CC list
+    // (a kill_first unit is not crowd-controlled, so a cc_priority entry for it would be dead).
+    CHECK(plan->killFirst.size() >= 2 && plan->killFirst[0] == 3840u && plan->killFirst[1] == 3671u);
+    CHECK(std::find(plan->ccPriority.begin(), plan->ccPriority.end(), 3840u) == plan->ccPriority.end());
 }
 
 void TestWalk(ai::DungeonPlan const* plan)
