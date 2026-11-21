@@ -2,9 +2,11 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/policy/gear/TrinketUsePolicy.h"
 #include "UseTrinketAction.h"
+#ifndef TORTOISEBOTS_FOREVER
 #include "Objects/Item.h"
 #include "Objects/ItemPrototype.h"
 #include "Objects/Player.h"
+#endif
 
 using namespace ai;
 

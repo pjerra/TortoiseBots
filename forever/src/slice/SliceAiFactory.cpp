@@ -411,7 +411,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             combatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "ranged", "flee", "cc", "buff", "boost", "aoe", "cure", NULL);
             break;
         case CLASS_ROGUE:
-            combatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "close", "behind", "cc", "buff", "boost", "aoe", "stealth", NULL);
+            combatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "close", "behind", "cc", "buff", "boost", "aoe", "stealth", "poisons", NULL);
             break;
         case CLASS_HUNTER:
             combatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "ranged", "flee", "aspect", "sting", "pet", "buff", "cc", "aoe", "boost", NULL);
@@ -503,7 +503,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             nonCombatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "follow", "cure", "buff", "food", "default", "boost", NULL);
             return;
         case CLASS_ROGUE:
-            nonCombatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "follow", "buff", "food", "default", "boost", "stealth", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "follow", "buff", "food", "default", "boost", "stealth", "poisons", NULL);
             return;
         case CLASS_HUNTER:
             nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "default", "boost", "cc", "aoe", NULL);
@@ -537,7 +537,7 @@ void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const 
 
 void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const facade, ReactionEngine* reactionEngine)
 {
-    // Reactions (AoE avoidance, potions, chat) are out of the slice. The class strategy is not: its reaction triggers are the
+    // The class strategy's reaction triggers are the
     // ones that move the bot between the engines ("combat start" -> "set combat state", "combat end" -> "set non combat state",
     // "death" -> "set dead state": ClassStrategy::InitReactionTriggers), exactly as the full factory adds it (AiFactory.cpp:2085,
     // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
@@ -546,11 +546,11 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // Slice 8: the mage's "fire" and the rogue's "combat" (AiFactory.cpp:2015-2060, tab 1).
     // Slice 10: the bear's "tank feral", the restoration druid's and shaman's "restoration", the paladin's "holy" or "protection" (AiFactory.cpp:1990-2125).
     // Slice 11: the hunter's "marksmanship" and the warlock's "affliction" (AiFactory.cpp:2034-2060 and :2138-2152, tab 1 and tab 0).
-    // S1-R2: the chat strategy runs beside the class kit on every class (the full factory's reaction set, AiFactory.cpp:1988, without "react",
-    // "avoid aoe" and "potions", which are out of the slice). Its triggers are the commands a player whispers or says in party chat
+    // S1-R2: the chat strategy runs beside the class kit on every class (the full factory's reaction set, AiFactory.cpp:1988, with "react",
+    // "avoid aoe" and "potions"). Its triggers are the commands a player whispers or says in party chat
     // (ChatCommandHandlerStrategy.cpp, chat/PlayerbotAI::HandleCommands); the command the host queued reaches it at the next reaction pass.
     reactionEngine->addStrategy("chat");
-    reactionEngine->addStrategies("react", "avoid aoe", NULL);
+    reactionEngine->addStrategies("react", "avoid aoe", "potions", NULL);
     if (!player)
         return;
     int const tab = KitSpecTab(player, facade);

@@ -69,7 +69,7 @@ Unit* PartyMemberToSoulstone::Calculate()
             // An invisible GM is dropped as a spell target by the core
             // (Spell::CheckTarget): the stone finished with no target and the
             // bot started it again every few seconds (#1107).
-            if (member->GetVisibility() == VISIBILITY_OFF)
+            if (PlayerHiddenGmCompat(member))
                 continue;
 
             if (!facts.ownStoneActive && member->IsAlive() &&

@@ -19,6 +19,7 @@
 #include "playerbot/strategy/actions/AhAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/BuffAction.h"
 #include "playerbot/strategy/actions/BuyAction.h"
 #include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChangeStrategyAction.h"
@@ -32,6 +33,7 @@
 #include "playerbot/strategy/actions/GenericSpellActions.h"
 #include "playerbot/strategy/actions/GiveItemAction.h"
 #include "playerbot/strategy/actions/HelpAction.h"
+#include "playerbot/strategy/actions/ImbueAction.h"
 #include "playerbot/strategy/actions/ListSpellsAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
@@ -57,12 +59,15 @@
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/TellTargetAction.h"
 #include "playerbot/strategy/actions/TrainerAction.h"
+#include "playerbot/strategy/actions/UseConsumableAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
+#include "playerbot/strategy/actions/UseTrinketAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
+#include "playerbot/strategy/generic/ConsumableStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FleeStrategy.h"
@@ -85,6 +90,7 @@
 #include "playerbot/strategy/generic/TankAssistStrategy.h"
 #include "playerbot/strategy/generic/ThreatStrategy.h"
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
+#include "playerbot/strategy/generic/UsePotionsStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
 #include "playerbot/strategy/triggers/ChatCommandTrigger.h"
@@ -154,6 +160,7 @@
 #include "playerbot/strategy/values/PartyMemberToDispel.h"
 #include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "playerbot/strategy/values/PartyMemberToResurrect.h"
+#include "playerbot/strategy/values/PartyMemberToSoulstone.h"
 #include "playerbot/strategy/values/PartyMemberWithoutAuraValue.h"
 #include "playerbot/strategy/values/PartyMemberWithoutItemValue.h"
 #include "playerbot/strategy/values/PetTargetValue.h"
@@ -186,7 +193,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (27 of its keys)
+    // the registry of StrategyContext (29 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -219,6 +226,8 @@ namespace slice
             creators["focus"] = [](PlayerbotAI* ai) { return new FocusStrategy(ai); };
             creators["focus heal targets"] = [](PlayerbotAI* ai) { return new FocusHealTargetsStrategy(ai); };
             creators["focus rti targets"] = [](PlayerbotAI* ai) { return new FocusRtiTargetsStrategy(ai); };
+            creators["potions"] = [](PlayerbotAI* ai) { return new UsePotionsStrategy(ai); };
+            creators["consumables"] = [](PlayerbotAI* ai) { return new ConsumableStrategy(ai); };
         }
     };
 
@@ -258,7 +267,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (73 of its keys)
+    // the registry of ActionContext (84 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -337,10 +346,21 @@ namespace slice
             creators["will of the forsaken"] = [](PlayerbotAI* ai) { return new CastWillOfTheForsakenAction(ai); };
             creators["mana tap"] = [](PlayerbotAI* ai) { return new CastManaTapAction(ai); };
             creators["arcane torrent"] = [](PlayerbotAI* ai) { return new CastArcaneTorrentAction(ai); };
+            creators["whipper root tuber"] = [](PlayerbotAI* ai) { return new UseWhipperRootTuberAction(ai); };
+            creators["healthstone"] = [](PlayerbotAI* ai) { return new UseHealthstoneAction(ai); };
+            creators["healing potion"] = [](PlayerbotAI* ai) { return new UseHealingPotionAction(ai); };
+            creators["mana potion"] = [](PlayerbotAI* ai) { return new UseManaPotionAction(ai); };
+            creators["dark rune"] = [](PlayerbotAI* ai) { return new UseDarkRuneAction(ai); };
+            creators["use bandage"] = [](PlayerbotAI* ai) { return new UseBandageAction(ai); };
+            creators["anti-venom"] = [](PlayerbotAI* ai) { return new UseAntiVenomAction(ai); };
+            creators["use consumable"] = [](PlayerbotAI* ai) { return new UseConsumableAction(ai); };
+            creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketAction(ai); };
+            creators["apply stone"] = [](PlayerbotAI* ai) { return new ImbueWithStoneAction(ai); };
+            creators["apply oil"] = [](PlayerbotAI* ai) { return new ImbueWithOilAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (39 of its keys)
+    // the registry of ChatActionContext (40 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -385,6 +405,7 @@ namespace slice
             creators["nc"] = [](PlayerbotAI* ai) { return new ChangeNonCombatStrategyAction(ai); };
             creators["formation"] = [](PlayerbotAI* ai) { return new SetFormationAction(ai); };
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceAction(ai); };
+            creators["buff"] = [](PlayerbotAI* ai) { return new BuffAction(ai); };
         }
     };
 
@@ -409,7 +430,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (131 of its keys)
+    // the registry of TriggerContext (133 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -546,6 +567,8 @@ namespace slice
             creators["arcane torrent"] = [](PlayerbotAI* ai) { return new ArcanetorrentTrigger(ai); };
             creators["war stomp"] = [](PlayerbotAI* ai) { return new WarStompTrigger(ai); };
             creators["perception"] = [](PlayerbotAI* ai) { return new PerceptionTrigger(ai); };
+            creators["has poison debuff"] = [](PlayerbotAI* ai) { return new HasPoisonDebuffTrigger(ai); };
+            creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
         }
     };
 
@@ -593,7 +616,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (205 of its keys)
+    // the registry of ValueContext (206 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -804,11 +827,12 @@ namespace slice
             creators["attacker without aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutAuraTargetValue(ai); };
             creators["attacker without my aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutMyAuraTargetValue(ai); };
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceValue(ai); };
+            creators["party member to soulstone"] = [](PlayerbotAI* ai) { return new PartyMemberToSoulstone(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 36, kActions = 124, kTriggers = 157, kValues = 205;
+    constexpr unsigned kStrategies = 38, kActions = 136, kTriggers = 159, kValues = 206;
 }
 }
 

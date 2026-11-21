@@ -323,3 +323,12 @@ ai/playerbot/strategy/generic/FocusStrategy.cpp
 ai/playerbot/strategy/actions/SpreadDistanceAction.cpp
 ai/playerbot/strategy/values/LeastHpTargetValue.cpp
 ai/playerbot/strategy/values/AttackerWithoutAuraTargetValue.cpp
+
+# Combat items (issue #124)
+ai/playerbot/strategy/generic/UsePotionsStrategy.cpp
+ai/playerbot/strategy/generic/ConsumableStrategy.cpp
+ai/playerbot/strategy/actions/UseConsumableAction.cpp
+ai/playerbot/strategy/actions/UseTrinketAction.cpp
+ai/playerbot/strategy/actions/ImbueAction.cpp
+ai/playerbot/strategy/actions/BuffAction.cpp
+ai/playerbot/strategy/values/PartyMemberToSoulstone.cpp
