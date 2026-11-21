@@ -196,6 +196,8 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 reply.Line(EventRecord(event));
         Rec end("run");
         end.S("verb", "events").S("lead", rec->leaderName);
+        if (!rec->events.empty())
+            end.N("oldest", rec->events.front().seq);
         if (rec->eventSeq)
             end.N("last", rec->eventSeq);
         reply.End(end);
