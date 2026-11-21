@@ -95,6 +95,14 @@ void HunterStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "counterattack",
         NextAction::array(0, new NextAction("counterattack", ACTION_HIGH + 2), NULL)));
 
+    triggers.push_back(new TriggerNode(
+        "scatter shot on enemy healer",
+        NextAction::array(0, new NextAction("scatter shot on enemy healer", ACTION_INTERRUPT + 2), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "scatter shot interrupt",
+        NextAction::array(0, new NextAction("scatter shot on interrupt target", ACTION_INTERRUPT + 1), NULL)));
+
     // Wyvern sting: sleep-based snare fallback when concussive shot is on
     // cooldown or unusable. The snare trigger fires only on unsnared targets;
     // the action's own usefulness gates ammo + spell state.

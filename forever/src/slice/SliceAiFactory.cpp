@@ -341,49 +341,47 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         // "heal interrupt": the overheal cancel (a heal in its cast bar is cancelled when the patient no longer needs it), added by the full factory
         // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3 of slice 2. The priest falls through to the `threat` block below
         // (slice 3: a commanded healer backs off the tank's threat).
-        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
+        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "cure", "cc", "aoe", "buff", "boost", "cast time", "heal interrupt", NULL);
     }
     else if (HybridKitOf(player, EffectiveRole(player, facade)) != HybridKit::None)
     {
         switch (HybridKitOf(player, EffectiveRole(player, facade)))
         {
             case HybridKit::Bear:
-                // AiFactory.cpp:807-853 (tab 1, tanking) without "pull back" and "aoe", "cc", "boost".
-                combatEngine->addStrategies("tank feral", "tank assist", "pull", "close", "tank face", "cure", "buff", NULL);
+                combatEngine->addStrategies("tank feral", "tank assist", "pull", "close", "tank face", "cure", "aoe", "cc", "buff", "boost", NULL);
                 return;                             // a tank never backs off the threat it holds
             case HybridKit::ProtPaladin:
-                combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff protection pve", NULL);
+                combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cure", "aoe", "cc", "aura", "blessing", "buff protection pve", "boost", NULL);
                 return;
             case HybridKit::RestoDruid:
-                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "aoe", "cc", "buff", "boost", "cast time", "heal interrupt", NULL);
                 break;
             case HybridKit::HolyPaladin:
-                combatEngine->addStrategies("holy", "dps assist", "ranged", "cure", "buff", "aura", "blessing", "cast time", "heal interrupt", NULL);
+                combatEngine->addStrategies("holy", "dps assist", "ranged", "cure", "aoe", "cc", "buff", "boost", "aura", "blessing", "cast time", "heal interrupt", NULL);
                 break;
             case HybridKit::RestoShaman:
-                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt", NULL);
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "aoe", "cc", "totems", "buff", "boost", "cast time", "heal interrupt", NULL);
                 break;
             default:
                 break;
         }
     }
     else if (player && player->GetClass() == CLASS_MAGE)
-        combatEngine->addStrategies("fire", "dps assist", "ranged", "cc", "buff", "boost", NULL);
+        combatEngine->addStrategies("fire", "dps assist", "ranged", "cure", "cc", "aoe", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_ROGUE)
-        // "cc" gives the rogue Kick (RogueCcStrategy: kick, kick on enemy healer; its Sap rows need a real player master and stay silent): M8 live test.
-        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", NULL);
+        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "aoe", "stealth", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_HUNTER)
-        combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff", NULL);
+        combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "cc", "aoe", "aspect", "sting", "pet", "buff", "boost", NULL);
     else if (player && player->GetClass() == CLASS_WARLOCK)
-        combatEngine->addStrategies("affliction", "dps assist", "ranged", "pet", "curse", "buff", NULL);
+        combatEngine->addStrategies("affliction", "dps assist", "ranged", "cc", "aoe", "pet", "curse", "buff", "boost", NULL);
     else if (WarriorIsTank(player, facade))
     {
         // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.
-        combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", NULL);
+        combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "aoe", "cc", "buff", "boost", NULL);
         return;                                     // a tank never backs off the threat it holds (KeepsPartyThreatBackoff is false for a tank)
     }
     else
-        combatEngine->addStrategies("arms", "dps assist", "close", "buff", NULL);
+        combatEngine->addStrategies("arms", "dps assist", "close", "aoe", "cc", "buff", "boost", NULL);
 
     // Applied after the class kit, as AiFactory.cpp:1009 does.
     if (KeepsPartyThreatBackoff(player, facade) && !combatEngine->HasStrategy("threat"))
@@ -417,15 +415,17 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     }
     if (player && player->GetClass() == CLASS_PRIEST)
     {
-        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", NULL);
+        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "cure", "buff", "boost", "food", "loot", "roll", "default", NULL);
         return;
     }
     if (HybridKit const kit = HybridKitOf(player, EffectiveRole(player, facade)); kit != HybridKit::None)
     {
-        // AiFactory.cpp:1284-1300, :1322-1345, :1408-1440: the spec strategy, the assist strategy of the role, then follow, cure, buff, food and the engine's own "default"
-        // (+ the paladin's aura and blessing). No "totems" out of combat (D5), no "aoe", "cc", "boost", "loot".
-        nonCombatEngine->addStrategies(HybridSpecStrategy(kit), IsTankKit(kit) ? "tank assist" : "dps assist", "follow", "cure", "buff", "food", "default", NULL);
-        if (kit == HybridKit::HolyPaladin)
+        nonCombatEngine->addStrategies(HybridSpecStrategy(kit), IsTankKit(kit) ? "tank assist" : "dps assist", "follow", "cure", "buff", "boost", "food", "default", NULL);
+        if (kit == HybridKit::Bear || kit == HybridKit::RestoDruid)
+            nonCombatEngine->addStrategies("aoe", "cc", NULL);
+        else if (kit == HybridKit::RestoShaman)
+            nonCombatEngine->addStrategy("aoe");
+        else if (kit == HybridKit::HolyPaladin)
             nonCombatEngine->addStrategies("aura", "blessing", NULL);
         else if (kit == HybridKit::ProtPaladin)
             nonCombatEngine->addStrategies("aura", "blessing", "buff protection pve", NULL);
@@ -433,22 +433,22 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     }
     if (player && player->GetClass() == CLASS_MAGE)
     {
-        nonCombatEngine->addStrategies("fire", "dps assist", "follow", "buff", "food", "default", NULL);
+        nonCombatEngine->addStrategies("fire", "dps assist", "follow", "cure", "buff", "boost", "food", "default", NULL);
         return;
     }
     if (player && player->GetClass() == CLASS_ROGUE)
     {
-        nonCombatEngine->addStrategies("combat", "dps assist", "follow", "buff", "food", "default", NULL);
+        nonCombatEngine->addStrategies("combat", "dps assist", "follow", "stealth", "buff", "boost", "food", "default", NULL);
         return;
     }
     if (player && player->GetClass() == CLASS_HUNTER)
     {
-        nonCombatEngine->addStrategies("marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default", NULL);
+        nonCombatEngine->addStrategies("marksmanship", "dps assist", "cc", "aoe", "aspect", "pet", "buff", "boost", "follow", "food", "default", NULL);
         return;
     }
     if (player && player->GetClass() == CLASS_WARLOCK)
     {
-        nonCombatEngine->addStrategies("affliction", "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default", NULL);
+        nonCombatEngine->addStrategies("affliction", "dps assist", "pet", "pet voidwalker", "buff", "boost", "follow", "food", "default", NULL);
         return;
     }
     if (WarriorIsTank(player, facade))
@@ -456,10 +456,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         // AiFactory.cpp:1445 plus the follow the slice's movement mode needs, food (the rest between pulls) and the engine's own "default".
         // Slice 9 (L9): the tank (the run's leader and the carrier of plan items) loots and rolls like the others: "loot" (corpses, chests) and "roll"
         // (group loot, greed only). The legacy dungeon-run feature has its own loot steps, DungeonRunLootFfa stays 0 (FOREVER-SLICE9-SPEC 5d).
-        nonCombatEngine->addStrategies("protection", "tank assist", "follow", "food", "loot", "roll", "default", NULL);
+        nonCombatEngine->addStrategies("protection", "tank assist", "follow", "buff", "boost", "food", "loot", "roll", "default", NULL);
         return;
     }
-    nonCombatEngine->addStrategies("arms", "dps assist", "follow", "food", "loot", "roll", "default", NULL);
+    nonCombatEngine->addStrategies("arms", "dps assist", "follow", "buff", "boost", "food", "loot", "roll", "default", NULL);
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* deadEngine)
