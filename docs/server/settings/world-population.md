@@ -67,7 +67,7 @@ These settings configure autonomous random bots roaming the open world, includin
 | [`AiPlayerbot.RelocateHopelessDeaths`](#aiplayerbotrelocatehopelessdeaths) | `1` (commented out in the template; uncomment to change it) | Relocates bots repeatedly killed near enemy guards or in death loops. |
 | [`AiPlayerbot.DeathReleasePauseMinSec`](#aiplayerbotdeathreleasepauseminsec--deathreleasepausemaxsec) / `DeathReleasePauseMaxSec` | `3` / `10` | Random pause in seconds before a free bot releases spirit after dying. |
 | [`AiPlayerbot.WalkTargetOffset`](#aiplayerbotwalktargetoffset) | `2.5` | Maximum lateral offset in yards added to open-world walk destinations so bots spread out. |
-| [`AiPlayerbot.HuntRares`](#aiplayerbothuntrares) | `0` | Free bots prioritize living rare spawns of their level within sight distance. |
+| [`AiPlayerbot.HuntRares`](#aiplayerbothuntrares) | `1` | Free bots prioritize living rare spawns of their level within sight distance. |
 | [`AiPlayerbot.AbandonedInstanceGraceSec`](#aiplayerbotabandonedinstancegracesec) | `90` | Grace period in seconds before an abandoned random or autonomous bot inside a dungeon or raid returns to its homebind. |
 | [`AiPlayerbot.UnstuckHearthLevelFit`](#aiplayerbotunstuckhearthlevelfit) | `1` | Requires bot hearthstone bind point to be within 10 levels of bot level. |
 | [`AiPlayerbot.StuckTravelTeleport`](#aiplayerbotstucktravelteleport) | `1` | Teleports long-stuck masterless bots directly to their travel destinations. |
@@ -731,7 +731,7 @@ Maximum lateral offset in yards added to open-world walk destinations at least 1
 
 ### `AiPlayerbot.HuntRares`
 Allows free bots to prioritize living rare spawns of their level within sight distance instead of skipping them or picking closer ordinary mobs.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 ### `AiPlayerbot.AbandonedInstanceGraceSec`
 Grace period in seconds before a random or autonomous bot left inside a dungeon or raid instance without a real player in its group teleports back to its homebind.

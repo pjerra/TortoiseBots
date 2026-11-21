@@ -247,8 +247,8 @@ AiPlayerbot.DeathReleasePauseMaxSec = 10
 # Maximum lateral offset in yards added to open-world walk destinations >= 15 yd away
 # so bots spread out instead of walking the exact same line. 0 disables. Default 2.5.
 AiPlayerbot.WalkTargetOffset = 2.5
-# Free bots prioritize living rare spawns of their level within sight distance. Default 0.
-AiPlayerbot.HuntRares = 0
+# Free bots prioritize living rare spawns of their level within sight distance. Default 1.
+AiPlayerbot.HuntRares = 1
 # Grace period in seconds before a masterless random or autonomous bot left
 # inside a dungeon or raid instance without a real player in its group is
 # teleported back to its homebind. 0 disables. Default 90.

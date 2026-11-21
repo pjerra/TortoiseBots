@@ -969,7 +969,7 @@ bool PlayerbotAIConfig::Initialize()
     deathReleasePauseMinSec = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.DeathReleasePauseMinSec", 3)));
     deathReleasePauseMaxSec = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.DeathReleasePauseMaxSec", 10)));
     walkTargetOffset = std::max(0.0f, config.GetFloatDefault("AiPlayerbot.WalkTargetOffset", 2.5f));
-    huntRares = config.GetBoolDefault("AiPlayerbot.HuntRares", false);
+    huntRares = config.GetBoolDefault("AiPlayerbot.HuntRares", true);
     abandonedInstanceGraceSec = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.AbandonedInstanceGraceSec", 90)));
     repopAtGraveyard = config.GetBoolDefault("AiPlayerbot.RepopAtGraveyard", true);
     turtleMountAtLevel = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.TurtleMountAtLevel", 18));

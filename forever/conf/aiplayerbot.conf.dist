@@ -1377,7 +1377,7 @@ AiPlayerbot.DeathReleasePauseMaxSec = 10
 AiPlayerbot.WalkTargetOffset = 2.5
 
 # AiPlayerbot.HuntRares  (bool, PlayerbotAIConfig.cpp:972)
-AiPlayerbot.HuntRares = 0
+AiPlayerbot.HuntRares = 1
 
 # AiPlayerbot.AbandonedInstanceGraceSec  (int, PlayerbotAIConfig.cpp:973)
 AiPlayerbot.AbandonedInstanceGraceSec = 90
