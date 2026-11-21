@@ -263,6 +263,7 @@ private:
     void TrackLife(Bot& bot, Player* me);
     void FreeThink(Bot& bot, Player* me);
     void GhostRescue(Bot& bot, Player* me);
+    void TickQuestGroups(uint32 diff);
     void EnsureEntrance(Bot const& bot, Player* me);
     bool IsCommandedHere(Bot const& bot, Player* me) const;
     void DeadBackstop(Bot& bot, Player* me);
@@ -278,6 +279,16 @@ private:
     struct PendingCreation;
     void ConfirmCreations();
     std::vector<std::shared_ptr<PendingCreation>> _creating;
+
+    struct QuestGroupEntry
+    {
+        ObjectGuid groupGuid;
+        uint32 questId = 0;
+        uint64 formedAtMs = 0;
+        std::vector<ObjectGuid> members;
+    };
+    std::vector<QuestGroupEntry> _questGroups;
+    uint32 _questGroupTimerMs = 0;
 
     std::unordered_map<ObjectGuid, Bot> _bots;
     bool _enabled = false;

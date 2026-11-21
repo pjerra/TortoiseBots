@@ -1,5 +1,5 @@
 #include "TbBotMgr.h"
-#include "host/TbHostGuildOrders.h"
+#include "host/TbHostGroupQuestPure.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
@@ -8,6 +8,8 @@
 #include "CellImpl.h"
 #include "CharacterPackets.h"
 #include "DatabaseEnv.h"
+#include "GameTime.h"
+#include "QuestDef.h"
 #include "GridNotifiers.h"
 #include "Group.h"
 #include "GroupMgr.h"
@@ -1473,6 +1475,148 @@ void BotMgr::Update(uint32 diff)
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);
         _bots.erase(guid);
+    }
+
+    TickQuestGroups(diff);
+}
+
+void BotMgr::TickQuestGroups(uint32 diff)
+{
+    if (!sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", false))
+        return;
+
+    _questGroupTimerMs += diff;
+    if (_questGroupTimerMs < 10000)
+        return;
+    _questGroupTimerMs = 0;
+
+    uint64 const nowMs = GameTime::GetGameTimeMS();
+
+    // 1. Disband finished/broken quest groups.
+    for (auto it = _questGroups.begin(); it != _questGroups.end();)
+    {
+        Group* group = nullptr;
+        for (ObjectGuid const& mGuid : it->members)
+        {
+            if (Player* p = FindBot(mGuid))
+            {
+                if (Group* g = p->GetGroup(); g && g->GetGUID() == it->groupGuid)
+                {
+                    group = g;
+                    break;
+                }
+            }
+        }
+
+        tbhost::group_quest::QuestGroupState st;
+        st.questId = it->questId;
+        st.formedAtMs = it->formedAtMs;
+        if (group)
+        {
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                auto bIt = _bots.find(slot.guid);
+                if (bIt == _bots.end())
+                {
+                    st.hasRealPlayer = true;
+                    break;
+                }
+                if (!bIt->second.free || !bIt->second.master.IsEmpty())
+                {
+                    st.anyMemberLostFree = true;
+                    break;
+                }
+                ++st.activeMemberCount;
+                if (Player* p = bIt->second.session ? bIt->second.session->GetPlayer() : nullptr)
+                {
+                    if (p->GetQuestStatus(it->questId) == QUEST_STATUS_INCOMPLETE)
+                        ++st.membersStillIncomplete;
+                }
+            }
+        }
+
+        char const* reason = nullptr;
+        if (!group || tbhost::group_quest::ShouldDisbandQuestGroup(st, nowMs, &reason))
+        {
+            if (group && !st.hasRealPlayer)
+                group->Disband(true);
+            for (ObjectGuid const& mGuid : it->members)
+            {
+                if (auto bIt = _bots.find(mGuid); bIt != _bots.end() && bIt->second.free && bIt->second.brain)
+                    engine::SetQuestGroupMember(bIt->second.brain.get(), false);
+            }
+            TC_LOG_INFO("tortoisebots", "[W3] group-quest disband quest={} reason={}",
+                it->questId, reason ? reason : "gone");
+            it = _questGroups.erase(it);
+        }
+        else
+            ++it;
+    }
+
+    // 2. Collect free bots holding incomplete group/elite quests (in-memory only, no world scan).
+    std::vector<tbhost::group_quest::BotQuestCandidate> candidates;
+    for (auto const& [guid, bot] : _bots)
+    {
+        if (!bot.free || !bot.master.IsEmpty())
+            continue;
+        Player* me = bot.session ? bot.session->GetPlayer() : nullptr;
+        if (!me || !me->IsInWorld() || !me->FindMap() || !me->IsAlive() || me->IsInCombat())
+            continue;
+        if (me->GetGroup() || me->GetGroupInvite())
+            continue;
+
+        tbhost::group_quest::BotQuestCandidate cand;
+        cand.guidLow = guid.GetCounter();
+        cand.mapId = me->GetMapId();
+        cand.x = me->GetPositionX();
+        cand.y = me->GetPositionY();
+        cand.level = me->GetLevel();
+        cand.alive = true;
+        cand.inCombat = false;
+        cand.inGroup = false;
+
+        for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 const qid = me->GetQuestSlotQuestId(slot);
+            if (!qid)
+                continue;
+            Quest const* q = sObjectMgr->GetQuestTemplate(qid);
+            if (!q || !tbhost::group_quest::IsGroupOrEliteQuest(q->GetQuestInfoID(), q->GetSuggestedPlayers()))
+                continue;
+            if (me->GetQuestStatus(qid) == QUEST_STATUS_INCOMPLETE)
+                cand.incompleteGroupQuests.push_back(qid);
+        }
+        if (!cand.incompleteGroupQuests.empty())
+            candidates.push_back(std::move(cand));
+    }
+
+    auto const plans = tbhost::group_quest::PlanQuestGroups(candidates);
+    for (auto const& plan : plans)
+    {
+        ObjectGuid const leaderGuid = ObjectGuid::Create<HighGuid::Player>(plan.leaderGuidLow);
+        Player* leader = FindBot(leaderGuid);
+        if (!leader)
+            continue;
+        std::vector<ObjectGuid> members{ leaderGuid };
+        for (uint32 mLow : plan.memberGuidLows)
+        {
+            ObjectGuid const mGuid = ObjectGuid::Create<HighGuid::Player>(mLow);
+            Player* member = FindBot(mGuid);
+            if (!member)
+                continue;
+            if (JoinParty(member, leader).empty())
+            {
+                members.push_back(mGuid);
+                if (auto bIt = _bots.find(mGuid); bIt != _bots.end() && bIt->second.brain)
+                    engine::SetQuestGroupMember(bIt->second.brain.get(), true);
+            }
+        }
+        if (Group* g = leader->GetGroup(); g && members.size() >= 2)
+        {
+            _questGroups.push_back({ g->GetGUID(), plan.questId, nowMs, std::move(members) });
+            TC_LOG_INFO("tortoisebots", "[W3] group-quest form leader={} members={} quest={}",
+                leader->GetName(), uint32(members.size()), plan.questId);
+        }
     }
 }
 
