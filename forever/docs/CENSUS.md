@@ -168,3 +168,46 @@ Integration batch 6 (the merge of `tbf/main` 6e8e0494a into W1) re-read the same
 `integ/batch-6`): `files 270  compile clean 270  with errors 0  error places 0  includes of a header ForeverCore does not have 0`
 (run folder `yulon-ubuntu2:~/forever-build/census-runs/integ6-32-SLICE-W1`). `SLICE11.txt` on the same tree: `files 263  compile
 clean 263  with errors 0  error places 0` (`census-runs/integ6-32-SLICE11`). Nothing in the module needed a change for the pin move.
+
+## W4-A1 (travel on foot: the node graph), 2026-11-20
+
+List `forever/SLICE-W4.txt` = every path of `SLICE-W1.txt` plus `ai/playerbot/TravelNode.cpp` (271 files; the list `CMakeLists.txt` and
+`slice_registry_check.py` now read; later W4 rounds append their files). Summary on the core pin 25fc7ca (slot 7): `files 271
+compile clean 271  with errors 0  error places 0  includes of a header ForeverCore does not have 0` (run folder
+`yulon-ubuntu2:~/forever-build/census-runs/wt-w4a1-s7-SLICE-W4-20261120T164613Z-4145388/`). The first read of `TravelNode.cpp`
+alone had 106 places: the area-trigger fields and the teleport condition, the creature template and spawn fields, the NPC service
+flags, the game-object spellcaster/transport fields, the taxi row fields, `PlayerInfo`'s start position, `RACE_HIGH_ELF`,
+`SIZEFMTD`, the printf `PExecute` of the saver and the three `WorldDatabase.Query` reads; all closed in
+`forever/src/compat/TbCompat_WL4n.h` (with the area-trigger entry helpers of the W1 pair). `TravelNode.cpp` alone after the last
+edits: `files 1  compile clean 1  with errors 0  error places 0`.
+
+## W4-A1 with round A2 merged (the travel destinations and zone levels), 2026-11-20 (re-review round)
+
+List `forever/SLICE-W4.txt` = `SLICE-W1.txt` (which now ends with `ai/playerbot/TravelMgr.cpp` and
+`ai/playerbot/strategy/values/TravelValues.cpp`, round A2) plus `ai/playerbot/TravelNode.cpp`: 273 files. Summary on the core pin
+25fc7ca (slot 8): `files 273  compile clean 273  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does
+not have 0` (run folder `yulon-ubuntu2:~/forever-build/census-runs/w4a1-fix-s8-SLICE-W4-20261120T190128Z/`). The A2 files needed
+no new compat helper in this round; the node graph and the loader were exercised at boot by
+`forever/tools/travel_graph_boot_check.sh` (W4-A1-NOTES.md section 7).
+
+## Integration batch 8 (W4 merged into main's #93/#95), 2026-11-20
+
+List `forever/SLICE-W4.txt` = the W4 list (273 files on 25fc7ca) plus the `W6a/W2/W3` block main's #93 added to `SLICE-W1.txt`
+(16 legacy files: `RandomItemWeights.cpp`, `EquipAction.cpp`, `MaintenanceStrategy.cpp`, `SellAction.cpp`, `BuyAction.cpp`,
+`RepairAllAction.cpp`, `TrainerAction.cpp`, `MailAction.cpp`, `BudgetValues.cpp`, `QuestStrategies.cpp`, `QuestAction.cpp`,
+`AcceptQuestAction.cpp`, `TalkToQuestGiverAction.cpp`, `DropQuestAction.cpp`, `ShareQuestAction.cpp`,
+`QuestRewardActions.cpp`): 289 files, the same set as `SLICE-W1.txt` plus `ai/playerbot/TravelNode.cpp`. W4 branched before #93,
+so its list did not hold that block; without it the branch would have lost every W2/W3/W6a file from the build. Summary on the
+core pin d02645dd21 (slot 1, `~/ForeverCore-d02645dd`): `files 289  compile clean 289  with errors 0  error places 0 (in 0
+files)  includes of a header ForeverCore does not have 0` (run folder
+`yulon-ubuntu2:~/forever-build/census-runs/integ8-s1-SLICE-W4/`). `slice_gen_context.py --check` up to date;
+`slice_registry_check.py` `(a)=0  (b)=232` (223 on the W4 branch: the sixteen files above name more keys).
+
+The vendor travel need does not resolve on this branch: `TravelPurposeGateRegisteredCompat` needs W2's `vendor trip needed`
+value, #93 registers the `sell`/`repair` actions, the `maintenance` strategy and its budget values but not that value
+(`W2_KEYS["value"]` has no vendor need), and its calculator `ai::VendorTripNeeded` lives in
+`ai/playerbot/strategy/values/MaintenanceValues.cpp`, which no slice list compiles. So `values.count("vendor trip needed")` is
+false, the Vendor and Repair purposes are refused (`travel_purpose::RefusalOf` = `VendorKeysMissing`) and the bot keeps
+grinding - the gate's do-less answer, not a crash (`SliceMissingKeyGuard.h` answers an unregistered value with an inert
+stand-in). Closing it is a W2 follow-up: compile `MaintenanceValues.cpp` into the slice, or add a ForeverCore
+`VendorTripNeeded` and the creator, and the gate opens by itself.
