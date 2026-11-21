@@ -53,22 +53,21 @@ struct TaskOrder
     int method = -1;                // lootmethod: RC::kLoot*
     int threshold = 0;
     bool hasThreshold = false;
-    bool gossipHasOption = false;   // gossip: false = list menu options; true = pick option
-    bool gossipByIndex = false;
-    uint32_t gossipIndex = 0;       // 1-based menu option index
-    std::string gossipText;         // option text
+    GossipOrder::Request gossip;    // gossip: the NPC's entry, the bot and the menu line (index or text; both empty = list the menu)
 };
 
-// Convert a ForeverCore GossipOptionNpc value to GossipOrder::Option (0 = GossipOptionNpc::None is plain gossip; any other is a service option).
+// Convert a ForeverCore GossipOptionNpc value to GossipOrder::Option. On this core a DATABASE menu item is added with sender = the menu id and action = the
+// order index (Player::PrepareGossipMenu, GossipMenu::AddMenuItem(item, MenuID, OrderIndex)), so neither field is the plain/service word the policy reads;
+// the option's own TYPE is (GossipOptionNpc::None = a plain gossip line, everything else a service: vendor, taxi, trainer, spirit healer, innkeeper/binder,
+// banker, battlemaster, auctioneer, stablemaster, mailbox, talent ...). The mapping hands the policy the database shape it knows: sender 0, action
+// GOSSIP_OPTION_GOSSIP (1) for None and 0 for every service (0 is a value the policy refuses: it is not GOSSIP_OPTION_GOSSIP).
 inline ::TortoiseBots::GossipOrder::Option MakeGossipOption(std::string const& text, uint32_t optionNpc, bool coded)
 {
     ::TortoiseBots::GossipOrder::Option opt;
     opt.text = text;
     opt.coded = coded;
-    if (optionNpc != 0)
-        opt.icon = 1; // GossipOrder::kIconVendor: marks as service option so IsPlainOption refuses it
-    else
-        opt.sender = 1;
+    opt.sender = 0;
+    opt.action = optionNpc == 0 ? ::TortoiseBots::GossipOrder::kOptionGossip : 0;
     return opt;
 }
 
@@ -136,6 +135,18 @@ inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> con
         out.itemId = request.itemId;
         out.bot = request.bot;
         out.spec = request.spec;
+        return true;
+    }
+    if (verb == "gossip")
+    {
+        // The policy's own grammar (`gossip <entry> <bot> <index | "text">`, GossipOrder::ParseRequest): an index is 1-based.
+        std::string rest;
+        for (size_t i = 0; i < args.size(); ++i)
+            rest += (i ? " " : "") + args[i];
+        if (!GossipOrder::ParseRequest(rest, out.gossip))
+            return invalid("gossip <npc entry> <bot> <option number 1-15 | \"option text\">");
+        out.verb = Verb::Gossip;
+        out.bot = out.gossip.bot;
         return true;
     }
     code = "invalid";
@@ -247,6 +258,7 @@ struct TaskRec
     Kind kind = Kind::Open;
     bool lootLike = false;          // loot window at the end: a corpse, or a chest
     bool corpse = false;            // the target is a creature corpse (else a game object)
+    std::string gossipPicked;       // Gossip: the menu line whose option was selected (the answer's payload)
     uint32_t itemId = 0;
     RC::TaskState state;
     bool actStarted = false;
@@ -257,10 +269,6 @@ struct TaskRec
     uint32_t totalMs = 0;
     bool scriptUse = false;         // a goober: its script handles the use (GameObject::Use, GOOBER case: `OnGossipHello` / the linked event), so the object's own state may never change
     uint32_t actMs = 0;             // since the use was delivered
-    bool gossipHasOption = false;
-    bool gossipByIndex = false;
-    uint32_t gossipIndex = 0;
-    std::string gossipText;
     std::string lastCode, lastMessage;
 };
 
@@ -324,6 +332,9 @@ inline bool ActDone(TaskRec const& r, Obs const& o)
 {
     if (!r.actStarted)
         return false;
+    // The core runs the choice inside the select handler (commands/Commander.cpp TaskActDone: "the act is over at once").
+    if (r.kind == Kind::Gossip)
+        return true;
     if (r.lootLike)
         return o.watchFound && o.windowFinished;
     return RC::JudgeObjectEffect(o.objectPresent, r.baseline, o.objectState) == RC::ObjectEffect::Reacted;
@@ -341,6 +352,13 @@ inline Step Failed(char const* code, std::string message)
 // The success answer of a finished act.
 inline Step Finished(TaskRec const& r, Obs const& o)
 {
+    if (r.kind == Kind::Gossip)
+    {
+        Step s;
+        s.what = Do::Succeed;
+        s.message = r.gossipPicked.empty() ? std::string("gossip") : r.gossipPicked;
+        return s;
+    }
     if (r.lootLike)
     {
         if (!o.watchFound)
@@ -376,7 +394,7 @@ inline Step Advance(TaskRec& r, Obs const& o, uint32_t diffMs)
     facts.actDone = r.state.stage == RC::TaskStage::Act && ActDone(r, o);
 
     // A used door that vanished (despawn, map change) is no "opened".
-    if (o.botAvailable && r.state.stage == RC::TaskStage::Act && r.actStarted && !r.lootLike && !o.objectPresent)
+    if (o.botAvailable && r.state.stage == RC::TaskStage::Act && r.actStarted && !r.lootLike && r.kind != Kind::Gossip && !o.objectPresent)
         return Failed(RC::kCodeFailed, "The object disappeared while the bot used it.");
 
     // A refused attempt that may pass the next look.

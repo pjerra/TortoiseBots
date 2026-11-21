@@ -3,12 +3,12 @@
 //
 // The engine calls these hooks from its tick (PlayerbotAI::DoNextAction, Engine::DoNextAction, ...): each one first asks whether
 // its service is on, and the answer here is no. Their real owners (runtime/WhyTrace.cpp, RunTrace.cpp, ObservabilityEmitter.cpp,
-// CombatMonitorService.cpp, ai/playerbot/CampMgr.cpp) are not part of the slice. Every function is listed in
+// ai/playerbot/CampMgr.cpp) are not part of the slice. Every function is listed in
 // forever/docs/SLICE1-R6B-NOTES.md (section 3, choice c); none keeps state, so there is nothing to flush at shutdown.
+// runtime/CombatMonitorService.cpp is compiled and fed by package P5 (host/cmd/TbCmdCombat.cpp), so its two entry points are not stubbed here.
 #include "compat/botpch_forever.h"
 
 #include "playerbot/CampMgr.h"
-#include "runtime/CombatMonitorService.h"
 #include "runtime/ObservabilityEmitter.h"
 #include "runtime/RunTrace.h"
 #include "runtime/WhyTrace.h"
@@ -98,18 +98,6 @@ void ObservabilityEmitter::OnActionFailed(Player* /*bot*/, std::string const& /*
 void ObservabilityEmitter::EmitBotActivity(std::string const& /*event*/, std::string const& /*info1*/, std::string const& /*info2*/,
     Player* /*bot*/, uint32 /*targetLevel*/)
 {
-}
-
-// ---- CombatMonitorService: nothing to load. ----
-CombatMonitorService& CombatMonitorService::Instance()
-{
-    static CombatMonitorService instance;
-    return instance;
-}
-
-void CombatMonitorService::LoadTimelineWatch()
-{
-    tbcompat::Unported(tbcompat::Feature::Tracing);
 }
 
 // ---- CampMgr: no camp spots, no active camp. ----

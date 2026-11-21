@@ -43,6 +43,117 @@ inline bool PointRefused(std::uint32_t status, float level, float z)
     return InWaterBits(status) || level >= z - kLevelSlackYd;
 }
 
+// ---- wading (a plan row's own hop, ai::kPlanFlagWadeOk) ----
+// The core's IsSwimmable radius: water no deeper than this (surface minus the bed) is walked, deeper is swum
+// (TerrainIsSwimmableCompat, TbCompat_Unit.h:701-710; F's GridMapLiquidData::depth_level is the ground under the liquid).
+constexpr float kWadeDepthYd = 1.5f;
+
+// What a wade hop sees at one sample: dry (no liquid at the walked height, so nothing to wade), shallow (liquid up to
+// kWadeDepthYd deep and the sample not under its surface), or refused (swimming water, or deeper than wading).
+enum class WadeWay : std::uint8_t
+{
+    Dry,
+    Shallow,
+    Refused,
+};
+
+inline WadeWay WadePointOf(std::uint32_t status, float level, float depthLevel, float z)
+{
+    if (status == 0)
+        return WadeWay::Dry;
+    if (!InWaterBits(status) && level < z - kLevelSlackYd)
+        return WadeWay::Dry;                                        // the surface lies below the walked point: the rule as before
+    if (status & kUnderWaterBit)
+        return WadeWay::Refused;                                    // swimming, or a point under a liquid it is not walking on
+    if (level - depthLevel > kWadeDepthYd)
+        return WadeWay::Refused;                                    // deeper than a wade: the bot would swim
+    return WadeWay::Shallow;
+}
+
+// A wade hop's line a -> b, sampled like SegmentRefused: every sample must be Dry or Shallow (one Refused refuses) and the
+// destination must not be under water (it may stand in a shallows). `read(x, y, z)` answers WadePointOf for a point.
+template <class Read>
+inline bool SegmentWadeRefused(float ax, float ay, float az, float bx, float by, float bz, Read&& read)
+{
+    float const dx = bx - ax, dy = by - ay, dz = bz - az;
+    float const length = std::sqrt(dx * dx + dy * dy + dz * dz);
+    std::size_t const steps = length > kSegmentSampleYd ? static_cast<std::size_t>(std::ceil(length / kSegmentSampleYd)) : 1;
+    for (std::size_t i = 0; i <= steps; ++i)
+    {
+        float const t = static_cast<float>(i) / static_cast<float>(steps);
+        if (read(ax + t * dx, ay + t * dy, az + t * dz) == WadeWay::Refused)
+            return true;
+    }
+    return false;
+}
+
+// A wade hop's path p[0..n) walked in order (vertices and legs).
+template <class Points, class Read>
+inline bool PathWadeRefused(Points const& p, std::size_t n, Read&& read)
+{
+    if (n == 0)
+        return false;
+    if (n == 1)
+        return read(p[0].x, p[0].y, p[0].z) == WadeWay::Refused;
+    for (std::size_t i = 1; i < n; ++i)
+        if (SegmentWadeRefused(p[i - 1].x, p[i - 1].y, p[i - 1].z, p[i].x, p[i].y, p[i].z, read))
+            return true;
+    return false;
+}
+
+// A wade hop's samples, with the deepest wet one kept: the live log line of a wet hop (the sampled depth and the core's
+// liquid status there), so the next live run says what it waded instead of only that it walked.
+struct WadeSample
+{
+    std::uint32_t samples = 0;          // every point sampled
+    std::uint32_t wetSamples = 0;       // the samples with liquid at the walked height
+    bool refused = false;               // kept is a refused sample (swimming or deeper than kWadeDepthYd)
+    std::uint32_t status = 0;           // the core's status at the kept sample
+    float depth = 0.0f;                 // its surface minus the ground under it: the water the bot would stand in
+    float x = 0.0f, y = 0.0f, z = 0.0f; // the kept sample
+    // A refused sample replaces a wading one; between samples of the same kind the deeper stays.
+    void Keep(WadeWay way, std::uint32_t statusAt, float depthAt, float px, float py, float pz)
+    {
+        ++samples;
+        if (way == WadeWay::Dry)
+            return;
+        ++wetSamples;
+        bool const refuse = way == WadeWay::Refused;
+        bool const better = wetSamples == 1 || (refuse != refused ? refuse : depthAt > depth);
+        if (refuse)
+            refused = true;
+        if (!better)
+            return;
+        status = statusAt;
+        depth = depthAt;
+        x = px;
+        y = py;
+        z = pz;
+    }
+};
+
+// A wade hop's line a -> b, sampled like SegmentWadeRefused, accumulating into `out`: true when it refuses.
+bool SegmentWadeTraceOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz, WadeSample& out);
+
+// A wade hop's path p[0..n) walked in order (vertices and legs).
+template <class Points>
+inline bool PathWadeTraceOnMap(Map* map, Points const& p, std::size_t n, WadeSample& out)
+{
+    if (n == 0)
+        return false;
+    if (n == 1)
+    {
+        WadeSample one;
+        SegmentWadeTraceOnMap(map, p[0].x, p[0].y, p[0].z, p[0].x, p[0].y, p[0].z, one);
+        out = one;
+        return one.refused;
+    }
+    bool refused = false;
+    for (std::size_t i = 1; i < n; ++i)
+        refused = SegmentWadeTraceOnMap(map, p[i - 1].x, p[i - 1].y, p[i - 1].z, p[i].x, p[i].y, p[i].z, out) || refused;
+    return refused;
+}
+
 // The samples of a line a -> b: ceil(length / kSegmentSampleYd) + 1 points, both ends included. `refused(x, y, z)` is the point rule.
 template <class Refused>
 inline bool SegmentRefused(float ax, float ay, float az, float bx, float by, float bz, Refused&& refused)
@@ -154,7 +265,22 @@ inline bool PathPrefixRefused(Points const& p, std::size_t n, Refused&& refused,
 
 // ---- the core half (TbRunLiquid.cpp, TORTOISEBOTS_SLICE1 only): the same rules over the map's terrain ----
 bool PointRefusedOnMap(Map* map, float x, float y, float z);
+
+// One point's liquid as the core reads it: its status, the surface level and the ground under the liquid (the core's
+// depth_level). A move refused for liquid logs these at the sampled point, so the live log says what it met (depth and
+// status) and not only where. `known` is false when there is no terrain to ask (the rule refuses, do less).
+struct LiquidProbe
+{
+    bool known = false;
+    std::uint32_t status = 0;
+    float level = 0.0f;
+    float depthLevel = 0.0f;
+    float Depth() const { return status != 0 ? level - depthLevel : 0.0f; }
+};
+LiquidProbe ProbeOnMap(Map* map, float x, float y, float z);
 bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);
+WadeWay WadePointOnMap(Map* map, float x, float y, float z);
+bool SegmentWadeRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz);
 // A diagnostic for `.tb where`: the liquid at (x, y, z) itself and the nearest wet floor cells on a grid of `step` yd within `radius` (the floor under each cell asked
 // with the run rule): one line each, at most `maxLines`. For live checks near lava; no state, one terrain read per cell.
 std::vector<std::string> DescribeAround(Map* map, float x, float y, float z, float radius, float step, std::size_t maxLines);

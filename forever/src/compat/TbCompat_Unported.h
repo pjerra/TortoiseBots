@@ -105,7 +105,7 @@ inline void QueueUseItemPacketCompat(Player* /*bot*/, uint8 /*bagIndex*/, uint8 
     tbcompat::Unported(tbcompat::Feature::ItemUsePacket);
 }
 
-// Whether this prototype would go into the given equipment slot (T `slot == bot->FindEquipSlot(proto, NULL_SLOT, true)`). F's
+// Whether this prototype would go into the given equipment slot (T `bot->FindEquipSlot(proto, slot, true) == slot`). F's
 // FindEquipSlot takes an Item. Failure value: false ("not for that slot").
 inline bool ItemProtoFitsSlotCompat(Player* /*bot*/, ItemPrototype const* /*proto*/, uint32 /*slot*/) { tbcompat::Unported(tbcompat::Feature::ItemSlotOfPrototype); return false; }
 
@@ -134,6 +134,7 @@ struct AuctionEntry
     // AuctionEntry is empty and these are only named, not read from a real auction.
     uint32 Id = 0;
     uint32 itemGuidLow = 0;
+    uint32 itemCount = 0;
     uint32 buyout = 0;
     uint32 owner = 0;
 };
@@ -245,9 +246,9 @@ inline void RegisterDirectPacketCasesCompat()
 // host provides one later, R4M request 5). Failure value: 0 (no allowance for server lag).
 inline uint32 WorldAverageDiffCompat() { tbcompat::Unported(tbcompat::Feature::WorldAverageDiff); return 0; }
 
-// Fall bookkeeping for fall damage: T `bot->SetFallInformation(z)` (time 0), F `SetFallInformation(time, z)` with a different
-// meaning of the pair. Failure value: nothing is recorded ("no fall damage is computed from this jump").
-inline void SetFallInformationCompat(Player* /*player*/, float /*z*/) { tbcompat::Unported(tbcompat::Feature::JumpFall); }
+// Fall bookkeeping for fall damage: T `bot->SetFallInformation(z)` (time 0), F `SetFallInformation(time, z)`: the same start
+// height the core's own CMSG_MOVE_FALL_LAND path writes, so HandleFall computes the damage (S3).
+inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(0, z); }
 
 
 // ===============================================================================================================

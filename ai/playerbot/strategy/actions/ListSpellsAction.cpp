@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "ListSpellsAction.h"
+#include "playerbot/TbCompatCH.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/policy/class/SpellListNamePolicy.h"
 #include "playerbot/ServerFacade.h"
@@ -22,15 +23,15 @@ bool CompareSpells(std::pair<uint32, std::string>& s1, std::pair<uint32, std::st
     for (uint32 j = 0; j < sSkillLineAbilityStore.GetNumRows(); ++j)
     {
         SkillLineAbilityEntry const* skillLine = sSkillLineAbilityStore.LookupEntry(j);
-        if (skillLine && skillLine->spellId == s1.first)
+        if (skillLine && SkillLineAbilitySpellCompat(skillLine) == s1.first)
         {
-            skill1 = skillLine->skillId;
-            skillValue1 = skillLine->min_value;
+            skill1 = SkillLineAbilitySkillCompat(skillLine);
+            skillValue1 = SkillLineAbilityMinCompat(skillLine);
         }
-        if (skillLine && skillLine->spellId == s2.first)
+        if (skillLine && SkillLineAbilitySpellCompat(skillLine) == s2.first)
         {
-            skill2 = skillLine->skillId;
-            skillValue2 = skillLine->min_value;
+            skill2 = SkillLineAbilitySkillCompat(skillLine);
+            skillValue2 = SkillLineAbilityMinCompat(skillLine);
         }
         if (skill1 && skill2) break;
     }
@@ -57,7 +58,7 @@ std::list<std::pair<uint32, std::string> > ListSpellsAction::GetSpellList(std::s
         {
             SkillLineAbilityEntry const* skillLine = sSkillLineAbilityStore.LookupEntry(j);
             if (skillLine)
-                skillSpells[skillLine->spellId] = skillLine;
+                skillSpells[SkillLineAbilitySpellCompat(skillLine)] = skillLine;
         }
     }
 
@@ -131,7 +132,7 @@ std::list<std::pair<uint32, std::string> > ListSpellsAction::GetSpellList(std::s
             continue;
 
         SkillLineAbilityEntry const* skillLine = skillSpells[spellId];
-        if (skill != SKILL_NONE && (!skillLine || skillLine->skillId != skill))
+        if (skill != SKILL_NONE && (!skillLine || SkillLineAbilitySkillCompat(skillLine) != skill))
             continue;
 
         std::string comp = pSpellInfo->SpellName[0];
@@ -203,7 +204,7 @@ std::list<std::pair<uint32, std::string> > ListSpellsAction::GetSpellList(std::s
                             break;
                         }
 
-                        if (slot != EQUIPMENT_SLOT_END && bot->FindEquipSlot(proto, slot, true) != slot)
+                        if (slot != EQUIPMENT_SLOT_END && !ItemProtoFitsSlotCompat(bot, proto, slot))
                         {
                             filtered = true;
                             break;
@@ -224,12 +225,12 @@ std::list<std::pair<uint32, std::string> > ListSpellsAction::GetSpellList(std::s
 
         out << materials.str();
 
-        if (skillLine && skillLine->skillId)
+        if (skillLine && SkillLineAbilitySkillCompat(skillLine))
         {
-            int GrayLevel = (int)skillLine->max_value,
-                GreenLevel = (int)(skillLine->max_value + skillLine->min_value) / 2,
-                YellowLevel = (int)skillLine->min_value,
-                SkillValue = (int)bot->GetSkillValue(skillLine->skillId);
+            int GrayLevel = (int)SkillLineAbilityMaxCompat(skillLine),
+                GreenLevel = (int)(SkillLineAbilityMaxCompat(skillLine) + SkillLineAbilityMinCompat(skillLine)) / 2,
+                YellowLevel = (int)SkillLineAbilityMinCompat(skillLine),
+                SkillValue = (int)bot->GetSkillValue(SkillLineAbilitySkillCompat(skillLine));
 
             out << " - ";
             if (SkillValue >= GrayLevel)

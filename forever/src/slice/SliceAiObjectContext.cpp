@@ -16,10 +16,12 @@
 #include "playerbot/strategy/actions/AcceptQuestAction.h"
 #include "playerbot/strategy/actions/AcceptResurrectAction.h"
 #include "playerbot/strategy/actions/AddLootAction.h"
+#include "playerbot/strategy/actions/AhAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
 #include "playerbot/strategy/actions/BuyAction.h"
 #include "playerbot/strategy/actions/CancelChannelAction.h"
+#include "playerbot/strategy/actions/ChangeStrategyAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
@@ -29,6 +31,8 @@
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
 #include "playerbot/strategy/actions/GiveItemAction.h"
+#include "playerbot/strategy/actions/HelpAction.h"
+#include "playerbot/strategy/actions/ListSpellsAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
 #include "playerbot/strategy/actions/MailAction.h"
@@ -36,19 +40,27 @@
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/actions/QuestRewardActions.h"
+#include "playerbot/strategy/actions/RangeAction.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
 #include "playerbot/strategy/actions/RepairAllAction.h"
 #include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
+#include "playerbot/strategy/actions/RtiAction.h"
+#include "playerbot/strategy/actions/SaveManaAction.h"
 #include "playerbot/strategy/actions/SellAction.h"
 #include "playerbot/strategy/actions/ShareQuestAction.h"
+#include "playerbot/strategy/actions/StatsAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
 #include "playerbot/strategy/actions/TalkToQuestGiverAction.h"
+#include "playerbot/strategy/actions/TellCastFailedAction.h"
+#include "playerbot/strategy/actions/TellLosAction.h"
+#include "playerbot/strategy/actions/TellTargetAction.h"
 #include "playerbot/strategy/actions/TrainerAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
+#include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
@@ -163,7 +175,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (17 of its keys)
+    // the registry of StrategyContext (18 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -186,6 +198,7 @@ namespace slice
             creators["roll"] = [](PlayerbotAI* ai) { return new RollStrategy(ai); };
             creators["grind"] = [](PlayerbotAI* ai) { return new GrindingStrategy(ai); };
             creators["maintenance"] = [](PlayerbotAI* ai) { return new MaintenanceStrategy(ai); };
+            creators["chat"] = [](PlayerbotAI* ai) { return new ChatCommandHandlerStrategy(ai); };
         }
     };
 
@@ -290,7 +303,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (19 of its keys)
+    // the registry of ChatActionContext (38 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -315,6 +328,25 @@ namespace slice
             creators["clean quest log"] = [](PlayerbotAI* ai) { return new CleanQuestLogAction(ai); };
             creators["share"] = [](PlayerbotAI* ai) { return new ShareQuestAction(ai); };
             creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardAction(ai); };
+            creators["ah"] = [](PlayerbotAI* ai) { return new AhAction(ai); };
+            creators["ah bid"] = [](PlayerbotAI* ai) { return new AhBidAction(ai); };
+            creators["ah cancel"] = [](PlayerbotAI* ai) { return new AhCancelAction(ai); };
+            creators["tank attack chat shortcut"] = [](PlayerbotAI* ai) { return new TankAttackChatShortcutAction(ai); };
+            creators["flee chat shortcut"] = [](PlayerbotAI* ai) { return new FleeChatShortcutAction(ai); };
+            creators["max dps chat shortcut"] = [](PlayerbotAI* ai) { return new MaxDpsChatShortcutAction(ai); };
+            creators["stats"] = [](PlayerbotAI* ai) { return new StatsAction(ai); };
+            creators["help"] = [](PlayerbotAI* ai) { return new HelpAction(ai); };
+            creators["spells"] = [](PlayerbotAI* ai) { return new ListSpellsAction(ai); };
+            creators["spell"] = [](PlayerbotAI* ai) { return new TellSpellAction(ai); };
+            creators["los"] = [](PlayerbotAI* ai) { return new TellLosAction(ai); };
+            creators["rti"] = [](PlayerbotAI* ai) { return new RtiAction(ai); };
+            creators["range"] = [](PlayerbotAI* ai) { return new RangeAction(ai); };
+            creators["save mana"] = [](PlayerbotAI* ai) { return new SaveManaAction(ai); };
+            creators["tell attackers"] = [](PlayerbotAI* ai) { return new TellAttackersAction(ai); };
+            creators["tell possible attack targets"] = [](PlayerbotAI* ai) { return new TellPossibleAttackTargetsAction(ai); };
+            creators["co"] = [](PlayerbotAI* ai) { return new ChangeCombatStrategyAction(ai); };
+            creators["nc"] = [](PlayerbotAI* ai) { return new ChangeNonCombatStrategyAction(ai); };
+            creators["formation"] = [](PlayerbotAI* ai) { return new SetFormationAction(ai); };
         }
     };
 
@@ -455,13 +487,32 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (1 of its keys)
+    // the registry of ChatTriggerContext (20 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
         SliceChatTriggerContext()
         {
             creators["pet"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "pet"); };
+            creators["follow"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "follow"); };
+            creators["stay"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "stay"); };
+            creators["attack"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "attack"); };
+            creators["tank attack"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "tank attack"); };
+            creators["flee"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "flee"); };
+            creators["max dps"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "max dps"); };
+            creators["stats"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "stats"); };
+            creators["help"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "help"); };
+            creators["spells"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "spells"); };
+            creators["spell"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "spell"); };
+            creators["los"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "los"); };
+            creators["rti"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "rti"); };
+            creators["range"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "range"); };
+            creators["save mana"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "save mana"); };
+            creators["attackers"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "attackers"); };
+            creators["possible attack targets"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "possible attack targets"); };
+            creators["co"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "co"); };
+            creators["nc"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "nc"); };
+            creators["formation"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "formation"); };
         }
     };
 
@@ -691,7 +742,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 24, kActions = 89, kTriggers = 114, kValues = 201;
+    constexpr unsigned kStrategies = 25, kActions = 108, kTriggers = 133, kValues = 201;
 }
 }
 

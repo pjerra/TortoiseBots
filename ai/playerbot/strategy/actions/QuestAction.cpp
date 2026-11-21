@@ -269,11 +269,9 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, ObjectGuid 
     }
     else
     {
-        Object* pObject = ai->GetUnit(questGiver);
-        if (!pObject)
-            pObject = ai->GetGameObject(questGiver);
-        if (!AcceptQuestDirectCompat(bot, quest, pObject ? static_cast<WorldObject*>(pObject) : nullptr) &&
-            SyncQuestWithPlayerAllowedCompat() && sPlayerbotAIConfig.syncQuestWithPlayer)
+        Object* pObject = QuestGiverObjectCompat(bot, questGiver);
+        if (!AcceptQuestByGiverCompat(bot, quest, questGiver) &&
+            SyncQuestWithPlayerAllowedCompat() && sPlayerbotAIConfig.syncQuestWithPlayer && pObject)
         {
             bot->AddQuest(quest, pObject);
             // Objective-less quests complete on accept, as in the core handler.

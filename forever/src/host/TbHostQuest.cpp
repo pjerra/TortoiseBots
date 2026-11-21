@@ -154,6 +154,12 @@ bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!ai)
         return Fail(handler, args, "quest", "no-engine", "the bot has no running engine (`.tb engine <bot> on`)");
 
+    {
+        std::string code, detail;
+        if (!CheckBotAccess(handler, bot, code, detail))
+            return Fail(handler, args, "quest", code, detail);
+    }
+
     if (verb == "accept")
     {
         if (args.w.size() < 3)
@@ -306,6 +312,16 @@ bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
 
     return Fail(handler, args, "quest", "unknown-verb", "unknown quest verb: " + verb);
+}
+
+void RebuildQuestEligibility()
+{
+    RebuildQuestEligibilityCompat();
+}
+
+void ClearQuestEligibility()
+{
+    ClearQuestEligibilityCompat();
 }
 
 } // namespace h3

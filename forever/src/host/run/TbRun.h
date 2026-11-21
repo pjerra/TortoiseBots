@@ -1,7 +1,7 @@
 // Slice 5, host package H5: the run header (forever/docs/RUN-S5-H-NOTES.md; spec FOREVER-RUN-S5S6-SPEC.md section 4.5).
 //
 // One RunRec per run, keyed by the leader's guid: who leads, which plan, how far it is (the Turtle `DungeonRun::Run`, runtime/DungeonRunPolicy.h, is the
-// progress), the counters and a ring of the last 200 events. In S5 NOTHING creates or ticks a run but the selftest: the S6 glue (`.tb run start`, the 1 Hz
+// progress), the counters and a ring of the last 1024 events. In S5 NOTHING creates or ticks a run but the selftest: the S6 glue (`.tb run start`, the 1 Hz
 // tick) does, and writes the same records this file builds (`run`, `event`). Compiled with TORTOISEBOTS_SLICE1 only.
 //
 // Threading: world thread only (a command, or the engine tick in OnBeforeMapsUpdate): plain data, no lock.
@@ -24,7 +24,7 @@ namespace TortoiseBots
 {
 namespace run
 {
-constexpr size_t kEventRing = 200;
+constexpr size_t kEventRing = 1024;   // a 63-minute run overflowed 200 events; `events since=` names the oldest seq kept
 
 // One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop, and since
 // slice 9 (package C9) open | object | loot | item | clear (a task or a wait step of the plan ended: `unit` = the object's or boss's entry, `why` = what it saw).
@@ -94,6 +94,7 @@ struct RunRec
     std::map<std::string, std::string> ccOwned;
     size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
     uint32 pullCheckedPass = 0;
+    size_t wadeLoggedStep = size_t(-1);          // the step whose wet wade hop was logged (one line per wet hop, not per order)
 
     // ---- S9 (package C9): what the run keys and the step-end events read. Plain data from the last tick's facts: the facts the policy decided on. ----
     std::string carrier;                         // the bot a loot / open / use_item step goes to (empty on any other step)

@@ -1431,9 +1431,10 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("DistanceTo(lead, end.x, end.y, end.z), DistanceTo(lead, px, py, ground), PathLengthCompat(path)))",
                       body(COMMANDS, "bool NearestReachablePoint(", "\n}\n"))
         self.assertIn("pathYd <= pointFromLeadYd + kDetourMaxPathYd &&", body(policy, "inline bool DetourPointReachable(", "\n}\n"))
-        # Every rewind of the step forgets the step's refusals.
-        for fn in ("inline void EventFailed(", "inline bool RearmEventOnWipe("):
+        # Every rewind of the step forgets the step's refusals; EventFailed uses the shared helper.
+        for fn in ("inline void EventFailedAt(", "inline bool RearmEventOnWipe("):
             self.assertIn("ForgetMoveRefusals(r);", body(policy, fn, "\n}\n"))
+        self.assertIn("EventFailedAt(r, EventStartStep(r), why);", body(policy, "inline void EventFailed(", "\n}\n"))
         self.assertIn("if (NeverSkipMove(r))\n        ForgetMoveRefusals(r);", body(policy, "inline bool Resume(", "\n}\n"))
         self.assertNotIn("UseDetour(", code)
         self.assertNotIn("15 yd of it either", code)

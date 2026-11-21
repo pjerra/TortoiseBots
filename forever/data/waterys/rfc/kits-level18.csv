@@ -1,51 +1,51 @@
 role,slot,item_id,name,source,reason
-protection warrior,head,7130,Brutal Helm,quest (1845 Brutal Helm),"quest/vendor preferred, console-handable"
-protection warrior,neck,281265,Roadwatcher's Confidence,quest (95981 Watching the Roads),"quest/vendor preferred, console-handable"
-protection warrior,shoulder,17695,Chestnut Mantle,quest (6565 Allegiance to the Old Gods),"quest/vendor preferred, console-handable"
-protection warrior,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable"
-protection warrior,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable"
-protection warrior,wrist,280095,Cryptwalker Bracers,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
-protection warrior,hands,7606,Polar Gauntlets,quest (2040 Underground Assault),"quest/vendor preferred, console-handable"
-protection warrior,waist,279897,Dusty Belt,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
-protection warrior,legs,15451,Gargoyle Leggings,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable"
-protection warrior,feet,10658,Quagmire Galoshes,quest (3369 In Nightmares),"quest/vendor preferred, console-handable"
-protection warrior,finger,6749,Tiger Band,quest (1144 Willix the Importer),"quest/vendor preferred, console-handable"
-protection warrior,finger,6748,Monkey Ring,quest (1144 Willix the Importer),"second ring, distinct item"
+protection warrior,head,281701,Restored Mail Coif,"armory (req 1, ilvl 1)",STRICT replacement; was 7130
+protection warrior,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",STRICT replacement; was 281265
+protection warrior,shoulder,3480,Rough Bronze Shoulders,"armory (req 17, ilvl 22)",STRICT replacement; was 17695
+protection warrior,back,15519,Spiked Chain Cloak,"armory (req 18, ilvl 23)",STRICT replacement; was 7004
+protection warrior,chest,14730,War Paint Chestpiece,"armory (req 18, ilvl 23)",STRICT replacement; was 2041
+protection warrior,wrist,2867,Rough Bronze Bracers,"armory (req 18, ilvl 23)",STRICT replacement; was 280095
+protection warrior,hands,14747,Hulking Gauntlets,"armory (req 18, ilvl 23)",STRICT replacement; was 7606
+protection warrior,waist,14746,Hulking Belt,"armory (req 17, ilvl 22)",STRICT replacement; was 279897
+protection warrior,legs,6578,Defender Leggings,"armory (req 18, ilvl 23)",STRICT replacement; was 15451
+protection warrior,feet,6573,Defender Boots,"armory (req 18, ilvl 23)",STRICT replacement; was 10658
+protection warrior,finger,11982,Viridian Band,"armory (req 18, ilvl 23)",STRICT replacement; was 6749
+protection warrior,finger,11967,Zircon Band,"armory (req 18, ilvl 23)",STRICT replacement; was 6748
 protection warrior,trinket,,,none,EMPTY: no wearable trinket for protection warrior at <=18 in gear-level18.csv
 protection warrior,trinket2,,,none,EMPTY: no wearable trinket2 for protection warrior at <=18 in gear-level18.csv
-protection warrior,main_hand,279874,The Stitcher,quest (92421 Light's Justice),"quest/vendor preferred, console-handable"
-protection warrior,off_hand,6746,Basalt Buckler,quest (1488 The Corrupter),"quest/vendor preferred, console-handable"
-arms warrior,head,7130,Brutal Helm,quest (1845 Brutal Helm),"quest/vendor preferred, console-handable"
-arms warrior,neck,281265,Roadwatcher's Confidence,quest (95981 Watching the Roads),"quest/vendor preferred, console-handable"
-arms warrior,shoulder,17695,Chestnut Mantle,quest (6565 Allegiance to the Old Gods),"quest/vendor preferred, console-handable"
-arms warrior,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable"
-arms warrior,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable"
-arms warrior,wrist,280095,Cryptwalker Bracers,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
-arms warrior,hands,7606,Polar Gauntlets,quest (2040 Underground Assault),"quest/vendor preferred, console-handable"
-arms warrior,waist,279897,Dusty Belt,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
-arms warrior,legs,15451,Gargoyle Leggings,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable"
-arms warrior,feet,10658,Quagmire Galoshes,quest (3369 In Nightmares),"quest/vendor preferred, console-handable"
-arms warrior,finger,6749,Tiger Band,quest (1144 Willix the Importer),"quest/vendor preferred, console-handable"
-arms warrior,finger,6748,Monkey Ring,quest (1144 Willix the Importer),"second ring, distinct item"
+protection warrior,main_hand,276888,Quilboar Toothpick,"armory (req 1, ilvl 24)",STRICT replacement; was 279874
+protection warrior,off_hand,276887,Big Bad Basher,"armory (req 1, ilvl 24)",STRICT replacement; was 6746
+arms warrior,head,281701,Restored Mail Coif,"armory (req 1, ilvl 1)",STRICT replacement; was 7130
+arms warrior,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",STRICT replacement; was 281265
+arms warrior,shoulder,3480,Rough Bronze Shoulders,"armory (req 17, ilvl 22)",STRICT replacement; was 17695
+arms warrior,back,15519,Spiked Chain Cloak,"armory (req 18, ilvl 23)",STRICT replacement; was 7004
+arms warrior,chest,14730,War Paint Chestpiece,"armory (req 18, ilvl 23)",STRICT replacement; was 2041
+arms warrior,wrist,2867,Rough Bronze Bracers,"armory (req 18, ilvl 23)",STRICT replacement; was 280095
+arms warrior,hands,14747,Hulking Gauntlets,"armory (req 18, ilvl 23)",STRICT replacement; was 7606
+arms warrior,waist,14746,Hulking Belt,"armory (req 17, ilvl 22)",STRICT replacement; was 279897
+arms warrior,legs,6578,Defender Leggings,"armory (req 18, ilvl 23)",STRICT replacement; was 15451
+arms warrior,feet,6573,Defender Boots,"armory (req 18, ilvl 23)",STRICT replacement; was 10658
+arms warrior,finger,11982,Viridian Band,"armory (req 18, ilvl 23)",STRICT replacement; was 6749
+arms warrior,finger,11967,Zircon Band,"armory (req 18, ilvl 23)",STRICT replacement; was 6748
 arms warrior,trinket,,,none,EMPTY: no wearable trinket for arms warrior at <=18 in gear-level18.csv
 arms warrior,trinket2,,,none,EMPTY: no wearable trinket2 for arms warrior at <=18 in gear-level18.csv
 arms warrior,off_hand,,,none,EMPTY: no wearable off_hand for arms warrior at <=18 in gear-level18.csv
 arms warrior,two_hand,279864,Monstrous Cleaver,quest (97290 Unending Torment),"quest/vendor preferred, console-handable"
-priest,head,23323,Crown of the Fire Festival,quest (9339 A Thief's Reward),"quest/vendor preferred, console-handable"
-priest,neck,281265,Roadwatcher's Confidence,quest (95981 Watching the Roads),"quest/vendor preferred, console-handable"
-priest,shoulder,3324,Ghostly Mantle,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable"
-priest,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable"
-priest,chest,17043,Zealot's Robe,quest (6521 An Unholy Alliance),"quest/vendor preferred, console-handable"
-priest,wrist,15452,Featherbead Bracers,quest (5724 Returning the Lost Satchel),"quest/vendor preferred, console-handable"
-priest,hands,279877,Blight Gloves,quest (95216 The New Plague),"quest/vendor preferred, console-handable"
-priest,waist,16975,Warsong Sash,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable"
-priest,legs,15449,Ghastly Trousers,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable"
-priest,feet,6998,Nimbus Boots,quest (1199 Twilight Falls),"quest/vendor preferred, console-handable"
-priest,finger,6749,Tiger Band,quest (1144 Willix the Importer),"quest/vendor preferred, console-handable"
-priest,finger,6748,Monkey Ring,quest (1144 Willix the Importer),"second ring, distinct item"
+priest,head,4373,Shadow Goggles,"armory (req 0, ilvl 24)",STRICT replacement; was 23323
+priest,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",STRICT replacement; was 281265
+priest,shoulder,4314,Double-Stitched Woolen Shoulders,"armory (req 17, ilvl 22)",STRICT replacement; was 3324
+priest,back,6381,Bright Cloak,"armory (req 18, ilvl 23)",STRICT replacement; was 7004
+priest,chest,5812,Robes of Antiquity,"armory (req 0, ilvl 25)",STRICT replacement; was 17043
+priest,wrist,281926,Bound Bracers,"armory (req 18, ilvl 23)",STRICT replacement; was 15452
+priest,hands,14162,Pagan Mitts,"armory (req 18, ilvl 23)",STRICT replacement; was 279877
+priest,waist,4436,Jewel-encrusted Sash,"armory (req 18, ilvl 23)",STRICT replacement; was 16975
+priest,legs,4434,Scarecrow Trousers,"armory (req 17, ilvl 22)",STRICT replacement; was 15449
+priest,feet,15461,Lightheel Boots,"armory (req 0, ilvl 25)",STRICT replacement; was 6998
+priest,finger,11982,Viridian Band,"armory (req 18, ilvl 23)",STRICT replacement; was 6749
+priest,finger,11967,Zircon Band,"armory (req 18, ilvl 23)",STRICT replacement; was 6748
 priest,trinket,,,none,EMPTY: no wearable trinket for priest at <=18 in gear-level18.csv
 priest,trinket2,,,none,EMPTY: no wearable trinket2 for priest at <=18 in gear-level18.csv
-priest,main_hand,279874,The Stitcher,quest (92421 Light's Justice),"quest/vendor preferred, console-handable"
+priest,main_hand,276888,Quilboar Toothpick,"armory (req 1, ilvl 24)",STRICT replacement; was 279874
 priest,off_hand,,,none,EMPTY: no wearable off_hand for priest at <=18 in gear-level18.csv
 priest,ranged,279896,Deepblaze,quest (96393 Old Ironforge Incursion),"quest/vendor preferred, console-handable"
 protection warrior,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
@@ -54,40 +54,40 @@ arms warrior,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely st
 arms warrior,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
 priest,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
 priest,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
-mage,head,208424,Sun Shades,"armory (req 0, ilvl 100)","best armory match for mage head at <=18; source armory row, verify vendor/quest origin on live"
-mage,neck,20250,90 Green Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-mage,shoulder,22968,Glacial Mantle,"armory (req 0, ilvl 83)","best armory match for mage shoulder at <=18; source armory row, verify vendor/quest origin on live"
-mage,back,21187,Earthweave Cloak,"armory (req 0, ilvl 62)","best armory match for mage back at <=18; source armory row, verify vendor/quest origin on live"
-mage,chest,21183,Earthpower Vest,"armory (req 0, ilvl 66)","best armory match for mage chest/robe at <=18; source armory row, verify vendor/quest origin on live"
-mage,waist,20217,Belt of Tiny Heads,"armory (req 0, ilvl 70)","best armory match for mage waist at <=18; source armory row, verify vendor/quest origin on live"
-mage,legs,22700,Glacial Leggings,"armory (req 0, ilvl 80)","best armory match for mage legs at <=18; source armory row, verify vendor/quest origin on live"
-mage,feet,226959,Virtuous Slippers,"armory (req 0, ilvl 60)","best armory match for mage feet at <=18; source armory row, verify vendor/quest origin on live"
-mage,wrist,226953,Virtuous Wraps,"armory (req 0, ilvl 65)","best armory match for mage wrist at <=18; source armory row, verify vendor/quest origin on live"
-mage,hands,23084,Gloves of Undead Cleansing,"armory (req 0, ilvl 63)","best armory match for mage hands at <=18; source armory row, verify vendor/quest origin on live"
-mage,finger,20144,90 Epic Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-mage,finger,20143,90 Epic Warrior Neck,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-mage,trinket,23207,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-mage,trinket,23206,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-mage,main_hand,24071,Bland Dagger,"armory (req 0, ilvl 69)","best armory match for mage weapon at <=18; source armory row, verify vendor/quest origin on live"
-mage,off_hand,3865,Test Offhand Weapon,"armory (req 1, ilvl 2)","best armory match for mage held at <=18; source armory row, verify vendor/quest origin on live"
-mage,ranged,19108,Wand of Biting Cold,"armory (req 0, ilvl 63)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,head,22689,Sanctified Leather Helm,"armory (req 0, ilvl 66)","best armory match for rogue head at <=18; source armory row, verify vendor/quest origin on live"
-rogue,neck,20250,90 Green Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,shoulder,226826,Darkmantle Spaulders,"armory (req 0, ilvl 65)","best armory match for rogue shoulder at <=18; source armory row, verify vendor/quest origin on live"
-rogue,back,20144,90 Epic Warrior Ring,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,chest,275708,Ghansurok Hide Tunic,"armory (req 0, ilvl 61)","best armory match for rogue chest/robe at <=18; source armory row, verify vendor/quest origin on live"
-rogue,waist,20216,Belt of Preserved Heads,"armory (req 0, ilvl 70)","best armory match for rogue waist at <=18; source armory row, verify vendor/quest origin on live"
-rogue,legs,22701,Polar Leggings,"armory (req 0, ilvl 80)","best armory match for rogue legs at <=18; source armory row, verify vendor/quest origin on live"
-rogue,feet,20714,Sandstorm Boots,"armory (req 0, ilvl 63)","best armory match for rogue feet at <=18; source armory row, verify vendor/quest origin on live"
-rogue,wrist,226830,Darkmantle Bracers,"armory (req 0, ilvl 65)","best armory match for rogue wrist at <=18; source armory row, verify vendor/quest origin on live"
-rogue,hands,23081,Handwraps of Undead Slaying,"armory (req 0, ilvl 63)","best armory match for rogue hands at <=18; source armory row, verify vendor/quest origin on live"
-rogue,finger,20143,90 Epic Warrior Neck,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,finger,22725,Band of Cenarius,"armory (req 0, ilvl 70)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,trinket,23207,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,trinket,23206,Mark of the Champion,"armory (req 0, ilvl 90)","jewelry/trinket/wand has no class restriction; best armory match at <=18, verify vendor/quest origin on live"
-rogue,main_hand,24071,Bland Dagger,"armory (req 0, ilvl 69)","best armory match for rogue weapon at <=18; source armory row, verify vendor/quest origin on live"
-rogue,off_hand,22378,Ravenholdt Slicer,"armory (req 0, ilvl 65)","best armory match for rogue weapon at <=18; source armory row, verify vendor/quest origin on live"
-rogue,ranged,20086,Dusksteel Throwing Knife,"armory (req 0, ilvl 52)","best armory match for rogue thrown at <=18; source armory row, verify vendor/quest origin on live"
+mage,head,281685,Restored Cloth Helm,"armory (req 1, ilvl 1)",STRICT replacement; was 208424 (req 0/ilvl 52-100/test/epic flagged)
+mage,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",STRICT replacement; was 20250 (req 0/ilvl 52-100/test/epic flagged)
+mage,shoulder,4314,Double-Stitched Woolen Shoulders,"armory (req 17, ilvl 22)",STRICT replacement; was 22968 (req 0/ilvl 52-100/test/epic flagged)
+mage,back,15519,Spiked Chain Cloak,"armory (req 18, ilvl 23)",STRICT replacement; was 21187 (req 0/ilvl 52-100/test/epic flagged)
+mage,chest,6787,White Woolen Dress,"armory (req 17, ilvl 22)",STRICT replacement; was 21183 (req 0/ilvl 52-100/test/epic flagged)
+mage,waist,4436,Jewel-encrusted Sash,"armory (req 18, ilvl 23)",STRICT replacement; was 20217 (req 0/ilvl 52-100/test/epic flagged)
+mage,legs,4434,Scarecrow Trousers,"armory (req 17, ilvl 22)",STRICT replacement; was 22700 (req 0/ilvl 52-100/test/epic flagged)
+mage,feet,9767,Greenweave Sandals,"armory (req 18, ilvl 23)",STRICT replacement; was 226959 (req 0/ilvl 52-100/test/epic flagged)
+mage,wrist,281926,Bound Bracers,"armory (req 18, ilvl 23)",STRICT replacement; was 226953 (req 0/ilvl 52-100/test/epic flagged)
+mage,hands,14162,Pagan Mitts,"armory (req 18, ilvl 23)",STRICT replacement; was 23084 (req 0/ilvl 52-100/test/epic flagged)
+mage,finger,11982,Viridian Band,"armory (req 18, ilvl 23)",STRICT replacement; was 20144 (req 0/ilvl 52-100/test/epic flagged)
+mage,finger,11967,Zircon Band,"armory (req 18, ilvl 23)",STRICT replacement; was 20143 (req 0/ilvl 52-100/test/epic flagged)
+mage,trinket,,,none,EMPTY: no green trinket at req<=18/ilvl<=25 in 70959 Item.db2
+mage,trinket,,,none,EMPTY: no green trinket at req<=18/ilvl<=25 in 70959 Item.db2
+mage,main_hand,5540,Pearl-handled Dagger,"armory (req 18, ilvl 23)",STRICT replacement; was 24071 (req 0/ilvl 52-100/test/epic flagged)
+mage,off_hand,15971,Aboriginal Rod,"armory (req 15, ilvl 20)",STRICT replacement; held in off-hand (mage cannot use shields)
+mage,ranged,11288,Greater Magic Wand,"armory (req 13, ilvl 23)",STRICT replacement; was 19108 (req 0/ilvl 52-100/test/epic flagged)
+rogue,head,281693,Restored Leather Hood,"armory (req 1, ilvl 1)",STRICT replacement; was 22689 (req 0/ilvl 52-100/test/epic flagged)
+rogue,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",STRICT replacement; was 20250 (req 0/ilvl 52-100/test/epic flagged)
+rogue,shoulder,281694,Restored Leather Spaulders,"armory (req 1, ilvl 1)",STRICT replacement; was 226826 (req 0/ilvl 52-100/test/epic flagged)
+rogue,back,15519,Spiked Chain Cloak,"armory (req 18, ilvl 23)",STRICT replacement; was 20144 (req 0/ilvl 52-100/test/epic flagged)
+rogue,chest,9782,Bandit Jerkin,"armory (req 18, ilvl 23)",STRICT replacement; was 275708 (req 0/ilvl 52-100/test/epic flagged)
+rogue,waist,14567,Bristlebark Belt,"armory (req 18, ilvl 23)",STRICT replacement; was 20216 (req 0/ilvl 52-100/test/epic flagged)
+rogue,legs,5961,Dark Leather Pants,"armory (req 18, ilvl 23)",STRICT replacement; was 22701 (req 0/ilvl 52-100/test/epic flagged)
+rogue,feet,14568,Bristlebark Boots,"armory (req 18, ilvl 23)",STRICT replacement; was 20714 (req 0/ilvl 52-100/test/epic flagged)
+rogue,wrist,14569,Bristlebark Bindings,"armory (req 17, ilvl 22)",STRICT replacement; was 226830 (req 0/ilvl 52-100/test/epic flagged)
+rogue,hands,6586,Scouting Gloves,"armory (req 18, ilvl 23)",STRICT replacement; was 23081 (req 0/ilvl 52-100/test/epic flagged)
+rogue,finger,11965,Quartz Ring,"armory (req 15, ilvl 20)",STRICT replacement; was 20143 (req 0/ilvl 52-100/test/epic flagged)
+rogue,finger,11982,Viridian Band,"armory (req 18, ilvl 23)",STRICT replacement; was 22725 (req 0/ilvl 52-100/test/epic flagged)
+rogue,trinket,,,none,EMPTY: no green trinket at req<=18/ilvl<=25 in 70959 Item.db2
+rogue,trinket,,,none,EMPTY: no green trinket at req<=18/ilvl<=25 in 70959 Item.db2
+rogue,main_hand,276888,Quilboar Toothpick,"armory (req 1, ilvl 24)",STRICT replacement; was 24071 (req 0/ilvl 52-100/test/epic flagged)
+rogue,off_hand,5540,Pearl-handled Dagger,"armory (req 18, ilvl 23)",STRICT replacement; was 22378 (req 0/ilvl 52-100/test/epic flagged)
+rogue,ranged,4369,Deadly Blunderbuss,"armory (req 16, ilvl 21)",STRICT replacement; was 20086 (req 0/ilvl 52-100/test/epic flagged)
 mage,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
 mage,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
 rogue,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water

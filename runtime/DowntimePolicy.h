@@ -97,4 +97,31 @@ inline bool DowntimeWindowExpired(time_t startedAt, time_t now)
     return now - startedAt >= static_cast<time_t>(kDowntimeMaxSeconds);
 }
 
+// One due rank the bot could still learn: its list price (undiscounted - the
+// visit can only be cheaper) and every class-trainer entry teaching it.
+struct DowntimeTrainerRank
+{
+    uint32_t spellId = 0;
+    uint32_t moneyCost = 0;
+    std::vector<int32_t> entries;
+};
+
+// The gold check for the trainer the bot will actually visit: true while the
+// candidate destination (creature entry, nearest reachable first) teaches at
+// least one due rank the purse covers. A global cheapest rank taught only by
+// a farther trainer must not send the bot to this one.
+inline bool DowntimeTrainerEntryTeachesAffordable(int32_t entry,
+    std::vector<DowntimeTrainerRank> const& dueRanks, uint32_t freeMoney)
+{
+    for (DowntimeTrainerRank const& rank : dueRanks)
+    {
+        if (rank.moneyCost > freeMoney)
+            continue;
+        for (int32_t teaches : rank.entries)
+            if (teaches == entry)
+                return true;
+    }
+    return false;
+}
+
 } // namespace TortoiseBots

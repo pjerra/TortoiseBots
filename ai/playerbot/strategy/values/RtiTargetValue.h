@@ -85,9 +85,10 @@ namespace ai
             Unit* unit = ai->GetUnit(ObjectGuid(guid));
             if (!unit || sServerFacade.UnitIsDead(unit))
                 return NULL;
-            // `.tb ignore`: a listed mob is no focus, assist or area target. The crowd-control mark is exempt: the CC
-            // bot reads its own mark through this same function, and crowd control is not an attack.
-            if (type != "rti cc" && IsIgnoredMobCompat(bot, unit->GetObjectGuid()))
+            // `.tb ignore`: a listed mob is no focus, assist or area target - unless it is attacking the party (it attacks -> the bots defend).
+            // The crowd-control mark is exempt: the CC bot reads its own mark through this same function, and crowd control is not an attack.
+            if (type != "rti cc" && IsIgnoredMobCompat(bot, unit->GetObjectGuid()) &&
+                !PossibleAttackTargetsValue::IgnoredMobAttacksParty(unit, bot))
                 return NULL;
 
             if (!PossibleAttackTargetsValue::IsPossibleTarget(unit, bot, sPlayerbotAIConfig.sightDistance, false))

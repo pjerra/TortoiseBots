@@ -3,6 +3,7 @@
 #pragma once
 
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 struct QuestTriageViewCompat
@@ -130,6 +131,24 @@ inline bool AcceptQuestDirectCompat(Player* bot, Quest const* quest, WorldObject
     return QuestIsAcceptedStatusCompat(bot->GetQuestStatus(quest->GetQuestId()));
 }
 
+// The giver of a quest: an NPC, an object, a player sharing it or an item starting it.
+inline Object* QuestGiverObjectCompat(Player* bot, ObjectGuid giverGuid)
+{
+    return bot ? bot->GetObjectByTypeMask(giverGuid, TYPEMASK_CREATURE_GAMEOBJECT_PLAYER_OR_ITEM) : nullptr;
+}
+
+inline bool AcceptQuestByGiverCompat(Player* bot, Quest const* quest, ObjectGuid giverGuid)
+{
+    if (!bot || !quest)
+        return false;
+    WorldPacket p(CMSG_QUESTGIVER_ACCEPT_QUEST);
+    uint32 unk1 = 0;
+    p << giverGuid.GetRawValue() << quest->GetQuestId() << unk1;
+    p.rpos(0);
+    bot->GetSession()->HandleQuestgiverAcceptQuestOpcode(p);
+    return QuestIsAcceptedStatusCompat(bot->GetQuestStatus(quest->GetQuestId()));
+}
+
 inline bool CanRewardQuestCompat(Player* bot, Quest const* quest, bool msg)
 {
     return bot->CanRewardQuest(quest, msg);
@@ -150,6 +169,34 @@ inline void PushQuestToPartyCompat(Player* bot, uint32 questId)
     WorldPacket p;
     p << questId;
     bot->GetSession()->HandlePushQuestToParty(p);
+}
+
+// The spawned-giver/ender sets live only on the ForeverCore side (TbCompat_Quest.h), which has the relation tables;
+// here they are inert twins keeping the compat pair equal. Eligibility on this side stays always-true below.
+struct QuestEligibilitySetsCompat
+{
+    std::unordered_set<uint32> spawnedCreatures;
+    std::unordered_set<uint32> spawnedGOs;
+    std::unordered_set<uint32> questsWithGiver;
+    bool built = false;
+};
+
+inline QuestEligibilitySetsCompat& QuestEligibilitySetsCompat()
+{
+    static QuestEligibilitySetsCompat sets;
+    return sets;
+}
+
+inline void RebuildQuestEligibilityCompat()
+{
+    QuestEligibilitySetsCompat& sets = QuestEligibilitySetsCompat();
+    sets = QuestEligibilitySetsCompat();
+    sets.built = true;
+}
+
+inline void ClearQuestEligibilityCompat()
+{
+    QuestEligibilitySetsCompat() = QuestEligibilitySetsCompat();
 }
 
 inline bool QuestIsVanillaEligibleCompat(Quest const* /*quest*/) { return true; }

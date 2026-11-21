@@ -65,6 +65,9 @@ These settings configure autonomous random bots roaming the open world, includin
 | [`AiPlayerbot.AvoidHostileTowns`](#aiplayerbotavoidhostiletowns) | `1` | Prevents masterless bots from traveling near enemy faction town guards. |
 | [`AiPlayerbot.ExtraTownGuardEntries`](#aiplayerbotextratownguardentries) | `5996,5997,5998,5999,6000,6001,6002,6003` | Creatures that count as town guards although the data does not mark them. |
 | [`AiPlayerbot.RelocateHopelessDeaths`](#aiplayerbotrelocatehopelessdeaths) | `1` (commented out in the template; uncomment to change it) | Relocates bots repeatedly killed near enemy guards or in death loops. |
+| [`AiPlayerbot.DeathReleasePauseMinSec`](#aiplayerbotdeathreleasepauseminsec--deathreleasepausemaxsec) / `DeathReleasePauseMaxSec` | `3` / `10` | Random pause in seconds before a free bot releases spirit after dying. |
+| [`AiPlayerbot.WalkTargetOffset`](#aiplayerbotwalktargetoffset) | `2.5` | Maximum lateral offset in yards added to open-world walk destinations so bots spread out. |
+| [`AiPlayerbot.HuntRares`](#aiplayerbothuntrares) | `1` | Free bots prioritize living rare spawns of their level within sight distance. |
 | [`AiPlayerbot.AbandonedInstanceGraceSec`](#aiplayerbotabandonedinstancegracesec) | `90` | Grace period in seconds before an abandoned random or autonomous bot inside a dungeon or raid returns to its homebind. |
 | [`AiPlayerbot.UnstuckHearthLevelFit`](#aiplayerbotunstuckhearthlevelfit) | `1` | Requires bot hearthstone bind point to be within 10 levels of bot level. |
 | [`AiPlayerbot.StuckTravelTeleport`](#aiplayerbotstucktravelteleport) | `1` | Teleports long-stuck masterless bots directly to their travel destinations. |
@@ -717,6 +720,18 @@ Rescues bots stuck in fatal death loops by relocating them to a safe nearby hub.
 When a masterless bot suffers repeated deaths in the same hostile area or becomes trapped in an inescapable graveyard loop, the unstuck engine teleports the bot's spirit or corpse to its starting area (< level 10) or a level-fitting overworld point. The town death-loop rescue additionally needs `AiPlayerbot.AvoidHostileTowns = 1`.
 
 </details>
+
+### `AiPlayerbot.DeathReleasePauseMinSec` / `DeathReleasePauseMaxSec`
+Random pause in seconds before a free bot releases spirit after dying (`0` disables).
+**Default:** `3` / `10` · **Values:** non-negative integers (seconds) · **Restart:** needed
+
+### `AiPlayerbot.WalkTargetOffset`
+Maximum lateral offset in yards added to open-world walk destinations at least 15 yards away so bots do not walk single-file along the exact same line (`0` disables). Exact close-range interaction points, instances, and follow moves are never offset.
+**Default:** `2.5` · **Values:** non-negative float (yards) · **Restart:** needed
+
+### `AiPlayerbot.HuntRares`
+Allows free bots to prioritize living rare spawns of their level within sight distance instead of skipping them or picking closer ordinary mobs.
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 ### `AiPlayerbot.AbandonedInstanceGraceSec`
 Grace period in seconds before a random or autonomous bot left inside a dungeon or raid instance without a real player in its group teleports back to its homebind.

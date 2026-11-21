@@ -6,6 +6,7 @@
 #include "compat/botpch_forever.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include "Map.h"
 #include "compat/TbCompat_Unit.h"
@@ -24,6 +25,62 @@ bool PointRefusedOnMap(Map* map, float x, float y, float z)
     GridMapLiquidData data;
     GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, &data);
     return PointRefused(static_cast<std::uint32_t>(status), data.level, z);
+}
+
+LiquidProbe ProbeOnMap(Map* map, float x, float y, float z)
+{
+    LiquidProbe probe;
+    TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;
+    if (!terrain)
+        return probe;                       // no terrain to ask: the rule refuses (do less), the log says so
+    GridMapLiquidData data;
+    std::uint32_t const status = static_cast<std::uint32_t>(LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, &data));
+    probe.known = true;
+    probe.status = status;
+    probe.level = data.level;
+    probe.depthLevel = data.depth_level;
+    return probe;
+}
+
+WadeWay WadePointOnMap(Map* map, float x, float y, float z)
+{
+    TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;
+    if (!terrain)
+        return WadeWay::Refused;            // no terrain to ask: refused (do less)
+    GridMapLiquidData data;
+    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, &data);
+    return WadePointOf(static_cast<std::uint32_t>(status), data.level, data.depth_level, z);
+}
+
+bool SegmentWadeRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz)
+{
+    return SegmentWadeRefused(ax, ay, az, bx, by, bz, [map](float x, float y, float z) { return WadePointOnMap(map, x, y, z); });
+}
+
+bool SegmentWadeTraceOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz, WadeSample& out)
+{
+    TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;
+    if (!terrain)
+    {
+        // No terrain to ask is refused (do less), exactly as WadePointOnMap: the kept sample says so.
+        out.Keep(WadeWay::Refused, 0, 0.0f, ax, ay, az);
+        return true;
+    }
+    float const dx = bx - ax, dy = by - ay, dz = bz - az;
+    float const length = std::sqrt(dx * dx + dy * dy + dz * dz);
+    std::size_t const steps = length > kSegmentSampleYd ? static_cast<std::size_t>(std::ceil(length / kSegmentSampleYd)) : 1;
+    bool refused = false;
+    for (std::size_t i = 0; i <= steps; ++i)
+    {
+        float const t = static_cast<float>(i) / static_cast<float>(steps);
+        float const px = ax + t * dx, py = ay + t * dy, pz = az + t * dz;
+        GridMapLiquidData data;
+        std::uint32_t const status = static_cast<std::uint32_t>(LiquidStatusCompat(terrain, px, py, pz, MAP_ALL_LIQUIDS, &data));
+        WadeWay const way = WadePointOf(status, data.level, data.depth_level, pz);
+        out.Keep(way, status, data.level - data.depth_level, px, py, pz);
+        refused = refused || way == WadeWay::Refused;
+    }
+    return refused;
 }
 
 bool SegmentRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz)

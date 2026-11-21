@@ -129,9 +129,11 @@ class ReviewRoundOneWiringTest(unittest.TestCase):
     """The Opus review of f1fdeb67."""
 
     def test_event_rewinds_forget_the_route_memory(self):
-        for fn in ("inline void EventFailed(", "inline bool RearmEventOnWipe("):
+        for fn in ("inline void EventFailedAt(", "inline bool RearmEventOnWipe("):
             code = body(POLICY, fn, "\n}\n")
             self.assertLess(code.index("ForgetMoveRefusals(r);"), code.index("ForgetRewoundRoute(r);"))
+        # EventFailed delegates to the shared rewind helper (`EventStartStep` picks the step).
+        self.assertIn("EventFailedAt(r, EventStartStep(r), why);", body(POLICY, "inline void EventFailed(", "\n}\n"))
         # A resume keeps both (it is no rewind).
         self.assertNotIn("ForgetRewoundRoute", body(POLICY, "inline bool Resume(Run& r)", "\n}\n"))
 

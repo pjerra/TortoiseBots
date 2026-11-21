@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+class GameObject;
 class Player;
 
 namespace TortoiseBots
@@ -37,6 +38,10 @@ namespace tasks
 // `open` and `loot`: judged now (the bot, the target, the reach, the lock), accepted when a task could be queued. `bots` = the host bots of the party on the
 // lead's map and instance, the lead first (the executor's party). A refusal changes nothing.
 OrderAnswer Begin(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
+
+// `gossip`: the bot talks to the NPC through the two packets a client sends (hello, then the option), the choice judged on the menu the core built
+// (GossipOrder). Only the NPC a gossip step of the run's own plan names, or one of AiPlayerbot.BotGossipNpcs, may be talked to.
+OrderAnswer BeginGossip(RunRec& rec, Player* lead, std::vector<Player*> const& bots, TaskOrder const& order, uint32 nowMs);
 
 // Commander P6: shared task entry points for `.tb cmd loot|open|use|gossip|lootmethod|state` on the same task engine.
 // `resolvedTarget` is the pre-resolved object/corpse/NPC guid (when `my`, `32-hex`, or `entry:<id>` without `@x,y,z` was resolved by the caller).
@@ -91,6 +96,9 @@ struct Totals
     uint64 began = 0, done = 0, failed = 0, cancelled = 0;
 };
 Totals const& TotalsSinceBoot();
+
+// The typed `GameObjUse` packet into the core's handler, for a gathered node that needs no spell (the packet's sender stays in this file).
+bool SendGameObjectUse(Player* bot, GameObject* go);
 }
 }
 }

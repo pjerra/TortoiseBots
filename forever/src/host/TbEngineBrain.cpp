@@ -11,6 +11,11 @@
 #include "TbBotSession.h"
 #include "host/TbH3.h"
 #include "host/TbCc.h"
+#include "host/chat/TbChatIn.h"
+#include "host/TbSpellDelayPure.h"
+#include "host/TbThrownPure.h"
+#include "host/TbHostTaxi.h"
+#include "host/TbHostTransport.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -25,6 +30,7 @@
 #include <memory>
 #include "ByteBuffer.h"
 #include "MotionMaster.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "Unit.h"
 
@@ -51,6 +57,10 @@ struct Brain
     PlayerbotAI* ai = nullptr;
     BotSession* session = nullptr;   // the bot's session (owned by BotMgr, which drops the brain before the session); its cast-result queue is on while the brain lives
     uint32 teleportAcks = 0;     // R10 (S3): how many teleports the host handed to PlayerbotAI::HandleTeleportAck (`.tb where`)
+    uint32 castStartMs = 0;      // S2: world time (getMSTime) the engine's current "last spell cast" was first seen, stamped after each engine step
+    uint32 castSeenId = 0;       // the "last spell cast" as of the last step (id, target, whole-second time): a change means a new cast started
+    ObjectGuid castSeenTarget;
+    time_t castSeenTime = 0;
     uint32 pendingMs = 0;        // R4: world time the engine has not been given yet (Tick hands it over in steps of kMinEngineStepMs)
 };
 
@@ -70,16 +80,55 @@ BotSession* BotSessionOf(Player* bot)
     return session && session->IsBot() ? dynamic_cast<BotSession*>(session) : nullptr;
 }
 
-// One cast result, handed to the engine the way the Turtle packet handlers do (PlayerbotAIPackets.cpp:187-199 and :554-591).
+// S2: the engine's "last spell cast" carries a whole-second clock (time(0)), so it cannot say how long ago a cast started. After each engine step the
+// host looks at it: a new (id, target, time) means a cast began during this step, and the world time (milliseconds) is kept beside it.
+void NoteCastStart(Brain* brain)
+{
+    ai::LastSpellCast const& last = brain->ai->GetAiObjectContext()->GetValue<ai::LastSpellCast&>("last spell cast")->Get();
+    if (last.id == brain->castSeenId && last.target == brain->castSeenTarget && last.time == brain->castSeenTime)
+        return;
+    brain->castSeenId = last.id;
+    brain->castSeenTarget = last.target;
+    brain->castSeenTime = last.time;
+    brain->castStartMs = WorldTimer::getMSTime();
+}
+
+// S2: a cast of the bot's own ended without the spell (SMSG_SPELL_FAILURE or the async SMSG_CAST_FAILED). The legacy SpellInterrupted does the
+// work when the failure comes in a later wall second than the cast start; when it left the cast in place (the same second: its clock is time(0),
+// PlayerbotAI.cpp:3184, left unchanged for Turtle) the host clears it and cuts the engine's wait on a millisecond clock, so a failed heal does not
+// keep the bot waiting out the whole bar.
+void RearmAfterCastFailure(Brain* brain, uint32 spellId)
+{
+    PlayerbotAI* pai = brain->ai;
+    pai->SpellInterrupted(spellId);
+    ai::LastSpellCast& last = pai->GetAiObjectContext()->GetValue<ai::LastSpellCast&>("last spell cast")->Get();
+    if (!spellId || last.id != spellId)
+        return;
+    uint32 const wait = TortoiseBots::sd::FailureWaitMs(brain->castStartMs, WorldTimer::getMSTime(), pai->CalculateGlobalCooldown(spellId), sPlayerbotAIConfig.reactDelay);
+    pai->NoteCastFailureWait(wait);
+    last.id = 0;
+    ai::botdiag::BotActionLog::Write(pai, "CAST_FAILURE_REARM", "spell=%u wait=%u", spellId, wait);
+}
+
+// One cast result, handed to the engine the way the Turtle packet handlers do (PlayerbotAIPackets.cpp:187-199, :202-217 and :554-591).
 void DeliverCastResult(Brain* brain, CastResult const& result)
 {
     PlayerbotAI* pai = brain->ai;
+    if (result.kind == CastResult::Kind::SpellDelayed)
+    {
+        // SMSG_SPELL_DELAYED of the bot's own cast -> the engine's wait grows by the pushback (PlayerbotAIPackets.cpp:202-217): the cast bar
+        // keeps the length the core reports, so the next action cannot start before it ends. The legacy case ignored a delay above 1000 ms.
+        uint32 const extra = TortoiseBots::sd::PushbackExtraMs(int64(result.delayMs));
+        ai::botdiag::BotActionLog::Write(pai, "SPELL_DELAYED", "delay=%u extra=%u%s", result.delayMs, extra, result.injected ? " injected=1" : "");
+        pai->NoteSpellDelayed(extra);
+        return;
+    }
     if (result.kind == CastResult::Kind::SpellFailure)
     {
         // SMSG_SPELL_FAILURE of the bot's own cast -> PlayerbotAI::SpellInterrupted (PlayerbotAIPackets.cpp:187-199): the engine
         // clears "last spell cast" and shortens its wait to the remaining global cooldown (PlayerbotAI.cpp:3172-3194).
         ai::botdiag::BotActionLog::Write(pai, "SPELL_FAILURE", "spell=%u reason=%u%s", result.spellId, result.reason, result.injected ? " injected=1" : "");
-        pai->SpellInterrupted(result.spellId);
+        RearmAfterCastFailure(brain, result.spellId);
         return;
     }
 
@@ -99,6 +148,36 @@ void DeliverCastResult(Brain* brain, CastResult const& result)
                 result.spellId, result.reason, ccTarget ? ccTarget->GetGUID().ToString().c_str() : "none",
                 ccTarget ? pai->GetBot()->GetDistance(ccTarget) : -1.0f, pai->GetBot()->isMoving() ? 1u : 0u);
         }
+    }
+    // D4: the bar ended without the cast, so the engine must not keep waiting for it. SpellInterrupted only acts when this spell is the
+    // "last spell cast" (PlayerbotAI.cpp:3172-3194), which is exactly this case: the wait is cut to the rest of the global cooldown (or the
+    // react delay) and the next tick may plan at once. No "cast failed" trigger is fed and nothing is whispered, as on Turtle's own handler.
+    RearmAfterCastFailure(brain, result.spellId);
+}
+
+// S1-R2: the chat lines the hook (host/chat/TbChatIn.cpp) queued for this bot since its last step. Each one goes to the engine the way the
+// Turtle packet case hands a whisper to it (PlayerbotAIPackets.cpp:376-385): the sender is looked up again NOW (a pointer is never kept
+// across ticks), the sender must still be allowed to command this bot (a party removal or a lost binding since admission drops the
+// order), and a bot that may not act this tick drops the line rather than holding it. Every drop is counted (`dropped` in `.tb state`),
+// so a line that never ran is never left reading `accepted`.
+void DeliverChat(Brain* brain)
+{
+    if (!brain->bot || !brain->ai)
+        return;
+    chatin::Envelope line;
+    std::size_t taken = 0;
+    while (taken < chatin::InboxCapacity && chatin::Pop(brain->guidLow, line))
+    {
+        ++taken;
+        ObjectGuid senderGuid;
+        senderGuid.SetRawValue(line.senderHigh, line.senderLow);
+        Player* sender = ObjectAccessor::FindConnectedPlayer(senderGuid);
+        if (!sender || !chatin::StillAuthorized(brain->bot, sender) || !brain->ai->AllowActivity())
+        {
+            chatin::Drop(brain->guidLow);
+            continue;
+        }
+        brain->ai->HandleCommand(line.kind, line.text, *sender, line.lang);
     }
 }
 
@@ -306,8 +385,12 @@ void Tick(Brain* brain, uint32 diff)
         // result): the session counts it and does not queue it (BotSession::EngineTickScope).
         BotSession::EngineTickScope tickScope(brain->session);
         DeliverCastResults(brain);
+        DeliverChat(brain);                                        // S1-R2: the chat lines the hook queued since the last step
         TortoiseBots::h3::BeforeEngineTick(brain->bot, brain->ai);   // H3: the bot's queued orders, before its tick
+        tbhost::taxi::TickLandingWatch(brain->bot);
+        tbhost::ride::TickRide(brain->bot, diff);
         brain->ai->UpdateAI(diff);
+        NoteCastStart(brain);
     }
     catch (ByteBufferException const&)
     {
@@ -315,6 +398,29 @@ void Tick(Brain* brain, uint32 diff)
         // update (the Turtle adapter does the same, runtime/PlayerbotAIAdapter.cpp:68-76).
         sLog.outError("TortoiseBots engine: dropped a malformed packet while updating bot %s", brain->bot->GetName().c_str());
     }
+}
+
+void NoteThrown(Brain* brain, uint32 jumpUntilMs, bool start)
+{
+    if (!Usable(brain))
+        return;
+    PlayerbotAI* pai = brain->ai;
+    if (start)
+    {
+        // The Turtle knockback packet handler's first two steps (PlayerbotAIPackets.cpp:475-478): the cast bar ends, and a landing
+        // target from an older jump must not pull the bot back to it when the flight ends.
+        pai->InterruptSpell(false, "knockback");
+        pai->ResetJumpDestination();
+    }
+    // A re-timed flight may extend the wait; a later report never shortens it. Zero means no jump time is set, and a
+    // plain stamp compare would wrap (non-advancing for 24.8 days of uptime): kb::RaisesDeadline answers both.
+    if (kb::RaisesDeadline(pai->GetJumpTime(), jumpUntilMs))
+        pai->SetJumpTime(jumpUntilMs);
+}
+
+bool InFlight(Brain* brain)
+{
+    return Usable(brain) && brain->ai->IsJumping();
 }
 
 void ReapplyStrategies(Brain* brain, bool free)
@@ -325,6 +431,21 @@ void ReapplyStrategies(Brain* brain, bool free)
     brain->ai->SetMovementStrategy(free ? "free" : "follow");
 }
 
+void SetQuestGroupMember(Brain* brain, bool inGroup)
+{
+    if (!brain || !brain->ai)
+        return;
+    if (inGroup)
+    {
+        brain->ai->ChangeStrategy("+follow,+dps assist", BotState::BOT_STATE_NON_COMBAT);
+        brain->ai->SetMovementStrategy("follow");
+    }
+    else
+    {
+        ReapplyStrategies(brain, true);
+    }
+}
+
 void BindMaster(Brain* brain, Player* master)
 {
     if (!brain || !brain->ai)
@@ -333,7 +454,8 @@ void BindMaster(Brain* brain, Player* master)
     // The engine's own adoption path ("remove bot masters not in our group", PlayerbotAI.cpp): a full reset purges the travel and grind
     // targets and stops the path the free kit had started, so the bot is the commanded one from this tick on, not the one it was.
     brain->ai->Reset(true);
-    brain->ai->StopMoving();
+    if (!brain->ai->IsJumping())     // a flight in the air is not cut by a rebind: it lands where it was thrown
+        brain->ai->StopMoving();
     ReapplyStrategies(brain, false);
 }
 
@@ -380,6 +502,14 @@ std::string InjectCastResult(Player* bot, uint32 spellId, uint32 reason, bool in
     if (!session)
         return "not a bot session";
     return session->InjectCastResult(spellId, reason, interrupted);
+}
+
+std::string InjectSpellDelay(Player* bot, uint32 delayMs)
+{
+    BotSession* session = BotSessionOf(bot);
+    if (!session)
+        return "not a bot session";
+    return session->InjectSpellDelay(delayMs);
 }
 
 std::vector<std::string> Describe(Brain const* brain)
@@ -467,10 +597,21 @@ std::vector<std::string> Describe(Brain const* brain)
         CastResultCounts const counts = brain->session->GetCastResultCounts();
         lines.push_back("cast results: queued " + std::to_string(counts.queued) + ", delivered " + std::to_string(counts.delivered) +
             ", dropped " + std::to_string(counts.dropped) + " (queue holds " + std::to_string(BotSession::CastResultCapacity) + "), pending " +
-            std::to_string(counts.pending) + "; refused during the engine's own tick (not queued) " + std::to_string(counts.refusedInTick) +
+            std::to_string(counts.pending) + ", delayed " + std::to_string(counts.delayed) +
+            "; refused during the engine's own tick (not queued) " + std::to_string(counts.refusedInTick) +
             ", unreadable " + std::to_string(counts.malformed));
     }
     return lines;
+}
+
+bool RunAction(Player* bot, char const* action, char const* param)
+{
+    if (!bot || !action)
+        return false;
+    PlayerbotAI* pai = PlayerbotAIStorage::Instance().GetAI(bot->GetGUID());
+    if (!pai)
+        return false;
+    return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
 }
 }
 }
@@ -489,12 +630,17 @@ Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
     return nullptr;
 }
 void ReapplyStrategies(Brain*, bool) {}
+void SetQuestGroupMember(Brain*, bool) {}
 void BindMaster(Brain*, Player*) {}
 void Tick(Brain*, uint32) {}
 void HandleTeleportAck(Brain*) {}
 void Destroy(Brain*) {}
+void NoteThrown(Brain*, uint32, bool) {}
+bool InFlight(Brain*) { return false; }
 std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
+std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
+bool RunAction(Player*, char const*, char const*) { return false; }
 }
 }
 

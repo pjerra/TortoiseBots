@@ -109,7 +109,7 @@ class Wiring(unittest.TestCase):
         self.assertIn("run::Find(bot)", key_of_bot)                           # a system run's leader is its own card key
         master = function_body(self.cpp, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
         self.assertEqual(master.count("PruneToStanding(s)"), 1)               # the bind path; P2's release erases the record at once
-        release = function_body(self.cpp, r"void ReleaseCommander\(ObjectGuid commander, L::End end\)\s*\{")
+        release = function_body(self.cpp, r"void ReleaseCommander\(ObjectGuid commander, L::End end(?:, Group\* partyGroup = nullptr, bool partyKnown = false)?\)\s*\{")
         self.assertIn("s.metas.erase(it)", release)
         self.assertIn("store::Erase(", release)
 

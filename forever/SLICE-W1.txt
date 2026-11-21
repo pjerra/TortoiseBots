@@ -290,3 +290,21 @@ ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp
 ai/playerbot/strategy/actions/DropQuestAction.cpp
 ai/playerbot/strategy/actions/ShareQuestAction.cpp
 ai/playerbot/strategy/actions/QuestRewardActions.cpp
+# S1-R2 (chat commands in): the chat strategy and the actions its registered commands fire (FOREVER-SMALL-SLICES-SPEC section 3, "Engine
+# kit"). The unregistered commands' actions (CastCustomSpellAction.cpp and the quest, item, trade and guild files) stay out on purpose.
+ai/playerbot/strategy/generic/ChatCommandHandlerStrategy.cpp
+ai/playerbot/strategy/actions/StatsAction.cpp
+ai/playerbot/strategy/actions/HelpAction.cpp
+ai/playerbot/strategy/actions/ListSpellsAction.cpp
+ai/playerbot/strategy/actions/TellCastFailedAction.cpp
+ai/playerbot/strategy/actions/TellTargetAction.cpp
+ai/playerbot/strategy/actions/RtiAction.cpp
+ai/playerbot/strategy/actions/RangeAction.cpp
+ai/playerbot/strategy/actions/SaveManaAction.cpp
+ai/playerbot/strategy/actions/TellLosAction.cpp
+
+# World-life slice W4 (travel destinations, round A2): the destination manager and its values. They compile against the
+# core only through the WL4 pair (TbCompat_WL4.h + ai/cmangos-compat-wl4.h).
+ai/playerbot/TravelMgr.cpp
+ai/playerbot/strategy/values/TravelValues.cpp
+ai/playerbot/strategy/actions/AhAction.cpp

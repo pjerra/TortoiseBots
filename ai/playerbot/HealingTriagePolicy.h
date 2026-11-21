@@ -144,4 +144,54 @@ namespace ai
             ++count;
         return healerOrdinal % count;
     }
+
+    // With several healers, the main healer (ordinal 0) heals the tank(s) first
+    // and the others split the rest of the group. Single healer = unchanged.
+    inline std::size_t HealingAssignment(std::vector<HealingCandidate> const& candidates,
+                                         HealingBands const& bands, std::size_t healerOrdinal,
+                                         std::size_t totalHealers)
+    {
+        if (candidates.empty())
+            return 0;
+        if (totalHealers <= 1)
+            return HealingAssignment(candidates, bands, healerOrdinal);
+
+        std::size_t firstTank = candidates.size();
+        for (std::size_t i = 0; i < candidates.size(); ++i)
+        {
+            if (candidates[i].tank && !candidates[i].pet)
+            {
+                firstTank = i;
+                break;
+            }
+        }
+        if (firstTank == candidates.size())
+            return HealingAssignment(candidates, bands, healerOrdinal);
+
+        if (healerOrdinal == 0)
+            return firstTank;
+
+        std::size_t firstOther = candidates.size();
+        for (std::size_t i = 0; i < candidates.size(); ++i)
+        {
+            if (!candidates[i].tank)
+            {
+                firstOther = i;
+                break;
+            }
+        }
+        if (firstOther == candidates.size())
+            return HealingAssignment(candidates, bands, healerOrdinal);
+
+        unsigned const urgency = HealingUrgency(candidates[firstOther], bands);
+        bool const los = candidates[firstOther].inLos;
+        std::vector<std::size_t> others;
+        for (std::size_t i = firstOther; i < candidates.size(); ++i)
+        {
+            if (!candidates[i].tank && HealingUrgency(candidates[i], bands) == urgency &&
+                candidates[i].inLos == los)
+                others.push_back(i);
+        }
+        return others[(healerOrdinal - 1) % others.size()];
+    }
 }
