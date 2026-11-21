@@ -63,7 +63,7 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (TryHandleTaskVerb(handler, args, verb, 1, &taskOk))
         return taskOk;
 
-    // Issue #131: the tactical orders are settings and direct actions the judge does not know; they answer their own `cmd` reply.
+    // The tactical orders are settings and direct actions the judge does not know; they answer their own `cmd` reply.
     bool tacticalOk = false;
     if (TryHandleTacticalVerb(handler, args, verb, lead, members, sender, &tacticalOk))
         return tacticalOk;

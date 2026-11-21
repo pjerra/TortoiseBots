@@ -1,4 +1,4 @@
-// Tactical orders (issue #131), M1: stop, flee, guard, stance, engage and rebuff. ONE executor for both surfaces (`.tb order` queues the order
+// Tactical orders, M1: stop, flee, guard, stance, engage and rebuff. ONE executor for both surfaces (`.tb order` queues the order
 // through h3, `.tb cmd` does the same): the command validates and queues, and the bot's next engine tick runs the verb through the existing
 // legacy action or strategy. See forever/docs/TB-COMMANDS.md section 23 and forever/docs/TACT-M1-NOTES.md.
 //

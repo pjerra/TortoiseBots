@@ -1184,7 +1184,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "order", "unknown-verb", verb);
     std::string const rest = JoinFrom(args.w, pos);
 
-    // Issue #131: the tactical verbs have their own words (a stance name, the engage seconds) and their own refusal codes.
+    // The tactical verbs have their own words (a stance name, the engage seconds) and their own refusal codes.
     bool const tactical = tactics::IsTacticalVerb(verb);
     std::string tacticArg = rest;
     if (tactical)

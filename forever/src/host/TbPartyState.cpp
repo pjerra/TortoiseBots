@@ -338,7 +338,7 @@ Rec StateRec(Player* bot, Readiness& ready)
         rec.T("blockmsg", entry.blockText);
     rec.N("catchup", entry.catchups).B("practice", BotMgr::Instance().Practice(guid));
     h8::AppendCcState(rec, bot);                              // H8 (slice 8): rticc, ccfam, held, combo (appended: the older keys are unchanged)
-    tactics::AppendState(rec, bot);                           // Issue #131 M1: stance=, rebuff= (appended after the h8 keys)
+    tactics::AppendState(rec, bot);                           // the tactical state keys: stance=, rebuff= (appended after the h8 keys)
     h10::AppendHybridState(rec, bot);                         // H10 (slice 10): form, totems, imbue, seal, paura (appended: the older keys are unchanged)
     p11::AppendPetState(rec, bot);                            // P11 (slice 11): pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
     kb::AppendThrownState(rec, bot);                          // S3: thrown=, falldmg=, runrate= (appended: the older keys are unchanged)

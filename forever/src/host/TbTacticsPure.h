@@ -1,4 +1,4 @@
-// Tactical orders (issue #131), M1: the core-free half. The command handlers, the queued order and the engine hook turn game state into
+// Tactical orders, M1: the core-free half. The command handlers, the queued order and the engine hook turn game state into
 // plain values here, so tools/test_tactics_pure.cpp can prove the grammar without a world.
 //
 // M1: the six verbs of the round, the engage seconds (0-60, empty = the default 4) and the stance word (`turn` is `turnback`). The later

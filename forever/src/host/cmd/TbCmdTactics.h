@@ -1,4 +1,4 @@
-// Commander surface of the tactical orders (issue #131, M1): `.tb cmd stop|flee|guard|stance|engage|rebuff`.
+// Commander surface of the tactical orders, M1: `.tb cmd stop|flee|guard|stance|engage|rebuff`.
 // The per-bot work is the same queued order `.tb order` uses (host/TbTactics.h): this file only resolves the caller's binding, parses the
 // words and answers in the `cmd` reply. It runs before the lifted judge (TbCmdOrders.cpp) because these verbs are settings and actions the
 // judge does not know. World thread only.

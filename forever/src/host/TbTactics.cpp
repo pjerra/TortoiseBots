@@ -13,6 +13,7 @@
 #include "MotionMaster.h"
 #include "Player.h"
 
+#include "compat/TbCompat_Unit.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PullJoinWindowPolicy.h"
@@ -189,7 +190,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
         unsigned seconds = 0;
         if (!ParseEngageSeconds(arg, seconds))
             return "fail:bad-argument";
-        ai->StartEngageWindow(requester->GetGUID().GetRawValue(), seconds);
+        ai->StartEngageWindow(GuidKeyCompat(requester->GetGUID()), seconds);
         return "ok";
     }
     if (verb == "rebuff")
