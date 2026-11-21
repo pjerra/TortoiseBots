@@ -43,6 +43,9 @@ bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail args);       /
 bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb quest <bot> status|accept|turnin|share|drop|reward ... [#token]
 bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb guildorder create|list|cancel|status ... [#token]
 
+// Rebuilds the quest eligibility sets (TbCompat_Quest.h): at world load and after a quest reload.
+void RebuildQuestEligibility();
+
 // ---- engine hooks (only built, and only called, with TORTOISEBOTS_SLICE1) ----
 // Called by engine::Tick (TbEngineBrain.cpp) right before the bot's UpdateAI: runs the bot's queued orders through the legacy actions.
 void BeforeEngineTick(Player* bot, PlayerbotAI* ai);

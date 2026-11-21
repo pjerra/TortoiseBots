@@ -158,6 +158,10 @@ public:
     void OnAfterReload(std::string_view command) override
     {
 #ifdef TORTOISEBOTS_SLICE1
+        // The quest starter/ender tables feed the bots' quest eligibility sets.
+        if (BotMgr::Instance().Enabled() && TortoiseBots::engine::Built()
+            && (command == "reload all" || command.find("quest") != std::string_view::npos))
+            TortoiseBots::h3::RebuildQuestEligibility();
         if (command != "reload all" || !BotMgr::Instance().Enabled() || !ai::GetDungeonPlans().Sealed())
             return;
         // A run keeps the plan it started on and matches its units by (leg, seq): new unit rows under it could give it another step's
@@ -219,6 +223,7 @@ public:
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
                 tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
+                TortoiseBots::h3::RebuildQuestEligibility();
             }
         }
 #endif

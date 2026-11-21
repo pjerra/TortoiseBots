@@ -314,5 +314,10 @@ bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     return Fail(handler, args, "quest", "unknown-verb", "unknown quest verb: " + verb);
 }
 
+void RebuildQuestEligibility()
+{
+    RebuildQuestEligibilityCompat();
+}
+
 } // namespace h3
 } // namespace TortoiseBots

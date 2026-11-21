@@ -392,6 +392,10 @@ void SetPersistentSkull(Party const& ctx, ResolvedParty const& party, Unit const
     Group* group = party.lead->GetGroup();
     if (!group)
         return;
+    // Raid icons are shared: with another real player in the group, leave the skull to the players.
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        if (slot.guid != ctx.owner && !BotMgr::Instance().IsBot(slot.guid))
+            return;
     ObjectGuid const changedBy = ctx.owner.IsEmpty() ? party.lead->GetGUID() : ctx.owner;
     group->SetTargetIcon(7, target->GetGUID(), changedBy);
 }

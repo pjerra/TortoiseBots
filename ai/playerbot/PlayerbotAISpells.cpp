@@ -491,7 +491,7 @@ bool CcKindDenied(PlayerbotAI* ai, std::uint32_t kind, SpellCastResult* checkRes
 
 bool PlayerbotAI::CanCastSpell(std::string name, Unit* target, uint8 effectMask, Item* itemTarget, bool ignoreRange, bool ignoreInCombat, bool ignoreMount, SpellCastResult* checkResult)
 {
-    if (CcKindDenied(this, CcPermissions::KindFromSpellName(name), checkResult))
+    if (GetCcDeniedMask() != 0 && CcKindDenied(this, CcPermissions::KindFromSpellName(name), checkResult))
         return false;
     return CanCastSpell(aiObjectContext->GetValue<uint32>("spell id", name)->Get(), target, 0, true, itemTarget, ignoreRange, ignoreInCombat, ignoreMount, checkResult);
 }
