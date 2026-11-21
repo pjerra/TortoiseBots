@@ -40,7 +40,7 @@
 // "blessing", "cast time", "heal interrupt"; non-combat "holy", "dps assist", "follow", "cure", "buff", "food", "default", "aura", "blessing"; reaction "holy". Protection paladin
 // (recorded only, D1): combat "protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff"; non-combat "protection", "tank assist" + the same tail; reaction
 // "protection". Restoration shaman: combat "restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt"; non-combat "restoration", "dps assist", "follow",
-// "cure", "buff", "food", "default" (no "totems" out of combat: D5, the totems drop in combat only); reaction "restoration". A tank kit (bear, protection) returns before the threat rule, as
+// "cure", "totems", "buff", "food", "default"; reaction "restoration". A tank kit (bear, protection) returns before the threat rule, as
 // the warrior's does (a tank never backs off the threat it holds; the spec's lists name "threat" in the two tank kits, but KeepsPartyThreatBackoff is false for a tank, so the strategy was
 // never added to the warrior's; the kits here follow the warrior's). The three healer kits get "threat" from KeepsPartyThreatBackoff as the priest does. Left out on purpose (the spec's
 // list): the full kits' "aoe", "cc", "boost", "flee", "pull back", "offheal"/"offdps", "stealth", "oom melee", the druid's under-level-10 "leveling" kit, every cat, balance, retribution,
@@ -497,7 +497,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             return;
         }
         case CLASS_SHAMAN:
-            nonCombatEngine->addStrategies(tab == 0 ? "elemental" : (tab == 1 ? "enhancement" : "restoration"), "dps assist", "follow", "cure", "buff", "food", "default", "boost", "aoe", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "elemental" : (tab == 1 ? "enhancement" : "restoration"), "dps assist", "follow", "cure", "totems", "buff", "food", "default", "boost", "aoe", NULL);
             return;
         case CLASS_MAGE:
             nonCombatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "follow", "cure", "buff", "food", "default", "boost", NULL);

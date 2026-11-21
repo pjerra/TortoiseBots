@@ -171,7 +171,7 @@ check(r.returncode == 0 and "(a)=0" in r.stdout, "slice_registry_check.py: " + (
 ctx = read("forever/src/slice/SliceAiObjectContext.cpp")
 for key in ("initialize pet", "toggle pet spell", "set pet stance", "pet attack", "no pet", "has pet", "new pet", "pet dead", "pet happy", "active spell", "cancel channel", "pet"):
     check('creators["%s"]' % key in ctx, "the slice registry lacks the key " + key)
-for key in ("tame", "manual saved string", "flee with pet"):
+for key in ("manual saved string", "flee with pet"):
     check('creators["%s"]' % key not in ctx, "the slice registry must NOT hold " + key)
 
 if failures:

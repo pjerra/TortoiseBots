@@ -129,7 +129,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft", "taxi-learn", "fly", "ride", "ah" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft", "taxi-learn", "fly", "ride", "ah", "tame" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -423,6 +423,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     // instance's entrance (D2). The action's own result is the order's result; a bot that is not dead has nothing to release (`fail:release`).
     if (o.verb == "release")
         return act("release", Event("tb order", std::string(), owner)) ? "ok" : "fail:release";
+    if (o.verb == "tame")
+        return act("tame", Event("tb order", o.arg, owner)) ? "ok" : "fail:tame";
     if (o.verb == "sell")
         return act("sell", Event("tb order", o.arg.empty() ? std::string("gray") : o.arg, owner)) ? "ok" : "fail:sell";
     if (o.verb == "buy")
@@ -1239,6 +1241,8 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else if (verb == "stay")
             needAction[0] = "stay chat shortcut";
+        else if (verb == "tame")
+            needAction[0] = "tame";
         else if (verb == "come")
         {
             // The spot: where the sender stands (a GM's character), or the bound commander from the console.

@@ -324,7 +324,7 @@ ai/playerbot/strategy/actions/SpreadDistanceAction.cpp
 ai/playerbot/strategy/values/LeastHpTargetValue.cpp
 ai/playerbot/strategy/values/AttackerWithoutAuraTargetValue.cpp
 
-# Combat items (issue #124)
+# Combat items: potions, healthstones, bandages, trinkets, oils, stones, poisons, soulstone
 ai/playerbot/strategy/generic/UsePotionsStrategy.cpp
 ai/playerbot/strategy/generic/ConsumableStrategy.cpp
 ai/playerbot/strategy/actions/UseConsumableAction.cpp
@@ -332,3 +332,6 @@ ai/playerbot/strategy/actions/UseTrinketAction.cpp
 ai/playerbot/strategy/actions/ImbueAction.cpp
 ai/playerbot/strategy/actions/BuffAction.cpp
 ai/playerbot/strategy/values/PartyMemberToSoulstone.cpp
+
+# Class extras: hunter taming
+ai/playerbot/strategy/actions/TameAction.cpp

@@ -16,6 +16,7 @@
 #include "host/TbPet.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
+#include "host/TbPetFactory.h"
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/TbHostGuildOrders.h"
@@ -372,9 +373,11 @@ public:
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             tbhost::prof::ClearBotErrands(player->GetGUID());
 #endif
-            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1528). Only the preference:
-            // nothing is added to the bags and the ammo slot is untouched.
+            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1528).
             player->SetPreferDrawableAmmo(true);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            TortoiseBots::p11::EnsureHunterStarterAmmo(player);
+#endif
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }

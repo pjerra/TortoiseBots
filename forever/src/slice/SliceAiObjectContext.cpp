@@ -55,6 +55,7 @@
 #include "playerbot/strategy/actions/StatsAction.h"
 #include "playerbot/strategy/actions/StayActions.h"
 #include "playerbot/strategy/actions/TalkToQuestGiverAction.h"
+#include "playerbot/strategy/actions/TameAction.h"
 #include "playerbot/strategy/actions/TellCastFailedAction.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/TellTargetAction.h"
@@ -267,7 +268,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (84 of its keys)
+    // the registry of ActionContext (85 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -357,10 +358,11 @@ namespace slice
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketAction(ai); };
             creators["apply stone"] = [](PlayerbotAI* ai) { return new ImbueWithStoneAction(ai); };
             creators["apply oil"] = [](PlayerbotAI* ai) { return new ImbueWithOilAction(ai); };
+            creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (40 of its keys)
+    // the registry of ChatActionContext (41 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -406,6 +408,7 @@ namespace slice
             creators["formation"] = [](PlayerbotAI* ai) { return new SetFormationAction(ai); };
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceAction(ai); };
             creators["buff"] = [](PlayerbotAI* ai) { return new BuffAction(ai); };
+            creators["tame"] = [](PlayerbotAI* ai) { return new TameAction(ai); };
         }
     };
 
@@ -430,7 +433,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (133 of its keys)
+    // the registry of TriggerContext (134 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -569,6 +572,7 @@ namespace slice
             creators["perception"] = [](PlayerbotAI* ai) { return new PerceptionTrigger(ai); };
             creators["has poison debuff"] = [](PlayerbotAI* ai) { return new HasPoisonDebuffTrigger(ai); };
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
+            creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
         }
     };
 
@@ -616,7 +620,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (206 of its keys)
+    // the registry of ValueContext (209 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -828,11 +832,14 @@ namespace slice
             creators["attacker without my aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutMyAuraTargetValue(ai); };
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceValue(ai); };
             creators["party member to soulstone"] = [](PlayerbotAI* ai) { return new PartyMemberToSoulstone(ai); };
+            creators["warlock spread attacker my aura"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker my aura", true, true, false, false); };
+            creators["warlock spread attacker"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker", false, false, true, false); };
+            creators["warlock spread attacker manual"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker manual", false, false, true, true); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 38, kActions = 136, kTriggers = 159, kValues = 206;
+    constexpr unsigned kStrategies = 38, kActions = 138, kTriggers = 160, kValues = 209;
 }
 }
 
