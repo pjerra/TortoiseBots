@@ -363,6 +363,12 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // instance, `leave` no longer moves a stranger's bots.
     if (!MayLeadBots(handler, leader->GetGUID()))
         return Fail(handler, args, "instance", "not-allowed", args.w[0] + " is neither a host bot nor your own character");
+    if (verb == "reset" || verb == "leave")
+    {
+        std::string code, detail;
+        if (!CheckPartyLeadAccess(handler, leader, code, detail))
+            return Fail(handler, args, "instance", code, detail);
+    }
     uint32 mapId = 0;
     if (args.w.size() > 2)
     {
@@ -628,6 +634,12 @@ bool HandleTele(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         // C3: a character named in a command must be a host bot or the sender's own character.
         if (!MayLeadBots(handler, source->GetGUID()))
             return Fail(handler, args, "tele", "not-allowed", args.w[0] + " is neither a host bot nor your own character");
+        if (IsHostBot(source))
+        {
+            std::string code, detail;
+            if (!CheckBotAccess(handler, source, code, detail))
+                return Fail(handler, args, "tele", code, detail);
+        }
         if (!MayLeadBots(handler, dest->GetGUID()))
             return Fail(handler, args, "tele", "not-allowed", args.w[2] + " is neither a host bot nor your own character");
         Reply reply(handler, args, "tele");
@@ -829,6 +841,12 @@ bool HandleGm(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "gm", "no-such-player", args.w[0] + " is not in the world");
     if (!MayLeadBots(handler, player->GetGUID()))
         return Fail(handler, args, "gm", "not-allowed", args.w[0] + " is neither a host bot nor your own character");
+    if (IsHostBot(player))
+    {
+        std::string code, detail;
+        if (!CheckBotAccess(handler, player, code, detail))
+            return Fail(handler, args, "gm", code, detail);
+    }
     if (args.w.size() < 2)
         return Fail(handler, args, "gm", "missing-argument", "on or off");
     std::string const word = Lower(args.w[1]);

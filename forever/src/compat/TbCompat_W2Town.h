@@ -6,6 +6,7 @@
 #include "DB2Structure.h"
 #include "Mail.h"
 #include "host/TbHostTown.h"
+#include "playerbot/policy/town/TownErrandPolicy.h"
 #include "TbItemPrototype.h"
 
 #include <cmath>
@@ -45,6 +46,12 @@ inline Creature* RepairIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 inline bool HasVendorStockCompat(Creature* vendor)
 {
     return tbhost::town::HasVendorStock(vendor);
+}
+
+// ForeverCore vendors carry no template list, so the explicit-item path keeps its single-list lookup.
+inline VendorItemData const* VendorTemplateItemsCompat(Creature*)
+{
+    return nullptr;
 }
 
 inline bool SellItemToVendorCompat(Player* bot, Creature* vendor, ObjectGuid const& /*vendorguid*/, Item* item, uint32 count)
@@ -220,4 +227,14 @@ inline bool MailTakeItemCompat(Player* bot, ObjectGuid const& mailbox, Mail cons
 inline void MailDeleteCompat(Player* bot, ObjectGuid const& /*mailbox*/, uint64 mailId)
 {
     tbhost::town::DeleteMail(bot, mailId);
+}
+
+inline bool MailRequiresMailboxCompat()
+{
+    return true;
+}
+
+inline bool MailTakeAfterResultCompat(uint32 confirmedTakes)
+{
+    return ai::MailTakeAfterResult(true, confirmedTakes);
 }

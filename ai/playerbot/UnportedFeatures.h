@@ -27,18 +27,18 @@
     X(IncomingEmotes, "incoming: emotes", "text emote and emote packets") \
     X(IncomingObjectUse, "incoming: gossip, game object and area trigger", "gossip hello, game object use and area trigger packets") \
     X(IncomingDeath, "incoming: reclaim corpse", "the release-spirit, reclaim-corpse and resurrect-request rows of the packet tables (1.12 layouts) a MASTER sends; the bot's own release (`release`, `auto release`), its corpse run (`find corpse`, `revive from corpse` through the core's HandleReclaimCorpse) and its spirit-healer revive (through HandleSpiritHealerActivate) are real since W1, its acceptance of a resurrection (`accept resurrect`) since slice 4") \
-    X(IncomingCastFailed, "incoming: cast failed trigger", "the 'cast failed' world-packet trigger is not fed (no strategy maps it); the result itself is heard through the host's cast-result queue (CAST_FAILED_ASYNC, SpellInterrupted)") \
-    X(IncomingSpeedChange, "incoming: forced speed change", "the six forced-speed packets and the client acks the bot answers them with (findings item 9)") \
-    X(IncomingKnockBack, "incoming: knock back", "the knock-back packet and the jump the bot answers it with") \
-    X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout): party and whisper commands typed to a bot") \
-    X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); the failure half is the host's cast-result queue") \
-    X(JumpFall, "jump, fall and knockback", "jumping, fall damage bookkeeping and knock-back handling by 1.12 movement packets (MSG_MOVE_JUMP, SetFallInformation, forced movement acks); ForeverCore moves by spline and movement generators") \
+    X(IncomingCastFailed, "incoming: cast failed trigger", "the 'cast failed' world-packet trigger is not fed (no strategy maps it); the result itself is heard through the host's cast-result queue, which since S2 also shortens the engine's wait (CAST_FAILED_ASYNC + SpellInterrupted, host path)") \
+    X(IncomingSpeedChange, "incoming: forced speed change", "the six forced-speed packets and the client acks the bot answers them with; ForeverCore applies SetSpeedRate at once, so a bot has nothing to ack (S3)") \
+    X(IncomingKnockBack, "incoming: knock back", "the 1.12 knock-back packet and the client jump a bot answered it with; ForeverCore flies a bot server-side and the host waits the flight out and lands it (S3)") \
+    X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout); since S1-R2 a real whisper or party line reaches the bot through the host hook (PlayerScript::OnChat -> chatin::Judge -> PlayerbotAI::HandleCommand); the 1.12 packet case stays dead") \
+    X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); since S2 the host session reads the core's typed packet (the engine's wait grows by the pushback, SPELL_DELAYED), the 1.12 case stays unregistered") \
+    X(JumpFall, "jump, fall and knockback", "bot-started jumps and the 1.12 jump/land packets; ForeverCore moves by spline and movement generators, and a core-started flight lands with the core's own fall damage (S3)") \
     X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
     X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
     X(SpawnGuid, "guid from spawn data", "an object guid built from a spawn record (creature data id + spawn id, 1.12 guid layout); ForeverCore keys spawns by spawn id and map, not by guid counter") \
     X(GuidPositionWire, "wire form of a GuidPosition", "writing a GuidPosition into a packet buffer (1.12 layout)") \
     X(BattlegroundQueue, "battleground queue", "battleground template id from a queue type id (BattleGroundMgr::BGTemplateId); ForeverCore's queue type id is a struct and the mapping is not ported") \
-    X(ChatLinks, "chat link parsing", "extracting quest and spell ids from chat links (1.12 ChatHandler helpers ExtractKeyFromLink, ExtractSpellIdFromLink)") \
+    X(ChatLinks, "quest link: waits for D3", "extracting a quest id from a chat link (1.12 ChatHandler helper ExtractKeyFromLink); its link branch waits for D3, the spell and item halves are real since S1-R1") \
     X(Pets, "pets and guardians", "pet spell learning and autocast, pet command packets, the controlled-guardian walk (1.12 Pet, CallForAllControlledUnits)") \
     X(GameObjectUse, "game object use", "using a game object by the use packet (lightwell, party portal, ritual objects); ForeverCore uses typed packets and a different interact check") \
     X(ItemCasts, "item and totem casts", "casting an item spell with a hand-built Spell (SpellCastTargets setters, triggered flags, SetCastItem, item cooldowns); ForeverCore constructs a Spell from SpellInfo") \
@@ -67,7 +67,7 @@
     X(BotTexts, "bot texts and help", "PlayerbotTextMgr and PlayerbotHelpMgr (ai_playerbot_texts, help topics); the text lookups answer the text name itself (R6B)") \
     X(TalentSpecs, "talent spec tables", "TalentSpec and ClassSpecs, the premade talent specs and their checks; no spec is read (R6B)") \
     X(PoolServices, "pool and hire services", "the random-bot pool tables (RandomBotFacade caches, RandomBotAccountRegistry, AhBotSellerAccount), HireLifecycle, ClaimLifecycle, BotGearService (pinned cap), AltBotService (autonomous alts), the activity leases and the guild order store (TortoiseBots::GuildOrders); answers: not a pool bot, not hired, not claimed, no pinned cap, not autonomous, no order (R6B)") \
-    X(Tracing, "trace and observability services", "WhyTraceService, RunTraceService, ObservabilityEmitter, CombatMonitorService: switched off, every hook is a no-op (R6B)") \
+    X(Tracing, "trace and observability services", "WhyTraceService, RunTraceService and ObservabilityEmitter are switched off on ForeverCore, every hook a no-op (R6B); the combat monitor is ported (host/cmd/TbCmdCombat.cpp)") \
     X(PlayerSummon, "player summon request", "PlayerConvenience::RequestSummon, the meeting-stone style summon of a bot to its master; the host's own placement (BotMgr::Think teleports a far bot next to its master) does that job (R6B)") \
     X(BotFactory, "bot factory (ammo, pets)", "PlayerbotFactory ammo and hunter pet set-up and pet training; nothing is created (R6B)") \
     X(ChatFilters, "chat filter chain", "CompositeChatFilter, the filters that rewrite a command line before the bot reads it; the line is used as it comes (R6B)") \

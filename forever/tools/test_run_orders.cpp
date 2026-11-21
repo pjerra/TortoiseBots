@@ -99,7 +99,7 @@ static void TestParse()
 
     // Refused by grammar: the verbs the module does not carry out are `unsupported`, a broken one `invalid`.
     for (char const* order : { "escape from 1 2 3 4 5 6", "rescue from a to 1 2 3", "fetch 1 2 3", "return Mdps 389", "rejoin Mdps",
-             "ritual 5 A B", "gossip 5 Mdps 1", "state 5", "enter near" })
+             "ritual 5 A B", "state 5", "enter near" })
     {
         Parse(order, false);
         CHECK(CodeOf(order) == "unsupported");
@@ -115,6 +115,11 @@ static void TestParse()
     CHECK(Parse("lootmethod ffa").verb == od::Verb::LootMethod);
     CHECK(Parse("open entry:1 Mdps").verb == od::Verb::Open);
     CHECK(Parse("use 5 Mdps").verb == od::Verb::Use);
+    // WC: the plan's own gossip step has a grammar (`gossip <entry> <bot> <option>`, GossipOrder); the executor judges the menu (test_run_tasks).
+    CHECK(Parse("gossip 3678 Mtank 1").verb == od::Verb::Gossip);
+    CHECK(Parse("gossip 3678 Mtank 1").bot == "Mtank");
+    CHECK(Parse("gossip 3678 Mtank 1").task.gossip.index == 1 && Parse("gossip 3678 Mtank 1").task.gossip.entry == 3678);
+    CHECK(Parse("gossip 3678 Mtank \"Let the event begin!\"").task.gossip.text == "Let the event begin!");
     for (char const* order : { "loot", "loot 5", "lootmethod", "lootmethod sideways", "open", "open entry:0 Mdps", "use", "use 5" })
     {
         Parse(order, false);
@@ -312,6 +317,55 @@ static void TestSettle()
     CHECK(od::Settle(party, 100, look, failure) && !failure.empty());   // a helper's success does not rescue it
 }
 
+static void TestWadeHop()
+{
+    // ai::kPlanFlagWadeOk belongs to the row's hop, and the run walks that hop in approach hops and TooFar legs: every point of the
+    // walk inherits the permission, not only the row's own end. Anything else keeps the RFC liquid rule.
+    DR::Run r;
+    ai::PlanStep move;
+    move.kind = ai::PlanStepKind::Move;
+    move.x = -61.367f;
+    move.y = 323.721f;
+    move.z = -106.561f;
+    move.flags = ai::kPlanFlagWadeOk;
+    CHECK(DR::RowHopWades(r, move, -61.4f, 323.7f));          // the row's own point (the hop's end)
+    // The live first river hop: the run's approach hop stood at -32.0 285.2, 40 yd along the way.
+    r.phase = DR::Phase::Walk;
+    r.hopWalk = true;
+    r.hopX = -32.0f;
+    r.hopY = 285.2f;
+    r.hopZ = -105.1f;
+    r.walkX = r.hopX;
+    r.walkY = r.hopY;
+    r.walkZ = r.hopZ;
+    CHECK(DR::RowHopWades(r, move, -32.0f, 285.2f));          // the middle path point wades too
+    CHECK(!DR::RowHopWades(r, move, 10.0f, 100.0f));          // a point of no walk of this row
+    ai::PlanStep plain = move;
+    plain.flags = 0;
+    CHECK(!DR::RowHopWades(r, plain, -32.0f, 285.2f));        // the same middle point without the bit: the RFC pause
+    // WalkTo's TooFar leg is a point of the same walk.
+    r.legOn = true;
+    r.legX = -45.0f;
+    r.legY = 300.0f;
+    r.legZ = -106.0f;
+    CHECK(DR::RowHopWades(r, move, -45.0f, 300.0f));
+    CHECK(!DR::RowHopWades(r, plain, -45.0f, 300.0f));
+    // The walk under way is another row's (or a detour's): its point does not wade, and neither does the row's own point then.
+    r.walkX = -100.0f;
+    r.walkY = 400.0f;
+    r.hopWalk = false;
+    CHECK(!DR::RowHopWades(r, move, -45.0f, 300.0f));
+    CHECK(!DR::RowHopWades(r, move, -100.0f, 400.0f));
+    CHECK(DR::RowHopWades(r, move, -61.4f, 323.7f));          // the row's own point is always its own
+    // A hold row never wades, whatever flags it carries (the loader refuses the bit there too).
+    ai::PlanStep hold;
+    hold.kind = ai::PlanStepKind::Hold;
+    hold.flags = ai::kPlanFlagWadeOk;
+    hold.x = 1.0f;
+    hold.y = 2.0f;
+    CHECK(!DR::RowHopWades(r, hold, 1.0f, 2.0f));
+}
+
 static void TestCommanderP3()
 {
     // `hold` verb + 32-hex guid targets for pull/pullback/attack/focus
@@ -386,6 +440,7 @@ int main()
     TestTexts();
     TestSettle();
     TestCommanderP3();
+    TestWadeHop();
     if (g_fail)
     {
         std::printf("RESULT: FAIL (%d of %d checks)\n", g_fail, g_checks);

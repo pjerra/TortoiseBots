@@ -80,7 +80,7 @@ class Review(unittest.TestCase):
 
     def test_straight_moves_read_the_line(self):
         self.assertIn("liquid::SegmentPrefixRefusedOnMap(lead->GetMap()", self.runorders)
-        check = function_body(self.runorders, r"MoveCheck CheckLeadMove\(Player\* mover, MovePoint point, bool fromRun, bool gather\)\s*\{")
+        check = function_body(self.runorders, r"MoveCheck CheckLeadMove\(Player\* mover, MovePoint point, bool fromRun, bool gather, bool wade\)\s*\{")
         self.assertIn("liquid::PathPrefixRefused", check)
         self.assertIn("liquidOnWay", check)
         # round 2: no blanket exemption for a wet origin, validation and execution use the same prefix rule

@@ -50,6 +50,12 @@ inline bool TravelLinkUsableCompat(uint8 /*pathType*/)
     return true;
 }
 
+// The loader keeps every link type it always kept.
+inline bool TravelLoaderChecksLinkTypeCompat()
+{
+    return false;
+}
+
 // The loader keeps every row it always kept (a walk link between two maps included).
 inline bool TravelLoaderChecksWalkMapsCompat()
 {

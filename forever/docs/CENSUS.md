@@ -189,3 +189,25 @@ List `forever/SLICE-W4.txt` = `SLICE-W1.txt` (which now ends with `ai/playerbot/
 not have 0` (run folder `yulon-ubuntu2:~/forever-build/census-runs/w4a1-fix-s8-SLICE-W4-20261120T190128Z/`). The A2 files needed
 no new compat helper in this round; the node graph and the loader were exercised at boot by
 `forever/tools/travel_graph_boot_check.sh` (W4-A1-NOTES.md section 7).
+
+## Integration batch 8 (W4 merged into main's #93/#95), 2026-11-20
+
+List `forever/SLICE-W4.txt` = the W4 list (273 files on 25fc7ca) plus the `W6a/W2/W3` block main's #93 added to `SLICE-W1.txt`
+(16 legacy files: `RandomItemWeights.cpp`, `EquipAction.cpp`, `MaintenanceStrategy.cpp`, `SellAction.cpp`, `BuyAction.cpp`,
+`RepairAllAction.cpp`, `TrainerAction.cpp`, `MailAction.cpp`, `BudgetValues.cpp`, `QuestStrategies.cpp`, `QuestAction.cpp`,
+`AcceptQuestAction.cpp`, `TalkToQuestGiverAction.cpp`, `DropQuestAction.cpp`, `ShareQuestAction.cpp`,
+`QuestRewardActions.cpp`): 289 files, the same set as `SLICE-W1.txt` plus `ai/playerbot/TravelNode.cpp`. W4 branched before #93,
+so its list did not hold that block; without it the branch would have lost every W2/W3/W6a file from the build. Summary on the
+core pin d02645dd21 (slot 1, `~/ForeverCore-d02645dd`): `files 289  compile clean 289  with errors 0  error places 0 (in 0
+files)  includes of a header ForeverCore does not have 0` (run folder
+`yulon-ubuntu2:~/forever-build/census-runs/integ8-s1-SLICE-W4/`). `slice_gen_context.py --check` up to date;
+`slice_registry_check.py` `(a)=0  (b)=232` (223 on the W4 branch: the sixteen files above name more keys).
+
+The vendor travel need does not resolve on this branch: `TravelPurposeGateRegisteredCompat` needs W2's `vendor trip needed`
+value, #93 registers the `sell`/`repair` actions, the `maintenance` strategy and its budget values but not that value
+(`W2_KEYS["value"]` has no vendor need), and its calculator `ai::VendorTripNeeded` lives in
+`ai/playerbot/strategy/values/MaintenanceValues.cpp`, which no slice list compiles. So `values.count("vendor trip needed")` is
+false, the Vendor and Repair purposes are refused (`travel_purpose::RefusalOf` = `VendorKeysMissing`) and the bot keeps
+grinding - the gate's do-less answer, not a crash (`SliceMissingKeyGuard.h` answers an unregistered value with an inert
+stand-in). Closing it is a W2 follow-up: compile `MaintenanceValues.cpp` into the slice, or add a ForeverCore
+`VendorTripNeeded` and the creator, and the gate opens by itself.

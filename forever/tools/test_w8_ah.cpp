@@ -25,6 +25,7 @@ int main()
         in.depositTotal = 10;
         in.marketLowestUnitPrice = 100;
         in.freeMoneyForAh = 500;
+        in.isUsageAh = true;
         ai::AhSellDecision const d = ai::DecideAhSell(in);
         assert(d.shouldPost);
         assert(d.kind == ai::AhPostKind::Commodity);
@@ -42,6 +43,7 @@ int main()
         in.depositTotal = 15;
         in.marketLowestUnitPrice = 200;
         in.freeMoneyForAh = 500;
+        in.isUsageAh = true;
         ai::AhSellDecision const d = ai::DecideAhSell(in);
         assert(d.shouldPost);
         assert(d.kind == ai::AhPostKind::Item);
@@ -61,6 +63,7 @@ int main()
         in.depositTotal = 25;
         in.marketLowestUnitPrice = 110; // undercut would be 105 < 125 floor
         in.freeMoneyForAh = 500;
+        in.isUsageAh = true;
         ai::AhSellDecision const d = ai::DecideAhSell(in);
         assert(d.shouldPost);
         assert(d.unitPrice >= in.vendorSellPrice + in.depositTotal);
@@ -79,6 +82,7 @@ int main()
         in.marketLowestUnitPrice = 0;
         in.unitValue = 0;
         in.freeMoneyForAh = 500;
+        in.isUsageAh = true;
         ai::AhSellDecision const d = ai::DecideAhSell(in);
         assert(!d.shouldPost);
         assert(std::string(d.reason) == "no-market-or-unit-value");
@@ -96,6 +100,7 @@ int main()
         in.marketLowestUnitPrice = 0;
         in.unitValue = 180;
         in.freeMoneyForAh = 500;
+        in.isUsageAh = true;
         ai::AhSellDecision const d = ai::DecideAhSell(in);
         assert(d.shouldPost);
         assert(d.unitPrice == 180);
@@ -112,6 +117,7 @@ int main()
         base.depositTotal = 5;
         base.marketLowestUnitPrice = 100;
         base.freeMoneyForAh = 500;
+        base.isUsageAh = true;
 
         {
             auto in = base;

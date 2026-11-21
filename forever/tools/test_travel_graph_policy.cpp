@@ -101,13 +101,25 @@ int main()
 
     // The link rule itself: walks, area triggers, transport legs and flight paths are routes on ForeverCore (W5T);
     // teleports stay refused (D4).
-    CHECK(tg::LinkUsableOnForever(tg::kNone));
+    CHECK(!tg::LinkUsableOnForever(tg::kNone)); // review medium: an invalid type is no route
+    CHECK(!tg::LinkUsableOnForever(7));
+    CHECK(!tg::LinkUsableOnForever(255));
+    CHECK(!tg::LinkTypeKnown(tg::kNone));
+    CHECK(!tg::LinkTypeKnown(7));
+    CHECK(tg::LinkTypeKnown(tg::kWalk) && tg::LinkTypeKnown(tg::kStaticPortal));
     CHECK(tg::LinkUsableOnForever(tg::kWalk));
     CHECK(tg::LinkUsableOnForever(tg::kAreaTrigger));
     CHECK(tg::LinkUsableOnForever(tg::kTransport));   // W5T: boarded through tbhost::ride
     CHECK(tg::LinkUsableOnForever(tg::kFlightPath));  // W5T: flown through tbhost::taxi::Fly
     CHECK(!tg::LinkUsableOnForever(tg::kTeleportSpell)); // D4: no teleport outside the logged rescue
     CHECK(!tg::LinkUsableOnForever(tg::kStaticPortal));  // D4
+
+    // A cross-map link of an invalid type gives no route and no map transfer.
+    Node inv1{ "InvA", 0, true, {} }, inv2{ "InvB", 1, true, {} };
+    Link(inv1, inv2, tg::kNone);
+    CHECK(Reach(inv1, tg::LinkUsableOnForever).size() == 1);
+    CHECK(!tg::MapTransferWanted(tg::LinkUsableOnForever(tg::kNone), 0, 1));
+    CHECK(!tg::MapTransferWanted(tg::LinkUsableOnForever(9), 0, 1));
 
     // Map transfers (LoadMapTransfers): the zeppelin and the flight path join Kalimdor to Azeroth now (W5T),
     // the area trigger does, a same-map link never does.

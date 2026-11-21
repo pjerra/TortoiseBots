@@ -388,7 +388,9 @@ class ReviewFixes(unittest.TestCase):
         self.assertIn("ai::travel_graph::MapTransferWanted(TravelLinkUsableCompat(uint8(path->getPathType()))", transfers)
         self.assertLess(transfers.index("MapTransferWanted"), transfers.index("AddMapTransfer("))
         # Teleport-spell and static-portal links stay refused (D4; W5T wires flights and transports instead), and the tram exit is off.
-        self.assertIn("type != kTeleportSpell && type != kStaticPortal", GRAPH_POLICY)
+        # The rule is the ForeverCore allowlist: only walk, area-trigger, transport and flight-path links are routes.
+        allow = func(GRAPH_POLICY, "inline bool LinkUsableOnForever(")
+        self.assertIn("return type == kWalk || type == kAreaTrigger || type == kTransport || type == kFlightPath;", allow)
         tram = func(TRAVEL, "bool LeaveDeeprunTram(")
         self.assertLess(tram.index("TravelTramExitAllowedCompat()"), tram.index("TeleportTo"))
         self.assertIn("return false;", func(COMPAT_FN, "inline bool TravelTramExitAllowedCompat()"))

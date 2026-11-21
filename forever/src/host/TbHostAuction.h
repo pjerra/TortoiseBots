@@ -36,6 +36,7 @@ struct AhOwnedView
     uint64_t buyoutOrUnitPrice = 0;
     bool isCommodity = false;
     bool hasBidder = false;
+    ObjectGuid itemGuid;
 };
 
 // NPC interaction & faction-house check (faction houses only; neutral houseId == 7 is excluded).
@@ -69,6 +70,8 @@ bool Cancel(Player* bot, Creature* auctioneer, uint32_t auctionId, uint32_t item
 // Async-commit confirmation next tick via BuildListOwnedItems, and state counters for `.tb state`.
 void ConfirmPendingPosts(Player* bot);
 void GetBotStateCounts(Player* bot, uint32_t& outPosted, uint32_t& outSold);
+void SetLastFailCode(Player* bot, std::string const& code);
+std::string TakeLastFailCode(Player* bot);
 
 } // namespace ah
 } // namespace tbhost

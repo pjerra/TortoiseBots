@@ -135,4 +135,27 @@ inline bool AoEBlockedByIgnored(float blastRadiusYd, float ignoredToBotYd, float
     return ignoredToBotYd <= kIgnoreMobAoERadiusYd ||
         ignoredToBlastYd <= blastRadiusYd + kIgnoreMobAoERadiusYd;
 }
+
+// Defence exception, plain-data half: `victim` is the mob's current victim
+// (a default Guid() when it has none), `bot` the bot, `party` the bot's
+// party members, `threatOnBotOrParty` whether it holds threat on any of
+// them. True while the ignore must yield and the mob is fought anyway: a
+// listed mob that is attacking the bot or any party member is never
+// ignored. The engine half (PossibleAttackTargetsValue::IgnoredMobAttacksParty)
+// reads the victim, the party and the threat from the core.
+template <class Guid>
+inline bool IgnoreMobYieldsToDefence(Guid const& victim, Guid const& bot,
+    std::vector<Guid> const& party, bool threatOnBotOrParty)
+{
+    if (threatOnBotOrParty)
+        return true;
+    if (victim == Guid())
+        return false;
+    if (victim == bot)
+        return true;
+    for (Guid const& member : party)
+        if (victim == member)
+            return true;
+    return false;
+}
 } // namespace ai

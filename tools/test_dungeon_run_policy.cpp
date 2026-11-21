@@ -6342,29 +6342,28 @@ static void TestGossipDeadIsDoneOnlyForADeadNpc()
     CHECK(m.step == 0);
 }
 
-// A units hold whose four units lay dead before the hold (r15: "4 of 4 down" for 300 s): it ends once the spot has been in sight for
-// kHoldAllDeadMs, and not before.
-static void TestUnitsHoldAllDeadOnEntryEndsAfterTenSeconds()
+// A units hold reads the corpses already in its radius at its first look as a baseline: a corpse from an earlier leg never ends
+// the hold (WC round, RUN-WC-NOTES.md section 4). A corpse above that baseline ends it after kHoldAllDeadMs, and not before.
+static void TestUnitsHoldBaselineCorpsesDoNotEnd()
 {
     CHECK(kHoldAllDeadMs == 10000);
     DungeonPlan plan;
     plan.steps = {CrewHold(), Step(PlanStepKind::Move, 500)};
     Run r = Start(&plan);
     Facts f = Party(0);
-    f.eventDown = 4; // the corpses are in sight, nothing alive
-    // The first tick is the first look; the clock runs from the next one: 9 s later it still holds, at 10 s it is done.
-    int ticks = 1;
+    f.eventDown = 4; // the corpses are in sight before the hold, nothing alive
     Tick(r, f);
     CHECK(r.state == State::Running && r.step == 0 && r.eventTotal == 4 && !r.eventStarted);
-    while (r.state == State::Running && r.step == 0 && ticks < 40)
-    {
+    CHECK(r.eventDownBase == 4 && r.eventDownBaseSet);
+    // However long the hold stands there, the baseline corpses alone do not end it.
+    for (int i = 0; i < 40 && r.state == State::Running && r.step == 0; ++i)
         Tick(r, f);
-        ++ticks;
-    }
+    CHECK(r.state == State::Running && r.step == 0);
+    // One corpse above the baseline: the all-dead-before-the-hold rule ends the step (the hold's clock is already past the wait).
+    f.eventDown = 5;
+    Tick(r, f);
     CHECK(r.state == State::Running && r.step == 1);
-    CHECK(ticks == static_cast<int>(kHoldAllDeadMs / kTickMs) + 1);
     CHECK(r.note.find("event done: none of its units is alive (they died before the hold)") != std::string::npos);
-    CHECK(r.note.find("4 of 4 down") != std::string::npos);
 }
 
 // The whole r15 step 223-224 replay: the crew is dead, the gossip flagged: no pause at the gossip, the hold ends by itself.
@@ -6485,6 +6484,8 @@ static void TestHoldUnitSeenDoesNotLeakAcrossSteps()
         f.eventDown = 4;
         Tick(r, f);
         CHECK(r.step == 1 && !r.holdUnitSeen); // the first hold ended ("every unit of it is dead"); nothing leaks into the second
+        Tick(r, f);                            // the second hold's baseline is the crew's corpses
+        f.eventDown = 5;                       // one corpse above it: the all-dead rule fires
         int ticks = 0;
         while (r.state == State::Running && r.step == 1 && ticks < 40)
         {
@@ -6510,6 +6511,9 @@ static void TestHoldUnitSeenDoesNotLeakAcrossSteps()
         CHECK(!r.holdUnitSeen);
         f.units.clear();
         f.eventDown = 4;
+        Tick(r, f);
+        CHECK(r.step == 0 && !r.holdUnitSeen);  // the resume re-baselined the corpses; the old alive unit is gone
+        f.eventDown = 5;                        // one corpse above the baseline: the all-dead rule fires
         int ticks = 0;
         while (r.state == State::Running && r.step == 0 && ticks < 80)
         {
@@ -38433,7 +38437,7 @@ int main()
     TestUnitsHoldWaitsForAFriendlyBossToTurn();
     TestGossipDeadIsDoneWithFlag();
     TestGossipDeadIsDoneOnlyForADeadNpc();
-    TestUnitsHoldAllDeadOnEntryEndsAfterTenSeconds();
+    TestUnitsHoldBaselineCorpsesDoNotEnd();
     TestBlyCrewDeadBeforeTheLegRunsUnattended();
     TestUnitsHoldAllDeadDoesNotEndEarly();
     TestAllDeadEndIsForAUnitsHoldOnly();

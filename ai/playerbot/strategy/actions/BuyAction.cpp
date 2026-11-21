@@ -272,7 +272,7 @@ bool BuyAction::Execute(Event& event)
 
                 result |= BuyItem(requester, pCreature, pCreature->GetVendorItems(), vendorguid, proto, bought);
                 if (!result)
-                    result |= BuyItem(requester, pCreature, nullptr, vendorguid, proto, bought);
+                    result |= BuyItem(requester, pCreature, VendorTemplateItemsCompat(pCreature), vendorguid, proto, bought);
 
                 if (!result)
                 {

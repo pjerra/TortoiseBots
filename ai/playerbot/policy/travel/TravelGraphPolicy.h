@@ -34,9 +34,16 @@ namespace ai
 
         // ForeverCore: walks, area triggers, transport legs and flight paths (the core teleports the bot when it crosses
         // the trigger itself; flights and rides go through the W5 host seams, never instant flight or teleport).
+        // An allowlist: none (0) and any out-of-range database value are not routes either.
         inline bool LinkUsableOnForever(std::uint8_t type)
         {
-            return type != kTeleportSpell && type != kStaticPortal;
+            return type == kWalk || type == kAreaTrigger || type == kTransport || type == kFlightPath;
+        }
+
+        // A link type the graph knows (walk .. static portal). The loader refuses the rest (0 and out of range) on ForeverCore.
+        inline bool LinkTypeKnown(std::uint8_t type)
+        {
+            return type >= kWalk && type <= kStaticPortal;
         }
 
         // A link becomes a map transfer (a cross-map shortcut of MapTransDistance) only when it joins two maps and may be used.

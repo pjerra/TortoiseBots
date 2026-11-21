@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Mail/Mail.h"
+#include "playerbot/policy/town/TownErrandPolicy.h"
 
 inline Creature* VendorIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 {
@@ -23,6 +24,11 @@ inline bool HasVendorStockCompat(Creature* vendor)
     VendorItemData const* items = vendor->GetVendorItems();
     VendorItemData const* templateItems = vendor->GetVendorTemplateItems();
     return (items && !items->Empty()) || (templateItems && !templateItems->Empty());
+}
+
+inline VendorItemData const* VendorTemplateItemsCompat(Creature* vendor)
+{
+    return vendor ? vendor->GetVendorTemplateItems() : nullptr;
 }
 
 inline bool SellItemToVendorCompat(Player* bot, Creature* /*vendor*/, ObjectGuid const& vendorguid, Item* item, uint32 count)
@@ -220,4 +226,14 @@ inline void MailDeleteCompat(Player* bot, ObjectGuid const& mailbox, uint32 mail
     packet << mailbox;
     packet << mailId;
     bot->GetSession()->HandleMailDelete(packet);
+}
+
+inline bool MailRequiresMailboxCompat()
+{
+    return false;
+}
+
+inline bool MailTakeAfterResultCompat(uint32 confirmedTakes)
+{
+    return ai::MailTakeAfterResult(false, confirmedTakes);
 }

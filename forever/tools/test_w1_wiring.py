@@ -28,7 +28,8 @@ COMPAT_T = (ROOT / "ai/cmangos-compat-w1.h").read_text()
 HOSTBOTS = (ROOT / "forever/src/host/TbHostBotManager.cpp").read_text()
 GEN = (ROOT / "forever/tools/slice_gen_context.py").read_text()
 CTX = (ROOT / "forever/src/slice/SliceAiObjectContext.cpp").read_text()
-LIST = (ROOT / "forever/SLICE-W1.txt").read_text()
+LIST = (ROOT / "forever/SLICE-W4.txt").read_text()      # W0-A: the newest list (the build reads it; it holds every W1 path)
+W1_LIST = (ROOT / "forever/SLICE-W1.txt").read_text()
 CMAKE = (ROOT / "CMakeLists.txt").read_text()
 POLICY = (ROOT / "ai/playerbot/policy/death/GhostRescuePolicy.h").read_text()
 
@@ -74,7 +75,7 @@ class FreeHost(unittest.TestCase):
 
     def test_the_console_commands_lead_to_the_host(self):
         self.assertIn('{ "free",   HandleFree,', SCRIPTS)
-        self.assertIn("BotMgr::Instance().SetFree(GuidByName(name), word == \"on\")", func(SCRIPTS, "static bool HandleFree("))
+        self.assertIn("std::string const error = BotMgr::Instance().SetFree(guid, word == \"on\");", func(SCRIPTS, "static bool HandleFree("))
         self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free)", func(SCRIPTS, "static bool HandleLogin("))
         self.assertIn("BotMgr::Instance().IsFreeBot(ObjectGuid::Create<HighGuid::Player>(guid))", HOSTBOTS)
 
@@ -182,6 +183,11 @@ class Registry(unittest.TestCase):
         # The newest list (now the travel slice W4's) is what the build reads; the W1 list stays its first part.
         self.assertIn("forever/SLICE-W4.txt", CMAKE)
         self.assertNotIn("forever/SLICE9.txt", CMAKE)
+        # The W1 list stays the record of the W1 slice, and the list the build reads holds every one of its paths.
+        for line in W1_LIST.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                self.assertIn(line, listed)
 
 
 class FreeAndCommanded(unittest.TestCase):

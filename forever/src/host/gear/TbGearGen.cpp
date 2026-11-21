@@ -45,26 +45,6 @@ GearIndexState& Index()
     return s;
 }
 
-bool HasBagSpaceFor(Player const* target, uint32 countNeeded)
-{
-    if (!target)
-        return false;
-    uint32 freeSlots = 0;
-    for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
-        if (!target->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            ++freeSlots;
-    for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
-    {
-        if (Bag const* pBag = target->GetBagByPos(bag))
-        {
-            for (uint32 slot = 0; slot < pBag->GetBagSize(); ++slot)
-                if (!pBag->GetItemByPos(slot))
-                    ++freeSlots;
-        }
-    }
-    return freeSlots >= countNeeded;
-}
-
 bool EquipCandidateInSlot(Player* target, uint8 slot, uint32 itemId, std::string& outStatus, std::string& outCode)
 {
     Item* existing = target->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
@@ -98,7 +78,7 @@ bool EquipCandidateInSlot(Player* target, uint8 slot, uint32 itemId, std::string
         return false;
     }
 
-    // Slot is occupied: move old item to bags via StoreNewItemInBestSlots + SwapItem; never destroy worn gear.
+    // Slot is occupied: move old item to bags via CanStoreNewItem + StoreNewItem + SwapItem; never destroy worn gear or pre-existing bag copies.
     InventoryResult const canSwap = target->CanEquipNewItem(slot, dest, itemId, true);
     if (canSwap != EQUIP_ERR_OK)
     {
@@ -107,18 +87,28 @@ bool EquipCandidateInSlot(Player* target, uint8 slot, uint32 itemId, std::string
         return false;
     }
 
-    if (!HasBagSpaceFor(target, 1) || !target->StoreNewItemInBestSlots(itemId, 1, ItemContext::NONE))
+    ItemPosCountVec storeDest;
+    if (target->CanStoreNewItem(NULL_BAG, NULL_SLOT, storeDest, itemId, 1) != EQUIP_ERR_OK)
     {
         outStatus = "refused";
         outCode = "bags-full";
         return false;
     }
 
-    Item* fresh = target->GetItemByEntry(itemId, ItemSearchLocation::Inventory);
-    uint16 swapDest = 0;
-    if (!fresh || target->CanEquipItem(slot, swapDest, fresh, true) != EQUIP_ERR_OK)
+    Item* fresh = target->StoreNewItem(storeDest, itemId, true, 0, GuidSet(), ItemContext::NONE);
+    if (!fresh)
     {
-        target->DestroyItemCount(itemId, 1, true, false);
+        outStatus = "refused";
+        outCode = "bags-full";
+        return false;
+    }
+
+    ObjectGuid const freshGuid = fresh->GetGUID();
+    uint16 swapDest = 0;
+    if (target->CanEquipItem(slot, swapDest, fresh, true) != EQUIP_ERR_OK)
+    {
+        if (Item* created = target->GetItemByGuid(freshGuid))
+            target->DestroyItem(created->GetBagSlot(), created->GetSlot(), true);
         outStatus = "refused";
         outCode = "core-refused";
         return false;
@@ -133,7 +123,8 @@ bool EquipCandidateInSlot(Player* target, uint8 slot, uint32 itemId, std::string
         return true;
     }
 
-    target->DestroyItemCount(itemId, 1, true, false);
+    if (Item* created = target->GetItemByGuid(freshGuid))
+        target->DestroyItem(created->GetBagSlot(), created->GetSlot(), true);
     outStatus = "refused";
     outCode = "core-refused";
     return false;
@@ -291,9 +282,10 @@ GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint
             continue;
         }
 
-        // Build scored candidate pool for this slot.
-        std::vector<ai::GearItemCandidate> pool = Index().bySlot[slot];
-        for (ai::GearItemCandidate& c : pool)
+        // Filter slot pool first, then score only fitting candidates.
+        std::vector<ai::GearItemCandidate> ranked = ai::FilterCandidatesForSlot(
+            Index().bySlot[slot], playerClass, canonicalSpec, level, slot, maxQuality, canDualWield, mainHandIsTwoHanded, alreadyPicked);
+        for (ai::GearItemCandidate& c : ranked)
         {
             if (ItemPrototype const* proto = tbcompat::ItemProto(c.itemId))
             {
@@ -301,9 +293,7 @@ GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint
                 c.score = sRandomItemMgr.CalculateStatWeight(playerClass, static_cast<uint8>(specId), proto, itSpec);
             }
         }
-
-        std::vector<ai::GearItemCandidate> ranked = ai::RankCandidatesForSlot(
-            pool, playerClass, canonicalSpec, level, slot, maxQuality, canDualWield, mainHandIsTwoHanded, alreadyPicked);
+        ai::SortCandidatesForSlot(ranked);
 
         // At level 60, prepend preferred replacements from gear-replacements.csv when they fit.
         if (level == 60)

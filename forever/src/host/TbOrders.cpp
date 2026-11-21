@@ -6,6 +6,7 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "host/TbHostAuction.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTaxi.h"
 #include "host/TbHostTown.h"
@@ -18,6 +19,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbPlace.h"
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/run/TbRunFacts.h"
@@ -479,25 +481,34 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         uint32_t const entry = static_cast<uint32_t>(std::strtoul(o.arg.c_str(), nullptr, 10));
         if (!entry)
             return "fail:bad-entry";
-        std::string failCode;
-        return tbhost::ride::StartRide(bot, entry, &failCode) ? "ok" : ("fail:" + (failCode.empty() ? std::string("ride") : failCode));
+        std::string stateOut;
+        return tbhost::ride::StartRide(bot, entry, &stateOut, o.seq) ? stateOut : ("fail:" + (stateOut.empty() ? std::string("ride") : stateOut));
     }
     if (o.verb == "ah")
     {
+        if (!tbhost::ah::IsWorldAuctionEnabled())
+            return "fail:auction-disabled";
+        auto ahResult = [&](bool ok, char const* fallback) -> std::string
+        {
+            if (ok)
+                return "ok";
+            std::string const code = tbhost::ah::TakeLastFailCode(bot);
+            return "fail:" + (code.empty() ? std::string(fallback) : code);
+        };
         std::string const sub = Lower(o.arg);
         if (sub == "list")
-            return act("ah", Event("tb order", std::string("list"), owner)) ? "ok" : "fail:ah-list";
+            return ahResult(act("ah", Event("tb order", std::string("list"), owner)), "ah-list");
         if (sub == "sell" || sub.rfind("sell ", 0) == 0)
         {
             std::string const param = (sub == "sell") ? std::string("vendor") : o.arg.substr(5);
-            return act("ah", Event("tb order", param, owner)) ? "ok" : "fail:ah-sell";
+            return ahResult(act("ah", Event("tb order", param, owner)), "ah-sell");
         }
         if (sub.rfind("buy ", 0) == 0)
-            return act("ah bid", Event("tb order", o.arg.substr(4), owner)) ? "ok" : "fail:ah-buy";
+            return ahResult(act("ah bid", Event("tb order", o.arg.substr(4), owner)), "ah-buy");
         if (sub == "cancel" || sub.rfind("cancel ", 0) == 0)
         {
             std::string const param = (sub == "cancel") ? std::string("all") : o.arg.substr(7);
-            return act("ah cancel", Event("tb order", param, owner)) ? "ok" : "fail:ah-cancel";
+            return ahResult(act("ah cancel", Event("tb order", param, owner)), "ah-cancel");
         }
         return "fail:ah-arg";
     }
@@ -796,7 +807,10 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     if (rec->second.seq != 0)
     {
         std::string errandResult;
-        if (tbhost::prof::PollOrderErrand(bot, rec->second.seq, errandResult) && rec->second.result != errandResult)
+        bool const hasErrandUpdate =
+            (tbhost::prof::PollOrderErrand(bot, rec->second.seq, errandResult) ||
+             tbhost::ride::PollOrderErrand(bot, rec->second.seq, errandResult));
+        if (hasErrandUpdate && rec->second.result != errandResult)
         {
             rec->second.result = errandResult;
             if (errandResult.compare(0, 5, "fail:") == 0)
@@ -812,6 +826,8 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         rec->second.queue.pop_front();
         if (order.verb != "gather" && order.verb != "craft")
             tbhost::prof::CancelOrderErrand(bot);
+        if (order.verb != "ride")
+            tbhost::ride::CancelOrderErrand(bot);
         std::string result = now - order.queuedAt > OrderMaxAgeMs ? "fail:expired" : Run(bot, ai, order);
         if (rec->second.seq == order.seq)       // a later order of the same bot keeps the later one's name and seq
             rec->second.result = result;
@@ -841,6 +857,21 @@ uint8 WantedRole(ObjectGuid bot)
 {
     auto role = Roles().find(bot);
     return role == Roles().end() ? uint8(0) : role->second;
+}
+
+bool ReleasePlaceStay(Player* bot, uint32 seq)
+{
+    if (!bot)
+        return false;
+    OrderStatus const last = LastOrder(bot->GetGUID());
+    if (last.seq != seq || last.verb != "come")
+        return false;      // another order owns the bot now: only the placement's own stay is ours to clear
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    ai->Reset();
+    ai->SetMovementStrategy("follow");
+    return true;
 }
 
 // ---- O6: the queue as a call (TbOrdersApi.h) ----
@@ -1072,6 +1103,10 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return false;
     Player* sender = SenderPlayer(handler);
 
+    // A later command from the commander ends a pending `place ... cursor` request.
+    if (sender)
+        place::CancelPending(sender->GetGUID(), handler);
+
     // `party` takes the next word as the leader unless that word is already the verb.
     bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party" && !IsVerb(Lower(args.w[1]));
     size_t pos = 0;
@@ -1271,6 +1306,11 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else if (verb == "ah")
         {
+            if (!tbhost::ah::IsWorldAuctionEnabled())
+            {
+                refuse("auction-disabled", "world auction is disabled (TortoiseBots.World.Auction=0)");
+                continue;
+            }
             std::string const sub = Lower(order.arg);
             if (sub != "list" && sub != "sell" && sub.rfind("sell ", 0) != 0 &&
                 sub.rfind("buy ", 0) != 0 && sub != "cancel" && sub.rfind("cancel ", 0) != 0)
@@ -1458,6 +1498,12 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "master", "no-such-player", name + " is not in the world");
     if (!release && !MayLeadBots(handler, commander->GetGUID()))   // N5
         return Fail(handler, args, "master", "not-allowed", name + " is neither a host bot nor your own character: it cannot be made the commander of bots");
+    if (!release && IsHostBot(commander))
+    {
+        std::string code, detail;
+        if (!CheckBotAccess(handler, commander, code, detail))
+            return Fail(handler, args, "master", code, detail);
+    }
     for (Player* bot : who.bots)
         if (bot == commander)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");

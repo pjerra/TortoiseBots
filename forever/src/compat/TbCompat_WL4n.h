@@ -132,6 +132,13 @@ inline bool TravelLinkUsableCompat(uint8 pathType)
     return ai::travel_graph::LinkUsableOnForever(pathType);
 }
 
+// May the loader keep a link of an unknown or invalid type (0 or past static portal)? ForeverCore refuses it when the graph is built
+// (counted, one log line), so no route and no map transfer can come from it. Turtle loads its rows as it always did.
+inline bool TravelLoaderChecksLinkTypeCompat()
+{
+    return true;
+}
+
 // May the loader keep a walk link that joins two maps, or whose path runs through a point on another map? A walk is costed as
 // `distance` yards on foot, so such a row (one bad row from the generator is enough) would leave the bot standing at the node: ForeverCore
 // skips it, one log line counts them. Turtle loads its rows as it always did.

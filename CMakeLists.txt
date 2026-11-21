@@ -38,10 +38,11 @@ option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SL
 # needs (the R4C helpers, the legacy ini reader, the unported-feature counters) are not compiled into it. TbScripts.cpp and TbEngineBrain.cpp
 # answer `.tb engine` / `.tb unported` with "the engine is not built in" and never name them without the option.
 # Slice 3 (M): the nine group-fight commands (host/TbH3, TbOrders, TbPartyState, TbTestKit) are engine-facing code; the default build compiles ONE stub
-# (host/TbH3Off.cpp) that gives their "the engine is not built in" answers, and the slice build compiles the real four instead.
+# (host/TbH3Off.cpp) that gives their "the engine is not built in" answers, and the slice build compiles the real four instead. S1-R2's `.tb hear`
+# follows the same rule (host/chat/TbChatCmd.cpp: it names the engine's reply types); the chat hook itself (TbChatIn.cpp) is in both builds and inert here.
 if(NOT TORTOISEBOTS_SLICE1)
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported|TbCompat_WL4)\\.cpp$")
-  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit)\\.cpp$")
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit|chat/TbChatCmd)\\.cpp$")
 else()
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/TbH3Off\\.cpp$")
 endif()
@@ -105,6 +106,16 @@ if(TORTOISEBOTS_SLICE1)
     ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/host/TbHost*.cpp)
 
   target_sources(tortoisebots PRIVATE ${TB_SLICE_LEGACY} ${TB_SLICE_NEW})
+
+  # The fight monitor's shared runtime TU (the Turtle file; its one world read and its two log lines go through ai/playerbot/TbCompatC5.h).
+  # Only this build registers its scripts and feeds it (forever/src/host/cmd/TbCmdCombat.cpp); the option-OFF build has neither. It reads the
+  # engine's config and logs through the legacy proxy, so it gets the legacy files' preinclude.
+  target_sources(tortoisebots PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/runtime/CombatMonitorService.cpp)
+  if(MSVC)
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/runtime/CombatMonitorService.cpp PROPERTIES COMPILE_OPTIONS "/FI${TB_SLICE_PREINCLUDE}")
+  else()
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/runtime/CombatMonitorService.cpp PROPERTIES COMPILE_OPTIONS "-include;${TB_SLICE_PREINCLUDE}")
+  endif()
 
   # The ForeverCore counterpart of ai/botpch.h goes in front of the legacy files only: the files under forever/src are
   # ordinary module code (the two slice sources that need it include it themselves).

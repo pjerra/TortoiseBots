@@ -2,16 +2,21 @@
 
 #include "DB2Structure.h"
 #include "GameObject.h"
+#include "GameObjectModel.h"
 #include "GameTime.h"
 #include "Log.h"
 #include "Map.h"
 #include "MotionMaster.h"
+#include "PathGenerator.h"
 #include "Player.h"
 #include "Transport.h"
 #include "TransportMgr.h"
+#include "VMapDefinitions.h"
 #include "VehicleDefines.h"
 #include "playerbot/policy/travel/TransportWaitPolicy.h"
 
+#include <G3D/Ray.h>
+#include <G3D/Vector3.h>
 #include <cmath>
 #include <limits>
 #include <unordered_map>
@@ -25,22 +30,31 @@ namespace
 {
 
 constexpr float kMaxBoardReachYd = 12.0f;   // 2D from the transport's centre: the bot stands on the deck
+constexpr float kMaxDeckZDiffYd = 2.5f;     // vertical band around the transport's deck surface at (botX, botY)
 constexpr float kApproachReachYd = 60.0f;
 constexpr float kLeaveDockMinDistYd = 100.0f;
 constexpr uint32_t kGiveUpMarginMs = 15000;
+constexpr uint32_t kMissingTimeoutMs = 30000;
+constexpr uint32_t kRescanIntervalMs = 3000;
 
 struct RideState
 {
     bool active = false;
     bool boarded = false;
     bool leftStartDock = false;
+    bool offDeckRefused = false;
+    bool approachPathFailed = false;
+    bool arrived = false;
     uint32_t entry = 0;
+    uint32_t orderSeq = 0;
     ObjectGuid transportGuid;
     uint32_t startMap = 0;
     float startX = 0.0f;
     float startY = 0.0f;
     float startZ = 0.0f;
     uint32_t waitedMs = 0;
+    uint32_t nextRescanMs = 0;
+    std::string outcome;
 };
 
 std::unordered_map<ObjectGuid, RideState>& RideStates()
@@ -226,31 +240,56 @@ bool CheckClassicRoute(uint32_t entry)
     return sTransportMgr->GetTransportAnimInfo(entry) != nullptr;
 }
 
+bool SampleTransportDeckZ(Player const* bot, WorldObject const* transportObj, float& outDeckZ)
+{
+    if (!bot || !transportObj)
+        return false;
+
+    if (GameObject const* go = transportObj->ToGameObject())
+    {
+        if (go->m_model)
+        {
+            float const rayStartZ = bot->GetPositionZ() + 2.0f;
+            float maxDist = 6.0f;
+            G3D::Ray const ray(G3D::Vector3(bot->GetPositionX(), bot->GetPositionY(), rayStartZ), G3D::Vector3(0.0f, 0.0f, -1.0f));
+            if (go->m_model->IntersectRay(ray, maxDist, /*stopAtFirstHit=*/false, bot->GetPhaseShift(), VMAP::ModelIgnoreFlags::Nothing))
+            {
+                outDeckZ = rayStartZ - maxDist;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    outDeckZ = transportObj->GetPositionZ();
+    return true;
+}
+
 } // namespace
 
-bool StartRide(Player* bot, uint32_t transportEntry, std::string* failCode)
+bool StartRide(Player* bot, uint32_t transportEntry, std::string* stateOut, uint32_t orderSeq)
 {
-    if (failCode)
-        failCode->clear();
+    if (stateOut)
+        stateOut->clear();
     if (!bot || !transportEntry)
     {
-        if (failCode)
-            *failCode = "bad-args";
+        if (stateOut)
+            *stateOut = "bad-args";
         return false;
     }
 
     Map* map = bot->FindMap();
     if (!map)
     {
-        if (failCode)
-            *failCode = "no-map";
+        if (stateOut)
+            *stateOut = "no-map";
         return false;
     }
 
     if (!CheckClassicRoute(transportEntry))
     {
-        if (failCode)
-            *failCode = "non-classic-route";
+        if (stateOut)
+            *stateOut = "non-classic-route";
         TC_LOG_INFO("tortoisebots", "[W5] ride-refused bot={} entry={} code=non-classic-route map={}",
             bot->GetName(), transportEntry, map->GetId());
         return false;
@@ -260,14 +299,20 @@ bool StartRide(Player* bot, uint32_t transportEntry, std::string* failCode)
     rs = RideState{};
     rs.active = true;
     rs.entry = transportEntry;
+    rs.orderSeq = orderSeq;
     rs.startMap = map->GetId();
     rs.startX = bot->GetPositionX();
     rs.startY = bot->GetPositionY();
     rs.startZ = bot->GetPositionZ();
+    rs.nextRescanMs = kRescanIntervalMs;
 
     FoundTransport const found = FindByEntry(bot, map, transportEntry);
     if (found.obj)
         rs.transportGuid = found.guid;
+
+    rs.outcome = ai::RideOrderResult(true, false, false, false, "");
+    if (stateOut)
+        *stateOut = rs.outcome;
 
     TC_LOG_INFO("tortoisebots", "[W5] ride-wait bot={} entry={} guid={} map={}",
         bot->GetName(), transportEntry, rs.transportGuid.ToString(), map->GetId());
@@ -292,8 +337,9 @@ void TickRide(Player* bot, uint32_t diffMs)
     rs.waitedMs += diffMs;
 
     FoundTransport found = FindByGuid(map, rs.transportGuid);
-    if (!found.obj && !rs.boarded)
+    if (ai::ShouldRescanTransport(found.obj != nullptr, rs.boarded, rs.waitedMs, rs.nextRescanMs))
     {
+        rs.nextRescanMs = rs.waitedMs + kRescanIntervalMs;
         found = FindByEntry(bot, map, rs.entry);
         if (found.obj)
             rs.transportGuid = found.guid;
@@ -304,6 +350,8 @@ void TickRide(Player* bot, uint32_t diffMs)
     {
         if (TransportTemplate const* tmpl = sTransportMgr->GetTransportTemplate(rs.entry))
             totalPathTimeMs = tmpl->TotalPathTime;
+        else if (TransportAnimation const* anim = sTransportMgr->GetTransportAnimInfo(rs.entry))
+            totalPathTimeMs = anim->TotalTime;
     }
 
     bool const currentlyOnBoard = bot->GetTransport() != nullptr &&
@@ -321,6 +369,30 @@ void TickRide(Player* bot, uint32_t diffMs)
 
     float const distToDeck = found.obj ? Dist2D(bot->GetPositionX(), bot->GetPositionY(), found.obj->GetPositionX(), found.obj->GetPositionY()) : 9999.0f;
 
+    bool hasDeckZ = false;
+    float deckZ = 0.0f;
+    if (!rs.boarded && found.obj && found.stopped && !atDestinationDock && distToDeck <= kMaxBoardReachYd)
+    {
+        hasDeckZ = SampleTransportDeckZ(bot, found.obj, deckZ);
+        if (!ai::IsOnTransportDeck(hasDeckZ, bot->GetPositionZ(), deckZ, kMaxDeckZDiffYd))
+        {
+            if (!rs.offDeckRefused)
+            {
+                rs.offDeckRefused = true;
+                TC_LOG_INFO("tortoisebots", "[W5] ride-board-refused bot={} entry={} code=off-deck bot_z={:.2f} deck_z={:.2f} has_deck={}",
+                    bot->GetName(), rs.entry, bot->GetPositionZ(), deckZ, hasDeckZ ? 1 : 0);
+            }
+        }
+        else
+        {
+            rs.offDeckRefused = false;
+        }
+    }
+    else
+    {
+        rs.offDeckRefused = false;
+    }
+
     ai::TransportWaitInput in;
     in.mapReady = true;
     in.onBoard = rs.boarded && currentlyOnBoard;
@@ -330,9 +402,15 @@ void TickRide(Player* bot, uint32_t diffMs)
     in.distanceToDeck = distToDeck;
     in.maxBoardRange = kMaxBoardReachYd;
     in.approachRange = kApproachReachYd;
+    in.hasDeckZ = hasDeckZ;
+    in.botZ = bot->GetPositionZ();
+    in.deckZ = deckZ;
+    in.maxDeckZDiff = kMaxDeckZDiffYd;
+    in.approachPathFailed = rs.approachPathFailed;
     in.waitedMs = rs.waitedMs;
     in.totalPathTimeMs = totalPathTimeMs;
     in.marginMs = kGiveUpMarginMs;
+    in.missingTimeoutMs = kMissingTimeoutMs;
 
     switch (ai::DecideTransportWait(in))
     {
@@ -345,6 +423,8 @@ void TickRide(Player* bot, uint32_t diffMs)
                 // Where the bot stands, in the transport's own frame: boarding never moves it.
                 found.base->AddPassenger(bot, found.base->GetPositionOffsetTo(bot->GetPosition()));
                 rs.boarded = true;
+                rs.offDeckRefused = false;
+                rs.outcome = ai::RideOrderResult(true, true, false, false, "");
                 TC_LOG_INFO("tortoisebots", "[W5] ride-board bot={} entry={} guid={} map={}",
                     bot->GetName(), rs.entry, rs.transportGuid.ToString(), map->GetId());
             }
@@ -353,7 +433,21 @@ void TickRide(Player* bot, uint32_t diffMs)
         case ai::TransportWaitStep::Approach:
         {
             if (found.obj && !bot->isMoving())
-                bot->GetMotionMaster()->MovePoint(0, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), false);
+            {
+                PathGenerator path(bot);
+                path.CalculatePath(found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), false);
+                if (!ai::IsApproachPathUsable(static_cast<uint32_t>(path.GetPathType()), path.GetPath().size()))
+                {
+                    rs.approachPathFailed = true;
+                    rs.active = false;
+                    rs.outcome = ai::RideOrderResult(false, false, false, false, "no-path");
+                    TC_LOG_INFO("tortoisebots", "[W5] ride-giveup bot={} entry={} code=no-path map={}",
+                        bot->GetName(), rs.entry, map->GetId());
+                    break;
+                }
+                bot->GetMotionMaster()->MovePoint(0, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), true);
+            }
+            rs.outcome = ai::RideOrderResult(rs.active, rs.boarded, rs.arrived, rs.offDeckRefused, "");
             break;
         }
         case ai::TransportWaitStep::Leave:
@@ -361,21 +455,53 @@ void TickRide(Player* bot, uint32_t diffMs)
             if (TransportBase* tb = bot->GetTransport())
                 tb->RemovePassenger(bot);
             rs.active = false;
+            rs.arrived = true;
+            rs.outcome = ai::RideOrderResult(false, true, true, false, "");
             TC_LOG_INFO("tortoisebots", "[W5] ride-leave bot={} entry={} guid={} map={}",
                 bot->GetName(), rs.entry, rs.transportGuid.ToString(), map->GetId());
             break;
         }
         case ai::TransportWaitStep::GiveUp:
         {
+            std::string const failCode = rs.approachPathFailed ? "no-path"
+                : (!found.obj ? "not-found" : (rs.offDeckRefused ? "off-deck" : "timeout"));
             rs.active = false;
-            TC_LOG_INFO("tortoisebots", "[W5] ride-giveup bot={} entry={} waited_ms={} total_ms={} map={}",
-                bot->GetName(), rs.entry, rs.waitedMs, totalPathTimeMs, map->GetId());
+            rs.outcome = ai::RideOrderResult(false, rs.boarded, false, rs.offDeckRefused, failCode);
+            TC_LOG_INFO("tortoisebots", "[W5] ride-giveup bot={} entry={} code={} waited_ms={} total_ms={} map={}",
+                bot->GetName(), rs.entry, failCode, rs.waitedMs, totalPathTimeMs, map->GetId());
             break;
         }
         case ai::TransportWaitStep::Wait:
         default:
+            rs.outcome = ai::RideOrderResult(rs.active, rs.boarded, rs.arrived, rs.offDeckRefused, "");
             break;
     }
+}
+
+bool PollOrderErrand(Player const* bot, uint32_t orderSeq, std::string& outResult)
+{
+    if (!bot || orderSeq == 0)
+        return false;
+    auto it = RideStates().find(bot->GetGUID());
+    if (it == RideStates().end())
+        return false;
+    RideState const& rs = it->second;
+    if (rs.orderSeq != orderSeq || rs.outcome.empty())
+        return false;
+    outResult = rs.outcome;
+    return true;
+}
+
+void CancelOrderErrand(Player const* bot)
+{
+    if (!bot)
+        return;
+    auto it = RideStates().find(bot->GetGUID());
+    if (it == RideStates().end())
+        return;
+    it->second.active = false;
+    it->second.orderSeq = 0;
+    it->second.outcome.clear();
 }
 
 bool IsOnBoard(Player const* bot)

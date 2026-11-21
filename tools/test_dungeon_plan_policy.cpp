@@ -752,6 +752,44 @@ static void TestStandPullFlagOnBossAndPull()
     CHECK(NormalizePlanStep(move) == PlanStepRefusal::BadParam);
 }
 
+// ai::kPlanFlagWadeOk (131072): a move, pull or boss row may wade shallow water; any other kind is refused.
+static void TestWadeFlagOnRowHopsOnly()
+{
+    CHECK(kPlanFlagWadeOk == 131072);
+    CHECK((kPlanFlagWadeOk & (kPlanFlagProofCreature | kPlanFlagSkipUnreachable | kPlanFlagStandPull | kPlanFlagResetToGossip |
+                              kPlanFlagDeadGossipOk | kPlanFlagEscortNpc | kPlanFlagExact | kPlanFlagNoDefer | kPlanFlagDoneData |
+                              kPlanFlagDoneObject | kPlanFlagAmbush)) == 0);
+    PlanStep move = Step(0, 240, PlanStepKind::Move, 1.0f, 2.0f, 3.0f);
+    move.flags = kPlanFlagWadeOk;
+    CHECK(NormalizePlanStep(move) == PlanStepRefusal::None && (move.flags & kPlanFlagWadeOk));
+    PlanStep pull = Step(0, 241, PlanStepKind::Pull);
+    pull.entries = {5053};
+    pull.flags = kPlanFlagWadeOk;
+    CHECK(NormalizePlanStep(pull) == PlanStepRefusal::None && (pull.flags & kPlanFlagWadeOk));
+    PlanStep boss = Step(0, 242, PlanStepKind::Boss);
+    boss.entry = 3654;
+    boss.flags = kPlanFlagWadeOk;
+    CHECK(NormalizePlanStep(boss) == PlanStepRefusal::None && (boss.flags & kPlanFlagWadeOk));
+    PlanStep hold = Step(0, 243, PlanStepKind::Hold);
+    hold.entries = {3636};
+    hold.flags = kPlanFlagWadeOk;
+    CHECK(NormalizePlanStep(hold) == PlanStepRefusal::BadParam);
+    PlanStep gossip = Step(0, 244, PlanStepKind::Gossip, 1.0f, 2.0f, 3.0f);
+    gossip.entry = 3678;
+    gossip.param = 1;
+    gossip.flags = kPlanFlagWadeOk;
+    CHECK(NormalizePlanStep(gossip) == PlanStepRefusal::BadParam);
+    // The exact flag's own row (a move_direct) has no wade: the hop is a straight line the probe did not check.
+    PlanStep direct = Step(0, 245, PlanStepKind::MoveDirect, 1.0f, 2.0f, 3.0f);
+    direct.flags = kPlanFlagWadeOk;
+    CHECK(NormalizePlanStep(direct) == PlanStepRefusal::BadParam);
+    // A wade move keeps its other bits.
+    PlanStep both = Step(0, 246, PlanStepKind::Boss);
+    both.entry = 3653;
+    both.flags = kPlanFlagWadeOk | kPlanFlagSkipUnreachable;
+    CHECK(NormalizePlanStep(both) == PlanStepRefusal::None && both.flags == (kPlanFlagWadeOk | kPlanFlagSkipUnreachable));
+}
+
 static void TestResetToGossipFlagOnlyOnUnitsHold()
 {
     CHECK(kPlanFlagResetToGossip == 16384);
@@ -963,6 +1001,7 @@ int main()
     TestProofCreatureFlagOnlyOnOpenProof();
     TestPlainOpenUnchanged();
     TestStandPullFlagOnBossAndPull();
+    TestWadeFlagOnRowHopsOnly();
     TestResetToGossipFlagOnlyOnUnitsHold();
     TestDeadGossipFlagOnlyOnUnitsHold();
     TestHoldTimeoutCeiling();

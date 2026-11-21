@@ -183,7 +183,7 @@ public:
         }
 
         ObjectGuid mailbox = FindMailbox(ai);
-        if (mailbox.IsEmpty())
+        if (ai::MailProcessShouldAbortMissingMailbox(MailRequiresMailboxCompat(), mailbox.IsEmpty()))
             return false;
 
         if (mail->money)
@@ -281,7 +281,7 @@ public:
             ai->TellPlayer(requester, BOT_TEXT2("|cffffff00%money |cff00ff00recieved from mail.", args), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         }
 
-        return confirmedTakes > 0;
+        return MailTakeAfterResultCompat(confirmedTakes);
     }
 
     static TakeMailProcessor instance;

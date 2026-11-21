@@ -98,7 +98,11 @@ bool ResolveCommanderParty(ChatHandler* handler, std::string const& botHint, Obj
     {
         Player* bot = ObjectAccessor::FindPlayer(g);
         if (bot && bot->IsInWorld() && IsCommandedBy(commander, bot))
+        {
+            if (!h3::CheckBotAccess(handler, bot, code, detail))
+                return false;
             bots.push_back(bot);
+        }
     }
     if (bots.empty())
     {
@@ -403,13 +407,15 @@ bool HandleGossip(ChatHandler* handler, h3::Words const& args, size_t argStart)
     std::string option = GossipOrder::Trimmed(RebuildTail(args.w, optStart));
     if (!option.empty())
     {
-        order.gossipHasOption = true;
+        order.gossip.byIndex = false;
+        order.gossip.index = 0;
+        order.gossip.text.clear();
         if (option.front() == '"')
         {
             if (option.size() < 3 || option.back() != '"')
                 return h3::Fail(handler, args, "cmd", "invalid", "unclosed quote in gossip option");
-            order.gossipText = option.substr(1, option.size() - 2);
-            if (GossipOrder::Trimmed(order.gossipText).empty())
+            order.gossip.text = option.substr(1, option.size() - 2);
+            if (GossipOrder::Trimmed(order.gossip.text).empty())
                 return h3::Fail(handler, args, "cmd", "invalid", "empty gossip option");
         }
         else if (AllDigits(option))
@@ -419,11 +425,11 @@ bool HandleGossip(ChatHandler* handler, h3::Words const& args, size_t argStart)
             uint32 const idx = uint32(std::strtoul(option.c_str(), nullptr, 10));
             if (idx == 0 || idx > 32)
                 return h3::Fail(handler, args, "cmd", "invalid", "gossip option index must be 1..32");
-            order.gossipByIndex = true;
-            order.gossipIndex = idx;
+            order.gossip.byIndex = true;
+            order.gossip.index = idx;
         }
         else
-            order.gossipText = option;
+            order.gossip.text = option;
     }
 
     Player* sender = h3::SenderPlayer(handler);
