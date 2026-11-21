@@ -77,7 +77,8 @@ public:
     // `.tb group <bot> <master>` for two logged-in characters, and the step `Login` does with a master: puts the bot into the
     // master's party, the master as leader, through the core's Group API (what an invite and its accept do, Handlers/GroupHandler.cpp
     // HandlePartyInviteOpcode / HandlePartyInviteResponseOpcode, without the packets). The bot's host master becomes `master`.
-    // Empty string = done, else the reason it was refused. A party holds MAX_GROUP_SIZE (5) members, the master among them.
+    // Empty string = done, else the reason it was refused. A party holds MAX_GROUP_SIZE (5) members, the master among them; with
+    // TortoiseBots.Raid.Enable a sixth member turns it into a raid, which holds MAX_RAID_SIZE (40).
     std::string GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid);
     // `.tb ungroup <bot>`: the bot leaves its party and has no master afterwards. Empty string = done, else the reason.
     std::string Ungroup(ObjectGuid botGuid);
@@ -185,6 +186,8 @@ public:
     // on it yet), and the configured caps by kind (TortoiseBots.Free.MaxPerMap.*). CheckEntry refuses a free bot past the cap.
     uint32 FreeBotsOnMap(uint32 mapId) const;
     world::FreeMapCaps GetFreeMapCaps() const { return _freeMapCaps; }
+    // TortoiseBots.Raid.Enable: host joins may turn a full party into a raid and fill it up to 40.
+    bool RaidsEnabled() const { return _raidsEnabled; }
     // `.tb enter`: the bot walks into the area trigger's box (its engine is down meanwhile) and the core's own area-trigger handler is called for it
     // (WorldSession::HandleAreaTriggerOpcode, MiscHandler.cpp:538), which asks the core's entry rule and teleports it. `leader` (not empty) = the
     // party leader's guid: the bot calls the handler only after the leader stands on the trigger's target map (followers enter after their leader
@@ -373,6 +376,7 @@ private:
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    bool _raidsEnabled = false;
     bool _capitalErrandsEnabled = false;
     bool _guildMailEnabled = false;
     bool _guildMailAllowMixed = false;

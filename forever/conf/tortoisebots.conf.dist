@@ -66,6 +66,17 @@ TortoiseBots.SpellSchool.VulnerableMinPct = 10
 TortoiseBots.Slice.EngineByDefault = 0
 
 #
+#    TortoiseBots.Raid.Enable
+#        Description: Bots may be in raids. A host join (`.tb login <bot>` with a master, `.tb group`, `.tb party`) that would be the
+#                     sixth member turns the party into a raid first, and a raid takes bots up to 40 members. `.tb layout <leader>`
+#                     then puts the raid into the raid layout (subgroups, main tank, off-tanks, tank healers). 0: the host keeps the
+#                     5-man party and refuses a raid.
+#        Default:     0
+#
+
+TortoiseBots.Raid.Enable = 0
+
+#
 #    TortoiseBots.Slice.MasterGraceSeconds
 #        Description: How long a bot waits when its master logs out. The bot stays in the world and in its party, stops acting, and follows
 #                     again when the master is back in the world within this time; after it the bot logs out. 0 = the bots log out with

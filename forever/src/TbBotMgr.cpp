@@ -2,6 +2,7 @@
 #include "host/TbTickBudgetPure.h"
 #include "host/TbAutoFood.h"
 #include "host/TbHostGroupQuestPure.h"
+#include "host/TbRaidGroupsPure.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostAhMarket.h"
 #include "host/TbHostGuildMail.h"
@@ -252,6 +253,7 @@ void BotMgr::LoadConfig()
     _enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Enable", false);
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
     _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
+    _raidsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.Raid.Enable", false);
     _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", true);
     _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", true);
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
@@ -400,22 +402,26 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         bot.free = true;
     if (bot.wantParty)
     {
-        // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
-        // logins in a row are not all accepted just because none has joined yet.
+        // Count the bots that are on their way into the group as well, so a run of logins is not all accepted just because none
+        // has joined yet. A party holds five; with TortoiseBots.Raid.Enable a full party becomes a raid at the join and a raid holds 40.
         uint32 members = 1;
+        bool isRaid = false;
         if (Player* leader = ObjectAccessor::FindPlayer(master))
             if (Group* group = leader->GetGroup())
             {
-                // R10 (S1): the host forms 5-man parties only. A raid is refused here, before a session is made (JoinParty checks it again).
-                if (group->isRaidGroup())
-                    return "the master leads a raid: raids are not in this slice, the bot is not logged in";
+                isRaid = group->isRaidGroup();
                 members = group->GetMembersCount();
             }
         for (auto const& [guid, other] : _bots)
             if (other.wantParty && other.master == master)
                 ++members;
-        if (members >= MAX_GROUP_SIZE)
-            return Trinity::StringFormat("the party of that master is full ({} members at most, raids are not in this slice)", uint32(MAX_GROUP_SIZE));
+        raidgroups::JoinPlan const plan = raidgroups::PlanJoin(_raidsEnabled, isRaid, members);
+        if (plan.code == "raids-off")
+            return "the master leads a raid and TortoiseBots.Raid.Enable is 0: the bot is not logged in";
+        if (plan.code == "party-full")
+            return Trinity::StringFormat("the party of that master is full ({} members at most; TortoiseBots.Raid.Enable = 1 lets it become a raid)", uint32(MAX_GROUP_SIZE));
+        if (plan.code == "raid-full")
+            return Trinity::StringFormat("the raid of that master is full ({} members)", uint32(MAX_RAID_SIZE));
     }
     if (!bot.session->BeginLogin(characterGuid))
         return "the login could not be started (see the server log)";
@@ -449,23 +455,28 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
         return "both characters must be in the world";
 
     Group* group = master->GetGroup();
-    // R10 (S1): the host forms and keeps 5-man parties. Group::IsFull is the 40-member check for a raid, so a raid would have taken the bot as
-    // its 4th or 30th member: refuse it first (even when the bot is already in it: the host's master binding is for a party).
-    if (group && group->isRaidGroup())
-        return "the master leads a raid: raids are not in this slice, the bot was not added";
+    bool const raidsEnabled = Instance().RaidsEnabled();
+    // Without TortoiseBots.Raid.Enable the host keeps 5-man parties: a raid is refused even when the bot is already in it.
+    if (group && group->isRaidGroup() && !raidsEnabled)
+        return "the master leads a raid and TortoiseBots.Raid.Enable is 0: the bot was not added";
     if (group && bot->GetGroup() == group)
         return {};                                   // already in it
     if (bot->GetGroup() || bot->GetGroupInvite())
         return "the bot is already in another party (use .tb ungroup first)";
     if (master->GetGroupInvite())
         return "the master has a pending party invite";
+    bool convertFirst = false;
     if (group)
     {
         if (!group->IsLeader(master->GetGUID()))
             return "the master is not the leader of its party";
-        // The party's own five, counted against MAX_GROUP_SIZE here and not through IsFull (which is the raid's 40 for a raid).
-        if (group->GetMembersCount() >= MAX_GROUP_SIZE)
-            return Trinity::StringFormat("the party is full ({} members at most, raids are not in this slice)", uint32(MAX_GROUP_SIZE));
+        // Counted here and not through Group::IsFull, which is the raid's 40 for a raid and the party's five otherwise.
+        raidgroups::JoinPlan const plan = raidgroups::PlanJoin(raidsEnabled, group->isRaidGroup(), group->GetMembersCount());
+        if (plan.code == "party-full")
+            return Trinity::StringFormat("the party is full ({} members at most; TortoiseBots.Raid.Enable = 1 lets it become a raid)", uint32(MAX_GROUP_SIZE));
+        if (plan.code == "raid-full")
+            return Trinity::StringFormat("the raid is full ({} members)", uint32(MAX_RAID_SIZE));
+        convertFirst = plan.step == raidgroups::JoinStep::ConvertThenAdd;
     }
 
     // The invite, as HandlePartyInviteOpcode makes it: a new group is not created or saved until the first accept.
@@ -487,6 +498,11 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
     }
     else if (!group->AddInvite(bot))
         return "the core refused the invite";
+
+    // A sixth member: the party becomes a raid first, as the client's own "convert to raid" does it (the leader keeps the lead, the five
+    // stay in subgroup 1, the newcomer takes the next free seat).
+    if (convertFirst)
+        group->ConvertToRaid();
 
     // The accept, as HandlePartyInviteResponseOpcode (Accept = true) does it.
     group->RemoveInvite(bot);
