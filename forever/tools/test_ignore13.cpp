@@ -79,11 +79,31 @@ static void TestAoE()
     CHECK(!ai::AoEBlockedByIgnored(0.0f, 1000.0f, 30.1f));
 }
 
+static void TestDefenceException()
+{
+    // A listed mob that fights nobody stays ignored: no victim, no threat.
+    CHECK(!ai::IgnoreMobYieldsToDefence<Guid>(0, 100, {100, 101}, false));
+    // Victim is the bot itself: fought anyway.
+    CHECK(ai::IgnoreMobYieldsToDefence<Guid>(100, 100, {100, 101}, false));
+    // Victim is a party member: fought anyway.
+    CHECK(ai::IgnoreMobYieldsToDefence<Guid>(101, 100, {100, 101}, false));
+    // Victim is an outsider (another party's pull): the list stands.
+    CHECK(!ai::IgnoreMobYieldsToDefence<Guid>(999, 100, {100, 101}, false));
+    // No victim yet, but threat on the party (running at the priest): fought.
+    CHECK(ai::IgnoreMobYieldsToDefence<Guid>(0, 100, {100, 101}, true));
+    // Threat elsewhere, victim an outsider: the list stands.
+    CHECK(!ai::IgnoreMobYieldsToDefence<Guid>(999, 100, {100}, false));
+    // Empty party (solo bot): only its own victimhood or threat counts.
+    CHECK(ai::IgnoreMobYieldsToDefence<Guid>(100, 100, {}, false));
+    CHECK(!ai::IgnoreMobYieldsToDefence<Guid>(0, 100, {}, false));
+}
+
 int main()
 {
     TestAddRemoveClear();
     TestCap();
     TestExpiry();
+    TestDefenceException();
     TestAoE();
     std::printf("%d checks, %d failed\n", g_checks, g_fail);
     return g_fail == 0 ? 0 : 1;

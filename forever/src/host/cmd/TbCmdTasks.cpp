@@ -98,7 +98,11 @@ bool ResolveCommanderParty(ChatHandler* handler, std::string const& botHint, Obj
     {
         Player* bot = ObjectAccessor::FindPlayer(g);
         if (bot && bot->IsInWorld() && IsCommandedBy(commander, bot))
+        {
+            if (!h3::CheckBotAccess(handler, bot, code, detail))
+                return false;
             bots.push_back(bot);
+        }
     }
     if (bots.empty())
     {

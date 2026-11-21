@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+class GameObject;
 class Player;
 
 namespace TortoiseBots
@@ -95,6 +96,9 @@ struct Totals
     uint64 began = 0, done = 0, failed = 0, cancelled = 0;
 };
 Totals const& TotalsSinceBoot();
+
+// The typed `GameObjUse` packet into the core's handler, for a gathered node that needs no spell (the packet's sender stays in this file).
+bool SendGameObjectUse(Player* bot, GameObject* go);
 }
 }
 }

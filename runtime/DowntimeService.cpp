@@ -16,6 +16,9 @@
 #include "../ai/playerbot/strategy/actions/SellAction.h"
 #include "../ai/playerbot/TravelMgr.h"
 
+#include "../ai/playerbot/strategy/values/TrainerValues.h"
+#include "../ai/playerbot/strategy/values/SharedValueContext.h"
+#include "DowntimePolicy.h"
 #include <sstream>
 #include "Bag.h"
 #include "Chat.h"
@@ -91,6 +94,47 @@ bool VendorErrandNeeded(Player* bot)
                 if (hasJunk(bag, slot))
                     return true;
     return false;
+}
+
+// The gold check for the trainer the bot will actually visit: the candidate
+// destination's entry must teach a due rank the purse covers (list price -
+// the visit can only be cheaper). Points come nearest first, so the first
+// one this admits is the nearest reachable trainer that can actually teach
+// something. Built from the cached "trainable spells" / "trainable spell
+// map" values, no world scan.
+bool TrainerDestinationTeachesAffordable(PlayerbotAI* ai, Player* bot, int32 entry)
+{
+    AiObjectContext* context = ai->GetAiObjectContext();
+
+    uint32 const freeMoney = AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::spells);
+    std::vector<TrainerSpell const*> const trainable =
+        AI_VALUE2(std::vector<TrainerSpell const*>, "trainable spells", (uint32)TRAINER_TYPE_CLASS);
+    trainableSpellMap* spellMap = GAI_VALUE(trainableSpellMap*, "trainable spell map");
+    if (!spellMap)
+        return false;
+    auto byType = spellMap->find(TRAINER_TYPE_CLASS);
+    if (byType == spellMap->end())
+        return false;
+    auto byRequirement = byType->second.find(bot->GetClass());
+    if (byRequirement == byType->second.end())
+        return false;
+
+    std::vector<TortoiseBots::DowntimeTrainerRank> due;
+    for (TrainerSpell const* spell : trainable)
+    {
+        if (!spell || TrainerSpellPrice(spell, 1.0f) > freeMoney)
+            continue;
+        auto taught = byRequirement->second.find(spell);
+        if (taught == byRequirement->second.end())
+            continue;
+        TortoiseBots::DowntimeTrainerRank rank;
+        rank.spellId = spell->spell;
+        rank.moneyCost = spell->spellCost;
+        for (int32 teaches : taught->second)
+            rank.entries.push_back(teaches);
+        due.push_back(std::move(rank));
+    }
+    return TortoiseBots::DowntimeTrainerEntryTeachesAffordable(entry, due, freeMoney);
 }
 
 // The pool's trainer need (NeedTravelPurposeValue "trainer class"): nothing to
@@ -260,6 +304,11 @@ bool FindErrandDestination(Player* bot, PlayerbotAI* ai, DowntimeErrand errand, 
         for (auto& [dest, pos, dist] : points)
         {
             if (!dest || !pos || !dest->IsActive(bot, info))
+                continue;
+            // The trainer gold check is for the trainer actually visited: a
+            // nearer trainer that teaches no due rank the purse covers is not
+            // the visit - the search moves on to the next nearest one.
+            if (errand == DowntimeErrand::Trainer && !TrainerDestinationTeachesAffordable(ai, bot, dest->GetEntry()))
                 continue;
             if (pos->GetMapId() != bot->GetMapId())
                 continue;

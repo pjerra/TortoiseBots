@@ -369,6 +369,7 @@ struct OrderRecord
     uint32_t reportedCarry = 0;  // last reported bags-plus-mailbox count; the list reply uses it for a terminal row and while the bot is offline
     uint64_t createdAt = 0;
     uint64_t updatedAt = 0;
+    uint32_t ahGoldSpent = 0;
 };
 
 // One queued disenchant service item: which member it goes back to, which

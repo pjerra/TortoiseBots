@@ -953,6 +953,17 @@ Totals const& TotalsSinceBoot()
 {
     return TotalsRw();
 }
+
+bool SendGameObjectUse(Player* bot, GameObject* go)
+{
+    WorldSession* session = bot && go ? bot->GetSession() : nullptr;
+    if (!session)
+        return false;
+    WorldPackets::GameObject::GameObjUse packet{ WorldPacket(CMSG_GAME_OBJ_USE) };
+    packet.Guid = go->GetGUID();
+    session->HandleGameObjectUseOpcode(packet);
+    return true;
+}
 }
 }
 }
