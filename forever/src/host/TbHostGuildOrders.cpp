@@ -506,13 +506,16 @@ public:
 
         if (GameObject* banker = FindNearestGameObjectByType(bot, GAMEOBJECT_TYPE_GUILD_BANK, kW2MaxVisitDistYd))
         {
-            if (!bot->GetGameObjectIfCanInteractWith(banker->GetGUID(), GAMEOBJECT_TYPE_GUILD_BANK))
+            // Walk to the vault only when no mailbox can take the delivery where the bot stands: a guild without bank tabs (or a
+            // vault the bot cannot reach) otherwise sent it walking to the bank every tick and the order never mailed.
+            bool const mailHere = tbhost::town::FindNearestMailbox(bot) != nullptr;
+            if (!bot->GetGameObjectIfCanInteractWith(banker->GetGUID(), GAMEOBJECT_TYPE_GUILD_BANK) && !mailHere)
             {
                 bot->GetMotionMaster()->MovePoint(0, banker->GetPositionX(), banker->GetPositionY(), banker->GetPositionZ());
                 outReason = "walking";
                 return false;
             }
-            for (uint8_t tab = 0; tab < kDeliveryTabCount; ++tab)
+            for (uint8_t tab = 0; tab < kDeliveryTabCount && bot->GetGameObjectIfCanInteractWith(banker->GetGUID(), GAMEOBJECT_TYPE_GUILD_BANK); ++tab)
             {
                 std::string failReason;
                 if (tbhost::guild::DepositItem(bot, banker->GetGUID(), tab, deliveryItem, &failReason))
