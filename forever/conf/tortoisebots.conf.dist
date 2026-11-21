@@ -87,6 +87,37 @@ TortoiseBots.Slice.RestManaPct = 80
 TortoiseBots.Commander.KeepBindings = 0
 
 #
+#    TortoiseBots.Commander.Feeds
+#        Description: Send the Commander card's map layers (the hostile units near the binding's lead, the game objects its bots have near them,
+#                     the known bosses of its lead's dungeon with their state, and what each bot is doing: cast, crowd control, rest, target, the boss
+#                     debuffs it carries, the ready check) in the dashboard's COMMANDERS report. Only in the engine build and only while a binding
+#                     stands; a layer whose scan did not run is sent as null, never as an empty list. 0 = the card keeps the layers greyed out.
+#        Default:     1
+#
+
+TortoiseBots.Commander.Feeds = 1
+
+#
+#    TortoiseBots.Commander.MobRange
+#    TortoiseBots.Commander.ObjectRange
+#        Description: The radius in yards of the two sweeps around a binding's lead bot: the hostile units listed for the card (the nearest 24) and
+#                     the doors, chests, levers, goobers and rituals its bots have near them (the nearest 16). 1 to 200.
+#        Default:     60, 40
+#
+
+TortoiseBots.Commander.MobRange = 60
+TortoiseBots.Commander.ObjectRange = 40
+
+#
+#    TortoiseBots.Commander.PosMs
+#        Description: How often the live position report (COMMANDER_POS) goes out for every standing binding: where its bots are, the enemies its
+#                     last COMMANDERS report listed. Field reads only, no scan. 50 to 2000; the dashboard merges the reports between the 2 s cards.
+#        Default:     100
+#
+
+TortoiseBots.Commander.PosMs = 100
+
+#
 #    TortoiseBots.Dashboard.Enable
 #        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
 #        Default:     1

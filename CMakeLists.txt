@@ -106,6 +106,16 @@ if(TORTOISEBOTS_SLICE1)
 
   target_sources(tortoisebots PRIVATE ${TB_SLICE_LEGACY} ${TB_SLICE_NEW})
 
+  # The fight monitor's shared runtime TU (the Turtle file; its one world read and its two log lines go through ai/playerbot/TbCompatC5.h).
+  # Only this build registers its scripts and feeds it (forever/src/host/cmd/TbCmdCombat.cpp); the option-OFF build has neither. It reads the
+  # engine's config and logs through the legacy proxy, so it gets the legacy files' preinclude.
+  target_sources(tortoisebots PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/runtime/CombatMonitorService.cpp)
+  if(MSVC)
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/runtime/CombatMonitorService.cpp PROPERTIES COMPILE_OPTIONS "/FI${TB_SLICE_PREINCLUDE}")
+  else()
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/runtime/CombatMonitorService.cpp PROPERTIES COMPILE_OPTIONS "-include;${TB_SLICE_PREINCLUDE}")
+  endif()
+
   # The ForeverCore counterpart of ai/botpch.h goes in front of the legacy files only: the files under forever/src are
   # ordinary module code (the two slice sources that need it include it themselves).
   if(MSVC)
