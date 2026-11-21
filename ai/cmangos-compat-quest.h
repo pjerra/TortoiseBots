@@ -130,6 +130,24 @@ inline bool AcceptQuestDirectCompat(Player* bot, Quest const* quest, WorldObject
     return QuestIsAcceptedStatusCompat(bot->GetQuestStatus(quest->GetQuestId()));
 }
 
+// The giver of a quest: an NPC, an object, a player sharing it or an item starting it.
+inline Object* QuestGiverObjectCompat(Player* bot, ObjectGuid giverGuid)
+{
+    return bot ? bot->GetObjectByTypeMask(giverGuid, TYPEMASK_CREATURE_GAMEOBJECT_PLAYER_OR_ITEM) : nullptr;
+}
+
+inline bool AcceptQuestByGiverCompat(Player* bot, Quest const* quest, ObjectGuid giverGuid)
+{
+    if (!bot || !quest)
+        return false;
+    WorldPacket p(CMSG_QUESTGIVER_ACCEPT_QUEST);
+    uint32 unk1 = 0;
+    p << giverGuid.GetRawValue() << quest->GetQuestId() << unk1;
+    p.rpos(0);
+    bot->GetSession()->HandleQuestgiverAcceptQuestOpcode(p);
+    return QuestIsAcceptedStatusCompat(bot->GetQuestStatus(quest->GetQuestId()));
+}
+
 inline bool CanRewardQuestCompat(Player* bot, Quest const* quest, bool msg)
 {
     return bot->CanRewardQuest(quest, msg);

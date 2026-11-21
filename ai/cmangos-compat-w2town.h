@@ -26,6 +26,11 @@ inline bool HasVendorStockCompat(Creature* vendor)
     return (items && !items->Empty()) || (templateItems && !templateItems->Empty());
 }
 
+inline VendorItemData const* VendorTemplateItemsCompat(Creature* vendor)
+{
+    return vendor ? vendor->GetVendorTemplateItems() : nullptr;
+}
+
 inline bool SellItemToVendorCompat(Player* bot, Creature* /*vendor*/, ObjectGuid const& vendorguid, Item* item, uint32 count)
 {
     if (!bot || !item)
