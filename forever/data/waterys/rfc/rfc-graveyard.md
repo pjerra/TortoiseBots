@@ -13,7 +13,7 @@ Both factions end up at the **same** graveyard because the RFC zone links have n
     "Durotar, Northern Durotar GY"
 - No `conditions` row (SourceType 27, graveyard) exists for 2437/32/850, so `GetClosestGraveyardInZone`
   is not team-filtered. For an instance corpse, the core compares each linked graveyard's map-1 position
-  with the instance entrance `CorpseX/Y` (`ObjectMgr.cpp:7282-7440`). Safe loc 850 is **640 yd** from the
+  with the instance entrance `CorpseX/Y` (`ObjectMgr.cpp:7330-7488`). Safe loc 850 is **640 yd** from the
   RFC entrance; safe loc 32 is **1,626 yd**, so **850 is chosen for both Alliance and Horde**.
 - `instance_template` for 389 is `classic_instance_ragefire_chasm`; it does not override the graveyard.
   The relevant `areatrigger_teleport` is the instance entrance/exit, not a ghost destination.

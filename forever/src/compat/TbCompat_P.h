@@ -16,10 +16,10 @@
 
 // "The player stands in a sanctuary." T: the PLAYER_FLAGS_SANCTUARY player flag (0x10000, T Player.h:399). F: that bit is now
 // LOW_LEVEL_RAID_ENABLED (Player.h:543, "pre-3.0.3 PLAYER_FLAGS_SANCTUARY"), so the unit's sanctuary pvp flag answers the question
-// (Unit.h:902). Different answer: the flag is set by the area in the one core and by the unit's pvp state in the other.
+// (Unit.h:912). Different answer: the flag is set by the area in the one core and by the unit's pvp state in the other.
 inline bool PlayerInSanctuaryCompat(Player const* player) { return player->IsInSanctuary(); }
 
-// The experience still needed for the next level. T update field PLAYER_NEXT_LEVEL_XP, F Player.h:1353.
+// The experience still needed for the next level. T update field PLAYER_NEXT_LEVEL_XP, F Player.h:1354.
 inline uint32 PlayerNextLevelXPCompat(Player const* player) { return player->GetXPForNextLevel(); }
 
 // The position held in a movement info. T MovementInfo::pos is a Position with x, y, z, o (T Object.h:283); F Position keeps
@@ -35,7 +35,7 @@ inline TbMovementPos MovementPosCompat(MovementInfo const& info)
 
 // ---------------------------------------------------------------------------------------------------------------
 // Member renames only the casing differs on (each used as `x->Name(...)`, no bot class defines a member of the name:
-// grep over ai/ runtime/ host/ commands/). T Player.h / Unit.h against F Player.h:1306 (isAFK), :1340 (isGMVisible),
+// grep over ai/ runtime/ host/ commands/). T Player.h / Unit.h against F Player.h:1307 (isAFK), :1340 (isGMVisible),
 // :1338 (isTaxiCheater; SetTaxiCheater has the same spelling on both).
 // ---------------------------------------------------------------------------------------------------------------
 #define IsAFK isAFK
@@ -58,7 +58,7 @@ inline Spell* NewSpellCompat(Unit* caster, SpellEntry const* info, bool triggere
     return new Spell(caster, GetSpellInfoCompat(info), triggered ? TRIGGERED_FULL_MASK : TRIGGERED_NONE);
 }
 
-// T Spell::SetCastItem (Spell.h:492) stores the pointer; F has the public member the cast reads in prepare (Spell.cpp:3489-3492).
+// T Spell::SetCastItem (Spell.h:492) stores the pointer; F has the public member the cast reads in prepare (Spell.cpp:3494-3497).
 inline void SpellSetCastItemCompat(Spell* spell, Item* item) { spell->m_CastItem = item; }
 
 // Different answers: T setUnitTarget also copies the unit's position into the destination (Spell.cpp:95-106), F does not; T
@@ -98,14 +98,14 @@ inline Aura* GetAuraCompat(Unit* unit, uint32 spellId, uint32 effectIndex)
 // stacks). F: the Aura itself, which answers GetCasterGUID, GetCharges, GetDuration, GetStackAmount (SpellAuras.h:187-238).
 inline Aura const* AuraHolderCompat(Aura const* aura) { return aura; }
 inline Aura* AuraHolderCompat(Aura* aura) { return aura; }
-// T Aura::IsAreaAura (SpellAuras.h:514); F: the spell carries an area aura effect (SpellInfo.h:462).
+// T Aura::IsAreaAura (SpellAuras.h:514); F: the spell carries an area aura effect (SpellInfo.h:465).
 inline bool AuraIsAreaCompat(Aura const* aura) { return aura->GetSpellInfo()->HasAreaAuraEffect(); }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Immunity. T Unit::IsImmuneToSpell(spell, castOnSelf), IsImmuneToSpellEffect(spell, index, castOnSelf),
-// IsImmuneToDamage(school, spell); F Unit.h:1723-1731 asks for the caster. castOnSelf says the caster is the target itself.
+// IsImmuneToDamage(school, spell); F Unit.h:1739-1747 asks for the caster. castOnSelf says the caster is the target itself.
 // Different answers: F also answers from the caster (its own immunity-ignoring auras, dispel-type rules); the effect mask is
-// every effect of the spell (MAX_EFFECT_MASK, as Spell.cpp:3215 asks).
+// every effect of the spell (MAX_EFFECT_MASK, as Spell.cpp:3220 asks).
 // ---------------------------------------------------------------------------------------------------------------
 inline bool IsImmuneToSpellCompat(Unit const* target, SpellEntry const* spell, bool castOnSelf, WorldObject const* caster)
 {
@@ -115,13 +115,13 @@ inline bool IsImmuneToSpellCompat(Unit const* target, SpellEntry const* spell, b
 inline bool IsImmuneToSpellEffectCompat(Unit const* target, SpellEntry const* spell, uint32 effectIndex, bool castOnSelf, WorldObject const* caster)
 {
     SpellInfo const* info = GetSpellInfoCompat(spell);
-    // SpellInfo::GetEffect ASSERTs index < effect count (SpellInfo.h:599) and the core's ASSERT aborts a release build; the bot asks
+    // SpellInfo::GetEffect ASSERTs index < effect count (SpellInfo.h:602) and the core's ASSERT aborts a release build; the bot asks
     // for effects 0..2 of every spell, so a spell with fewer effects answers "not immune" (it has no such effect to be immune to).
     if (!info || effectIndex >= info->GetEffects().size())
         return false;
     SpellEffectInfo const& effect = info->GetEffect(SpellEffIndex(effectIndex));
     // Slice 8 (K8 notes section 4, H8): the core refuses an interrupt on a unit whose mechanic immunity holds MECHANIC_INTERRUPT (SpellInfo::CanBeInterrupted,
-    // SpellInfo.cpp:1778); the engine's own read of effect immunity does not know it, so a Kick at such a mob was cast and wasted. Immune = the bot does less.
+    // SpellInfo.cpp:1814); the engine's own read of effect immunity does not know it, so a Kick at such a mob was cast and wasted. Immune = the bot does less.
     if (effect.Effect == SPELL_EFFECT_INTERRUPT_CAST && (target->GetMechanicImmunityMask() & (uint64(1) << MECHANIC_INTERRUPT)))
         return true;
     return target->IsImmunedToSpellEffect(info, effect, castOnSelf ? target : caster);
@@ -132,7 +132,7 @@ inline bool IsImmuneToDamageCompat(Unit const* target, SpellEntry const* spell, 
 }
 
 // The diminishing-returns group of a spell. T SpellEntry::GetDiminishingReturnsGroup(triggered) separates the "triggered stun" groups
-// by the flag; F SpellInfo::GetDiminishingReturnsGroupForSpell() (SpellInfo.h:602) keeps the vanilla groups (SharedDefines.h:6654-6679)
+// by the flag; F SpellInfo::GetDiminishingReturnsGroupForSpell() (SpellInfo.h:605) keeps the vanilla groups (SharedDefines.h:6654-6679)
 // and takes no flag. Different answer: the triggered flag is not passed. The group names the bot tests are F's DIMINISHING_STUN
 // and DIMINISHING_KIDNEY_SHOT.
 inline DiminishingGroup DiminishingGroupOfSpellCompat(SpellEntry const* spell, bool /*triggered*/)
@@ -145,10 +145,10 @@ inline DiminishingGroup DiminishingGroupOfSpellCompat(SpellEntry const* spell, b
 // ---------------------------------------------------------------------------------------------------------------
 // Teleports and logout the bot acknowledges for itself, through the core's own handlers (the way forever/src/TbBotSession.cpp does
 // for the spike: AcknowledgeTeleports). T hand-builds MSG_MOVE_TELEPORT_ACK (guid, the counter the core waits for, a time) and
-// calls HandleMoveTeleportAckOpcode; F's handler takes the typed packet (WorldSession.h:1370) and needs the mover guid only
+// calls HandleMoveTeleportAckOpcode; F's handler takes the typed packet (WorldSession.h:1377) and needs the mover guid only
 // (TbBotSession.cpp:69-72). The far teleport: T HandleMoveWorldportAckOpcode() with no argument, F HandleMoveWorldportAck()
-// (WorldSession.h:1449, "for server-side calls"). Logout cancel: T takes any packet (the handler reads none), F the typed
-// LogoutCancel (WorldSession.h:1397).
+// (WorldSession.h:1464, "for server-side calls"). Logout cancel: T takes any packet (the handler reads none), F the typed
+// LogoutCancel (WorldSession.h:1404).
 // ---------------------------------------------------------------------------------------------------------------
 inline void AckNearTeleportCompat(Player* bot)
 {
@@ -166,7 +166,7 @@ inline void CancelLogoutCompat(Player* bot)
 // ---------------------------------------------------------------------------------------------------------------
 // Chat, one helper per kind of message. T hand-builds the packets (ChatHandler::BuildChatPacket, or a CMSG_MESSAGECHAT the
 // session reads on its next update); F has the typed packet (ChatPackets::Chat, ChatPackets.h:151-171), the unit's Say / Yell /
-// Whisper (Player.h:1411-1421) and the session's own chat entry (WorldSession::HandleChatMessage, WorldSession.h:1708).
+// Whisper (Player.h:1412-1422) and the session's own chat entry (WorldSession::HandleChatMessage, WorldSession.h:1723).
 // Different answers, all kinds: F's Say / Yell / Whisper run the core's language and ignore-list rules; the "like a player" kinds
 // run now (F) and not on the next session update (T).
 // ---------------------------------------------------------------------------------------------------------------
@@ -288,7 +288,7 @@ inline MovementGenerator* MotionMasterTopCompat(MotionMaster* master)
 }
 
 // The auras applied to a unit, as (spell id, aura) pairs. T Player::GetSpellAuraHolderMap is a map of SpellAuraHolder (the holder of one
-// spell); F keeps AuraApplication per applied aura (Unit.h:1319), whose GetBase() is the Aura (SpellAuras.h:134: GetAura() of the
+// spell); F keeps AuraApplication per applied aura (Unit.h:1335), whose GetBase() is the Aura (SpellAuras.h:134: GetAura() of the
 // application). The aura answers what the bot asks the holder (GetSpellProto, caster, stacks, duration).
 inline std::vector<std::pair<uint32, Aura*>> AuraHolderMapCompat(Unit const* unit)
 {
@@ -306,9 +306,9 @@ inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z)
 
 // ---------------------------------------------------------------------------------------------------------------
 // The bot cheats (health, cooldown, repair; BotCheatMask). T Unit::SetHealthPercent (Unit.h:446), Unit::RemoveAllSpellCooldown
-// (Unit.h:1020), Player::DurabilityRepairAll(cost, discount) (Player.h:1442, returns the cost); F: health as a share of the maximum,
+// (Unit.h:1033), Player::DurabilityRepairAll(cost, discount) (Player.h:1443, returns the cost); F: health as a share of the maximum,
 // SpellHistory::ResetAllCooldowns (SpellHistory.h:170), Player::DurabilityRepairAll(takeCost, discountMod, guildBank)
-// (Player.h:2455, no result). The repair cheat does not use the cost.
+// (Player.h:2456, no result). The repair cheat does not use the cost.
 // ---------------------------------------------------------------------------------------------------------------
 inline void SetHealthPercentCompat(Unit* unit, float percent) { unit->SetHealth(uint32(unit->GetMaxHealth() * percent / 100.0f)); }
 inline void RemoveAllSpellCooldownCompat(Unit* unit) { unit->GetSpellHistory()->ResetAllCooldowns(); }

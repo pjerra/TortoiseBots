@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------------------------------------------------
 // Names (a): one line, the same meaning on both cores.
 // ---------------------------------------------------------------------------------------------------------------------
-// The guid of a unit's pet / of the unit that created it. T Unit.h:1365 (GetCreatorGuid), F Unit.h:1215,1219.
+// The guid of a unit's pet / of the unit that created it. T Unit.h:1365 (GetCreatorGuid), F Unit.h:1230,1219.
 #define GetPetGuid GetPetGUID
 #define GetCreatorGuid GetCreatorGUID
 // "Is this unit swimming": T Object.h:977 reads the swimming movement flag, the same flag here (cf. IsRooted in TbCompat_Names.h).
@@ -26,7 +26,7 @@
 #define UNIT_FLAG_UNTARGETABLE UNIT_FLAG_UNINTERACTIBLE
 #endif
 
-// The guid on a raid target icon slot (0..7), empty when the slot is unset. T Group.h returns the raw uint64 of the guid, F Group.h:362
+// The guid on a raid target icon slot (0..7), empty when the slot is unset. T Group.h returns the raw uint64 of the guid, F Group.h:365
 // returns the ObjectGuid.
 inline ObjectGuid TargetIconGuidCompat(Group* group, uint8 icon) { return group->GetTargetIcon(icon); }
 
@@ -90,7 +90,7 @@ inline void VisitFriendlyUnitsCompat(Unit const* center, std::list<Unit*>& out, 
     VisitUnitsCompat(center, out, check, range);
 }
 
-// Is the unit silenced (any school). T: the unit flag, F: the silenced school mask (Unit.h:1524).
+// Is the unit silenced (any school). T: the unit flag, F: the silenced school mask (Unit.h:1540).
 inline bool IsSilencedCompat(Unit const* unit) { return unit->IsSilenced(SPELL_SCHOOL_MASK_ALL); }
 // The guid the unit has selected / is aiming at. T `GetGuidValue(UNIT_FIELD_TARGET)`, F Unit.h GetTarget (same field).
 inline ObjectGuid UnitTargetGuidCompat(Unit const* unit) { return unit->GetTarget(); }
@@ -154,7 +154,7 @@ inline bool CanSeeOrDetectCompat(Player* viewer, Unit const* target)
 }
 // Does the viewer see the object (T WorldObject::isVisibleFor(viewer, viewPoint), the viewpoint being the viewer itself in the bot).
 inline bool IsVisibleForCompat(WorldObject const* target, Player const* viewer) { return viewer->CanSeeOrDetect(target); }
-// A GM hidden from players (T VISIBILITY_OFF; F Unit::IsVisible is the GM visibility, Unit.cpp:9132).
+// A GM hidden from players (T VISIBILITY_OFF; F Unit::IsVisible is the GM visibility, Unit.cpp:9278).
 inline bool IsHiddenGmCompat(Unit* unit) { return !unit->IsVisible(); }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -178,7 +178,7 @@ inline bool SpellDestinationCompat(Spell const* spell, float& x, float& y, float
 // Is the cast still being prepared (the cast time runs). Both cores name the state the same (T Spell.h, F Spell.h:257).
 inline bool SpellIsPreparingCompat(Spell* spell) { return spell->getState() == SPELL_STATE_PREPARING; }
 // Is `spellId` a higher rank of the same spell than `otherId`. T SpellMgr::IsHighRankOfSpell. F: the module's chain table (tbcompat::SpellIsHigherRank,
-// TbSpellEntry.cpp: the core's own chain or the SkillLineAbility supersedes links), NOT SpellInfo::IsHighRankOf (SpellInfo.cpp:4835-4843), which reads only
+// TbSpellEntry.cpp: the core's own chain or the SkillLineAbility supersedes links), NOT SpellInfo::IsHighRankOf (SpellInfo.cpp:4871-4879), which reads only
 // the core's own ChainEntry and so answers false for every spell the core has no chain for (R5 item 9).
 inline bool IsHighRankOfSpellCompat(uint32 spellId, uint32 otherId)
 {
@@ -213,19 +213,19 @@ inline bool PetIsHappyCompat(Pet const* pet) { return pet->GetHappinessState() =
 // Controlled units, combo points, items, home bind
 // ---------------------------------------------------------------------------------------------------------------------
 // Calls fn(Unit*) for every unit the unit controls: pet, mini pet, guardians, totems and charm. T CallForAllControlledUnits with
-// the five CONTROLLED_* kinds (Unit.h:1563), F Unit.h:1256 m_Controlled (one set holding pets, guardians, totems and charms).
+// the five CONTROLLED_* kinds (Unit.h:1579), F Unit.h:1271 m_Controlled (one set holding pets, guardians, totems and charms).
 template <class Fn>
 inline void ForEachControlledUnitCompat(Unit* unit, Fn&& fn)
 {
     for (Unit* controlled : unit->m_Controlled)
         fn(controlled);
 }
-// The guid of the unit the player's combo points are on, and how many there are. T Player.h:1832,1834, F Unit.h:1225
+// The guid of the unit the player's combo points are on, and how many there are. T Player.h:1832,1834, F Unit.h:1240
 // (GetClassicComboTarget) and the combo power.
 inline ObjectGuid ComboTargetGuidCompat(Player const* player) { return player->GetClassicComboTarget(); }
 inline uint8 ComboPointsCompat(Player const* player) { return uint8(player->GetPower(POWER_COMBO_POINTS)); }
 
-// The player's home bind (map and point). T Player::GetHomeBindLocation, F Player.h:2820 m_homebind.
+// The player's home bind (map and point). T Player::GetHomeBindLocation, F Player.h:2821 m_homebind.
 inline decltype(auto) HomeBindLocationCompat(Player* player) { return (player->m_homebind); }
 
 // The distance between two objects as the bot meant by "combat distance" (T Object.h:890): the combat-reach form,

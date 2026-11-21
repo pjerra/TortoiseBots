@@ -329,7 +329,7 @@ ActResult Started()
 }
 
 // A door or a lever: the typed GameObjUse packet, what a client's click sends (SpellHandler.cpp:201). The core runs GetGameObjectIfCanInteractWith (the
-// interaction range, Player.cpp:1993) and `Use`. Judged first, by the host: the lock row (RC CheckLock), and the state (a door that is not at rest is open
+// interaction range, Player.cpp:1997) and `Use`. Judged first, by the host: the lock row (RC CheckLock), and the state (a door that is not at rest is open
 // already, and the core's Use TOGGLES it).
 ActResult BeginObjectAct(Task& task, Player* bot, PlayerbotAI* ai, GameObject* go)
 {

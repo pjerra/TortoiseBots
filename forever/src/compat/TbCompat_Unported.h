@@ -340,9 +340,9 @@ template <class AI>
 inline bool HasThrownSkillCompat(AI* /*ai*/) { tbcompat::Unported(tbcompat::Feature::Skills); return false; }
 
 // PROPER (R9): the creature template's immunity masks. T keeps them as two masks on the template (`CreatureInfo::school_immune_mask`, bit
-// `1 << school`; `mechanic_immune_mask`, bit `1 << (mechanic - 1)`, Creature.cpp:2172). F keeps them in a CreatureImmunities row that the template names
-// (`CreatureTemplate::CreatureImmunitiesId`, CreatureData.h:533; the row is `SpellMgr::GetCreatureImmunities(id)`, SpellMgr.h:566 / :750) and
-// `Creature::LoadTemplateImmunities` (Creature.cpp:2540) applies as the creature's school (`1 << school`) and mechanic (index = the Mechanics value)
+// `1 << school`; `mechanic_immune_mask`, bit `1 << (mechanic - 1)`, Creature.cpp:2193). F keeps them in a CreatureImmunities row that the template names
+// (`CreatureTemplate::CreatureImmunitiesId`, CreatureData.h:533; the row is `SpellMgr::GetCreatureImmunities(id)`, SpellMgr.h:570 / :750) and
+// `Creature::LoadTemplateImmunities` (Creature.cpp:2561) applies as the creature's school (`1 << school`) and mechanic (index = the Mechanics value)
 // immunities. The helpers rebuild T's two masks from that row, so the school gate (`SpellSchoolImmune`) and the stun selection
 // (`StunMechanicImmune`, bit MECHANIC_STUN - 1) read what they read on T. A template with no row is immune to nothing, as on T.
 inline uint32 CreatureSchoolImmuneMaskCompat(CreatureInfo const* info)
@@ -367,17 +367,17 @@ inline uint32 CreatureMechanicImmuneMaskCompat(CreatureInfo const* info)
 }
 
 // PROPER (R9): whether a player is a hidden GM. T `GetVisibility() == VISIBILITY_OFF` (`.gm visible off`); F `.gm visible off` sets
-// PLAYER_EXTRA_GM_INVISIBLE, which `isGMVisible()` reads (Player.h:1340).
+// PLAYER_EXTRA_GM_INVISIBLE, which `isGMVisible()` reads (Player.h:1341).
 inline bool PlayerHiddenGmCompat(Player* player) { return !player->isGMVisible(); }
 
 // PROPER (slice 2, R4; R5 item 10): the heal one effect of a spell would do for the bot, as an EXPECTED value. T: CalculateSpellDamage (which rolls the
-// effect's dice with irand, Object.cpp:4416-4458, and applies the caster's spell mods) then SpellHealingBonusDone, 0 when the base is not positive; Turtle
-// leaves out the target's healing-taken modifiers. F: the cast's own steps as Spell::EffectHeal does them (SpellEffects.cpp:1250-1290):
-//  1. SpellEffectInfo::CalcValue (base points, level scaling, the vanilla dice row). It rolls a random spread (SpellInfo.cpp:608-616: value += basePoints *
+// effect's dice with irand, Object.cpp:4440-4482, and applies the caster's spell mods) then SpellHealingBonusDone, 0 when the base is not positive; Turtle
+// leaves out the target's healing-taken modifiers. F: the cast's own steps as Spell::EffectHeal does them (SpellEffects.cpp:1258-1298):
+//  1. SpellEffectInfo::CalcValue (base points, level scaling, the vanilla dice row). It rolls a random spread (SpellInfo.cpp:625-636: value += basePoints *
 //     frand(-delta, delta)) and hands the roll back through `variance`; the roll is taken out again (value - CalcBaseValue * roll), which leaves the average of
-//     the dice (the roll is symmetric around 0, and so is the final `bonus + bonus * variance` of EffectHeal): the choice of a rank is deterministic.
-//  2. Unit::SpellHealingBonusDone (Unit.h:1704, the +healing bonus; no Spell object, so no spell mods of a cast in flight),
-//  3. Unit::SpellHealingBonusTaken on the target (Unit.h:1706: a Mortal-Strike-style reduction, +healing taken): the one step Turtle's estimate omits, added
+//     the dice. A spell-school heal is not rolled there (ClassicRollsWholeAmount: EffectHeal rolls the whole amount later), so nothing is taken out for it (the roll is symmetric around 0, and so is the final `bonus + bonus * variance` of EffectHeal): the choice of a rank is deterministic.
+//  2. Unit::SpellHealingBonusDone (Unit.h:1720, the +healing bonus; no Spell object, so no spell mods of a cast in flight),
+//  3. Unit::SpellHealingBonusTaken on the target (Unit.h:1722: a Mortal-Strike-style reduction, +healing taken): the one step Turtle's estimate omits, added
 //     here so the downrank does not pick a heal that is too small for a wounded target that heals less (0 when the result is not positive).
 // A spell the mirror has no core record for heals nothing (0: the downrank rule skips it and keeps the top rank, as before).
 inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry const* info, uint32 effect)
@@ -388,7 +388,7 @@ inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry co
     SpellEffectInfo const& effectInfo = spellInfo->GetEffect(SpellEffIndex(effect));
     float roll = 0.0f;
     double expected = double(effectInfo.CalcValue(bot, nullptr, target, &roll));
-    if (roll != 0.0f)
+    if (roll != 0.0f && !effectInfo.ClassicRollsWholeAmount())
         expected -= double(effectInfo.CalcBaseValue(bot, target, 0, -1)) * double(roll);
     int32 const base = int32(std::lround(expected));
     if (base <= 0)
@@ -519,7 +519,7 @@ inline void EndCinematicIfWatchingCompat(Player* bot)
     }
 }
 
-// The loot window of a player (T: `GetLootGuid()` and the loot manager). F keeps it in the player data (Player.h:2348 GetLootGUID, the
+// The loot window of a player (T: `GetLootGuid()` and the loot manager). F keeps it in the player data (Player.h:2349 GetLootGUID, the
 // target of the open loot window), so the question is answered for real: empty for a bot with no loot window, which is every bot while
 // no loot is ported. It is asked on every moving tick (PlayerbotAI.cpp:485), so counting the question buried the report (204k calls in
 // 4 minutes, R6B); only ReleaseLootIfFarCompat, reached with a non-empty guid, counts.

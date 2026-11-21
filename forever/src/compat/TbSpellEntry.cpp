@@ -19,7 +19,7 @@
 //
 // The core has no spell reload at the pinned commit: LoadSpellInfoStore and every pass that edits the SpellInfo objects
 // (LoadSpellInfoCorrections, LoadClassicSpellInfo, LoadSpellInfoCustomAttributes) are called once from
-// World::SetInitialWorldSettings (World.cpp:1485-1505) and no `.reload` handler calls them again (scripts/Commands/cs_reload.cpp
+// World::SetInitialWorldSettings (World.cpp:1487-1508) and no `.reload` handler calls them again (scripts/Commands/cs_reload.cpp
 // reloads spell_required/spell_area/spell_proc and the other side tables only). So a mirror is only as fresh as the core's
 // object, which never changes once built; PORT-PLAN.md carries the same rule for the pin.
 #include "TbSpellEntry.h"
@@ -71,7 +71,7 @@ std::atomic<bool> g_disabledLogged{false};
 // a retail-era Renew 425268 above the classic ranks and was removed).
 // Sources (every accepted link of every source goes into ONE graph, then the chains are materialised from it; R5 round 2):
 //  (a) the core's own chain, SpellMgr::LoadSpellRanks (SpellMgr.cpp:837-905: SkillLineAbility rows with a SupercedesSpell, both spells present at
-//      DIFFICULTY_NONE), read through SpellInfo::ChainEntry (SpellMgr.h:518-525: prev/next/first/last/rank);
+//      DIFFICULTY_NONE), read through SpellInfo::ChainEntry (SpellMgr.h:522-529: prev/next/first/last/rank);
 //  (b) the same client table read here for the links the core did not turn into a chain entry: SkillLineAbilityEntry::SupercedesSpell (DB2Structure.h:3724);
 //  (c) the trainers' required-ability links (trainer_spell.ReqAbility, Trainer.h:59), accepted as rank links only with same-line evidence: see TrainerLinks.
 // A component of the graph is a chain when every spell has at most one successor and one predecessor and there is no cycle; a link that agrees with the
@@ -317,7 +317,7 @@ ChainTable const* BuildChainTable()
 
     // (c) the trainers' required-ability links with same-line evidence. The client's SkillLineAbility table has NO supercedes link for the 1.12 priest spells
     // (`.tb ranks priest`: Smite 585/591/598 were singles), while the world database's trainer rows name the previous rank (2052 requires 2050, 591 requires
-    // 585; Trainer::Spell::ReqAbility, Trainer.h:59, enforced by Trainer::GetSpellState, Trainer.cpp:431-433). A prerequisite is not always a rank
+    // 585; Trainer::Spell::ReqAbility, Trainer.h:59, enforced by Trainer::GetSpellState, Trainer.cpp:435-437). A prerequisite is not always a rank
     // (Whirlwind requires Berserker Stance), hence TrainerLinks' tests.
     TrainerLinkResult strict = TrainerLinks(true);
     table->trainer = strict.stats;
@@ -809,7 +809,7 @@ SpellEntry* BuildSpellEntry(SpellInfo const* info)
         entry->rangeIndex = info->RangeEntry->ID;
 
     // Power cost: the first row is the spell's power type; for mana the core charges the vanilla table's flat + percent
-    // figure when it has the row (SpellInfo.cpp:4386-4395), so the same row is what the old fields held. Without it the
+    // figure when it has the row (SpellInfo.cpp:4422-4431), so the same row is what the old fields held. Without it the
     // first row's flat cost and percent are the core's own base numbers.
     //
     // powerType keeps the signed value's uint32 image, which is what the old core's uint32 column held: POWER_HEALTH is
@@ -854,14 +854,14 @@ SpellEntry* BuildSpellEntry(SpellInfo const* info)
         entry->EffectMiscValue[i] = effect.MiscValue;
         entry->EffectItemType[i] = effect.ItemType;
         entry->EffectTriggerSpell[i] = effect.TriggerSpell;
-        // The core's ChainTargets is a signed count (Spell.cpp:1838-1851 treats it as the chain's target count); the old
+        // The core's ChainTargets is a signed count (Spell.cpp:1837-1850 treats it as the chain's target count); the old
         // column is an unsigned count of chain jumps. A negative core value is not a count, and 0 is the old column's
         // "not a chain"; the classic data has no negative chain target.
         entry->EffectChainTarget[i] = effect.ChainTargets < 0 ? 0 : uint32(effect.ChainTargets);
         if (effect.TargetARadiusEntry)
             entry->EffectRadiusIndex[i] = effect.TargetARadiusEntry->ID;
 
-        // The dice, from the vanilla row of this effect when the core matched one (SpellMgr.cpp:3696-3720: the effect
+        // The dice, from the vanilla row of this effect when the core matched one (SpellMgr.cpp:3769-3793: the effect
         // type, the aura and, for the auras whose value lives in it, the misc value all agree). Without a row the core's
         // BasePoints is the value the spell uses (the mean of the vanilla roll where there is one); the old field keeps
         // that number minus one, and a single-result effect has die sides 1 and one die - the shape the vanilla column
@@ -870,7 +870,7 @@ SpellEntry* BuildSpellEntry(SpellInfo const* info)
         {
             entry->EffectBasePoints[i] = vanilla->BasePoints;
             // The old field is int32 and the vanilla dice are signed: a negative count is a range
-            // (Object.cpp:4435-4454 rolls irand(randomPoints, baseDice)), so no clamp.
+            // (Object.cpp:4459-4478 rolls irand(randomPoints, baseDice)), so no clamp.
             entry->EffectDieSides[i] = vanilla->DieSides;
             entry->EffectRealPointsPerLevel[i] = vanilla->PointsPerLevel;
             entry->EffectPointsPerComboPoint[i] = vanilla->PointsPerCombo;
@@ -970,7 +970,7 @@ bool SpellEntry::IsPositiveSpell() const
 
 bool SpellEntry::IsPositiveEffect(SpellEffectIndex effIndex) const
 {
-    // The core tests a 32-bit set (SpellInfo.cpp:2041-2044); an index beyond the spell's effects is no positive effect (R5 item 11).
+    // The core tests a 32-bit set (SpellInfo.cpp:2077-2080); an index beyond the spell's effects is no positive effect (R5 item 11).
     return Core && uint32(effIndex) < Core->GetEffects().size() && Core->IsPositiveEffect(uint8(effIndex));
 }
 
@@ -1005,7 +1005,7 @@ bool SpellEntry::IsNextMeleeSwingSpell() const
 bool SpellEntry::IsFromBehindOnlySpell() const
 {
     // Old: the two attribute bits of the client data, or the Turtle custom flag. The core computes the same set in
-    // LoadSpellInfoCustomAttributes (SpellMgr.cpp:3368, :3374) into its own custom attribute.
+    // LoadSpellInfoCustomAttributes (SpellMgr.cpp:3441, :3374) into its own custom attribute.
     return Core && Core->HasAttribute(SPELL_ATTR0_CU_REQ_CASTER_BEHIND_TARGET);
 }
 

@@ -20,8 +20,8 @@
 
 class Group;
 
-// The group's raid icon. ForeverCore's Group::SetTargetIcon takes the guid of whoever changed the mark (Group.h:361: the packet's ChangedBy,
-// so a client can skip its own echo, Group.cpp:789-806); 1.12's took only the slot and the unit. A bot has no client, so it names itself.
+// The group's raid icon. ForeverCore's Group::SetTargetIcon takes the guid of whoever changed the mark (Group.h:364: the packet's ChangedBy,
+// so a client can skip its own echo, Group.cpp:820-837); 1.12's took only the slot and the unit. A bot has no client, so it names itself.
 inline void SetTargetIconCompat(Group* group, int index, ObjectGuid unit, ObjectGuid changedBy)
 {
     group->SetTargetIcon(uint8(index), unit, changedBy);
@@ -39,7 +39,7 @@ inline uint32 ItemRepairCostCompat(Item const* item)
 
 // The skill levels a profession spell is learned at: min_value was the rank it turns learnable (yellow), max_value the rank it turns trivial
 // (grey). ForeverCore names them MinSkillLineRank and TrivialSkillLineRankHigh (DB2Structure.h:3715-3733; the core's own skill-up math reads
-// them as gray/green/yellow at Player.cpp:5967-5970); SkillLineAbilitySkillCompat/SpellCompat (TbCompat_S9.h) answer the line and the spell.
+// them as gray/green/yellow at Player.cpp:5996-5999); SkillLineAbilitySkillCompat/SpellCompat (TbCompat_S9.h) answer the line and the spell.
 inline uint32 SkillLineAbilityMinCompat(SkillLineAbilityEntry const* ability) { return uint32(ability->MinSkillLineRank); }
 inline uint32 SkillLineAbilityMaxCompat(SkillLineAbilityEntry const* ability) { return uint32(ability->TrivialSkillLineRankHigh); }
 

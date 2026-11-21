@@ -168,7 +168,7 @@ std::vector<replace::ActiveObjective> ActiveItemObjectives(Player* player)
 }
 
 // ---- `.tb learn <bot> <spell id>... [#token]` ----
-// The core's own learn path (the one `.learn` takes, cs_learn.cpp:78-103): SpellMgr::IsSpellValid, then Player::LearnSpell (Player.h:2028). An id the
+// The core's own learn path (the one `.learn` takes, cs_learn.cpp:78-103): SpellMgr::IsSpellValid, then Player::LearnSpell (Player.h:2029). An id the
 // core does not know is refused. No rank chain is added: every id is asked for by name.
 
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
@@ -215,7 +215,7 @@ bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 }
 
 // ---- `.tb equip <bot> <item id> [replace] [#token]` ----
-// The core's own checks and calls: Player::CanEquipNewItem (Player.h:1603: class, level, skill, slot, two-hand rules, combat, stun), then
+// The core's own checks and calls: Player::CanEquipNewItem (Player.h:1604: class, level, skill, slot, two-hand rules, combat, stun), then
 // Player::EquipNewItem (:1621) into the slot it found. A slot that is taken refuses with the core's reason (EQUIP_ERR_NO_SLOT_AVAILABLE). With
 // `replace` the item goes to the bags and the core's own swap (Player::SwapItem, the call of a client's equip click) puts it on and the old piece
 // into the bags, after the same check with swap = true. A displaced piece the equipment makes disposable (start-outfit gear, or poor quality) is
@@ -287,7 +287,7 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             say("refused", "core-returned-no-item");
         return true;
     }
-    // With swap = false the core answers an occupied weapon / shield / ring slot with EQUIP_ERR_NO_SLOT_AVAILABLE (Player.cpp:11831) but FindEquipSlot returns
+    // With swap = false the core answers an occupied weapon / shield / ring slot with EQUIP_ERR_NO_SLOT_AVAILABLE (Player.cpp:11927) but FindEquipSlot returns
     // NULL_SLOT and so EQUIP_ERR_NOT_EQUIPPABLE (:11821-11822) when every slot of the item's type is taken (live, M package: a one-hand weapon over a starter weapon).
     // Both mean "the slot is taken": `replace` asks again with swap = true, which names the real refusal (proficiency, level, class...).
     if (!replace || (result != EQUIP_ERR_NO_SLOT_AVAILABLE && result != EQUIP_ERR_NOT_EQUIPPABLE))
@@ -384,7 +384,7 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
 // ---- `.tb removeitem [<character>] <item id> [count] [#token]` ----
 // The inverse of `.tb additem`: takes up to `count` (no count = all) of the item out of the target's BAGS (backpack, the worn bags and the reagent bag),
-// through the core's Item*-based Player::DestroyItemCount(Item*, uint32&, bool) (Player.h:1678: quest bookkeeping included). The stacks are collected
+// through the core's Item*-based Player::DestroyItemCount(Item*, uint32&, bool) (Player.h:1679: quest bookkeeping included). The stacks are collected
 // first, by the pure rule target::IsBagStack (never equipped, bank, keyring, child-equipment, the worn bags themselves, nor a stack in an open trade), and
 // only those Items are destroyed, so nothing outside the bags can be touched (the core's entry-based DestroyItemCount sweeps equipment and bank too).
 // Only the item named is touched, so a quest item goes only when it is the one asked for. One record `removeitem bot=.. item=<id> removed=<n> left=<n>`

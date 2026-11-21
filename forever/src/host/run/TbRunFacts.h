@@ -6,7 +6,7 @@
 //
 // Light on purpose (no policy header, no core header beyond Define/ObjectGuid): C6's tick includes it. Compiled with TORTOISEBOTS_SLICE1 only.
 //
-// Threading: world thread only (the run tick in OnBeforeMapsUpdate, World.cpp:2481, while every map is idle). No Player, Unit or Map pointer is kept
+// Threading: world thread only (the run tick in OnBeforeMapsUpdate, World.cpp:2490, while every map is idle). No Player, Unit or Map pointer is kept
 // between calls: a run's state here is guid handles, a path-probe cache and counters.
 #pragma once
 

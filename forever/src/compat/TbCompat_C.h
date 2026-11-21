@@ -72,7 +72,7 @@ inline ObjectGuid GuidReadCompat(std::istream& in)
 inline bool WorldBoolConfigCompat(WorldBoolConfigs index) { return sWorld.getBoolConfig(index); }
 
 // The highest level a character can reach. T `DEFAULT_MAX_LEVEL` is the compile-time 60 (SharedDefines.h); F has no such
-// constant (the level cap is the setting MaxPlayerLevel, CONFIG_MAX_PLAYER_LEVEL, World.h:286).
+// constant (the level cap is the setting MaxPlayerLevel, CONFIG_MAX_PLAYER_LEVEL, World.h:288).
 inline uint32 MaxLevelCompat() { return sWorld.getIntConfig(CONFIG_MAX_PLAYER_LEVEL); }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ inline uint32 MaxLevelCompat() { return sWorld.getIntConfig(CONFIG_MAX_PLAYER_LE
 inline uint32 ZoneIdCompat(WorldObject const* wo) { return wo->GetZoneId(); }
 
 // Whether the player is waiting in a battleground queue. T `Player::InBattleGroundQueue()`, F `InBattlegroundQueue(ignoreArena)`
-// (Player.h:2718); arenas do not exist on the Turtle core, so the default (arenas count too) is the same question.
+// (Player.h:2719); arenas do not exist on the Turtle core, so the default (arenas count too) is the same question.
 inline bool InBattleGroundQueueCompat(Player const* player) { return player->InBattlegroundQueue(); }
 
 // Whether the guid waits in a dungeon finder queue. T `sLFGMgr.IsPlayerInQueue`; F asks the finder for the state (LFGMgr.h:355),
@@ -98,7 +98,7 @@ inline bool HasSpellCategoryCooldownCompat(Player const* player, uint32 category
 
 // Turn a unit to an angle now and tell the clients. T sets the orientation and sends a movement heartbeat
 // (`Unit::SendHeartBeat`); F has no such call (the heartbeat belongs to the movement generators) and turns a unit with a facing
-// spline, `SetFacingTo(ori, force)` (Unit.h:1203), which sets the orientation at its end and tells the clients itself.
+// spline, `SetFacingTo(ori, force)` (Unit.h:1218), which sets the orientation at its end and tells the clients itself.
 inline void SetOrientationAndSendCompat(Unit* unit, float angle) { unit->SetFacingTo(angle, true); }
 
 // The unit a chase or follow movement generator is going after (nullptr when the current generator is neither). T moved the
@@ -109,7 +109,7 @@ Unit* TargetedMovementTargetCompat(Unit* unit);
 
 // ---------------------------------------------------------------------------------------------------------------
 // Auras, for the action log's dump of what a bot carries. T keeps a map of aura holders by spell id and 64 visible slots
-// as unit fields; F keeps the applied auras in a multimap by spell id (Unit.h:1319) and the visible ones in a set ordered by slot.
+// as unit fields; F keeps the applied auras in a multimap by spell id (Unit.h:1335) and the visible ones in a set ordered by slot.
 // ---------------------------------------------------------------------------------------------------------------
 inline std::vector<uint32> AuraSpellIdsCompat(Unit const* unit)
 {
@@ -175,7 +175,7 @@ inline ReputationRank const* ForcedReputationRankCompat(Player const* player, Fa
 }
 
 // Flags of a unit and a player. T `HasFlag(UNIT_FIELD_FLAGS, mask)` / `HasFlag(PLAYER_FLAGS, mask)` on the object's update fields,
-// F `HasUnitFlag` / `HasPlayerFlag` on the update data (Unit.h:862, Player.h:3044). Same bits by name.
+// F `HasUnitFlag` / `HasPlayerFlag` on the update data (Unit.h:872, Player.h:3049). Same bits by name.
 inline bool IsPlayerControlledCompat(Unit const* unit) { return unit->HasUnitFlag(UNIT_FLAG_PLAYER_CONTROLLED); }
 inline bool IsContestedPvpCompat(Player const* player) { return player->HasPlayerFlag(PLAYER_FLAGS_CONTESTED_PVP); }
 
@@ -199,12 +199,12 @@ inline void GameTelePointCompat(GameTele const* tele, float& x, float& y, float&
 // Maps, creatures.
 // ---------------------------------------------------------------------------------------------------------------
 // The creature or pet a guid names, looked up in one map. T `Map::GetAnyTypeCreature`, F has `GetCreature` for creatures and
-// vehicles and `GetPet` for pets (Map.h:443-446; R3's GetWorldObjectCompat splits them the same way).
+// vehicles and `GetPet` for pets (Map.h:446-449; R3's GetWorldObjectCompat splits them the same way).
 inline Creature* GetAnyTypeCreatureCompat(Map* map, ObjectGuid const& guid)
 {
     return guid.IsPet() ? static_cast<Creature*>(map->GetPet(guid)) : map->GetCreature(guid);
 }
-// Whether the grid under a point is loaded. T `Map::IsLoaded(x, y)`, F `Map::IsGridLoaded(x, y)` (Map.h:278).
+// Whether the grid under a point is loaded. T `Map::IsLoaded(x, y)`, F `Map::IsGridLoaded(x, y)` (Map.h:281).
 inline bool MapIsLoadedCompat(Map const* map, float x, float y) { return map->IsGridLoaded(x, y); }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -218,13 +218,13 @@ inline uint32 RaceIdCompat(ChrRacesEntry const* race) { return race->ID; }
 // A skill line's name. T SkillLineEntry::name[locale], F DisplayName[locale] (DB2Structure.h:3696).
 inline char const* SkillNameCompat(SkillLineEntry const* skill, int locale) { return skill->DisplayName[LocaleConstant(locale)]; }
 // A player's skill numbers. T GetSkillValuePure / GetSkillMaxPure / GetSkillBonusPermanent / GetSkillBonusTemporary, F
-// GetPureSkillValue / GetPureMaxSkillValue / GetSkillPermBonusValue / GetSkillTempBonusValue (Player.h:2476-2481).
+// GetPureSkillValue / GetPureMaxSkillValue / GetSkillPermBonusValue / GetSkillTempBonusValue (Player.h:2477-2482).
 inline uint32 SkillValuePureCompat(Player const* player, uint32 skill) { return player->GetPureSkillValue(skill); }
 inline uint32 SkillMaxPureCompat(Player const* player, uint32 skill) { return player->GetPureMaxSkillValue(skill); }
 inline int32 SkillBonusPermanentCompat(Player const* player, uint32 skill) { return player->GetSkillPermBonusValue(skill); }
 inline int32 SkillBonusTemporaryCompat(Player const* player, uint32 skill) { return player->GetSkillTempBonusValue(skill); }
 
-// A text of the server's string table by id and locale index. T `sObjectMgr.GetMangosString`, F `GetTrinityString` (ObjectMgr.h:1593).
+// A text of the server's string table by id and locale index. T `sObjectMgr.GetMangosString`, F `GetTrinityString` (ObjectMgr.h:1594).
 // Both tables are the core's own: the ids are the shared names of Language.h (LANG_REP_*), the words each core's own.
 inline char const* MangosStringCompat(uint32 id, int locale) { return sObjectMgr.GetTrinityString(id, LocaleConstant(locale)); }
 
@@ -266,7 +266,7 @@ inline std::string ItemLocalizedNameCompat(uint32 itemId, int locale, std::strin
 // ---- Areas ----------------------------------------------------------------------------------------------------
 // The area row a position's area KEY names (the key is what AreaKeyAtCompat, R3, returns). T keys a per-map area FLAG:
 // AreaEntry::GetByAreaFlagAndMap(flag, map) walks the table for the row whose explore flag matches (the one on this map, else
-// any, else the map's linked zone; Maps/Map.h:149-166). F's key is the area ID and the row is the DB2 row of that id (0 gives none).
+// any, else the map's linked zone; Maps/Map.h:152-169). F's key is the area ID and the row is the DB2 row of that id (0 gives none).
 // The key is therefore not comparable between the cores, only within one.
 inline AreaTableEntry const* AreaEntryOfKeyCompat(uint32 key, uint32 /*mapId*/) { return sAreaTableStore.LookupEntry(key); }
 // The zone and area ids an area key stands for (0, 0 for an unknown key). T `TerrainManager::GetZoneAndAreaIdByAreaFlag(zone, area, flag,

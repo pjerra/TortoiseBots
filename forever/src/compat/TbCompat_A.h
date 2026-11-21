@@ -18,16 +18,16 @@
 #include "ReputationMgr.h"
 #include "CharmInfo.h"
 
-// The swing timer of a weapon slot in ms. T Unit.h:1074, F Unit.h:717 (getAttackTimer).
+// The swing timer of a weapon slot in ms. T Unit.h:1074, F Unit.h:725 (getAttackTimer).
 #define GetAttackTimer getAttackTimer
 // "Is this a raid group". The Turtle shim has the same rename (ai/cmangos-compat-shim.h:1045); F Group.h:303 isRaidGroup.
 #define IsRaidGroup isRaidGroup
 // The unit guid a cast aims at. T Spell.h:142, F SpellDefines.h:385 GetUnitTargetGUID.
 #define getUnitTargetGuid GetUnitTargetGUID
-// The unit's mount display id (0 = not mounted). T Unit.h:579 (UNIT_FIELD_MOUNTDISPLAYID), F Unit.h:930.
+// The unit's mount display id (0 = not mounted). T Unit.h:579 (UNIT_FIELD_MOUNTDISPLAYID), F Unit.h:940.
 #define GetMountID GetMountDisplayId
-// Write the selected-target guid of a player. T Unit.h:1351 SetTargetGuid writes UNIT_FIELD_TARGET; F Player.h:1979 SetSelection
-// writes UnitData::Target, the same field (F Player::SetTarget is a no-op for players, Player.h:1978). The shim already maps
+// Write the selected-target guid of a player. T Unit.h:1351 SetTargetGuid writes UNIT_FIELD_TARGET; F Player.h:1980 SetSelection
+// writes UnitData::Target, the same field (F Player::SetTarget is a no-op for players, Player.h:1979). The shim already maps
 // SetSelectionGuid to it (forever-compat-shim.h:134).
 #define SetTargetGuid SetSelection
 // cmangos called the taxi flight motion TAXI_MOTION_TYPE; the Turtle shim maps it to FLIGHT_MOTION_TYPE (cmangos-compat-shim.h:513),
@@ -45,7 +45,7 @@ constexpr uint32 ITEM_SPELLTRIGGER_ON_NO_DELAY_USE = 0xFFFFFFFFu;
 constexpr SpellState SpellStateLastCompat = SPELL_STATE_IDLE;
 
 // The size a world object adds to distances. T Object.h:862 (the default DEFAULT_WORLD_OBJECT_SIZE, overridden by units with the
-// bounding radius field and by game objects with their display size); F has the bounding radius on Unit only (Unit.h:724) and
+// bounding radius field and by game objects with their display size); F has the bounding radius on Unit only (Unit.h:732) and
 // says the player radius is "also used for any non Unit world objects" (ObjectDefines.h:39).
 // DIFFERENT ANSWER for a game object or a dynamic object: T its display size, F the player radius.
 inline float ObjectBoundingRadiusCompat(WorldObject const* obj)
@@ -56,7 +56,7 @@ inline float ObjectBoundingRadiusCompat(WorldObject const* obj)
 }
 
 // A unit's melee reach. T Unit.cpp:11024-11033: the combat reach, at least 1.5; F has no separate melee reach (the combat reach
-// field, Unit.h:722), so the same clamp is applied to it. T's 1.5 is the Turtle value (F's own minimum, MIN_MELEE_REACH, is 2.0
+// field, Unit.h:730), so the same clamp is applied to it. T's 1.5 is the Turtle value (F's own minimum, MIN_MELEE_REACH, is 2.0
 // and is applied by Unit::GetMeleeRange, which GetCombatReachCompat uses).
 inline float MeleeReachCompat(Unit const* unit)
 {
@@ -69,7 +69,7 @@ inline float MeleeReachCompat(Unit const* unit)
 //    for the whole airborne stretch, jump or drop alike, so JUMPING reads true for a drop too.
 // ---------------------------------------------------------------------------------------------------------------
 
-// Does the unit carry the movement flag. T Unit's HasMovementFlag(flag) reads m_movementInfo; F Unit.h:1770 HasUnitMovementFlag
+// Does the unit carry the movement flag. T Unit's HasMovementFlag(flag) reads m_movementInfo; F Unit.h:1790 HasUnitMovementFlag
 // (the name HasMovementFlag is MovementInfo's member on F, so no macro).
 inline bool HasMovementFlagCompat(Unit const* unit, uint64 flag)
 {
@@ -181,7 +181,7 @@ inline Creature* SummonCreatureCompat(WorldObject* owner, uint32 entry, float x,
     return owner->SummonCreature(entry, x, y, z, o, type, Milliseconds(despawnMs));
 }
 
-// Teleport a player to a point. T Player.h:2057 (options a uint32, 0 = none), F Player.h:1266 (TeleportToOptions). The bot passes 0
+// Teleport a player to a point. T Player.h:2057 (options a uint32, 0 = none), F Player.h:1267 (TeleportToOptions). The bot passes 0
 // in every call (grep), the one value both cores mean "no option" by; no other option number is translated.
 inline bool TeleportToCompat(Player* player, uint32 mapId, float x, float y, float z, float o, uint32 options)
 {
@@ -190,17 +190,17 @@ inline bool TeleportToCompat(Player* player, uint32 mapId, float x, float y, flo
 }
 
 // A server float setting the bot reads: how far a yell carries. T `sWorld.getConfig(CONFIG_FLOAT_LISTEN_RANGE_YELL)`
-// (World.h:515), F `getFloatConfig(CONFIG_LISTEN_RANGE_YELL)` (World.h:231, :737). The two cores' own configured values.
+// (World.h:517), F `getFloatConfig(CONFIG_LISTEN_RANGE_YELL)` (World.h:233, :737). The two cores' own configured values.
 inline float ListenRangeYellCompat() { return sWorld.getFloatConfig(CONFIG_LISTEN_RANGE_YELL); }
 
-// Stop the unit's emote loop. T Unit.h:643 HandleEmoteState(id) (0 = none); F Unit.h:882 SetEmoteState.
+// Stop the unit's emote loop. T Unit.h:643 HandleEmoteState(id) (0 = none); F Unit.h:892 SetEmoteState.
 inline void HandleEmoteStateCompat(Unit* unit, uint32 emote)
 {
     unit->SetEmoteState(static_cast<Emote>(emote));
 }
 
 // A point near an object, free of obstacles. T Object.cpp:2399 GetNearPoint(searcher, x, y, z, searcherBoundingRadius,
-// distance2d, absAngle): the point is distance2d + both bounding radii away. F Object.cpp:2777 GetNearPoint(searcher, x, y, z,
+// distance2d, absAngle): the point is distance2d + both bounding radii away. F Object.cpp:2801 GetNearPoint(searcher, x, y, z,
 // distance2d, absAngle) takes no radius and adds both COMBAT reaches itself (GetNearPoint2D, :2748-2754), so the searcher's
 // radius argument is dropped. DIFFERENT ANSWER: the distance differs by (combat reach - bounding radius) of the two units.
 inline void GetNearPointCompat(WorldObject const* target, WorldObject const* searcher, float& x, float& y, float& z,
@@ -210,24 +210,24 @@ inline void GetNearPointCompat(WorldObject const* target, WorldObject const* sea
 }
 
 // Does the straight line between two points hit a static collision model. T Map.h:577 FindCollisionModel(...) != nullptr (the static
-// model tree); F has the same question as the VMAP line of sight (Map.h:509): no line of sight over the static models.
+// model tree); F has the same question as the VMAP line of sight (Map.h:512): no line of sight over the static models.
 inline bool LineHitsCollisionModelCompat(Map const* map, float x1, float y1, float z1, float x2, float y2, float z2)
 {
     return !map->isInLineOfSight(PhasingHandler::GetEmptyPhaseShift(), x1, y1, z1, x2, y2, z2, LINEOFSIGHT_CHECK_VMAP, VMAP::ModelIgnoreFlags::Nothing);
 }
 
-// T Map::IsBattleGround, F Map.h:383 IsBattleground.
+// T Map::IsBattleGround, F Map.h:386 IsBattleground.
 inline bool MapIsBattlegroundCompat(Map const* map) { return map->IsBattleground(); }
 
-// The unit the player's client is moving. T Player::GetMover; F Unit.h:1275 GetUnitBeingMoved (the unit under direct client control).
+// The unit the player's client is moving. T Player::GetMover; F Unit.h:1291 GetUnitBeingMoved (the unit under direct client control).
 inline Unit* PlayerMoverCompat(Player* player) { return player->GetUnitBeingMoved(); }
 
-// Recompute one speed. T Unit::UpdateSpeed(type, forced) (forced = send the change at once); F Unit.h:1741 UpdateSpeed(type) always
+// Recompute one speed. T Unit::UpdateSpeed(type, forced) (forced = send the change at once); F Unit.h:1761 UpdateSpeed(type) always
 // sends it.
 inline void UpdateSpeedCompat(Unit* unit, UnitMoveType type, bool /*forced*/) { unit->UpdateSpeed(type); }
 
 // The icon identity of a spell (the ranks of one spell share it; the bot only compares two of them). T SpellEntry::SpellIconID (an
-// index of SpellIcon.dbc), F SpellInfo.h:415 IconFileDataId (the icon's file data id) through the mirror's link to the core spell.
+// index of SpellIcon.dbc), F SpellInfo.h:418 IconFileDataId (the icon's file data id) through the mirror's link to the core spell.
 // DIFFERENT ANSWER: another number space; equal for the ranks of one spell on both, but not the same value.
 inline uint32 SpellIconIdCompat(SpellEntry const* entry)
 {
@@ -237,7 +237,7 @@ inline uint32 SpellIconIdCompat(SpellEntry const* entry)
 
 // Is `self` behind `target`. T Unit.cpp:3242 IsBehindTarget(target, strict): not within the target's front arc (pi); the strict form
 // also reads a creature's facing (its victim and its cast target guid). F has isInBack on the other unit with its own arc rule
-// (Object.cpp:674) and no creature cast-target guid. The bot calls it with strict = false only, which is carried as
+// (Object.cpp:675) and no creature cast-target guid. The bot calls it with strict = false only, which is carried as
 // !HasInArc(target -> self, pi) (HasInArcCompat); a strict call is refused.
 inline bool IsBehindTargetCompat(Unit const* self, Unit const* target, bool strict)
 {
