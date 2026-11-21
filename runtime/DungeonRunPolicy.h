@@ -7767,10 +7767,11 @@ inline void StrandCountsForStep(Run& r)
 // it may teleport again on the same step (Blackfathom Deeps r29 slot 6: a placed run's second wipe at step 574 found
 // the latch used by the first and walked from the entrance for 23 minutes). Bounded by kAutoRegroupsPerStep; a resume
 // (ResetStep) still keeps the latch, and this step's failed tries (strandTries, strandWaits) stay counted. The death
-// pauses past kAutoRegroupsPerStep (the wipe's, LeadRevivedAway's, WaitForFallen's: 'regroups by itself at this step
-// did not hold') arm it too, so the walk back after their resume may teleport once more (Windhorn Canyon r34 slot B
-// wipe 3 and Hateforge Quarry r32 slot E wipe 5: the resume found the latch used by the wipe before and replayed the
-// placed route from its start, 5-9 min); a resume after any other pause does not.
+// pauses past kAutoRegroupsPerStep (the wipe's, LeadRevivedAway's: 'regroups by itself at this step did not hold'),
+// the dead lead's regroup and the regroup's own revive pause ('still dead after') arm it too, so the walk back after
+// their resume may teleport once more (Windhorn Canyon r34 slot B wipe 3 and Hateforge Quarry r32 slot E wipe 5: the
+// resume found the latch used by the wipe before and replayed the placed route from its start, 5-9 min); a resume
+// after any other pause does not.
 inline void RearmRescueAfterDeath(Run& r)
 {
     r.strandStep = static_cast<std::size_t>(-1);
@@ -20206,8 +20207,12 @@ inline bool LeadRevivedAway(Run& r, const Facts& f)
 // The owner's wait rule: drops the fallen that are back (alive and within
 // kGatherYd of the lead bot), then starts the regroup when one is not. The
 // lead bot dead itself: the regroup's revive brings it back (at the entrance
-// after a release) and the walk back follows; counted against
-// kAutoRegroupsPerStep, past that it pauses. False when nobody is waited for.
+// after a release) and the walk back follows. That wait is NOT counted against
+// kAutoRegroupsPerStep: it is no retry the run can make either way, and the
+// regroup it starts already bounds itself (RezHold's budget, or the
+// `revive party` clock and the "still dead after" pause); counting it made a
+// lead death that came after a wipe's regroups pause on the next tick, before
+// a resurrection had one tick to start. False when nobody is waited for.
 inline bool WaitForFallen(Run& r, const Facts& f)
 {
     for (auto it = r.waitFor.begin(); it != r.waitFor.end();)
@@ -20225,16 +20230,7 @@ inline bool WaitForFallen(Run& r, const Facts& f)
         return false;
     bool const lead = !f.leadAlive;
     if (lead)
-    {
-        if (r.autoRegroups >= kAutoRegroupsPerStep)
-        {
-            RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more
-            Pause(r, "the lead bot is dead: revive it, then .bot run resume (" +
-                std::to_string(kAutoRegroupsPerStep) + " regroups by itself at this step did not hold)");
-            return true;
-        }
-        ++r.autoRegroups;
-    }
+        RearmRescueAfterDeath(r); // a death: the resume after this regroup's own pause may teleport once more
     std::string const note = WaitNote(r, f);
     bool const deathSpotKnown = r.leadDied;
     // The regroup's gather overrides a walk under way: the step starts over

@@ -69,6 +69,20 @@ PULL_SPOT_ADJUST = {
 # `ai_dungeon_plan.source` is varchar(64): the row says where the route came from, in the room the column has.
 PLAN_SOURCE = 'forever-agent 109a2496 route export + core scripts'
 
+# The plan row's focus lists (`ai_dungeon_plan.cc_priority`, `kill_first`).
+# Live run 5 (2026-11-21, notes/live-wc-run5-2026-11-21.md): the Druid of the Fang (3840) packs were the wall. The
+# 4-elite camp at leg 7 seq 5 cost 12 deaths (a wipe) and the single Druid of leg 7 seq 8 cost 11 -- at that one the
+# healer and then the tank fell to it -- while the cc_priority Polymorph fired on every one of those pulls (the run's
+# `cc moon ... Wcmag` event) and did not carry the fight. Entry 3840's own smart_scripts (world DB, source_type 0)
+# cast 5187 Healing Touch, 8040 Druid's Slumber (a party member slept) and 9532 Lightning Bolt. A kill_first entry is
+# focused by every bot of the party (the run's own focus order puts the skull on it), and the class interrupt
+# triggers read the bot's current target (protection warrior Shield Bash, rogue Kick, mage Counterspell), so the
+# Druids' heals and sleeps are the casts those kicks then cover. A kill_first entry is never crowd-controlled
+# (DungeonRunPolicy PickCcOrderPlan: "never a kill_first unit (that list wins)"), so 3840 leaves cc_priority: a
+# cc_priority list of 3840 would be dead. Anacondra (3671) stays after them: the Druids are the ones healing her.
+PLAN_CC_PRIORITY = ''
+PLAN_KILL_FIRST = '3840,3671'
+
 # The Disciple of Naralex (npc 3678) and his script (classic_wailing_caverns.cpp,
 # ClassicDiscipleWaypoints): the points the escort pauses at are 7, 15 and 30.
 DISCIPLE = 3678
@@ -435,8 +449,8 @@ def emit_sql(legs, units, bosses, header):
     lines.append('DELETE FROM `ai_dungeon_plan` WHERE `plan` = %s;' % sql_quote(PLAN))
     lines.append('INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, '
                  '`comment`) VALUES')
-    lines.append('(%s, %d, %s, %s, %s, %s, %s);' % (sql_quote(PLAN), MAP, sql_quote('3840'), sql_quote(''),
-                                                sql_quote('3671'), sql_quote(PLAN_SOURCE),
+    lines.append('(%s, %d, %s, %s, %s, %s, %s);' % (sql_quote(PLAN), MAP, sql_quote(PLAN_CC_PRIORITY),
+                                                sql_quote(''), sql_quote(PLAN_KILL_FIRST), sql_quote(PLAN_SOURCE),
                                                 sql_quote(header)))
     lines.append('INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES')
     leg_rows = []
@@ -470,7 +484,7 @@ def emit_sql(legs, units, bosses, header):
 
 def emit_tsv(legs, units):
     """The test's input: the plan row (`P`), one line per step, then one per unit row (`U`); an empty `entries` is `-` (a TSV keeps no empty last field)."""
-    out = ['P\t%d\t3840\t\t3671' % MAP]
+    out = ['P\t%d\t%s\t\t%s' % (MAP, PLAN_CC_PRIORITY, PLAN_KILL_FIRST)]
     for leg, name, steps in legs:
         for s in steps:
             out.append('\t'.join([str(leg), name, str(s.seq), s.kind, str(s.entry), '%.3f' % s.x, '%.3f' % s.y,

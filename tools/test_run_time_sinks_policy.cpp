@@ -1762,7 +1762,8 @@ static void TestDeathPauseRearmsTheRescue()
     Tick(a, Party(0.0f, 0.0f));
     CHECK(a.state == State::Paused && a.note.find("the lead bot died and came back") == 0);
     CHECK(a.strandStep == static_cast<std::size_t>(-1));
-    // WaitForFallen's pause (the lead bot dead).
+    // A lead death's own regroup (no pause: it is no retry the step's wipe budget counts, and the regroup bounds
+    // itself) re-arms the rescue as every death does.
     Run w = Start(&plan, wipe);
     w.startStep = start;
     w.strandStep = wipe;
@@ -1772,8 +1773,8 @@ static void TestDeathPauseRearmsTheRescue()
     d.dead = 1;
     d.alive = 4;
     Tick(w, d);
-    CHECK(w.state == State::Paused && w.note.find("the lead bot is dead: revive it") == 0);
-    CHECK(w.strandStep == static_cast<std::size_t>(-1));
+    CHECK(w.state == State::Running && w.regroup && w.walkBackDue && w.strandStep == static_cast<std::size_t>(-1));
+    CHECK(w.note.find("the lead bot is dead") != std::string::npos);
     // The failed tries of the step stay counted: spent, no teleport after the resume.
     Run t = Start(&plan, wipe);
     t.startStep = start;

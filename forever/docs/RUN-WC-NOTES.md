@@ -617,3 +617,87 @@ tree under the same lock. The `ssh` exit 1 after each build is `build.sh`'s last
 | RFC policy: `test_forever_plan_match` | `test_forever_plan_match: ok, 38 checks passed` |
 | `git diff --check` | clean |
 
+## 12. The fix round after live run 5 (2026-11-21)
+
+Evidence: `~/TortoiseBots-audit/notes/live-wc-run5-2026-11-21.md` and, on the test box, `~/wc5-events.txt` and
+`~/forever-run/dumps/wc5-world.out` (both read this round; no live run). The run got to leg 7 `pythas_b` step 78
+(56 of 87 pulls, Kresh and Cobrahn dead) and was stopped by the wall: the Druid of the Fang (3840) packs at leg 7
+(12 deaths and a wipe at step 75, 11 at step 78), with three pauses, all in the dead-lead family.
+
+### 12.1 A dead lead bot waits; it no longer pauses on the tick it dies
+
+The log, step by step:
+
+* step 75, t=6309 `step`, t=6317 `cc moon 132 Wcmag`, t=6318 pull, t=6342-6404 the five deaths and the wipe,
+  t=6505 `revive party`, t=6758 pull, t=6782 `death step=75 leg=7 unit=3840 why=Wctank` and, the same second,
+  `pause ... the lead bot is dead: revive it, then .bot run resume (2 regroups by itself at this step did not hold)`;
+* step 78, t=7501 `step`, t=7503 pull; the lead died at t=7541 and at t=7702 and each death was handled by the
+  lead-dead regroup (`regroup: waiting for Wctank (dead) ... reviving`), so both of the step's regroups were spent
+  and the wipe at t=7752 paused `3 dead: regroup (cmd revive party), then .bot run resume (2 regroups by itself at
+  this step did not hold)`; after the resume, the lead's death at t=8401 paused at t=8441 (`the lead bot is dead ...`).
+
+Cause, in `runtime/DungeonRunPolicy.h` (`WaitForFallen`): the lead-dead branch bumped `r.autoRegroups` and paused
+when the counter reached `kAutoRegroupsPerStep`. That counter is the step's wipe-regroup budget (reset only on a step
+advance or a resume). At step 75 the wipe had already spent one, the lead-dead branch's own bump made two, and the
+next tick paused: one second after the death, before the party's resurrection had a tick to start. At step 78 two
+lead deaths spent both, so the wipe after them could not regroup at all.
+
+Fix: the dead lead's wait no longer touches `autoRegroups` (it is no retry the run can make either way). It starts
+the same regroup as before (`revive party` or the RezHold wait, the hold, the walk back) and is bounded where a
+regroup already bounds itself: RezHold's budget (60 s, +12 s a corpse, at most 120 s, 90 s of mana wait), then
+`revive party` and the regroup's own 240 s revive clock (`regroup: N still dead after 240 s (cmd revive <bot>, then
+.bot run resume)`). The death still re-arms the rescue latch. All three pauses of run 5 are removed by that one
+change: 1 and 3 were the dead lead's own, 2 was the wipe left without a budget because the lead's deaths took it.
+
+Tests: `tools/test_dungeon_run_policy.cpp` `TestWipeAndLeadDeathPause` (a lead death with the step's budget spent
+still regroups, and the budget keeps the wipes' value) and the new `TestDeadLeadPausesOnTheRegroupsRevive` (`revive
+party`, then the regroup's own 240 s pause); `tools/test_run_time_sinks_policy.cpp` (the lead-death wait re-arms the
+rescue); `tools/test_time_sinks_wiring.py` (the dead-lead block has no pause of its own).
+
+### 12.2 The Druids of the Fang are the plan's kill-first units
+
+The core's own data for 3840 (the test box's world DB: `creature_template_spell` 9532/8041/5185/8040 and
+`smart_scripts` source_type 0): Lightning Bolt 9532 on its victim every 2 s, Druid's Slumber 8040 on a random
+hostile every 10-20 s, Healing Touch 5187 at 60 % mana every 12-18 s, and a self buff 8041. A Druid therefore both
+heals its pack and sleeps a party member, and it has no other cast that matters.
+
+Why the rows change:
+
+* step 78 (`leg 7 seq 8`, `-133.5 -31.8 -76.9` r19.4, entry 3840): the only 3840 spawn inside the radius is the one
+  the unit row lists (0 yd; the next is 22.8 yd out). That single Druid killed Wcpri and then Wctank (events 333,
+  334) and cost 11 deaths, the party reviving into it again and again.
+* step 75 (`leg 7 seq 5`, `-223.4 48.33 -82.43` r18.2, entries 3840,5761): a 4-elite camp -- two Druids at 5.9 and
+  8.1 yd and two Shamblers at 3.2 and 6.0 -- cost 12 deaths and the wipe.
+* the `cc_priority` Polymorph fired on those pulls (t=6317, 6757, 7066 `cc moon 132 Wcmag`; t=4337 `cc moon 94
+  Wcmag`) and did not carry either fight.
+
+Change (generated into `ai_dungeon_plan`): `kill_first = '3840,3671'` (the Druids first, Anacondra after them --
+the Druids are the ones healing her) and `cc_priority = ''`. A kill_first entry is never crowd-controlled
+(`PickCcOrderPlan`: "never a kill_first unit (that list wins)"), so a `cc_priority` of 3840 would be dead.
+
+Why this interrupts the heals and the sleep: the run's kill-first focus puts its skull on the unit and sends every
+bot, the tank too, at it (`IssueKillFirstFocus`), and the class interrupt triggers read the bot's *current* target
+(`InterruptSpellTrigger` -> `PlayerbotAI::IsInterruptableSpellCasting` -> `InterruptCastingPolicy`: PreventionType
+SILENCE plus the damage/channel interrupt flag). With the Druid as the current target, the protection warrior's
+Shield Bash, the rogue's Kick and the mage's Counterspell cover its 5187 and 8040 casts; the priest has no
+interrupt and the arms warrior's Pummel rows are off by design, so those three are the party's coverage.
+
+The plan file stays generated: `forever/tools/wc_plan_rows.py` carries the lists and
+`sql/world/2026_11_20_12_tortoisebots_plan_wailing_caverns.sql` is regenerated from it (the file's single
+delete+insert transaction is what makes a re-apply safe; the updater re-runs a changed file by hash).
+
+### 12.3 The early rows (steps 5-18): no row changes, and why
+
+Spawn distances from the world DB (map 43 `creature`, the distance to each row's point):
+
+| step | row | what stands in the radius | the evidence |
+|---|---|---|---|
+| 5 | `leg 0 seq 5` -72.2 214.8 r13.8, 3636 | the two Ravagers the unit rows list (4.8 and 11.8 yd); the nearest 3640 spawn is 37.7 yd out | the 17:19 deaths name the patrolling Evolving Ectoplasm 3640 with a Ravager: the patroller walked in, which no row controls |
+| 15 | `leg 1 seq 2` 12.8 160.5 r20.2, 3637 | the single Guardian the unit row lists (0 yd; the next elite is 23.7 yd out) | five deaths to one elite is the party's, not the pull's |
+| 18 | `leg 1 seq 5` 59.1 205.8 r9.4, 3636,3640 | its own Ravager at 2.4 yd and Ectoplasm at 8.3 yd, exactly the rows | 3 deaths; the pack is the row's |
+
+One chain was measured and left alone: step 49 (`leg 5 seq 1`, the single Druid at 27.7 504) and step 50 (`leg 5
+seq 2`, `20.1 523.1` r12.9) were one fight -- step 50's `step` event came one second after step 49's and its pull
+found nothing alive (all four of its camp had been killed as step 49's adds). The spots are 20.6 yd apart and the
+closest members of the two camps 16.2 yd; splitting or merging them is a route change this evidence does not decide
+(the run rested after the chain anyway), so the rows stay.
