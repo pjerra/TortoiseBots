@@ -155,14 +155,43 @@ BotMgr::EntryCheck BotMgr::CheckEntry(Player* who, uint32 mapId)
         return { "teleporting", "the character is being teleported" };
     if (who->GetMapId() == mapId)
         return { "already-on-map", "already on that map" };
-    if (!sMapStore.LookupEntry(mapId))
+    MapEntry const* target = sMapStore.LookupEntry(mapId);
+    if (!target)
         return { "other", Trinity::StringFormat("map {} is not in the map store", mapId) };
     TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
     if (!denied)
+    {
+        // F-population: a free bot does not pile into a dungeon or raid past its size (dungeons 5, raids 10/20/40 by the map
+        // row's player count). Commanded bots enter as a group of their own, under the core's group rules, not this cap.
+        if (Instance().IsFreeBot(who->GetGUID()))
+        {
+            uint32 const cap = world::FreeMapCapFor(target->IsDungeon(), target->IsRaid(), target->MaxPlayers, Instance().GetFreeMapCaps());
+            if (cap)
+            {
+                uint32 const present = Instance().FreeBotsOnMap(mapId);
+                if (present >= cap)
+                    return { "map-cap", Trinity::StringFormat("map {} already holds {} free bot(s): the cap is {}", mapId, present, cap) };
+            }
+        }
         return {};
+    }
     std::string text = EntryRefusalText(denied, mapId, who);
     std::string code = EntryRefusalCode(denied, text);
     return { std::move(code), std::move(text) };
+}
+
+uint32 BotMgr::FreeBotsOnMap(uint32 mapId) const
+{
+    uint32 count = 0;
+    for (ObjectGuid const guid : BotGuids())
+    {
+        if (!IsFreeBot(guid))
+            continue;
+        Player const* bot = FindBot(guid);
+        if (bot && bot->GetMapId() == mapId)
+            ++count;
+    }
+    return count;
 }
 
 // Returns "" when the core has no objection (or the map is not a dungeon), else the reason in words.
@@ -202,6 +231,11 @@ void BotMgr::LoadConfig()
     int32 const graceSeconds = sConfigMgr->GetIntDefault("TortoiseBots.Slice.MasterGraceSeconds", 300);
     _masterGraceMs = uint32(std::clamp<int32>(graceSeconds, 0, 3600)) * 1000;
     _deadBackstopMs = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.DeadBackstopSeconds", DeadBackstopDefaultMs / 1000), 10, 3600)) * 1000;
+    // F-population: how many free bots one map of each kind holds before another free bot is refused its entry (0 = no cap).
+    _freeMapCaps.dungeon = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Dungeon", 5), 0, 1000));
+    _freeMapCaps.raid10 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid10", 10), 0, 1000));
+    _freeMapCaps.raid20 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid20", 20), 0, 1000));
+    _freeMapCaps.raid40 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid40", 40), 0, 1000));
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");

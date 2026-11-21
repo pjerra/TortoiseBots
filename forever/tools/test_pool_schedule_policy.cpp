@@ -143,6 +143,34 @@ w::PoolBotState OnlineBot(std::uint64_t guid, std::uint8_t race, std::int64_t se
 
 int main()
 {
+    // `.tb pool population <n|low|high>`: the word to a target. `low` and `high` are the presets, a number is used as-is,
+    // anything else and a number past the ceiling are refused.
+    {
+        w::PoolPopulationTarget low = w::PoolResolvePopulationTarget("low", 10, 50);
+        CHECK(low.ok && low.target == 10);
+        w::PoolPopulationTarget high = w::PoolResolvePopulationTarget("high", 10, 50);
+        CHECK(high.ok && high.target == 50);
+        w::PoolPopulationTarget number = w::PoolResolvePopulationTarget("25", 10, 50);
+        CHECK(number.ok && number.target == 25);
+        w::PoolPopulationTarget zero = w::PoolResolvePopulationTarget("0", 10, 50);
+        CHECK(zero.ok && zero.target == 0);
+        w::PoolPopulationTarget ceiling = w::PoolResolvePopulationTarget("5000", 10, 50);
+        CHECK(ceiling.ok && ceiling.target == 5000);
+        w::PoolPopulationTarget past = w::PoolResolvePopulationTarget("5001", 10, 50);
+        CHECK(!past.ok);
+        w::PoolPopulationTarget huge = w::PoolResolvePopulationTarget("99999999999999999999", 10, 50);
+        CHECK(!huge.ok);
+        w::PoolPopulationTarget empty = w::PoolResolvePopulationTarget("", 10, 50);
+        CHECK(!empty.ok);
+        w::PoolPopulationTarget word = w::PoolResolvePopulationTarget("medium", 10, 50);
+        CHECK(!word.ok);
+        w::PoolPopulationTarget mixed = w::PoolResolvePopulationTarget("12a", 10, 50);
+        CHECK(!mixed.ok);
+        w::PoolPopulationTarget negative = w::PoolResolvePopulationTarget("-5", 10, 50);
+        CHECK(!negative.ok);
+        w::PoolPopulationTarget spaced = w::PoolResolvePopulationTarget(" 25", 10, 50);
+        CHECK(!spaced.ok);
+    }
     // The ids the policy relies on: the client's races, the Alliance's four.
     CHECK(w::PoolFactionOfRace(1) == w::PoolFaction::Alliance);
     CHECK(w::PoolFactionOfRace(3) == w::PoolFaction::Alliance);

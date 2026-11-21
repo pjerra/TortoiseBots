@@ -403,6 +403,7 @@ public:
             { "start",  HandlePoolStart,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // W0-B: the scheduler
             { "stop",   HandlePoolStop,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandlePoolStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "population", HandlePoolPopulation, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // F-population: the online target at runtime
         };
         static ChatCommandTable tbTable =
         {
@@ -641,6 +642,19 @@ public:
         for (std::string const& line : TortoiseBots::pool::PoolScheduler::Status())
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
         return true;
+    }
+
+    // `.tb pool population <n|low|high>` (F-population): the pool's online target at runtime. `low` and `high` are the
+    // TortoiseBots.Pool.PopulationLow/High presets; a number is used as-is. The pool adds or logs out bots gradually from the
+    // next pass (logins at LoginsPerMinute, logouts at 5 per second, never a dead or fighting bot); `.reload config` puts the
+    // configured TargetOnline back.
+    static bool HandlePoolPopulation(ChatHandler* handler, std::string word)
+    {
+        TortoiseBots::pool::PoolScheduler::SwitchResult const result = TortoiseBots::pool::PoolScheduler::SetPopulation(Lower(word));
+        handler->PSendSysMessage("TortoiseBots: %s", result.message.c_str());
+        if (!result.ok)
+            handler->SetSentErrorMessage(true);
+        return result.ok;
     }
 
     // .tb free <bot> on|off: a logged-in bot without a master plays the world on its own (W1). Off puts it back to standing.
