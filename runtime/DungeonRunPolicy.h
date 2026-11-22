@@ -451,6 +451,13 @@ inline bool StandAbovePackReach(float x, float y, float z, const std::vector<Sta
 }
 constexpr std::uint32_t kMaxPullsPerStep = 20;
 constexpr std::uint32_t kMaxWalkBackPulls = 8;    // pulls on the way of a walk back (their own count), then pause
+// The healer gate before a pull (Facts::healerPullGate; WC run 8: the tank was the top victim, 24 of 77 deaths, dying first
+// with the healer out of heal range or out of sight): no pull goes out while no living healer is within kPullHealerMaxYd of
+// the tank (inside its 40 yd heal range with room to run in) AND in its line of sight. The hold is bounded: it spends at
+// most kPullHealerHoldMs in the gather phase, then the pull goes out anyway (a healer that cannot get sight must not
+// stop an unattended run).
+constexpr float kPullHealerMaxYd = 30.0f;
+constexpr std::uint32_t kPullHealerHoldMs = 25000;
 // A lead bot on a navmesh island (IslandEscape). Zul'Farrak r3-19z20: the tank
 // chased a Shadowhunter onto a ~3 x 3 yd patch of mesh at 1589 1046 that no
 // path leaves; every walk-back point was refused or a zero-length hop, and the
@@ -1423,6 +1430,9 @@ struct MemberFact
     bool losLead = false;
     bool pathToLead = false;
     float pathLenYd = 0.0f;
+    // A healer's line of sight to the lead bot, read fresh each tick by a host that asks for Facts::healerPullGate (the pull's
+    // healer gate, HealerOutOfReach). Unread: false.
+    bool healerSight = false;
     // How many of its summons the summon portal dropped since the server started (the bot was in combat, dead,
     // teleporting or flying when the portal went: PlayerConvenience::SummonCancels). A rise is a failed summon
     // (UpdateSummonOutcomes), whoever queued it. Unread: 0.
@@ -1702,6 +1712,13 @@ struct Facts
     // AiPlayerbot.DungeonRunWalkBackRescue (default 1): a stuck walk back, and a placed run's lead bot revived behind
     // its start step, are teleported to a safe point (WalkBackStuckRescue, PlacedRunRescue). Off: the old pause.
     bool walkBackRescue = true;
+    // The pull's healer gate (HealerOutOfReach, kPullHealerMaxYd): the host reads each healer's MemberFact::healerSight this tick
+    // (its sight line to the lead bot) and asks for the gate. Off (default): no gate, as before.
+    bool healerPullGate = false;
+    // The most pulls a walk back may make on its way before it pauses (kMaxWalkBackPulls when 0). A host whose dungeon packs
+    // respawn while the run is away (ForeverCore: spawntimesecs 7200 in Wailing Caverns) meets respawned packs on the way
+    // back after a wipe and pulls them one at a time; it raises the cap.
+    std::uint32_t walkBackPullCap = 0;
     // AiPlayerbot.DungeonRunDryWalk (default 0): the run leader's route picks stay off deep water (the glue's
     // DryWayPath and DryWayFor; the policy's DryWalkWanted and DryLegPick).
     bool dryWalk = false;
@@ -11499,6 +11516,32 @@ inline bool BossGateTick(Run& r, const Facts& f, std::uint32_t entry, std::uint3
     return true;
 }
 
+// The healer gate (Facts::healerPullGate): true when the party has a living healer that is not the lead bot and none of
+// them stands within kPullHealerMaxYd of the lead bot in its line of sight (MemberFact::healerSight, read by the glue this
+// tick). `who` names the healer nearest the lead bot and why it does not cover the tank. A party with no healer, a healer
+// that is itself the lead bot, a raid (its own healer rules) and a host that does not ask for the gate are all "covered".
+inline bool HealerOutOfReach(const Facts& f, std::string& who)
+{
+    if (!f.healerPullGate || f.raid.on)
+        return false;
+    const MemberFact* nearest = nullptr;
+    for (const MemberFact& m : f.members)
+    {
+        if (!m.healer || m.name.empty() || m.name == f.carrier || m.frozen || m.offPlanMap || m.otherCopy)
+            continue;
+        if (m.yd <= kPullHealerMaxYd && m.healerSight)
+            return false; // one healer covers the tank
+        if (!nearest || m.yd < nearest->yd)
+            nearest = &m;
+    }
+    if (!nearest)
+        return false;
+    who = nearest->name + (nearest->yd > kPullHealerMaxYd ? " is " + Num(nearest->yd) + " yd from the tank (more than " +
+                                                                  Num(kPullHealerMaxYd) + ")"
+                                                            : std::string(" has no line of sight to the tank"));
+    return true;
+}
+
 // Gathers the party, crowd-controls the plan's cc targets of the pack (a
 // `cc <mark> <guid> <bot>` each, once per unit and step, PickCcOrder), then
 // sends `pullback <guid>`.
@@ -11583,9 +11626,10 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
         r.standPullShotGuid = 0; // the pull never went out (the cap paused the step)
         return;
     }
-    if (walkBack && r.walkBackPulls >= kMaxWalkBackPulls)
+    std::uint32_t const walkBackCap = f.walkBackPullCap ? f.walkBackPullCap : kMaxWalkBackPulls;
+    if (walkBack && r.walkBackPulls >= walkBackCap)
     {
-        Pause(r, "walk back: " + std::to_string(kMaxWalkBackPulls) + " pulls on the way did not clear it");
+        Pause(r, "walk back: " + std::to_string(walkBackCap) + " pulls on the way did not clear it");
         r.standPullShotGuid = 0; // the pull never went out (the walk-back cap paused the step)
         return;
     }
@@ -11707,6 +11751,26 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
     {
         r.standDisciplineGuid = 0;
         r.standDisciplineMs = 0;
+    }
+    // The healer gate (Facts::healerPullGate): the pull waits, in the gather phase, until a healer stands within heal range of
+    // the tank in its line of sight, for at most kPullHealerHoldMs; the walk-back and hop pulls wait too. A body-pull retry
+    // is a fight already on and never waits.
+    std::string healerWhy;
+    if (!body && HealerOutOfReach(f, healerWhy))
+    {
+        bool const spent = r.phase == Phase::Gather && r.phaseMs >= kPullHealerHoldMs;
+        if (!spent)
+        {
+            if (r.phase != Phase::Gather)
+            {
+                EnterPhase(r, Phase::Gather);
+                SendGather(r, f, order); // the party forms up on the tank
+            }
+            r.stepIdleMs = dt > r.stepIdleMs ? 0 : r.stepIdleMs - dt; // the wait is the step's work, not idling
+            r.note = "pull held: the healer " + healerWhy;
+            return;
+        }
+        outOfPlace += "; healer gate spent: the healer " + healerWhy;
     }
     std::uint32_t& tries = r.pullTries[u.guid];
     if (tries >= kMaxPullsPerTarget)

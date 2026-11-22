@@ -818,3 +818,7 @@ to be applied first. What worked: `git archive <core sha> sql` from the core che
 the boot's update step reads (back the old directory up first), then the update step (`236 updates applied` for
 0.1.39), then boot (`READY`, 0 ASSERT). The archive's `sql/old` is multi-GB and can be dropped before the update.
 Do this before the plan SQL and before the first boot of any core move, and record the sha it was taken from.
+
+## 14. The fix round after live run 8 (2026-11-22)
+
+See `forever/docs/WC-R9-NOTES.md`: the pull's healer gate (the tank died first), the walk back that pulls the respawned packs one at a time (7200 s respawn), and the Deviate Shambler (5761) kill order.

@@ -387,6 +387,7 @@ Result Walk(ai::DungeonPlan const* plan, int maxTicks)
             m.yd = i == 0 ? 0.0f : 2.0f;
             m.x = w.x + m.yd; m.y = w.y; m.z = w.z;
             m.tank = i == 0; m.healer = i == 1; m.core = i < 2; m.level = 22;
+            m.healerSight = true;               // the walk harness's party stands together: the healer sees the tank
             m.actedMs = 0xFFFFFFFFu;
             party.push_back(e);
         }
@@ -538,7 +539,9 @@ void TestPlanShape(ai::DungeonPlan const* plan, int unitRows)
     // (a kill_first unit is not crowd-controlled, so a cc_priority entry for it would be dead). Live run 6: the leg-5 camp
     // (leg 5 seq 6, 3840,5048,5755) killed the party twice even with the Druid first, so the camp's own Adder and Viper
     // follow it in the order (TestLeg5CampKillFirstOrder).
-    std::vector<std::uint32_t> const wantKillFirst{ 3840, 3671, 5048, 5755 };
+    // Live run 8: the Deviate Shambler camps (5761; leg 6 seq 11 and leg 8 seq 2) join the list behind the leg-5 units
+    // (TestShamblerCampsKillFirstOrder).
+    std::vector<std::uint32_t> const wantKillFirst{ 3840, 3671, 5048, 5755, 5761 };
     CHECK(plan->killFirst == wantKillFirst);
     CHECK(std::find(plan->ccPriority.begin(), plan->ccPriority.end(), 3840u) == plan->ccPriority.end());
 }
@@ -616,6 +619,7 @@ void BuildPartyFacts(Facts& f, World const& w)
         m.yd = i == 0 ? 0.0f : 2.0f;
         m.x = w.x + m.yd; m.y = w.y; m.z = w.z;
         m.tank = i == 0; m.healer = i == 1; m.ranged = (i == 1 || i == 2); m.core = i < 2; m.level = 22;
+        m.healerSight = true;                     // the party stands together: the healer sees the tank (the pull's healer gate, run 9)
         m.actedMs = 0xFFFFFFFFu;
         party.push_back(e);
     }
@@ -1063,6 +1067,187 @@ void TestWipeResumeAtTheLastClearedStep(ai::DungeonPlan const* plan)
     CHECK(plan->steps[81].kind == PlanStepKind::Move);
 }
 
+
+// Live run 8 (notes/live-wc-run8-2026-11-22.md): the Deviate Shambler camps (5761) are the deadliest after the Druid camps: leg 6
+// seq 11 (index 69: 5761, 3840, 3640; 11 deaths and a wipe) and leg 8 seq 2 (index 82: 5761, 3840; 34 deaths, two wipes, three
+// pauses). Their units stand 1.3-5.9 yd apart (Druid 1.3, Shambler 4.6, Snake 5.9 yd from the row's point at step 82), so the pull
+// cannot be split; the plan's kill order is the lever: the Druid first, the Shambler after the camp-leg units, never "no rank".
+void TestShamblerCampsKillFirstOrder(ai::DungeonPlan const* plan)
+{
+    std::size_t const camps[] = { 69, 82 };
+    for (std::size_t step : camps)
+    {
+        CHECK(plan->steps[step].kind == PlanStepKind::Pull);
+        CHECK(std::find(plan->steps[step].entries.begin(), plan->steps[step].entries.end(), 5761u) != plan->steps[step].entries.end());
+        CHECK(std::find(plan->steps[step].entries.begin(), plan->steps[step].entries.end(), 3840u) != plan->steps[step].entries.end());
+    }
+    CHECK(plan->steps[69].entries == (std::vector<std::uint32_t>{ 5761, 3840, 3640 }));
+    CHECK(plan->steps[82].entries == (std::vector<std::uint32_t>{ 5761, 3840 }));
+    int const druid = plan->KillFirstRank(3840);
+    int const viper = plan->KillFirstRank(5755);
+    int const shambler = plan->KillFirstRank(5761);
+    CHECK(druid == 0);
+    CHECK(shambler > viper);          // behind the r7 list, which stays a prefix
+    // Every row of the plan that lists the Shambler carries it in the order (kill_first is plan-wide).
+    std::size_t rowsWithShambler = 0;
+    for (PlanStep const& st : plan->steps)
+        if (st.kind == PlanStepKind::Pull &&
+            std::find(st.entries.begin(), st.entries.end(), 5761u) != st.entries.end())
+            ++rowsWithShambler;
+    CHECK(rowsWithShambler == 10);   // plus the Pythas boss row, which lists it too
+    // The pull of step 82: the Druid is the target even with the Shambler nearer; the focus then goes Druid, Shambler.
+    Run r = Start(plan, 82);
+    Facts f;
+    fx::Config cfg;
+    fx::ApplyConfig(f, cfg);
+    f.seen = true;
+    auto unit = [](std::uint64_t guid, std::uint32_t entry, float yd) {
+        UnitFact u;
+        u.guid = guid;
+        u.entry = entry;
+        u.distLead = yd;
+        u.hostile = true;
+        u.attackable = true;
+        u.engaged = true;
+        return u;
+    };
+    f.units = { unit(2, 5761, 5.0f), unit(1, 3840, 9.0f) };
+    CHECK(PickPackPull(r, f) && PickPackPull(r, f)->guid == 1);
+    f.killFirst = { unit(2, 5761, 5.0f), unit(1, 3840, 9.0f), unit(3, 2914, 4.0f) };   // the Snake (2914) has no rank
+    CHECK(PickKillFirst(r, f) && PickKillFirst(r, f)->guid == 1);
+    f.killFirst.erase(f.killFirst.begin() + 1);
+    CHECK(PickKillFirst(r, f) && PickKillFirst(r, f)->guid == 2);
+}
+
+// Live run 8, the tank died first (24 of 77 deaths): the host asks for the pull's healer gate and a raised walk-back pull cap
+// (ApplyConfig), and reads the healer's sight line each tick (TbRunFacts.cpp: m.healerSight).
+void TestHostAsksForTheRun9Gates()
+{
+    Facts f;
+    fx::Config cfg;
+    fx::ApplyConfig(f, cfg);
+    CHECK(f.healerPullGate);
+    CHECK(f.walkBackPullCap == fx::kWalkBackPullCap && fx::kWalkBackPullCap > kMaxWalkBackPulls);
+}
+
+// The real plan, the real pull row of step 82: with the healer out of the tank's sight the pull is held, with it in sight the
+// pull goes out.
+void TestHealerGateAtTheShamblerCamp(ai::DungeonPlan const* plan)
+{
+    World w;
+    Run r;
+    Facts f = ReadAt(plan, 82, w, r);
+    CHECK(f.healerPullGate);
+    f.seen = true;
+    UnitFact shambler;
+    shambler.guid = 77;
+    shambler.entry = 5761;
+    shambler.distLead = 20.0f;
+    shambler.hostile = true;
+    shambler.attackable = true;
+    f.units = { shambler };
+    for (MemberFact& m : f.members)
+        if (m.healer)
+            m.healerSight = false;      // the priest stands round a corner of the cave
+    std::string const held = Tick(r, f);
+    CHECK(held.rfind("pullback", 0) != 0);
+    CHECK(r.note.find("pull held: the healer Mpriest has no line of sight to the tank") != std::string::npos);
+    for (MemberFact& m : f.members)
+        if (m.healer)
+            m.healerSight = true;
+    CHECK(Tick(r, f) == "pullback 77");
+}
+
+// Live run 8, step 82: after the wipe the party walked from the entrance to step 81 through packs that had respawned (7200 s after
+// they were cleared). The walk back lists every hostile within kWalkBackSeeYd of the lead bot, so each respawned pack on the way is
+// pulled one at a time; a forward move lists only those within kHopPullYd of its point, as before; the current step's own pack
+// stays the step's.
+void TestWalkBackPullsRespawnedPacks(ai::DungeonPlan const* plan)
+{
+    auto hop = [](std::uint64_t handle, std::uint32_t entry, float x, float y, float z, float lx, float ly, float lz) {
+        fx::HopObs h;
+        h.handle = handle;
+        h.entry = entry;
+        h.x = x; h.y = y; h.z = z;
+        h.distLead = fx::Dist3(x, y, z, lx, ly, lz);
+        h.los = true;
+        h.pathRead = true;
+        h.endX = x; h.endY = y; h.endZ = z;
+        h.straightYd = h.pathYd = h.distLead;
+        return h;
+    };
+    // The lead bot stands on the leg 0 route (-72.2 214.8 -93.6 is leg 0 seq 5's pull point), the walk back's point is far ahead.
+    float const lx = -72.2f, ly = 214.8f, lz = -93.6f;
+    PlanStep const& ahead = plan->steps[81];                      // the point the walk back goes to
+    Run walk = Start(plan, 82);
+    walk.walkBack = true;
+    std::vector<fx::HopObs> const around = {
+        hop(1, 3636, lx + 18.0f, ly, lz, lx, ly, lz),            // a respawned Ravager pack 18 yd from the lead bot
+        hop(2, 3636, lx + 45.0f, ly, lz, lx, ly, lz),            // one 45 yd off: not yet
+        hop(3, 5761, -173.0f, -90.0f, -67.6f, lx, ly, lz),       // the camp of step 82 itself: its step's
+    };
+    Facts back;
+    fx::ReadHopUnits(back, walk, ahead.x, ahead.y, ahead.z, around, lx, ly, lz);
+    CHECK(back.hopUnits.size() == 1 && back.hopUnits[0].guid == 1);
+    // A forward move (no walk back): only what stands within kHopPullYd of the point, none of these.
+    Run forward = Start(plan, 81);
+    Facts fwd;
+    fx::ReadHopUnits(fwd, forward, ahead.x, ahead.y, ahead.z, around, lx, ly, lz);
+    CHECK(fwd.hopUnits.empty());
+    // A unit in combat is never a hop unit, in a walk back too.
+    std::vector<fx::HopObs> busy = { hop(4, 3636, lx + 10.0f, ly, lz, lx, ly, lz) };
+    busy[0].inCombat = true;
+    Facts fought;
+    fx::ReadHopUnits(fought, walk, ahead.x, ahead.y, ahead.z, busy, lx, ly, lz);
+    CHECK(fought.hopUnits.empty());
+}
+
+// The same through ReadStepFacts: the glue is asked for hostiles out to kWalkBackSeeYd of the lead bot while the run walks back (the hop
+// range is otherwise the distance to the point plus kHopPullYd, 20 yd here), and lists the one that stands 25 yd off only then.
+struct HopWorld : World
+{
+    float asked = 0;
+    std::vector<fx::HopObs> give;
+    void HopCandidates(float range, float, float, float, std::vector<fx::HopObs>& out) override
+    {
+        asked = range;
+        out = give;
+    }
+};
+
+void TestWalkBackAsksForHostilesAroundTheLead(ai::DungeonPlan const* plan)
+{
+    PlanStep const& point = plan->steps[81];
+    HopWorld w;
+    w.x = point.x - 5.0f; w.y = point.y; w.z = point.z;       // 5 yd short of the walk-back point
+    fx::HopObs h;
+    h.handle = 9;
+    h.entry = 3636;
+    h.x = w.x - 25.0f; h.y = w.y; h.z = w.z;                   // a respawned Ravager 25 yd behind the lead bot
+    h.distLead = 25.0f;
+    h.los = true;
+    h.pathRead = true;
+    h.endX = h.x; h.endY = h.y; h.endZ = h.z;
+    h.straightYd = h.pathYd = 25.0f;
+    w.give = { h };
+    for (bool walkBack : { true, false })
+    {
+        Run r = Start(plan, walkBack ? 82 : 81);
+        r.walkBack = walkBack;
+        r.walkBackIdx = 81;
+        Facts f;
+        fx::Config cfg;
+        fx::ApplyConfig(f, cfg);
+        fx::LeadView lead;
+        lead.x = w.x; lead.y = w.y; lead.z = w.z; lead.alive = true; lead.mapId = 43; lead.name = "Mtank";
+        DungeonRun::MoveProbeCache probe;
+        fx::ReadStepFacts(f, r, lead, probe, w);
+        CHECK(f.seen);
+        CHECK(std::fabs(w.asked - (walkBack ? fx::kWalkBackSeeYd : 5.0f + kHopPullYd)) < 0.01f);
+        CHECK(f.hopUnits.size() == (walkBack ? 1u : 0u));
+    }
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 2)
@@ -1088,6 +1273,11 @@ int main(int argc, char** argv)
     TestPlanShape(plan, unitRows);
     TestLeg5CampKillFirstOrder(plan);
     TestWipeResumeAtTheLastClearedStep(plan);
+    TestShamblerCampsKillFirstOrder(plan);
+    TestHostAsksForTheRun9Gates();
+    TestHealerGateAtTheShamblerCamp(plan);
+    TestWalkBackPullsRespawnedPacks(plan);
+    TestWalkBackAsksForHostilesAroundTheLead(plan);
     TestWalk(plan);
     TestUnitsHoldFacts(plan);
     TestDataHoldFacts(plan);

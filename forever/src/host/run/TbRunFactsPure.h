@@ -38,6 +38,8 @@ constexpr std::size_t kMaxMembers = 40;         // the group's slots (a dungeon 
 constexpr std::size_t kMaxListed = 48;          // units in `units`, `patrollers`, `packResidue`, `engagedUnits`, `partyAttackers`
 constexpr std::size_t kMaxHopUnits = 8;         // hop-pull candidates examined
 constexpr std::size_t kMaxHopPaths = 4;         // path queries for them (the rest are not listed: a hop unit not read is not pulled first)
+constexpr std::uint32_t kWalkBackPullCap = 40;  // pulls a walk back may make on its way before it pauses (the policy's own cap is 8: ForeverCore respawns the dungeon's packs, 7200 s in WC)
+constexpr float kWalkBackSeeYd = 30.0f;          // a walk back pulls the hostile that stands this close to the lead bot (see ReadHopUnits)
 constexpr std::size_t kHandleCap = 4096;        // guid handles kept per run
 
 // ---- configuration ----
@@ -71,6 +73,9 @@ inline void ApplyConfig(Facts& f, Config const& c)
     f.linkedDeath = c.linkedDeath;
     f.nearWipeStopCount = DungeonRun::NearWipeStopCount(false, c.nearWipeStopParty, c.nearWipeStop);
     f.nearWipeStopWindowMs = c.nearWipeStopMinutes * 60000u;
+    // on here: the pull's healer gate (WC run 8: the tank died first, out of its healer's reach) and the respawn-aware walk back's pull cap
+    f.healerPullGate = true;
+    f.walkBackPullCap = kWalkBackPullCap;
     // forced off
     f.joinerCeiling = 0;
     f.aggroWalkRing = false;
@@ -485,13 +490,19 @@ struct HopObs
     float straightYd = 0.0f;
 };
 
-// The move case's hostile loop (Commander.cpp:12594-12648).
-inline void ReadHopUnits(Facts& f, DungeonRun::Run const& run, float cx, float cy, float cz, std::vector<HopObs> const& around)
+// The move case's hostile loop (Commander.cpp:12594-12648). A hop unit is one within kHopPullYd of the point the facts are read for. A WALK BACK
+// (run.walkBack) also lists every hostile within kWalkBackSeeYd of the lead bot (WC run 8: after a wipe the party walked from the entrance to step 81
+// through packs that had respawned, 7200 s after they were cleared, and was caught by them in mid-walk, 34 deaths at step 82): each respawned pack
+// on the way is pulled one at a time, with the pull's gather, rest and healer gate, instead of being walked into.
+inline void ReadHopUnits(Facts& f, DungeonRun::Run const& run, float cx, float cy, float cz, std::vector<HopObs> const& around,
+    float leadX, float leadY, float leadZ)
 {
     using namespace DungeonRun;
     for (HopObs const& h : around)
     {
-        if (Dist3(h.x, h.y, h.z, cx, cy, cz) > kHopPullYd || h.inCombat)
+        bool const nearPoint = Dist3(h.x, h.y, h.z, cx, cy, cz) <= kHopPullYd;
+        bool const nearLead = run.walkBack && Dist3(h.x, h.y, h.z, leadX, leadY, leadZ) <= kWalkBackSeeYd;
+        if ((!nearPoint && !nearLead) || h.inCombat)
             continue;
         if (run.plan && ai::PlanNamesEventUnit(*run.plan, h.entry))
             continue;
@@ -1230,10 +1241,13 @@ inline void ReadStepFacts(Facts& f, DungeonRun::Run const& run, LeadView const& 
             }
             float const toCentre = Dist3(lead.x, lead.y, lead.z, cx, cy, cz);
             std::vector<HopObs> hops;
-            w.HopCandidates(std::min(toCentre + kHopPullYd, 2.0f * kSeeYd), cx, cy, cz, hops);
+            float hopRange = std::min(toCentre + kHopPullYd, 2.0f * kSeeYd);
+            if (run.walkBack)
+                hopRange = std::max(hopRange, kWalkBackSeeYd);
+            w.HopCandidates(hopRange, cx, cy, cz, hops);
             if (hops.size() > kMaxHopUnits)
                 hops.resize(kMaxHopUnits);
-            ReadHopUnits(f, run, cx, cy, cz, hops);
+            ReadHopUnits(f, run, cx, cy, cz, hops, lead.x, lead.y, lead.z);
             break;
         }
         case ai::PlanStepKind::WaitClear:

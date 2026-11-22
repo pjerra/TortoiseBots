@@ -88,8 +88,15 @@ PLAN_SOURCE = 'forever-agent 109a2496 route export + core scripts'
 # after it: once it falls each bot picks its own target while the two poisoners finish the party. The pack's own units
 # therefore carry the same kill-first order the Druid got (its adds behind it, ahead of nothing): the Druid, then the
 # Adder, then the Viper. Anacondra keeps her place between them: she is the pool boss of the early Druid camps.
+# Live run 8 (2026-11-22, notes/live-wc-run8-2026-11-22.md): the Deviate Shambler packs (5761) at step 69 (leg 6 seq 11: 5761,
+# 3840, 3640, 11 deaths and a wipe) and step 82 (leg 8 seq 2: 5761, 3840, 2 shamblers, 34 deaths, 2+ wipes, three pauses) are the
+# deadliest camps of the route after the Druid camps. Their units stand 1.3-5.9 yd apart (the spawn dump: step 82 Druid 1.3, Shambler
+# 4.6, Snake 5.9 yd from the row's point; step 69 Shambler 2.0, Druid 5.0 yd), so no pull point can split them; the one lever the
+# plan format has is the kill order: the Shambler joins the kill-first list behind the camp-leg units (3840, 3671, 5048, 5755 keep
+# their ranks: the r7 list is a prefix), so after the Druid the whole party takes the Shambler before the Snake and the patroller
+# peck at the priest. kill_first is plan-wide: the other rows that list 5761 (legs 6-9) get the same order.
 PLAN_CC_PRIORITY = ''
-PLAN_KILL_FIRST = '3840,3671,5048,5755'
+PLAN_KILL_FIRST = '3840,3671,5048,5755,5761'
 
 # The Disciple of Naralex (npc 3678) and his script (classic_wailing_caverns.cpp,
 # ClassicDiscipleWaypoints): the points the escort pauses at are 7, 15 and 30.

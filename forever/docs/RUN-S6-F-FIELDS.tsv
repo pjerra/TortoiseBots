@@ -59,6 +59,8 @@ anchorReachable	1682	yes	filled	1	one PathGenerator query (PathGenerator.h:86), 
 directPathCrossesPack	1686	A	notknown	1	false: the test needs the live list of uncleared packs along the path
 approachIncomplete	1692	A	filled	1	one PathGenerator query toward the step point (PathGenerator.h:86/100/102); a path that cannot be read: leadPathGood=false, approachKnown=false
 walkBackRescue	1695	A	forced	3	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
+healerPullGate	1717	A	forced	1	forced ON: the pull's healer gate (WC run 9, TbRunFactsPure.h ApplyConfig); the host reads each healer's sight line to the lead bot (MemberFact::healerSight, TbRunFacts.cpp)
+walkBackPullCap	1721	A	forced	1	forced to kWalkBackPullCap (WC run 9, TbRunFactsPure.h ApplyConfig): ForeverCore respawns the dungeon's packs, so a walk back pulls the respawned packs on its way
 dryWalk	1698	no	forced	1	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
 teleportReturnYd	1702	A	forced	2	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
 reviveHoldYd	1705	A	forced	1	forced off: the rescue and return teleports are GM powers (spec 5.2), the revive stand-still hold and the dry walk have no reader
