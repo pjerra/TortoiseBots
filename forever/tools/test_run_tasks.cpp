@@ -71,11 +71,16 @@ static void TestMethod()
     CHECK(tk::JudgeLootMethod(order("lootmethod group")).ok);
     CHECK(tk::JudgeLootMethod(order("lootmethod rr")).ok);
     CHECK(tk::JudgeLootMethod(order("lootmethod group epic")).ok);
-    tk::MethodVerdict v = tk::JudgeLootMethod(order("lootmethod master"));
-    CHECK(!v.ok && v.code == "unsupported");
-    v = tk::JudgeLootMethod(order("lootmethod nbg"));
-    CHECK(!v.ok && v.code == "unsupported");
-    v = tk::JudgeLootMethod(order("lootmethod group common"));      // the core refuses a threshold below uncommon
+    CHECK(tk::JudgeLootMethod(order("lootmethod master")).ok);
+    CHECK(tk::JudgeLootMethod(order("lootmethod nbg")).ok);
+    CHECK(tk::ChooseLootMaster(RC::kLootMaster, true) == tk::LootMasterTarget::BoundMaster);
+    CHECK(tk::ChooseLootMaster(RC::kLootMaster, false) == tk::LootMasterTarget::GroupLeader);
+    for (int m : { RC::kLootFfa, RC::kLootRoundRobin, RC::kLootGroup, RC::kLootNeedBeforeGreed })
+    {
+        CHECK(tk::ChooseLootMaster(m, true) == tk::LootMasterTarget::Empty);
+        CHECK(tk::ChooseLootMaster(m, false) == tk::LootMasterTarget::Empty);
+    }
+    tk::MethodVerdict v = tk::JudgeLootMethod(order("lootmethod group common"));      // the core refuses a threshold below uncommon
     CHECK(!v.ok && v.code == "invalid");
     // the core's methods as the policy reads them: PERSONAL_LOOT (5) and anything unknown are "no method"
     CHECK(tk::PolicyLootMethod(0) == RC::kLootFfa && tk::PolicyLootMethod(1) == RC::kLootRoundRobin && tk::PolicyLootMethod(2) == RC::kLootMaster);
@@ -83,12 +88,12 @@ static void TestMethod()
     CHECK(tk::PolicyLootMethod(5) == -1 && tk::PolicyLootMethod(6) == -1 && tk::PolicyLootMethod(200) == -1);
     std::string why;
     CHECK(tk::RunLootMethodOk(RC::kLootGroup, why));
+    CHECK(tk::RunLootMethodOk(RC::kLootNeedBeforeGreed, why));
     CHECK(!tk::RunLootMethodOk(RC::kLootFfa, why) && why.find("ffa") != std::string::npos);
     CHECK(!tk::RunLootMethodOk(-1, why) && why.find("personal") != std::string::npos);
     // a method changed under a running run is refused by the same rule: the run pauses and its pending task dies before any act
     CHECK(!tk::RunLootMethodOk(RC::kLootRoundRobin, why) && why.find("rr") != std::string::npos);
     CHECK(!tk::RunLootMethodOk(RC::kLootMaster, why) && why.find("master") != std::string::npos);
-    CHECK(!tk::RunLootMethodOk(RC::kLootNeedBeforeGreed, why) && why.find("nbg") != std::string::npos);
     CHECK(tk::StartBagsOk(12) && tk::StartBagsOk(16) && !tk::StartBagsOk(11) && !tk::StartBagsOk(0));
     CHECK(DR::kTaskCapMs > tk::kTaskCapMs);
 }

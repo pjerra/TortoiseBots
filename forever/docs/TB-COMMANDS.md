@@ -43,13 +43,16 @@ R1 ships two verbs:
 | Command | What it does |
 |---|---|
 | `.bot` / `.bot help` | the usage rows the caller may use |
-| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow|stay|free`, `engine|spike`. A GM's `.bot who all` lists every bot |
+| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow\|stay\|free`, `engine\|spike`. A GM's `.bot who all` lists every bot |
+| `.bot maintenance <bot>` | refresh one owned bot's kit (reagents, bandages, hunter ammo), repair it for free, save it. Owner tier only (the caller owns the bot, or a GameMaster); pool bots are refused. Off unless `AiPlayerbot.OwnedBotMaintenanceEnabled = 1` (default 0, in `forever/conf/aiplayerbot.conf.dist`); potions, food, paid consumables and thrown top-ups are not ported |
 
 Replies: `TortoiseBots: help: <row>`, `TortoiseBots: who: <n> bot(s)`, `TortoiseBots: who: <Name> level <n> <class> map <id> <move> <brain>`,
 and `TortoiseBots: <verb>: refused <code>: <text>` with `usage`, `unknown-verb`, `players-off` (and later `not-a-bot`, `not-yours`, `in-run`, ...).
 `TortoiseBots.Player.Commands = 0` refuses players with `players-off`; GMs keep the command. `TortoiseBots.Player.MaxBots` (default 4) caps
 how many of a player's own characters may be in the world at once when `.bot add` arrives. The ordering verbs (`add`, `logout`, `follow`,
-`stay`, `attack`, `flee`, `summon`, `stats`) follow in the next rounds; until then they answer `unknown-verb`.
+`stay`, `attack`, `flee`, `summon`, `stats`) follow in the next rounds; until then they answer `unknown-verb`. `.bot maintenance` answers
+`TortoiseBots: maintenance <Name>: ok <n> item(s) granted, repaired, saved`, or `TortoiseBots: maintenance: refused <code>: <text>` with
+`pool` (a pool bot), `disabled` (the flag is off) or `dead`, after the owner-tier `not-a-bot`, `not-yours` and `in-run`.
 
 ## 2. The older commands (free text, human readable)
 
@@ -536,13 +539,13 @@ The run leader's `open`, `loot` and `lootmethod` orders are carried out now (`fo
 
 * **`open entry:<id>@x,y,z <bot>`** (a door, a lever, a goober, a chest): the object is the spawned game object of that entry nearest the plan's point **within 5 yd of it** (never another object of the entry: none refuses `invalid-target`); the bot walks to a stand 1.5 yd short of it (the executor's `come`), then a door or a lever is used by the typed `GameObjUse` packet and a chest by the engine's own `open loot` (the opening spell, a key the bot carries). The host judges the lock row first with the Turtle judge (`no-item`, `locked`) and refuses what the core's `Use` would let through. **A door that is not at rest (state != ready) is never used again** (the core's `Use` toggles a door): the answer is `done` with `already open (state N): not used again`. Success = the object changed state within 4 s (a chest: its loot window closed within 8 s of the cast); otherwise `failed: The object showed no change after the bot used it.`
 * **`loot <handle | entry:<id>@x,y,z> <bot> [item]`** (a corpse by the handle `ReadFacts` gave, a chest by entry): the engine's loot window with the ledger watching it. `failed` texts carry the words the policy moves on: `nothing this bot may loot` (another member's turn, already looted, not tapped) and `Nothing is left to loot`.
-* **`lootmethod <ffa|group|rr> [threshold 2-5]`**: the lead bot, the group's leader, sets it through the handler a client's window uses and the answer reads the method back from the group. `master` and `nbg` are refused `unsupported` (the bots vote greed in group loot only, so a need-before-greed roll would time out); a threshold below uncommon is refused `invalid` (the core's own rule).
+* **`lootmethod <ffa|group|rr|master|nbg> [threshold 2-5]`**: the lead bot, the group's leader, sets it through the handler a client's window uses and the answer reads the method back from the group. The bots vote in group loot and need-before-greed and stay silent in free-for-all, round robin and master loot (no roll window there; the human master distributes); a threshold below uncommon is refused `invalid` (the core's own rule).
 * **`use <item> <bot>`** is parsed and refused `unsupported` (the item-use path is not ported; no plan of the two dungeons has a use_item row).
 * One task per bot; a second order for the same bot is refused `busy`, an order in a fight `in-combat` (the policy sends both again). The task's result is not the order's answer: the order is accepted at once and the result reaches the policy as the facts' `taskReply` / `taskText` (`done` payloads: `opened`, `already open ...`, `<item>:<n>,copper:<n>`; failures `<code>: <message>`).
 
 **Facts (F9).** `wait_object` reads the object's state (plan words: 0 ready = the core's `GO_STATE_READY`, 1 active = `GO_STATE_ACTIVE`, 2 = `GO_STATE_DESTROYED`: the Iron Clad Door after the cannon) with the same 5 yd search; `wait_clear` lists the living hostile creatures within the step's radius; loot / open steps read the carrier (the lead bot, or the bot holding the item), its bags, its task and the answer; the group's loot method (the core's personal loot reads as `none`); the instance's doors from the area trigger table.
 
-**`.tb run start`** gains two refusals, checked with the others and changing nothing: **`bags`** (a member has fewer than 12 free bag slots) and **`loot-method`** (the party's loot method is not group loot). A loot step for an item whose carrier has two or fewer free slots **pauses** (`why=bags-full: ...`) instead of looting and finding the item missing.
+**`.tb run start`** gains two refusals, checked with the others and changing nothing: **`bags`** (a member has fewer than 12 free bag slots) and **`loot-method`** (the party's loot method is not group loot or need-before-greed). A loot step for an item whose carrier has two or fewer free slots **pauses** (`why=bags-full: ...`) instead of looting and finding the item missing.
 
 **`run` record keys** (absent when the step has none): `carrier=<bot>` (a loot / open / use_item step), `item=<id>:held|missing` (the carrier or a party bot holds the step's item), `obj=<entry>:<ready|active|active_alt|none>` (a wait_object step). **`event` kinds** added: `open` and `loot` (a task ended: `why=done: <payload>` or `failed: <code>: <message>`, `unit` = the object's entry), `object` (a wait_object step ended on its state: `why=<entry>:<state>`), `clear` (a wait_clear ended: no hostile within the radius), `item` (a loot or open step ended with the item in a bag: `why=item <id> is in <bot>'s bags`).
 
@@ -594,7 +597,7 @@ Bound commanders issue task orders on the shared `TbRunTasks` engine (`forever/s
 * **`.tb cmd open <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: walks to the door, lever, goober or chest and opens it (`HandleGameObjectUseOpcode` or `open loot`). A door not at rest is never toggled closed (`done: already open ...`).
 * **`.tb cmd use <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: uses a game object via `HandleGameObjectUseOpcode` (or `open loot` for chests). `.tb cmd use <itemId>` is refused `unsupported` (`item use except food and drink`).
 * **`.tb cmd gossip <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<index | "text" | text>] [#token]`**: walks to a `UNIT_NPC_FLAG_GOSSIP` NPC, calls `HandleGossipHelloOpcode`, and either lists the menu options (when no option is given) or validates the option via `GossipOrder::MatchOption` (refusing service/coded/missing options) and calls `HandleGossipSelectOptionOpcode`.
-* **`.tb cmd lootmethod <ffa|group|rr> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; `master` and `nbg` are refused `unsupported`.
+* **`.tb cmd lootmethod <ffa|group|rr|master|nbg> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; the bots vote in group loot and need-before-greed and stay silent otherwise (no roll window in free-for-all and round robin; the human master distributes master loot).
 * **`.tb cmd state [<bot>] [#token]`**: reports each bound bot's active or last task (`task bot= busy= status=none|running|done|failed [verb=] [entry=] [text=]`).
 * **`.tb cmd ritual|scout ...`**: refused `unsupported` (decision D5).
 
@@ -901,3 +904,8 @@ enables the opt-in ground strategy. Configure the named host tank first, then
 its same-group participants. Explicitly pull using that owner's host order;
 configuration alone does not pull. Other accepted orders release control.
 See [ONYXIA.md](ONYXIA.md) for damage gates, checked routes and live-test limits.
+
+## Autogear (`.bot autogear` and `.autogear`)
+
+* `.bot autogear <bot> [quality|ilvl]`: incremental upgrades-only re-gearing for same-account owned bots (and GMs; pool bots refused, bot must be alive, bot in active run refused). Gated by `AiPlayerbot.OwnedBotAutogearEnabled` (default `0`), capped by `AiPlayerbot.OwnedBotAutogearQualityCap` (default `2`, uncommon) and `AiPlayerbot.OwnedBotAutogearIlvlCap` (default `0`, uncapped). Warns if the equipped ranged weapon has no matching ammo in bags.
+* `.autogear [player] <spec> [ilvl]`: top-level command for real players (bots refused; dead, in-combat, or shapeshifted targets refused). GM-only by default (`AiPlayerbot.PlayerAutogearForAll = 0`); when `1`, non-GMs may gear themselves only. Equips upgrades only, moves replaced items to bags or mails them if bags are full, warns on missing ranged ammo, and logs `PlayerAutogear: caller=...`.

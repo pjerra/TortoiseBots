@@ -309,8 +309,25 @@ class Wiring(unittest.TestCase):
     def test_help_lists_new_verbs(self):
         cmd = read(PLAYER / "TbPlayerCmd.cpp")
         help_body = function_body(cmd, r"bool HandleHelp\(Player\* player, Caller const& caller\)")
-        for verb in ("add", "logout", "follow", "stay", "attack", "flee"):
+        for verb in ("add", "logout", "follow", "stay", "attack", "flee", "maintenance"):
             self.assertIn(verb, help_body)
+
+    def test_maintenance_handler_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        upkeep = read(PLAYER / "TbUpkeep.cpp")
+        pure = read(PLAYER / "TbUpkeepPure.h")
+        self.assertIn('if (verb == "maintenance")', cmd)
+        self.assertIn("HandleMaintenance(player, caller, scope, AfterFirstWord(rest))", cmd)
+        self.assertIn("bool HandleMaintenance(Player* player, Caller const& caller", cmd)
+        self.assertIn('TierOf("maintenance")', cmd)
+        self.assertIn("IsPoolBot", cmd)
+        self.assertIn("upkeep::Run(bot, summary)", cmd)
+        self.assertIn("ownedBotMaintenanceEnabled", upkeep)
+        self.assertIn("DurabilityRepairAll", upkeep)
+        self.assertIn("SaveToDB", upkeep)
+        self.assertIn("InitAmmo", upkeep)
+        self.assertIn("pool", pure)
+        self.assertIn("disabled", pure)
 
 
 MUTANTS = [

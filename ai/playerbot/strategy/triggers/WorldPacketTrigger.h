@@ -20,7 +20,7 @@ namespace ai
         {
             if (!triggered)
             {
-                // T: the packet handler tables feed the trigger. F: the two loot events are read from the core's own state (TbCompat_S9.h).
+                // T: the packet handler tables feed the trigger. F: the three loot events are read from the core's own state (TbCompat_S9.h).
                 PollPacketEventCompat(bot, getName(), *this);
                 if (!triggered)
                     return Event();

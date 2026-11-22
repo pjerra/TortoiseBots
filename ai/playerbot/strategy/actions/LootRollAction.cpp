@@ -594,8 +594,6 @@ bool RollAction::RollOnItemInSlot(BotRollVote vote, ObjectGuid lootGuid, uint32 
 
     // Same entry point the client uses via CMSG_LOOT_ROLL. The core checks
     // eligibility and resolves the roll once everyone has voted.
-    // ForeverCore votes greed only (TbCompat_S9.h): the one sink every vote passes, so an ordered "roll need" is greed there too. T: the vote as it was.
-    vote = GreedOnlyVoteCompat(vote);
     if (!RollVoteCompat(bot, group, lootGuid, slot, vote))
         return false;
 

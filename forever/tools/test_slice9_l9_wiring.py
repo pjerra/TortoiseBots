@@ -1,10 +1,11 @@
 """Wiring pins for slice 9, package L9 (item loot, group loot rolls, the item usage value).
 
-The both-core helpers of forever/src/compat/TbCompat_S9.h have a Turtle twin, ai/cmangos-compat-s9.h, whose bodies are the calls the bot
-always made. These pins prove, by reading the sources, that (1) the two headers define the same helper names, (2) the Turtle bodies hold
-the original expressions, (3) the policy of the slice holds in the code: GREED ONLY, one sink for every vote, no auto-equip wiring, a roll is
-announced once, (4) the two files the package adds are in the slice list and the build reads that list, and (5) the registry keys of the
-package are in the generator (the generator --check and the registry check prove the rest).
+The both-core helpers of forever/src/compat/TbCompat_S9.h have a Turtle twin, ai/cmangos-compat-s9.h, whose bodies hold
+the original expressions. These pins prove, by reading the sources, that (1) the two headers define the same helper names, (2) the Turtle bodies hold
+the original expressions, (3) the policy of the slice holds in the code: HONEST VOTES (TB's need/greed/pass reaches the wire, constrained only by
+the roll's own vote mask), one sink for every vote, a won roll is announced once and logged, a roll is announced once,
+(4) the two files the package adds are in the slice list and the build reads that list, and (5) the registry keys of the package are in the
+generator (the generator --check and the registry check prove the rest).
 
 Run: python3 -m unittest forever/tools/test_slice9_l9_wiring.py
 """
@@ -54,7 +55,6 @@ class L9Wiring(unittest.TestCase):
 
     def test_turtle_bodies_are_the_original_expressions(self):
         self.assertIn("group->CountRollVote(bot, lootGuid, slot, vote)", body(T_HEADER, "RollVoteCompat"))
-        self.assertIn("return vote;", body(T_HEADER, "GreedOnlyVoteCompat"))
         self.assertIn("loot->LootItemInSlot(slot, bot->GetGUIDLow())", body(T_HEADER, "LootItemOfSlotCompat"))
         self.assertIn("member->IsWithinLootXPDist(target)", body(T_HEADER, "MemberInLootRangeCompat"))
         self.assertIn("creature->GetGroupLootTimer()", body(T_HEADER, "GroupLootTimerCompat"))
@@ -65,26 +65,31 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("using BotRollVote = RollVote;", T_HEADER)
         self.assertIn("FindEquipSlot(proto, NULL_SLOT, true)", body(T_HEADER, "EquipSlotOfProtoCompat"))
 
-    def test_greed_only_on_forevercore(self):
-        # the F helper ignores the vote it is given
-        self.assertIn("return ROLL_GREED;", body(F_HEADER, "GreedOnlyVoteCompat"))
-        # the one sink: RollOnItemInSlot normalises the vote, then asks the helper, THEN votes through the core
+    def test_honest_votes_on_forevercore(self):
+        # no forcing helper anywhere: TB's need/greed/pass reaches the wire
+        self.assertNotIn("GreedOnlyVoteCompat", F_HEADER)
+        self.assertNotIn("GreedOnlyVoteCompat", T_HEADER)
+        self.assertNotIn("GreedOnlyVoteCompat", ROLL)
+        # the one sink: RollOnItemInSlot normalises the vote, then votes through the core
         sink = ROLL[ROLL.index("bool RollAction::RollOnItemInSlot("):]
         sink = sink[:sink.index("\n}\n")]
-        self.assertLess(sink.index("GreedOnlyVoteCompat(vote)"), sink.index("RollVoteCompat("))
+        self.assertIn("RollVoteCompat(", sink)
         # nothing else in the file votes through the core
         self.assertEqual(len(re.findall(r"RollVoteCompat\(", ROLL)), 1)
-        # the F vote is the core's own handler with the typed packet
+        # the F vote constrains the decided vote to the roll's own mask, then sends it
         vote = body(F_HEADER, "RollVoteCompat")
-        self.assertIn("HandleLootRoll(packet)", vote)
+        self.assertIn("TbRollVoteMaskFallback(int(vote), live->GetVoteMask())", vote)
+        self.assertLess(vote.index("TbRollVoteMaskFallback("), vote.index("HandleLootRoll(packet)"))
         self.assertIn("packet.RollType = uint8(vote);", vote)
 
-    def test_no_auto_equip_and_no_unfed_roll_keys(self):
+    def test_won_keys_are_fed_and_the_rest_stays_unfed(self):
         start = GEN.index("SLICE9_KEYS = {")
         keys = GEN[start:GEN.index("\n}\n", start)]
-        for fed in ("loot start roll", "auto loot roll", "release loot", "active rolls", "item usage"):
+        for fed in ("loot start roll", "auto loot roll", "release loot", "active rolls", "item usage",
+                    "loot roll won", "log roll won"):
             self.assertIn(fed, keys)
-        for unfed in ("equip upgrades", "loot roll won", "log roll won", "delayed roll", "item push result"):
+        # `equip upgrades` reaches the slice through the maintenance keys (W6_KEYS), not through slice 9
+        for unfed in ("equip upgrades", "delayed roll", "item push result"):
             self.assertNotIn(unfed, keys)
 
     def test_a_roll_and_a_window_are_announced_once(self):
@@ -96,11 +101,14 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("NoteLootWindowAnnouncedCompat(bot, guid);", I2)
         self.assertIn("PollPacketEventCompat(bot, getName(), *this);", TRIGGER)
 
-    def test_rolls_are_announced_and_voted_only_in_group_loot(self):
+    def test_rolls_are_announced_and_voted_in_group_loot_and_nbg_only(self):
         gate = body(F_HEADER, "BotRollsInGroupLootCompat")
-        self.assertIn("GetLootMethod() == GROUP_LOOT", gate)
+        # the gate is the one table both calls read: the group's method and the roll's own loot must each take rolls
+        self.assertIn("rollmethods::MethodTakesRolls(int(group->GetLootMethod()))", gate)
+        self.assertIn("rollmethods::MethodTakesRolls(int(loot->GetLootMethod()))", gate)
+        self.assertIn("TbRollMethodsPure.h", F_HEADER)
         poll = body(F_HEADER, "PollPacketEventCompat")
-        # the roll event is raised only after the gate says so (Need Before Greed, master loot and no group: nothing is announced)
+        # the roll event is raised only after the gate says so (free-for-all, round robin, master loot and no group: nothing is announced)
         self.assertIn("BotRollsInGroupLootCompat(bot, roll->GetLoot())", poll)
         self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);"))
         vote = body(F_HEADER, "RollVoteCompat")

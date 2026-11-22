@@ -7,13 +7,13 @@
 // and the loot-method rule. The core half (TbRunTasks.cpp) fills the observation from the core's public API and carries out what this half decides.
 //
 // Everything the module cannot do on ForeverCore is refused with a code, never answered "ok" (findings rule of slice 1): `use <item>` (no plan of the two
-// dungeons has a use_item row, and the item-use path is not ported), `lootmethod master|nbg` (master loot is out of the slice; need-before-greed rolls are not
-// voted by the greed-only roll code, so they would time out), a lock whose key the bot does not carry (the core's `Use` would not look: the host does).
+// dungeons has a use_item row, and the item-use path is not ported), a lock whose key the bot does not carry (the core's `Use` would not look: the host
+// does). Every loot method is carried out; the run itself goes on only under group loot and need-before-greed (TbRollMethodsPure.h).
 #pragma once
 
 #include "runtime/GossipOrderPolicy.h"
 #include "runtime/RemoteCommanderPolicy.h"
-#include "runtime/RemoteCommanderTasks.h"
+#include "forever/src/host/TbRollMethodsPure.h"
 
 #include <cstdint>
 #include <string>
@@ -119,7 +119,7 @@ inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> con
     {
         int method = 0, threshold = 0;
         if (args.empty() || args.size() > 2 || !RC::ParseLootMethod(args[0], method) || (args.size() == 2 && !RC::ParseLootThreshold(args[1], threshold)))
-            return invalid("lootmethod <ffa|group|rr> [threshold 2-5 or uncommon/rare/epic/legendary]");
+            return invalid("lootmethod <ffa|group|rr|master|nbg> [threshold 2-5 or uncommon/rare/epic/legendary]");
         out.verb = Verb::LootMethod;
         out.method = method;
         out.threshold = threshold;
@@ -170,25 +170,25 @@ struct MethodVerdict
 inline MethodVerdict JudgeLootMethod(TaskOrder const& order)
 {
     MethodVerdict v;
-    if (order.method == RC::kLootMaster)
-    {
-        v.ok = false;
-        v.code = "unsupported";
-        v.text = "master loot is not carried out on this core (decision D4: group loot, greed only).";
-    }
-    else if (order.method == RC::kLootNeedBeforeGreed)
-    {
-        v.ok = false;
-        v.code = "unsupported";
-        v.text = "need-before-greed is not carried out on this core: the bots vote greed in group loot only, so a need-before-greed roll would time out.";
-    }
-    else if (order.hasThreshold && (order.threshold < 2 || order.threshold > 5))
+    // Every method is carried out (the bots vote group loot and need-before-greed; under free-for-all, round robin and master loot they stay silent
+    // and the human master distributes). Only the threshold is judged: the core's own handler refuses below uncommon.
+    if (order.hasThreshold && (order.threshold < 2 || order.threshold > 5))
     {
         v.ok = false;
         v.code = "invalid";
         v.text = "The core accepts a loot threshold from uncommon (2) to legendary (5).";
     }
     return v;
+}
+
+enum class LootMasterTarget : uint8_t { Empty, BoundMaster, GroupLeader };
+
+// Core HandleSetLootMethodOpcode rejects MASTER_LOOT when LootMasterGUID is not a group member.
+inline LootMasterTarget ChooseLootMaster(int policyMethod, bool boundHumanMasterInGroup)
+{
+    if (policyMethod != RC::kLootMaster)
+        return LootMasterTarget::Empty;
+    return boundHumanMasterInGroup ? LootMasterTarget::BoundMaster : LootMasterTarget::GroupLeader;
 }
 
 // The loot method of a core group as the policy reads it (Facts::lootMethod): the five 1.12 methods keep their numbers; anything else (the core's
@@ -206,15 +206,16 @@ inline int PolicyLootMethod(uint32_t coreMethod)
     }
 }
 
-// The loot method a run may go on with (packages C9 and O9): group loot only, at the start and for the whole run (spec D4). Others are named, so the
-// supervisor can set it back. A method changed under a running run leaves a chest or corpse to rules the policy does not know (rolls it cannot vote,
-// items to chance), so the run pauses and no loot or object act starts until it is group loot again.
+// The loot method a run may go on with (packages C9 and O9): group loot and need-before-greed, at the start and for the whole run (the table both gates
+// read, TbRollMethodsPure.h). Others are named, so the supervisor can set it back. A method changed under a running run leaves a chest or corpse to rules
+// the policy does not know (rolls it cannot vote, items to chance), so the run pauses and no loot or object act starts until it is group loot or
+// need-before-greed again.
 inline bool RunLootMethodOk(int policyMethod, std::string& why)
 {
-    if (policyMethod == RC::kLootGroup)
+    if (rollmethods::RunMayUseMethod(policyMethod))
         return true;
     why = policyMethod == kLootNone ? std::string("the group's loot method is one the policy does not know (personal loot)")
-                                    : std::string("the group's loot method is ") + RC::LootMethodName(policyMethod) + ", not group loot";
+                                    : std::string("the group's loot method is ") + RC::LootMethodName(policyMethod) + ", not group loot or need-before-greed";
     return false;
 }
 
