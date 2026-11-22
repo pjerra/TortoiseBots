@@ -99,7 +99,7 @@ SLICE4_KEYS = {
 # forever/docs/SLICE8-H-NOTES.md): the keys the compiled mage and rogue contexts and their kits name that the slice did not register yet. The give-item values
 # (`party member without item/food/water`) are not in the spec's table but `give food`/`give water` read them (K8 notes). Left unregistered on purpose (each one does
 # less): apply oil, throw grenade, oil of immolation, thistle tea (item casts); enemy flagcarrier near, player has flag, enemy player target, has enemy player targets
-# (PvP); grind target (the stealth trigger then reads `dps target` only); manual saved string; no blink instance; hemorrhage back/front (no context defines them).
+# (PvP); grind target (the stealth trigger then reads `dps target` only); no blink instance; hemorrhage back/front (no context defines them).
 SLICE8_KEYS = {
     "strategy": "hold position, behind",
     "action": "give food, give water, cancel channel, set behind, rear flank, reach cc",
@@ -110,7 +110,7 @@ SLICE8_KEYS = {
 # Slice 10 (package H10, FOREVER-SLICE10-HYBRIDS-SPEC section 3 "Registry keys", forever/docs/SLICE10-K-NOTES.md section 4; listed with creator file:line in
 # forever/docs/SLICE10-H-NOTES.md): the keys the compiled druid, paladin and shaman contexts and their kits name that the slice did not register yet. `low mana` and
 # `enemy is close` are not in the spec's table but the restoration shaman (`low mana`) and the holy paladin (`enemy is close`) kits fire them (K10 notes: also on
-# slice 8's list, listed once). Left unregistered on purpose (each one does less): manual saved string (D5: totem mode stays auto), travel target traveling, enemy player
+# slice 8's list, listed once). Left unregistered on purpose (each one does less): travel target traveling, enemy player
 # target, has enemy player targets, grind target; enemy flagcarrier near, player has flag, new pet, has (greater) blessing of salvation, resist aura swap over, not
 # sensing undead, kick, aquatic form; apply oil/stone, oil of immolation, throw grenade, mana/stoneshield potion, remove (greater) blessing of salvation, set pet stance,
 # sense undead, switch to melee/ranged, cancel channel, powershift, reach party member for totem (no totem order). Cat, balance, enhancement, elemental and the Turtle
@@ -126,8 +126,8 @@ SLICE10_KEYS = {
 }
 # Slice 11 (package H11, FOREVER-SLICE11-PETS-SPEC sections 3 and 10, listed with creator file:line in forever/docs/SLICE11-NOTES.md section 5): the generic pet keys the hunter and
 # warlock kits fire, and the hunter's dead-zone and range keys. Left unregistered on purpose (each one makes the bot do less, spec section 3): the chat `tame` action and
-# trigger (TameAction.cpp stays out), `flee with pet`, `boss tactics seek pet`, `thaddius *`, `manual saved string` (so `choice pet`, `choice sting`, `choice aspect` and
-# `.bot choice` stay off, as S10 D5), `apply oil`, `apply stone`, `equip upgrades`, `dispel enrage` (Tranquilizing Shot is level 60), `player has flag`, `nearest stealthed unit`,
+# trigger (TameAction.cpp stays out), `flee with pet`, `boss tactics seek pet`, `thaddius *`, the `choice pet` / `choice sting` / `choice aspect` rows
+# (so `.bot choice` stays off, as S10 D5), `apply oil`, `apply stone`, `equip upgrades`, `dispel enrage` (Tranquilizing Shot is level 60), `player has flag`, `nearest stealthed unit`,
 # `warlock spread attacker my aura` (the raid DoT spread), `aoe fear`. `pet target` is registered since slice 1.
 SLICE11_KEYS = {
     "strategy": "",
@@ -270,7 +270,17 @@ CLASS_EXTRAS_KEYS = {
     "trigger": "dispel enrage",
     "value": "warlock spread attacker my aura, warlock spread attacker, warlock spread attacker manual",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS)
+# Piece c-store (TBF #133): the persisted "manual saved string" AI value. TB keeps every class choice (totem/blessing/choice keys) as a
+# qualified "manual saved string" value persisted by sPlayerbotDbStore into characters.ai_playerbot_db_store; the slice left it
+# unregistered (slices 8/10/11 notes above), so no choice reader could resolve it. Registered alone it changes nothing the bot does:
+# the triggers and strategies that read it (choice rows, ordered totem/blessing rows) stay unregistered until the #133 pieces land.
+STORE_KEYS = {
+    "strategy": "",
+    "action": "",
+    "trigger": "",
+    "value": "manual saved string",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

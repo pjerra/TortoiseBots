@@ -18,6 +18,7 @@
 #include "host/TbHostTransport.h"
 #include "host/TbOnyxia.h"
 #include "host/TbOnyxiaGround.h"
+#include "slice/SliceDbStore.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -204,6 +205,10 @@ void Dispose(Brain* brain)
         brain->session->SetCastResultSink(false);
     // PlayerbotAIAdapter::Shutdown (:149-158): RemoveAI first (hooks resolve the AI through the registry, so none can
     // reach it afterwards), then the action log, then the AI itself.
+    // Piece c-store: the saved values go to characters.ai_playerbot_db_store before the AI is gone (by guidLow: the
+    // Player may be mid-logout, so no Player is touched). A brain that never entered the world saved nothing anyway.
+    if (brain->ai && brain->guidLow)
+        ai::slice::aistore::SaveValues(brain->ai, brain->guidLow, std::string());
     if (brain->bot)
         PlayerbotAIStorage::Instance().RemoveAI(brain->bot);
     if (brain->guidLow)
