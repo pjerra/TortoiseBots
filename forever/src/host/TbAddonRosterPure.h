@@ -24,23 +24,25 @@ namespace roster
 inline constexpr unsigned kAddonProtocol = 1;
 inline constexpr unsigned kMinAddonProtocol = 1;
 
-// The capability tokens this server earns today: only verbs that exist in
-// player::Dispatch. The rest of TB's set (pull-seconds, flee, inventory,
-// behavior, loot-log, downtime, professions, blessing, blessing-player,
-// engage, choice, focus-mark, use-object, guild-orders, guild-order-steps,
-// guild-order-nobuy, dungeon-run) stays dark until its verb lands: the addon
-// would otherwise light buttons whose sends come back ACTION_ERR.
+// The capability tokens this server earns today: only verbs that exist
+// natively (player::Dispatch plus the f-actions `action` intents). The rest of
+// TB's set (inventory, behavior, loot-log, downtime, professions, blessing,
+// blessing-player, choice, focus-mark, use-object, guild-orders,
+// guild-order-steps, guild-order-nobuy, dungeon-run) stays dark until its verb
+// lands: the addon would otherwise light buttons whose sends come back
+// ACTION_ERR.
 // "tb-gm" rides along when the requester holds the .tb permission
 // (rbac::RBAC_PERM_COMMAND_GM, 371, the permission every .tb row asks for):
 // the addon uses it to decide whether its GM-only .tb bridge may be used.
 inline std::vector<std::string> CapsFor(bool hasTbPermission)
 {
-    // TB advertises claimed-roster unconditionally and the stream below is
-    // live (empty until the guild-bot stores land); every other token needs
-    // a verb TBF does not have yet.
+    // TB-relative order (Info.cpp CAPS line). pull-seconds/flee/engage ride on
+    // f-actions (action pull/pullback [seconds] [ranged|body], action flee,
+    // action engage [seconds]); TB advertises claimed-roster unconditionally
+    // and the stream below is live (empty until the guild-bot stores land).
     if (hasTbPermission)
-        return { "claimed-roster", "tb-gm" };
-    return { "claimed-roster" };
+        return { "pull-seconds", "flee", "claimed-roster", "engage", "tb-gm" };
+    return { "pull-seconds", "flee", "claimed-roster", "engage" };
 }
 
 // One roster row: the same bots `.bot who` shows (see RosterVisible).

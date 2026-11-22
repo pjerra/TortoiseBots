@@ -113,14 +113,15 @@ int main()
         CHECK(roster::TransportLine("none") == "TBM:TRANSPORT|none");
     }
 
-    // VERBS/CAPS join the token lists; the base caps earn only the live
-    // claimed-roster stream (flee waits for the action router, the rest for
-    // their verbs). "tb-gm" rides along only for a .tb-permitted requester.
+    // VERBS/CAPS join the token lists. pull-seconds/flee/engage ride on
+    // f-actions (action pull/pullback [seconds], action flee, action engage);
+    // claimed-roster is the live stream; "tb-gm" rides along only for a
+    // .tb-permitted requester.
     // case: verbs_caps_join
     {
-        CHECK(roster::VerbsLine({ "alts", "list", "roster" }) == "TBM:VERBS|alts,list,roster");
-        CHECK(roster::CapsLine(roster::CapsFor(false)) == "TBM:CAPS|claimed-roster");
-        CHECK(roster::CapsLine(roster::CapsFor(true)) == "TBM:CAPS|claimed-roster,tb-gm");
+        CHECK(roster::VerbsLine({ "action", "alts", "list", "roster" }) == "TBM:VERBS|action,alts,list,roster");
+        CHECK(roster::CapsLine(roster::CapsFor(false)) == "TBM:CAPS|pull-seconds,flee,claimed-roster,engage");
+        CHECK(roster::CapsLine(roster::CapsFor(true)) == "TBM:CAPS|pull-seconds,flee,claimed-roster,engage,tb-gm");
         CHECK(roster::JoinTokens({}) == "");
     }
 
