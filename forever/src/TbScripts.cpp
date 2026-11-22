@@ -100,6 +100,7 @@
 #include "host/TbAddonInv.h"
 #include "host/TbAddonBehaviorService.h"
 #include "host/TbAddonTrade.h"
+#include "host/TbAddonProfessions.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -1763,6 +1764,7 @@ void AddSC_tortoisebots()
     TortoiseBots::behsvc::RegisterAddonVerbsBehaviorService(); // #133 c-behsvc: `behavior` + `service` addon verbs
     TortoiseBots::inv::RegisterAddonVerbsInv();   // #134 i-inv: the `inv`/`inventory`/`item` verbs + `inventory` cap (host/TbAddonInv.cpp)
     TortoiseBots::trade::RegisterAddonVerbsTrade(); // #134 P134-C: `trade` addon verb + trade window driver
+    TortoiseBots::professions::RegisterAddonVerbsProfessions(); // #134 P134-D: `professions` verb + `professions` cap (host/TbAddonProfessions.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
