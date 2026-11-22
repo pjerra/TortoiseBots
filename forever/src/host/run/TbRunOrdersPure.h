@@ -8,6 +8,7 @@
 #pragma once
 
 #include "TbRunTasksPure.h"
+#include "ai/playerbot/PullOpeningPolicy.h"
 #include "runtime/CcOrderFamily.h"
 #include "runtime/RemoteCommanderPolicy.h"
 
@@ -57,6 +58,7 @@ struct Parsed
     uint64_t handle = 0;        // pull, pullback, attack, focus: the handle of ReadFacts' unit guid (0 when a 32-hex guid)
     std::string targetToken;    // pull, pullback, attack, focus: the raw target token (handle or 32-hex guid)
     bool body = false;          // pull <handle> body
+    std::string pullOption;     // pull, pullback: the canonical option text the h3 order parses (`5 ranged`, `body`, empty)
     std::string mark;           // cc, cc clear: the raid mark word, lower case ("" for a `cc clear <bot>`)
     std::string family;         // cc: the family token the policy named after the bot ("" for the plan's own orders)
     tasks::TaskOrder task;      // S9 (O9): open, loot, lootmethod, use
@@ -99,6 +101,18 @@ inline std::string CcAnswerCode(std::string const& hostCode)
     if (hostCode == "no-engine" || hostCode == "engine-not-built")
         return "no-engine";
     return "failed";
+}
+
+// The canonical option text of a parsed pull (TB PullOptionText, Action.cpp:240-249): "[seconds][ ranged|body]". The h3 order parses this
+// same text on the bot's tick, so the command and the executor read one grammar.
+inline std::string PullOptionText(ai::PullOrderOption const& option)
+{
+    std::string text = option.hasSeconds ? std::to_string(option.seconds) : std::string();
+    if (option.ranged)
+        text += text.empty() ? "ranged" : " ranged";
+    if (option.body)
+        text += text.empty() ? "body" : " body";
+    return text;
 }
 
 // The text after the legacy `.bot cmd`: P's own grammar. A refused parse sets `code` (always "invalid" or "unsupported") and the reason in the legacy words.
@@ -177,24 +191,18 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
     }
     if (verb == "pull" || verb == "pullback")
     {
-        if (args.empty() || args.size() > 2 || !targetOf(args[0], out.handle, out.targetToken))
-            return invalid(verb + " <guid>" + (verb == "pull" ? " [body]" : ""));
+        std::string const usage = "pull|pullback <guid> [seconds 0-60] [ranged|body]";
+        if (args.empty() || !targetOf(args[0], out.handle, out.targetToken))
+            return invalid(usage);
         out.verb = verb == "pull" ? Verb::Pull : Verb::Pullback;
-        if (args.size() == 2)
-        {
-            std::string option = args[1];
-            for (char& c : option)
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            // `pull <guid> body` is the tank walking in (the one option the policy sends). A join delay and `ranged` are the Turtle command's: the module
-            // does not carry them out, so it says so instead of dropping them.
-            if (verb != "pull" || option != "body")
-            {
-                code = "unsupported";
-                message = "The module carries out `" + verb + " <guid>" + (verb == "pull" ? " [body]" : "") + "` only: a join delay and the word ranged are not ported.";
-                return false;
-            }
-            out.body = true;
-        }
+        std::string optionText;
+        for (size_t i = 1; i < args.size(); ++i)
+            optionText += (i > 1 ? " " : "") + args[i];
+        ai::PullOrderOption option;
+        if (!ai::ParsePullOrderOption(optionText, option))
+            return invalid(usage);
+        out.body = option.body;
+        out.pullOption = PullOptionText(option);
         return true;
     }
     if (verb == "attack")
@@ -297,7 +305,7 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
             return false;
         }
     code = "invalid";
-    message = "Usage: attack <guid> [bot] / pull|pullback <guid> / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr> [threshold]";
+    message = "Usage: attack <guid> [bot] / pull|pullback <guid> [seconds 0-60] [ranged|body] / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr> [threshold]";
     return false;
 }
 

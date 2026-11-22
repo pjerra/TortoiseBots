@@ -18,6 +18,7 @@
 #include "host/TbPet.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
+#include "host/TbPetFactory.h"
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/TbHostGuildOrders.h"
@@ -72,6 +73,7 @@
 #include "TbBotSession.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbSpellDelayPure.h"
+#include "host/TbClassQuestSpells.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -170,6 +172,10 @@ public:
         TortoiseBots::pool::LoadConfig();      // W0: the pool key, its rate and the registry rows (re-read on a reload)
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B: the scheduler's target, window, session and offline times
         TortoiseBots::bg::LoadConfig();        // BG1: the battleground keys (off by default)
+        TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
+        // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
+        if (reload)
+            TortoiseBots::questspells::BuildIndex();
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -187,6 +193,10 @@ public:
     // character DB (no core reload reads them) and the engine config through OnConfigLoad above.
     void OnAfterReload(std::string_view command) override
     {
+        // The class-quest spell index holds Quest pointers into the store a quest reload replaces, so both reloads rebuild it, and a
+        // disabled switch drops it (BuildIndex resets the index then): no stale pointer survives for a later re-enable to read.
+        if (command == "reload all" || command.find("quest") != std::string_view::npos)
+            TortoiseBots::questspells::BuildIndex();
 #ifdef TORTOISEBOTS_SLICE1
         // The quest starter/ender tables feed the bots' quest eligibility sets. A reload while the module is off still drops
         // them: the next check rebuilds, so a re-enable cannot read pre-reload rows.
@@ -246,6 +256,9 @@ public:
         // store into a table that is never rebuilt.
         tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
+        // The class quests' spells, once, from the loaded quest store; a quest reload rebuilds it.
+        if (TortoiseBots::questspells::Enabled())
+            TortoiseBots::questspells::BuildIndex();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
         // Without the slice nothing reaches an unported feature, so the lines are only for a build that has the engine.
 #ifdef TORTOISEBOTS_SLICE1
@@ -379,11 +392,23 @@ public:
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             tbhost::prof::ClearBotErrands(player->GetGUID());
 #endif
-            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1528). Only the preference:
-            // nothing is added to the bags and the ammo slot is untouched.
+            // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1528).
             player->SetPreferDrawableAmmo(true);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            TortoiseBots::p11::EnsureHunterStarterAmmo(player);
+            TortoiseBots::p11::EnsureShamanStarterTotems(player);
+#endif
+            // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
+            TortoiseBots::questspells::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
+    }
+
+    // A level gained any way (XP, `.character level`, `.tb level`) teaches the class-quest spells the new level earns.
+    void OnLevelChanged(Player* player, uint8 /*oldLevel*/) override
+    {
+        if (BotMgr::Instance().IsBot(player->GetGUID()))
+            TortoiseBots::questspells::Sync(player, "level");
     }
 
     void OnLogout(Player* player) override
@@ -496,6 +521,7 @@ public:
             { "setskill", HandleSetSkill, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {

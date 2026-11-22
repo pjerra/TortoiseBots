@@ -144,7 +144,7 @@ bool ChoicePoisonTrigger::IsActive()
 
 bool SapCcMarkTrigger::IsActive()
 {
-    if (sServerFacade.IsInCombat(bot) || !ai->HasRealPlayerMaster())
+    if (sServerFacade.IsInCombat(bot))
         return false;
 
     // Player switch: `.bot action sap off` adds "no sap" (on by default).

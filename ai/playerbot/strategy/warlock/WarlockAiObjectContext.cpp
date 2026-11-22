@@ -112,6 +112,7 @@ namespace ai
             PetManualStrategyFactoryInternal() : NamedObjectContext<Strategy>(false, true)
             {
                 creators["pet"] = [](PlayerbotAI* ai) { return new WarlockPetPlaceholderStrategy(ai); };
+                creators["pet auto"] = [](PlayerbotAI* ai) { return new WarlockAutoPetStrategy(ai); };
                 creators["pet imp"] = [](PlayerbotAI* ai) { return new WarlockManualPetStrategy(ai, "pet imp", "no imp", "summon imp"); };
                 creators["pet voidwalker"] = [](PlayerbotAI* ai) { return new WarlockManualPetStrategy(ai, "pet voidwalker", "no voidwalker", "summon voidwalker"); };
                 creators["pet succubus"] = [](PlayerbotAI* ai) { return new WarlockManualPetStrategy(ai, "pet succubus", "no succubus", "summon succubus"); };
@@ -265,6 +266,10 @@ namespace ai
                 creators["spec pet voidwalker"] = [](PlayerbotAI* ai) { return new SpecPetTrigger(ai, "spec pet voidwalker", TortoiseBots::WarlockSpecPetDecision::SummonVoidwalker); };
                 creators["spec pet succubus"] = [](PlayerbotAI* ai) { return new SpecPetTrigger(ai, "spec pet succubus", TortoiseBots::WarlockSpecPetDecision::SummonSuccubus); };
                 creators["spec pet felhunter"] = [](PlayerbotAI* ai) { return new SpecPetTrigger(ai, "spec pet felhunter", TortoiseBots::WarlockSpecPetDecision::SummonFelhunter); };
+                creators["auto pet imp"] = [](PlayerbotAI* ai) { return new AutoPetTrigger(ai, "auto pet imp", TortoiseBots::WarlockAutoPetDecision::SummonImp); };
+                creators["auto pet voidwalker"] = [](PlayerbotAI* ai) { return new AutoPetTrigger(ai, "auto pet voidwalker", TortoiseBots::WarlockAutoPetDecision::SummonVoidwalker); };
+                creators["auto pet succubus"] = [](PlayerbotAI* ai) { return new AutoPetTrigger(ai, "auto pet succubus", TortoiseBots::WarlockAutoPetDecision::SummonSuccubus); };
+                creators["auto pet felhunter"] = [](PlayerbotAI* ai) { return new AutoPetTrigger(ai, "auto pet felhunter", TortoiseBots::WarlockAutoPetDecision::SummonFelhunter); };
                 creators["suffering"] = [](PlayerbotAI* ai) { return new SufferingTrigger(ai); };
                 creators["consume shadows"] = [](PlayerbotAI* ai) { return new ConsumeShadowsTrigger(ai); };
                 creators["spell lock"] = [](PlayerbotAI* ai) { return new SpellLockTrigger(ai); };

@@ -41,5 +41,7 @@ uint32 StarterPetEntry(Player const* bot);
 // pet the bot cannot read back after the attach, is undone completely (active slot, attachment, object; nothing saved), and the result is read back from the
 // world before anything is written.
 GiveResult GiveHunterPet(Player* bot, bool saveToDb = true);
+void EnsureHunterStarterAmmo(Player* bot);
+void EnsureShamanStarterTotems(Player* bot);
 }
 }

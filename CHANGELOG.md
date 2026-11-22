@@ -1,5 +1,7 @@
 # Changelog
 
+- Fixed: a warlock bot summons the best demon it has learned instead of always trying the Voidwalker, so one below level 10 brings out the Imp it learns at level 1 and a later warlock brings out the Voidwalker, then the Succubus and the Felhunter; a `pet <demon>` strategy or a `.bot choice pet` order still wins, a demon past the Imp needs a Soul Shard, and a live demon is never swapped for want of one.
+
 - New: behind `AiPlayerbot.DungeonRunPackFocusSparesTacticUnits` (default 0, recommended on), the run leader's fallback skull for a pulled pack never lands on a unit the boss tactics own, on every step kind — a unit whose entry has its own `ai_boss_tactic` rows (a boss engaged before his boss step, a held whelp) or one a live row names as its target (a `seek_aura`'s or `seek_pull`'s source, a `tank_post`'s unit, a `hold_kill`'s blocker); Zul'Gurub walk 112 skulled Hakkar on the move step before his boss row and the focus order left no damage dealer for the Son the seek's row needs dosed (7/10 fights fully undosed against 17/22 without the focus code), and the fallback skulled Onyxia's held whelps ~85 times a fight.
 
 - Fixed: a commander's loot order on a chest that holds only common loot (a key or event item, e.g. the Deadmines gunpowder) is no longer refused, and a player's own `loot` order reaches the same chest (the order survives the loot queue's selection); bots still skip such chests on their own.

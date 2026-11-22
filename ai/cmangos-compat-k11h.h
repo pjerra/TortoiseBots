@@ -28,3 +28,36 @@ inline void ForEachThreatListTargetCompat(Unit* attacker, Fn&& fn)
     for (HostileReference* ref : attacker->GetThreatManager().getThreatList())
         fn(ref ? ref->getTarget() : nullptr);
 }
+
+inline bool IsTameBeastSpellCompat(SpellEntry const* spell)
+{
+    return spell && (spell->AttributesEx2 & SPELL_ATTR_EX2_TAME_BEAST);
+}
+
+inline std::string CreatureFamilyNameCompat(CreatureInfo const* info)
+{
+    CreatureFamilyEntry const* family = info ? sCreatureFamilyStore.LookupEntry(info->beast_family) : nullptr;
+    return (family && family->Name[LOCALE_enUS]) ? std::string(family->Name[LOCALE_enUS]) : std::string();
+}
+
+inline bool IsReservedNameCompat(std::string const& name)
+{
+    return sObjectMgr.IsReservedName(name);
+}
+
+inline void SetPetNameTimestampCompat(Pet* pet, uint32 ts)
+{
+    if (pet)
+        pet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, ts);
+}
+
+inline bool HasAnyHunterPetCompat(Player const* bot)
+{
+    return bot && (bot->GetPet() || !bot->GetPetGuid().IsEmpty());
+}
+
+inline void RemovePetCompat(Player* bot)
+{
+    if (bot)
+        bot->RemovePet(PET_SAVE_AS_DELETED);
+}

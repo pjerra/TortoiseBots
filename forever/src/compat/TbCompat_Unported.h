@@ -93,17 +93,7 @@ inline SlotRangeCompat BankItemSlotsCompat() { tbcompat::Unported(tbcompat::Feat
 inline Loot* LootOfCreatureCompat(Creature* /*creature*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); return nullptr; }
 inline Loot* LootOfGameObjectCompat(GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); return nullptr; }
 
-// Whether the item prototype has this display id (T `proto->DisplayInfoID == displayId`). The mirror prototype has no display
-// id. Failure value: false (no item looks like it).
-inline bool ItemProtoHasDisplayIdCompat(ItemPrototype const* /*proto*/, uint32 /*displayId*/) { tbcompat::Unported(tbcompat::Feature::ItemDisplayId); return false; }
-
-// Use / imbue an item by the use-item packet. T queues a CMSG_USE_ITEM (bag, slot, spell index, target flags, packed target guid)
-// on the bot's session. F's packet is a different structure and a bot session has no client to send it. Failure value: nothing
-// is queued ("the item was not used"); the caller is a void function.
-inline void QueueUseItemPacketCompat(Player* /*bot*/, uint8 /*bagIndex*/, uint8 /*slot*/, uint8 /*spellIndex*/, uint16 /*targetFlag*/, ObjectGuid const& /*targetGuid*/)
-{
-    tbcompat::Unported(tbcompat::Feature::ItemUsePacket);
-}
+// ItemProtoHasDisplayIdCompat and QueueUseItemPacketCompat moved to TbCompat_I2.h.
 
 // Whether this prototype would go into the given equipment slot (T `bot->FindEquipSlot(proto, slot, true) == slot`). F's
 // FindEquipSlot takes an Item. Failure value: false ("not for that slot").
@@ -333,7 +323,8 @@ inline bool SpellProhibitedCompat(Player const* player, SpellEntry const* spellI
 // ai/playerbot/TbCompatP11.h.)
 
 // Use a game object by the 1.12 use packet. Failure value: false ("could not use it").
-inline bool UseGameObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+namespace tbcompat { bool UseGameObject(Player* bot, GameObject* object); }
+inline bool UseGameObjectCompat(Player* bot, GameObject* object) { return tbcompat::UseGameObject(bot, object); }
 
 // The skill ForeverCore does not name. Failure value: false ("not trained").
 template <class AI>
@@ -400,13 +391,7 @@ inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry co
     return taken > 0 ? taken : 0;
 }
 
-// An item cast with a hand-built Spell: the loop of CastItemTargetAction::Execute. Failure value: false (the cast did not start).
-template <class SpellType>
-inline bool CastItemOnTargetCompat(Player* /*bot*/, Unit* /*target*/, Item* /*item*/, ItemPrototype const* /*proto*/)
-{
-    tbcompat::Unported(tbcompat::Feature::ItemCasts);
-    return false;
-}
+// CastItemOnTargetCompat moved to TbCompat_I2.h.
 // The triggered flags of the n-th spell of an item cast (T: TRIGGERED_OLD_TRIGGERED after the first), and the item cooldowns.
 inline void AddSpellAndCategoryCooldownsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/, uint32 /*itemId*/) { tbcompat::Unported(tbcompat::Feature::ItemCasts); }
 // Base class of ai::BotUseItemSpell: T's Spell. F cannot build a Spell from the mirror SpellEntry, so the class is only a

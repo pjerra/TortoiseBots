@@ -139,3 +139,20 @@ inline float GetCombatDistanceCompat(WorldObject const* self, WorldObject const*
 
 inline SpellEffectIndex DynamicObjectEffectIndexCompat(DynamicObject const* dyn) { return dyn->GetEffIndex(); }
 inline bool DynamicObjectAffectsCompat(DynamicObject* dyn, Unit* unit) { return dyn->IsAffecting(unit); }
+// A live ground ring (a CREATE_AREATRIGGER effect, e.g. Flamestrike 8422 on ForeverCore):
+// Turtle 1.12 has no AreaTrigger entities, so the scan below always leaves `out` empty and
+// the resolver always answers false. Same names as forever/src/compat/TbCompat_V.h.
+struct AreaTriggerHazardInfo
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float radius = 0.0f;
+    uint32 spellId = 0;
+    ObjectGuid guid;
+    ObjectGuid casterGuid;
+    Unit* caster = nullptr;
+};
+inline void CollectAreaTriggerInfosCompat(WorldObject const*, float, std::vector<AreaTriggerHazardInfo>&) {}
+inline bool GetAreaTriggerInfoCompat(Player*, ObjectGuid, AreaTriggerHazardInfo&) { return false; }
+inline void CollectAreaTriggerInfosAtCompat(float, float, float, Map*, float, std::vector<AreaTriggerHazardInfo>&) {}

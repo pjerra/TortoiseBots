@@ -680,6 +680,7 @@ OrderAnswer DoPull(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     Batch batch(ctx.fromRun);
     batch.Add(lead, p.verb == od::Verb::Pullback ? "pullback" : "pull", true, true);
     batch.Back().unit = guid;
+    batch.Back().arg = p.pullOption;
     OrderAnswer refusal;
     if (!PreflightBatch(batch, refusal))
         return refusal;

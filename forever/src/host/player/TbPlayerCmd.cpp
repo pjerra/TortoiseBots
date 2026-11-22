@@ -13,6 +13,7 @@
 #include "host/run/TbRunHooks.h"
 
 #include "CharacterCache.h"
+#include "BattlenetAccountMgr.h"
 #include "Chat.h"
 #include "Config.h"
 #include "DatabaseEnv.h"
@@ -28,6 +29,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -35,13 +37,25 @@ namespace TortoiseBots
 {
 namespace player
 {
-// Who the caller is as an owner: the Battle.net account of the caller's own session and every game account it holds now. Read
-// fresh for each `.bot` line (one login-DB query), never kept across lines: a `.bnetaccount link`/`unlink` takes effect for
-// the next line, so a game account moved to another Battle.net account stops being "owned" at once (fail closed on 0).
+// Who the caller is as an owner: the Battle.net account of the caller's own session. Whether a game account is one of its own is
+// asked of the core's Battlenet::AccountMgr::GetIdByGameAccount (the core's own login-DB read, no module query) for each game
+// account the line touches, memoised only inside this one scope (one `.bot` line), never kept across lines: a `.bnetaccount
+// link`/`unlink` takes effect for the next line, so a game account moved to another Battle.net account stops being "owned" at
+// once (fail closed: bnet 0 or an unlinked account owns nothing).
 struct OwnerScope
 {
     std::uint32_t bnet = 0;
-    std::unordered_set<std::uint32_t> gameAccounts;
+    bool Owns(std::uint32_t gameAccount) const
+    {
+        if (!bnet || !gameAccount)
+            return false;
+        auto it = memo.find(gameAccount);
+        if (it == memo.end())
+            it = memo.emplace(gameAccount, Battlenet::AccountMgr::GetIdByGameAccount(gameAccount)).first;
+        return it->second == bnet;
+    }
+private:
+    mutable std::unordered_map<std::uint32_t, std::uint32_t> memo;   // game account -> its Battle.net account now, this line only
 };
 
 BotFacts FactsOf(Player* requester, Player* bot, OwnerScope const& scope);   // fills the pure rule's facts; defined below
@@ -52,7 +66,7 @@ bool s_commands = true;
 [[maybe_unused]] std::uint32_t s_maxBots = 4;   // TortoiseBots.Player.MaxBots: the owned-login cap of round 2's `add`
 
 // The caller's Battle.net account is the one its session logged in with (the core's own identity of the player); its game
-// accounts are read from the login DB now, so a roster of any size costs one query, not one per bot.
+// accounts are checked against the login DB now (see OwnerScope).
 OwnerScope ScopeOf(Player* player)
 {
     OwnerScope scope;
@@ -60,17 +74,9 @@ OwnerScope ScopeOf(Player* player)
     if (!session)
         return scope;
     scope.bnet = session->GetBattlenetAccountId();
-    if (!scope.bnet)
-        return scope;
-    if (QueryResult result = LoginDatabase.PQuery("SELECT id FROM account WHERE battlenet_account = {}", scope.bnet))
-    {
-        do
-            scope.gameAccounts.insert((*result)[0].GetUInt32());
-        while (result->NextRow());
-    }
     // The session keeps its login Battle.net id after a live unlink or move of its own game account: that id is the caller's
     // only while the caller's game account is still one of its game accounts now, else the caller owns nothing.
-    if (!scope.gameAccounts.count(session->GetAccountId()))
+    if (!scope.Owns(session->GetAccountId()))
         return OwnerScope{};
     return scope;
 }
@@ -224,7 +230,7 @@ BotFacts FactsOf(Player* requester, Player* bot, OwnerScope const& scope)
     ObjectGuid const guid = bot->GetGUID();
     facts.isBot = BotMgr::Instance().IsBot(guid);
     std::uint32_t const gameAccount = sCharacterCache->GetCharacterAccountIdByGuid(guid);
-    if (scope.bnet && gameAccount && scope.gameAccounts.count(gameAccount))
+    if (scope.Owns(gameAccount))
         facts.account = scope.bnet;
     facts.master = BotMgr::Instance().MasterOf(guid).GetCounter();
     facts.commandedByCaller = requester && cmd::IsCommandedBy(requester, bot);

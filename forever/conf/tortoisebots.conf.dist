@@ -17,6 +17,17 @@ TortoiseBots.Enable = 0
 TortoiseBots.Spike.FollowDistance = 3
 
 #
+#    TortoiseBots.ClassQuestSpells
+#        Description: Bots learn the class spells a real player gets from its class quests (Summon Imp, the warrior stances,
+#                     the hunter pet kit, the priest racials, the druid forms and the shaman totems) when they log in and when
+#                     they gain a level. Only spells from the module's reviewed list are taught, and only through a class
+#                     quest the running world has. 0 = no index at startup and no bot is touched.
+#        Default:     0 (test servers turn it on)
+#
+
+TortoiseBots.ClassQuestSpells = 0
+
+#
 #    TortoiseBots.Slice.EngineByDefault
 #        Description: A bot that logs in runs on the real bot engine (PlayerbotAI) instead of the spike's follow/assist.
 #                     Only has an effect in a build made with TORTOISEBOTS_SLICE1. `.tb engine <character> on|off`
@@ -116,6 +127,16 @@ TortoiseBots.Commander.ObjectRange = 40
 #
 
 TortoiseBots.Commander.PosMs = 100
+
+#
+#    TortoiseBots.Orders.Tactical
+#        Description: The tactical orders of `.tb order` and `.tb cmd`: stop, flee, guard, stance, engage and rebuff. At 0 every one
+#                     of them answers `error code=disabled` and nothing is queued; the engine still runs an order that was queued before the
+#                     switch went off. Read on each use, so a config reload counts at once.
+#        Default:     1
+#
+
+TortoiseBots.Orders.Tactical = 1
 
 #
 #    TortoiseBots.Dashboard.Enable

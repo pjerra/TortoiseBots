@@ -19,10 +19,20 @@
 // Spec pet (AiPlayerbot.WarlockPetBySpec, default 1): with the toggle
 // on, PvE (open world + dungeon) picks the demon that fits the talent tree
 // instead of always the Voidwalker; see DecideWarlockSpecPet below.
+//
+// Default pet (DecideWarlockAutoPet, the "pet auto" strategy): the strongest
+// demon the warlock has learned, in the donor's summon order Felhunter ->
+// Succubus -> Voidwalker -> Imp, so a warlock below the Voidwalker trainer
+// tier (10) summons the Imp it learned at level 1 instead of standing
+// petless. A demon past the Imp needs a Soul Shard: without one a petless
+// warlock falls down the chain to the Imp and a live demon is never swapped.
+// Player orders (a "pet <demon>" strategy, `.bot choice pet`) and the spec
+// pet rows own the choice while they are set.
 
 namespace TortoiseBots
 {
 
+inline constexpr uint32_t WARLOCK_IMP_SUMMON_SPELL = 688;
 inline constexpr uint32_t WARLOCK_VOIDWALKER_SUMMON_SPELL = 697;
 inline constexpr uint32_t WARLOCK_VOIDWALKER_PET_ENTRY = 1860;
 inline constexpr uint32_t WARLOCK_IMP_PET_ENTRY = 416;
@@ -212,6 +222,99 @@ inline WarlockSpecPetDecision DecideWarlockSpecPet(WarlockSpecPetInputs const& i
         case WarlockPetKind::Succubus: return WarlockSpecPetDecision::SummonSuccubus;
         case WarlockPetKind::Felhunter: return WarlockSpecPetDecision::SummonFelhunter;
         default: return WarlockSpecPetDecision::LeaveAlone;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Default pet (the "pet auto" strategy). The donor's non-combat summon node
+// chains Felhunter -> Succubus -> Voidwalker -> Imp and each step passes
+// through to the next, so a warlock casts the strongest demon it knows. This
+// is that chain as a decision; the caller owns the trigger rows.
+
+enum class WarlockAutoPetDecision
+{
+    LeaveAlone,
+    SummonImp,
+    SummonVoidwalker,
+    SummonSuccubus,
+    SummonFelhunter,
+};
+
+struct WarlockAutoPetInputs
+{
+    bool hasRealPlayerMaster = false; // a live pet a player's bot already runs is never swapped
+    bool choiceOwned = false;         // a player's "pet <demon>" strategy or `.bot choice pet`, or a situation pet row
+    bool knowsImp = false;            // HasSpell(688)
+    bool knowsVoidwalker = false;     // HasSpell(697)
+    bool knowsSuccubus = false;       // HasSpell(712)
+    bool knowsFelhunter = false;      // HasSpell(691)
+    bool hasSoulShard = false;        // holds a 6265; every demon but the Imp needs one
+    bool hasPet = false;              // any live pet
+    uint32_t currentPetEntry = 0;     // 0 when petless
+};
+
+// The strongest demon the warlock has learned, donor order.
+inline WarlockPetKind WarlockBestKnownPet(bool knowsImp, bool knowsVoidwalker, bool knowsSuccubus,
+    bool knowsFelhunter)
+{
+    if (knowsFelhunter)
+        return WarlockPetKind::Felhunter;
+    if (knowsSuccubus)
+        return WarlockPetKind::Succubus;
+    if (knowsVoidwalker)
+        return WarlockPetKind::Voidwalker;
+    if (knowsImp)
+        return WarlockPetKind::Imp;
+    return WarlockPetKind::None;
+}
+
+// The demon the default choice wants before any shard read, or None when the
+// pet stands: a player owns the choice, nothing is learned, a live pet a
+// player's bot runs, a pet that is not one of the four demons, or the wanted
+// demon already out.
+inline WarlockPetKind WarlockAutoPetWanted(WarlockAutoPetInputs const& in)
+{
+    if (in.choiceOwned)
+        return WarlockPetKind::None;
+    WarlockPetKind const want = WarlockBestKnownPet(in.knowsImp, in.knowsVoidwalker, in.knowsSuccubus,
+        in.knowsFelhunter);
+    if (want == WarlockPetKind::None)
+        return WarlockPetKind::None;
+    if (in.hasPet)
+    {
+        if (WarlockPetKindFromEntry(in.currentPetEntry) == WarlockPetKind::None)
+            return WarlockPetKind::None;
+        if (WarlockPetEntry(want) == in.currentPetEntry)
+            return WarlockPetKind::None;
+        if (in.hasRealPlayerMaster)
+            return WarlockPetKind::None;
+    }
+    return want;
+}
+
+inline WarlockAutoPetDecision DecideWarlockAutoPet(WarlockAutoPetInputs const& in)
+{
+    WarlockPetKind want = WarlockAutoPetWanted(in);
+    if (want == WarlockPetKind::None)
+        return WarlockAutoPetDecision::LeaveAlone;
+
+    // A demon past the Imp needs a shard. A petless warlock still summons:
+    // the chain passes down to the Imp. A live demon is never swapped for
+    // want of a shard.
+    if (want != WarlockPetKind::Imp && !in.hasSoulShard)
+    {
+        if (in.hasPet || !in.knowsImp)
+            return WarlockAutoPetDecision::LeaveAlone;
+        want = WarlockPetKind::Imp;
+    }
+
+    switch (want)
+    {
+        case WarlockPetKind::Imp: return WarlockAutoPetDecision::SummonImp;
+        case WarlockPetKind::Voidwalker: return WarlockAutoPetDecision::SummonVoidwalker;
+        case WarlockPetKind::Succubus: return WarlockAutoPetDecision::SummonSuccubus;
+        case WarlockPetKind::Felhunter: return WarlockAutoPetDecision::SummonFelhunter;
+        default: return WarlockAutoPetDecision::LeaveAlone;
     }
 }
 

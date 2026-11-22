@@ -700,11 +700,62 @@ TortoiseBots::WarlockSpecPetDecision DecideSpecPet(PlayerbotAI* ai, Player* bot)
     inputs.hasSoulShard = bot->GetItemCount(TortoiseBots::WARLOCK_SOUL_SHARD_ITEM) > 0;
     return TortoiseBots::DecideWarlockSpecPet(inputs);
 }
+
+// One default-pet decision for the four AutoPetTrigger rows. A player order
+// (a "pet <demon>" strategy, `.bot choice pet`) and the situation pet rows
+// own the demon while they are on, so the default only picks when none does.
+TortoiseBots::WarlockAutoPetDecision DecideAutoPet(PlayerbotAI* ai, Player* bot)
+{
+    using TortoiseBots::WarlockAutoPetDecision;
+    if (bot->IsInCombat())
+        return WarlockAutoPetDecision::LeaveAlone;
+    if (ai->GetAiObjectContext()->GetValue<bool>("mounted", "self target")->Get())
+        return WarlockAutoPetDecision::LeaveAlone;
+
+    TortoiseBots::WarlockAutoPetInputs inputs;
+    inputs.choiceOwned = !ai::OrderedPetWord(ai).empty();
+    static char const* const manualPets[] = { "pet imp", "pet voidwalker", "pet succubus", "pet felhunter" };
+    for (char const* manual : manualPets)
+        inputs.choiceOwned = inputs.choiceOwned ||
+            ai->HasStrategy(manual, BotState::BOT_STATE_NON_COMBAT);
+    // The class's update-<situation>-strats rows add "pet <spec> <situation>"
+    // (PvE, PvP, raid) while the bot is in that situation; its rows are the
+    // demon owner there (the spec pet rows, or the fixed rows with the spec
+    // toggle off).
+    static char const* const situationPets[] = {
+        "pet affliction pve", "pet affliction pvp", "pet affliction raid",
+        "pet demonology pve", "pet demonology pvp", "pet demonology raid",
+        "pet destruction pve", "pet destruction pvp", "pet destruction raid"
+    };
+    for (char const* name : situationPets)
+        inputs.choiceOwned = inputs.choiceOwned ||
+            ai->HasStrategy(name, BotState::BOT_STATE_NON_COMBAT);
+
+    inputs.hasRealPlayerMaster = ai->HasRealPlayerMaster();
+    inputs.knowsImp = bot->HasSpell(TortoiseBots::WARLOCK_IMP_SUMMON_SPELL);
+    inputs.knowsVoidwalker = bot->HasSpell(TortoiseBots::WARLOCK_VOIDWALKER_SUMMON_SPELL);
+    inputs.knowsSuccubus = bot->HasSpell(TortoiseBots::WARLOCK_SUCCUBUS_SUMMON_SPELL);
+    inputs.knowsFelhunter = bot->HasSpell(TortoiseBots::WARLOCK_FELHUNTER_SUMMON_SPELL);
+    Unit* pet = ai->GetAiObjectContext()->GetValue<Unit*>("pet target")->Get();
+    inputs.hasPet = pet != nullptr;
+    inputs.currentPetEntry = pet ? pet->GetEntry() : 0;
+    // The demon already out (or no demon to want): stop before the bag read.
+    if (TortoiseBots::WarlockAutoPetWanted(inputs) == TortoiseBots::WarlockPetKind::None)
+        return WarlockAutoPetDecision::LeaveAlone;
+
+    inputs.hasSoulShard = bot->GetItemCount(TortoiseBots::WARLOCK_SOUL_SHARD_ITEM) > 0;
+    return TortoiseBots::DecideWarlockAutoPet(inputs);
+}
 } // namespace
 
 bool SpecPetTrigger::IsActive()
 {
     return DecideSpecPet(ai, bot) == wanted;
+}
+
+bool AutoPetTrigger::IsActive()
+{
+    return DecideAutoPet(ai, bot) == wanted;
 }
 
 bool SpecPetTankValue::Calculate()

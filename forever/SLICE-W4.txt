@@ -52,6 +52,7 @@ ai/playerbot/strategy/generic/ClassStrategy.cpp
 ai/playerbot/strategy/generic/CombatStrategy.cpp
 ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
+ai/playerbot/strategy/generic/GuardStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp
 ai/playerbot/strategy/triggers/BotStateTriggers.cpp
@@ -311,3 +312,27 @@ ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/strategy/actions/AhAction.cpp
 ai/playerbot/TravelNode.cpp
 runtime/BotNameService.cpp
+
+# Reactions: flee, kite, runaway, avoid aoe, racials, mark rti, focus, spread distance, target values
+ai/playerbot/strategy/generic/FleeStrategy.cpp
+ai/playerbot/strategy/generic/KiteStrategy.cpp
+ai/playerbot/strategy/generic/RunawayStrategy.cpp
+ai/playerbot/strategy/generic/ReactionStrategy.cpp
+ai/playerbot/strategy/generic/RacialsStrategy.cpp
+ai/playerbot/strategy/generic/MarkRtiStrategy.cpp
+ai/playerbot/strategy/generic/FocusStrategy.cpp
+ai/playerbot/strategy/actions/SpreadDistanceAction.cpp
+ai/playerbot/strategy/values/LeastHpTargetValue.cpp
+ai/playerbot/strategy/values/AttackerWithoutAuraTargetValue.cpp
+
+# Combat items: potions, healthstones, bandages, trinkets, oils, stones, poisons, soulstone
+ai/playerbot/strategy/generic/UsePotionsStrategy.cpp
+ai/playerbot/strategy/generic/ConsumableStrategy.cpp
+ai/playerbot/strategy/actions/UseConsumableAction.cpp
+ai/playerbot/strategy/actions/UseTrinketAction.cpp
+ai/playerbot/strategy/actions/ImbueAction.cpp
+ai/playerbot/strategy/actions/BuffAction.cpp
+ai/playerbot/strategy/values/PartyMemberToSoulstone.cpp
+
+# Class extras: hunter taming
+ai/playerbot/strategy/actions/TameAction.cpp

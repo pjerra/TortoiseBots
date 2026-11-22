@@ -414,7 +414,7 @@ class Wiring(unittest.TestCase):
         self.assertIn("runtime/BotNameService.cpp", listed)
         self.assertIn("forever/SLICE-W4.txt", CMAKE)
         self.assertIn("WL0_KEYS", GEN)
-        self.assertIn("WL0_KEYS)", GEN)
+        self.assertRegex(GEN, r"WL0_KEYS[,)]")
 
 
     def test_the_last_round_pins(self):

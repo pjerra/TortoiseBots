@@ -468,6 +468,23 @@ namespace ai
         TortoiseBots::WarlockSpecPetDecision wanted;
     };
 
+    // Default pet (the "pet auto" strategy, the slice's warlock kit): one
+    // trigger per demon, active when the default policy
+    // (runtime/policy/pet/WarlockPetPolicy.h) wants that demon summoned now —
+    // the strongest demon the warlock has learned, the Imp at level 1. Exactly
+    // one of the four is active at a time; a player's "pet <demon>" row, a
+    // `.bot choice pet` order and a situation pet strategy stand it down.
+    class AutoPetTrigger : public Trigger
+    {
+    public:
+        AutoPetTrigger(PlayerbotAI* ai, std::string name, TortoiseBots::WarlockAutoPetDecision decision)
+            : Trigger(ai, name, 5), wanted(decision) {}
+        bool IsActive() override;
+
+    private:
+        TortoiseBots::WarlockAutoPetDecision wanted;
+    };
+
     // Group tank read for the spec-pet rows, shared by the four SpecPetTrigger
     // rows: one walk per refresh period instead of one per row. A
     // CalculatedValue refreshes every checkInterval/2 s, so 10 = every 5 s (the

@@ -70,6 +70,7 @@ namespace ai
         INTERRUPT_EFFECT_APPLY_AURA = 6,
         INTERRUPT_AURA_MOD_SILENCE = 27,
         INTERRUPT_AURA_MOD_STUN = 12,
+        INTERRUPT_AURA_MOD_CONFUSE = 5,
         INTERRUPT_MECHANIC_STUN = 12,
     };
 
@@ -227,7 +228,8 @@ namespace ai
             if (interrupt.effect[i] == INTERRUPT_EFFECT_INTERRUPT_CAST && !interrupt.effectImmune[i])
                 return true;
             if (interrupt.effect[i] == INTERRUPT_EFFECT_APPLY_AURA &&
-                interrupt.effectAura[i] == INTERRUPT_AURA_MOD_SILENCE)
+                (interrupt.effectAura[i] == INTERRUPT_AURA_MOD_SILENCE ||
+                 (interrupt.effectAura[i] == INTERRUPT_AURA_MOD_CONFUSE && !interrupt.effectImmune[i])))
                 return true;
         }
         return stun;

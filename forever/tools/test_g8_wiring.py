@@ -79,7 +79,7 @@ class G8Wiring(unittest.TestCase):
 
     def test_rogue_keeps_cc(self):
         fac = text("forever/src/slice/SliceAiFactory.cpp")
-        self.assertRegex(fac, r'addStrategies\("combat", "dps assist", "close", "behind", "cc",')
+        self.assertRegex(fac, r'"combat"\), "dps assist", "close", "behind", "cc",')
 
     def test_gather_extension(self):
         run = text("forever/src/host/run/TbRun.cpp")

@@ -15,7 +15,7 @@ bool ImbueWithStoneAction::Execute(Event& event)
 
     // remove stealth
     if (bot->HasAura(SPELL_AURA_MOD_STEALTH))
-        bot->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
+        RemoveStealthAurasCompat(bot);
 
     // hp check
     if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
@@ -52,7 +52,7 @@ bool ImbueWithStoneAction::Execute(Event& event)
             // Do not use Elemental Sharpening Stone outside instances
             if (stone && GetItemProtoCompat(stone))
             {
-                if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+                if (ItemProtoHasDisplayIdCompat(GetItemProtoCompat(stone), ELEMENTAL_SHARPENING_DISPLAYID) && bot->GetInstanceId() == 0)
                     stone = nullptr;
             }
 
@@ -69,7 +69,7 @@ bool ImbueWithStoneAction::Execute(Event& event)
         // Do not use Elemental Sharpening Stone outside instances
         if (stone && GetItemProtoCompat(stone))
         {
-            if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+            if (ItemProtoHasDisplayIdCompat(GetItemProtoCompat(stone), ELEMENTAL_SHARPENING_DISPLAYID) && bot->GetInstanceId() == 0)
                 stone = nullptr;
         }
 
@@ -111,7 +111,7 @@ bool ImbueWithStoneAction::isUseful()
         Item* stone = ai->FindStoneFor(secondaryWeapon);
         if (stone && GetItemProtoCompat(stone))
         {
-            if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+            if (ItemProtoHasDisplayIdCompat(GetItemProtoCompat(stone), ELEMENTAL_SHARPENING_DISPLAYID) && bot->GetInstanceId() == 0)
                 stone = nullptr;
         }
 
@@ -128,7 +128,7 @@ bool ImbueWithStoneAction::isUseful()
             Item* stone = ai->FindStoneFor(mainWeapon);
             if (stone && GetItemProtoCompat(stone))
             {
-                if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+                if (ItemProtoHasDisplayIdCompat(GetItemProtoCompat(stone), ELEMENTAL_SHARPENING_DISPLAYID) && bot->GetInstanceId() == 0)
                     stone = nullptr;
             }
 
@@ -148,7 +148,7 @@ bool ImbueWithOilAction::Execute(Event& event)
 
     // remove stealth
     if (bot->HasAura(SPELL_AURA_MOD_STEALTH))
-        bot->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
+        RemoveStealthAurasCompat(bot);
 
     // hp check
     if (bot->GetStandState() != UNIT_STAND_STATE_STAND)

@@ -137,6 +137,7 @@ namespace ai
             creators["nearest damaging traps"] = [](PlayerbotAI* ai) { return new NearestDamagingTrapsValue(ai); };
             creators["nearest dynamic objects"] = [](PlayerbotAI* ai) { return new NearestDynamicObjects(ai); };
             creators["nearest dynamic objects no los"] = [](PlayerbotAI* ai) { return new NearestDynamicObjects(ai, kTrapScanRangeYd, LOS_IGNORE); };
+            creators["nearest area triggers no los"] = [](PlayerbotAI* ai) { return new NearestAreaTriggers(ai, kTrapScanRangeYd); };
             creators["closest game objects static los"] = [](PlayerbotAI* ai) { return new NearestGameObjects(ai, INTERACTION_DISTANCE, LOS_STATIC); };
             creators["nearest npcs"] = [](PlayerbotAI* ai) { return new NearestNpcsValue(ai); };
             creators["nearest npcs no los"] = [](PlayerbotAI* ai) { return new NearestNpcsValue(ai, sPlayerbotAIConfig.sightDistance, true); };

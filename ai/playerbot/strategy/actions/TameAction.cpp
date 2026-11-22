@@ -5,6 +5,7 @@
 
 #include "playerbot/playerbot.h"
 #include "TameAction.h"
+#include "playerbot/TbCompatK11h.h"
 
 #include "Creature.h"
 #include "DBCStructure.h"
@@ -42,7 +43,7 @@ uint32 FindTameSpell(Player* bot)
             continue;
 
         SpellEntry const* spell = sServerFacade.LookupSpellInfo(itr->first);
-        if (spell && (spell->AttributesEx2 & SPELL_ATTR_EX2_TAME_BEAST))
+        if (IsTameBeastSpellCompat(spell))
             return spell->Id;
     }
 
@@ -63,6 +64,7 @@ Creature* TameAction::FindTarget(std::string const& mode, std::string const& val
 
     std::string needle = Lower(value);
     uint32 entry = 0;
+    uint64 guidCounter = 0;
     if (mode == "id")
     {
         try
@@ -74,26 +76,42 @@ Creature* TameAction::FindTarget(std::string const& mode, std::string const& val
             return nullptr;
         }
     }
-
-    std::list<ObjectGuid> nearby = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
-    for (ObjectGuid const& guid : nearby)
+    else if (mode == "guid")
     {
-        Creature* creature = botAI->GetCreature(guid);
-        if (!creature || !creature->GetCreatureInfo())
-            continue;
-
-        CreatureInfo const* info = creature->GetCreatureInfo();
-        if (mode == "id" && info->entry != entry)
-            continue;
-        if (mode == "name" && Lower(creature->GetName()) != needle)
-            continue;
-        if (mode == "family")
+        try
         {
-            CreatureFamilyEntry const* family = sCreatureFamilyStore.LookupEntry(info->beast_family);
-            if (!family || Lower(family->Name[LOCALE_enUS]) != needle)
-                continue;
+            guidCounter = std::stoull(value);
         }
-        return creature;
+        catch (...)
+        {
+            return nullptr;
+        }
+    }
+
+    for (char const* valueName : { "possible targets", "nearest npcs", "attackers" })
+    {
+        std::list<ObjectGuid> nearby = AI_VALUE(std::list<ObjectGuid>, valueName);
+        for (ObjectGuid const& guid : nearby)
+        {
+            Creature* creature = botAI->GetCreature(guid);
+            if (!creature || !creature->GetCreatureInfo())
+                continue;
+
+            CreatureInfo const* info = creature->GetCreatureInfo();
+            if (mode == "guid" && guid.GetCounter() != guidCounter)
+                continue;
+            if (mode == "id" && creature->GetEntry() != entry)
+                continue;
+            if (mode == "name" && Lower(creature->GetName()) != needle)
+                continue;
+            if (mode == "family")
+            {
+                std::string const familyName = CreatureFamilyNameCompat(info);
+                if (familyName.empty() || Lower(familyName) != needle)
+                    continue;
+            }
+            return creature;
+        }
     }
 
     return nullptr;
@@ -118,14 +136,14 @@ bool TameAction::RenamePet(std::string const& value, Player* requester)
         }
     }
 
-    if (sObjectMgr.IsReservedName(name))
+    if (IsReservedNameCompat(name))
     {
         ai->TellPlayer(requester, "That pet name is reserved.");
         return false;
     }
 
     pet->SetName(name);
-    pet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, static_cast<uint32>(std::time(nullptr)));
+    SetPetNameTimestampCompat(pet, static_cast<uint32>(std::time(nullptr)));
     pet->SavePetToDB(PET_SAVE_AS_CURRENT);
     bot->PetSpellInitialize();
     ai->TellPlayer(requester, "Pet renamed to " + name + ".");
@@ -134,13 +152,14 @@ bool TameAction::RenamePet(std::string const& value, Player* requester)
 
 bool TameAction::AbandonPet(Player* requester)
 {
-    if (!bot->GetPet())
+    if (!HasAnyHunterPetCompat(bot))
     {
         ai->TellPlayer(requester, "I do not have a pet to abandon.");
         return false;
     }
 
-    bot->RemovePet(PET_SAVE_AS_DELETED);
+    RemovePetCompat(bot);
+    ai->SetPetAbandoned(true);
     ai->TellPlayer(requester, "Pet abandoned.");
     return true;
 }
@@ -171,7 +190,7 @@ bool TameAction::Execute(Event& event)
         ai->TellPlayer(requester, "Only level 10+ hunters can tame pets.");
         return false;
     }
-    if (bot->GetPet() || bot->GetPetGuid())
+    if (HasAnyHunterPetCompat(bot))
     {
         ai->TellPlayer(requester, "I already have a pet; abandon it before taming another.");
         return false;
@@ -179,14 +198,14 @@ bool TameAction::Execute(Event& event)
 
     if (mode.empty())
         mode = "target";
-    if (mode != "target" && mode != "name" && mode != "id" && mode != "family")
+    if (mode != "target" && mode != "name" && mode != "id" && mode != "family" && mode != "guid")
     {
         ai->TellPlayer(requester, "Usage: tame [target/name <name>/id <entry>/family <family>/rename <name>/abandon]");
         return false;
     }
 
     Creature* target = FindTarget(mode, value, requester);
-    if (!target || !target->GetCreatureInfo() || !target->GetCreatureInfo()->isTameable())
+    if (!target || !IsTameableCompat(bot, target))
     {
         ai->TellPlayer(requester, "I cannot find a nearby tameable beast.");
         return false;
@@ -199,12 +218,16 @@ bool TameAction::Execute(Event& event)
         return false;
     }
 
+    if (!bot->IsStopped())
+        ai->StopMoving();
+
     if (!ai->CastSpell(tameSpell, target))
     {
         ai->TellPlayer(requester, "I could not start taming that beast.");
         return false;
     }
 
+    ai->SetPetAbandoned(false);
     ai->TellPlayer(requester, "Taming " + std::string(target->GetName()) + ".");
     return true;
 }

@@ -40,7 +40,7 @@
 // "blessing", "cast time", "heal interrupt"; non-combat "holy", "dps assist", "follow", "cure", "buff", "food", "default", "aura", "blessing"; reaction "holy". Protection paladin
 // (recorded only, D1): combat "protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff"; non-combat "protection", "tank assist" + the same tail; reaction
 // "protection". Restoration shaman: combat "restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt"; non-combat "restoration", "dps assist", "follow",
-// "cure", "buff", "food", "default" (no "totems" out of combat: D5, the totems drop in combat only); reaction "restoration". A tank kit (bear, protection) returns before the threat rule, as
+// "cure", "totems", "buff", "food", "default"; reaction "restoration". A tank kit (bear, protection) returns before the threat rule, as
 // the warrior's does (a tank never backs off the threat it holds; the spec's lists name "threat" in the two tank kits, but KeepsPartyThreatBackoff is false for a tank, so the strategy was
 // never added to the warrior's; the kits here follow the warrior's). The three healer kits get "threat" from KeepsPartyThreatBackoff as the priest does. Left out on purpose (the spec's
 // list): the full kits' "aoe", "cc", "boost", "flee", "pull back", "offheal"/"offdps", "stealth", "oom melee", the druid's under-level-10 "leveling" kit, every cat, balance, retribution,
@@ -50,8 +50,9 @@
 // `else` gives it; the slice never reads talents): combat "marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff" (+ "threat" where
 // KeepsPartyThreatBackoff says so); non-combat "marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default"; reaction "marksmanship".
 // Warlock on tab 0 (affliction): combat "affliction", "dps assist", "ranged", "pet", "curse", "buff" (+ "threat"); non-combat "affliction", "dps assist", "pet",
-// "pet voidwalker", "buff", "follow", "food", "default"; reaction "affliction". Left out on purpose (the spec's list): the full kits' "cc" (Scare Beast, Freezing
-// Trap through Feign Death, Fear), "aoe" (Multi-Shot, Rain of Fire), "boost", the warlock's "flee".
+// "pet auto", "buff", "follow", "food", "default"; reaction "affliction". "pet auto" is the default demon choice (the strongest demon the warlock knows, the Imp at
+// level 1); the manual "pet voidwalker" here would be read as a player order and would stand the spec pet rows down. Left out on purpose (the spec's list): the full
+// kits' "cc" (Scare Beast, Freezing Trap through Feign Death, Fear), "aoe" (Multi-Shot, Rain of Fire), "boost", the warlock's "flee".
 #include "compat/botpch_forever.h"
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/playerbot.h"
@@ -75,9 +76,14 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "Group.h"
 #include "LFG.h"
+#include "DB2Stores.h"
+#include "TraitMgr.h"
+#include "TraitPacketsCommon.h"
 #include "SliceLog.h"
 #include <map>
+#include <unordered_map>
 #include "SliceHybridPolicy.h"
+#include "SliceSpecPolicy.h"
 #include "playerbot/policy/world/FreeKitPolicy.h"
 #include "SliceMissingKeyGuard.h"
 
@@ -122,11 +128,55 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* a
 
 
 
-std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* /*player*/)
+namespace
+{
+std::unordered_map<int32, int> const& NodeTabMapForClass(uint8 classId)
+{
+    static std::map<uint8, std::unordered_map<int32, int>> cache;
+    auto it = cache.find(classId);
+    if (it != cache.end())
+        return it->second;
+
+    std::vector<TortoiseBots::slice::spec::TraitNodeLayout> layout;
+    if (ChrSpecializationEntry const* spec = sDB2Manager.GetChrSpecializationByIndex(classId, 0))
+    {
+        WorldPackets::Traits::TraitConfig config;
+        config.Type = TraitConfigType::Combat;
+        config.ChrSpecializationID = spec->ID;
+        for (TraitMgr::NodeEntryInfo const& e : TraitMgr::GetNodeEntriesForConfig(config))
+        {
+            if (TraitNodeEntry const* node = sTraitNodeStore.LookupEntry(e.TraitNodeID))
+                layout.push_back({ e.TraitNodeID, node->PosX, node->PosY });
+        }
+    }
+    return cache.emplace(classId, TortoiseBots::slice::spec::BuildNodeTabMap(layout)).first->second;
+}
+}
+
+std::map<uint32, int32> AiFactory::GetPlayerSpecTabs(const Player* player)
 {
     std::map<uint32, int32> tabs;
     for (uint32 i = 0; i < uint32(3); i++)
         tabs[i] = 0;
+    if (!player)
+        return tabs;
+
+    int32 const activeConfigId = *player->m_activePlayerData->ActiveCombatTraitConfigID;
+    if (!activeConfigId)
+        return tabs;
+    UF::TraitConfig const* config = player->GetTraitConfig(activeConfigId);
+    if (!config)
+        return tabs;
+
+    std::unordered_map<int32, int> const& nodeTab = NodeTabMapForClass(player->GetClass());
+    for (UF::TraitEntry const& entry : config->Entries)
+    {
+        if (entry.Rank <= 0)
+            continue;
+        auto it = nodeTab.find(entry.TraitNodeID);
+        if (it != nodeTab.end() && it->second >= 0 && it->second < 3)
+            tabs[uint32(it->second)] += entry.Rank;
+    }
     return tabs;
 }
 
@@ -201,6 +251,7 @@ TortoiseBots::slice::hybrid::GroupMemberRoleInfo BuildMemberRoleInfo(Player cons
     }
     info.tankSignal = HasTankSignal(player);
     info.canHeal = ClassCanHeal(player->GetClass());
+    info.defaultRole = TortoiseBots::slice::spec::DefaultSpecRole(unsigned(player->GetClass()), player->GetLevel(), AiFactory::GetPlayerSpecTab(player));
     return info;
 }
 
@@ -230,76 +281,37 @@ uint8 EffectiveRole(Player const* player, PlayerbotAI* const facade)
     return TortoiseBots::slice::hybrid::ResolveGroupRole(self, members, sPlayerbotAIConfig.substituteTank);
 }
 
-bool WarriorIsTank(Player const* player, PlayerbotAI* const facade)
-{
-    return player && player->GetClass() == CLASS_WARRIOR && EffectiveRole(player, facade) == static_cast<uint8>(BOT_ROLE_TANK);
-}
-
-// Slice 10: the kit a druid, paladin or shaman plays (spec section 2, D1/D2). Only the tank order changes it: a druid ordered to tank is the bear and a paladin the protection
-// paladin (recorded only); every other order or none is the healer kit (restoration druid, holy paladin, restoration shaman). A shaman never tanks here (D2).
-enum class HybridKit { None, Bear, RestoDruid, HolyPaladin, ProtPaladin, RestoShaman };
-
-HybridKit HybridKitOf(Player const* player, uint8 orderedRole)
+int KitSpecTab(Player const* player, PlayerbotAI* const facade)
 {
     if (!player)
-        return HybridKit::None;
-    bool const tank = orderedRole == static_cast<uint8>(BOT_ROLE_TANK);
-    switch (player->GetClass())
-    {
-        case CLASS_DRUID: return tank ? HybridKit::Bear : HybridKit::RestoDruid;
-        case CLASS_PALADIN: return tank ? HybridKit::ProtPaladin : HybridKit::HolyPaladin;
-        case CLASS_SHAMAN: return HybridKit::RestoShaman;
-        default: return HybridKit::None;
-    }
-}
-
-bool IsTankKit(HybridKit kit)
-{
-    return kit == HybridKit::Bear || kit == HybridKit::ProtPaladin;
-}
-
-// The class strategy that names the kit (the reaction engine's one strategy, and the spec strategy of the combat and non-combat kits).
-char const* HybridSpecStrategy(HybridKit kit)
-{
-    switch (kit)
-    {
-        case HybridKit::Bear: return "tank feral";
-        case HybridKit::RestoDruid: return "restoration";
-        case HybridKit::HolyPaladin: return "holy";
-        case HybridKit::ProtPaladin: return "protection";
-        case HybridKit::RestoShaman: return "restoration";
-        default: return nullptr;
-    }
+        return 0;
+    int8 const forced = PlayerbotAIStorage::Instance().GetPlayerForcedSpecTab(player->GetObjectGuid());
+    std::map<uint32, int32> const tabs = AiFactory::GetPlayerSpecTabs(player);
+    uint8 const role = EffectiveRole(player, facade);
+    return TortoiseBots::slice::spec::ResolveKitSpecTab(
+        unsigned(player->GetClass()),
+        player->GetLevel(),
+        forced,
+        role,
+        tabs.at(0),
+        tabs.at(1),
+        tabs.at(2));
 }
 }
 
 int AiFactory::GetPlayerSpecTab(const Player* player)
 {
-    // The slice never reads talents, so the tab comes from the class and the ordered role. A mage is fire and a rogue combat (tab 1: AiFactory.cpp:169-185 gives both that tab
-    // without talents; GenericMageStrategy.cpp:119 and :140 read it); a hunter is marksmanship (tab 1: AiFactory.cpp:858-873). A druid, paladin or shaman gets the tab its kit
-    // belongs to (the full factory's tabs: DruidAiObjectContext / PaladinAiObjectContext / ShamanAiObjectContext strategies read it, e.g. GenericDruidStrategy.cpp:68): druid
-    // feral 1 for the bear, restoration 2 otherwise; paladin protection 1 for the protection kit, holy 0 otherwise; shaman restoration 2. Every other class keeps tab 0
-    // (warrior arms, priest discipline, warlock affliction).
-    if (player && (player->GetClass() == CLASS_MAGE || player->GetClass() == CLASS_ROGUE))
-        return 1;
-    if (player && player->GetClass() == CLASS_HUNTER)
-        return 1;
-    // A warrior ordered to tank is protection (tab 2), so the item scoring picks the protection scale and keeps the shield.
-    if (player && player->GetClass() == CLASS_WARRIOR && EffectiveRole(player, nullptr) == static_cast<uint8>(BOT_ROLE_TANK))
-        return 2;
-    if (player)
-    {
-        switch (HybridKitOf(player, EffectiveRole(player, nullptr)))
-        {
-            case HybridKit::Bear: return 1;
-            case HybridKit::RestoDruid: return 2;
-            case HybridKit::HolyPaladin: return 0;
-            case HybridKit::ProtPaladin: return 1;
-            case HybridKit::RestoShaman: return 2;
-            default: break;
-        }
-    }
-    return 0; // arms
+    if (!player)
+        return 0;
+    int8 const forced = PlayerbotAIStorage::Instance().GetPlayerForcedSpecTab(player->GetObjectGuid());
+    std::map<uint32, int32> const tabs = GetPlayerSpecTabs(player);
+    return TortoiseBots::slice::spec::PickSpecTab(
+        unsigned(player->GetClass()),
+        player->GetLevel(),
+        forced,
+        tabs.at(0),
+        tabs.at(1),
+        tabs.at(2));
 }
 
 // The full factory's text (AiFactory.cpp:633-642), compiled here because AiFactory.cpp is not in the slice: non-tank bots of a party with a real
@@ -336,54 +348,90 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
 
 void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* combatEngine)
 {
-    if (player && player->GetClass() == CLASS_PRIEST)
+    if (!player)
+        return;
+    combatEngine->addStrategy("racials");
+    int const tab = KitSpecTab(player, facade);
+
+    switch (player->GetClass())
     {
-        // "heal interrupt": the overheal cancel (a heal in its cast bar is cancelled when the patient no longer needs it), added by the full factory
-        // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3 of slice 2. The priest falls through to the `threat` block below
-        // (slice 3: a commanded healer backs off the tank's threat).
-        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
-    }
-    else if (HybridKitOf(player, EffectiveRole(player, facade)) != HybridKit::None)
-    {
-        switch (HybridKitOf(player, EffectiveRole(player, facade)))
+        case CLASS_PRIEST:
         {
-            case HybridKit::Bear:
-                // AiFactory.cpp:807-853 (tab 1, tanking) without "pull back" and "aoe", "cc", "boost".
-                combatEngine->addStrategies("tank feral", "tank assist", "pull", "close", "tank face", "cure", "buff", NULL);
-                return;                             // a tank never backs off the threat it holds
-            case HybridKit::ProtPaladin:
-                combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff protection pve", NULL);
+            if (tab == 2)
+                combatEngine->addStrategies("shadow", "dps assist", "ranged", "flee", "cure", "buff", "cast time", "cc", "aoe", "boost", NULL);
+            else
+                combatEngine->addStrategies(tab == 1 ? "holy" : "discipline", "offdps", "dps assist", "ranged", "flee", "cure", "buff", "cast time", "heal interrupt", "cc", "aoe", "boost", NULL);
+            break;
+        }
+        case CLASS_DRUID:
+        {
+            if (player->GetLevel() < 10)
+            {
+                combatEngine->addStrategies("leveling", "dps assist", "cure", "cc", "aoe", "boost", NULL);
+                break;
+            }
+            if (tab == 1)
+            {
+                if (EffectiveRole(player, facade) == static_cast<uint8>(BOT_ROLE_TANK))
+                {
+                    combatEngine->addStrategies("tank feral", "tank assist", "pull", "close", "tank face", "cure", "buff", "cc", "aoe", "boost", NULL);
+                    return;
+                }
+                combatEngine->addStrategies("dps feral", "dps assist", "close", "behind", "cure", "buff", "cc", "aoe", "boost", NULL);
+            }
+            else if (tab == 0)
+                combatEngine->addStrategies("balance", "dps assist", "ranged", "flee", "oom melee", "cure", "buff", "cc", "aoe", "boost", NULL);
+            else
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "flee", "cure", "buff", "cast time", "heal interrupt", "cc", "aoe", "boost", NULL);
+            break;
+        }
+        case CLASS_PALADIN:
+        {
+            if (tab == 1)
+            {
+                combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cure", "aura", "blessing", "buff protection pve", "cc", "aoe", "boost", NULL);
                 return;
-            case HybridKit::RestoDruid:
-                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "buff", "cast time", "heal interrupt", NULL);
-                break;
-            case HybridKit::HolyPaladin:
-                combatEngine->addStrategies("holy", "dps assist", "ranged", "cure", "buff", "aura", "blessing", "cast time", "heal interrupt", NULL);
-                break;
-            case HybridKit::RestoShaman:
-                combatEngine->addStrategies("restoration", "dps assist", "ranged", "cure", "totems", "buff", "cast time", "heal interrupt", NULL);
-                break;
-            default:
-                break;
+            }
+            if (tab == 2)
+                combatEngine->addStrategies("retribution", "dps assist", "close", "behind", "cure", "buff", "aura", "blessing", "cc", "aoe", "boost", NULL);
+            else
+                combatEngine->addStrategies("holy", "dps assist", "ranged", "flee", "cure", "buff", "aura", "blessing", "cast time", "heal interrupt", "cc", "aoe", "boost", NULL);
+            break;
+        }
+        case CLASS_SHAMAN:
+        {
+            if (tab == 0)
+                combatEngine->addStrategies("elemental", "dps assist", "ranged", "flee", "cure", "totems", "buff", "cc", "aoe", "boost", NULL);
+            else if (tab == 1)
+                combatEngine->addStrategies("enhancement", "dps assist", "close", "behind", "cure", "totems", "buff", "cc", "aoe", "boost", NULL);
+            else
+                combatEngine->addStrategies("restoration", "dps assist", "ranged", "flee", "cure", "totems", "buff", "cast time", "heal interrupt", "cc", "aoe", "boost", NULL);
+            break;
+        }
+        case CLASS_MAGE:
+            combatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "ranged", "flee", "cc", "buff", "boost", "aoe", "cure", NULL);
+            break;
+        case CLASS_ROGUE:
+            combatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "close", "behind", "cc", "buff", "boost", "aoe", "stealth", "poisons", NULL);
+            break;
+        case CLASS_HUNTER:
+            combatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "ranged", "flee", "aspect", "sting", "pet", "buff", "cc", "aoe", "boost", NULL);
+            break;
+        case CLASS_WARLOCK:
+            combatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "ranged", "flee", "pet", "curse", "buff", "cc", "aoe", "boost", NULL);
+            break;
+        case CLASS_WARRIOR:
+        default:
+        {
+            if (tab == 2)
+            {
+                combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", "cc", "aoe", "boost", NULL);
+                return;
+            }
+            combatEngine->addStrategies(tab == 1 ? "fury" : "arms", "dps assist", "close", "behind", "buff", "cc", "aoe", "boost", NULL);
+            break;
         }
     }
-    else if (player && player->GetClass() == CLASS_MAGE)
-        combatEngine->addStrategies("fire", "dps assist", "ranged", "cc", "buff", "boost", NULL);
-    else if (player && player->GetClass() == CLASS_ROGUE)
-        // "cc" gives the rogue Kick (RogueCcStrategy: kick, kick on enemy healer; its Sap rows need a real player master and stay silent): M8 live test.
-        combatEngine->addStrategies("combat", "dps assist", "close", "behind", "cc", "buff", "boost", NULL);
-    else if (player && player->GetClass() == CLASS_HUNTER)
-        combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff", NULL);
-    else if (player && player->GetClass() == CLASS_WARLOCK)
-        combatEngine->addStrategies("affliction", "dps assist", "ranged", "pet", "curse", "buff", NULL);
-    else if (WarriorIsTank(player, facade))
-    {
-        // AiFactory.cpp:727 without "pull back" (the return leg of a pull is out of the slice); "close" is the melee approach the damage kit has too.
-        combatEngine->addStrategies("protection", "tank assist", "pull", "close", "tank face", NULL);
-        return;                                     // a tank never backs off the threat it holds (KeepsPartyThreatBackoff is false for a tank)
-    }
-    else
-        combatEngine->addStrategies("arms", "dps assist", "close", "buff", NULL);
 
     // Applied after the class kit, as AiFactory.cpp:1009 does.
     if (KeepsPartyThreatBackoff(player, facade) && !combatEngine->HasStrategy("threat"))
@@ -407,6 +455,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 {
     if (nonCombatEngine)
         nonCombatEngine->addStrategy("maintenance");
+        nonCombatEngine->addStrategy("racials");
     // A free bot plays the world on its own: grind targets, food, loot, rolls, the class spec and the engine's default handler.
     if (player && sRandomBotFacade.IsFreeBot(player) && !facade->HasRealPlayerMaster())
     {
@@ -415,51 +464,64 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             nonCombatEngine->addStrategy(*kit);
         return;
     }
-    if (player && player->GetClass() == CLASS_PRIEST)
-    {
-        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", NULL);
+    if (!player)
         return;
-    }
-    if (HybridKit const kit = HybridKitOf(player, EffectiveRole(player, facade)); kit != HybridKit::None)
+    int const tab = KitSpecTab(player, facade);
+
+    switch (player->GetClass())
     {
-        // AiFactory.cpp:1284-1300, :1322-1345, :1408-1440: the spec strategy, the assist strategy of the role, then follow, cure, buff, food and the engine's own "default"
-        // (+ the paladin's aura and blessing). No "totems" out of combat (D5), no "aoe", "cc", "boost", "loot".
-        nonCombatEngine->addStrategies(HybridSpecStrategy(kit), IsTankKit(kit) ? "tank assist" : "dps assist", "follow", "cure", "buff", "food", "default", NULL);
-        if (kit == HybridKit::HolyPaladin)
-            nonCombatEngine->addStrategies("aura", "blessing", NULL);
-        else if (kit == HybridKit::ProtPaladin)
-            nonCombatEngine->addStrategies("aura", "blessing", "buff protection pve", NULL);
-        return;
+        case CLASS_PRIEST:
+            nonCombatEngine->addStrategies(tab == 2 ? "shadow" : (tab == 1 ? "holy" : "discipline"), "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "boost", NULL);
+            return;
+        case CLASS_DRUID:
+        {
+            if (player->GetLevel() < 10)
+            {
+                nonCombatEngine->addStrategies("leveling", "dps assist", "follow", "cure", "buff", "food", "default", "boost", NULL);
+                return;
+            }
+            if (tab == 1)
+            {
+                bool const tank = EffectiveRole(player, facade) == static_cast<uint8>(BOT_ROLE_TANK);
+                nonCombatEngine->addStrategies(tank ? "tank feral" : "dps feral", tank ? "tank assist" : "dps assist", "follow", "cure", "buff", "food", "default", "boost", "aoe", "cc", NULL);
+                return;
+            }
+            nonCombatEngine->addStrategies(tab == 0 ? "balance" : "restoration", "dps assist", "follow", "cure", "buff", "food", "default", "boost", "aoe", "cc", NULL);
+            return;
+        }
+        case CLASS_PALADIN:
+        {
+            if (tab == 1)
+                nonCombatEngine->addStrategies("protection", "tank assist", "follow", "cure", "buff", "food", "default", "aura", "blessing", "buff protection pve", "boost", NULL);
+            else
+                nonCombatEngine->addStrategies(tab == 2 ? "retribution" : "holy", "dps assist", "follow", "cure", "buff", "food", "default", "aura", "blessing", "boost", NULL);
+            return;
+        }
+        case CLASS_SHAMAN:
+            nonCombatEngine->addStrategies(tab == 0 ? "elemental" : (tab == 1 ? "enhancement" : "restoration"), "dps assist", "follow", "cure", "totems", "buff", "food", "default", "boost", "aoe", NULL);
+            return;
+        case CLASS_MAGE:
+            nonCombatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "follow", "cure", "buff", "food", "default", "boost", NULL);
+            return;
+        case CLASS_ROGUE:
+            nonCombatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "follow", "buff", "food", "default", "boost", "stealth", "poisons", NULL);
+            return;
+        case CLASS_HUNTER:
+            nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "default", "boost", "cc", "aoe", NULL);
+            return;
+        case CLASS_WARLOCK:
+            nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet auto", "buff", "follow", "food", "default", "boost", NULL);
+            return;
+        case CLASS_WARRIOR:
+        default:
+        {
+            if (tab == 2)
+                nonCombatEngine->addStrategies("protection", "tank assist", "follow", "food", "loot", "roll", "default", "boost", NULL);
+            else
+                nonCombatEngine->addStrategies(tab == 1 ? "fury" : "arms", "dps assist", "follow", "food", "loot", "roll", "default", "boost", NULL);
+            return;
+        }
     }
-    if (player && player->GetClass() == CLASS_MAGE)
-    {
-        nonCombatEngine->addStrategies("fire", "dps assist", "follow", "buff", "food", "default", NULL);
-        return;
-    }
-    if (player && player->GetClass() == CLASS_ROGUE)
-    {
-        nonCombatEngine->addStrategies("combat", "dps assist", "follow", "buff", "food", "default", NULL);
-        return;
-    }
-    if (player && player->GetClass() == CLASS_HUNTER)
-    {
-        nonCombatEngine->addStrategies("marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default", NULL);
-        return;
-    }
-    if (player && player->GetClass() == CLASS_WARLOCK)
-    {
-        nonCombatEngine->addStrategies("affliction", "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default", NULL);
-        return;
-    }
-    if (WarriorIsTank(player, facade))
-    {
-        // AiFactory.cpp:1445 plus the follow the slice's movement mode needs, food (the rest between pulls) and the engine's own "default".
-        // Slice 9 (L9): the tank (the run's leader and the carrier of plan items) loots and rolls like the others: "loot" (corpses, chests) and "roll"
-        // (group loot, greed only). The legacy dungeon-run feature has its own loot steps, DungeonRunLootFfa stays 0 (FOREVER-SLICE9-SPEC 5d).
-        nonCombatEngine->addStrategies("protection", "tank assist", "follow", "food", "loot", "roll", "default", NULL);
-        return;
-    }
-    nonCombatEngine->addStrategies("arms", "dps assist", "follow", "food", "loot", "roll", "default", NULL);
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* deadEngine)
@@ -476,7 +538,7 @@ void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const 
 
 void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const facade, ReactionEngine* reactionEngine)
 {
-    // Reactions (AoE avoidance, potions, chat) are out of the slice. The class strategy is not: its reaction triggers are the
+    // The class strategy's reaction triggers are the
     // ones that move the bot between the engines ("combat start" -> "set combat state", "combat end" -> "set non combat state",
     // "death" -> "set dead state": ClassStrategy::InitReactionTriggers), exactly as the full factory adds it (AiFactory.cpp:2085,
     // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
@@ -485,28 +547,37 @@ void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const 
     // Slice 8: the mage's "fire" and the rogue's "combat" (AiFactory.cpp:2015-2060, tab 1).
     // Slice 10: the bear's "tank feral", the restoration druid's and shaman's "restoration", the paladin's "holy" or "protection" (AiFactory.cpp:1990-2125).
     // Slice 11: the hunter's "marksmanship" and the warlock's "affliction" (AiFactory.cpp:2034-2060 and :2138-2152, tab 1 and tab 0).
-    // S1-R2: the chat strategy runs beside the class kit on every class (the full factory's reaction set, AiFactory.cpp:1988, without "react",
-    // "avoid aoe" and "potions", which are out of the slice). Its triggers are the commands a player whispers or says in party chat
+    // S1-R2: the chat strategy runs beside the class kit on every class (the full factory's reaction set, AiFactory.cpp:1988, with "react",
+    // "avoid aoe" and "potions"). Its triggers are the commands a player whispers or says in party chat
     // (ChatCommandHandlerStrategy.cpp, chat/PlayerbotAI::HandleCommands); the command the host queued reaches it at the next reaction pass.
     reactionEngine->addStrategy("chat");
-    if (char const* hybrid = HybridSpecStrategy(HybridKitOf(player, EffectiveRole(player, facade))))
-    {
-        reactionEngine->addStrategy(hybrid);
+    reactionEngine->addStrategies("react", "avoid aoe", "potions", NULL);
+    if (!player)
         return;
-    }
+    int const tab = KitSpecTab(player, facade);
     char const* spec = "arms";
-    if (player && player->GetClass() == CLASS_PRIEST)
-        spec = "discipline";
-    else if (player && player->GetClass() == CLASS_MAGE)
-        spec = "fire";
-    else if (player && player->GetClass() == CLASS_ROGUE)
-        spec = "combat";
-    else if (player && player->GetClass() == CLASS_HUNTER)
-        spec = "marksmanship";
-    else if (player && player->GetClass() == CLASS_WARLOCK)
-        spec = "affliction";
-    else if (WarriorIsTank(player, facade))
-        spec = "protection";
+    switch (player->GetClass())
+    {
+        case CLASS_PRIEST:  spec = tab == 2 ? "shadow" : (tab == 1 ? "holy" : "discipline"); break;
+        case CLASS_MAGE:    spec = tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"); break;
+        case CLASS_ROGUE:   spec = tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"); break;
+        case CLASS_HUNTER:  spec = tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"); break;
+        case CLASS_WARLOCK: spec = tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"); break;
+        case CLASS_PALADIN: spec = tab == 1 ? "protection" : (tab == 2 ? "retribution" : "holy"); break;
+        case CLASS_SHAMAN:  spec = tab == 0 ? "elemental" : (tab == 1 ? "enhancement" : "restoration"); break;
+        case CLASS_DRUID:
+            if (player->GetLevel() < 10)
+                spec = "leveling";
+            else if (tab == 1)
+                spec = EffectiveRole(player, facade) == static_cast<uint8>(BOT_ROLE_TANK) ? "tank feral" : "dps feral";
+            else
+                spec = tab == 0 ? "balance" : "restoration";
+            break;
+        case CLASS_WARRIOR:
+        default:
+            spec = tab == 2 ? "protection" : (tab == 1 ? "fury" : "arms");
+            break;
+    }
     reactionEngine->addStrategy(spec);
 }
 
