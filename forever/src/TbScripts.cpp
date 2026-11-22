@@ -92,6 +92,7 @@
 #include "host/TbAddonChannel.h"
 #include "host/TbAddonInfo.h"
 #include "host/TbAddonActions.h"
+#include "host/TbAddonTotem.h"
 #include "host/TbAddonVerbs.h"
 #include "host/TbAddonRoster.h"
 #include "host/player/TbPlayerCmd.h"
@@ -1748,6 +1749,7 @@ void AddSC_tortoisebots()
     TortoiseBots::addon::AddScripts();      // #130: PlayerScript::OnAddonMessageSent -> the TBM addon channel (host/TbAddonChannel.cpp)
     TortoiseBots::addoninfo::RegisterAddonVerbsInfo(); // #130 f-info: the "features" and "run" verbs (host/TbAddonInfo.cpp)
     TortoiseBots::action::RegisterAddonVerbsActions();   // #130 f-actions: the `action` verb + `action:<intent>` tokens
+    TortoiseBots::totem::RegisterAddonVerbsTotem();   // #133 c-totem: the `totem` verb + `totem` cap (host/TbAddonTotem.cpp)
     TortoiseBots::addonverbs::RegisterAddonVerbsPassthrough();   // #130 f-verbs: the `.bot` words the player layer answers (host/TbAddonVerbs.cpp)
     TortoiseBots::roster::RegisterAddonVerbsRoster();   // #130: `roster`/`list`/`alts` + handshake/BOTSTATE over the TBM channel (host/TbAddonRoster.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
