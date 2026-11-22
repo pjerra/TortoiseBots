@@ -1,4 +1,5 @@
 #include "TbBotMgr.h"
+#include "host/TbAutoFood.h"
 #include "host/TbHostGroupQuestPure.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostGuildMail.h"
@@ -1996,6 +1997,7 @@ void BotMgr::FreeThink(Bot& bot, Player* me)
 {
     if (bot.entry.active)
         return;
+    autofood::TickTopUp(me);
     if (bot.useEngine && !bot.engineFailed && !bot.brain)
     {
         std::string error;
