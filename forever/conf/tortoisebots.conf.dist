@@ -485,3 +485,8 @@ TortoiseBots.AutoLearnOnLevel = 1
 #
 
 TortoiseBots.AutoTalentsOnLevel = 1
+#    TortoiseBots.AutoProfessions
+#        Description: Pool bots reaching level 5 automatically learn a class-sensible pair of primary professions plus
+#                     First Aid and Cooking (and catch up on login if level >= 5 with no primary profession).
+
+TortoiseBots.AutoProfessions = 1

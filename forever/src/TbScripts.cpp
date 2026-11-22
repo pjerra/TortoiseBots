@@ -76,6 +76,7 @@
 #include "host/TbAutoTrain.h"
 #include "host/TbClassQuestSpells.h"
 #include "host/TbTalents.h"
+#include "host/TbAutoProfs.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -177,6 +178,7 @@ public:
         tbhost::autotrain::LoadConfig();       // TortoiseBots.AutoLearnOnLevel (default 1)
         TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
         TortoiseBots::talents::LoadConfig();       // automatic talent spending on login and level-up
+        TortoiseBots::autoprofs::LoadConfig();
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
         if (reload)
         {
@@ -413,6 +415,7 @@ public:
             tbhost::autotrain::Sync(player, "login");
             TortoiseBots::questspells::Sync(player, "login");
             TortoiseBots::talents::Sync(player, "login");
+            TortoiseBots::autoprofs::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
@@ -425,6 +428,7 @@ public:
             tbhost::autotrain::Sync(player, "level");
             TortoiseBots::questspells::Sync(player, "level");
             TortoiseBots::talents::Sync(player, "level");
+            TortoiseBots::autoprofs::Sync(player, "level");
         }
     }
 
