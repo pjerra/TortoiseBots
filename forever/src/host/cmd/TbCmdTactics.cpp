@@ -209,15 +209,18 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
         for (Player* bot : addressed)
         {
             bool current = false;
-            if (tactics::ReadToggle(bot, verb, current))
-                wanted.push_back(tactics::ToggleWanted(op, current));
+            bool const read = tactics::ReadToggle(bot, verb, current);
             h3::OrderSpec spec;
             spec.verb = verb;
             spec.arg = opText;
             std::string code, detail;
             uint32 seq = 0;
             if (h3::QueueOrder(bot, spec, code, detail, seq))
+            {
                 ++queued;
+                if (read)
+                    wanted.push_back(tactics::ToggleWanted(op, current));
+            }
             else
                 refusals.push_back({ bot, code, detail });
         }
