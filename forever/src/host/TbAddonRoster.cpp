@@ -1,15 +1,16 @@
 // The addon roster verbs (TBF #130 piece f-roster). `roster` and `list` send
-// the full TB-shaped reply (roster stream, ALTBOTS, empty CC_ASSIGN and
-// CLAIMED streams, BOTSTATE, then the VERSION/PROTO/LATEST/VERBS/CAPS/
-// TRANSPORT trailer); `alts` sends the away-alt summary only. The rows are
-// the same bots `.bot who` shows the caller (RosterVisible over the pure
-// rule); a GM sees what a player sees. `list` aliases `roster` here: TB's
-// plain-text HandleList stays a chat-side shape and is not ported.
+// the full TB-shaped reply (roster stream, ALTBOTS, the f-info CC_ASSIGN
+// stream, the empty CLAIMED stream, BOTSTATE, then the
+// VERSION/PROTO/LATEST/VERBS/CAPS/TRANSPORT trailer); `alts` sends the
+// away-alt summary only. The rows are the same bots `.bot who` shows the
+// caller (RosterVisible over the pure rule); a GM sees what a player sees.
+// `list` aliases `roster` here: TB's plain-text HandleList stays a chat-side
+// shape and is not ported.
 #include "host/TbAddonRoster.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
-
 #include "host/TbAddonChannel.h"
+#include "host/TbAddonInfo.h"
 #include "host/TbAddonRosterPure.h"
 #include "host/player/TbPlayerAuthPure.h"
 #include "TbBotMgr.h"
@@ -220,10 +221,8 @@ void HandleRoster(Player* requester, std::string_view /*args*/)
     std::sort(away.begin(), away.end());
     addon::Send(requester, AltBotsLine(away));
 
-    // No CC assignments on TBF yet (the CC piece fills this stream when it
-    // lands); the empty pair keeps the roster reply well-formed.
-    addon::Send(requester, "TBM:CC_ASSIGN_BEGIN|0");
-    addon::Send(requester, "TBM:CC_ASSIGN_END");
+    // The CC stream rides here (TB Info.cpp:501-505); f-info owns the lines.
+    addoninfo::AppendCcAssign(requester);
 
     // No claimed-guild-bot store on TBF yet; same well-formed empty pair.
     addon::Send(requester, ClaimedBegin(0));

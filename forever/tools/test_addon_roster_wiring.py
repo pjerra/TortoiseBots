@@ -74,9 +74,13 @@ class Wiring(unittest.TestCase):
     def test_trailer_order_and_sources(self):
         roster = function_body(self.cpp, r"void HandleRoster\(Player\* requester, std::string_view /\*args\*/\)\s*\{")
         for line in ("RosterBegin(rows.size())", '"TBM:ROSTER_END"', "AltBotsLine(away)",
-                     '"TBM:CC_ASSIGN_BEGIN|0"', '"TBM:CC_ASSIGN_END"', 'ClaimedBegin(0)', '"TBM:CLAIMED_END"',
+                     "addoninfo::AppendCcAssign(requester)", 'ClaimedBegin(0)', '"TBM:CLAIMED_END"',
                      "BotStateBegin(states.size())", '"TBM:BOTSTATE_END"'):
             self.assertIn(line, roster, f"roster reply misses {line}")
+        # The CC stream rides at TB's spot (Info.cpp:501-505) but f-info owns
+        # the lines; the roster reply carries no CC wire of its own.
+        self.assertNotIn("TBM:CC_ASSIGN", strip_comments(self.cpp))
+        self.assertIn('#include "host/TbAddonInfo.h"', self.cpp)
         trailer = function_body(self.cpp, r"void SendTrailer\(Player\* requester\)\s*\{")
         order = ["VersionLine(", "ProtoLine()", "LatestLine()", "VerbsLine(", "CapsLine(", "TransportLine("]
         for token in order:
