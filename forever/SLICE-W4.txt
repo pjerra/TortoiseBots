@@ -336,3 +336,8 @@ ai/playerbot/strategy/values/PartyMemberToSoulstone.cpp
 
 # Class extras: hunter taming
 ai/playerbot/strategy/actions/TameAction.cpp
+
+# Behavior toggles (#133 c-behsvc)
+ai/playerbot/strategy/generic/NoAoeStrategy.cpp
+ai/playerbot/strategy/generic/ConserveManaStrategy.cpp
+ai/playerbot/strategy/generic/MimicConsumableStrategy.cpp
