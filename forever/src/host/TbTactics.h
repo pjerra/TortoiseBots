@@ -33,9 +33,16 @@ bool Enabled();
 // bot for `stop`, out of combat for `rebuff`, the argument parsers). False with a refusal code and a reason in `code`/`detail`.
 bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::string& detail);
 
-// Runs one queued order on the bot's tick. Returns ok or fail:<code>. `owner` is the commander when in the world, else the bot (the caller
-// resolves it, as h3::Run does).
-std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner);
+// Runs one queued order on the bot's tick. Returns ok, fail:<code> or (interrupt only) pending:interrupt. `owner` is the commander when in
+// the world, else the bot (the caller resolves it, as h3::Run does). `seq` is the order's number: a pending interrupt reports its end under it.
+std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner, uint32 seq = 0);
+
+// A pending interrupt order of `bot` tries again (the engine's next tick, before its own AI). True when one was pending: `seq` is its order
+// and `result` the order's result now (pending:interrupt while it still tries, else ok or fail:<code>, see kInterruptWindowMs).
+bool PollPendingInterrupt(Player* bot, PlayerbotAI* ai, uint32& seq, std::string& result);
+
+// Any other order of the bot ends its pending interrupt (the commander changed its mind).
+void CancelPendingInterrupt(Player* bot);
 
 // The interrupt executor among `bots` (already the party order, or just the named bot): the first with a castable interrupt action.
 // `action` is the action name the queued order runs; when none is found `reasons` is one `name:reason` per probed bot (dead, other-map,

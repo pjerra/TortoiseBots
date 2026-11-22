@@ -94,12 +94,38 @@ static void TestInterrupt()
     CHECK(order == "counterspell|silence|kick|pummel|shield bash|bash|hammer of justice|earth shock|death coil|");
 }
 
+static void TestInterruptTick()
+{
+    using Tick = t::InterruptTick;
+    unsigned const window = t::kInterruptWindowMs;
+    // The order is ok only when the spell cast was requested, whatever the target does after.
+    CHECK(t::NextInterruptTick(true, true, true, true, 0) == Tick::Done);
+    CHECK(t::NextInterruptTick(true, true, false, true, window + 1) == Tick::Done);
+    CHECK(std::string(t::InterruptTickResult(Tick::Done)) == "ok");
+    // The live failure: an accepted order that never cast reported ok. Not cast yet, target still casting: keep trying, not ok.
+    CHECK(t::NextInterruptTick(true, true, true, false, 0) == Tick::Wait);
+    CHECK(t::NextInterruptTick(true, true, true, false, window - 1) == Tick::Wait);
+    CHECK(std::string(t::InterruptTickResult(Tick::Wait)) == "pending:interrupt");
+    // Inside the window only; past it the order fails instead of staying pending or ok.
+    CHECK(t::NextInterruptTick(true, true, true, false, window) == Tick::TimedOut);
+    CHECK(std::string(t::InterruptTickResult(Tick::TimedOut)) == "fail:interrupt");
+    // The target's own state ends the order first.
+    CHECK(t::NextInterruptTick(false, false, false, false, 0) == Tick::NoTarget);
+    CHECK(t::NextInterruptTick(true, false, false, false, 0) == Tick::NoTarget);
+    CHECK(std::string(t::InterruptTickResult(Tick::NoTarget)) == "fail:no-target");
+    CHECK(t::NextInterruptTick(true, true, false, false, 0) == Tick::NotCasting);
+    CHECK(std::string(t::InterruptTickResult(Tick::NotCasting)) == "fail:not-casting");
+    // The window is shorter than a Frostbolt's 3 s cast plus the GCD slack the live caster showed (2.9 s), and long enough for two engine ticks.
+    CHECK(window >= 1000 && window <= 4000);
+}
+
 int main()
 {
     TestEngageSeconds();
     TestStance();
     TestVerbs();
     TestInterrupt();
+    TestInterruptTick();
     if (g_fail)
     {
         std::printf("%d of %d checks FAILED\n", g_fail, g_checks);

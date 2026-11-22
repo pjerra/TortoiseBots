@@ -441,6 +441,17 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
                 }
             return "fail:pull";
         }
+        // M2 live evidence (batch 3, C5): a `ranged` order whose tank walked in and meleed left no trace of why. The strategy wants the ranged opening for an
+        // explicit order (DecidePullOpening) and falls back to the body pull when the weapon cannot fire (GetRangedBlocker: no weapon, untrained, no spell,
+        // no ammo, or the mob inside the shot's dead zone). Say which one in the log so a fallback is read, not guessed.
+        if (option.ranged)
+            if (ai::PullStrategy* strategy = ai::PullStrategy::Get(ai))
+                if (Unit* mob = ObjectAccessor::GetUnit(*bot, o.unit))
+                {
+                    ai::PullRangedBlocker const blocker = strategy->GetRangedBlocker(bot->GetDistance(mob));
+                    if (blocker != ai::PullRangedBlocker::None)
+                        sLog.outString("TortoiseBots order: %s seq %u (pull ranged) opens as a body pull: %s", bot->GetName().c_str(), o.seq, ai::PullRangedBlockerName(blocker));
+                }
         // L2 (package L): `pull my target` places no hold (only the chat `pullback` and the command layer's PausePartyDpsForPull do), so the damage
         // bots and the healer's damage spells opened on a mob the tank had not reached (M package, observation d). The same party hold as the
         // legacy chat pull, lead-keyed: damage warriors stay on the commander's anchor, every member's window opens only after the pull LANDED
@@ -762,7 +773,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         return fighting ? "fail:rest" : "ok";
     }
     if (tactics::IsTacticalVerb(o.verb))
-        return tactics::Run(bot, ai, o.verb, o.arg, o.unit, owner);
+        return tactics::Run(bot, ai, o.verb, o.arg, o.unit, owner, o.seq);
     return "fail:unknown-verb";
 }
 
@@ -892,6 +903,20 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         }
     }
 
+    // M2: an interrupt order that could not cast at its first look keeps trying at every tick while the target still casts (kInterruptWindowMs).
+    {
+        uint32 pendingSeq = 0;
+        std::string pendingResult;
+        if (tactics::PollPendingInterrupt(bot, ai, pendingSeq, pendingResult))
+        {
+            auto pendingRec = Recs().find(guid);
+            if (pendingRec != Recs().end() && pendingRec->second.seq == pendingSeq)
+                pendingRec->second.result = pendingResult;
+            if (pendingResult != "ok" && pendingResult.compare(0, 7, "pending") != 0)
+                sLog.outString("TortoiseBots order: %s seq %u (interrupt) -> %s", bot->GetName().c_str(), pendingSeq, pendingResult.c_str());
+        }
+    }
+
     auto rec = Recs().find(guid);
     if (rec == Recs().end())
         return;
@@ -915,6 +940,8 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     {
         Order order = std::move(rec->second.queue.front());
         rec->second.queue.pop_front();
+        if (order.verb != "interrupt")
+            tactics::CancelPendingInterrupt(bot);
         if (order.verb != "gather" && order.verb != "craft")
             tbhost::prof::CancelOrderErrand(bot);
         if (order.verb != "ride")

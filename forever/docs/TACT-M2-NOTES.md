@@ -23,6 +23,24 @@ no legacy source edit, no config key.
 * `.tb cmd` answers `cmd verb=interrupt status=accepted bots=1 result=bot:<name> 1 action=<action>`; `.tb order` answers the usual
   `order` lines, one for the picked bot.
 
+## Interrupt: the cast path (live fix, batch 3 check C)
+
+Live on forever-test2, 9 accepted interrupts cast nothing (no Counterspell or Kick, the Frostbolt always completed) while the order read
+`ok`. Cause: the class action's target is the `interrupt target::<spell>` pick (a cached value over `possible attack targets`), not the
+order's unit, so with a stale or empty pick `DoSpecificAction` was refused and the fallback `Engine::QueueAction` returned true whatever
+that queued action later did; and a cast already in progress (the bot's own combat spell) or a GCD/facing refusal for that tick ended the
+single attempt. Now (`TbTactics.cpp`): `TryInterruptCast` runs only for a bot whose spell is ready and in reach (the pick value's own
+rule), stops its own cast, stands, drops the cached `interrupt target` and `possible attack targets`, runs the class action and, when that
+refuses, casts the same spell directly at the order's unit (`PlayerbotAI::CastSpell`). A first miss leaves the order
+`pending:interrupt`; `PollPendingInterrupt` (called from `BeforeEngineTick`) retries it at every tick while the target still casts, up to
+`kInterruptWindowMs` (3.5 s), and the order ends `ok` only on a cast request, else `fail:no-target`, `fail:not-casting` or
+`fail:interrupt`. An out-of-reach bot also gets the old queued class action once, as its walk. Another order of the bot cancels the pending
+one. Pure rule `NextInterruptTick` in `TbTacticsPure.h`.
+
+Ranged pull opener (C5): the pull branch records `ranged` on the PullStrategy exactly as before; the strategy wants the ranged opening for
+an explicit order and falls back to the body pull when `GetRangedBlocker` names a weapon limit (no weapon, untrained, no spell, no ammo,
+mob inside the dead zone). No code fault was found; the order now logs `opens as a body pull: <blocker>` so a fallback is read, not guessed.
+
 ## Pull options
 
 `pull|pullback <guid> [seconds 0-60] [ranged|body]` (`.tb cmd`, the judge) and `pull <target> [seconds] [ranged|body]` (`.tb order`).

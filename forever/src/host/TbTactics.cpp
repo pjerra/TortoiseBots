@@ -9,6 +9,8 @@
 
 #include "compat/botpch_forever.h"
 
+#include <list>
+#include <map>
 #include <string>
 #include <vector>
 #include "MotionMaster.h"
@@ -20,6 +22,7 @@
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/ServerFacade.h"
 #include "playerbot/PullJoinWindowPolicy.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Engine.h"
@@ -224,7 +227,126 @@ Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::st
     return bots[pick.index];
 }
 
-std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner)
+namespace
+{
+// An interrupt order still trying (see kInterruptWindowMs): one per bot, the newest order replaces the older one.
+struct PendingInterrupt
+{
+    ObjectGuid target;
+    ObjectGuid owner;
+    std::string action;
+    uint32 seq = 0;
+    uint32 startMs = 0;
+    bool walkQueued = false;
+};
+
+std::map<ObjectGuid, PendingInterrupt>& PendingInterrupts()
+{
+    static std::map<ObjectGuid, PendingInterrupt> pending;
+    return pending;
+}
+
+uint32 NowMs()
+{
+    return WorldTimer::getMSTime();
+}
+
+// One attempt to get the class's interrupt spell cast at `target`. The class action alone was not enough on the live test (nine accepted orders,
+// no cast): its own target is the `interrupt target` pick (cached per value, and only a caster that is already a possible attack target), a
+// cast already in progress refuses every other cast (PlayerbotAI::CastSpell's cast-in-progress gate: the bot's own combat AI starts one each
+// tick), and a bot that sits or is not facing is turned first and refused for that tick. So: the bot stops its own cast and stands, the
+// action's cached picks are dropped so it reads the target again, the class action runs, and when it still refuses the same spell is cast
+// directly at the order's target.
+bool TryInterruptCast(Player* bot, PlayerbotAI* ai, Unit* target, std::string const& action, Player* requester)
+{
+    // Only a bot that could cast now gives up its own cast for it: a spell on cooldown, or a target still out of reach, waits for a later tick
+    // (the walk is queued by the caller) and must not cost the bot its cast every tick for nothing. The reach rule is the pick value's own
+    // (InterruptTargetValue): the spell's range, floored at melee distance.
+    uint32 const spellId = ai->GetAiObjectContext()->GetValue<uint32>("spell id", action)->Get();
+    if (!spellId || !sServerFacade.IsSpellReady(bot, spellId))
+        return false;
+    float reach = ATTACK_DISTANCE;
+    float spellRange = 0.0f;
+    if (ai->GetSpellRange(action, &spellRange) && spellRange > reach)
+        reach = spellRange;
+    if (sServerFacade.getDistance2d(bot, target) > reach)
+        return false;
+    if (bot->IsNonMeleeSpellCast(false, true, true))
+        bot->InterruptNonMeleeSpells(false);
+    if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+    bot->SetSelection(target->GetObjectGuid());
+    ai::AiObjectContext* context = ai->GetAiObjectContext();
+    if (ai::Value<Unit*>* current = context->GetValue<Unit*>("current target"))
+        current->Set(target);
+    if (ai::Value<Unit*>* pick = context->GetValue<Unit*>("interrupt target", action))
+        pick->Reset();
+    if (ai::Value<std::list<ObjectGuid>>* attackers = context->GetValue<std::list<ObjectGuid>>("possible attack targets"))
+        attackers->Reset();
+    ai::Event const event("tb order", std::string(), requester);
+    if (ai->DoSpecificAction(action, event, true))
+        return true;
+    return ai->CastSpell(action, target);
+}
+
+// The queued class action is only the walk to the target for a bot out of reach (its reach prerequisite); the cast itself is TryInterruptCast.
+void QueueWalk(Player* bot, PlayerbotAI* ai, std::string const& action, Player* requester)
+{
+    ai::Engine* engine = ai->GetCurrentEngine();
+    if (!engine)
+        return;
+    if (bot->IsInCombat())
+        ai->OnCombatStarted();
+    engine->QueueAction(action, ACTION_PASSTROUGH, ai::Event("tb order", std::string(), requester));
+}
+
+std::string InterruptTickAt(Player* bot, PlayerbotAI* ai, PendingInterrupt& pending, Player* requester, bool& finished)
+{
+    Unit* target = ObjectAccessor::GetUnit(*bot, pending.target);
+    bool const present = target && target->IsInWorld();
+    bool const alive = present && target->IsAlive();
+    bool const casting = alive && target->IsNonMeleeSpellCast(true);
+    bool requested = false;
+    if (casting)
+    {
+        requested = TryInterruptCast(bot, ai, target, pending.action, requester);
+        if (!requested && !pending.walkQueued)
+        {
+            pending.walkQueued = true;
+            if (!ai->CanCastSpell(pending.action, target, 0, nullptr, false, true, true))
+                QueueWalk(bot, ai, pending.action, requester);
+        }
+    }
+    InterruptTick const tick = NextInterruptTick(present, alive, casting, requested, NowMs() - pending.startMs);
+    finished = tick != InterruptTick::Wait;
+    return InterruptTickResult(tick);
+}
+}
+
+void CancelPendingInterrupt(Player* bot)
+{
+    if (bot)
+        PendingInterrupts().erase(bot->GetGUID());
+}
+
+bool PollPendingInterrupt(Player* bot, PlayerbotAI* ai, uint32& seq, std::string& result)
+{
+    if (!bot || !ai || !ai->GetAiObjectContext())
+        return false;
+    auto it = PendingInterrupts().find(bot->GetGUID());
+    if (it == PendingInterrupts().end())
+        return false;
+    PendingInterrupt& pending = it->second;
+    seq = pending.seq;
+    Player* owner = ObjectAccessor::FindPlayer(pending.owner);
+    bool finished = false;
+    result = InterruptTickAt(bot, ai, pending, (owner && owner->IsInWorld()) ? owner : bot, finished);
+    if (finished)
+        PendingInterrupts().erase(it);
+    return true;
+}
+
+std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner, uint32 seq)
 {
     if (!bot || !ai || !ai->GetAiObjectContext())
         return "fail:no-engine";
@@ -290,29 +412,20 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
     }
     if (verb == "interrupt")
     {
-        Unit* target = ObjectAccessor::GetUnit(*bot, unit);
-        if (!target || !target->IsInWorld())
-            return "fail:no-target";
-        if (!target->IsNonMeleeSpellCast(true))
-            return "fail:not-casting";
-        bot->SetSelection(unit);
-        if (ai::Value<Unit*>* current = ai->GetAiObjectContext()->GetValue<Unit*>("current target"))
-            current->Set(target);
-        ai::Event const event("tb order", std::string(), requester);
-        if (ai->DoSpecificAction(arg, event, true))
-            return "ok";
-        // TB QueueMatureAction: the direct call bypasses the action's reach prerequisite; queue the same mature action so it can walk and
-        // cast. A bot already in core combat keeps the queued action on the combat engine (OnCombatStarted).
-        if (!target->IsAlive())
-            return "fail:no-target";
-        if (!target->IsNonMeleeSpellCast(true))
-            return "fail:not-casting";
-        ai::Engine* engine = ai->GetCurrentEngine();
-        if (!engine)
-            return "fail:interrupt";
-        if (bot->IsInCombat())
-            ai->OnCombatStarted();
-        return engine->QueueAction(arg, ACTION_PASSTROUGH, event) ? "ok" : "fail:interrupt";
+        // A newer order of this bot replaces an older pending one.
+        PendingInterrupt pending;
+        pending.target = unit;
+        pending.owner = requester->GetGUID();
+        pending.action = arg;
+        pending.seq = seq;
+        pending.startMs = NowMs();
+        bool finished = false;
+        std::string const result = InterruptTickAt(bot, ai, pending, requester, finished);
+        if (finished)
+            PendingInterrupts().erase(bot->GetGUID());
+        else
+            PendingInterrupts()[bot->GetGUID()] = pending;
+        return result;
     }
     return "fail:unknown-verb";
 }
@@ -371,10 +484,17 @@ bool Preflight(Player*, h3::OrderSpec const&, std::string& code, std::string& de
     return false;
 }
 
-std::string Run(Player*, PlayerbotAI*, std::string const&, std::string const&, ObjectGuid, Player*)
+std::string Run(Player*, PlayerbotAI*, std::string const&, std::string const&, ObjectGuid, Player*, uint32)
 {
     return "fail:engine-not-built";
 }
+
+bool PollPendingInterrupt(Player*, PlayerbotAI*, uint32&, std::string&)
+{
+    return false;
+}
+
+void CancelPendingInterrupt(Player*) {}
 
 Player* PickInterruptBot(std::vector<Player*> const&, Unit*, std::string& action, std::string& reasons)
 {

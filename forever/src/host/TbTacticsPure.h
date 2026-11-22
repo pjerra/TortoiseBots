@@ -114,5 +114,44 @@ inline InterruptPick PickInterrupt(std::vector<InterruptProbe> const& probes)
         }
     return InterruptPick();
 }
+
+// An interrupt order does not end at its first look. The bot's own AI starts a cast of its own every tick, the GCD or its facing can refuse
+// the first attempt, and the engine's action pick (the `interrupt target` value) only sees a caster that is already a possible attack target.
+// So the order is retried at every engine tick for as long as the target still casts, up to this many ms from the order's first run: the
+// order ends `ok` only when the class's interrupt spell was really requested.
+constexpr unsigned kInterruptWindowMs = 3500;
+
+enum class InterruptTick
+{
+    Done,       // the spell cast was requested: the order is ok
+    Wait,       // not yet, try again at the next engine tick
+    NoTarget,   // the target is gone or dead: fail:no-target
+    NotCasting, // the target finished its cast before the interrupt could start: fail:not-casting
+    TimedOut    // the target still casts and nothing could be cast inside the window: fail:interrupt
+};
+
+inline InterruptTick NextInterruptTick(bool targetPresent, bool targetAlive, bool targetCasting, bool castRequested, unsigned ageMs)
+{
+    if (castRequested)
+        return InterruptTick::Done;
+    if (!targetPresent || !targetAlive)
+        return InterruptTick::NoTarget;
+    if (!targetCasting)
+        return InterruptTick::NotCasting;
+    return ageMs >= kInterruptWindowMs ? InterruptTick::TimedOut : InterruptTick::Wait;
+}
+
+// The order's result text for a tick (Wait is `pending:interrupt`, which the order shows until a later tick settles it).
+inline char const* InterruptTickResult(InterruptTick tick)
+{
+    switch (tick)
+    {
+        case InterruptTick::Done: return "ok";
+        case InterruptTick::NoTarget: return "fail:no-target";
+        case InterruptTick::NotCasting: return "fail:not-casting";
+        case InterruptTick::TimedOut: return "fail:interrupt";
+        default: return "pending:interrupt";
+    }
+}
 }
 }

@@ -198,10 +198,52 @@ def check_interrupt_named(src):
 
 
 def check_interrupt_run(src):
-    body = tactics_run_body(src)
-    for pin in ("SetSelection(", "ACTION_PASSTROUGH", "QueueAction("):
+    # The order ends ok only from a real cast request: Run hands the interrupt to InterruptTickAt (never "ok" from a queued action) and keeps
+    # a not-yet-cast order pending for the next engine ticks.
+    body = function_body(tactics_run_body(src), 'if (verb == "interrupt")')
+    for pin in ("InterruptTickAt(", "PendingInterrupts()[bot->GetGUID()] = pending"):
         if pin not in body:
             raise AssertionError(f"the interrupt run does not use {pin}")
+    if "QueueAction(" in body or 'return "ok"' in body:
+        raise AssertionError("the interrupt run reports ok without a cast request")
+
+
+def check_interrupt_cast_path(src):
+    c = strip_comments(src)
+    body = function_body(c, "bool TryInterruptCast(")
+    for pin in ("InterruptNonMeleeSpells(false)", "SetStandState(UNIT_STAND_STATE_STAND)", "SetSelection(",
+                '"interrupt target", action', "pick->Reset()", "DoSpecificAction(action", "return ai->CastSpell(action, target);"):
+        if pin not in body:
+            raise AssertionError(f"TryInterruptCast lacks {pin}")
+    if body.index("DoSpecificAction(action") > body.index("return ai->CastSpell(action, target);"):
+        raise AssertionError("TryInterruptCast must try the class action before the direct cast")
+
+
+def check_interrupt_tick_result(src):
+    body = function_body(strip_comments(src), "std::string InterruptTickAt(")
+    for pin in ("NextInterruptTick(", "InterruptTickResult(tick)", "TryInterruptCast("):
+        if pin not in body:
+            raise AssertionError(f"InterruptTickAt lacks {pin}")
+
+
+def check_interrupt_poll_hook(src):
+    c = strip_comments(src)
+    start = c.find("void BeforeEngineTick(")
+    if start < 0:
+        raise AssertionError("TbOrders.cpp lost BeforeEngineTick")
+    body = function_body(c, "void BeforeEngineTick(")
+    if "tactics::PollPendingInterrupt(" not in body:
+        raise AssertionError("BeforeEngineTick never retries a pending interrupt")
+    if body.index("tactics::PollPendingInterrupt(") > body.index("rec->second.queue.empty()"):
+        raise AssertionError("the pending interrupt must be retried before the order queue is read")
+    if 'tactics::CancelPendingInterrupt(bot)' not in body:
+        raise AssertionError("another order does not end a pending interrupt")
+
+
+def check_ranged_pull_diagnostic(src):
+    c = strip_comments(src)
+    if "GetRangedBlocker(bot->GetDistance(mob))" not in c or "opens as a body pull" not in src:
+        raise AssertionError("a ranged pull that falls back to the body pull is not logged")
 
 
 def check_interrupt_prefers_in_range(src):
@@ -296,6 +338,16 @@ class Wiring(unittest.TestCase):
     def test_interrupt_run_queues_the_mature_action(self):
         check_interrupt_run(self.sources["tactics"])
 
+    def test_interrupt_order_casts_and_retries(self):
+        check_interrupt_cast_path(self.sources["tactics"])
+        check_interrupt_tick_result(self.sources["tactics"])
+
+    def test_pending_interrupt_is_retried_every_tick(self):
+        check_interrupt_poll_hook(self.sources["orders"])
+
+    def test_ranged_pull_fallback_is_logged(self):
+        check_ranged_pull_diagnostic(self.sources["orders"])
+
     def test_interrupt_prefers_in_range(self):
         check_interrupt_prefers_in_range(self.sources["tactics_pure"])
 
@@ -327,6 +379,12 @@ MUTATIONS = [
     ("ignore-in-range-interrupt", "tactics_pure", lambda s: s.replace("pass == 0 ? probes[i].inRange : probes[i].actions", "probes[i].actions", 1), check_interrupt_prefers_in_range),
     ("drop-range-probe", "tactics", lambda s: s.replace("probe.inRange.push_back(key)", "(void)key", 1), check_interrupt_probe_in_range),
     ("pullback-hold-config-delay", "orders", lambda s: s.replace("PausePartyPullHold(bot, holdDelay,", "PausePartyPullHold(bot, delay,", 1), check_pullback_default_hold),
+    ("drop-direct-interrupt-cast", "tactics", lambda s: s.replace("return ai->CastSpell(action, target);", "return false;", 1), check_interrupt_cast_path),
+    ("drop-own-cast-stop", "tactics", lambda s: s.replace("bot->InterruptNonMeleeSpells(false);", "", 1), check_interrupt_cast_path),
+    ("drop-pick-reset", "tactics", lambda s: s.replace("pick->Reset();", "", 1), check_interrupt_cast_path),
+    ("interrupt-ok-from-queue", "tactics", lambda s: s.replace("std::string const result = InterruptTickAt(bot, ai, pending, requester, finished);", "ai->GetCurrentEngine()->QueueAction(arg, ACTION_PASSTROUGH, ai::Event());\n        std::string const result = \"ok\"; (void)finished;", 1), check_interrupt_run),
+    ("drop-interrupt-poll", "orders", lambda s: s.replace("tactics::PollPendingInterrupt(", "tactics::Forget(", 1), check_interrupt_poll_hook),
+    ("drop-ranged-log", "orders", lambda s: s.replace("opens as a body pull", "opens", 1), check_ranged_pull_diagnostic),
     ("ignore-named-interrupt", "tactics_pure", lambda s: s.replace("anyNamed && !probes[i].named", "false", 1), check_interrupt_named),
 ]
 
