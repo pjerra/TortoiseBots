@@ -80,8 +80,16 @@ PLAN_SOURCE = 'forever-agent 109a2496 route export + core scripts'
 # Druids' heals and sleeps are the casts those kicks then cover. A kill_first entry is never crowd-controlled
 # (DungeonRunPolicy PickCcOrderPlan: "never a kill_first unit (that list wins)"), so 3840 leaves cc_priority: a
 # cc_priority list of 3840 would be dead. Anacondra (3671) stays after them: the Druids are the ones healing her.
+# Live run 6 (2026-11-22, notes/live-wc-run6-2026-11-22.md): the leg-7 Druid camps are won (steps 74/75/78: no death
+# against 3, 12 and 11 in run 5), the leg-5 camp of leg 5 seq 6 (index 54: 3840, 5048, 5755) is not. The world log's
+# fight there engaged exactly the row's three units -- Druid of the Fang, Deviate Adder 5048, Deviate Viper 5755 at
+# 7.3, 14.6 and 7.9 yd from the pull spot -- and the party of five died to it twice in 26 s and 77 s (10 deaths, two
+# `revive party`, the camp stood after the first fight). With only 3840 ranked, the focus is the Druid and nothing
+# after it: once it falls each bot picks its own target while the two poisoners finish the party. The pack's own units
+# therefore carry the same kill-first order the Druid got (its adds behind it, ahead of nothing): the Druid, then the
+# Adder, then the Viper. Anacondra keeps her place between them: she is the pool boss of the early Druid camps.
 PLAN_CC_PRIORITY = ''
-PLAN_KILL_FIRST = '3840,3671'
+PLAN_KILL_FIRST = '3840,3671,5048,5755'
 
 # The Disciple of Naralex (npc 3678) and his script (classic_wailing_caverns.cpp,
 # ClassicDiscipleWaypoints): the points the escort pauses at are 7, 15 and 30.

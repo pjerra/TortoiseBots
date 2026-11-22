@@ -535,8 +535,11 @@ void TestPlanShape(ai::DungeonPlan const* plan, int unitRows)
     CHECK(bosses.count(3671) == 0);     // Lady Anacondra: a pool boss inside a pack, kill_first 3671
     CHECK(std::find(plan->killFirst.begin(), plan->killFirst.end(), 3671u) != plan->killFirst.end());
     // Live run 5: the Druids of the Fang (3840) are the kill-first units, ahead of Anacondra, and are never in the CC list
-    // (a kill_first unit is not crowd-controlled, so a cc_priority entry for it would be dead).
-    CHECK(plan->killFirst.size() >= 2 && plan->killFirst[0] == 3840u && plan->killFirst[1] == 3671u);
+    // (a kill_first unit is not crowd-controlled, so a cc_priority entry for it would be dead). Live run 6: the leg-5 camp
+    // (leg 5 seq 6, 3840,5048,5755) killed the party twice even with the Druid first, so the camp's own Adder and Viper
+    // follow it in the order (TestLeg5CampKillFirstOrder).
+    std::vector<std::uint32_t> const wantKillFirst{ 3840, 3671, 5048, 5755 };
+    CHECK(plan->killFirst == wantKillFirst);
     CHECK(std::find(plan->ccPriority.begin(), plan->ccPriority.end(), 3840u) == plan->ccPriority.end());
 }
 
@@ -996,6 +999,45 @@ void TestDataHoldFacts(ai::DungeonPlan const* plan)
 }
 }
 
+// Live run 6 (notes/live-wc-run6-2026-11-22.md): the leg-5 camp of the Druid of the Fang (leg 5 seq 6, index 54:
+// 3840, 5048, 5755) killed the party twice (10 deaths) although the Druid is killed first: the world log's fight
+// engaged exactly the row's three units (Druid of the Fang, Deviate Adder, Deviate Viper), and after the Druid fell
+// each bot fought its own pick while the two poisoners finished the party. The camp's own units carry the pack's
+// kill-first order now, the treatment the leg-7 Druid camps got (live run 5): the Druid, then the Adder, then the Viper.
+void TestLeg5CampKillFirstOrder(ai::DungeonPlan const* plan)
+{
+    std::size_t const step = 54;
+    CHECK(plan->steps[step].kind == PlanStepKind::Pull);
+    CHECK(plan->steps[step].entries == (std::vector<std::uint32_t>{ 3840, 5048, 5755 }));
+    int const druid = plan->KillFirstRank(3840);
+    int const adder = plan->KillFirstRank(5048);
+    int const viper = plan->KillFirstRank(5755);
+    CHECK(druid >= 0);
+    CHECK(adder > druid);
+    CHECK(viper > adder);
+    // The focus the run sends: the Druid while all three are engaged, the Adder once it falls, then the Viper.
+    Run r = Start(plan, step);
+    Facts f;
+    fx::Config cfg;
+    fx::ApplyConfig(f, cfg);
+    auto engaged = [](std::uint64_t guid, std::uint32_t entry, float yd) {
+        UnitFact u;
+        u.guid = guid;
+        u.entry = entry;
+        u.distLead = yd;
+        u.hostile = true;
+        u.attackable = true;
+        u.engaged = true;
+        return u;
+    };
+    f.killFirst = {engaged(1, 3840, 6.0f), engaged(2, 5048, 8.0f), engaged(3, 5755, 9.0f)};
+    CHECK(PickKillFirst(r, f) && PickKillFirst(r, f)->guid == 1);
+    f.killFirst.erase(f.killFirst.begin());
+    CHECK(PickKillFirst(r, f) && PickKillFirst(r, f)->guid == 2);
+    f.killFirst.erase(f.killFirst.begin());
+    CHECK(PickKillFirst(r, f) && PickKillFirst(r, f)->guid == 3);
+}
+
 // Live run 6: the wipe at leg 8's boss (step 87, Pythas) released the party to the entrance and lost the route
 // checkpoint; the straight walk back failed and the replay began at the plan's first move point (the live note's
 // "walk back: to the point of step 4"), so the run walked the whole route back before pulling again. With no
@@ -1044,6 +1086,7 @@ int main(int argc, char** argv)
         return 1;
     }
     TestPlanShape(plan, unitRows);
+    TestLeg5CampKillFirstOrder(plan);
     TestWipeResumeAtTheLastClearedStep(plan);
     TestWalk(plan);
     TestUnitsHoldFacts(plan);
