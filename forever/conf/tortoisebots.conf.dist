@@ -466,3 +466,14 @@ TortoiseBots.Player.Commands = 1
 #
 
 TortoiseBots.Player.MaxBots = 4
+
+#
+#    TortoiseBots.AutoTools
+#        Description: Automatically grant missing Classic profession tools (Mining Pick, Skinning Knife,
+#                     Blacksmith Hammer, Fishing Pole, Arclight Spanner, Runed Copper Rod) into a free bag
+#                     slot on login and level-up for pool and free bots. Never grants duplicates or touches
+#                     real players or owned alts.
+#        Default:     1
+#
+
+TortoiseBots.AutoTools = 1
