@@ -77,6 +77,7 @@
 #include "host/TbClassQuestSpells.h"
 #include "host/TbTalents.h"
 #include "host/TbAutoProfs.h"
+#include "host/TbAutoTools.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -179,6 +180,7 @@ public:
         TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
         TortoiseBots::talents::LoadConfig();       // automatic talent spending on login and level-up
         TortoiseBots::autoprofs::LoadConfig();
+        TortoiseBots::autotools::LoadConfig();     // auto-grant missing profession tools to pool/free bots, on by default
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
         if (reload)
         {
@@ -416,6 +418,7 @@ public:
             TortoiseBots::questspells::Sync(player, "login");
             TortoiseBots::talents::Sync(player, "login");
             TortoiseBots::autoprofs::Sync(player, "login");
+            TortoiseBots::autotools::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
@@ -429,6 +432,7 @@ public:
             TortoiseBots::questspells::Sync(player, "level");
             TortoiseBots::talents::Sync(player, "level");
             TortoiseBots::autoprofs::Sync(player, "level");
+            TortoiseBots::autotools::Sync(player, "level");
         }
     }
 
