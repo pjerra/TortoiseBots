@@ -165,10 +165,59 @@ def check_cmd_missing_verb_lists_m1(src):
             raise AssertionError(f"the `.tb cmd` missing-verb text does not list `{verb}`")
 
 
+def check_dopull_arg(src):
+    body = function_body(strip_comments(src), "OrderAnswer DoPull(")
+    if ".arg = p.pullOption" not in body:
+        raise AssertionError("DoPull drops the parsed pull option (the `body` fix)")
+
+
+def check_pull_run_options(src):
+    body = function_body(strip_comments(src), "std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)")
+    for pin in ("ParsePullOrderOption(", "BeginCommand("):
+        if pin not in body:
+            raise AssertionError(f"the h3 pull run does not call {pin}")
+
+
+def check_interrupt_action_order(src):
+    c = strip_comments(src)
+    start = c.find("kInterruptActions[]")
+    if start < 0:
+        raise AssertionError("kInterruptActions is missing")
+    block = c[start:c.find("};", start)]
+    order = [block.find(f'"{action}"') for action in ("counterspell", "kick", "death coil")]
+    if min(order) < 0 or order != sorted(order):
+        raise AssertionError("kInterruptActions is not in TB's probe order")
+    for gone in ("spell lock", "repentance"):
+        if f'"{gone}"' in block:
+            raise AssertionError(f"kInterruptActions carries `{gone}`, which TB's port drops")
+
+
+def check_interrupt_named(src):
+    if "anyNamed && !probes[i].named" not in strip_comments(src):
+        raise AssertionError("PickInterrupt ignores the named bot")
+
+
+def check_interrupt_run(src):
+    body = tactics_run_body(src)
+    for pin in ("SetSelection(", "ACTION_PASSTROUGH", "QueueAction("):
+        if pin not in body:
+            raise AssertionError(f"the interrupt run does not use {pin}")
+
+
+def check_cmd_interrupt(src):
+    body = function_body(strip_comments(src), "bool TryHandleTacticalVerb(")
+    for pin in ('verb == "interrupt"', "PickInterruptBot("):
+        if pin not in body:
+            raise AssertionError(f"TryHandleTacticalVerb does not handle interrupt ({pin})")
+
+
 SOURCES = {
     "orders": lambda: read(HOST / "TbOrders.cpp"),
     "cmd_orders": lambda: read(CMD / "TbCmdOrders.cpp"),
     "tactics": lambda: read(HOST / "TbTactics.cpp"),
+    "tactics_pure": lambda: read(HOST / "TbTacticsPure.h"),
+    "cmd_tactics": lambda: read(CMD / "TbCmdTactics.cpp"),
+    "run_orders": lambda: read(HOST / "run" / "TbRunOrders.cpp"),
     "gen": lambda: read(ROOT / "forever" / "tools" / "slice_gen_context.py"),
     "w4": lambda: read(ROOT / "forever" / "SLICE-W4.txt"),
 }
@@ -214,6 +263,24 @@ class Wiring(unittest.TestCase):
     def test_cmd_missing_verb_lists_the_m1_verbs(self):
         check_cmd_missing_verb_lists_m1(self.sources["cmd_orders"])
 
+    def test_dopull_passes_the_pull_option(self):
+        check_dopull_arg(self.sources["run_orders"])
+
+    def test_h3_pull_run_parses_the_option(self):
+        check_pull_run_options(self.sources["orders"])
+
+    def test_interrupt_probe_order(self):
+        check_interrupt_action_order(self.sources["tactics_pure"])
+
+    def test_interrupt_honours_the_named_bot(self):
+        check_interrupt_named(self.sources["tactics_pure"])
+
+    def test_interrupt_run_queues_the_mature_action(self):
+        check_interrupt_run(self.sources["tactics"])
+
+    def test_cmd_handles_interrupt(self):
+        check_cmd_interrupt(self.sources["cmd_tactics"])
+
 
 MUTATIONS = [
     ("drop-stop-verb", "orders", lambda s: re.sub(r'"stop",', "", s, count=1), check_is_verb),
@@ -228,6 +295,9 @@ MUTATIONS = [
     ("drop-applykit-guard", "orders", lambda s: s.replace('ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT)', 'ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)'), check_applykit_keeps_guard),
     ("drop-alive-refusal", "tactics", lambda s: s.replace("if (!bot->IsAlive())", "if (false)", 1), check_preflight_alive_first),
     ("cmd-missing-verb-old-list", "cmd_orders", lambda s: s.replace(", stop, flee, guard, stance, engage, rebuff\");", "\");", 1), check_cmd_missing_verb_lists_m1),
+    ("drop-pull-arg", "run_orders", lambda s: s.replace(".arg = p.pullOption;", "", 1), check_dopull_arg),
+    ("reverse-interrupt-order", "tactics_pure", lambda s: s.replace('"counterspell", "silence", "kick"', '"kick", "silence", "counterspell"', 1), check_interrupt_action_order),
+    ("ignore-named-interrupt", "tactics_pure", lambda s: s.replace("anyNamed && !probes[i].named", "false", 1), check_interrupt_named),
 ]
 
 

@@ -10,14 +10,20 @@
 #include "compat/botpch_forever.h"
 
 #include <string>
+#include <vector>
 #include "MotionMaster.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
+#include "Unit.h"
 
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/PullJoinWindowPolicy.h"
 #include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/Engine.h"
+#include "playerbot/strategy/Strategy.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/Stances.h"
 #include "PlayerbotAIStorage.h"
@@ -137,14 +143,84 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
         }
         return true;
     }
+    if (verb == "interrupt")
+    {
+        if (spec.arg.empty())
+        {
+            code = "bad-argument";
+            detail = "interrupt <target> [bot]";
+            return false;
+        }
+        if (!need(spec.arg.c_str()))
+            return false;
+        Unit* target = ObjectAccessor::GetUnit(*bot, spec.unit);
+        if (!target || !target->IsInWorld())
+        {
+            code = "no-target";
+            detail = "no such unit on the bot's map";
+            return false;
+        }
+        if (!target->IsAlive())
+        {
+            code = "dead-target";
+            detail = "the target is dead";
+            return false;
+        }
+        if (!target->IsNonMeleeSpellCast(true))
+        {
+            code = "not-casting";
+            detail = "the target is not casting an interruptible spell";
+            return false;
+        }
+        return true;
+    }
     code = "unknown-verb";
     detail = verb;
     return false;
 }
 
+Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::string& action, std::string& reasons)
+{
+    action.clear();
+    reasons.clear();
+    std::vector<InterruptProbe> probes;
+    std::vector<std::string> why;
+    for (Player* bot : bots)
+    {
+        InterruptProbe probe;
+        probe.bot = bot ? bot->GetName() : std::string();
+        PlayerbotAI* ai = AiOf(bot);
+        std::string reason;
+        if (!bot || !bot->IsInWorld() || !bot->IsAlive())
+            reason = "dead";
+        else if (!ai || !ai->GetAiObjectContext())
+            reason = "no-engine";
+        else if (!target || !target->IsInWorld() || bot->GetMap() != target->GetMap())
+            reason = "other-map";
+        else if (bot->GetDistance(target) > sPlayerbotAIConfig.sightDistance)
+            reason = "far";
+        else
+            for (char const* key : kInterruptActions)
+                if (ActionRegistered(ai, key) && ai->HasSpell(key) && ai->IsInterruptableSpellCasting(target, key, true) &&
+                    ai->CanCastSpell(key, target, 0, nullptr, true, true, true))
+                    probe.actions.push_back(key);
+        probes.push_back(probe);
+        if (probe.actions.empty())
+            why.push_back(probe.bot + ":" + (reason.empty() ? "no-spell" : reason));
+    }
+    InterruptPick const pick = PickInterrupt(probes);
+    if (!pick.found)
+    {
+        for (size_t i = 0; i < why.size(); ++i)
+            reasons += (i ? ";" : "") + why[i];
+        return nullptr;
+    }
+    action = pick.action;
+    return bots[pick.index];
+}
+
 std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner)
 {
-    (void)unit;   // M1 takes no unit; the interrupt order (M2) is the first
     if (!bot || !ai || !ai->GetAiObjectContext())
         return "fail:no-engine";
 
@@ -207,6 +283,32 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
         proposed->Set(false);
         return "ok";
     }
+    if (verb == "interrupt")
+    {
+        Unit* target = ObjectAccessor::GetUnit(*bot, unit);
+        if (!target || !target->IsInWorld())
+            return "fail:no-target";
+        if (!target->IsNonMeleeSpellCast(true))
+            return "fail:not-casting";
+        bot->SetSelection(unit);
+        if (ai::Value<Unit*>* current = ai->GetAiObjectContext()->GetValue<Unit*>("current target"))
+            current->Set(target);
+        ai::Event const event("tb order", std::string(), requester);
+        if (ai->DoSpecificAction(arg, event, true))
+            return "ok";
+        // TB QueueMatureAction: the direct call bypasses the action's reach prerequisite; queue the same mature action so it can walk and
+        // cast. A bot already in core combat keeps the queued action on the combat engine (OnCombatStarted).
+        if (!target->IsAlive())
+            return "fail:no-target";
+        if (!target->IsNonMeleeSpellCast(true))
+            return "fail:not-casting";
+        ai::Engine* engine = ai->GetCurrentEngine();
+        if (!engine)
+            return "fail:interrupt";
+        if (bot->IsInCombat())
+            ai->OnCombatStarted();
+        return engine->QueueAction(arg, ACTION_PASSTROUGH, event) ? "ok" : "fail:interrupt";
+    }
     return "fail:unknown-verb";
 }
 
@@ -239,6 +341,8 @@ void SelfTestRecords(h3::Reply& reply)
     reply.Line(h3::Rec("order").S("bot", "Mtank").S("verb", "rebuff").S("status", "refused").S("code", "in-combat").T("msg", "a bot in a fight does not start a rebuff"));
     reply.Line(h3::Rec("cmd").S("verb", "stance").S("status", "accepted").N("bots", 5).S("result", "party 5").S("stance", "behind"));
     reply.Line(h3::Rec("cmd").S("verb", "engage").S("status", "accepted").N("bots", 5).S("result", "party 5").N("seconds", 5));
+    reply.Line(h3::Rec("order").S("bot", "Mmage").S("verb", "interrupt").N("seq", 42).S("status", "queued"));
+    reply.Line(h3::Rec("cmd").S("verb", "interrupt").S("status", "accepted").N("bots", 1).S("result", "bot:Mmage 1").S("action", "counterspell"));
     reply.Line(h3::Rec("selftest").S("case", "state-tactics").S("bot", "Mtank").S("stance", "behind").N("rebuff", 37));
 }
 }
@@ -265,6 +369,13 @@ bool Preflight(Player*, h3::OrderSpec const&, std::string& code, std::string& de
 std::string Run(Player*, PlayerbotAI*, std::string const&, std::string const&, ObjectGuid, Player*)
 {
     return "fail:engine-not-built";
+}
+
+Player* PickInterruptBot(std::vector<Player*> const&, Unit*, std::string& action, std::string& reasons)
+{
+    action.clear();
+    reasons = "no-engine";
+    return nullptr;
 }
 
 void AppendState(h3::Rec&, Player*) {}

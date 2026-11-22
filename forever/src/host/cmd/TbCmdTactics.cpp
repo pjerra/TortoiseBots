@@ -13,6 +13,7 @@
 #include <vector>
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "Unit.h"
 
 #include "host/cmd/TbCmdBinding.h"
 
@@ -59,6 +60,75 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
 
     if (!tactics::Enabled())
         return refuse("disabled", "TortoiseBots.Orders.Tactical is 0");
+
+    if (verb == "interrupt")
+    {
+        if (args.w.size() < 2 || args.w.size() > 3)
+            return refuse(args.w.size() < 2 ? "missing-argument" : "bad-argument", "interrupt <guid> [bot]");
+        ObjectGuid guid;
+        if (!h3::ParseGuidText(args.w[1], guid))
+            return refuse("bad-argument", "interrupt <guid> [bot]");
+        std::string const namedBot = args.w.size() == 3 ? args.w[2] : std::string();
+        Player* leadPlayer = ObjectAccessor::FindPlayer(lead);
+        Unit* target = leadPlayer ? ObjectAccessor::GetUnit(*leadPlayer, guid) : nullptr;
+        if (!target || !target->IsInWorld())
+            return refuse("no-target", "no such unit on the binding's map");
+        if (!target->IsAlive())
+            return refuse("dead-target", "the target is dead");
+        if (!target->IsNonMeleeSpellCast(true))
+            return refuse("not-casting", "the target is not casting an interruptible spell");
+
+        std::vector<Player*> candidates;
+        if (!namedBot.empty())
+        {
+            Player* bot = BoundBot(namedBot, lead, members);
+            if (!bot)
+                return refuse("no-bot", namedBot + " is not a bot of your binding");
+            candidates.push_back(bot);
+        }
+        else
+        {
+            auto const add = [&](ObjectGuid botGuid)
+            {
+                Player* bot = ObjectAccessor::FindPlayer(botGuid);
+                if (bot && bot->IsInWorld() && std::find(candidates.begin(), candidates.end(), bot) == candidates.end())
+                    candidates.push_back(bot);
+            };
+            add(lead);
+            for (ObjectGuid const& member : members)
+                add(member);
+            if (candidates.empty())
+                return refuse("not-alive", "no bot of your binding is in the world");
+        }
+        std::string action, reasons;
+        Player* picked = tactics::PickInterruptBot(candidates, target, action, reasons);
+        if (!picked)
+            return refuse("no-interrupt", "no bot has a ready interrupt for this target" +
+                (reasons.empty() ? std::string() : ": " + reasons));
+
+        h3::OrderSpec spec;
+        spec.verb = "interrupt";
+        spec.arg = action;
+        spec.unit = guid;
+        std::string code, detail;
+        uint32 seq = 0;
+        if (!h3::QueueOrder(picked, spec, code, detail, seq))
+            return refuse(code.empty() ? "failed" : code, detail);
+
+        std::string const result = "bot:" + std::string(picked->GetName()) + " 1";
+        h3::Reply reply(handler, args, "cmd");
+        reply.Begin();
+        h3::Rec head("cmd");
+        head.S("verb", verb).S("status", "accepted").N("bots", 1).S("result", result).S("action", action);
+        reply.Line(head);
+        h3::Rec end("cmd");
+        end.S("verb", verb).S("lead", leadPlayer ? std::string(leadPlayer->GetName()) : h3::GuidText(lead))
+            .N("bots", 1).N("ok", 1).N("refused", 0);
+        reply.End(end);
+        NoteRunOrder(lead, orderText, true, "", result + " action=" + action);
+        ok = true;
+        return done();
+    }
 
     // The words after the verb: `stop [bot]`, `stance <word> [bot]`, `engage [seconds]`, the rest take none.
     std::string named, stanceWord, engageText;

@@ -125,11 +125,22 @@ static void TestParse()
         Parse(order, false);
         CHECK(CodeOf(order) == "invalid");
     }
-    // The Turtle command's options that the module does not port are refused, not dropped.
-    Parse("pull 12 ranged", false);
-    CHECK(CodeOf("pull 12 ranged") == "unsupported");
-    Parse("pullback 12 5", false);
-    CHECK(CodeOf("pullback 12 5") == "unsupported");
+    // M2: the Turtle command's pull options are carried out, in the canonical text the h3 order takes.
+    p = Parse("pull 12 5 ranged");
+    CHECK(p.verb == od::Verb::Pull && p.handle == 12 && p.pullOption == "5 ranged" && !p.body);
+    p = Parse("pull 12 ranged 5");
+    CHECK(p.verb == od::Verb::Pull && p.pullOption == "5 ranged");
+    p = Parse("pull 12 body");
+    CHECK(p.verb == od::Verb::Pull && p.pullOption == "body" && p.body);
+    p = Parse("pull 12");
+    CHECK(p.verb == od::Verb::Pull && p.pullOption.empty());
+    p = Parse("pullback 12 5");
+    CHECK(p.verb == od::Verb::Pullback && p.pullOption == "5");
+    Parse("pull 12 ranged body", false);
+    CHECK(CodeOf("pull 12 ranged body") == "invalid");
+    Parse("pullback 12 61", false);
+    CHECK(CodeOf("pullback 12 61") == "invalid");
+    Parse("pull 12 5 body extra", false);
 }
 
 // The refusal texts against the run leader's own parsers (the whole point of "the answer is in the Turtle shape").

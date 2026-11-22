@@ -137,7 +137,8 @@ Each bot of the address gets the order QUEUED at once; the engine runs it right 
 | `stay` | - | `stay chat shortcut` | - |
 | `come` | - | the stay position = where the SENDER stands (the bound commander from the console), `stay` movement, a fresh stay walk | different map, or further than the engine's react distance (`too-far`; the host's own catch-up keeps a commanded bot within that distance, so it is not seen in practice) |
 | `attack` | `my` \| `skull`/`star`/... \| `mark` \| `mark:<word>` \| `spawn:<id>` \| 32-hex guid | the unit goes on the bot's rti mark for the call, `attack rti target` runs, the marks are put back (`marks=0` on `state-end`) | no such unit, dead, not attackable, the bot is in no party; `my` from the console |
-| `pull` | the same targets | `pull my target` with the unit's guid as the event object (tank only), then the party hold (package L: the other bots wait until the pull LANDED and the pack is on the tank: 3 s at the earliest, 10 s at the latest, at once when a mob hits them or the tank is under 60 %, 15 s after the order if it never lands) | as `attack`, and the bot has no `pull` combat strategy |
+| `pull` | the same targets, then `[seconds 0-60]` and/or `ranged` \| `body` (any order, each once) | `pull my target` with the unit's guid as the event object (tank only); `ranged`/`body` are recorded on the pull for this command only and rolled back when the request refuses; then the party hold (package L: the other bots wait until the pull LANDED and the pack is on the tank: the order's seconds or 3 s, 10 s at the latest, at once when a mob hits them or the tank is under 60 %, 15 s after the order if it never lands) | as `attack`; the bot has no `pull` combat strategy; `ranged` and `body` together, a sign, more than 60 seconds or any other word (`bad-argument`) |
+| `interrupt` | the same targets | one bot is picked (the first in party order with a castable interrupt: `counterspell`, `silence`, `kick`, `pummel`, `shield bash`, `bash`, `hammer of justice`, `earth shock`, `death coil`); it selects the target and runs that action, queuing it as a mature pass-through action when the direct call refuses while the target still casts (issue #131, section 23) | `no-target`, `dead-target`, `not-casting`, `no-interrupt` (with one `name:reason` per probed bot in `msg`) |
 | `endpull` (or `end pull`) | - | `end pull` | - |
 | `hold` | - | strategy `+passive` in combat and non-combat (`hold=yes` in the state line) | the strategy is not registered |
 | `free` | - | `ResetStrategies`, movement `follow`, the explicit attack target cleared | - |
@@ -577,7 +578,7 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
 
-* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`) answer their own `cmd` reply and are described in section 23; `pull` options and `cc` are judge changes of their own round.
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull|pullback <32-hex guid> [seconds 0-60] [ranged|body]`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`) answer their own `cmd` reply and are described in section 23; `cc` is a judge change of its own round.
 * **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
 * **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
 * **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
@@ -826,9 +827,9 @@ Queue and acceptance never go through anything but the core: `WorldSession::Join
 the core: the module holds it back through `WorldScript::CanCreateBattleground` until a human's queue reaches the fill target, and
 re-schedules the core's queue update each pass so bots still waiting follow the human into his instance.
 
-## 23. Issue #131: tactical orders (M1)
+## 23. Issue #131: tactical orders (M1-M2)
 
-The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`).
+The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`).
 
 Every tactical order except `engage` first ends a live engage hold (`HasEngagePullWindow()` → `EndPullWindow("order")`): the hold waits for the commander's first hit, and a new order replaces it. `stop` adds no `passive`, so a bot hit again defends itself; `hold` or `flee` is the order that keeps it out.
 
@@ -857,8 +858,9 @@ Acts on every bot of the caller's binding (lead and members) that is alive, or o
 | `stance <near\|tank\|turnback\|turn\|behind> [bot]` | `stance=<canonical word>` | as above |
 | `engage [seconds 0-60]` | `seconds=<n>` (the default 4 when left out) | as above |
 | `rebuff` | - | as above |
+| `interrupt <guid> [bot]` | `action=<action>` | `result=bot:<name> 1`: one bot is picked (the named one only, else the first in party order with a castable interrupt) |
 
-Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
+Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=|action=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
 
 ```
 cmd-begin #c1
@@ -869,11 +871,19 @@ cmd verb=engage status=accepted bots=5 result=party%205 seconds=5 #c2
 cmd-end count=1 records=1 verb=engage lead=Mtank bots=5 ok=5 refused=0 #c2
 ```
 
+### Interrupt (M2)
+
+`.tb order <bot|party> interrupt <target>` and `.tb cmd interrupt <guid> [bot]` check the target (exists, alive, `IsNonMeleeSpellCast(true)`: `no-target`, `dead-target`, `not-casting`) and pick ONE bot: the named bot only, else the first bot in party order whose probe finds an action. The probe walks TB's list (`counterspell`, `silence`, `kick`, `pummel`, `shield bash`, `bash`, `hammer of justice`, `earth shock`, `death coil`) and asks for the registered action, `HasSpell`, `IsInterruptableSpellCasting(target, action, true)` and `CanCastSpell(..., range ignored)`. No bot qualifies: `no-interrupt`, and `msg` carries `name:reason` per probed bot (`dead`, `no-engine`, `other-map`, `far`, `no-spell`). Only the picked bot receives the order (`arg` = the action, `unit` = the target); its tick selects the target and runs the action. When the direct call refuses and the target still casts, the same action is queued on the current engine as `ACTION_PASSTROUGH` (with `OnCombatStarted()` first for a bot in combat), so its reach prerequisite can walk and cast; if that also refuses, `fail:interrupt`.
+
+### Pull options (M2)
+
+`pull|pullback <guid> [seconds 0-60] [ranged|body]` in `.tb cmd`; `pull <target> [seconds] [ranged|body]` in `.tb order`. `ai::ParsePullOrderOption` parses the words (any order, each once; `ranged` and `body` exclude each other) and the canonical text (`5 ranged`, `body`, ...) travels in the queued order. The seconds replace the hold's join delay (`kPullJoinDelaySeconds`, 3 s, for `pull`; `AiPlayerbot.PullBackDpsJoinDelay` for `pullback`). `ranged`/`body` call `PullStrategy::BeginCommand` for this command only, before `pull my target`, and are rolled back when the request refuses - for `pull` and `pullback` alike. The run policy's plan rows that ask for `body` now actually walk in (before M2 `body` was parsed and dropped). The kill switch does not cover these options: they are the judge's grammar.
+
 ### State and configuration
 
 `.tb state` gains two keys after the h8 keys: `stance=<near|tank|turnback|behind>` (empty without an engine) and `rebuff=<seconds left>` (empty when no force-rebuff window runs). `mv` reads `guard` while the guard strategy holds the bot in place.
 
-`TortoiseBots.Orders.Tactical` (default 1) is the kill switch: at 0 every one of the six verbs answers `error code=disabled cmd=<order|cmd> msg=TortoiseBots.Orders.Tactical%20is%200` and nothing is queued. Read on each command.
+`TortoiseBots.Orders.Tactical` (default 1) is the kill switch: at 0 every tactical verb (the pull options are the judge's and stay available) answers `error code=disabled cmd=<order|cmd> msg=TortoiseBots.Orders.Tactical%20is%200` and nothing is queued. Read on each command.
 
 Rebuff opens the same force-rebuff window (begin ms = now, pending/proposed false) the ready-check bot uses: the bot's normal buff pass tops the party up while the two-minute window runs. It has no `force rebuff` strategy gate (that strategy is not compiled): the window values are the gate. `AiPlayerbot.ForceRebuffOnReadyCheck` does not gate this order; it gates the ready-check hold of a later round.
 

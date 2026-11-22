@@ -11,9 +11,11 @@
 #include "host/TbOrdersApi.h"
 
 #include <string>
+#include <vector>
 
 class Player;
 class PlayerbotAI;
+class Unit;
 
 namespace TortoiseBots
 {
@@ -34,6 +36,12 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
 // Runs one queued order on the bot's tick. Returns ok or fail:<code>. `owner` is the commander when in the world, else the bot (the caller
 // resolves it, as h3::Run does).
 std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner);
+
+// The interrupt executor among `bots` (already the party order, or just the named bot): the first with a castable interrupt action.
+// `action` is the action name the queued order runs; when none is found `reasons` is one `name:reason` per probed bot (dead, other-map,
+// far, no-spell, no-engine). The probe is TB FindInterruptAction (BotCommandContext.cpp:556-586): registered action, known spell, the
+// target's spell is interruptible by it, and CanCastSpell with range ignored (the queued action walks).
+Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::string& action, std::string& reasons);
 
 // Appends the tactical keys to a `.tb state` record: stance= and rebuff= (seconds left of the force-rebuff window).
 void AppendState(h3::Rec& rec, Player* bot);
