@@ -52,6 +52,10 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
    The pin move added nothing that reloads either store. `forever/tools/check_core_cites.py` lists the `File.ext:LINE`
    cites in `forever/` that point into a core file a pin move changed and where the cited line went: run it with
    `--old <old pin> --new <new pin>` on every pin move.
+   Re-checked at b441bf74e0 (forever-bots, 2026-11-21; the core code is the one of d3358c21dc: `git diff d3358c21dc b441bf74e0`
+   touches no file under `src/server`, `src/common` or `sql/base`; the only additions are `src/modules/PlayerbotV2/**`, which is
+   built only with `BUILD_PLAYERBOT_V2=1`, and this module's CMakeLists.txt refuses that). Every cite and every loader line
+   above stands as at d3358c21dc.
 4. Game data is not ported blindly. Spell ids, talents, races, zones, travel nodes and boss data are re-derived from
    ForeverCore's DB2 and world database, feature by feature.
 

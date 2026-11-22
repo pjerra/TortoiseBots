@@ -66,6 +66,16 @@ int main()
     CHECK(!HumanBgSideWantsBot(4, 0, 5));
     CHECK(HumanBgSideWantsBot(1, 0, 0));  // size 0 treated as solo
 
+    // BG1 (BATTLEGROUNDS-SPEC.md section 4): a solo Alliance human in a min-5 queue gives Alliance 5 bots and Horde 6 (the
+    // other side has no human), never more than the template's team size.
+    std::uint32_t const minFive = HumanBgSideTarget(5, 10);          // WSG at the module's explicit minimum
+    CHECK(minFive == 6);
+    CHECK(HumanBgSideNeed(minFive, 1) == 5);                         // the human's own side
+    CHECK(HumanBgSideNeed(minFive, 0) == 6);                         // the other side
+    CHECK(minFive <= 10);                                            // WSG max per team
+    CHECK(HumanBgSideTarget(5, 15) == 6);                            // AB: same minimum, room to the 15 max
+    CHECK(HumanBgSideTarget(5, 5) == 5);                             // a full 5-per-team template is not overshot
+
     // Pace: one check lifts a solo WSG queue past the core minimum on both
     // sides (1 human + 4 own bots >= 4, 5 enemy bots >= 4).
     CHECK(HumanBgSideNeed(target, 1) <= kHumanBgDemandPerSidePerCheck);

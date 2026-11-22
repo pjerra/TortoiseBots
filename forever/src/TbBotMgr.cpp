@@ -562,7 +562,16 @@ void BotMgr::DropBrain(Bot& bot)
 void BotMgr::DetachFromMaster(Bot& bot)
 {
     DropBrain(bot);
-    if (_masterGraceMs == 0)
+    // A battleground holds the bot until the match is over or the battleground module takes it out: logging out here would pull a
+    // participant out of a running match. A queue entry does not hold it: the battleground module takes a bot out of a queue whose
+    // human is gone, and a bot left waiting in a queue forever is a worse leak than a re-queue. UpdateMasterAway retries once it is
+    // out.
+    bool const held = [&]
+    {
+        Player* me = bot.session->GetPlayer();
+        return me && me->IsInWorld() && me->InBattleground();
+    }();
+    if (_masterGraceMs == 0 && !held)
     {
         bot.master = ObjectGuid::Empty;
         bot.wantParty = false;
@@ -619,6 +628,14 @@ bool BotMgr::UpdateMasterAway(Bot& bot, uint32 diff)
         bot.graceLeftMs -= diff;
         return false;
     }
+    // A running match holds the bot: the battleground module leaves it (master-gone) and this pass logs it out afterwards. A queue
+    // entry does not: the module took the bot out of the queue already, and waiting for it here would keep the bot forever.
+    if (Player* me = bot.session->GetPlayer())
+        if (me->IsInWorld() && me->InBattleground())
+        {
+            bot.graceLeftMs = 0;
+            return false;
+        }
     bot.graceLeftMs = 0;
     bot.masterAway = false;
     bot.master = ObjectGuid::Empty;
@@ -1286,8 +1303,17 @@ void BotMgr::TrackLife(Bot& bot, Player* me)
             bot.wasGhost = true;
             ++bot.teleports;
         }
-        if (bot.free)
+        // BG1 (D6): inside a battleground the W1 ghost rescue is off: the battleground module releases the ghost and queues it at
+        // the area spirit healer (host/bg/TbBgQueue.cpp), so the stall clock is reset rather than left to fire on the way out. (The
+        // slice's dead engine has no corpse-run action; a class slice that compiles ReviveFromCorpseAction is not touched here.)
+        bool const inBattleground = me->GetMap() && me->GetMap()->IsBattleground();
+        if (bot.free && !inBattleground)
             GhostRescue(bot, me);
+        else if (bot.free)
+        {
+            bot.ghostRescue.Reset();
+            bot.ghostYd = -1.0f;
+        }
         bot.runBack = false;
         return;
     }

@@ -104,7 +104,7 @@ Rows added by the slice-4 porting worker (`SLICE4-P-NOTES.md` section 5): 76 fea
 
 | Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
 |---|---|---|---|---|
-| battleground release aura | the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground | ReleaseSpiritAction.h: `WaitingForResurrectAuraCompat` (2 places: `ReleaseSpiritAction`, `AutoReleaseSpiritAction`; only when `InBattleGround()`) | nothing is cast (the release itself still runs) | the battleground slice: the core puts the aura on a player when its spirit guide is chosen (`Player::SetAreaSpiritHealer`, Player.cpp:33468) |
+| battleground release aura | the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground | ReleaseSpiritAction.h: `WaitingForResurrectAuraCompat` (2 places: `ReleaseSpiritAction`, `AutoReleaseSpiritAction`; only when `InBattleGround()`) | nothing is cast by the engine: the core puts the aura on a player itself when its spirit guide is chosen (`Player::SetAreaSpiritHealer`, Player.cpp:33470), and BG1's host queues a dead bot at the nearest area spirit healer (`forever/src/host/bg/TbBgQueue.cpp`) | none: the release itself runs and the aura arrives through the core (BG1) |
 | self resurrection | soulstone and ankh self-resurrection: `PLAYER_SELF_RES_SPELL` and `CMSG_SELF_RES` | ReleaseSpiritAction.h: `SelfResurrectPossibleCompat`, `SelfResurrectCompat` (`SelfResurrectAction`, key `self resurrect` not registered) | not possible, nothing sent | read the player's self-resurrection spell list (`InitializeSelfResurrectionSpells`) and send the typed packet with the spell id |
 
 <!-- slice 8, package K8 (mage, rogue, give item) -->
