@@ -78,4 +78,13 @@ All in build slot 2 of `yulon-ubuntu2`; Turtle gates ran with `docker ps | grep 
 
 Fixes the first link found, kept for the merge worker: `ItemUsageValue::PopulateSoldByVendorItemIds` (called at config load, `PlayerbotAIConfig.cpp:1575`) names the 1.12 table `npc_vendor_template` and uses printf placeholders in a `PQuery`: on F that aborts the server, so `VendorItemListsUnportedCompat()` returns early there (T: unchanged). The two reagent populators were stand-ins and are the real code now (DB2 reads only, never called at boot).
 
-Not proven (no server was started): U4 (section 5), that the opening cast of a chest works for a bot (spec U3), the real roll-start-to-vote path, the chest window poll, and the bag floor under live bags.
+## 7. Piece D of #136 (2026-11-22): loot methods like TB
+
+Rolls are announced and voted in GROUP_LOOT and NEED_BEFORE_GREED and stay silent in free-for-all, round robin and master loot (no roll window there;
+the human master distributes), like TB (`LootMethodTakesRolls`). The table lives in `forever/src/host/TbRollMethodsPure.h` and both gates call it:
+`BotRollsInGroupLootCompat` (the group's method and the roll's own loot must each take rolls) and the run gate `RunLootMethodOk`. `.tb lootmethod`
+and `.tb cmd lootmethod` carry out every method now; a run goes on only under group loot and need-before-greed. Test: `test_roll_methods_pure.cpp`.
+`DungeonRunLootFfa` stays 0 (no free-for-all detour).
+
+Forever adaptation, unchanged: `GroupLootTimerCompat` still returns 0 (the roll's end time is private), so bots vote at once instead of waiting for
+real players the way TB does. The core still resolves the roll at its own timeout, so a later human vote counts the same in a mixed human+bot group.

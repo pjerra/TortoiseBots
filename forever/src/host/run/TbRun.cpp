@@ -966,13 +966,13 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     DungeonRun::ApplyPlayerFacts(facts);
-    // S9 (C9, spec D4): group loot is the run's rule for every tick, not only at the start. A method changed under a running run would let a chest or a
-    // corpse pay out under rules the policy does not know (rolls it cannot vote, items to chance). The pending loot task dies before its act, and the run
-    // pauses; the resume checks the method again, so group loot has to be back first.
+    // S9 (C9): group loot or need-before-greed is the run's rule for every tick, not only at the start. A method changed under a running run would let a
+    // chest or a corpse pay out under rules the policy does not know (rolls it cannot vote, items to chance). The pending loot task dies before its act,
+    // and the run pauses; the resume checks the method again, so group loot or need-before-greed has to be back first.
     if (std::string methodWhy; !tasks::RunLootMethodOk(facts.lootMethod, methodWhy))
     {
         tasks::Cancel(rec.leader);
-        DungeonRun::Pause(run, methodWhy + ": the run waits for group loot (set it, then .tb run resume)");
+        DungeonRun::Pause(run, methodWhy + ": the run waits for group loot or need-before-greed (set it, then .tb run resume)");
         PauseWith(rec, "loot-method");
         Observe(rec, nowMs, &facts);
         return;
@@ -1198,13 +1198,13 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
             return refuse("not-commanded", slot.name + " has no commander yet: bind the party first (.tb master party " + name + " <commander>)");
         others.push_back(member);
     }
-    // S9 (C9, spec D4): the group's loot method is group loot: the bots roll greed in group loot only, so any other method would leave rolls un-voted
-    // (need-before-greed) or items to chance (free-for-all, round robin), and personal loot is a method the policy does not know. A new group is created in
+    // S9 (C9): the group's loot method is group loot or need-before-greed: the bots vote both, so any other method would leave rolls un-voted
+    // (master loot) or items to chance (free-for-all, round robin), and personal loot is a method the policy does not know. A new group is created in
     // group loot (Group.cpp:296), so a refusal here means someone changed it.
     {
         std::string methodWhy;
         if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
-            return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot)");
+            return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot or need-before-greed)");
     }
     // Every check passed: nothing is changed before this line. A finished earlier run of the leader gives way to the new one.
     if (Find(leader->GetGUID()))
@@ -1312,10 +1312,10 @@ StateOutcome ResumeRun(RunRec& rec, uint32 nowMs)
         for (Group::MemberSlot const& slot : group->GetMemberSlots())
             if (!BotMgr::Instance().IsBot(slot.guid))
                 return refuse("player-in-group", slot.name + " is in the group: the run waits until the group is bots only again");
-        // The pause reason of a method changed under the run ends only on group loot: a resume with the method still wrong would pause again at once.
+        // The pause reason of a method changed under the run ends only on group loot or need-before-greed: a resume with the method still wrong would pause again at once.
         std::string methodWhy;
         if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
-            return refuse("loot-method", methodWhy + " (a run needs group loot)");
+            return refuse("loot-method", methodWhy + " (a run needs group loot or need-before-greed)");
     }
     DungeonRun::LeadSpot spot;
     if (lead)

@@ -99,11 +99,14 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("NoteLootWindowAnnouncedCompat(bot, guid);", I2)
         self.assertIn("PollPacketEventCompat(bot, getName(), *this);", TRIGGER)
 
-    def test_rolls_are_announced_and_voted_only_in_group_loot(self):
+    def test_rolls_are_announced_and_voted_in_group_loot_and_nbg_only(self):
         gate = body(F_HEADER, "BotRollsInGroupLootCompat")
-        self.assertIn("GetLootMethod() == GROUP_LOOT", gate)
+        # the gate is the one table both calls read: the group's method and the roll's own loot must each take rolls
+        self.assertIn("rollmethods::MethodTakesRolls(int(group->GetLootMethod()))", gate)
+        self.assertIn("rollmethods::MethodTakesRolls(int(loot->GetLootMethod()))", gate)
+        self.assertIn("TbRollMethodsPure.h", F_HEADER)
         poll = body(F_HEADER, "PollPacketEventCompat")
-        # the roll event is raised only after the gate says so (Need Before Greed, master loot and no group: nothing is announced)
+        # the roll event is raised only after the gate says so (free-for-all, round robin, master loot and no group: nothing is announced)
         self.assertIn("BotRollsInGroupLootCompat(bot, roll->GetLoot())", poll)
         self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);"))
         vote = body(F_HEADER, "RollVoteCompat")

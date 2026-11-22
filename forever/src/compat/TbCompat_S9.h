@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "host/TbRollVote.h"
+#include "forever/src/host/TbRollMethodsPure.h"
 
 // ===============================================================================================================
 // NAMES: the 1.12 spellings of constants the loot, roll and item usage code uses
@@ -108,13 +109,14 @@ inline void NoteWindowAnnounced(Player const* bot, ObjectGuid const& owner)
 // Called by LootOpenCompat when it raises the "loot response" event of a corpse itself (TbCompat_I2.h), so the poll below never raises it a second time.
 inline void NoteLootWindowAnnouncedCompat(Player const* bot, ObjectGuid const& owner) { tbs9::NoteWindowAnnounced(bot, owner); }
 
-// THE METHOD GATE: the bot rolls only in GROUP_LOOT. The core starts a LootRoll in other methods too (Need Before Greed, master loot over the
-// threshold), and a greed vote there would be a vote the policy never allowed (a Need Before Greed greed can win). So for every other method (or no
-// group) NOTHING is announced and NOTHING is voted: the core's own timeout decides. Both the bot's group and the roll's own loot must say GROUP_LOOT.
+// THE METHOD GATE: the bot rolls where a roll window exists (group loot and need-before-greed, TbRollMethodsPure.h): in free-for-all and round robin
+// there is no window, and under master loot the human master distributes. For every other method (or no group) NOTHING is announced and NOTHING is
+// voted: the core's own timeout decides. Both the bot's group and the roll's own loot must take rolls (a method changed in flight leaves the roll to
+// the core's timeout).
 inline bool BotRollsInGroupLootCompat(Player const* bot, Loot const* loot)
 {
     Group const* group = bot ? bot->GetGroup() : nullptr;
-    return group && group->GetLootMethod() == GROUP_LOOT && (!loot || loot->GetLootMethod() == GROUP_LOOT);
+    return group && TortoiseBots::rollmethods::MethodTakesRolls(int(group->GetLootMethod())) && (!loot || TortoiseBots::rollmethods::MethodTakesRolls(int(loot->GetLootMethod())));
 }
 
 // ===============================================================================================================

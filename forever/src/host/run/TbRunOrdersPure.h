@@ -42,7 +42,7 @@ enum class Verb : uint8_t
     CcClear,        // cc clear <bot> [<mark> <handle>]             (G8: h8::ClearCcOrder)
     Open,           // S9 (O9): open <object> <bot>: a door, a lever, a chest (TbRunTasks)
     Loot,           // S9 (O9): loot <corpse or object> <bot> [item]
-    LootMethod,     // S9 (O9): lootmethod <ffa|group|rr> [threshold]
+    LootMethod,     // S9 (O9): lootmethod <ffa|group|rr|master|nbg> [threshold]
     Use,            // S9 (O9): use <item> <bot>: parsed, refused `unsupported` by the executor (the item-use path is not ported)
     Gossip,         // WC: gossip <npc entry> <bot> <option>: the plan's own gossip step (TbRunTasks, GossipOrder)
     Unsupported,    // a verb of the grammar the module does not carry out on ForeverCore
@@ -305,7 +305,7 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
             return false;
         }
     code = "invalid";
-    message = "Usage: attack <guid> [bot] / pull|pullback <guid> [seconds 0-60] [ranged|body] / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr> [threshold]";
+    message = "Usage: attack <guid> [bot] / pull|pullback <guid> [seconds 0-60] [ranged|body] / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr|master|nbg> [threshold]";
     return false;
 }
 

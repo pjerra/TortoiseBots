@@ -111,7 +111,7 @@ std::string NameOf(Player* player)
     return player ? std::string(player->GetName()) : std::string();
 }
 
-// A run takes loot under group loot only (spec D4), for its whole life. The run tick pauses on a changed method once a second, but a task's act comes up
+// A run takes loot under group loot or need-before-greed (TbRollMethodsPure.h), for its whole life. The run tick pauses on a changed method once a second, but a task's act comes up
 // to four times a second: the method is read again right before every act, so no loot or object use starts under rules the policy does not know.
 bool LeadGroupLoot(Player* lead, std::string& why)
 {
@@ -639,7 +639,7 @@ bool Look(ObjectGuid owner, RunTasks& rt, Task& task, uint32 diffMs, uint32 nowM
             ActResult result;
             std::string methodWhy;
             if (task.ownerKind == OwnerKind::Run && !LeadGroupLoot(lead ? lead : bot, methodWhy))
-                result = ActFailed("loot-method", methodWhy + ": no loot or object is used while the group's loot method is not group loot.");
+                result = ActFailed("loot-method", methodWhy + ": no loot or object is used while the group's loot method is not group loot or need-before-greed.");
             else if (HoldForAct(ai, bot))
                 result = ActFailed(RC::CastReasonCode("moving"), RC::OpenRefusalText("moving", 0), ActStart::Retry);
             else if (task.rec.kind == Kind::Gossip)
