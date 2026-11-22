@@ -106,6 +106,23 @@ Tests: `forever/tools/test_run_wc.cpp` `TestShamblerCampsKillFirstOrder` (the ro
 rows carry it, `PickPackPull` takes the Druid with the Shambler nearer, `PickKillFirst` goes Druid, Shambler, the Snake has no rank)
 and `TestPlanShape` (the list, pinned whole); `python3 forever/tools/test_wc_plan_rows.py` regenerates the migration byte for byte.
 
+## The live proof: short, placed starts (owner rule 2026-11-22: prove the fix, no long runs)
+
+`.tb run start` could only begin at step 0 (run 7 tried a placed start at leg 5 and gave up). It now takes the Turtle words:
+`.tb run start <leader> <plan> from step <N>` (N from 1, the plan index + 1: poll `step=54` is `from step 55`) or `from leg <number|name>`
+(`DungeonRun::ParseStartArgs`, `ResolveStartStep`), `Run::startStep` is set so a walk back never goes before it, a step the plan lacks is refused
+with `no-step` (`TbRunCommands.cpp`, `TbRun.cpp` `StartRun`/`Create`; `TB-COMMANDS.md` section 10). The party must already stand at the step
+(`.tb tele party Wctank 43 x y z 0` to the step's point, then rest to full as in run 8's setup; fresh weapons and full durability).
+
+Proof run (target under 60 min, run 8's party and setup; a world restart with `world.creature.spawntimesecs` of map 43 set to 300 for the
+walk-back part only, restored with the DB dump afterwards):
+
+| part | start | what it proves | stop when |
+|---|---|---|---|
+| A, the leg-5 camp (run 8: 13 deaths, 2 wipes) | `from step 54` (index 53, -62.89 475.72 -59.33) | `pull held: the healer ...` notes appear and clear, deaths at index 54 and 56 against 13 and 3 | index 56 cleared (about 10 min) |
+| B, the Shambler camps (run 8: 11 and 34 deaths) | `from step 70` (index 69, -347.6 23.23 -101.07 is the pack: tele to the approach (-273.7 -7.6 -106.4, index 68) and start `from step 69`); then `from step 81` (index 80, -158.7 -55 -75.9) for the index 82 camp | focus Druid then Shambler (`kill 5761 first` notes), deaths per camp, the healer gate | each camp cleared or 3 wipes |
+| C, the walk back over respawned packs | `from step 5` (index 4), spawntimesecs 300 | clear indices 4-8, wait 5 minutes, `.die` the party (deliberate wipe), `.tb run resume`: the walk back note and `pulling <entry>` events for the respawned leg-0 packs one at a time, no 8-pull pause | the party is back at the last cleared step |
+
 ## Review (Codex adversarial against `tbf/run/wc-r8`, one round)
 
 * High, the first version of the hold ran on `Run::phaseMs`, the gather phase's clock: a gather that had already run 25 s let the

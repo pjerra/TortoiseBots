@@ -88,7 +88,7 @@ void SetEndListener(EndListener listener)
     EndHook = listener;
 }
 
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs)
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
 {
     if (!plan || leader.IsEmpty() || Table().count(leader))
         return nullptr;
@@ -96,7 +96,8 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
     rec->leader = leader;
     rec->leaderName = leaderName;
     rec->planName = plan->name;
-    rec->run = DungeonRun::Start(plan);
+    rec->run = DungeonRun::Start(plan, fromStep);
+    rec->run.startStep = fromStep;      // a placed start: a walk back never goes before it (DungeonRun::ReplayFloor)
     rec->startedMs = nowMs;
     RunRec* raw = rec.get();
     Table()[leader] = std::move(rec);
@@ -1146,7 +1147,7 @@ void Update(uint32 diffMs)
     }
 }
 
-StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
 {
     StartOutcome out;
     auto const refuse = [&out](char const* code, std::string detail)
@@ -1213,7 +1214,9 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
         tasks::Forget(leader->GetGUID());   // S9 (O9)
         Remove(leader->GetGUID());
     }
-    RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs);
+    if (fromStep >= plan->steps.size())
+        return refuse("no-step", "the plan has no such step");
+    RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs, fromStep);
     if (!rec)
         return refuse("no-plan", "the run could not be created");
     for (Player* member : others)

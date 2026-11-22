@@ -73,7 +73,7 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Words const args = Split(tail);
     if (!RequireBuilt(handler, args, "run"))
         return false;
-    static char const* const usage = ".tb run start <leader> <plan> | stop <leader> [reason] | pause <leader> | resume <leader> | status <leader|all> | events <leader> [since=<seq>]";
+    static char const* const usage = ".tb run start <leader> <plan> [from step <N> | from leg <leg>] | stop <leader> [reason] | pause <leader> | resume <leader> | status <leader|all> | events <leader> [since=<seq>]";
     if (args.w.empty())
         return Fail(handler, args, "run", "missing-argument", usage);
     std::string const verb = Lower(args.w[0]);
@@ -90,9 +90,18 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (verb == "start")
     {
         if (args.w.size() < 3)
-            return Fail(handler, args, "run", "missing-argument", ".tb run start <leader> <plan>");
+            return Fail(handler, args, "run", "missing-argument", ".tb run start <leader> <plan> [from step <N> | from leg <leg>]");
+        // A placed start (WC run 9: a short live proof starts at the failing leg): `from step <N>` (the step number the status line shows, from 1)
+        // or `from leg <number|name>`, the words and the resolution of the Turtle `.bot run start ... from` (DungeonRun::ParseStartArgs).
         if (args.w.size() > 3)
-            return Fail(handler, args, "run", "unexpected-argument", args.w[3]);
+        {
+            std::string joined;
+            for (size_t i = 2; i < args.w.size(); ++i)
+                joined += (joined.empty() ? "" : " ") + Lower(args.w[i]);
+            DungeonRun::StartArgs const parsed = DungeonRun::ParseStartArgs(joined);
+            if (!parsed.ok || parsed.from == DungeonRun::StartFrom::Beginning || parsed.plan != Lower(args.w[2]))
+                return Fail(handler, args, "run", "unexpected-argument", args.w[3]);
+        }
     }
     else if (verb == "stop")
     {
@@ -144,7 +153,17 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         ai::DungeonPlan const* plan = FindPlan(table, args.w[2]);
         if (!plan)
             return Fail(handler, args, "run", "no-plan", args.w[2] + " is not a loaded dungeon plan (.tb plan list)");
-        StartOutcome const started = StartRun(leader, plan, nowMs);
+        size_t fromStep = 0;
+        if (args.w.size() > 3)
+        {
+            std::string joined;
+            for (size_t i = 2; i < args.w.size(); ++i)
+                joined += (joined.empty() ? "" : " ") + Lower(args.w[i]);
+            DungeonRun::StartArgs const parsed = DungeonRun::ParseStartArgs(joined);
+            if (DungeonRun::ResolveStartStep(*plan, parsed.from, parsed.value, fromStep) != DungeonRun::FromResult::Ok)
+                return Fail(handler, args, "run", "no-step", args.w[args.w.size() - 1] + " is not a step or leg of " + plan->name + " (.tb plan " + plan->name + " check)");
+        }
+        StartOutcome const started = StartRun(leader, plan, nowMs, fromStep);
         if (!started.code.empty())
             return Fail(handler, args, "run", started.code, started.detail);
         Rec end("run");

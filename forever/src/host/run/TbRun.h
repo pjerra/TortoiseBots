@@ -109,7 +109,7 @@ struct RunRec
 
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
 RunRec* Find(ObjectGuid leader);
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs);
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
 bool Remove(ObjectGuid leader);
 std::vector<RunRec*> All();                         // by leader name
 
@@ -154,7 +154,8 @@ struct StartOutcome
     RunRec* rec = nullptr;
 };
 // Checks the party and starts the run (binds every other member to the leader). Nothing changes when a code is returned.
-StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs);
+// `fromStep` (`.tb run start <leader> <plan> from step N|leg L`): a placed start; the run begins at that plan index and a walk back never goes before it.
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
 
 struct StopOutcome
 {
