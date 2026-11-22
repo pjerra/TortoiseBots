@@ -90,6 +90,26 @@ namespace ai
         virtual bool Execute(Event& event) override;
         virtual uint32 GetItemId() { return getQualifier().empty() ? 0 : getMultiQualifierInt(getQualifier(),0, ","); }
         virtual Unit* GetTarget() override { return nullptr; }
+        uint32 BestOffCooldownItemId(std::list<Item*> const& items) const
+        {
+            uint32 bestId = 0;
+            uint32 bestReqLevel = 0;
+            uint32 bestItemLevel = 0;
+            for (Item* item : items)
+            {
+                ItemPrototype const* proto = GetItemProtoCompat(item);
+                if (!proto || HasItemCooldown(proto->ItemId))
+                    continue;
+                if (!bestId || proto->RequiredLevel > bestReqLevel ||
+                    (proto->RequiredLevel == bestReqLevel && proto->ItemLevel > bestItemLevel))
+                {
+                    bestId = proto->ItemId;
+                    bestReqLevel = proto->RequiredLevel;
+                    bestItemLevel = proto->ItemLevel;
+                }
+            }
+            return bestId ? bestId : GetItemProtoCompat(items.front())->ItemId;
+        }
     };
 
     class UseTargetedItemIdAction : public UseItemIdAction
@@ -122,7 +142,7 @@ namespace ai
                 return sRandomItemMgr.GetRandomPotion(bot->GetLevel(), effect);
             }
 
-            return GetItemProtoCompat(items.front())->ItemId;
+            return BestOffCooldownItemId(items);
         }
 
         bool Execute(Event& event) override
@@ -233,7 +253,7 @@ namespace ai
                 }
             }
 
-            return GetItemProtoCompat(items.front())->ItemId;
+            return BestOffCooldownItemId(items);
         }
 
         bool Execute(Event& event) override
