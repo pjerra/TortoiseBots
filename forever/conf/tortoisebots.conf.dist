@@ -353,3 +353,84 @@ TortoiseBots.Free.MaxPerMap.Raid40 = 40
 #
 
 TortoiseBots.Create.TestAccounts = ""
+
+#
+#    --- BG (BATTLEGROUNDS-SPEC.md, round BG1) ---
+#
+#    TortoiseBots.Bg.Enable
+#        Description: The battleground round: fill a human's WSG/AB queue with pool bots, accept the bots' invitations, take them
+#                     out of a queue that no longer wants them, let them leave a finished match and queue them at the area spirit
+#                     healer after a death. Off by default (a big feature ships behind a toggle); with it off no hook does any
+#                     work and no bot queues or accepts anything by itself.
+#        Default:     0
+#
+
+TortoiseBots.Bg.Enable = 0
+
+#
+#    TortoiseBots.Bg.Maps
+#        Description: The maps this round plays, comma separated: `wsg` (Warsong Gulch, map 489) and `ab` (Arathi Basin, map 529).
+#                     AV, arenas and the random queue are out. A map whose flag stands / node banners or start locations are
+#                     missing in the core's data is off with one error line at boot.
+#        Default:     "wsg,ab"
+#
+
+TortoiseBots.Bg.Maps = "wsg,ab"
+
+#
+#    TortoiseBots.Bg.FillHumanQueues
+#        Description: While a real player waits in a WSG/AB queue, queue free pool bots of that side's bracket and faction until
+#                     each side has the module minimum below plus one, counting everyone already waiting. Both sides are filled
+#                     (the human's own side first needs bots too). At most 5 bots per side per 5 s check. A side still short after
+#                     180 s says so to the waiting player once: "not enough Horde bots for levels 10-19: 2 of 5".
+#        Default:     1
+#
+
+TortoiseBots.Bg.FillHumanQueues = 1
+
+#
+#    TortoiseBots.Bg.Autonomous
+#        Description: Bot-only battleground seeding (BG6): bots queue and play with no human in the match. In this round the
+#                     creation veto reads it: with 0 a bracket holding only the module's bots never starts an instance; the seeder
+#                     that keeps such a queue fed is BG6. Keep it 0.
+#        Default:     0
+#
+
+TortoiseBots.Bg.Autonomous = 0
+
+#
+#    TortoiseBots.Bg.MinPlayersPerTeam
+#        Description: The module's own match minimum per side. The core's BattlemasterList rows for 489/529 say 1 (R0), so a match
+#                     would start at 1v1; the fill target is this plus one, clamped to the template's team size. 0 to 40.
+#        Default:     5
+#
+
+TortoiseBots.Bg.MinPlayersPerTeam = 5
+
+#
+#    TortoiseBots.Bg.MaxInstancesWithBots
+#        Description: At most this many battleground instances hold bots at once, counting the buckets a queued bot waits in as the
+#                     instance it may become; a bot is not queued while the cap is reached.
+#        Default:     2
+#
+
+TortoiseBots.Bg.MaxInstancesWithBots = 2
+
+#
+#    TortoiseBots.Bg.MaxBots
+#        Description: At most this many bots are held for battlegrounds server-wide (queued, invited and inside all count); a bot is
+#                     not queued while the cap is reached.
+#        Default:     50
+#
+
+TortoiseBots.Bg.MaxBots = 50
+
+#
+#    TortoiseBots.Bg.MaxMinutes
+#        Description: The longest a free bot stays inside one instance. At it the bot leaves without the Deserter debuff, so a
+#                     `.tb pool stop` (which holds a bot in a battleground) can finish. A bound bot leaves with its human, or after
+#                     60 s in an instance its human never reached.
+#        Default:     45
+#
+
+TortoiseBots.Bg.MaxMinutes = 45

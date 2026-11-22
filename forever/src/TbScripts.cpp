@@ -3,6 +3,8 @@
 #include "TbBotMgr.h"
 #include "TbDashboard.h"
 #include "dash/TbDashRuns.h"
+#include "host/bg/TbBgMapData.h"
+#include "host/bg/TbBgQueue.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/pool/TbPoolCreate.h"
 #include "host/pool/TbPoolRegistry.h"
@@ -166,6 +168,7 @@ public:
         TortoiseBots::DashRuns::LoadConfig();
         TortoiseBots::pool::LoadConfig();      // W0: the pool key, its rate and the registry rows (re-read on a reload)
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B: the scheduler's target, window, session and offline times
+        TortoiseBots::bg::LoadConfig();        // BG1: the battleground keys (off by default)
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -231,6 +234,7 @@ public:
         TortoiseBots::pool::LoadConfig();      // W0
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B
         TortoiseBots::pool::Reconcile();       // W0: the creations that stopped halfway (a claim row, no account or character yet)
+        TortoiseBots::bg::LoadBgMapData();     // BG1: the flag stands and node banners from the core's spawn store (one pass)
         // The item store is loaded by now (World.cpp:1625, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
@@ -269,6 +273,7 @@ public:
         bool const poolLogin = TortoiseBots::pool::PoolScheduler::Update(diff);   // W0-B: the pool's logins and logouts, once a second
         if (!poolLogin)
             TortoiseBots::pool::CreateUpdate(diff);   // W0: at most one pool character per rate tick, and never in a tick with a login
+        TortoiseBots::bg::Update(diff);           // BG1: the queue fill, the invitations, the leaves and the spirit healer
         TortoiseBots::Dashboard::Update(diff);
         uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
         uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
@@ -475,6 +480,7 @@ public:
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
             { "pool",   poolTable },   // W0: `.tb pool create <n>`, `.tb pool prune [confirm]`
+            { "bg",     HandleBg,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // BG1: `.tb bg status|events` (host/bg/TbBgQueue.h)
             { "gear",   TortoiseBots::h3::HandleGear,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "cmd",      TortoiseBots::cmd::HandleCmd,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -654,6 +660,57 @@ public:
         for (std::string const& line : TortoiseBots::pool::PoolScheduler::Status())
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
         return true;
+    }
+
+    // `.tb bg status` | `.tb bg events [since=<seq>] [#token]` (BG1, host/bg/TbBgQueue.h): one `bg ...` record per line and one
+    // `bg-end` line, so a client can tell an empty answer from a broken one.
+    static bool HandleBg(ChatHandler* handler, Tail args)
+    {
+        std::vector<std::string> words = WordsOf(args);
+        std::string token;
+        if (!words.empty() && words.back().size() > 1 && words.back()[0] == '#')
+        {
+            token = words.back();
+            words.pop_back();
+        }
+        static char const* const usage = "usage: `.tb bg status` or `.tb bg events [since=<seq>]`.";
+        if (words.empty())
+            return Fail(handler, usage);
+        std::string const verb = Lower(words[0]);
+        if (verb == "status")
+        {
+            if (words.size() != 1)
+                return Fail(handler, usage);
+            std::vector<std::string> const lines = TortoiseBots::bg::Status();
+            for (std::string const& line : lines)
+                handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+            handler->PSendSysMessage("TortoiseBots: bg-end verb=status lines=%zu %s", lines.size(), token.c_str());
+            return true;
+        }
+        if (verb == "events")
+        {
+            std::uint32_t since = 0;
+            bool haveSince = false;
+            for (size_t i = 1; i < words.size(); ++i)
+            {
+                std::string const word = Lower(words[i]);
+                if (word.compare(0, 6, "since=") != 0 || haveSince || word.size() == 6)
+                    return Fail(handler, usage);
+                char* end = nullptr;
+                unsigned long const value = std::strtoul(word.c_str() + 6, &end, 10);
+                if (!end || *end)
+                    return Fail(handler, usage);
+                since = std::uint32_t(value);
+                haveSince = true;
+            }
+            TortoiseBots::bg::EventPage const page = TortoiseBots::bg::Events(since);
+            for (std::string const& line : page.lines)
+                handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+            handler->PSendSysMessage("TortoiseBots: bg-end verb=events since=%u count=%zu oldest=%u last=%u %s", since,
+                page.lines.size(), page.oldest, page.last, token.c_str());
+            return true;
+        }
+        return Fail(handler, usage);
     }
 
     // `.tb pool population <n|low|high>` (F-population): the pool's online target at runtime. `low` and `high` are the
@@ -1695,4 +1752,5 @@ void AddSC_tortoisebots()
     new tortoisebots_commands();
     TortoiseBots::chatin::AddScripts();     // S1-R2: PlayerScript::OnChat -> the bots' chat inboxes (host/chat/TbChatIn.cpp)
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
+    TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
 }

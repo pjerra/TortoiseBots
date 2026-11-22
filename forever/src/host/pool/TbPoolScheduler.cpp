@@ -163,6 +163,7 @@ void Sync(State& s, Tracked& track, std::int64_t now)
     {
         facts.alive = player->IsAlive();
         facts.inCombat = player->IsInCombat();
+        facts.inBg = player->InBattleground();   // BG: hold the session through a match, not a queue entry
     }
     facts.free = facts.logged && BotMgr::Instance().IsFreeBot(guid);
     facts.hasMaster = facts.logged && !BotMgr::Instance().MasterOf(guid).IsEmpty();
@@ -460,6 +461,7 @@ std::vector<std::string> Status()
     std::uint32_t alliance = 0, horde = 0;
     std::uint32_t const counted = Counted(s, &alliance, &horde);
     std::uint32_t due = 0;
+    std::uint32_t inBg = 0;
     char const* state = s.stopping ? "stopping" : (s.running ? "running" : "stopped");
     std::vector<world::PoolBotState> states;
     states.reserve(s.bots.size());
@@ -467,14 +469,16 @@ std::vector<std::string> Status()
     for (auto const& [guid, bot] : s.bots)
     {
         states.push_back(bot.state);
+        if (bot.state.inBg)
+            ++inBg;
         if (!bot.state.bound && bot.state.phase == world::PoolPhase::Offline && now >= bot.state.offlineUntilMs)
             ++due;
     }
     // D2: one session per account, so the pool cannot hold more online bots than the accounts its characters sit on.
     std::uint32_t const accounts = world::PoolAccountCount(states);
     std::string line = Trinity::StringFormat(
-        "pool: state={} target={} online={} alliance={} horde={} size={} due={} logins_60s={} drain={} last_pass_us={}",
-        state, s.settings.targetOnline, counted, alliance, horde, s.bots.size(), due,
+        "pool: state={} target={} online={} alliance={} horde={} size={} due={} in_bg={} logins_60s={} drain={} last_pass_us={}",
+        state, s.settings.targetOnline, counted, alliance, horde, s.bots.size(), due, inBg,
         world::PoolRecentCount(s.logins, now, world::kPoolLoginWindowMs), Draining(s), s.lastPassUs);
     if (s.settings.targetOnline > accounts)
         line += Trinity::StringFormat(" capped by accounts: {}", accounts);

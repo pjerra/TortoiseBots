@@ -81,7 +81,7 @@
     /* --- slice 3, porting worker (threat/tank, pull, orders) --- */ \
     X(DebugVisuals, "debug spell visuals", "the spell visuals the `debug threat` strategy plays on a bot (Unit::SendPlaySpellVisual(kit id) on T plays a SpellVisualKit.dbc index; ForeverCore sends a spell visual with a target and its own numbering); debug aid only, nothing is shown (slice 3)") \
     /* --- slice 4, porting worker P4 (instance and death) --- */ \
-    X(BattlegroundRelease, "battleground release aura", "the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground (ReleaseSpiritAction); ForeverCore puts it on a player when its spirit guide is chosen (Player::SetAreaSpiritHealer), battlegrounds are a later slice; nothing is cast (slice 4)") \
+    X(BattlegroundRelease, "battleground release aura", "the Waiting to Resurrect aura (spell 2584) a bot casts on itself when it releases inside a battleground (ReleaseSpiritAction); on ForeverCore the core puts it on a player itself when the spirit guide is chosen (Player::SetAreaSpiritHealer), and the host queues a dead bot at the nearest area spirit healer (BG1, forever/src/host/bg/TbBgQueue.cpp), so the helper stays a no-op and nothing is cast by the engine") \
     X(SelfResurrection, "self resurrection", "the self-resurrection action (soulstone, ankh: PLAYER_SELF_RES_SPELL and CMSG_SELF_RES); ForeverCore keeps the spells in its own list and takes the spell in a typed packet; the `self resurrect` key is not registered, the helper answers: not possible (slice 4)")
 
 namespace tbcompat

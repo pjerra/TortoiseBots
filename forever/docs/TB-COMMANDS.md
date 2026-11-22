@@ -749,6 +749,48 @@ The run's plan grammar gains the two step kinds the Wailing Caverns event needed
 * **`hold` rows ended by instance data** (`flags` 8, `entry` = the data id, `param` = the value) and **by its units** (`entries` + `radius`: every unit dead after one was seen awake): `eventData` is the instance's own `GetData(entry)` (no instance script: -1, and the hold pauses saying so), a units hold lists the living creatures of `entries` within the radius with `eventDown` counting the dead. Wailing Caverns reads data 4 = 4 for the gate: the four Fanglords' own smart_scripts set Enc 0-3 = 3 on death, and the instance then sets data 4 = SPECIAL. It does not wait on data 5: on the pinned core Mutanus's smart_script sets boss state 4 (type 1), not instance data 5, so data 5 never reads 3; his boss step's own kill read ends the run. An escort hold with `flags` 65536 (`kPlanFlagEscortNpc`) reads the event's start NPC (the gossip row before it) around the lead bot: dead or gone for 10 s it stops the event with that reason, once (the run goes back to the gossip, so a respawned Disciple can start it again); alive but still within 5 yd of his stand after 30 s of the hold with no wave up, the gossip did not start the escort and the run stops with that reason too. The gossip looks back to the nearest gossip row through the holds between them (`EventGossipStartStep`). A hold unit's x, y and its engaged/victim reads are filled, so the ranged stand on the side the event comes from.
 
 
+## 22. BG1: battlegrounds, queue and status (round BG1)
+
+`BATTLEGROUNDS-SPEC.md` decision D11 and `forever/docs/BG1-NOTES.md`. The whole round sits behind `TortoiseBots.Bg.Enable` (default 0):
+with it off the hooks do nothing and no bot queues, accepts or leaves by itself. **The reply shapes below are specified, not yet live
+output** (BG1 shipped without a live run); the live checks are listed in the notes for the lead's queue. Grammar version 2: one
+`bg ...` record per line, one `bg-end` line with the token last.
+
+### `.tb bg status [#token]`
+
+The config line, the loaded maps, one line per instance holding bots, one line per bot inside and one per bot waiting in a queue.
+`role` and `objective` are `-` until the WSG/AB rounds compute them.
+```
+bg: enabled=1 maps=wsg,ab fill=1 autonomous=0 min_per_team=5 max_instances=2 max_bots=50 max_minutes=45 queued=6 inside=9 events=15
+bg maps: wsg map=489 list=2 enabled=1 stands=2 ab map=529 list=3 enabled=1 nodes=5
+bg instance=3 map=wsg status=wait-join score=0-0 alliance=1h+5b horde=0h+6b
+bg bot=Mwarrior role=- objective=- map=wsg instance=3 team=alliance alive=1 move_age=2s
+bg queued bot=Mother map=wsg bracket=10-19 since=3s invited=0
+bg-end verb=status lines=5 #s1
+```
+`bg maps` says `enabled=0` and the boot log carries the one error line when a flag stand, node banner or start location is missing in the
+core's data; a disabled map gets no fill.
+
+### `.tb bg events [since=<seq>] [#token]`
+
+The ring of the last 1024 events, oldest first. `since=` asks for the events above a seq (a watchdog keeps `last=` and sees that nothing
+new arrived); a `since` below `oldest=` means the ring dropped events instead of there being a gap. Kinds: `queue`, `join`, `leave` (with
+`why=`: `match-over`, `max-minutes`, `master-gone`, `declined`, `ineligible` (`bound`/`run`/`left-pool`), `no-human`, `queue-timeout`,
+`logout`, `out`, `queue-end`, `port-failed:N`),
+and the later rounds' `role`, `objective`, `flag-pick|drop|return|capture`, `node assault|defend|occupied`, `fallback`.
+```
+bg event seq=15 t=214 kind=queue bot=Mwarrior map=wsg team=alliance instance=0 flag=- node=- why=
+bg event seq=16 t=219 kind=join bot=Mwarrior map=wsg team=alliance instance=3 flag=- node=- why=
+bg-end verb=events since=0 count=2 oldest=15 last=16 #e1
+```
+`t=` is seconds since the server started (`GameTime::GetGameTimeMS`), not since a match.
+
+Queue and acceptance never go through anything but the core: `WorldSession::JoinBattlegroundQueue`, the typed
+`CMSG_BATTLEFIELD_PORT` packet through `HandleBattleFieldPortOpcode`, `Player::LeaveBattleground`, and the core's own
+`RemovePlayer` + `RemoveBattlegroundQueueId` pair for a queued bot that became ineligible. The match itself is only ever started by
+the core: the module holds it back through `WorldScript::CanCreateBattleground` until a human's queue reaches the fill target, and
+re-schedules the core's queue update each pass so bots still waiting follow the human into his instance.
+
 ## Onyxia observation
 
 `.tb onyxia <bot> observe <32-hex-boss-guid> | status | off [#token]`
