@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace TortoiseBots
 {
@@ -69,6 +70,42 @@ inline char const* VerdictName(Verdict verdict)
         case Verdict::SkipHasStablePet: return "skip-has-stable-pet";
     }
     return "unknown";
+}
+
+struct PetControlSpell
+{
+    uint32_t spellId;
+    char const* name;
+};
+
+// Classic 1.60 hunter pet-control spells taught alongside the starter pet / on login catch-up.
+inline constexpr PetControlSpell kPetControlSpells[] =
+{
+    { 883,  "Call Pet" },
+    { 982,  "Revive Pet" },
+    { 2641, "Dismiss Pet" },
+    { 6991, "Feed Pet" },
+    { 1515, "Tame Beast" },
+    { 5149, "Beast Training" },
+};
+
+inline bool EligibleForPetControlSpells(Input const& in)
+{
+    return in.enabled && in.isBot && in.isHunter && in.level >= kMinLevel && in.inWorld && !in.teleportingFar;
+}
+
+template <typename HasSpellFn>
+inline std::vector<PetControlSpell> MissingPetControlSpells(Input const& in, HasSpellFn&& hasSpell)
+{
+    std::vector<PetControlSpell> missing;
+    if (!EligibleForPetControlSpells(in))
+        return missing;
+    for (PetControlSpell const& spell : kPetControlSpells)
+    {
+        if (!hasSpell(spell.spellId))
+            missing.push_back(spell);
+    }
+    return missing;
 }
 
 } // namespace autohunterpet
