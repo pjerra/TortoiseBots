@@ -1,6 +1,7 @@
 #include "host/TbRaidLayout.h"
 #include "host/TbH3.h"
 #include "host/TbRaidGroupsPure.h"
+#include "host/run/TbRun.h"
 #include "TbBotMgr.h"
 
 #include "compat/botpch_forever.h"
@@ -233,6 +234,26 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         .S("groups", raidgroups::SubgroupLine(names, real));
     reply.End(end);
     return true;
+}
+
+bool RaidConvertBlocked(Group* group, std::string& why)
+{
+    if (!group)
+        return false;
+    std::string const leader = group->GetLeaderName();
+    if (run::RunRec* rec = run::Find(group->GetLeaderGUID()); rec && !run::Ended(*rec))
+    {
+        why = leader + "'s party has a run (.tb run status " + leader + "): a sixth member would make it a raid and end the run, so it was not added";
+        return true;
+    }
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        if (!CommanderGuid(slot.guid).IsEmpty())
+        {
+            why = leader + "'s party has a commander binding (" + slot.name + "): a sixth member would make it a raid and end the binding, so it was "
+                "not added; .tb raid " + leader + " converts the party on purpose";
+            return true;
+        }
+    return false;
 }
 
 void ForgetLayout(Group* group)

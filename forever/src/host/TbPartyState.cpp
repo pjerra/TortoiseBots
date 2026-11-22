@@ -682,7 +682,7 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         for (size_t i = 1; i < args.w.size(); ++i)
         {
             Player* member = FindOnline(args.w[i]);
-            std::string const error = BotMgr::Instance().GroupWith(member->GetGUID(), leader->GetGUID());
+            std::string const error = BotMgr::Instance().GroupWith(member->GetGUID(), leader->GetGUID(), true);
             Rec rec("party-join");
             rec.S("bot", member->GetName()).S("leader", leader->GetName());
             if (error.empty())

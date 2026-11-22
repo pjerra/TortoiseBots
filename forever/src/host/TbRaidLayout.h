@@ -4,6 +4,8 @@
 
 #include "ChatCommand.h"
 
+#include <string>
+
 class Group;
 class Player;
 
@@ -21,5 +23,10 @@ int PlaceJoiner(Group* group, Player* member);
 
 // The group is gone (GroupScript::OnDisband): its layout record goes with it.
 void ForgetLayout(Group* group);
+
+// A join that would turn `group` (a full party) into a raid must not: a member has a commander binding, or the leader has a run that is
+// not over. Both end when the party becomes a raid (the binding with `group-raid`, the run needs a party). `why` is the refusal.
+// The build without the engine has neither and answers false.
+bool RaidConvertBlocked(Group* group, std::string& why);
 }
 }

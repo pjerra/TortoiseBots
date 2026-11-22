@@ -46,8 +46,10 @@ public:
     // started (W0): a pool bot is always a free bot, and IsPoolBot answers for the scheduler. `engine` asks for the real brain
     // on a commanded bot that is neither free nor owned (a hire): on a server with TortoiseBots.Slice.EngineByDefault off, every
     // other commanded bot runs the follow-only spike.
+    // allowRaid: the join may make or fill a raid (TortoiseBots.Raid.Enable = 1): only the explicit `.tb login`, `.tb group` and `.tb party` pass
+    // it; every automatic join keeps the 5-man party.
     std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false, bool owned = false,
-        bool engine = false);
+        bool engine = false, bool allowRaid = false);
 
     // Makes a new level 1 character on the account the way the core's own creation does (realm character count, creation hooks).
     // Empty string = the saves were QUEUED; the character commit is asynchronous, and only when it succeeds are the login side
@@ -79,7 +81,7 @@ public:
     // HandlePartyInviteOpcode / HandlePartyInviteResponseOpcode, without the packets). The bot's host master becomes `master`.
     // Empty string = done, else the reason it was refused. A party holds MAX_GROUP_SIZE (5) members, the master among them; with
     // TortoiseBots.Raid.Enable a sixth member turns it into a raid, which holds MAX_RAID_SIZE (40).
-    std::string GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid);
+    std::string GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid, bool allowRaid = false);
     // `.tb ungroup <bot>`: the bot leaves its party and has no master afterwards. Empty string = done, else the reason.
     std::string Ungroup(ObjectGuid botGuid);
 
@@ -266,6 +268,7 @@ private:
         bool following = false;
         bool placed = false;         // moved next to the master after login
         bool wantParty = false;      // joins the master's party once both are in the world (Login with a master)
+        bool allowRaid = false;      // that join may make or fill a raid (`.tb login`, with TortoiseBots.Raid.Enable = 1)
         uint32 ownerLoadingMs = 0;   // how long the account's real session has been loading a character
         uint32 thinkMs = 0;
         uint32 lastTurnMs = 0;       // world time of this bot's last pass, so a budgeted bot gets the time since its last turn
@@ -326,7 +329,7 @@ public:
     // N1: the one guarded call of Map::PlayerCannotEnter: "" = no objection, else the reason (see TbBotMgr.cpp).
     static std::string CanEnterMap(Player* who, uint32 mapId);
 private:
-    static std::string JoinParty(Player* bot, Player* master);
+    static std::string JoinParty(Player* bot, Player* master, bool allowRaid = false);
     // W1 (review): the ONE master-binding step. A master replaces free mode at that moment (the autonomous kit, the ghost bookkeeping),
     // so every binding path lands here: `.tb group` (GroupWith), the commander binding, a run and the engine's own adoption (SetMaster).
     void BindMaster(Bot& bot, ObjectGuid master);

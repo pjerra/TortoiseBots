@@ -3,6 +3,7 @@
 #include "host/TbAutoFood.h"
 #include "host/TbHostGroupQuestPure.h"
 #include "host/TbRaidGroupsPure.h"
+#include "host/TbRaidLayout.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostAhMarket.h"
 #include "host/TbHostGuildMail.h"
@@ -327,7 +328,7 @@ std::vector<uint32> BotMgr::BotAccounts() const
     return accounts;
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned, bool engine)
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned, bool engine, bool allowRaid)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -392,6 +393,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     // (`.bot add` by the owner or a GM, `.tb login`, the pool) reports the character's own account, never the adder's and never 0.
     bot.characterBnet = bot.session->GetBattlenetAccountId();
     bot.wantParty = !master.IsEmpty();
+    bot.allowRaid = allowRaid;
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
     // An owned bot always runs the engine too: `.bot` orders and chat need it. A hire asks for it explicitly.
     bot.useEngine = _engineByDefault || free || owned || engine;
@@ -415,11 +417,13 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         for (auto const& [guid, other] : _bots)
             if (other.wantParty && other.master == master)
                 ++members;
-        raidgroups::JoinPlan const plan = raidgroups::PlanJoin(_raidsEnabled, isRaid, members);
+        raidgroups::JoinPlan const plan = raidgroups::PlanJoin(_raidsEnabled && allowRaid, isRaid, members);
         if (plan.code == "raids-off")
-            return "the master leads a raid and TortoiseBots.Raid.Enable is 0: the bot is not logged in";
+            return _raidsEnabled ? "the master leads a raid and this login keeps 5-man parties (.tb login <bot> <master> joins a raid)"
+                                 : "the master leads a raid and TortoiseBots.Raid.Enable is 0: the bot is not logged in";
         if (plan.code == "party-full")
-            return Trinity::StringFormat("the party of that master is full ({} members at most; TortoiseBots.Raid.Enable = 1 lets it become a raid)", uint32(MAX_GROUP_SIZE));
+            return _raidsEnabled ? Trinity::StringFormat("the party of that master is full ({} members at most; this login keeps 5-man parties: .tb login <bot> <master> makes a raid)", uint32(MAX_GROUP_SIZE))
+                                 : Trinity::StringFormat("the party of that master is full ({} members at most; TortoiseBots.Raid.Enable = 1 lets it become a raid)", uint32(MAX_GROUP_SIZE));
         if (plan.code == "raid-full")
             return Trinity::StringFormat("the raid of that master is full ({} members)", uint32(MAX_RAID_SIZE));
     }
@@ -447,7 +451,7 @@ void BotMgr::LogoutAll(char const* reason)
         bot.session->RequestLogout(reason);
 }
 
-std::string BotMgr::JoinParty(Player* bot, Player* master)
+std::string BotMgr::JoinParty(Player* bot, Player* master, bool allowRaid)
 {
     if (bot == master)
         return "a bot cannot be its own master";
@@ -455,10 +459,13 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
         return "both characters must be in the world";
 
     Group* group = master->GetGroup();
-    bool const raidsEnabled = Instance().RaidsEnabled();
-    // Without TortoiseBots.Raid.Enable the host keeps 5-man parties: a raid is refused even when the bot is already in it.
+    // Without TortoiseBots.Raid.Enable the host keeps 5-man parties: a raid is refused even when the bot is already in it. With it, only the
+    // explicit `.tb login`, `.tb group` and `.tb party` (allowRaid) make or fill a raid; the automatic joins (the free-bot quest groups, the
+    // hire flow, a stored commander binding's restore) keep the 5-man refusal, so they never turn a bound or running party into a raid.
+    bool const raidsEnabled = Instance().RaidsEnabled() && allowRaid;
     if (group && group->isRaidGroup() && !raidsEnabled)
-        return "the master leads a raid and TortoiseBots.Raid.Enable is 0: the bot was not added";
+        return Instance().RaidsEnabled() ? "the master leads a raid and this join keeps 5-man parties (.tb group or .tb party add to a raid)"
+                                         : "the master leads a raid and TortoiseBots.Raid.Enable is 0: the bot was not added";
     if (group && bot->GetGroup() == group)
         return {};                                   // already in it
     if (bot->GetGroup() || bot->GetGroupInvite())
@@ -473,10 +480,17 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
         // Counted here and not through Group::IsFull, which is the raid's 40 for a raid and the party's five otherwise.
         raidgroups::JoinPlan const plan = raidgroups::PlanJoin(raidsEnabled, group->isRaidGroup(), group->GetMembersCount());
         if (plan.code == "party-full")
-            return Trinity::StringFormat("the party is full ({} members at most; TortoiseBots.Raid.Enable = 1 lets it become a raid)", uint32(MAX_GROUP_SIZE));
+            return Instance().RaidsEnabled()
+                ? Trinity::StringFormat("the party is full ({} members at most; this join keeps 5-man parties: .tb group or .tb party make it a raid)", uint32(MAX_GROUP_SIZE))
+                : Trinity::StringFormat("the party is full ({} members at most; TortoiseBots.Raid.Enable = 1 lets it become a raid)", uint32(MAX_GROUP_SIZE));
         if (plan.code == "raid-full")
             return Trinity::StringFormat("the raid is full ({} members)", uint32(MAX_RAID_SIZE));
         convertFirst = plan.step == raidgroups::JoinStep::ConvertThenAdd;
+        // A party with a commander binding or a run ends it when it becomes a raid (End::GroupRaid; a run needs a party): an explicit join
+        // does not do that by the way. `.tb raid <leader>` converts on purpose.
+        std::string blocked;
+        if (convertFirst && h3::RaidConvertBlocked(group, blocked))
+            return blocked;
     }
 
     // The invite, as HandlePartyInviteOpcode makes it: a new group is not created or saved until the first accept.
@@ -551,7 +565,7 @@ void BotMgr::BindMaster(Bot& bot, ObjectGuid master)
     bot.masterAway = false;
 }
 
-std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
+std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid, bool allowRaid)
 {
     auto itr = _bots.find(botGuid);
     if (itr == _bots.end())
@@ -562,7 +576,7 @@ std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
         return "the bot is not in the world yet";
     if (!master)
         return "the master is not in the world";
-    std::string const error = JoinParty(bot, master);
+    std::string const error = JoinParty(bot, master, allowRaid);
     if (!error.empty())
         return error;
     BindMaster(itr->second, masterGuid);
@@ -2082,7 +2096,7 @@ void BotMgr::Think(Bot& bot, Player* me)
     if (bot.wantParty)
     {
         bot.wantParty = false;
-        std::string const error = JoinParty(me, master);
+        std::string const error = JoinParty(me, master, bot.allowRaid);
         if (!error.empty())
         {
             TC_LOG_ERROR("tortoisebots", "BotMgr: {} could not join the party of {}: {}", me->GetName(), master->GetName(), error);

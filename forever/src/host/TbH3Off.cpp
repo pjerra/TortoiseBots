@@ -73,6 +73,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { re
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "party"); }
 bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "layout"); }
 void ForgetLayout(Group*) {}
+bool RaidConvertBlocked(Group*, std::string&) { return false; }
 bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "onyxia"); }
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "state"); }
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "threat"); }

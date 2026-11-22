@@ -914,7 +914,7 @@ public:
                 master = caller->GetGUID();
 
         ObjectGuid const guid = GuidByName(name);
-        std::string const error = BotMgr::Instance().Login(guid, master, free);
+        std::string const error = BotMgr::Instance().Login(guid, master, free, false, false, false, true);
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
         // A bot with no master that takes the engine (EngineByDefault, `owned`) runs the free kit, so say so.
@@ -1103,7 +1103,7 @@ public:
         ObjectGuid const guid = GuidByName(name);
         if (!RequireOwnedBot(handler, guid))
             return false;
-        std::string const error = BotMgr::Instance().GroupWith(guid, master);
+        std::string const error = BotMgr::Instance().GroupWith(guid, master, true);
         if (!error.empty())
             return Fail(handler, name + " not grouped: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s joined the party of %s.", name.c_str(), masterName.c_str());
