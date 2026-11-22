@@ -763,11 +763,12 @@ camp floors at the pack before it (`ReplayFloor` = the move point of the 600 yd 
 are all uncleared keeps floor 0.
 Existing walk-back tests pin the rest: a known checkpoint still decides the floor, the folded route's holes are still
 replayed from the point before the first uncrossed one, and an entrance revive with nothing cleared replays from the
-start. The hole rule follows the same floor (`FirstUncrossedDirect`): with no checkpoint a direct step at or before
-the last cleared step counts as crossed — the party walked to a point past it — so a wipe at leg 8 of a route whose
-hole sits at leg 2 replays from leg 8, not from the hole; only a hole after the last cleared step is replayed, from
-the last move point before it. WC's own holes are past step 87 (the lift to Serpentis's part, indexes 114 and 139),
-so run 6 never met this case; the made-up plan in the test pins it both ways.
+start. The hole rule is unchanged (`FirstUncrossedDirect`): with no checkpoint the lead bot may stand at the entrance
+(the wipe's release), so a direct step (a navmesh hole) at or before the last cleared step has to be crossed again.
+Review fix: the floor lift is therefore made only when no direct step lies in [start step, last cleared step]
+(`DirectStepIn`); otherwise the old floor and the old hole replay stand. WC has no direct step at all, so it always gets
+the lift; a plan with a hole before the last cleared camp keeps the replay from the hole. The test's made-up plan pins
+both: a hole before the cleared camp keeps floor 0 and names the hole, a hole after it lets the floor lift.
 
 ### 13.2 The leg-5 Druid camp carries the pack's whole kill-first order
 
@@ -794,6 +795,19 @@ Tests: `forever/tools/test_run_wc.cpp` `TestLeg5CampKillFirstOrder` (the camp's 
 `PickKillFirst` sends the party at the Druid, then the Adder, then the Viper) and `TestPlanShape` (the list, pinned
 whole). They fail on the old row (`KillFirstRank(5048) == -1`, the focus empty after the Druid) and pass on the new
 one; `python3 forever/tools/test_wc_plan_rows.py` regenerates the migration byte for byte (3507 checks, 0 failed).
+
+### 13.2b Review round (Codex adversarial, one round)
+
+- High, hazardous mixed liquid flags (`TbRunLiquid.h`): a flag word such as OCEAN | DARK_WATER passed the water test.
+  Fixed: any MAGMA, SLIME or DARK_WATER bit refuses the wade point (`kWadeTypeHazard`); `test_run_liquid` pins the mixed
+  words and that WATER | OCEAN still wades.
+- High, one swim threshold for every race: the known limit of section 11.4 (a shorter model swims in 1.5-2.0 yd of
+  water). Not changed here: the wade rule shipped in runs 2-6 and every wade hop of run 6 was walked; the per-race
+  depth is the open item of 11.4.
+- Medium, the in-place edit of the Wailing Caverns plan migration: not a defect here. The core's updater records a file
+  by name and hash and applies it again when the hash changes (forever/sql/README.md), and the file deletes and
+  inserts the plan's rows in one transaction, so the changed file replays on the next boot; the README names
+  "replace the file" as the way to change generated plan rows, and the plan test pins the file to the generator.
 
 ### 13.3 Deploy note: a core move needs the core's own SQL applied
 

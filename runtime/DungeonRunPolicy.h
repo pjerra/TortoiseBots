@@ -12751,6 +12751,15 @@ inline std::size_t LastClearedStep(const Run& r)
     return found;
 }
 
+// Whether a direct step (a navmesh hole the route crosses in a straight line) lies in [from, to] of the plan.
+inline bool DirectStepIn(const Run& r, std::size_t from, std::size_t to)
+{
+    for (std::size_t i = from; r.plan && i <= to && i < r.plan->steps.size(); ++i)
+        if (r.plan->steps[i].kind == PlanStepKind::MoveDirect)
+            return true;
+    return false;
+}
+
 // The lowest plan index a walk back may start at: the checkpoint when it is
 // known (a point before it can lie behind a hole the lead bot crossed since);
 // with no checkpoint (a death, a wipe's release to the entrance, a pause) the
@@ -12758,14 +12767,18 @@ inline std::size_t LastClearedStep(const Run& r)
 // party is known to have walked to (WC run 6: after the wipe at leg 8 the
 // replay began at the point nearest the lead bot at the entrance, the plan's
 // first move point, and walked the whole route before the next pull); else 0
-// (before every hole). Never before the step the run started at
-// (Run::startStep: a placed run never walked the steps before it).
+// (before every hole). With no checkpoint the lead bot may stand at the
+// entrance, so a direct step (a hole) at or before the last cleared step keeps
+// the old floor: the hole has to be crossed again, and FirstUncrossedDirect
+// still names it. Never before the step the run started at (Run::startStep: a
+// placed run never walked the steps before it).
 inline std::size_t ReplayFloor(const Run& r)
 {
     std::size_t floor = r.startStep;
     if (CheckpointKnown(r))
         floor = std::max(floor, r.checkpoint);
-    else if (std::size_t const cleared = LastClearedStep(r); cleared != static_cast<std::size_t>(-1))
+    else if (std::size_t const cleared = LastClearedStep(r);
+             cleared != static_cast<std::size_t>(-1) && !DirectStepIn(r, r.startStep, cleared))
     {
         for (std::size_t i = r.startStep; i <= cleared && i < r.plan->steps.size(); ++i)
             if (IsRunMovePoint(r, i))
@@ -12775,19 +12788,11 @@ inline std::size_t ReplayFloor(const Run& r)
 }
 
 // The first direct step before the current step that the lead bot has not
-// crossed (npos for none): after the checkpoint when it is known; with no
-// checkpoint after the last cleared step, the same floor ReplayFloor uses (a
-// hole at or before a point the party is known to have reached is crossed: a
-// wipe at leg 8 of a route with a hole at leg 2 replays from leg 8, not from
-// the hole); else the plan's first direct step. Never one before the run's
-// start step.
+// crossed (npos for none): after the checkpoint when it is known, else the
+// plan's first direct step; never one before the run's start step.
 inline std::size_t FirstUncrossedDirect(const Run& r)
 {
-    std::size_t from = r.startStep;
-    if (CheckpointKnown(r))
-        from = std::max(r.checkpoint + 1, r.startStep);
-    else if (std::size_t const cleared = LastClearedStep(r); cleared != static_cast<std::size_t>(-1))
-        from = std::max(cleared + 1, r.startStep);
+    std::size_t const from = std::max(CheckpointKnown(r) ? r.checkpoint + 1 : static_cast<std::size_t>(0), r.startStep);
     for (std::size_t i = from; i < r.step && i < r.plan->steps.size(); ++i)
         if (r.plan->steps[i].kind == PlanStepKind::MoveDirect)
             return i;

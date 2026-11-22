@@ -566,23 +566,31 @@ static void TestWipeReplayStartsAtTheLastClearedStep()
     NoteCheckpoint(c, 3);
     CHECK(ReplayFloor(c) == 3);
 
-    // A navmesh hole on the way, crossed before the wiped camp: it is crossed like the checkpoint's holes, so the walk
-    // back neither replays it nor starts before it (the old rule replayed from the plan's first point).
+    // A navmesh hole on the way, before the last cleared camp: with no checkpoint the lead bot may stand at the
+    // entrance (the wipe's release), so the hole has to be crossed again: the old floor and the hole replayed, never
+    // a walk that starts past it.
     DungeonPlan holed;
     holed.steps = {Step(PlanStepKind::Move, 0), PullStep(20, {1}), Step(PlanStepKind::MoveDirect, 40),
         Step(PlanStepKind::Move, 80), PullStep(100, {1}), Step(PlanStepKind::Move, 140), PullStep(160, {2})};
     Run h = Start(&holed, 6);
     CHECK(LastClearedStep(h) == 4);
-    CHECK(FirstUncrossedDirect(h) == static_cast<std::size_t>(-1));
-    CHECK(ReplayFloor(h) == 3); // the last move point at or before the last cleared camp (index 3, 80 0)
+    CHECK(FirstUncrossedDirect(h) == 2);
+    CHECK(ReplayFloor(h) == 0);
     Facts hf = Party(-100);
     hf.seen = false;
     StartWalkBack(h, hf);
-    CHECK(h.walkBack && h.walkBackStart == 3);
     hf.approachKnown = true;
     hf.approachIncomplete = true;
     Tick(h, hf);
-    CHECK(h.walkBack && h.walkBackIdx == 3);
+    CHECK(h.walkBack && h.walkBackIdx == 0);
+    // A hole only after the last cleared camp does not hold the floor back: the camps before it were walked.
+    DungeonPlan holedLate;
+    holedLate.steps = {Step(PlanStepKind::Move, 0), PullStep(20, {1}), Step(PlanStepKind::Move, 80), PullStep(100, {1}),
+        Step(PlanStepKind::MoveDirect, 120), Step(PlanStepKind::Move, 140), PullStep(160, {2})};
+    Run l = Start(&holedLate, 6);
+    CHECK(LastClearedStep(l) == 3);
+    CHECK(ReplayFloor(l) == 2);
+    CHECK(FirstUncrossedDirect(l) == 4);
 
     // The same route with the wipe's camp before the hole: the hole is still uncrossed and replayed from the point
     // before it.

@@ -104,6 +104,11 @@ int main()
     CHECK(L::WadePointOf(0x04, 10.4f, 10.2f, 10.0f, 0x04) == L::WadeWay::Refused);  // slime, 0.2 deep
     CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x10) == L::WadeWay::Refused);  // dark water, 0.2 deep
     CHECK(L::WadePointOf(0x01, 2.0f, 1.0f, 10.0f, 0x01) == L::WadeWay::Dry);        // lava far below the walk
+    // A mixed flag word is not water either: a hazardous bit ORed with water or ocean refuses.
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x02 | 0x10) == L::WadeWay::Refused); // ocean | dark water
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x08 | 0x01) == L::WadeWay::Refused); // water | magma
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x08 | 0x04) == L::WadeWay::Refused); // water | slime
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x08 | 0x02) == L::WadeWay::Shallow); // water | ocean is still water
     // The RFC rule on the same shallow point refuses: that is what a player's own `cmd move` still gets.
     CHECK(L::PointRefused(0x04, 10.4f, 10.0f));
     // A hop across a shallow strip: a run-issued move passes the wade rule, the same hop from a player pauses (the exact

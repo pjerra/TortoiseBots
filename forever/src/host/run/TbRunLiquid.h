@@ -56,6 +56,7 @@ constexpr float kSwimDepthYd = 2.03128f;
 // MAP_LIQUID_TYPE_*). Lava, slime and dark water keep the RFC refusal at any depth: a run's move never wades them.
 constexpr std::uint32_t kWadeTypeWater = 0x08;
 constexpr std::uint32_t kWadeTypeOcean = 0x02;
+constexpr std::uint32_t kWadeTypeHazard = 0x01 | 0x04 | 0x10; // MAGMA | SLIME | DARK_WATER: any of them in the flags refuses the point
 
 // What a wade move sees at one sample: dry (no liquid at the walked height, so nothing to wade), shallow (liquid up to
 // kSwimDepthYd deep and the sample not under its surface), or refused (swimming water, a non-water liquid, or deeper
@@ -73,8 +74,8 @@ inline WadeWay WadePointOf(std::uint32_t status, float level, float depthLevel, 
         return WadeWay::Dry;
     if (!InWaterBits(status) && level < z - kLevelSlackYd)
         return WadeWay::Dry;                                        // the surface lies below the walked point: the rule as before
-    if (!(typeFlags & (kWadeTypeWater | kWadeTypeOcean)))
-        return WadeWay::Refused;                                    // lava, slime, dark water: never a wade, however shallow
+    if (!(typeFlags & (kWadeTypeWater | kWadeTypeOcean)) || (typeFlags & kWadeTypeHazard))
+        return WadeWay::Refused;                                    // lava, slime, dark water: never a wade, however shallow, whatever else is ORed in
     if (status & kUnderWaterBit)
         return WadeWay::Refused;                                    // swimming, or a point under a liquid it is not walking on
     if (level - depthLevel > kSwimDepthYd)
