@@ -615,7 +615,7 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
         else
         {
             if (itemId == 13446 || itemId == 118)
-                sLog.outDebug("healing potion UseItemInternal failed bot=%s itemId=%u spellId=%u", bot->GetName(), itemId, spellData.SpellId);
+                sLog.outDebug("healing potion UseItemInternal failed bot=%s itemId=%u spellId=%u", std::string(bot->GetName()).c_str(), itemId, spellData.SpellId);
             break;
         }
     }
@@ -1052,14 +1052,14 @@ bool UseItemIdAction::isPossible()
     if (HasItemCooldown(itemId))
     {
         if (getName() == "healing potion")
-            sLog.outDebug("healing potion isPossible=false (cooldown) bot=%s itemId=%u", bot->GetName(), itemId);
+            sLog.outDebug("healing potion isPossible=false (cooldown) bot=%s itemId=%u", std::string(bot->GetName()).c_str(), itemId);
         return false;
     }
 
         if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
     {
         if (getName() == "healing potion")
-            sLog.outDebug("healing potion isPossible=false (no item count) bot=%s itemId=%u", bot->GetName(), itemId);
+            sLog.outDebug("healing potion isPossible=false (no item count) bot=%s itemId=%u", std::string(bot->GetName()).c_str(), itemId);
         return false;
     }
 
@@ -1070,7 +1070,7 @@ bool UseItemIdAction::isPossible()
     if (canUse != EQUIP_ERR_OK)
     {
         if (getName() == "healing potion")
-            sLog.outDebug("healing potion isPossible=false (CanUseItem=%d) bot=%s itemId=%u", int(canUse), bot->GetName(), itemId);
+            sLog.outDebug("healing potion isPossible=false (CanUseItem=%d) bot=%s itemId=%u", int(canUse), std::string(bot->GetName()).c_str(), itemId);
         return false;
     }
 
