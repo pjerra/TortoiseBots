@@ -124,6 +124,18 @@ def trigger_nodes(strategy_text):
     return out
 
 
+def actions_of(key, nodes, supported):
+    """The actions a chat word fires: its explicit TriggerNode's, else the pass-through action of its own name, else none.
+
+    A word with no TriggerNode (`use`: the strategy only has the `u` node) is registration only, exactly as in the full build.
+    """
+    if key in nodes:
+        return nodes[key]
+    if key in supported:
+        return [key]
+    return []
+
+
 def check(gen_text, strategy_text, context_text, build_list):
     block = pc_chat_keys(gen_text)
     join = re.search(r"^KEYS = _join\(([^)]*)\)", gen_text, re.M)
@@ -157,13 +169,7 @@ def check(gen_text, strategy_text, context_text, build_list):
     supported = supported_words(strategy_text)
     nodes = trigger_nodes(strategy_text)
     for key in block["trigger"]:
-        actions = nodes.get(key, [])
-        if not actions and key in supported:
-            # PassTroughStrategy fires an action of the trigger word's own name
-            actions = [key]
-        if not actions:
-            raise AssertionError("chat trigger %r fires no action in %s" % (key, STRATEGY))
-        for action in actions:
+        for action in actions_of(key, nodes, supported):
             if action not in reg["action"]:
                 raise AssertionError("chat trigger %r fires action %r, which the slice does not register" % (key, action))
 
@@ -197,7 +203,7 @@ class Grammar(unittest.TestCase):
         for key in R4_TRIGGERS:
             with self.subTest(word=key):
                 self.assertIn(key, reg["trigger"], "chat trigger %r is not registered" % key)
-                for action in (nodes.get(key) or ([key] if key in words else [])):
+                for action in actions_of(key, nodes, words):
                     self.assertIn(action, reg["action"], "trigger %r fires unregistered action %r" % (key, action))
 
     def test_mutations_turn_it_red(self):
@@ -205,7 +211,7 @@ class Grammar(unittest.TestCase):
         block = pc_chat_keys(self.gen)
         mutations = [
             # a word dropped from the block (mutation 13 of the spec)
-            (0, self.gen.replace('"repair", ', "", 1)),
+            (0, self.gen.replace('release, repair, u, use', 'release, u, use', 1)),
             # an action dropped from the block
             (0, self.gen.replace('"buy back, ', "", 1)),
             # the block no longer joined into KEYS
@@ -214,6 +220,10 @@ class Grammar(unittest.TestCase):
             (0, re.sub(r"^PC_CHAT_KEYS = \{.*?\n\}\n", "", self.gen, count=1, flags=re.M | re.S)),
             # a new action's source not built
             (3, self.build_list.replace("ai/playerbot/strategy/actions/EquipAction.cpp\n", "")),
+            # a word's action creator gone from the generated registry
+            (2, self.context.replace('creators["position"] = [](PlayerbotAI* ai) { return new PositionAction(ai); };', "", 1)),
+            # a word's trigger creator gone from the generated registry
+            (2, self.context.replace('creators["repair"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "repair"); };', "", 1)),
         ]
         for i, (slot, mutated) in enumerate(mutations):
             args = list(base)
