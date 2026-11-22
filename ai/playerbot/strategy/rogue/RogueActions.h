@@ -579,6 +579,10 @@ namespace ai
                     Item* poisonItem = FindItemByEntryCompat(bot, poisonItemId);
                     if (poisonItem)
                     {
+                        if (bot->HasAura(SPELL_AURA_MOD_STEALTH))
+                            RemoveStealthAurasCompat(bot);
+                        if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
+                            bot->SetStandState(UNIT_STAND_STATE_STAND);
                         ai->ImbueItem(poisonItem, weaponSlot);
                         SetDuration(3000);
                         return true;
