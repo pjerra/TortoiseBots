@@ -95,6 +95,7 @@ void ClearFocusHeal(Player* healer)
         return;
     ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("focus heal targets")->Set(std::list<ObjectGuid>());
     ai->ChangeStrategy("-focus heal targets", BotState::BOT_STATE_COMBAT);
+    sLog.outString("TortoiseBots raid: %s heals the whole raid again (focus heal targets cleared)", healer->GetName().c_str());
 }
 
 void ClearFocusHeal(ObjectGuid healer)
