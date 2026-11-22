@@ -247,7 +247,7 @@ COMBAT_ITEMS_KEYS = {
 }
 CLASS_EXTRAS_KEYS = {
     "strategy": "",
-    "action": "tame, use lightwell",
+    "action": "tame, use lightwell, reach party member for totem",
     "trigger": "dispel enrage",
     "value": "warlock spread attacker my aura, warlock spread attacker, warlock spread attacker manual",
 }

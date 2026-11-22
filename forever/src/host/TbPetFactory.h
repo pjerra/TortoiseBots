@@ -42,5 +42,6 @@ uint32 StarterPetEntry(Player const* bot);
 // world before anything is written.
 GiveResult GiveHunterPet(Player* bot, bool saveToDb = true);
 void EnsureHunterStarterAmmo(Player* bot);
+void EnsureShamanStarterTotems(Player* bot);
 }
 }
