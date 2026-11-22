@@ -1,4 +1,4 @@
-# TortoiseBots for ForeverCore (Karrz1/TrinityCore, branch `forever`).
+# TortoiseBots for ForeverCore (Karrz1/TrinityCore, branch `forever-bots`).
 #
 # This file is only for ForeverCore. The Turtle (tortoise-wow) build does not read it: that core includes
 # TortoiseBots.cmake and collects src/. Clone or link this repository at  <core>/src/modules/TortoiseBots  and
@@ -17,6 +17,14 @@ endif()
 option(BUILD_TORTOISEBOTS "Build the TortoiseBots module" 0)
 if(NOT BUILD_TORTOISEBOTS)
   return()
+endif()
+
+# Two bot systems must never load together (two `.bot` command sets, two session drivers on the PlayerScript hooks, two group and
+# auction loops). The forever-bots core carries Karrz's own PlayerbotV2 module, which is off unless BUILD_PLAYERBOT_V2=1; this module
+# stops the configure when both are asked for. forever/tools/test_playerbot_v2_guard.py runs the configure both ways.
+if(BUILD_PLAYERBOT_V2)
+  message(FATAL_ERROR "TortoiseBots (BUILD_TORTOISEBOTS) cannot be built together with the PlayerbotV2 module (BUILD_PLAYERBOT_V2): "
+    "two bot systems must never load together. Configure with -DBUILD_PLAYERBOT_V2=OFF, or with -DBUILD_TORTOISEBOTS=OFF.")
 endif()
 
 # (The core README shows CollectSourceFiles(); that macro does not exist at the pinned commit, so glob here.)

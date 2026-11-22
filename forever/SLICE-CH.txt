@@ -325,4 +325,6 @@ ai/playerbot/strategy/actions/TellLosAction.cpp
 forever/src/compat/TbCompat_CH.h
 ai/cmangos-compat-ch.h
 ai/playerbot/TbCompatCH.h
+ai/playerbot/TravelMgr.cpp
+ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/strategy/actions/AhAction.cpp
