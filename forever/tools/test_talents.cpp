@@ -94,6 +94,32 @@ int main()
     check(TalentMatchesClass(1, 1), "ClassID=1 matches warrior");
     check(!TalentMatchesClass(2, 1), "ClassID=2 does not match warrior");
 
+    // 8. Fallback ordering puts mainTab first, then other tabs, each in row order (posY asc, posX asc),
+    //    and filters out invalid tabs or zero-rank/invalid nodes.
+    {
+        std::vector<FallbackNode> nodes = {
+            { 10, 100, 5, 200, 600, 0 }, // tab 0, row 1
+            { 11, 101, 5, 100,   0, 0 }, // tab 0, row 0
+            { 20, 200, 3, 100, 600, 1 }, // tab 1, row 1
+            { 21, 201, 5, 300,   0, 1 }, // tab 1, row 0, right
+            { 22, 202, 5, 100,   0, 1 }, // tab 1, row 0, left
+            { 30, 300, 5, 100,   0, 2 }, // tab 2, row 0
+            { 99, 999, 5, 100,   0, -1 }, // invalid tab (hidden)
+            { 98, 998, 0, 100,   0, 1 }, // 0 maxRanks
+        };
+        auto ordered = OrderFallbackNodes(nodes, 1);
+        check(ordered.size() == 6, "fallback filters invalid tab and 0 maxRanks");
+        if (ordered.size() == 6)
+        {
+            check(ordered[0].traitNodeId == 22, "mainTab row 0 left first");
+            check(ordered[1].traitNodeId == 21, "mainTab row 0 right second");
+            check(ordered[2].traitNodeId == 20, "mainTab row 1 third");
+            check(ordered[3].traitNodeId == 11, "other tab 0 row 0 fourth");
+            check(ordered[4].traitNodeId == 10, "other tab 0 row 1 fifth");
+            check(ordered[5].traitNodeId == 30, "other tab 2 row 0 sixth");
+        }
+    }
+
     if (fails == 0)
         std::printf("PASS: test_talents (all checks passed)\n");
     else

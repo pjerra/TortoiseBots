@@ -14,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "CharacterCache.h"
@@ -53,6 +54,7 @@ struct ClassTalentCache
     std::unordered_map<int32, int> nodeTab; // TraitNodeID -> 0..2
     std::unordered_map<uint32, ResolvedNode> talentToNode; // Talent.db2 ID -> TraitNode/Entry
     std::unordered_map<int32, uint32> nodeToTalent; // TraitNodeID -> Talent.db2 ID
+    std::vector<FallbackNode> fallbackNodes;
 };
 
 ClassTalentCache const& CacheForClass(uint8 classId)
@@ -95,6 +97,18 @@ ClassTalentCache const& CacheForClass(uint8 classId)
         }
 
         built.nodeTab = TortoiseBots::slice::spec::BuildNodeTabMap(layout);
+
+        std::unordered_set<int32> seenFallback;
+        for (TraitMgr::NodeEntryInfo const& e : entries)
+        {
+            if (!seenFallback.insert(e.TraitNodeID).second)
+                continue;
+            auto tit = built.nodeTab.find(e.TraitNodeID);
+            if (tit == built.nodeTab.end())
+                continue;
+            if (TraitNodeEntry const* node = sTraitNodeStore.LookupEntry(e.TraitNodeID))
+                built.fallbackNodes.push_back({ e.TraitNodeID, e.TraitNodeEntryID, e.MaxRanks, node->PosX, node->PosY, tit->second });
+        }
 
         for (TalentEntry const* tal : sTalentStore)
         {
@@ -219,8 +233,51 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
     uint32 firstUnmapped = 0;
     int32 lastFailResult = 0;
     uint32 lastFailTalent = 0;
+
+    auto tryAddPoint = [&](int32 traitNodeId, int32 traitNodeEntryId, int32 maxRanks, uint32 talentIdForDiag, bool& outOfPoints) -> bool
+    {
+        WorldPackets::Traits::TraitConfig candidate = working;
+        auto eit = std::find_if(candidate.Entries.begin(), candidate.Entries.end(), [&](WorldPackets::Traits::TraitEntry const& e)
+        {
+            return e.TraitNodeID == traitNodeId && e.TraitNodeEntryID == traitNodeEntryId;
+        });
+        if (eit != candidate.Entries.end())
+        {
+            if (eit->Rank + eit->GrantedRanks >= maxRanks)
+                return false;
+            ++eit->Rank;
+        }
+        else
+        {
+            WorldPackets::Traits::TraitEntry& added = candidate.Entries.emplace_back();
+            added.TraitNodeID = traitNodeId;
+            added.TraitNodeEntryID = traitNodeEntryId;
+            added.Rank = 1;
+        }
+
+        TraitMgr::LearnResult const res = TraitMgr::ValidateConfigForCommit(candidate, bot);
+        if (res != TraitMgr::LearnResult::Ok)
+        {
+            if (res == TraitMgr::LearnResult::NotEnoughTalentsInPrimaryTree && report.spent >= expectedTotal)
+                outOfPoints = true;
+            if (talentIdForDiag)
+            {
+                lastFailResult = int32(res);
+                lastFailTalent = talentIdForDiag;
+            }
+            return false;
+        }
+
+        working = std::move(candidate);
+        ++report.applied;
+        ++report.spent;
+        return true;
+    };
+
     for (uint32 talentId : plan)
     {
+        if (report.spent >= expectedTotal)
+            break;
         auto tit = cache.talentToNode.find(talentId);
         if (tit == cache.talentToNode.end())
         {
@@ -229,40 +286,40 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
             continue;
         }
         ResolvedNode const& rn = tit->second;
+        bool outOfPoints = false;
+        tryAddPoint(rn.traitNodeId, rn.traitNodeEntryId, rn.maxRanks, talentId, outOfPoints);
+        if (outOfPoints)
+            break;
+    }
 
-        WorldPackets::Traits::TraitConfig candidate = working;
-        auto eit = std::find_if(candidate.Entries.begin(), candidate.Entries.end(), [&](WorldPackets::Traits::TraitEntry const& e)
+    if (report.spent < expectedTotal)
+    {
+        std::vector<FallbackNode> const ordered = OrderFallbackNodes(cache.fallbackNodes, report.tab);
+        auto runFallbackTabPass = [&](bool mainTabOnly)
         {
-            return e.TraitNodeID == rn.traitNodeId && e.TraitNodeEntryID == rn.traitNodeEntryId;
-        });
-        if (eit != candidate.Entries.end())
-        {
-            if (eit->Rank + eit->GrantedRanks >= rn.maxRanks)
-                continue;
-            ++eit->Rank;
-        }
-        else
-        {
-            WorldPackets::Traits::TraitEntry& added = candidate.Entries.emplace_back();
-            added.TraitNodeID = rn.traitNodeId;
-            added.TraitNodeEntryID = rn.traitNodeEntryId;
-            added.Rank = 1;
-        }
-
-        TraitMgr::LearnResult const res = TraitMgr::ValidateConfigForCommit(candidate, bot);
-        if (res != TraitMgr::LearnResult::Ok)
-        {
-            bool const outOfPoints = (res == TraitMgr::LearnResult::NotEnoughTalentsInPrimaryTree) && (report.spent >= expectedTotal);
-            if (outOfPoints)
-                break;
-            lastFailResult = int32(res);
-            lastFailTalent = talentId;
-            continue;
-        }
-
-        working = std::move(candidate);
-        ++report.applied;
-        ++report.spent;
+            while (report.spent < expectedTotal)
+            {
+                uint32 passApplied = 0;
+                for (FallbackNode const& fn : ordered)
+                {
+                    if ((fn.tab == report.tab) != mainTabOnly)
+                        continue;
+                    while (report.spent < expectedTotal)
+                    {
+                        bool outOfPoints = false;
+                        if (!tryAddPoint(fn.traitNodeId, fn.traitNodeEntryId, fn.maxRanks, 0, outOfPoints))
+                            break;
+                        ++passApplied;
+                    }
+                    if (report.spent >= expectedTotal)
+                        break;
+                }
+                if (passApplied == 0)
+                    break;
+            }
+        };
+        runFallbackTabPass(true);
+        runFallbackTabPass(false);
     }
 
     if (report.applied > 0)
@@ -270,6 +327,13 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
         bot->UpdateTraitConfig(std::move(working), 0, false);
         countTabs(working);
         report.free = std::max<int32>(0, expectedTotal - report.spent);
+        report.tab = PickSpecTabForBot(
+            bot->GetClass(),
+            bot->GetGUID().GetCounter(),
+            forced,
+            report.tabCounts[0],
+            report.tabCounts[1],
+            report.tabCounts[2]);
         TC_LOG_INFO("tortoisebots", "talents: {} spent {} point(s) in {} ({}/{}/{}, total {}/{}) on {}",
             bot->GetName(), report.applied, SpecName(bot->GetClass(), report.tab),
             report.tabCounts[0], report.tabCounts[1], report.tabCounts[2],
