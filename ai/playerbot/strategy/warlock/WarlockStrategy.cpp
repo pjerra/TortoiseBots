@@ -680,6 +680,26 @@ void WarlockCursesRaidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
 }
 
 
+void WarlockAutoPetStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    // One row per demon, keyed by the default policy: exactly one trigger is
+    // active, so the ladder (Felhunter, Succubus, Voidwalker, Imp) picks the
+    // strongest demon the warlock knows without relying on an impossible cast
+    // being retried as a fallback.
+    triggers.push_back(new TriggerNode(
+        "auto pet felhunter",
+        NextAction::array(0, new NextAction("summon felhunter", ACTION_NORMAL + 2), NULL)));
+    triggers.push_back(new TriggerNode(
+        "auto pet succubus",
+        NextAction::array(0, new NextAction("summon succubus", ACTION_NORMAL + 2), NULL)));
+    triggers.push_back(new TriggerNode(
+        "auto pet voidwalker",
+        NextAction::array(0, new NextAction("summon voidwalker", ACTION_NORMAL + 2), NULL)));
+    triggers.push_back(new TriggerNode(
+        "auto pet imp",
+        NextAction::array(0, new NextAction("summon imp", ACTION_NORMAL + 2), NULL)));
+}
+
 void WarlockManualPetStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     triggers.push_back(new TriggerNode(

@@ -305,6 +305,168 @@ static void TestSpecWantedIsShardFree()
     }
 }
 
+// ---- default pet: the best demon the warlock knows -------------------------
+
+static WarlockAutoPetInputs Auto(bool imp, bool vw, bool suc, bool fh, bool shard)
+{
+    WarlockAutoPetInputs in;
+    in.knowsImp = imp;
+    in.knowsVoidwalker = vw;
+    in.knowsSuccubus = suc;
+    in.knowsFelhunter = fh;
+    in.hasSoulShard = shard;
+    return in;
+}
+
+// The donor's summon chain, highest learned demon first: Felhunter, Succubus,
+// Voidwalker, Imp. The ticket's case is the last line's sibling: a level-1
+// warlock holds only 688 and must summon the Imp, not wait for 697.
+static void TestAutoLadderByWhatIsKnown()
+{
+    CHECK(WarlockBestKnownPet(true, false, false, false) == WarlockPetKind::Imp);
+    CHECK(WarlockBestKnownPet(true, true, false, false) == WarlockPetKind::Voidwalker);
+    CHECK(WarlockBestKnownPet(true, true, true, false) == WarlockPetKind::Succubus);
+    CHECK(WarlockBestKnownPet(true, true, true, true) == WarlockPetKind::Felhunter);
+    CHECK(WarlockBestKnownPet(false, false, false, false) == WarlockPetKind::None);
+    CHECK(DecideWarlockAutoPet(Auto(true, false, false, false, false)) == WarlockAutoPetDecision::SummonImp);
+    CHECK(DecideWarlockAutoPet(Auto(true, true, false, false, true)) == WarlockAutoPetDecision::SummonVoidwalker);
+    CHECK(DecideWarlockAutoPet(Auto(true, true, true, false, true)) == WarlockAutoPetDecision::SummonSuccubus);
+    CHECK(DecideWarlockAutoPet(Auto(true, true, true, true, true)) == WarlockAutoPetDecision::SummonFelhunter);
+}
+
+// A petless warlock without a shard still summons: the chain drops to the
+// Imp, which needs none.
+static void TestAutoShardlessPetlessFallsToImp()
+{
+    CHECK(DecideWarlockAutoPet(Auto(true, true, false, false, false)) == WarlockAutoPetDecision::SummonImp);
+    CHECK(DecideWarlockAutoPet(Auto(true, true, true, true, false)) == WarlockAutoPetDecision::SummonImp);
+    // No Imp learned either: nothing to summon.
+    CHECK(DecideWarlockAutoPet(Auto(false, true, true, true, false)) == WarlockAutoPetDecision::LeaveAlone);
+}
+
+static void TestAutoLivePetStaysOrUpgrades()
+{
+    // The best demon is already out: no resummon loop.
+    WarlockAutoPetInputs in = Auto(true, true, true, false, true);
+    in.hasPet = true;
+    in.currentPetEntry = WARLOCK_VOIDWALKER_PET_ENTRY;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::SummonSuccubus);
+    in.currentPetEntry = WARLOCK_SUCCUBUS_PET_ENTRY;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+
+    // A swap costs a shard; without one the live demon stays (never a downgrade).
+    in = Auto(true, true, true, false, false);
+    in.hasPet = true;
+    in.currentPetEntry = WARLOCK_VOIDWALKER_PET_ENTRY;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+    in.currentPetEntry = WARLOCK_IMP_PET_ENTRY;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+
+    // A live Imp below the Voidwalker tier is the choice already.
+    in = Auto(true, false, false, false, false);
+    in.hasPet = true;
+    in.currentPetEntry = WARLOCK_IMP_PET_ENTRY;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+}
+
+// A player's pick wins: their manual strategy or `.bot choice pet` order, and
+// a pet a real player's bot already has is never swapped.
+static void TestAutoPlayerChoiceWins()
+{
+    WarlockAutoPetInputs in = Auto(true, true, true, true, true);
+    in.choiceOwned = true;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+    CHECK(WarlockAutoPetWanted(in) == WarlockPetKind::None);
+
+    in = Auto(true, true, false, false, true);
+    in.hasPet = true;
+    in.currentPetEntry = WARLOCK_IMP_PET_ENTRY;
+    in.hasRealPlayerMaster = true;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+    // A petless owned bot still gets a demon.
+    in.hasPet = false;
+    in.currentPetEntry = 0;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::SummonVoidwalker);
+
+    // A pet that is not one of the four demons is not swapped.
+    in = Auto(true, true, true, true, true);
+    in.hasRealPlayerMaster = false;
+    in.hasPet = true;
+    in.currentPetEntry = 12345;
+    CHECK(DecideWarlockAutoPet(in) == WarlockAutoPetDecision::LeaveAlone);
+}
+
+static WarlockAutoPetDecision DecisionForAuto(WarlockPetKind kind)
+{
+    switch (kind)
+    {
+        case WarlockPetKind::Imp: return WarlockAutoPetDecision::SummonImp;
+        case WarlockPetKind::Voidwalker: return WarlockAutoPetDecision::SummonVoidwalker;
+        case WarlockPetKind::Succubus: return WarlockAutoPetDecision::SummonSuccubus;
+        case WarlockPetKind::Felhunter: return WarlockAutoPetDecision::SummonFelhunter;
+        default: return WarlockAutoPetDecision::LeaveAlone;
+    }
+}
+
+// Without a shard a petless warlock drops down the chain to the Imp (which
+// needs none); a live demon is never swapped for want of a shard.
+static WarlockAutoPetDecision AutoWithoutShard(WarlockPetKind want, bool knowsImp, bool hasPet)
+{
+    if (want == WarlockPetKind::Imp)
+        return WarlockAutoPetDecision::SummonImp;
+    if (hasPet || !knowsImp)
+        return WarlockAutoPetDecision::LeaveAlone;
+    return WarlockAutoPetDecision::SummonImp;
+}
+
+// The caller's early return (before the bag read): Wanted is None exactly when
+// the decision is LeaveAlone whatever the shard count, and a wanted demon only
+// needs the shard when it is not the Imp.
+static void TestAutoWantedIsShardFree()
+{
+    bool const known[] = { false, true };
+    uint32_t const pets[] = { 0, 416, 1860, 1863, 417, 12345 };
+    for (bool imp : known)
+    for (bool vw : known)
+    for (bool suc : known)
+    for (bool fh : known)
+    for (bool owned : known)
+    for (int ownedChoice = 0; ownedChoice < 2; ++ownedChoice)
+    for (int petState = 0; petState < 11; ++petState)
+    {
+        WarlockAutoPetInputs in;
+        in.knowsImp = imp;
+        in.knowsVoidwalker = vw;
+        in.knowsSuccubus = suc;
+        in.knowsFelhunter = fh;
+        in.hasRealPlayerMaster = owned;
+        in.choiceOwned = ownedChoice != 0;
+        in.hasPet = petState > 0;
+        if (in.hasPet)
+            in.currentPetEntry = pets[(petState - 1) % 6];
+        WarlockPetKind const want = WarlockAutoPetWanted(in);
+        in.hasSoulShard = false;
+        WarlockAutoPetDecision const noShard = DecideWarlockAutoPet(in);
+        in.hasSoulShard = true;
+        WarlockAutoPetDecision const withShard = DecideWarlockAutoPet(in);
+        if (want == WarlockPetKind::None)
+        {
+            CHECK(noShard == WarlockAutoPetDecision::LeaveAlone);
+            CHECK(withShard == WarlockAutoPetDecision::LeaveAlone);
+        }
+        else
+        {
+            CHECK(withShard == DecisionForAuto(want));
+            CHECK(noShard == AutoWithoutShard(want, imp, in.hasPet));
+        }
+    }
+}
+
+static void TestAutoConstants()
+{
+    CHECK(WARLOCK_IMP_SUMMON_SPELL == 688);
+}
+
 int main()
 {
     std::printf("Starting warlock pet policy tests...\n");
@@ -340,6 +502,18 @@ int main()
     std::printf("  [PASS] spec wanted stands when the pet matches\n");
     TestSpecWantedIsShardFree();
     std::printf("  [PASS] spec wanted is shard free\n");
+    TestAutoLadderByWhatIsKnown();
+    std::printf("  [PASS] auto ladder follows the donor order\n");
+    TestAutoShardlessPetlessFallsToImp();
+    std::printf("  [PASS] auto shardless petless falls to the imp\n");
+    TestAutoLivePetStaysOrUpgrades();
+    std::printf("  [PASS] auto live pet stays or upgrades\n");
+    TestAutoPlayerChoiceWins();
+    std::printf("  [PASS] auto player choice wins\n");
+    TestAutoWantedIsShardFree();
+    std::printf("  [PASS] auto wanted is shard free\n");
+    TestAutoConstants();
+    std::printf("  [PASS] auto constants\n");
     std::printf("All warlock pet policy checks PASSED (%d assertions)!\n", checks);
     return 0;
 }

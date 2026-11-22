@@ -69,8 +69,10 @@ The spec's `PetSpellsCompat` is not added: `PetSpellIdsCompat` (TbCompat_V.h:198
 | spec tab | 1 (marksmanship; the slice never reads talents) | 0 (affliction) |
 | role | damage | damage |
 | combat | marksmanship, dps assist, ranged, aspect, sting, pet, buff (+ threat where `KeepsPartyThreatBackoff` says so) | affliction, dps assist, ranged, pet, curse, buff (+ threat) |
-| non-combat | marksmanship, dps assist, aspect, pet, buff, follow, food, default | affliction, dps assist, pet, pet voidwalker, buff, follow, food, default |
+| non-combat | marksmanship, dps assist, aspect, pet, buff, follow, food, default | affliction, dps assist, pet, pet auto, buff, follow, food, default |
 | reaction | marksmanship | affliction |
+
+Since the package, the warlock's non-combat `pet voidwalker` is `pet auto` (issue #198): the manual strategy read as a player order and stood the spec pet rows down, so a level-1 warlock (Summon Imp 688 known, Summon Voidwalker 697 not) never summoned. `pet auto` is the default choice — the strongest demon the warlock has learned — and a manual `pet <demon>` still wins.
 
 Left out as the spec says: `cc`, `aoe`, `boost`, the warlock's `flee`.
 

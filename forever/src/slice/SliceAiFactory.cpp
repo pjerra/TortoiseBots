@@ -50,8 +50,9 @@
 // `else` gives it; the slice never reads talents): combat "marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff" (+ "threat" where
 // KeepsPartyThreatBackoff says so); non-combat "marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default"; reaction "marksmanship".
 // Warlock on tab 0 (affliction): combat "affliction", "dps assist", "ranged", "pet", "curse", "buff" (+ "threat"); non-combat "affliction", "dps assist", "pet",
-// "pet voidwalker", "buff", "follow", "food", "default"; reaction "affliction". Left out on purpose (the spec's list): the full kits' "cc" (Scare Beast, Freezing
-// Trap through Feign Death, Fear), "aoe" (Multi-Shot, Rain of Fire), "boost", the warlock's "flee".
+// "pet auto", "buff", "follow", "food", "default"; reaction "affliction". "pet auto" is the default demon choice (the strongest demon the warlock knows, the Imp at
+// level 1); the manual "pet voidwalker" here would be read as a player order and would stand the spec pet rows down. Left out on purpose (the spec's list): the full
+// kits' "cc" (Scare Beast, Freezing Trap through Feign Death, Fear), "aoe" (Multi-Shot, Rain of Fire), "boost", the warlock's "flee".
 #include "compat/botpch_forever.h"
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/playerbot.h"
@@ -509,7 +510,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "default", "boost", "cc", "aoe", NULL);
             return;
         case CLASS_WARLOCK:
-            nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default", "boost", NULL);
+            nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet auto", "buff", "follow", "food", "default", "boost", NULL);
             return;
         case CLASS_WARRIOR:
         default:
