@@ -65,9 +65,11 @@
 #include "playerbot/strategy/actions/UseTrinketAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
+#include "playerbot/strategy/generic/AutoCcStrategy.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
+#include "playerbot/strategy/generic/ConserveManaStrategy.h"
 #include "playerbot/strategy/generic/ConsumableStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
@@ -82,6 +84,9 @@
 #include "playerbot/strategy/generic/MaintenanceStrategy.h"
 #include "playerbot/strategy/generic/MarkRtiStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
+#include "playerbot/strategy/generic/MimicConsumableStrategy.h"
+#include "playerbot/strategy/generic/NoAoeStrategy.h"
+#include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
@@ -195,7 +200,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (29 of its keys)
+    // the registry of StrategyContext (34 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -230,6 +235,11 @@ namespace slice
             creators["focus rti targets"] = [](PlayerbotAI* ai) { return new FocusRtiTargetsStrategy(ai); };
             creators["potions"] = [](PlayerbotAI* ai) { return new UsePotionsStrategy(ai); };
             creators["consumables"] = [](PlayerbotAI* ai) { return new ConsumableStrategy(ai); };
+            creators["no aoe"] = [](PlayerbotAI* ai) { return new NoAoeStrategy(ai); };
+            creators["conserve mana"] = [](PlayerbotAI* ai) { return new ConserveManaStrategy(ai); };
+            creators["mimic consumables"] = [](PlayerbotAI* ai) { return new MimicConsumableStrategy(ai); };
+            creators["spread"] = [](PlayerbotAI* ai) { return new SpreadStrategy(ai); };
+            creators["no blink instance"] = [](PlayerbotAI* ai) { return new NoBlinkInstanceStrategy(ai); };
         }
     };
 
@@ -248,7 +258,7 @@ namespace slice
         }
     };
 
-    // the registry of AssistStrategyContext (2 of its keys)
+    // the registry of AssistStrategyContext (3 of its keys)
     class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -256,6 +266,7 @@ namespace slice
         {
             creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
             creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistStrategy(ai); };
+            creators["auto cc"] = [](PlayerbotAI* ai) { return new AutoCcStrategy(ai); };
         }
     };
 
@@ -882,7 +893,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 39, kActions = 148, kTriggers = 190, kValues = 210;
+    constexpr unsigned kStrategies = 45, kActions = 148, kTriggers = 190, kValues = 210;
 }
 }
 
