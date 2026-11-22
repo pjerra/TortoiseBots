@@ -71,6 +71,7 @@
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/actions/WhoAction.h"
+#include "playerbot/strategy/generic/AutoCcStrategy.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
@@ -88,6 +89,7 @@
 #include "playerbot/strategy/generic/MaintenanceStrategy.h"
 #include "playerbot/strategy/generic/MarkRtiStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
+#include "playerbot/strategy/generic/NoAoeStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
@@ -201,13 +203,14 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (29 of its keys)
+    // the registry of StrategyContext (30 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
         SliceStrategyContext()
         {
             creators["close"] = [](PlayerbotAI* ai) { return new MeleeCombatStrategy(ai); };
+            creators["no aoe"] = [](PlayerbotAI* ai) { return new NoAoeStrategy(ai); };
             creators["ranged"] = [](PlayerbotAI* ai) { return new RangedCombatStrategy(ai); };
             creators["food"] = [](PlayerbotAI* ai) { return new UseFoodStrategy(ai); };
             creators["loot"] = [](PlayerbotAI* ai) { return new LootNonCombatStrategy(ai); };
@@ -254,13 +257,14 @@ namespace slice
         }
     };
 
-    // the registry of AssistStrategyContext (2 of its keys)
+    // the registry of AssistStrategyContext (3 of its keys)
     class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
         SliceAssistStrategyContext() : NamedObjectContext<Strategy>(false, true)
         {
             creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
+            creators["auto cc"] = [](PlayerbotAI* ai) { return new AutoCcStrategy(ai); };
             creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistStrategy(ai); };
         }
     };
@@ -907,7 +911,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 39, kActions = 154, kTriggers = 200, kValues = 213;
+    constexpr unsigned kStrategies = 41, kActions = 154, kTriggers = 200, kValues = 213;
 }
 }
 

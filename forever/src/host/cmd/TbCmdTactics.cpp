@@ -130,6 +130,203 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
         return done();
     }
 
+    if (verb == "aoe" || verb == "autocc" || verb == "sap" || verb == "loot")
+    {
+        if (args.w.size() > 3)
+            return refuse("bad-argument", verb + " [on|off|status] [bot]");
+        bool opOk = false;
+        tactics::ToggleOp op = tactics::ToggleOp::Flip;
+        std::string named, opText;
+        if (args.w.size() >= 2)
+        {
+            op = tactics::ParseToggle(args.w[1], opOk);
+            if (opOk)
+            {
+                opText = h3::Lower(args.w[1]);
+                if (args.w.size() == 3)
+                    named = args.w[2];
+            }
+            else
+            {
+                if (args.w.size() == 3)
+                    return refuse("bad-argument", verb + " [on|off|status] [bot]");
+                named = args.w[1];
+            }
+        }
+        std::vector<Player*> addressed;
+        if (!named.empty())
+        {
+            Player* bot = BoundBot(named, lead, members);
+            if (!bot)
+                return refuse("no-bot", named + " is not a bot of your binding");
+            addressed.push_back(bot);
+        }
+        else
+        {
+            auto const add = [&](ObjectGuid guid)
+            {
+                Player* bot = ObjectAccessor::FindPlayer(guid);
+                if (bot && bot->IsInWorld() && bot->IsAlive() && std::find(addressed.begin(), addressed.end(), bot) == addressed.end())
+                    addressed.push_back(bot);
+            };
+            add(lead);
+            for (ObjectGuid const& guid : members)
+                add(guid);
+            if (addressed.empty())
+                return refuse("not-alive", "no bot of your binding is alive");
+        }
+
+        if (op == tactics::ToggleOp::Status)
+        {
+            std::vector<bool> states;
+            for (Player* bot : addressed)
+            {
+                bool on = false;
+                if (tactics::ReadToggle(bot, verb, on))
+                    states.push_back(on);
+            }
+            h3::Reply reply(handler, args, "cmd");
+            reply.Begin();
+            h3::Rec head("cmd");
+            head.S("verb", verb).S("status", "read").N("bots", int64(addressed.size())).S("state", tactics::AggregateState(states));
+            reply.Line(head);
+            h3::Rec end("cmd");
+            end.S("verb", verb).N("bots", int64(addressed.size())).N("ok", int64(addressed.size())).N("refused", 0);
+            reply.End(end);
+            ok = true;
+            return done();
+        }
+
+        struct Refusal
+        {
+            Player* bot;
+            std::string code;
+            std::string detail;
+        };
+        std::vector<Refusal> refusals;
+        uint32 queued = 0;
+        std::vector<bool> wanted;
+        for (Player* bot : addressed)
+        {
+            bool current = false;
+            if (tactics::ReadToggle(bot, verb, current))
+                wanted.push_back(tactics::ToggleWanted(op, current));
+            h3::OrderSpec spec;
+            spec.verb = verb;
+            spec.arg = opText;
+            std::string code, detail;
+            uint32 seq = 0;
+            if (h3::QueueOrder(bot, spec, code, detail, seq))
+                ++queued;
+            else
+                refusals.push_back({ bot, code, detail });
+        }
+        if (queued == 0)
+        {
+            Refusal const& first = refusals.front();
+            return refuse(first.code.empty() ? "failed" : first.code, first.detail);
+        }
+        h3::Reply reply(handler, args, "cmd");
+        reply.Begin();
+        uint32 const refused = uint32(refusals.size());
+        std::string const result = named.empty() ? "party " + std::to_string(queued) : "bot:" + addressed.front()->GetName() + " 1";
+        h3::Rec head("cmd");
+        head.S("verb", verb).S("status", "accepted").N("bots", int64(queued + refused)).S("result", result).S("state", tactics::AggregateState(wanted));
+        if (refused)
+            head.N("refused", int64(refused));
+        reply.Line(head);
+        for (Refusal const& refusal : refusals)
+        {
+            h3::Rec rec("cmd");
+            rec.S("bot", refusal.bot->GetName()).S("verb", verb).S("status", "refused").S("code", refusal.code).T("msg", refusal.detail);
+            reply.Line(rec);
+        }
+        Player* leadPlayer = ObjectAccessor::FindPlayer(lead);
+        h3::Rec end("cmd");
+        end.S("verb", verb).S("lead", leadPlayer ? std::string(leadPlayer->GetName()) : h3::GuidText(lead))
+            .N("bots", int64(queued + refused)).N("ok", int64(queued)).N("refused", int64(refused));
+        reply.End(end);
+        NoteRunOrder(lead, orderText, true, "", result);
+        ok = true;
+        return done();
+    }
+
+    if (verb == "corpserun")
+    {
+        if (args.w.size() > 2)
+            return refuse("bad-argument", "corpserun [bot]");
+        std::string named = args.w.size() == 2 ? args.w[1] : std::string();
+        std::vector<Player*> addressed;
+        if (!named.empty())
+        {
+            Player* bot = BoundBot(named, lead, members);
+            if (!bot)
+                return refuse("no-bot", named + " is not a bot of your binding");
+            addressed.push_back(bot);
+        }
+        else
+        {
+            auto const add = [&](ObjectGuid guid)
+            {
+                Player* bot = ObjectAccessor::FindPlayer(guid);
+                if (bot && bot->IsInWorld() && !bot->IsAlive() && std::find(addressed.begin(), addressed.end(), bot) == addressed.end())
+                    addressed.push_back(bot);
+            };
+            add(lead);
+            for (ObjectGuid const& guid : members)
+                add(guid);
+            if (addressed.empty())
+                return refuse("not-dead", "no dead bot of your binding");
+        }
+        struct Refusal
+        {
+            Player* bot;
+            std::string code;
+            std::string detail;
+        };
+        std::vector<Refusal> refusals;
+        uint32 queued = 0;
+        for (Player* bot : addressed)
+        {
+            h3::OrderSpec spec;
+            spec.verb = "corpserun";
+            std::string code, detail;
+            uint32 seq = 0;
+            if (h3::QueueOrder(bot, spec, code, detail, seq))
+                ++queued;
+            else
+                refusals.push_back({ bot, code, detail });
+        }
+        if (queued == 0)
+        {
+            Refusal const& first = refusals.front();
+            return refuse(first.code.empty() ? "failed" : first.code, first.detail);
+        }
+        h3::Reply reply(handler, args, "cmd");
+        reply.Begin();
+        uint32 const refused = uint32(refusals.size());
+        std::string const result = named.empty() ? "party " + std::to_string(queued) : "bot:" + addressed.front()->GetName() + " 1";
+        h3::Rec head("cmd");
+        head.S("verb", verb).S("status", "accepted").N("bots", int64(queued + refused)).S("result", result);
+        if (refused)
+            head.N("refused", int64(refused));
+        reply.Line(head);
+        for (Refusal const& refusal : refusals)
+        {
+            h3::Rec rec("cmd");
+            rec.S("bot", refusal.bot->GetName()).S("verb", verb).S("status", "refused").S("code", refusal.code).T("msg", refusal.detail);
+            reply.Line(rec);
+        }
+        Player* leadPlayer = ObjectAccessor::FindPlayer(lead);
+        h3::Rec end("cmd");
+        end.S("verb", verb).S("lead", leadPlayer ? std::string(leadPlayer->GetName()) : h3::GuidText(lead))
+            .N("bots", int64(queued + refused)).N("ok", int64(queued)).N("refused", int64(refused));
+        reply.End(end);
+        NoteRunOrder(lead, orderText, true, "", result);
+        ok = true;
+        return done();
+    }
+
     // The words after the verb: `stop [bot]`, `stance <word> [bot]`, `engage [seconds]`, the rest take none.
     std::string named, stanceWord, engageText;
     if (verb == "stop")

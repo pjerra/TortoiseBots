@@ -53,6 +53,7 @@ ai/playerbot/strategy/generic/CombatStrategy.cpp
 ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
 ai/playerbot/strategy/generic/GuardStrategy.cpp
+ai/playerbot/strategy/generic/NoAoeStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp
 ai/playerbot/strategy/triggers/BotStateTriggers.cpp

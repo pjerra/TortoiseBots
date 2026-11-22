@@ -30,7 +30,7 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (args.badToken)
         return h3::Fail(handler, args, "cmd", "bad-token", "a token starts with # and holds 1-32 characters of [A-Za-z0-9_.:-]");
     if (args.w.empty())
-        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, interrupt, focus, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod, place, rally, fallback, resume, stop, flee, guard, stance, engage, rebuff");
+        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, interrupt, focus, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod, place, rally, fallback, resume, stop, flee, guard, stance, engage, rebuff, aoe, autocc, sap, loot, corpserun");
 
     Player* sender = h3::SenderPlayer(handler);
     if (!sender)
@@ -64,8 +64,23 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return taskOk;
 
     // The tactical orders are settings and direct actions the judge does not know; they answer their own `cmd` reply.
+    // M3: normalise the two-word `auto cc` and `corpse run` forms to the one-word verbs before the tactical handler sees them.
+    std::string tacticalVerb = verb;
+    h3::Words tacticalArgs = args;
+    if (verb == "auto" && args.w.size() > 1 && h3::Lower(args.w[1]) == "cc")
+    {
+        tacticalVerb = "autocc";
+        tacticalArgs.w.erase(tacticalArgs.w.begin() + 1);
+        tacticalArgs.w[0] = "autocc";
+    }
+    else if (verb == "corpse" && args.w.size() > 1 && h3::Lower(args.w[1]) == "run")
+    {
+        tacticalVerb = "corpserun";
+        tacticalArgs.w.erase(tacticalArgs.w.begin() + 1);
+        tacticalArgs.w[0] = "corpserun";
+    }
     bool tacticalOk = false;
-    if (TryHandleTacticalVerb(handler, args, verb, lead, members, sender, &tacticalOk))
+    if (TryHandleTacticalVerb(handler, tacticalArgs, tacticalVerb, lead, members, sender, &tacticalOk))
         return tacticalOk;
 
     std::string order;

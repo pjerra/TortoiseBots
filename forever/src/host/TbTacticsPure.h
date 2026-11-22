@@ -21,7 +21,89 @@ constexpr unsigned kEngageDefaultSeconds = 4;
 inline bool IsTacticalVerb(std::string const& verb)
 {
     return verb == "stop" || verb == "flee" || verb == "guard" || verb == "stance" || verb == "engage" || verb == "rebuff" ||
-        verb == "interrupt";
+        verb == "interrupt" || verb == "aoe" || verb == "autocc" || verb == "sap" || verb == "loot" || verb == "corpserun";
+}
+
+// The toggle verbs (`aoe|autocc|sap|loot`) and the corpse run, normalised: `auto cc` is the two-word form of `autocc`, and
+// `corpse run` is the two-word form of `corpserun` (section 4.3). A caller that split the words already can join them back
+// or pass the first two words straight here.
+inline std::string NormaliseTacticalVerb(std::string const& first, std::string const& second = std::string())
+{
+    if (second == "cc" && first == "auto")
+        return "autocc";
+    if (second == "run" && first == "corpse")
+        return "corpserun";
+    return first;
+}
+
+// M3: the four toggles and their state operations. `Flip` is a bare verb (each bot flips its own state); `Status` reads
+// without queuing; `On`/`Off` set the absolute state. The op is parsed from the first argument after the verb.
+enum class ToggleOp
+{
+    Flip,
+    On,
+    Off,
+    Status
+};
+
+inline ToggleOp ParseToggle(std::string const& text, bool& ok)
+{
+    std::string word;
+    word.reserve(text.size());
+    for (char const c : text)
+        word += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    ok = true;
+    if (word.empty())
+        return ToggleOp::Flip;
+    if (word == "on")
+        return ToggleOp::On;
+    if (word == "off")
+        return ToggleOp::Off;
+    if (word == "status")
+        return ToggleOp::Status;
+    ok = false;
+    return ToggleOp::Flip;
+}
+
+// The wanted state of one bot after the op against its current state. A flip inverts; On/Off set; Status never changes
+// anything (the caller should not call this for a read, but the answer is the current state).
+inline bool ToggleWanted(ToggleOp op, bool current)
+{
+    if (op == ToggleOp::On)
+        return true;
+    if (op == ToggleOp::Off)
+        return false;
+    if (op == ToggleOp::Flip)
+        return !current;
+    return current;
+}
+
+// The `.tb cmd` aggregate answer for a party: "on" when every bot reads on, "off" when every bot reads off, "mixed"
+// otherwise. An empty list is "off" (no bot to call on).
+inline std::string AggregateState(std::vector<bool> const& states)
+{
+    if (states.empty())
+        return "off";
+    bool const first = states.front();
+    for (bool const state : states)
+        if (state != first)
+            return "mixed";
+    return first ? "on" : "off";
+}
+
+// M3: the strategy name each toggle reads or writes (section 4.3), and the state (combat or non-combat) it lives in.
+// `loot` lives in non-combat like `no sap`; the others are combat.
+inline char const* ToggleStrategy(std::string const& verb)
+{
+    if (verb == "aoe")
+        return "no aoe";
+    if (verb == "autocc")
+        return "auto cc";
+    if (verb == "sap")
+        return "no sap";
+    if (verb == "loot")
+        return "loot";
+    return "";
 }
 
 // `engage [seconds]`: empty means the default delay; digits only; more than 60 seconds is refused (the pull window's own limit).

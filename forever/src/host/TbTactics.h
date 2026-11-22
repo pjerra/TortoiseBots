@@ -51,6 +51,15 @@ void CancelPendingInterrupt(Player* bot);
 // wins over an earlier bot that would have to walk (PickInterrupt's first pass).
 Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::string& action, std::string& reasons);
 
+// M3: reads one toggle's current state from the live strategy (aoe/autocc/sap/loot). False when the bot has no engine. The
+// table's wanted state is not consulted: this is what the strategy reads now, so `status` and a flip's current value start here.
+bool ReadToggle(Player* bot, std::string const& verb, bool& on);
+
+// M3: the toggle enforcement the engine calls before its own tick (h3::BeforeEngineTick): the host table's wanted state wins over
+// a `co`/`nc` change of the same strategy. Idempotent; runs every tick so every ResetStrategies is covered. `sap` only on rogues;
+// `loot` only once the table has an entry (the kit default is left alone otherwise).
+void BeforeTick(Player* bot, PlayerbotAI* ai);
+
 // Appends the tactical keys to a `.tb state` record: stance= and rebuff= (seconds left of the force-rebuff window).
 void AppendState(h3::Rec& rec, Player* bot);
 
