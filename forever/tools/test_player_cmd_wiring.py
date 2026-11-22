@@ -223,6 +223,96 @@ class Wiring(unittest.TestCase):
         self.assertIn("bool Dispatch(Player*, std::string_view) { return false; }", off)
 
 
+    # ---- R2: add, logout, follow, stay, attack, flee, owned login, battlenet id ----
+
+    def test_login_owned_skips_account_rule_only_for_owner(self):
+        mgr = read(SRC / "TbBotMgr.cpp")
+        login = function_body(mgr, r"std::string BotMgr::Login\(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned\)")
+        self.assertIn("if (AccountHasBot(accountId))", login)
+        # The owner (the master) must be in the world now, with a Battle.net account; fail closed otherwise.
+        self.assertIn("ObjectAccessor::FindPlayer(master)", login)
+        self.assertIn("!owner->IsInWorld()", login)
+        self.assertIn('return "the owner is not in the world";', login)
+        self.assertIn("if (ownerBnet == 0)", login)
+        # Sharing: the character's game account is the owner's Battle.net account's, and every bot already on it is an owned
+        # bot of the same owner (a pool bot keeps the one-bot rule).
+        self.assertIn("Battlenet::AccountMgr::GetIdByGameAccount(accountId) == ownerBnet", login)
+        self.assertIn("!other.owned || other.ownerBnet != ownerBnet", login)
+        self.assertNotIn("sWorld->FindSession(accountId)", login)
+        self.assertIn("bot.owned = owned;", login)
+        self.assertIn("bot.ownerBnet = ownerBnet;", login)
+        self.assertIn("bot.useEngine = _engineByDefault || free || owned;", login)
+        hdr = read(SRC / "TbBotMgr.h")
+        self.assertIn("bool owned = false", hdr)
+        self.assertIn("uint32 ownerBnet = 0;", hdr)
+
+    def test_owned_cap_counts_the_battlenet_owner(self):
+        # Codex R2: the cap keyed on the master guid was bypassed by a relog or a second linked game account.
+        mgr = read(SRC / "TbBotMgr.cpp")
+        owned = function_body(mgr, r"uint32 BotMgr::OwnedBotsOf\(uint32 ownerBnet\) const")
+        self.assertIn("bot.owned && bot.ownerBnet == ownerBnet", owned)
+        self.assertNotIn("bot.master", owned)
+        self.assertIn("if (ownerBnet == 0)", owned)
+        self.assertIn("uint32 OwnedBotsOf(uint32 ownerBnet) const", read(SRC / "TbBotMgr.h"))
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("OwnedBotsOf(player->GetSession() ? player->GetSession()->GetBattlenetAccountId() : 0)", cmd)
+        self.assertNotIn("OwnedBotsOf(player->GetGUID())", cmd)
+
+    def test_owned_bots_leave_with_their_owner(self):
+        # D-3 amended: owned bots stay only while the owner is in the world: no master grace for them.
+        mgr = read(SRC / "TbBotMgr.cpp")
+        logout = function_body(mgr, r"void BotMgr::OnPlayerLogout\(Player\* player\)")
+        self.assertIn("bot.session->LogoutRequested() || bot.owned", logout)
+        self.assertIn('RequestLogout("its owner left the world")', logout)
+        self.assertLess(logout.index("|| bot.owned"), logout.index("DetachFromMaster(bot);"))
+
+    def test_bot_session_uses_bnet_id(self):
+        session = read(SRC / "TbBotSession.cpp")
+        self.assertIn('#include "BattlenetAccountMgr.h"', session)
+        self.assertIn("Battlenet::AccountMgr::GetIdByGameAccount(accountId)", session)
+        self.assertNotIn("WorldSession(accountId, std::move(accountName), accountId,", session)
+
+    def test_flee_is_a_verb(self):
+        orders = read(SRC / "host" / "TbOrders.cpp")
+        self.assertIn('"flee"', orders)
+        self.assertIn("flee chat shortcut", orders)
+        self.assertIn('verb == "flee"', orders)
+        self.assertIn('o.verb == "flee"', orders)
+        self.assertIn("fail:flee", orders)
+
+    def test_add_handler_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("HandleAdd", cmd)
+        self.assertIn("MayLoginOwned", cmd)
+        self.assertIn("Login(guid, player->GetGUID(), false, false, true)", cmd)
+        self.assertIn("not-found", cmd)
+        self.assertIn("already-online", cmd)
+        self.assertIn("not-leader", cmd)
+        self.assertIn("too-many", cmd)
+        self.assertIn("queued for login", cmd)
+
+    def test_logout_handler_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("HandleLogout", cmd)
+        self.assertIn("Tier::Owner", cmd)
+        self.assertIn("Logout(", cmd)
+        self.assertIn("logged out by its owner", cmd)
+
+    def test_order_handlers_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("HandleOrderVerb", cmd)
+        self.assertIn("QueueOrder", cmd)
+        self.assertIn("no-selection", cmd)
+        self.assertIn("GetSelectedUnit", cmd)
+        self.assertIn("Tier::Tactical", cmd)
+
+    def test_help_lists_new_verbs(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        help_body = function_body(cmd, r"bool HandleHelp\(Player\* player, Caller const& caller\)")
+        for verb in ("add", "logout", "follow", "stay", "attack", "flee"):
+            self.assertIn(verb, help_body)
+
+
 MUTANTS = [
     ("gm-branch-dropped",
      "    if (caller.gm)\n        return Verdict::Allowed;\n", ""),

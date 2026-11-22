@@ -1,5 +1,6 @@
 #include "host/TbHostProfession.h"
 
+#include "host/TbAutoToolsPure.h"
 #include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostTown.h"
 #include "host/run/TbRunTasks.h"
@@ -53,18 +54,12 @@ constexpr uint32_t kSpellHerbGathering = 2366;
 constexpr uint32_t kSpellMining = 2575;
 constexpr uint32_t kSpellSkinning = 8613;
 
-constexpr uint32_t kItemMiningPick = 2901;
-constexpr uint32_t kItemSkinningKnife = 7005;
-
 bool HasRequiredGatherTool(Player const* bot, uint32_t skillId)
 {
     if (!bot)
         return false;
-    if (skillId == TortoiseBots::prof::SkillMining)
-        return bot->HasItemCount(kItemMiningPick, 1, false);
-    if (skillId == TortoiseBots::prof::SkillSkinning)
-        return bot->HasItemCount(kItemSkinningKnife, 1, false);
-    return true;
+    return TortoiseBots::autotools::HasRequiredGatherTool(
+        skillId, [bot](uint32_t id) { return bot->HasItemCount(id, 1, false); });
 }
 
 bool HasDangerNearby(Player const* bot, float radiusYd = 18.0f)

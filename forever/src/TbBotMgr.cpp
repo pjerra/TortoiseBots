@@ -1,4 +1,5 @@
 #include "TbBotMgr.h"
+#include "host/TbAutoFood.h"
 #include "host/TbHostGroupQuestPure.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostGuildMail.h"
@@ -38,7 +39,9 @@
 #include "RealmList.h"
 #include "ScriptMgr.h"
 #include "World.h"
+#include "WorldSession.h"
 #include "WorldPacket.h"
+#include "BattlenetAccountMgr.h"
 #include <algorithm>
 #include <chrono>
 #include <future>
@@ -259,6 +262,19 @@ bool BotMgr::AccountHasBot(uint32 accountId) const
     return false;
 }
 
+uint32 BotMgr::OwnedBotsOf(uint32 ownerBnet) const
+{
+    // Every state counts (loading, in the world, away, on its way out): the cap is the Battle.net account's, whichever of its
+    // characters or game accounts added the bot.
+    if (ownerBnet == 0)
+        return 0;
+    uint32 count = 0;
+    for (auto const& [guid, bot] : _bots)
+        if (bot.owned && bot.ownerBnet == ownerBnet)
+            ++count;
+    return count;
+}
+
 std::vector<uint32> BotMgr::BotAccounts() const
 {
     std::vector<uint32> accounts;
@@ -270,7 +286,7 @@ std::vector<uint32> BotMgr::BotAccounts() const
     return accounts;
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool)
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -290,8 +306,28 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         return "that character has no account";
     // D2: one session per account. The check is here, where the session is made, so no caller can put two characters of an
     // account in the world at once (the pool's scheduler sees the same rule through AccountHasBot).
+    // D-3 (amended: owner = Battle.net account): an owned login needs its owner (the master) in the world now, and is stamped with the
+    // owner's Battle.net account. It may share a game account with other bots only when that game account is the owner's and every bot
+    // already on it is an owned bot of the same owner; a pool or a stranger's bot on the account keeps the one-bot rule. Fail closed.
+    uint32 ownerBnet = 0;
+    if (owned)
+    {
+        Player* owner = ObjectAccessor::FindPlayer(master);
+        if (!owner || !owner->IsInWorld() || !owner->GetSession())
+            return "the owner is not in the world";
+        ownerBnet = owner->GetSession()->GetBattlenetAccountId();
+        if (ownerBnet == 0)
+            return "the owner has no Battle.net account";
+    }
     if (AccountHasBot(accountId))
-        return "another bot of that account is already logged in or loading";
+    {
+        bool share = owned && Battlenet::AccountMgr::GetIdByGameAccount(accountId) == ownerBnet;
+        for (auto const& [guid, other] : _bots)
+            if (share && other.session->GetAccountId() == accountId && (!other.owned || other.ownerBnet != ownerBnet))
+                share = false;
+        if (!share)
+            return "another bot of that account is already logged in or loading";
+    }
 
     std::string accountName;
     if (!AccountMgr::GetName(accountId, accountName))
@@ -308,9 +344,12 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     bot.master = master;
     bot.free = free;
     bot.pool = pool;
+    bot.owned = owned;
+    bot.ownerBnet = ownerBnet;
     bot.wantParty = !master.IsEmpty();
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
-    bot.useEngine = _engineByDefault || free;
+    // An owned bot always runs the engine too: `.bot` orders and chat need it.
+    bot.useEngine = _engineByDefault || free || owned;
     if (bot.wantParty)
     {
         // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
@@ -662,11 +701,15 @@ void BotMgr::OnPlayerLogout(Player* player)
     {
         if (guid == leaving || bot.master != leaving)
             continue;
-        if (bot.session->LogoutRequested())
+        // D-3: an owned bot is in the world only while its owner is: no grace, it leaves with the owner (a pending login too: the
+        // session logs the Player out as soon as its load finishes).
+        if (bot.session->LogoutRequested() || bot.owned)
         {
             DropBrain(bot);
             bot.master = ObjectGuid::Empty;
             bot.wantParty = false;
+            if (!bot.session->LogoutRequested())
+                bot.session->RequestLogout("its owner left the world");
             continue;
         }
         DetachFromMaster(bot);
@@ -1996,6 +2039,7 @@ void BotMgr::FreeThink(Bot& bot, Player* me)
 {
     if (bot.entry.active)
         return;
+    autofood::TickTopUp(me);
     if (bot.useEngine && !bot.engineFailed && !bot.brain)
     {
         std::string error;
