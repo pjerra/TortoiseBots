@@ -2494,6 +2494,9 @@ struct Run
     bool joinerReported = false;   // the pull's line carries its joiner report (once)
     bool joinerReportDue = false;  // the window closed: the report goes on this tick's note (Tick's end)
     std::uint32_t walkBackPulls = 0; // pulls on the way of the walk back (not counted in `pulls`)
+    // The time the pull's healer gate (HealerOutOfReach) has held this pull: its own clock, not the gather phase's (an unrelated gather
+    // that ran long must not spend it). Starts over when a healer covers the tank, when the pull goes out and with the step.
+    std::uint32_t healerHoldMs = 0;
     // Run-wide (kept across steps).
     std::unordered_set<std::uint64_t> unreachable;   // units given up on: never pulled again this run
     // Units that never came (PLAN-ZF-NOFIGHT; Zul'Farrak r3/r6, the island
@@ -3854,6 +3857,7 @@ inline void ResetStep(Run& r)
     r.joinerReported = false;
     r.joinerReportDue = false;
     r.walkBackPulls = 0;
+    r.healerHoldMs = 0;
     r.gatherOrder.clear();
     r.gatherRefusals = 0;
     r.gatherWaived = false;
@@ -11758,9 +11762,10 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
     std::string healerWhy;
     if (!body && HealerOutOfReach(f, healerWhy))
     {
-        bool const spent = r.phase == Phase::Gather && r.phaseMs >= kPullHealerHoldMs;
+        bool const spent = r.healerHoldMs >= kPullHealerHoldMs;
         if (!spent)
         {
+            r.healerHoldMs += dt;
             if (r.phase != Phase::Gather)
             {
                 EnterPhase(r, Phase::Gather);
@@ -11772,6 +11777,8 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
         }
         outOfPlace += "; healer gate spent: the healer " + healerWhy;
     }
+    else if (!body)
+        r.healerHoldMs = 0; // a healer covers the tank: the next uncovered healer starts a fresh hold
     std::uint32_t& tries = r.pullTries[u.guid];
     if (tries >= kMaxPullsPerTarget)
     {
@@ -11805,6 +11812,7 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
     r.joinerReportDue = false;
     r.pullHop = hop;
     r.residuePullGuid = 0; // a residue pull marks its unit after this (PackResidueTick)
+    r.healerHoldMs = 0;    // the pull went out: its healer hold is spent or was never needed
     r.reachStopped = false;
     EndBigWalk(r);
     EnterPhase(r, Phase::AwaitPull);

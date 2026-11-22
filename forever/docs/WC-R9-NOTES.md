@@ -31,19 +31,20 @@ gate in `PullUnit` (`HealerOutOfReach`, `kPullHealerMaxYd` = 30 yd, inside the 4
 out (the first pull, a hop pull and a walk-back pull alike; not a body-pull retry, which is a fight already on) while the party has
 a living healer other than the lead bot and none of them stands within 30 yd of the tank in its line of sight. The party forms up
 on the tank (the gather phase and the gather order) and the pull waits. The hold is bounded: `kPullHealerHoldMs` = 25 s in the
-gather phase (`Run::phaseMs`), then the pull goes out with `healer gate spent: the healer ... ` in its note, so a healer that
+gather phase on its own clock (`Run::healerHoldMs`, reset when a healer covers the tank, when the pull goes out and with the step), then the pull goes out with `healer gate spent: the healer ... ` in its note, so a healer that
 never gets sight (a corner of the cave) cannot stop an unattended run. A party with no healer, a healer that is the lead, a second
 healer that covers the tank, a frozen healer and a raid are not affected (the raid has its own healer rules).
 
 The host asks for it: `ApplyConfig` sets `Facts::healerPullGate`, and `TbRunFacts.cpp` reads each healer's sight line to the lead
 bot once a tick (`MemberFact::healerSight`, one LOS query a healer). The Turtle glue never sets the flag, so the Turtle run leader
 does not change. Mana threshold: the existing rest rule stays the threshold (50 % start, 80 % end); a second one would fight it.
-New fields: `Facts::healerPullGate`, `Facts::walkBackPullCap`, `MemberFact::healerSight`; the decision-capture schema and its
+New fields: `Facts::healerPullGate`, `Facts::walkBackPullCap`, `MemberFact::healerSight`, `Run::healerHoldMs`; the decision-capture schema and its
 fixture are regenerated and upgraded (`tools/gen_decision_capture.py`, `replay_decisions upgrade`).
 
 Tests: `tools/test_run_wc_r9_policy.cpp` `TestHealerGateHoldsThePull` (a healer 40 yd off holds with the note naming it; 12 yd and
 out of sight holds with "no line of sight"; 30 yd exactly and in sight pulls; no gate asked for pulls as before),
-`TestHealerGateLeavesOtherPartiesAlone`, `TestHealerGateIsBounded` (the pull goes out after 25 s with "healer gate spent"),
+`TestHealerGateLeavesOtherPartiesAlone`, `TestHealerGateIsBounded` (the pull goes out after 25 s with "healer gate spent", also when an unrelated gather had already run 40 s,
+and the clock starts afresh once a healer covers the tank),
 `TestHealerGateHoldsTheWalkBackPull`; `forever/tools/test_run_wc.cpp` `TestHostAsksForTheRun9Gates` and
 `TestHealerGateAtTheShamblerCamp` (the real plan, step 82).
 
@@ -104,6 +105,17 @@ pull row that lists a kill_first entry is never deferred and a kill_first unit i
 Tests: `forever/tools/test_run_wc.cpp` `TestShamblerCampsKillFirstOrder` (the rows of 69 and 82, the rank of 5761 behind 5755, ten pull
 rows carry it, `PickPackPull` takes the Druid with the Shambler nearer, `PickKillFirst` goes Druid, Shambler, the Snake has no rank)
 and `TestPlanShape` (the list, pinned whole); `python3 forever/tools/test_wc_plan_rows.py` regenerates the migration byte for byte.
+
+## Review (Codex adversarial against `tbf/run/wc-r8`, one round)
+
+* High, the first version of the hold ran on `Run::phaseMs`, the gather phase's clock: a gather that had already run 25 s let the
+  pull go out at once with the healer round the corner. FIXED: the gate has its own clock, `Run::healerHoldMs`; the regression is in
+  `TestHealerGateIsBounded` (a gather at 40 s still holds the pull for the 25 s; a covered tick resets the clock). The decision
+  capture schema and its synthetic fixture were regenerated again (`replay_decisions synth`).
+* Medium, the generated Wailing Caverns migration is edited in place. NOT A DEFECT, as in run 7 (round 13.2b): the updater applies a
+  changed file again by hash, the file deletes and inserts the plan's rows in one transaction, and `forever/sql/README.md` names
+  "edit the plan, export again, replace the file" as the way to change generated plan rows; a second migration that only updates
+  `kill_first` would leave the generator and the shipped rows disagreeing (`test_wc_plan_rows.py` pins the file to the generator).
 
 ## Mutations (each caught)
 

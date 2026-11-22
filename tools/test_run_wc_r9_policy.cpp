@@ -191,6 +191,32 @@ static void TestHealerGateIsBounded()
     CHECK(order == "pullback 7");
     CHECK(ms >= kPullHealerHoldMs && ms <= kPullHealerHoldMs + 3 * kTickMs);
     CHECK(r.note.find("healer gate spent: the healer Wcpri has no line of sight to the tank") != std::string::npos);
+    CHECK(r.healerHoldMs == 0); // the pull went out: the next pull gets a fresh hold
+
+    // Codex review of the first version: the hold ran on the gather phase's clock, so an unrelated gather that had already run
+    // 40 s let the pull go out at once with the healer round the corner. The gate has its own clock now.
+    Run q = Start(&plan);
+    EnterPhase(q, Phase::Gather);
+    q.phaseMs = 40000;
+    Facts g = PullParty(true, 12.0f, false);
+    std::string held = Tick(q, g);
+    CHECK(held != "pullback 7");
+    CHECK(q.note == "pull held: the healer Wcpri has no line of sight to the tank");
+    std::uint32_t held_ms = kTickMs;
+    while (held_ms < 3 * kPullHealerHoldMs && Tick(q, g) != "pullback 7")
+        held_ms += kTickMs;
+    CHECK(held_ms >= kPullHealerHoldMs && held_ms <= kPullHealerHoldMs + 3 * kTickMs);
+    // A healer that covers the tank starts the next hold afresh: 20 s uncovered, covered, 20 s uncovered again does not spend it.
+    Run w = Start(&plan);
+    Facts h = PullParty(true, 12.0f, false);
+    for (int i = 0; i < 20; ++i)
+        CHECK(Tick(w, h) != "pullback 7");
+    CHECK(w.healerHoldMs == 20 * kTickMs);
+    h.members[1].healerSight = true;
+    h.units[0].distLead = 40;
+    // (the covered tick pulls: reset by the pull; the clock is zero again)
+    CHECK(Tick(w, h) == "pullback 7");
+    CHECK(w.healerHoldMs == 0);
 }
 
 // The walk back's hop pulls wait for the healer too: a respawned pack on the way back is pulled with the healer in reach.
