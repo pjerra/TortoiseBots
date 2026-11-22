@@ -9,7 +9,7 @@ change, no new .cpp on the build list.
 The chat words whose action is already registered (or whose class is already compiled) now reach the bot when the master whispers them.
 One new block, `PC_CHAT_KEYS`, in `forever/tools/slice_gen_context.py`, joined into `KEYS`; the generated
 `forever/src/slice/SliceAiObjectContext.cpp` carries the result (25 / 113 / 162 / 201 strategies/actions/triggers/values, from
-25 / 108 / 133 / 201). No hand-written source changes: `ChatCommandHandlerStrategy.cpp` and every action file are untouched.
+25 / 108 / 133 / 201). One hand-written change: the `use` TriggerNode in `ChatCommandHandlerStrategy.cpp` (below); every action file is untouched.
 
 * **29 trigger keys, all already in the full build** (`ChatTriggerContext.h` creators copied byte for byte, as the generator does):
   `quest reward`, `drop`, `roll`, `share`, `loot`, `add all loot`, `release`, `repair`, `u`, `use`, `s`, `b`, `trainer`,
@@ -29,9 +29,10 @@ longest prefix down to the first word and calls `AiObjectContext::GetTrigger(<wo
 own name. `Engine::ProcessTriggers` binds each strategy `TriggerNode` to the trigger of the node's name, so the node's actions run.
 Two consequences the round record must keep:
 
-* **A registered trigger key is not a node.** `use` registers (the full build has it) but `ChatCommandHandlerStrategy` only carries
-  the `u` node, so a literal `use` word sets a trigger no node watches: `u` is the word that works. The same is true of the legacy
-  build; the round mirrors it rather than inventing a second alias.
+* **A registered trigger key is not a node.** The engine caches one trigger instance per key, so a key no strategy node watches never
+  fires. `use` registered (the full build has it) but `ChatCommandHandlerStrategy` only carried the `u` node, so a literal `use` word
+  was a silent no-op (Codex review finding). The round adds the `use` TriggerNode next to `u` (one `TriggerNode`, +4 lines in that
+  file; `u` is kept) and the wiring test now fails for any R4 word that reaches no node or action.
 * **`equip` and `loot` register triggers whose internal name differs from the key** (`equip` -> `e`, `loot` -> `add all loot`), again
   copied from `ChatTriggerContext.h`. The key is what the chat parser looks up, so both the key and the node's action must exist.
 
@@ -45,8 +46,9 @@ setters (`boost target`, `buff target`, `revive target`, `wait for attack time`,
 
 * `forever/tools/slice_gen_context.py` — +18/-1 lines: the `PC_CHAT_KEYS` block with its left-outs, and the `_join` entry.
 * `forever/src/slice/SliceAiObjectContext.cpp` — generated, +37/-3 lines (5 chat actions, 29 chat triggers, the two counters).
-* `forever/tools/test_chat_grammar_wiring.py` — new, 243 lines: the block, the generated registry, the strategy's `TriggerNode`
-  actions and the build list, with 7 mutations.
+* `ai/playerbot/strategy/generic/ChatCommandHandlerStrategy.cpp` — +4 lines: the `use` TriggerNode.
+* `forever/tools/test_chat_grammar_wiring.py` — new: the block, the generated registry, the strategy's `TriggerNode`
+  actions (a word reaching none fails) and the build list, with 8 mutations.
 * `forever/docs/PC-R4-NOTES.md` — this file.
 
 ## Tests and gates
@@ -68,4 +70,4 @@ block`). Both pass after the block.
 
 A-9 of the spec is queued on forever-test2 (`LIVE-QUEUE.md`) with the rest of the player-command walks: an owner whispers `repair`,
 `trainer`, `release` (dead bot), `u <item>`, `e <item>`, `position`, and a non-owner group member whispers `repair` and must get
-"Only this bot's owner (or a GameMaster) may do that." The reachability caveats above (`use`) are what that walk checks.
+"Only this bot's owner (or a GameMaster) may do that." The walk also whispers a literal `use <item>`.

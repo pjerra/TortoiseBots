@@ -127,7 +127,8 @@ def trigger_nodes(strategy_text):
 def actions_of(key, nodes, supported):
     """The actions a chat word fires: its explicit TriggerNode's, else the pass-through action of its own name, else none.
 
-    A word with no TriggerNode (`use`: the strategy only has the `u` node) is registration only, exactly as in the full build.
+    Empty means the word is dead: the engine binds a trigger instance per KEY, so a registered key no node watches never fires
+    (`use` needed its own node next to `u`). The callers fail on an empty result.
     """
     if key in nodes:
         return nodes[key]
@@ -169,7 +170,10 @@ def check(gen_text, strategy_text, context_text, build_list):
     supported = supported_words(strategy_text)
     nodes = trigger_nodes(strategy_text)
     for key in block["trigger"]:
-        for action in actions_of(key, nodes, supported):
+        fired = actions_of(key, nodes, supported)
+        if not fired:
+            raise AssertionError("chat trigger %r reaches no strategy node or pass-through action: the word is registered but dead" % key)
+        for action in fired:
             if action not in reg["action"]:
                 raise AssertionError("chat trigger %r fires action %r, which the slice does not register" % (key, action))
 
@@ -203,6 +207,7 @@ class Grammar(unittest.TestCase):
         for key in R4_TRIGGERS:
             with self.subTest(word=key):
                 self.assertIn(key, reg["trigger"], "chat trigger %r is not registered" % key)
+                self.assertTrue(actions_of(key, nodes, words), "chat word %r reaches no node or action (dead word)" % key)
                 for action in actions_of(key, nodes, words):
                     self.assertIn(action, reg["action"], "trigger %r fires unregistered action %r" % (key, action))
 
@@ -220,6 +225,8 @@ class Grammar(unittest.TestCase):
             (0, re.sub(r"^PC_CHAT_KEYS = \{.*?\n\}\n", "", self.gen, count=1, flags=re.M | re.S)),
             # a new action's source not built
             (3, self.build_list.replace("ai/playerbot/strategy/actions/EquipAction.cpp\n", "")),
+            # a registered word no strategy node watches (the `use` finding: a literal `use` word was a silent no-op)
+            (1, self.strategy.replace('        "use",\n', '        "unused",\n', 1)),
             # a word's action creator gone from the generated registry
             (2, self.context.replace('creators["position"] = [](PlayerbotAI* ai) { return new PositionAction(ai); };', "", 1)),
             # a word's trigger creator gone from the generated registry
