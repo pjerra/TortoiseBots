@@ -19,7 +19,8 @@ Oggleflint's initial tank point is the shipped navmesh-exported RFC boss-step
 position. Native path/floor checks and a coordinated live check are still
 required; matching an exported position is not evidence of successful combat.
 
-The activation gate remains `AiPlayerbot.DungeonTactics` (off by default), or
+The activation gate remains `AiPlayerbot.DungeonTactics` (on by default:
+`PlayerbotAIConfig.cpp` reads it with default true, and `aiplayerbot.conf.dist` sets 1), or
 membership in a commanded group, and a supported map with rows. Role state is
 in memory: reapply/check tank/healer roles after a server restart.
 
@@ -52,5 +53,5 @@ died to: the tank dying first, respawned mobs on the walk back after a wipe, and
 Not boss tactics, so not here: mobs respawning on the walk back after a wipe (respawn timers, a run/plan
 matter) and the size of Deviate Shambler packs (pulling, #23-style pack handling).
 
-The activation gate is unchanged: `AiPlayerbot.DungeonTactics = 1`, or a commanded group, on a supported
-five-man map with rows. Each rule that fires logs `FiveMan tactic bot=<name> map=43 rule=<interrupt|kill-first> target=<entry>`.
+The activation gate is unchanged: `AiPlayerbot.DungeonTactics` (default 1), or a commanded group, on a supported
+five-man map with rows. So a player's own bots in WC use these rows without any setting. Each rule that fires logs `FiveMan tactic bot=<name> map=43 rule=<interrupt|kill-first> target=<entry>`.
