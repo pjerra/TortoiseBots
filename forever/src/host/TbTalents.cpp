@@ -324,7 +324,6 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
 
     if (report.applied > 0)
     {
-        bot->UpdateTraitConfig(std::move(working), 0, false);
         countTabs(working);
         report.free = std::max<int32>(0, expectedTotal - report.spent);
         report.tab = PickSpecTabForBot(
@@ -334,6 +333,7 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
             report.tabCounts[0],
             report.tabCounts[1],
             report.tabCounts[2]);
+        bot->UpdateTraitConfig(std::move(working), 0, false);
         TC_LOG_INFO("tortoisebots", "talents: {} spent {} point(s) in {} ({}/{}/{}, total {}/{}) on {}",
             bot->GetName(), report.applied, SpecName(bot->GetClass(), report.tab),
             report.tabCounts[0], report.tabCounts[1], report.tabCounts[2],
