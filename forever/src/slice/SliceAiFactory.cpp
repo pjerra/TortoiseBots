@@ -477,40 +477,40 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         {
             if (player->GetLevel() < 10)
             {
-                nonCombatEngine->addStrategies("leveling", "dps assist", "follow", "cure", "buff", "food", "default", "boost", NULL);
+                nonCombatEngine->addStrategies("leveling", "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "boost", NULL);
                 return;
             }
             if (tab == 1)
             {
                 bool const tank = EffectiveRole(player, facade) == static_cast<uint8>(BOT_ROLE_TANK);
-                nonCombatEngine->addStrategies(tank ? "tank feral" : "dps feral", tank ? "tank assist" : "dps assist", "follow", "cure", "buff", "food", "default", "boost", "aoe", "cc", NULL);
+                nonCombatEngine->addStrategies(tank ? "tank feral" : "dps feral", tank ? "tank assist" : "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "boost", "aoe", "cc", NULL);
                 return;
             }
-            nonCombatEngine->addStrategies(tab == 0 ? "balance" : "restoration", "dps assist", "follow", "cure", "buff", "food", "default", "boost", "aoe", "cc", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "balance" : "restoration", "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "boost", "aoe", "cc", NULL);
             return;
         }
         case CLASS_PALADIN:
         {
             if (tab == 1)
-                nonCombatEngine->addStrategies("protection", "tank assist", "follow", "cure", "buff", "food", "default", "aura", "blessing", "buff protection pve", "boost", NULL);
+                nonCombatEngine->addStrategies("protection", "tank assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "aura", "blessing", "buff protection pve", "boost", NULL);
             else
-                nonCombatEngine->addStrategies(tab == 2 ? "retribution" : "holy", "dps assist", "follow", "cure", "buff", "food", "default", "aura", "blessing", "boost", NULL);
+                nonCombatEngine->addStrategies(tab == 2 ? "retribution" : "holy", "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "aura", "blessing", "boost", NULL);
             return;
         }
         case CLASS_SHAMAN:
-            nonCombatEngine->addStrategies(tab == 0 ? "elemental" : (tab == 1 ? "enhancement" : "restoration"), "dps assist", "follow", "cure", "totems", "buff", "food", "default", "boost", "aoe", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "elemental" : (tab == 1 ? "enhancement" : "restoration"), "dps assist", "follow", "cure", "totems", "buff", "food", "loot", "roll", "default", "boost", "aoe", NULL);
             return;
         case CLASS_MAGE:
-            nonCombatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "follow", "cure", "buff", "food", "default", "boost", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "arcane" : (tab == 2 ? "frost" : "fire"), "dps assist", "follow", "cure", "buff", "food", "loot", "roll", "default", "boost", NULL);
             return;
         case CLASS_ROGUE:
-            nonCombatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "follow", "buff", "food", "default", "boost", "stealth", "poisons", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "assassination" : (tab == 2 ? "subtlety" : "combat"), "dps assist", "follow", "buff", "food", "loot", "roll", "default", "boost", "stealth", "poisons", NULL);
             return;
         case CLASS_HUNTER:
-            nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "default", "boost", "cc", "aoe", NULL);
+            nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "loot", "roll", "default", "boost", "cc", "aoe", NULL);
             return;
         case CLASS_WARLOCK:
-            nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet auto", "buff", "follow", "food", "default", "boost", NULL);
+            nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet auto", "buff", "follow", "food", "loot", "roll", "default", "boost", NULL);
             return;
         case CLASS_WARRIOR:
         default:
