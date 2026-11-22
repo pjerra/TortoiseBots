@@ -282,14 +282,50 @@ inline ParsedService ParseServiceArgs(std::string_view args)
 
 inline std::string FormatBotStateLine(std::string_view botName, std::string_view fields)
 {
-    return "TBM:BOTSTATE|" + addon::pure::Safe(botName) + "|" + std::string(fields);
+    // The addon channel caps at 255 bytes and the state parser reads each
+    // comma field on its own, so a long tail drops whole trailing fields —
+    // focus first, then the spec list — never a cut mid-field. The move and
+    // toggle fields the panel needs always survive (bounded, up front).
+    std::string tail(fields);
+    for (char const* optional : { ",focus=", ",specs=" })
+    {
+        std::string line = "TBM:BOTSTATE|" + addon::pure::Safe(botName) + "|" + tail;
+        if (line.size() <= addon::pure::kMaxLineBytes)
+            return line;
+        std::size_t const cut = tail.rfind(optional);
+        if (cut == std::string::npos)
+            return line;
+        tail.erase(cut);
+    }
+    return "TBM:BOTSTATE|" + addon::pure::Safe(botName) + "|" + tail;
 }
 
 inline std::string FormatServiceLine(std::string_view botName, bool food, bool water, bool healthstone,
     std::string_view portals)
 {
-    return "TBM:SERVICE|" + addon::pure::Safe(botName) + "|" + (food ? "1" : "0") + "|" + (water ? "1" : "0") + "|" +
-        (healthstone ? "1" : "0") + "|" + (portals.empty() ? "-" : std::string(portals));
+    // The portal list is the only unbounded tail (a portal per city the mage
+    // trained). A truncated mid-entry id would fail the entry parse and, with
+    // no valid entry left, the whole line — so the line keeps the longest
+    // entry-boundary prefix that fits, and "-" when even one entry will not.
+    std::string const head = "TBM:SERVICE|" + addon::pure::Safe(botName) + "|" + (food ? "1" : "0") + "|" +
+        (water ? "1" : "0") + "|" + (healthstone ? "1" : "0") + "|";
+    std::string kept;
+    std::size_t begin = 0;
+    while (begin < portals.size())
+    {
+        std::size_t const end = portals.find(',', begin);
+        std::string const entry = std::string(portals.substr(begin, end == std::string_view::npos ? std::string_view::npos : end - begin));
+        std::string const candidate = kept.empty() ? entry : kept + "," + entry;
+        if ((head + candidate).size() > addon::pure::kMaxLineBytes)
+            break;
+        kept = candidate;
+        if (end == std::string_view::npos)
+            break;
+        begin = end + 1;
+    }
+    if (kept.empty() && !portals.empty() && portals != "-")
+        return head + "-";
+    return head + (kept.empty() ? "-" : kept);
 }
 
 } // namespace behsvc

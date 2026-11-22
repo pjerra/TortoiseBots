@@ -1,6 +1,6 @@
 // Standalone test of the `behavior` and `service` addon verbs' core-free half
 // (forever/src/host/TbAddonBehaviorServicePure.h):
-//   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_addon_behsvc.cpp -o /tmp/test_addon_behsvc && /tmp/test_addon_behsvc
+//   g++ -std=c++17 -O1 -Wall -Wextra -I. -Iforever/src forever/tools/test_addon_behsvc.cpp -o /tmp/test_addon_behsvc && /tmp/test_addon_behsvc
 #include "forever/src/host/TbAddonBehaviorServicePure.h"
 
 #include <cstdio>
@@ -104,6 +104,32 @@ static void TestParseServiceAndFormat()
         "TBM:SERVICE|Magi|1|1|0|10059:Stormwind");
     CHECK(bs::FormatServiceLine("Locky", false, false, true, "") ==
         "TBM:SERVICE|Locky|0|0|1|-");
+    // A mage that trained every portal: the line keeps the longest
+    // entry-boundary prefix that fits 255 bytes, never a cut mid-entry.
+    std::string everyPortal =
+        "10059:Stormwind,11416:Ironforge,11419:Darnassus,11417:Orgrimmar,11418:Undercity,"
+        "11420:Thunder Bluff,49365:Theramore,49362:Stonard,49004:Alah'Thalas,49002:Amani'Alor,"
+        "49001:Sparkwater Port,49000:Gurubashi Arena,28148:Karazhan";
+    std::string const longService = bs::FormatServiceLine("Flivmage", true, true, false, everyPortal);
+    CHECK(longService.size() <= TortoiseBots::addon::pure::kMaxLineBytes);
+    CHECK(longService.rfind("TBM:SERVICE|Flivmage|1|1|0|", 0) == 0);
+    CHECK(longService.find("10059:Stormwind") != std::string::npos);
+    // every kept tail entry is a complete "id:city" pair from the input
+    std::string const tail = longService.substr(longService.find_last_of('|') + 1);
+    CHECK(tail.find(",,") == std::string::npos);
+    // A pathological tail (more specs than a bot can hold): focus drops
+    // first, then specs; the move and toggle fields always survive, and
+    // the line still fits.
+    std::string const longState = bs::FormatBotStateLine("Flivpaladinname",
+        "move=follow,loot=on,aoe=off,autocc=on,savemana=off,boost=on,threat=on,potions=off,"
+        "mimic=off,spread=on,hold=off,noblink=off,offheal=on,offdps=on,sap=on,"
+        "specs=retribution+offdps+beast mastery+marksmanship+survival+combat+assassination,"
+        "focus=Flivshaman");
+    CHECK(longState.size() <= TortoiseBots::addon::pure::kMaxLineBytes);
+    CHECK(longState.find("move=follow") != std::string::npos);
+    CHECK(longState.find("loot=on") != std::string::npos);
+    CHECK(longState.find("focus=") == std::string::npos);
+    CHECK(longState.find("specs=") == std::string::npos);
 }
 
 int main()
