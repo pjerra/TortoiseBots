@@ -165,10 +165,119 @@ def check_cmd_missing_verb_lists_m1(src):
             raise AssertionError(f"the `.tb cmd` missing-verb text does not list `{verb}`")
 
 
+def check_dopull_arg(src):
+    body = function_body(strip_comments(src), "OrderAnswer DoPull(")
+    if ".arg = p.pullOption" not in body:
+        raise AssertionError("DoPull drops the parsed pull option (the `body` fix)")
+
+
+def check_pull_run_options(src):
+    body = function_body(strip_comments(src), "std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)")
+    for pin in ("ParsePullOrderOption(", "BeginCommand("):
+        if pin not in body:
+            raise AssertionError(f"the h3 pull run does not call {pin}")
+
+
+def check_interrupt_action_order(src):
+    c = strip_comments(src)
+    start = c.find("kInterruptActions[]")
+    if start < 0:
+        raise AssertionError("kInterruptActions is missing")
+    block = c[start:c.find("};", start)]
+    order = [block.find(f'"{action}"') for action in ("counterspell", "kick", "death coil")]
+    if min(order) < 0 or order != sorted(order):
+        raise AssertionError("kInterruptActions is not in TB's probe order")
+    for gone in ("spell lock", "repentance"):
+        if f'"{gone}"' in block:
+            raise AssertionError(f"kInterruptActions carries `{gone}`, which TB's port drops")
+
+
+def check_interrupt_named(src):
+    if "anyNamed && !probes[i].named" not in strip_comments(src):
+        raise AssertionError("PickInterrupt ignores the named bot")
+
+
+def check_interrupt_run(src):
+    # The order ends ok only from a real cast request: Run hands the interrupt to InterruptTickAt (never "ok" from a queued action) and keeps
+    # a not-yet-cast order pending for the next engine ticks.
+    body = function_body(tactics_run_body(src), 'if (verb == "interrupt")')
+    for pin in ("InterruptTickAt(", "PendingInterrupts()[bot->GetGUID()] = pending"):
+        if pin not in body:
+            raise AssertionError(f"the interrupt run does not use {pin}")
+    if "QueueAction(" in body or 'return "ok"' in body:
+        raise AssertionError("the interrupt run reports ok without a cast request")
+
+
+def check_interrupt_cast_path(src):
+    c = strip_comments(src)
+    body = function_body(c, "bool TryInterruptCast(")
+    for pin in ("InterruptNonMeleeSpells(false)", "SetStandState(UNIT_STAND_STATE_STAND)", "SetSelection(",
+                '"interrupt target", action', "pick->Reset()", "DoSpecificAction(action", "return ai->CastSpell(action, target);"):
+        if pin not in body:
+            raise AssertionError(f"TryInterruptCast lacks {pin}")
+    if body.index("DoSpecificAction(action") > body.index("return ai->CastSpell(action, target);"):
+        raise AssertionError("TryInterruptCast must try the class action before the direct cast")
+
+
+def check_interrupt_tick_result(src):
+    body = function_body(strip_comments(src), "std::string InterruptTickAt(")
+    for pin in ("NextInterruptTick(", "InterruptTickResult(tick)", "TryInterruptCast("):
+        if pin not in body:
+            raise AssertionError(f"InterruptTickAt lacks {pin}")
+
+
+def check_interrupt_poll_hook(src):
+    c = strip_comments(src)
+    start = c.find("void BeforeEngineTick(")
+    if start < 0:
+        raise AssertionError("TbOrders.cpp lost BeforeEngineTick")
+    body = function_body(c, "void BeforeEngineTick(")
+    if "tactics::PollPendingInterrupt(" not in body:
+        raise AssertionError("BeforeEngineTick never retries a pending interrupt")
+    if body.index("tactics::PollPendingInterrupt(") > body.index("rec->second.queue.empty()"):
+        raise AssertionError("the pending interrupt must be retried before the order queue is read")
+    if 'tactics::CancelPendingInterrupt(bot)' not in body:
+        raise AssertionError("another order does not end a pending interrupt")
+
+
+def check_ranged_pull_diagnostic(src):
+    c = strip_comments(src)
+    if "GetRangedBlocker(bot->GetDistance(mob))" not in c or "opens as a body pull" not in src:
+        raise AssertionError("a ranged pull that falls back to the body pull is not logged")
+
+
+def check_interrupt_prefers_in_range(src):
+    c = strip_comments(src)
+    if "pass == 0 ? probes[i].inRange : probes[i].actions" not in c:
+        raise AssertionError("PickInterrupt does not prefer a bot in range")
+
+
+def check_interrupt_probe_in_range(src):
+    body = function_body(strip_comments(src), "Player* PickInterruptBot(")
+    if "CanCastSpell(key, target, 0, nullptr, false, true, true)" not in body or "probe.inRange.push_back(key)" not in body:
+        raise AssertionError("PickInterruptBot does not probe the range")
+
+
+def check_pullback_default_hold(src):
+    body = function_body(strip_comments(src), "std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)")
+    if "option.hasSeconds ? option.seconds : kPullJoinDelaySeconds;" not in body or "PausePartyPullHold(bot, holdDelay," not in body:
+        raise AssertionError("a default pullback no longer keeps the 3 s party hold")
+
+
+def check_cmd_interrupt(src):
+    body = function_body(strip_comments(src), "bool TryHandleTacticalVerb(")
+    for pin in ('verb == "interrupt"', "PickInterruptBot("):
+        if pin not in body:
+            raise AssertionError(f"TryHandleTacticalVerb does not handle interrupt ({pin})")
+
+
 SOURCES = {
     "orders": lambda: read(HOST / "TbOrders.cpp"),
     "cmd_orders": lambda: read(CMD / "TbCmdOrders.cpp"),
     "tactics": lambda: read(HOST / "TbTactics.cpp"),
+    "tactics_pure": lambda: read(HOST / "TbTacticsPure.h"),
+    "cmd_tactics": lambda: read(CMD / "TbCmdTactics.cpp"),
+    "run_orders": lambda: read(HOST / "run" / "TbRunOrders.cpp"),
     "gen": lambda: read(ROOT / "forever" / "tools" / "slice_gen_context.py"),
     "w4": lambda: read(ROOT / "forever" / "SLICE-W4.txt"),
 }
@@ -214,6 +323,43 @@ class Wiring(unittest.TestCase):
     def test_cmd_missing_verb_lists_the_m1_verbs(self):
         check_cmd_missing_verb_lists_m1(self.sources["cmd_orders"])
 
+    def test_dopull_passes_the_pull_option(self):
+        check_dopull_arg(self.sources["run_orders"])
+
+    def test_h3_pull_run_parses_the_option(self):
+        check_pull_run_options(self.sources["orders"])
+
+    def test_interrupt_probe_order(self):
+        check_interrupt_action_order(self.sources["tactics_pure"])
+
+    def test_interrupt_honours_the_named_bot(self):
+        check_interrupt_named(self.sources["tactics_pure"])
+
+    def test_interrupt_run_queues_the_mature_action(self):
+        check_interrupt_run(self.sources["tactics"])
+
+    def test_interrupt_order_casts_and_retries(self):
+        check_interrupt_cast_path(self.sources["tactics"])
+        check_interrupt_tick_result(self.sources["tactics"])
+
+    def test_pending_interrupt_is_retried_every_tick(self):
+        check_interrupt_poll_hook(self.sources["orders"])
+
+    def test_ranged_pull_fallback_is_logged(self):
+        check_ranged_pull_diagnostic(self.sources["orders"])
+
+    def test_interrupt_prefers_in_range(self):
+        check_interrupt_prefers_in_range(self.sources["tactics_pure"])
+
+    def test_interrupt_probes_range(self):
+        check_interrupt_probe_in_range(self.sources["tactics"])
+
+    def test_pullback_default_hold(self):
+        check_pullback_default_hold(self.sources["orders"])
+
+    def test_cmd_handles_interrupt(self):
+        check_cmd_interrupt(self.sources["cmd_tactics"])
+
 
 MUTATIONS = [
     ("drop-stop-verb", "orders", lambda s: re.sub(r'"stop",', "", s, count=1), check_is_verb),
@@ -228,6 +374,18 @@ MUTATIONS = [
     ("drop-applykit-guard", "orders", lambda s: s.replace('ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT)', 'ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)'), check_applykit_keeps_guard),
     ("drop-alive-refusal", "tactics", lambda s: s.replace("if (!bot->IsAlive())", "if (false)", 1), check_preflight_alive_first),
     ("cmd-missing-verb-old-list", "cmd_orders", lambda s: s.replace(", stop, flee, guard, stance, engage, rebuff\");", "\");", 1), check_cmd_missing_verb_lists_m1),
+    ("drop-pull-arg", "run_orders", lambda s: s.replace(".arg = p.pullOption;", "", 1), check_dopull_arg),
+    ("reverse-interrupt-order", "tactics_pure", lambda s: s.replace('"counterspell", "silence", "kick"', '"kick", "silence", "counterspell"', 1), check_interrupt_action_order),
+    ("ignore-in-range-interrupt", "tactics_pure", lambda s: s.replace("pass == 0 ? probes[i].inRange : probes[i].actions", "probes[i].actions", 1), check_interrupt_prefers_in_range),
+    ("drop-range-probe", "tactics", lambda s: s.replace("probe.inRange.push_back(key)", "(void)key", 1), check_interrupt_probe_in_range),
+    ("pullback-hold-config-delay", "orders", lambda s: s.replace("PausePartyPullHold(bot, holdDelay,", "PausePartyPullHold(bot, delay,", 1), check_pullback_default_hold),
+    ("drop-direct-interrupt-cast", "tactics", lambda s: s.replace("return ai->CastSpell(action, target);", "return false;", 1), check_interrupt_cast_path),
+    ("drop-own-cast-stop", "tactics", lambda s: s.replace("bot->InterruptNonMeleeSpells(false);", "", 1), check_interrupt_cast_path),
+    ("drop-pick-reset", "tactics", lambda s: s.replace("pick->Reset();", "", 1), check_interrupt_cast_path),
+    ("interrupt-ok-from-queue", "tactics", lambda s: s.replace("std::string const result = InterruptTickAt(bot, ai, pending, requester, finished);", "ai->GetCurrentEngine()->QueueAction(arg, ACTION_PASSTROUGH, ai::Event());\n        std::string const result = \"ok\"; (void)finished;", 1), check_interrupt_run),
+    ("drop-interrupt-poll", "orders", lambda s: s.replace("tactics::PollPendingInterrupt(", "tactics::Forget(", 1), check_interrupt_poll_hook),
+    ("drop-ranged-log", "orders", lambda s: s.replace("opens as a body pull", "opens", 1), check_ranged_pull_diagnostic),
+    ("ignore-named-interrupt", "tactics_pure", lambda s: s.replace("anyNamed && !probes[i].named", "false", 1), check_interrupt_named),
 ]
 
 

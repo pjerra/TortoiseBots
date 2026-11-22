@@ -9,15 +9,24 @@
 
 #include "compat/botpch_forever.h"
 
+#include <list>
+#include <map>
 #include <string>
+#include <vector>
 #include "MotionMaster.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
+#include "Unit.h"
 
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/ServerFacade.h"
 #include "playerbot/PullJoinWindowPolicy.h"
 #include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/Engine.h"
+#include "playerbot/strategy/Strategy.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/Stances.h"
 #include "PlayerbotAIStorage.h"
@@ -137,14 +146,208 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
         }
         return true;
     }
+    if (verb == "interrupt")
+    {
+        if (spec.arg.empty())
+        {
+            code = "bad-argument";
+            detail = "interrupt <target> [bot]";
+            return false;
+        }
+        if (!need(spec.arg.c_str()))
+            return false;
+        Unit* target = ObjectAccessor::GetUnit(*bot, spec.unit);
+        if (!target || !target->IsInWorld())
+        {
+            code = "no-target";
+            detail = "no such unit on the bot's map";
+            return false;
+        }
+        if (!target->IsAlive())
+        {
+            code = "dead-target";
+            detail = "the target is dead";
+            return false;
+        }
+        if (!target->IsNonMeleeSpellCast(true))
+        {
+            code = "not-casting";
+            detail = "the target is not casting an interruptible spell";
+            return false;
+        }
+        return true;
+    }
     code = "unknown-verb";
     detail = verb;
     return false;
 }
 
-std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner)
+Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::string& action, std::string& reasons)
 {
-    (void)unit;   // M1 takes no unit; the interrupt order (M2) is the first
+    action.clear();
+    reasons.clear();
+    std::vector<InterruptProbe> probes;
+    std::vector<std::string> why;
+    for (Player* bot : bots)
+    {
+        InterruptProbe probe;
+        probe.bot = bot ? bot->GetName() : std::string();
+        PlayerbotAI* ai = AiOf(bot);
+        std::string reason;
+        if (!bot || !bot->IsInWorld() || !bot->IsAlive())
+            reason = "dead";
+        else if (!ai || !ai->GetAiObjectContext())
+            reason = "no-engine";
+        else if (!target || !target->IsInWorld() || bot->GetMap() != target->GetMap())
+            reason = "other-map";
+        else if (bot->GetDistance(target) > sPlayerbotAIConfig.sightDistance)
+            reason = "far";
+        else
+            for (char const* key : kInterruptActions)
+                if (ActionRegistered(ai, key) && ai->HasSpell(key) && ai->IsInterruptableSpellCasting(target, key, true) &&
+                    ai->CanCastSpell(key, target, 0, nullptr, true, true, true))
+                {
+                    probe.actions.push_back(key);
+                    // Review fix: a bot that can land the interrupt from where it stands wins over an earlier one that would walk.
+                    if (ai->CanCastSpell(key, target, 0, nullptr, false, true, true))
+                        probe.inRange.push_back(key);
+                }
+        probes.push_back(probe);
+        if (probe.actions.empty())
+            why.push_back(probe.bot + ":" + (reason.empty() ? "no-spell" : reason));
+    }
+    InterruptPick const pick = PickInterrupt(probes);
+    if (!pick.found)
+    {
+        for (size_t i = 0; i < why.size(); ++i)
+            reasons += (i ? ";" : "") + why[i];
+        return nullptr;
+    }
+    action = pick.action;
+    return bots[pick.index];
+}
+
+namespace
+{
+// An interrupt order still trying (see kInterruptWindowMs): one per bot, the newest order replaces the older one.
+struct PendingInterrupt
+{
+    ObjectGuid target;
+    ObjectGuid owner;
+    std::string action;
+    uint32 seq = 0;
+    uint32 startMs = 0;
+    bool walkQueued = false;
+};
+
+std::map<ObjectGuid, PendingInterrupt>& PendingInterrupts()
+{
+    static std::map<ObjectGuid, PendingInterrupt> pending;
+    return pending;
+}
+
+uint32 NowMs()
+{
+    return WorldTimer::getMSTime();
+}
+
+// One attempt to get the class's interrupt spell cast at `target`. The class action alone was not enough on the live test (nine accepted orders,
+// no cast): its own target is the `interrupt target` pick (cached per value, and only a caster that is already a possible attack target), a
+// cast already in progress refuses every other cast (PlayerbotAI::CastSpell's cast-in-progress gate: the bot's own combat AI starts one each
+// tick), and a bot that sits or is not facing is turned first and refused for that tick. So: the bot stops its own cast and stands, the
+// action's cached picks are dropped so it reads the target again, the class action runs, and when it still refuses the same spell is cast
+// directly at the order's target.
+bool TryInterruptCast(Player* bot, PlayerbotAI* ai, Unit* target, std::string const& action, Player* requester)
+{
+    // Only a bot that could cast now gives up its own cast for it: a spell on cooldown, or a target still out of reach, waits for a later tick
+    // (the walk is queued by the caller) and must not cost the bot its cast every tick for nothing. The reach rule is the pick value's own
+    // (InterruptTargetValue): the spell's range, floored at melee distance.
+    uint32 const spellId = ai->GetAiObjectContext()->GetValue<uint32>("spell id", action)->Get();
+    if (!spellId || !sServerFacade.IsSpellReady(bot, spellId))
+        return false;
+    float reach = ATTACK_DISTANCE;
+    float spellRange = 0.0f;
+    if (ai->GetSpellRange(action, &spellRange) && spellRange > reach)
+        reach = spellRange;
+    if (sServerFacade.getDistance2d(bot, target) > reach)
+        return false;
+    if (bot->IsNonMeleeSpellCast(false, true, true))
+        bot->InterruptNonMeleeSpells(false);
+    if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+    bot->SetSelection(target->GetObjectGuid());
+    ai::AiObjectContext* context = ai->GetAiObjectContext();
+    if (ai::Value<Unit*>* current = context->GetValue<Unit*>("current target"))
+        current->Set(target);
+    if (ai::Value<Unit*>* pick = context->GetValue<Unit*>("interrupt target", action))
+        pick->Reset();
+    if (ai::Value<std::list<ObjectGuid>>* attackers = context->GetValue<std::list<ObjectGuid>>("possible attack targets"))
+        attackers->Reset();
+    ai::Event const event("tb order", std::string(), requester);
+    if (ai->DoSpecificAction(action, event, true))
+        return true;
+    return ai->CastSpell(action, target);
+}
+
+// The queued class action is only the walk to the target for a bot out of reach (its reach prerequisite); the cast itself is TryInterruptCast.
+void QueueWalk(Player* bot, PlayerbotAI* ai, std::string const& action, Player* requester)
+{
+    ai::Engine* engine = ai->GetCurrentEngine();
+    if (!engine)
+        return;
+    if (bot->IsInCombat())
+        ai->OnCombatStarted();
+    engine->QueueAction(action, ACTION_PASSTROUGH, ai::Event("tb order", std::string(), requester));
+}
+
+std::string InterruptTickAt(Player* bot, PlayerbotAI* ai, PendingInterrupt& pending, Player* requester, bool& finished)
+{
+    Unit* target = ObjectAccessor::GetUnit(*bot, pending.target);
+    bool const present = target && target->IsInWorld();
+    bool const alive = present && target->IsAlive();
+    bool const casting = alive && target->IsNonMeleeSpellCast(true);
+    bool requested = false;
+    if (casting)
+    {
+        requested = TryInterruptCast(bot, ai, target, pending.action, requester);
+        if (!requested && !pending.walkQueued)
+        {
+            pending.walkQueued = true;
+            if (!ai->CanCastSpell(pending.action, target, 0, nullptr, false, true, true))
+                QueueWalk(bot, ai, pending.action, requester);
+        }
+    }
+    InterruptTick const tick = NextInterruptTick(present, alive, casting, requested, NowMs() - pending.startMs);
+    finished = tick != InterruptTick::Wait;
+    return InterruptTickResult(tick);
+}
+}
+
+void CancelPendingInterrupt(Player* bot)
+{
+    if (bot)
+        PendingInterrupts().erase(bot->GetGUID());
+}
+
+bool PollPendingInterrupt(Player* bot, PlayerbotAI* ai, uint32& seq, std::string& result)
+{
+    if (!bot || !ai || !ai->GetAiObjectContext())
+        return false;
+    auto it = PendingInterrupts().find(bot->GetGUID());
+    if (it == PendingInterrupts().end())
+        return false;
+    PendingInterrupt& pending = it->second;
+    seq = pending.seq;
+    Player* owner = ObjectAccessor::FindPlayer(pending.owner);
+    bool finished = false;
+    result = InterruptTickAt(bot, ai, pending, (owner && owner->IsInWorld()) ? owner : bot, finished);
+    if (finished)
+        PendingInterrupts().erase(it);
+    return true;
+}
+
+std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::string const& arg, ObjectGuid unit, Player* owner, uint32 seq)
+{
     if (!bot || !ai || !ai->GetAiObjectContext())
         return "fail:no-engine";
 
@@ -207,6 +410,23 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
         proposed->Set(false);
         return "ok";
     }
+    if (verb == "interrupt")
+    {
+        // A newer order of this bot replaces an older pending one.
+        PendingInterrupt pending;
+        pending.target = unit;
+        pending.owner = requester->GetGUID();
+        pending.action = arg;
+        pending.seq = seq;
+        pending.startMs = NowMs();
+        bool finished = false;
+        std::string const result = InterruptTickAt(bot, ai, pending, requester, finished);
+        if (finished)
+            PendingInterrupts().erase(bot->GetGUID());
+        else
+            PendingInterrupts()[bot->GetGUID()] = pending;
+        return result;
+    }
     return "fail:unknown-verb";
 }
 
@@ -239,6 +459,8 @@ void SelfTestRecords(h3::Reply& reply)
     reply.Line(h3::Rec("order").S("bot", "Mtank").S("verb", "rebuff").S("status", "refused").S("code", "in-combat").T("msg", "a bot in a fight does not start a rebuff"));
     reply.Line(h3::Rec("cmd").S("verb", "stance").S("status", "accepted").N("bots", 5).S("result", "party 5").S("stance", "behind"));
     reply.Line(h3::Rec("cmd").S("verb", "engage").S("status", "accepted").N("bots", 5).S("result", "party 5").N("seconds", 5));
+    reply.Line(h3::Rec("order").S("bot", "Mmage").S("verb", "interrupt").N("seq", 42).S("status", "queued"));
+    reply.Line(h3::Rec("cmd").S("verb", "interrupt").S("status", "accepted").N("bots", 1).S("result", "bot:Mmage 1").S("action", "counterspell"));
     reply.Line(h3::Rec("selftest").S("case", "state-tactics").S("bot", "Mtank").S("stance", "behind").N("rebuff", 37));
 }
 }
@@ -262,9 +484,23 @@ bool Preflight(Player*, h3::OrderSpec const&, std::string& code, std::string& de
     return false;
 }
 
-std::string Run(Player*, PlayerbotAI*, std::string const&, std::string const&, ObjectGuid, Player*)
+std::string Run(Player*, PlayerbotAI*, std::string const&, std::string const&, ObjectGuid, Player*, uint32)
 {
     return "fail:engine-not-built";
+}
+
+bool PollPendingInterrupt(Player*, PlayerbotAI*, uint32&, std::string&)
+{
+    return false;
+}
+
+void CancelPendingInterrupt(Player*) {}
+
+Player* PickInterruptBot(std::vector<Player*> const&, Unit*, std::string& action, std::string& reasons)
+{
+    action.clear();
+    reasons = "no-engine";
+    return nullptr;
 }
 
 void AppendState(h3::Rec&, Player*) {}
