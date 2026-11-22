@@ -827,9 +827,20 @@ OrderAnswer SetLootMethodForParty(Player* lead, std::vector<Player*> const& bots
         return Refuse("lead-unavailable", "The lead bot does not lead the group.");
     int threshold = order.hasThreshold ? order.threshold : int(group->GetLootThreshold());
     threshold = std::max(2, std::min(5, threshold));
+    ObjectGuid masterGuid = h3::CommanderGuid(lead->GetGUID());
+    if (masterGuid.IsEmpty())
+        masterGuid = BotMgr::Instance().MasterOf(lead->GetGUID());
+    bool const boundHumanMasterInGroup = !masterGuid.IsEmpty() && !BotMgr::Instance().IsBot(masterGuid) && group->IsMember(masterGuid);
+    ObjectGuid lootMaster = ObjectGuid::Empty;
+    switch (ChooseLootMaster(order.method, boundHumanMasterInGroup))
+    {
+        case LootMasterTarget::BoundMaster: lootMaster = masterGuid; break;
+        case LootMasterTarget::GroupLeader: lootMaster = lead->GetGUID(); break;
+        case LootMasterTarget::Empty: break;
+    }
     WorldPackets::Party::SetLootMethod packet{ WorldPacket(CMSG_SET_LOOT_METHOD) };
     packet.LootMethod = uint8(order.method);
-    packet.LootMasterGUID = ObjectGuid::Empty;
+    packet.LootMasterGUID = lootMaster;
     packet.LootThreshold = uint32(threshold);
     lead->GetSession()->HandleSetLootMethodOpcode(packet);
     // The answer is read back from the group: a change the core refused is not reported as made.
