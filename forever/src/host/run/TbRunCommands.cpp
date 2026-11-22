@@ -12,6 +12,7 @@
 #include "host/TbH3.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
+#include "host/run/TbRunFactsPure.h"
 #include "host/run/TbRunStands.h"
 
 #include "GameTime.h"
@@ -160,7 +161,7 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             for (size_t i = 2; i < args.w.size(); ++i)
                 joined += (joined.empty() ? "" : " ") + Lower(args.w[i]);
             DungeonRun::StartArgs const parsed = DungeonRun::ParseStartArgs(joined);
-            if (DungeonRun::ResolveStartStep(*plan, parsed.from, parsed.value, fromStep) != DungeonRun::FromResult::Ok)
+            if (facts::ResolvePlacedStart(*plan, parsed.from, parsed.value, fromStep) != DungeonRun::FromResult::Ok)
                 return Fail(handler, args, "run", "no-step", args.w[args.w.size() - 1] + " is not a step or leg of " + plan->name + " (.tb plan " + plan->name + " check)");
         }
         StartOutcome const started = StartRun(leader, plan, nowMs, fromStep);

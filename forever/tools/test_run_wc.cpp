@@ -1248,6 +1248,30 @@ void TestWalkBackAsksForHostilesAroundTheLead(ai::DungeonPlan const* plan)
     }
 }
 
+// `.tb run start ... from step N`: N is the number `.tb run status` shows as `step=` (the plan index from 0); Codex round 3 caught the first
+// version resolving it one row early. The proof runs start at indices 53 (the leg-5 camp), 68 (the approach to the index-69 Shambler camp),
+// 80 (leg 8's first move) and 4 (leg 0, the walk-back proof); `from leg` finds a leg's first step by number or name.
+void TestPlacedStartNumbering(ai::DungeonPlan const* plan)
+{
+    std::size_t step = 999;
+    for (std::size_t n : { std::size_t(0), std::size_t(4), std::size_t(53), std::size_t(68), std::size_t(80), std::size_t(82) })
+    {
+        step = 999;
+        CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Step, std::to_string(n), step) == DungeonRun::FromResult::Ok);
+        CHECK(step == n);
+    }
+    CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Step, "301", step) == DungeonRun::FromResult::Ok && step == 301);
+    CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Step, "302", step) == DungeonRun::FromResult::NoSuchStep);
+    CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Step, "x", step) == DungeonRun::FromResult::NoSuchStep);
+    CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Leg, "8", step) == DungeonRun::FromResult::Ok && step == 80);
+    CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Leg, "pythas_c", step) == DungeonRun::FromResult::Ok && step == 80);
+    CHECK(fx::ResolvePlacedStart(*plan, DungeonRun::StartFrom::Leg, "nowhere", step) == DungeonRun::FromResult::NoSuchLeg);
+    // The run that starts there: its current step is exactly the one named, and a walk back never goes before it.
+    DungeonRun::Run r = DungeonRun::Start(plan, 53);
+    r.startStep = 53;
+    CHECK(r.step == 53 && DungeonRun::ReplayFloor(r) >= 53);
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 2)
@@ -1278,6 +1302,7 @@ int main(int argc, char** argv)
     TestHealerGateAtTheShamblerCamp(plan);
     TestWalkBackPullsRespawnedPacks(plan);
     TestWalkBackAsksForHostilesAroundTheLead(plan);
+    TestPlacedStartNumbering(plan);
     TestWalk(plan);
     TestUnitsHoldFacts(plan);
     TestDataHoldFacts(plan);

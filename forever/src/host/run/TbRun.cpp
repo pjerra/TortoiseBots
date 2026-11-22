@@ -65,7 +65,7 @@ void CountPulls(RunRec const& rec, uint32& pulls, uint32& done)
         if (plan->steps[i].kind != ai::PlanStepKind::Pull)
             continue;
         ++pulls;
-        if (i < passed && !rec.run.notCleared.count(i) && !listed(rec.run.unreachableSkips, i) && !listed(rec.run.noPathSkips, i)
+        if (i >= rec.run.startStep && i < passed && !rec.run.notCleared.count(i) && !listed(rec.run.unreachableSkips, i) && !listed(rec.run.noPathSkips, i)
             && !listed(rec.run.deferredPulls, i) && !listed(rec.run.deferGivenUp, i))
             ++done;
     }
@@ -1237,7 +1237,7 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs,
     rec->seenState = rec->run.state;
     rec->seenPhase = rec->run.phase;
     rec->seenStep = rec->run.step;
-    Note(*rec, nowMs, "start", 0, plan->name);
+    Note(*rec, nowMs, "start", int32(fromStep), plan->name);
     out.rec = rec;
     return out;
 }

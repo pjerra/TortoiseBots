@@ -469,6 +469,16 @@ inline void ReadStepCreatures(Facts& f, DungeonRun::Run const& run, ai::PlanStep
     (void)toPoint;
 }
 
+// `.tb run start <leader> <plan> from step N | from leg L` (a placed start): the plan index the run begins at. `N` of `from step` is the number
+// `.tb run status` shows as `step=` (the plan index, counted from 0); the policy's resolver (the Turtle `from step`) counts from 1, so it is
+// asked for N + 1. A leg is resolved as the Turtle does. A start inside a scripted event moves back to the step that starts it.
+inline DungeonRun::FromResult ResolvePlacedStart(ai::DungeonPlan const& plan, DungeonRun::StartFrom from, std::string value, std::size_t& step)
+{
+    if (from == DungeonRun::StartFrom::Step && DungeonRun::AllDigits(value))
+        value = std::to_string(std::strtoul(value.c_str(), nullptr, 10) + 1);
+    return DungeonRun::ResolveStartStep(plan, from, value, step);
+}
+
 // A hostile near the step's point on a move step: what is read about it before it is a hop unit.
 struct HopObs
 {
