@@ -3,6 +3,7 @@
 // Pure header: no core or engine headers; unit-tested standalone by forever/tools/test_talents.cpp.
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
@@ -670,6 +671,47 @@ inline std::vector<uint32_t> PlanNextSteps(uint8_t classId, int tab, std::unorde
         }
     }
     return out;
+}
+
+struct FallbackNode
+{
+    int32_t traitNodeId = 0;
+    int32_t traitNodeEntryId = 0;
+    int32_t maxRanks = 0;
+    int32_t posX = 0;
+    int32_t posY = 0;
+    int tab = -1;
+};
+
+// Orders valid talent nodes for fallback spending: mainTab first, then remaining tabs (0..2),
+// and within each tab by row (posY ascending, top to bottom), then left-to-right (posX ascending).
+inline std::vector<FallbackNode> OrderFallbackNodes(std::vector<FallbackNode> nodes, int mainTab)
+{
+    nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [](FallbackNode const& n)
+    {
+        return n.tab < 0 || n.tab > 2 || n.maxRanks <= 0 || n.traitNodeId <= 0 || n.traitNodeEntryId <= 0;
+    }), nodes.end());
+
+    auto tabRank = [mainTab](int tab) -> int
+    {
+        return tab == mainTab ? 0 : (1 + tab);
+    };
+
+    std::sort(nodes.begin(), nodes.end(), [&](FallbackNode const& a, FallbackNode const& b)
+    {
+        int const ta = tabRank(a.tab);
+        int const tb = tabRank(b.tab);
+        if (ta != tb)
+            return ta < tb;
+        if (a.posY != b.posY)
+            return a.posY < b.posY;
+        if (a.posX != b.posX)
+            return a.posX < b.posX;
+        if (a.traitNodeId != b.traitNodeId)
+            return a.traitNodeId < b.traitNodeId;
+        return a.traitNodeEntryId < b.traitNodeEntryId;
+    });
+    return nodes;
 }
 
 } // namespace talents
