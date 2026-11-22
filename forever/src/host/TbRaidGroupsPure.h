@@ -5,8 +5,10 @@
 
 #include "../../../runtime/RaidLayoutPolicy.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace TortoiseBots
@@ -108,6 +110,109 @@ inline std::string SubgroupLine(std::vector<std::string> const& names, std::vect
         if (!lines[sub].empty())
             out += (out.empty() ? "" : ";") + std::to_string(sub + 1) + "=" + lines[sub];
     return out;
+}
+// One member slot of the group, for the subgroup moves of a layout: the seat it holds now and, for a member the layout
+// planned (one in the world), the layout's subgroup. A member that is not in the world still holds its seat in the
+// saved group, so it is planned where it sits: PlanSubgroupMoves then counts it and never plans a move into its subgroup
+// that would make six (review #187, item 1).
+struct SeatFacts
+{
+    uint8_t current = 0;
+    bool planned = false;
+    uint8_t plannedSub = 0;
+};
+
+// The input of RaidLayout::PlanSubgroupMoves for every member slot, the id being the slot's index plus one.
+inline std::vector<RaidLayout::SubgroupMember> LayoutMoves(std::vector<SeatFacts> const& seats)
+{
+    std::vector<RaidLayout::SubgroupMember> out;
+    out.reserve(seats.size());
+    for (size_t i = 0; i < seats.size(); ++i)
+        out.push_back({static_cast<uint64_t>(i + 1), seats[i].current, seats[i].planned ? seats[i].plannedSub : seats[i].current});
+    return out;
+}
+
+// The ops applied the way the host applies them to a Group: a swap always, a plain move only when its subgroup has a
+// free seat (the host checks Group::HasFreeSlotSubGroup first: Group::ChangeMembersGroup itself does not check, only
+// the client's handler does). `at` holds each slot's subgroup (index = id - 1) and is updated. Returns the moves
+// skipped because the subgroup was full.
+inline uint32_t ApplyMovesGuarded(std::vector<uint8_t>& at, std::vector<RaidLayout::SubgroupOp> const& ops)
+{
+    uint32_t skipped = 0;
+    for (RaidLayout::SubgroupOp const& op : ops)
+    {
+        if (op.member == 0 || op.member > at.size())
+            continue;
+        if (op.swap)
+        {
+            if (op.other != 0 && op.other <= at.size())
+                std::swap(at[op.member - 1], at[op.other - 1]);
+            continue;
+        }
+        uint32_t seated = 0;
+        for (uint8_t s : at)
+            seated += s == op.sub ? 1 : 0;
+        if (op.sub >= RaidLayout::kSubgroups || seated >= RaidLayout::kSubgroupSize)
+        {
+            ++skipped;
+            continue;
+        }
+        at[op.member - 1] = op.sub;
+    }
+    return skipped;
+}
+
+// What a layout leaves on a raid for the members that join it later (review #187, item 2): its tanks (the main tank
+// first), which healer heals which tank, and the raid healers. `Id` is the caller's member id (an ObjectGuid on the host).
+// Before a joiner is placed the book is pruned to the raid as it is now, as the legacy PlaceJoinerInRaidLayout counted
+// only present members: a tank that left (or is no tank any more) is dropped with its healer pairs, a healer that left
+// is no longer counted.
+template <typename Id>
+struct HealBook
+{
+    std::vector<Id> tanks;
+    std::vector<std::pair<Id, Id>> tankHealers;   // healer, tank
+    std::vector<Id> raidHealers;
+};
+
+template <typename Id>
+void PruneHealBook(HealBook<Id>& book, std::vector<Id> const& tanksNow, std::vector<Id> const& healersNow)
+{
+    auto const has = [](std::vector<Id> const& v, Id const& id) { return std::find(v.begin(), v.end(), id) != v.end(); };
+    book.tanks.erase(std::remove_if(book.tanks.begin(), book.tanks.end(), [&](Id const& t) { return !has(tanksNow, t); }), book.tanks.end());
+    book.tankHealers.erase(std::remove_if(book.tankHealers.begin(), book.tankHealers.end(),
+        [&](std::pair<Id, Id> const& p) { return !has(healersNow, p.first) || !has(book.tanks, p.second); }), book.tankHealers.end());
+    book.raidHealers.erase(std::remove_if(book.raidHealers.begin(), book.raidHealers.end(),
+        [&](Id const& h) { return !has(healersNow, h); }), book.raidHealers.end());
+}
+
+template <typename Id>
+struct HealPick
+{
+    bool tank = false;   // false: the joiner heals the raid
+    Id id{};             // the tank it heals
+};
+
+// The joining healer's target from the (pruned) book, by RaidLayout::PickJoinerHealTank, and the book updated with it.
+template <typename Id>
+HealPick<Id> PickAndRecordHealer(HealBook<Id>& book, Id const& healer)
+{
+    std::vector<uint32_t> perTank(book.tanks.size(), 0);
+    for (auto const& p : book.tankHealers)
+        for (size_t t = 0; t < book.tanks.size(); ++t)
+            if (book.tanks[t] == p.second)
+                ++perTank[t];
+    int const t = RaidLayout::PickJoinerHealTank(perTank, static_cast<uint32_t>(book.raidHealers.size()));
+    HealPick<Id> pick;
+    if (t >= 0 && static_cast<size_t>(t) < book.tanks.size())
+    {
+        pick.tank = true;
+        pick.id = book.tanks[static_cast<size_t>(t)];
+        book.tankHealers.emplace_back(healer, pick.id);
+    }
+    else
+        book.raidHealers.push_back(healer);
+    return pick;
 }
 }
 }

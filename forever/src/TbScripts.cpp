@@ -535,6 +535,7 @@ public:
         TortoiseBots::HireLifecycle::Instance().OnGroupDisband(group);
 #endif
         TortoiseBots::cmd::NoteGroupDisband(group);
+        TortoiseBots::h3::ForgetLayout(group);
     }
 };
 

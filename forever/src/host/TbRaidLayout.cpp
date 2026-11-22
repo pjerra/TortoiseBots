@@ -6,6 +6,7 @@
 #include "compat/botpch_forever.h"
 
 #include "Group.h"
+#include "GroupMgr.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 
@@ -28,19 +29,32 @@ namespace
 {
 namespace RL = RaidLayout;
 
-// What a layout left on a group, for the members that join it later: its tanks (the main tank first) and how many
-// healers each tank and the raid have.
-struct Applied
-{
-    std::vector<ObjectGuid> tanks;
-    std::vector<uint32> healersPerTank;
-    uint32 raidHealers = 0;
-};
+// What a layout left on a raid, for the members that join it later (raidgroups::HealBook): its tanks (the main tank first), which healer
+// heals which tank, and the raid healers. Pruned to the raid as it is before every joiner is placed; dropped with the group.
+using Applied = raidgroups::HealBook<ObjectGuid>;
+
+RL::Role RoleFor(Player* member);
 
 std::map<ObjectGuid, Applied>& Layouts()
 {
     static std::map<ObjectGuid, Applied> layouts;
     return layouts;
+}
+
+// The book's input from the raid as it is now: the members in the world with the tank role, and those with the healer role.
+void RolesNow(Group* group, Player* except, std::vector<ObjectGuid>& tanks, std::vector<ObjectGuid>& healers)
+{
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        Player* other = ObjectAccessor::FindPlayer(slot.guid);
+        if (!other || !other->IsInWorld() || other == except)
+            continue;
+        RL::Role const role = RoleFor(other);
+        if (role == RL::Role::Tank)
+            tanks.push_back(slot.guid);
+        else if (role == RL::Role::Healer)
+            healers.push_back(slot.guid);
+    }
 }
 
 // The role `.tb state` reports (`role=`): the engine's answer for a bot with one, else the role `.tb role` stored (1 tank, 2 healer).
@@ -97,14 +111,20 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!group->isRaidGroup())
         return Fail(handler, args, "layout", "not-raid", leader->GetName() + "'s group is a party: a layout is for a raid");
 
-    // Every member in the world, real players too: their seats count, so the plan never overfills a subgroup around them.
+    // Every member in the world is planned, real players too. Every member slot holds a seat, the offline ones included (the saved
+    // group keeps them): `slots` lists them all, so the moves below count each seat and never fill a subgroup past five around them.
     std::vector<Player*> players;
     std::vector<raidgroups::MemberFacts> facts;
+    std::vector<ObjectGuid> slots;
+    std::vector<int> playerOfSlot;   // index into players, -1 for a member that is not in the world
     for (Group::MemberSlot const& slot : group->GetMemberSlots())
     {
+        slots.push_back(slot.guid);
+        playerOfSlot.push_back(-1);
         Player* member = ObjectAccessor::FindPlayer(slot.guid);
         if (!member || !member->IsInWorld())
             continue;
+        playerOfSlot.back() = int(players.size());
         raidgroups::MemberFacts f;
         f.name = member->GetName();
         f.role = RoleFor(member);
@@ -121,16 +141,32 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!layout.ok)
         return Fail(handler, args, "layout", "layout-refused", layout.error);
 
-    // The policy names members by a 64-bit id; a Forever guid is 128 bits, so the id is the member's index plus one.
-    std::vector<RL::SubgroupMember> moves;
-    for (size_t i = 0; i < players.size(); ++i)
-        moves.push_back({uint64_t(i + 1), group->GetMemberGroup(players[i]->GetGUID()), layout.placements[i].subgroup});
-    for (RL::SubgroupOp const& op : RL::PlanSubgroupMoves(moves))
+    // The policy names members by a 64-bit id; a Forever guid is 128 bits, so the id is the slot's index plus one. An offline member is
+    // planned where it sits (raidgroups::LayoutMoves). Group::ChangeMembersGroup does not check the target's room (only the client's
+    // handler does), so every plain move is guarded with HasFreeSlotSubGroup as well; a swap keeps both counts.
+    std::vector<raidgroups::SeatFacts> seats;
+    for (size_t s = 0; s < slots.size(); ++s)
     {
-        ObjectGuid const member = players[size_t(op.member - 1)]->GetGUID();
+        raidgroups::SeatFacts seat;
+        seat.current = group->GetMemberGroup(slots[s]);
+        if (playerOfSlot[s] >= 0)
+        {
+            seat.planned = true;
+            seat.plannedSub = layout.placements[size_t(playerOfSlot[s])].subgroup;
+        }
+        seats.push_back(seat);
+    }
+    for (RL::SubgroupOp const& op : RL::PlanSubgroupMoves(raidgroups::LayoutMoves(seats)))
+    {
+        if (op.member == 0 || op.member > slots.size())
+            continue;
+        ObjectGuid const member = slots[size_t(op.member - 1)];
         if (op.swap)
-            group->SwapMembersGroups(member, players[size_t(op.other - 1)]->GetGUID());
-        else
+        {
+            if (op.other != 0 && op.other <= slots.size())
+                group->SwapMembersGroups(member, slots[size_t(op.other - 1)]);
+        }
+        else if (op.sub < RL::kSubgroups && group->HasFreeSlotSubGroup(op.sub))
             group->ChangeMembersGroup(member, op.sub);
     }
 
@@ -149,7 +185,6 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (!group->IsAssistant(tankByIndex[t]))
             group->SetGroupMemberFlag(tankByIndex[t], true, MEMBER_FLAG_ASSISTANT);
     applied.tanks = tankByIndex;
-    applied.healersPerTank.assign(tankByIndex.size(), 0);
 
     Reply reply(handler, args, "layout");
     reply.Begin();
@@ -171,7 +206,7 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (p.healsTank >= 0 && size_t(p.healsTank) < tankByIndex.size())
         {
             ObjectGuid const tank = tankByIndex[size_t(p.healsTank)];
-            ++applied.healersPerTank[size_t(p.healsTank)];
+            applied.tankHealers.emplace_back(players[i]->GetGUID(), tank);
             bool const focus = FocusHeal(players[i], tank);
             focused += focus ? 1 : 0;
             Player* tankPlayer = ObjectAccessor::FindPlayer(tank);
@@ -179,7 +214,7 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else if (p.role == RL::Role::Healer)
         {
-            ++applied.raidHealers;
+            applied.raidHealers.push_back(players[i]->GetGUID());
             rec.S("heals", "raid");
         }
         if (sub != p.subgroup)
@@ -189,6 +224,9 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         reply.Line(rec);
     }
+    // Layouts of groups that are gone (a missed disband) go too, so the table never grows past the raids that exist.
+    for (auto itr = Layouts().begin(); itr != Layouts().end();)
+        itr = sGroupMgr->GetGroupByGUID(itr->first) ? std::next(itr) : Layouts().erase(itr);
     Layouts()[group->GetGUID()] = applied;
     Rec end("layout");
     end.S("leader", leader->GetName()).N("members", players.size()).N("tanks", tankByIndex.size()).N("focus", focused).N("misplaced", misplaced)
@@ -197,13 +235,24 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     return true;
 }
 
+void ForgetLayout(Group* group)
+{
+    if (group)
+        Layouts().erase(group->GetGUID());
+}
+
 int PlaceJoiner(Group* group, Player* member)
 {
-    if (!group || !member || !group->isRaidGroup())
+    if (!group || !member)
         return -1;
     auto const found = Layouts().find(group->GetGUID());
     if (found == Layouts().end())
         return -1;
+    if (!group->isRaidGroup())
+    {
+        Layouts().erase(found);
+        return -1;
+    }
     Applied& applied = found->second;
     RL::JoinFacts facts;
     facts.role = RoleFor(member);
@@ -222,24 +271,29 @@ int PlaceJoiner(Group* group, Player* member)
     RL::JoinSeat const seat = RL::PlanJoinerSubgroup(facts);
     if (!seat.ok)
         return -1;
-    group->ChangeMembersGroup(member->GetGUID(), seat.subgroup);
+    // The core's ChangeMembersGroup does not check the room: guard it, as the client's handler does (the joiner keeps the seat it got).
+    if (seat.subgroup != group->GetMemberGroup(member->GetGUID()))
+    {
+        if (!group->HasFreeSlotSubGroup(seat.subgroup))
+            return -1;
+        group->ChangeMembersGroup(member->GetGUID(), seat.subgroup);
+    }
     if (facts.role == RL::Role::Tank)
     {
         if (!group->IsAssistant(member->GetGUID()))
             group->SetGroupMemberFlag(member->GetGUID(), true, MEMBER_FLAG_ASSISTANT);
         applied.tanks.push_back(member->GetGUID());
-        applied.healersPerTank.push_back(0);
     }
     else if (facts.role == RL::Role::Healer)
     {
-        int const tank = RL::PickJoinerHealTank(applied.healersPerTank, applied.raidHealers);
-        if (tank >= 0 && size_t(tank) < applied.tanks.size())
-        {
-            ++applied.healersPerTank[size_t(tank)];
-            FocusHeal(member, applied.tanks[size_t(tank)]);
-        }
-        else
-            ++applied.raidHealers;
+        // The book as the raid is now (the legacy code counted present members only): a tank that left or is no tank any more is
+        // dropped with its healers, a healer that left is not counted, so the joiner is never pointed at a tank who is not there.
+        std::vector<ObjectGuid> tanksNow, healersNow;
+        RolesNow(group, member, tanksNow, healersNow);
+        raidgroups::PruneHealBook(applied, tanksNow, healersNow);
+        raidgroups::HealPick<ObjectGuid> const pick = raidgroups::PickAndRecordHealer(applied, member->GetGUID());
+        if (pick.tank)
+            FocusHeal(member, pick.id);
     }
     return seat.subgroup;
 }
