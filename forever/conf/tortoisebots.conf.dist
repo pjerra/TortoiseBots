@@ -497,3 +497,8 @@ TortoiseBots.AutoProfessions = 1
 #                     real players or owned alts.
 
 TortoiseBots.AutoTools = 1
+#    TortoiseBots.AutoHunterPet
+#        Description: Hunter bots at level 10 or higher with no pet out and none in their stable receive their race's
+#                     starter pet and its pet spells on login and on level-up. Never replaces an existing pet.
+
+TortoiseBots.AutoHunterPet = 1
