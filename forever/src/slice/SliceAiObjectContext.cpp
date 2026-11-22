@@ -366,7 +366,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (43 of its keys)
+    // the registry of ChatActionContext (48 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -412,6 +412,11 @@ namespace slice
             creators["co"] = [](PlayerbotAI* ai) { return new ChangeCombatStrategyAction(ai); };
             creators["nc"] = [](PlayerbotAI* ai) { return new ChangeNonCombatStrategyAction(ai); };
             creators["formation"] = [](PlayerbotAI* ai) { return new SetFormationAction(ai); };
+            creators["buy back"] = [](PlayerbotAI* ai) { return new BuyBackAction(ai); };
+            creators["corpse run"] = [](PlayerbotAI* ai) { return new CorpseRunAction(ai); };
+            creators["equip"] = [](PlayerbotAI* ai) { return new EquipAction(ai); };
+            creators["free chat shortcut"] = [](PlayerbotAI* ai) { return new FreeChatShortcutAction(ai); };
+            creators["position"] = [](PlayerbotAI* ai) { return new PositionAction(ai); };
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceAction(ai); };
             creators["buff"] = [](PlayerbotAI* ai) { return new BuffAction(ai); };
             creators["tame"] = [](PlayerbotAI* ai) { return new TameAction(ai); };
@@ -583,7 +588,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (20 of its keys)
+    // the registry of ChatTriggerContext (49 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -609,6 +614,35 @@ namespace slice
             creators["co"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "co"); };
             creators["nc"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "nc"); };
             creators["formation"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "formation"); };
+            creators["quest reward"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "quest reward"); };
+            creators["drop"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "drop"); };
+            creators["roll"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "roll"); };
+            creators["share"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "share"); };
+            creators["loot"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "add all loot"); };
+            creators["add all loot"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "add all loot"); };
+            creators["release"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "release"); };
+            creators["repair"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "repair"); };
+            creators["u"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "use"); };
+            creators["use"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "use"); };
+            creators["s"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "s"); };
+            creators["b"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "b"); };
+            creators["trainer"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "trainer"); };
+            creators["attack rti"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "attack rti"); };
+            creators["pull"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "pull"); };
+            creators["end pull"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "end pull"); };
+            creators["accept"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "accept"); };
+            creators["follow target"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "follow target"); };
+            creators["revive"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "revive"); };
+            creators["mail"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "mail"); };
+            creators["ah"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "ah"); };
+            creators["ah bid"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "ah bid"); };
+            creators["ah cancel"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "ah cancel"); };
+            creators["corpse run"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "corpse run"); };
+            creators["e"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "e"); };
+            creators["equip"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "e"); };
+            creators["bb"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "bb"); };
+            creators["free"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "free"); };
+            creators["position"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "position"); };
         }
     };
 
@@ -848,7 +882,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 39, kActions = 143, kTriggers = 161, kValues = 210;
+    constexpr unsigned kStrategies = 39, kActions = 148, kTriggers = 190, kValues = 210;
 }
 }
 

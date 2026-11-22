@@ -220,6 +220,23 @@ CH_KEYS = {
                "stats, help, spells, spell, los, rti, range, save mana, attackers, possible attack targets, co, nc, formation",
     "value": "",
 }
+# R4 of PLAYER-COMMANDS-SPEC ("chat grammar A", forever/docs/PC-R1-NOTES.md has the round table): the chat words whose ACTION is
+# already registered (or whose class is already compiled), so the bot answers the master's word without a new .cpp. The chat
+# strategy's pass-through fires an action of the word's own name, so a word also registers that action when the full build has one;
+# where the strategy names another action (`e` -> equip, `u` -> use, `s` -> sell, `b` -> buy, `bb` -> buy back, `free` -> free chat
+# shortcut, `pull` -> pull my target, `attack rti` -> attack rti target, `accept` -> accept quest, `revive` -> spirit healer,
+# `follow target` -> follow target) only the trigger is new. Left out on purpose: `pullback` (`pullback my target` is not
+# registered; `.tb order pullback` exists), `de react all` (strategy edits of other states: with the behaviour toggles later),
+# `guard` / `wander` / `grind` / `runaway` / `warning` (those strategies are not registered), the value setters (`boost target`,
+# `buff target`, `revive target`, `wait for attack time`, `self res`), `portal` (round 7) and `jump` (D5). Registered keys: forever/docs/PC-R4-NOTES.md.
+PC_CHAT_KEYS = {
+    "strategy": "",
+    "action": "buy back, corpse run, equip, free chat shortcut, position",
+    "trigger": "quest reward, drop, roll, share, loot, add all loot, release, repair, u, use, s, b, trainer, attack rti, pull, "
+               "end pull, accept, follow target, revive, mail, ah, ah bid, ah cancel, "
+               "corpse run, e, equip, bb, free, position",
+    "value": "",
+}
 # W8 (auction house): ah sell/list, ah buy, ah cancel.
 W8_KEYS = {
     "strategy": "",
@@ -253,7 +270,7 @@ CLASS_EXTRAS_KEYS = {
     "trigger": "dispel enrage",
     "value": "warlock spread attacker my aura, warlock spread attacker, warlock spread attacker manual",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
