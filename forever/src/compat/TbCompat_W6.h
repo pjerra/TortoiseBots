@@ -21,6 +21,7 @@ inline uint32 RandomPropertyEnchantIdCompat(uint32, uint8) { return 0; }
 
 
 // equip
+#include "host/TbCommandedEquipPure.h"
 #include "ItemPackets.h"
 #include "runtime/CommandedGroupQuery.h"
 
@@ -76,9 +77,20 @@ struct ScopedExplicitEquipOrder
 };
 }
 
-// D4: auto-equip is ON for free bots only; a bot bound in a commanded/run party never auto-equips
-// unless an explicit order is running.
+// TB rule: commanded bots self-equip iff AiPlayerbot.ClaimedBotSelfEquip
+// (default 1); the explicit `.tb gear upgrade` order always runs.
+// The switch is read in host/TbCommandedEquip.cpp (PlayerbotAIConfig.h needs
+// PlayerbotAI declared first, so the compat header cannot include it).
+namespace tbs_w6
+{
+bool CommandedBotSelfEquipEnabled();
+}
 inline bool MayAutoEquipUpgradesCompat(Player* bot)
 {
-    return bot && (tbs_w6::ExplicitEquipOrderFlag() || !TortoiseBots::BotCommands::IsInCommandedGroup(bot));
+    if (!bot)
+        return false;
+    return TortoiseBots::commandedequip::MayCommandedBotAutoEquip(
+        TortoiseBots::BotCommands::IsInCommandedGroup(bot),
+        tbs_w6::CommandedBotSelfEquipEnabled(),
+        tbs_w6::ExplicitEquipOrderFlag());
 }
