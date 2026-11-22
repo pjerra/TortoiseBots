@@ -580,7 +580,7 @@ inline constexpr TalentStep kBuildSteps[] = {
 inline char const* SpecName(uint8_t classId, int tab)
 {
     if (tab < 0 || tab > 2)
-        return "auto";
+        return "none";
     switch (classId)
     {
         case 1:  return tab == 0 ? "arms" : (tab == 1 ? "fury" : "protection");
@@ -631,6 +631,12 @@ inline int PickSpecTabForBot(uint8_t classId, uint32_t guidLow, int forcedSpecTa
         return 2;
     }
     return 0;
+}
+
+inline bool TalentMatchesClass(int8_t talentClassId, uint8_t targetClassId)
+{
+    // Classic 1.60.1 Talent.db2 leaves ClassID=0 and scopes via TabID; accept 0 or exact match.
+    return talentClassId == 0 || talentClassId == int8_t(targetClassId);
 }
 
 inline size_t BuildStepCount(uint8_t classId, int tab)

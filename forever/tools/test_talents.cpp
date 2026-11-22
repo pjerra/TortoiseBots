@@ -82,9 +82,17 @@ int main()
         }
     }
 
-    // 6. SpecName returns known names.
+    // 6. SpecName returns known names and "none" for unset/out-of-range tab.
     check(std::string(SpecName(1, 2)) == "protection", "warrior tab 2 is protection");
     check(std::string(SpecName(5, 1)) == "holy", "priest tab 1 is holy");
+    check(std::string(SpecName(3, -1)) == "none", "unset tab -1 is none");
+    check(std::string(SpecName(1, 3)) == "none", "out-of-range tab 3 is none");
+
+    // 7. Classic 1.60.1 Talent.db2 leaves ClassID=0; TalentMatchesClass accepts 0 or exact class.
+    check(TalentMatchesClass(0, 1), "ClassID=0 matches warrior");
+    check(TalentMatchesClass(0, 11), "ClassID=0 matches druid");
+    check(TalentMatchesClass(1, 1), "ClassID=1 matches warrior");
+    check(!TalentMatchesClass(2, 1), "ClassID=2 does not match warrior");
 
     if (fails == 0)
         std::printf("PASS: test_talents (all checks passed)\n");
