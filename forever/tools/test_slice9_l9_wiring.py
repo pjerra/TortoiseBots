@@ -1,8 +1,9 @@
 """Wiring pins for slice 9, package L9 (item loot, group loot rolls, the item usage value).
 
-The both-core helpers of forever/src/compat/TbCompat_S9.h have a Turtle twin, ai/cmangos-compat-s9.h, whose bodies are the calls the bot
-always made. These pins prove, by reading the sources, that (1) the two headers define the same helper names, (2) the Turtle bodies hold
-the original expressions, (3) the policy of the slice holds in the code: GREED ONLY, one sink for every vote, no auto-equip wiring, a roll is
+The both-core helpers of forever/src/compat/TbCompat_S9.h have a Turtle twin, ai/cmangos-compat-s9.h, whose bodies hold
+the original expressions. These pins prove, by reading the sources, that (1) the two headers define the same helper names, (2) the Turtle bodies hold
+the original expressions, (3) the policy of the slice holds in the code: HONEST VOTES (TB's need/greed/pass reaches the wire, constrained only by
+the roll's own vote mask), one sink for every vote, no auto-equip, a roll is
 announced once, (4) the two files the package adds are in the slice list and the build reads that list, and (5) the registry keys of the
 package are in the generator (the generator --check and the registry check prove the rest).
 
@@ -54,7 +55,6 @@ class L9Wiring(unittest.TestCase):
 
     def test_turtle_bodies_are_the_original_expressions(self):
         self.assertIn("group->CountRollVote(bot, lootGuid, slot, vote)", body(T_HEADER, "RollVoteCompat"))
-        self.assertIn("return vote;", body(T_HEADER, "GreedOnlyVoteCompat"))
         self.assertIn("loot->LootItemInSlot(slot, bot->GetGUIDLow())", body(T_HEADER, "LootItemOfSlotCompat"))
         self.assertIn("member->IsWithinLootXPDist(target)", body(T_HEADER, "MemberInLootRangeCompat"))
         self.assertIn("creature->GetGroupLootTimer()", body(T_HEADER, "GroupLootTimerCompat"))
@@ -65,18 +65,21 @@ class L9Wiring(unittest.TestCase):
         self.assertIn("using BotRollVote = RollVote;", T_HEADER)
         self.assertIn("FindEquipSlot(proto, NULL_SLOT, true)", body(T_HEADER, "EquipSlotOfProtoCompat"))
 
-    def test_greed_only_on_forevercore(self):
-        # the F helper ignores the vote it is given
-        self.assertIn("return ROLL_GREED;", body(F_HEADER, "GreedOnlyVoteCompat"))
-        # the one sink: RollOnItemInSlot normalises the vote, then asks the helper, THEN votes through the core
+    def test_honest_votes_on_forevercore(self):
+        # no forcing helper anywhere: TB's need/greed/pass reaches the wire
+        self.assertNotIn("GreedOnlyVoteCompat", F_HEADER)
+        self.assertNotIn("GreedOnlyVoteCompat", T_HEADER)
+        self.assertNotIn("GreedOnlyVoteCompat", ROLL)
+        # the one sink: RollOnItemInSlot normalises the vote, then votes through the core
         sink = ROLL[ROLL.index("bool RollAction::RollOnItemInSlot("):]
         sink = sink[:sink.index("\n}\n")]
-        self.assertLess(sink.index("GreedOnlyVoteCompat(vote)"), sink.index("RollVoteCompat("))
+        self.assertIn("RollVoteCompat(", sink)
         # nothing else in the file votes through the core
         self.assertEqual(len(re.findall(r"RollVoteCompat\(", ROLL)), 1)
-        # the F vote is the core's own handler with the typed packet
+        # the F vote constrains the decided vote to the roll's own mask, then sends it
         vote = body(F_HEADER, "RollVoteCompat")
-        self.assertIn("HandleLootRoll(packet)", vote)
+        self.assertIn("TbRollVoteMaskFallback(int(vote), live->GetVoteMask())", vote)
+        self.assertLess(vote.index("TbRollVoteMaskFallback("), vote.index("HandleLootRoll(packet)"))
         self.assertIn("packet.RollType = uint8(vote);", vote)
 
     def test_no_auto_equip_and_no_unfed_roll_keys(self):
