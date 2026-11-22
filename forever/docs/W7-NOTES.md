@@ -52,3 +52,17 @@ Position bot `Testbot` (with copper, Mining Pick `2901`, and Linen Cloth/Thread)
 
 - W4 travel purposes (`gather`, `prof-trainer`) and autonomous route-walking / W6a craft-upgrade loop wait for W4 round C.
 - Skinning (`CorpseSkinnableByCompat`), pickpocketing, fishing, and disenchanting remain in `GatheringLoot`.
+
+## Live result (board ticket #150, 2026-11-22, Waterys Island Test: core b441bf74, main d0d13b9f6)
+
+Run by Audrey in game (Asdasdasd, Horde GM) with host bots; state read from the server log and the database before/after
+(`out/w3-liveproof-150.md` in the worker notes). Setup note: a bot needs `.tb master <bot> <player>` AND `.tb party <player> <bot>`
+(a bot outside the commander's party loses the binding on the next tick, so no engine starts).
+
+- **`gather`: PASS, with a report bug** (own ticket). Homeleek (Herbalism 1) picked a Silverleaf: DB +3 Silverleaf (765), Herbalism 1 -> 2;
+  but the order answered `fail:timeout` (`[W7] gather-fail ... node=1617 reason=timeout`). `StepGatherErrand`'s Casting phase only
+  advances on an open loot window for the node; the herbs reached the bags without the errand seeing it, and 1.5 s after the cast it
+  fails without checking the bags. Fix direction: a bag gain of the node's item (or the node used) after a delivered cast is done.
+- **`craft 3755 1` (Linen Bag): PASS** -> `ord=..:ok`, DB +1 Linen Bag (4238), 3 Coarse Thread and 3 Bolt of Linen Cloth used. In
+  DB2 70959 Linen Bag needs **Bolt of Linen Cloth (2996)**, not Linen Cloth; with raw cloth the order answers `fail:reagents`
+  (`[W7] craft-skip ... reason=reagents`), as it should.

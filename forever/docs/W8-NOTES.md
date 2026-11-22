@@ -73,3 +73,19 @@ Expected:
 
 - **W4 travel purpose**: no W4 travel purpose (`auctioneer`) added yet; bots only use an auctioneer within the W2 walking rule.
 - **W7 trade goods**: `AhReserveTradeGoodsForW7()` currently returns `true` (reserves all trade goods) until W7 lands.
+
+## Live result (board ticket #150, 2026-11-22, Waterys Island Test: core b441bf74, main d0d13b9f6)
+
+Run by Audrey in game (Asdasdasd, Horde GM) with host bots; state read from the server log and the database before/after
+(`out/w3-liveproof-150.md` in the worker notes). Setup note: a bot needs `.tb master <bot> <player>` AND `.tb party <player> <bot>`
+(a bot outside the commander's party loses the binding on the next tick, so no engine starts).
+
+- **`ah sell` / `ah buy`: PASS for a single item.** Seller Horangek undercut a 5000c Raider Shortsword by 5%:
+  `[W8] post bot=Horangek item=15210 count=1 price=4750 deposit=164 result=ok`; buyer Horangeh: `[W8] buy ... price=4750 result=ok`,
+  the sword arrived by mail; the seller's proceeds mail (4677c) is held 1 h by the core (`MailDeliveryDelay = 3600`), then `mail` takes it.
+- Requirements seen live: `TortoiseBots.World.Auction = 1`; the bot must stand within 5 yd of the auctioneer (`GetNPCIfCanInteractWith`,
+  else "Cannot find faction auctioneer nearby"); a price source must exist (a listing of the item, or the core's
+  `AuctionHouseBot.Vanilla.ValueCurve`, else `fail:no-market-or-unit-value`).
+- **Commodities: host bug** (own ticket): the core's `BuildListAuctionItems` sends commodity listings without the `Item` field, and
+  `tbhost::ah::AppendItemsFromResult` skips every listing without it, so the bot never sees a commodity listing (Linen Cloth could not
+  be priced against an existing listing). Fix direction: take item id and count from the posting (`house->GetAuction(id)`).
