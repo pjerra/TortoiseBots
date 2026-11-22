@@ -466,3 +466,11 @@ TortoiseBots.Player.Commands = 1
 #
 
 TortoiseBots.Player.MaxBots = 4
+
+#
+#    TortoiseBots.AutoFood
+#        Description: Pool and free bots receive level-fitting vendor food (and water for mana users) on login and level-up.
+#        Default:     1
+#
+
+TortoiseBots.AutoFood = 1
