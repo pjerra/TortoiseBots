@@ -1,11 +1,11 @@
 // Standalone test of the `totem` addon's core-free half (forever/src/host/TbAddonTotemPure.h):
-//   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_addon_totem.cpp -o /tmp/test_addon_totem && /tmp/test_addon_totem
+//   g++ -std=c++17 -O1 -Wall -Wextra -I. -Iforever/src forever/tools/test_addon_totem.cpp -o /tmp/test_addon_totem && /tmp/test_addon_totem
 // The parse ports TB's `.bot totem` grammar (TortoiseBots/commands/Totem.cpp:229-464); the TOTEM line matches
 // TB's TBM:TOTEM record (Totem.cpp:142-164) which TortoiseBotsForeverManager/BotTotem.lua parses.
 #include "forever/src/host/TbAddonTotemPure.h"
 
+#include <cstdint>
 #include <cstdio>
-#include <string>
 
 namespace totem = TortoiseBots::totem;
 
@@ -104,10 +104,39 @@ static void TestLineFormat()
         "searing totem+windfury totem");
     CHECK(line == "TBM:TOTEM|Garr|earth=none,fire=searing totem,water=auto,air=windfury totem,mode=auto,"
         "known=searing totem+windfury totem");
+    // A short list keeps TB's exact `known` encoding; a trained-everything
+    // shaman drops the list instead of truncating mid-name (the addon reads
+    // a missing `known` as nil and offers the slot's totems, the same shape
+    // an older server sends). Either way the line fits 255 bytes.
+    CHECK(line.size() <= TortoiseBots::addon::pure::kMaxLineBytes);
     CHECK(totem::AckScope(true, "Garr") == "party");
     CHECK(totem::AckScope(false, "Garr") == "bot:Garr");
 }
 
+static void TestLineFits()
+{
+    // A trained-everything shaman: every slot's full list joined, the shape
+    // the live realm truncated mid-`known` at 255 bytes.
+    std::string all;
+    for (int slot = 0; slot < 4; ++slot)
+    {
+        std::uint32_t count = 0;
+        char const* const* choices = ai::TotemChoicesForSlot(slot, count);
+        for (std::uint32_t i = 0; i < count; ++i)
+        {
+            if (!all.empty())
+                all += "+";
+            all += choices[i];
+        }
+    }
+    std::string line = totem::FormatTotemLine("Flivsham", "strength of earth totem", "none",
+        "mana spring totem", "none", "manual", all);
+    CHECK(line.size() <= TortoiseBots::addon::pure::kMaxLineBytes);
+    CHECK(line.find(",known=") == std::string::npos);
+    CHECK(line.find("earth=strength of earth totem") != std::string::npos);
+    CHECK(line.find("water=mana spring totem") != std::string::npos);
+    CHECK(line.find("mode=manual") != std::string::npos);
+}
 int main()
 {
     TestParseSlot();
@@ -115,6 +144,7 @@ int main()
     TestParseSet();
     TestParseModeDropStatus();
     TestLineFormat();
+    TestLineFits();
     if (g_fail)
         std::printf("FAIL %d/%d\n", g_fail, g_checks);
     else

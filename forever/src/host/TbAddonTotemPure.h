@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ai/playerbot/strategy/shaman/ShamanTotemCommandPolicy.h"
+#include "host/TbAddonPure.h"
 
 namespace TortoiseBots
 {
@@ -174,11 +175,19 @@ inline std::string JoinKnown(std::vector<std::string> const& names)
 }
 
 // One TBM:TOTEM record (Totem.cpp:161-163), the line BotTotem.lua parses.
+// TB sends the whole `known` list over chat (no length cap); the addon
+// channel caps at 255 bytes, so a shaman that trained half of Alterac
+// would truncate mid-list and the panel would offer a broken subset. A
+// missing `known` reads as nil (older server) and the panel offers every
+// totem of the slot instead — the server still rejects untrained picks —
+// so the line drops the list when it does not fit, never a prefix of it.
 inline std::string FormatTotemLine(std::string const& bot, std::string const& earth, std::string const& fire,
     std::string const& water, std::string const& air, std::string const& mode, std::string const& known)
 {
-    return "TBM:TOTEM|" + bot + "|earth=" + earth + ",fire=" + fire + ",water=" + water + ",air=" + air +
-        ",mode=" + mode + ",known=" + known;
+    std::string const core = "TBM:TOTEM|" + bot + "|earth=" + earth + ",fire=" + fire + ",water=" + water + ",air=" + air +
+        ",mode=" + mode;
+    std::string const full = core + ",known=" + known;
+    return full.size() <= addon::pure::kMaxLineBytes ? full : core;
 }
 
 // TB's ACK scope (Totem.cpp:291): "party" for a party/raid scope, else the bot.

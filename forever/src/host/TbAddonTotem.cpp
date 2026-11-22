@@ -41,6 +41,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <ctime>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -355,6 +356,7 @@ void HandleTotemVerb(Player* requester, std::string_view args)
             PlayerbotAI* ai = AiOf(bot);
             if (!ai || !IsShamanBot(bot))
                 continue;
+            std::uint32_t placed = 0;
             for (int slot = 0; slot < 4; ++slot)
             {
                 std::string const want = TotemWantForBot(ai, bot, slot);
@@ -363,8 +365,18 @@ void HandleTotemVerb(Player* requester, std::string_view args)
                 if (HasTotemUp(ai, want))
                     continue;
                 if (QueueTotem(ai, bot, want, requester))
-                    ++queued;
+                    ++placed;
             }
+            if (!placed)
+                continue;
+            // The set lands one slot per few ticks (the 4 s drop stagger, with
+            // a queued retry while this stamp is fresh) and the recall refund
+            // stands down for the same window, so the ordered set is not
+            // wiped before it ever stands.
+            if (ai::AiObjectContext* ctx = ai->GetAiObjectContext())
+                if (ai::Value<time_t>* dropStamp = ctx->GetValue<time_t>("manual time", ai::TotemDropTimeKey()))
+                    dropStamp->Set(time(0));
+            queued += placed;
         }
         if (!queued)
         {
