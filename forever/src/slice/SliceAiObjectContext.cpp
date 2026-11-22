@@ -894,11 +894,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-<<<<<<< HEAD
-    constexpr unsigned kStrategies = 39, kActions = 148, kTriggers = 190, kValues = 211;
-=======
-    constexpr unsigned kStrategies = 45, kActions = 148, kTriggers = 190, kValues = 210;
->>>>>>> feat/c-behsvc
+    constexpr unsigned kStrategies = 45, kActions = 148, kTriggers = 190, kValues = 211;
 }
 }
 
