@@ -292,7 +292,7 @@ bool HandleAdd(Player* player, Caller const& caller, OwnerScope const& scope, st
         return true;
     }
     std::uint32_t const gameAccount = entry->AccountId;
-    std::uint32_t const characterBnet = scope.bnet && scope.gameAccounts.count(gameAccount) ? scope.bnet : 0;
+    std::uint32_t const characterBnet = scope.bnet && scope.Owns(gameAccount) ? scope.bnet : 0;
     std::uint32_t const ownedOnline = BotMgr::Instance().OwnedBotsOf(player->GetSession() ? player->GetSession()->GetBattlenetAccountId() : 0);
     if (!MayLoginOwned(caller.account, characterBnet, caller.gm, ownedOnline, s_maxBots, code))
     {
