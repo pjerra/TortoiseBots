@@ -191,6 +191,22 @@ uint32 GearIndexItemCount()
     return Index().totalCount;
 }
 
+std::vector<ai::GearItemCandidate> const& SlotCandidates(uint8 slot)
+{
+    if (!Index().initialized)
+        InitGearIndex();
+    static std::vector<ai::GearItemCandidate> const kEmpty;
+    return slot < Index().bySlot.size() ? Index().bySlot[slot] : kEmpty;
+}
+
+ai::GearItemCandidate const* FindCandidate(uint32 itemId)
+{
+    if (!Index().initialized)
+        InitGearIndex();
+    auto const it = Index().byId.find(itemId);
+    return it != Index().byId.end() ? &it->second : nullptr;
+}
+
 std::vector<GearAuditEntry> AuditGearIndex(uint32 level)
 {
     if (!Index().initialized)

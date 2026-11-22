@@ -27,6 +27,7 @@
 #include "ScriptMgr.h"
 #include "WorldSession.h"
 #include "host/TbOrdersApi.h"
+#include "host/TbAutogear.h"
 
 #include <algorithm>
 #include <cctype>
@@ -457,6 +458,8 @@ bool Dispatch(Player* player, std::string_view rest)
         return HandleLogout(player, caller, scope, AfterFirstWord(rest));
     if (verb == "follow" || verb == "stay" || verb == "attack" || verb == "flee")
         return HandleOrderVerb(player, caller, scope, verb, AfterFirstWord(rest));
+    if (verb == "autogear")
+        return autogear::HandleBotAutogear(player, caller.gm, caller.account, AfterFirstWord(rest));
 
     Refuse(player, verb, "unknown-verb", "no such command; try .bot help");
     return true;
