@@ -62,8 +62,9 @@ who is not a tank; real players in the raid are planned too, so the plan never o
 - `tools/test_forever_raid_groups_wiring.py`: the call sites (join plan in Login/JoinParty, convert after invite and before add,
   toggle default = template, `layout` registration, stub and engine-only source, policy calls, `.tb party` cap and joiner seat, slice key).
 - `forever/tools/raid_groups_check.py`: the headless live check (world console only, no client). It forms a raid of host bots with
-  `.tb party`, sets `.tb master`, applies `.tb layout`, reads the roster back and checks the subgroups, the five-per-subgroup cap
-  and the marks; `--offline <member>` logs one member out and checks the cap again after a second layout. It needs `docker exec`
+  `.tb party`, optionally sets `.tb master` (`--commander`), applies `.tb layout`, reads the roster back and checks the subgroups,
+  the five-per-subgroup cap and the marks; `--offline <member>` logs one member out and checks the cap again after a second layout
+  (a host bot leaves the raid when it logs out, so only a real player's character stays as an offline member). It needs `docker exec`
   and a container path: a dev-box tool, not part of `tools/verify_all.sh`.
 
 ### Live check

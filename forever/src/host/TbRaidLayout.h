@@ -18,8 +18,9 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 
 // A member that joined `group` after its layout was applied: only it is placed (the subgroup of its role, an off-tank
 // mark for a tank, a tank or the raid for a healer); nobody else moves. Nothing happens without an applied layout.
-// Returns the subgroup it took (0-7), or -1 when it was not placed.
-int PlaceJoiner(Group* group, Player* member);
+// Returns the subgroup it took (0-7), or -1 when it was not placed. `heals`, when given, gets a healer's target: the tank's name or
+// "raid" (empty for any other role).
+int PlaceJoiner(Group* group, Player* member, std::string* heals = nullptr);
 
 // The group is gone (GroupScript::OnDisband): its layout record goes with it.
 void ForgetLayout(Group* group);

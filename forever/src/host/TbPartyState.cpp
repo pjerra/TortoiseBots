@@ -692,8 +692,11 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 if (Group* group = member->GetGroup(); group && group->isRaidGroup())
                 {
                     // A raid with a layout seats the newcomer by its role; without one it stays where the core put it (the first free seat).
-                    PlaceJoiner(group, member);
+                    std::string heals;
+                    PlaceJoiner(group, member, &heals);
                     rec.N("sub", group->GetMemberGroup(member->GetGUID()) + 1);
+                    if (!heals.empty())
+                        rec.S("heals", heals);
                 }
             }
             else

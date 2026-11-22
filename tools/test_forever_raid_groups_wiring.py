@@ -108,7 +108,8 @@ class RaidGroupsWiring(unittest.TestCase):
     def test_party_forming_caps_by_the_toggle_and_places_joiners(self):
         party = body(read("forever/src/host/TbPartyState.cpp"), "bool HandleParty(")
         self.assertIn("raidgroups::MaxNamedMembers(raids)", party)
-        self.assertIn("PlaceJoiner(group, member)", party)
+        self.assertIn("PlaceJoiner(group, member, &heals)", party)
+        self.assertIn('rec.S("heals", heals)', party)
         self.assertIn('if (slot.group < MAX_RAID_SUBGROUPS)', party)
         self.assertLess(party.index("if (slot.group < MAX_RAID_SUBGROUPS)"), party.index('rec.N("sub", slot.group + 1)'))
 

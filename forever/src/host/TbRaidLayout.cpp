@@ -264,7 +264,7 @@ void ForgetLayout(Group* group)
         Layouts().erase(group->GetGUID());
 }
 
-int PlaceJoiner(Group* group, Player* member)
+int PlaceJoiner(Group* group, Player* member, std::string* heals)
 {
     if (!group || !member)
         return -1;
@@ -317,6 +317,11 @@ int PlaceJoiner(Group* group, Player* member)
         raidgroups::HealPick<ObjectGuid> const pick = raidgroups::PickAndRecordHealer(applied, member->GetGUID());
         if (pick.tank)
             FocusHeal(member, pick.id);
+        if (heals)
+        {
+            Player* tank = pick.tank ? ObjectAccessor::FindPlayer(pick.id) : nullptr;
+            *heals = pick.tank ? (tank ? std::string(tank->GetName()) : pick.id.ToString()) : std::string("raid");
+        }
     }
     return seat.subgroup;
 }

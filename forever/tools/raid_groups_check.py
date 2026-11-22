@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Headless raid-groups check: a raid of host bots forms through `.tb party` and takes the raid layout (no game client).
 
-    python3 forever/tools/raid_groups_check.py --container <world container> LEADER MEMBER... [--no-master] [--offline MEMBER] [--keep]
+    python3 forever/tools/raid_groups_check.py --container <world container> LEADER MEMBER... [--commander NAME] [--offline MEMBER] [--keep]
 
 Needs a world server built with TORTOISEBOTS_SLICE1, TortoiseBots.Raid.Enable = 1, and 5 to 39 logged-in host bots
 besides LEADER that are in no group; at least one of them (or LEADER) has the tank role. The console is reached the way
@@ -10,13 +10,15 @@ back from the container log by the `#token` every `.tb` reply carries.
 
 Steps and what must hold:
   1. `.tb party LEADER MEMBER...`  every member joined, the group is a raid (`raid=yes`)
-  2. `.tb master party LEADER LEADER` (unless --no-master): the bots get their engines, so tank healers can take their focus
-  3. `.tb layout LEADER`           every member placed (`members=` = all, `misplaced=0`), exactly one main tank; after step 2
-                                   every tank healer that is a host bot has `focus=yes`
+  2. --commander NAME: `.tb master party LEADER NAME` (a bot cannot command itself: NAME is a character outside the raid, a
+     GM's own one in the game); the bots get their engines, so tank healers can take their focus
+  3. `.tb layout LEADER`           every member placed (`members=` = all, `misplaced=0`), exactly one main tank; with
+                                   --commander every tank healer has `focus=yes`
   4. `.tb party LEADER`            the roster's subgroups are the layout's, no subgroup holds more than five, the main
                                    tank carries the `maintank` mark and each off-tank the `assistant` mark
-  5. --offline MEMBER: `.tb logout MEMBER`, then `.tb layout LEADER` again and the roster: the offline member keeps its seat
-     and no subgroup holds more than five (review #187 item 1); afterwards MEMBER logs in again
+  5. --offline MEMBER: `.tb logout MEMBER`, then `.tb layout LEADER` again and the roster: no subgroup holds more than five
+     (review #187 item 1). A host bot leaves its raid when it leaves the world, so only a REAL player's character stays as an
+     offline member: with a host bot the check reports that it left instead of judging its seat; afterwards MEMBER logs in again
   6. unless --keep: `.tb ungroup` for every member (the leader's group dissolves with them)
 Exit 0 on PASS, 1 on FAIL, 2 on a usage or console error. Prints every reply line it judged.
 A dev-box tool (docker exec, a container path): not part of tools/verify_all.sh.
@@ -62,7 +64,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--container", required=True)
     ap.add_argument("--keep", action="store_true", help="leave the raid formed")
-    ap.add_argument("--no-master", action="store_true", help="skip `.tb master` before the layout (focus=no is then expected)")
+    ap.add_argument("--commander", metavar="NAME", help="run `.tb master party LEADER NAME` before the layout and expect focus=yes")
     ap.add_argument("--offline", metavar="MEMBER", help="log this member out and check the layout's five-per-subgroup cap again")
     ap.add_argument("names", nargs="+")
     a = ap.parse_args()
@@ -88,8 +90,8 @@ def main():
     if a.offline and a.offline not in members:
         print("--offline names a member of the list")
         return 2
-    if not a.no_master:
-        for l in c.tb(f"master party {leader} {leader}"):
+    if a.commander:
+        for l in c.tb(f"master party {leader} {a.commander}"):
             print("  " + l)
         time.sleep(3)   # the engines are built on the next bot ticks
 
@@ -103,7 +105,7 @@ def main():
     mains = [n for n, r in rows.items() if r.get("tank") == "main"]
     check(len(mains) == 1, f"layout: one main tank ({','.join(mains) or 'none'})")
     healers = [n for n, r in rows.items() if r.get("heals") not in (None, "", "raid")]
-    if not a.no_master:
+    if a.commander:
         check(all(rows[n].get("focus") == "yes" for n in healers), f"layout: {len(healers)} tank healer(s) took their focus")
 
     roster = c.tb(f"party {leader}")
@@ -130,7 +132,8 @@ def main():
             now = roster_rows()
             if now.get(a.offline, {}).get("online") == "no":
                 break
-        check(now.get(a.offline, {}).get("online") == "no", f"offline: {a.offline} is an offline member of the raid")
+        stayed = now.get(a.offline, {}).get("online") == "no"
+        print(f"note offline: {a.offline} " + ("is an offline member of the raid" if stayed else "left the raid when it left the world (a host bot does)"))
         again = c.tb(f"layout {leader}")
         for l in again:
             print("  " + l)
@@ -140,7 +143,8 @@ def main():
         per = Counter(r.get("sub") for r in now.values())
         check(all(n <= 5 for n in per.values()), "offline: no subgroup holds more than five (" +
               ", ".join(f"{s}:{n}" for s, n in sorted(per.items())) + ")")
-        check(now.get(a.offline, {}).get("sub") == seat, f"offline: {a.offline} kept its seat (sub={seat})")
+        if stayed:
+            check(now.get(a.offline, {}).get("sub") == seat, f"offline: {a.offline} kept its seat (sub={seat})")
         c.send(f"tb login {a.offline}")
         for _ in range(40):
             time.sleep(1)
