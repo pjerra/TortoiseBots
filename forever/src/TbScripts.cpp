@@ -97,6 +97,7 @@
 #include "host/TbAddonRoster.h"
 #include "host/TbAddonBlessing.h"
 #include "host/TbAddonChoice.h"
+#include "host/TbAddonInv.h"
 #include "host/TbAddonBehaviorService.h"
 #include "host/TbAddonTrade.h"
 #include "host/player/TbPlayerCmd.h"
@@ -1760,6 +1761,7 @@ void AddSC_tortoisebots()
     TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
     TortoiseBots::choice::RegisterAddonVerbsChoice();   // #133 c-choice: `choice` verb + `choice` cap (host/TbAddonChoice.cpp)
     TortoiseBots::behsvc::RegisterAddonVerbsBehaviorService(); // #133 c-behsvc: `behavior` + `service` addon verbs
+    TortoiseBots::inv::RegisterAddonVerbsInv();   // #134 i-inv: the `inv`/`inventory`/`item` verbs + `inventory` cap (host/TbAddonInv.cpp)
     TortoiseBots::trade::RegisterAddonVerbsTrade(); // #134 P134-C: `trade` addon verb + trade window driver
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
