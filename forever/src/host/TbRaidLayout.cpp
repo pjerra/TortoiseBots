@@ -58,14 +58,16 @@ void RolesNow(Group* group, Player* except, std::vector<ObjectGuid>& tanks, std:
     }
 }
 
-// The role `.tb state` reports (`role=`): the engine's answer for a bot with one, else the role `.tb role` stored (1 tank, 2 healer).
+// The member's role (review #187 item 4): PlayerbotAI::IsTank / IsHeal, which need no engine: the role `.tb role` stored first, then a bot's
+// engine (its forced role and its tank or heal strategy) when it has one, else the class and talents (AiFactory::GetPlayerRoles, the slice's
+// EffectiveRole). So a layout right after `.tb party`, before `.tb master` gave the bots their engines, still finds the tanks and healers of
+// a raid whose roles were never set; real players are read the same way. `.tb state` reports `none` for a bot without an engine and no
+// stored role: the layout's read is wider on purpose.
 RL::Role RoleFor(Player* member)
 {
-    bool const engine = PlayerbotAIStorage::Instance().GetAI(member) != nullptr;
-    uint8 const forced = PlayerbotAIStorage::Instance().GetPlayerForcedRole(member->GetGUID());
-    if (engine ? PlayerbotAI::IsTank(member, true) : forced == 1)
+    if (PlayerbotAI::IsTank(member, true))
         return RL::Role::Tank;
-    if (engine ? PlayerbotAI::IsHeal(member, true) : forced == 2)
+    if (PlayerbotAI::IsHeal(member, true))
         return RL::Role::Healer;
     return RL::Role::Damage;
 }

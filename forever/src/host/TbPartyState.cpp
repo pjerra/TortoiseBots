@@ -704,7 +704,7 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         Group const* formed = leader->GetGroup();
         bool const raid = formed && formed->isRaidGroup();
         end.S("leader", leader->GetName()).N("joined", joined).N("asked", args.w.size() - 1).B("raid", raid)
-            .S("note", raid ? "the host master is the leader: run .tb layout, then .tb master" : "the host master is the leader: run .tb master next");
+            .S("note", raid ? "the host master is the leader: run .tb master, then .tb layout (tank healers get their focus once they have an engine)" : "the host master is the leader: run .tb master next");
         reply.End(end);
         return true;
     }
