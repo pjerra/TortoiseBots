@@ -88,27 +88,30 @@ Creature* TameAction::FindTarget(std::string const& mode, std::string const& val
         }
     }
 
-    std::list<ObjectGuid> nearby = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
-    for (ObjectGuid const& guid : nearby)
+    for (char const* valueName : { "possible targets", "nearest npcs", "attackers" })
     {
-        Creature* creature = botAI->GetCreature(guid);
-        if (!creature || !creature->GetCreatureInfo())
-            continue;
-
-        CreatureInfo const* info = creature->GetCreatureInfo();
-        if (mode == "guid" && guid.GetCounter() != guidCounter)
-            continue;
-        if (mode == "id" && creature->GetEntry() != entry)
-            continue;
-        if (mode == "name" && Lower(creature->GetName()) != needle)
-            continue;
-        if (mode == "family")
+        std::list<ObjectGuid> nearby = AI_VALUE(std::list<ObjectGuid>, valueName);
+        for (ObjectGuid const& guid : nearby)
         {
-            std::string const familyName = CreatureFamilyNameCompat(info);
-            if (familyName.empty() || Lower(familyName) != needle)
+            Creature* creature = botAI->GetCreature(guid);
+            if (!creature || !creature->GetCreatureInfo())
                 continue;
+
+            CreatureInfo const* info = creature->GetCreatureInfo();
+            if (mode == "guid" && guid.GetCounter() != guidCounter)
+                continue;
+            if (mode == "id" && creature->GetEntry() != entry)
+                continue;
+            if (mode == "name" && Lower(creature->GetName()) != needle)
+                continue;
+            if (mode == "family")
+            {
+                std::string const familyName = CreatureFamilyNameCompat(info);
+                if (familyName.empty() || Lower(familyName) != needle)
+                    continue;
+            }
+            return creature;
         }
-        return creature;
     }
 
     return nullptr;
@@ -156,6 +159,7 @@ bool TameAction::AbandonPet(Player* requester)
     }
 
     RemovePetCompat(bot);
+    ai->SetPetAbandoned(true);
     ai->TellPlayer(requester, "Pet abandoned.");
     return true;
 }
@@ -223,6 +227,7 @@ bool TameAction::Execute(Event& event)
         return false;
     }
 
+    ai->SetPetAbandoned(false);
     ai->TellPlayer(requester, "Taming " + std::string(target->GetName()) + ".");
     return true;
 }

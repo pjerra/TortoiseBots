@@ -132,7 +132,22 @@ namespace ai
     public:
         UsePotionAction(PlayerbotAI* ai, std::string name, SpellEffects effect) : UseItemIdAction(ai, name), effect(effect) {}
 
-        bool isUseful() override { return UseItemIdAction::isUseful() && AI_VALUE2(bool, "combat", "self target"); }
+        bool isUseful() override
+        {
+            if (!UseItemIdAction::isUseful())
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", bot->GetName(), GetItemId());
+                return false;
+            }
+            if (!AI_VALUE2(bool, "combat", "self target"))
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", bot->GetName());
+                return false;
+            }
+            return true;
+        }
 
         virtual uint32 GetItemId() override
         {
@@ -219,7 +234,22 @@ namespace ai
     public:
         UseHealthstoneAction(PlayerbotAI* ai) : UseItemIdAction(ai, "healthstone") {}
 
-        bool isUseful() override { return UseItemIdAction::isUseful() && AI_VALUE2(bool, "combat", "self target"); }
+        bool isUseful() override
+        {
+            if (!UseItemIdAction::isUseful())
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", bot->GetName(), GetItemId());
+                return false;
+            }
+            if (!AI_VALUE2(bool, "combat", "self target"))
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", bot->GetName());
+                return false;
+            }
+            return true;
+        }
 
         uint32 GetItemId() override
         {

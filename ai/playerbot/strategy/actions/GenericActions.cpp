@@ -195,6 +195,7 @@ bool InitializePetAction::isUseful()
     // Cheap enough for the "often" trigger: a handful of map lookups.
     if (Pet* pet = bot->GetPet())
     {
+        ai->SetPetAbandoned(false);
         // Presence-flip tracking for the stored-pet cache below.
         storedPetLookup.ShouldQuery(true, time(nullptr));
         if (!PlayerbotFactory::PetAutoTrainAllowed(bot))
@@ -223,6 +224,8 @@ bool InitializePetAction::isUseful()
     {
         if (bot->GetClass() == CLASS_HUNTER)
         {
+            if (ai->IsPetAbandoned())
+                return false;
             // Issue #1178: the character_pet query below runs on the "often"
             // trigger, but its answer only changes when the pet state changes.
             // Ask the cache first; it re-queries at most once per live-pet
