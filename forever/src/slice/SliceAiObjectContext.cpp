@@ -621,7 +621,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (209 of its keys)
+    // the registry of ValueContext (210 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -717,6 +717,7 @@ namespace slice
             creators["my attacker count"] = [](PlayerbotAI* ai) { return new MyAttackerCountValue(ai); };
             creators["my threat"] = [](PlayerbotAI* ai) { return new MyThreatValue(ai); };
             creators["nearest adds"] = [](PlayerbotAI* ai) { return new NearestAddsValue(ai); };
+            creators["nearest area triggers no los"] = [](PlayerbotAI* ai) { return new NearestAreaTriggers(ai, kTrapScanRangeYd); };
             creators["nearest damaging traps"] = [](PlayerbotAI* ai) { return new NearestDamagingTrapsValue(ai); };
             creators["nearest dynamic objects no los"] = [](PlayerbotAI* ai) { return new NearestDynamicObjects(ai, kTrapScanRangeYd, LOS_IGNORE); };
             creators["nearest friendly players"] = [](PlayerbotAI* ai) { return new NearestFriendlyPlayersValue(ai); };
@@ -840,7 +841,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 38, kActions = 139, kTriggers = 160, kValues = 209;
+    constexpr unsigned kStrategies = 38, kActions = 139, kTriggers = 160, kValues = 210;
 }
 }
 
