@@ -147,12 +147,6 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
     h3::Reply reply(handler, args, "cmd");
     reply.Begin();
     uint32 const refused = uint32(refusals.size());
-    for (Refusal const& refusal : refusals)
-    {
-        h3::Rec rec("cmd");
-        rec.S("bot", refusal.bot->GetName()).S("verb", verb).S("status", "refused").S("code", refusal.code).T("msg", refusal.detail);
-        reply.Line(rec);
-    }
 
     std::string const result = named.empty() ? "party " + std::to_string(queued) : "bot:" + addressed.front()->GetName() + " 1";
     h3::Rec head("cmd");
@@ -164,6 +158,13 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
     if (refused)
         head.N("refused", int64(refused));
     reply.Line(head);
+    // The accepted line first, then a row per refused bot (TB-COMMANDS.md section 23).
+    for (Refusal const& refusal : refusals)
+    {
+        h3::Rec rec("cmd");
+        rec.S("bot", refusal.bot->GetName()).S("verb", verb).S("status", "refused").S("code", refusal.code).T("msg", refusal.detail);
+        reply.Line(rec);
+    }
     Player* leadPlayer = ObjectAccessor::FindPlayer(lead);
     h3::Rec end("cmd");
     end.S("verb", verb).S("lead", leadPlayer ? std::string(leadPlayer->GetName()) : h3::GuidText(lead))

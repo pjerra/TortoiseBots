@@ -144,6 +144,27 @@ def check_applykit_keeps_guard(src):
         raise AssertionError("ApplyKit does not keep the guard movement mode")
 
 
+def check_preflight_alive_first(src):
+    body = function_body(strip_comments(src), "bool Preflight(Player* bot")
+    alive = body.find("if (!bot->IsAlive())")
+    first_verb = body.find('if (verb == "stop")')
+    if alive < 0 or '"not-alive"' not in body:
+        raise AssertionError("tactics::Preflight does not refuse a dead bot with not-alive")
+    if first_verb < 0 or alive > first_verb:
+        raise AssertionError("the dead-bot refusal must come before every verb's own branch")
+
+
+def check_cmd_missing_verb_lists_m1(src):
+    c = strip_comments(src)
+    start = c.find('"missing-verb"')
+    if start < 0:
+        raise AssertionError("HandleCmd lost its missing-verb answer")
+    line = c[start:c.find("\n", start)]
+    for verb in M1_VERBS:
+        if verb not in line:
+            raise AssertionError(f"the `.tb cmd` missing-verb text does not list `{verb}`")
+
+
 SOURCES = {
     "orders": lambda: read(HOST / "TbOrders.cpp"),
     "cmd_orders": lambda: read(CMD / "TbCmdOrders.cpp"),
@@ -187,6 +208,12 @@ class Wiring(unittest.TestCase):
     def test_applykit_keeps_guard(self):
         check_applykit_keeps_guard(self.sources["orders"])
 
+    def test_preflight_refuses_a_dead_bot_for_every_verb(self):
+        check_preflight_alive_first(self.sources["tactics"])
+
+    def test_cmd_missing_verb_lists_the_m1_verbs(self):
+        check_cmd_missing_verb_lists_m1(self.sources["cmd_orders"])
+
 
 MUTATIONS = [
     ("drop-stop-verb", "orders", lambda s: re.sub(r'"stop",', "", s, count=1), check_is_verb),
@@ -199,6 +226,8 @@ MUTATIONS = [
     ("drop-w4-guard", "w4", lambda s: s.replace("ai/playerbot/strategy/generic/GuardStrategy.cpp\n", ""), check_slice_w4),
     ("shrink-need-action", "orders", lambda s: s.replace("needAction[3]", "needAction[2]"), check_need_action),
     ("drop-applykit-guard", "orders", lambda s: s.replace('ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT)', 'ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)'), check_applykit_keeps_guard),
+    ("drop-alive-refusal", "tactics", lambda s: s.replace("if (!bot->IsAlive())", "if (false)", 1), check_preflight_alive_first),
+    ("cmd-missing-verb-old-list", "cmd_orders", lambda s: s.replace(", stop, flee, guard, stance, engage, rebuff\");", "\");", 1), check_cmd_missing_verb_lists_m1),
 ]
 
 

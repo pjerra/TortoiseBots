@@ -42,16 +42,16 @@ result=party%20<n>|bot:<name>%201 [stance=] [seconds=] [refused=]`, a row per re
 answer is the one-line `error`. Codes: `not-alive`, `in-combat`, `action-not-registered` (with `name=`), `strategy-not-registered:guard`,
 `value-not-registered`, `bad-argument`, `missing-argument`, `unexpected-argument`, `no-bot`, `disabled`.
 
-Rebuffed at command time, on purpose: the argument parsers run once per command (not per bot), so a party order cannot half-queue on a
+Refused at command time, on purpose: the argument parsers run once per command (not per bot), so a party order cannot half-queue on a
 typo.
 
 ## Tests
 
 Failing first, on the tree before the fix: `test_tactics_wiring.py` failed 10 of 10 (every verb, both dispatch points, the engage rule,
 the rebuff anchor, the slice keys, the `ah` bound, the `ApplyKit` guard); `test_tactics_pure.cpp` did not compile (no header). After the
-fix: pure test 29 checks pass; wiring 10 tests pass; `TACTICS_MUTATE=1` catches all 10 mutations (dropped verb, skipped dispatches,
+fix: pure test 29 checks pass; wiring 12 tests pass; `TACTICS_MUTATE=1` catches all 12 mutations (dropped verb, skipped dispatches,
 dropped stop body, `run-end` instead of `order`, renamed rebuff anchor, dropped slice key, dropped W4 file, `needAction[2]`, dropped
-`ApplyKit` guard). `slice_gen_context.py --check` and `slice_registry_check.py` pass.
+`ApplyKit` guard, dropped dead-bot refusal, the old `.tb cmd` missing-verb list). `slice_gen_context.py --check` and `slice_registry_check.py` pass.
 
 ## Not in M1
 

@@ -64,17 +64,17 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
         detail = std::string("the legacy action `") + key + "` is not registered in this build";
         return false;
     };
+    // Every tactical verb needs a live bot (spec D2, and TB's own rule): a dead bot cannot stop, flee, guard, take a stance, engage or
+    // rebuff, and a queued order would only run into its resurrection.
+    if (!bot->IsAlive())
+    {
+        code = "not-alive";
+        detail = "the bot is dead";
+        return false;
+    }
     std::string const& verb = spec.verb;
     if (verb == "stop")
-    {
-        if (!bot->IsAlive())
-        {
-            code = "not-alive";
-            detail = "the bot is dead";
-            return false;
-        }
         return true;
-    }
     if (verb == "flee")
         return need("flee chat shortcut");
     if (verb == "guard")
