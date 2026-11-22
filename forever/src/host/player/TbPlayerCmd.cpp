@@ -3,6 +3,7 @@
 // and is tested standalone by forever/tools/test_player_auth.cpp.
 #include "host/player/TbPlayerCmd.h"
 #include "host/player/TbPlayerAuthPure.h"
+#include "host/player/TbUpkeep.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -187,6 +188,7 @@ bool HandleHelp(Player* player, Caller const& caller)
     // Every player may add and log out its own characters (D-7), so the owner rows are shown to all: a new owner owns no bot yet.
     Say(player, "TortoiseBots: help: .bot add <name> - log one of your own characters in as a bot (it joins your party)");
     Say(player, "TortoiseBots: help: .bot logout <bot> - log your bot out");
+    Say(player, "TortoiseBots: help: .bot maintenance <bot> - refresh your bot's kit and repair (when enabled)");
     return true;
 }
 
@@ -393,6 +395,59 @@ bool HandleOrderVerb(Player* player, Caller const& caller, OwnerScope const& sco
     return true;
 }
 
+// Piece E upkeep (ticket #137): TB's `.bot maintenance` for owned bots. The
+// owner tier is the pure rule (TierOf("maintenance") is Owner: the caller
+// owns the bot or is a GameMaster); pool bots, the disabled flag and dead
+// bots are the pure upkeep checklist. The work itself is upkeep::Run.
+bool HandleMaintenance(Player* player, Caller const& caller, OwnerScope const& scope, std::string_view tail)
+{
+    std::string_view const name = FirstWord(tail);
+    if (name.empty())
+    {
+        Refuse(player, "maintenance", "usage", ".bot maintenance <bot>");
+        return true;
+    }
+    Player* bot = nullptr;
+    std::string code;
+    if (!ResolveBot(name, bot, code))
+    {
+        Refuse(player, "maintenance", code.c_str(), code == "not-found" ? "no such online bot" : "that character is not a bot");
+        return true;
+    }
+    BotFacts const facts = FactsOf(player, bot, scope);
+    Verdict const verdict = Decide(caller, facts, TierOf("maintenance"));
+    if (verdict != Verdict::Allowed)
+    {
+        Refuse(player, "maintenance", CodeOf(verdict), "you may not maintain that bot");
+        return true;
+    }
+    upkeep::Input in;
+    in.enabled = upkeep::IsEnabled();
+    in.poolBot = BotMgr::Instance().IsPoolBot(bot->GetGUID());
+    in.alive = bot->IsAlive();
+    upkeep::Refusal const refusal = upkeep::Decide(in);
+    if (refusal != upkeep::Refusal::None)
+    {
+        char const* text = "";
+        if (refusal == upkeep::Refusal::Pool)
+            text = "pool bots keep progressing organically";
+        else if (refusal == upkeep::Refusal::Disabled)
+            text = "owned-bot maintenance is disabled (AiPlayerbot.OwnedBotMaintenanceEnabled = 0)";
+        else
+            text = "that bot must be alive";
+        Refuse(player, "maintenance", upkeep::CodeOf(refusal), text);
+        return true;
+    }
+    upkeep::Summary summary;
+    if (!upkeep::Run(bot, summary))
+    {
+        Refuse(player, "maintenance", "failed", "maintenance did not run");
+        return true;
+    }
+    Say(player, "TortoiseBots: maintenance " + bot->GetName() + ": ok " + upkeep::Describe(summary));
+    return true;
+}
+
 // Fills the pure rule's facts from the live objects: the bot table for the guid and the master, the character cache's game
 // account checked against the caller's Battle.net account, the commander binding, the bot's party and the run gate.
 // `account` is the bot's Battle.net account when it is the caller's, else 0 ("not the caller's": never an owner match).
@@ -457,6 +512,8 @@ bool Dispatch(Player* player, std::string_view rest)
         return HandleLogout(player, caller, scope, AfterFirstWord(rest));
     if (verb == "follow" || verb == "stay" || verb == "attack" || verb == "flee")
         return HandleOrderVerb(player, caller, scope, verb, AfterFirstWord(rest));
+    if (verb == "maintenance")
+        return HandleMaintenance(player, caller, scope, AfterFirstWord(rest));
 
     Refuse(player, verb, "unknown-verb", "no such command; try .bot help");
     return true;
