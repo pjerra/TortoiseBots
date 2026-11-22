@@ -73,6 +73,13 @@ static void TestMethod()
     CHECK(tk::JudgeLootMethod(order("lootmethod group epic")).ok);
     CHECK(tk::JudgeLootMethod(order("lootmethod master")).ok);
     CHECK(tk::JudgeLootMethod(order("lootmethod nbg")).ok);
+    CHECK(tk::ChooseLootMaster(RC::kLootMaster, true) == tk::LootMasterTarget::BoundMaster);
+    CHECK(tk::ChooseLootMaster(RC::kLootMaster, false) == tk::LootMasterTarget::GroupLeader);
+    for (int m : { RC::kLootFfa, RC::kLootRoundRobin, RC::kLootGroup, RC::kLootNeedBeforeGreed })
+    {
+        CHECK(tk::ChooseLootMaster(m, true) == tk::LootMasterTarget::Empty);
+        CHECK(tk::ChooseLootMaster(m, false) == tk::LootMasterTarget::Empty);
+    }
     tk::MethodVerdict v = tk::JudgeLootMethod(order("lootmethod group common"));      // the core refuses a threshold below uncommon
     CHECK(!v.ok && v.code == "invalid");
     // the core's methods as the policy reads them: PERSONAL_LOOT (5) and anything unknown are "no method"

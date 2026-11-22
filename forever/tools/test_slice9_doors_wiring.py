@@ -109,6 +109,10 @@ class TaskModule(unittest.TestCase):
         body = func(TASKS, "OrderAnswer SetLootMethodForParty(")
         self.assertLess(body.index("HandleSetLootMethodOpcode("), body.index("group->GetLootMethod()"))
         self.assertLess(body.index("JudgeLootMethod("), body.index("HandleSetLootMethodOpcode("))
+        self.assertLess(body.index("ChooseLootMaster("), body.index("HandleSetLootMethodOpcode("))
+        self.assertIn("LootMasterTarget::BoundMaster", body)
+        self.assertIn("LootMasterTarget::GroupLeader", body)
+        self.assertIn("group->IsMember(", body)
 
 
 class Hooks(unittest.TestCase):

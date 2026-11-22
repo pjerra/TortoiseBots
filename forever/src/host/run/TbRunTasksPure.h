@@ -181,6 +181,16 @@ inline MethodVerdict JudgeLootMethod(TaskOrder const& order)
     return v;
 }
 
+enum class LootMasterTarget : uint8_t { Empty, BoundMaster, GroupLeader };
+
+// Core HandleSetLootMethodOpcode rejects MASTER_LOOT when LootMasterGUID is not a group member.
+inline LootMasterTarget ChooseLootMaster(int policyMethod, bool boundHumanMasterInGroup)
+{
+    if (policyMethod != RC::kLootMaster)
+        return LootMasterTarget::Empty;
+    return boundHumanMasterInGroup ? LootMasterTarget::BoundMaster : LootMasterTarget::GroupLeader;
+}
+
 // The loot method of a core group as the policy reads it (Facts::lootMethod): the five 1.12 methods keep their numbers; anything else (the core's
 // PERSONAL_LOOT = 5, a method the 1.12 policy does not know) reads as "no" (-1): the loot step then pauses instead of guessing.
 inline int PolicyLootMethod(uint32_t coreMethod)
