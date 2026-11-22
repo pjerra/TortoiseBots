@@ -96,6 +96,7 @@
 #include "host/TbAddonVerbs.h"
 #include "host/TbAddonRoster.h"
 #include "host/TbAddonBlessing.h"
+#include "host/TbAddonChoice.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -1755,6 +1756,7 @@ void AddSC_tortoisebots()
     TortoiseBots::addonverbs::RegisterAddonVerbsPassthrough();   // #130 f-verbs: the `.bot` words the player layer answers (host/TbAddonVerbs.cpp)
     TortoiseBots::roster::RegisterAddonVerbsRoster();   // #130: `roster`/`list`/`alts` + handshake/BOTSTATE over the TBM channel (host/TbAddonRoster.cpp)
     TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
+    TortoiseBots::choice::RegisterAddonVerbsChoice();   // #133 c-choice: `choice` verb + `choice` cap (host/TbAddonChoice.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
