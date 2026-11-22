@@ -466,3 +466,12 @@ TortoiseBots.Player.Commands = 1
 #
 
 TortoiseBots.Player.MaxBots = 4
+
+#
+#    TortoiseBots.AutoHunterPet
+#        Description: Hunter bots at level 10 or higher with no pet out and none in their stable receive their race's
+#                     starter pet and its pet spells on login and on level-up. Never replaces an existing pet.
+#        Default:     1
+#
+
+TortoiseBots.AutoHunterPet = 1

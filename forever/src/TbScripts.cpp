@@ -74,6 +74,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbSpellDelayPure.h"
 #include "host/TbClassQuestSpells.h"
+#include "host/TbAutoHunterPet.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -173,6 +174,7 @@ public:
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B: the scheduler's target, window, session and offline times
         TortoiseBots::bg::LoadConfig();        // BG1: the battleground keys (off by default)
         TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
+        TortoiseBots::autohunterpet::LoadConfig(); // starter pet on level 10 / login for hunter bots without a pet
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
         if (reload)
             TortoiseBots::questspells::BuildIndex();
@@ -400,6 +402,7 @@ public:
 #endif
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
             TortoiseBots::questspells::Sync(player, "login");
+            TortoiseBots::autohunterpet::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
@@ -408,7 +411,10 @@ public:
     void OnLevelChanged(Player* player, uint8 /*oldLevel*/) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
+        {
             TortoiseBots::questspells::Sync(player, "level");
+            TortoiseBots::autohunterpet::Sync(player, "level");
+        }
     }
 
     void OnLogout(Player* player) override
