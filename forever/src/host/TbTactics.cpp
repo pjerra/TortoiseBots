@@ -116,7 +116,7 @@ void BeforeTick(Player* bot, PlayerbotAI* ai)
             ai->ChangeStrategy(t.autocc ? "+auto cc" : "-auto cc", BotState::BOT_STATE_COMBAT);
     }
     // sap: rogues only (a non-rogue has no Sap); `no sap` present = off.
-    if (bot->getClass() == CLASS_ROGUE)
+    if (bot->GetClass() == CLASS_ROGUE)
     {
         bool const wantNoSap = !t.sap;
         if (ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT) != wantNoSap)
@@ -192,7 +192,7 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
             detail = verb + " [on|off|status]";
             return false;
         }
-        if (verb == "sap" && bot->getClass() != CLASS_ROGUE)
+        if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)
         {
             code = "no-rogue";
             detail = "only a rogue has a Sap to toggle";
@@ -552,7 +552,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
         ToggleOp const op = ParseToggle(arg, ok);
         if (!ok)
             return "fail:bad-argument";
-        if (verb == "sap" && bot->getClass() != CLASS_ROGUE)
+        if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)
             return "fail:no-rogue";
         bool current = false;
         if (!ReadToggle(bot, verb, current))
