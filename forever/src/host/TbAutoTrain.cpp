@@ -181,6 +181,7 @@ uint32_t TeachClassSpells(Player* bot, Tally& out)
         bot->RemoveSpell(spellId, false, false);
         ++out.removedCount;
     }
+    out.trainerTaught = NetTrainerTaught(out.trainerTaught, out.removedCount);
     return out.TotalTaught();
 }
 
