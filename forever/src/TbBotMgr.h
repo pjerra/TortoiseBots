@@ -38,7 +38,7 @@ public:
     // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
     // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
     // started (W0): a pool bot is always a free bot, and IsPoolBot answers for the scheduler.
-    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false);
+    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false, bool owned = false);
 
     // Makes a new level 1 character on the account the way the core's own creation does (realm character count, creation hooks).
     // Empty string = the saves were QUEUED; the character commit is asynchronous, and only when it succeeds are the login side
@@ -85,6 +85,8 @@ public:
     // W0 (D2): a bot of this manager (pool or not, loading or in the world) sits on that account. One session per account is
     // the rule, so the scheduler counts the account as online and a second bot of it is refused.
     bool AccountHasBot(uint32 accountId) const;
+    // D-3: how many owned bots this Battle.net account has in the manager, in any state (the Player.MaxBots cap).
+    uint32 OwnedBotsOf(uint32 ownerBnet) const;
     // W0: every account this manager holds a bot on, sorted and unique: the scheduler's once-a-pass account query.
     std::vector<uint32> BotAccounts() const;
 
@@ -242,6 +244,8 @@ private:
         // W0: logged in by the pool scheduler (`.tb pool start`). A master binding clears `free`; a pool bot without it has left
         // the pool's count and is never logged out by the pool.
         bool pool = false;
+        bool owned = false;            // D-3: an owner's alt (`.bot add`): logs out with its owner, may share the owner's game accounts
+        uint32 ownerBnet = 0;          // D-3: the owner's Battle.net account at login (the cap and the sharing rule key on it)
         uint32 kills = 0;
         uint32 deaths = 0;
         uint32 rescues = 0;
