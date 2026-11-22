@@ -43,7 +43,8 @@ namespace ai
 		virtual bool isUseful() override;
 
 	protected:
-		// Cast around the paladin: a reach step toward the target never completes for it.
+		// Cast around the paladin: target self (ForeverCore marks Consecration positive) and skip reach.
+		virtual std::string GetTargetName() override { return "self target"; }
 		virtual std::string GetReachActionName() override { return ""; }
 	};
 

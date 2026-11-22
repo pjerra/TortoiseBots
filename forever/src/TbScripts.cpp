@@ -377,6 +377,7 @@ public:
             player->SetPreferDrawableAmmo(true);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             TortoiseBots::p11::EnsureHunterStarterAmmo(player);
+            TortoiseBots::p11::EnsureShamanStarterTotems(player);
 #endif
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding

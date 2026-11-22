@@ -22,6 +22,7 @@
 #include "compat/TbCompat_V.h"
 #include "runtime/HunterPetPolicy.h"
 #include "runtime/policy/class/HunterStarterAmmoPolicy.h"
+#include "runtime/policy/class/ShamanStarterTotemPolicy.h"
 #include "runtime/policy/pet/PetSpellRankPolicy.h"
 
 #include <algorithm>
@@ -227,6 +228,21 @@ void EnsureHunterStarterAmmo(Player* bot)
     if (bot->GetItemCount(ammoId) == 0)
         bot->StoreNewItemInBestSlots(ammoId, 200, ItemContext::NONE);
     bot->AutoSelectAmmo();
+}
+void EnsureShamanStarterTotems(Player* bot)
+{
+    if (!bot || bot->GetClass() != CLASS_SHAMAN)
+        return;
+
+    uint8 const level = bot->GetLevel();
+    for (uint8 slot = 0; slot < TortoiseBots::kShamanStarterTotems.size(); ++slot)
+    {
+        uint32 const totemId = TortoiseBots::ShamanStarterTotemForSlot(slot, level);
+        if (!totemId || !sObjectMgr.GetItemTemplate(totemId))
+            continue;
+        if (bot->GetItemCount(totemId, true) == 0)
+            bot->StoreNewItemInBestSlots(totemId, 1, ItemContext::NONE);
+    }
 }
 }
 }
