@@ -93,6 +93,7 @@
 #include "host/TbAddonInfo.h"
 #include "host/TbAddonActions.h"
 #include "host/TbAddonVerbs.h"
+#include "host/TbAddonRoster.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -1748,6 +1749,7 @@ void AddSC_tortoisebots()
     TortoiseBots::addoninfo::RegisterAddonVerbsInfo(); // #130 f-info: the "features" and "run" verbs (host/TbAddonInfo.cpp)
     TortoiseBots::action::RegisterAddonVerbsActions();   // #130 f-actions: the `action` verb + `action:<intent>` tokens
     TortoiseBots::addonverbs::RegisterAddonVerbsPassthrough();   // #130 f-verbs: the `.bot` words the player layer answers (host/TbAddonVerbs.cpp)
+    TortoiseBots::roster::RegisterAddonVerbsRoster();   // #130: `roster`/`list`/`alts` + handshake/BOTSTATE over the TBM channel (host/TbAddonRoster.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
