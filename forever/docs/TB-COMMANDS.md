@@ -144,6 +144,12 @@ Each bot of the address gets the order QUEUED at once; the engine runs it right 
 | `assist` | a party member's name | one shot: `attack` on what that member is attacking when the order runs | the member is not in the party, or has no attackable victim now |
 | `co` / `nc` | `+name,-name` | `ChangeStrategy(arg, combat / non-combat)`: a debug switch | characters other than letters, digits, space, `+ - , _` |
 | `release` | - | `release` (the dead bot releases its spirit; inside a dungeon the core revives it at the instance's entrance, section 8) | the instance has no entrance point (`no-entrance`: the release is held, never a graveyard outside) |
+| `stop` | - | `CombatStopWithPets(true)`, `Reset(false)`, `MotionMaster::Clear`, the explicit attack target cleared (issue #131, section 23). It adds no `passive`: a bot hit again defends itself | the bot is dead |
+| `flee` | - | `-wait for attack` in every engine, `CombatStopWithPets(true)`, `Reset(false)`, `MotionMaster::Clear`, then the `flee chat shortcut` (owner = the commander, else the bot) | the action is not registered |
+| `guard` | - | `guard chat shortcut`: guards the spot the bot stands on (`mv=guard`) | the action or the `guard` strategy is not registered |
+| `stance` | `near` \| `tank` \| `turnback` \| `turn` \| `behind` | the `stance` action with the canonical word (`turn` reads back as `turnback`); the order is `ok` only when the `stance` value names the new stance | another word (`bad-argument`), no word (`missing-argument`) |
+| `engage` | `[seconds 0-60]` | `StartEngageWindow(commander guid, seconds)` (default 4): the bots hold until the commander's first hit | more than 60, or not a number |
+| `rebuff` | - | opens the force-rebuff window (begin ms = now, pending/proposed false); the bot's normal buff pass then tops the party up | the bot is in combat (`in-combat`) |
 
 One bot and a party (both have the markers):
 ```
@@ -199,7 +205,7 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `power` `pw` `pwmax` `manapct` | main power, value, maximum (RAGE IN RAGE POINTS), mana percent (absent for a bot with no mana) |
 | `st` `incombat` | the engine's state `combat` / `non-combat` / `dead`; the core's in-combat flag |
 | `tgt` `tgtentry` `tgthp` `victim` | the engine's current target (GUID text, entry, health percent) and the unit the core says the bot is fighting; empty when none |
-| `hold` `mv` | the passive strategy is on; movement `follow` / `stay` or empty |
+| `hold` `mv` | the passive strategy is on; movement `follow` / `stay` / `guard` or empty |
 | `stuck` | empty; `blocked:<reason>`; `away:<seconds left>`; `noengine` |
 | `engine` | a PlayerbotAI runs the bot. Attached when the bot is in the world and on its master's map, or inside an instance one of its party's other members stands in (another character, in the world, not between maps, in the bot's exact instance: who leads the group does not matter, so a leader bot with its party beside it keeps its engine and a lone leader keeps none; it follows the party's leader there, so a party that entered while its commander stayed outside keeps its engine); a bot that lands elsewhere reads `no` until it stands on the master's map again |
 | `pos` `map` `inst` | ONE key `x,y,z` with two decimals; map id; instance id (no separate x/y/z keys) |
@@ -225,6 +231,7 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `form` `totems` `imbue` `seal` `paura` | slice 10 (appended after `practice=`): `form` = the shapeshift form id the bot is in (bear 5, cat 1, ghost wolf 16) or `none`; `totems` = `<creature entry>:<seconds left>;...` for the bot's live totems (summon slots 1-4, read only), empty when none; `imbue` = `<enchant id>:<seconds left>` of the main-hand weapon's temporary enchantment, empty when none; `seal` = the aura id of a paladin's own active "Seal of ..." (empty for every other class), `paura` = the aura id of a paladin's own active "... Aura" (empty otherwise). The power type and amount stay in `power` `pw` `pwmax`; no second `power=` is added |
 | `spec` `gear` | W6a (appended after `money=`): `spec` = the bot's active weightscale spec name (empty when none); `gear` = `<slot>:<item>;...` for each occupied equipment slot (`0..18`), empty when none |
 | `chatin` `chatlast` | S1-R2 (appended after `ghostyd=`): `chatin` = `<accepted>:<refused>:<dropped>` of the bot's chat inbox (lines the filter accepted, lines it refused, lines dropped — a full inbox of 16 drops its oldest, and a line dropped on its way to the engine counts here too); `chatlast` = the word of the last decision: `accepted`, `kind`, `addon`, `self`, `not-real`, `length`, `not-authorized`, `other-subgroup`, `no-engine`, `dropped` (empty until a line was judged) |
+| `stance` `rebuff` | issue #131 M1 (appended after `held=`/`combo=`): `stance` = the stance the bot is in (`near`, `tank`, `turnback`, `behind`; empty without an engine); `rebuff` = whole seconds left of a force-rebuff window, empty when no window runs |
 
 End line: `state-end count=<lines> records=<records> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
 Slice 4 adds to the end line: `alive=<n> dead=<n> ghost=<n> wipe=yes|no whole=yes|no` (`dead` = bodies; `wipe` = nobody is alive; `whole` = every addressed bot is alive, on its leader's map and within 40 yd of it).
@@ -257,6 +264,8 @@ READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per
 ## 7. Config keys
 
 `TortoiseBots.Slice.RestHealthPct` (default 90) and `TortoiseBots.Slice.RestManaPct` (default 80), `forever/conf/tortoisebots.conf.dist`; read on each `.tb state`.
+
+`TortoiseBots.Orders.Tactical` (default 1): the kill switch of the tactical orders (section 23). At 0 every one of them answers `error code=disabled`; read on each command, so a config reload counts at once.
 
 ## 8. Slice 4: entering a dungeon, instances, death (package H4)
 
@@ -568,7 +577,7 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
 
-* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.)
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull <32-hex guid> [body]`, `pullback <32-hex guid>`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`) answer their own `cmd` reply and are described in section 23; `pull` options and `cc` are judge changes of their own round.
 * **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
 * **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
 * **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
@@ -816,6 +825,57 @@ Queue and acceptance never go through anything but the core: `WorldSession::Join
 `RemovePlayer` + `RemoveBattlegroundQueueId` pair for a queued bot that became ineligible. The match itself is only ever started by
 the core: the module holds it back through `WorldScript::CanCreateBattleground` until a human's queue reaches the fill target, and
 re-schedules the core's queue update each pass so bots still waiting follow the human into his instance.
+
+## 23. Issue #131: tactical orders (M1)
+
+The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`).
+
+Every tactical order except `engage` first ends a live engage hold (`HasEngagePullWindow()` → `EndPullWindow("order")`): the hold waits for the commander's first hit, and a new order replaces it. `stop` adds no `passive`, so a bot hit again defends itself; `hold` or `flee` is the order that keeps it out.
+
+### `.tb order <bot|party [leader]> <verb> [argument] [#token]`
+
+The verbs and their refusals are the section 4 table rows. The reply is the usual `order-begin` / one `order bot=.. verb=.. seq=.. status=queued|refused [code= msg=]` per bot / `order-end`. A dead bot is refused `not-alive`; `rebuff` refuses `in-combat`; a missing legacy action is `action-not-registered` (with `name=`), a missing strategy `strategy-not-registered:guard`.
+
+```
+order-begin #o1
+order bot=Mtank verb=stance seq=41 status=queued #o1
+order-end count=1 records=1 verb=stance target=party:commander:Mcmd bots=1 queued=1 refused=0 #o1
+order-begin #o2
+order bot=Mpriest verb=rebuff status=refused code=in-combat msg=a%20bot%20in%20a%20fight%20does%20not%20start%20a%20rebuff #o2
+order-end count=1 records=1 verb=rebuff target=Mpriest bots=1 queued=0 refused=1 #o2
+```
+
+### `.tb cmd <verb> [argument] [bot] [#token]`
+
+Acts on every bot of the caller's binding (lead and members) that is alive, or on the one named bot (`stop [bot]`, `stance <word> [bot]`); a name outside the binding is `no-bot`, and a dead named bot is refused by its own pre-flight.
+
+| Command | Extra keys | Result |
+|---|---|---|
+| `stop [bot]` | - | `result=party <n>` or `result=bot:<name> 1` |
+| `flee` | - | as above |
+| `guard` | - | as above |
+| `stance <near\|tank\|turnback\|turn\|behind> [bot]` | `stance=<canonical word>` | as above |
+| `engage [seconds 0-60]` | `seconds=<n>` (the default 4 when left out) | as above |
+| `rebuff` | - | as above |
+
+Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
+
+```
+cmd-begin #c1
+cmd verb=stance status=accepted bots=5 result=party%205 stance=behind #c1
+cmd-end count=1 records=1 verb=stance lead=Mtank bots=5 ok=5 refused=0 #c1
+cmd-begin #c2
+cmd verb=engage status=accepted bots=5 result=party%205 seconds=5 #c2
+cmd-end count=1 records=1 verb=engage lead=Mtank bots=5 ok=5 refused=0 #c2
+```
+
+### State and configuration
+
+`.tb state` gains two keys after the h8 keys: `stance=<near|tank|turnback|behind>` (empty without an engine) and `rebuff=<seconds left>` (empty when no force-rebuff window runs). `mv` reads `guard` while the guard strategy holds the bot in place.
+
+`TortoiseBots.Orders.Tactical` (default 1) is the kill switch: at 0 every one of the six verbs answers `error code=disabled cmd=<order|cmd> msg=TortoiseBots.Orders.Tactical%20is%200` and nothing is queued. Read on each command.
+
+Rebuff opens the same force-rebuff window (begin ms = now, pending/proposed false) the ready-check bot uses: the bot's normal buff pass tops the party up while the two-minute window runs. It has no `force rebuff` strategy gate (that strategy is not compiled): the window values are the gate. `AiPlayerbot.ForceRebuffOnReadyCheck` does not gate this order; it gates the ready-check hold of a later round.
 
 ## Onyxia observation
 

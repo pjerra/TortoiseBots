@@ -19,6 +19,8 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
+#include "host/TbTactics.h"
+#include "host/TbTacticsPure.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/cmd/TbPlace.h"
 #include "host/cmd/TbTestTargetPure.h"
@@ -129,7 +131,8 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft", "taxi-learn", "fly", "ride", "ah", "tame" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft", "taxi-learn", "fly", "ride", "ah", "tame",
+        "stop", "flee", "guard", "stance", "engage", "rebuff" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -347,10 +350,11 @@ void ApplyKit(PlayerbotAI* ai, uint8 role, bool setRole)
 {
     bool const freeMove = ai->HasStrategy("free", BotState::BOT_STATE_NON_COMBAT);
     bool const stay = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
+    bool const guard = ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT);
     if (setRole)
         ai->SetForcedRole(role);
     ai->ResetStrategies();
-    ai->SetMovementStrategy(freeMove ? "free" : (stay ? "stay" : "follow"));
+    ai->SetMovementStrategy(freeMove ? "free" : (stay ? "stay" : (guard ? "guard" : "follow")));
 }
 
 std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
@@ -722,6 +726,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         bool const fighting = bot->IsInCombat() || ai->IsGroupMemberNearInCombat() || ai->GetAiObjectContext()->GetValue<bool>("has attackers")->Get();
         return fighting ? "fail:rest" : "ok";
     }
+    if (tactics::IsTacticalVerb(o.verb))
+        return tactics::Run(bot, ai, o.verb, o.arg, o.unit, owner);
     return "fail:unknown-verb";
 }
 
@@ -1086,6 +1092,8 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
         }
         return true;
     }
+    if (tactics::IsTacticalVerb(spec.verb))
+        return tactics::Preflight(bot, spec, code, detail);
     code = "unknown-verb";
     detail = verb;
     return false;
@@ -1164,7 +1172,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!who.ok())
         return Fail(handler, args, "order", who.code, who.detail);
     if (pos >= args.w.size())
-        return Fail(handler, args, "order", "missing-verb", "follow, stay, come, attack, pull, endpull, hold, free, assist, co, nc, release");
+        return Fail(handler, args, "order", "missing-verb", "follow, stay, come, attack, pull, endpull, hold, free, assist, co, nc, release, stop, flee, guard, stance, engage, rebuff");
     std::string verb = Lower(args.w[pos++]);
     if (verb == "end")
     {
@@ -1176,6 +1184,28 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "order", "unknown-verb", verb);
     std::string const rest = JoinFrom(args.w, pos);
 
+    // The tactical verbs have their own words (a stance name, the engage seconds) and their own refusal codes.
+    bool const tactical = tactics::IsTacticalVerb(verb);
+    std::string tacticArg = rest;
+    if (tactical)
+    {
+        if (!tactics::Enabled())
+            return Fail(handler, args, "order", "disabled", "TortoiseBots.Orders.Tactical is 0");
+        if (verb == "stance")
+        {
+            if (rest.empty())
+                return Fail(handler, args, "order", "missing-argument", "stance <near|tank|turnback|turn|behind>");
+            if (!tactics::NormaliseStance(rest, tacticArg))
+                return Fail(handler, args, "order", "bad-argument", "stance <near|tank|turnback|turn|behind>");
+        }
+        else if (verb == "engage" && !rest.empty())
+        {
+            unsigned seconds = 0;
+            if (!tactics::ParseEngageSeconds(rest, seconds))
+                return Fail(handler, args, "order", "bad-argument", "engage [seconds 0-60]");
+        }
+    }
+
     if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc" || verb == "learn-prof" || verb == "craft" || verb == "fly" || verb == "ride") && rest.empty())
         return Fail(handler, args, "order", "missing-argument", verb == "assist" ? "assist <member name>" :
             (verb == "co" || verb == "nc") ? "co|nc <+strategy,-strategy>" :
@@ -1183,7 +1213,8 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             verb == "craft" ? "craft <spell> [n]" :
             verb == "fly" ? "fly <node id|name>" :
             verb == "ride" ? "ride <transport entry>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
-    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair" || verb == "gather" || verb == "taxi-learn") && !rest.empty())
+    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair" || verb == "gather" || verb == "taxi-learn" ||
+            verb == "stop" || verb == "flee" || verb == "guard" || verb == "rebuff") && !rest.empty())
         return Fail(handler, args, "order", "unexpected-argument", rest);
     if (verb == "learn-prof" && TortoiseBots::prof::SkillIdFromName(rest) == 0)
         return Fail(handler, args, "order", "bad-argument", "unknown or unsupported profession (fishing is out)");
@@ -1237,10 +1268,22 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         order.verb = verb;
         order.owner = commander ? commander->GetGUID() : bot->GetGUID();
         order.arg = rest;
-        char const* needAction[2] = { nullptr, nullptr };
+        char const* needAction[3] = { nullptr, nullptr, nullptr };
         std::string code, detail;
 
-        if (verb == "follow")
+        if (tactical)
+        {
+            order.arg = tacticArg;
+            h3::OrderSpec spec;
+            spec.verb = verb;
+            spec.arg = tacticArg;
+            if (!tactics::Preflight(bot, spec, code, detail))
+            {
+                refuse(code, detail);
+                continue;
+            }
+        }
+        else if (verb == "follow")
         {
             needAction[0] = "follow chat shortcut";
             if (!rest.empty())

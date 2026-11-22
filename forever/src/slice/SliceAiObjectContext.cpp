@@ -76,6 +76,7 @@
 #include "playerbot/strategy/generic/FocusTargetStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/GrindingStrategy.h"
+#include "playerbot/strategy/generic/GuardStrategy.h"
 #include "playerbot/strategy/generic/KiteStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
 #include "playerbot/strategy/generic/MaintenanceStrategy.h"
@@ -232,13 +233,14 @@ namespace slice
         }
     };
 
-    // the registry of MovementStrategyContext (5 of its keys)
+    // the registry of MovementStrategyContext (6 of its keys)
     class SliceMovementStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
         SliceMovementStrategyContext() : NamedObjectContext<Strategy>(false, true)
         {
             creators["follow"] = [](PlayerbotAI* ai) { return new FollowMasterStrategy(ai); };
+            creators["guard"] = [](PlayerbotAI* ai) { return new GuardStrategy(ai); };
             creators["stay"] = [](PlayerbotAI* ai) { return new StayStrategy(ai); };
             creators["free"] = [](PlayerbotAI* ai) { return new FreeStrategy(ai); };
             creators["flee from adds"] = [](PlayerbotAI* ai) { return new FleeFromAddsStrategy(ai); };
@@ -268,7 +270,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (86 of its keys)
+    // the registry of ActionContext (87 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -285,6 +287,7 @@ namespace slice
             creators["set dead state"] = [](PlayerbotAI* ai) { return new SetDeadStateAction(ai); };
             creators["interrupt current spell"] = [](PlayerbotAI* ai) { return new InterruptCurrentSpellAction(ai); };
             creators["formation station"] = [](PlayerbotAI* ai) { return new FormationStationAction(ai); };
+            creators["guard"] = [](PlayerbotAI* ai) { return new GuardAction(ai); };
             creators["reach spell"] = [](PlayerbotAI* ai) { return new ReachSpellAction(ai); };
             creators["reach party member to heal"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToHealAction(ai); };
             creators["flee"] = [](PlayerbotAI* ai) { return new FleeAction(ai); };
@@ -363,12 +366,14 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (41 of its keys)
+    // the registry of ChatActionContext (43 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
         SliceChatActionContext()
         {
+            creators["guard chat shortcut"] = [](PlayerbotAI* ai) { return new GuardChatShortcutAction(ai); };
+            creators["stance"] = [](PlayerbotAI* ai) { return new SetStanceAction(ai); };
             creators["use"] = [](PlayerbotAI* ai) { return new UseAction(ai); };
             creators["attack my target"] = [](PlayerbotAI* ai) { return new AttackMyTargetAction(ai); };
             creators["follow chat shortcut"] = [](PlayerbotAI* ai) { return new FollowChatShortcutAction(ai); };
@@ -841,7 +846,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 38, kActions = 139, kTriggers = 160, kValues = 210;
+    constexpr unsigned kStrategies = 39, kActions = 142, kTriggers = 160, kValues = 210;
 }
 }
 
