@@ -413,11 +413,8 @@ inline uint64 DbStoreBotGuidCompat(Player* bot) { return bot ? bot->GetGUID().Ge
 QueryResult DbStoreQueryValuesCompat(uint64 guid);
 void DbStoreDeleteValuesCompat(uint64 guid);
 QueryResult DbStoreQueryPresetsCompat(uint64 guid);
-// The custom strategy lines of one owner (T: SELECT from ai_playerbot_custom_strategy). Failure value: no lines.
-inline void LoadCustomStrategyLinesCompat(std::string const& /*qualifier*/, uint32 /*owner*/, std::list<std::string>& /*lines*/)
-{
-    tbcompat::Unported(tbcompat::Feature::CustomStrategyStore);
-}
+// The custom strategy lines of one owner (T: SELECT from ai_playerbot_custom_strategy); implemented in forever/src/slice/SliceCustomStrategy.cpp.
+void LoadCustomStrategyLinesCompat(std::string const& qualifier, uint32 owner, std::list<std::string>& lines);
 
 // ===============================================================================================================
 // DATABASE READS WITH PRINTF FORMATS (findings item 18)
