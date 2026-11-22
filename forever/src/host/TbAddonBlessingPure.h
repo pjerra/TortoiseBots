@@ -5,6 +5,7 @@
 #pragma once
 
 #include "playerbot/strategy/paladin/PaladinBlessingOrderPolicy.h"
+#include "host/TbAddonPure.h"
 
 #include <array>
 #include <sstream>
@@ -74,36 +75,43 @@ inline std::string FormatBlessingLine(
     std::array<bool, ai::kBlessingOrderBlessingCount> const& known,
     std::string const& playersStored)
 {
-    std::string line = "TBM:BLESSING|";
-    line.append(safeBotName);
-    line.push_back('|');
+    std::string core = "TBM:BLESSING|";
+    core.append(safeBotName);
+    core.push_back('|');
 
     for (int i = 0; i < ai::kBlessingOrderClassCount; ++i)
     {
         std::string word = classStored[i];
         if (ai::BlessingOrderSpell(word).empty())
             word = "auto";
-        line += ai::BlessingOrderClassWord(i);
-        line += "=" + word + ",";
+        core += ai::BlessingOrderClassWord(i);
+        core += "=" + word + ",";
     }
 
-    line += "known=";
+    std::string knownField = "known=";
     bool first = true;
     for (int i = 0; i < ai::kBlessingOrderBlessingCount; ++i)
     {
         if (!known[i])
             continue;
         if (!first)
-            line.push_back('+');
-        line += ai::BlessingOrderWord(i);
+            knownField.push_back('+');
+        knownField += ai::BlessingOrderWord(i);
         first = false;
     }
 
     std::string const players = ai::FormatBlessingPlayerOrders(ai::ParseBlessingPlayerOrders(playersStored));
-    if (!players.empty())
-        line += ",players=" + players;
-
-    return line;
+    std::string const playersField = players.empty() ? std::string() : ",players=" + players;
+    // The addon channel caps at 255 bytes; a truncated tail would corrupt
+    // the last field the parser reads. The panel tolerates a missing tail
+    // (players defaults to none, known nil offers every blessing, and the
+    // server still validates picks), so the line drops the unbounded
+    // players list first, then the known list — never a prefix of either.
+    if ((core + knownField + playersField).size() <= addon::pure::kMaxLineBytes)
+        return core + knownField + playersField;
+    if ((core + knownField).size() <= addon::pure::kMaxLineBytes)
+        return core + knownField;
+    return core;
 }
 
 inline std::string FormatBlessingAckDetail(ParsedBlessingArgs const& parsed, std::string const& canonicalPlayerName)
