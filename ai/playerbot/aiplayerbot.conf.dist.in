@@ -2993,7 +2993,7 @@ AiPlayerbot.BotProfessionSpecializations = 2
 AiPlayerbot.AutoPickReward = yes
 
 # Bots equip upgrades (Bots will equip any item obtained from looting or a quest if they are upgrades)
-# Default: 0 (disabled)
+# Default: 1 (enabled)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
 
 # Allow claimed guild bots at level 60 to auto-equip upgrades (1 = on, 0 = lock at level 60).

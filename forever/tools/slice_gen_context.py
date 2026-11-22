@@ -171,14 +171,16 @@ def _join(*ds):
     return out
 # Slice 9 (package L9, FOREVER-SLICE9-SPEC section 6, listed with creator file:line in forever/docs/SLICE9-L-NOTES.md): item loot and group loot rolls. The
 # `roll` strategy is the one whose `very often` trigger fires `auto loot roll`; `loot start roll` / `loot vote` are the pass-through names of the
-# `default` strategy (WorldPacketHandlerStrategy::supported), fed by the poll of TbCompat_S9.h. Left out on purpose (each one does less): `loot roll won`
-# and `log roll won` (nothing feeds them; the trigger's second action is `equip upgrades`, so registering it would wire AUTO-EQUIP), `delayed roll`,
-# `equip upgrades`, `item push result`; the item usage value's own dependencies (mount list, craft spells, should craft spell, free money for): their
+# `default` strategy (WorldPacketHandlerStrategy::supported), fed by the poll of TbCompat_S9.h. Piece C feeds `loot roll won` from the PollRollWon
+# host poll (forever/src/host/TbRollWon.*): it remembers the bot's open rolls and raises the event once when a roll disappears with the bot as
+# winner, so `log roll won` logs the win and the already-registered `equip upgrades` action equips it when it is an upgrade. Still left out on
+# purpose (each one does less): `delayed roll`, `equip upgrades` (fed by the maintenance strategy, W6_KEYS), `item push result` (fed by the same
+# strategy's bag-generation poll); the item usage value's own dependencies (mount list, craft spells, should craft spell, free money for): their
 # absence reads as the empty value, so no mount, craft or purchase is planned.
 SLICE9_KEYS = {
     "strategy": "roll",
-    "action": "loot start roll, loot vote, loot roll, auto loot roll, roll, release loot",
-    "trigger": "loot start roll, loot vote, loot roll",
+    "action": "loot start roll, loot vote, loot roll, auto loot roll, roll, release loot, log roll won",
+    "trigger": "loot start roll, loot vote, loot roll, loot roll won",
     "value": "active rolls, seen need rolls, item usage, skip go loot list",
 }
 # W6a (package E6): auto-equip upgrades for every bot (`equipment audit` 300 s + `item push result` bag-generation poll); commanded bots self-equip iff ClaimedBotSelfEquip.

@@ -10,7 +10,7 @@
 //    this player's answer) is announced to the engine as the "loot start roll" event, and the bot's vote goes through WorldSession::
 //    HandleLootRoll (LootHandler.cpp:510). THE POLICY (owner decision 2026-11-22: TB parity): the vote TB decided (need/greed/pass, etiquette
 //    included) reaches the wire, constrained only by the roll's own vote mask (NEED not offered -> GREED, GREED not offered -> PASS, TbRollVote.h);
-//    no auto-equip (the trigger `loot roll won` and the action `equip upgrades` are not registered);
+//    a won roll raises `loot roll won` (PollRollWon below), whose second action `equip upgrades` runs under its own gates (W6a);
 //  * the loot tables (creature / game object / reference / item) are copied from the world database through the guarded reader below
 //    (LootTemplate::Entries and ::Groups are private, LootMgr.h:150-151).
 //
@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "host/TbRollWon.h"     // piece C: the won-roll poll (PollRollWon), called from PollPacketEventCompat below
 
 #include "host/TbRollVote.h"
 #include "forever/src/host/TbRollMethodsPure.h"
@@ -199,6 +200,11 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     if (name == "quest share")
     {
         PollQuestShareCompat(bot, trigger);
+        return;
+    }
+    if (name == "loot roll won")
+    {
+        ::TortoiseBots::rollwon::PollRollWon(bot, trigger);
         return;
     }
     if (name != "loot start roll" && name != "loot response")
