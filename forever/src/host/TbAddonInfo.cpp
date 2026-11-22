@@ -225,7 +225,9 @@ void AppendCcAssign(Player* requester)
                 continue;
             std::string mark, family;
             h8::CcOrderValues(member, mark, family);
-            if (!mark.empty() && ValidCcMark(mark))
+            // TB's gate (commands/Info.cpp:495): the mark alone never lists
+            // a bot, since "rti cc" reads moon on every fresh bot.
+            if (CcRowVisible(h8::HasCombatCcStrategy(member), mark))
                 rows.emplace_back(member->GetName(), mark);
         }
     addon::Send(requester, CcBeginLine(rows.size()));

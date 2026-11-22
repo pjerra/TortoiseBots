@@ -171,11 +171,39 @@ inline std::string LatestLine()
     return "TBM:LATEST|-|-";
 }
 
-// Forever-only line, ignored by older addons: the exact verbs this server
-// answers natively, so the addon picks native vs bridge per command.
-inline std::string VerbsLine(std::vector<std::string> const& verbs)
+// The VERBS stream: the token list no longer fits one 255-byte addon
+// message (the channel truncates longer lines mid-token), so it rides
+// counted like ROSTER: BEGIN carries the total token count, each VERBS line
+// carries whole tokens only, END closes the stream. The addon commits the
+// set only when the received token count matches the BEGIN total.
+inline std::string VerbsBegin(std::size_t total)
 {
-    return "TBM:VERBS|" + JoinTokens(verbs);
+    return "TBM:VERBS_BEGIN|" + std::to_string(total);
+}
+
+inline constexpr std::string_view kVerbsEnd = "TBM:VERBS_END";
+
+// One TBM:VERBS| line per chunk, each within the channel cap and never
+// split mid-token. A token longer than the cap (no real token is) rides
+// alone rather than split.
+inline std::vector<std::string> VerbsChunks(std::vector<std::string> const& verbs)
+{
+    static constexpr std::string_view kPrefix = "TBM:VERBS|";
+    std::vector<std::string> chunks;
+    std::string current(kPrefix);
+    for (std::string const& token : verbs)
+    {
+        std::string const piece = (current.size() == kPrefix.size() ? "" : ",") + token;
+        if (current.size() + piece.size() > addon::pure::kMaxLineBytes && current.size() > kPrefix.size())
+        {
+            chunks.push_back(current);
+            current = std::string(kPrefix);
+        }
+        current += (current.size() == kPrefix.size() ? "" : ",") + token;
+    }
+    if (current.size() > kPrefix.size() || verbs.empty())
+        chunks.push_back(current);
+    return chunks;
 }
 
 inline std::string CapsLine(std::vector<std::string> const& caps)

@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace roster = TortoiseBots::roster;
 namespace player = TortoiseBots::player;
@@ -118,13 +119,47 @@ int main()
     // along last only for a .tb-permitted requester, never from the registry.
     // case: verbs_caps_join
     {
-        CHECK(roster::VerbsLine({ "action", "alts", "list", "roster" }) == "TBM:VERBS|action,alts,list,roster");
+        CHECK(roster::VerbsBegin(41) == "TBM:VERBS_BEGIN|41");
+        CHECK(roster::VerbsBegin(0) == "TBM:VERBS_BEGIN|0");
+        CHECK(std::string(roster::kVerbsEnd) == "TBM:VERBS_END");
         CHECK(roster::CapsLine(roster::CapsFor({}, false)) == "TBM:CAPS|claimed-roster");
         CHECK(roster::CapsLine(roster::CapsFor({ "engage", "flee", "pull-seconds" }, false)) ==
             "TBM:CAPS|claimed-roster,engage,flee,pull-seconds");
         CHECK(roster::CapsLine(roster::CapsFor({ "engage", "flee", "pull-seconds" }, true)) ==
             "TBM:CAPS|claimed-roster,engage,flee,pull-seconds,tb-gm");
         CHECK(roster::JoinTokens({}) == "");
+    }
+
+    // The VERBS list outgrew one 255-byte addon message (the channel truncates
+    // longer lines mid-token), so it rides counted like ROSTER: BEGIN total,
+    // whole-token chunks, END. A short list stays one line.
+    // case: verbs_stream
+    {
+        std::vector<std::string> const verbs = { "action", "action:attack", "action:follow", "add", "alts",
+            "autogear", "features", "list", "logout", "maintenance", "remove", "roster", "run", "run:here",
+            "run:list", "run:status", "summon", "who" };
+        std::vector<std::string> chunks = roster::VerbsChunks(verbs);
+        CHECK(chunks.size() == 1);
+        CHECK(chunks.front() == "TBM:VERBS|action,action:attack,action:follow,add,alts,autogear,features,list,"
+            "logout,maintenance,remove,roster,run,run:here,run:list,run:status,summon,who");
+        // The live forty-token list spans several lines, each within the cap,
+        // and the chunks rejoin to the full list with no token split.
+        std::vector<std::string> many;
+        for (int i = 0; i < 40; ++i)
+            many.push_back("action:intent" + std::to_string(i) + "xx");
+        std::vector<std::string> wide = roster::VerbsChunks(many);
+        CHECK(wide.size() > 1);
+        std::string rejoined;
+        for (std::string const& chunk : wide)
+        {
+            CHECK(chunk.size() <= 255);
+            CHECK(chunk.compare(0, 10, "TBM:VERBS|") == 0);
+            rejoined += (rejoined.empty() ? "" : ",") + chunk.substr(10);
+        }
+        CHECK(rejoined == roster::JoinTokens(many));
+        // Empty set: BEGIN|0, one empty chunk, END commits the empty set.
+        std::vector<std::string> none = roster::VerbsChunks({});
+        CHECK(none.size() == 1 && none.front() == "TBM:VERBS|");
     }
 
     // The move= word stays inside the vocabulary TB's clients render.
