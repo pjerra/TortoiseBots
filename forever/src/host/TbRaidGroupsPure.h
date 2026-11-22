@@ -175,15 +175,75 @@ struct HealBook
     std::vector<Id> raidHealers;
 };
 
+// Returns the healers still in the raid whose tank was dropped: they heal the raid now (they are moved to the raid healers),
+// and the caller clears their focus list (review #187 re-review: a stale list makes a healer heal only its old tank).
 template <typename Id>
-void PruneHealBook(HealBook<Id>& book, std::vector<Id> const& tanksNow, std::vector<Id> const& healersNow)
+std::vector<Id> PruneHealBook(HealBook<Id>& book, std::vector<Id> const& tanksNow, std::vector<Id> const& healersNow)
 {
     auto const has = [](std::vector<Id> const& v, Id const& id) { return std::find(v.begin(), v.end(), id) != v.end(); };
     book.tanks.erase(std::remove_if(book.tanks.begin(), book.tanks.end(), [&](Id const& t) { return !has(tanksNow, t); }), book.tanks.end());
+    std::vector<Id> orphans;
     book.tankHealers.erase(std::remove_if(book.tankHealers.begin(), book.tankHealers.end(),
-        [&](std::pair<Id, Id> const& p) { return !has(healersNow, p.first) || !has(book.tanks, p.second); }), book.tankHealers.end());
+        [&](std::pair<Id, Id> const& p)
+        {
+            if (!has(healersNow, p.first))
+                return true;
+            if (has(book.tanks, p.second))
+                return false;
+            orphans.push_back(p.first);
+            return true;
+        }), book.tankHealers.end());
     book.raidHealers.erase(std::remove_if(book.raidHealers.begin(), book.raidHealers.end(),
         [&](Id const& h) { return !has(healersNow, h); }), book.raidHealers.end());
+    for (Id const& h : orphans)
+        if (!has(book.raidHealers, h))
+            book.raidHealers.push_back(h);
+    return orphans;
+}
+
+// A member left the raid (GroupScript::OnRemoveMember): a tank goes with its healer pairs and its healers become raid healers
+// (returned: their focus list must be cleared); a healer goes from the book.
+template <typename Id>
+std::vector<Id> ForgetMember(HealBook<Id>& book, Id const& member)
+{
+    std::vector<Id> orphans;
+    book.tanks.erase(std::remove(book.tanks.begin(), book.tanks.end(), member), book.tanks.end());
+    book.tankHealers.erase(std::remove_if(book.tankHealers.begin(), book.tankHealers.end(),
+        [&](std::pair<Id, Id> const& p)
+        {
+            if (p.first == member)
+                return true;
+            if (p.second != member)
+                return false;
+            orphans.push_back(p.first);
+            return true;
+        }), book.tankHealers.end());
+    book.raidHealers.erase(std::remove(book.raidHealers.begin(), book.raidHealers.end(), member), book.raidHealers.end());
+    for (Id const& h : orphans)
+        if (std::find(book.raidHealers.begin(), book.raidHealers.end(), h) == book.raidHealers.end())
+            book.raidHealers.push_back(h);
+    return orphans;
+}
+
+// A tank joins: listed once, even when it rejoins (re-review low: a rejoining tank was listed twice).
+template <typename Id>
+void AddTankOnce(HealBook<Id>& book, Id const& tank)
+{
+    if (std::find(book.tanks.begin(), book.tanks.end(), tank) == book.tanks.end())
+        book.tanks.push_back(tank);
+}
+
+// The tank a healer's focus list must name after the book changed; false: none (a raid healer, or not in the book), so its list is cleared.
+template <typename Id>
+bool FocusTankOf(HealBook<Id> const& book, Id const& healer, Id& tank)
+{
+    for (auto const& p : book.tankHealers)
+        if (p.first == healer)
+        {
+            tank = p.second;
+            return true;
+        }
+    return false;
 }
 
 template <typename Id>

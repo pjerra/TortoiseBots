@@ -527,6 +527,7 @@ public:
         TortoiseBots::HireLifecycle::Instance().OnGroupMemberRemoved(group, guid);
 #endif
         TortoiseBots::cmd::NoteGroupRemove(group, guid);
+        TortoiseBots::h3::NoteLayoutMemberLeft(group, guid);
     }
     void OnChangeLeader(Group* group, ObjectGuid newLeaderGuid, ObjectGuid /*oldLeaderGuid*/) override { TortoiseBots::cmd::NoteGroupLeader(group, newLeaderGuid); }
     void OnDisband(Group* group) override

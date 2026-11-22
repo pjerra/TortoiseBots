@@ -85,6 +85,23 @@ bool FocusHeal(Player* healer, ObjectGuid tank)
     return true;
 }
 
+// The other way round (review #187 re-review): a healer that heals the raid gets no focus list. With "focus heal targets" on, a
+// healer heals ONLY its list, so a stale list (its tank left, or a new layout made it a raid healer) must go: the list is emptied and
+// the strategy dropped. Only a host bot whose engine has the strategy is touched.
+void ClearFocusHeal(Player* healer)
+{
+    PlayerbotAI* ai = (healer && IsHostBot(healer)) ? PlayerbotAIStorage::Instance().GetAI(healer) : nullptr;
+    if (!ai || !ai->GetAiObjectContext() || !ai->HasStrategy("focus heal targets", BotState::BOT_STATE_COMBAT))
+        return;
+    ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("focus heal targets")->Set(std::list<ObjectGuid>());
+    ai->ChangeStrategy("-focus heal targets", BotState::BOT_STATE_COMBAT);
+}
+
+void ClearFocusHeal(ObjectGuid healer)
+{
+    ClearFocusHeal(ObjectAccessor::FindPlayer(healer));
+}
+
 char const* RoleWord(RL::Role role)
 {
     return role == RL::Role::Tank ? "tank" : role == RL::Role::Healer ? "healer" : "dps";
@@ -215,10 +232,15 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             Player* tankPlayer = ObjectAccessor::FindPlayer(tank);
             rec.S("heals", tankPlayer ? std::string(tankPlayer->GetName()) : std::string()).B("focus", focus);
         }
-        else if (p.role == RL::Role::Healer)
+        else
         {
-            applied.raidHealers.push_back(players[i]->GetGUID());
-            rec.S("heals", "raid");
+            // Every layout rebuilds the lists: a raid healer (or a member that is no healer any more) keeps no old focus.
+            ClearFocusHeal(players[i]);
+            if (p.role == RL::Role::Healer)
+            {
+                applied.raidHealers.push_back(players[i]->GetGUID());
+                rec.S("heals", "raid");
+            }
         }
         if (sub != p.subgroup)
         {
@@ -256,6 +278,20 @@ bool RaidConvertBlocked(Group* group, std::string& why)
             return true;
         }
     return false;
+}
+
+void NoteLayoutMemberLeft(Group* group, ObjectGuid member)
+{
+    if (!group)
+        return;
+    auto const found = Layouts().find(group->GetGUID());
+    if (found == Layouts().end())
+        return;
+    // The tank's healers heal the raid from now on (their focus list would keep them on a tank who is gone); the leaver's own
+    // list goes too (a bot healer that leaves the raid heals its next party normally).
+    for (ObjectGuid const& orphan : raidgroups::ForgetMember(found->second, member))
+        ClearFocusHeal(orphan);
+    ClearFocusHeal(member);
 }
 
 void ForgetLayout(Group* group)
@@ -305,7 +341,7 @@ int PlaceJoiner(Group* group, Player* member, std::string* heals)
     {
         if (!group->IsAssistant(member->GetGUID()))
             group->SetGroupMemberFlag(member->GetGUID(), true, MEMBER_FLAG_ASSISTANT);
-        applied.tanks.push_back(member->GetGUID());
+        raidgroups::AddTankOnce(applied, member->GetGUID());
     }
     else if (facts.role == RL::Role::Healer)
     {
@@ -313,10 +349,13 @@ int PlaceJoiner(Group* group, Player* member, std::string* heals)
         // dropped with its healers, a healer that left is not counted, so the joiner is never pointed at a tank who is not there.
         std::vector<ObjectGuid> tanksNow, healersNow;
         RolesNow(group, member, tanksNow, healersNow);
-        raidgroups::PruneHealBook(applied, tanksNow, healersNow);
+        for (ObjectGuid const& orphan : raidgroups::PruneHealBook(applied, tanksNow, healersNow))
+            ClearFocusHeal(orphan);
         raidgroups::HealPick<ObjectGuid> const pick = raidgroups::PickAndRecordHealer(applied, member->GetGUID());
         if (pick.tank)
             FocusHeal(member, pick.id);
+        else
+            ClearFocusHeal(member);
         if (heals)
         {
             Player* tank = pick.tank ? ObjectAccessor::FindPlayer(pick.id) : nullptr;

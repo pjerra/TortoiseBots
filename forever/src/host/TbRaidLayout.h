@@ -3,6 +3,7 @@
 // (runtime/RaidLayoutPolicy.h) gives it, and a bot that joins a raid with a layout takes the seat of its role.
 
 #include "ChatCommand.h"
+#include "ObjectGuid.h"
 
 #include <string>
 
@@ -21,6 +22,10 @@ bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 // Returns the subgroup it took (0-7), or -1 when it was not placed. `heals`, when given, gets a healer's target: the tank's name or
 // "raid" (empty for any other role).
 int PlaceJoiner(Group* group, Player* member, std::string* heals = nullptr);
+
+// A member is leaving `group` (GroupScript::OnRemoveMember): a tank's healers lose their focus on it (they heal the raid), and the
+// leaver's own focus list is cleared. Nothing happens for a group without a layout.
+void NoteLayoutMemberLeft(Group* group, ObjectGuid member);
 
 // The group is gone (GroupScript::OnDisband): its layout record goes with it.
 void ForgetLayout(Group* group);

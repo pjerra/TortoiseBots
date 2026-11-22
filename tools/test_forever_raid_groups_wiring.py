@@ -92,6 +92,23 @@ class RaidGroupsWiring(unittest.TestCase):
         self.assertIn("void ForgetLayout(Group*) {}", off)
         self.assertIn("bool RaidConvertBlocked(Group*, std::string&) { return false; }", off)
 
+    def test_stale_focus_lists_are_cleared(self):
+        layout = read("forever/src/host/TbRaidLayout.cpp")
+        clear = body(layout, "void ClearFocusHeal(Player* healer)")
+        self.assertIn('ChangeStrategy("-focus heal targets"', clear)
+        self.assertIn('Set(std::list<ObjectGuid>())', clear)
+        handler = body(layout, "bool HandleLayout(")
+        self.assertIn("ClearFocusHeal(players[i]);", handler)          # every layout rebuilds the lists
+        joiner = body(layout, "int PlaceJoiner(")
+        self.assertIn("raidgroups::PruneHealBook(applied, tanksNow, healersNow))", joiner)
+        self.assertIn("ClearFocusHeal(orphan);", joiner)
+        self.assertIn("raidgroups::AddTankOnce(applied, member->GetGUID());", joiner)
+        left = body(layout, "void NoteLayoutMemberLeft(")
+        self.assertIn("raidgroups::ForgetMember(found->second, member)", left)
+        scripts = read("forever/src/TbScripts.cpp")
+        self.assertIn("TortoiseBots::h3::NoteLayoutMemberLeft(group, guid);", body(scripts, "void OnRemoveMember("))
+        self.assertIn("void NoteLayoutMemberLeft(Group*, ObjectGuid) {}", read("forever/src/host/TbH3Off.cpp"))
+
     def test_only_the_explicit_commands_may_make_a_raid(self):
         scripts = read("forever/src/TbScripts.cpp")
         self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free, false, false, true)", scripts)   # .tb login

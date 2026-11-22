@@ -49,8 +49,11 @@ who is not a tank; real players in the raid are planned too, so the plan never o
 - The seat-aware assist of the legacy layout is not live: `RaidTankHealerSeat` (`TbHostOwnership.cpp`) is still the stub that
   answers "no seat", so `PartyMemberToHeal.cpp`'s quiet-second-healer raid assist never runs. Only the focus list (`focus heal
   targets`: the tank, then the healer) is set.
-- The layout is not undone when a raid breaks up (the legacy commander restored the old subgroups at unbind). A tank healer keeps
-  its `focus heal targets` until it leaves the world or its strategies are rebuilt (`.tb role`).
+- The layout is not undone when a raid breaks up (the legacy commander restored the old subgroups at unbind). With
+  `focus heal targets` on, a healer heals ONLY its list, so the lists are kept current: every `.tb layout` sets each tank healer's
+  list again and clears it (list emptied, strategy dropped) for a raid healer; when a tank leaves the group
+  (`GroupScript::OnRemoveMember` -> `NoteLayoutMemberLeft`) its healers' lists are cleared and they heal the raid; a joiner's prune does
+  the same for a tank that is gone or no tank any more. A rejoining tank is listed once (`AddTankOnce`).
 - The commander binding's raid rules are unchanged (it already allowed raids up to 40).
 - Raid-wide behaviour of the legacy commander (wipe threshold, gather, rest floor in `RaidLayoutPolicy.h`) is not wired here.
 

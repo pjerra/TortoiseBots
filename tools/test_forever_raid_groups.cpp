@@ -179,6 +179,53 @@ int main()
         assert(!PickAndRecordHealer(book, 42).tank);
     }
 
-    std::cout << "PASS: raid joins (party cap, convert, raid cap), main tank pick, a 20-member layout and its subgroup moves, an offline member holds its seat, the heal book follows the raid\n";
+    // Re-review Medium: a healer whose tank leaves must lose its focus list (with "focus heal targets" on, a healer heals only that
+    // list). The tank leaving the raid hands back its healers; they heal the raid now and name no tank.
+    {
+        HealBook<int> book;
+        book.tanks = {1, 2};
+        book.tankHealers = {{11, 1}, {21, 2}, {22, 2}};
+        book.raidHealers = {31};
+        std::vector<int> const orphans = ForgetMember(book, 2);
+        assert(orphans == std::vector<int>({21, 22}));
+        assert(book.tanks == std::vector<int>({1}));
+        int tank = 0;
+        assert(!FocusTankOf(book, 21, tank) && !FocusTankOf(book, 22, tank));      // their focus is cleared
+        assert(FocusTankOf(book, 11, tank) && tank == 1);                          // the other tank's healer keeps its tank
+        assert(book.raidHealers == std::vector<int>({31, 21, 22}));
+        // A healer leaving only goes from the book.
+        assert(ForgetMember(book, 11).empty() && !FocusTankOf(book, 11, tank));
+        // The prune before a joiner hands back the healers of a tank that is no tank any more (or gone) the same way.
+        HealBook<int> b2;
+        b2.tanks = {1, 2};
+        b2.tankHealers = {{11, 1}, {21, 2}};
+        assert(PruneHealBook(b2, {1}, {11, 21}) == std::vector<int>({21}));
+        assert(!FocusTankOf(b2, 21, tank) && b2.raidHealers == std::vector<int>({21}));
+    }
+
+    // Re-review Medium: a re-run layout that makes a former tank healer a raid healer leaves it with no focus tank (heals=raid),
+    // so the host clears its list; one that keeps it on a tank names that tank (heals=<tank>).
+    {
+        HealBook<int> before;
+        before.tanks = {1};
+        before.tankHealers = {{11, 1}};
+        HealBook<int> relaid;           // what the new layout recorded: 11 is a raid healer now
+        relaid.tanks = {1};
+        relaid.raidHealers = {11};
+        int tank = 0;
+        assert(FocusTankOf(before, 11, tank) && tank == 1);
+        assert(!FocusTankOf(relaid, 11, tank));
+    }
+
+    // Re-review low: a tank that rejoins is listed once.
+    {
+        HealBook<int> book;
+        AddTankOnce(book, 1);
+        AddTankOnce(book, 2);
+        AddTankOnce(book, 1);
+        assert(book.tanks == std::vector<int>({1, 2}));
+    }
+
+    std::cout << "PASS: raid joins (party cap, convert, raid cap), main tank pick, a 20-member layout and its subgroup moves, an offline member holds its seat, the heal book follows the raid, a departed tank frees its healers' focus, a rejoining tank is listed once\n";
     return 0;
 }
