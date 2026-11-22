@@ -64,11 +64,23 @@ Creature* TameAction::FindTarget(std::string const& mode, std::string const& val
 
     std::string needle = Lower(value);
     uint32 entry = 0;
+    uint64 guidCounter = 0;
     if (mode == "id")
     {
         try
         {
             entry = static_cast<uint32>(std::stoul(value));
+        }
+        catch (...)
+        {
+            return nullptr;
+        }
+    }
+    else if (mode == "guid")
+    {
+        try
+        {
+            guidCounter = std::stoull(value);
         }
         catch (...)
         {
@@ -84,6 +96,8 @@ Creature* TameAction::FindTarget(std::string const& mode, std::string const& val
             continue;
 
         CreatureInfo const* info = creature->GetCreatureInfo();
+        if (mode == "guid" && guid.GetCounter() != guidCounter)
+            continue;
         if (mode == "id" && creature->GetEntry() != entry)
             continue;
         if (mode == "name" && Lower(creature->GetName()) != needle)
@@ -135,7 +149,7 @@ bool TameAction::RenamePet(std::string const& value, Player* requester)
 
 bool TameAction::AbandonPet(Player* requester)
 {
-    if (!bot->GetPet())
+    if (!HasAnyHunterPetCompat(bot))
     {
         ai->TellPlayer(requester, "I do not have a pet to abandon.");
         return false;
@@ -172,7 +186,7 @@ bool TameAction::Execute(Event& event)
         ai->TellPlayer(requester, "Only level 10+ hunters can tame pets.");
         return false;
     }
-    if (bot->GetPet() || !bot->GetPetGuid().IsEmpty())
+    if (HasAnyHunterPetCompat(bot))
     {
         ai->TellPlayer(requester, "I already have a pet; abandon it before taming another.");
         return false;
@@ -180,7 +194,7 @@ bool TameAction::Execute(Event& event)
 
     if (mode.empty())
         mode = "target";
-    if (mode != "target" && mode != "name" && mode != "id" && mode != "family")
+    if (mode != "target" && mode != "name" && mode != "id" && mode != "family" && mode != "guid")
     {
         ai->TellPlayer(requester, "Usage: tame [target/name <name>/id <entry>/family <family>/rename <name>/abandon]");
         return false;
@@ -199,6 +213,9 @@ bool TameAction::Execute(Event& event)
         ai->TellPlayer(requester, "I do not know a tame-beast spell.");
         return false;
     }
+
+    if (!bot->IsStopped())
+        ai->StopMoving();
 
     if (!ai->CastSpell(tameSpell, target))
     {

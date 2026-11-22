@@ -287,27 +287,40 @@ namespace ai
 
         bool isUseful() override
         {
+            if (!bot->HasAuraType(SPELL_AURA_MOD_STEALTH))
+                return false;
+
             Unit* target = GetTarget();
             if (target && bot->CanReachWithMeleeAutoAttack(target) && IsWithinLOSInMapCompat(bot, target, true))
+            {
+                if (!bot->IsStopped())
+                    ai->StopMoving();
                 return false;
+            }
 
             return ReachTargetAction::isUseful();
         }
 
         bool MoveIntoRange(Unit* target, float /*distance*/) override
         {
+            if (!bot->HasAuraType(SPELL_AURA_MOD_STEALTH))
+                return false;
+
             const float edgeGap = 2.5f;
+            float const meleeLimit = std::max(1.5f, GetCombatReachCompat(bot, target, false, 0.0f) - 0.5f);
             float standDist = bot->GetObjectBoundingRadius() + target->GetObjectBoundingRadius() + edgeGap;
-            standDist = std::min(standDist, GetCombatReachCompat(bot, target, false, 0.0f) - 1.0f);
+            standDist = std::min(std::max(standDist, 3.5f), meleeLimit);
 
             if (sPlayerbotAIConfig.sapApproachAvoidPack)
                 return ApproachAroundPack(target, standDist);
 
-            const float angle = GetAngleCompat(target, bot);
-            WorldPosition stand(target->GetMapId(),
-                target->GetPositionX() + standDist * std::cos(angle),
-                target->GetPositionY() + standDist * std::sin(angle),
-                target->GetPositionZ());
+            TortoiseBots::SapPoint const dest = TortoiseBots::SapBehindStep(
+                TortoiseBots::SapPoint{bot->GetPositionX(), bot->GetPositionY()},
+                TortoiseBots::SapPoint{target->GetPositionX(), target->GetPositionY()},
+                target->GetOrientation(),
+                standDist,
+                std::max(15.0f, standDist + 10.0f));
+            WorldPosition stand(target->GetMapId(), dest.x, dest.y, target->GetPositionZ());
             stand.setZ(stand.GetHeight());
             return MoveTo(stand.GetMapId(), stand.getX(), stand.getY(), stand.getZ());
         }
@@ -341,7 +354,10 @@ namespace ai
             return context->GetValue<Unit*>("cc target", getName());
         }
 
-        virtual bool isUseful() override { return true; }
+        virtual bool isUseful() override
+        {
+            return sServerFacade.IsInCombat(bot) || bot->HasAuraType(SPELL_AURA_MOD_STEALTH);
+        }
 
     protected:
         std::string GetTargetName() override

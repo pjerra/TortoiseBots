@@ -73,8 +73,32 @@ inline void SetPetNameTimestampCompat(Pet* pet, uint32 ts)
         pet->SetPetNameTimestamp(ts);
 }
 
+inline bool HasAnyHunterPetCompat(Player const* bot)
+{
+    if (!bot)
+        return false;
+    if (bot->GetPet() || !bot->GetPetGUID().IsEmpty())
+        return true;
+    if (PetStable const* stable = bot->GetPetStable())
+        for (Optional<PetStable::PetInfo> const& info : stable->ActivePets)
+            if (info)
+                return true;
+    return false;
+}
+
 inline void RemovePetCompat(Player* bot)
 {
-    if (bot)
-        bot->RemovePet(nullptr, PET_SAVE_NOT_IN_SLOT);
+    if (!bot)
+        return;
+    if (Pet* pet = bot->GetPet())
+        bot->RemovePet(pet, pet->getPetType() == HUNTER_PET ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT);
+    if (PetStable const* stable = bot->GetPetStable())
+    {
+        std::vector<uint32> petNumbers;
+        for (Optional<PetStable::PetInfo> const& info : stable->ActivePets)
+            if (info && info->Type == HUNTER_PET)
+                petNumbers.push_back(info->PetNumber);
+        for (uint32 petNumber : petNumbers)
+            bot->DeletePetFromDB(petNumber);
+    }
 }

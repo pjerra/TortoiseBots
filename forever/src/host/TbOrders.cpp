@@ -424,7 +424,27 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     if (o.verb == "release")
         return act("release", Event("tb order", std::string(), owner)) ? "ok" : "fail:release";
     if (o.verb == "tame")
-        return act("tame", Event("tb order", o.arg, owner)) ? "ok" : "fail:tame";
+    {
+        std::string arg = o.arg;
+        if (!arg.empty())
+        {
+            std::istringstream iss(arg);
+            std::string first;
+            iss >> first;
+            std::string firstLower = first;
+            for (char& c : firstLower)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (firstLower != "abandon" && firstLower != "rename" && firstLower != "target" &&
+                firstLower != "name" && firstLower != "id" && firstLower != "family" && firstLower != "guid")
+            {
+                ObjectGuid resolved;
+                std::string code, detail;
+                if (ResolveTarget(bot, owner, arg, resolved, code, detail))
+                    arg = "guid " + std::to_string(resolved.GetCounter());
+            }
+        }
+        return act("tame", Event("tb order", arg, owner)) ? "ok" : "fail:tame";
+    }
     if (o.verb == "sell")
         return act("sell", Event("tb order", o.arg.empty() ? std::string("gray") : o.arg, owner)) ? "ok" : "fail:sell";
     if (o.verb == "buy")

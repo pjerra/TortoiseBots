@@ -51,6 +51,11 @@ inline void SetPetNameTimestampCompat(Pet* pet, uint32 ts)
         pet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, ts);
 }
 
+inline bool HasAnyHunterPetCompat(Player const* bot)
+{
+    return bot && (bot->GetPet() || !bot->GetPetGuid().IsEmpty());
+}
+
 inline void RemovePetCompat(Player* bot)
 {
     if (bot)
