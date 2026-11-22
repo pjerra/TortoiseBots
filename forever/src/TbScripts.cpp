@@ -278,6 +278,7 @@ public:
         tbhost::autotrain::BuildIndex();
         if (TortoiseBots::questspells::Enabled())
             TortoiseBots::questspells::BuildIndex();
+        TortoiseBots::talents::LogStartupSelfCheck();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
         // Without the slice nothing reaches an unported feature, so the lines are only for a build that has the engine.
 #ifdef TORTOISEBOTS_SLICE1

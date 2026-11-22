@@ -18,6 +18,9 @@ namespace talents
 void LoadConfig();
 bool Enabled();
 
+// Logs per-class build-step -> TraitNode mapping counts at world startup.
+void LogStartupSelfCheck();
+
 // Spends any free talent points on the bot's active combat TraitConfig following the picked spec build.
 // Never resets existing spent points. Returns the number of points newly spent.
 uint32_t Sync(Player* bot, char const* why);

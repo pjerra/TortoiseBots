@@ -98,7 +98,7 @@ ClassTalentCache const& CacheForClass(uint8 classId)
 
         for (TalentEntry const* tal : sTalentStore)
         {
-            if (!tal || tal->ClassID != int8(classId))
+            if (!tal || !TalentMatchesClass(tal->ClassID, classId))
                 continue;
             ResolvedNode found;
             bool ok = false;
@@ -152,7 +152,7 @@ struct SyncReport
     uint32 applied = 0;
     int32 spent = 0;
     int32 free = 0;
-    int tab = 0;
+    int tab = -1;
     int tabCounts[3] = { 0, 0, 0 };
 };
 
@@ -178,10 +178,6 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
     {
         report.tabCounts[0] = report.tabCounts[1] = report.tabCounts[2] = 0;
         report.spent = 0;
-        for (UF::TraitEntry const& e : currentConfig->Entries)
-        {
-            (void)e;
-        }
         for (WorldPackets::Traits::TraitEntry const& e : cfg.Entries)
         {
             if (e.Rank <= 0)
@@ -220,14 +216,17 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
     }
 
     std::vector<uint32> const plan = PlanNextSteps(bot->GetClass(), report.tab, currentRanks);
+    uint32 firstUnmapped = 0;
+    int32 lastFailResult = 0;
+    uint32 lastFailTalent = 0;
     for (uint32 talentId : plan)
     {
         auto tit = cache.talentToNode.find(talentId);
         if (tit == cache.talentToNode.end())
         {
-            TC_LOG_WARN("tortoisebots", "talents: {} ({}) stopped at unmapped talent {} (spec {})",
-                bot->GetName(), why ? why : "sync", talentId, SpecName(bot->GetClass(), report.tab));
-            break;
+            if (!firstUnmapped)
+                firstUnmapped = talentId;
+            continue;
         }
         ResolvedNode const& rn = tit->second;
 
@@ -254,13 +253,11 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
         if (res != TraitMgr::LearnResult::Ok)
         {
             bool const outOfPoints = (res == TraitMgr::LearnResult::NotEnoughTalentsInPrimaryTree) && (report.spent >= expectedTotal);
-            if (!outOfPoints)
-            {
-                TC_LOG_WARN("tortoisebots", "talents: {} ({}) stopped at talent {} node {} (spec {}, result {})",
-                    bot->GetName(), why ? why : "sync", talentId, rn.traitNodeId,
-                    SpecName(bot->GetClass(), report.tab), int32(res));
-            }
-            break;
+            if (outOfPoints)
+                break;
+            lastFailResult = int32(res);
+            lastFailTalent = talentId;
+            continue;
         }
 
         working = std::move(candidate);
@@ -278,6 +275,12 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
             report.tabCounts[0], report.tabCounts[1], report.tabCounts[2],
             report.spent, expectedTotal, why ? why : "sync");
     }
+    else if (report.free > 0)
+    {
+        TC_LOG_WARN("tortoisebots", "talents: {} ({}) spent 0/{} free (spec {}, unmapped={}, failTalent={}, failRes={})",
+            bot->GetName(), why ? why : "sync", report.free, SpecName(bot->GetClass(), report.tab),
+            firstUnmapped, lastFailTalent, lastFailResult);
+    }
 
     return report;
 }
@@ -287,6 +290,31 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
 void LoadConfig()
 {
     g_enabled.store(sConfigMgr->GetBoolDefault("TortoiseBots.AutoTalentsOnLevel", true), std::memory_order_relaxed);
+}
+
+void LogStartupSelfCheck()
+{
+    static uint8 const kClasses[] = { 1, 2, 3, 4, 5, 7, 8, 9, 11 };
+    std::ostringstream ss;
+    for (size_t i = 0; i < sizeof(kClasses) / sizeof(kClasses[0]); ++i)
+    {
+        uint8 const cls = kClasses[i];
+        ClassTalentCache const& cache = CacheForClass(cls);
+        size_t mapped = 0;
+        size_t total = 0;
+        for (TalentStep const& step : kBuildSteps)
+        {
+            if (step.classId != cls)
+                continue;
+            total += step.ranks;
+            if (cache.talentToNode.find(step.talentId) != cache.talentToNode.end())
+                mapped += step.ranks;
+        }
+        if (i)
+            ss << ' ';
+        ss << "cls" << unsigned(cls) << '=' << mapped << '/' << total;
+    }
+    TC_LOG_INFO("server.loading", "TortoiseBots: talents self-check: {}", ss.str());
 }
 
 bool Enabled()
@@ -334,11 +362,21 @@ bool HandleTalentsCommand(ChatHandler* handler, Trinity::ChatCommands::Tail args
     }
 
     SyncReport const r = ApplyTalents(bot, "command", true);
-    handler->PSendSysMessage("TortoiseBots: %s (level %u): spec=%s (tab %d) spent=%d (%d/%d/%d) free=%d applied=%u.",
-        bot->GetName().c_str(), uint32(bot->GetLevel()),
-        SpecName(bot->GetClass(), r.tab), r.tab,
-        r.spent, r.tabCounts[0], r.tabCounts[1], r.tabCounts[2],
-        r.free, r.applied);
+    if (r.tab < 0)
+    {
+        handler->PSendSysMessage("TortoiseBots: %s (level %u): spec=none spent=%d (%d/%d/%d) free=%d applied=%u.",
+            bot->GetName().c_str(), uint32(bot->GetLevel()),
+            r.spent, r.tabCounts[0], r.tabCounts[1], r.tabCounts[2],
+            r.free, r.applied);
+    }
+    else
+    {
+        handler->PSendSysMessage("TortoiseBots: %s (level %u): spec=%s (tab %d) spent=%d (%d/%d/%d) free=%d applied=%u.",
+            bot->GetName().c_str(), uint32(bot->GetLevel()),
+            SpecName(bot->GetClass(), r.tab), r.tab,
+            r.spent, r.tabCounts[0], r.tabCounts[1], r.tabCounts[2],
+            r.free, r.applied);
+    }
     return true;
 }
 
