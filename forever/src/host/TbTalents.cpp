@@ -1,0 +1,346 @@
+// Host half of bot talent spending: maps Forever Talent.db2 IDs to TraitNode/TraitNodeEntry
+// via TraitDefinition SpellID, validates each step with TraitMgr::ValidateConfigForCommit,
+// and commits via Player::UpdateTraitConfig so the 1.60 client tab and #122 spec choice stay in sync.
+#include "host/TbTalents.h"
+
+#include "host/TbTalentsPure.h"
+#include "slice/SliceSpecPolicy.h"
+#include "TbBotMgr.h"
+
+#include <algorithm>
+#include <atomic>
+#include <map>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "CharacterCache.h"
+#include "Chat.h"
+#include "Config.h"
+#include "DB2Stores.h"
+#include "Log.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Player.h"
+#include "SharedDefines.h"
+#include "TraitMgr.h"
+#include "TraitPacketsCommon.h"
+
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+#include "PlayerbotAIStorage.h"
+#endif
+
+namespace TortoiseBots
+{
+namespace talents
+{
+namespace
+{
+
+std::atomic<bool> g_enabled{ true };
+
+struct ResolvedNode
+{
+    int32 traitNodeId = 0;
+    int32 traitNodeEntryId = 0;
+    int32 maxRanks = 0;
+};
+
+struct ClassTalentCache
+{
+    std::unordered_map<int32, int> nodeTab; // TraitNodeID -> 0..2
+    std::unordered_map<uint32, ResolvedNode> talentToNode; // Talent.db2 ID -> TraitNode/Entry
+    std::unordered_map<int32, uint32> nodeToTalent; // TraitNodeID -> Talent.db2 ID
+};
+
+ClassTalentCache const& CacheForClass(uint8 classId)
+{
+    static std::mutex mutex;
+    static std::map<uint8, ClassTalentCache> cache;
+
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = cache.find(classId);
+    if (it != cache.end())
+        return it->second;
+
+    ClassTalentCache built;
+    if (ChrSpecializationEntry const* spec = sDB2Manager.GetChrSpecializationByIndex(classId, 0))
+    {
+        WorldPackets::Traits::TraitConfig dummy;
+        dummy.Type = TraitConfigType::Combat;
+        dummy.ChrSpecializationID = spec->ID;
+
+        std::vector<TraitMgr::NodeEntryInfo> const entries = TraitMgr::GetNodeEntriesForConfig(dummy);
+        std::vector<TortoiseBots::slice::spec::TraitNodeLayout> layout;
+        layout.reserve(entries.size());
+
+        std::unordered_map<int32, ResolvedNode> spellToNode;
+        for (TraitMgr::NodeEntryInfo const& e : entries)
+        {
+            if (TraitNodeEntry const* node = sTraitNodeStore.LookupEntry(e.TraitNodeID))
+                layout.push_back({ e.TraitNodeID, node->PosX, node->PosY });
+
+            if (TraitDefinitionEntry const* def = sTraitDefinitionStore.LookupEntry(e.TraitDefinitionID))
+            {
+                ResolvedNode rn{ e.TraitNodeID, e.TraitNodeEntryID, e.MaxRanks };
+                if (def->SpellID)
+                    spellToNode.emplace(def->SpellID, rn);
+                if (def->VisibleSpellID)
+                    spellToNode.emplace(def->VisibleSpellID, rn);
+                if (def->OverridesSpellID)
+                    spellToNode.emplace(def->OverridesSpellID, rn);
+            }
+        }
+
+        built.nodeTab = TortoiseBots::slice::spec::BuildNodeTabMap(layout);
+
+        for (TalentEntry const* tal : sTalentStore)
+        {
+            if (!tal || tal->ClassID != int8(classId))
+                continue;
+            ResolvedNode found;
+            bool ok = false;
+            if (tal->SpellID)
+            {
+                auto sit = spellToNode.find(int32(tal->SpellID));
+                if (sit != spellToNode.end())
+                {
+                    found = sit->second;
+                    ok = true;
+                }
+            }
+            if (!ok)
+            {
+                for (uint32 rankSpell : tal->SpellRank)
+                {
+                    if (!rankSpell)
+                        continue;
+                    auto sit = spellToNode.find(int32(rankSpell));
+                    if (sit != spellToNode.end())
+                    {
+                        found = sit->second;
+                        ok = true;
+                        break;
+                    }
+                }
+            }
+            if (ok)
+            {
+                built.talentToNode[tal->ID] = found;
+                built.nodeToTalent.emplace(found.traitNodeId, tal->ID);
+            }
+        }
+    }
+
+    return cache.emplace(classId, std::move(built)).first->second;
+}
+
+int8 ForcedSpecTab(ObjectGuid guid)
+{
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    return PlayerbotAIStorage::Instance().GetPlayerForcedSpecTab(guid);
+#else
+    (void)guid;
+    return -1;
+#endif
+}
+
+struct SyncReport
+{
+    uint32 applied = 0;
+    int32 spent = 0;
+    int32 free = 0;
+    int tab = 0;
+    int tabCounts[3] = { 0, 0, 0 };
+};
+
+SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
+{
+    SyncReport report;
+    if (!bot || !BotMgr::Instance().IsBot(bot->GetGUID()))
+        return report;
+    if (!ignoreConfigFlag && !Enabled())
+        return report;
+    if (bot->GetLevel() < 10)
+        return report;
+
+    int32 const activeConfigId = *bot->m_activePlayerData->ActiveCombatTraitConfigID;
+    UF::TraitConfig const* currentConfig = activeConfigId ? bot->GetTraitConfig(activeConfigId) : nullptr;
+    if (!currentConfig)
+        return report;
+
+    ClassTalentCache const& cache = CacheForClass(bot->GetClass());
+    WorldPackets::Traits::TraitConfig working(*currentConfig);
+
+    auto countTabs = [&](WorldPackets::Traits::TraitConfig const& cfg)
+    {
+        report.tabCounts[0] = report.tabCounts[1] = report.tabCounts[2] = 0;
+        report.spent = 0;
+        for (UF::TraitEntry const& e : currentConfig->Entries)
+        {
+            (void)e;
+        }
+        for (WorldPackets::Traits::TraitEntry const& e : cfg.Entries)
+        {
+            if (e.Rank <= 0)
+                continue;
+            report.spent += e.Rank;
+            auto tit = cache.nodeTab.find(e.TraitNodeID);
+            if (tit != cache.nodeTab.end() && tit->second >= 0 && tit->second < 3)
+                report.tabCounts[tit->second] += e.Rank;
+        }
+    };
+
+    countTabs(working);
+    int32 const expectedTotal = bot->GetLevel() >= 10 ? int32(bot->GetLevel()) - 9 : 0;
+    report.free = std::max<int32>(0, expectedTotal - report.spent);
+
+    int8 const forced = ForcedSpecTab(bot->GetGUID());
+    report.tab = PickSpecTabForBot(
+        bot->GetClass(),
+        bot->GetGUID().GetCounter(),
+        forced,
+        report.tabCounts[0],
+        report.tabCounts[1],
+        report.tabCounts[2]);
+
+    if (report.free <= 0)
+        return report;
+
+    std::unordered_map<uint32, uint8> currentRanks;
+    for (WorldPackets::Traits::TraitEntry const& e : working.Entries)
+    {
+        if (e.Rank <= 0)
+            continue;
+        auto nit = cache.nodeToTalent.find(e.TraitNodeID);
+        if (nit != cache.nodeToTalent.end())
+            currentRanks[nit->second] = uint8(std::min<int32>(255, e.Rank));
+    }
+
+    std::vector<uint32> const plan = PlanNextSteps(bot->GetClass(), report.tab, currentRanks);
+    for (uint32 talentId : plan)
+    {
+        auto tit = cache.talentToNode.find(talentId);
+        if (tit == cache.talentToNode.end())
+        {
+            TC_LOG_WARN("tortoisebots", "talents: {} ({}) stopped at unmapped talent {} (spec {})",
+                bot->GetName(), why ? why : "sync", talentId, SpecName(bot->GetClass(), report.tab));
+            break;
+        }
+        ResolvedNode const& rn = tit->second;
+
+        WorldPackets::Traits::TraitConfig candidate = working;
+        auto eit = std::find_if(candidate.Entries.begin(), candidate.Entries.end(), [&](WorldPackets::Traits::TraitEntry const& e)
+        {
+            return e.TraitNodeID == rn.traitNodeId && e.TraitNodeEntryID == rn.traitNodeEntryId;
+        });
+        if (eit != candidate.Entries.end())
+        {
+            if (eit->Rank + eit->GrantedRanks >= rn.maxRanks)
+                continue;
+            ++eit->Rank;
+        }
+        else
+        {
+            WorldPackets::Traits::TraitEntry& added = candidate.Entries.emplace_back();
+            added.TraitNodeID = rn.traitNodeId;
+            added.TraitNodeEntryID = rn.traitNodeEntryId;
+            added.Rank = 1;
+        }
+
+        TraitMgr::LearnResult const res = TraitMgr::ValidateConfigForCommit(candidate, bot);
+        if (res != TraitMgr::LearnResult::Ok)
+        {
+            bool const outOfPoints = (res == TraitMgr::LearnResult::NotEnoughTalentsInPrimaryTree) && (report.spent >= expectedTotal);
+            if (!outOfPoints)
+            {
+                TC_LOG_WARN("tortoisebots", "talents: {} ({}) stopped at talent {} node {} (spec {}, result {})",
+                    bot->GetName(), why ? why : "sync", talentId, rn.traitNodeId,
+                    SpecName(bot->GetClass(), report.tab), int32(res));
+            }
+            break;
+        }
+
+        working = std::move(candidate);
+        ++report.applied;
+        ++report.spent;
+    }
+
+    if (report.applied > 0)
+    {
+        bot->UpdateTraitConfig(std::move(working), 0, false);
+        countTabs(working);
+        report.free = std::max<int32>(0, expectedTotal - report.spent);
+        TC_LOG_INFO("tortoisebots", "talents: {} spent {} point(s) in {} ({}/{}/{}, total {}/{}) on {}",
+            bot->GetName(), report.applied, SpecName(bot->GetClass(), report.tab),
+            report.tabCounts[0], report.tabCounts[1], report.tabCounts[2],
+            report.spent, expectedTotal, why ? why : "sync");
+    }
+
+    return report;
+}
+
+} // namespace
+
+void LoadConfig()
+{
+    g_enabled.store(sConfigMgr->GetBoolDefault("TortoiseBots.AutoTalentsOnLevel", true), std::memory_order_relaxed);
+}
+
+bool Enabled()
+{
+    return g_enabled.load(std::memory_order_relaxed);
+}
+
+uint32_t Sync(Player* bot, char const* why)
+{
+    return ApplyTalents(bot, why, false).applied;
+}
+
+bool HandleTalentsCommand(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    if (!BotMgr::Instance().Enabled())
+    {
+        handler->PSendSysMessage("TortoiseBots: module is disabled.");
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::istringstream iss{ std::string(args) };
+    std::string name;
+    if (!(iss >> name))
+    {
+        handler->PSendSysMessage("TortoiseBots: usage: .tb talents <bot>");
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (!normalizePlayerName(name))
+    {
+        handler->PSendSysMessage("TortoiseBots: invalid character name.");
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+
+    ObjectGuid const guid = sCharacterCache->GetCharacterGuidByName(name);
+    Player* bot = guid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(guid);
+    if (!bot || !BotMgr::Instance().IsBot(guid))
+    {
+        handler->PSendSysMessage("TortoiseBots: bot '%s' is not online.", name.c_str());
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+
+    SyncReport const r = ApplyTalents(bot, "command", true);
+    handler->PSendSysMessage("TortoiseBots: %s (level %u): spec=%s (tab %d) spent=%d (%d/%d/%d) free=%d applied=%u.",
+        bot->GetName().c_str(), uint32(bot->GetLevel()),
+        SpecName(bot->GetClass(), r.tab), r.tab,
+        r.spent, r.tabCounts[0], r.tabCounts[1], r.tabCounts[2],
+        r.free, r.applied);
+    return true;
+}
+
+} // namespace talents
+} // namespace TortoiseBots

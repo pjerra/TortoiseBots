@@ -75,6 +75,7 @@
 #include "host/TbSpellDelayPure.h"
 #include "host/TbAutoTrain.h"
 #include "host/TbClassQuestSpells.h"
+#include "host/TbTalents.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -175,6 +176,7 @@ public:
         TortoiseBots::bg::LoadConfig();        // BG1: the battleground keys (off by default)
         tbhost::autotrain::LoadConfig();       // TortoiseBots.AutoLearnOnLevel (default 1)
         TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
+        TortoiseBots::talents::LoadConfig();       // automatic talent spending on login and level-up
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
         if (reload)
         {
@@ -410,6 +412,7 @@ public:
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
             tbhost::autotrain::Sync(player, "login");
             TortoiseBots::questspells::Sync(player, "login");
+            TortoiseBots::talents::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
@@ -421,6 +424,7 @@ public:
         {
             tbhost::autotrain::Sync(player, "level");
             TortoiseBots::questspells::Sync(player, "level");
+            TortoiseBots::talents::Sync(player, "level");
         }
     }
 
@@ -535,6 +539,7 @@ public:
             { "guildorder", TortoiseBots::h3::HandleGuildOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "talents", TortoiseBots::talents::HandleTalentsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
