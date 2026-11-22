@@ -9,7 +9,8 @@
 //  * a group-loot roll the core starts for this bot (Player::GetLootRolls, Player.h:2359: the core's own read-only list of the rolls waiting for
 //    this player's answer) is announced to the engine as the "loot start roll" event, and the bot's vote goes through WorldSession::
 //    HandleLootRoll (LootHandler.cpp:510). THE POLICY (lead decision 2026-11-20): group loot, GREED ONLY: never need, never pass on its own
-//    (so no item times out), no auto-equip (the trigger `loot roll won` and the action `equip upgrades` are not registered);
+//    (so no item times out); a won roll raises `loot roll won` (piece C: PollRollWon below), whose second action `equip upgrades`
+//    runs under its own gates (W6a, free bots only);
 //  * the loot tables (creature / game object / reference / item) are copied from the world database through the guarded reader below
 //    (LootTemplate::Entries and ::Groups are private, LootMgr.h:150-151).
 //
@@ -24,6 +25,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "host/TbRollWon.h"     // piece C: the won-roll poll (PollRollWon), called from PollPacketEventCompat below
 
 // ===============================================================================================================
 // NAMES: the 1.12 spellings of constants the loot, roll and item usage code uses
@@ -194,6 +196,11 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     if (name == "quest share")
     {
         PollQuestShareCompat(bot, trigger);
+        return;
+    }
+    if (name == "loot roll won")
+    {
+        ::TortoiseBots::rollwon::PollRollWon(bot, trigger);
         return;
     }
     if (name != "loot start roll" && name != "loot response")

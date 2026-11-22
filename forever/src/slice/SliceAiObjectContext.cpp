@@ -418,7 +418,7 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketActionContext (12 of its keys)
+    // the registry of WorldPacketActionContext (13 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -430,6 +430,7 @@ namespace slice
             creators["loot start roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootStartRollAction(ai); };
             creators["loot vote"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootVoteAction(ai); };
             creators["loot roll"] = [](PlayerbotAI* ai) { return (QueryItemUsageAction*)new LootRollAction(ai); };
+            creators["log roll won"] = [](PlayerbotAI* ai) { return new RollWonLogAction(ai); };
             creators["find corpse"] = [](PlayerbotAI* ai) { return new FindCorpseAction(ai); };
             creators["revive from corpse"] = [](PlayerbotAI* ai) { return new ReviveFromCorpseAction(ai); };
             creators["talk to quest giver"] = [](PlayerbotAI* ai) { return new TalkToQuestGiverAction(ai); };
@@ -611,7 +612,7 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketTriggerContext (6 of its keys)
+    // the registry of WorldPacketTriggerContext (7 of its keys)
     class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -621,6 +622,7 @@ namespace slice
             creators["loot start roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot start roll"); };
             creators["loot vote"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot vote"); };
             creators["loot roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll"); };
+            creators["loot roll won"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll won"); };
             creators["item push result"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "item push result"); };
             creators["quest share"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "quest share"); };
         }
@@ -846,7 +848,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 39, kActions = 142, kTriggers = 160, kValues = 210;
+    constexpr unsigned kStrategies = 39, kActions = 143, kTriggers = 161, kValues = 210;
 }
 }
 
