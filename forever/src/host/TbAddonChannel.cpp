@@ -29,6 +29,7 @@ namespace
 std::mutex g_mutex;
 std::unordered_map<std::string, VerbHandler> g_verbs;
 std::set<std::string> g_advertised;   // sorted and unique by construction
+std::set<std::string> g_advertisedCaps;   // sorted and unique by construction
 pure::PendingQueue g_queue;
 bool g_truncationLogged = false;   // world thread only (Send runs in the drain)
 
@@ -162,6 +163,21 @@ std::vector<std::string> AdvertisedVerbs()
 {
     std::lock_guard<std::mutex> lock(g_mutex);
     return std::vector<std::string>(g_advertised.begin(), g_advertised.end());
+}
+
+void AdvertiseCap(std::string_view token)
+{
+    std::string const text(pure::Trim(token));
+    if (text.empty())
+        return;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_advertisedCaps.insert(std::string(text));
+}
+
+std::vector<std::string> AdvertisedCaps()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return std::vector<std::string>(g_advertisedCaps.begin(), g_advertisedCaps.end());
 }
 
 std::string Safe(std::string_view field)

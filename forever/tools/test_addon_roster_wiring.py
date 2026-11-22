@@ -90,7 +90,7 @@ class Wiring(unittest.TestCase):
         # VERBS is the channel's own sorted-unique list; CAPS earns tb-gm for
         # a .tb-permitted requester; TRANSPORT is TB's channel verdict.
         self.assertIn("VerbsLine(addon::AdvertisedVerbs())", trailer)
-        self.assertIn("CapsLine(CapsFor(HasTbPermission(requester)))", trailer)
+        self.assertIn("CapsLine(CapsFor(addon::AdvertisedCaps(), HasTbPermission(requester)))", trailer)
         self.assertIn("TransportLine(TransportFor(requester))", trailer)
         gm = function_body(self.cpp, r"bool HasTbPermission\(Player\* player\)\s*\{")
         self.assertIn("HasPermission(rbac::RBAC_PERM_COMMAND_GM)", gm)

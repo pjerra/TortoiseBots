@@ -354,6 +354,12 @@ void TortoiseBots::action::RegisterAddonVerbsActions()
     addon::RegisterVerb("action", HandleActionVerb);
     for (std::string const& intent : SupportedIntents())
         addon::Advertise(AdvertiseToken(intent));
+    // The buttons these intents light in the addon (Core.lua PullIntent, the
+    // Flee and engage buttons in UI.lua): each token names a gated send the
+    // verbs above answer.
+    addon::AdvertiseCap("pull-seconds");
+    addon::AdvertiseCap("flee");
+    addon::AdvertiseCap("engage");
 }
 
 #else // no engine: the verb is unknown and the channel answers it so

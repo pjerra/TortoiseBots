@@ -45,6 +45,8 @@ class AddonActionsWiring(unittest.TestCase):
         self.assertIn("RegisterAddonVerbsActions", H)
         self.assertIn('addon::RegisterVerb("action"', CPP)
         self.assertIn("addon::Advertise(AdvertiseToken(intent))", CPP)
+        for token in ("pull-seconds", "flee", "engage"):
+            self.assertIn(f'addon::AdvertiseCap("{token}")', CPP)
         self.assertIn("SupportedIntents()", CPP)
 
     def test_calls_existing_implementations(self):

@@ -24,25 +24,27 @@ namespace roster
 inline constexpr unsigned kAddonProtocol = 1;
 inline constexpr unsigned kMinAddonProtocol = 1;
 
-// The capability tokens this server earns today: only verbs that exist
-// natively (player::Dispatch plus the f-actions `action` intents). The rest of
-// TB's set (inventory, behavior, loot-log, downtime, professions, blessing,
-// blessing-player, choice, focus-mark, use-object, guild-orders,
-// guild-order-steps, guild-order-nobuy, dungeon-run) stays dark until its verb
-// lands: the addon would otherwise light buttons whose sends come back
-// ACTION_ERR.
-// "tb-gm" rides along when the requester holds the .tb permission
-// (rbac::RBAC_PERM_COMMAND_GM, 371, the permission every .tb row asks for):
-// the addon uses it to decide whether its GM-only .tb bridge may be used.
-inline std::vector<std::string> CapsFor(bool hasTbPermission)
+// The roster CAPS line: the fixed tokens earned by this piece plus what the
+// other pieces advertised at startup (AdvertisedCaps), with "tb-gm" last when
+// the requester holds the .tb permission (rbac::RBAC_PERM_COMMAND_GM, 371,
+// the permission every .tb row asks for). Only tokens whose feature really
+// works reach the line: each piece advertises exactly the tokens its verbs
+// earn, so the addon never lights a button whose send comes back ACTION_ERR.
+// The rest of TB's set (inventory, behavior, loot-log, downtime, professions,
+// blessing, blessing-player, choice, focus-mark, use-object, guild-orders,
+// guild-order-steps, guild-order-nobuy, dungeon-run) stays dark until its
+// verb lands.
+inline std::vector<std::string> CapsFor(std::vector<std::string> advertisedCaps, bool hasTbPermission)
 {
-    // TB-relative order (Info.cpp CAPS line). pull-seconds/flee/engage ride on
-    // f-actions (action pull/pullback [seconds] [ranged|body], action flee,
-    // action engage [seconds]); TB advertises claimed-roster unconditionally
-    // and the stream below is live (empty until the guild-bot stores land).
+    // TB advertises claimed-roster unconditionally and the stream below is
+    // live (empty until the guild-bot stores land). The advertised extras
+    // arrive sorted from the channel; "tb-gm" stays per-requester, never in
+    // the shared set.
+    std::vector<std::string> caps = { "claimed-roster" };
+    caps.insert(caps.end(), advertisedCaps.begin(), advertisedCaps.end());
     if (hasTbPermission)
-        return { "pull-seconds", "flee", "claimed-roster", "engage", "tb-gm" };
-    return { "pull-seconds", "flee", "claimed-roster", "engage" };
+        caps.push_back("tb-gm");
+    return caps;
 }
 
 // One roster row: the same bots `.bot who` shows (see RosterVisible).

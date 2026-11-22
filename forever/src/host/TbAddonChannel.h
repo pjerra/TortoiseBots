@@ -36,6 +36,12 @@ void Advertise(std::string_view token);
 // roster handshake emits it right before TBM:CAPS; the addon uses it to pick
 // native vs bridge per command.
 std::vector<std::string> AdvertisedVerbs();
+// Adds a TBM:CAPS token ("flee", "pull-seconds"). Owned by the piece whose
+// verb earns it, called at startup like Advertise (startup only).
+void AdvertiseCap(std::string_view token);
+// The capability tokens earned so far: sorted, unique. The roster handshake
+// emits its fixed tokens plus these.
+std::vector<std::string> AdvertisedCaps();
 // One addon message per non-empty line ('\n' splits), prefix TBM, to the
 // requester itself (Player::WhisperAddon to self, not logged). Lines over 255
 // bytes are truncated (logged once). Silently drops null or logged-out

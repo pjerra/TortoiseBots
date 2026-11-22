@@ -185,7 +185,7 @@ void SendTrailer(Player* requester)
     addon::Send(requester, ProtoLine());
     addon::Send(requester, LatestLine());
     addon::Send(requester, VerbsLine(addon::AdvertisedVerbs()));
-    addon::Send(requester, CapsLine(CapsFor(HasTbPermission(requester))));
+    addon::Send(requester, CapsLine(CapsFor(addon::AdvertisedCaps(), HasTbPermission(requester))));
     addon::Send(requester, TransportLine(TransportFor(requester)));
 }
 

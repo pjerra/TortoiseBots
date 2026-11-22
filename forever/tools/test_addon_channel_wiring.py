@@ -22,7 +22,9 @@ def check_api_shape(header_src):
         "using VerbHandler = void (*)(Player* requester, std::string_view args);",
         "void RegisterVerb(std::string_view verb, VerbHandler handler);",
         "void Advertise(std::string_view token);",
+        "void AdvertiseCap(std::string_view token);",
         "std::vector<std::string> AdvertisedVerbs();",
+        "std::vector<std::string> AdvertisedCaps();",
         "void Send(Player* to, std::string_view line);",
         "void Ack(Player* to, std::string_view intent, std::string_view scope, std::uint32_t count, std::string_view detail);",
         "void Err(Player* to, std::string_view intent, std::string_view code, std::string_view message);",
@@ -43,7 +45,8 @@ def check_hooks(cpp_src):
 
 
 def check_guards(cpp_src):
-    for token in ["IsBot(player->GetGUID())", "BotMgr::Instance().Enabled()", "engine::Built()"]:
+    for token in ["IsBot(player->GetGUID())", "BotMgr::Instance().Enabled()", "engine::Built()",
+                  "g_advertisedCaps", "AdvertisedCaps()"]:
         if token not in cpp_src:
             raise AssertionError("channel lost guard: " + token)
 
