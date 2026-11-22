@@ -173,7 +173,7 @@ inline void PushQuestToPartyCompat(Player* bot, uint32 questId)
 
 // The spawned-giver/ender sets live only on the ForeverCore side (TbCompat_Quest.h), which has the relation tables;
 // here they are inert twins keeping the compat pair equal. Eligibility on this side stays always-true below.
-struct QuestEligibilitySetsCompat
+struct QuestEligibilitySets
 {
     std::unordered_set<uint32> spawnedCreatures;
     std::unordered_set<uint32> spawnedGOs;
@@ -181,22 +181,22 @@ struct QuestEligibilitySetsCompat
     bool built = false;
 };
 
-inline QuestEligibilitySetsCompat& QuestEligibilitySetsCompat()
+inline QuestEligibilitySets& QuestEligibilitySetsCompat()
 {
-    static QuestEligibilitySetsCompat sets;
+    static QuestEligibilitySets sets;
     return sets;
 }
 
 inline void RebuildQuestEligibilityCompat()
 {
-    QuestEligibilitySetsCompat& sets = QuestEligibilitySetsCompat();
-    sets = QuestEligibilitySetsCompat();
+    QuestEligibilitySets& sets = QuestEligibilitySetsCompat();
+    sets = QuestEligibilitySets();
     sets.built = true;
 }
 
 inline void ClearQuestEligibilityCompat()
 {
-    QuestEligibilitySetsCompat() = QuestEligibilitySetsCompat();
+    QuestEligibilitySetsCompat() = QuestEligibilitySets();
 }
 
 inline bool QuestIsVanillaEligibleCompat(Quest const* /*quest*/) { return true; }
