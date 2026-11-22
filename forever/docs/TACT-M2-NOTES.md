@@ -11,7 +11,8 @@ no legacy source edit, no config key.
 * Command checks: the unit exists, is alive and `IsNonMeleeSpellCast(true)`; refusals `no-target`, `dead-target`, `not-casting`.
 * One bot is picked (TB `ResolveInterruptExecutor`): the named bot only, else the first bot in party order with a castable action.
   The probe is TB `FindInterruptAction`: registered action, `ai->HasSpell`, `ai->IsInterruptableSpellCasting(target, action, true)`,
-  `ai->CanCastSpell(action, target, 0, nullptr, true, true, true)` (range ignored: the queued action walks). The action list is
+  `ai->CanCastSpell(action, target, 0, nullptr, true, true, true)` (range ignored: the queued action walks). Review fix: a bot that can cast its action from where it stands wins
+  over an earlier one that would walk; the walk-and-queue path is used only when no probed bot is in range. The action list is
   `counterspell`, `silence`, `kick`, `pummel`, `shield bash`, `bash`, `hammer of justice`, `earth shock`, `death coil` - without
   `spell lock` (pet context) and `repentance` (no Forever kit).
 * No bot qualifies: `no-interrupt`, `msg` = `name:reason` per probed bot (`dead`, `no-engine`, `other-map`, `far`, `no-spell`).
@@ -28,8 +29,8 @@ no legacy source edit, no config key.
 `ai::ParsePullOrderOption` owns the words: any order, each once, `ranged` and `body` exclude each other, a sign or another word is
 `invalid` with the usage. The canonical text (TB `PullOptionText`) travels as `Parsed::pullOption` into `batch.Back().arg`.
 
-* The seconds replace the hold's join delay: `kPullJoinDelaySeconds` (3) for `pull`, `AiPlayerbot.PullBackDpsJoinDelay` for
-  `pullback`; `PausePartyPullHold` takes the order's value.
+* The seconds replace the party hold's join delay (`kPullJoinDelaySeconds`, 3, for both verbs without seconds) and, for `pullback`,
+  the strategy's DPS join delay (`AiPlayerbot.PullBackDpsJoinDelay` without seconds). Review fix: a default `pullback` keeps its 3 s hold.
 * `ranged`/`body` record the per-command mode with `PullStrategy::BeginCommand(pullback, hadPullBack, delay, ranged, body)` before
   `pull my target`, and the `SaveCommand`/`RestoreCommand` rollback runs for `pull` as well as `pullback` when the request refuses.
 * `body` is no longer parsed and dropped: plan rows that ask for it walk in. `pull` with only seconds does not touch the strategy

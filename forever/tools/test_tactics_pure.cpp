@@ -74,6 +74,19 @@ static void TestInterrupt()
 
     CHECK(!t::PickInterrupt(std::vector<InterruptProbe>()).found);
 
+    // Review fix: a bot that can land the interrupt from where it stands wins over an earlier bot that would have to walk.
+    probes = { { "Mrogue", false, { "kick" }, {} }, { "Mmage", false, { "counterspell" }, { "counterspell" } } };
+    pick = t::PickInterrupt(probes);
+    CHECK(pick.found && pick.index == 1 && pick.action == "counterspell" && pick.inRange);
+    // ... and with nobody in range the first able bot still gets the walk-and-queue order.
+    probes = { { "Mrogue", false, { "kick" }, {} }, { "Mmage", false, { "counterspell" }, {} } };
+    pick = t::PickInterrupt(probes);
+    CHECK(pick.found && pick.index == 0 && pick.action == "kick" && !pick.inRange);
+    // A named bot out of range is still the only one considered.
+    probes = { { "Mrogue", true, { "kick" }, {} }, { "Mmage", false, { "counterspell" }, { "counterspell" } } };
+    pick = t::PickInterrupt(probes);
+    CHECK(pick.found && pick.index == 0 && !pick.inRange);
+
     // TB's list without the pet-only `spell lock` and the unported `repentance`.
     std::string order;
     for (char const* action : t::kInterruptActions)

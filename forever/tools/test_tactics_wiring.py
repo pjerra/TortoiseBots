@@ -204,6 +204,24 @@ def check_interrupt_run(src):
             raise AssertionError(f"the interrupt run does not use {pin}")
 
 
+def check_interrupt_prefers_in_range(src):
+    c = strip_comments(src)
+    if "pass == 0 ? probes[i].inRange : probes[i].actions" not in c:
+        raise AssertionError("PickInterrupt does not prefer a bot in range")
+
+
+def check_interrupt_probe_in_range(src):
+    body = function_body(strip_comments(src), "Player* PickInterruptBot(")
+    if "CanCastSpell(key, target, 0, nullptr, false, true, true)" not in body or "probe.inRange.push_back(key)" not in body:
+        raise AssertionError("PickInterruptBot does not probe the range")
+
+
+def check_pullback_default_hold(src):
+    body = function_body(strip_comments(src), "std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)")
+    if "option.hasSeconds ? option.seconds : kPullJoinDelaySeconds;" not in body or "PausePartyPullHold(bot, holdDelay," not in body:
+        raise AssertionError("a default pullback no longer keeps the 3 s party hold")
+
+
 def check_cmd_interrupt(src):
     body = function_body(strip_comments(src), "bool TryHandleTacticalVerb(")
     for pin in ('verb == "interrupt"', "PickInterruptBot("):
@@ -278,6 +296,15 @@ class Wiring(unittest.TestCase):
     def test_interrupt_run_queues_the_mature_action(self):
         check_interrupt_run(self.sources["tactics"])
 
+    def test_interrupt_prefers_in_range(self):
+        check_interrupt_prefers_in_range(self.sources["tactics_pure"])
+
+    def test_interrupt_probes_range(self):
+        check_interrupt_probe_in_range(self.sources["tactics"])
+
+    def test_pullback_default_hold(self):
+        check_pullback_default_hold(self.sources["orders"])
+
     def test_cmd_handles_interrupt(self):
         check_cmd_interrupt(self.sources["cmd_tactics"])
 
@@ -297,6 +324,9 @@ MUTATIONS = [
     ("cmd-missing-verb-old-list", "cmd_orders", lambda s: s.replace(", stop, flee, guard, stance, engage, rebuff\");", "\");", 1), check_cmd_missing_verb_lists_m1),
     ("drop-pull-arg", "run_orders", lambda s: s.replace(".arg = p.pullOption;", "", 1), check_dopull_arg),
     ("reverse-interrupt-order", "tactics_pure", lambda s: s.replace('"counterspell", "silence", "kick"', '"kick", "silence", "counterspell"', 1), check_interrupt_action_order),
+    ("ignore-in-range-interrupt", "tactics_pure", lambda s: s.replace("pass == 0 ? probes[i].inRange : probes[i].actions", "probes[i].actions", 1), check_interrupt_prefers_in_range),
+    ("drop-range-probe", "tactics", lambda s: s.replace("probe.inRange.push_back(key)", "(void)key", 1), check_interrupt_probe_in_range),
+    ("pullback-hold-config-delay", "orders", lambda s: s.replace("PausePartyPullHold(bot, holdDelay,", "PausePartyPullHold(bot, delay,", 1), check_pullback_default_hold),
     ("ignore-named-interrupt", "tactics_pure", lambda s: s.replace("anyNamed && !probes[i].named", "false", 1), check_interrupt_named),
 ]
 

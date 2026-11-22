@@ -203,7 +203,12 @@ Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::st
             for (char const* key : kInterruptActions)
                 if (ActionRegistered(ai, key) && ai->HasSpell(key) && ai->IsInterruptableSpellCasting(target, key, true) &&
                     ai->CanCastSpell(key, target, 0, nullptr, true, true, true))
+                {
                     probe.actions.push_back(key);
+                    // Review fix: a bot that can land the interrupt from where it stands wins over an earlier one that would walk.
+                    if (ai->CanCastSpell(key, target, 0, nullptr, false, true, true))
+                        probe.inRange.push_back(key);
+                }
         probes.push_back(probe);
         if (probe.actions.empty())
             why.push_back(probe.bot + ":" + (reason.empty() ? "no-spell" : reason));

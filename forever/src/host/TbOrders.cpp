@@ -663,6 +663,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         ai::PullOrderOption option;
         ai::ParsePullOrderOption(o.arg, option);
         uint32 const delay = option.hasSeconds ? option.seconds : sPlayerbotAIConfig.pullBackDpsJoinDelay;
+        uint32 const holdDelay = option.hasSeconds ? option.seconds : kPullJoinDelaySeconds;   // review fix: no seconds, the hold keeps its 3 s
         bool const hadPullBack = ai->HasStrategy("pull back", BotState::BOT_STATE_COMBAT) || ai->HasStrategy("pull back", BotState::BOT_STATE_NON_COMBAT);
         ai::PullStrategy::CommandState commandBefore;
         bool hasCommandBefore = false;
@@ -688,7 +689,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
             return "fail:pullback";
         }
         RelaxTankForPull(bot, ai, o.fromRun);
-        ai::PausePartyPullHold(bot, delay, true, kPullApproachWindowSeconds);   // L2: the same lead-keyed hold as `pull`, from the order's seconds
+        ai::PausePartyPullHold(bot, holdDelay, true, kPullApproachWindowSeconds);   // L2: the same lead-keyed hold as `pull`, from the order's seconds
         if (o.fromRun)
             AnchorPullHoldOnTank(bot);
         return "ok";

@@ -67,13 +67,15 @@ inline char const* const kInterruptActions[] = {
     "counterspell", "silence", "kick", "pummel", "shield bash", "bash", "hammer of justice", "earth shock", "death coil"
 };
 
-// One bot's probe: the actions above that passed every check for this target now. `named` is the bot the order names: when any probe is
-// named, only named probes are considered (TB ResolveInterruptExecutor), so the party picked by name is never overridden.
+// One bot's probe: the actions above that passed every check for this target now, with the spell range ignored (`actions`), and
+// the subset castable from where the bot stands (`inRange`). `named` is the bot the order names: when any probe is named, only named
+// probes are considered (TB ResolveInterruptExecutor), so the party picked by name is never overridden.
 struct InterruptProbe
 {
     std::string bot;
     bool named = false;
     std::vector<std::string> actions;
+    std::vector<std::string> inRange;
 };
 
 struct InterruptPick
@@ -81,30 +83,35 @@ struct InterruptPick
     bool found = false;
     size_t index = 0;
     std::string action;
+    bool inRange = false;   // the pick can land from where it stands; false: no bot was in range, the queued action walks (D6)
 };
 
-// The first able bot in the list's own order (the party order), and within it the first action of kInterruptActions, so the answer does not
-// depend on the order the caller happened to test the spells in.
+// A bot that can interrupt from where it stands wins over one that would have to walk: the first in-range bot in the list's own order
+// (the party order), else the first able bot with range ignored. Within a bot the first action of kInterruptActions wins, so the answer
+// does not depend on the order the caller happened to test the spells in.
 inline InterruptPick PickInterrupt(std::vector<InterruptProbe> const& probes)
 {
     bool anyNamed = false;
     for (InterruptProbe const& probe : probes)
         anyNamed = anyNamed || probe.named;
-    for (size_t i = 0; i < probes.size(); ++i)
-    {
-        if (anyNamed && !probes[i].named)
-            continue;
-        for (char const* action : kInterruptActions)
-            for (std::string const& known : probes[i].actions)
-                if (known == action)
-                {
-                    InterruptPick pick;
-                    pick.found = true;
-                    pick.index = i;
-                    pick.action = action;
-                    return pick;
-                }
-    }
+    for (int pass = 0; pass < 2; ++pass)
+        for (size_t i = 0; i < probes.size(); ++i)
+        {
+            if (anyNamed && !probes[i].named)
+                continue;
+            std::vector<std::string> const& known = pass == 0 ? probes[i].inRange : probes[i].actions;
+            for (char const* action : kInterruptActions)
+                for (std::string const& name : known)
+                    if (name == action)
+                    {
+                        InterruptPick pick;
+                        pick.found = true;
+                        pick.index = i;
+                        pick.action = action;
+                        pick.inRange = pass == 0;
+                        return pick;
+                    }
+        }
     return InterruptPick();
 }
 }

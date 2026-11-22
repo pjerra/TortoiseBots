@@ -40,7 +40,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
 // The interrupt executor among `bots` (already the party order, or just the named bot): the first with a castable interrupt action.
 // `action` is the action name the queued order runs; when none is found `reasons` is one `name:reason` per probed bot (dead, other-map,
 // far, no-spell, no-engine). The probe is TB FindInterruptAction (BotCommandContext.cpp:556-586): registered action, known spell, the
-// target's spell is interruptible by it, and CanCastSpell with range ignored (the queued action walks).
+// target's spell is interruptible by it, and CanCastSpell with range ignored (the queued action walks). A bot in range of its action
+// wins over an earlier bot that would have to walk (PickInterrupt's first pass).
 Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::string& action, std::string& reasons);
 
 // Appends the tactical keys to a `.tb state` record: stance= and rebuff= (seconds left of the force-rebuff window).
