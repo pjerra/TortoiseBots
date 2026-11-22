@@ -25,6 +25,32 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 * Threads: console commands run in `World::ProcessCliCommands` (World.cpp:3166, called at :2592) and chat commands in `World::UpdateSessions` (World.cpp:3119, called at :2421;
   the chat opcodes are `PROCESS_THREADUNSAFE`, Opcodes.cpp:334-338): both on the world thread, as does the engine tick (`WorldScript::OnBeforeMapsUpdate`, World.cpp:2470).
 
+## 1a. `.bot` (players)
+
+Round R1 of the player command layer (issue #129): a player types `.bot` in ordinary chat. The entry is a module `PlayerScript` hook
+(`PlayerScript::OnCommand`), which the core calls before its own command lookup and before any RBAC check, so a non-GM sees it. It claims
+exactly the word `bot` (any case, then end or a space): `.bot help` is ours, `.botany` stays the core's. With `TortoiseBots.Enable = 0`, or
+in a build without the engine (`TORTOISEBOTS_SLICE1` off), the hook declines and the core answers as for any unknown command. The console
+keeps `.tb`; `.bot` is for characters in the world. `.bot` is not listed in the core's `.help`.
+
+**Who may order which bot.** Ownership is the **Battle.net account**: the bot character's game account belongs to the caller's Battle.net
+account. A caller also gets the tactical verbs on a bot it is master of, commands through the commander binding, or leads the bot's party as
+a real player. A GameMaster (RBAC 371, the `.tb` permission) may use every verb on every bot. A bot in a running dungeon run refuses every
+`.bot` order to everyone, GMs included. Refusals name a stable code and never an account.
+
+R1 ships two verbs:
+
+| Command | What it does |
+|---|---|
+| `.bot` / `.bot help` | the usage rows the caller may use |
+| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow|stay|free`, `engine|spike`. A GM's `.bot who all` lists every bot |
+
+Replies: `TortoiseBots: help: <row>`, `TortoiseBots: who: <n> bot(s)`, `TortoiseBots: who: <Name> level <n> <class> map <id> <move> <brain>`,
+and `TortoiseBots: <verb>: refused <code>: <text>` with `usage`, `unknown-verb`, `players-off` (and later `not-a-bot`, `not-yours`, `in-run`, ...).
+`TortoiseBots.Player.Commands = 0` refuses players with `players-off`; GMs keep the command. `TortoiseBots.Player.MaxBots` (default 4) caps
+how many of a player's own characters may be in the world at once when `.bot add` arrives. The ordering verbs (`add`, `logout`, `follow`,
+`stay`, `attack`, `flee`, `summon`, `stats`) follow in the next rounds; until then they answer `unknown-verb`.
+
 ## 2. The older commands (free text, human readable)
 
 | Command | What it does |

@@ -81,6 +81,7 @@
 #include "host/TbChatLinkCmd.h"
 #include "host/chat/TbChatCmd.h"
 #include "host/chat/TbChatIn.h"
+#include "host/player/TbPlayerCmd.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -176,6 +177,7 @@ public:
         if (reload)
             TortoiseBots::cmd::LoadBindings();     // P2: the key or the graces changed, or persistence was just turned on
         TortoiseBots::cmd::LoadFeeds();            // P4: the map layers' keys and ranges (the boss roster is built by the world start, below)
+        TortoiseBots::player::LoadConfig();        // R1: the `.bot` keys (TortoiseBots.Player.Commands, MaxBots)
     }
 
     // `reload all` is the operator's "read the database again". The plan tables are the module's own (ai_dungeon_plan and
@@ -1751,6 +1753,7 @@ void AddSC_tortoisebots()
     new tortoisebots_server();
     new tortoisebots_commands();
     TortoiseBots::chatin::AddScripts();     // S1-R2: PlayerScript::OnChat -> the bots' chat inboxes (host/chat/TbChatIn.cpp)
+    TortoiseBots::player::AddScripts();     // R1: PlayerScript::OnCommand -> the players' `.bot` entry (host/player/TbPlayerCmd.cpp)
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
 }

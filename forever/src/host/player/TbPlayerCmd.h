@@ -1,0 +1,23 @@
+// The `.bot` entry a player types in game: the words, the caller's right to each, and the replies (D-1, D-4, D-6 of the player-command
+// spec). The rule without the core is host/player/TbPlayerAuthPure.h; the live objects and the reply channel are TbPlayerCmd.cpp.
+//
+// Threading: world thread (a chat opcode is PROCESS_THREADUNSAFE; the hook runs inside ChatHandler::ParseCommands).
+#pragma once
+
+#include <string_view>
+
+class Player;
+
+namespace TortoiseBots
+{
+namespace player
+{
+// TortoiseBots.Player.Commands and TortoiseBots.Player.MaxBots, read at world config load and on a reload.
+void LoadConfig();
+// Registers the `tortoisebots_player_cmd` PlayerScript whose PlayerScript::OnCommand claims the word `bot`. Nothing with the engine off.
+void AddScripts();
+// The text after `.bot` (or after the `bot` word of the command text). False only while the module or the engine is off: the core
+// then answers the command as it does for any other.
+bool Dispatch(Player* player, std::string_view rest);
+}
+}

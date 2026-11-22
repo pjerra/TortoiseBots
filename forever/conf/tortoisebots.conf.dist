@@ -434,3 +434,24 @@ TortoiseBots.Bg.MaxBots = 50
 #
 
 TortoiseBots.Bg.MaxMinutes = 45
+
+#    --- Player commands: `.bot` ---
+#
+#    TortoiseBots.Player.Commands
+#        Description: The `.bot` command a player types in game (`.bot help`, `.bot who`, ...). 1 = players may use it;
+#                     0 = only GameMasters may (a player is told `players-off`). Only the engine build has it
+#                     (TORTOISEBOTS_SLICE1); without it `.bot` stays unknown to the core. `.tb` is a GameMaster command
+#                     whatever this says.
+#        Default:     1
+#
+
+TortoiseBots.Player.Commands = 1
+
+#
+#    TortoiseBots.Player.MaxBots
+#        Description: How many of a player's own characters (on the player's Battle.net account) `.bot add` may put in the
+#                     world at once, under the one-session-per-account rule. 0 to 4. Only the engine build has it.
+#        Default:     4
+#
+
+TortoiseBots.Player.MaxBots = 4
