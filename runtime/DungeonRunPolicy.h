@@ -11765,12 +11765,15 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
         bool const spent = r.healerHoldMs >= kPullHealerHoldMs;
         if (!spent)
         {
+            bool const first = r.healerHoldMs == 0;
             r.healerHoldMs += dt;
             if (r.phase != Phase::Gather)
             {
                 EnterPhase(r, Phase::Gather);
                 SendGather(r, f, order); // the party forms up on the tank
             }
+            else if (first)
+                SendGather(r, f, order); // already gathering for another reason: this hold's own gather order, once (Codex review round 2)
             r.stepIdleMs = dt > r.stepIdleMs ? 0 : r.stepIdleMs - dt; // the wait is the step's work, not idling
             r.note = "pull held: the healer " + healerWhy;
             return;

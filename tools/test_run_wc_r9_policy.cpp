@@ -200,9 +200,10 @@ static void TestHealerGateIsBounded()
     q.phaseMs = 40000;
     Facts g = PullParty(true, 12.0f, false);
     std::string held = Tick(q, g);
-    CHECK(held != "pullback 7");
+    CHECK(held.rfind("move ", 0) == 0); // Codex round 2: already in the gather phase, the hold still sends its own gather order, once
+    CHECK(Tick(q, g).empty());
     CHECK(q.note == "pull held: the healer Wcpri has no line of sight to the tank");
-    std::uint32_t held_ms = kTickMs;
+    std::uint32_t held_ms = 2 * kTickMs;
     while (held_ms < 3 * kPullHealerHoldMs && Tick(q, g) != "pullback 7")
         held_ms += kTickMs;
     CHECK(held_ms >= kPullHealerHoldMs && held_ms <= kPullHealerHoldMs + 3 * kTickMs);

@@ -116,6 +116,9 @@ and `TestPlanShape` (the list, pinned whole); `python3 forever/tools/test_wc_pla
   changed file again by hash, the file deletes and inserts the plan's rows in one transaction, and `forever/sql/README.md` names
   "edit the plan, export again, replace the file" as the way to change generated plan rows; a second migration that only updates
   `kill_first` would leave the generator and the shipped rows disagreeing (`test_wc_plan_rows.py` pins the file to the generator).
+* High (round 2), when the run is already in the gather phase for another reason the hold sent no gather order, so the healer could
+  stay round the corner until the 25 s ran out. FIXED: the hold sends its own gather order once, on entry, whatever the phase;
+  `TestHealerGateIsBounded` starts in the gather phase and requires the order (mutation: no order when already gathering, caught).
 
 ## Mutations (each caught)
 
@@ -126,6 +129,8 @@ Run on the build VM against the tests above; each mutation was applied to a scra
 | healer gate off (`HealerOutOfReach` returns false) | `TestHealerGateHoldsThePull` (r9), `TestHealerGateAtTheShamblerCamp` (run_wc) |
 | sight ignored (distance only) | `TestHealerGateHoldsThePull` "no line of sight" case |
 | hold never spent | `TestHealerGateIsBounded` |
+| hold on the gather phase's clock again | `TestHealerGateIsBounded` (slow-gather case) |
+| no gather order when the run is already gathering | `TestHealerGateIsBounded` (gather-phase case) |
 | range three times as wide (90 yd) | `TestHealerGateHoldsThePull` (40 yd case) |
 | walk-back cap ignores the host's raised value | `TestWalkBackPullCapIsTheHostsToRaise`, and the walk-back healer test |
 | walk back reads only units near the point (no lead radius) | `TestWalkBackPullsRespawnedPacks`, `TestWalkBackAsksForHostilesAroundTheLead` |
