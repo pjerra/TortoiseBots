@@ -36,5 +36,10 @@ inline bool ShouldAutoTrainOnEvent(bool flagEnabled, bool isBot)
     return flagEnabled && isBot;
 }
 
+inline uint32_t NetTrainerTaught(uint32_t trainerTaught, uint32_t removedCount)
+{
+    return trainerTaught > removedCount ? trainerTaught - removedCount : 0;
+}
+
 } // namespace autotrain
 } // namespace tbhost

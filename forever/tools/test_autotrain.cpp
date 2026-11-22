@@ -85,12 +85,22 @@ static void TestAutoTrainEventGate()
     CHECK(c, !A::ShouldAutoTrainOnEvent(false, false));
 }
 
+static void TestNetTrainerTaught()
+{
+    char const* const c = "case 5 (net trainer taught excludes post-train removals)";
+    BeginCase(c);
+    CHECK(c, A::NetTrainerTaught(1, 1) == 0);
+    CHECK(c, A::NetTrainerTaught(3, 1) == 2);
+    CHECK(c, A::NetTrainerTaught(0, 1) == 0);
+}
+
 int main()
 {
     TestRetailChainlessRule();
     TestPostTrainRemoval();
     TestClassLineSpellEligibility();
     TestAutoTrainEventGate();
+    TestNetTrainerTaught();
 
     int failed = 0;
     for (auto const& [name, ok] : g_cases)
