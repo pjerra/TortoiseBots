@@ -110,7 +110,7 @@ class L9Wiring(unittest.TestCase):
         poll = body(F_HEADER, "PollPacketEventCompat")
         # the roll event is raised only after the gate says so (free-for-all, round robin, master loot and no group: nothing is announced)
         self.assertIn("BotRollsInGroupLootCompat(bot, roll->GetLoot())", poll)
-        self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);"))
+        self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);", poll.index('name == "loot start roll")')))
         vote = body(F_HEADER, "RollVoteCompat")
         self.assertIn("BotRollsInGroupLootCompat(bot, live->GetLoot())", vote)
         self.assertLess(vote.index("BotRollsInGroupLootCompat("), vote.index("HandleLootRoll(packet)"))

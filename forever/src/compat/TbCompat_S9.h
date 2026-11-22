@@ -204,7 +204,7 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     }
     if (name == "loot roll won")
     {
-        ::TortoiseBots::rollwon::PollRollWon(bot, trigger);
+        ::TortoiseBots::rollwon::PollRollWon(bot, [&](WorldPacket& event) { trigger.ExternalEvent(event, nullptr); });
         return;
     }
     if (name != "loot start roll" && name != "loot response")
