@@ -56,6 +56,8 @@ def check_factory_call(s):
     assert "Decide(in)" in s["host"]
     assert "factory.InitPet();" in s["host"]
     assert "factory.InitPetSpells();" in s["host"]
+    assert "MissingPetControlSpells(in," in s["host"]
+    assert "bot->LearnSpell(spell.spellId, false);" in s["host"]
     for declared in ("void LoadConfig();", "bool Enabled();", "bool Sync(Player* bot, char const* why);"):
         assert declared in s["host_h"]
 
