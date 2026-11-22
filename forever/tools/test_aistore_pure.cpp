@@ -12,6 +12,7 @@ namespace
 {
 
 using ai::slice::aistore::BuildDeleteAllValuesSql;
+using ai::slice::aistore::SkipPoolStrategies;
 using ai::slice::aistore::BuildInvalidateStrategySnapshotsSql;
 using ai::slice::aistore::BuildLoadPlan;
 using ai::slice::aistore::BuildResetSql;
@@ -173,6 +174,13 @@ int main()
         LoadPlan plan = BuildLoadPlan(rows);
         assert(plan.clearNonCombat && plan.ops.empty());
     }
+
+    // Pool bots without a real player relation keep no strategy snapshot (TB
+    // random-bot rule); owned/commanded bots and non-pool bots use the store.
+    assert(SkipPoolStrategies(true, false));
+    assert(!SkipPoolStrategies(true, true));
+    assert(!SkipPoolStrategies(false, false));
+    assert(!SkipPoolStrategies(false, true));
     assert(BuildResetSql(42, "a'b", FakeEscape) ==
         "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `preset` = 'a\\'b'");
     assert(BuildInvalidateStrategySnapshotsSql(42) ==

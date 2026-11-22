@@ -167,6 +167,16 @@ inline LoadPlan BuildLoadPlan(std::vector<std::pair<std::string, std::string>> c
     return plan;
 }
 
+// Pool bots behave like TB random bots for the strategy store: a pool bot with
+// no real player relation (no real master, guild or friend) neither loads nor
+// saves co/nc/dead/react rows, so a bot that levels or changes spec always
+// rebuilds the current kit on login instead of replaying a stale snapshot.
+// Owned alts and bots commanded by a real player keep the normal store.
+inline bool SkipPoolStrategies(bool isPoolBot, bool hasRealPlayerRelation)
+{
+    return isPoolBot && !hasRealPlayerRelation;
+}
+
 struct StrategyRow
 {
     std::string key;

@@ -16,6 +16,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotDbStore.h"
+#include "TbBotMgr.h"
 #include "playerbot/strategy/AiObjectContext.h"
 
 #include "SliceDbStore.h"
@@ -123,6 +124,19 @@ void SaveValues(PlayerbotAI* ai, uint32_t guid, std::string const& preset)
     CharacterTransactGuardedCompat(all);
 }
 
+// TB random-bot rule for the strategy store, with Forever pool membership
+// standing in for the random flag (IsRandomBot stays false): a pool bot with
+// no real player relation keeps no co/nc/dead/react snapshot. The relation is
+// TB's own first three HasPlayerRelation clauses, without the random-bot tail.
+bool PoolSkipsStrategies(PlayerbotAI* ai)
+{
+    Player* bot = ai ? ai->GetBot() : nullptr;
+    if (!bot)
+        return false;
+    bool const relation = ai->HasRealPlayerMaster() || ai->IsInRealGuild() || ai->IsPlayerFriend();
+    return SkipPoolStrategies(TortoiseBots::BotMgr::Instance().IsPoolBot(bot->GetGUID()), relation);
+}
+
 void LoadAll(PlayerbotAI* ai, uint32_t guid, std::string const& preset)
 {
     if (!ai || !ai->GetAiObjectContext())
@@ -135,7 +149,14 @@ void LoadAll(PlayerbotAI* ai, uint32_t guid, std::string const& preset)
         ai->ReleasePullHold();
         return;
     }
-
+    // A pool bot with no real player relation keeps no strategy snapshot: it
+    // always rebuilds the current kit, like a TB random bot. Values still load.
+    if (PoolSkipsStrategies(ai))
+    {
+        LoadValues(ai, guid, preset);
+        ai->ReleasePullHold();
+        return;
+    }
     QueryResult result = CharacterQueryGuardedCompat(SelectValuesSql(guid, preset, Escape));
     if (result)
     {
@@ -202,6 +223,19 @@ void SaveAll(PlayerbotAI* ai, uint32_t guid, std::string const& preset)
         if (ai->HasPullWindow() && entry.compare(0, waitTimeRow.size(), waitTimeRow) == 0)
             entry = waitTimeRow + std::to_string(ai->PullWindowSavedSeconds());
         valueRows.push_back(std::move(entry));
+    }
+
+    // A pool bot with no real player relation keeps no strategy snapshot: values
+    // still save, strategy rows are left alone (like c-store's SaveValues).
+    if (PoolSkipsStrategies(ai))
+    {
+        SaveStatements statements = BuildSaveStatements(guid, preset, valueRows, Escape);
+        std::vector<std::string> all;
+        all.reserve(statements.insertSql.size() + 1);
+        all.push_back(statements.deleteSql);
+        all.insert(all.end(), statements.insertSql.begin(), statements.insertSql.end());
+        CharacterTransactGuardedCompat(all);
+        return;
     }
 
     auto collect = [ai](BotState state)
