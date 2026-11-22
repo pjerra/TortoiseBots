@@ -151,7 +151,7 @@ void RegisterVerb(std::string_view verb, VerbHandler handler)
 
 void Advertise(std::string_view token)
 {
-    std::string const text = pure::Trim(token);
+    std::string const text(pure::Trim(token));
     if (text.empty())
         return;
     std::lock_guard<std::mutex> lock(g_mutex);
