@@ -2,6 +2,9 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
 #include "CombatStrategy.h"
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+#include "playerbot/BossTacticsFiveManPolicy.h"
+#endif
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "../../../../runtime/CommandedGroupQuery.h"
@@ -226,6 +229,11 @@ float WaitForAttackMultiplier::GetValue(Action* action)
 {
     // Allow some movement and targeting actions
     const std::string& actionName = action->getName();
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    if (FiveManMap(ai->GetBot()->GetMapId()) && FiveManSafetyAction(actionName) &&
+        ai->HasStrategy("boss tactics",BotState::BOT_STATE_COMBAT) && ai->HasPullWindow() &&
+        ai->PullWindowLeadKeyed() && !ai->HasEngagePullWindow() && !ai->PullWindowFightStart()) return 1.0f;
+#endif
     if ((actionName != "wait for attack keep safe distance") &&
         (actionName != "dps assist") &&
         (actionName != "set facing") &&
