@@ -163,4 +163,14 @@ and capture tests (schema upgraded: `1e7499a0f90850f7` -> `ddd57f691bc09002`).
 
 ## Gates
 
-(filled in below at the end of the round)
+* Unit suites, mutations and Codex: above. Three Codex adversarial rounds against `tbf/run/wc-r8` (round 1: the hold's clock, the in-place
+  migration (not a defect); round 2: the gather order when already gathering; round 3: `from step` numbering and the placed run's pull count).
+* `tbf-premerge ~/wt-wc-r9 4` (it now bases on `tbf/dev`): the Turtle build PASSES every time and so does the pytest guard. The module builds
+  FAIL on a **dev defect that is not in this branch**: `tbf/dev` at d0d13b9f6 (#213 loot-gear) does not compile with the module
+  (`TbRollWon.h` uses `Player` as an incomplete type in slice ON; `TbUpkeep.cpp` 96/119/133 `ObjectMgr *` used with `.` in slice OFF); a
+  fix branch `fix/dev-build-213` is in progress in `~/wt-fix-213`. Run on a temporary base of `tbf/dev` + that fix's working diff
+  (`TBF_BASE=tmp/dev-fix213 tbf-premerge ~/wt-wc-r9 7`, never pushed): merge clean, pytest PASS, Turtle PASS, **slice1-ON PASS**, slice1-OFF FAIL
+  with only the three `TbUpkeep.cpp` errors (the fix does not cover them; none is in this branch's files). Re-run the gate when dev builds.
+  (Two sessions shared build slot 4 while this ran; the failures reproduce on the other slot.)
+
+(Re-run `tbf-premerge ~/wt-wc-r9 4` once `tbf/dev` builds; expected PASS.)
