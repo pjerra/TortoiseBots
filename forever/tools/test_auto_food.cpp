@@ -62,6 +62,16 @@ int main()
     assert(staleDrinkAt5.size() == 1 && staleDrinkAt5[0] == 159);
     assert(StaleLadderDrinkItems(1).empty());
 
+    // Periodic top-up rule: only when below 5, and at most once per 60 s per bot.
+    assert(NeedsTopUp(0));
+    assert(NeedsTopUp(4));
+    assert(!NeedsTopUp(5));
+    assert(!NeedsTopUp(20));
+
+    assert(TopUpCooldownElapsed(0, 1000));
+    assert(!TopUpCooldownElapsed(1000, 1000 + 59999));
+    assert(TopUpCooldownElapsed(1000, 1000 + 60000));
+
     std::cout << "PASS: test_auto_food\n";
     return 0;
 }

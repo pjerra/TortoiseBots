@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <unordered_map>
 
 #include "TbBotMgr.h"
 
@@ -22,7 +24,13 @@ namespace
 {
 
 std::atomic<bool> g_enabled{ true };
-constexpr uint32_t kMaxRationStack = 20;
+std::unordered_map<uint64_t, uint64_t> g_lastTopUpMs;
+
+uint64_t NowSteadyMs()
+{
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 uint32_t StockItem(Player* bot, uint32_t itemId, std::vector<uint32_t> const& staleIds)
 {
@@ -48,6 +56,30 @@ uint32_t StockItem(Player* bot, uint32_t itemId, std::vector<uint32_t> const& st
     return needed;
 }
 
+void ApplyStock(Player* bot, bool onlyWhenLow, char const* why)
+{
+    uint8_t const level = bot->GetLevel();
+    uint32_t const foodId = PickFoodItem(level, bot->GetGUID().GetCounter());
+    uint32_t addedFood = 0;
+    if (!onlyWhenLow || NeedsTopUp(bot->GetItemCount(foodId, false)))
+        addedFood = StockItem(bot, foodId, StaleLadderFoodItems(level));
+
+    uint32_t drinkId = 0;
+    uint32_t addedDrink = 0;
+    if (bot->GetMaxPower(POWER_MANA) > 0)
+    {
+        drinkId = PickDrinkItem(level);
+        if (!onlyWhenLow || NeedsTopUp(bot->GetItemCount(drinkId, false)))
+            addedDrink = StockItem(bot, drinkId, StaleLadderDrinkItems(level));
+    }
+
+    if (addedFood > 0 || addedDrink > 0)
+    {
+        TC_LOG_INFO("tortoisebots", "auto-food: {} (level {}) stocked food={}x{} drink={}x{} on {}",
+            bot->GetName(), uint32_t(level), foodId, addedFood, drinkId, addedDrink, why ? why : "sync");
+    }
+}
+
 } // namespace
 
 void LoadConfig()
@@ -69,23 +101,25 @@ void Sync(Player* bot, char const* why)
     if (!BotMgr::Instance().IsPoolBot(guid) && !BotMgr::Instance().IsFreeBot(guid))
         return;
 
-    uint8_t const level = bot->GetLevel();
-    uint32_t const foodId = PickFoodItem(level, guid.GetCounter());
-    uint32_t const addedFood = StockItem(bot, foodId, StaleLadderFoodItems(level));
+    ApplyStock(bot, false, why);
+}
 
-    uint32_t drinkId = 0;
-    uint32_t addedDrink = 0;
-    if (bot->GetMaxPower(POWER_MANA) > 0)
-    {
-        drinkId = PickDrinkItem(level);
-        addedDrink = StockItem(bot, drinkId, StaleLadderDrinkItems(level));
-    }
+void TickTopUp(Player* bot)
+{
+    if (!Enabled() || !bot || !bot->IsAlive() || !bot->IsInWorld())
+        return;
 
-    if (addedFood > 0 || addedDrink > 0)
-    {
-        TC_LOG_INFO("tortoisebots", "auto-food: {} (level {}) stocked food={}x{} drink={}x{} on {}",
-            bot->GetName(), uint32_t(level), foodId, addedFood, drinkId, addedDrink, why ? why : "sync");
-    }
+    ObjectGuid const guid = bot->GetGUID();
+    if (!BotMgr::Instance().IsPoolBot(guid) && !BotMgr::Instance().IsFreeBot(guid))
+        return;
+
+    uint64_t const nowMs = NowSteadyMs();
+    uint64_t& lastMs = g_lastTopUpMs[guid.GetCounter()];
+    if (!TopUpCooldownElapsed(lastMs, nowMs))
+        return;
+    lastMs = nowMs;
+
+    ApplyStock(bot, true, "topup");
 }
 
 } // namespace autofood

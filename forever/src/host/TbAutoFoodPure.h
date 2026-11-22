@@ -69,5 +69,19 @@ inline std::vector<uint32_t> StaleLadderDrinkItems(uint8_t level)
     return stale;
 }
 
+inline constexpr uint32_t kTopUpThreshold = 5;
+inline constexpr uint32_t kMaxRationStack = 20;
+inline constexpr uint64_t kTopUpIntervalMs = 60000;
+
+inline bool NeedsTopUp(uint32_t haveCount, uint32_t minThreshold = kTopUpThreshold)
+{
+    return haveCount < minThreshold;
+}
+
+inline bool TopUpCooldownElapsed(uint64_t lastMs, uint64_t nowMs, uint64_t intervalMs = kTopUpIntervalMs)
+{
+    return lastMs == 0 || (nowMs >= lastMs && (nowMs - lastMs) >= intervalMs);
+}
+
 } // namespace autofood
 } // namespace TortoiseBots

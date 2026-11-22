@@ -11,6 +11,7 @@ namespace autofood
 void LoadConfig();
 bool Enabled();
 void Sync(Player* bot, char const* why);
+void TickTopUp(Player* bot);
 
 } // namespace autofood
 } // namespace TortoiseBots
