@@ -40,10 +40,13 @@ namespace ai
         Ranged = 1,
         Healer = 2,
         Melee = 3,
+        Tank = 4,
     };
 
     inline StandRole ParseStandRole(const std::string& text)
     {
+        if (text == "tank")
+            return StandRole::Tank;
         if (text == "ranged")
             return StandRole::Ranged;
         if (text == "healer")

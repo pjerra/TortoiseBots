@@ -103,8 +103,7 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 namespace ai
 {
 // BossTacticsMgr.cpp / DungeonPlanMgr.cpp are real files now (slice 5): GetBossTactics, GetDungeonPlans, LoadBossTactics and LoadDungeonPlans
-// are theirs. BossStandMgr.cpp is not in the slice: its loader stays a stand-in.
-void LoadBossStands() { NoteBoss(); }
+// and BossStandMgr.cpp now own their real loaders.
 
 // BossTacticsActions.cpp
 // The per-update bracket PlayerbotAI::UpdateAI opens around the scan (PlayerbotAI.cpp:383): it opens no scan slot here, so it is not counted

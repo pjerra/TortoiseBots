@@ -449,3 +449,4 @@ ai/playerbot/strategy/actions/PoolGearTopUpAction.cpp
 # stays verbatim. The slice registers `emote` and `mount anim` (EMOTE_KEYS); `talk` and the two receive rows stay out
 # because their triggers never fire here (no legacy packet handler table, no emote poll).
 ai/playerbot/strategy/actions/EmoteAction.cpp
+ai/playerbot/BossStandMgr.cpp

@@ -17,9 +17,9 @@ std::uint32_t ai::ReadBossStandRows(BossStandTable& table)
 {
     uint32 skipped = 0;
     // The core's Query hands over a raw QueryResult* the caller frees (src/shared/Database/Database.h).
-    auto result = QueryGuardCompat(WorldDatabase.Query(
+    auto result = WorldQueryCompat(
         "SELECT `map`, `boss_entry`, `anchor`, `anchor_x`, `anchor_y`, `anchor_r`, `role`, `window_spell`, `aura`, `side`, "
-        "`seq`, `x`, `y`, `z`, `dx`, `dy`, `slots`, `hold_ms`, `release_anchor`, `window_signal` FROM `ai_boss_stand`"));
+        "`seq`, `x`, `y`, `z`, `dx`, `dy`, `slots`, `hold_ms`, `release_anchor`, `window_signal` FROM `ai_boss_stand`");
     if (result)
     {
         do
