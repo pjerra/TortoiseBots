@@ -2,6 +2,7 @@
 // exactly as TbOrders.cpp keeps it, and the default build answers `error code=engine-not-built` (the second half of this file).
 #include "host/TbCc.h"
 #include "host/TbCcPure.h"
+#include "slice/SliceCustomStrategyPure.h"
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -699,8 +700,8 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (rest.empty())
         return Fail(handler, args, "strategy", "missing-argument", "co|nc <+name,-name ...>");
     for (char c : rest)
-        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == ',' || c == '_'))
-            return Fail(handler, args, "strategy", "bad-argument", "strategy changes use letters, digits, space, + - , _");
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == ',' || c == '_' || c == ':'))
+            return Fail(handler, args, "strategy", "bad-argument", "strategy changes use letters, digits, space, + - , _ :");
 
     struct Item { char op; std::string name; };
     std::vector<Item> items;
@@ -727,10 +728,18 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     PlayerbotAI* ai = AiOf(bot);
     if (!ai || !ai->GetAiObjectContext())
         return Fail(handler, args, "strategy", "no-engine", "the bot has no running engine (`.tb engine <bot> on`)");
-    // Every name must be a strategy of the bot's context before anything changes (no half-applied list).
+    // Every name must be a strategy of the bot's context before anything changes (no half-applied list). TB's
+    // `custom::<name>` form is built on demand, so the engine lookup below validates it; a bare `custom` would
+    // attach under the name `custom::`, which nothing finds again, so it is refused first.
     for (Item const& item : items)
+    {
+        std::string qualifier;
+        if (ai::slice::aipreset::SplitCustomAttach(item.name, qualifier) && Trim(qualifier).empty())
+            return Fail(handler, args, "strategy", "bad-argument",
+                "custom strategies need a name: +custom::<name> (bare +custom attaches nothing)");
         if (!ai->GetAiObjectContext()->GetStrategy(item.name))
             return Fail(handler, args, "strategy", "unknown-strategy", item.name + " is not a strategy this build registers for the bot");
+    }
 
     Reply reply(handler, args, "strategy");
     reply.Begin();

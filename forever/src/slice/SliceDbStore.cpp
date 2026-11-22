@@ -14,7 +14,6 @@
 #include "compat/botpch_forever.h"
 
 #include "playerbot/playerbot.h"
-#include "playerbot/MovementModePolicy.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotDbStore.h"
 #include "playerbot/strategy/AiObjectContext.h"
@@ -140,56 +139,52 @@ void LoadAll(PlayerbotAI* ai, uint32_t guid, std::string const& preset)
     QueryResult result = CharacterQueryGuardedCompat(SelectValuesSql(guid, preset, Escape));
     if (result)
     {
-        struct Row
-        {
-            std::string key;
-            std::string value;
-        };
-
-        std::vector<Row> rows;
-        ai::StoredStrategyRows stored;
+        std::vector<std::pair<std::string, std::string>> rows;
         do
         {
             Field* fields = result->Fetch();
             std::string key = fields[0].IsNull() ? std::string() : fields[0].GetString();
             std::string val = fields[1].IsNull() ? std::string() : fields[1].GetString();
-            stored.Note(key.c_str());
-            rows.push_back({ std::move(key), std::move(val) });
+            rows.emplace_back(std::move(key), std::move(val));
         } while (result->NextRow());
 
-        if (stored.combat)
-        {
+        // The saved lists replace the kit-built engines: an engine whose own
+        // row was read is cleared and its saved rows are replayed verbatim.
+        // No baseline is added first (unlike TB's years-old snapshots, every
+        // row here was written by the current kit), so an explicitly removed
+        // kit strategy stays removed and no foreign strategy is invented.
+        LoadPlan plan = BuildLoadPlan(rows);
+        if (plan.clearCombat)
             ai->ClearStrategies(BotState::BOT_STATE_COMBAT);
-            ai->ChangeStrategy("+chat", BotState::BOT_STATE_COMBAT);
-        }
-        if (stored.nonCombat)
-        {
+        if (plan.clearNonCombat)
             ai->ClearStrategies(BotState::BOT_STATE_NON_COMBAT);
-            ai->ChangeStrategy("+chat,+loot,+quest", BotState::BOT_STATE_NON_COMBAT);
+        for (LoadOp const& op : plan.ops)
+        {
+            if (op.key == "co")
+                ai->ChangeStrategy(op.value, BotState::BOT_STATE_COMBAT);
+            else if (op.key == "nc")
+                ai->ChangeStrategy(op.value, BotState::BOT_STATE_NON_COMBAT);
+            else if (op.key == "dead")
+                ai->ChangeStrategy(op.value, BotState::BOT_STATE_DEAD);
+            else if (op.key == "react")
+                ai->ChangeStrategy(op.value, BotState::BOT_STATE_REACTION);
         }
 
         std::list<std::string> values;
-        for (Row const& row : rows)
+        for (std::pair<std::string, std::string> const& row : rows)
         {
-            if (row.key == ValueKey())
-            {
-                std::string name, saved;
-                if (ParseRow(row.value, name, saved) && !name.empty())
-                    values.push_back(row.value);
-            }
-            else if (row.key == "co")
-                ai->ChangeStrategy(row.value, BotState::BOT_STATE_COMBAT);
-            else if (row.key == "nc")
-                ai->ChangeStrategy(row.value, BotState::BOT_STATE_NON_COMBAT);
-            else if (row.key == "dead")
-                ai->ChangeStrategy(row.value, BotState::BOT_STATE_DEAD);
-            else if (row.key == "react")
-                ai->ChangeStrategy(row.value, BotState::BOT_STATE_REACTION);
+            if (row.first != ValueKey())
+                continue;
+            std::string name, saved;
+            // TB's Load looks the row's name up and skips a null value; the slice logs a missing-key line for an
+            // unregistered name instead, so empty names are skipped here (an empty row stores nothing).
+            if (ParseRow(row.second, name, saved) && !name.empty())
+                values.push_back(row.second);
         }
-
         ai->GetAiObjectContext()->Load(values);
     }
 
+    // An anchor ("pull hold") restored from the snapshot has no pull left to end it.
     ai->ReleasePullHold();
 }
 

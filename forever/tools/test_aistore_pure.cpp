@@ -13,13 +13,16 @@ namespace
 
 using ai::slice::aistore::BuildDeleteAllValuesSql;
 using ai::slice::aistore::BuildInvalidateStrategySnapshotsSql;
+using ai::slice::aistore::BuildLoadPlan;
 using ai::slice::aistore::BuildResetSql;
 using ai::slice::aistore::BuildSaveAllStatements;
 using ai::slice::aistore::BuildSaveStatements;
 using ai::slice::aistore::BuildSelectDistinctPresetsSql;
 using ai::slice::aistore::BuildSelectValueOnlySql;
+using ai::slice::aistore::DropEmptyCustomAttach;
 using ai::slice::aistore::EncodeRow;
 using ai::slice::aistore::FormatStrategies;
+using ai::slice::aistore::LoadPlan;
 using ai::slice::aistore::ParseRow;
 using ai::slice::aistore::SelectValuesSql;
 using ai::slice::aistore::StrategyRow;
@@ -119,7 +122,57 @@ int main()
     assert(full.insertSql[4] ==
         "INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (42, 'p\\'1', 'react', '+arms')");
 
-    // Reset, InvalidateStrategySnapshots, ResetValues, and ListAi SQL builders.
+    // Strategy snapshot load plan: saved rows replace the kit-built engines verbatim, no baseline is added.
+    // A removal the player saved (nc without +loot) must come back without loot: replay adds nothing.
+    {
+        std::vector<std::pair<std::string, std::string>> rows = {
+            { "co", "+discipline,+dps assist" },
+            { "nc", "+discipline,+dps assist,+follow" },
+            { "dead", "+dead" },
+            { "react", "+discipline" },
+            { "value", "manual saved string::k>v" },
+        };
+        LoadPlan plan = BuildLoadPlan(rows);
+        assert(plan.clearCombat && plan.clearNonCombat);
+        assert(plan.ops.size() == 4);
+        assert(plan.ops[0].key == "co" && plan.ops[0].value == "+discipline,+dps assist");
+        assert(plan.ops[1].key == "nc" && plan.ops[1].value == "+discipline,+dps assist,+follow");
+        assert(plan.ops[2].key == "dead" && plan.ops[2].value == "+dead");
+        assert(plan.ops[3].key == "react" && plan.ops[3].value == "+discipline");
+    }
+    // No saved strategy rows: empty plan, the kit stands untouched.
+    {
+        std::vector<std::pair<std::string, std::string>> rows = { { "value", "manual saved string::k>v" } };
+        LoadPlan plan = BuildLoadPlan(rows);
+        assert(!plan.clearCombat && !plan.clearNonCombat && plan.ops.empty());
+    }
+    // Only one engine stored: only that engine is cleared and replayed.
+    {
+        std::vector<std::pair<std::string, std::string>> rows = { { "nc", "+discipline,+follow" } };
+        LoadPlan plan = BuildLoadPlan(rows);
+        assert(!plan.clearCombat && plan.clearNonCombat);
+        assert(plan.ops.size() == 1 && plan.ops[0].key == "nc");
+    }
+    // Unknown keys are never replayed.
+    {
+        std::vector<std::pair<std::string, std::string>> rows = { { "bogus", "+x" } };
+        LoadPlan plan = BuildLoadPlan(rows);
+        assert(!plan.clearCombat && !plan.clearNonCombat && plan.ops.empty());
+    }
+    // An empty-qualifier custom attach is dropped from the replay: it would
+    // store the engine entry under `custom::`, which nothing finds again.
+    assert(DropEmptyCustomAttach("+mimic consumables,+custom::,+loot") == "+mimic consumables,+loot");
+    assert(DropEmptyCustomAttach("+custom") == "");
+    assert(DropEmptyCustomAttach("+custom::") == "");
+    assert(DropEmptyCustomAttach("-custom::") == "");
+    assert(DropEmptyCustomAttach("+custom::say") == "+custom::say");
+    assert(DropEmptyCustomAttach("+custom::say,+loot") == "+custom::say,+loot");
+    assert(DropEmptyCustomAttach("+loot") == "+loot");
+    {
+        std::vector<std::pair<std::string, std::string>> rows = { { "nc", "+custom::" } };
+        LoadPlan plan = BuildLoadPlan(rows);
+        assert(plan.clearNonCombat && plan.ops.empty());
+    }
     assert(BuildResetSql(42, "a'b", FakeEscape) ==
         "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `preset` = 'a\\'b'");
     assert(BuildInvalidateStrategySnapshotsSql(42) ==

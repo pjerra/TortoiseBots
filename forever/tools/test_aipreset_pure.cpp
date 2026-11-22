@@ -115,6 +115,20 @@ void TestSqlBuilders()
         "DELETE FROM `ai_playerbot_custom_strategy` WHERE `name` = 'my_strat' AND `owner` = 7 AND `idx` = 2");
 }
 
+void TestCustomAttachSplit()
+{
+    // TB's attach form `custom::<name>`: split off the qualifier; a bare `custom` must never attach.
+    std::string qualifier = "?";
+    assert(SplitCustomAttach("custom::say", qualifier) && qualifier == "say");
+    assert(SplitCustomAttach("custom", qualifier) && qualifier.empty());
+    assert(SplitCustomAttach("custom::", qualifier) && qualifier.empty());
+    assert(SplitCustomAttach("custom::a::b", qualifier) && qualifier == "a::b");
+    assert(!SplitCustomAttach("custom:", qualifier));
+    assert(!SplitCustomAttach("loot", qualifier));
+    assert(!SplitCustomAttach("customx", qualifier));
+    assert(!SplitCustomAttach("", qualifier));
+}
+
 void TestActionLineSplit()
 {
     std::string trigger;
@@ -139,6 +153,7 @@ int main()
     TestAiArgs();
     TestCsArgs();
     TestSqlBuilders();
+    TestCustomAttachSplit();
     TestActionLineSplit();
     std::cout << "aipreset pure: all assertions passed\n";
     return 0;

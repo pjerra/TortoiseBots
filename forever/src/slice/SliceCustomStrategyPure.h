@@ -352,6 +352,27 @@ inline bool SplitCustomActionLine(std::string_view actionLine, std::string& trig
     return !items.empty();
 }
 
+// Splits TB's attach form `custom::<name>`: true when `name` is a bare `custom`
+// or starts with `custom::`, with `qualifier` holding the part after `::`
+// (empty for a bare `custom`). A bare `custom` must never attach: the engine
+// stores it under the name `custom::`, which no later lookup finds again.
+inline bool SplitCustomAttach(std::string_view name, std::string& qualifier)
+{
+    constexpr std::string_view kCustom = "custom";
+    constexpr std::string_view kPrefix = "custom::";
+    if (name == kCustom || name == kPrefix)
+    {
+        qualifier.clear();
+        return true;
+    }
+    if (name.size() > kPrefix.size() && name.substr(0, kPrefix.size()) == kPrefix)
+    {
+        qualifier = std::string(name.substr(kPrefix.size()));
+        return true;
+    }
+    return false;
+}
+
 } // namespace aipreset
 } // namespace slice
 } // namespace ai
