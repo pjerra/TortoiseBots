@@ -466,3 +466,13 @@ TortoiseBots.Player.Commands = 1
 #
 
 TortoiseBots.Player.MaxBots = 4
+
+#    --- Auto-learn ---
+#
+#    TortoiseBots.AutoLearnOnLevel
+#        Description: Bots automatically learn their class trainer and class skill-line spells for free when they log in
+#                     (catch-up) and when they gain a level. 0 = off (bots only learn spells when trained).
+#        Default:     1
+#
+
+TortoiseBots.AutoLearnOnLevel = 1

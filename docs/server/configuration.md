@@ -108,3 +108,9 @@ Off by default and meant for test servers: it writes every tick of a running run
 Raid diagnostics stay opt-in through
 [`AiPlayerbot.RaidBossDiagnostics`](settings/logging.md#aiplayerbotraidbossdiagnostics)
 (default `0`); event CSV files alone do not enable boss observations.
+
+## ForeverCore module keys (`tortoisebots.conf`)
+
+| Key | Default | Meaning |
+| :--- | :--- | :--- |
+| `TortoiseBots.AutoLearnOnLevel` | `1` | Bots learn class trainer and skill-line spells for free on login and level-up. |

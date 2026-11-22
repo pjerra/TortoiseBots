@@ -73,6 +73,7 @@
 #include "TbBotSession.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbSpellDelayPure.h"
+#include "host/TbAutoTrain.h"
 #include "host/TbClassQuestSpells.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
@@ -172,10 +173,14 @@ public:
         TortoiseBots::pool::LoadConfig();      // W0: the pool key, its rate and the registry rows (re-read on a reload)
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B: the scheduler's target, window, session and offline times
         TortoiseBots::bg::LoadConfig();        // BG1: the battleground keys (off by default)
+        tbhost::autotrain::LoadConfig();       // TortoiseBots.AutoLearnOnLevel (default 1)
         TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
         if (reload)
+        {
+            tbhost::autotrain::BuildIndex();
             TortoiseBots::questspells::BuildIndex();
+        }
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -197,6 +202,8 @@ public:
         // disabled switch drops it (BuildIndex resets the index then): no stale pointer survives for a later re-enable to read.
         if (command == "reload all" || command.find("quest") != std::string_view::npos)
             TortoiseBots::questspells::BuildIndex();
+        if (command == "reload all" || command.find("trainer") != std::string_view::npos)
+            tbhost::autotrain::BuildIndex();
 #ifdef TORTOISEBOTS_SLICE1
         // The quest starter/ender tables feed the bots' quest eligibility sets. A reload while the module is off still drops
         // them: the next check rebuilds, so a re-enable cannot read pre-reload rows.
@@ -257,6 +264,8 @@ public:
         tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
         // The class quests' spells, once, from the loaded quest store; a quest reload rebuilds it.
+        tbhost::autotrain::LoadConfig();
+        tbhost::autotrain::BuildIndex();
         if (TortoiseBots::questspells::Enabled())
             TortoiseBots::questspells::BuildIndex();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
@@ -399,6 +408,7 @@ public:
             TortoiseBots::p11::EnsureShamanStarterTotems(player);
 #endif
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
+            tbhost::autotrain::Sync(player, "login");
             TortoiseBots::questspells::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
@@ -408,7 +418,10 @@ public:
     void OnLevelChanged(Player* player, uint8 /*oldLevel*/) override
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
+        {
+            tbhost::autotrain::Sync(player, "level");
             TortoiseBots::questspells::Sync(player, "level");
+        }
     }
 
     void OnLogout(Player* player) override
@@ -1068,28 +1081,8 @@ public:
         return true;
     }
 
-    // The 1.12-era spell ids of the class skill lines end at 28382 for priest and warrior (the highest id below 100000 in their lines); every id the lines
-    // hold above that is retail-era (the lowest is 401859: Renew 425268, Mind Spike, Shadowfiend, Circle of Healing...). The bound below sits in that gap.
-    static constexpr uint32 kClassicSpellIdEnd = 100000;
-
-    // .tb train <bot>: teaches the bot, free and without an NPC, the class spells it may know at its level, from the core's own data, in two passes
-    // (no spell id is written in this module):
-    //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1629, the world database's trainer and trainer_spell tables) and the core's own
-    //     per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A trainer is
-    //     used when its type is a class trainer and its class mask (Trainer::GetClassMask) IS the bot's class (a mask of several classes is a trainer whose
-    //     data names no class: riding, recipes; the first boot of R3 taught a priest riding passives and a tailoring recipe through them). The type of a class trainer in this
-    //     core's data is `Trainer::Type::None` (trainer.Type 0: 254 of 716 trainers, the priests' trainers 7 and 8 among them); `Trainer::Type::Talent` (1)
-    //     is another set of 8 whose spells all need a skill line (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading).
-    //  2. the class's own skill-line abilities (ClassLineSpells above; the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181): a spell of
-    //     the class's spell family (ChrClasses SpellClassSet) that fits the class and race (Player::IsSpellFitByClassAndRace), whose spell level the bot has
-    //     reached, that is valid (SpellMgr::IsSpellValid), AND (R5 item 1) either belongs to a verified rank chain (tbcompat::SpellRankOf: the core's chain,
-    //     the SkillLineAbility links or the trainers' required-ability links; every rank up to the bot's level is taught, the chain is verified data) or is a
-    //     chainless ability with a 1.12-era id (below kClassicSpellIdEnd: the retail-era ids of the class lines are all far above it). This gives what no
-    //     trainer teaches: the spells a new character starts with (a priest's Smite and Lesser Heal are in no trainer table). The core's command has no level
-    //     test; this one has (SpellInfo::SpellLevel <= level). A retail-era spell the TRAINER pass taught (the class trainers' tables carry them: Mind Spike,
-    //     Shadowfiend, Circle of Healing...) and that is in no verified chain is taken away again at the end (the core teaches every trainer row of the class
-    //     and cannot be told to skip one); the printout counts them.
-    // Passes repeat while one teaches something (a spell can be the prerequisite of the next). Prints the counts and the tally of the trainer pass.
+    // .tb train <bot>: teaches the bot, free and without an NPC, the class spells it may know at its level, from the core's own data
+    // (delegates to tbhost::autotrain::TeachClassSpells).
     static bool HandleTrain(ChatHandler* handler, std::string name)
     {
         if (!RequireEngine(handler))
@@ -1097,69 +1090,13 @@ public:
         Player* bot = RequireBot(handler, name);
         if (!bot)
             return false;
-        uint32 const classMask = 1u << (bot->GetClass() - 1);
-        ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(bot->GetClass());
-        uint32 trainerTaught = 0, lineTaught = 0, trainers = 0, passes = 0, retailSkipped = 0;
-        std::set<uint32> const lineSpells = tbcompat::ClassLineSpells(bot->GetClass());
-        std::set<uint32> knownBefore;
-        for (auto const& [spellId, spell] : bot->GetSpellMap())
-            knownBefore.insert(spellId);
-        Trainer::Trainer::FreeTeachTally tally;
-        for (; passes < 8; ++passes)
-        {
-            uint32 passTaught = 0;
-            trainers = 0;
-            for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
-            {
-                if (trainer.GetType() != Trainer::Type::None || trainer.GetClassMask() != classMask)
-                    continue;
-                ++trainers;
-                passTaught += trainer.TeachAvailableSpellsFree(bot, &tally);
-            }
-            trainerTaught += passTaught;
-
-            uint32 lineThisPass = 0;
-            if (classEntry)
-                for (uint32 spellId : lineSpells)
-                {
-                    if (bot->HasSpell(spellId))
-                        continue;
-                    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
-                    if (!info || info->SpellLevel == 0 || info->SpellLevel > bot->GetLevel() || info->SpellFamilyName != classEntry->SpellClassSet)
-                        continue;
-                    if (!tbcompat::SpellRankOf(spellId) && spellId >= kClassicSpellIdEnd)
-                    {
-                        ++retailSkipped;
-                        continue;
-                    }
-                    if (!bot->IsSpellFitByClassAndRace(info->Id) || !SpellMgr::IsSpellValid(info, bot, false))
-                        continue;
-                    bot->LearnSpell(info->Id, false);
-                    ++lineThisPass;
-                }
-            lineTaught += lineThisPass;
-            if (!passTaught && !lineThisPass)
-                break;
-        }
-        // A retail-era spell of a trainer row (id from kClassicSpellIdEnd up) that is in no verified chain is not taught by this command: taken away again.
-        std::string removed;
-        uint32 removedCount = 0;
-        {
-            std::vector<uint32> taken;
-            for (auto const& [spellId, spell] : bot->GetSpellMap())
-                if (!knownBefore.count(spellId) && spellId >= kClassicSpellIdEnd && !tbcompat::SpellRankOf(spellId))
-                    taken.push_back(spellId);
-            for (uint32 spellId : taken)
-            {
-                SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
-                removed += std::to_string(spellId) + ":" + (info && info->SpellName ? info->SpellName->Str[LOCALE_enUS] : "?") + " ";
-                bot->RemoveSpell(spellId, false, false);
-                ++removedCount;
-            }
-        }
-        handler->PSendSysMessage("TortoiseBots: train: %u retail-era chainless class-line spell(s) not taught, %u retail-era trainer spell(s) taken away again: %s", retailSkipped, removedCount, removed.c_str());
+        tbhost::autotrain::Tally tally;
+        tbhost::autotrain::TeachClassSpells(bot, tally);
+        handler->PSendSysMessage("TortoiseBots: train: %u retail-era chainless class-line spell(s) not taught, %u retail-era trainer spell(s) taken away again: %s",
+            tally.retailSkipped, tally.removedCount, tally.removed.c_str());
         handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) and %u from the class skill lines, in %u pass(es); trainer pass not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
-            name.c_str(), trainerTaught, trainers, lineTaught, passes + 1, tally.known, tally.class_race, tally.level, tally.ability, tally.skill_line, tally.other);
+            name.c_str(), tally.trainerTaught, tally.trainers, tally.lineTaught, tally.passes,
+            tally.trainerTally.known, tally.trainerTally.class_race, tally.trainerTally.level, tally.trainerTally.ability, tally.trainerTally.skill_line, tally.trainerTally.other);
         return true;
     }
 
