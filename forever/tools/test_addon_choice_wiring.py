@@ -13,8 +13,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PURE = (ROOT / "forever/src/host/TbAddonChoicePure.h").read_text()
 H = (ROOT / "forever/src/host/TbAddonChoice.h").read_text()
 CPP = (ROOT / "forever/src/host/TbAddonChoice.cpp").read_text()
-SCRIPTS = (ROOT / "forever/src/TbScripts.cpp").read_text()
+WARLOCK_STRAT = (ROOT / "ai/playerbot/strategy/warlock/WarlockStrategy.cpp").read_text()
 PLAYER_CMD = (ROOT / "forever/src/host/player/TbPlayerCmd.cpp").read_text()
+SCRIPTS = (ROOT / "forever/src/TbScripts.cpp").read_text()
 
 
 def check_registers_choice(scripts_src):
@@ -46,6 +47,16 @@ class AddonChoiceWiring(unittest.TestCase):
         for field in ("commandedByCaller", "groupLeader", "leaderIsBot", "inRun", "IsCommandedBy",
                       "BotInRunningRun", "GetIdByGameAccount", "GetCharacterAccountIdByGuid", "MasterOf"):
             self.assertIn(field, CPP, f"facts glue lost {field}")
+
+    def test_choice_pet_row_owned_by_pet_auto(self):
+        # The stored `choice pet` order summons only through a strategy that
+        # carries the "choice pet" trigger row. The spec-pet strategies own
+        # one, but they are never added once "pet auto" evicts its "pet"
+        # sibling, so "pet auto" must carry the same row above its ladder.
+        body = WARLOCK_STRAT.split("void WarlockAutoPetStrategy::InitNonCombatTriggers")[1]
+        body = body.split("void WarlockManualPetStrategy::InitNonCombatTriggers")[0]
+        self.assertIn('"choice pet"', body)
+        self.assertLess(body.index('"choice pet"'), body.index('"auto pet imp"'))
 
     def test_no_edits_to_player_cmd(self):
         for token in ("HandleChoiceVerb", "RegisterAddonVerbsChoice", "TbAddonChoice"):

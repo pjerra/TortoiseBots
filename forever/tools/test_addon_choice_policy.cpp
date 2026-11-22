@@ -71,6 +71,22 @@ int main()
         assert(line == "TBM:CHOICE|Legolas|aspect=auto,known=hawk+monkey");
         std::string const setLine = FormatChoiceLine("Guldan", ai::CHOICE_PET, "voidwalker", "imp+voidwalker");
         assert(setLine == "TBM:CHOICE|Guldan|pet=voidwalker,known=imp+voidwalker");
+        // Every kind's full trained list fits one 255-byte line, so CHOICE
+        // never needs the tail-drop the totem/blessing lines do (and must
+        // not get one: the panel reads a missing `known` as auto-only).
+        for (int kind = 0; kind < ai::CHOICE_KIND_COUNT; ++kind)
+        {
+            std::string known;
+            for (int i = 0; i < ai::ChoiceWordCount(kind); ++i)
+            {
+                if (!known.empty())
+                    known += "+";
+                known += ai::ChoiceWord(kind, i);
+            }
+            std::string const full = FormatChoiceLine("TwelveCharName", kind, "auto", known);
+            assert(full.size() <= TortoiseBots::addon::pure::kMaxLineBytes);
+            assert(full.find(",known=") != std::string::npos);
+        }
     }
 
     // ClassChoicePolicy pure helpers
