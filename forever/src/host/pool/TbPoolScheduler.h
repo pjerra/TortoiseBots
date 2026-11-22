@@ -43,7 +43,8 @@ SwitchResult Start();
 SwitchResult Stop();
 
 // `.tb pool status`: one line, `state=`, `target=`, the counted online bots and their factions, the pool's size, the bots due to
-// return, the logins of the last 60 s, the drain's queue and the last pass's cost; ` capped by accounts: N` when the target is
+// return, `in_bg=` (bots whose session a running battleground holds), the logins of the last 60 s, the drain's queue and the
+// last pass's cost; ` capped by accounts: N` when the target is
 // above the accounts the pool can still log in on (the ones its characters sit on, less the accounts a bound bot holds).
 std::vector<std::string> Status();
 

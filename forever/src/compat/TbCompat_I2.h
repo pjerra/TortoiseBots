@@ -331,7 +331,8 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
 // down, or the bot having a current spell / the spell's aura. What ProcessItemCast checks before that call (item found in the bags, not
 // equipped-only, CanUseItem, combat rules, binding on use, arena, scripts, the ItemUse aura interrupt) is NOT repeated here: the legacy
 // action already checked CanUseItem, the item and its cooldown, and combat (IsNonCombatSpell), and food and drink are not bound.
-// Different answers: no ProcessItemCast script hook (OnItemUse) and no RemoveAurasWithInterruptFlags(ItemUse); a second on-use spell
+// Different answers: the OnItemUse script hook is not called (ForeverCore 0.1.39 has PlayerScript::OnItemUse, which ProcessItemCast runs; the port
+// never overrides it, so nothing is lost) and no RemoveAurasWithInterruptFlags(ItemUse); a second on-use spell
 // of the same item is not cast (T casts it triggered after the first).
 // UNPROVEN: no boot was allowed. The live spike (forever/docs/SLICE2-I2-NOTES.md, "U1 spike") decides whether this works for water.
 template <class SpellType, class AiType, class ItemForSpellFn>

@@ -682,6 +682,61 @@ int main()
         CHECK(w::PoolTrackKept(offline, true));
     }
 
+    // (8h) BG (BG1, BATTLEGROUNDS-SPEC.md D5): a session that ends while the bot waits in a battleground queue or is inside a match
+    // is deferred, the pass logs it out only after it comes out, and `.tb pool stop` skips it (the battleground module's
+    // Bg.MaxMinutes bring it out, the next stop pass drains it).
+    {
+        w::PoolScheduleSettings settings;
+        settings.targetOnline = 1;
+        auto roll = [] { return 0u; };
+
+        w::PoolBotState bot = OnlineBot(21, 1, 0, 10 * kMinute);
+        w::PoolBotFacts facts;
+        facts.logged = true;
+        facts.inWorld = true;
+        facts.free = true;
+        facts.alive = true;
+        facts.inBg = true;
+        std::int64_t now = 10 * kMinute + 1;
+        w::PoolSyncOutcome const outcome = w::PoolSyncBot(bot, facts, settings, now, roll);
+        CHECK(!outcome.wentOffline);
+        CHECK(bot.inBg);
+        CHECK(bot.sessionEndsMs > now);                        // held: the end moved forward
+        CHECK(bot.sessionEndsMs == now + w::kPoolBgHoldMs);
+
+        std::vector<w::PoolBotState> bots{ bot };
+        w::PoolPassInput in;
+        in.bots = &bots;
+        in.settings = settings;
+        in.nowMs = now;
+        in.recentLoginsMs = nullptr;
+        in.recentLogoutsMs = nullptr;
+        CHECK(w::PlanPoolPass(in).logouts.empty());            // a session end alone does not take it out
+        in.stopping = true;
+        CHECK(w::PlanPoolPass(in).logouts.empty());            // `.tb pool stop` while it is inside
+        in.stopping = false;
+        in.nowMs = bot.sessionEndsMs;                          // the held end is due
+        CHECK(w::PlanPoolPass(in).logouts.empty());            // still inside at that end: carried on next pass by the host sync
+
+        // It comes out (facts.inBg false): the deferred end is still ahead, then passes and the bot logs out once.
+        facts.inBg = false;
+        w::PoolSyncBot(bot, facts, settings, bot.sessionEndsMs - 1, roll);
+        CHECK(!bot.inBg);
+        bots[0] = bot;
+        in.nowMs = bot.sessionEndsMs - 1;
+        CHECK(w::PlanPoolPass(in).logouts.empty());
+        in.nowMs = bot.sessionEndsMs;
+        w::PoolPass const leaving = w::PlanPoolPass(in);
+        CHECK(leaving.logouts.size() == 1 && leaving.logouts.front() == bot.guid);
+
+        // Baseline: the same bot without a battleground logs out at its end.
+        w::PoolBotState plain = OnlineBot(22, 1, 0, 10 * kMinute);
+        std::vector<w::PoolBotState> plainBots{ plain };
+        in.bots = &plainBots;
+        in.nowMs = 10 * kMinute;
+        CHECK(w::PlanPoolPass(in).logouts.size() == 1);
+    }
+
     // (9) the pass over a 2000-bot pool stays under 0.5 ms (the spec's budget: one pass per second).
     {
         Sim sim;

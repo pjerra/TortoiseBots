@@ -50,6 +50,13 @@ inline constexpr std::uint32_t kPoolTargetMax = 5000;
 // time it needs, and a bot that could not get back waits no longer.
 inline constexpr std::int64_t kPoolDeadWaitMs = 10 * kPoolMinuteMs;
 
+// BG (BG1, BATTLEGROUNDS-SPEC.md D5): a bot inside a battleground keeps its session; an ended session is deferred by this much at
+// a time until the bot comes out, so the pool never pulls a participant out of a running match. A bot only *waiting* in a queue
+// holds nothing: its entry leaves with the session, and the fill queues another. `.tb pool stop` skips a bot inside a match the
+// same way; the battleground module leaves it at Bg.MaxMinutes (45 min) without the Deserter debuff, and the next stop pass drains
+// it then.
+inline constexpr std::int64_t kPoolBgHoldMs = kPoolMinuteMs;
+
 enum class PoolFaction : std::uint8_t
 {
     Alliance = 0,
@@ -92,6 +99,7 @@ struct PoolBotState
     bool bound = false;                // got a master: out of the count, never logged out, never logged in again
     bool alive = true;
     bool inCombat = false;             // a living bot in a fight is not logged out (stop is the exception)
+    bool inBg = false;                 // BG: inside a match; its session is held (nothing logs it out)
     std::int64_t sessionStartMs = 0;
     std::int64_t sessionEndsMs = 0;    // 0 = not known (a session the scheduler did not start)
     std::int64_t lastLogoutMs = 0;     // when it last went offline, 0 = never
@@ -236,6 +244,7 @@ struct PoolBotFacts
     bool hasMaster = false;
     bool alive = true;
     bool inCombat = false;
+    bool inBg = false;                 // BG: Player::InBattleground() only; a queue entry does not hold a session
 };
 
 struct PoolSyncOutcome
@@ -267,6 +276,7 @@ inline void PoolGoOffline(PoolBotState& bot, PoolScheduleSettings const& setting
     bot.sessionEndsMs = 0;
     bot.alive = true;
     bot.inCombat = false;
+    bot.inBg = false;
 }
 
 // `bound` follows the binding: a master (BindMaster clears `free`) takes the bot out of the count, and `.tb free on` or a
@@ -345,6 +355,10 @@ inline PoolSyncOutcome PoolSyncBot(PoolBotState& bot, PoolBotFacts const& facts,
             {
                 bot.alive = facts.alive;
                 bot.inCombat = facts.inCombat;
+                bot.inBg = facts.inBg;
+                // BG: a session that ran out while the bot fights in a match is deferred, not spent.
+                if (bot.inBg && bot.sessionEndsMs && now >= bot.sessionEndsMs)
+                    bot.sessionEndsMs = now + kPoolBgHoldMs;
             }
             break;
         case PoolPhase::Leaving:
@@ -443,8 +457,8 @@ inline PoolPass PlanPoolPass(PoolPassInput const& in)
     if (in.stopping)
     {
         for (PoolBotState const& bot : bots)
-            if (!bot.bound && (bot.phase == PoolPhase::Online || bot.phase == PoolPhase::Loading))
-                candidates.push_back(&bot);
+            if (!bot.bound && !bot.inBg && (bot.phase == PoolPhase::Online || bot.phase == PoolPhase::Loading))
+                candidates.push_back(&bot);   // BG: a bot inside a match waits for Bg.MaxMinutes
         std::sort(candidates.begin(), candidates.end(), PoolNewestSessionFirstPtr);
         for (PoolBotState const* bot : candidates)
         {
@@ -457,7 +471,7 @@ inline PoolPass PlanPoolPass(PoolPassInput const& in)
 
     for (PoolBotState const& bot : bots)
     {
-        if (bot.bound || bot.phase != PoolPhase::Online || !bot.sessionEndsMs || in.nowMs < bot.sessionEndsMs)
+        if (bot.bound || bot.phase != PoolPhase::Online || bot.inBg || !bot.sessionEndsMs || in.nowMs < bot.sessionEndsMs)
             continue;
         // A corpse still gets its ten minutes (W1's corpse run) unless it is alive again; a living bot keeps its session until
         // the fight it is in has ended.
@@ -485,8 +499,8 @@ inline PoolPass PlanPoolPass(PoolPassInput const& in)
         {
             if (bot.bound || (bot.phase != PoolPhase::Online && bot.phase != PoolPhase::Loading))
                 continue;
-            if (!bot.alive || bot.inCombat)
-                continue;                     // a corpse and a fight are left alone; a later pass takes them
+            if (!bot.alive || bot.inCombat || bot.inBg)
+                continue;                     // a corpse, a fight and a match are left alone; a later pass takes them
             if (std::find(out.logouts.begin(), out.logouts.end(), bot.guid) != out.logouts.end())
                 continue;
             live.push_back(&bot);
