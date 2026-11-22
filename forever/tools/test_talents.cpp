@@ -1,0 +1,94 @@
+// Standalone unit tests for forever/src/host/TbTalentsPure.h.
+#include "forever/src/host/TbTalentsPure.h"
+
+#include <cassert>
+#include <cstdio>
+#include <set>
+#include <string>
+#include <unordered_map>
+
+using namespace TortoiseBots::talents;
+
+int main()
+{
+    int fails = 0;
+    auto check = [&](bool cond, char const* msg)
+    {
+        if (!cond)
+        {
+            std::printf("FAIL: %s\n", msg);
+            ++fails;
+        }
+    };
+
+    // 1. All 9 classes x 3 tabs have non-empty builds.
+    uint8_t const classes[] = { 1, 2, 3, 4, 5, 7, 8, 9, 11 };
+    for (uint8_t cls : classes)
+    {
+        for (int tab = 0; tab < 3; ++tab)
+        {
+            if (BuildStepCount(cls, tab) == 0)
+            {
+                std::printf("FAIL: class %u tab %d has 0 build steps\n", unsigned(cls), tab);
+                ++fails;
+            }
+        }
+    }
+
+    // 2. Forced spec (.tb spec) always wins, even if points are spent elsewhere.
+    check(PickSpecTabForBot(1, 100, 2, 10, 0, 0) == 2, "forced spec overrides spent points");
+    check(PickSpecTabForBot(8, 100, 0, 0, 0, 0) == 0, "forced spec overrides fresh pick");
+
+    // 3. Once points are spent (and no override), keep the tab with most points.
+    check(PickSpecTabForBot(1, 100, -1, 5, 0, 0) == 0, "spent tab 0 kept");
+    check(PickSpecTabForBot(1, 100, -1, 2, 10, 0) == 1, "spent tab 1 kept");
+    check(PickSpecTabForBot(1, 100, -1, 0, 0, 1) == 2, "spent tab 2 kept");
+
+    // 4. Fresh bot (0 spent, no override) gets a deterministic tab in 0..2, and varies across guids.
+    for (uint8_t cls : classes)
+    {
+        int const p1 = PickSpecTabForBot(cls, 42, -1, 0, 0, 0);
+        int const p2 = PickSpecTabForBot(cls, 42, -1, 0, 0, 0);
+        check(p1 >= 0 && p1 <= 2 && p1 == p2, "fresh pick is deterministic and in 0..2");
+
+        std::set<int> seen;
+        for (uint32_t g = 1; g <= 200; ++g)
+            seen.insert(PickSpecTabForBot(cls, g, -1, 0, 0, 0));
+        check(seen.size() == 3, "fresh pick covers all 3 tabs across 200 guids");
+    }
+
+    // 5. PlanNextSteps for Warrior Arms (class 1, tab 0) produces single-point steps in build order.
+    {
+        std::unordered_map<uint32_t, uint8_t> empty;
+        auto steps = PlanNextSteps(1, 0, empty);
+        check(steps.size() == 51, "warrior arms has 51 single-point steps");
+        if (steps.size() >= 8)
+        {
+            // First 5 points are talent 641, next 2 points are talent 127, then 126 (from talent-builds.csv).
+            for (int i = 0; i < 5; ++i)
+                check(steps[i] == 641, "arms first 5 points are 641");
+            for (int i = 5; i < 7; ++i)
+                check(steps[i] == 127, "arms next 2 points are 127");
+            check(steps[7] == 126, "arms 8th point is 126");
+        }
+
+        // Partial progress: 3 points already in 641 -> next 2 should be 641, then 127.
+        std::unordered_map<uint32_t, uint8_t> partial = { { 641, 3 } };
+        auto rem = PlanNextSteps(1, 0, partial);
+        check(rem.size() == 48, "partial progress leaves 48 steps");
+        if (rem.size() >= 3)
+        {
+            check(rem[0] == 641 && rem[1] == 641 && rem[2] == 127, "partial progress resumes at point 4");
+        }
+    }
+
+    // 6. SpecName returns known names.
+    check(std::string(SpecName(1, 2)) == "protection", "warrior tab 2 is protection");
+    check(std::string(SpecName(5, 1)) == "holy", "priest tab 1 is holy");
+
+    if (fails == 0)
+        std::printf("PASS: test_talents (all checks passed)\n");
+    else
+        std::printf("FAIL: test_talents (%d failed)\n", fails);
+    return fails ? 1 : 0;
+}

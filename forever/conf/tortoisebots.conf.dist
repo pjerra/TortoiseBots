@@ -466,3 +466,13 @@ TortoiseBots.Player.Commands = 1
 #
 
 TortoiseBots.Player.MaxBots = 4
+
+#
+#    TortoiseBots.AutoTalentsOnLevel
+#        Description: Bots automatically spend their free talent points on login and on level-up following a premade spec build
+#                     (honouring `.tb spec` if set, otherwise picking a stable weighted spec for the bot's guid, or keeping
+#                     the bot's current tab once points are spent). Never resets existing points.
+#        Default:     1
+#
+
+TortoiseBots.AutoTalentsOnLevel = 1
