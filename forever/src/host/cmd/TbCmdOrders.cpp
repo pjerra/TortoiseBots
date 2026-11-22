@@ -7,6 +7,7 @@
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbCmdTactics.h"
 #include "host/cmd/TbPlace.h"
 #include "host/run/TbRunOrders.h"
 
@@ -29,7 +30,7 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (args.badToken)
         return h3::Fail(handler, args, "cmd", "bad-token", "a token starts with # and holds 1-32 characters of [A-Za-z0-9_.:-]");
     if (args.w.empty())
-        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, focus, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod, place, rally, fallback, resume");
+        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, interrupt, focus, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod, place, rally, fallback, resume, stop, flee, guard, stance, engage, rebuff");
 
     Player* sender = h3::SenderPlayer(handler);
     if (!sender)
@@ -61,6 +62,11 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     bool taskOk = false;
     if (TryHandleTaskVerb(handler, args, verb, 1, &taskOk))
         return taskOk;
+
+    // The tactical orders are settings and direct actions the judge does not know; they answer their own `cmd` reply.
+    bool tacticalOk = false;
+    if (TryHandleTacticalVerb(handler, args, verb, lead, members, sender, &tacticalOk))
+        return tacticalOk;
 
     std::string order;
     for (size_t i = 0; i < args.w.size(); ++i)

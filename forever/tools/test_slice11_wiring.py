@@ -149,7 +149,7 @@ KITS = [
     'combatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "ranged", "flee", "aspect", "sting", "pet", "buff",',
     'combatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "ranged", "flee", "pet", "curse", "buff",',
     'nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "default",',
-    'nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default",',
+    'nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet auto", "buff", "follow", "food", "default",',
     "GuardedContext<HunterAiObjectContext>",
     "GuardedContext<WarlockAiObjectContext>",
 ]

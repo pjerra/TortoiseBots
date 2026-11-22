@@ -137,13 +137,13 @@ namespace ai
             if (!UseItemIdAction::isUseful())
             {
                 if (getName() == "healing potion")
-                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", bot->GetName(), GetItemId());
+                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", std::string(bot->GetName()).c_str(), GetItemId());
                 return false;
             }
             if (!AI_VALUE2(bool, "combat", "self target"))
             {
                 if (getName() == "healing potion")
-                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", bot->GetName());
+                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", std::string(bot->GetName()).c_str());
                 return false;
             }
             return true;
@@ -239,13 +239,13 @@ namespace ai
             if (!UseItemIdAction::isUseful())
             {
                 if (getName() == "healing potion")
-                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", bot->GetName(), GetItemId());
+                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", std::string(bot->GetName()).c_str(), GetItemId());
                 return false;
             }
             if (!AI_VALUE2(bool, "combat", "self target"))
             {
                 if (getName() == "healing potion")
-                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", bot->GetName());
+                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", std::string(bot->GetName()).c_str());
                 return false;
             }
             return true;

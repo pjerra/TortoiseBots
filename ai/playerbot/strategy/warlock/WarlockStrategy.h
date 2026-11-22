@@ -211,6 +211,20 @@ namespace ai
         static void InitNonCombatTriggers(std::list<TriggerNode*>& triggers);
     };
 
+    // Default demon when no player order and no situation pet row owns the
+    // choice: the strongest demon the warlock has learned (Felhunter,
+    // Succubus, Voidwalker, Imp), so a warlock below the Voidwalker tier (10)
+    // summons the Imp it learns at level 1. See DecideWarlockAutoPet.
+    class WarlockAutoPetStrategy : public Strategy
+    {
+    public:
+        WarlockAutoPetStrategy(PlayerbotAI* ai) : Strategy(ai) {}
+        std::string getName() override { return "pet auto"; }
+
+    private:
+        void InitNonCombatTriggers(std::list<TriggerNode*>& triggers) override;
+    };
+
     class WarlockCursesStrategy : public Strategy
     {
     public:
