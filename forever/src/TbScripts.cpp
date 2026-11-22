@@ -94,6 +94,7 @@
 #include "host/TbAddonActions.h"
 #include "host/TbAddonVerbs.h"
 #include "host/TbAddonRoster.h"
+#include "host/TbAddonBlessing.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -563,6 +564,7 @@ public:
             { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "talents", TortoiseBots::talents::HandleTalentsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "blessing", TortoiseBots::blessing::HandleBlessingChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
         };
         static ChatCommandTable commandTable =
         {
@@ -1750,6 +1752,7 @@ void AddSC_tortoisebots()
     TortoiseBots::action::RegisterAddonVerbsActions();   // #130 f-actions: the `action` verb + `action:<intent>` tokens
     TortoiseBots::addonverbs::RegisterAddonVerbsPassthrough();   // #130 f-verbs: the `.bot` words the player layer answers (host/TbAddonVerbs.cpp)
     TortoiseBots::roster::RegisterAddonVerbsRoster();   // #130: `roster`/`list`/`alts` + handshake/BOTSTATE over the TBM channel (host/TbAddonRoster.cpp)
+    TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
