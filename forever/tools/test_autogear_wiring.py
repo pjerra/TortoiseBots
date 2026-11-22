@@ -25,6 +25,17 @@ def check_pure_claim(pure_src):
         raise AssertionError("ClaimsAutogearCommand missing boundary check")
 
 
+def check_ownership_via_owner_scope(player_cmd_src, autogear_cpp_src):
+    if "HandleBotAutogear(player, caller.gm, scope," not in player_cmd_src:
+        raise AssertionError("TbPlayerCmd Dispatch must pass OwnerScope scope to HandleBotAutogear")
+    if "return scope.Owns(gameAccount);" not in player_cmd_src:
+        raise AssertionError("TbPlayerCmd OwnsGameAccount must delegate to scope.Owns")
+    if "player::OwnsGameAccount(scope, entry->AccountId)" not in autogear_cpp_src:
+        raise AssertionError("TbAutogear must check ownership via OwnerScope::Owns")
+    if "GetIdByGameAccount" in autogear_cpp_src:
+        raise AssertionError("TbAutogear must not bypass OwnerScope::Owns")
+
+
 class AutogearWiring(unittest.TestCase):
     def test_player_cmd_and_scripts_wiring(self):
         self.assertIn('verb == "autogear"', PLAYER_CMD)
@@ -32,6 +43,10 @@ class AutogearWiring(unittest.TestCase):
         self.assertIn("TortoiseBots::autogear::AddScripts();", SCRIPTS)
         self.assertIn("HandleBotAutogear", AUTOGEAR_H)
         self.assertIn("AddScripts", AUTOGEAR_H)
+
+    def test_ownership_via_owner_scope_owns(self):
+        check_ownership_via_owner_scope(PLAYER_CMD, AUTOGEAR_CPP)
+        self.assertIn("!callerGm && !player::OwnsGameAccount(scope, entry->AccountId)", AUTOGEAR_CPP)
 
     def test_autogear_uses_forever_gear_gen_and_tb_policies(self):
         self.assertIn("gear::InitGearIndex()", AUTOGEAR_CPP)
@@ -51,12 +66,21 @@ class AutogearWiring(unittest.TestCase):
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:
-        mutated = AUTOGEAR_PURE.replace("if (word.size() > kCmd.size() && !std::isspace(static_cast<unsigned char>(word[kCmd.size()])))", "if (false)")
+        mutated_claim = AUTOGEAR_PURE.replace("if (word.size() > kCmd.size() && !std::isspace(static_cast<unsigned char>(word[kCmd.size()])))", "if (false)")
         try:
-            check_pure_claim(mutated)
+            check_pure_claim(mutated_claim)
         except AssertionError:
             print("MUTATION CAUGHT: claim-boundary")
+        else:
+            print("ERROR: claim-boundary mutation survived", file=sys.stderr)
+            sys.exit(1)
+
+        mutated_own = AUTOGEAR_CPP.replace("player::OwnsGameAccount(scope, entry->AccountId)", "false")
+        try:
+            check_ownership_via_owner_scope(PLAYER_CMD, mutated_own)
+        except AssertionError:
+            print("MUTATION CAUGHT: ownership-scope")
             sys.exit(0)
-        print("ERROR: mutation survived", file=sys.stderr)
+        print("ERROR: ownership-scope mutation survived", file=sys.stderr)
         sys.exit(1)
     unittest.main()

@@ -4,6 +4,7 @@
 // Threading: world thread (a chat opcode is PROCESS_THREADUNSAFE; the hook runs inside ChatHandler::ParseCommands).
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 
 class Player;
@@ -12,6 +13,8 @@ namespace TortoiseBots
 {
 namespace player
 {
+struct OwnerScope;
+bool OwnsGameAccount(OwnerScope const& scope, std::uint32_t gameAccount);
 // TortoiseBots.Player.Commands and TortoiseBots.Player.MaxBots, read at world config load and on a reload.
 void LoadConfig();
 // Registers the `tortoisebots_player_cmd` PlayerScript whose PlayerScript::OnCommand claims the word `bot`. Nothing with the engine off.

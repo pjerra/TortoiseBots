@@ -1,5 +1,6 @@
 #include "host/TbAutogear.h"
 #include "host/TbAutogearPure.h"
+#include "host/player/TbPlayerCmd.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -9,7 +10,6 @@
 #include "host/run/TbRunHooks.h"
 
 #include "Bag.h"
-#include "BattlenetAccountMgr.h"
 #include "CharacterCache.h"
 #include "Chat.h"
 #include "DatabaseEnv.h"
@@ -478,7 +478,7 @@ public:
 
 } // namespace
 
-bool HandleBotAutogear(Player* caller, bool callerGm, std::uint32_t callerBnet, std::string_view tail)
+bool HandleBotAutogear(Player* caller, bool callerGm, player::OwnerScope const& scope, std::string_view tail)
 {
     if (!caller)
         return false;
@@ -514,14 +514,10 @@ bool HandleBotAutogear(Player* caller, bool callerGm, std::uint32_t callerBnet, 
         return true;
     }
 
-    if (!callerGm)
+    if (!callerGm && !player::OwnsGameAccount(scope, entry->AccountId))
     {
-        std::uint32_t const botBnet = entry->AccountId ? Battlenet::AccountMgr::GetIdByGameAccount(entry->AccountId) : 0;
-        if (!callerBnet || !botBnet || callerBnet != botBnet)
-        {
-            Say(caller, "TortoiseBots: autogear: refused not-yours: you may only autogear your own bots.");
-            return true;
-        }
+        Say(caller, "TortoiseBots: autogear: refused not-yours: you may only autogear your own bots.");
+        return true;
     }
 
     if (BotMgr::Instance().IsPoolBot(bot->GetGUID()))
@@ -577,7 +573,7 @@ namespace TortoiseBots
 namespace autogear
 {
 
-bool HandleBotAutogear(Player*, bool, std::uint32_t, std::string_view) { return false; }
+bool HandleBotAutogear(Player*, bool, player::OwnerScope const&, std::string_view) { return false; }
 void AddScripts() { }
 
 } // namespace autogear
