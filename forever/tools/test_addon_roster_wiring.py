@@ -82,14 +82,17 @@ class Wiring(unittest.TestCase):
         self.assertNotIn("TBM:CC_ASSIGN", strip_comments(self.cpp))
         self.assertIn('#include "host/TbAddonInfo.h"', self.cpp)
         trailer = function_body(self.cpp, r"void SendTrailer\(Player\* requester\)\s*\{")
-        order = ["VersionLine(", "ProtoLine()", "LatestLine()", "VerbsLine(", "CapsLine(", "TransportLine("]
+        order = ["VersionLine(", "ProtoLine()", "LatestLine()", "VerbsBegin(", "VerbsChunks(", "kVerbsEnd",
+                 "CapsLine(", "TransportLine("]
         for token in order:
             self.assertIn(token, trailer, f"trailer misses {token}")
         positions = [trailer.index(token) for token in order]
-        self.assertEqual(positions, sorted(positions), "trailer order is not VERSION PROTO LATEST VERBS CAPS TRANSPORT")
-        # VERBS is the channel's own sorted-unique list; CAPS earns tb-gm for
-        # a .tb-permitted requester; TRANSPORT is TB's channel verdict.
-        self.assertIn("VerbsLine(addon::AdvertisedVerbs())", trailer)
+        self.assertEqual(positions, sorted(positions), "trailer order is not VERSION PROTO LATEST VERBS_BEGIN CHUNKS END CAPS TRANSPORT")
+        # VERBS is the channel's own sorted-unique list, counted like ROSTER
+        # (one 255-byte line cannot hold it); CAPS earns tb-gm for a
+        # .tb-permitted requester; TRANSPORT is TB's channel verdict.
+        self.assertIn("VerbsBegin(verbs.size())", trailer)
+        self.assertIn("VerbsChunks(verbs)", trailer)
         self.assertIn("CapsLine(CapsFor(addon::AdvertisedCaps(), HasTbPermission(requester)))", trailer)
         self.assertIn("TransportLine(TransportFor(requester))", trailer)
         gm = function_body(self.cpp, r"bool HasTbPermission\(Player\* player\)\s*\{")
@@ -133,7 +136,7 @@ class Wiring(unittest.TestCase):
                                 f"TbAddonRosterPure.h includes a core header: {line.strip()}")
         for name in ("RosterLine(", "AltBotsLine(", "AltSumLineText(", "AltSumEnd(",
                      "ClaimedLine(", "BotStateText(", "ProtoLine()", "LatestLine(",
-                     "VerbsLine(", "CapsLine(", "CapsFor(", "TransportVerdict(",
+                     "VerbsBegin(", "VerbsChunks(", "kVerbsEnd", "CapsLine(", "CapsFor(", "TransportVerdict(",
                      "RosterVisible(", "BotMoveWord(", "RosterStateOf("):
             self.assertIn(name, self.pure)
             self.assertIn(name.rstrip("("), self.unit, f"the unit test does not cover {name}")
@@ -141,7 +144,7 @@ class Wiring(unittest.TestCase):
     def test_required_cases_are_named(self):
         for case in (
             "roster_row_field_order", "field_escaping", "altsum_stream",
-            "claimed_botstate_shapes", "transport_verdict", "verbs_caps_join",
+            "claimed_botstate_shapes", "transport_verdict", "verbs_caps_join", "verbs_stream",
             "bot_move_word", "roster_visible_matches_who",
         ):
             self.assertIn(f"case: {case}", self.unit, f"missing case {case}")

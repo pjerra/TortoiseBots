@@ -323,6 +323,12 @@ bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
     return true;
 }
 
+bool HasCombatCcStrategy(Player* bot)
+{
+    PlayerbotAI* ai = AiOf(bot);
+    return ai && ai->HasStrategy("cc", BotState::BOT_STATE_COMBAT);
+}
+
 // The bot's `rti cc` and `run cc family` as `.tb state` reads them ("" for "none" or no engine): the run's end (TbRun.cpp ClearRunCc) checks that a bot it
 // marked still carries the run's mark before it resets it.
 void CcOrderValues(Player* bot, std::string& mark, std::string& family)

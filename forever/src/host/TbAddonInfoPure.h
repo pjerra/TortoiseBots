@@ -162,6 +162,14 @@ inline bool ValidCcMark(std::string_view mark)
     return false;
 }
 
+// TB lists a bot only when it also holds the "cc" combat strategy, the same
+// condition the CC hold uses: "rti cc" defaults to moon on every bot, so the
+// mark alone does not make a CC bot (TB commands/Info.cpp).
+inline bool CcRowVisible(bool hasCcStrategy, std::string_view mark)
+{
+    return hasCcStrategy && ValidCcMark(mark);
+}
+
 // The "run" verb's readers: "run status", "run here" and "run list" (the
 // addon sends nothing else read-only; anything else is a mutation this piece
 // does not own).

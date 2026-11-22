@@ -64,6 +64,11 @@ int main()
         CHECK(std::string(kCcEnd) == "TBM:CC_ASSIGN_END");
         CHECK(ValidCcMark("moon") && ValidCcMark("STAR") && ValidCcMark("cross"));
         CHECK(!ValidCcMark("skull") && !ValidCcMark("") && !ValidCcMark("focus"));
+        // TB's gate: the mark alone never lists a bot ("rti cc" reads moon on
+        // every fresh bot); the "cc" combat strategy must hold too.
+        CHECK(CcRowVisible(true, "moon") && CcRowVisible(true, "STAR"));
+        CHECK(!CcRowVisible(false, "moon") && !CcRowVisible(false, "star"));
+        CHECK(!CcRowVisible(true, "") && !CcRowVisible(true, "skull") && !CcRowVisible(false, ""));
     }
     // 6. The "run" verb routes the three readers; anything else keeps its word
     // for the error intent.

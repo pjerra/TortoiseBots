@@ -184,7 +184,13 @@ void SendTrailer(Player* requester)
     addon::Send(requester, VersionLine(GitRevision::GetFullVersion()));
     addon::Send(requester, ProtoLine());
     addon::Send(requester, LatestLine());
-    addon::Send(requester, VerbsLine(addon::AdvertisedVerbs()));
+    // Counted like ROSTER: the token list exceeds one 255-byte message, so
+    // the channel would truncate a single line mid-token.
+    std::vector<std::string> const verbs = addon::AdvertisedVerbs();
+    addon::Send(requester, VerbsBegin(verbs.size()));
+    for (std::string const& chunk : VerbsChunks(verbs))
+        addon::Send(requester, chunk);
+    addon::Send(requester, std::string(kVerbsEnd));
     addon::Send(requester, CapsLine(CapsFor(addon::AdvertisedCaps(), HasTbPermission(requester))));
     addon::Send(requester, TransportLine(TransportFor(requester)));
 }
