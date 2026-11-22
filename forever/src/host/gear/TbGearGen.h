@@ -7,6 +7,7 @@
 #include <vector>
 
 class Player;
+namespace ai { struct GearItemCandidate; }
 
 namespace TortoiseBots
 {
@@ -45,6 +46,8 @@ struct GearSetOutcome
 void InitGearIndex();
 uint32 GearIndexItemCount();
 std::vector<GearAuditEntry> AuditGearIndex(uint32 level);
+std::vector<ai::GearItemCandidate> const& SlotCandidates(uint8 slot);
+ai::GearItemCandidate const* FindCandidate(uint32 itemId);
 GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint32 levelArg, int32 qualityArg);
 
 } // namespace gear

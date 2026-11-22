@@ -28,6 +28,7 @@
 #include "ScriptMgr.h"
 #include "WorldSession.h"
 #include "host/TbOrdersApi.h"
+#include "host/TbAutogear.h"
 
 #include <algorithm>
 #include <cctype>
@@ -62,6 +63,11 @@ private:
 };
 
 BotFacts FactsOf(Player* requester, Player* bot, OwnerScope const& scope);   // fills the pure rule's facts; defined below
+
+bool OwnsGameAccount(OwnerScope const& scope, std::uint32_t gameAccount)
+{
+    return scope.Owns(gameAccount);
+}
 
 namespace
 {
@@ -514,6 +520,8 @@ bool Dispatch(Player* player, std::string_view rest)
         return HandleOrderVerb(player, caller, scope, verb, AfterFirstWord(rest));
     if (verb == "maintenance")
         return HandleMaintenance(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "autogear")
+        return autogear::HandleBotAutogear(player, caller.gm, scope, AfterFirstWord(rest));
 
     Refuse(player, verb, "unknown-verb", "no such command; try .bot help");
     return true;
