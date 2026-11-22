@@ -730,3 +730,77 @@ of the build VM's core trees (`src-4`..`src-7`, all copied 2026-11-20) has that 
 d02645dd21 this brief names. The merge's other incompatible hunk count is in the pin batch (`TbSpellEntry.*`,
 `TbItemPrototype.*`, 56 files). The tree gated here is the one built by the three build gates above, and `turtle: PASS`
 is this round's cmangos twin fix (`ai/cmangos-compat-quest.h`: one name for the struct and the accessor cannot compile).
+
+## 13. The fix round after live run 6 (2026-11-22)
+
+Evidence: the run-6 notes (2026-11-22) and the run's own world log dump (`wc6-world.out`, read this round with the bot
+log for the death times; no live run). The run reached leg 10 `west_column` step 103 of 302, pull 74 of 87, Kresh,
+Cobrahn, Pythas and Skum dead, and was stopped by its own 3 h cap (67 deaths, 5 wipes, 0 pauses).
+
+### 13.1 A wipe's walk back resumes at the last cleared step
+
+The run-6 notes have the walk that prompted this: after the wipe at leg 8's boss (step 87, unit 3670) the party
+released to the entrance, and the run's note was `walk back: to the point of step 4`. The party stood at the
+entrance; the walk back's straight target failed (no complete navmesh path from there to leg 8), so the plan's own
+points were replayed — from `ReplayStartPoint`'s nearest move point to the lead bot, which at the entrance is the
+plan's first one. The run walked the route's points back toward step 4 before it pulled again.
+
+Cause, `runtime/DungeonRunPolicy.h`: `ReplayFloor` is the checkpoint when it is known, else 0 (as at the entrance:
+before every hole). A death loses the checkpoint (`routeKnown`: the lead bot came back at the entrance), so a wipe
+left the floor at the plan's start and the nearest-point pick had 87 steps of route to choose from. The floor now
+falls back to the last cleared step (`LastClearedStep`: the last pull or boss step before the current one that
+`notCleared` does not name, after the run's start step) and, inside it, the last move point at or before it — the
+furthest place on the route the party is known to have walked to. It survives the death because it is the step
+pointer's own record, not a live reading. Nothing cleared (a run placed at its start step, a route whose packs were
+all skipped) keeps the old floor 0.
+
+Tests: `tools/test_run_leader_sentinel_policy.cpp` `TestWipeReplayStartsAtTheLastClearedStep` and
+`forever/tools/test_run_wc.cpp` `TestWipeResumeAtTheLastClearedStep` (the real 302-step plan: at Pythas's boss step
+the floor is 81, leg 8's first move point, and the replay starts there). Both fail on the old policy — the replay
+started at the plan's first move point (index 0 in the made-up route, index 3 in the live plan) — and pass now.
+`tools/test_run_time_sinks_policy.cpp` pins the rule on the Gnomeregan-shaped plan too: a wipe at the route's last
+camp floors at the pack before it (`ReplayFloor` = the move point of the 600 yd pack, not 0), and a run whose packs
+are all uncleared keeps floor 0.
+Existing walk-back tests pin the rest: a known checkpoint still decides the floor, the folded route's holes are still
+replayed from the point before the first uncrossed one, and an entrance revive with nothing cleared replays from the
+start. The hole rule follows the same floor (`FirstUncrossedDirect`): with no checkpoint a direct step at or before
+the last cleared step counts as crossed — the party walked to a point past it — so a wipe at leg 8 of a route whose
+hole sits at leg 2 replays from leg 8, not from the hole; only a hole after the last cleared step is replayed, from
+the last move point before it. WC's own holes are past step 87 (the lift to Serpentis's part, indexes 114 and 139),
+so run 6 never met this case; the made-up plan in the test pins it both ways.
+
+### 13.2 The leg-5 Druid camp carries the pack's whole kill-first order
+
+The run-6 notes' watched item: the leg-7 Druid camps are won (steps 74/75/78: 0 deaths, against 3, 12 and 11 in run
+5), the leg-5 camp is not (10 deaths). The world log's fight at leg 5 `cobrahn_c` seq 6 (index 54, entries 3840,
+5048, 5755) engaged exactly the row's three units — Druid of the Fang 3840, Deviate Adder 5048, Deviate Viper 5755,
+7.3, 14.6 and 7.9 yd from the pull spot, no add (no unit of entry 8886 took damage anywhere in the run) —
+and killed the party twice: 5 deaths in 26 s at 01:16, a `revive party`, the camp still standing, then with the
+run's `pull` and `fight-end` events again: 5 deaths in 77 s at 01:21 and another `revive party`.
+
+Cause: the plan's `kill_first` named only 3840 (and 3671, Anacondra). The focus is an ordered list
+(`DungeonPlan::KillFirstRank`, `PickKillFirst`): the Druid gets the skull and every bot, and once it falls no
+kill_first unit is engaged, so each bot fights its own pick while the camp's two poisoners finish the party.
+
+Change (generated into `ai_dungeon_plan`): `kill_first = '3840,3671,5048,5755'` — the Druid, then Anacondra (the
+pool boss of the early Druid camps, unchanged in place), then the camp's Adder and Viper. The same ordered focus the
+leg-7 Druid camps got (section 12.2) now covers the pack the Druid is pulled with, and every other row that lists
+5048/5755. Two consequences are accepted and named here: a kill_first unit is never crowd-controlled (the plan's
+`cc_priority` is empty, so nothing changes today), and a pull whose row lists a kill_first entry is never deferred
+(`PullMayBeDeferred`), so the rows with 5048/5755 pause if their pack is unreachable instead of being retried at the
+leg's end — as the rows with 3840 already did.
+
+Tests: `forever/tools/test_run_wc.cpp` `TestLeg5CampKillFirstOrder` (the camp's three units carry the order and
+`PickKillFirst` sends the party at the Druid, then the Adder, then the Viper) and `TestPlanShape` (the list, pinned
+whole). They fail on the old row (`KillFirstRank(5048) == -1`, the focus empty after the Druid) and pass on the new
+one; `python3 forever/tools/test_wc_plan_rows.py` regenerates the migration byte for byte (3507 checks, 0 failed).
+
+### 13.3 Deploy note: a core move needs the core's own SQL applied
+
+The 0.1.39 first boot on the test box crash-looped before this could be written down: `[1146] Table
+'world.classic_item_damage' doesn't exist`, worldserver aborting on every start. A world database restored from an
+earlier dump (or carried over from the previous core) is not enough after a core move: the core's own `sql` tree has
+to be applied first. What worked: `git archive <core sha> sql` from the core checkout into the sql source directory
+the boot's update step reads (back the old directory up first), then the update step (`236 updates applied` for
+0.1.39), then boot (`READY`, 0 ASSERT). The archive's `sql/old` is multi-GB and can be dropped before the update.
+Do this before the plan SQL and before the first boot of any core move, and record the sha it was taken from.
