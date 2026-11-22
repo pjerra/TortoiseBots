@@ -502,3 +502,7 @@ TortoiseBots.AutoTools = 1
 #                     starter pet and its pet spells on login and on level-up. Never replaces an existing pet.
 
 TortoiseBots.AutoHunterPet = 1
+#    TortoiseBots.AutoFood
+#        Description: Pool and free bots receive level-fitting vendor food (and water for mana users) on login and level-up.
+
+TortoiseBots.AutoFood = 1

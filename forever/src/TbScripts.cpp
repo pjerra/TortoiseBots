@@ -79,6 +79,7 @@
 #include "host/TbAutoProfs.h"
 #include "host/TbAutoTools.h"
 #include "host/TbAutoHunterPet.h"
+#include "host/TbAutoFood.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -183,6 +184,7 @@ public:
         TortoiseBots::autoprofs::LoadConfig();
         TortoiseBots::autotools::LoadConfig();     // auto-grant missing profession tools to pool/free bots, on by default
         TortoiseBots::autohunterpet::LoadConfig(); // starter pet on level 10 / login for hunter bots without a pet
+        TortoiseBots::autofood::LoadConfig();
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
         if (reload)
         {
@@ -422,6 +424,7 @@ public:
             TortoiseBots::autoprofs::Sync(player, "login");
             TortoiseBots::autotools::Sync(player, "login");
             TortoiseBots::autohunterpet::Sync(player, "login");
+            TortoiseBots::autofood::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
     }
@@ -437,6 +440,7 @@ public:
             TortoiseBots::autoprofs::Sync(player, "level");
             TortoiseBots::autotools::Sync(player, "level");
             TortoiseBots::autohunterpet::Sync(player, "level");
+            TortoiseBots::autofood::Sync(player, "level");
         }
     }
 
