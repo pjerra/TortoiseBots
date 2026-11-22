@@ -75,6 +75,81 @@ inline SaveStatements BuildSaveStatements(uint32_t guid, std::string preset, std
     return out;
 }
 
+inline std::string FormatStrategies(std::vector<std::string> const& strategies)
+{
+    std::string out;
+    for (std::string const& s : strategies)
+    {
+        if (!out.empty())
+            out += ',';
+        out += '+';
+        out += s;
+    }
+    return out;
+}
+
+struct StrategyRow
+{
+    std::string key;
+    std::string value;
+};
+
+inline SaveStatements BuildSaveAllStatements(uint32_t guid, std::string preset,
+    std::vector<std::string> const& valueRows, std::vector<StrategyRow> const& stratRows,
+    std::function<void(std::string&)> const& escape)
+{
+    escape(preset);
+    SaveStatements out;
+    std::string const guidStr = std::to_string(guid);
+    out.deleteSql = "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + guidStr + " AND `preset` = '" + preset + "'";
+    std::string const prefix = "INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (" +
+        guidStr + ", '" + preset + "', '";
+    for (std::string row : valueRows)
+    {
+        escape(row);
+        out.insertSql.push_back(prefix + "value', '" + row + "')");
+    }
+    for (StrategyRow const& sr : stratRows)
+    {
+        std::string key = sr.key;
+        std::string val = sr.value;
+        escape(key);
+        escape(val);
+        out.insertSql.push_back(prefix + key + "', '" + val + "')");
+    }
+    return out;
+}
+
+inline std::string BuildResetSql(uint32_t guid, std::string preset, std::function<void(std::string&)> const& escape)
+{
+    escape(preset);
+    return "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) + " AND `preset` = '" + preset + "'";
+}
+
+inline std::string BuildInvalidateStrategySnapshotsSql(uint32_t guid)
+{
+    return "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) +
+        " AND `key` IN ('co','nc','dead','react')";
+}
+
+inline std::string BuildSelectValueOnlySql(uint32_t guid, std::string preset,
+    std::function<void(std::string&)> const& escape)
+{
+    escape(preset);
+    return "SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) +
+        " AND `preset` = '" + preset + "' AND `key` = 'value'";
+}
+
+inline std::string BuildDeleteAllValuesSql(uint32_t guid)
+{
+    return "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) + " AND `key` = 'value'";
+}
+
+inline std::string BuildSelectDistinctPresetsSql(uint32_t guid)
+{
+    return "SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid);
+}
+
 }
 }
 }

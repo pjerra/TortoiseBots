@@ -406,9 +406,13 @@ public:
     void SetCastItem(Item* /*item*/) {}
 };
 
-// The strategy store (ai_playerbot_*): not in ForeverCore's schema. Begin returns false ("no transaction, store nothing").
-inline bool DbStoreBeginCompat(uint32 /*serialId*/) { tbcompat::Unported(tbcompat::Feature::StrategyStoreTransactions); return false; }
+// The strategy store (ai_playerbot_db_store): transactions run in SliceDbStore via CharacterTransactGuardedCompat.
+inline bool DbStoreBeginCompat(uint32 /*serialId*/) { return true; }
 inline void DbStoreCommitCompat() {}
+inline uint64 DbStoreBotGuidCompat(Player* bot) { return bot ? bot->GetGUID().GetCounter() : 0; }
+QueryResult DbStoreQueryValuesCompat(uint64 guid);
+void DbStoreDeleteValuesCompat(uint64 guid);
+QueryResult DbStoreQueryPresetsCompat(uint64 guid);
 // The custom strategy lines of one owner (T: SELECT from ai_playerbot_custom_strategy). Failure value: no lines.
 inline void LoadCustomStrategyLinesCompat(std::string const& /*qualifier*/, uint32 /*owner*/, std::list<std::string>& /*lines*/)
 {

@@ -11,10 +11,18 @@
 namespace
 {
 
+using ai::slice::aistore::BuildDeleteAllValuesSql;
+using ai::slice::aistore::BuildInvalidateStrategySnapshotsSql;
+using ai::slice::aistore::BuildResetSql;
+using ai::slice::aistore::BuildSaveAllStatements;
 using ai::slice::aistore::BuildSaveStatements;
+using ai::slice::aistore::BuildSelectDistinctPresetsSql;
+using ai::slice::aistore::BuildSelectValueOnlySql;
 using ai::slice::aistore::EncodeRow;
+using ai::slice::aistore::FormatStrategies;
 using ai::slice::aistore::ParseRow;
 using ai::slice::aistore::SelectValuesSql;
+using ai::slice::aistore::StrategyRow;
 using ai::slice::aistore::ValueKey;
 
 // The production escaper doubles backslashes and quotes (what MySQL's EscapeString does to the
@@ -88,6 +96,40 @@ int main()
     // A save with no saved values still clears stale rows (TB's Reset always runs first).
     auto empty = BuildSaveStatements(7, "", {}, NoEscape);
     assert(empty.insertSql.empty() && !empty.deleteSql.empty());
+
+    // Strategy list formatting (TB PlayerbotDbStore::FormatStrategies).
+    assert(FormatStrategies({}) == "");
+    assert(FormatStrategies({ "arms" }) == "+arms");
+    assert(FormatStrategies({ "arms", "dps assist", "close" }) == "+arms,+dps assist,+close");
+
+    // Full save (values + co/nc/dead/react) deletes all keys for (guid, preset) and inserts values + strategies.
+    std::vector<StrategyRow> strats = {
+        { "co", "+arms,+dps assist" },
+        { "nc", "+arms,+follow" },
+        { "dead", "+dead" },
+        { "react", "+arms" },
+    };
+    auto full = BuildSaveAllStatements(42, "p'1", { "manual saved string::k>v'1" }, strats, FakeEscape);
+    assert(full.deleteSql == "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `preset` = 'p\\'1'");
+    assert(full.insertSql.size() == 5);
+    assert(full.insertSql[0] ==
+        "INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (42, 'p\\'1', 'value', 'manual saved string::k>v\\'1')");
+    assert(full.insertSql[1] ==
+        "INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (42, 'p\\'1', 'co', '+arms,+dps assist')");
+    assert(full.insertSql[4] ==
+        "INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (42, 'p\\'1', 'react', '+arms')");
+
+    // Reset, InvalidateStrategySnapshots, ResetValues, and ListAi SQL builders.
+    assert(BuildResetSql(42, "a'b", FakeEscape) ==
+        "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `preset` = 'a\\'b'");
+    assert(BuildInvalidateStrategySnapshotsSql(42) ==
+        "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `key` IN ('co','nc','dead','react')");
+    assert(BuildSelectValueOnlySql(42, "p'1", FakeEscape) ==
+        "SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `preset` = 'p\\'1' AND `key` = 'value'");
+    assert(BuildDeleteAllValuesSql(42) ==
+        "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = 42 AND `key` = 'value'");
+    assert(BuildSelectDistinctPresetsSql(42) ==
+        "SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = 42");
 
     std::cout << "aistore pure: all assertions passed" << std::endl;
     return 0;

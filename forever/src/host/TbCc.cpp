@@ -25,6 +25,8 @@
 
 #include "compat/TbCompat_V.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/PlayerbotDbStore.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
@@ -756,6 +758,8 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Rec end("strategy");
     end.S("target", bot->GetName()).S("state", stateWord).N("applied", applied).N("refused", refused);
     reply.End(end);
+    if (applied > 0 && !sPlayerbotAIConfig.bExplicitDbStoreSave)
+        sPlayerbotDbStore.Save(ai);
     if (refused)
         handler->SetSentErrorMessage(true);
     return refused == 0;

@@ -46,6 +46,7 @@
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
 #include "playerbot/strategy/actions/RepairAllAction.h"
+#include "playerbot/strategy/actions/ResetAiAction.h"
 #include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
 #include "playerbot/strategy/actions/RtiAction.h"
 #include "playerbot/strategy/actions/SaveManaAction.h"
@@ -377,7 +378,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (48 of its keys)
+    // the registry of ChatActionContext (55 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -431,6 +432,13 @@ namespace slice
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceAction(ai); };
             creators["buff"] = [](PlayerbotAI* ai) { return new BuffAction(ai); };
             creators["tame"] = [](PlayerbotAI* ai) { return new TameAction(ai); };
+            creators["de"] = [](PlayerbotAI* ai) { return new ChangeDeadStrategyAction(ai); };
+            creators["react"] = [](PlayerbotAI* ai) { return new ChangeReactionStrategyAction(ai); };
+            creators["all"] = [](PlayerbotAI* ai) { return new ChangeAllStrategyAction(ai); };
+            creators["reset ai"] = [](PlayerbotAI* ai) { return new ResetAiAction(ai, true); };
+            creators["reset strats"] = [](PlayerbotAI* ai) { return new ResetStratsAction(ai); };
+            creators["reset values"] = [](PlayerbotAI* ai) { return new ResetValuesAction(ai); };
+            creators["reset ai soft"] = [](PlayerbotAI* ai) { return new ResetAiAction(ai, false); };
         }
     };
 
@@ -599,7 +607,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (49 of its keys)
+    // the registry of ChatTriggerContext (55 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -654,6 +662,12 @@ namespace slice
             creators["bb"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "bb"); };
             creators["free"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "free"); };
             creators["position"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "position"); };
+            creators["de"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "de"); };
+            creators["react"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "react"); };
+            creators["all"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "all"); };
+            creators["reset ai"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset ai"); };
+            creators["reset strats"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset strats"); };
+            creators["reset values"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset values"); };
         }
     };
 
@@ -894,7 +908,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 45, kActions = 148, kTriggers = 190, kValues = 211;
+    constexpr unsigned kStrategies = 45, kActions = 155, kTriggers = 196, kValues = 211;
 }
 }
 

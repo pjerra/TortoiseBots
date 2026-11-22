@@ -35,9 +35,9 @@ void ResetAiAction::ResetStrategies()
 
 void ResetAiAction::ResetValues()
 {
-    uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
+    uint64 guid = DbStoreBotGuidCompat(ai->GetBot());
 
-    auto results = CharacterPQueryCompat("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' and `preset` = '' and `key` = 'value'", guid);
+    auto results = QueryGuardCompat(DbStoreQueryValuesCompat(guid));
     if (results)
     {
         std::list<std::string> values;
@@ -62,8 +62,8 @@ void ResetAiAction::ResetValues()
 
         } while (results->NextRow());
 
-        if(fullReset)
-            CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' and `key` = 'value'", guid);
+        if (fullReset)
+            DbStoreDeleteValuesCompat(guid);
     }
 }
 
@@ -113,11 +113,11 @@ bool ListAiAction::Execute(Event& event)
 {
    if (Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster())
    {
-      uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
+      uint64 guid = DbStoreBotGuidCompat(ai->GetBot());
 
       ai->TellError(requester, "### PRESETS AVAILABLE ###");
 
-      auto results = CharacterPQueryCompat("SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu'", guid);
+      auto results = QueryGuardCompat(DbStoreQueryPresetsCompat(guid));
       if (results)
       {
          std::list<std::string> values;
