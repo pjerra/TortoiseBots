@@ -151,15 +151,19 @@ class Wiring(unittest.TestCase):
         self.assertIn("ScopeOf(player)", dispatch)
         scope = function_body(self.cpp, r"OwnerScope ScopeOf\(Player\* player\)\s*\{")
         self.assertIn("GetBattlenetAccountId()", scope)
-        self.assertIn('"SELECT id FROM account WHERE battlenet_account = {}", scope.bnet', scope)
+        # The game-account -> Battle.net check is the core's own Battlenet::AccountMgr::GetIdByGameAccount (a fresh login-DB read;
+        # the module makes no raw query, test_forever_no_direct_queries.py), asked in OwnerScope::Owns.
+        owns = function_body(self.cpp, r"bool Owns\(std::uint32_t gameAccount\) const\s*\{")
+        self.assertIn("Battlenet::AccountMgr::GetIdByGameAccount(gameAccount)", owns)
+        self.assertIn("if (!bnet || !gameAccount)", owns)   # fail closed
+        self.assertIn("return it->second == bnet", owns)
         # A live unlink of the caller's own game account leaves the session's old Battle.net id: the scope holds only while
-        # the caller's game account is still in the set read now.
-        self.assertIn("scope.gameAccounts.count(session->GetAccountId())", scope)
-        self.assertLess(scope.index("PQuery"), scope.index("scope.gameAccounts.count(session->GetAccountId())"))
+        # the caller's game account is still one of that Battle.net account's now.
+        self.assertIn("!scope.Owns(session->GetAccountId())", scope)
         self.assertIn("caller.account = scope.bnet", dispatch)
         facts = function_body(self.cpp, r"BotFacts FactsOf\(Player\* requester, Player\* bot, OwnerScope const& scope\)\s*\{")
         self.assertIn("sCharacterCache->GetCharacterAccountIdByGuid(guid)", facts)
-        self.assertIn("scope.gameAccounts.count(gameAccount)", facts)
+        self.assertIn("scope.Owns(gameAccount)", facts)
         self.assertIn("facts.account = scope.bnet", facts)
         # The pure rule's account field carries a Battle.net account, then compared for equality.
         self.assertIn("caller.account == bot.account", self.pure)
@@ -172,7 +176,8 @@ class Wiring(unittest.TestCase):
         code = strip_comments(self.cpp)
         self.assertNotRegex(code, r"(?m)^\s*(static\s+)?std::unordered_map<std::uint32_t,\s*std::uint32_t>\s+s_")
         self.assertNotIn("s_bnetOf", code)
-        self.assertNotIn("GetIdByGameAccount", code)
+        self.assertNotRegex(code, r"(?:Login)Database\s*(?:\.|->)")   # no raw module query on the login pool
+        self.assertRegex(code, r"mutable std::unordered_map<std::uint32_t, std::uint32_t> memo;")   # the memo is per OwnerScope (one line)
         self.assertNotRegex(code, r"(?m)^(static\s+)?std::(unordered_)?(map|set)<[^;]*>\s+s_\w+\s*;")
 
     def test_facts_come_from_the_core_objects(self):
