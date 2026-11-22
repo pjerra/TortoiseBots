@@ -38,6 +38,7 @@
 #include "RealmList.h"
 #include "ScriptMgr.h"
 #include "World.h"
+#include "WorldSession.h"
 #include "WorldPacket.h"
 #include <algorithm>
 #include <chrono>
@@ -259,6 +260,15 @@ bool BotMgr::AccountHasBot(uint32 accountId) const
     return false;
 }
 
+uint32 BotMgr::OwnedBotsOf(ObjectGuid master) const
+{
+    uint32 count = 0;
+    for (auto const& [guid, bot] : _bots)
+        if (bot.owned && bot.master == master)
+            ++count;
+    return count;
+}
+
 std::vector<uint32> BotMgr::BotAccounts() const
 {
     std::vector<uint32> accounts;
@@ -270,7 +280,7 @@ std::vector<uint32> BotMgr::BotAccounts() const
     return accounts;
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool)
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -290,8 +300,15 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
         return "that character has no account";
     // D2: one session per account. The check is here, where the session is made, so no caller can put two characters of an
     // account in the world at once (the pool's scheduler sees the same rule through AccountHasBot).
+    // D-3: an owned login skips it only while the owner's real session is in the world on that account.
     if (AccountHasBot(accountId))
-        return "another bot of that account is already logged in or loading";
+    {
+        bool ownerPresent = false;
+        if (WorldSession* real = sWorld->FindSession(accountId); real && real->GetPlayer() && real->GetPlayer()->IsInWorld())
+            ownerPresent = true;
+        if (!owned || !ownerPresent)
+            return "another bot of that account is already logged in or loading";
+    }
 
     std::string accountName;
     if (!AccountMgr::GetName(accountId, accountName))
@@ -308,9 +325,11 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     bot.master = master;
     bot.free = free;
     bot.pool = pool;
+    bot.owned = owned;
     bot.wantParty = !master.IsEmpty();
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
-    bot.useEngine = _engineByDefault || free;
+    // An owned bot always runs the engine too: `.bot` orders and chat need it.
+    bot.useEngine = _engineByDefault || free || owned;
     if (bot.wantParty)
     {
         // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five

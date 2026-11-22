@@ -223,6 +223,72 @@ class Wiring(unittest.TestCase):
         self.assertIn("bool Dispatch(Player*, std::string_view) { return false; }", off)
 
 
+    # ---- R2: add, logout, follow, stay, attack, flee, owned login, battlenet id ----
+
+    def test_login_owned_skips_account_rule_only_for_owner(self):
+        mgr = read(SRC / "TbBotMgr.cpp")
+        login = function_body(mgr, r"std::string BotMgr::Login\(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned\)")
+        self.assertIn("if (AccountHasBot(accountId))", login)
+        self.assertIn("sWorld->FindSession(accountId)", login)
+        self.assertIn("GetPlayer()", login)
+        self.assertIn("IsInWorld()", login)
+        self.assertIn("!owned || !ownerPresent", login)
+        self.assertIn("bot.owned = owned;", login)
+        self.assertIn("bot.useEngine = _engineByDefault || free || owned;", login)
+        owned = function_body(mgr, r"uint32 BotMgr::OwnedBotsOf\(ObjectGuid master\) const")
+        self.assertIn("bot.owned", owned)
+        self.assertIn("bot.master == master", owned)
+        hdr = read(SRC / "TbBotMgr.h")
+        self.assertIn("bool owned = false", hdr)
+        self.assertIn("uint32 OwnedBotsOf(ObjectGuid master) const", hdr)
+
+    def test_bot_session_uses_bnet_id(self):
+        session = read(SRC / "TbBotSession.cpp")
+        self.assertIn('#include "BattlenetAccountMgr.h"', session)
+        self.assertIn("Battlenet::AccountMgr::GetIdByGameAccount(accountId)", session)
+        self.assertNotIn("WorldSession(accountId, std::move(accountName), accountId,", session)
+
+    def test_flee_is_a_verb(self):
+        orders = read(SRC / "host" / "TbOrders.cpp")
+        self.assertIn('"flee"', orders)
+        self.assertIn("flee chat shortcut", orders)
+        self.assertIn('verb == "flee"', orders)
+        self.assertIn('o.verb == "flee"', orders)
+        self.assertIn("fail:flee", orders)
+
+    def test_add_handler_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("HandleAdd", cmd)
+        self.assertIn("MayLoginOwned", cmd)
+        self.assertIn("Login(guid, player->GetGUID(), false, false, true)", cmd)
+        self.assertIn("not-found", cmd)
+        self.assertIn("already-online", cmd)
+        self.assertIn("not-leader", cmd)
+        self.assertIn("too-many", cmd)
+        self.assertIn("queued for login", cmd)
+
+    def test_logout_handler_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("HandleLogout", cmd)
+        self.assertIn("Tier::Owner", cmd)
+        self.assertIn("Logout(", cmd)
+        self.assertIn("logged out by its owner", cmd)
+
+    def test_order_handlers_present(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        self.assertIn("HandleOrderVerb", cmd)
+        self.assertIn("QueueOrder", cmd)
+        self.assertIn("no-selection", cmd)
+        self.assertIn("GetSelectedUnit", cmd)
+        self.assertIn("Tier::Tactical", cmd)
+
+    def test_help_lists_new_verbs(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        help_body = function_body(cmd, r"bool HandleHelp\(Player\* player, Caller const& caller, OwnerScope const& scope\)")
+        for verb in ("add", "logout", "follow", "stay", "attack", "flee"):
+            self.assertIn(verb, help_body)
+
+
 MUTANTS = [
     ("gm-branch-dropped",
      "    if (caller.gm)\n        return Verdict::Allowed;\n", ""),

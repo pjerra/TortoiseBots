@@ -1,4 +1,5 @@
 #include "TbBotSession.h"
+#include "BattlenetAccountMgr.h"
 #include "ByteBuffer.h"
 #include "ClientBuildInfo.h"
 #include "CombatLogPacketsCommon.h"
@@ -34,7 +35,7 @@ BotSession::EngineTickScope::~EngineTickScope()
 }
 
 BotSession::BotSession(uint32 accountId, std::string accountName)
-    : WorldSession(accountId, std::move(accountName), accountId, std::string(), std::shared_ptr<WorldSocket>(), SEC_PLAYER,
+    : WorldSession(accountId, std::move(accountName), Battlenet::AccountMgr::GetIdByGameAccount(accountId), std::string(), std::shared_ptr<WorldSocket>(), SEC_PLAYER,
         EXPANSION_LEVEL_CURRENT, 0, std::string(), Minutes(0), 0, ClientBuild::VariantId{}, LOCALE_enUS, 0, false,
         /*isBot*/ true)
 {

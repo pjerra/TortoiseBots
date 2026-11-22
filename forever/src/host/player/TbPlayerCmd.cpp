@@ -21,10 +21,12 @@
 #include "Define.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "RBAC.h"
 #include "ScriptMgr.h"
 #include "WorldSession.h"
+#include "host/TbOrdersApi.h"
 
 #include <algorithm>
 #include <cctype>
@@ -172,12 +174,36 @@ bool Visible(Caller const& caller, BotFacts const& bot)
     return false;
 }
 
-bool HandleHelp(Player* player, Caller const& caller)
+bool OwnsAnyBot(Player* requester, OwnerScope const& scope)
+{
+    if (scope.bnet == 0)
+        return false;
+    for (ObjectGuid const& guid : BotMgr::Instance().BotGuids())
+    {
+        Player* bot = ObjectAccessor::FindPlayer(guid);
+        if (!bot || !bot->IsInWorld())
+            continue;
+        if (FactsOf(requester, bot, scope).account != 0)
+            return true;
+    }
+    return false;
+}
+
+bool HandleHelp(Player* player, Caller const& caller, OwnerScope const& scope)
 {
     Say(player, "TortoiseBots: help: .bot help - this list");
     Say(player, "TortoiseBots: help: .bot who [all] - the bots you may order, one line each");
     if (caller.gm)
         Say(player, "TortoiseBots: help: .bot who all - every bot in the world (GameMasters)");
+    Say(player, "TortoiseBots: help: .bot follow <bot> [member] - follow a member or your target");
+    Say(player, "TortoiseBots: help: .bot stay <bot> - stand where it is");
+    Say(player, "TortoiseBots: help: .bot attack <bot> - attack your selected target");
+    Say(player, "TortoiseBots: help: .bot flee <bot> - run from the fight");
+    if (caller.gm || OwnsAnyBot(player, scope))
+    {
+        Say(player, "TortoiseBots: help: .bot add <name> - log your own character in as a bot");
+        Say(player, "TortoiseBots: help: .bot logout <bot> - log your bot out");
+    }
     return true;
 }
 
@@ -217,6 +243,171 @@ bool HandleWho(Player* player, Caller const& caller, OwnerScope const& scope, st
     }
     return true;
 }
+}
+
+bool ResolveCharacter(std::string_view name, CharacterCacheEntry const*& entry, std::string& code)
+{
+    std::string normalized(name);
+    normalizePlayerName(normalized);
+    if (normalized.empty())
+    {
+        code = "not-found";
+        return false;
+    }
+    entry = sCharacterCache->GetCharacterCacheByName(normalized);
+    if (!entry)
+    {
+        code = "not-found";
+        return false;
+    }
+    return true;
+}
+
+bool ResolveBot(Player* requester, std::string_view name, Player*& bot, std::string& code)
+{
+    CharacterCacheEntry const* entry = nullptr;
+    if (!ResolveCharacter(name, entry, code))
+        return false;
+    bot = ObjectAccessor::FindConnectedPlayer(entry->Guid);
+    if (!bot || !bot->IsInWorld())
+    {
+        code = "not-found";
+        return false;
+    }
+    if (!BotMgr::Instance().IsBot(bot->GetGUID()))
+    {
+        code = "not-a-bot";
+        return false;
+    }
+    return true;
+}
+
+bool HandleAdd(Player* player, Caller const& caller, OwnerScope const& scope, std::string_view tail)
+{
+    std::string_view const name = FirstWord(tail);
+    if (name.empty())
+    {
+        Refuse(player, "add", "usage", ".bot add <name>");
+        return true;
+    }
+    CharacterCacheEntry const* entry = nullptr;
+    std::string code;
+    if (!ResolveCharacter(name, entry, code))
+    {
+        Refuse(player, "add", code.c_str(), "no such character");
+        return true;
+    }
+    ObjectGuid const guid = entry->Guid;
+    if (ObjectAccessor::FindConnectedPlayer(guid))
+    {
+        Refuse(player, "add", "already-online", "that character is already in the world");
+        return true;
+    }
+    if (Group* group = player->GetGroup(); group && group->GetLeaderGUID() != player->GetGUID())
+    {
+        Refuse(player, "add", "not-leader", "you are in a group led by someone else");
+        return true;
+    }
+    std::uint32_t const gameAccount = entry->AccountId;
+    std::uint32_t const characterBnet = scope.bnet && scope.gameAccounts.count(gameAccount) ? scope.bnet : 0;
+    std::uint32_t const ownedOnline = BotMgr::Instance().OwnedBotsOf(player->GetGUID());
+    if (!MayLoginOwned(caller.account, characterBnet, caller.gm, ownedOnline, s_maxBots, code))
+    {
+        if (code == "too-many")
+            Refuse(player, "add", "too-many", "the owned-bot cap is reached");
+        else
+            Refuse(player, "add", code.c_str(), "that character is not yours");
+        return true;
+    }
+    std::string const error = BotMgr::Instance().Login(guid, player->GetGUID(), false, false, true);
+    if (!error.empty())
+    {
+        Refuse(player, "add", "login-refused", error);
+        return true;
+    }
+    Say(player, "TortoiseBots: add " + entry->Name + ": ok queued for login; it joins your party");
+    return true;
+}
+
+bool HandleLogout(Player* player, Caller const& caller, OwnerScope const& scope, std::string_view tail)
+{
+    std::string_view const name = FirstWord(tail);
+    if (name.empty())
+    {
+        Refuse(player, "logout", "usage", ".bot logout <bot>");
+        return true;
+    }
+    Player* bot = nullptr;
+    std::string code;
+    if (!ResolveBot(player, name, bot, code))
+    {
+        Refuse(player, "logout", code.c_str(), code == "not-found" ? "no such online bot" : "that character is not a bot");
+        return true;
+    }
+    BotFacts const facts = FactsOf(player, bot, scope);
+    Verdict const verdict = Decide(caller, facts, Tier::Owner);
+    if (verdict != Verdict::Allowed)
+    {
+        Refuse(player, "logout", CodeOf(verdict), "you may not log that bot out");
+        return true;
+    }
+    if (!BotMgr::Instance().Logout(bot->GetGUID(), "logged out by its owner"))
+    {
+        Refuse(player, "logout", "not-found", "that bot is not logged in");
+        return true;
+    }
+    Say(player, "TortoiseBots: logout " + bot->GetName() + ": ok logged out");
+    return true;
+}
+
+bool HandleOrderVerb(Player* player, Caller const& caller, OwnerScope const& scope, std::string_view verb, std::string_view tail)
+{
+    std::string_view const name = FirstWord(tail);
+    if (name.empty())
+    {
+        Refuse(player, std::string(verb), "usage", ".bot " + std::string(verb) + " <bot>");
+        return true;
+    }
+    Player* bot = nullptr;
+    std::string code;
+    if (!ResolveBot(player, name, bot, code))
+    {
+        Refuse(player, std::string(verb), code.c_str(), code == "not-found" ? "no such online bot" : "that character is not a bot");
+        return true;
+    }
+    BotFacts const facts = FactsOf(player, bot, scope);
+    Verdict const verdict = Decide(caller, facts, Tier::Tactical);
+    if (verdict != Verdict::Allowed)
+    {
+        Refuse(player, std::string(verb), CodeOf(verdict), "you may not order that bot");
+        return true;
+    }
+    h3::OrderSpec spec;
+    spec.verb = std::string(verb);
+    if (verb == "follow")
+    {
+        spec.arg = std::string(AfterFirstWord(tail));
+    }
+    else if (verb == "attack")
+    {
+        Unit* selected = player->GetSelectedUnit();
+        if (!selected)
+        {
+            Refuse(player, "attack", "no-selection", "select a target first");
+            return true;
+        }
+        spec.unit = selected->GetGUID();
+    }
+    std::string queueCode;
+    std::string detail;
+    std::uint32_t seq = 0;
+    if (!h3::QueueOrder(bot, spec, queueCode, detail, seq))
+    {
+        Refuse(player, std::string(verb), queueCode.c_str(), detail);
+        return true;
+    }
+    Say(player, "TortoiseBots: " + std::string(verb) + " " + bot->GetName() + ": ok order " + std::to_string(seq));
+    return true;
 }
 
 // Fills the pure rule's facts from the live objects: the bot table for the guid and the master, the character cache's game
@@ -270,14 +461,19 @@ bool Dispatch(Player* player, std::string_view rest)
         return true;
     }
 
+    OwnerScope const scope = ScopeOf(player);
+    caller.account = scope.bnet;   // 0 when the session's Battle.net id no longer holds the caller's game account
+
     if (verb.empty() || verb == "help")
-        return HandleHelp(player, caller);
+        return HandleHelp(player, caller, scope);
     if (verb == "who" || verb == "roster" || verb == "list")
-    {
-        OwnerScope const scope = ScopeOf(player);
-        caller.account = scope.bnet;   // 0 when the session's Battle.net id no longer holds the caller's game account
         return HandleWho(player, caller, scope, AfterFirstWord(rest));
-    }
+    if (verb == "add")
+        return HandleAdd(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "logout" || verb == "remove")
+        return HandleLogout(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "follow" || verb == "stay" || verb == "attack" || verb == "flee")
+        return HandleOrderVerb(player, caller, scope, verb, AfterFirstWord(rest));
 
     Refuse(player, verb, "unknown-verb", "no such command; try .bot help");
     return true;
