@@ -1,4 +1,4 @@
-"""Wiring pins for W6a package E6 (auto-equip upgrades, proficiency check, push poll, D4 free-bot gate).
+"""Wiring pins for W6a package E6 (auto-equip upgrades, proficiency check, push poll, TB commanded-equip rule).
 
 Run:
   python3 -m unittest forever/tools/test_w6a_equip_wiring.py
@@ -17,6 +17,8 @@ ITEM_USAGE = (ROOT / "ai/playerbot/strategy/values/ItemUsageValue.cpp").read_tex
 S9_HEADER = (ROOT / "forever/src/compat/TbCompat_S9.h").read_text()
 SLICE9 = (ROOT / "forever/SLICE9.txt").read_text()
 GEN = (ROOT / "forever/tools/slice_gen_context.py").read_text()
+PURE = (ROOT / "forever/src/host/TbCommandedEquipPure.h").read_text()
+BRIDGE = (ROOT / "forever/src/host/TbCommandedEquip.cpp").read_text()
 
 HELPER = re.compile(r"^(?:template\s*<[^>]*>\s*)?inline\s+(?:[\w:<>,\s\*&]+?)\s+(\w+Compat)\s*\(", re.M)
 
@@ -39,14 +41,19 @@ def body(text, name):
     raise AssertionError(name)
 
 
-def check_d4_gate(equip_src, f_header_src):
+def check_tb_commanded_gate(equip_src, f_header_src, pure_src, bridge_src):
     exec_fn = equip_src[equip_src.index("bool EquipUpgradesAction::Execute("):]
     exec_fn = exec_fn[:exec_fn.index("\n}\n")]
     if "if (!MayAutoEquipUpgradesCompat(bot))" not in exec_fn:
         raise AssertionError("EquipUpgradesAction::Execute missing MayAutoEquipUpgradesCompat(bot) gate")
     gate = body(f_header_src, "MayAutoEquipUpgradesCompat")
-    if "IsInCommandedGroup(bot)" not in gate:
-        raise AssertionError("MayAutoEquipUpgradesCompat missing IsInCommandedGroup(bot) check")
+    for needle in ("IsInCommandedGroup(bot)", "CommandedBotSelfEquipEnabled()", "ExplicitEquipOrderFlag()", "MayCommandedBotAutoEquip("):
+        if needle not in gate:
+            raise AssertionError("MayAutoEquipUpgradesCompat missing TB rule piece: %s" % needle)
+    if "bool MayCommandedBotAutoEquip(bool isInCommandedGroup, bool claimedBotSelfEquip, bool explicitOrder)" not in pure_src:
+        raise AssertionError("TbCommandedEquipPure.h missing MayCommandedBotAutoEquip truth table")
+    if "sPlayerbotAIConfig.claimedBotSelfEquip" not in bridge_src:
+        raise AssertionError("TbCommandedEquip.cpp missing ClaimedBotSelfEquip read")
 
 
 class E6Wiring(unittest.TestCase):
@@ -80,16 +87,16 @@ class E6Wiring(unittest.TestCase):
         self.assertIn("EQUIP_ERR_PROFICIENCY_NEEDED", fn)
         self.assertIn("CanUseItemForEquipCompat(bot, itemProto)", ITEM_USAGE)
 
-    def test_d4_auto_equip_only_for_free_bots(self):
-        check_d4_gate(EQUIP, F_HEADER)
+    def test_tb_rule_commanded_bots_follow_claimed_switch(self):
+        check_tb_commanded_gate(EQUIP, F_HEADER, PURE, BRIDGE)
 
-    def test_d4_mutation_fails(self):
+    def test_tb_rule_mutation_fails(self):
         mutated_equip = EQUIP.replace("if (!MayAutoEquipUpgradesCompat(bot))", "if (false)")
         with self.assertRaises(AssertionError):
-            check_d4_gate(mutated_equip, F_HEADER)
-        mutated_header = F_HEADER.replace("!TortoiseBots::BotCommands::IsInCommandedGroup(bot)", "true")
+            check_tb_commanded_gate(mutated_equip, F_HEADER, PURE, BRIDGE)
+        mutated_header = F_HEADER.replace("MayCommandedBotAutoEquip(", "MayCommandedBotAutoEquipMutated(")
         with self.assertRaises(AssertionError):
-            check_d4_gate(EQUIP, mutated_header)
+            check_tb_commanded_gate(EQUIP, mutated_header, PURE, BRIDGE)
 
     def test_push_poll_and_slice_registration(self):
         poll = body(S9_HEADER, "PollPacketEventCompat")
@@ -104,7 +111,7 @@ class E6Wiring(unittest.TestCase):
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:
-        # Run D4 check against mutated source so --mutate exits non-zero as a smoke pin.
-        check_d4_gate(EQUIP.replace("if (!MayAutoEquipUpgradesCompat(bot))", "if (false)"), F_HEADER)
+        # Run TB-rule check against mutated source so --mutate exits non-zero as a smoke pin.
+        check_tb_commanded_gate(EQUIP.replace("if (!MayAutoEquipUpgradesCompat(bot))", "if (false)"), F_HEADER, PURE, BRIDGE)
         sys.exit(0)
     unittest.main()

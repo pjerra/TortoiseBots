@@ -181,7 +181,7 @@ SLICE9_KEYS = {
     "trigger": "loot start roll, loot vote, loot roll",
     "value": "active rolls, seen need rolls, item usage, skip go loot list",
 }
-# W6a (package E6): auto-equip upgrades for free bots (`equipment audit` 300 s + `item push result` bag-generation poll).
+# W6a (package E6): auto-equip upgrades for every bot (`equipment audit` 300 s + `item push result` bag-generation poll); commanded bots self-equip iff ClaimedBotSelfEquip.
 # Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `disenchant random item`,
 # `enchant random item`, `smart destroy item`, `pool gear top up`, `use random quest item`, `auto share quest`, `auto complete quest`)
 # stay unregistered and are skipped by the engine.
