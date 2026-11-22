@@ -18,6 +18,7 @@
 #include "playerbot/HunterSwitchPolicy.h"
 #include "playerbot/policy/combat/EvadeChasePolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/strategy/values/NearestGameObjects.h"
 #include "playerbot/BossTacticsStand.h"
 #include "AI/CreatureAI.h"
 #include <cstdio>
@@ -792,6 +793,23 @@ namespace ai
             // Do not move if stay strategy is set
             if (!ai->HasStrategy("stay", ai->GetState()))
             {
+            // A step-out owns a bot that stands inside a hostile ground ring:
+            // reaching for a target would cancel the escape mid-step or walk
+            // back into the fire. The walk resumes once the bot is clear.
+            std::vector<AoeHazardCircle> rings;
+            CollectDamagingDynObjHazards(ai, bot, rings, true);
+            for (AoeHazardCircle const& ring : rings)
+            {
+                if (InsideAoeHazard(ring, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
+                    return false;
+                // The target itself stands covered: walking in anyway is
+                // walking back in. The walk resumes when the ring is gone.
+                if (Unit* reachTarget = GetTarget())
+                    if (InsideAoeHazard(ring, reachTarget->GetPositionX(), reachTarget->GetPositionY(),
+                        reachTarget->GetPositionZ()))
+                        return false;
+            }
+
                 Unit* target = GetTarget();
                 if (target)
                 {

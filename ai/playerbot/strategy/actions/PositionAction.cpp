@@ -6,6 +6,7 @@
 #include "PositionAction.h"
 #include "BossTacticsActions.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
+#include "playerbot/strategy/values/NearestGameObjects.h"
 #include "playerbot/ServerFacade.h"
 #include "Movement/spline/MoveSpline.h"
 #include "../../../../runtime/StayArrivalPolicy.h"
@@ -242,6 +243,20 @@ bool ai::StayWalkDueNow(PlayerbotAI* ai, Player* bot, PositionEntry const& stayP
     StayWalkPoint(ai, bot, point);
     TortoiseBots::StayWalkBackoff& backoff = ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement")->Get().stayWalk;
     TortoiseBots::StayWalkTrack(backoff, point.x, point.y, point.z, point.mapId);
+    // A step-out owns a bot that stands inside a hostile ground ring, and the
+    // stay spot itself may be covered: the return walk would yank the bot back
+    // into the fire it just left (or never let it leave). Not due until the
+    // bot and its point are both clear.
+    std::vector<AoeHazardCircle> rings;
+    CollectDamagingDynObjHazards(ai, bot, rings, true);
+    for (AoeHazardCircle const& ring : rings)
+    {
+        if (InsideAoeHazard(ring, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
+            return false;
+        if (InsideAoeHazard(ring, point.x, point.y, point.z))
+            return false;
+    }
+
     float const dx = bot->GetPositionX() - point.x;
     float const dy = bot->GetPositionY() - point.y;
     float const dz = bot->GetPositionZ() - point.z;

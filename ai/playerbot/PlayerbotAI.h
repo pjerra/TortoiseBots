@@ -803,6 +803,8 @@ public:
     bool HasCheat(BotCheatMask mask) const;
     BotCheatMask GetCheat() { return cheatMask; }
     void SetCheat(BotCheatMask mask) { cheatMask = mask; }
+    bool IsPetAbandoned() const { return m_petAbandoned; }
+    void SetPetAbandoned(bool abandoned) { m_petAbandoned = abandoned; }
 
     // A live group member near this bot is fighting something. Member flags
     // only, no grid scan, so it is cheap enough for the per-tick resting wake.
@@ -1141,6 +1143,7 @@ protected:
 	uint8 m_forcedRole = 0;
 	uint32 m_ccDeniedMask = 0;
 	bool m_petTauntAutocastOrdered = false;
+	bool m_petAbandoned = false;
 	time_t m_dungeonCatchUpAt = 0;
 	// Mage-portal follow: the party portal the master just stepped through
 	// (map it stands on), the tick the episode started, and the last tick a

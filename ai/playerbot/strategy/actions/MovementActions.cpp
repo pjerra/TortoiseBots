@@ -4627,8 +4627,8 @@ bool FleeFromAreaAction::isUseful()
 
 bool AvoidAoeAction::isUseful()
 {
-    if (!MovementAction::isUseful())
-        return false;
+    // Stepping out of a ground hazard beats `stay` (TrapHoldMultiplier holds
+    // the return walk while the stay spot remains covered).
     float radius = 0.0f;
     WorldPosition center;
     keepoutSource = ObjectGuid();

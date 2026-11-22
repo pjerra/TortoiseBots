@@ -317,33 +317,21 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
 }
 
 // One on-use spell of an item (the loop of UseAction::UseItemInternal). T builds its own Spell (BotUseItemSpell) for every kind of
-// target. F uses the core's own item cast for ONE case only: food or drink, used from the bags on the bot itself, whose spell targets
-// the caster. Everything else counts "item use except food and drink" and answers "the cast did not start" (the loop stops, the action
-// reports failure): the bot does less.
-//
-// The core call: Player::CastItemUseSpell(item, spellId, targets, castId, misc) (Player.cpp:9803-9853), the call ProcessItemCast ends in
-// when the client sends CMSG_USE_ITEM (Player.cpp:33914-34000, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
-// that the spell is an ON_USE effect of a non-LEGACY item, or a use-spell enchantment (:9716-9744, an error line and no cast otherwise),
-// builds `Spell(this, spellInfo, TRIGGERED_NONE)` with m_CastItem = the item and calls prepare(targets) (:9746-9756); prepare checks the
-// cast (CheckCast), refuses with SendCastResult and otherwise queues the cast, which consumes the item when it finishes. The call
-// returns nothing, so the answer is read back three ways: a refusal of THIS tick (BotSession::TakeInTickRefusal, R0 notes 3.3: the
-// core sends SMSG_CAST_FAILED to the session synchronously and the session keeps it while the engine ticks), the item count going
-// down, or the bot having a current spell / the spell's aura. What ProcessItemCast checks before that call (item found in the bags, not
-// equipped-only, CanUseItem, combat rules, binding on use, arena, scripts, the ItemUse aura interrupt) is NOT repeated here: the legacy
-// action already checked CanUseItem, the item and its cooldown, and combat (IsNonCombatSpell), and food and drink are not bound.
-// Different answers: the OnItemUse script hook is not called (ForeverCore 0.1.39 has PlayerScript::OnItemUse, which ProcessItemCast runs; the port
-// never overrides it, so nothing is lost) and no RemoveAurasWithInterruptFlags(ItemUse); a second on-use spell
-// of the same item is not cast (T casts it triggered after the first).
-// UNPROVEN: no boot was allowed. The live spike (forever/docs/SLICE2-I2-NOTES.md, "U1 spike") decides whether this works for water.
+// target. F uses the core's own item cast (Player::CastItemUseSpell) for owned items in bags/equipment with self, unit, or item targets.
+// GameObject targets and item-cheat casts without an owned Item* remain unported.
 template <class SpellType, class AiType, class ItemForSpellFn>
 inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemPrototype const* /*proto*/, _ItemSpell const& spellData,
-    SpellEntry const* spellInfo, uint32 itemId, uint8 successCasts, Item* itemUsed, Unit* unit, GameObject* gameObject, Item* item,
+    SpellEntry const* /*spellInfo*/, uint32 itemId, uint8 successCasts, Item* itemUsed, Unit* unit, GameObject* gameObject, Item* item,
     ItemForSpellFn&&, bool foodOrDrink)
 {
     ItemSpellUseCompat out;
 
-    // Only food and drink, from the bags, on the bot itself.
-    if (!foodOrDrink || !itemUsed || unit || gameObject || item)
+    if (!itemUsed)
+    {
+        tbcompat::Unported(tbcompat::Feature::ItemCasts);
+        return out;
+    }
+    if (gameObject)
     {
         tbcompat::Unported(tbcompat::Feature::ItemUseOther);
         return out;
@@ -353,13 +341,6 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
     if (successCasts > 0)
     {
         out.skipped = true;
-        return out;
-    }
-
-    // A pure self spell: no target flags, the first effect aims at the caster (F's target ids are what the mirror holds).
-    if (spellInfo->Targets != 0 || spellInfo->EffectImplicitTargetA[0] != uint32(TARGET_UNIT_CASTER))
-    {
-        tbcompat::Unported(tbcompat::Feature::ItemUseOther);
         return out;
     }
 
@@ -383,18 +364,25 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
         return out;
     }
 
-    // Food and drink are sat through: the cast stops the bot first (T stops it for casted and channelled spells).
-    ai->StopMoving();
+    SpellInfo const* coreSpell = sSpellMgr.GetSpellInfo(spellData.SpellId, DIFFICULTY_NONE);
+    bool const hasCastOrChannel = coreSpell && (coreSpell->CalcCastTime() > 0 || coreSpell->IsChanneled());
+    if (foodOrDrink || hasCastOrChannel)
+        ai->StopMoving();
 
     TortoiseBots::CastResult stale;
     session->TakeInTickRefusal(stale);                  // forget a refusal of an earlier call in this tick
 
     uint32 const countBefore = bot->GetItemCount(itemId);
-    SpellCastTargets targets;                           // a self spell: the client sends no target either
+    SpellCastTargets targets;
+    if (item)
+        targets.SetItemTarget(item);
+    else if (unit)
+        targets.SetUnitTarget(unit);
+
     bot->CastItemUseSpell(itemUsed, spellData.SpellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
     // itemUsed may be gone now (the last of a stack is consumed by the cast): not touched again.
 
-    // Only a refusal OF THIS spell is the drink's: the in-tick slot may hold the failure of an earlier, interrupted cast (R5 item 4), which is not
+    // Only a refusal OF THIS spell is the item's: the in-tick slot may hold the failure of an earlier, interrupted cast (R5 item 4), which is not
     // this item's answer and is left out (the checks below read what the cast really did).
     TortoiseBots::CastResult refusal;
     if (session->TakeInTickRefusal(refusal) && refusal.spellId == spellData.SpellId)
@@ -404,13 +392,121 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
     }
 
     bool const started = bot->GetItemCount(itemId) < countBefore || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ||
-        bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) || bot->HasAura(spellData.SpellId);
+        bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) || bot->HasAura(spellData.SpellId) ||
+        (bot->GetSpellHistory() && bot->GetSpellHistory()->HasCooldown(spellData.SpellId));
     if (!started)
         return out;
 
     out.cast = true;
-    out.castDuration = 24000;                           // food and drink: the sit of the legacy action (UseItemAction.cpp: SetDuration(24000))
+    if (foodOrDrink)
+        out.castDuration = 24000;                       // food and drink: the sit of the legacy action (UseItemAction.cpp: SetDuration(24000))
+    else if (coreSpell && coreSpell->IsChanneled())
+        out.castDuration = coreSpell->GetDuration() > 0 ? uint32(coreSpell->GetDuration()) : 8000;
+    else if (coreSpell && coreSpell->CalcCastTime() > 0)
+        out.castDuration = uint32(coreSpell->CalcCastTime());
     return out;
+}
+
+// Item cast onto a unit target (e.g. Soulstone via CastItemTargetAction::Execute).
+template <class SpellType>
+inline bool CastItemOnTargetCompat(Player* bot, Unit* target, Item* item, ItemPrototype const* /*proto*/)
+{
+    if (!item)
+    {
+        tbcompat::Unported(tbcompat::Feature::ItemCasts);
+        return false;
+    }
+    if (!bot || !target)
+        return false;
+
+    ItemTemplate const* tpl = item->GetTemplate();
+    uint32 spellId = 0;
+    if (!tpl->HasFlag(ITEM_FLAG_LEGACY))
+        for (ItemEffectEntry const* effect : item->GetEffects())
+            if (effect->SpellID > 0 && effect->TriggerType == ITEM_SPELLTRIGGER_ON_USE)
+            {
+                spellId = uint32(effect->SpellID);
+                break;
+            }
+    if (!spellId)
+        return false;
+
+    SpellInfo const* coreSpell = sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE);
+    if (coreSpell && (coreSpell->CalcCastTime() > 0 || coreSpell->IsChanneled()))
+        bot->StopMoving();
+
+    auto* session = dynamic_cast<TortoiseBots::BotSession*>(bot->GetSession());
+    if (session)
+    {
+        TortoiseBots::CastResult stale;
+        session->TakeInTickRefusal(stale);
+    }
+
+    uint32 const itemId = item->GetEntry();
+    uint32 const countBefore = bot->GetItemCount(itemId);
+    SpellCastTargets targets;
+    targets.SetUnitTarget(target);
+    bot->CastItemUseSpell(item, spellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
+
+    if (session)
+    {
+        TortoiseBots::CastResult refusal;
+        if (session->TakeInTickRefusal(refusal) && refusal.spellId == spellId)
+            return false;
+    }
+
+    return bot->GetItemCount(itemId) < countBefore || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ||
+        bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) || target->HasAura(spellId) ||
+        (bot->GetSpellHistory() && bot->GetSpellHistory()->HasCooldown(spellId));
+}
+
+// Use / imbue an item by bag/slot/target (used by ApplyPoisonAction via PlayerbotAI::ImbueItem).
+inline void QueueUseItemPacketCompat(Player* bot, uint8 bagIndex, uint8 slot, uint8 spellIndex, uint16 targetFlag, ObjectGuid const& targetGuid)
+{
+    if (!bot)
+        return;
+    Item* item = bot->GetItemByPos(bagIndex, slot);
+    if (!item)
+        return;
+
+    ItemPrototype const* proto = GetItemProtoCompat(item);
+    if (!proto || spellIndex >= MAX_ITEM_PROTO_SPELLS)
+        return;
+    uint32 const spellId = proto->Spells[spellIndex].SpellId;
+    if (!spellId)
+        return;
+
+    SpellCastTargets targets;
+    if ((targetFlag & TARGET_FLAG_ITEM) || targetGuid.IsItem())
+    {
+        Item* targetItem = bot->GetItemByGuid(targetGuid);
+        if (!targetItem)
+            return;
+        targets.SetItemTarget(targetItem);
+    }
+    else if ((targetFlag & TARGET_FLAG_UNIT) || targetGuid.IsUnit() || targetGuid.IsPlayer())
+    {
+        Unit* targetUnit = ObjectAccessor::GetUnit(*bot, targetGuid);
+        if (!targetUnit)
+            return;
+        targets.SetUnitTarget(targetUnit);
+    }
+
+    SpellInfo const* coreSpell = sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE);
+    if (coreSpell && (coreSpell->CalcCastTime() > 0 || coreSpell->IsChanneled()))
+        bot->StopMoving();
+
+    bot->CastItemUseSpell(item, spellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
+}
+
+inline bool ItemProtoHasDisplayIdCompat(ItemPrototype const* proto, uint32 displayId)
+{
+    if (!proto)
+        return false;
+    if (ItemModifiedAppearanceEntry const* modifiedAppearance = TransmogMgr::GetItemModifiedAppearance(proto->ItemId, 0))
+        if (ItemAppearanceEntry const* itemAppearance = sItemAppearanceStore.LookupEntry(modifiedAppearance->ItemAppearanceID))
+            return itemAppearance->ItemDisplayInfoID == displayId;
+    return false;
 }
 
 // The count of a stack the bot has just used from. T: the item object's own count (the item is still there). F: an instant-use item is consumed
@@ -429,13 +525,13 @@ inline bool BotUseItemOpenLockCheckCompat(SpellType* /*self*/) { tbcompat::Unpor
 // use"). Failure value: false (not used).
 inline bool QueueGameObjectUseCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
 
-// Every use of an item except food and drink, and every use of a game object by the bot, is the named feature (the bot does less):
-// UseAction::UseItemInternal and UseGameObject refuse and report failure. True = refused.
-inline bool ItemUseUnportedCompat(bool foodOrDrink)
+inline bool ItemUseUnportedCompat(bool /*foodOrDrink*/)
 {
-    if (foodOrDrink)
-        return false;
-    tbcompat::Unported(tbcompat::Feature::ItemUseOther);
-    return true;
+    return false;
+}
+inline void RemoveStealthAurasCompat(Player* bot)
+{
+    if (bot)
+        bot->RemoveAurasByType(SPELL_AURA_MOD_STEALTH);
 }
 inline bool GameObjectUseUnportedCompat() { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return true; }

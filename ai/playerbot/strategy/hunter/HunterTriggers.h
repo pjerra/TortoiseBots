@@ -195,6 +195,8 @@ namespace ai
     };
 
     SNARE_TRIGGER(ScatterShotSnareTrigger, "scatter shot");
+    INTERRUPT_TRIGGER(ScatterShotInterruptTrigger, "scatter shot");
+    INTERRUPT_HEALER_TRIGGER(ScatterShotInterruptEnemyHealerSpellTrigger, "scatter shot");
 
     class ScareBeastTrigger : public HasCcTargetTrigger
     {

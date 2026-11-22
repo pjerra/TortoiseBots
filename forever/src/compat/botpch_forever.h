@@ -12,6 +12,7 @@
 #include "Common.h"
 #include "Define.h"
 
+#include "AreaTrigger.h"
 #include "AccountMgr.h"
 #include "AuctionHouseMgr.h"
 #include "Bag.h"
@@ -90,6 +91,7 @@
 #include "TerrainMgr.h"
 #include "Timer.h"
 #include "Totem.h"
+#include "TransmogMgr.h"
 #include "Transport.h"
 #include "Unit.h"
 #include "Util.h"

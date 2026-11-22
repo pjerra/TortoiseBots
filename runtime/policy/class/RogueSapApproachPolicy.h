@@ -393,4 +393,31 @@ SapApproachPlan const& SapPlanFor(SapPlanCache& cache, unsigned targetId, SapPoi
     return cache.plan;
 }
 
+// Approach behind the target's back so the rogue stays outside its front 180-deg
+// stealth detection arc (WorldObject::CanDetectStealthOf). When already in front,
+// step out to a flank waypoint at frontAvoidRadius first instead of walking
+// straight across the target's face.
+inline SapPoint SapBehindStep(SapPoint here, SapPoint targetAt, float targetOri,
+    float standDist, float frontAvoidRadius)
+{
+    float const fx = std::cos(targetOri);
+    float const fy = std::sin(targetOri);
+    float const dx = here.x - targetAt.x;
+    float const dy = here.y - targetAt.y;
+    float const dist = std::hypot(dx, dy);
+    float const forward = dx * fx + dy * fy;
+
+    if (forward > 0.5f && dist > standDist + 1.0f)
+    {
+        float const cross = fx * dy - fy * dx;
+        float const flankAngle = targetOri + (cross >= 0.0f ? 1.5707963f : -1.5707963f);
+        return SapPoint{
+            targetAt.x + frontAvoidRadius * std::cos(flankAngle),
+            targetAt.y + frontAvoidRadius * std::sin(flankAngle)
+        };
+    }
+
+    return SapPoint{targetAt.x - standDist * fx, targetAt.y - standDist * fy};
+}
+
 } // namespace TortoiseBots

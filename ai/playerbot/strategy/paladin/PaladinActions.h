@@ -41,6 +41,11 @@ namespace ai
 		// on nothing else; on cooldown against a single enemy it empties the paladin in
 		// half a minute.
 		virtual bool isUseful() override;
+
+	protected:
+		// Cast around the paladin: target self (ForeverCore marks Consecration positive) and skip reach.
+		virtual std::string GetTargetName() override { return "self target"; }
+		virtual std::string GetReachActionName() override { return ""; }
 	};
 
 	// repentance

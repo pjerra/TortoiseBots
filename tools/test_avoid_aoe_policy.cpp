@@ -17,6 +17,7 @@ using ai::AoeFallbackHeadings;
 using ai::AoeHazardCircle;
 using ai::AoeLanding;
 using ai::AoePoint;
+using ai::DamagingAreaTriggerEffect;
 using ai::ChooseClearAoeLanding;
 using ai::DynObjIsHostileHazard;
 using ai::HazardsHoldMove;
@@ -311,6 +312,21 @@ int main()
     CHECK(!DynObjIsHostileHazard(false, false, false, 30.0f)); // past the dodge cap
     CHECK(!DynObjIsHostileHazard(false, false, false, 0.0f));  // no radius
     std::cout << "  [PASS] friendly or positive ground effects are no hazard\n";
+    // A live ground ring (CREATE_AREATRIGGER, e.g. Flamestrike 8422: school
+    // damage, a create-areatrigger effect and a periodic-dummy aura) marks a
+    // hazard through its hurting effects only: the school-damage effect and a
+    // periodic-damage aura, both non-positive. The create-areatrigger effect
+    // itself, the periodic dummy, a persistent-area aura (the dynobj sensor
+    // owns that cloud) and any positive effect mark nothing.
+    CHECK(DamagingAreaTriggerEffect(2, 0, false));    // school damage, e.g. Flamestrike eff0
+    CHECK(!DamagingAreaTriggerEffect(2, 0, true));    // positive school damage
+    CHECK(DamagingAreaTriggerEffect(6, 3, false));    // periodic-damage aura
+    CHECK(!DamagingAreaTriggerEffect(6, 3, true));    // positive periodic aura
+    CHECK(!DamagingAreaTriggerEffect(6, 226, false)); // periodic dummy, e.g. Flamestrike eff2
+    CHECK(!DamagingAreaTriggerEffect(179, 0, false)); // the create-areatrigger effect itself
+    CHECK(!DamagingAreaTriggerEffect(27, 3, false));  // persistent aura: the dynobj sensor's cloud
+    CHECK(!DamagingAreaTriggerEffect(0, 0, false));   // no effect
+    std::cout << "  [PASS] only hurting areatrigger effects mark a hazard\n";
 
     std::cout << "All avoid-aoe policy tests passed.\n";
     return 0;

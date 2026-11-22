@@ -361,7 +361,7 @@ namespace ai
                 {
                     const SpellEntry* const spellInfo = sServerFacade.LookupSpellInfo(proto->Spells[j].SpellId);
                     if (!spellInfo)
-                        return false;
+                        continue;
 
                     for (int i = 0 ; i < 3; i++)
                     {

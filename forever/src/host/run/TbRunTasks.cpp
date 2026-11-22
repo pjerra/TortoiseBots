@@ -970,6 +970,18 @@ bool SendGameObjectUse(Player* bot, GameObject* go)
 }
 }
 
+namespace tbcompat
+{
+bool UseGameObject(Player* bot, GameObject* object)
+{
+    if (!bot || !object)
+        return false;
+    if (!bot->GetGameObjectIfCanInteractWith(object->GetGUID()))
+        return false;
+    return TortoiseBots::run::tasks::SendGameObjectUse(bot, object);
+}
+}
+
 #else
 
 namespace TortoiseBots

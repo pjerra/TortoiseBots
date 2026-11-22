@@ -146,16 +146,17 @@ check(re.search(r"kHordeFallback\s*=\s*%d" % fb.get("fallback-horde", -1), fact)
 # ---- the kits ----
 fac = read("forever/src/slice/SliceAiFactory.cpp")
 KITS = [
-    'combatEngine->addStrategies("marksmanship", "dps assist", "ranged", "aspect", "sting", "pet", "buff", NULL);',
-    'combatEngine->addStrategies("affliction", "dps assist", "ranged", "pet", "curse", "buff", NULL);',
-    'nonCombatEngine->addStrategies("marksmanship", "dps assist", "aspect", "pet", "buff", "follow", "food", "default", NULL);',
-    'nonCombatEngine->addStrategies("affliction", "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default", NULL);',
+    'combatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "ranged", "flee", "aspect", "sting", "pet", "buff",',
+    'combatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "ranged", "flee", "pet", "curse", "buff",',
+    'nonCombatEngine->addStrategies(tab == 0 ? "beast mastery" : (tab == 2 ? "survival" : "marksmanship"), "dps assist", "aspect", "pet", "buff", "follow", "food", "default",',
+    'nonCombatEngine->addStrategies(tab == 1 ? "demonology" : (tab == 2 ? "destruction" : "affliction"), "dps assist", "pet", "pet voidwalker", "buff", "follow", "food", "default",',
     "GuardedContext<HunterAiObjectContext>",
     "GuardedContext<WarlockAiObjectContext>",
 ]
 for k in KITS:
     check(k in fac, "SliceAiFactory.cpp lacks: " + k)
-check(re.search(r"CLASS_HUNTER\)\s*\n\s*return 1;", fac) is not None, "the hunter must be on spec tab 1 (marksmanship)")
+pol = read("forever/src/slice/SliceSpecPolicy.h")
+check(re.search(r"case ClassHunter:\s*\n\s*return 1;", pol) is not None, "a hunter without talents must default to spec tab 1 (marksmanship)")
 
 
 # ---- the registry ----
@@ -170,7 +171,7 @@ check(r.returncode == 0 and "(a)=0" in r.stdout, "slice_registry_check.py: " + (
 ctx = read("forever/src/slice/SliceAiObjectContext.cpp")
 for key in ("initialize pet", "toggle pet spell", "set pet stance", "pet attack", "no pet", "has pet", "new pet", "pet dead", "pet happy", "active spell", "cancel channel", "pet"):
     check('creators["%s"]' % key in ctx, "the slice registry lacks the key " + key)
-for key in ("tame", "manual saved string", "flee with pet"):
+for key in ("manual saved string", "flee with pet"):
     check('creators["%s"]' % key not in ctx, "the slice registry must NOT hold " + key)
 
 if failures:

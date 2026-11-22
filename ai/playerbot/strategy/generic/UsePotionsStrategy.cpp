@@ -35,6 +35,10 @@ void UsePotionsStrategy::InitCombatTriggers(std::list<TriggerNode*> &triggers)
 
     triggers.push_back(new TriggerNode(
         "critical health",
+        NextAction::array(0, new NextAction("healing potion", ACTION_CRITICAL_HEAL + 0.5f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "critical health",
         NextAction::array(0, new NextAction("whipper root tuber", ACTION_CRITICAL_HEAL), NULL)));
 
     triggers.push_back(new TriggerNode(

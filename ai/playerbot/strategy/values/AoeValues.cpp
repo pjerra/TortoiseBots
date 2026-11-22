@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/AvoidAoePolicy.h"
 #include "AoeValues.h"
 
 #include "playerbot/PlayerbotAIConfig.h"
@@ -103,27 +104,58 @@ bool HasAreaDebuffValue::Calculate()
         return false;
 
     std::list<ObjectGuid> nearestDynObjects = *context->GetValue<std::list<ObjectGuid> >("nearest dynamic objects no los");
-    if (nearestDynObjects.empty())
-        return false;
-
-    for (std::list<ObjectGuid>::iterator i = nearestDynObjects.begin(); i != nearestDynObjects.end(); ++i)
+    if (!nearestDynObjects.empty())
     {
-        DynamicObject* go = checkTarget->GetMap()->GetDynamicObject(*i);
-        if (!go)
-            continue;
+        for (std::list<ObjectGuid>::iterator i = nearestDynObjects.begin(); i != nearestDynObjects.end(); ++i)
+        {
+            DynamicObject* go = checkTarget->GetMap()->GetDynamicObject(*i);
+            if (!go)
+                continue;
 
-        // A seek_aura row's cloud is no debuff to step out of: the raid stands in it for the poison.
-        if (IsSoughtCloudFor(ai, bot, go))
-            continue;
+            // A seek_aura row's cloud is no debuff to step out of: the raid stands in it for the poison.
+            if (IsSoughtCloudFor(ai, bot, go))
+                continue;
 
-        SpellEntry const* spellProto = GetSpellEntryCompat(go->GetSpellId());
+            SpellEntry const* spellProto = GetSpellEntryCompat(go->GetSpellId());
+            if (!spellProto)
+                continue;
+
+            if (IsPositiveEffect(spellProto, DynamicObjectEffectIndexCompat(go)))
+                continue;
+
+            if (DynamicObjectAffectsCompat(go, checkTarget))
+                return true;
+        }
+    }
+
+    // A live ground ring's mark (a CREATE_AREATRIGGER effect, e.g. Flamestrike
+    // 8422): no DynamicObject carries it, so the aura of the ring's own spell
+    // from the ring's caster counts the same way. (No seek_aura exemption:
+    // no listed seek cloud is an area trigger today.)
+    std::list<ObjectGuid> nearestRings = *context->GetValue<std::list<ObjectGuid> >("nearest area triggers no los");
+    for (std::list<ObjectGuid>::iterator i = nearestRings.begin(); i != nearestRings.end(); ++i)
+    {
+        AreaTriggerHazardInfo info;
+        if (!GetAreaTriggerInfoCompat(bot, *i, info))
+            continue;
+        SpellEntry const* spellProto = GetSpellEntryCompat(info.spellId);
         if (!spellProto)
             continue;
-
-        if (IsPositiveEffect(spellProto, DynamicObjectEffectIndexCompat(go)))
+        bool hurting = false;
+        for (int e = 0; e < MAX_EFFECT_INDEX; ++e)
+        {
+            if (DamagingAreaTriggerEffect((int)spellProto->Effect[e], (int)spellProto->EffectApplyAuraName[e],
+                    IsPositiveEffect(spellProto, SpellEffectIndex(e))))
+            {
+                hurting = true;
+                break;
+            }
+        }
+        if (!hurting)
             continue;
-
-        if (DynamicObjectAffectsCompat(go, checkTarget))
+        // Any caster: the ticking aura's caster guid need not match the ring's
+        // (the splash and the ring apply it independently).
+        if (checkTarget->HasAura(info.spellId))
             return true;
     }
 

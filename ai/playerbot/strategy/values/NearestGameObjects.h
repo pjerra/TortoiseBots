@@ -80,11 +80,13 @@ namespace ai
     void CollectDamagingTrapHazardsAt(PlayerbotAI* ai, Player* bot, float x, float y, float z,
         std::vector<AoeHazardCircle>& out);
 
-    // Every listed hostile ground cloud around the bot as a hazard circle: a
+    // Every listed hostile ground circle around the bot as a hazard circle: a
     // persistent-area-aura dynamic object (Poison Cloud, Blizzard, Rain of
-    // Fire, Consecration). A positive effect's circle is skipped, and so is a
+    // Fire, Consecration), or a live damaging area trigger (a
+    // CREATE_AREATRIGGER ring such as Flamestrike, which leaves no dynamic
+    // object). A positive effect's circle is skipped, and so is a
     // player-controlled caster's friendly circle (a group mage's Blizzard),
-    // while a creature's damaging cloud stays a hazard whatever its faction.
+    // while a creature's damaging circle stays a hazard whatever its faction.
     // With `creatureCastersOnly` a player-controlled caster is skipped
     // altogether: the step-out and the hold leave the open world and PvP
     // against players unchanged.
@@ -109,5 +111,21 @@ namespace ai
     private:
         float range;
         LineOfSight lineOfSight;
+    };
+    // Live ground rings (a CREATE_AREATRIGGER effect, e.g. Flamestrike 8422 on
+    // ForeverCore): the same hazard-range scan as the dynamic objects above,
+    // LoS ignored for the same reason. Turtle 1.12 has no AreaTrigger
+    // entities, so the list is always empty there.
+    class NearestAreaTriggers : public ObjectGuidListCalculatedValue
+    {
+    public:
+        NearestAreaTriggers(PlayerbotAI* ai, float range = kTrapScanRangeYd, std::string name = "nearest area triggers") :
+            ObjectGuidListCalculatedValue(ai, name), range(range) {}
+
+    protected:
+        virtual std::list<ObjectGuid> Calculate() override;
+
+    private:
+        float range;
     };
 }

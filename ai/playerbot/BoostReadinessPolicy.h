@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Boost triggers arm on a missing aura. A cooldown spell is missing its aura
 // for almost the whole cooldown, and an untrained spell never has one, so a
 // trigger that checks only the aura (or only training, at construction time)
@@ -34,5 +36,13 @@ namespace ai
     inline bool RacialBoostReady(bool firstCastable, bool secondCastable)
     {
         return firstCastable || secondCastable;
+    }
+
+    // Solo/bot-only parties still pop offensive racials on equal-or-harder
+    // pulls (balance <= 100) or when taking real damage, holding the 2-min
+    // cooldown only for trivial lower-level pulls at healthy HP.
+    inline bool RacialBoostSituationReady(bool targetIsPlayer, bool hasRealPlayerMaster, std::uint8_t balance, std::uint8_t selfHealthPct)
+    {
+        return targetIsPlayer || hasRealPlayerMaster || balance <= 100 || selfHealthPct < 80;
     }
 }

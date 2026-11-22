@@ -90,6 +90,26 @@ namespace ai
         virtual bool Execute(Event& event) override;
         virtual uint32 GetItemId() { return getQualifier().empty() ? 0 : getMultiQualifierInt(getQualifier(),0, ","); }
         virtual Unit* GetTarget() override { return nullptr; }
+        uint32 BestOffCooldownItemId(std::list<Item*> const& items) const
+        {
+            uint32 bestId = 0;
+            uint32 bestReqLevel = 0;
+            uint32 bestItemLevel = 0;
+            for (Item* item : items)
+            {
+                ItemPrototype const* proto = GetItemProtoCompat(item);
+                if (!proto || HasItemCooldown(proto->ItemId))
+                    continue;
+                if (!bestId || proto->RequiredLevel > bestReqLevel ||
+                    (proto->RequiredLevel == bestReqLevel && proto->ItemLevel > bestItemLevel))
+                {
+                    bestId = proto->ItemId;
+                    bestReqLevel = proto->RequiredLevel;
+                    bestItemLevel = proto->ItemLevel;
+                }
+            }
+            return bestId ? bestId : GetItemProtoCompat(items.front())->ItemId;
+        }
     };
 
     class UseTargetedItemIdAction : public UseItemIdAction
@@ -112,7 +132,22 @@ namespace ai
     public:
         UsePotionAction(PlayerbotAI* ai, std::string name, SpellEffects effect) : UseItemIdAction(ai, name), effect(effect) {}
 
-        bool isUseful() override { return UseItemIdAction::isUseful() && AI_VALUE2(bool, "combat", "self target"); }
+        bool isUseful() override
+        {
+            if (!UseItemIdAction::isUseful())
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", bot->GetName(), GetItemId());
+                return false;
+            }
+            if (!AI_VALUE2(bool, "combat", "self target"))
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", bot->GetName());
+                return false;
+            }
+            return true;
+        }
 
         virtual uint32 GetItemId() override
         {
@@ -122,7 +157,7 @@ namespace ai
                 return sRandomItemMgr.GetRandomPotion(bot->GetLevel(), effect);
             }
 
-            return GetItemProtoCompat(items.front())->ItemId;
+            return BestOffCooldownItemId(items);
         }
 
         bool Execute(Event& event) override
@@ -199,7 +234,22 @@ namespace ai
     public:
         UseHealthstoneAction(PlayerbotAI* ai) : UseItemIdAction(ai, "healthstone") {}
 
-        bool isUseful() override { return UseItemIdAction::isUseful() && AI_VALUE2(bool, "combat", "self target"); }
+        bool isUseful() override
+        {
+            if (!UseItemIdAction::isUseful())
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (base) bot=%s itemId=%u", bot->GetName(), GetItemId());
+                return false;
+            }
+            if (!AI_VALUE2(bool, "combat", "self target"))
+            {
+                if (getName() == "healing potion")
+                    sLog.outDebug("healing potion isUseful=false (not in combat) bot=%s", bot->GetName());
+                return false;
+            }
+            return true;
+        }
 
         uint32 GetItemId() override
         {
@@ -233,7 +283,7 @@ namespace ai
                 }
             }
 
-            return GetItemProtoCompat(items.front())->ItemId;
+            return BestOffCooldownItemId(items);
         }
 
         bool Execute(Event& event) override

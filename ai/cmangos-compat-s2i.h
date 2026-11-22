@@ -476,4 +476,5 @@ inline bool QueueGameObjectUseCompat(Player* bot, GameObject* go)
 
 // Whether this core refuses the use of an item that is not food or drink (T: never), and the use of a game object by the bot.
 inline bool ItemUseUnportedCompat(bool /*foodOrDrink*/) { return false; }
+inline void RemoveStealthAurasCompat(Player* bot) { if (bot) bot->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH); }
 inline bool GameObjectUseUnportedCompat() { return false; }

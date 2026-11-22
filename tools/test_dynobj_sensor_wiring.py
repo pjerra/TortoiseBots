@@ -49,6 +49,12 @@ TRIGGERS = (STRATEGY / "triggers/GenericTriggers.cpp").read_text()
 VALUES = (STRATEGY / "values/NearestGameObjects.cpp").read_text()
 VALUE_CONTEXT = (STRATEGY / "values/ValueContext.h").read_text()
 TARGETS = (STRATEGY / "values/PossibleTargetsValue.cpp").read_text()
+AOEVALUES = (STRATEGY / "values/AoeValues.cpp").read_text()
+SLICE_CTX = (ROOT / "forever/src/slice/SliceAiObjectContext.cpp").read_text()
+FOREVER_V = (ROOT / "forever/src/compat/TbCompat_V.h").read_text()
+TURTLE_COMPAT = (ROOT / "ai/cmangos-compat-r4v.h").read_text()
+FOREVER_V_CPP = (ROOT / "forever/src/compat/TbCompat_V.cpp").read_text()
+REACH = (ROOT / "ai/playerbot/strategy/actions/ReachTargetActions.h").read_text()
 
 
 def body(text, start, end="\n}\n"):
@@ -228,6 +234,83 @@ class FleeRowWiring(unittest.TestCase):
         row = COMBAT_STRATEGY[i:i + 200]
         self.assertIn("ACTION_EMERGENCY + 4", row)
         self.assertNotIn("ACTION_EMERGENCY + 5", row)
+
+class AreaTriggerRingWiring(unittest.TestCase):
+    """A CREATE_AREATRIGGER ground ring (Flamestrike 8422 on ForeverCore) leaves
+    no DynamicObject, so the cloud sensor never saw it: the trigger never fired
+    and the step-out never ran. The ring sensor mirrors the cloud sensor (grid
+    scan, cached guid list, same hostility rules) and merges into the same
+    collectors, so every consumer is fixed at once."""
+
+    def test_the_ring_scan_visits_the_grid(self):
+        fn = body(FOREVER_V_CPP, "void CollectAreaTriggerInfosCompat(WorldObject const* center, float range,")
+        self.assertIn("VisitGridObjectsCompat(center, targets, check, range)", fn)
+        self.assertNotIn("VisitGameObjectsCompat(", fn)
+        self.assertNotIn("VisitUnitsCompat(", fn)
+        # WorldObjectListSearcher calls the check for every container type, so
+        # the check takes a WorldObject* and filters by type id.
+        check = body(FOREVER_V_CPP, "class AreaTriggersInRangeCheck", "\n};\n")
+        self.assertIn("operator()(WorldObject* u)", check)
+        self.assertIn("TYPEID_AREATRIGGER", check)
+
+    def test_the_ring_value_uses_the_hazard_range(self):
+        fn = body(VALUES, "std::list<ObjectGuid> NearestAreaTriggers::Calculate()")
+        self.assertIn("CollectAreaTriggerInfosCompat(bot, range, infos)", fn)
+        rows = [line for line in VALUE_CONTEXT.splitlines()
+                if '"nearest area triggers no los"' in line]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("kTrapScanRangeYd", rows[0])
+        self.assertIn('creators["nearest area triggers no los"]', SLICE_CTX)
+
+    def test_the_collectors_merge_the_rings(self):
+        fn = body(VALUES, "void ai::CollectDamagingDynObjHazards(")
+        self.assertIn('"nearest area triggers no los"', fn)
+        self.assertIn("PushAreaTriggerHazard(", fn)
+        far = body(VALUES, "void ai::CollectDamagingDynObjHazardsAt(")
+        self.assertIn("CollectAreaTriggerInfosAtCompat(", far)
+        self.assertIn("PushAreaTriggerHazard(", far)
+
+    def test_the_ring_push_uses_the_policy_gate(self):
+        push = body(VALUES, "void PushAreaTriggerHazard(")
+        self.assertIn("DamagingAreaTriggerEffect(", push)
+        self.assertIn("DynObjIsHostileHazard(", push)
+        self.assertIn("GetCharmerOrOwnerPlayerOrPlayerItself", push)
+        self.assertIn("IsFriendlyTo", push)
+        # The ring's damage search is reach-inclusive: the hazard circle is the
+        # trigger bounds plus the caster's reach.
+        self.assertIn("info.caster->GetCombatReach()", push)
+
+    def test_the_debuff_value_sees_the_ring_mark(self):
+        fn = body(AOEVALUES, "bool HasAreaDebuffValue::Calculate()")
+        self.assertIn('"nearest area triggers no los"', fn)
+        self.assertIn("DamagingAreaTriggerEffect(", fn)
+        # Any caster: the ticking aura's caster guid need not match the ring's.
+        self.assertIn("HasAura(info.spellId)", fn)
+    def test_the_reach_stands_down_inside_a_ring(self):
+        start = REACH.index("class ReachTargetAction : public MovementAction, public Qualified")
+        segment = REACH[start:REACH.index("class CastReachTargetSpellAction", start)]
+        # A reach (melee, spell, cc) that ran while the bot stands inside a
+        # hostile ring would cancel the escape mid-step or walk back into the
+        # fire. The walk resumes once the bot is clear, and a covered target
+        # holds the reach too: walking in anyway is walking back in.
+        self.assertIn("CollectDamagingDynObjHazards(ai, bot, rings, true)", segment)
+        self.assertIn("InsideAoeHazard(ring, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())", segment)
+        self.assertIn("if (Unit* reachTarget = GetTarget())", segment)
+
+    def test_both_cores_name_the_same_seam(self):
+        for text in (TURTLE_COMPAT, FOREVER_V):
+            self.assertIn("struct AreaTriggerHazardInfo", text)
+            self.assertIn("CollectAreaTriggerInfosCompat(", text)
+            self.assertIn("CollectAreaTriggerInfosAtCompat(", text)
+            self.assertIn("bool GetAreaTriggerInfoCompat(", text)
+        # Turtle 1.12 has no AreaTrigger entities: all three twins are inline
+        # bodies (the resolver answers false).
+        for prefix, tail in (("inline void CollectAreaTriggerInfosCompat(", "{}"),
+                             ("inline void CollectAreaTriggerInfosAtCompat(", "{}"),
+                             ("inline bool GetAreaTriggerInfoCompat(", "{ return false; }")):
+            rows = [line for line in TURTLE_COMPAT.splitlines() if prefix in line]
+            self.assertEqual(len(rows), 1)
+            self.assertIn(tail, rows[0])
 
 
 if __name__ == "__main__":

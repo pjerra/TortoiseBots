@@ -4,6 +4,7 @@
 
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
+#include "playerbot/strategy/values/NearestGameObjects.h"
 
 using namespace ai;
 
@@ -53,6 +54,15 @@ bool StayAction::Execute(Event& event)
 
 bool StayAction::isUseful()
 {
+    // A step-out owns a bot that stands inside a hostile ground ring: stopping
+    // here would cancel the escape mid-step, so stay stands down until the bot
+    // is clear (the return walk below stays held the same way).
+    std::vector<AoeHazardCircle> rings;
+    CollectDamagingDynObjHazards(ai, bot, rings, true);
+    for (AoeHazardCircle const& ring : rings)
+        if (InsideAoeHazard(ring, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
+            return false;
+
     if (AI_VALUE2(bool, "moving", "self target"))
         return false;
 

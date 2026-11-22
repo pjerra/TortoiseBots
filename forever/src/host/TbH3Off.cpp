@@ -65,6 +65,7 @@ bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const
 
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "order"); }
 bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "role"); }
+bool HandleSpec(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "spec"); }
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "master"); }
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "party"); }
 bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "onyxia"); }

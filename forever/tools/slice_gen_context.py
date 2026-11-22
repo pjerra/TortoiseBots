@@ -44,7 +44,7 @@ SLICE_KEYS = {
              "last spell cast, last spell cast time, last taxi, leader travel target, lowest durability, main tank, "
              "mana, mana save level, manual bool, manual follow target, manual int, manual saved int, manual string, "
              "manual time, master target, mounted, move style, moving, my attacker count, my threat, nearest adds, "
-             "nearest damaging traps, nearest dynamic objects no los, nearest friendly players, nearest game objects, "
+             "nearest area triggers no los, nearest damaging traps, nearest dynamic objects no los, nearest friendly players, nearest game objects, "
              "nearest game objects no los, nearest npcs, nearest stealthed units, neglect threat, new player nearby, "
              "old target, party member to protect, party member to remove roots, party member without aura, "
              "party member without my aura, party tank without aura, pet target, pos, position, possible adds, "
@@ -225,7 +225,33 @@ W8_KEYS = {
     "trigger": "",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, WL0_KEYS)
+# Reactions: flee, kite, runaway, avoid aoe, racials, mark rti, focus, spread distance, fear/stun/threat triggers, target values.
+REACTIONS_KEYS = {
+    "strategy": "flee, flee from adds, kite, runaway, react, avoid aoe, racials, mark rti, focus, focus heal targets, focus rti targets",
+    "action": "avoid aoe, flee from area, runaway, mark rti, spread distance, "
+              "war stomp, berserking, blood fury, cannibalize, escape artist, shadowmeld, stoneform, "
+              "perception, will of the forsaken, mana tap, arcane torrent",
+    "trigger": "feared, stunned, fear sleep sap, low tank threat, some threat, no threat, "
+               "panic, outnumbered, critical health no master, has nearest adds, aoe threat nearby, has area debuff, no rti target, "
+               "berserking, blood fury, generic boost, cannibalize, will of the forsaken, stoneform, shadowmeld, "
+               "mana tap, arcane torrent, war stomp, perception",
+    "value": "least hp target, attacker without aura, attacker without my aura, spread distance",
+}
+# Combat items (issue #124): potions, healthstones, bandages, trinkets, oils, stones, consumables, soulstone target.
+COMBAT_ITEMS_KEYS = {
+    "strategy": "potions, consumables",
+    "action": "whipper root tuber, healthstone, healing potion, mana potion, dark rune, use bandage, anti-venom, "
+              "use consumable, use trinket, apply stone, apply oil, buff",
+    "trigger": "has poison debuff, use trinket",
+    "value": "party member to soulstone",
+}
+CLASS_EXTRAS_KEYS = {
+    "strategy": "",
+    "action": "tame, use lightwell, reach party member for totem",
+    "trigger": "dispel enrage",
+    "value": "warlock spread attacker my aura, warlock spread attacker, warlock spread attacker manual",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
@@ -261,6 +287,8 @@ def find_class_headers():
             for m in re.finditer(r'^[ \t]*(?:class|struct)\s+(\w+)\b([^;{]*)(\{|$)', text, re.M):
                 if m.group(3) == "{" or ":" in m.group(2):
                     defs.setdefault(m.group(1), set()).add(os.path.relpath(p, base))
+            for m in re.finditer(r'^[ \t]*(?:BEGIN_TRIGGER|BUFF_ACTION(?:_U)?|HEAL_ACTION)\(\s*(\w+)\s*,', text, re.M):
+                defs.setdefault(m.group(1), set()).add(os.path.relpath(p, base))
     return defs
 
 

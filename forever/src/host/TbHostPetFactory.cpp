@@ -21,6 +21,8 @@
 #include "playerbot/TbCompatP11.h"
 #include "compat/TbCompat_V.h"
 #include "runtime/HunterPetPolicy.h"
+#include "runtime/policy/class/HunterStarterAmmoPolicy.h"
+#include "runtime/policy/class/ShamanStarterTotemPolicy.h"
 #include "runtime/policy/pet/PetSpellRankPolicy.h"
 
 #include <algorithm>
@@ -198,6 +200,50 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
     PetSummonSteps steps{ bot, pet, map, saveToDb };
     return SummonTamedPet(steps) == PetSummonOutcome::Out ? GiveResult::Ok : GiveResult::NotSummoned;
 }
+void EnsureHunterStarterAmmo(Player* bot)
+{
+    if (!bot || bot->GetClass() != CLASS_HUNTER)
+        return;
+    bot->SetPreferDrawableAmmo(true);
+    bot->AutoSelectAmmo();
+    if (AmmoItemIdCompat(bot) != 0)
+        return;
+
+    Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
+    ItemTemplate const* rangedProto = ranged ? ranged->GetTemplate() : nullptr;
+    if (!rangedProto)
+        return;
+
+    bool isBullet = false;
+    if (rangedProto->GetSubClass() == ITEM_SUBCLASS_WEAPON_GUN)
+        isBullet = true;
+    else if (rangedProto->GetSubClass() != ITEM_SUBCLASS_WEAPON_BOW &&
+             rangedProto->GetSubClass() != ITEM_SUBCLASS_WEAPON_CROSSBOW)
+        return;
+
+    uint32 const ammoId = TortoiseBots::HunterStarterAmmoId(isBullet, bot->GetLevel());
+    if (!ammoId || !sObjectMgr.GetItemTemplate(ammoId))
+        return;
+
+    if (bot->GetItemCount(ammoId) == 0)
+        bot->StoreNewItemInBestSlots(ammoId, 200, ItemContext::NONE);
+    bot->AutoSelectAmmo();
+}
+void EnsureShamanStarterTotems(Player* bot)
+{
+    if (!bot || bot->GetClass() != CLASS_SHAMAN)
+        return;
+
+    uint8 const level = bot->GetLevel();
+    for (uint8 slot = 0; slot < TortoiseBots::kShamanStarterTotems.size(); ++slot)
+    {
+        uint32 const totemId = TortoiseBots::ShamanStarterTotemForSlot(slot, level);
+        if (!totemId || !sObjectMgr.GetItemTemplate(totemId))
+            continue;
+        if (bot->GetItemCount(totemId, true) == 0)
+            bot->StoreNewItemInBestSlots(totemId, 1, ItemContext::NONE);
+    }
+}
 }
 }
 
@@ -206,14 +252,9 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
 // (ai/playerbot/PlayerbotFactory.h:155,178-187); the Turtle bodies are in ai/playerbot/PlayerbotFactory.cpp.
 // =====================================================================================================================
 
-// No ammo is handed out (lead decision D3: the kit carries the stock, the shots take it). What this does is let the core pick the ammo the bot carries: a bot has
-// no client to choose it, so it prefers a stack drawn with a model (Player.h:1528) and takes one (Player::AutoSelectAmmo, Player.cpp:10682).
 void PlayerbotFactory::InitAmmo()
 {
-    if (bot->GetClass() != CLASS_HUNTER)
-        return;
-    bot->SetPreferDrawableAmmo(true);
-    bot->AutoSelectAmmo();
+    TortoiseBots::p11::EnsureHunterStarterAmmo(bot);
 }
 
 void PlayerbotFactory::InitPet(bool saveToDb)

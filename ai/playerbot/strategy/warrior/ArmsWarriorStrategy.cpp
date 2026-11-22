@@ -265,7 +265,7 @@ void ArmsWarriorBuffStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigge
 
     triggers.push_back(new TriggerNode(
         "feared",
-        NextAction::array(0, new NextAction("berserker rage fear", ACTION_INTERRUPT), NULL)));
+        NextAction::array(0, new NextAction("berserker rage", ACTION_INTERRUPT), NULL)));
 
 }
 
