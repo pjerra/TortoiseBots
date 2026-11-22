@@ -56,6 +56,16 @@ class StayArrivalWiringTest(unittest.TestCase):
         self.assertIn('return TortoiseBots::StayWalkDue(backoff, TortoiseBots::StayPointReached(dx, dy, dz, ai->GetRange("follow")),\n'
                       "        TortoiseBots::StayPointDistance(dx, dy, dz), moving, bot->IsInCombat(), bot->GetTransport() != nullptr, WorldTimer::getMSTime());", fn)
 
+    def test_stay_walk_waits_out_a_ground_ring(self):
+        fn = body(POSITION, "bool ai::StayWalkDueNow(PlayerbotAI* ai, Player* bot, PositionEntry const& stayPosition)")
+        # A step-out owns a bot that stands inside a hostile ground ring, and the
+        # stay spot itself may be covered: the return walk would yank the bot back
+        # into the fire it just left (or never let it leave). Both the trigger and
+        # the walk ask this one question, so gating it here holds both.
+        self.assertIn("CollectDamagingDynObjHazards(ai, bot, rings, true)", fn)
+        self.assertIn("InsideAoeHazard(ring, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())", fn)
+        self.assertIn("InsideAoeHazard(ring, point.x, point.y, point.z)", fn)
+
     def test_stay_walk_is_useful_by_the_shared_question(self):
         cls = body(POSITION_H, "class ReturnToStayPositionAction : public MoveToPositionAction", "\n    };\n")
         self.assertIn("virtual bool isUseful() override;", cls)

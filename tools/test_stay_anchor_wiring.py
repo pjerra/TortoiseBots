@@ -66,6 +66,14 @@ class StayAnchorWiringTest(unittest.TestCase):
         self.assertIn('!AI_VALUE(time_t, "stay time")', useful)
         self.assertIn("lastMove.lastFollow", useful)
 
+    def test_stay_action_stands_down_inside_a_ground_ring(self):
+        useful = body(STAY, "bool StayAction::isUseful()", "\n}\n")
+        # The stay action stops a moving bot (Stay() calls StopMoving): while a
+        # step-out is walking the bot out of a hostile ring, running anyway
+        # would cancel the escape mid-step.
+        self.assertIn("CollectDamagingDynObjHazards(ai, bot, rings, true)", useful)
+        self.assertIn("InsideAoeHazard(ring, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())", useful)
+
 
 if __name__ == "__main__":
     unittest.main()

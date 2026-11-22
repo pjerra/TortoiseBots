@@ -124,6 +124,20 @@ std::list<ObjectGuid> NearestDynamicObjects::Calculate()
     return result;
 }
 
+std::list<ObjectGuid> NearestAreaTriggers::Calculate()
+{
+    // A live ground ring lives in the grid containers too; the compat scan
+    // below is the dynobj one's twin (empty on cores without AreaTriggers).
+    std::vector<AreaTriggerHazardInfo> infos;
+    CollectAreaTriggerInfosCompat(bot, range, infos);
+
+    std::list<ObjectGuid> result;
+    for (AreaTriggerHazardInfo const& info : infos)
+        result.push_back(info.guid);
+
+    return result;
+}
+
 float ai::DamagingTrapHazardRadius(GameObject* go)
 {
     if (!go)
@@ -245,6 +259,54 @@ void PushDynObjHazard(PlayerbotAI* ai, Player* bot, DynamicObject* dyn, std::vec
     hazard.radius = radius;
     out.push_back(hazard);
 }
+// A live ground ring that marks a hazard (a hurting, non-positive spell effect,
+// within the dodge cap, caster not a friend when it is player-controlled):
+// appended to `out` as a centre/radius circle. Same rules as the cloud above:
+// with `creatureCastersOnly` a player-controlled caster's ring is skipped, so
+// the open world and PvP against players are unchanged. (No seek_aura
+// exemption: no listed seek cloud is an area trigger today.)
+void PushAreaTriggerHazard(PlayerbotAI* ai, Player* bot, AreaTriggerHazardInfo const& info,
+                      std::vector<AoeHazardCircle>& out, bool creatureCastersOnly)
+{
+    if (info.spellId == 0)
+        return;
+    // The ring's damage search is reach-inclusive (the core applies the ticks
+    // past the trigger's own bounds): the hazard circle is the bounds plus the
+    // caster's reach, or ticks land on bots the sensor calls safe.
+    float const hazardRadius = info.radius + (info.caster ? info.caster->GetCombatReach() : 0.0f);
+    if (!IsAvoidableAoeRadius(hazardRadius))
+        return;
+    SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(info.spellId);
+    if (!spellProto)
+        return;
+    bool hurting = false;
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (DamagingAreaTriggerEffect((int)spellProto->Effect[i], (int)spellProto->EffectApplyAuraName[i],
+                spellProto->IsPositiveEffect(SpellEffectIndex(i))))
+        {
+            hurting = true;
+            break;
+        }
+    }
+    if (!hurting)
+        return;
+    Unit* casterUnit = info.caster;
+    bool const casterPlayerControlled = casterUnit && casterUnit->GetCharmerOrOwnerPlayerOrPlayerItself() != nullptr;
+    if (creatureCastersOnly && casterPlayerControlled)
+        return;
+    // A ring with no caster left (a laid trap's ring) hurts everyone: only a
+    // player-controlled caster's friendly ring is left alone, the cloud rule.
+    bool const casterFriendly = info.caster && sServerFacade.IsFriendlyTo(info.caster, bot);
+    if (!DynObjIsHostileHazard(false, casterPlayerControlled, casterFriendly, hazardRadius))
+        return;
+    AoeHazardCircle hazard;
+    hazard.x = info.x;
+    hazard.y = info.y;
+    hazard.z = info.z;
+    hazard.radius = hazardRadius;
+    out.push_back(hazard);
+}
 
 // Dynamic objects within `range` of a map point (one bounded visit; the grid
 // is never loaded per bot tick).
@@ -349,6 +411,15 @@ void ai::CollectDamagingDynObjHazards(PlayerbotAI* ai, Player* bot, std::vector<
     AiObjectContext* context = ai->GetAiObjectContext();
     for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest dynamic objects no los"))
         PushDynObjHazard(ai, bot, map->GetDynamicObject(guid), out, creatureCastersOnly);
+    // Live ground rings (a CREATE_AREATRIGGER effect, e.g. Flamestrike 8422):
+    // no DynamicObject marks them, so the same circle test runs over the
+    // cached trigger list.
+    for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest area triggers no los"))
+    {
+        AreaTriggerHazardInfo info;
+        if (GetAreaTriggerInfoCompat(bot, guid, info))
+            PushAreaTriggerHazard(ai, bot, info, out, creatureCastersOnly);
+    }
 }
 
 void ai::CollectDamagingDynObjHazardsAt(PlayerbotAI* ai, Player* bot, float x, float y, float z,
@@ -376,6 +447,11 @@ void ai::CollectDamagingDynObjHazardsAt(PlayerbotAI* ai, Player* bot, float x, f
     VisitGridObjectsAtCompat(x, y, map, targets, u_check, kTrapScanRangeYd);
     for (WorldObject* wo : targets)
         PushDynObjHazard(ai, bot, static_cast<DynamicObject*>(wo), out, creatureCastersOnly);
+    // The same far-point query for live ground rings (see above).
+    std::vector<AreaTriggerHazardInfo> ringInfos;
+    CollectAreaTriggerInfosAtCompat(x, y, z, map, kTrapScanRangeYd, ringInfos);
+    for (AreaTriggerHazardInfo const& info : ringInfos)
+        PushAreaTriggerHazard(ai, bot, info, out, creatureCastersOnly);
 }
 
 std::list<ObjectGuid> NearestDamagingTrapsValue::Calculate()

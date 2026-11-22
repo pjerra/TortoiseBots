@@ -8,6 +8,7 @@
 
 #include "Containers.h"   // Trinity::Containers::RandomShuffle
 #include "TradeData.h"   // TRADE_SLOT_NONTRADED and TradeData::GetItem (F declares them in a header the botpch does not pull)
+#include <vector>
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Names (a): one line, the same meaning on both cores.
@@ -251,3 +252,28 @@ inline bool DynamicObjectAffectsCompat(DynamicObject* dyn, Unit* unit)
 {
     return unit->HasAura(dyn->GetSpellId(), dyn->GetCasterGUID());
 }
+// A live ground ring (a CREATE_AREATRIGGER effect, e.g. Flamestrike 8422): the
+// trigger's centre, its live bounds radius (scale included), its spell and its
+// caster. Out-of-line in TbCompat_V.cpp (the scan names AreaTrigger, which only
+// exists here); the Turtle twin in ai/cmangos-compat-r4v.h is the same struct
+// with an empty scan and a resolver that always answers false.
+struct AreaTriggerHazardInfo
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float radius = 0.0f;
+    uint32 spellId = 0;
+    ObjectGuid guid;
+    ObjectGuid casterGuid;
+    Unit* caster = nullptr;
+};
+// Every live area trigger within `range` of `center` (grid containers only,
+// the same shape as the dynamic-object scan above).
+void CollectAreaTriggerInfosCompat(WorldObject const* center, float range, std::vector<AreaTriggerHazardInfo>& out);
+// The live data of one trigger by guid, false when it is gone.
+bool GetAreaTriggerInfoCompat(Player* bot, ObjectGuid guid, AreaTriggerHazardInfo& info);
+// The same scan around a map point (for a destination beyond the bot's cached
+// list, the trap query's far-point shape).
+void CollectAreaTriggerInfosAtCompat(float x, float y, float z, Map* map, float range,
+    std::vector<AreaTriggerHazardInfo>& out);

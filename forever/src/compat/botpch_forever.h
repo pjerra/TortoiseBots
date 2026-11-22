@@ -12,6 +12,7 @@
 #include "Common.h"
 #include "Define.h"
 
+#include "AreaTrigger.h"
 #include "AccountMgr.h"
 #include "AuctionHouseMgr.h"
 #include "Bag.h"

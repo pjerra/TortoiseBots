@@ -172,6 +172,22 @@ namespace ai
     {
         return !positiveEffect && IsAvoidableAoeRadius(radius) && !(casterPlayerControlled && casterFriendly);
     }
+    // One effect of a live ground ring's spell (a CREATE_AREATRIGGER effect,
+    // e.g. Flamestrike 8422 on this core: school damage, a create-areatrigger
+    // effect and a periodic-dummy aura): only a hurting effect marks the ring,
+    // school damage or a periodic-damage aura, both non-positive. The
+    // create-areatrigger effect itself only places the ring, the periodic
+    // dummy only tags its victims, and a persistent-area aura is the dynobj
+    // sensor's cloud, not a ring. Effect-only test (no radius gate, no caster
+    // test): callers own those, and the unit test feeds bare triples.
+    inline bool DamagingAreaTriggerEffect(int effect, int aura, bool positiveEffect)
+    {
+        if (positiveEffect)
+            return false;
+        if (effect == 2) // SPELL_EFFECT_SCHOOL_DAMAGE
+            return true;
+        return effect == 6 && aura == 3; // SPELL_EFFECT_APPLY_AURA + SPELL_AURA_PERIODIC_DAMAGE
+    }
 
     // A periodic-trigger aura whose triggered spell hurts around the caster
     // marks a hazard — but not the same one for every unit (#971 review):
