@@ -34,9 +34,10 @@ class RaidGroupsWiring(unittest.TestCase):
         mgr = read("forever/src/TbBotMgr.cpp")
         login = body(mgr, "std::string BotMgr::Login(")
         join = body(mgr, "std::string BotMgr::JoinParty(")
-        self.assertIn("raidgroups::PlanJoin(_raidsEnabled", login)
+        self.assertIn("raidgroups::PlanJoin(_raidsEnabled && allowRaid", login)
         self.assertIn("raidgroups::PlanJoin(raidsEnabled", join)
-        self.assertIn("Instance().RaidsEnabled()", join)
+        self.assertIn("Instance().RaidsEnabled() && allowRaid", join)
+        self.assertIn("h3::RaidConvertBlocked(group, blocked)", join)
         self.assertNotIn("raids are not in this slice", mgr)
 
     def test_party_becomes_a_raid_after_the_invite_and_before_the_member(self):
@@ -64,18 +65,52 @@ class RaidGroupsWiring(unittest.TestCase):
     def test_layout_uses_the_policy_and_the_core_group_api(self):
         layout = read("forever/src/host/TbRaidLayout.cpp")
         handler = body(layout, "bool HandleLayout(")
-        for needle in ("raidgroups::PickMainTank(", "RL::Plan(", "RL::PlanSubgroupMoves(", "group->ChangeMembersGroup(",
+        for needle in ("raidgroups::PickMainTank(", "RL::Plan(", "RL::PlanSubgroupMoves(raidgroups::LayoutMoves(seats))",
+                       "group->HasFreeSlotSubGroup(op.sub)", "group->ChangeMembersGroup(",
                        "group->SwapMembersGroups(", "MEMBER_FLAG_MAINTANK", "MEMBER_FLAG_ASSISTANT", "FocusHeal("):
             self.assertIn(needle, handler, needle)
         joiner = body(layout, "int PlaceJoiner(")
         self.assertIn("RL::PlanJoinerSubgroup(", joiner)
-        self.assertIn("RL::PickJoinerHealTank(", joiner)
+        self.assertIn("raidgroups::PruneHealBook(applied, tanksNow, healersNow)", joiner)
+        self.assertIn("raidgroups::PickAndRecordHealer(applied", joiner)
+        self.assertIn("group->HasFreeSlotSubGroup(seat.subgroup)", joiner)
+        self.assertLess(joiner.index("HasFreeSlotSubGroup(seat.subgroup)"), joiner.index("ChangeMembersGroup("))
+        # Every member slot is in the moves (an offline member keeps its seat), not only the members in the world.
+        self.assertIn("slots.push_back(slot.guid);", handler)
+        self.assertLess(handler.index("slots.push_back(slot.guid);"), handler.index("if (!member || !member->IsInWorld())"))
+        # Roles without an engine: the class and talents (PlayerbotAI::IsTank / IsHeal), not only the stored role.
+        role = body(layout, "RL::Role RoleFor(Player* member)\n{")
+        self.assertIn("PlayerbotAI::IsTank(member, true)", role)
+        self.assertNotIn("GetAI(member)", role)
+
+    def test_layout_record_goes_with_the_group(self):
+        layout = read("forever/src/host/TbRaidLayout.cpp")
+        self.assertIn("Layouts().erase(group->GetGUID())", body(layout, "void ForgetLayout("))
+        scripts = read("forever/src/TbScripts.cpp")
+        self.assertIn("TortoiseBots::h3::ForgetLayout(group);", body(scripts, "void OnDisband(Group* group) override"))
+        off = read("forever/src/host/TbH3Off.cpp")
+        self.assertIn("void ForgetLayout(Group*) {}", off)
+        self.assertIn("bool RaidConvertBlocked(Group*, std::string&) { return false; }", off)
+
+    def test_only_the_explicit_commands_may_make_a_raid(self):
+        scripts = read("forever/src/TbScripts.cpp")
+        self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free, false, false, true)", scripts)   # .tb login
+        self.assertIn("BotMgr::Instance().GroupWith(guid, master, true)", scripts)                              # .tb group
+        self.assertIn("GroupWith(member->GetGUID(), leader->GetGUID(), true)", read("forever/src/host/TbPartyState.cpp"))
+        self.assertIn("BotMgr::Instance().GroupWith(bot, m.lead);", read("forever/src/host/cmd/TbCmdBinding.cpp"))  # restore: 5-man
+        self.assertIn("BotMgr::Instance().Login(guid, player->GetGUID(), false, false, true);", read("forever/src/host/player/TbPlayerCmd.cpp"))
+        mgr = read("forever/src/TbBotMgr.cpp")
+        self.assertIn("if (JoinParty(member, leader).empty())", mgr)                                           # quest groups: 5-man
+        self.assertIn("JoinParty(me, master, bot.allowRaid)", mgr)                                             # the login's own join
+        self.assertIn("bot.allowRaid = allowRaid;", body(mgr, "std::string BotMgr::Login("))
+        self.assertIn("JoinParty(bot, master, allowRaid)", body(mgr, "std::string BotMgr::GroupWith("))
 
     def test_party_forming_caps_by_the_toggle_and_places_joiners(self):
         party = body(read("forever/src/host/TbPartyState.cpp"), "bool HandleParty(")
         self.assertIn("raidgroups::MaxNamedMembers(raids)", party)
         self.assertIn("PlaceJoiner(group, member)", party)
-        self.assertIn('rec.N("sub", slot.group + 1)', party)
+        self.assertIn('if (slot.group < MAX_RAID_SUBGROUPS)', party)
+        self.assertLess(party.index("if (slot.group < MAX_RAID_SUBGROUPS)"), party.index('rec.N("sub", slot.group + 1)'))
 
     def test_slice_registers_the_focus_heal_strategy(self):
         ctx = read("forever/src/slice/SliceAiObjectContext.cpp")

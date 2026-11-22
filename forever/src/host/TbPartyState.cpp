@@ -724,7 +724,8 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         rec.S("member", slot.name).B("leader", group->IsLeader(slot.guid)).B("online", online);
         if (group->isRaidGroup())
         {
-            rec.N("sub", slot.group + 1);
+            if (slot.group < MAX_RAID_SUBGROUPS)   // a corrupt row (a subgroup past 8) shows no seat
+                rec.N("sub", slot.group + 1);
             if (slot.flags & MEMBER_FLAG_MAINTANK)
                 rec.S("mark", "maintank");
             else if (slot.flags & MEMBER_FLAG_ASSISTANT)
