@@ -12734,21 +12734,60 @@ inline int PickApproachStand(const Run& r, const PlanStep& s, const std::vector<
     return best;
 }
 
+// The last pull or boss step before the current step that the run left cleared: a step it advanced past that
+// notCleared does not name (a skipped, deferred-and-given-up or out-of-reach pack is not cleared), after the run's
+// start step; npos for none. It is the step pointer's own record, not a live reading, so it survives a death, a
+// wipe and a resume: the furthest place on the route the party is known to have walked to (ReplayFloor). A row for
+// the other team counts too: the run walked its leg past it, so a floor there is still behind the party.
+inline std::size_t LastClearedStep(const Run& r)
+{
+    std::size_t found = static_cast<std::size_t>(-1);
+    for (std::size_t i = r.startStep; r.plan && i < r.step && i < r.plan->steps.size(); ++i)
+    {
+        const PlanStep& g = r.plan->steps[i];
+        if ((g.kind == PlanStepKind::Pull || g.kind == PlanStepKind::Boss) && !r.notCleared.count(i))
+            found = i;
+    }
+    return found;
+}
+
 // The lowest plan index a walk back may start at: the checkpoint when it is
-// known (a point before it can lie behind a hole the lead bot crossed since),
-// else 0 (as at the entrance: before every hole). Never before the step the
-// run started at (Run::startStep: a placed run never walked the steps before it).
+// known (a point before it can lie behind a hole the lead bot crossed since);
+// with no checkpoint (a death, a wipe's release to the entrance, a pause) the
+// last move point at or before the last cleared step, the furthest point the
+// party is known to have walked to (WC run 6: after the wipe at leg 8 the
+// replay began at the point nearest the lead bot at the entrance, the plan's
+// first move point, and walked the whole route before the next pull); else 0
+// (before every hole). Never before the step the run started at
+// (Run::startStep: a placed run never walked the steps before it).
 inline std::size_t ReplayFloor(const Run& r)
 {
-    return std::max(CheckpointKnown(r) ? r.checkpoint : static_cast<std::size_t>(0), r.startStep);
+    std::size_t floor = r.startStep;
+    if (CheckpointKnown(r))
+        floor = std::max(floor, r.checkpoint);
+    else if (std::size_t const cleared = LastClearedStep(r); cleared != static_cast<std::size_t>(-1))
+    {
+        for (std::size_t i = r.startStep; i <= cleared && i < r.plan->steps.size(); ++i)
+            if (IsRunMovePoint(r, i))
+                floor = std::max(floor, i);
+    }
+    return floor;
 }
 
 // The first direct step before the current step that the lead bot has not
-// crossed (npos for none): after the checkpoint when it is known, else the
-// plan's first direct step; never one before the run's start step.
+// crossed (npos for none): after the checkpoint when it is known; with no
+// checkpoint after the last cleared step, the same floor ReplayFloor uses (a
+// hole at or before a point the party is known to have reached is crossed: a
+// wipe at leg 8 of a route with a hole at leg 2 replays from leg 8, not from
+// the hole); else the plan's first direct step. Never one before the run's
+// start step.
 inline std::size_t FirstUncrossedDirect(const Run& r)
 {
-    std::size_t const from = std::max(CheckpointKnown(r) ? r.checkpoint + 1 : static_cast<std::size_t>(0), r.startStep);
+    std::size_t from = r.startStep;
+    if (CheckpointKnown(r))
+        from = std::max(r.checkpoint + 1, r.startStep);
+    else if (std::size_t const cleared = LastClearedStep(r); cleared != static_cast<std::size_t>(-1))
+        from = std::max(cleared + 1, r.startStep);
     for (std::size_t i = from; i < r.step && i < r.plan->steps.size(); ++i)
         if (r.plan->steps[i].kind == PlanStepKind::MoveDirect)
             return i;

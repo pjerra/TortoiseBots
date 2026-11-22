@@ -996,6 +996,31 @@ void TestDataHoldFacts(ai::DungeonPlan const* plan)
 }
 }
 
+// Live run 6: the wipe at leg 8's boss (step 87, Pythas) released the party to the entrance and lost the route
+// checkpoint; the straight walk back failed and the replay began at the plan's first move point (the live note's
+// "walk back: to the point of step 4"), so the run walked the whole route back before pulling again. With no
+// checkpoint the replay resumes at the last cleared step's move point (leg 8 seq 1, index 81).
+void TestWipeResumeAtTheLastClearedStep(ai::DungeonPlan const* plan)
+{
+    std::size_t const boss = 87;
+    CHECK(plan->steps[boss].kind == PlanStepKind::Boss && plan->steps[boss].entry == 3670);
+    Run r = Start(plan, boss);
+    CHECK(!r.routeKnown);                 // a wipe: the lead bot died, where it stands on the route is not known
+    // The release spot: the plan's own step 4 point (the live note named step 4 as the point the replay walked to).
+    World w;
+    w.x = plan->steps[3].x;
+    w.y = plan->steps[3].y;
+    w.z = plan->steps[3].z;
+    Facts f;
+    BuildPartyFacts(f, w);
+    f.seen = false;
+    CHECK(ReplayWalkBack(r, f));
+    CHECK(r.walkBack && r.walkBackIdx == 81);
+    CHECK(LastClearedStep(r) == 86);      // the last camp cleared before the boss
+    CHECK(ReplayFloor(r) == 81);          // leg 8's first move point, the last move point before the boss
+    CHECK(plan->steps[81].kind == PlanStepKind::Move);
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 2)
@@ -1019,6 +1044,7 @@ int main(int argc, char** argv)
         return 1;
     }
     TestPlanShape(plan, unitRows);
+    TestWipeResumeAtTheLastClearedStep(plan);
     TestWalk(plan);
     TestUnitsHoldFacts(plan);
     TestDataHoldFacts(plan);
