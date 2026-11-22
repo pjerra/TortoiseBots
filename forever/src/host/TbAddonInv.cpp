@@ -390,9 +390,19 @@ void HandleItemVerb(Player* requester, std::string_view args)
         addon::Err(requester, parsed.intent, "failed", "You have no bag space for it.");
         return;
     }
-    bot->RemoveItem(bag, slot, true);
-    requester->StoreItem(dest, item, true);
-    if (item->GetOwner() != requester)
+    // An item leaving one inventory for another must exit with
+    // MoveItemFromInventory and enter with MoveItemToInventory (the core's
+    // own trade: TradeHandler.cpp:504,509 then :153,173). RemoveItem alone
+    // leaves the item queued on the bot and in the world, so the bot's next
+    // save reports it at the owner's slot and the delete lands in-world.
+    // `in_characterInventoryDB` is true: SetState keeps a never-saved (NEW)
+    // item NEW and flips a saved one to CHANGED, both queueing on the owner.
+    ObjectGuid const movedGuid = item->GetGUID();
+    bot->MoveItemFromInventory(bag, slot, true);
+    requester->MoveItemToInventory(dest, item, true, true);
+    // A merge into an equal stack on the requester deletes `item`
+    // (Item.cpp SetState), so only the guid is touched from here on.
+    if (bot->GetItemByGuid(movedGuid))
     {
         addon::Err(requester, parsed.intent, "failed", "The give was refused.");
         SendInventorySnapshot(requester, bot);
