@@ -76,7 +76,7 @@ bool s_commands = true;
 
 // The caller's Battle.net account is the one its session logged in with (the core's own identity of the player); its game
 // accounts are checked against the login DB now (see OwnerScope).
-OwnerScope ScopeOf(Player* player)
+OwnerScope ScopeOf(Player const* player)
 {
     OwnerScope scope;
     WorldSession* session = player ? player->GetSession() : nullptr;
@@ -545,6 +545,16 @@ public:
 };
 }
 
+// R5 fix: the same ownership read as `.bot` (ScopeOf: the sender's Battle.net account, checked against the login DB now, nothing kept
+// between messages) applied to the bot's game account; the verdict is the pure rule.
+bool CallerOwnsBotForChat(Player const& sender, Player const& bot)
+{
+    OwnerScope const scope = ScopeOf(&sender);
+    std::uint32_t const gameAccount = sCharacterCache->GetCharacterAccountIdByGuid(bot.GetGUID());
+    std::uint32_t const botOwnerBnet = scope.Owns(gameAccount) ? scope.bnet : 0;
+    return ChatOwnerAllowed(false, scope.bnet, botOwnerBnet);
+}
+
 void AddScripts()
 {
     new tortoisebots_player_cmd();
@@ -561,6 +571,7 @@ namespace player
 void LoadConfig() { }
 void AddScripts() { }
 bool Dispatch(Player*, std::string_view) { return false; }
+bool CallerOwnsBotForChat(Player const&, Player const&) { return false; }
 }
 }
 

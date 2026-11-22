@@ -123,6 +123,7 @@
 #include "strategy/values/GuildValues.h"
 #include "PlayerbotAIPackets.h"
 #include "playerbot/TbCompatP11.h"
+#include "playerbot/TbCompatOwner.h"
 
 using namespace ai;
 
@@ -2902,8 +2903,9 @@ bool PlayerbotAI::IsBotOwnerOrGm(Player const& fromPlayer) const
     if (manager.GetOwnedCharacter(bot->GetObjectGuid(), owned) &&
         owned.ownerAccountId != 0 && owned.ownerAccountId == senderAccount)
         return true;
-    // Pre-ownership records (same character account as the bot itself).
-    return AccountIdOfCharacterCompat(bot->getObjectGuid()) == senderAccount;
+    // Pre-ownership records (same character account as the bot itself). ForeverCore: the owner is the sender's Battle.net account, read
+    // fresh the way `.bot` reads it (R5 fix), so the owner's other game account owns the bot; Turtle: the game account, as before.
+    return BotOwnedBySenderCompat(bot, fromPlayer, senderAccount);
 }
 bool PlayerbotAI::CheckBotCommandAuth(Player& fromPlayer, std::string const& command, bool silentDeny)
 {

@@ -34,6 +34,8 @@
 #include "playerbot/strategy/actions/GiveItemAction.h"
 #include "playerbot/strategy/actions/HelpAction.h"
 #include "playerbot/strategy/actions/ImbueAction.h"
+#include "playerbot/strategy/actions/LeaveGroupAction.h"
+#include "playerbot/strategy/actions/ListQuestsActions.h"
 #include "playerbot/strategy/actions/ListSpellsAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
@@ -57,14 +59,18 @@
 #include "playerbot/strategy/actions/TalkToQuestGiverAction.h"
 #include "playerbot/strategy/actions/TameAction.h"
 #include "playerbot/strategy/actions/TellCastFailedAction.h"
+#include "playerbot/strategy/actions/TellItemCountAction.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
+#include "playerbot/strategy/actions/TellReputationAction.h"
 #include "playerbot/strategy/actions/TellTargetAction.h"
 #include "playerbot/strategy/actions/TrainerAction.h"
+#include "playerbot/strategy/actions/UnequipAction.h"
 #include "playerbot/strategy/actions/UseConsumableAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/UseTrinketAction.h"
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
+#include "playerbot/strategy/actions/WhoAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
@@ -366,7 +372,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (48 of its keys)
+    // the registry of ChatActionContext (54 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -417,6 +423,12 @@ namespace slice
             creators["equip"] = [](PlayerbotAI* ai) { return new EquipAction(ai); };
             creators["free chat shortcut"] = [](PlayerbotAI* ai) { return new FreeChatShortcutAction(ai); };
             creators["position"] = [](PlayerbotAI* ai) { return new PositionAction(ai); };
+            creators["who"] = [](PlayerbotAI* ai) { return new WhoAction(ai); };
+            creators["item count"] = [](PlayerbotAI* ai) { return new TellItemCountAction(ai); };
+            creators["unequip"] = [](PlayerbotAI* ai) { return new UnequipAction(ai); };
+            creators["quests"] = [](PlayerbotAI* ai) { return new ListQuestsAction(ai); };
+            creators["leave"] = [](PlayerbotAI* ai) { return new LeaveGroupAction(ai); };
+            creators["reputation"] = [](PlayerbotAI* ai) { return new TellReputationAction(ai); };
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceAction(ai); };
             creators["buff"] = [](PlayerbotAI* ai) { return new BuffAction(ai); };
             creators["tame"] = [](PlayerbotAI* ai) { return new TameAction(ai); };
@@ -588,7 +600,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (49 of its keys)
+    // the registry of ChatTriggerContext (59 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -643,6 +655,16 @@ namespace slice
             creators["bb"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "bb"); };
             creators["free"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "free"); };
             creators["position"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "position"); };
+            creators["who"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "who"); };
+            creators["c"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "c"); };
+            creators["items"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "c"); };
+            creators["inventory"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "c"); };
+            creators["inv"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "c"); };
+            creators["ue"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "ue"); };
+            creators["quests"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "quests"); };
+            creators["leave"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "leave"); };
+            creators["rep"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reputation"); };
+            creators["reputation"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reputation"); };
         }
     };
 
@@ -662,7 +684,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (210 of its keys)
+    // the registry of ValueContext (213 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -870,6 +892,9 @@ namespace slice
             creators["min repair cost"] = [](PlayerbotAI* ai) { return new MinRepairCostValue(ai); };
             creators["has all money for"] = [](PlayerbotAI* ai) { return new HasAllMoneyForValue(ai); };
             creators["quest reward"] = [](PlayerbotAI* ai) { return new QuestRewardValue(ai); };
+            creators["focus travel target"] = [](PlayerbotAI* ai) { return new FocusTravelTargetValue(ai); };
+            creators["experience"] = [](PlayerbotAI* ai) { return new ExperienceValue(ai); };
+            creators["honor"] = [](PlayerbotAI* ai) { return new HonorValue(ai); };
             creators["least hp target"] = [](PlayerbotAI* ai) { return new LeastHpTargetValue(ai); };
             creators["attacker without aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutAuraTargetValue(ai); };
             creators["attacker without my aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutMyAuraTargetValue(ai); };
@@ -882,7 +907,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 39, kActions = 148, kTriggers = 190, kValues = 210;
+    constexpr unsigned kStrategies = 39, kActions = 154, kTriggers = 200, kValues = 213;
 }
 }
 

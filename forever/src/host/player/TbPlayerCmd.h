@@ -22,5 +22,9 @@ void AddScripts();
 // The text after `.bot` (or after the `bot` word of the command text). False only while the module or the engine is off: the core
 // then answers the command as it does for any other.
 bool Dispatch(Player* player, std::string_view rest);
+// The owner tier of a chat word whispered to a bot (the legacy whisper gate, PlayerbotAI::IsBotOwnerOrGm): is the bot's game account one of the
+// sender's Battle.net account's game accounts, read fresh now, the way `.bot` decides ownership? False for a stranger, for bnet 0 and with the
+// engine off. GMs are decided by the caller.
+bool CallerOwnsBotForChat(Player const& sender, Player const& bot);
 }
 }

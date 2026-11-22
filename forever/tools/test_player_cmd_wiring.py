@@ -149,7 +149,7 @@ class Wiring(unittest.TestCase):
         dispatch = function_body(self.cpp, r"bool Dispatch\(Player\* player, std::string_view rest\)\s*\{")
         self.assertIn("GetSession()->GetBattlenetAccountId()", dispatch)
         self.assertIn("ScopeOf(player)", dispatch)
-        scope = function_body(self.cpp, r"OwnerScope ScopeOf\(Player\* player\)\s*\{")
+        scope = function_body(self.cpp, r"OwnerScope ScopeOf\(Player const\* player\)\s*\{")
         self.assertIn("GetBattlenetAccountId()", scope)
         # The game-account -> Battle.net check is the core's own Battlenet::AccountMgr::GetIdByGameAccount (a fresh login-DB read;
         # the module makes no raw query, test_forever_no_direct_queries.py), asked in OwnerScope::Owns.

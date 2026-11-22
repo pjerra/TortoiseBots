@@ -97,6 +97,18 @@ inline Verdict Decide(Caller const& caller, BotFacts const& bot, Tier tier)
     return Verdict::NotYours;
 }
 
+// The owner tier of the chat words (R5 fix, ADR 0005: ownership is the Battle.net account). The legacy whisper gate
+// (PlayerbotAI::IsBotOwnerOrGm) asks this for a line from a real player to a bot: `callerBnet` is the sender's Battle.net account
+// and `botOwnerBnet` is that same id when the bot character's game account is one of the sender's Battle.net account's game accounts
+// (read fresh, the way `.bot` reads it: TbPlayerCmd.cpp OwnerScope), else 0. A GM always passes; account 0 is "unknown" and never
+// matches. Two game accounts of one Battle.net account own the same bots; a stranger or a group member who is not the owner does not.
+inline bool ChatOwnerAllowed(bool gm, std::uint32_t callerBnet, std::uint32_t botOwnerBnet)
+{
+    if (gm)
+        return true;
+    return callerBnet != 0 && botOwnerBnet != 0 && callerBnet == botOwnerBnet;
+}
+
 inline char const* CodeOf(Verdict verdict)
 {
     switch (verdict)

@@ -237,6 +237,21 @@ PC_CHAT_KEYS = {
                "corpse run, e, equip, bb, free, position",
     "value": "",
 }
+# R5 of PLAYER-COMMANDS-SPEC ("chat grammar B"): the chat words that need ONE small legacy action file each, now on the build list
+# (forever/SLICE-W4.txt): `who` (WhoAction.cpp), `c` / `items` / `inventory` / `inv` (`item count`, TellItemCountAction.cpp), `ue`
+# (`unequip`, UnequipAction.cpp), `quests` (ListQuestsActions.cpp), `leave` (LeaveGroupAction.cpp) and `rep` / `reputation`
+# (TellReputationAction.cpp). Every trigger copies its ChatTriggerContext.h creator, every action its ChatActionContext.h creator.
+# `ll` and `ss` (LootStrategyAction.cpp, SkipSpellsListAction.cpp) are not in this round. Who may use a word is the legacy whisper
+# gate's table (PlayerbotAI::AuthTierForCommand), unchanged. Notes: forever/docs/PC-R5-NOTES.md.
+PC_CHAT_B_KEYS = {
+    "strategy": "",
+    "action": "who, item count, unequip, quests, leave, reputation",
+    "trigger": "who, c, items, inventory, inv, ue, quests, leave, rep, reputation",
+    # The values those actions read and the slice did not register (R5 fix, live batch 4): `focus travel target` is read by the
+    # PlayerTravelInfo constructor (TravelMgr.cpp:72) that ListQuestsAction builds on every call (a missing value read as a type the
+    # stand-in lacked crashed the worldserver on `quests`), `experience` and `honor` by LeaveGroupAction.cpp (MEM_AI_VALUE derefs them).
+    "value": "focus travel target, experience, honor",
+}
 # W8 (auction house): ah sell/list, ah buy, ah cancel.
 W8_KEYS = {
     "strategy": "",
@@ -270,7 +285,7 @@ CLASS_EXTRAS_KEYS = {
     "trigger": "dispel enrage",
     "value": "warlock spread attacker my aura, warlock spread attacker, warlock spread attacker manual",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

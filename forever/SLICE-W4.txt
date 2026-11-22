@@ -336,3 +336,11 @@ ai/playerbot/strategy/values/PartyMemberToSoulstone.cpp
 
 # Class extras: hunter taming
 ai/playerbot/strategy/actions/TameAction.cpp
+
+# Chat grammar B (R5 of PLAYER-COMMANDS-SPEC): who, items, unequip, quests, leave, reputation
+ai/playerbot/strategy/actions/WhoAction.cpp
+ai/playerbot/strategy/actions/TellItemCountAction.cpp
+ai/playerbot/strategy/actions/UnequipAction.cpp
+ai/playerbot/strategy/actions/ListQuestsActions.cpp
+ai/playerbot/strategy/actions/LeaveGroupAction.cpp
+ai/playerbot/strategy/actions/TellReputationAction.cpp

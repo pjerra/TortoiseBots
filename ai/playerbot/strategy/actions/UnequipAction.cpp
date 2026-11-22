@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "UnequipAction.h"
+#include "playerbot/TbCompatPC5.h"
 
 #include "playerbot/strategy/values/ItemCountValue.h"
 
@@ -37,9 +38,7 @@ void UnequipAction::UnequipItem(PlayerbotAI* ai, Player* requester, Item* item, 
     uint8 slot = item->GetSlot();
     uint8 dstBag = NULL_BAG;
 
-    WorldPacket packet(CMSG_AUTOSTORE_BAG_ITEM, 3);
-    packet << bagIndex << slot << dstBag;
-    bot->GetSession()->HandleAutoStoreBagItemOpcode(packet);
+    AutoStoreItemCompat(bot, bagIndex, slot, dstBag);
 
     RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
 

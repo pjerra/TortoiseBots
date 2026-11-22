@@ -6,6 +6,7 @@
 #include "../../../../runtime/BotActivityLease.h"
 #include "../../../../runtime/HireLifecycle.h"
 #include "LeaveGroupAction.h"
+#include "playerbot/TbCompatPC5.h"
 
 namespace ai
 {
@@ -32,10 +33,7 @@ namespace ai
             if (group)
                 sPlayerbotAIConfig.logEvent(ai, "LeaveGroupAction", group->GetLeaderName(), std::to_string(group->GetMembersCount()-1));
 
-            WorldPacket p;
-            std::string member = bot->GetName();
-            p << uint32(PARTY_OP_LEAVE) << member << uint32(0);
-            bot->GetSession()->HandleGroupDisbandOpcode(p);
+            BotLeaveGroupCompat(bot);
             if (ai->HasRealPlayerMaster() && ai->GetMaster()->getObjectGuid() != player->getObjectGuid())
                 ai->TellPlayer(player, "I left my group");
         }
