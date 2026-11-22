@@ -8,8 +8,9 @@
 //    slot rights the core itself gives (LootItem::GetUiTypeForPlayer, Loot.cpp:212);
 //  * a group-loot roll the core starts for this bot (Player::GetLootRolls, Player.h:2359: the core's own read-only list of the rolls waiting for
 //    this player's answer) is announced to the engine as the "loot start roll" event, and the bot's vote goes through WorldSession::
-//    HandleLootRoll (LootHandler.cpp:510). THE POLICY (lead decision 2026-11-20): group loot, GREED ONLY: never need, never pass on its own
-//    (so no item times out), no auto-equip (the trigger `loot roll won` and the action `equip upgrades` are not registered);
+//    HandleLootRoll (LootHandler.cpp:510). THE POLICY (owner decision 2026-11-22: TB parity): the vote TB decided (need/greed/pass, etiquette
+//    included) reaches the wire, constrained only by the roll's own vote mask (NEED not offered -> GREED, GREED not offered -> PASS, TbRollVote.h);
+//    no auto-equip (the trigger `loot roll won` and the action `equip upgrades` are not registered);
 //  * the loot tables (creature / game object / reference / item) are copied from the world database through the guarded reader below
 //    (LootTemplate::Entries and ::Groups are private, LootMgr.h:150-151).
 //
@@ -25,6 +26,8 @@
 #include <utility>
 #include <vector>
 
+#include "host/TbRollVote.h"
+
 // ===============================================================================================================
 // NAMES: the 1.12 spellings of constants the loot, roll and item usage code uses
 // ===============================================================================================================
@@ -37,7 +40,7 @@
 #define ITEM_CLASS_JUNK ITEM_CLASS_MISCELLANEOUS
 // SummarizeItemStats (LootRollAction.cpp) only compares an aura name with these. F has no school-specific spell crit aura and keeps the shield block
 // value as a percent aura (SpellAuraDefines.h:144, :237): the nearest F aura stands in, so an item with a different aura reads as "no spell power / block"
-// there: LESS. The summary only feeds FindBetterFittingMember, which runs for a need vote, and the greed-only rule never votes need.
+// there: LESS. The summary only feeds FindBetterFittingMember, which runs for a need vote.
 #define SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL SPELL_AURA_MOD_SPELL_CRIT_CHANCE
 #define SPELL_AURA_MOD_SHIELD_BLOCKVALUE SPELL_AURA_MOD_SHIELD_BLOCKVALUE_PCT
 
@@ -299,7 +302,8 @@ inline bool RollVoteCompat(Player* bot, Group* /*group*/, ObjectGuid const& owne
     // greed): the core's timeout decides, and the bot cannot win an item it has no room for. The same floor as the corpse take (LootBagFloorCompat).
     if (LootBagFloorCompat(bot, live->GetItem()->itemid, live->GetItem()->count))
         return false;
-
+    // Forever refuses a vote the roll's mask does not offer (LootRoll::PlayerVote): NEED on a greed-only item dies there, so fall back NEED -> GREED -> PASS.
+    vote = BotRollVote(TbRollVoteMaskFallback(int(vote), live->GetVoteMask()));
     WorldPackets::Loot::LootRoll packet{ WorldPacket(CMSG_LOOT_ROLL) };
     packet.LootObj = lootGuid;
     packet.LootListID = uint8(slot);
@@ -307,12 +311,6 @@ inline bool RollVoteCompat(Player* bot, Group* /*group*/, ObjectGuid const& owne
     bot->GetSession()->HandleLootRoll(packet);
     return true;
 }
-
-// THE GREED-ONLY RULE. T: the vote the bot decided. F: every vote the bot casts is GREED (lead decision 2026-11-20, FOREVER-SLICE9-SPEC "Lead decisions"):
-// never need (a need would take an item from a bot that wants it more, and the bot's own judgment of "wants" is the T item usage value, which is not
-// what this slice proves), never pass on its own (a pass leaves an item that a bot with free bags could take; with greed every roll resolves at once
-// instead of timing out after 60 s). The same function is the only sink to the core (RollAction::RollOnItemInSlot), so an ordered "roll need" is greed too.
-inline BotRollVote GreedOnlyVoteCompat(BotRollVote /*vote*/) { return ROLL_GREED; }
 
 // Does this bot roll on loot while its bags are nearly full? T: nothing changes. F: a roll the bot cannot store is a roll it would still win; the
 // existing `bag space` rule (RollAction, >= 100 percent) stands, and so does LootBagFloorCompat for the corpse take.
