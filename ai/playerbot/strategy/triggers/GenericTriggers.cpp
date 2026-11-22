@@ -1142,11 +1142,11 @@ bool GenericBoostTrigger::IsActive()
         return false;
 
     Unit* target = AI_VALUE(Unit*, "current target");
-    if (target && target->IsPlayer())
-        return true;
-    if (ai->HasRealPlayerMaster())
-        return true;
-    return AI_VALUE(uint8, "balance") <= 50;
+    return ai::RacialBoostSituationReady(
+        target && target->IsPlayer(),
+        ai->HasRealPlayerMaster(),
+        AI_VALUE(uint8, "balance"),
+        AI_VALUE2(uint8, "health", "self target"));
 }
 
 bool ItemCountTrigger::IsActive()

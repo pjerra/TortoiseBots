@@ -8099,6 +8099,9 @@ float TrapHoldMultiplier::GetValue(Action* action)
             return 1.0f;
         std::vector<AoeHazardCircle> hazards;
         CollectDamagingTrapHazardsAt(ai, bot, stay->second.x, stay->second.y, stay->second.z, hazards);
+        std::vector<AoeHazardCircle> dynObjHazards;
+        CollectDamagingDynObjHazardsAt(ai, bot, stay->second.x, stay->second.y, stay->second.z, dynObjHazards, true);
+        hazards.insert(hazards.end(), dynObjHazards.begin(), dynObjHazards.end());
         return HazardsHoldMove(false, false, true, stay->second.x, stay->second.y, stay->second.z, hazards)
                    ? 0.0f
                    : 1.0f;
