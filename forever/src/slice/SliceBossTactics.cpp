@@ -132,7 +132,7 @@ BossInterruptScan FindBossInterrupt(PlayerbotAI* ai,Player*,BossTacticsFight con
         if (IsInterruptListed(fight.rows,unit->GetEntry(),CastId(unit,CURRENT_GENERIC_SPELL)) ||
             IsInterruptListed(fight.rows,unit->GetEntry(),CastId(unit,CURRENT_CHANNELED_SPELL)))
             for (char const* spell:{"shield bash","pummel","kick","counterspell","earth shock","silence","spell lock"})
-                if (ai->IsInterruptableSpellCasting(unit,std::string(spell)) && ai->CanCastSpell(std::string(spell),unit)) return {unit,spell};
+                if (ai->IsInterruptableSpellCasting(unit,std::string(spell),true) && ai->CanCastSpell(std::string(spell),unit)) return {unit,spell};
     return {};
 }
 Unit* FindBossKillFirst(PlayerbotAI* ai,Player* bot,BossTacticsFight const& fight)

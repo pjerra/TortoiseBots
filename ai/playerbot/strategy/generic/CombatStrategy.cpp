@@ -230,7 +230,7 @@ float WaitForAttackMultiplier::GetValue(Action* action)
     // Allow some movement and targeting actions
     const std::string& actionName = action->getName();
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
-    if (FiveManMap(ai->GetBot()->GetMapId()) && FiveManSafetyAction(actionName) &&
+    if (FiveManMap(ai->GetBot()->GetMapId()) && FiveManPullWaitAllowed(actionName) &&
         ai->HasStrategy("boss tactics",BotState::BOT_STATE_COMBAT) && ai->HasPullWindow() &&
         ai->PullWindowLeadKeyed() && !ai->HasEngagePullWindow() && !ai->PullWindowFightStart()) return 1.0f;
 #endif

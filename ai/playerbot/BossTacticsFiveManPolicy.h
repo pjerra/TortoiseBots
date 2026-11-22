@@ -21,4 +21,12 @@ inline bool FiveManSafetyAction(std::string const& name)
 {
     return name=="boss tactics stand" || name=="boss tactics step behind" || name=="boss tactics avoid cast";
 }
+// What a temporary pull wait (WaitForAttackMultiplier) still lets through on a five-man map: the safety movements, and the
+// interrupt of a listed cast. An interrupt only ever targets a unit that is already engaged with the group (ScanBossTactics),
+// so it pulls nothing new; holding it back during the wait is what let a sleep or a heal land (job lesson: a generic pull or
+// wait multiplier must not block encounter actions). Kill-first and other damage stay held.
+inline bool FiveManPullWaitAllowed(std::string const& name)
+{
+    return FiveManSafetyAction(name) || name=="boss tactics interrupt";
+}
 }

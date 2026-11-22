@@ -15,6 +15,13 @@ int main()
     assert(FiveManSafetyAction("boss tactics avoid cast"));
     assert(!FiveManSafetyAction("boss tactics kill first"));
     assert(!FiveManSafetyAction("melee"));
+    // A pull wait lets the safety moves and the interrupt of a listed (already engaged) cast through, nothing that deals damage.
+    assert(FiveManPullWaitAllowed("boss tactics interrupt"));
+    assert(FiveManPullWaitAllowed("boss tactics stand"));
+    assert(FiveManPullWaitAllowed("boss tactics avoid cast"));
+    assert(!FiveManPullWaitAllowed("boss tactics kill first"));
+    assert(!FiveManPullWaitAllowed("melee"));
+    assert(!FiveManSafetyAction("boss tactics interrupt"));   // the kill-first multiplier still treats it as its own action
     assert(!BossTacticsWanted(false,false,true));
     assert(!BossTacticsWanted(true,true,false));
     assert(BossTacticsWanted(false,true,true));
