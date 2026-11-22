@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 #include "ObjectAccessor.h"
 #include "Player.h"
@@ -179,19 +180,36 @@ bool TryHandleTacticalVerb(ChatHandler* handler, h3::Words const& args, std::str
         if (op == tactics::ToggleOp::Status)
         {
             std::vector<bool> states;
+            std::vector<std::pair<Player*, std::pair<std::string, std::string>>> faults;
             for (Player* bot : addressed)
             {
+                std::string code, detail;
+                if (tactics::ToggleStatusFault(bot, verb, code, detail))
+                {
+                    faults.push_back({ bot, { code, detail } });
+                    continue;
+                }
                 bool on = false;
-                if (tactics::ReadToggle(bot, verb, on))
-                    states.push_back(on);
+                tactics::ReadToggle(bot, verb, on);
+                states.push_back(on);
             }
+            if (states.empty())
+                return refuse(faults.front().second.first, faults.front().second.second);
             h3::Reply reply(handler, args, "cmd");
             reply.Begin();
             h3::Rec head("cmd");
             head.S("verb", verb).S("status", "read").N("bots", int64(addressed.size())).S("state", tactics::AggregateState(states));
+            if (!faults.empty())
+                head.N("refused", int64(faults.size()));
             reply.Line(head);
+            for (auto const& fault : faults)
+            {
+                h3::Rec rec("cmd");
+                rec.S("bot", fault.first->GetName()).S("verb", verb).S("status", "refused").S("code", fault.second.first).T("msg", fault.second.second);
+                reply.Line(rec);
+            }
             h3::Rec end("cmd");
-            end.S("verb", verb).N("bots", int64(addressed.size())).N("ok", int64(addressed.size())).N("refused", 0);
+            end.S("verb", verb).N("bots", int64(addressed.size())).N("ok", int64(states.size())).N("refused", int64(faults.size()));
             reply.End(end);
             ok = true;
             return done();

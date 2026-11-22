@@ -24,6 +24,10 @@ The queued Run writes the table entry and changes the strategy at once; `BeforeT
 `status=queued` (or `status=read state=<on|off>` for a `status`). `.tb cmd` answers `state=<on|off|mixed>`: the wanted state for a
 change, the bots' current state aggregated for a `status` read. `AggregateState` (`on`/`off`/`mixed`) is the same for both.
 
+A `status` read goes through `tactics::ToggleStatusFault` first (Codex review): `sap` on a non-rogue is refused `no-rogue` and a bot
+with no running engine `no-engine`; such a bot is counted in `refused=` and left out of the `.tb cmd` on/off/mixed aggregate (all
+bots refused: the command is refused with that code).
+
 ## Corpse run
 
 `corpserun` (also `corpse run`) in `.tb order`, and `corpserun [bot]` in `.tb cmd` (no bot: every dead bound bot). An alive bot is

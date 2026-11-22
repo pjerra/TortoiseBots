@@ -54,6 +54,9 @@ Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::st
 // M3: reads one toggle's current state from the live strategy (aoe/autocc/sap/loot). False when the bot has no engine. The
 // table's wanted state is not consulted: this is what the strategy reads now, so `status` and a flip's current value start here.
 bool ReadToggle(Player* bot, std::string const& verb, bool& on);
+// True (with code/detail) when a `status` read of this toggle is meaningless for the bot: `no-rogue` (sap on a non-rogue) or
+// `no-engine`. The `.tb order` and `.tb cmd` status paths refuse such a bot and keep it out of the aggregate.
+bool ToggleStatusFault(Player* bot, std::string const& verb, std::string& code, std::string& detail);
 
 // M3: the toggle enforcement the engine calls before its own tick (h3::BeforeEngineTick): the host table's wanted state wins over
 // a `co`/`nc` change of the same strategy. Idempotent; runs every tick so every ResetStrategies is covered. `sap` only on rogues;

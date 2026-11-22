@@ -1293,20 +1293,27 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             {
                 Reply reply(handler, args, "order");
                 reply.Begin();
-                uint32 reads = 0;
+                uint32 reads = 0, refused = 0;
                 for (Player* bot : who.bots)
                 {
+                    std::string code, detail;
+                    if (tactics::ToggleStatusFault(bot, verb, code, detail))
+                    {
+                        Rec rec("order");
+                        rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused").S("code", code).T("msg", detail);
+                        reply.Line(rec);
+                        ++refused;
+                        continue;
+                    }
                     bool on = false;
-                    std::string state;
-                    if (tactics::ReadToggle(bot, verb, on))
-                        state = on ? "on" : "off";
+                    tactics::ReadToggle(bot, verb, on);
                     Rec rec("order");
-                    rec.S("bot", bot->GetName()).S("verb", verb).S("status", "read").S("state", state);
+                    rec.S("bot", bot->GetName()).S("verb", verb).S("status", "read").S("state", on ? "on" : "off");
                     reply.Line(rec);
                     ++reads;
                 }
                 Rec end("order");
-                end.S("verb", verb).N("bots", reads).N("read", reads).N("queued", 0).N("refused", 0);
+                end.S("verb", verb).N("bots", reads + refused).N("read", reads).N("queued", 0).N("refused", refused);
                 reply.End(end);
                 return true;
             }

@@ -353,6 +353,25 @@ def check_aoe_strategy_sense(src):
         raise AssertionError("BeforeTick does not read HasStrategy(\"no aoe\")")
 
 
+def check_status_validates(orders_src, cmd_src):
+    """Codex finding: a toggle `status` read must run the per-bot check (no engine, sap on a non-rogue) like a change does."""
+    o = strip_comments(orders_src)
+    i = o.find("ToggleOp::Status")
+    if i < 0 or "ToggleStatusFault(" not in o[i:i + 1500]:
+        raise AssertionError(".tb order toggle status does not call tactics::ToggleStatusFault")
+    c = strip_comments(cmd_src)
+    j = c.find("ToggleOp::Status")
+    if j < 0 or "ToggleStatusFault(" not in c[j:j + 1500]:
+        raise AssertionError(".tb cmd toggle status does not call tactics::ToggleStatusFault")
+
+
+def check_status_fault_codes(src):
+    body = function_body(strip_comments(src), "bool ToggleStatusFault(Player* bot")
+    for needle in ('"no-rogue"', '"no-engine"', "ReadToggle("):
+        if needle not in body:
+            raise AssertionError(f"ToggleStatusFault lacks {needle}")
+
+
 SOURCES = {
     "orders": lambda: read(HOST / "TbOrders.cpp"),
     "cmd_orders": lambda: read(CMD / "TbCmdOrders.cpp"),
@@ -469,6 +488,12 @@ class Wiring(unittest.TestCase):
     def test_aoe_strategy_sense(self):
         check_aoe_strategy_sense(self.sources["tactics"])
 
+    def test_status_reads_validate_per_bot(self):
+        check_status_validates(self.sources["orders"], self.sources["cmd_tactics"])
+
+    def test_status_fault_codes(self):
+        check_status_fault_codes(self.sources["tactics"])
+
 
 MUTATIONS = [
     ("drop-stop-verb", "orders", lambda s: re.sub(r'"stop",', "", s, count=1), check_is_verb),
@@ -498,9 +523,12 @@ MUTATIONS = [
     ("drop-slice-m3-strategy", "gen", lambda s: s.replace('"strategy": "dps assist, close, follow, guard"', '"strategy": "dps assist, close, follow, guard"').replace(", no aoe, auto cc", "").replace("no aoe, auto cc, ", "").replace(", no aoe", "").replace("no aoe, ", "").replace(", auto cc", "").replace("auto cc, ", ""), check_slice_keys_m3),
     ("drop-w4-noaoe", "w4", lambda s: s.replace("ai/playerbot/strategy/generic/NoAoeStrategy.cpp\n", ""), check_slice_w4_m3),
     ("drop-before-tick-call", "orders", lambda s: s.replace("tactics::BeforeTick(", "", 1), check_before_tick),
-    ("drop-sap-rogue-check", "tactics", lambda s: s.replace('if (verb == "sap" && bot->getClass() != CLASS_ROGUE)\n            return "fail:no-rogue";', "", 1), check_sap_run),
+    ("drop-sap-rogue-check", "tactics", lambda s: s.replace('if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)\n            return "fail:no-rogue";', "", 1), check_sap_run),
     ("drop-corpserun-not-dead", "tactics", lambda s: s.replace('if (bot->IsAlive())\n            return "fail:not-dead";', "", 1), check_corpserun_refusal),
     ("invert-aoe-sense", "tactics", lambda s: s.replace('bool const wantNoAoe = !t.aoe;', 'bool const wantNoAoe = t.aoe;'), check_aoe_strategy_sense),
+    ("drop-order-status-validation", "orders", lambda s: s.replace("ToggleStatusFault(", "ReadToggle(", 1), lambda src: check_status_validates(src, read(CMD / "TbCmdTactics.cpp"))),
+    ("drop-cmd-status-validation", "cmd_tactics", lambda s: s.replace("ToggleStatusFault(", "ReadToggle(", 1), lambda src: check_status_validates(read(HOST / "TbOrders.cpp"), src)),
+    ("drop-no-rogue-status-fault", "tactics", lambda s: s.replace('code = "no-rogue";', 'code = "x";', 1), check_status_fault_codes),
     ("drop-before-tick-enforce", "tactics", lambda s: s.replace('if (ai->HasStrategy("no aoe", BotState::BOT_STATE_COMBAT) != wantNoAoe)\n            ai->ChangeStrategy(wantNoAoe ? "+no aoe" : "-no aoe", BotState::BOT_STATE_COMBAT);', "", 1), check_before_tick_toggles),
 ]
 

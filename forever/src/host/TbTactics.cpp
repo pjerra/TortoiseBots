@@ -98,6 +98,26 @@ bool ReadToggle(Player* bot, std::string const& verb, bool& on)
     return true;
 }
 
+// A `status` read is not meaningful for a bot the change path would refuse: sap on a non-rogue (the absent `no sap` would read
+// "on" for a class with no Sap) or a bot with no running engine. The callers refuse that bot and leave it out of the aggregate.
+bool ToggleStatusFault(Player* bot, std::string const& verb, std::string& code, std::string& detail)
+{
+    if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)
+    {
+        code = "no-rogue";
+        detail = "only a rogue has a Sap to toggle";
+        return true;
+    }
+    bool on = false;
+    if (!ReadToggle(bot, verb, on))
+    {
+        code = "no-engine";
+        detail = "the bot has no running engine to read";
+        return true;
+    }
+    return false;
+}
+
 void BeforeTick(Player* bot, PlayerbotAI* ai)
 {
     if (!bot || !ai || !ai->GetAiObjectContext())
@@ -668,6 +688,13 @@ bool ReadToggle(Player*, std::string const&, bool& on)
 {
     on = false;
     return false;
+}
+
+bool ToggleStatusFault(Player*, std::string const&, std::string& code, std::string& detail)
+{
+    code = "no-engine";
+    detail = "the slice engine is not built";
+    return true;
 }
 
 void BeforeTick(Player*, PlayerbotAI*) {}
