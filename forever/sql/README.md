@@ -56,3 +56,7 @@ No file here names its database (no `` `world`. `` prefix): the updater connects
 `world/2026_11_21_30_tortoisebots_boss_tactics_rfc.sql` creates the guarded
 boss-stand table and seeds six verified RFC tactic rows plus one tank stand.
 See `forever/docs/FIVE-MAN-TACTICS.md`; no raid or molten-pack rules are imported.
+
+`world/2026_11_22_30_tortoisebots_boss_tactics_wc.sql` seeds Wailing Caverns (map 43): 17 interrupt rows
+(Druid of the Fang, Deviate Shambler, the four Fanglords, Skum, Verdan) and kill Druids of the Fang first,
+each backed by `forever/data/waterys/wc/wc-casts.csv`. Apply it after the plans file (which creates `ai_boss_tactic`).

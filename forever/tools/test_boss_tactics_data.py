@@ -29,4 +29,33 @@ class RfcRows(unittest.TestCase):
         self.assertIn('INSERT IGNORE INTO `ai_boss_stand`', SQL.read_text())
         self.assertIn('CREATE TABLE IF NOT EXISTS `ai_boss_stand`', SQL.read_text())
 
+WC_SQL = ROOT / 'forever/sql/world/2026_11_22_30_tortoisebots_boss_tactics_wc.sql'
+
+
+class WcRows(unittest.TestCase):
+    """Every Wailing Caverns row is backed by forever/data/waterys/wc/wc-casts.csv (SmartAI casts at core b441bf74, DB2 70959 cast times)."""
+
+    def facts(self):
+        return list(csv.DictReader(io.StringIO((ROOT / 'forever/data/waterys/wc/wc-casts.csv').read_text())))
+
+    def test_interrupts_are_listed_casts_with_a_cast_time(self):
+        casts = {(int(r['entry']), int(r['spell_id'])): r for r in self.facts()}
+        rows = re.findall(r"\(43,(\d+),'interrupt',0,(\d+),", WC_SQL.read_text())
+        self.assertEqual(len(rows), 17)
+        for boss, spell in rows:
+            fact = casts.get((int(boss), int(spell)))
+            self.assertIsNotNone(fact, (boss, spell))
+            self.assertTrue(fact['cast_ms'] and int(fact['cast_ms']) > 0, (boss, spell))
+
+    def test_kill_first_targets_spawn_in_wc_and_kinds_stay_five_man(self):
+        spawned = {int(r['entry']) for r in self.facts() if int(r['spawns_map43']) > 0}
+        sql = WC_SQL.read_text()
+        for boss, target in re.findall(r"\(43,(\d+),'kill_first',(\d+),", sql):
+            self.assertIn(int(boss), spawned)
+            self.assertIn(int(target), spawned)
+        kinds = set(re.findall(r"\(43,\d+,'(\w+)',", sql))
+        self.assertEqual(kinds, {'interrupt', 'kill_first'})
+        self.assertNotIn('ai_boss_stand', sql)   # no unverified WC stand point
+        self.assertIn('INSERT IGNORE INTO `ai_boss_tactic`', sql)
+
 if __name__ == '__main__': unittest.main()
