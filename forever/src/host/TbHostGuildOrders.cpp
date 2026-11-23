@@ -11,6 +11,7 @@
 #include "host/TbH3.h"
 #include "host/TbHostAuction.h"
 #include "host/TbHostGuild.h"
+#include "host/TbHostGuildOrderRead.h"
 #include "host/TbHostGuildPure.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
@@ -813,11 +814,17 @@ IDeliveryProvider* g_delivery = &g_hostDelivery;
 
 } // namespace
 
+uint32_t BotBagItemCount(Player* bot, uint32_t itemId)
+{
+    return BagItemCount(bot, itemId);
+}
+
 void LoadOrders()
 {
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
     s.orders.clear();
+    TortoiseBots::h3::guild_read::ForgetAllOrderHistory();
     s.loaded = true;
     s.available = false;
 
@@ -959,6 +966,14 @@ bool GiveOrder(OrderRecord record)
     trans->Append(sql.c_str());
     CharacterDatabase.CommitTransaction(trans);
 
+    bool fresh = true;
+    if (auto const existing = s.orders.find(record.botGuidLow); existing != s.orders.end())
+    {
+        fresh = existing->second.createdAt != record.createdAt ||
+            existing->second.itemId != record.itemId || existing->second.type != record.type;
+    }
+    TortoiseBots::h3::guild_read::NoteOrderHistory(record, fresh);
+
     s.orders[record.botGuidLow] = std::move(record);
     return true;
 }
@@ -984,6 +999,7 @@ bool CancelOrder(uint32_t botGuidLow)
     CharacterDatabase.CommitTransaction(trans);
 
     s.orders.erase(it);
+    TortoiseBots::h3::guild_read::ForgetOrderHistory(botGuidLow);
     return true;
 }
 
@@ -1300,10 +1316,13 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     if (!RequireBuilt(handler, words, "guildorder"))
         return false;
     if (words.w.empty())
-        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
+        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps");
 
     std::string const sub = Lower(words.w[0]);
     Player* sender = SenderPlayer(handler);
+
+    if (guild_read::IsReadVerb(sub))
+        return guild_read::Handle(handler, words, sender, sub);
 
     if (sub == "create")
     {
@@ -1490,7 +1509,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         return true;
     }
 
-    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
+    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps");
 }
 
 bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)

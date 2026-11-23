@@ -16,6 +16,8 @@ namespace guild_orders
 
 // Guarded characters-DB store for tortoise_bots_guild_order.
 void LoadOrders();
+// The order's own bag count: backpack and carried bags, never worn bags.
+uint32_t BotBagItemCount(Player* bot, uint32_t itemId);
 bool IsOrderStoreAvailable();
 std::optional<TortoiseBots::GuildOrders::OrderRecord> FindOrder(uint32_t botGuidLow);
 std::vector<TortoiseBots::GuildOrders::OrderRecord> ListOrdersForGuild(uint32_t guildId);
