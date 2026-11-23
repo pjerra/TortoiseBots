@@ -212,7 +212,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (37 of its keys)
+    // the registry of StrategyContext (38 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -255,6 +255,7 @@ namespace slice
             creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
             creators["pull back"] = [](PlayerbotAI* ai) { return new PullBackStrategy(ai); };
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionStrategy(ai); };
+            creators["sit"] = [](PlayerbotAI* ai) { return new SitStrategy(ai); };
         }
     };
 
@@ -296,7 +297,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (89 of its keys)
+    // the registry of ActionContext (90 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -391,6 +392,7 @@ namespace slice
             creators["reach party member for totem"] = [](PlayerbotAI* ai) { return new ReachPartyMemberForTotemAction(ai); };
             creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
             creators["move out of collision"] = [](PlayerbotAI* ai) { return new MoveOutOfCollisionAction(ai); };
+            creators["sit"] = [](PlayerbotAI* ai) { return new SitAction(ai); };
         }
     };
 
@@ -487,7 +489,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (136 of its keys)
+    // the registry of TriggerContext (137 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -629,6 +631,7 @@ namespace slice
             creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
             creators["should pull"] = [](PlayerbotAI* ai) { return new ShouldPullTrigger(ai); };
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionTrigger(ai); };
+            creators["sit"] = [](PlayerbotAI* ai) { return new SitTrigger(ai); };
         }
     };
 
@@ -948,7 +951,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 48, kActions = 164, kTriggers = 209, kValues = 215;
+    constexpr unsigned kStrategies = 49, kActions = 165, kTriggers = 210, kValues = 215;
 }
 }
 
