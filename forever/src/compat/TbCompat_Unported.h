@@ -697,9 +697,28 @@ inline void SendChatPacketCompat(Facade& /*facade*/, Player* /*from*/, Player* /
 // ===============================================================================================================
 // SPELLS (PlayerbotAISpells.cpp)
 // ===============================================================================================================
-// Hand an object the bot summoned on another map back to its owner (T: the four summon object slots of the player). Failure value:
-// nothing is handed back.
-inline void ReleaseForeignSummonObjectsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/) { tbcompat::Unported(tbcompat::Feature::SummonSlots); }
+// Release a summon-object slot before the cast (totems, traps). T undoes the 1.12 guid-counter collision: a totem left
+// on another map can share its slot guid with a stranger's object on this map, so the caller takes the object, removes
+// it from the bot's list and gives it back. ForeverCore guids are unique, so a slot on this map can only name an object
+// the bot itself summoned; a slot naming someone else's object is stale and is dropped. A slot whose object lives on
+// another map is kept: the core holds the totem until it despawns and its own summon effect empties the slot.
+inline void ReleaseForeignSummonObjectsCompat(Player* bot, SpellEntry const* spellInfo)
+{
+    for (uint32 effectIndex = 0; effectIndex < MAX_EFFECT_INDEX; ++effectIndex)
+    {
+        uint32 const effect = spellInfo->Effect[effectIndex];
+        if (effect < SPELL_EFFECT_SUMMON_OBJECT_SLOT1 || effect >= SPELL_EFFECT_SUMMON_OBJECT_SLOT1 + MAX_GAMEOBJECT_SLOT)
+            continue;
+
+        ObjectGuid& slot = bot->m_ObjectSlot[effect - SPELL_EFFECT_SUMMON_OBJECT_SLOT1];
+        if (slot.IsEmpty())
+            continue;
+
+        GameObject* obj = bot->GetMap()->GetGameObject(slot);
+        if (obj && obj->GetOwnerGUID() != bot->GetGUID())
+            slot.Clear();
+    }
+}
 // Whether the spell's icon id is this one (T `SpellIconID == icon`). Failure value: false.
 inline bool SpellIconIdIsCompat(SpellEntry const* /*spell*/, uint32 /*icon*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return false; }
 // The charges of an item's spell by index (T `Item::GetSpellCharges(index)`). Failure value: 0 charges.
