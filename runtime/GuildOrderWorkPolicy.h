@@ -82,7 +82,9 @@ inline OrderStepDecision DecideOrderStep(OrderStepInput const& in)
     }
 
     // Full bags stop a farm order from looting: deliver what it carries now
-    // instead of walking past sources it cannot take.
+    // instead of walking past sources it cannot take. Without a delivery
+    // endpoint in reach the ladder below still runs: ending the order here
+    // would lose stock the bot may hand in later.
     if (in.bagsFull && in.inBags > 0)
     {
         if (in.canDeliverBank)
@@ -97,9 +99,6 @@ inline OrderStepDecision DecideOrderStep(OrderStepInput const& in)
             out.reason = "bags-full";
             return out;
         }
-        out.action = OrderStepAction::CannotTravel;
-        out.reason = "cannot: travel";
-        return out;
     }
 
     if (in.type == OrderType::Craft)

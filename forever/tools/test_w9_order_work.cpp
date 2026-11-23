@@ -140,9 +140,10 @@ int main()
         assert(d.action == OrderStepAction::DeliverBank);
         assert(std::string(d.reason) == "bags-full");
 
+        // No endpoint in reach: the source ladder still runs (no cant here).
         in.canDeliverBank = false;
         in.canDeliverMail = false;
-        assert(DecideOrderStep(in).action == OrderStepAction::CannotTravel);
+        assert(DecideOrderStep(in).action == OrderStepAction::Gather);
 
         in.bagsFull = false;
         in.canDeliverBank = true;
