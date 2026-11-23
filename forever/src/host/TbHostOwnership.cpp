@@ -197,6 +197,30 @@ void NoteDeath(uint32_t /*botGuidLow*/)
     tbcompat::Unported(tbcompat::Feature::PoolServices);
 }
 
+// The mail read: no relist ledger, so no mail is matched to one and none is claimed.
+void NoteTakenMailSender(uint32_t /*senderLow*/, uint32_t /*itemId*/, uint32_t /*count*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+}
+
+std::vector<RelistLedgerEntry> RelistEntries(uint32_t /*botGuidLow*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return {};
+}
+
+bool NoteRelistClaimed(uint32_t /*botGuidLow*/, uint32_t /*seq*/, uint32_t /*mailId*/, uint32_t /*gold*/, uint32_t /*items*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
+bool NoteRelistReceived(uint32_t /*botGuidLow*/, uint32_t /*seq*/, uint32_t /*gold*/, uint32_t /*items*/)
+{
+    tbcompat::Unported(tbcompat::Feature::PoolServices);
+    return false;
+}
+
 void NoteDisenchantDropOff(uint32_t /*botGuidLow*/, uint32_t /*memberGuidLow*/, uint32_t /*nowMs*/)
 {
     tbcompat::Unported(tbcompat::Feature::PoolServices);
