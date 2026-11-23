@@ -1,0 +1,42 @@
+/* Dashboard UI v2 (base). Every rule is scoped under html[data-ui="v2"] so v1 stays untouched. */
+/* Palette adapted from ForeverCMS (MIT, FilinoDZ; based on SahtoutCMS, MIT, blodyiheb).
+   v1 tokens are remapped here so every existing component picks up v2 colours;
+   --v2-* tokens are shared by all v2 stylesheets. */
+html[data-ui="v2"] {
+  --v2-bg: #070913;
+  --v2-bg-2: #0a0b16;
+  --v2-panel: rgba(11, 12, 22, .78);
+  --v2-panel-solid: #0b0c16;
+  --v2-panel-hover: #151625;
+  --v2-gold: #e8c46a;
+  --v2-gold-light: #fff3cc;
+  --v2-gold-deep: #b07a26;
+  --v2-gold-ink: #2a1a06;
+  --v2-text: #ede6d6;
+  --v2-dim: #9c9480;
+  --v2-faint: #6f6857;
+  --v2-line: rgba(232, 196, 106, .2);
+  --v2-line-strong: rgba(232, 196, 106, .45);
+  --v2-green: #55d078;
+  --v2-red: #e5534b;
+  --v2-alliance: #4a8cff;
+  --v2-horde: #e5534b;
+  --v2-radius: 8px;
+  --v2-font-display: 'Cinzel', 'Palatino Linotype', Palatino, Georgia, serif;
+  --v2-font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --bg-app: var(--v2-bg);
+  --bg-sidebar: var(--v2-bg-2);
+  --bg-header: rgba(7, 9, 19, .94);
+  --bg-card: var(--v2-panel-solid);
+  --bg-card-hover: var(--v2-panel-hover);
+  --bg-card-subtle: #090a14;
+  --bg-input: #080913;
+  --border-color: var(--v2-line);
+  --border-strong: var(--v2-line-strong);
+  --border-active: rgba(232, 196, 106, .55);
+  --text-main: var(--v2-text);
+  --text-muted: var(--v2-dim);
+  --text-dim: var(--v2-faint);
+  --radius: var(--v2-radius);
+}
