@@ -1,8 +1,9 @@
-import csv, sys
-sys.path.insert(0, "/home/waterys/tbots-dev/forever/TortoiseBotsForever/forever/tools")
+import csv, sys, os
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 from talent_builds import load_trees, check_build
 TREES = load_trees()
-R = "/home/waterys/tbots-dev/forever/TortoiseBotsForever/forever/data/waterys/rfc/"
+R = os.path.join(HERE, "..", "data", "waterys", "rfc") + os.sep
 def steps(rows):
     rows = sorted(rows, key=lambda r: int(r["order"]))
     out = []
