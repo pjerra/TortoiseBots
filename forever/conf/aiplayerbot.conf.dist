@@ -2090,7 +2090,7 @@ AiPlayerbot.AutoDoQuests = 1
 AiPlayerbot.AutoShareConjuredOnTrade = 1
 
 # AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1512)
-AiPlayerbot.GenerateTravelNodes = 0
+AiPlayerbot.GenerateTravelNodes = 1
 
 # AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1513)
 AiPlayerbot.GenerateFishLocations = 0
@@ -2098,30 +2098,30 @@ AiPlayerbot.GenerateFishLocations = 0
 # AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1514)
 AiPlayerbot.AsyncTravelPartitions = 0
 
-# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1521)
+# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1520)
 AiPlayerbot.SyncAltLevelToMaster = 0
 
-# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1522)
+# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1521)
 AiPlayerbot.TalentsInPublicNote = 1
 
-# AiPlayerbot.ProfessionsGrowWithLevel  (bool, PlayerbotAIConfig.cpp:1523)
+# AiPlayerbot.ProfessionsGrowWithLevel  (bool, PlayerbotAIConfig.cpp:1522)
 AiPlayerbot.ProfessionsGrowWithLevel = 1
 
-# AiPlayerbot.BotProfessionSpecializations  (int, PlayerbotAIConfig.cpp:1524)
+# AiPlayerbot.BotProfessionSpecializations  (int, PlayerbotAIConfig.cpp:1523)
 AiPlayerbot.BotProfessionSpecializations = 2
 
-# AiPlayerbot.GearProgressionSystem.Enable  (bool, PlayerbotAIConfig.cpp:1527)
+# AiPlayerbot.GearProgressionSystem.Enable  (bool, PlayerbotAIConfig.cpp:1526)
 AiPlayerbot.GearProgressionSystem.Enable = 0
 
-# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1554)
+# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1553)
 #   default is computed in the code: uint32(BotSelfBotLevel::GM_ONLY)
 # AiPlayerbot.SelfBotLevel =
 
-# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1555)
+# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1554)
 AiPlayerbot.ToggleAlwaysOnlineAccounts = 
 
-# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1556)
+# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1555)
 AiPlayerbot.ToggleAlwaysOnlineChars = 
 
-# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1575)
+# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1574)
 AiPlayerbot.TargetPosRecalcDistance = 0.1
