@@ -181,6 +181,22 @@ that canvas, so the sizes must not change. It reads Turtle's newer patches
 Pass `--overlay-dbc` with the server's extracted `WorldMapOverlay.dbc` if the
 client copy is unreadable.
 
+## UI v2
+
+The dashboard ships two skins: v1 (the original) and v2 (dark navy with gold framing). A viewer
+switches from the top-bar button (`UI v2` / `UI v1`); the choice is kept in that browser. A link
+`?ui=v2` or `?ui=v1` switches that page load too and is remembered.
+
+- `--ui v1|v2` / `TBDASH_UI` sets the server default for viewers that have no saved choice
+  (default `v1`). The daemon injects it into the page head as
+  `<meta name="tbdash-ui" content="v1|v2">`, ahead of the switch script, so the first paint is
+  already right; `GET /api/v1/ui` answers `{"default":"v1","model3d":false}` behind the GM session.
+- `--ui-3d` / `TBDASH_UI_3D=1` enables the v2 3D model viewer; off by default.
+- Every v2 rule is scoped under `html[data-ui="v2"]`; with v2 off the page is unchanged.
+
+The v2 palette and layout ideas are adapted from ForeverCMS and SahtoutCMS (both MIT); see
+[`web/THIRD_PARTY_NOTICES.md`](web/THIRD_PARTY_NOTICES.md).
+
 ## Security
 
 - **Session secret (`SESSION_SECRET`)**: the `tbm_session` cookie is signed with HMAC-SHA256. There is no shipped default key — unset, the daemon generates a random key at startup and logs a warning, so dashboard sessions end on a restart. Set `SESSION_SECRET` (any random string) to keep sessions across restarts.
