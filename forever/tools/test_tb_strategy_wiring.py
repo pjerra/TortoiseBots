@@ -63,7 +63,7 @@ def check_toggle(cpp):
     assert "piece[0] != '~'" in parse, "a change may start with ~"
     assert "a +, - or ~ without a strategy name" in parse, "a bare ~ is refused"
     assert '"unknown-strategy"' in cpp, "every name is still checked against the bot's context"
-    assert "sPlayerbotDbStore" not in cpp, "persistence is #135"
+    assert "sPlayerbotDbStore.Save" in cpp and "bExplicitDbStoreSave" in cpp, "changes are saved like TB (#135), unless ExplicitDbStoreSave"
 
 
 def check_reset(cpp):
@@ -75,7 +75,7 @@ def check_reset(cpp):
     assert body.index("ResetStrategies()") < body.index('S("op", "reset")'), \
         "the rebuild happens before its ok record"
     assert '"reset takes one bot' in body, "the role target refuses reset (it takes one bot)"
-    assert "sPlayerbotDbStore" not in cpp, "persistence is #135"
+    assert "sPlayerbotDbStore.Save" in cpp and "bExplicitDbStoreSave" in cpp, "changes are saved like TB (#135), unless ExplicitDbStoreSave"
 
 
 def check_role(cpp):

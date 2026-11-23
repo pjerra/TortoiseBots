@@ -72,8 +72,8 @@ class Registration(unittest.TestCase):
         self.assertIn('creators["manual saved string"]', full)
         generated = CTX.read_text()
         self.assertIn('creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };', generated)
-        self.assertIn("ValueContext (211 of its keys)", generated)
-        self.assertIn("kValues = 211", generated)
+        self.assertIn("ValueContext (214 of its keys)", generated)
+        self.assertIn("kValues = 214", generated)
 
 
 class StoreWiring(unittest.TestCase):
