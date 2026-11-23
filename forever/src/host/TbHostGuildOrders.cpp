@@ -5,6 +5,7 @@
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildOrderReassign.h"
 #include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderQueues.h"
 
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -969,6 +970,11 @@ bool GiveOrder(OrderRecord record)
     if (!record.createdAt)
         record.createdAt = now;
     record.updatedAt = now;
+    // Unspent guild gold outlives the order: the row parks as a refund stub
+    // instead of disappearing, and the refund pass pays it from any banker
+    // visit, then deletes the stub.
+    if (IsFinished(record.state) && record.guildGoldHeld > 0)
+        record.cancelled = true;
 
     std::string const sql = Trinity::StringFormat(
         "REPLACE INTO `tortoise_bots_guild_order` ({}, `ah_gold_spent`) VALUES "
@@ -1012,6 +1018,40 @@ bool CancelOrder(uint32_t botGuidLow)
 {
     if (!botGuidLow)
         return false;
+
+    std::optional<OrderRecord> heldGoldRow;
+    {
+        StoreState& s = State();
+        std::lock_guard<std::mutex> lock(s.mutex);
+        if (!EnsureSchema(s))
+            return false;
+        auto const it = s.orders.find(botGuidLow);
+        if (it == s.orders.end())
+            return false;
+        if (it->second.guildGoldHeld > 0)
+            heldGoldRow = it->second;
+    }
+
+    // Unspent guild gold outlives the order: cancelling parks the row as a
+    // refund stub the refund pass pays at the next banker visit, instead of
+    // dropping a debt the guild is still owed.
+    if (heldGoldRow)
+    {
+        OrderRecord stub = *heldGoldRow;
+        stub.cancelled = true;
+        stub.state = OrderState::Working;
+        stub.reason = OrderReason::None;
+        stub.supplyStep = SupplyStep::None;
+        stub.supplyReturnStep = SupplyStep::None;
+        stub.supplyItemId = 0;
+        stub.supplyCount = 0;
+        stub.supplyGoldCount = 0;
+        stub.needItems.clear();
+        stub.needWhispered = false;
+        stub.needBankDenied = false;
+        stub.reportedHave = 0;
+        return GiveOrder(stub);
+    }
 
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
@@ -1061,6 +1101,7 @@ void OnBotLogout(uint32_t botGuidLow)
     if (!botGuidLow)
         return;
     DisenchantForgetBot(botGuidLow);
+    ForgetGuildOrderQueueSession(botGuidLow);
     g_hostGatherCraft.ClearPending(botGuidLow);
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
