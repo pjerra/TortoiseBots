@@ -26,11 +26,11 @@ html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) .page-head::before
 }
 
 html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) .page-head::before {
-  content: "Tortoise WoW · Live overview";
+  content: "WoW Forever · Live overview";
 }
 
 html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) .page-head::before {
-  content: "Tortoise WoW · Fleet roster";
+  content: "WoW Forever · Fleet roster";
 }
 
 html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) #page-title,
