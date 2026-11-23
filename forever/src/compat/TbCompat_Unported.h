@@ -262,10 +262,9 @@ inline bool PremadeSpecsPortedCompat()
 template <class Tab>
 inline int TalentTabPageCompat(Tab const* /*tab*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
 
-// An object guid from a creature or game object spawn record (T `ObjectGuid(HIGHGUID_UNIT, creature entry, spawn counter)`). Failure
-// value: the empty guid ("no such object"); the record's position is still read by the caller's WorldPosition part.
-template <class DataPair>
-inline ObjectGuid GuidOfCreatureDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
+// An object guid from a GAME OBJECT spawn record (T `ObjectGuid(HIGHGUID_GAMEOBJECT, go entry, spawn counter)`). The creature
+// form is real (TbCompat_C.h, the travel destinations read it). Failure value: the empty guid ("no such object"); the record's
+// position is still read by the caller's WorldPosition part.
 template <class DataPair>
 inline ObjectGuid GuidOfGameObjectDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
 
