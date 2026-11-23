@@ -1,4 +1,5 @@
 #include "host/TbHostCraftOrderPure.h"
+#include "host/TbHostGuildOrderFish.h"
 #include "host/TbHostGuildOrders.h"
 
 #include "SpellInfo.h"
@@ -815,6 +816,8 @@ IDeliveryProvider* g_delivery = &g_hostDelivery;
 
 void LoadOrders()
 {
+    tbhost::guild_order_fish::LoadFishingSources();
+
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
     s.orders.clear();
@@ -1274,6 +1277,26 @@ void TickBotOrder(Player* bot)
 
         case OrderStepAction::CannotTravel:
         default:
+        {
+            // A farm order that can neither craft nor gather the item may be a
+            // fishing order: the bot brain's fishing path is not built here, so
+            // the store reports the verdict the fishing plan itself would give
+            // instead of the generic no-source.
+            if (rec.type == OrderType::Farm && (in.delivered + inBagsBefore) < rec.amount &&
+                !in.canCraft && !in.canGather)
+            {
+                if (std::optional<OrderReason> const fishReason =
+                        tbhost::guild_order_fish::ResolveFarmRefusal(bot, rec.itemId))
+                {
+                    rec.state = StateForReason(*fishReason);
+                    rec.reason = *fishReason;
+                    GiveOrder(rec);
+                    SetOrderWorking(botGuidLow, false);
+                    TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason={} fishing=1",
+                        rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, ReasonToken(*fishReason));
+                    return;
+                }
+            }
             rec.state = OrderState::Cant;
             rec.reason = OrderReason::NoSource;
             GiveOrder(rec);
@@ -1281,6 +1304,7 @@ void TickBotOrder(Player* bot)
             TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason=cannot:%20travel",
                 rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount);
             return;
+        }
     }
 }
 
