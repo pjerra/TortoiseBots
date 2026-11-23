@@ -117,7 +117,6 @@ template <class Block, class... Args>
 inline void UnportedBlockCompat(tbcompat::Feature, Block&& block, Args&&... args) { block(std::forward<Args>(args)...); }
 template <class Result, class Block, class... Args>
 inline Result UnportedBlockResultCompat(tbcompat::Feature, Result, Block&& block, Args&&... args) { return block(std::forward<Args>(args)...); }
-inline void RegisterDirectPacketCasesCompat() {}
 
 inline uint32 WorldAverageDiffCompat() { return sWorld.GetAverageDiff(); }
 

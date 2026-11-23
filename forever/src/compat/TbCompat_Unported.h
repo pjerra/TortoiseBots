@@ -51,8 +51,8 @@ std::vector<UnportedEntry> UnportedSummary();
 std::string UnportedBootLine();
 std::string UnportedReport();
 
-// Counts one registered handler row of a legacy packet table under the group of what its handler does ("loot roll" ->
-// Feature::IncomingLoot, ...). An unknown handler name counts under Feature::PacketHandlerTables.
+// Counts one registered handler row of a legacy packet table under the group of what its handler does ("activate taxi" ->
+// Feature::IncomingTaxi, ...). An unknown handler name counts under Feature::PacketHandlerTables.
 void UnportedPacketHandler(std::string const& handlerName);
 }
 
@@ -202,8 +202,8 @@ constexpr bool OpcodesAgreeCompat(uint32 /*policyValue*/, uint32 /*coreOpcode*/)
 inline bool PackedGuidReadCompat(tbcompat::Feature feature, WorldPacket& /*packet*/, ObjectGuid& /*guid*/) { tbcompat::Unported(feature); return false; }
 
 // Registers the handler rows of one legacy table. T: AddHandler for each row. F: nothing is registered; each row is counted under
-// the group of what its handler does, and the direct cases of HandleBotOutgoingPacket (chat, spell failure and delay, speed
-// change, knock back) are counted once, so the boot-time list shows what is dead.
+// the group of what its handler does, or under Feature::PacketHandlerTables when no group names it, so the boot-time list shows
+// what is dead.
 template <class Helper, class Spec>
 inline void RegisterPacketHandlersCompat(Helper& /*helper*/, Spec const* specs, size_t count)
 {
@@ -221,17 +221,6 @@ template <class Block, class... Args>
 inline void UnportedBlockCompat(tbcompat::Feature feature, Block&&, Args&&...) { tbcompat::Unported(feature); }
 template <class Result, class Block, class... Args>
 inline Result UnportedBlockResultCompat(tbcompat::Feature feature, Result failure, Block&&, Args&&...) { tbcompat::Unported(feature); return failure; }
-
-// The packet cases HandleBotOutgoingPacket handles directly (not through a table). On F none of them can match a packet, so
-// they are counted once per bot with the tables.
-inline void RegisterDirectPacketCasesCompat()
-{
-    tbcompat::Unported(tbcompat::Feature::IncomingChat);
-    tbcompat::Unported(tbcompat::Feature::IncomingSpellState);
-    tbcompat::Unported(tbcompat::Feature::IncomingSpeedChange);
-    tbcompat::Unported(tbcompat::Feature::IncomingKnockBack);
-}
-
 
 // The world's average update time in ms (T `sWorld.GetAverageDiff()`), added to a jump's landing time. F keeps no such average (the
 // host provides one later, R4M request 5). Failure value: 0 (no allowance for server lag).

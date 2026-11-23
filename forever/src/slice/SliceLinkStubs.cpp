@@ -446,9 +446,9 @@ bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI*) { NoteMisc(); re
 
 // behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the
 // summon's restore does not put it back on follow. The real function returns false when the bot has no summon record, which is always
-// the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
-// PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
-bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }
+// the case here (ForeverCore keeps no summon bookkeeping): the host's BotMgr::Think places a far bot next to its master itself.
+// If the host adds it next to the other PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
+bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { return false; }
 
 // =====================================================================================================================
 // W2 (town: sell, buy, repair, trainer, mail read): symbols referenced by the W2 action files whose owners (MaintenanceValues,
