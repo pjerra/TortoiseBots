@@ -34,7 +34,9 @@ std::string TokenOf(std::string_view tail)
     }
     return std::string(word);
 }
+} // namespace
 
+// Declared in TbH3.h: the default build's `ai`/`cs` commands answer through it too (TbAddonAi.cpp).
 bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd)
 {
     // The same percent-encoding as the real writers (TbH3.cpp Enc): every byte outside [A-Za-z0-9._-] as %XX.
@@ -60,7 +62,6 @@ bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const
     handler->SendSysMessage(line);
     handler->SetSentErrorMessage(true);
     return false;
-}
 }
 
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "order"); }

@@ -47,6 +47,10 @@ bool HandleQuest(ChatHandler* handler, Trinity::ChatCommands::Tail args);      /
 bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb guildorder create|list|cancel|status ... [#token]
 bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args); // .tb craftorder create|status|cancel ... [#token]
 
+// The option-OFF answer of a command this build has no engine for: `error code=engine-not-built cmd=<cmd> ... #token` (TbH3Off.cpp,
+// the default build's stand-in for TbH3.cpp). The default build's `ai`/`cs` commands answer through it too (TbAddonAi.cpp).
+bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd);
+
 // Rebuilds the quest eligibility sets (TbCompat_Quest.h): at world load and after a quest reload.
 void RebuildQuestEligibility();
 // Drops the quest eligibility sets (TbCompat_Quest.h): on a quest reload while the module is off, so the next check rebuilds them.
