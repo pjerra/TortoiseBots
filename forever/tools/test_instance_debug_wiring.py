@@ -49,7 +49,7 @@ def check_instance(text):
         raise AssertionError("the instance helper still counts InstanceBind")
     if '#include "InstanceLockMgr.h"' not in text:
         raise AssertionError("TbCompat_Unported.h does not include the instance-lock header")
-    for needle in ("area->GetMapId()", "sMapMgr->FindInstanceIdForPlayer(mapId, bot)",
+    for needle in ("area->GetMapId()", "sMapMgr.FindInstanceIdForPlayer(mapId, bot)",
                    "instance->GetPlayersCountExceptGMs() >= instance->GetMaxPlayers()",
                    "script && script->IsEncounterInProgress()",
                    "sInstanceLockMgr.CanJoinInstanceLock(bot->GetGUID(), MapDb2Entries(mapEntry, map->GetMapDifficulty()), lock)"):
