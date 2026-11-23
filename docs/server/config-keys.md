@@ -611,7 +611,7 @@ relates_to:
 | `AiPlayerbot.RndBotCheats` | `repair,breath,item` | string | yes | `ai/playerbot/PlayerbotAI.cpp` |
 | `AiPlayerbot.CombatMonitor` | `0` | bool | yes | `forever/src/host/cmd/TbCmdCombat.cpp` |
 | `AiPlayerbot.CombatTimeline` | `0` | bool | yes | `runtime/CombatMonitorService.cpp` |
-| `AiPlayerbot.RaidBossDiagnostics` | `0` | bool | yes | `ai/playerbot/PlayerbotAIPackets.cpp` |
+| `AiPlayerbot.RaidBossDiagnostics` | `0` | bool | yes | `ai/playerbot/CastCancelLog.cpp`, `ai/playerbot/PlayerbotAIPackets.cpp` |
 | `AiPlayerbot.AllowedLogFiles` | `bot_events.csv,deaths.csv` | string | yes | the config accessor (`PlayerbotAIConfig.cpp:1349`) |
 | `AiPlayerbot.LogRetentionDays` | `3` | int | yes | `ai/playerbot/PlayerbotAIConfig.cpp` |
 | `AiPlayerbot.UpdateCheck` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
@@ -701,7 +701,7 @@ relates_to:
 | `AiPlayerbot.AutoEquipUpgradeLoot` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp` |
 | `AiPlayerbot.ClaimedBotSelfEquip` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp`, `forever/src/host/TbCommandedEquip.cpp`, `forever/src/host/TbCommandedEquipPure.h` +1 more |
 | `AiPlayerbot.EquipUpgradeThreshold` | `1.1` | float | yes | `ai/playerbot/strategy/values/ItemUsageValue.cpp` |
-| `AiPlayerbot.SyncQuestWithPlayer` | `0` | bool | yes | `ai/playerbot/strategy/actions/LootAction.cpp`, `ai/playerbot/strategy/actions/QuestAction.cpp`, `ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp` +1 more |
+| `AiPlayerbot.SyncQuestWithPlayer` | `0` | bool | yes | `ai/playerbot/strategy/actions/LootAction.cpp`, `ai/playerbot/strategy/actions/LootRollAction.cpp`, `ai/playerbot/strategy/actions/QuestAction.cpp` +2 more |
 | `AiPlayerbot.SyncQuestForPlayer` | `0` | bool | yes | `ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp` |
 | `AiPlayerbot.AutoTrainSpells` | `yes` | string | yes | `ai/playerbot/strategy/actions/TrainerAction.cpp`, `forever/src/slice/SliceLinkStubs.cpp` |
 | `AiPlayerbot.AutoPickTalents` | `full` | string | no | **not wired** — nothing in the Forever build reads it |
