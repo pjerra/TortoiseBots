@@ -699,27 +699,25 @@ inline void SendChatPacketCompat(Facade& /*facade*/, Player* /*from*/, Player* /
 // ===============================================================================================================
 // SPELLS (PlayerbotAISpells.cpp)
 // ===============================================================================================================
-// Release a summon-object slot before the cast (totems, traps). T undoes the 1.12 guid-counter collision: a totem left
-// on another map can share its slot guid with a stranger's object on this map, so the caller takes the object, removes
-// it from the bot's list and gives it back. ForeverCore guids are unique, so a slot on this map can only name an object
-// the bot itself summoned; a slot naming someone else's object is stale and is dropped. A slot whose object lives on
-// another map is kept: the core holds the totem until it despawns and its own summon effect empties the slot.
+// Release the summon-object slot before a cast (traps, lightwells, ritual objects). T reads one of four slots from
+// effects 104-107; this core routes only effect 104 (SPELL_EFFECT_SUMMON_OBJECT_SLOT1) to a slot, and its own summon
+// effect replaces the object while RemoveGameObject clears the entry, so only the bot's stale entry is left to drop.
+// T's guard exists for the 1.12 guid-counter collision, where the slot names a stranger's object on this map;
+// ForeverCore guids are unique, so a slot naming an object the bot does not own is stale and is cleared.
 inline void ReleaseForeignSummonObjectsCompat(Player* bot, SpellEntry const* spellInfo)
 {
-    for (uint32 effectIndex = 0; effectIndex < MAX_EFFECT_INDEX; ++effectIndex)
-    {
-        uint32 const effect = spellInfo->Effect[effectIndex];
-        if (effect < SPELL_EFFECT_SUMMON_OBJECT_SLOT1 || effect >= SPELL_EFFECT_SUMMON_OBJECT_SLOT1 + MAX_GAMEOBJECT_SLOT)
-            continue;
+    if (!spellInfo->HasEffect(SPELL_EFFECT_SUMMON_OBJECT_SLOT1))
+        return;
 
-        ObjectGuid& slot = bot->m_ObjectSlot[effect - SPELL_EFFECT_SUMMON_OBJECT_SLOT1];
-        if (slot.IsEmpty())
-            continue;
+    // EffectSummonObject stores the object in slot `effect - SPELL_EFFECT_SUMMON_OBJECT_SLOT1`, and only effect 104
+    // reaches it, so slot 0 is the one a bot can hold.
+    ObjectGuid& slot = bot->m_ObjectSlot[0];
+    if (slot.IsEmpty())
+        return;
 
-        GameObject* obj = bot->GetMap()->GetGameObject(slot);
-        if (obj && obj->GetOwnerGUID() != bot->GetGUID())
-            slot.Clear();
-    }
+    GameObject* obj = bot->GetMap()->GetGameObject(slot);
+    if (obj && obj->GetOwnerGUID() != bot->GetGUID())
+        slot.Clear();
 }
 // Whether the spell's icon id is this one (T `SpellIconID == icon`). Failure value: false.
 inline bool SpellIconIdIsCompat(SpellEntry const* /*spell*/, uint32 /*icon*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return false; }
