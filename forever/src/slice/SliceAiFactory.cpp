@@ -454,8 +454,13 @@ static_assert(TortoiseBots::world::ClassDruid == CLASS_DRUID, "FreeKitPolicy.h: 
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
     if (nonCombatEngine)
+    {
         nonCombatEngine->addStrategy("maintenance");
         nonCombatEngine->addStrategy("racials");
+        // The mount toggle: without it CheckMountStateAction::isUseful refuses every
+        // unmounted bot, so a bot that owns a mount would never ride it.
+        nonCombatEngine->addStrategy("mount");
+    }
     // A free bot plays the world on its own: grind targets, food, loot, rolls, the class spec and the engine's default handler.
     if (player && sRandomBotFacade.IsFreeBot(player) && !facade->HasRealPlayerMaster())
     {

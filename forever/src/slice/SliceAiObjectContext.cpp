@@ -25,6 +25,7 @@
 #include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChangeStrategyAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
+#include "playerbot/strategy/actions/CheckMountStateAction.h"
 #include "playerbot/strategy/actions/CheckValuesAction.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
@@ -173,6 +174,7 @@
 #include "playerbot/strategy/values/MaintenanceValues.h"
 #include "playerbot/strategy/values/ManaSaveLevelValue.h"
 #include "playerbot/strategy/values/MasterTargetValue.h"
+#include "playerbot/strategy/values/MountValues.h"
 #include "playerbot/strategy/values/MoveStyleValue.h"
 #include "playerbot/strategy/values/NearestAdsValue.h"
 #include "playerbot/strategy/values/NearestCorpsesValue.h"
@@ -220,7 +222,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (59 of its keys)
+    // the registry of StrategyContext (60 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -285,6 +287,7 @@ namespace slice
             creators["debug stuck"] = [](PlayerbotAI* ai) { return new DebugStuckStrategy(ai); };
             creators["debug xp"] = [](PlayerbotAI* ai) { return new DebugXpStrategy(ai); };
             creators["debug equip"] = [](PlayerbotAI* ai) { return new DebugEquipStrategy(ai); };
+            creators["mount"] = [](PlayerbotAI* ai) { return new MountStrategy(ai); };
         }
     };
 
@@ -506,7 +509,7 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketActionContext (13 of its keys)
+    // the registry of WorldPacketActionContext (14 of its keys)
     class SliceWorldPacketActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -525,6 +528,7 @@ namespace slice
             creators["accept quest"] = [](PlayerbotAI* ai) { return new AcceptQuestAction(ai); };
             creators["accept all quests"] = [](PlayerbotAI* ai) { return new AcceptAllQuestsAction(ai); };
             creators["accept quest share"] = [](PlayerbotAI* ai) { return new AcceptQuestShareAction(ai); };
+            creators["check mount state"] = [](PlayerbotAI* ai) { return new CheckMountStateAction(ai); };
         }
     };
 
@@ -757,7 +761,7 @@ namespace slice
         }
     };
 
-    // the registry of WorldPacketTriggerContext (7 of its keys)
+    // the registry of WorldPacketTriggerContext (8 of its keys)
     class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -770,10 +774,11 @@ namespace slice
             creators["loot roll won"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll won"); };
             creators["item push result"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "item push result"); };
             creators["quest share"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "quest share"); };
+            creators["check mount state"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "check mount state"); };
         }
     };
 
-    // the registry of ValueContext (223 of its keys)
+    // the registry of ValueContext (228 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1002,11 +1007,16 @@ namespace slice
             creators["time since last change"] = [](PlayerbotAI* ai) { return new TimeSinceLastChangeValue(ai); };
             creators["nearest non bot players"] = [](PlayerbotAI* ai) { return new NearestNonBotPlayersValue(ai); };
             creators["log level"] = [](PlayerbotAI* ai) { return new LogLevelValue(ai); };
+            creators["mount list"] = [](PlayerbotAI* ai) { return new MountListValue(ai); };
+            creators["current mount speed"] = [](PlayerbotAI* ai) { return new CurrentMountSpeedValue(ai); };
+            creators["max mount speed"] = [](PlayerbotAI* ai) { return new MaxMountSpeedValue(ai); };
+            creators["travel target traveling"] = [](PlayerbotAI* ai) { return new TravelTargetTravelingValue(ai); };
+            creators["travel target working"] = [](PlayerbotAI* ai) { return new TravelTargetWorkingValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 71, kActions = 174, kTriggers = 218, kValues = 223;
+    constexpr unsigned kStrategies = 72, kActions = 175, kTriggers = 219, kValues = 228;
 }
 }
 
