@@ -27,6 +27,7 @@
 #include "UpdateTime.h"
 #include "World.h"
 #include "WorldSession.h"
+#include "runtime/PlayerLagWindow.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/udp.hpp>
 #include <ctime>
@@ -71,6 +72,7 @@ struct Sender
     uint32 serverInfoSinceMs = 0;
     uint32 statsSinceMs = 0;
     bool serverInfoSent = false;
+    TortoiseBots::PlayerLagWindow tickWindow{ 30000 };
     std::vector<std::string> events;   // BOT_EVENTS rows waiting for the next cycle
     struct Track { float x = 0, y = 0; uint32 map = 0; time_t since = 0; time_t lastStuck = 0; bool alive = true; };
     std::unordered_map<ObjectGuid, Track> track;
@@ -867,8 +869,11 @@ void SendCycle()
     size_t const total = bots.empty() ? 0 : (bots.size() + BotsPerBatch - 1) / BotsPerBatch;
 
     std::ostringstream hb;
+    TortoiseBots::PlayerLagWindow::Stats const tick = s.tickWindow.Compute();
     hb << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
        << ",\"type\":\"HEARTBEAT\",\"uptime\":" << GameTime::GetUptime() << ",\"diff\":" << sWorldUpdateTime.GetLastUpdateTime()
+       << ",\"diff_avg\":" << tick.avgMs << ",\"diff_worst\":" << tick.worstMs
+       << ",\"lag_p50\":" << tick.p50Ms << ",\"lag_p95\":" << tick.p95Ms
        << ",\"humans\":" << humans << ",\"bots\":" << bots.size() << ",\"states\":{\"combat\":" << ratio(counts[0])
        << ",\"moving\":" << ratio(counts[1]) << ",\"busy\":0,\"stalled\":0,\"resting\":0,\"dead\":" << ratio(counts[5])
        << ",\"idle\":" << ratio(counts[6]) << "}}";
@@ -1001,6 +1006,7 @@ void Update(uint32 diff)
     if (!s.enabled || !s.socket || !BotMgr::Instance().Enabled())
         return;
     s.serverInfoSinceMs += diff;
+    s.tickWindow.Add(diff);
     s.sinceMs += diff;
     if (s.sinceMs < s.intervalMs)
         return;
