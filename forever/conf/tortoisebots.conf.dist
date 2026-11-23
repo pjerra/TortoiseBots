@@ -296,6 +296,24 @@ TortoiseBots.Pool.Enable = 0
 TortoiseBots.Pool.CreatePerMinute = 30
 
 #
+#    TortoiseBots.Pool.Reset
+#        Description: Rebuild the pool on world startup: delete every ready pool character one per tick, then refill to
+#                     MaxCharacters. `off` (the default) never resets. `once:<token>` resets on the next startup only while
+#                     the token differs from the last completed one (1-128 printable, non-space characters); leaving the same
+#                     token in place makes every later start a no-op. `always` resets on every startup (development only)
+#                     and never overwrites a stored once-token. Anything else is refused with one error line.
+#                     Read only during world startup: `.reload config` never starts a reset, and no `.tb` command does.
+#                     Needs `Pool.Enable = 1` and `Pool.CreatePerMinute > 0` so the pool can be refilled. It deletes only
+#                     `ready` rows of the pool's own accounts; characters on pool accounts without a ready row are kept and
+#                     counted. A pool-led guild with any member outside the pool, a target owning an auction listing, a
+#                     target account with a player session, or an unreadable database refuses the reset before any deletion.
+#                     A reset to MaxCharacters can shrink a pool that was larger than the cap.
+#        Default:     "off"
+#
+
+TortoiseBots.Pool.Reset = "off"
+
+#
 #    TortoiseBots.Pool.MaxCharacters
 #        Description: The ceiling on the pool's total size: characters already made plus the ones being created. `.tb pool create`
 #                     refuses when the pool is at the cap and creates only what still fits when it asks for more. The per-command

@@ -62,6 +62,27 @@ The reset runs **only during world startup**, one step per world tick:
 - `.reload config` never starts a reset.
 - No live in-game reset command exists. A running world is never mutated.
 
+### ForeverCore: `TortoiseBots.Pool.Reset`
+
+The ForeverCore build reads its own module key instead of the `AiPlayerbot` keys above, from `modules/tortoise_bots.conf`:
+
+| Setting Value | Behavior |
+| :--- | :--- |
+| `"off"` | Never reset. Default. |
+| `"once:<token>"` | Reset on the next startup while `<token>` differs from the last completed one (1-128 printable, non-space characters). Leaving the token in place makes later starts a no-op. |
+| `"always"` | Reset on every startup. Development only; never overwrites a stored one-shot token. |
+| *(anything else)* | One error line and no reset. |
+
+What it does, in the same startup-only state machine:
+
+- Targets **only** `ready` rows of the pool registry (`tb_pool_character`) whose account still passes the pool's username/id/creation-stamp proof. A character on a pool account that has no ready pool row is **kept and counted**, never deleted; a normal player account has no registry row, so it is never a target.
+- Deletes one character per world tick through the core's character deletion, after re-reading that row, the character's account, the account's session and its auction listings.
+- Refuses the whole reset before the first deletion when: a guild led by a pool character holds any member outside the pool (including a member with no character row), a target owns an auction listing (the core deletion does not remove listings), a target account carries a player session, or a database read does not answer.
+- Records the generation in `tb_pool_state` only after the characters table proves every target gone, then refills with normal pool creation to `TortoiseBots.Pool.MaxCharacters` (a pool larger than that cap shrinks to it).
+- `.tb pool status` ends with `pool reset=... phase=... targets=... applied=...`.
+
+Needs `TortoiseBots.Pool.Enable = 1` and `TortoiseBots.Pool.CreatePerMinute > 0`; the reset is refused otherwise.
+
 ### Reset Modes
 
 Set [`AiPlayerbot.RandomBotPoolReset`](settings/world-population.md#aiplayerbotrandombotpoolreset) in `aiplayerbot.conf`:

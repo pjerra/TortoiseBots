@@ -119,3 +119,4 @@ Raid diagnostics stay opt-in through
 | `TortoiseBots.AutoTools` | `1` | Pool and free bots get the missing tool of a profession they know (pick, knife, hammer, rod, spanner, fishing pole) into their bags. |
 | `TortoiseBots.AutoHunterPet` | `1` | Hunter bots at level 10 without a pet get their race's starter pet and the pet-control spells; an existing pet is never replaced. |
 | `TortoiseBots.AutoFood` | `1` | Pool and free bots carry level-fitting food (and water for mana users), topped up when they run low. |
+| `TortoiseBots.Pool.Reset` | `off` | Rebuild the pool on world startup (`off`, `once:<token>` or `always`). Startup only; `.reload config` never starts it. Deletes only `ready` pool rows, keeps other characters on pool accounts, and refuses on a pool-led guild with an outsider, an owned auction listing or a player session. See [Managing & Resetting the Bot Pool](bot-pool.md). |

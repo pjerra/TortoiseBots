@@ -9,6 +9,7 @@
 #include "Define.h"
 #include "ObjectGuid.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,9 @@ struct FakePendingCharacter
 inline std::vector<FakePendingCharacter> fakePendingCreations;
 // Names whose character row is in the database but whose creation is not complete (BotMgr::CreationInFlight).
 inline std::vector<std::string> fakeLoginHeld;
+// The reset's drain: the guids BotMgr still holds as bots, and the logouts it asked for.
+inline std::set<uint64> fakeBots;
+inline std::vector<uint64> fakeLogouts;
 
 inline void fakeCommitPendingCharacters()
 {
@@ -58,6 +62,14 @@ public:
             if (held == name)
                 return true;
         return false;
+    }
+
+    bool IsBot(ObjectGuid guid) const { return fakeBots.count(guid.GetCounter()) != 0; }
+
+    bool Logout(ObjectGuid guid, char const* /*reason*/)
+    {
+        fakeLogouts.push_back(guid.GetCounter());
+        return fakeBots.erase(guid.GetCounter()) != 0;
     }
 
     std::string CreateCharacter(uint32 accountId, std::string const& name, uint8 /*race*/, uint8 /*playerClass*/, uint8 /*gender*/)
