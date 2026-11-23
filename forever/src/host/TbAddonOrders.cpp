@@ -283,7 +283,11 @@ bool RefuseHandoff(Player* requester, std::vector<Record> const& reply)
 std::vector<addonorders::Record> RunRead(Player* requester, std::string const& tail, std::string const& sub)
 {
     CaptureHandler handler;
-    h3::Words const words = h3::Split(tail);
+    // Build the words directly: the read verbs need no `#token`, and a search
+    // text may legitimately contain a `#` the `.tb` echo-token splitter would
+    // eat.
+    h3::Words words;
+    words.w = SplitWords(tail);
     h3::guild_read::Handle(&handler, words, requester, sub);
     return ParseReply(handler.lines);
 }
