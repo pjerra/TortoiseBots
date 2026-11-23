@@ -319,8 +319,10 @@ PRESET_KEYS = {
 # behaviour toggles that stay off until a player enables them.
 S209_KEYS = {
     "strategy": "dps aoe",
-    "action": "dps aoe",
-    "trigger": "not dps aoe target active",
+    "action": "dps aoe, "
+              "remove blessing of salvation, remove greater blessing of salvation",
+    "trigger": "not dps aoe target active, "
+               "has blessing of salvation, has greater blessing of salvation",
     "value": "",
 }
 KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS)

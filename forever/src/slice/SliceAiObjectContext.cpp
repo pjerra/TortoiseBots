@@ -292,7 +292,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (88 of its keys)
+    // the registry of ActionContext (90 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -386,6 +386,8 @@ namespace slice
             creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
             creators["reach party member for totem"] = [](PlayerbotAI* ai) { return new ReachPartyMemberForTotemAction(ai); };
             creators["dps aoe"] = [](PlayerbotAI* ai) { return new DpsAoeAction(ai); };
+            creators["remove blessing of salvation"] = [](PlayerbotAI* ai) { return new RemoveBlessingOfSalvationAction(ai); };
+            creators["remove greater blessing of salvation"] = [](PlayerbotAI* ai) { return new RemoveGreaterBlessingOfSalvationAction(ai); };
         }
     };
 
@@ -482,7 +484,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (135 of its keys)
+    // the registry of TriggerContext (137 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -623,6 +625,8 @@ namespace slice
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
             creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
             creators["not dps aoe target active"] = [](PlayerbotAI* ai) { return new NotDpsAoeTargetActiveTrigger(ai); };
+            creators["has blessing of salvation"] = [](PlayerbotAI* ai) { return new HasBlessingOfSalvationTrigger(ai); };
+            creators["has greater blessing of salvation"] = [](PlayerbotAI* ai) { return new HasGreaterBlessingOfSalvationTrigger(ai); };
         }
     };
 
@@ -941,7 +945,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 47, kActions = 163, kTriggers = 208, kValues = 214;
+    constexpr unsigned kStrategies = 47, kActions = 165, kTriggers = 210, kValues = 214;
 }
 }
 
