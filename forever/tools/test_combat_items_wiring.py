@@ -102,6 +102,15 @@ class TestCombatItemsWiring(unittest.TestCase):
         self.assertIn("SetUnitTarget(unit)", read("forever/src/compat/TbCompat_I2.h"))
         self.assertIn('"use bandage"', read("forever/src/slice/SliceAiObjectContext.cpp"))
 
+    def test_buff_family_casts_through_core(self):
+        # Family 3: use consumable classifies flasks, elixirs, scrolls and food buffs, then hands the chosen item to the same
+        # item-use path (UseItemIdAction::Execute -> UseItemInternal -> CastItemSpellCompat).
+        consumable = read("ai/playerbot/strategy/actions/UseConsumableAction.cpp")
+        for kind in ("ConsumableType::Flask", "ConsumableType::Elixir", "ConsumableType::Scroll", "ConsumableType::FoodBuff"):
+            self.assertIn(kind, consumable)
+        self.assertIn("UseItemIdAction::Execute(event)", consumable)
+        self.assertIn('"use consumable"', read("forever/src/slice/SliceAiObjectContext.cpp"))
+
     def test_random_potion_stub_present(self):
         stubs = read("forever/src/slice/SliceLinkStubs.cpp")
         self.assertIn("RandomItemMgr::GetRandomPotion", stubs)

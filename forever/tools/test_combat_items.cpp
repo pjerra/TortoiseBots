@@ -31,6 +31,15 @@ int main()
     CHECK(ShouldStopMovingForItemCast(false, 8000, false));
     CHECK(ItemCastDurationMs(false, 8000, false, 0) == 8000u);
 
+    // Family 3, scrolls / elixirs / flasks / food buffs: a self spell with an instant cast; the food/drink sit is the only 24 s case.
+    CHECK(DecideItemCastTargetKind(false, false) == ItemCastTargetKind::Self);
+    CHECK(!ShouldStopMovingForItemCast(false, 0, false));
+    CHECK(ItemCastDurationMs(false, 0, false, 0) == 0u);
+    CHECK(ItemCastDurationMs(true, 0, false, 0) == 24000u);
+
+    // A weapon stone or a poison is cast onto an item, and the item target wins over a unit target.
+    CHECK(DecideItemCastTargetKind(true, true) == ItemCastTargetKind::Item);
+
     // Movement: instant potions/healthstones/trinkets do not stop movement; food/drink, cast-time, and channeled spells do.
     CHECK(!ShouldStopMovingForItemCast(false, 0, false));
     CHECK(ShouldStopMovingForItemCast(true, 0, false));
