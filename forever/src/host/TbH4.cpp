@@ -550,10 +550,9 @@ bool HandleInstance(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 }
 
 // ---- `.tb tele` ----
-namespace
-{
-// One teleport of `source` next to `dest` (the destination's map; into an instance: the destination's instance). Fills the record; true = the core started the teleport.
-bool TeleportNextTo(Player* source, Player* dest, bool revive, Rec& rec)
+// One teleport of `source` next to `dest` (the destination's map; into an instance: the destination's instance). Fills the record; true = the core
+// started the teleport. Exported (TbH4.h): `.bot summon` calls the same function, so no second copy of these rules exists.
+bool TeleportBotNextTo(Player* source, Player* dest, bool revive, Rec& rec)
 {
     auto const refuse = [&](char const* code, std::string const& text)
     {
@@ -564,6 +563,9 @@ bool TeleportNextTo(Player* source, Player* dest, bool revive, Rec& rec)
         return refuse("bad-target", "a character cannot be teleported to itself");
     if (source->IsBeingTeleported() || dest->IsBeingTeleported())
         return refuse("teleporting", "one of the two is being teleported");
+    // Player::TeleportTo does not end a taxi flight: a character in flight would keep its flight state at the new place.
+    if (source->IsInFlight() || dest->IsInFlight())
+        return refuse("in-flight", "one of the two is on a taxi");
     if (source->IsInCombat() || dest->IsInCombat())
         return refuse("in-combat", "one of the two is in combat");
     if (!dest->IsAlive())
@@ -603,7 +605,6 @@ bool TeleportNextTo(Player* source, Player* dest, bool revive, Rec& rec)
     }
     rec.S("status", "started").N("map", dest->GetMapId()).N("inst", instanceId).S("tag", revive ? "PRACTICE" : "SETUP");
     return true;
-}
 }
 
 bool HandleTele(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
@@ -646,7 +647,7 @@ bool HandleTele(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         reply.Begin();
         Rec rec("tele");
         rec.S("bot", source->GetName()).S("to", dest->GetName());
-        bool const started = TeleportNextTo(source, dest, revive, rec);
+        bool const started = TeleportBotNextTo(source, dest, revive, rec);
         reply.Line(rec);
         Rec end("tele");
         end.S("target", source->GetName()).N("bots", 1).N("started", started ? 1 : 0).N("refused", started ? 0 : 1);

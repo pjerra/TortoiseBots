@@ -202,5 +202,41 @@ inline bool SummonCooldownLeft(std::uint64_t nowMs, std::uint64_t lastMs, std::u
     leftS = static_cast<std::uint32_t>((cooldownMs - elapsed + 999) / 1000);
     return true;
 }
+
+// D-6: every value of a `.tb` reply record is percent-encoded (TbH3.h `Rec`: a byte outside [A-Za-z0-9._-] as %XX, upper-case hex).
+// The `.bot` lines are human text, so the summon handler decodes the shared teleport's own refusal message back before showing it to
+// the player (D-8: the message is that function's, never a second copy of its wording). A '%' that does not start two hex digits is
+// kept as typed: a malformed escape is shown, never guessed at.
+inline std::string EncDecode(std::string_view text)
+{
+    auto hexDigit = [](char c) -> int
+    {
+        if (c >= '0' && c <= '9')
+            return c - '0';
+        if (c >= 'A' && c <= 'F')
+            return c - 'A' + 10;
+        if (c >= 'a' && c <= 'f')
+            return c - 'a' + 10;
+        return -1;
+    };
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] == '%' && i + 2 < text.size())
+        {
+            int const high = hexDigit(text[i + 1]);
+            int const low = hexDigit(text[i + 2]);
+            if (high >= 0 && low >= 0)
+            {
+                out.push_back(static_cast<char>(high * 16 + low));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(text[i]);
+    }
+    return out;
+}
 }
 }

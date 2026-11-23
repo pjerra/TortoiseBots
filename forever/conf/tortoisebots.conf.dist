@@ -529,3 +529,14 @@ TortoiseBots.AutoHunterPet = 1
 #        Description: Pool and free bots receive level-fitting vendor food (and water for mana users) on login and level-up.
 
 TortoiseBots.AutoFood = 1
+
+#
+#    AiPlayerbot.OwnedBotSummonCooldown (it lives in aiplayerbot.conf, not in this file)
+#        Description: The wait between two `.bot summon <bot>`s of the same bot, in seconds (0 = no wait); capped at 3600. The key
+#                     already belongs to the bot brain's config and that read stays the one that owns it: `.bot summon` reads the
+#                     same key with the same default (300) and the same cap, so the two can never disagree. GameMasters are not
+#                     held by the wait. The other AiPlayerbot.OwnedBotSummon* keys (WhenGroup, AllowInCombat, AllowMasterDead,
+#                     AllowBotDead, Revive, Repair) are not read by `.bot summon`: its refusals are the shared `.tb tele` rules
+#                     (combat, death, instances) plus the master and cooldown checks of the player command spec (D-8).
+#        Default:     300
+#

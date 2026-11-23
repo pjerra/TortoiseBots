@@ -205,7 +205,7 @@ class Wiring(unittest.TestCase):
         for line in self.pure.splitlines():
             if line.strip().startswith("#include"):
                 self.assertNotIn('"', line, f"TbPlayerAuthPure.h includes a core header: {line.strip()}")
-        for name in ("TierOf(", "Decide(", "CodeOf(", "ClaimsCommand(", "MayLoginOwned(", "SummonCooldownLeft("):
+        for name in ("TierOf(", "Decide(", "CodeOf(", "ClaimsCommand(", "MayLoginOwned(", "SummonCooldownLeft(", "EncDecode("):
             self.assertIn(name, self.pure)
             self.assertIn(name.rstrip("("), self.unit, f"the unit test does not cover {name}")
 
@@ -309,7 +309,7 @@ class Wiring(unittest.TestCase):
     def test_help_lists_new_verbs(self):
         cmd = read(PLAYER / "TbPlayerCmd.cpp")
         help_body = function_body(cmd, r"bool HandleHelp\(Player\* player, Caller const& caller\)")
-        for verb in ("add", "logout", "follow", "stay", "attack", "flee", "maintenance"):
+        for verb in ("add", "logout", "follow", "stay", "attack", "flee", "maintenance", "summon", "stats"):
             self.assertIn(verb, help_body)
 
     def test_maintenance_handler_present(self):
@@ -328,6 +328,114 @@ class Wiring(unittest.TestCase):
         self.assertIn("InitAmmo", upkeep)
         self.assertIn("pool", pure)
         self.assertIn("disabled", pure)
+    # ---- R3: summon, stats, the run refusal on every verb, the cooldown ----
+
+    SUMMON = r"bool HandleSummon\(Player\* player, Caller const& caller, OwnerScope const& scope, std::string_view tail\)\s*\{"
+    STATS = r"bool HandleStats\(Player\* player, Caller const& caller, OwnerScope const& scope, std::string_view tail\)\s*\{"
+
+    def test_summon_uses_shared_teleport(self):
+        # THE R3 failing case: one teleport path. `.bot summon` must not call Player::TeleportTo itself; it goes through
+        # h4::TeleportBotNextTo, the function `.tb tele <character> to <character>` already uses (D-8: every map, instance and
+        # combat rule is that function's, never a second copy).
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        summon = function_body(cmd, self.SUMMON)
+        self.assertIn("h4::TeleportBotNextTo(", summon)
+        self.assertNotIn("TeleportTo(", strip_comments(cmd))          # no second teleport path anywhere in the entry
+        # The shared function is exported: declared in TbH4.h, defined in namespace h4, and `.tb tele` calls it unchanged.
+        hdr = read(SRC / "host" / "TbH4.h")
+        self.assertIn("class Rec;", hdr)
+        self.assertIn("bool TeleportBotNextTo(Player* source, Player* dest, bool revive, h3::Rec& rec);", hdr)
+        h4 = read(SRC / "host" / "TbH4.cpp")
+        self.assertIn("bool TeleportBotNextTo(Player* source, Player* dest, bool revive, Rec& rec)", h4)
+        self.assertIn("TeleportBotNextTo(source, dest, revive, rec)", h4)   # `.tb tele` form 1
+        self.assertNotIn("bool TeleportNextTo(", h4)                        # one definition, no leftover anonymous copy
+
+    def test_cooldown_stamped_only_on_start(self):
+        # D-8: the cooldown is checked before the teleport and stamped only after the teleport STARTED (a refused summon
+        # stamps nothing, so the next try is not locked out); the stamp is per bot guid, in memory.
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        summon = function_body(cmd, self.SUMMON)
+        self.assertIn("SummonCooldownLeft(", summon)
+        self.assertIn("s_summonCooldown", summon)                            # the legacy key's value, read at config load
+        tele = summon.index("h4::TeleportBotNextTo(")
+        self.assertLess(summon.index("SummonCooldownLeft("), tele)           # the check precedes the action
+        refused = summon.index("if (!started)")
+        stamp = summon.index("SummonStamps()[")
+        self.assertLess(refused, stamp)                                     # the refusal branch comes first ...
+        self.assertIn("Refuse(", summon[refused:stamp])
+        self.assertNotIn("SummonStamps()[", summon[refused:stamp])           # ... and stamps nothing
+        self.assertIn("GetCounter()", summon)                                # keyed on the bot's guid, the file's own accessor
+
+    def test_summon_owner_tier_master_rule_and_flight_refusal(self):
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        summon = function_body(cmd, self.SUMMON)
+        self.assertIn("Decide(caller, facts, Tier::Owner)", summon)          # the run refusal is Decide's, for GMs too
+        self.assertIn('"not-master"', summon)                               # D-8: only the master, unless GM
+        self.assertIn('"on-cooldown"', summon)
+        self.assertIn("IsInFlight()", summon)                               # D-8: never from a taxi
+        self.assertIn('"in-flight"', summon)
+        self.assertLess(summon.index("Decide(caller, facts, Tier::Owner)"), summon.index("SummonCooldownLeft("))
+        self.assertIn("h4::TeleportBotNextTo(bot, player, false, rec)", summon)   # no revive for players
+
+    def test_summon_clock_is_64_bit_monotonic(self):
+        # Review R3: getMSTime() is a 32-bit millisecond count that wraps after 49.7 days of uptime. A stamp taken just before the
+        # wrap reads as "the clock went backwards", which the pure rule treats as just stamped: that bot could not be summoned again
+        # until a restart. The handler's clock is a 64-bit monotonic one that never wraps and never goes back.
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        code = strip_comments(cmd)
+        self.assertNotIn("getMSTime", code)
+        summon = function_body(cmd, self.SUMMON)
+        self.assertIn("steady_clock", summon)
+        self.assertIn("std::uint64_t const nowMs", summon)
+        self.assertIn("#include <chrono>", cmd)
+
+    def test_shared_teleport_refuses_a_bot_on_a_taxi(self):
+        # Review R3 (Codex + cold review): Player::TeleportTo does not end a taxi flight, so a bot in flight would keep its flight
+        # state after the teleport and the cooldown would be spent. The shared rule refuses either side in flight, before the
+        # teleport, so `.tb tele` and `.bot summon` both get it (D-8: one copy).
+        h4 = read(SRC / "host" / "TbH4.cpp")
+        body = function_body(h4, r"bool TeleportBotNextTo\(Player\* source, Player\* dest, bool revive, Rec& rec\)\s*\{")
+        self.assertIn("source->IsInFlight()", body)
+        self.assertIn("dest->IsInFlight()", body)
+        self.assertIn('"in-flight"', body)
+        self.assertLess(body.index('"in-flight"'), body.index("TeleportTo("))
+
+    def test_stats_is_host_built(self):
+        # D-9: one line built from the Player objects on the world thread, in the command's own channel; not the engine's
+        # `stats` whisper (that needs an engine tick and answers on another channel).
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        stats = function_body(cmd, self.STATS)
+        for needle in ('"TortoiseBots: stats "', "GetLevel()", "ClassName(", "GetHealthPct()", "GetPowerPct(POWER_MANA)",
+                       "GetMoney()", "GetZoneId()", "sAreaTableStore", "IsAlive()"):
+            self.assertIn(needle, stats)
+        self.assertNotIn("QueueOrder", stats)
+        self.assertNotIn("stats chat", stats)
+        # Level, class, health %, mana %, money in g/s/c, zone id and name, alive/dead, movement strategy (D-9).
+        for token in ('"% hp"', '"% mana"', '"g "', '"s "', '"c"', '"zone "', '"alive"', '"dead"'):
+            self.assertIn(token, stats)
+        self.assertIn("MoveWord(", stats)
+        self.assertIn("Decide(caller, facts, Tier::Tactical)", stats)
+
+    def test_summon_cooldown_key_is_the_legacy_one(self):
+        # D-13: AiPlayerbot.OwnedBotSummonCooldown is the wired legacy key, read once at config load with the legacy read's own
+        # default (300) and cap (3600); the other OwnedBotSummon* keys stay unread.
+        cmd = read(PLAYER / "TbPlayerCmd.cpp")
+        cfg = function_body(cmd, r"void LoadConfig\(\)\s*\{")
+        self.assertIn('GetIntDefault("AiPlayerbot.OwnedBotSummonCooldown", 300)', cfg)
+        self.assertIn("3600", cfg)
+        self.assertNotIn("OwnedBotSummonCooldown", function_body(cmd, self.SUMMON))   # the handler reads the value, not the key
+        for key in ("OwnedBotSummonAllowInCombat", "OwnedBotSummonAllowMasterDead", "OwnedBotSummonAllowBotDead",
+                    "OwnedBotSummonRevive", "OwnedBotSummonRepair", "OwnedBotSummonWhenGroup"):
+            self.assertNotIn(key, cmd)
+        self.assertIn("AiPlayerbot.OwnedBotSummonCooldown", self.conf)
+        self.assertIn("not read", self.conf)
+
+    def test_docs_list_the_r3_verbs(self):
+        doc = read(ROOT / "forever" / "docs" / "TB-COMMANDS.md")
+        self.assertIn("## 1a. `.bot` (players)", doc)
+        section = doc.split("## 1a. `.bot` (players)", 1)[1].split("\n## ", 1)[0]
+        for needle in (".bot summon", ".bot stats", "on-cooldown", "not-master", "in-flight", "OwnedBotSummonCooldown"):
+            self.assertIn(needle, section)
 
 
 MUTANTS = [

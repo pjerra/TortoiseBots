@@ -27,7 +27,7 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 
 ## 1a. `.bot` (players)
 
-Round R1 of the player command layer (issue #129): a player types `.bot` in ordinary chat. The entry is a module `PlayerScript` hook
+Rounds R1-R3 of the player command layer (issue #129): a player types `.bot` in ordinary chat. The entry is a module `PlayerScript` hook
 (`PlayerScript::OnCommand`), which the core calls before its own command lookup and before any RBAC check, so a non-GM sees it. It claims
 exactly the word `bot` (any case, then end or a space): `.bot help` is ours, `.botany` stays the core's. With `TortoiseBots.Enable = 0`, or
 in a build without the engine (`TORTOISEBOTS_SLICE1` off), the hook declines and the core answers as for any unknown command. The console
@@ -38,12 +38,17 @@ account. A caller also gets the tactical verbs on a bot it is master of, command
 a real player. A GameMaster (RBAC 371, the `.tb` permission) may use every verb on every bot. A bot in a running dungeon run refuses every
 `.bot` order to everyone, GMs included. Refusals name a stable code and never an account.
 
-R1 ships two verbs:
+The verbs of rounds R1-R3 (`forever/docs/PC-R1-NOTES.md` .. `PC-R3-NOTES.md`; every later verb answers `unknown-verb` until its round):
 
 | Command | What it does |
 |---|---|
 | `.bot` / `.bot help` | the usage rows the caller may use |
-| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow\|stay\|free`, `engine\|spike`. A GM's `.bot who all` lists every bot |
+| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow|stay|free`, `engine|spike`. A GM's `.bot who all` lists every bot |
+| `.bot add <name>` | logs one of the caller's own characters in as a bot (a GM: any character not online); it joins the caller's party. Owner verbs below need it first |
+| `.bot logout <bot>` (alias `remove`) | logs the caller's bot out |
+| `.bot follow <bot> [member]`, `.bot stay <bot>`, `.bot attack <bot>`, `.bot flee <bot>` | tactical orders queued for the bot's engine tick (`attack` reads the caller's selected unit; `flee` runs from the fight) |
+| `.bot stats <bot>` | one line from the bot's own objects: level, class, health %, mana %, money in `g/s/c`, zone id and name, `alive|dead`, and the movement it keeps (`follow|stay|free`) |
+| `.bot summon <bot>` | brings the bot to the caller's side through the `.tb tele` path. Owner or GM; the caller must be the bot's master (a GM need not be). Refused `teleporting`/`in-flight` while the caller or the bot is being teleported or rides a taxi, and `on-cooldown` inside the per-bot wait |
 | `.bot maintenance <bot>` | refresh one owned bot's kit (reagents, bandages, hunter ammo), repair it for free, save it. Owner tier only (the caller owns the bot, or a GameMaster); pool bots are refused. Off unless `AiPlayerbot.OwnedBotMaintenanceEnabled = 1` (default 0, in `forever/conf/aiplayerbot.conf.dist`); potions, food, paid consumables and thrown top-ups are not ported |
 | `.bot totem <bot\|party> <earth\|fire\|water\|air> <totem\|auto\|none>`, `set <earth>,<fire>,<water>,<air>`, `mode <auto\|prepull\|manual>`, `status` | a shaman's per-slot totem orders, read by the totem triggers (`ShamanTotemCommandPolicy.h`): `auto` keeps the subgroup pick, `none` leaves the slot empty, a totem name holds that totem (short names work: `mana spring`). `set` sets all four at once. Shamans only (`not-shaman`); a totem the bot never trained is refused `not-known`, and a `set` is validated for every slot before any slot of that bot changes. Owner tier; `status` is tactical. Values live until logout (#135 adds persistence) |
 | `.bot behavior <bot\|party> <toggle> <on\|off>`, `status` | the old TB behaviour toggles (`loot`, `aoe` = "no aoe", `autocc`, `savemana` = "conserve mana", `boost`, `threat`, `potions`, `mimic`, `spread`, `hold`, `noblink`, `offheal`, `offdps`): `ChangeStrategy` on the toggle's state, read back with `HasStrategy`. Off-spec toggles (`offheal`, `offdps`) need paladin, priest, shaman or druid (`class`); a strategy this build does not register is `not-in-build`; a change that does not hold is `failed`. Owner tier; `status` is tactical and lists the toggles the class has. Values live until logout (#135 adds persistence) |
@@ -53,11 +58,22 @@ R1 ships two verbs:
 | `.bot service <bot> portal <spellId>` | a mage's portal (owner tier): the policy decides first (`MagePortalPolicy.h`: `dead`, `combat`, `busy` while casting, `unknown` for a non-mage, an unknown city or a portal not learned, `group` when the caller is not in the bot's raid), then the rune is granted, the bot stops and stands, and the engine's `cast` action casts it. A build without that action answers `action-not-registered` |
 | `.bot service <bot> conjure <food\|water\|healthstone>` | the highest known rank of the line through the same `cast` action (owner tier): `dead`, `not-known` when the bot has no rank of the line, `action-not-registered` without the action |
 
+Summon rules (spec D-8): every map, instance, combat and death rule is the shared `TeleportBotNextTo`'s (the function
+`.tb tele <character> to <character>` calls), and its refusal codes pass through unchanged (`in-combat`, `in-flight`, `dead`, `teleporting`,
+`already-on-map`, `not-in-group`, `teleport-refused`, entry codes, ...). Players get no revive. The wait is
+`AiPlayerbot.OwnedBotSummonCooldown` (in `aiplayerbot.conf`; default 300 s, 0 = no wait, capped at 3600) and is stamped only by a summon
+whose teleport started, so a refused try costs nothing; GameMasters are not held by it. The other `AiPlayerbot.OwnedBotSummon*` keys are
+not read here. The refusal `not-a-bot`/`not-found` names no such online bot, `not-yours` a bot outside the caller's reach, `not-master` a
+bot that follows someone else, and `in-run` any verb that names a bot inside a running dungeon run (GMs included; `.tb run pause` is the
+GM's way).
+
 Replies: `TortoiseBots: help: <row>`, `TortoiseBots: who: <n> bot(s)`, `TortoiseBots: who: <Name> level <n> <class> map <id> <move> <brain>`,
-and `TortoiseBots: <verb>: refused <code>: <text>` with `usage`, `unknown-verb`, `players-off` (and later `not-a-bot`, `not-yours`, `in-run`, ...).
+`TortoiseBots: stats <Bot>: ok level <n> <class>, <hp>% hp, <mana>% mana, <g>g <s>s <c>c, zone <id> <Name>, <alive|dead>, <move>`, and
+`TortoiseBots: <verb> <Bot>: ok <text>` or `TortoiseBots: <verb>: refused <code>: <text>` with the codes `usage`, `unknown-verb`,
+`players-off`, `not-found`, `not-a-bot`, `not-yours`, `in-run`, `not-leader`, `already-online`, `too-many`, `no-selection`,
+`not-master`, `in-flight`, `on-cooldown`. A refusal never names an account.
 `TortoiseBots.Player.Commands = 0` refuses players with `players-off`; GMs keep the command. `TortoiseBots.Player.MaxBots` (default 4) caps
-how many of a player's own characters may be in the world at once when `.bot add` arrives. The ordering verbs (`add`, `logout`, `follow`,
-`stay`, `attack`, `flee`, `summon`, `stats`) follow in the next rounds; until then they answer `unknown-verb`. `.bot maintenance` answers
+how many of a player's own characters may be in the world at once when `.bot add` arrives. `.bot maintenance` answers
 `TortoiseBots: maintenance <Name>: ok <n> item(s) granted, repaired, saved`, or `TortoiseBots: maintenance: refused <code>: <text>` with
 `pool` (a pool bot), `disabled` (the flag is off) or `dead`, after the owner-tier `not-a-bot`, `not-yours` and `in-run`.
 

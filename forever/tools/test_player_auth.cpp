@@ -236,6 +236,19 @@ int main()
         CHECK(left == 300);
     }
 
+    // D-6/D-8: the summon handler reads the shared teleport's refusal text back out of a reply record, where every value is
+    // percent-encoded (TbH3.h Rec); the decoded text is what the player is shown. Malformed escapes stay as typed.
+    // case: encoded_text_decodes
+    {
+        CHECK(p::EncDecode("") == "");
+        CHECK(p::EncDecode("Elwynn%20Forest") == "Elwynn Forest");
+        CHECK(p::EncDecode("a%2Cb%3Ac%3Bd%25e") == "a,b:c;d%e");
+        CHECK(p::EncDecode("plain-name_1.2") == "plain-name_1.2");
+        CHECK(p::EncDecode("%7e%7E") == "~~");
+        CHECK(p::EncDecode("bad%zz%") == "bad%zz%");     // not two hex digits: left as typed
+        CHECK(p::EncDecode("cut%2") == "cut%2");         // a trailing, unfinished escape too
+    }
+
     std::printf("%d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }
