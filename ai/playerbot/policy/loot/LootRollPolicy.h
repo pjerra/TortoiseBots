@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace ai
@@ -148,5 +149,87 @@ namespace ai
             return LootRollVote::Greed;
 
         return vote;
+    }
+
+    // Raw ItemUsage values (ItemUsageValue.h) that represent vendor/junk-like
+    // items and may be discarded to make room for loot:
+    //   ITEM_USAGE_NONE = 0, ITEM_USAGE_AH = 9,
+    //   ITEM_USAGE_BROKEN_AH = 10, ITEM_USAGE_VENDOR = 12.
+    inline bool IsWonLootDisposableUsage(std::uint8_t usage)
+    {
+        return usage == 0 || usage == 9 || usage == 10 || usage == 12;
+    }
+
+    // One bag slot a room-making pass may throw out. The call site fills it
+    // with the facts that make an item untouchable (quest, tool, ammo, a
+    // reagent a spell uses, key, hearthstone, a bag, the guild's order stock).
+    struct WonLootReliefCandidate
+    {
+        std::uint8_t bag = 0;
+        std::uint8_t slot = 0;
+        std::uint32_t itemId = 0;
+        std::uint32_t quality = 0;        // 0 = ITEM_QUALITY_POOR (grey)
+        std::uint32_t stackSellValue = 0; // SellPrice * stack count
+        std::uint8_t usage = 0;           // raw ItemUsage
+        bool bagFitsWonItem = true;
+        bool hasForceUsage = false;
+        bool isGuildOrderStock = false;
+        bool isQuestItem = false;
+        bool isBag = false;
+        bool isAmmo = false;
+        bool isReagentOrConsumableUsed = false;
+        bool isProfessionTool = false;
+        bool isHearthstone = false;
+        bool isKey = false;
+    };
+
+    inline bool IsWonLootReliefEligible(WonLootReliefCandidate const& c, bool isAutonomousAlt)
+    {
+        if (isAutonomousAlt || c.itemId == 0 || !c.bagFitsWonItem)
+            return false;
+        if (c.hasForceUsage || c.isGuildOrderStock || c.isQuestItem || c.isBag ||
+            c.isAmmo || c.isReagentOrConsumableUsed || c.isProfessionTool ||
+            c.isHearthstone || c.isKey)
+            return false;
+        return IsWonLootDisposableUsage(c.usage);
+    }
+
+    // Picks the single bag slot to destroy next to make room, or -1 when no
+    // slot may be touched. Grey items (quality == 0) always go first,
+    // cheapest stack first; only if no grey item is eligible does it pick
+    // the lowest-vendor-value non-critical item (ties broken by quality).
+    inline int SelectWonLootReliefIndex(WonLootReliefCandidate const* candidates,
+        std::size_t count, bool isAutonomousAlt)
+    {
+        int best = -1;
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            WonLootReliefCandidate const& cur = candidates[i];
+            if (!IsWonLootReliefEligible(cur, isAutonomousAlt))
+                continue;
+            if (best < 0)
+            {
+                best = static_cast<int>(i);
+                continue;
+            }
+            WonLootReliefCandidate const& prev = candidates[best];
+            bool const curGrey = (cur.quality == 0);
+            bool const prevGrey = (prev.quality == 0);
+            if (curGrey != prevGrey)
+            {
+                if (curGrey)
+                    best = static_cast<int>(i);
+                continue;
+            }
+            if (cur.stackSellValue != prev.stackSellValue)
+            {
+                if (cur.stackSellValue < prev.stackSellValue)
+                    best = static_cast<int>(i);
+                continue;
+            }
+            if (cur.quality < prev.quality)
+                best = static_cast<int>(i);
+        }
+        return best;
     }
 }

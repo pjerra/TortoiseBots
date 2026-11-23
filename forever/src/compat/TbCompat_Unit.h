@@ -302,6 +302,10 @@ inline Tokens StrSplit(std::string const& src, std::string const& sep)
 // (ai/cmangos-compat-shim.h:385); the definition is the bot's, not the core's.
 char* strstri(std::string const& s1, std::string const& s2);
 
+// The faction template a unit wears. T `Unit::GetFactionTemplateId()` (the field on the unit); F `Unit::GetFaction()`
+// (Unit.h:898 returns m_unitData->FactionTemplate, the same number).
+inline uint32 GetFactionTemplateIdCompat(Unit const* unit) { return unit ? unit->GetFaction() : 0; }
+
 // The faction template row by id. T `sObjectMgr.GetFactionTemplateEntry(id)`, F the DB2 store (DB2Stores.h).
 inline FactionTemplateEntry const* GetFactionTemplateEntryCompat(uint32 id) { return sFactionTemplateStore.LookupEntry(id); }
 

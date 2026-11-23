@@ -6277,88 +6277,113 @@ bool JumpAction::DoJump(const WorldPosition &dest, const WorldPosition& highestP
         landing = WorldPosition(dest.GetMapId(), ox, oy, oz);
     }
 
-    return UnportedBlockResultCompat(tbcompat::Feature::JumpFall, false, [&](auto* bot) -> bool
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
+    if (!goodLanding)
+        ai->SetFallAfterJump();
+
+    ai->InterruptSpell(false, "jump");
+    ai->StopMoving();
+    ai->SetJumpDestination(landing);
+    bot->SetFallInformation(maxHeight);
+
+    bool slowJump = false;// !jumpBackward && hSpeed == bot->GetSpeed(MOVE_WALK);
+    // TODO calculate slow jump (jump + move forward)
+
+    // send move packet before jump
+    if (!jumpInPlace && !slowJump)
     {
-        if (!goodLanding)
-            ai->SetFallAfterJump();
+        bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
+        WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
+// write packet info
+        move << bot->m_movementInfo;
+        ai->QueuePacket(move);
+    }
 
-        ai->InterruptSpell(false, "jump");
-        ai->StopMoving();
-        ai->SetJumpDestination(landing);
-        bot->SetFallInformation(maxHeight);
+    float vsin = jumpInPlace ? 0 : sin(angle);
+    float vcos = jumpInPlace ? 1 : cos(angle);
 
-        bool slowJump = false;// !jumpBackward && hSpeed == bot->GetSpeed(MOVE_WALK);
-        // TODO calculate slow jump (jump + move forward)
+    // write jump info
+    uint32 curTime = WorldTimer::getMSTime();
+    uint32 jumpTime = curTime + WorldAverageDiffCompat() * 2 + uint32(timeToLand * static_cast<float>(IN_MILLISECONDS));
+    ai->SetJumpTime(jumpTime);
+    bot->m_movementInfo.jump.zspeed = -vSpeed;
+    bot->m_movementInfo.jump.cosAngle = vcos;
+    bot->m_movementInfo.jump.sinAngle = vsin;
+    bot->m_movementInfo.jump.xyspeed = slowJump ? 0.f : hSpeed;
 
-        // send move packet before jump
-        if (!jumpInPlace && !slowJump)
-        {
-            bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
-            WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
-    // write packet info
-            move << bot->m_movementInfo;
-            ai->QueuePacket(move);
-        }
+    sLog.outDetail("%s: Jump x: %f, y: %f, z: %f, time: %f, dist: %f, inPlace: %u, landTime: %u, curTime: %u", CStrCompat(bot->GetName()), landing.getX(), landing.getY(), landing.getZ(), timeToLand, distanceToLand, jumpInPlace, jumpTime, curTime);
 
-        float vsin = jumpInPlace ? 0 : sin(angle);
-        float vcos = jumpInPlace ? 1 : cos(angle);
+    // send jump packet
+    bot->m_movementInfo.AddMovementFlag(MOVEFLAG_JUMPING);
 
-        // write jump info
-        uint32 curTime = WorldTimer::getMSTime();
-        uint32 jumpTime = curTime + WorldAverageDiffCompat() * 2 + uint32(timeToLand * static_cast<float>(IN_MILLISECONDS));
-        ai->SetJumpTime(jumpTime);
-        bot->m_movementInfo.jump.zspeed = -vSpeed;
-        bot->m_movementInfo.jump.cosAngle = vcos;
-        bot->m_movementInfo.jump.sinAngle = vsin;
-        bot->m_movementInfo.jump.xyspeed = slowJump ? 0.f : hSpeed;
+    // client doesn't seem to show proper bigger jump with faster than real speeds
+    if (vSpeed > (7.96f * 1.3f) || hSpeed > (bot->GetSpeed(MOVE_RUN) * 1.3f))
+    {
+        WorldPacket data(MSG_MOVE_KNOCK_BACK);
+        data << bot->GetMover()->GetPackGUID();
+        data << bot->m_movementInfo;
+        data << bot->m_movementInfo.jump.cosAngle;
+        data << bot->m_movementInfo.jump.sinAngle;
+        data << bot->m_movementInfo.jump.xyspeed;
+        data << bot->m_movementInfo.jump.zspeed;
+        bot->GetMover()->SendMessageToSetExcept(&data, bot);
+    }
+    else
+    {
+        WorldPacket jump(MSG_MOVE_JUMP);
+        // write packet info
+        jump << bot->m_movementInfo;
+        ai->QueuePacket(jump);
+    }
 
-        sLog.outDetail("%s: Jump x: %f, y: %f, z: %f, time: %f, dist: %f, inPlace: %u, landTime: %u, curTime: %u", CStrCompat(bot->GetName()), landing.getX(), landing.getY(), landing.getZ(), timeToLand, distanceToLand, jumpInPlace, jumpTime, curTime);
+    // send move packet after jump
+    if (!jumpInPlace && slowJump)
+    {
+        bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
+        bot->m_movementInfo.jump.xyspeed = hSpeed;
+        WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
+        // write packet info
+        move << bot->m_movementInfo;
+        ai->QueuePacket(move);
+    }
 
-        // send jump packet
-        bot->m_movementInfo.AddMovementFlag(MOVEFLAG_JUMPING);
+    // change position to highest position
+    // todo add in between points to avoid mobs instant aggro before landing
+    bot->Relocate(highestPoint.getX(), highestPoint.getY(), highestPoint.getZ());
 
-        // client doesn't seem to show proper bigger jump with faster than real speeds
-        if (vSpeed > (7.96f * 1.3f) || hSpeed > (bot->GetSpeed(MOVE_RUN) * 1.3f))
-        {
-            WorldPacket data(MSG_MOVE_KNOCK_BACK);
-            data << bot->GetMover()->GetPackGUID();
-            data << bot->m_movementInfo;
-            data << bot->m_movementInfo.jump.cosAngle;
-            data << bot->m_movementInfo.jump.sinAngle;
-            data << bot->m_movementInfo.jump.xyspeed;
-            data << bot->m_movementInfo.jump.zspeed;
-            bot->GetMover()->SendMessageToSetExcept(&data, bot);
-        }
-        else
-        {
-            WorldPacket jump(MSG_MOVE_JUMP);
-            // write packet info
-            jump << bot->m_movementInfo;
-            ai->QueuePacket(jump);
-        }
+    if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
+    {
+        std::string text = "Jump: cos: " + std::to_string(vcos) + " sin: " + std::to_string(vsin) + " distance: " + std::to_string(distanceToLand) + " speed: " + std::to_string(hSpeed);
+        bot->Say(text, (bot->GetTeam() == ALLIANCE ? LANG_COMMON : LANG_ORCISH));
+    }
 
-        // send move packet after jump
-        if (!jumpInPlace && slowJump)
-        {
-            bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
-            bot->m_movementInfo.jump.xyspeed = hSpeed;
-            WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
-            // write packet info
-            move << bot->m_movementInfo;
-            ai->QueuePacket(move);
-        }
+    return true;
+#else
+    // ForeverCore: one core jump spline to the landing. The host's flight watcher keeps IsJumping up for the flight
+    // and lands it with the core's own fall damage, so no landing deadline or jump packet is needed here. A jump in
+    // place is a client animation and moves nobody; it only keeps the engine's airtime window.
+    ai->InterruptSpell(false, "jump");
+    ai->StopMoving();
 
-        // change position to highest position
-        // todo add in between points to avoid mobs instant aggro before landing
-        bot->Relocate(highestPoint.getX(), highestPoint.getY(), highestPoint.getZ());
+    // A jump that hit something ends above the floor: the landing block then simulates the drop from there.
+    if (!goodLanding)
+        ai->SetFallAfterJump();
 
-        if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
-        {
-            std::string text = "Jump: cos: " + std::to_string(vcos) + " sin: " + std::to_string(vsin) + " distance: " + std::to_string(distanceToLand) + " speed: " + std::to_string(hSpeed);
-            bot->Say(text, (bot->GetTeam() == ALLIANCE ? LANG_COMMON : LANG_ORCISH));
-        }
+    if (jumpInPlace || hSpeed <= 0.0f)
+        ai->SetJumpTime(WorldTimer::getMSTime() + uint32(timeToLand * static_cast<float>(IN_MILLISECONDS)) + 1000);
+    else
+        // The core caps a flight at 50 yd/s. The jump's own speed is what makes the spline's flight time, and so its
+        // arc, match the timeToLand the landing was computed for, so the cap must not apply.
+        bot->GetMotionMaster()->MoveJump(EVENT_JUMP, TbCorePosition(landing), hSpeed, {}, {}, {}, false, true);
 
-        return true;    }, bot);
+    if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
+    {
+        std::string text = "Jump: distance: " + std::to_string(distanceToLand) + " speed: " + std::to_string(hSpeed);
+        bot->Say(text, (bot->GetTeam() == ALLIANCE ? LANG_COMMON : LANG_ORCISH));
+    }
+
+    return true;
+#endif
 }
 
 WorldPosition JumpAction::GetPossibleJumpStartFor(const WorldPosition& src, const WorldPosition& dest, WorldPosition& possibleLanding, Unit* jumper, float &requiredSpeed, float distanceTo, float distanceFrom)

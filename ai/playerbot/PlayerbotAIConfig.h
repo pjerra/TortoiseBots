@@ -810,6 +810,10 @@ public:
     bool hunterCarveInReachOnly;
     // Paladin bots keep Judgement of Wisdom / Light up on the boss in groups (opt-in).
     bool paladinJudgementUpkeep;
+    // Protection paladin tanks use Seal of Wisdom on 5-man dungeon trash and backfill Judgement of Wisdom.
+    bool protPaladinDungeonWisdom;
+    // Holy paladin bots in groups walk into melee to weave Holy Strike and Seal of Wisdom.
+    bool holyPaladinMeleeWeave;
     // Onyxia phase 2 whelp duty for AoE ranged DPS and egg-cave avoidance (opt-in).
     bool onyxiaWhelpsAndEggs;
     bool dungeonTactics;
@@ -1432,9 +1436,8 @@ public:
     bool petAutoTrainAlts;
     bool autoDoQuests;
     bool autoShareConjuredOnTrade;
-    // TravelNode cache generation can load every map and rewrite its database
-    // cache. Keep it opt-in; direct movement and quest destinations do not
-    // require a generated graph for the owned-bot MVP.
+    // First-boot travel graph generation (TravelNode.cpp): when the travel tables are empty, node seeding and walk linking
+    // run once, synchronously, during startup, before bots log in; later boots load the saved graph. Opt-out.
     bool generateTravelNodes;
     bool asyncTravelPartitions;
     // Fish-location generation scans populated grids and writes the resulting

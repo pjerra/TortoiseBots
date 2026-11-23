@@ -219,6 +219,7 @@ For server admins.
 | Count action successes and failures | No | [`AiPlayerbot.ActionCountsLog`](../server/settings/logging.md#aiplayerbotactioncountslog) | [Setting](../server/settings/logging.md#aiplayerbotactioncountslog) |
 | Logs of the previous run are kept | Always | — | [Log rotation](../server/settings/logging.md#log-rotation--previous-run-logs) |
 | Build item caches at startup | Yes | [`AiPlayerbot.GenerateItemCaches`](../server/settings/performance.md#aiplayerbotgenerateitemcaches) | [Setting](../server/settings/performance.md#aiplayerbotgenerateitemcaches) |
+| Build travel network at startup | Yes | [`AiPlayerbot.GenerateTravelNodes`](../server/settings/performance.md#aiplayerbotgeneratetravelnodes) | [Setting](../server/settings/performance.md#aiplayerbotgeneratetravelnodes) |
 | Travel lookups in the background | No | [`AiPlayerbot.AsyncTravelPartitions`](../server/settings/performance.md#aiplayerbotasynctravelpartitions) | [Setting](../server/settings/performance.md#aiplayerbotasynctravelpartitions) |
 | Refresh bot values on a timer | No | [`AiPlayerbot.ValueRefreshAtInterval`](../server/settings/performance.md#aiplayerbotvaluerefreshatinterval) | [Setting](../server/settings/performance.md#aiplayerbotvaluerefreshatinterval) |
 

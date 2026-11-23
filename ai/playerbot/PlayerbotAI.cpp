@@ -626,34 +626,25 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         if (!fallAfterJump)
         {
             bot->m_movementInfo.AddMovementFlag(MOVEFLAG_FALLINGFAR);
-
-            UnportedBlockCompat(tbcompat::Feature::JumpFall, [&](auto* player)
-            {
-                WorldPacket stop(MSG_MOVE_STOP);
-                stop << player->m_movementInfo;
-                QueuePacket(stop);
-            }, bot);
-
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
+            // Turtle's bot is its own client: the stop and land packets are what ends the jump there.
+            WorldPacket stop(MSG_MOVE_STOP);
+            stop << bot->m_movementInfo;
+            QueuePacket(stop);
+#endif
             bot->m_movementInfo.SetMovementFlags(MOVEFLAG_NONE);
             bot->m_movementInfo.jump = MovementInfo::JumpInfo();
-
-            UnportedBlockCompat(tbcompat::Feature::JumpFall, [&](auto* player)
-            {
-                WorldPacket land(MSG_MOVE_FALL_LAND);
-                land << player->m_movementInfo;
-                QueuePacket(land);
-            }, bot);
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
+            WorldPacket land(MSG_MOVE_FALL_LAND);
+            land << bot->m_movementInfo;
+            QueuePacket(land);
+#endif
             sLog.outDetail("%s: Jump: Landed, landTime: %u", CStrCompat(bot->GetName()), curTime);
 
-            // Player::IsFalling() (m_fallStartZ != 0, set by SetFallInformation() above
-            // this block and in the knockback handler) is what actually gates CanMove().
-            // It's meant to clear via Player::UpdateFallInformationIfNeed() when the
-            // MSG_MOVE_FALL_LAND packet just queued above is processed by
-            // WorldSession::HandleMovementOpcodes - but that processing is unreliable for
-            // an AI-synthesized packet (dropped if the bot's movespline isn't finalized,
-            // rejected by anti-cheat, etc.), and when it's dropped m_fallStartZ is never
-            // reset, permanently blocking the bot from moving again. Clear it here
-            // directly so landing doesn't depend on that fragile round-trip.
+            // Turtle's Player::IsFalling() reads the fall start (m_fallStartZ), which only the core's own
+            // CMSG_MOVE_FALL_LAND handling clears; an AI-synthesized land packet is unreliable there. A ForeverCore
+            // flight is landed by the host watcher, which leaves the same bookkeeping. Clear the start here on both,
+            // so a landing never leaves the bot stuck on a fall it already finished.
             SetFallInformationCompat(bot, 0.0f);
             jumpTime = 0;
             fallAfterJump = false;
@@ -1723,7 +1714,19 @@ void PlayerbotAI::EnsureAutoToolsKit()
         IsAutonomousCampEligible())
     {
         EnsureCampSurvivalSkillCompat(bot, TortoiseBots::CAMP_SURVIVAL_SKILL_CAP);
-        EnsureCheatItem(TortoiseBots::CAMP_TENT_ITEM_ID, 1);
+        // The bag walk stops at two free slots: that is all the check needs, and
+        // it keeps the scan off the 30 s kit pass's normal path otherwise.
+        uint32 freeSlots = 0;
+        for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END && freeSlots < 2; ++slot)
+            if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                ++freeSlots;
+        for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END && freeSlots < 2; ++bagSlot)
+            if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot))
+                if (ItemPrototype const* bagProto = GetItemProtoCompat(bag))
+                    if (bagProto->BagFamily == 0)
+                        freeSlots += bag->GetFreeSlots();
+        if (TortoiseBots::CampTentFitsBags(freeSlots))
+            EnsureCheatItem(TortoiseBots::CAMP_TENT_ITEM_ID, 1);
     }
     // MC rune douse: map gate first so open-world bots skip the bag counts;
     // one Quintessence while inside Molten Core so the rune actions never
@@ -5769,30 +5772,7 @@ bool PlayerbotAI::AddAura(Unit* unit, uint32 spellId)
         return false;
     }
 
-    return UnportedBlockResultCompat(tbcompat::Feature::AuraHolders, false, [&](auto* unit) -> bool
-    {
-        auto* holder = CreateSpellAuraHolder(spellInfo, unit, unit, unit);
-
-        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-        {
-            uint8 eff = spellInfo->Effect[i];
-            if (eff >= MAX_SPELL_EFFECTS)
-                continue;
-            if (IsAreaAuraEffect(eff) ||
-                eff == SPELL_EFFECT_APPLY_AURA ||
-                eff == SPELL_EFFECT_PERSISTENT_AREA_AURA)
-            {
-                int32 basePoints = spellInfo->CalculateSimpleValue(SpellEffectIndex(i));
-                int32 damage = basePoints;
-                Aura* aur = CreateAura(spellInfo, SpellEffectIndex(i), &damage, holder, unit);
-                holder->AddAura(aur, SpellEffectIndex(i));
-            }
-        }
-        if (!unit->AddSpellAuraHolder(holder))
-            holder = nullptr;
-
-        return true;
-    }, unit);
+    return ApplyDebugAuraCompat(unit, spellInfo);
 }
 
 std::list<Unit*> PlayerbotAI::GetAllHostileUnitsAroundWO(WorldObject* wo, float distanceAround)

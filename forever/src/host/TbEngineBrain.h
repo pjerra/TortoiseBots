@@ -9,6 +9,7 @@
 #pragma once
 
 #include "Define.h"
+#include "ObjectGuid.h"
 #include <string>
 #include <vector>
 
@@ -23,6 +24,20 @@ struct Brain;
 
 // True when this build contains the engine (TORTOISEBOTS_SLICE1).
 bool Built();
+
+// The per-tick bot-update budget the host applies to the pool, in the engine's
+// own keys so the operator keeps TB's names and file: AiPlayerbot.PoolTickBudgetUs,
+// CombatTickBudgetUs, TargetWorldTickMs and PoolBudgetWhenTickOverMs. The values
+// are the engine config's after its first load; a build without the engine (or
+// before that load) answers the TB defaults.
+struct TickBudgetConfig
+{
+    uint32 poolUs = 22000;
+    uint32 combatUs = 15000;
+    uint32 targetMs = 100;
+    uint32 gateMs = 0;
+};
+TickBudgetConfig ReadTickBudgetConfig();
 
 // Loads the engine's own configuration (PlayerbotAIConfig) once, before the first brain (WorldScript::OnWorldInitialized
 // calls it when the engine is built in and the module is enabled, so the first bot does not pay for it). Safe to call again:
@@ -83,8 +98,48 @@ std::string InjectSpellDelay(Player* bot, uint32 delayMs);
 // What `.tb where` prints for an engine bot: one line each for state, strategies and current target, and the cast-result counts.
 std::vector<std::string> Describe(Brain const* brain);
 
+// The engine's live view of one bot for the dashboard feed (world thread, member reads only): its state, the
+// last executed action and its trigger, the travel destination it is working, and the combat engine's current target.
+// False when the bot has no usable brain; the struct is left default in that case.
+struct Telemetry
+{
+    bool engine = false;
+    bool combatState = false;       // the engine is in BOT_STATE_COMBAT
+    bool deadState = false;         // the engine is in BOT_STATE_DEAD
+    std::string lastAction;
+    std::string lastTrigger;
+    std::string combatStrategies;
+    std::string travelPurpose;      // destination short name ("grind", "vendor", ...)
+    std::string travelTo;           // destination title
+    std::string travelStatus;       // none, prepare, ready, travel, work, cooldown, expired
+    int32 travelDist = -1;          // yards to the destination point (-1 = no active destination)
+    ObjectGuid currentTarget;       // the engine's "current target" value (empty = none)
+    std::string currentTargetName;
+    bool targetHostile = false;
+    float targetDistance = 0.0f;
+    bool targetInLos = true;
+};
+
+bool ReadTelemetry(Player* bot, Telemetry& out, bool withStrategies = false);
+
+// True once the engine's own config file has been read (EnsureConfig succeeded). The Server panel only reports live
+// getters, so a build or a failed config load reports no engine settings.
+bool ConfigReady();
+
+// The engine settings for the Server panel, as JSON object members without braces. Empty when the engine config is
+// not loaded. `ServerBotsJson` feeds SERVER_INFO's `bots` object, `ServerDiagnosticsJson` its `diagnostics` object.
+std::string ServerBotsJson();
+std::string ServerDiagnosticsJson();
+
+// The engine's XP multiplier for bots (rates.bot_xp_mult). 1.0 before the engine config is loaded.
+float BotXpRate();
+
 // Executes a legacy action by key for `bot` (used by host world-life errands).
 bool RunAction(Player* bot, char const* action, char const* param);
+
+// The periodic action-count snapshot (AiPlayerbot.ActionCountsLog): the engine counts every executed action and
+// this writes the cumulative action_counts.csv rows. No-op without the engine or with the key off.
+void DumpActionCounts();
 
 struct BrainDeleter
 {

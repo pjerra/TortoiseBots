@@ -65,7 +65,8 @@ bool DebugAction::HandleArea(Event& event, Player* requester, const std::string&
     AreaTableEntry const* area = point.GetArea();
     std::ostringstream out;
     out << point.GetAreaName(true, false);
-    out << "," << area->Team << " (" << (area->Team != FACTION_GROUP_MASK_ALLIANCE ? (area->Team != FACTION_GROUP_MASK_HORDE ? "neutral" : "horde") : "alliance") << ")";
+    uint32 const team = AreaTeamCompat(area);
+    out << "," << team << " (" << (team != FACTION_GROUP_MASK_ALLIANCE ? (team != FACTION_GROUP_MASK_HORDE ? "neutral" : "horde") : "alliance") << ")";
     ai->TellPlayerNoFacing(requester, out, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, true, false);
     return true;
 }
@@ -79,7 +80,8 @@ bool DebugAction::HandleGY(Event& event, Player* requester, const std::string& t
 bool DebugAction::HandleGrid(Event& event, Player* requester, const std::string& text)
 {
     WorldPosition botPos = bot;
-    std::string loaded = botPos.GetMap(bot->GetInstanceId())->IsLoaded(botPos.getX(), botPos.getY()) ? "loaded" : "unloaded";
+    Map* botMap = botPos.GetMap(bot->GetInstanceId());
+    std::string loaded = botMap && MapIsLoadedCompat(botMap, botPos.getX(), botPos.getY()) ? "loaded" : "unloaded";
 
     std::ostringstream out;
 
@@ -173,8 +175,8 @@ bool DebugAction::HandleLogoutTime(Event& event, Player* requester, const std::s
 bool DebugAction::HandleLevel(Event& event, Player* requester, const std::string& text)
 {
     uint32 level = bot->GetLevel();
-    uint32 nextLevelXp = bot->GetUInt32Value(PLAYER_NEXT_LEVEL_XP);
-    uint32 xp = bot->GetUInt32Value(PLAYER_XP);
+    uint32 nextLevelXp = PlayerNextLevelXPCompat(bot);
+    uint32 xp = PlayerXPCompat(bot);
     float flevel = ai->GetLevelFloat();
 
     std::ostringstream out;
@@ -186,6 +188,9 @@ bool DebugAction::HandleLevel(Event& event, Player* requester, const std::string
     return true;
 }
 
+// The quest log internals this reads (ReqItemId/ReqCreatureOrGOId and the 1.12 quest credit calls) are not
+// ForeverCore APIs: on that core the command answers through forever/src/slice/SliceDebugStubs.cpp.
+#ifndef TORTOISEBOTS_CORE_FOREVER
 bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string& text)
 {
     std::string param = text.substr(5); // skip "quest"
@@ -571,6 +576,7 @@ bool DebugAction::HandleQuest(Event& event, Player* requester, const std::string
     return true;
 }
 
+#endif
 bool DebugAction::HandleNPC(Event& event, Player* requester, const std::string& text)
 {
     std::ostringstream out;
@@ -613,28 +619,27 @@ bool DebugAction::HandleNPC(Event& event, Player* requester, const std::string& 
 
     guidP.printWKT(out);
 
-    out << "[a:" << guidP.GetArea()->Name;
+    out << "[a:" << AreaNameCompat(guidP.GetArea());
 
     if (guidP.GetArea() && guidP.GetAreaLevel())
         out << " level: " << guidP.GetAreaLevel();
     if (AreaZoneIdCompat(guidP.GetArea()) && GetAreaEntryByAreaID(AreaZoneIdCompat(guidP.GetArea())))
     {
-        out << " z:" << GetAreaEntryByAreaID(AreaZoneIdCompat(guidP.GetArea()))->Name;
+        out << " z:" << AreaNameCompat(GetAreaEntryByAreaID(AreaZoneIdCompat(guidP.GetArea())));
         if (sTravelMgr.GetAreaLevel(AreaZoneIdCompat(guidP.GetArea())))
             out << " level: " << sTravelMgr.GetAreaLevel(AreaZoneIdCompat(guidP.GetArea()));
     }
 
     out << "] ";
 
-    uint16 event_id = sGameEventMgr.GetGameEventId<Creature>(guidP.GetCounter());
+    uint16 topPoolId = PoolOfSpawnCompat(true, guidP.GetCounter());
+    uint16 event_id = uint16(GameEventOfSpawnCompat(topPoolId, true, false, guidP.GetCounter()));
 
     if (event_id)
-        out << " event:" << event_id << (sGameEventMgr.IsActiveEvent(event_id) ? " active" : " inactive");
-
-    uint16 topPoolId = sPoolMgr.IsPartOfTopPool<Creature>(guidP.GetCounter());
+        out << " event:" << event_id << (GameEventActiveCompat(event_id) ? " active" : " inactive");
 
     if (topPoolId)
-        out << " pool:" << topPoolId << (sGameEventMgr.GetGameEventId<Pool>(topPoolId) ? " event" : " nonevent");
+        out << " pool:" << topPoolId;
 
     ai->TellPlayerNoFacing(requester, out);
 
@@ -650,8 +655,10 @@ bool DebugAction::HandleNPC(Event& event, Player* requester, const std::string& 
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_TRAINER");
     if (guidP.HasNpcFlag(UNIT_NPC_FLAG_SPIRITHEALER))
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_SPIRITHEALER");
+#if !defined(TORTOISEBOTS_CORE_FOREVER)
     if (guidP.HasNpcFlag(UNIT_NPC_FLAG_SPIRITGUIDE))
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_SPIRITGUIDE");
+#endif
     if (guidP.HasNpcFlag(UNIT_NPC_FLAG_INNKEEPER))
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_INNKEEPER");
     if (guidP.HasNpcFlag(UNIT_NPC_FLAG_BANKER))
@@ -668,12 +675,14 @@ bool DebugAction::HandleNPC(Event& event, Player* requester, const std::string& 
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_STABLEMASTER");
     if (guidP.HasNpcFlag(UNIT_NPC_FLAG_REPAIR))
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_REPAIR");
+#if !defined(TORTOISEBOTS_CORE_FOREVER)
     if (guidP.HasNpcFlag(UNIT_NPC_FLAG_OUTDOORPVP))
         ai->TellPlayerNoFacing(requester, "UNIT_NPC_FLAG_OUTDOORPVP");
+#endif
 
 
     std::ostringstream out2;
-    FactionTemplateEntry const* requestFaction = sFactionTemplateStore.LookupEntry(requester->GetFactionTemplateId());
+    FactionTemplateEntry const* requestFaction = sFactionTemplateStore.LookupEntry(GetFactionTemplateIdCompat(requester));
     FactionTemplateEntry const* objectFaction = nullptr;
     if(guidP.GetCreatureTemplate() && guidP.GetCreatureTemplate()->faction)
         objectFaction = sFactionTemplateStore.LookupEntry(guidP.GetCreatureTemplate()->faction);
@@ -752,8 +761,9 @@ bool DebugAction::HandleGO(Event& event, Player* requester, const std::string& t
 
     std::ostringstream out2;
 
-    FactionTemplateEntry const* requestFaction = sFactionTemplateStore.LookupEntry(requester->GetFactionTemplateId());
-    FactionTemplateEntry const* objectFaction = sFactionTemplateStore.LookupEntry(guidP.GetGameObjectInfo()->faction);
+    FactionTemplateEntry const* requestFaction = sFactionTemplateStore.LookupEntry(GetFactionTemplateIdCompat(requester));
+    uint32 const goFaction = GameObjectFactionCompat(guidP.GetGameObjectInfo());
+    FactionTemplateEntry const* objectFaction = sFactionTemplateStore.LookupEntry(goFaction);
     FactionTemplateEntry const* humanFaction = sFactionTemplateStore.LookupEntry(1);
     FactionTemplateEntry const* orcFaction = sFactionTemplateStore.LookupEntry(2);
 
@@ -774,7 +784,7 @@ bool DebugAction::HandleGO(Event& event, Player* requester, const std::string& t
         ReputationRank reactionHum = PlayerbotAI::GetFactionReaction(humanFaction, objectFaction);
         ReputationRank reactionOrc = PlayerbotAI::GetFactionReaction(orcFaction, objectFaction);
 
-        out2 << " faction:" << guidP.GetGameObjectInfo()->faction << " reaction me: " << rep[reactionRequest] << ",alliance: " << rep[reactionHum] << " ,horde: " << rep[reactionOrc];
+        out2 << " faction:" << goFaction << " reaction me: " << rep[reactionRequest] << ",alliance: " << rep[reactionHum] << " ,horde: " << rep[reactionOrc];
     }
 
     ai->TellPlayerNoFacing(requester, out2);
@@ -828,8 +838,10 @@ bool DebugAction::HandleGO(Event& event, Player* requester, const std::string& t
             out << "GO_STATE_ACTIVE";
         if (state == GO_STATE_READY)
             out << "GO_STATE_READY";
+#if !defined(TORTOISEBOTS_CORE_FOREVER)
         if (state == GO_STATE_ACTIVE_ALTERNATIVE)
             out << "GO_STATE_ACTIVE_ALTERNATIVE";
+#endif
 
         out << (object->getLootState() == GO_ACTIVATED ? ", in use" : ", not in use");
 
@@ -869,10 +881,14 @@ bool DebugAction::HandleFind(Event& event, Player* requester, const std::string&
 
     uint32 entry = stoi(link);
 
+#if defined(TORTOISEBOTS_CORE_FOREVER)
+    Creature* creature = bot->FindNearestCreature(entry, 1000.0f, true);
+#else
     Creature* creature = nullptr;
     MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck creature_check(*bot, entry, true, 1000.0f);
     MaNGOS::CreatureLastSearcher<MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(creature, creature_check);
     Cell::VisitGridObjects(bot, searcher, 1000.0f);
+#endif
 
     if (!creature)
         return false;

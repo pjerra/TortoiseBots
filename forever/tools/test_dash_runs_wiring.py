@@ -66,6 +66,15 @@ class DashRunsWiring(unittest.TestCase):
         self.assertRegex(conf, r"(?m)^TortoiseBots\.Dashboard\.Runs = 1$")
         self.assertRegex(conf, r'(?m)^TortoiseBots\.Dashboard\.RunSummaryDir = ""$')
 
+    def test_dashboard_host_accepts_a_host_name(self):
+        # both senders (the roster socket and this shim) go through the one resolver, so a dashboard container name works
+        for rel in ("forever/src/TbDashboard.cpp", "forever/src/dash/TbDashLink.cpp"):
+            body = text(rel)
+            self.assertIn("ResolveEndpoint(host, uint16(port), s.target, resolveError)", body)
+            self.assertNotIn("make_address(", body)
+        conf = text("forever/conf/tortoisebots.conf.dist")
+        self.assertIn("host name", conf)
+
     def test_summary_is_written_once_per_run(self):
         cpp = text("forever/src/dash/TbDashRuns.cpp")
         # the job is queued before the file lands; only the atomic rename marks it done, and a failure leaves it for the next cycle

@@ -187,6 +187,12 @@ python3 -m unittest tools/test_verify_config_usage.py
 echo "✓ Config usage verified."
 
 echo ""
+echo "=== 8c. Verifying the Forever Config Ships Only Keys It Reads ==="
+python3 forever/tools/gen_aiplayerbot_conf.py --check
+python3 -m unittest forever/tools/test_config_key_wiring.py
+echo "✓ Forever config keys verified."
+
+echo ""
 echo "=========================================="
 echo "🎉 ALL TORTOISEBOTS CHECKS PASSED CLEANLY!"
 echo "=========================================="

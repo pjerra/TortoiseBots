@@ -1478,6 +1478,8 @@ bool PlayerbotAIConfig::Initialize()
     hunterViperOnLowMana = config.GetBoolDefault("AiPlayerbot.HunterViperOnLowMana", true);
     hunterCarveInReachOnly = config.GetBoolDefault("AiPlayerbot.HunterCarveInReachOnly", false);
     paladinJudgementUpkeep = config.GetBoolDefault("AiPlayerbot.PaladinJudgementUpkeep", true);
+    protPaladinDungeonWisdom = config.GetBoolDefault("AiPlayerbot.ProtPaladinDungeonWisdom", true);
+    holyPaladinMeleeWeave = config.GetBoolDefault("AiPlayerbot.HolyPaladinMeleeWeave", true);
     onyxiaWhelpsAndEggs = config.GetBoolDefault("AiPlayerbot.OnyxiaWhelpsAndEggs", true);
     dungeonTactics = config.GetBoolDefault("AiPlayerbot.DungeonTactics", true);
     // Startup-only on purpose (not in LoadDungeonRunKeys): the key shapes the reaction engine's trigger list, which
@@ -1509,13 +1511,12 @@ bool PlayerbotAIConfig::Initialize()
     petAutoTrainAlts = config.GetBoolDefault("AiPlayerbot.PetAutoTrainAlts", false);
     autoDoQuests = config.GetBoolDefault("AiPlayerbot.AutoDoQuests", true);
     autoShareConjuredOnTrade = config.GetBoolDefault("AiPlayerbot.AutoShareConjuredOnTrade", true);
-    generateTravelNodes = config.GetBoolDefault("AiPlayerbot.GenerateTravelNodes", false);
+    generateTravelNodes = config.GetBoolDefault("AiPlayerbot.GenerateTravelNodes", true);
     generateFishLocations = config.GetBoolDefault("AiPlayerbot.GenerateFishLocations", false);
     asyncTravelPartitions = config.GetBoolDefault("AiPlayerbot.AsyncTravelPartitions", false); // false = travel/terrain lookups on main thread only (crash-safe on cores without concurrent terrain load)
-    if (generateTravelNodes || generateFishLocations)
+    if (generateFishLocations)
     {
-        sLog.outError("TortoiseBots: travel/fish cache generation is disabled because the pinned core PathInfo has no area query or avoidance filter; use persisted caches or direct movement/fishing.");
-        generateTravelNodes = false;
+        sLog.outError("TortoiseBots: fish-location generation is disabled because the pinned core PathInfo has no area query; use persisted locations or direct fishing.");
         generateFishLocations = false;
     }
     syncAltLevelToMaster = config.GetBoolDefault("AiPlayerbot.SyncAltLevelToMaster", false);

@@ -31,6 +31,7 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <sstream>
 #include "ByteBuffer.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
@@ -38,11 +39,14 @@
 #include "Unit.h"
 
 #include "playerbot/BotActionLog.h"
+#include "playerbot/BotDiagnostics.h"
 #include "playerbot/BotState.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/WorldPosition.h"
+#include "playerbot/TravelMgr.h"
+#include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/LastSpellCastValue.h"
@@ -70,6 +74,8 @@ struct Brain
 
 namespace
 {
+bool g_configReady = false;
+
 bool Usable(Brain const* brain)
 {
     // PlayerbotAIAdapter::IsUsable (runtime/PlayerbotAIAdapter.cpp:79-85), without the adapter's own flag.
@@ -224,6 +230,16 @@ bool Built()
     return true;
 }
 
+TickBudgetConfig ReadTickBudgetConfig()
+{
+    TickBudgetConfig config;
+    config.poolUs = sPlayerbotAIConfig.poolTickBudgetUs;
+    config.combatUs = sPlayerbotAIConfig.combatTickBudgetUs;
+    config.targetMs = sPlayerbotAIConfig.targetWorldTickMs;
+    config.gateMs = sPlayerbotAIConfig.poolBudgetWhenTickOverMs;
+    return config;
+}
+
 std::string EnsureConfig()
 {
     // The Turtle host calls sPlayerbotAIConfig.Initialize() once at startup (host/BotHostAdapter.cpp:116). Here it is
@@ -237,8 +253,7 @@ std::string EnsureConfig()
     // Only a success is remembered (R9): a missing conf file or a failed Initialize is tried again on the next call (the next
     // brain, `.tb engine on`, a config reload), so fixing the file needs no restart. A failure never reaches the engine's half
     // state: Initialize itself runs again from the top.
-    static bool ready = false;
-    if (ready)
+    if (g_configReady)
         return std::string();
     std::string result;
 
@@ -259,8 +274,67 @@ std::string EnsureConfig()
         result = "PlayerbotAIConfig::Initialize failed (no aiplayerbot.conf or AiPlayerbot.Enabled = 0; see the server log)";
     else if (!sPlayerbotAIConfig.enabled)
         result = "AiPlayerbot.Enabled is 0";
-    ready = result.empty();
+    g_configReady = result.empty();
     return result;
+}
+
+bool ConfigReady()
+{
+    return g_configReady;
+}
+
+float BotXpRate()
+{
+    return g_configReady ? sPlayerbotAIConfig.playerbotsXPrate : 1.0f;
+}
+
+std::string ServerBotsJson()
+{
+    if (!g_configReady)
+        return {};
+    auto flag = [](bool on) -> char const* { return on ? "1" : "0"; };
+    std::ostringstream ss;
+    ss << "\"group_nearby\":\"" << flag(sPlayerbotAIConfig.randomBotGroupNearby) << "\""
+       << ",\"raid_nearby\":\"" << flag(sPlayerbotAIConfig.randomBotRaidNearby) << "\""
+       << ",\"invite_player\":\"" << flag(sPlayerbotAIConfig.randomBotInvitePlayer) << "\""
+       << ",\"timed_logout\":\"" << flag(sPlayerbotAIConfig.randomBotTimedLogout) << "\""
+       << ",\"level_ladder\":\"" << flag(sPlayerbotAIConfig.levelLadder) << "\""
+       << ",\"auto_do_quests\":\"" << flag(sPlayerbotAIConfig.autoDoQuests) << "\""
+       << ",\"disable_activity\":\"" << flag(sPlayerbotAIConfig.disableActivityPriorities) << "\""
+       << ",\"active_alone\":" << sPlayerbotAIConfig.botActiveAlone
+       << ",\"force_active_near\":\"" << flag(sPlayerbotAIConfig.forceActiveWhenNearPlayer) << "\""
+       << ",\"limit_combat\":\"" << flag(sPlayerbotAIConfig.limitCombatActivity) << "\""
+       << ",\"pool_budget_us\":" << sPlayerbotAIConfig.poolTickBudgetUs
+       << ",\"pool_budget_gate_ms\":" << sPlayerbotAIConfig.poolBudgetWhenTickOverMs
+       << ",\"ah_buyer\":\"" << flag(sPlayerbotAIConfig.ahMarketBuyer) << "\""
+       << ",\"lft\":\"" << flag(sPlayerbotAIConfig.randomBotLftEnabled) << "\""
+       << ",\"bg\":\"" << flag(sPlayerbotAIConfig.randomBotBgEnabled) << "\""
+       << ",\"avoid_towns\":\"" << flag(sPlayerbotAIConfig.avoidHostileTowns) << "\""
+       << ",\"leave_zones\":\"" << flag(sPlayerbotAIConfig.leaveOutgrownZones) << "\""
+       << ",\"bot_loot_uncommon\":" << sPlayerbotAIConfig.botLootRateUncommon
+       << ",\"bot_loot_rare\":" << sPlayerbotAIConfig.botLootRateRare
+       << ",\"ah_market\":\"" << flag(sPlayerbotAIConfig.ahMarketEnabled) << "\""
+       << ",\"auto_learn_trainer_spells\":\"" << flag(sPlayerbotAIConfig.autoLearnTrainerSpells) << "\""
+       << ",\"auto_learn_quest_spells\":\"" << flag(sPlayerbotAIConfig.autoLearnQuestSpells) << "\""
+       << ",\"auto_learn_quest_spells_alts\":\"" << flag(sPlayerbotAIConfig.autoLearnQuestSpellsAlts) << "\""
+       << ",\"level_up_mounts\":\"" << flag(sPlayerbotAIConfig.levelUpMounts) << "\""
+       << ",\"turtle_mount_at_level\":" << sPlayerbotAIConfig.turtleMountAtLevel
+       << ",\"remote_commander\":\"" << flag(sPlayerbotAIConfig.remoteCommander) << "\""
+       << ",\"camps_enabled\":\"" << flag(sPlayerbotAIConfig.campEnabled) << "\"";
+    return ss.str();
+}
+
+std::string ServerDiagnosticsJson()
+{
+    if (!g_configReady)
+        return {};
+    auto flag = [](bool on) -> char const* { return on ? "1" : "0"; };
+    std::ostringstream ss;
+    ss << "\"perf_mon\":\"" << flag(sPlayerbotAIConfig.perfMonEnabled) << "\""
+       << ",\"bot_events\":\"" << flag(sPlayerbotAIConfig.hasLog("bot_events.csv")) << "\""
+       << ",\"unreachable\":\"" << flag(sPlayerbotAIConfig.hasLog("unreachable_targets.csv")) << "\""
+       << ",\"deaths\":\"" << flag(sPlayerbotAIConfig.hasLog("deaths.csv")) << "\"";
+    return ss.str();
 }
 
 Brain* Create(Player* bot, Player* master, std::string& error, bool free)
@@ -626,6 +700,70 @@ bool RunAction(Player* bot, char const* action, char const* param)
         return false;
     return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
 }
+
+bool ReadTelemetry(Player* bot, Telemetry& out, bool withStrategies)
+{
+    out = Telemetry{};
+    if (!bot || !bot->IsInWorld())
+        return false;
+    PlayerbotAI* pai = PlayerbotAIStorage::Instance().GetAI(bot->GetGUID());
+    if (!pai || pai->GetBot() != bot || !pai->GetAiObjectContext())
+        return false;
+
+    out.engine = true;
+    out.combatState = pai->GetState() == BotState::BOT_STATE_COMBAT;
+    out.deadState = pai->GetState() == BotState::BOT_STATE_DEAD;
+    if (Action const* last = pai->GetLastExecutedAction(pai->GetState()))
+        out.lastAction = const_cast<Action*>(last)->getName();
+    out.lastTrigger = pai->GetLastExecutedTrigger(pai->GetState());
+    if (withStrategies)
+    {
+        std::string joined;
+        for (std::string_view strategy : pai->GetStrategies(BotState::BOT_STATE_COMBAT))
+        {
+            if (!joined.empty())
+                joined += ", ";
+            joined += strategy;
+        }
+        out.combatStrategies = std::move(joined);
+    }
+
+    AiObjectContext* context = pai->GetAiObjectContext();
+    if (ai::Value<ai::TravelTarget*>* value = context->GetValue<ai::TravelTarget*>("travel target"))
+        if (ai::TravelTarget* target = value->Get(); target && target->IsActive())
+            if (ai::TravelDestination* destination = target->GetDestination())
+            {
+                std::string const purpose = destination->GetShortName();
+                if (!purpose.empty() && purpose != "unknown" && purpose != "idle" && purpose != "none")
+                {
+                    // Same status names and order as TravelStatus (TravelMgr.h).
+                    static char const* const statusNames[] = { "none", "prepare", "ready", "travel", "work", "cooldown", "expired" };
+                    uint8 const status = uint8(target->GetStatus());
+                    out.travelPurpose = purpose;
+                    out.travelTo = destination->GetTitle();
+                    out.travelStatus = status < 7 ? statusNames[status] : "unknown";
+                    out.travelDist = int32(target->Distance(bot));
+                }
+            }
+
+    if (ai::Value<Unit*>* value = context->GetValue<Unit*>("current target"))
+        if (Unit* target = value->Get())
+        {
+            out.currentTarget = target->GetGUID();
+            out.currentTargetName = target->GetName();
+            out.targetHostile = bot->IsHostileTo(target);
+            out.targetDistance = bot->GetDistance(target);
+            // A line-of-sight check walks the VMap; only the unreachable judgement needs it, and only in combat.
+            if (out.combatState && out.targetHostile)
+                out.targetInLos = bot->IsWithinLOSInMap(target);
+        }
+    return true;
+}
+
+void DumpActionCounts()
+{
+    ai::botdiag::DumpActionCounts();
+}
 }
 }
 
@@ -636,6 +774,7 @@ namespace TortoiseBots
 namespace engine
 {
 bool Built() { return false; }
+TickBudgetConfig ReadTickBudgetConfig() { return TickBudgetConfig(); }
 std::string EnsureConfig() { return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)"; }
 Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
 {
@@ -653,7 +792,13 @@ bool InFlight(Brain*) { return false; }
 std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
+bool ReadTelemetry(Player*, Telemetry& out, bool /*withStrategies*/) { out = Telemetry{}; return false; }
+bool ConfigReady() { return false; }
+std::string ServerBotsJson() { return {}; }
+std::string ServerDiagnosticsJson() { return {}; }
+float BotXpRate() { return 1.0f; }
 bool RunAction(Player*, char const*, char const*) { return false; }
+void DumpActionCounts() {}
 }
 }
 

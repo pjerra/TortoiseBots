@@ -34,6 +34,7 @@
 #include "StringFormat.h"
 
 #include "playerbot/policy/ah/AhBuyPolicy.h"
+#include "PlayerbotAIStorage.h"
 #include "runtime/GuildOrderBringPolicy.h"
 #include "runtime/GuildOrderContract.h"
 #include "runtime/GuildOrderDeliveryPolicy.h"
@@ -50,6 +51,14 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+
+// The engine's room-making pass (ai/playerbot/strategy/actions/LootRollAction.cpp).
+// Declared here, not included: that header pulls the bot-brain tree and the cmangos
+// compat shim, whose function-like macros also rename host calls (GetLeaderGuid).
+namespace ai
+{
+bool MakeRoomForGuildOrderLoot(PlayerbotAI* ai, Player* bot, uint32 itemId, uint32 count);
+}
 
 namespace tbhost
 {
@@ -213,6 +222,28 @@ uint32_t BagItemCount(Player* bot, uint32_t itemId)
             for (uint32_t slot = 0; slot < pBag->GetBagSize(); ++slot)
                 add(pBag->GetItemByPos(slot));
     return total;
+}
+
+// One more of `itemId` fits: a free slot, or a stack of it that can grow.
+// CanStoreNewItem also refuses on unique-count and other eligibility rules,
+// which are not "bags full".
+bool HasBagRoomForItem(Player* bot, uint32_t itemId)
+{
+    if (!bot || !itemId)
+        return false;
+    auto hasRoom = [&](Item* item) -> bool
+    {
+        return !item || (item->GetEntry() == itemId && item->GetCount() < item->GetMaxStackCount());
+    };
+    for (uint8_t slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        if (hasRoom(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot)))
+            return true;
+    for (uint8_t bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+        if (Bag* bag = bot->GetBagByPos(bagSlot))
+            for (uint32_t slot = 0; slot < bag->GetBagSize(); ++slot)
+                if (hasRoom(bag->GetItemByPos(slot)))
+                    return true;
+    return false;
 }
 
 class HostGatherCraftProvider final : public IGatherCraftProvider
@@ -1060,6 +1091,7 @@ void TickBotOrder(Player* bot)
         : AuctionBuy().CanBuyOnAuction(botGuidLow, rec.itemId, budget.capped ? budget.remainingCopper : 0);
     in.canDeliverBank = Delivery().CanDeliverToBank(botGuidLow, rec.guildId);
     in.canDeliverMail = Delivery().CanDeliverByMail(botGuidLow, rec.giverGuidLow);
+    in.bagsFull = !HasBagRoomForItem(bot, rec.itemId);
 
     OrderStepDecision const dec = DecideOrderStep(in);
     std::string reason;
@@ -1085,6 +1117,8 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::DeliverMail:
         {
             rec.state = OrderState::Delivering;
+            if (std::string(dec.reason) == "bags-full")
+                rec.reason = OrderReason::BagsFull;
             uint32_t const missing = (rec.amount > rec.delivered) ? (rec.amount - rec.delivered) : 0u;
             bool const ok = Delivery().Deliver(botGuidLow, rec.guildId, rec.giverGuidLow, rec.itemId, missing, reason);
             if (!ok)
@@ -1127,6 +1161,12 @@ void TickBotOrder(Player* bot)
                     rec.reason = OrderReason::None;
                     SetOrderWorking(botGuidLow, false);
                 }
+                else if (DeliveryLostItsStock(rec.state, rec.reason, rec.delivered, rec.amount, inBagsAfter))
+                {
+                    // A bags-full delivery handed over what it carried: back to work.
+                    rec.state = OrderState::Working;
+                    rec.reason = OrderReason::None;
+                }
                 GiveOrder(rec);
             }
             TC_LOG_INFO("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode={} result={}",
@@ -1138,6 +1178,26 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::Craft:
         case OrderStepAction::Gather:
         {
+            // A farm order with full bags and none of the item throws out grey
+            // or white junk to make room; with nothing to throw out it ends now
+            // instead of walking past sources it cannot loot.
+            if (in.bagsFull && FullBagsWithoutStock(rec.type, inBagsBefore))
+            {
+                PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+                if (!ai::MakeRoomForGuildOrderLoot(ai, bot, rec.itemId, 1))
+                {
+                    rec.state = OrderState::Cant;
+                    rec.reason = OrderReason::BagsFull;
+                    GiveOrder(rec);
+                    SetOrderWorking(botGuidLow, false);
+                    TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason=bags-full",
+                        rec.itemId, bot->GetName(), rec.itemId, inBagsBefore, rec.amount);
+                    return;
+                }
+                TC_LOG_INFO("tortoisebots", "[W9] room id={} bot={} item={} have={} want={}",
+                    rec.itemId, bot->GetName(), rec.itemId, inBagsBefore, rec.amount);
+                return;
+            }
             uint64_t const moneyBefore = bot->GetMoney();
             bool const ok = GatherCraft().StepGatherOrCraft(botGuidLow, rec.itemId, dec.remaining, reason,
                 budget.capped, budget.remainingCopper);

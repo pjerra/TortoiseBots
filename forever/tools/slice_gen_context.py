@@ -71,7 +71,7 @@ SLICE2_KEYS = {
              "loot strategy, should get money, inventory item ids, incoming heals",
 }
 # Slice 3 (porting worker, FOREVER-SLICE3-SPEC section 3, listed with creator file:line in forever/docs/SLICE3-KEYS.md): the tank, the pull, the stay
-# and wait strategies and the order actions. Keys the spec deliberately leaves out: `should pull`, `pull nearest target`, `chat`, `pull back`.
+# and wait strategies and the order actions. Keys the spec deliberately leaves out: `chat` (the three pull rows are in PULL_KEYS).
 SLICE3_KEYS = {
     "strategy": "tank assist, threat, stay, free, passive, tank face, wait for attack",
     "action": "tank assist, stay, return to stay position, pull my target, end pull, pull start, pull action, pull end, reach pull, "
@@ -136,8 +136,9 @@ SLICE11_KEYS = {
     "value": "pet dead, pet happy, active spell",
 }
 # World-life slice W1 (FOREVER-W1-W6A-SPEC section 1.3, forever/docs/W1-NOTES.md): the grind target value and its strategy, the
-# actions and triggers of the open-world dead kit, and the graveyard values. Left unregistered on purpose (each one does less, spec
-# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `collision`, `group`, `guild`; the travel
+# actions and triggers of the open-world dead kit, and the graveyard values. Left out of the free kit on purpose (each one does less, spec
+# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
+# COLLISION_KEYS, which a player can add, still not part of the free kit); the travel
 # target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
 # reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
 W1_KEYS = {
@@ -314,7 +315,72 @@ PRESET_KEYS = {
     "trigger": "cs",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS)
+# Rows the compiled kits fire but the slice left unregistered: the AoE dps row, the salvation removal row, the
+# check-values pre-warm, the target books the reach and give-up paths write, the corpse-run timers and three
+# behaviour toggles that stay off until a player enables them.
+S209_KEYS = {
+    "strategy": "dps aoe, "
+                "map, map full, "
+                "attack tagged, preheal, silent",
+    "action": "dps aoe, "
+              "remove blessing of salvation, remove greater blessing of salvation, "
+              "check values",
+    "trigger": "not dps aoe target active, "
+               "has blessing of salvation, has greater blessing of salvation",
+    "value": "all targets, "
+             "keepout set aside, runners let go, unreachable entries, unreachable targets, "
+             "current position, time since last change",
+}
+# The pull rows slice 3 left out. A tank's kit keeps "pull" on the combat engine, so the one row that can start a
+# fight without an order is the non-combat `should pull`: it fires only in a dungeon, on a tank, with a live
+# grouped party where nobody fights and the healer has mana (PullTriggers.cpp), and it pulls a reachable target.
+# "pull back" is the return leg the ordered pulls switch on with ChangeStrategy("+pull back", ALL).
+PULL_KEYS = {
+    "strategy": "pull back",
+    "action": "pull nearest target",
+    "trigger": "should pull",
+    "value": "",
+}
+# The collision row: the bot unstacked itself from a real player in TB. The full factory adds the strategy to every
+# random and real-player bot (AiFactory.cpp:1546, :1588, :1631); the slice kit does not, so the strategy stays a
+# player add (.bot nc collision) and the keys below only make that add work. The action is useful only when the
+# bot overlaps a unit and a non-bot player is within reach (MovementActions.cpp:5492).
+COLLISION_KEYS = {
+    "strategy": "collision",
+    "action": "move out of collision",
+    "trigger": "collision",
+    "value": "nearest non bot players",
+}
+# The sit strategy a player adds to a stayed bot: SitTrigger fires once the stay has lasted SitDelay, SitAction puts
+# the bot in the sit stand state. Nothing adds it to a kit, in TB either.
+SIT_KEYS = {
+    "strategy": "sit",
+    "action": "sit",
+    "trigger": "sit",
+    "value": "",
+}
+# Combat/movement port: the chat `jump` word, the melee kit's `jump::chase` row and the `follow jump` marker that makes
+# a following bot take a jump shortcut, now that JumpAction drives the core's jump spline instead of the 1.12 jump
+# packets (earlier slices left `jump` out because the jump did nothing).
+JUMP_KEYS = {
+    "strategy": "follow jump",
+    "action": "jump",
+    "trigger": "jump",
+    "value": "",
+}
+# TBF #142 (diagnostics): the whisper words `debug`/`cdebug` (the DebugAction families that survive on
+# ForeverCore plus the stubs in forever/src/slice/SliceDebugStubs.cpp), `log` (LogLevelAction), `set value`
+# (SetValueAction) and the log-level value they read. The debug strategies are registered too, so bare
+# `debug` can turn the bot's action-line feedback on (`-debug` turns it off). Kept apart from CH_KEYS so the
+# chat round's own test keeps its exact list.
+DEBUG_KEYS = {
+    "strategy": "debug, debug action, debug move, debug rpg, debug spell, debug travel, debug threat, debug mount, "
+                "debug grind, debug loot, debug log, debug logname, debug stuck, debug xp, debug equip",
+    "action": "debug, cdebug, log, set value",
+    "trigger": "debug, cdebug, log, set value",
+    "value": "log level",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

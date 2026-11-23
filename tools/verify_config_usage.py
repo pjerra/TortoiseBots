@@ -213,7 +213,16 @@ def read_destination(clean, match, members, depth=0):
     return None
 
 
-def iter_code_files(root):
+def iter_code_files(root, files=None):
+    # A caller may hand the build's own file list (forever/tools/gen_aiplayerbot_conf.py): only a
+    # translation unit the build compiles, or a header it includes, can consume a key there.
+    if files is not None:
+        root = pathlib.Path(root)
+        for rel in sorted(files):
+            path = root / rel
+            if path.is_file():
+                yield path, rel
+        return
     for path in sorted(root.rglob('*')):
         if path.is_dir() or path.suffix not in CODE_SUFFIXES:
             continue
@@ -225,14 +234,14 @@ def iter_code_files(root):
         yield path, rel
 
 
-def scan_reads(root=None):
+def scan_reads(root=None, files=None):
     """Return ({member: {keys}}, (call sites, dynamic sites)) over the module."""
     root = pathlib.Path(root) if root else ROOT
     members = config_members(root)
     keys_by_member = {}
     literal_sites = 0
     dynamic_sites = 0
-    for path, _rel in iter_code_files(root):
+    for path, _rel in iter_code_files(root, files):
         clean = strip_comments(path.read_text(errors='replace'))
         for m in GET.finditer(clean):
             literal_sites += 1
@@ -246,16 +255,19 @@ def scan_reads(root=None):
     return keys_by_member, (literal_sites, dynamic_sites)
 
 
-def check(root=None):
-    """Run the check; return a list of human-readable findings."""
+def consumption_index(root=None, files=None):
+    """Return (engine_index, display_index): the token set of every file that can consume a key.
+
+    A member found in any engine token set is consumed. `files` narrows the scan to a build's own
+    sources plus the headers it includes (the Forever generator passes its compiled list); without
+    it every engine file in the module counts, which is the Turtle build's scope.
+    """
     root = pathlib.Path(root) if root else ROOT
-    findings = []
-    keys_by_member, _ = scan_reads(root)
     # Single pass: one token set per file, each file stripped of comments
     # and tokenized once, then every member is tested against the index.
     engine_index = {}  # rel -> token set (None for the config header)
     display_index = {}  # rel -> token set, snapshot stream only
-    for path, rel in iter_code_files(root):
+    for path, rel in iter_code_files(root, files):
         if rel in CONFIG_FILES:
             if rel != CONFIG_CPP:
                 continue  # declarations are not consumption
@@ -295,7 +307,7 @@ def check(root=None):
         bodies.setdefault(m.group(1), set()).update(
             re.findall(r'\w+', m.group(2)))
     called = set()
-    for path, rel in iter_code_files(root):
+    for path, rel in iter_code_files(root, files):
         if rel in CONFIG_FILES:
             continue
         called.update(re.findall(r'\.(\w+)\s*\(', strip_comments(
@@ -316,6 +328,15 @@ def check(root=None):
         if m.group(1) in called and not GET.search(m.group(2)):
             engine_index[f'{CONFIG_CPP}#{m.group(1)}'] = set(
                 re.findall(r'\w+', m.group(2)))
+    return engine_index, display_index
+
+
+def check(root=None, files=None):
+    """Run the check; return a list of human-readable findings."""
+    root = pathlib.Path(root) if root else ROOT
+    findings = []
+    keys_by_member, _ = scan_reads(root, files)
+    engine_index, display_index = consumption_index(root, files)
     for member in sorted(keys_by_member):
         if member in ALLOWLIST:
             continue

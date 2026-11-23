@@ -166,6 +166,12 @@ int main()
     assert(PickNearestCampSpotIndex(0, 0.0f, 0.0f, 0.0f, 10.0f, spots) == -1);
     assert(PickNearestCampSpotIndex(1, 95.0f, 100.0f, 10.0f, 40.0f, spots) == 0);
 
+    // The tent never takes the last free slot.
+    assert(!CampTentFitsBags(0));
+    assert(!CampTentFitsBags(1));
+    assert(CampTentFitsBags(2));
+    assert(CampTentFitsBags(20));
+
     // Movement arrival & 15s timeout
     assert(!HasCampMoveTimedOut(0, CAMP_MOVE_TIMEOUT_MS));
     assert(!HasCampMoveTimedOut(CAMP_MOVE_TIMEOUT_MS - 1, CAMP_MOVE_TIMEOUT_MS));

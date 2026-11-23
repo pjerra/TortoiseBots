@@ -163,7 +163,7 @@ TurnSituation TurnSituationOf(::Player* player, PlayerbotAI* ai)
 
 // One-shot headless RNDBOT scatter using persisted GenericRpg destinations.
 // Fail-closed: any validation miss retains original position. No DB scan,
-// no GenerateTravelNodes, no homebind update.
+// no travel-node generation, no homebind update.
 bool IsUsableTeleportPoint(ai::WorldPosition const& point)
 {
     if (!point.isOverworld() || !point.isValid() || !point.loadMapAndVMap(0))

@@ -38,6 +38,16 @@ bool DebugAction::Execute(Event& event)
 
     std::string text = event.GetParam();
 
+    // Bare `debug`/`cdebug` turns the bot's action-line feedback on, `debug off` turns it off.
+    // The lines themselves come from the debug strategy (PlayerbotAIConfig::CanLogAction reads it).
+    if (text.empty() || text == "on" || text == "off")
+    {
+        bool const on = text != "off";
+        ai->ChangeStrategy(on ? "+debug" : "-debug", BotState::BOT_STATE_NON_COMBAT);
+        ai->TellPlayer(requester, std::string("Action lines ") + (on ? "on" : "off") + " for " + bot->GetName() + ".");
+        return true;
+    }
+
     if (text == "help" || text.find("help ") == 0)
         return HandleDebugHelp(event, requester, text, isMod);
     else if (text == "avoid scan" && isMod)
