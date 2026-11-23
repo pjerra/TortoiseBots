@@ -690,7 +690,7 @@ bool RunAction(Player* bot, char const* action, char const* param)
     return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
 }
 
-bool ReadTelemetry(Player* bot, Telemetry& out)
+bool ReadTelemetry(Player* bot, Telemetry& out, bool withStrategies)
 {
     out = Telemetry{};
     if (!bot || !bot->IsInWorld())
@@ -705,14 +705,17 @@ bool ReadTelemetry(Player* bot, Telemetry& out)
     if (Action const* last = pai->GetLastExecutedAction(pai->GetState()))
         out.lastAction = const_cast<Action*>(last)->getName();
     out.lastTrigger = pai->GetLastExecutedTrigger(pai->GetState());
-    std::string joined;
-    for (std::string_view strategy : pai->GetStrategies(BotState::BOT_STATE_COMBAT))
+    if (withStrategies)
     {
-        if (!joined.empty())
-            joined += ", ";
-        joined += strategy;
+        std::string joined;
+        for (std::string_view strategy : pai->GetStrategies(BotState::BOT_STATE_COMBAT))
+        {
+            if (!joined.empty())
+                joined += ", ";
+            joined += strategy;
+        }
+        out.combatStrategies = std::move(joined);
     }
-    out.combatStrategies = std::move(joined);
 
     AiObjectContext* context = pai->GetAiObjectContext();
     if (ai::Value<ai::TravelTarget*>* value = context->GetValue<ai::TravelTarget*>("travel target"))
@@ -739,7 +742,9 @@ bool ReadTelemetry(Player* bot, Telemetry& out)
             out.currentTargetName = target->GetName();
             out.targetHostile = bot->IsHostileTo(target);
             out.targetDistance = bot->GetDistance(target);
-            out.targetInLos = bot->IsWithinLOSInMap(target);
+            // A line-of-sight check walks the VMap; only the unreachable judgement needs it, and only in combat.
+            if (out.combatState && out.targetHostile)
+                out.targetInLos = bot->IsWithinLOSInMap(target);
         }
     return true;
 }
@@ -770,7 +775,7 @@ bool InFlight(Brain*) { return false; }
 std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
-bool ReadTelemetry(Player*, Telemetry& out) { out = Telemetry{}; return false; }
+bool ReadTelemetry(Player*, Telemetry& out, bool /*withStrategies*/) { out = Telemetry{}; return false; }
 bool ConfigReady() { return false; }
 std::string ServerBotsJson() { return {}; }
 std::string ServerDiagnosticsJson() { return {}; }

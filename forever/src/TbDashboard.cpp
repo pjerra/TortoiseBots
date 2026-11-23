@@ -459,8 +459,12 @@ void TrackBots(std::vector<Player*> const& bots, std::unordered_map<ObjectGuid, 
                     details << "Combat target '" << engineState.currentTargetName << "' unreachable / out of LoS for "
                             << (t.unreachableDurationMs / 1000.0f) << "s (dist=" << std::fixed << std::setprecision(1)
                             << engineState.targetDistance << ", inLos=" << (engineState.targetInLos ? "true" : "false") << ")";
+                    std::string activeStrategy;
+                    TortoiseBots::engine::Telemetry detail;
+                    if (TortoiseBots::engine::ReadTelemetry(bot, detail, true))
+                        activeStrategy = detail.combatStrategies;
                     SendAnomaly(bot, "UNREACHABLE_TARGET", "WARN", engineState.currentTargetName, details.str(),
-                        engineState.combatStrategies, engineState.lastAction);
+                        activeStrategy, engineState.lastAction);
                 }
             }
             else
@@ -1781,7 +1785,7 @@ void OnActionFailed(Player* bot, std::string const& actionName, std::string cons
         rec.lastReportMs = nowMs;
         TortoiseBots::engine::Telemetry telemetry;
         std::string activeStrategy = strategy;
-        if (activeStrategy.empty() && TortoiseBots::engine::ReadTelemetry(bot, telemetry))
+        if (activeStrategy.empty() && TortoiseBots::engine::ReadTelemetry(bot, telemetry, true))
             activeStrategy = telemetry.combatStrategies;
         SendAnomaly(bot, "ACTION_LOOP", "WARN", targetName, "Action '" + actionName + "' failed >= 5 times within 2 seconds",
             activeStrategy, actionName);

@@ -106,7 +106,7 @@ struct Telemetry
     bool targetInLos = true;
 };
 
-bool ReadTelemetry(Player* bot, Telemetry& out);
+bool ReadTelemetry(Player* bot, Telemetry& out, bool withStrategies = false);
 
 // True once the engine's own config file has been read (EnsureConfig succeeded). The Server panel only reports live
 // getters, so a build or a failed config load reports no engine settings.
