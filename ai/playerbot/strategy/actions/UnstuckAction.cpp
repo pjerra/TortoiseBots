@@ -28,7 +28,7 @@ static bool HearthLeadsSomewhereUseful(PlayerbotAI* ai, Player* bot)
     // hearthstone cooldown. 0 disables the gate.
     if (sPlayerbotAIConfig.unstuckHearthMinDistance > 0.0f)
     {
-        WorldPosition const home = HomeBindLocationCompat(bot);
+        WorldPosition const home(HomeBindLocationCompat(bot));
         if (home.isValid() && WorldPosition(bot).fDist(home) < sPlayerbotAIConfig.unstuckHearthMinDistance)
             return false;
     }
@@ -73,7 +73,7 @@ static bool LongStuckFallbackTeleport(PlayerbotAI* ai, Player* bot, Player* mast
         return false;
 
     WorldPosition const botPos(bot);
-    WorldPosition home = HomeBindLocationCompat(bot);
+    WorldPosition home(HomeBindLocationCompat(bot));
     WorldSafeLocsEntry const* grave = ClosestGraveyardCompat(bot, bot->GetMapId(),
         bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetTeam());
     // Same guard as RepopAction: the core lookup can return a graveyard on
@@ -186,7 +186,7 @@ static void GiveUpCombatStuckTarget(PlayerbotAI* ai, Player* bot)
 
     Unit* target = AI_VALUE(Unit*, "current target");
     ObjectGuid attackGuid = AI_VALUE(ObjectGuid, "attack target");
-    if (!target && attackGuid)
+    if (!target && !attackGuid.IsEmpty())
         target = ai->GetUnit(attackGuid);
     if (!ShouldGiveUpCombatStuckTarget(target != nullptr,
         target && !sServerFacade.UnitIsDead(target), target == bot,
