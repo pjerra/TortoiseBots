@@ -92,6 +92,7 @@
 #include "host/chat/TbChatIn.h"
 #include "host/TbAddonChannel.h"
 #include "host/TbAddonInfo.h"
+#include "host/TbBotPerfPure.h"
 #include "host/TbAddonActions.h"
 #include "host/TbAddonTotem.h"
 #include "host/TbAddonVerbs.h"
@@ -176,6 +177,13 @@ struct PerfWindow
 PerfWindow& Perf()
 {
     static PerfWindow window;
+    return window;
+}
+
+// The BOTPERF line's own window: independent of `.tb perf` (which resets on read), reset when the line is written.
+TortoiseBots::perf::Window& BotPerf()
+{
+    static TortoiseBots::perf::Window window;
     return window;
 }
 
@@ -354,6 +362,24 @@ public:
         perf.lastCombatUs = budget.combatUs;
         perf.targetMs = budget.targetMs;
         perf.smoothedMs = budget.smoothedTickMs;
+        if (BotMgr::Instance().Enabled())
+        {
+            TortoiseBots::perf::Window& botPerf = BotPerf();
+            botPerf.elapsedMs += diff;
+            ++botPerf.ticks;
+            botPerf.passSumUs += us;
+            botPerf.maxPassUs = std::max(botPerf.maxPassUs, us);
+            botPerf.worldSumMs += worldMs;
+            if (botPerf.elapsedMs >= 30000)
+            {
+                BotMgr::FleetCounts const counts = BotMgr::Instance().GetFleetCounts();
+                TC_LOG_INFO("tortoisebots", "{}", TortoiseBots::perf::BotPerfLine(botPerf, counts.bots, counts.engines,
+                    counts.owned, counts.mastered, counts.free, counts.pool));
+                botPerf = TortoiseBots::perf::Window();
+            }
+        }
+        else
+            BotPerf() = TortoiseBots::perf::Window();
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)

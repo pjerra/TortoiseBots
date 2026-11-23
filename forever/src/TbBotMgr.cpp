@@ -1525,6 +1525,21 @@ void BotMgr::UpdateTickBudget(uint32 diff)
     _budgetUs = (poolUs == 0 || combatUs == 0) ? 0 : poolUs + combatUs;
 }
 
+BotMgr::FleetCounts BotMgr::GetFleetCounts() const
+{
+    FleetCounts counts;
+    for (auto const& [guid, bot] : _bots)
+    {
+        ++counts.bots;
+        counts.engines += bot.brain ? 1 : 0;
+        counts.owned += bot.owned ? 1 : 0;
+        counts.mastered += bot.master.IsEmpty() ? 0 : 1;
+        counts.free += bot.free ? 1 : 0;
+        counts.pool += bot.pool ? 1 : 0;
+    }
+    return counts;
+}
+
 void BotMgr::Update(uint32 diff)
 {
     // S1-R2: the chat lines the hook queued since the last update, resolved and judged here, on the world thread, before any bot's
@@ -1719,6 +1734,15 @@ void BotMgr::Update(uint32 diff)
     }
 
     TickQuestGroups(diff);
+
+    // The engine's cumulative action_counts.csv snapshot every five minutes of tick time. The dump itself
+    // checks AiPlayerbot.ActionCountsLog, so the off path is one branch and an add per tick.
+    _actionCountsElapsedMs += diff;
+    if (_actionCountsElapsedMs >= 5u * 60u * 1000u)
+    {
+        _actionCountsElapsedMs = 0;
+        engine::DumpActionCounts();
+    }
 }
 
 void BotMgr::TickQuestGroups(uint32 diff)

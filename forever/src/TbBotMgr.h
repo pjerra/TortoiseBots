@@ -134,6 +134,17 @@ public:
     // Every logged-in bot (the dashboard roster).
     std::vector<ObjectGuid> BotGuids() const { std::vector<ObjectGuid> out; out.reserve(_bots.size()); for (auto const& [guid, bot] : _bots) out.push_back(guid); return out; }
     std::size_t Count() const { return _bots.size(); }
+    // BOTPERF and `.tb stats`: the fleet in one pass over the live table (no world read, no DB).
+    struct FleetCounts
+    {
+        uint32 bots = 0;
+        uint32 engines = 0;
+        uint32 owned = 0;
+        uint32 mastered = 0;
+        uint32 free = 0;
+        uint32 pool = 0;
+    };
+    FleetCounts GetFleetCounts() const;
     // H3 (slice 3): the host master guid of a bot (empty = none or not a bot), and what `.tb state` shows of its follow state.
     ObjectGuid MasterOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? ObjectGuid::Empty : itr->second.master; }
     bool FollowStatus(ObjectGuid characterGuid, bool& away, uint32& awaySeconds, bool& blocked, std::string& blockedWhy, bool& hasBrain) const { auto itr = _bots.find(characterGuid); if (itr == _bots.end()) return false; Bot const& b = itr->second; away = b.masterAway; awaySeconds = (b.graceLeftMs + 999) / 1000; blocked = b.followBlocked; blockedWhy = b.followBlockedWhy; hasBrain = b.brain != nullptr; return true; }
@@ -330,6 +341,7 @@ private:
     };
     std::vector<QuestGroupEntry> _questGroups;
     uint32 _questGroupTimerMs = 0;
+    uint32 _actionCountsElapsedMs = 0;   // tick time since the last action_counts.csv snapshot (5 min)
 
     std::unordered_map<ObjectGuid, Bot> _bots;
     std::unordered_set<ObjectGuid> _knownBots;

@@ -29,6 +29,7 @@
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
 #include "playerbot/strategy/actions/CustomStrategyEditAction.h"
+#include "playerbot/strategy/actions/DebugAction.h"
 #include "playerbot/strategy/actions/DropQuestAction.h"
 #include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FollowActions.h"
@@ -40,6 +41,7 @@
 #include "playerbot/strategy/actions/LeaveGroupAction.h"
 #include "playerbot/strategy/actions/ListQuestsActions.h"
 #include "playerbot/strategy/actions/ListSpellsAction.h"
+#include "playerbot/strategy/actions/LogLevelAction.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
 #include "playerbot/strategy/actions/MailAction.h"
@@ -56,6 +58,7 @@
 #include "playerbot/strategy/actions/RtiAction.h"
 #include "playerbot/strategy/actions/SaveManaAction.h"
 #include "playerbot/strategy/actions/SellAction.h"
+#include "playerbot/strategy/actions/SetValueAction.h"
 #include "playerbot/strategy/actions/ShareQuestAction.h"
 #include "playerbot/strategy/actions/SpreadDistanceAction.h"
 #include "playerbot/strategy/actions/StatsAction.h"
@@ -82,6 +85,7 @@
 #include "playerbot/strategy/generic/ConserveManaStrategy.h"
 #include "playerbot/strategy/generic/ConsumableStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
+#include "playerbot/strategy/generic/DebugStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FocusStrategy.h"
@@ -163,6 +167,7 @@
 #include "playerbot/strategy/values/LastSpellCastTimeValue.h"
 #include "playerbot/strategy/values/LastSpellCastValue.h"
 #include "playerbot/strategy/values/LeastHpTargetValue.h"
+#include "playerbot/strategy/values/LogLevelValue.h"
 #include "playerbot/strategy/values/LootStrategyValue.h"
 #include "playerbot/strategy/values/LootValues.h"
 #include "playerbot/strategy/values/MaintenanceValues.h"
@@ -215,7 +220,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (44 of its keys)
+    // the registry of StrategyContext (59 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -265,6 +270,21 @@ namespace slice
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionStrategy(ai); };
             creators["sit"] = [](PlayerbotAI* ai) { return new SitStrategy(ai); };
             creators["follow jump"] = [](PlayerbotAI* ai) { return new FollowJumpStrategy(ai); };
+            creators["debug"] = [](PlayerbotAI* ai) { return new DebugStrategy(ai); };
+            creators["debug action"] = [](PlayerbotAI* ai) { return new DebugActionStrategy(ai); };
+            creators["debug move"] = [](PlayerbotAI* ai) { return new DebugMoveStrategy(ai); };
+            creators["debug rpg"] = [](PlayerbotAI* ai) { return new DebugRpgStrategy(ai); };
+            creators["debug spell"] = [](PlayerbotAI* ai) { return new DebugSpellStrategy(ai); };
+            creators["debug travel"] = [](PlayerbotAI* ai) { return new DebugTravelStrategy(ai); };
+            creators["debug threat"] = [](PlayerbotAI* ai) { return new DebugThreatStrategy(ai); };
+            creators["debug mount"] = [](PlayerbotAI* ai) { return new DebugMountStrategy(ai); };
+            creators["debug grind"] = [](PlayerbotAI* ai) { return new DebugGrindStrategy(ai); };
+            creators["debug loot"] = [](PlayerbotAI* ai) { return new DebugLootStrategy(ai); };
+            creators["debug log"] = [](PlayerbotAI* ai) { return new DebugLogStrategy(ai); };
+            creators["debug logname"] = [](PlayerbotAI* ai) { return new DebugLogNameStrategy(ai); };
+            creators["debug stuck"] = [](PlayerbotAI* ai) { return new DebugStuckStrategy(ai); };
+            creators["debug xp"] = [](PlayerbotAI* ai) { return new DebugXpStrategy(ai); };
+            creators["debug equip"] = [](PlayerbotAI* ai) { return new DebugEquipStrategy(ai); };
         }
     };
 
@@ -410,7 +430,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (63 of its keys)
+    // the registry of ChatActionContext (67 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -479,6 +499,10 @@ namespace slice
             creators["reset ai soft"] = [](PlayerbotAI* ai) { return new ResetAiAction(ai, false); };
             creators["cs"] = [](PlayerbotAI* ai) { return new CustomStrategyEditAction(ai); };
             creators["jump"] = [](PlayerbotAI* ai) { return new JumpAction(ai); };
+            creators["debug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
+            creators["cdebug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
+            creators["log"] = [](PlayerbotAI* ai) { return new LogLevelAction(ai); };
+            creators["set value"] = [](PlayerbotAI* ai) { return new SetValueAction(ai); };
         }
     };
 
@@ -653,7 +677,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (67 of its keys)
+    // the registry of ChatTriggerContext (71 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -726,6 +750,10 @@ namespace slice
             creators["reset values"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset values"); };
             creators["cs"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cs"); };
             creators["jump"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "jump"); };
+            creators["debug"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "debug"); };
+            creators["cdebug"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cdebug"); };
+            creators["log"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "log"); };
+            creators["set value"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "set value"); };
         }
     };
 
@@ -745,7 +773,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (222 of its keys)
+    // the registry of ValueContext (223 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -973,11 +1001,12 @@ namespace slice
             creators["current position"] = [](PlayerbotAI* ai) { return new CurrentPositionValue(ai); };
             creators["time since last change"] = [](PlayerbotAI* ai) { return new TimeSinceLastChangeValue(ai); };
             creators["nearest non bot players"] = [](PlayerbotAI* ai) { return new NearestNonBotPlayersValue(ai); };
+            creators["log level"] = [](PlayerbotAI* ai) { return new LogLevelValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 56, kActions = 170, kTriggers = 214, kValues = 222;
+    constexpr unsigned kStrategies = 71, kActions = 174, kTriggers = 218, kValues = 223;
 }
 }
 

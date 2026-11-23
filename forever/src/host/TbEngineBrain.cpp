@@ -39,6 +39,7 @@
 #include "Unit.h"
 
 #include "playerbot/BotActionLog.h"
+#include "playerbot/BotDiagnostics.h"
 #include "playerbot/BotState.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -758,6 +759,11 @@ bool ReadTelemetry(Player* bot, Telemetry& out, bool withStrategies)
         }
     return true;
 }
+
+void DumpActionCounts()
+{
+    ai::botdiag::DumpActionCounts();
+}
 }
 }
 
@@ -792,6 +798,7 @@ std::string ServerBotsJson() { return {}; }
 std::string ServerDiagnosticsJson() { return {}; }
 float BotXpRate() { return 1.0f; }
 bool RunAction(Player*, char const*, char const*) { return false; }
+void DumpActionCounts() {}
 }
 }
 

@@ -225,10 +225,6 @@ std::vector<GuildOrderEntrySource> GuildOrderSourcesFor(uint32_t) { NotePool(); 
 // =====================================================================================================================
 // Misc legacy services. Owner files named per line.
 // =====================================================================================================================
-// CastCancelLog.cpp: diagnostics only (a log line per cancelled cast), off.
-void LogCastCancel(PlayerbotAI*, const char*, CurrentSpellTypes, float) { NoteMisc(); }
-void LogCastCancelNonMelee(PlayerbotAI*, const char*, bool, float) { NoteMisc(); }
-void LogCastCancelStop(PlayerbotAI*, const char*, float) { NoteMisc(); }
 // FishAction.cpp
 void EndFishingSession(PlayerbotAI*, char const*) { NoteMisc(); }
 // BotAreaTriggers.cpp
@@ -322,6 +318,7 @@ bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
 double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
 void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
+int32 RandomBotFacade::GetValueValidTime(uint32, std::string) { NotePool(); return 0; }
 std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
 // The core checks an item it has not created through a temporary Item (Player::CanEquipNewItem); swap=true as on Turtle:
 // the caller compares old and new itself, and an occupied slot must not reject every upgrade.

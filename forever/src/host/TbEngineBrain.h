@@ -137,6 +137,10 @@ float BotXpRate();
 // Executes a legacy action by key for `bot` (used by host world-life errands).
 bool RunAction(Player* bot, char const* action, char const* param);
 
+// The periodic action-count snapshot (AiPlayerbot.ActionCountsLog): the engine counts every executed action and
+// this writes the cumulative action_counts.csv rows. No-op without the engine or with the key off.
+void DumpActionCounts();
+
 struct BrainDeleter
 {
     void operator()(Brain* brain) const { Destroy(brain); }

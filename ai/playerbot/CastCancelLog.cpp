@@ -45,7 +45,7 @@ void ai::LogCastCancel(PlayerbotAI* ai, const char* site, CurrentSpellTypes slot
     // removed in this tick, so a cancel at a dying boss's summons can read freed memory. Resolve the guid the cast
     // holds: a target that left the world reads none.
     ObjectGuid const targetGuid = cast->m_targets.getUnitTargetGuid();
-    Unit* const target = targetGuid ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
+    Unit* const target = !targetGuid.IsEmpty() ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
     char info1[192];
     snprintf(info1, sizeof(info1), "site=%s,slot=%s,spell=%u,cast_pct=%d,target=%s,moved_yd=%.1f",
              site, SlotWord(slot), GetSpellEntryCompat(cast->m_spellInfo)->Id, pct, target ? CStrCompat(target->GetName()) : "none", movedYd);
