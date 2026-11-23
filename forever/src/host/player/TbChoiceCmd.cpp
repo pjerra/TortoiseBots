@@ -24,6 +24,7 @@
 
 #include "Group.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "playerbot/BotState.h"
 #include "playerbot/MagePortalPolicy.h"
@@ -672,6 +673,13 @@ bool HandleBlessing(Player* player, player::Caller const& caller, player::OwnerS
             return true;
         }
         targetName = words[2];
+        // The stored list is `Name:blessing+Name:blessing`: a name holding one of its separators, or any other character
+        // a character name cannot hold, would split or corrupt the list, so it is refused before any paladin is touched.
+        if (!IsBlessingPlayerName(targetName) || !normalizePlayerName(targetName))
+        {
+            player::Refuse(player, verb, "usage", "not a character name: " + targetName);
+            return true;
+        }
         word = words[3];
     }
     else

@@ -669,72 +669,124 @@ bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     return onIcon;
 }
 
-// ---- `.tb strategy <bot> co|nc <+name,-name ...>` (test setup) ----
-bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+// ---- `.tb strategy`: test setup for a bot's strategy set ----
+// `.tb strategy <bot> co|nc <+name,-name,~name ...> | <bot> reset | role:<tank|healer|dps> co|nc <changes ...>`
+namespace
 {
-    Words const args = Split(tail);
-    if (!RequireBuilt(handler, args, "strategy"))
+// The forced roles as PlayerbotAIStorage stores them (ChatHelper.h BOT_ROLE_*); `.tb role` writes the same values.
+constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;
+
+char const* RoleWord(uint8 role)
+{
+    return role == RoleTank ? "tank" : (role == RoleHealer ? "healer" : "dps");
+}
+
+// `role:<tank|healer|dps>`: true when `word` is a role target. `ok` says whether the role word itself is one of the three.
+bool RoleTargetOf(std::string const& word, uint8& role, bool& ok)
+{
+    ok = false;
+    if (word.rfind("role:", 0) != 0)
         return false;
-    bool failed = false;
-    Player* bot = ResolveBot(handler, args, "strategy", failed);
-    if (failed)
-        return false;
-    if (args.w.size() < 2)
-        return Fail(handler, args, "strategy", "missing-argument", "co|nc <+name,-name ...>");
-    std::string const stateWord = Lower(args.w[1]);
-    if (stateWord != "co" && stateWord != "nc")
-        return Fail(handler, args, "strategy", "bad-argument", "the state is co (combat) or nc (non-combat)");
-    BotState const state = stateWord == "co" ? BotState::BOT_STATE_COMBAT : BotState::BOT_STATE_NON_COMBAT;
+    std::string const name = word.substr(5);
+    if (name == "tank")
+        role = RoleTank;
+    else if (name == "healer")
+        role = RoleHealer;
+    else if (name == "dps")
+        role = RoleDps;
+    else
+        return true;   // a role target with a word that is none of the three: the caller refuses it
+    ok = true;
+    return true;
+}
+
+// One change: '+' adds, '-' removes, '~' toggles on the state the bot is in (remove when held there, add when not).
+struct StrategyChange
+{
+    char op;
+    std::string name;
+};
+
+// The words after the scope, parsed: a state word and its changes, or `reset`.
+struct StrategyLine
+{
+    bool reset = false;
+    BotState state = BotState::BOT_STATE_COMBAT;
+    std::string stateWord;
+    std::vector<StrategyChange> items;
+};
+
+// Fills `line` from the words after the scope word; false (after the refusal) when the line is not usable.
+bool ParseStrategyLine(ChatHandler* handler, Words const& args, size_t from, StrategyLine& line)
+{
+    if (args.w.size() <= from)
+        return Fail(handler, args, "strategy", "missing-argument", "co|nc <+name,-name,~name ...> | reset");
+    std::string const head = Lower(args.w[from]);
+    if (head == "reset")
+    {
+        if (args.w.size() != from + 1)
+            return Fail(handler, args, "strategy", "unexpected-argument", args.w[from + 1]);
+        line.reset = true;
+        return true;
+    }
+    if (head != "co" && head != "nc")
+        return Fail(handler, args, "strategy", "bad-argument", "the state is co (combat) or nc (non-combat), or the word reset");
+    line.stateWord = head;
+    line.state = head == "co" ? BotState::BOT_STATE_COMBAT : BotState::BOT_STATE_NON_COMBAT;
     std::string rest;
-    for (size_t i = 2; i < args.w.size(); ++i)
+    for (size_t i = from + 1; i < args.w.size(); ++i)
         rest += (rest.empty() ? "" : " ") + args.w[i];
     if (rest.empty())
-        return Fail(handler, args, "strategy", "missing-argument", "co|nc <+name,-name ...>");
+        return Fail(handler, args, "strategy", "missing-argument", "co|nc <+name,-name,~name ...>");
     for (char c : rest)
-        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == ',' || c == '_'))
-            return Fail(handler, args, "strategy", "bad-argument", "strategy changes use letters, digits, space, + - , _");
-
-    struct Item { char op; std::string name; };
-    std::vector<Item> items;
-    size_t from = 0;
-    while (from <= rest.size())
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == '~' || c == ',' || c == '_'))
+            return Fail(handler, args, "strategy", "bad-argument", "strategy changes use letters, digits, space, + - ~ , _");
+    // `rest` is the words from `from + 1` on, rejoined: it starts at its own byte 0, not at the word index.
+    size_t start = 0;
+    while (start <= rest.size())
     {
-        size_t const comma = rest.find(',', from);
-        std::string const piece = Trim(rest.substr(from, comma == std::string::npos ? std::string::npos : comma - from));
+        size_t const comma = rest.find(',', start);
+        std::string const piece = Trim(rest.substr(start, comma == std::string::npos ? std::string::npos : comma - start));
         if (piece.empty())
             return Fail(handler, args, "strategy", "bad-argument", "an empty strategy change (a stray comma)");
-        if (piece[0] != '+' && piece[0] != '-')
-            return Fail(handler, args, "strategy", "bad-argument", "each change starts with + (add) or - (remove): " + piece);
+        if (piece[0] != '+' && piece[0] != '-' && piece[0] != '~')
+            return Fail(handler, args, "strategy", "bad-argument", "each change starts with + (add), - (remove) or ~ (toggle): " + piece);
         std::string const name = Trim(piece.substr(1));
         if (name.empty())
-            return Fail(handler, args, "strategy", "bad-argument", "a + or - without a strategy name");
-        items.push_back({ piece[0], name });
+            return Fail(handler, args, "strategy", "bad-argument", "a +, - or ~ without a strategy name");
+        line.items.push_back({ piece[0], name });
         if (comma == std::string::npos)
             break;
-        from = comma + 1;
+        start = comma + 1;
     }
-    if (items.size() > 16)
+    if (line.items.size() > 16)
         return Fail(handler, args, "strategy", "bad-argument", "at most 16 changes in one command");
+    return true;
+}
 
-    PlayerbotAI* ai = AiOf(bot);
-    if (!ai || !ai->GetAiObjectContext())
-        return Fail(handler, args, "strategy", "no-engine", "the bot has no running engine (`.tb engine <bot> on`)");
-    // Every name must be a strategy of the bot's context before anything changes (no half-applied list).
-    for (Item const& item : items)
+// The first change this bot's context does not register ("" when every one is known).
+std::string FirstUnknownStrategy(PlayerbotAI* ai, std::vector<StrategyChange> const& items)
+{
+    for (StrategyChange const& item : items)
         if (!ai->GetAiObjectContext()->GetStrategy(item.name))
-            return Fail(handler, args, "strategy", "unknown-strategy", item.name + " is not a strategy this build registers for the bot");
+            return item.name;
+    return std::string();
+}
 
-    Reply reply(handler, args, "strategy");
-    reply.Begin();
-    uint32 applied = 0, refused = 0;
-    for (Item const& item : items)
+// Applies a parsed line to one bot, one record per change, read back from the engine.
+void ApplyStrategyLine(Reply& reply, Player* bot, StrategyLine const& line, uint32& applied, uint32& refused)
+{
+    PlayerbotAI* ai = AiOf(bot);
+    for (StrategyChange const& item : line.items)
     {
-        bool const had = ai->HasStrategy(item.name, state);
-        ai->ChangeStrategy(std::string(1, item.op) + item.name, state);
-        bool const has = ai->HasStrategy(item.name, state);
-        bool const holds = item.op == '+' ? has : !has;
+        // `~` takes the state the bot is in now: remove when the strategy is held there, add when it is not.
+        char const op = item.op == '~' ? (ai->HasStrategy(item.name, line.state) ? '-' : '+') : item.op;
+        bool const had = ai->HasStrategy(item.name, line.state);
+        ai->ChangeStrategy(std::string(1, op) + item.name, line.state);
+        bool const has = ai->HasStrategy(item.name, line.state);
+        bool const holds = op == '+' ? has : !has;
         Rec rec("strategy");
-        rec.S("bot", bot->GetName()).S("state", stateWord).S("op", item.op == '+' ? "add" : "remove").S("name", item.name).S("tag", "SETUP");
+        rec.S("bot", bot->GetName()).S("state", line.stateWord).S("op", item.op == '~' ? "toggle" : (op == '+' ? "add" : "remove")).S("name", item.name).S("tag", "SETUP");
         if (holds)
         {
             ++applied;
@@ -747,8 +799,101 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         reply.Line(rec);
     }
+}
+} // namespace
+
+bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "strategy"))
+        return false;
+    if (args.w.empty())
+        return Fail(handler, args, "strategy", "missing-target", "name a bot, or role:<tank|healer|dps>");
+
+    uint8 role = 0;
+    bool roleKnown = false;
+    bool const roleScope = RoleTargetOf(Lower(args.w[0]), role, roleKnown);
+    if (roleScope)
+    {
+        // `role:<tank|healer|dps>`: every bot of the GM's group whose stored role is that one, each with its own record.
+        if (!roleKnown)
+            return Fail(handler, args, "strategy", "bad-argument", "the role is tank, healer or dps: role:<tank|healer|dps>");
+        StrategyLine line;
+        if (!ParseStrategyLine(handler, args, 1, line))
+            return false;
+        if (line.reset)
+            return Fail(handler, args, "strategy", "bad-argument", "reset takes one bot: `.tb strategy <bot> reset`");
+        Player* sender = SenderPlayer(handler);
+        Group* group = sender ? sender->GetGroup() : nullptr;
+        if (!group)
+            return Fail(handler, args, "strategy", "bad-target", "role:<tank|healer|dps> applies to the bots of your group: you are not in one");
+        std::vector<Player*> bots;
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        {
+            Player* member = ObjectAccessor::FindPlayer(slot.guid);
+            if (!member || !member->IsInWorld() || !IsHostBot(member))
+                continue;
+            if (PlayerbotAIStorage::Instance().GetPlayerForcedRole(member->GetGUID()) != role)
+                continue;
+            bots.push_back(member);
+        }
+        std::sort(bots.begin(), bots.end(), [](Player* left, Player* right) { return left->GetName() < right->GetName(); });
+        // Every target's engine and every name are checked before the first change: nothing half-applied.
+        for (Player* member : bots)
+        {
+            PlayerbotAI* targetAi = AiOf(member);
+            if (!targetAi || !targetAi->GetAiObjectContext())
+                return Fail(handler, args, "strategy", "no-engine", std::string(member->GetName()) + " has no running engine (`.tb engine <bot> on`)");
+            std::string const unknown = FirstUnknownStrategy(targetAi, line.items);
+            if (!unknown.empty())
+                return Fail(handler, args, "strategy", "unknown-strategy", unknown + " is not a strategy this build registers for " + member->GetName());
+        }
+        Reply reply(handler, args, "strategy");
+        reply.Begin();
+        uint32 applied = 0, refused = 0;
+        for (Player* member : bots)
+            ApplyStrategyLine(reply, member, line, applied, refused);
+        Rec end("strategy");
+        end.P("target", { "role", RoleWord(role) }).S("state", line.stateWord).N("bots", static_cast<int64>(bots.size())).N("applied", applied).N("refused", refused);
+        reply.End(end);
+        if (refused)
+            handler->SetSentErrorMessage(true);
+        return refused == 0;
+    }
+
+    bool failed = false;
+    Player* bot = ResolveBot(handler, args, "strategy", failed);
+    if (failed)
+        return false;
+    StrategyLine line;
+    if (!ParseStrategyLine(handler, args, 1, line))
+        return false;
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return Fail(handler, args, "strategy", "no-engine", "the bot has no running engine (`.tb engine <bot> on`)");
+    if (line.reset)
+    {
+        // The factory kit again (default combat, non-combat, dead and reaction strategies, the forced role's line).
+        ai->ResetStrategies();
+        Reply reply(handler, args, "strategy");
+        reply.Begin();
+        reply.Line(Rec("strategy").S("bot", bot->GetName()).S("op", "reset").S("tag", "SETUP").S("status", "ok"));
+        Rec end("strategy");
+        end.S("target", bot->GetName()).S("op", "reset").N("applied", 1).N("refused", 0);
+        reply.End(end);
+        return true;
+    }
+    // Every name must be a strategy of the bot's context before anything changes (no half-applied list).
+    std::string const unknown = FirstUnknownStrategy(ai, line.items);
+    if (!unknown.empty())
+        return Fail(handler, args, "strategy", "unknown-strategy", unknown + " is not a strategy this build registers for the bot");
+
+    Reply reply(handler, args, "strategy");
+    reply.Begin();
+    uint32 applied = 0, refused = 0;
+    ApplyStrategyLine(reply, bot, line, applied, refused);
     Rec end("strategy");
-    end.S("target", bot->GetName()).S("state", stateWord).N("applied", applied).N("refused", refused);
+    end.S("target", bot->GetName()).S("state", line.stateWord).N("applied", applied).N("refused", refused);
     reply.End(end);
     if (refused)
         handler->SetSentErrorMessage(true);

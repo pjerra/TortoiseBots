@@ -244,6 +244,20 @@ int main()
         CHECK(ai::SetBlessingPlayerOrder(players, "AEGNOR", "auto").empty());
     }
 
+    // `.bot blessing player <name>`: the store is `Name:blessing+Name:blessing`, so a name must never hold either of the
+    // list's separators, and only a character name's letters (with its apostrophe) count.
+    // case: BlessingPlayerNameRejectsStructure
+    {
+        CHECK(c::IsBlessingPlayerName("Aegnor"));
+        CHECK(c::IsBlessingPlayerName("Kel'Thuzad"));
+        CHECK(!c::IsBlessingPlayerName(""));
+        CHECK(!c::IsBlessingPlayerName("Aegnor+Might"));     // `+` splits two entries
+        CHECK(!c::IsBlessingPlayerName("Aegnor:kings"));      // `:` separates a name from its blessing
+        CHECK(!c::IsBlessingPlayerName("Aegnor;Might"));      // `;` is a list separator of the reply grammar
+        CHECK(!c::IsBlessingPlayerName("Aeg nor"));
+        CHECK(!c::IsBlessingPlayerName(std::string(33, 'a')));  // over the core's 32-byte name length
+    }
+
     // `.bot choice` (<bot|party> <kind> <value|auto>): a kind belongs to one class (or two for the hunter and the warlock),
     // poisons are bag items rather than spells, and a word only counts for its own kind.
     // case: ChoiceKindForClass

@@ -6,6 +6,7 @@
 
 #include "host/player/TbPlayerAuthPure.h"
 
+#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -135,6 +136,19 @@ inline std::vector<std::string> ChoiceWords(std::string_view tail)
         words.push_back(word);
     }
     return words;
+}
+
+// A name the per-character blessing list can hold (`PaladinBlessingOrderPolicy.h` stores `Name:blessing+Name:blessing`):
+// the list's own separators are structure, so `+` and `:` in a name would split it, and every other byte is a character
+// name's letter (or its apostrophe), at most the core's 32-byte name length.
+inline bool IsBlessingPlayerName(std::string_view name)
+{
+    if (name.empty() || name.size() > 32)
+        return false;
+    for (char c : name)
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '\''))
+            return false;
+    return true;
 }
 
 // `on`/`off` only; anything else is a usage refusal.

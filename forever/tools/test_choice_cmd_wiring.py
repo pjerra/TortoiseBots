@@ -277,6 +277,20 @@ def check_blessing_order(cpp):
     assert "PutValue(botAi, ai::BlessingOrderKey(" in write, "the class form stores the class row"
 
 
+def check_blessing_player_name(cpp, pure):
+    # #228 review: the stored list is `Name:blessing+Name:blessing`, so a name holding `+` or `:` would split it: the name is
+    # checked by the pure rule (letters and the apostrophe only) and normalized the way every other name in the module is.
+    helper = function_body(pure, r"inline bool IsBlessingPlayerName\(std::string_view name\)\s*\{")
+    assert "std::isalnum(" in helper, "a name is letters"
+    assert "c == '\\''" in helper, "a name may hold its apostrophe"
+    assert "name.size() > 32" in helper, "a name is at most the core's 32 bytes"
+    body = function_body(cpp, BLESSING_SIG)
+    assert "IsBlessingPlayerName(targetName)" in body, "the player name is not validated against the list's structure"
+    assert "normalizePlayerName(targetName)" in body, "the name is not normalized like other names"
+    assert body.index("IsBlessingPlayerName(") < body.index("ai::SetBlessingPlayerOrder("), \
+        "a bad name must be refused before anything is stored"
+
+
 def check_paladin_guard(cpp):
     body = function_body(cpp, PALADIN_SIG)
     assert '"not-paladin"' in body, "a non-paladin is refused"
@@ -432,6 +446,9 @@ class Wiring(unittest.TestCase):
 
     def test_blessing_decides_before_it_writes(self):
         check_blessing_order(self.cpp)
+
+    def test_blessing_player_name_is_validated(self):
+        check_blessing_player_name(self.cpp, self.pure)
 
     def test_the_paladin_guard(self):
         check_paladin_guard(self.cpp)
