@@ -3,9 +3,10 @@
 // gated by `TbPlayerAuthPure.h` (`Tier::Owner` for changes, `Tier::Tactical` for
 // status) and persisted via `manual saved string` + `sPlayerbotDbStore.Save(ai)`.
 #include "host/TbAddonBlessing.h"
-#include "host/TbAddonBlessingPure.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+
+#include "host/TbAddonBlessingPure.h"
 
 #include "compat/botpch_forever.h"
 #include "host/TbAddonChannel.h"
@@ -272,6 +273,8 @@ bool HandleBlessingChat(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 } // namespace TortoiseBots
 
 #else
+
+#include "Chat.h"
 
 namespace TortoiseBots
 {
