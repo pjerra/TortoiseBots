@@ -7,6 +7,7 @@
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
+#include "host/TbMountShop.h"
 
 #include "Bag.h"
 #include "CellImpl.h"
@@ -45,9 +46,12 @@ namespace
 using namespace TortoiseBots::world;
 
 constexpr float kMaxTownVisitDistYd = 500.0f;
+constexpr float kMountSearchDistYd = 150.0f;
 constexpr float kDuelSearchDistYd = 30.0f;
 constexpr uint64_t kErrandWalkTimeoutMs = 45000;
 constexpr uint64_t kDebugRefusalIntervalMs = 60000;
+constexpr uint64_t kMountNoPlanCooldownMs = 60000;
+constexpr uint64_t kMountStepPauseMs = 3000;
 constexpr uint32_t kSpellDuel = 7266;
 
 struct ActiveErrand
@@ -67,6 +71,7 @@ struct BotErrandState
     uint64_t trainerCooldownUntilMs = 0;
     uint64_t bankCooldownUntilMs = 0;
     uint64_t ahCooldownUntilMs = 0;
+    uint64_t mountCooldownUntilMs = 0;
     uint64_t duelCooldownUntilMs = 0;
     uint64_t nextDebugLogMs = 0;
     ActiveErrand current;
@@ -86,6 +91,7 @@ char const* KindName(CapitalErrandKind kind)
         case CapitalErrandKind::Trainer: return "trainer";
         case CapitalErrandKind::Bank: return "bank";
         case CapitalErrandKind::AuctionHouse: return "ah";
+        case CapitalErrandKind::Mount: return "mount";
         default: return "none";
     }
 }
@@ -363,9 +369,24 @@ void SetKindCooldown(BotErrandState& st, CapitalErrandKind kind, uint64_t nowMs)
         case CapitalErrandKind::Trainer: st.trainerCooldownUntilMs = until; break;
         case CapitalErrandKind::Bank: st.bankCooldownUntilMs = until; break;
         case CapitalErrandKind::AuctionHouse: st.ahCooldownUntilMs = until; break;
+        case CapitalErrandKind::Mount: st.mountCooldownUntilMs = until; break;
         default: break;
     }
     st.nextGlobalTryMs = nowMs + kErrandGlobalIntervalMs;
+}
+
+// Training is one step: with riding learned the bot still has to walk to the
+// vendor, so a successful training resumes in seconds instead of after the
+// full cooldown. Buying and using wait the full cooldown: the mount spell is
+// learned from the item's cast, and a second purchase must not follow a cast
+// that has not landed yet.
+void FinishMountErrand(BotErrandState& st, uint64_t nowMs, bool ok, mountshop::Step step)
+{
+    uint64_t const pause = (ok && step == mountshop::Step::TrainRiding)
+        ? kMountStepPauseMs
+        : kMountCooldownMs;
+    st.mountCooldownUntilMs = nowMs + pause;
+    st.nextGlobalTryMs = nowMs + pause;
 }
 
 void HandleDuels(Player* bot, BotErrandState& st, uint64_t nowMs)
@@ -501,10 +522,24 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         if (bot->GetDistance(target) <= INTERACTION_DISTANCE)
         {
             bot->StopMoving();
-            bool const ok = ExecuteErrandAtTarget(bot, st.current.kind, st.current.targetGuid);
-            TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
-                bot->GetName(), KindName(st.current.kind), ok ? 1 : 0);
-            SetKindCooldown(st, st.current.kind, nowMs);
+            if (st.current.kind == CapitalErrandKind::Mount)
+            {
+                mountshop::Plan const plan = mountshop::FindPlan(bot, INTERACTION_DISTANCE + 1.0f);
+                std::string refusal;
+                uint32_t spent = 0;
+                bool const ok = plan.step != mountshop::Step::None &&
+                    mountshop::ExecutePlan(bot, plan, &spent, &refusal);
+                TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind=mount step={} ok={} spent={} {}",
+                    bot->GetName(), mountshop::StepToken(plan.step), ok ? 1 : 0, spent, refusal);
+                FinishMountErrand(st, nowMs, ok, plan.step);
+            }
+            else
+            {
+                bool const ok = ExecuteErrandAtTarget(bot, st.current.kind, st.current.targetGuid);
+                TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
+                    bot->GetName(), KindName(st.current.kind), ok ? 1 : 0);
+                SetKindCooldown(st, st.current.kind, nowMs);
+            }
             st.current = ActiveErrand{};
         }
         else if (!bot->isMoving())
@@ -538,8 +573,18 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     if (nowMs < st.nextGlobalTryMs)
         return;
 
+    mountshop::Plan mountPlan;
+    bool needsMount = false;
+    if (nowMs >= st.mountCooldownUntilMs)
+    {
+        mountPlan = mountshop::FindPlan(bot, kMountSearchDistYd);
+        needsMount = mountPlan.step != mountshop::Step::None;
+        if (!needsMount)
+            st.mountCooldownUntilMs = nowMs + kMountNoPlanCooldownMs;
+    }
+
     bool const inCapital = IsInCapitalArea(bot);
-    if (!inCapital)
+    if (!inCapital && !needsMount)
     {
         if (nowMs >= st.nextDebugLogMs)
         {
@@ -550,7 +595,7 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         return;
     }
 
-    Creature* classTrainer = (nowMs >= st.trainerCooldownUntilMs) ? FindNearestClassTrainer(bot, kMaxTownVisitDistYd) : nullptr;
+    Creature* classTrainer = (inCapital && nowMs >= st.trainerCooldownUntilMs) ? FindNearestClassTrainer(bot, kMaxTownVisitDistYd) : nullptr;
     bool const hasTrainable = classTrainer && HasTrainableClassSpell(bot, classTrainer);
 
     CapitalErrandInput in;
@@ -561,12 +606,13 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     in.isMoving = false;
     in.isCasting = false;
     in.inDuel = false;
-    in.inCapital = true;
-    in.auctionEnabled = tbhost::ah::IsWorldAuctionEnabled();
-    in.unreadMailCount = tbhost::town::GetUnreadMailCount(bot);
+    in.inCapital = inCapital;
+    in.auctionEnabled = inCapital && tbhost::ah::IsWorldAuctionEnabled();
+    in.unreadMailCount = inCapital ? tbhost::town::GetUnreadMailCount(bot) : 0;
     in.hasTrainableSpell = hasTrainable;
-    in.freeBagSlots = CountFreeBagSlots(bot);
-    in.bankableItemCount = (in.freeBagSlots <= kBankFreeSlotsThreshold) ? CountBankableItems(bot) : 0;
+    in.needsMountPurchase = needsMount;
+    in.freeBagSlots = inCapital ? CountFreeBagSlots(bot) : 0;
+    in.bankableItemCount = (inCapital && in.freeBagSlots <= kBankFreeSlotsThreshold) ? CountBankableItems(bot) : 0;
     in.ahSellableItemCount = in.auctionEnabled ? CountAhSellableItems(bot) : 0;
     in.nowMs = nowMs;
     in.nextGlobalTryMs = st.nextGlobalTryMs;
@@ -574,6 +620,7 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     in.trainerCooldownUntilMs = st.trainerCooldownUntilMs;
     in.bankCooldownUntilMs = st.bankCooldownUntilMs;
     in.ahCooldownUntilMs = st.ahCooldownUntilMs;
+    in.mountCooldownUntilMs = st.mountCooldownUntilMs;
 
     CapitalErrandKind const pick = PickCapitalErrand(in);
     if (pick == CapitalErrandKind::None)
@@ -582,8 +629,8 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         {
             st.nextDebugLogMs = nowMs + kDebugRefusalIntervalMs;
             TC_LOG_DEBUG("tortoisebots",
-                "[W2] capital-errand-skip bot={} reason=none-picked unread={} train={} freeSlots={} bankable={} ahEnabled={} ahSellable={}",
-                bot->GetName(), in.unreadMailCount, hasTrainable ? 1 : 0, in.freeBagSlots,
+                "[W2] capital-errand-skip bot={} reason=none-picked unread={} train={} mount={} freeSlots={} bankable={} ahEnabled={} ahSellable={}",
+                bot->GetName(), in.unreadMailCount, hasTrainable ? 1 : 0, mountPlan.reason.c_str(), in.freeBagSlots,
                 in.bankableItemCount, in.auctionEnabled ? 1 : 0, in.ahSellableItemCount);
         }
         st.nextGlobalTryMs = nowMs + kErrandGlobalIntervalMs;
@@ -607,6 +654,19 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         case CapitalErrandKind::AuctionHouse:
             dest = tbhost::ah::FindNearestFactionAuctioneer(bot, kMaxTownVisitDistYd);
             break;
+        case CapitalErrandKind::Mount:
+            if (mountPlan.step == mountshop::Step::UseItem)
+            {
+                std::string refusal;
+                uint32_t spent = 0;
+                bool const ok = mountshop::ExecutePlan(bot, mountPlan, &spent, &refusal);
+                TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind=mount step=use-item ok={} spent={} {}",
+                    bot->GetName(), ok ? 1 : 0, spent, refusal);
+                FinishMountErrand(st, nowMs, ok, mountPlan.step);
+                return;
+            }
+            dest = ObjectAccessor::GetCreature(*bot, mountPlan.npc);
+            break;
         default:
             break;
     }
@@ -626,6 +686,16 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     if (bot->GetDistance(dest) <= INTERACTION_DISTANCE)
     {
         bot->StopMoving();
+        if (pick == CapitalErrandKind::Mount)
+        {
+            std::string refusal;
+            uint32_t spent = 0;
+            bool const ok = mountshop::ExecutePlan(bot, mountPlan, &spent, &refusal);
+            TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind=mount step={} ok={} spent={} {}",
+                bot->GetName(), mountshop::StepToken(mountPlan.step), ok ? 1 : 0, spent, refusal);
+            FinishMountErrand(st, nowMs, ok, mountPlan.step);
+            return;
+        }
         bool const ok = ExecuteErrandAtTarget(bot, pick, dest->GetGUID());
         TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
             bot->GetName(), KindName(pick), ok ? 1 : 0);

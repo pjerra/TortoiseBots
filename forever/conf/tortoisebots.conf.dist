@@ -228,7 +228,9 @@ TortoiseBots.World.GroupQuests = 1
 #
 #    TortoiseBots.World.CapitalErrands
 #        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
-#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates).
+#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates). Also lets a free bot within
+#                     150 yd of a riding trainer or its race's mount vendor learn riding and buy the mount with its own
+#                     gold (normal at 40, epic at 60); nothing is granted.
 #        Default:     1
 #
 
