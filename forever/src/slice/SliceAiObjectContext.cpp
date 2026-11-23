@@ -726,7 +726,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (215 of its keys)
+    // the registry of ValueContext (219 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -947,11 +947,15 @@ namespace slice
             creators["warlock spread attacker manual"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker manual", false, false, true, true); };
             creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };
             creators["all targets"] = [](PlayerbotAI* ai) { return new AllTargetsValue(ai); };
+            creators["keepout set aside"] = [](PlayerbotAI* ai) { return new KeepoutSetAsideValue(ai); };
+            creators["runners let go"] = [](PlayerbotAI* ai) { return new RunnersLetGoValue(ai); };
+            creators["unreachable entries"] = [](PlayerbotAI* ai) { return new UnreachableEntriesValue(ai); };
+            creators["unreachable targets"] = [](PlayerbotAI* ai) { return new UnreachableTargetsValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 49, kActions = 166, kTriggers = 210, kValues = 215;
+    constexpr unsigned kStrategies = 49, kActions = 166, kTriggers = 210, kValues = 219;
 }
 }
 
