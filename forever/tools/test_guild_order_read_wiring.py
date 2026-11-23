@@ -62,7 +62,7 @@ class TestGuildOrderReadWiring(unittest.TestCase):
         self.assertIn("WorldQueryCompat", reads)
         self.assertIn("gameobject_loot_template", reads)
         self.assertIn("reference_loot_template", reads)
-        self.assertIn("GetSkillLineAbilitiesBySkill", reads)
+        self.assertIn("Player::GetClassicProfessionSkill", reads)
         self.assertNotIn("WorldDatabase.Query", reads)
         # Live preview data comes from the existing host seams, not a second copy.
         self.assertIn("tbhost::ah::QueryMarketByItemId", reads)

@@ -601,7 +601,11 @@ inline void EnsureCampSurvivalSkillCompat(Player* /*bot*/, uint32 /*cap*/) { tbc
 inline void SetRestBonusCompat(Player* /*bot*/, float /*bonus*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
 inline void ClearWaterBreathingCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
 // The zone of a fishing area (T `AreaEntry::GetById(id)->ZoneId`). Failure value: 0 ("no zone found": the caller keeps the area id).
-inline uint32 FishingZoneOfAreaCompat(uint32 /*areaId*/) { tbcompat::Unported(tbcompat::Feature::Camp); return 0; }
+inline uint32 FishingZoneOfAreaCompat(uint32 areaId)
+{
+    AreaTableEntry const* area = AreaEntryOfKeyCompat(areaId, 0);
+    return area ? area->ParentAreaID : 0;
+}
 // The movespeed cheat: T `UpdateSpeed(type, true, 10)` forces a 10x rate for walk, run and swim; F sets that rate directly
 // (Unit::SetSpeedRate is where the forced update writes it, Unit.cpp:9480), and the core recomputes its aura part on top.
 inline void SpeedCheatCompat(Player* bot)

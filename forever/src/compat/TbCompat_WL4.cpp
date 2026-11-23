@@ -5,6 +5,7 @@
 #include "compat/botpch_forever.h"
 
 #include "TbCompat_WL4.h"
+#include "TbCompat_Fishing.h"
 
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
@@ -567,3 +568,35 @@ namespace ai
             sTravelNodeMap.saveNodeStore();
     }
 }
+
+namespace tbcompat
+{
+bool NearestFishingSpot(std::uint32_t mapId, float x, float y, float z, float maxDistanceYd,
+    std::uint32_t maxZoneSkill, FishingSpot& out)
+{
+    WorldPosition const from(mapId, x, y, z);
+    WorldPosition spot;
+    uint32 zone = 0;
+    int32 zoneSkill = 0;
+    if (!sTravelMgr.NearestFishSpotOnMap(mapId, from, maxDistanceYd, maxZoneSkill, spot, zone, zoneSkill))
+        return false;
+
+    out.mapId = mapId;
+    out.x = spot.getX();
+    out.y = spot.getY();
+    out.z = spot.getZ();
+    out.zone = zone;
+    out.zoneSkill = zoneSkill;
+    return true;
+}
+
+bool FishingStoreLoaded()
+{
+    return sTravelMgr.HasFishSpots();
+}
+
+std::int32_t FishingBaseSkill(std::uint32_t areaId)
+{
+    return FishingBaseSkillQuietWL4(areaId);
+}
+} // namespace tbcompat

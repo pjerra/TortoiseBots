@@ -114,8 +114,8 @@ first, and a `set` is validated for every target before the first value changes.
 | `.tb additem <bot> <item id> [count]`, `.tb removeitem [<character>] <item id> [count]`, `.tb use <bot> <item id> [self]` | items |
 | `.tb spells <bot>`, `.tb spell <id>`, `.tb spellscan`, `.tb item <id>` | what the spell and item mirrors hold |
 | `.tb pool create <n>` / `.tb pool prune [confirm]` / `.tb pool start` / `.tb pool stop` / `.tb pool status` / `.tb pool population <n\|low\|high>` | the bot pool (W0): make n level-1 pool characters at `TortoiseBots.Pool.CreatePerMinute`; list (`confirm` = remove) the unfinished creation rows; start the scheduler (target `TortoiseBots.Pool.TargetOnline`, alternating factions, `LoginsPerMinute` per 60 s, sessions and offline times rolled inside the configured ranges); stop it (every pool bot logs out, 5 per second); one status line (`state= target= online= alliance= horde= size= due= logins_60s= drain= last_pass_us=`, plus `capped by accounts: <n>` when the target is above the accounts left to the pool). One session per account, so the pool holds at most one character of each account; a bot that got a master (`.tb group`, a commander binding) leaves the pool's count and is never logged out by it, and its account is out of the pool's reach until the binding ends (a target above the accounts left shows in `capped by accounts`); a lowered target never logs out a dead or fighting bot; `population` changes the online target at runtime (`low`/`high` are the `TortoiseBots.Pool.PopulationLow`/`High` presets, a number is used as-is; the pool adds or logs out bots gradually, and `.reload config` puts the configured target back) |
-| `.tb guildorder create <bot> <item id> <amount> [farm\|craft\|buy]` / `list` / `cancel <bot>` / `status <bot>` / `work <bot> [id]` / `access [<bot\|guild id>]` / `rank <rank>` / `reassign <bot> <newBot>` | guild orders (W9): the bot farms, crafts or buys the items and delivers them to the guild bank or by mail; `status` shows `done/total` and the step it is on. `access` reports the guild's bot rank, the bank tabs that rank may deposit into and whether you may order or change the rank; `rank` (promote+demote right) moves every module-owned bot of your guild to that rank and stores it in `tortoise_bots_guild_bot_rank`; `reassign` moves an order to another guild bot (same permission as giving orders; the target must have no running order) |
-| `.tb guildorder search <bot> <farm\|craft\|buy> [cat=<kind>] <text>` / `who [<bot\|guild id>] <craft\|farm> <text>` / `preview <bot> <farm\|craft\|buy> <item> <amount>` / `steps <bot>` | read-only guild order lookups: which orderable items the bot can farm (herb/ore nodes), craft (a known recipe) or buy (AH), which online guild bots can make or gather an item, what a new order would use and cost (bags, mail, recipe reagents, AH listing, delivery), and the order's step timeline. `cat=herb\|ore\|leather\|fish\|cloth\|drop\|other`; they never change an order |
+| `.tb guildorder create <bot> <item id> <amount> [farm\|craft\|buy]` / `create <bot> enchant <spell link or id>` / `list` / `cancel <bot>` / `status <bot>` / `work <bot> [id]` / `meet <bot>` / `access [<bot\|guild id>]` / `rank <rank>` / `reassign <bot> <newBot>` | guild orders (W9): the bot farms, crafts or buys the items and delivers them to the guild bank or by mail; `status` shows `done/total` and the step it is on. `create … enchant` places one permanent enchant the bot knows (its Enchanting skill covers it; the giver must be a character) and `meet` is the giver's Meet press, standing in the bot's capital: the bot walks over, takes missing reagents in a materials trade, opens the enchant trade (put the item in the "will not be traded" slot), casts the enchant and confirms it with a whisper (`status` shows `ready`, `coming`, `enchanting`, then `done`). `access` reports the guild's bot rank, the bank tabs that rank may deposit into and whether you may order or change the rank; `rank` (promote+demote right) moves every module-owned bot of your guild to that rank and stores it in `tortoise_bots_guild_bot_rank`; `reassign` moves an order to another guild bot (same permission as giving orders; the target must have no running order) |
+| `.tb guildorder search <bot> <farm\|craft\|buy\|enchant> [cat=<kind>] <text>` / `who [<bot\|guild id>] <craft\|farm\|enchant> <text>` / `preview <bot> <farm\|craft\|buy> <item> <amount>` / `preview <bot> enchant <spell link or id>` / `steps <bot>` | read-only guild order lookups: which orderable items the bot can farm (herb/ore nodes), craft (a known recipe) or buy (AH), which permanent enchants the bot knows (name, slot, required skill, verdict, reagents with bags+mail counts), which online guild bots can make, gather or cast it, what a new order would use and cost (bags, mail, recipe or enchant reagents, AH listing, delivery), and the order's step timeline. `cat=herb\|ore\|leather\|fish\|cloth\|drop\|other`; they never change an order |
 | `.tb craftorder create <bot> <item id> <amount>` / `status <bot>` / `cancel <bot>` | a personal craft order, no guild needed: the crafter bot gets missing reagents (sub-craft, a nearby node that drops them, the auction house within the order's gold cap), keeps a `done/total` counter and mails the items to the ordering character (from the console: to the bot itself) |
 | `.tb perf`, `.tb unported` | tick cost window / the unported-feature counters |
 
@@ -999,4 +999,45 @@ Server-side diagnostics:
 * `CastCancel` rows in `bot_events.csv` — with `AiPlayerbot.RaidBossDiagnostics = 1` and `bot_events.csv` in
   `AiPlayerbot.AllowedLogFiles`, every module-side cast cancel writes one row (site, slot, spell, cast
   percent, target, distance moved).
+
+## 4. Addon order window (`TBM` `order` verb)
+
+`TBFM` (TortoiseBotsForeverManager) speaks the guild-order window over the addon channel. The module
+answers the `order` verb (`forever/src/host/TbAddonOrders.cpp`) and advertises the capability tokens
+`guild-orders`, `guild-order-nobuy` and `guild-order-steps`; `RegisterVerb` also advertises the verb
+itself, so the addon routes the command natively instead of the `.tb` bridge.
+
+Accepted payloads (the reply shapes are the ones `BotOrder.lua:57-75` parses):
+
+| Payload | Answer |
+|---|---|
+| `order list` | `TBM:ORDER_BEGIN`, `TBM:ORDER_ACCESS`, one `TBM:ORDER` per row, `TBM:ORDER_END` |
+| `order access` | one `TBM:ORDER_ACCESS` |
+| `order rank <idx>` | `ACTION_ACK order rank:<idx> 1 rank`, then a fresh `TBM:ORDER_ACCESS` |
+| `order reassign <bot> <newBot>` | `ACTION_ACK order bot:<bot> 1 reassign` |
+| `order <bot> cancel` | `ACTION_ACK order bot:<bot> 1 cancel` |
+| `order <bot> steps` | `TBM:ORDER_STEPS_BEGIN`, `TBM:ORDER_STEP` rows, `TBM:ORDER_STEPS_END` |
+| `order <bot> preview <farm\|craft> <item> <n> [bring=..]` | one `TBM:ORDER_PREVIEW` |
+| `order <bot> <farm\|craft> <item> <n> [hours\|inf] [keep] [gold=..] [bring=..]` | `ACTION_ACK order bot:<bot> 1 <farm\|craft>`, then a fresh list snapshot |
+| `order search <bot> <farm\|craft> [cat=..] <text>` | `TBM:ORDER_ITEMS_BEGIN`, `TBM:ORDER_ITEM` rows, `TBM:ORDER_ITEMS_END` |
+| `order search <bot> enchant <text>` | an empty `TBM:ORDER_ENCHANTS` pair |
+| `order search <craft\|enchant> <text>` | `TBM:ORDER_WHO` rows (empty for enchant) |
+| `order <bot> enchant <spell>` / `meet` | `ACTION_ERR` (enchant orders are not implemented) |
+
+Rules:
+
+* `order list` and `access` read the existing order store and access report; `search`, `who`, `preview`
+  and `steps` replay the existing `.tb guildorder` read verbs through a capturing `ChatHandler` and
+  reshape their stable records, so the two transports cannot drift. Mutations call the same store,
+  access and reassign functions with the same permission gates (`MayGiveOrders`, `MayChangeBotRank`).
+* Buy orders are refused and `guild-order-nobuy` is always advertised (owner rule: no Buy option for
+  players). Enchant search answers an empty pair; enchant create/meet refuse.
+* The store has no live `TBM:ORDER` push yet, so a newly created order is reported with a list snapshot
+  right after the ACK; progress then follows the addon's 30 s `order list` poll.
+* Fields the module's read records do not carry are sent as their protocol's "none" value, never
+  invented: `zone`/`difficulty`/`chance`/`minLevel` on search items, `minutes`/`zone`/`difficulty` on the
+  preview. A preview reagent's shortfall rides the `farm` lane (the order sources it), not the
+  player-must-send lane.
+* The `ORDER_ACCESS` gold bit comes from the bot rank's own `guild_rank.rights` withdraw-gold right and
+  only when the guild has a bank tab.
 

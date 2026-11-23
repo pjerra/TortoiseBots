@@ -1,9 +1,12 @@
 #include "host/TbHostCraftOrderPure.h"
+#include "host/TbHostGuildOrderEnchant.h"
 #include "host/TbHostGuildOrderFish.h"
+#include "host/TbHostFishing.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildOrderReassign.h"
 #include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderQueues.h"
 
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -258,6 +261,7 @@ class HostGatherCraftProvider final : public IGatherCraftProvider
         uint32_t itemId = 0;
         uint32_t beforeCount = 0;
         bool isCraft = false;
+        bool isFish = false;
     };
     std::unordered_map<uint32_t, PendingStep> _pending;
     std::unordered_map<uint32_t, uint32_t> _pendingAhMail;
@@ -366,7 +370,8 @@ public:
     bool CanGather(uint32_t botGuidLow, uint32_t itemId) const override
     {
         Player* bot = FindOnlineBot(botGuidLow);
-        return bot && tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId);
+        return bot && (tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId) ||
+            tbhost::fishing::CanFishOrder(bot, itemId));
     }
 
     bool CanCraft(uint32_t botGuidLow, uint32_t itemId) const override
@@ -394,10 +399,16 @@ public:
 
         if (auto it = _pending.find(botGuidLow); it != _pending.end())
         {
-            uint32_t const afterCount = BagItemCount(bot, it->second.itemId);
-            tbhost::craft_order::PendingStepOutcome const outcome =
-                tbhost::craft_order::EvaluatePendingStep(it->second.beforeCount, afterCount, it->second.isCraft);
+            PendingStep const pending = it->second;
             _pending.erase(it);
+            uint32_t const afterCount = BagItemCount(bot, pending.itemId);
+            if (pending.isFish && tbhost::fishing::TakeCaught(bot))
+            {
+                outReason = "fishing";
+                return true;
+            }
+            tbhost::craft_order::PendingStepOutcome const outcome =
+                tbhost::craft_order::EvaluatePendingStep(pending.beforeCount, afterCount, pending.isCraft);
             outReason = outcome.reason;
             return outcome.ok;
         }
@@ -512,6 +523,21 @@ public:
                 return false;
             }
             outReason = stateOut.empty() ? "craft-failed" : stateOut;
+            return false;
+        }
+
+        if (tbhost::fishing::CanFishOrder(bot, itemId))
+        {
+            std::string fishReason;
+            if (tbhost::fishing::StartOrderErrand(bot, itemId, fishReason))
+            {
+                _pending[botGuidLow] = { itemId, beforeCount, false, true };
+                outReason = "fishing";
+                return false;
+            }
+            // The item is fishing loot, not a node: do not fall through to
+            // the gather search that cannot find it and would hide the reason.
+            outReason = fishReason.empty() ? "no-water" : fishReason;
             return false;
         }
 
@@ -945,6 +971,11 @@ bool GiveOrder(OrderRecord record)
     if (!record.createdAt)
         record.createdAt = now;
     record.updatedAt = now;
+    // Unspent guild gold outlives the order: the row parks as a refund stub
+    // instead of disappearing, and the refund pass pays it from any banker
+    // visit, then deletes the stub.
+    if (IsFinished(record.state) && record.guildGoldHeld > 0)
+        record.cancelled = true;
 
     std::string const sql = Trinity::StringFormat(
         "REPLACE INTO `tortoise_bots_guild_order` ({}, `ah_gold_spent`) VALUES "
@@ -988,6 +1019,40 @@ bool CancelOrder(uint32_t botGuidLow)
 {
     if (!botGuidLow)
         return false;
+
+    std::optional<OrderRecord> heldGoldRow;
+    {
+        StoreState& s = State();
+        std::lock_guard<std::mutex> lock(s.mutex);
+        if (!EnsureSchema(s))
+            return false;
+        auto const it = s.orders.find(botGuidLow);
+        if (it == s.orders.end())
+            return false;
+        if (it->second.guildGoldHeld > 0)
+            heldGoldRow = it->second;
+    }
+
+    // Unspent guild gold outlives the order: cancelling parks the row as a
+    // refund stub the refund pass pays at the next banker visit, instead of
+    // dropping a debt the guild is still owed.
+    if (heldGoldRow)
+    {
+        OrderRecord stub = *heldGoldRow;
+        stub.cancelled = true;
+        stub.state = OrderState::Working;
+        stub.reason = OrderReason::None;
+        stub.supplyStep = SupplyStep::None;
+        stub.supplyReturnStep = SupplyStep::None;
+        stub.supplyItemId = 0;
+        stub.supplyCount = 0;
+        stub.supplyGoldCount = 0;
+        stub.needItems.clear();
+        stub.needWhispered = false;
+        stub.needBankDenied = false;
+        stub.reportedHave = 0;
+        return GiveOrder(stub);
+    }
 
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
@@ -1037,6 +1102,8 @@ void OnBotLogout(uint32_t botGuidLow)
     if (!botGuidLow)
         return;
     DisenchantForgetBot(botGuidLow);
+    ForgetGuildOrderQueueSession(botGuidLow);
+    ForgetEnchantOrder(botGuidLow);
     g_hostGatherCraft.ClearPending(botGuidLow);
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
@@ -1063,6 +1130,8 @@ bool IsItemNeededByGuildOrder(uint64_t guildId, uint32_t itemId)
         if (o.itemId == itemId)
             return true;
         if (o.type == OrderType::Craft && tbhost::prof::IsReagentForItem(o.itemId, itemId))
+            return true;
+        if (o.type == OrderType::Enchant && IsEnchantReagent(o.itemId, itemId))
             return true;
         for (auto const& ni : o.needItems)
         {
@@ -1098,6 +1167,10 @@ void TickBotOrder(Player* bot)
     }
 
     OrderRecord rec = *ordOpt;
+    if (rec.type == OrderType::Enchant)
+        return; // TickEnchantOrder owns this row: its itemId is a spell
+    if (rec.type == OrderType::Farm)
+        tbhost::fishing::EnsureOrderFishing(bot, rec.itemId);
     uint32_t const inBagsBefore = BagItemCount(bot, rec.itemId);
     tbhost::guild::OrderGoldBudget const budget =
         tbhost::guild::RemainingOrderGoldCap(rec.hasGoldCap, rec.goldCap, rec.ahGoldSpent);
@@ -1239,7 +1312,7 @@ void TickBotOrder(Player* bot)
                 GiveOrder(rec);
             }
             std::string const res = ok ? reason : (reason.empty() ? "fail" : reason);
-            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering");
+            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering" || res == "fishing");
             bool const logInfo = ok || recordTick(false, inProgress, res);
             if (ok)
                 recordTick(true, false, "");
@@ -1344,13 +1417,19 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     if (!RequireBuilt(handler, words, "guildorder"))
         return false;
     if (words.w.empty())
-        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps|access|rank|reassign");
+        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|meet|search|who|preview|steps|access|rank|reassign");
 
     std::string const sub = Lower(words.w[0]);
     Player* sender = SenderPlayer(handler);
 
     if (guild_read::IsReadVerb(sub))
         return guild_read::Handle(handler, words, sender, sub);
+
+    if (sub == "meet")
+        return tbhost::guild_orders::HandleEnchantMeet(handler, words, sender);
+
+    if (sub == "create" && words.w.size() >= 3 && Lower(words.w[2]) == "enchant")
+        return tbhost::guild_orders::HandleEnchantCreate(handler, words, sender);
 
     if (sub == "create")
     {
@@ -1521,6 +1600,9 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         auto const ord = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
         if (!ord)
             return Fail(handler, words, "guildorder", "not-found", bot->GetName());
+        if (ord->type == GuildOrders::OrderType::Enchant)
+            return Fail(handler, words, "guildorder", "bad-type",
+                "an enchant order runs without work: meet the bot when it is ready");
         if (words.w.size() >= 3)
         {
             uint32_t const reqId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
@@ -1642,7 +1724,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         return true;
     }
 
-    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps|access|rank|reassign");
+    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|meet|search|who|preview|steps|access|rank|reassign");
 }
 
 bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)

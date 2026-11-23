@@ -27,7 +27,7 @@ build and the two pure rules.
 | Area level | `ai_playerbot_zone_level`, then the DBC `AreaLevel`, then a sub-area average, then the parent zone | the same table row, then **the parent zone**, then `AreaTableEntry::ExplorationLevel`, else `-1`. No sub-area average, no terrain. `ZoneLevelPolicy` is the rule the generation boot (W4-B) feeds: median `creature_classic_level` of hostile, non-critter, non-elite spawns, five samples minimum, lower median |
 | Creature level/rank/gold/xp, quest level/type/items, area id/team/explore bit, skill maxima, map id | the cmangos fields | helpers in the pair (`CreatureLevelMaxWL4` = `creature_classic_level`, `CreatureRankWL4` = the classification enum with the same numbers, `QuestMinLevelWL4` = `GetClassicMinLevel`, `QuestReqItemIdWL4` = the objective rows, `AreaExploredWL4` = `Player::HasExploredZone`, ...) |
 | Taxi zones | node store + terrain zones | none: flights are W5, the cache is empty |
-| Fish locations | `ai_playerbot_named_location` rows | none: fishing is W7; the loader and saver return before their bodies |
+| Fish locations | `ai_playerbot_named_location` rows | loaded since TBF #155: the shipped FISH_LOCATION rows are read and their classic area flags mapped to area ids through the area table (`AreaIdOfStoredFishFlagWL4`); the host fishing errand picks spots from that store |
 | Travel graph | node store, generated links and paths | none yet: `TravelGraphLoadCompat()` says so once; **W4-A1 wires its node store in there** (the call site is `TravelMgr::LoadQuestTravelTable`) |
 
 ## 3. The cut (each one makes the bot do LESS)
