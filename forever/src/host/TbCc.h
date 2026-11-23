@@ -42,6 +42,11 @@ bool ApplyCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
 // clear changes nothing. Codes as above (engine-not-built no-engine bad-mark no-party failed; no-party only when a named unit's icon must be looked up).
 bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGuid unit, std::string& code, std::string* detail = nullptr, bool* iconRemoved = nullptr);
 
+// TB's CC_ASSIGN gate (commands/Info.cpp:495): a bot is listed only while it
+// holds the "cc" combat strategy. Fresh bots read "rti cc" moon by default,
+// so the mark alone must not list them.
+bool HasCombatCcStrategy(Player* bot);
+
 // The bot's `rti cc` and `run cc family` ("" for "none" or when the bot has no engine), as `.tb state` reads them.
 void CcOrderValues(Player* bot, std::string& mark, std::string& family);
 

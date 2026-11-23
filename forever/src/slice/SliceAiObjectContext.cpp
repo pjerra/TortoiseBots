@@ -12,6 +12,7 @@
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "playerbot/RaidTankHealing.h"
+#include "playerbot/strategy/CustomStrategy.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/actions/AcceptQuestAction.h"
 #include "playerbot/strategy/actions/AcceptResurrectAction.h"
@@ -26,6 +27,7 @@
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
+#include "playerbot/strategy/actions/CustomStrategyEditAction.h"
 #include "playerbot/strategy/actions/DropQuestAction.h"
 #include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FollowActions.h"
@@ -48,6 +50,7 @@
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/ReleaseSpiritAction.h"
 #include "playerbot/strategy/actions/RepairAllAction.h"
+#include "playerbot/strategy/actions/ResetAiAction.h"
 #include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
 #include "playerbot/strategy/actions/RtiAction.h"
 #include "playerbot/strategy/actions/SaveManaAction.h"
@@ -75,6 +78,7 @@
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
+#include "playerbot/strategy/generic/ConserveManaStrategy.h"
 #include "playerbot/strategy/generic/ConsumableStrategy.h"
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
@@ -89,7 +93,9 @@
 #include "playerbot/strategy/generic/MaintenanceStrategy.h"
 #include "playerbot/strategy/generic/MarkRtiStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
+#include "playerbot/strategy/generic/MimicConsumableStrategy.h"
 #include "playerbot/strategy/generic/NoAoeStrategy.h"
+#include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
@@ -203,7 +209,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (30 of its keys)
+    // the registry of StrategyContext (35 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -239,6 +245,11 @@ namespace slice
             creators["focus rti targets"] = [](PlayerbotAI* ai) { return new FocusRtiTargetsStrategy(ai); };
             creators["potions"] = [](PlayerbotAI* ai) { return new UsePotionsStrategy(ai); };
             creators["consumables"] = [](PlayerbotAI* ai) { return new ConsumableStrategy(ai); };
+            creators["conserve mana"] = [](PlayerbotAI* ai) { return new ConserveManaStrategy(ai); };
+            creators["mimic consumables"] = [](PlayerbotAI* ai) { return new MimicConsumableStrategy(ai); };
+            creators["spread"] = [](PlayerbotAI* ai) { return new SpreadStrategy(ai); };
+            creators["no blink instance"] = [](PlayerbotAI* ai) { return new NoBlinkInstanceStrategy(ai); };
+            creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
         }
     };
 
@@ -376,7 +387,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (54 of its keys)
+    // the registry of ChatActionContext (62 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -436,6 +447,14 @@ namespace slice
             creators["spread distance"] = [](PlayerbotAI* ai) { return new SpreadDistanceAction(ai); };
             creators["buff"] = [](PlayerbotAI* ai) { return new BuffAction(ai); };
             creators["tame"] = [](PlayerbotAI* ai) { return new TameAction(ai); };
+            creators["de"] = [](PlayerbotAI* ai) { return new ChangeDeadStrategyAction(ai); };
+            creators["react"] = [](PlayerbotAI* ai) { return new ChangeReactionStrategyAction(ai); };
+            creators["all"] = [](PlayerbotAI* ai) { return new ChangeAllStrategyAction(ai); };
+            creators["reset ai"] = [](PlayerbotAI* ai) { return new ResetAiAction(ai, true); };
+            creators["reset strats"] = [](PlayerbotAI* ai) { return new ResetStratsAction(ai); };
+            creators["reset values"] = [](PlayerbotAI* ai) { return new ResetValuesAction(ai); };
+            creators["reset ai soft"] = [](PlayerbotAI* ai) { return new ResetAiAction(ai, false); };
+            creators["cs"] = [](PlayerbotAI* ai) { return new CustomStrategyEditAction(ai); };
         }
     };
 
@@ -604,7 +623,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (59 of its keys)
+    // the registry of ChatTriggerContext (66 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -669,6 +688,13 @@ namespace slice
             creators["leave"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "leave"); };
             creators["rep"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reputation"); };
             creators["reputation"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reputation"); };
+            creators["de"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "de"); };
+            creators["react"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "react"); };
+            creators["all"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "all"); };
+            creators["reset ai"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset ai"); };
+            creators["reset strats"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset strats"); };
+            creators["reset values"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset values"); };
+            creators["cs"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cs"); };
         }
     };
 
@@ -688,7 +714,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (213 of its keys)
+    // the registry of ValueContext (214 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -907,11 +933,12 @@ namespace slice
             creators["warlock spread attacker my aura"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker my aura", true, true, false, false); };
             creators["warlock spread attacker"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker", false, false, true, false); };
             creators["warlock spread attacker manual"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker manual", false, false, true, true); };
+            creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 41, kActions = 154, kTriggers = 200, kValues = 213;
+    constexpr unsigned kStrategies = 46, kActions = 162, kTriggers = 207, kValues = 214;
 }
 }
 

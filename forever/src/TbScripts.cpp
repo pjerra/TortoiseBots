@@ -16,6 +16,7 @@
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
+#include "host/TbAddonAi.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #include "host/TbPetFactory.h"
@@ -89,6 +90,19 @@
 #include "host/TbChatLinkCmd.h"
 #include "host/chat/TbChatCmd.h"
 #include "host/chat/TbChatIn.h"
+#include "host/TbAddonChannel.h"
+#include "host/TbAddonInfo.h"
+#include "host/TbAddonActions.h"
+#include "host/TbAddonTotem.h"
+#include "host/TbAddonVerbs.h"
+#include "host/TbAddonRoster.h"
+#include "host/TbAddonBlessing.h"
+#include "host/TbAddonChoice.h"
+#include "host/TbAddonInv.h"
+#include "host/TbAddonBehaviorService.h"
+#include "host/TbAddonTrade.h"
+#include "host/TbAddonProfessions.h"
+#include "host/TbAddonLootLog.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -558,6 +572,10 @@ public:
             { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "talents", TortoiseBots::talents::HandleTalentsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "blessing", TortoiseBots::blessing::HandleBlessingChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
+            { "lootlog", TortoiseBots::lootlog::HandleLootLogChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
+            { "ai",       TortoiseBots::aipreset::HandleAiCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cs",       TortoiseBots::aipreset::HandleCsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -1740,6 +1758,20 @@ void AddSC_tortoisebots()
     new tortoisebots_commands();
     TortoiseBots::chatin::AddScripts();     // S1-R2: PlayerScript::OnChat -> the bots' chat inboxes (host/chat/TbChatIn.cpp)
     TortoiseBots::player::AddScripts();     // R1: PlayerScript::OnCommand -> the players' `.bot` entry (host/player/TbPlayerCmd.cpp)
+    TortoiseBots::addon::AddScripts();      // #130: PlayerScript::OnAddonMessageSent -> the TBM addon channel (host/TbAddonChannel.cpp)
+    TortoiseBots::addoninfo::RegisterAddonVerbsInfo(); // #130 f-info: the "features" and "run" verbs (host/TbAddonInfo.cpp)
+    TortoiseBots::action::RegisterAddonVerbsActions();   // #130 f-actions: the `action` verb + `action:<intent>` tokens
+    TortoiseBots::totem::RegisterAddonVerbsTotem();   // #133 c-totem: the `totem` verb + `totem` cap (host/TbAddonTotem.cpp)
+    TortoiseBots::addonverbs::RegisterAddonVerbsPassthrough();   // #130 f-verbs: the `.bot` words the player layer answers (host/TbAddonVerbs.cpp)
+    TortoiseBots::roster::RegisterAddonVerbsRoster();   // #130: `roster`/`list`/`alts` + handshake/BOTSTATE over the TBM channel (host/TbAddonRoster.cpp)
+    TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
+    TortoiseBots::choice::RegisterAddonVerbsChoice();   // #133 c-choice: `choice` verb + `choice` cap (host/TbAddonChoice.cpp)
+    TortoiseBots::behsvc::RegisterAddonVerbsBehaviorService(); // #133 c-behsvc: `behavior` + `service` addon verbs
+    TortoiseBots::inv::RegisterAddonVerbsInv();   // #134 i-inv: the `inv`/`inventory`/`item` verbs + `inventory` cap (host/TbAddonInv.cpp)
+    TortoiseBots::trade::RegisterAddonVerbsTrade(); // #134 P134-C: `trade` addon verb + trade window driver
+    TortoiseBots::professions::RegisterAddonVerbsProfessions(); // #134 P134-D: `professions` verb + `professions` cap (host/TbAddonProfessions.cpp)
+    TortoiseBots::lootlog::RegisterAddonVerbsLootLog(); // #134 i-loot: `lootlog` verb + `loot-log` cap (host/TbAddonLootLog.cpp)
+    TortoiseBots::aipreset::RegisterAddonVerbsAi(); // #135 P135-C: `ai` verb + `ai` cap (host/TbAddonAi.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)

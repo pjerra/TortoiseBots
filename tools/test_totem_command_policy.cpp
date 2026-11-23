@@ -21,6 +21,9 @@ using ai::TotemicRecallShouldFire;
 using ai::TotemDropMode;
 using ai::TotemDropModeName;
 using ai::TotemDropWantsSlot;
+using ai::TotemDropFresh;
+using ai::TotemDropTimeKey;
+using ai::kTotemDropGraceSec;
 using ai::TotemModeKey;
 using ai::TotemOrderKey;
 using ai::TotemSlotIndex;
@@ -148,6 +151,16 @@ int main()
         CHECK(!ParseTotemSetList("auto,auto,auto,mana spring", out));
     }
     std::puts("  [PASS] set list parses four valid words, rejects the rest");
+    // The explicit-drop grace: unset never fresh, fresh inside the window,
+    // stale at and past it, never from the future.
+    CHECK(std::string(TotemDropTimeKey()) == std::string("last totem drop time"));
+    CHECK(!TotemDropFresh(0, 1000));
+    CHECK(TotemDropFresh(1000, 1000));
+    CHECK(TotemDropFresh(1000, 1000 + kTotemDropGraceSec - 1));
+    CHECK(!TotemDropFresh(1000, 1000 + kTotemDropGraceSec));
+    CHECK(!TotemDropFresh(1000, 1000 + kTotemDropGraceSec + 30));
+    CHECK(!TotemDropFresh(2000, 1000));
+    std::puts("  [PASS] explicit-drop grace is fresh only inside the window");
 
     std::puts("All totem command policy checks PASSED!");
     {

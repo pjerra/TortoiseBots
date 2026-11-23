@@ -2,6 +2,7 @@
 // exactly as TbOrders.cpp keeps it, and the default build answers `error code=engine-not-built` (the second half of this file).
 #include "host/TbCc.h"
 #include "host/TbCcPure.h"
+#include "slice/SliceCustomStrategyPure.h"
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -25,6 +26,8 @@
 
 #include "compat/TbCompat_V.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/PlayerbotDbStore.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
@@ -321,6 +324,12 @@ bool ClearCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
     if (iconRemoved && plan.icon >= 0)
         *iconRemoved = true;
     return true;
+}
+
+bool HasCombatCcStrategy(Player* bot)
+{
+    PlayerbotAI* ai = AiOf(bot);
+    return ai && ai->HasStrategy("cc", BotState::BOT_STATE_COMBAT);
 }
 
 // The bot's `rti cc` and `run cc family` as `.tb state` reads them ("" for "none" or no engine): the run's end (TbRun.cpp ClearRunCc) checks that a bot it
@@ -739,8 +748,8 @@ bool ParseStrategyLine(ChatHandler* handler, Words const& args, size_t from, Str
     if (rest.empty())
         return Fail(handler, args, "strategy", "missing-argument", "co|nc <+name,-name,~name ...>");
     for (char c : rest)
-        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == '~' || c == ',' || c == '_'))
-            return Fail(handler, args, "strategy", "bad-argument", "strategy changes use letters, digits, space, + - ~ , _");
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '+' || c == '-' || c == '~' || c == ',' || c == '_' || c == ':'))
+            return Fail(handler, args, "strategy", "bad-argument", "strategy changes use letters, digits, space, + - ~ , _ :");
     // `rest` is the words from `from + 1` on, rejoined: it starts at its own byte 0, not at the word index.
     size_t start = 0;
     while (start <= rest.size())
@@ -764,12 +773,19 @@ bool ParseStrategyLine(ChatHandler* handler, Words const& args, size_t from, Str
     return true;
 }
 
-// The first change this bot's context does not register ("" when every one is known).
+// The first change this bot's context does not register ("" when every one is known). TB's `custom::<name>` form is built
+// on demand, so the engine lookup validates it; a bare `custom` would attach under the name `custom::`, which nothing finds
+// again, so it counts as unknown.
 std::string FirstUnknownStrategy(PlayerbotAI* ai, std::vector<StrategyChange> const& items)
 {
     for (StrategyChange const& item : items)
+    {
+        std::string qualifier;
+        if (ai::slice::aipreset::SplitCustomAttach(item.name, qualifier) && Trim(qualifier).empty())
+            return item.name + " (custom strategies need a name: +custom::<name>)";
         if (!ai->GetAiObjectContext()->GetStrategy(item.name))
             return item.name;
+    }
     return std::string();
 }
 
@@ -852,7 +868,12 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         reply.Begin();
         uint32 applied = 0, refused = 0;
         for (Player* member : bots)
+        {
+            uint32 const before = applied;
             ApplyStrategyLine(reply, member, line, applied, refused);
+            if (applied > before && !sPlayerbotAIConfig.bExplicitDbStoreSave)
+                sPlayerbotDbStore.Save(AiOf(member));
+        }
         Rec end("strategy");
         end.P("target", { "role", RoleWord(role) }).S("state", line.stateWord).N("bots", static_cast<int64>(bots.size())).N("applied", applied).N("refused", refused);
         reply.End(end);
@@ -875,6 +896,8 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     {
         // The factory kit again (default combat, non-combat, dead and reaction strategies, the forced role's line).
         ai->ResetStrategies();
+        if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
+            sPlayerbotDbStore.Save(ai);
         Reply reply(handler, args, "strategy");
         reply.Begin();
         reply.Line(Rec("strategy").S("bot", bot->GetName()).S("op", "reset").S("tag", "SETUP").S("status", "ok"));
@@ -895,6 +918,8 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Rec end("strategy");
     end.S("target", bot->GetName()).S("state", line.stateWord).N("applied", applied).N("refused", refused);
     reply.End(end);
+    if (applied > 0 && !sPlayerbotAIConfig.bExplicitDbStoreSave)
+        sPlayerbotDbStore.Save(ai);
     if (refused)
         handler->SetSentErrorMessage(true);
     return refused == 0;

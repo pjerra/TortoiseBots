@@ -72,6 +72,11 @@ namespace ai
             // test pins this exact logic.
             if (ai->IsStateActive(BotState::BOT_STATE_COMBAT))
                 return false;
+            // An explicit `drop` owns the set while the stagger is still
+            // placing it (one slot per few ticks): recalling now would wipe
+            // a set the player just ordered before it ever stands.
+            if (ai::TotemDropFresh(AI_VALUE2(time_t, "manual time", ai::TotemDropTimeKey()), time(0)))
+                return false;
             bool hasSpell = ai->HasSpell("totemic recall");
             bool anyOwn = AI_VALUE(bool, "have any own totem");
             bool tideOwn = AI_VALUE2(bool, "has own totem", "mana tide totem");
@@ -130,8 +135,15 @@ namespace ai
         (void)bot;
         AiObjectContext* ctx = ai ? ai->GetAiObjectContext() : nullptr;
         std::string stored = ctx ? ctx->GetValue<std::string>("manual saved string", TotemModeKey())->Get() : "";
-        bool imminent = !inCombat && TotemFightImminent(ai);
-        return TotemAutoRowsFire(StoredTotemDropMode(stored), inCombat, imminent);
+        // The engine's combat state covers the healer case: a bot the engine
+        // already runs as combat (attackers, assist) may never take the core
+        // combat flag (no damage dealt or taken), and the rows must still
+        // fire while the party is fighting. A pure bystander stays quiet:
+        // member combat alone does not count (the refund already watches the
+        // party; the rows spend mana, so they need this bot engaged).
+        bool fight = inCombat || (ai && ai->IsStateActive(BotState::BOT_STATE_COMBAT));
+        bool imminent = !fight && TotemFightImminent(ai);
+        return TotemAutoRowsFire(StoredTotemDropMode(stored), fight, imminent);
     }
 
     class FireTotemTrigger : public Trigger
