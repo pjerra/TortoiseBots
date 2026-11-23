@@ -91,6 +91,17 @@ class TestCombatItemsWiring(unittest.TestCase):
         self.assertIn("Player::CastItemUseSpell", features)
         self.assertNotIn("item use packet", read("forever/docs/UNPORTED.md"))
 
+    def test_bandage_family_casts_through_core(self):
+        # Family 2: "use bandage" is a targeted item use; the target (self target) and the item id reach UseItemInternal, whose
+        # CastItemSpellCompat sets a unit target and calls Player::CastItemUseSpell.
+        action = read("ai/playerbot/strategy/actions/UseItemAction.h")
+        bandage = action.split("class UseBandageAction")[1].split("// Used when this action is executed as a reaction")[0]
+        self.assertIn('"use bandage"', action)
+        self.assertIn('"self target"', bandage)
+        self.assertIn("GetItemId() override", bandage)
+        self.assertIn("SetUnitTarget(unit)", read("forever/src/compat/TbCompat_I2.h"))
+        self.assertIn('"use bandage"', read("forever/src/slice/SliceAiObjectContext.cpp"))
+
     def test_random_potion_stub_present(self):
         stubs = read("forever/src/slice/SliceLinkStubs.cpp")
         self.assertIn("RandomItemMgr::GetRandomPotion", stubs)

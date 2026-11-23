@@ -25,6 +25,12 @@ int main()
     CHECK(!ShouldStopMovingForItemCast(false, 0, false));
     CHECK(ItemCastDurationMs(false, 0, false, 0) == 0u);
 
+    // Family 2, bandages (First Aid): the action names the bot itself as the unit target and every bandage rank has an 8 s cast,
+    // so CastItemSpellCompat stops the bot and gives the action the cast time.
+    CHECK(DecideItemCastTargetKind(false, true) == ItemCastTargetKind::Unit);
+    CHECK(ShouldStopMovingForItemCast(false, 8000, false));
+    CHECK(ItemCastDurationMs(false, 8000, false, 0) == 8000u);
+
     // Movement: instant potions/healthstones/trinkets do not stop movement; food/drink, cast-time, and channeled spells do.
     CHECK(!ShouldStopMovingForItemCast(false, 0, false));
     CHECK(ShouldStopMovingForItemCast(true, 0, false));
