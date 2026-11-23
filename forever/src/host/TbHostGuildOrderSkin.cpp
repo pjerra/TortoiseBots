@@ -3,10 +3,10 @@
 
 #include "playerbot/GuildOrderSources.h"
 
+#include "DatabaseEnv.h"
 #include "compat/TbCompat_S5.h"
 
 #include "CreatureData.h"
-#include "DatabaseEnv.h"
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "Player.h"
