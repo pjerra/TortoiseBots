@@ -50,7 +50,6 @@
     X(NavmeshProbe, "navmesh and path internals", "the navmesh-island unstick probe over MMapFactory / PathInfo::FindWalkPoly, and the 1.12 path type and nav flag bits (PATHFIND_*, NAV_*); ForeverCore's MMapManager and path flags differ") \
     X(CinematicCamera, "cinematic and camera", "cinematic state (watching_cinematic_entry, CinematicEnd); ForeverCore keeps a cinematic manager object") \
     X(Camp, "camp, rest bonus, water breathing", "the camp kit skill (SKILL_SURVIVAL2), rest bonus (SetRestBonus), the water breathing interval, the fishing zone of an area (AreaEntry::GetById)") \
-    X(SpeedCheat, "speed cheat", "UpdateSpeed(type, forced, ratio) with a forced rate; ForeverCore recomputes speed from auras") \
     X(MovementInterrupt, "movement interrupt and heartbeat", "MovementGenerator::Interrupt and Player::SendHeartBeat; ForeverCore movement generators have no such calls") \
     X(AddonChat, "chat channels, addon bridge, chat tags", "addon messages (SendAddonMessage, BuildChatPacket with a chat tag), chat channels (ChannelMgr by team) and guild chat; ForeverCore chat is typed packets") \
     X(GuildRanks, "guild", "guild rank rights and member slots (Guild::GetRanksSize, GetMemberSlot, HasRankRight); ForeverCore has Guild::Member and rank ids") \

@@ -603,8 +603,14 @@ inline void SetRestBonusCompat(Player* /*bot*/, float /*bonus*/) { tbcompat::Unp
 inline void ClearWaterBreathingCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
 // The zone of a fishing area (T `AreaEntry::GetById(id)->ZoneId`). Failure value: 0 ("no zone found": the caller keeps the area id).
 inline uint32 FishingZoneOfAreaCompat(uint32 /*areaId*/) { tbcompat::Unported(tbcompat::Feature::Camp); return 0; }
-// The movespeed cheat (T `UpdateSpeed(type, true, 10)` for walk, run and swim). Failure value: no change.
-inline void SpeedCheatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SpeedCheat); }
+// The movespeed cheat: T `UpdateSpeed(type, true, 10)` forces a 10x rate for walk, run and swim; F sets that rate directly
+// (Unit::SetSpeedRate is where the forced update writes it, Unit.cpp:9480), and the core recomputes its aura part on top.
+inline void SpeedCheatCompat(Player* bot)
+{
+    bot->SetSpeedRate(MOVE_WALK, 10.0f);
+    bot->SetSpeedRate(MOVE_RUN, 10.0f);
+    bot->SetSpeedRate(MOVE_SWIM, 10.0f);
+}
 
 // PROPER: whether the session's account logs out at once. T compares its security level with the InstantLogout setting; F has the
 // permission RBAC_PERM_INSTANT_LOGOUT for exactly that (MiscHandler.cpp:251).
