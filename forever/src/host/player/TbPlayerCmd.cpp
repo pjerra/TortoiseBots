@@ -71,6 +71,24 @@ bool OwnsGameAccount(OwnerScope const& scope, std::uint32_t gameAccount)
 
 namespace
 {
+std::vector<std::string>* s_replySink = nullptr;   // set while an addon verb runs; world thread only, never kept
+}
+
+void SetReplySink(std::vector<std::string>* sink)
+{
+    s_replySink = sink;
+}
+
+bool CaptureReply(std::string const& line)
+{
+    if (!s_replySink)
+        return false;
+    s_replySink->push_back(line);
+    return true;
+}
+
+namespace
+{
 bool s_commands = true;
 [[maybe_unused]] std::uint32_t s_maxBots = 4;   // TortoiseBots.Player.MaxBots: the owned-login cap of round 2's `add`
 
@@ -125,6 +143,11 @@ std::string_view AfterFirstWord(std::string_view text)
 // D-6: one line per answer, the module's name first, then the verb (and the bot, once a verb names one). Never an account id or name.
 void Say(Player* player, std::string const& line)
 {
+    if (s_replySink)
+    {
+        s_replySink->push_back(line);
+        return;
+    }
     if (!player || !player->GetSession())
         return;
     ChatHandler handler(player->GetSession());
@@ -561,6 +584,8 @@ namespace player
 void LoadConfig() { }
 void AddScripts() { }
 bool Dispatch(Player*, std::string_view) { return false; }
+void SetReplySink(std::vector<std::string>*) { }
+bool CaptureReply(std::string const&) { return false; }
 }
 }
 
