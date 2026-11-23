@@ -34,7 +34,7 @@
     X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); since S2 the host session reads the core's typed packet (the engine's wait grows by the pushback, SPELL_DELAYED), the 1.12 case stays unregistered") \
     X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
     X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
-    X(SpawnGuid, "guid from spawn data", "an object guid built from a spawn record (creature data id + spawn id, 1.12 guid layout); ForeverCore keys spawns by spawn id and map, not by guid counter") \
+    X(SpawnGuid, "guid from spawn data", "the loaded unit or game object of a spawn record, and a game object's spawn guid (1.12 layout); ForeverCore generates a loaded object's low guid per map, so a spawn-record guid is not a live lookup key") \
     X(GuidPositionWire, "wire form of a GuidPosition", "writing a GuidPosition into a packet buffer (1.12 layout)") \
     X(BattlegroundQueue, "battleground queue", "battleground template id from a queue type id (BattleGroundMgr::BGTemplateId); ForeverCore's queue type id is a struct and the mapping is not ported") \
     X(ChatLinks, "quest link: waits for D3", "extracting a quest id from a chat link (1.12 ChatHandler helper ExtractKeyFromLink); its link branch waits for D3, the spell and item halves are real since S1-R1") \
