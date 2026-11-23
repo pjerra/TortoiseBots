@@ -313,6 +313,17 @@ inline void DoGameObjectDataCompat(Worker& worker)
 }
 // The game object a SPAWN record is, if it is loaded on the map. T builds the guid from entry and spawn id, F asks the map by spawn id.
 inline GameObject* GetGameObjectBySpawnIdCompat(Map* map, uint32 /*entry*/, uint64 spawnId) { return map->GetGameObjectBySpawnId(spawnId); }
+// The guid a creature spawn record stands for, built the way the core builds it for that spawn: a world-object guid of the
+// spawn's map, its template entry and its database spawn id as the counter (`ObjectGuid::Create<HighGuid::Creature>`,
+// ObjectGuid.h:405; the same value is the dbtable guid of Creature.cpp:810). The counter is the key of
+// GetAllCreatureData(), so GetCreatureData(GetCounter()) reads this record back (ObjectMgr.h:1504). It names the SPAWN,
+// not the live object: a loaded creature gets its own map-generated low guid, so this is not a live-object lookup key.
+template <class DataPair>
+inline ObjectGuid GuidOfCreatureDataCompat(DataPair const* dataPair)
+{
+    CreatureData const& data = dataPair->second;
+    return ObjectGuid::Create<HighGuid::Creature>(uint16(data.mapId), data.id, dataPair->first);
+}
 
 // ---- Creature templates ---------------------------------------------------------------------------------------
 // Whether the template is a civilian. T `CreatureInfo::civilian`, F the extra flag the core itself reads in `Creature::IsCivilian`

@@ -51,8 +51,8 @@ std::vector<UnportedEntry> UnportedSummary();
 std::string UnportedBootLine();
 std::string UnportedReport();
 
-// Counts one registered handler row of a legacy packet table under the group of what its handler does ("loot roll" ->
-// Feature::IncomingLoot, ...). An unknown handler name counts under Feature::PacketHandlerTables.
+// Counts one registered handler row of a legacy packet table under the group of what its handler does ("activate taxi" ->
+// Feature::IncomingTaxi, ...). An unknown handler name counts under Feature::PacketHandlerTables.
 void UnportedPacketHandler(std::string const& handlerName);
 }
 
@@ -202,8 +202,8 @@ constexpr bool OpcodesAgreeCompat(uint32 /*policyValue*/, uint32 /*coreOpcode*/)
 inline bool PackedGuidReadCompat(tbcompat::Feature feature, WorldPacket& /*packet*/, ObjectGuid& /*guid*/) { tbcompat::Unported(feature); return false; }
 
 // Registers the handler rows of one legacy table. T: AddHandler for each row. F: nothing is registered; each row is counted under
-// the group of what its handler does, and the direct cases of HandleBotOutgoingPacket (chat, spell failure and delay, speed
-// change, knock back) are counted once, so the boot-time list shows what is dead.
+// the group of what its handler does, or under Feature::PacketHandlerTables when no group names it, so the boot-time list shows
+// what is dead.
 template <class Helper, class Spec>
 inline void RegisterPacketHandlersCompat(Helper& /*helper*/, Spec const* specs, size_t count)
 {
@@ -221,17 +221,6 @@ template <class Block, class... Args>
 inline void UnportedBlockCompat(tbcompat::Feature feature, Block&&, Args&&...) { tbcompat::Unported(feature); }
 template <class Result, class Block, class... Args>
 inline Result UnportedBlockResultCompat(tbcompat::Feature feature, Result failure, Block&&, Args&&...) { tbcompat::Unported(feature); return failure; }
-
-// The packet cases HandleBotOutgoingPacket handles directly (not through a table). On F none of them can match a packet, so
-// they are counted once per bot with the tables.
-inline void RegisterDirectPacketCasesCompat()
-{
-    tbcompat::Unported(tbcompat::Feature::IncomingChat);
-    tbcompat::Unported(tbcompat::Feature::IncomingSpellState);
-    tbcompat::Unported(tbcompat::Feature::IncomingSpeedChange);
-    tbcompat::Unported(tbcompat::Feature::IncomingKnockBack);
-}
-
 
 // The world's average update time in ms (T `sWorld.GetAverageDiff()`), added to a jump's landing time. F keeps no such average (the
 // host provides one later, R4M request 5). Failure value: 0 (no allowance for server lag).
@@ -262,10 +251,9 @@ inline bool PremadeSpecsPortedCompat()
 template <class Tab>
 inline int TalentTabPageCompat(Tab const* /*tab*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
 
-// An object guid from a creature or game object spawn record (T `ObjectGuid(HIGHGUID_UNIT, creature entry, spawn counter)`). Failure
-// value: the empty guid ("no such object"); the record's position is still read by the caller's WorldPosition part.
-template <class DataPair>
-inline ObjectGuid GuidOfCreatureDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
+// An object guid from a GAME OBJECT spawn record (T `ObjectGuid(HIGHGUID_GAMEOBJECT, go entry, spawn counter)`). The creature
+// form is real (TbCompat_C.h, the travel destinations read it). Failure value: the empty guid ("no such object"); the record's
+// position is still read by the caller's WorldPosition part.
 template <class DataPair>
 inline ObjectGuid GuidOfGameObjectDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
 
@@ -393,8 +381,19 @@ inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry co
 }
 
 // CastItemOnTargetCompat moved to TbCompat_I2.h.
-// The triggered flags of the n-th spell of an item cast (T: TRIGGERED_OLD_TRIGGERED after the first), and the item cooldowns.
-inline void AddSpellAndCategoryCooldownsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/, uint32 /*itemId*/) { tbcompat::Unported(tbcompat::Feature::ItemCasts); }
+// The item cooldowns a use starts (T: Player::AddSpellAndCategoryCooldowns). The core keeps both rows in SpellHistory:
+// StartCooldown takes the item's own ItemEffect row (its cooldown and spell category replace the spell's) and applies the
+// player's cooldown mods, the same numbers a real use gets from Spell::SendSpellCooldown. Reached where the action decides not
+// to spend the item (the PvP use-potion chance) and only needs its cooldown running.
+inline void AddSpellAndCategoryCooldownsCompat(Player* bot, SpellEntry const* spellInfo, uint32 itemId)
+{
+    if (!bot || !spellInfo)
+        return;
+    SpellInfo const* coreSpell = GetSpellInfoCompat(spellInfo);
+    SpellHistory* history = bot->GetSpellHistory();
+    if (coreSpell && history)
+        history->StartCooldown(coreSpell, itemId);
+}
 // Base class of ai::BotUseItemSpell: T's Spell. F cannot build a Spell from the mirror SpellEntry, so the class is only a
 // declaration there: its constructor counts the feature (nothing can reach it in the slice: the item cast above returns first).
 class ItemCastSpellBaseCompat

@@ -157,7 +157,7 @@ inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> con
 // ---- verdicts that need no world ----
 
 // `use <item>`: refused on ForeverCore. The text names why, so a run that needs it pauses with the reason (the policy shows `cmd <order> refused: <text>`).
-inline char const* UseUnsupportedText() { return "using an item is not carried out on this core (the item-use path is not ported; no plan of this slice has a use_item row)"; }
+inline char const* UseUnsupportedText() { return "using an item is not carried out by a run task on this core (no plan of this slice has a use_item row); the console `.tb use <character> <item id>` casts an item"; }
 
 // `lootmethod`: the methods the module carries out. The core's own handler refuses a threshold below uncommon (GroupHandler.cpp HandleSetLootMethodOpcode).
 struct MethodVerdict

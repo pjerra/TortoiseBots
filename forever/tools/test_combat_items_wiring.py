@@ -68,7 +68,48 @@ class TestCombatItemsWiring(unittest.TestCase):
         for sym in ("CastItemSpellCompat", "CastItemOnTargetCompat", "QueueUseItemPacketCompat", "ItemProtoHasDisplayIdCompat"):
             self.assertIn(sym, i2)
         self.assertIn("CastItemUseSpell", i2)
-        self.assertIn("return false;", i2.split("ItemUseUnportedCompat")[1].split("}")[0])
+        # The cast's target kind, movement stop and action duration are the pure policy the C++ test pins.
+        for sym in ("DecideItemCastTargetKind", "ShouldStopMovingForItemCast", "ItemCastDurationMs"):
+            self.assertIn(sym, i2)
+        # The family-wide refusal gate is gone: every family is decided per item in CastItemSpellCompat.
+        self.assertNotIn("ItemUseUnportedCompat", i2)
+        self.assertNotIn("ItemUseUnportedCompat", read("ai/cmangos-compat-s2i.h"))
+        self.assertNotIn("ItemUseUnportedCompat", read("ai/playerbot/strategy/actions/UseItemAction.cpp"))
+
+    def test_potion_family_casts_through_core(self):
+        # Family 1: a potion/healthstone/mana consumable from the bags is an owned ON_USE effect; the helper casts it and
+        # the PvP "do not spend it" branch starts the item's own cooldowns through SpellHistory.
+        i2 = read("forever/src/compat/TbCompat_I2.h")
+        self.assertIn("if (!itemUsed)", i2)
+        self.assertIn("bot->CastItemUseSpell(itemUsed, spellData.SpellId, targets", i2)
+        unported = read("forever/src/compat/TbCompat_Unported.h")
+        cooldown = unported.split("AddSpellAndCategoryCooldownsCompat")[1].split("}")[0]
+        self.assertIn("StartCooldown", cooldown)
+        self.assertNotIn("Unported", cooldown)
+        features = read("ai/playerbot/UnportedFeatures.h")
+        self.assertNotIn("ItemUsePacket", features)
+        self.assertIn("Player::CastItemUseSpell", features)
+        self.assertNotIn("item use packet", read("forever/docs/UNPORTED.md"))
+
+    def test_bandage_family_casts_through_core(self):
+        # Family 2: "use bandage" is a targeted item use; the target (self target) and the item id reach UseItemInternal, whose
+        # CastItemSpellCompat sets a unit target and calls Player::CastItemUseSpell.
+        action = read("ai/playerbot/strategy/actions/UseItemAction.h")
+        bandage = action.split("class UseBandageAction")[1].split("// Used when this action is executed as a reaction")[0]
+        self.assertIn('"use bandage"', action)
+        self.assertIn('"self target"', bandage)
+        self.assertIn("GetItemId() override", bandage)
+        self.assertIn("SetUnitTarget(unit)", read("forever/src/compat/TbCompat_I2.h"))
+        self.assertIn('"use bandage"', read("forever/src/slice/SliceAiObjectContext.cpp"))
+
+    def test_buff_family_casts_through_core(self):
+        # Family 3: use consumable classifies flasks, elixirs, scrolls and food buffs, then hands the chosen item to the same
+        # item-use path (UseItemIdAction::Execute -> UseItemInternal -> CastItemSpellCompat).
+        consumable = read("ai/playerbot/strategy/actions/UseConsumableAction.cpp")
+        for kind in ("ConsumableType::Flask", "ConsumableType::Elixir", "ConsumableType::Scroll", "ConsumableType::FoodBuff"):
+            self.assertIn(kind, consumable)
+        self.assertIn("UseItemIdAction::Execute(event)", consumable)
+        self.assertIn('"use consumable"', read("forever/src/slice/SliceAiObjectContext.cpp"))
 
     def test_random_potion_stub_present(self):
         stubs = read("forever/src/slice/SliceLinkStubs.cpp")
