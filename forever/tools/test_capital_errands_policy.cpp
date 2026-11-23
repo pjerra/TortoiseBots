@@ -72,7 +72,7 @@ int main()
         ++checks;
     }
 
-    // 3. Priority order: Mailbox > Trainer > Bank > AuctionHouse, respecting per-kind cooldowns.
+    // 3. Priority order: Mailbox > Mount > Trainer > Bank > AuctionHouse, respecting per-kind cooldowns.
     {
         auto in = BaseErrandInput();
         in.unreadMailCount = 1;
@@ -94,6 +94,34 @@ int main()
 
         in.auctionEnabled = false;
         assert(PickCapitalErrand(in) == CapitalErrandKind::None);
+        ++checks;
+    }
+
+    // 3b. A mount need runs outside a capital (the racial trainer/vendor pairs
+    // sit in Goldshire, Sen'jin Village and the like) but yields to mail inside
+    // one and honours its own cooldown.
+    {
+        auto in = BaseErrandInput();
+        in.needsMountPurchase = true;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mount);
+
+        in.inCapital = false;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mount);
+
+        in.isMoving = true;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::None);
+        in.isMoving = false;
+
+        in.mountCooldownUntilMs = in.nowMs + 1;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::None);
+
+        in.inCapital = true;
+        in.mountCooldownUntilMs = 0;
+        in.unreadMailCount = 1;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mailbox);
+
+        in.mailboxCooldownUntilMs = in.nowMs + 1000;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mount);
         ++checks;
     }
 

@@ -19,6 +19,7 @@
 #include "runtime/GuildOrderPlayerBuyPolicy.h"
 #include "runtime/GuildOrderPoolPolicy.h"
 #include "runtime/GuildOrderPreviewPolicy.h"
+#include "runtime/GuildOrderReadPolicy.h"
 #include "runtime/GuildOrderProtectedItems.h"
 #include "runtime/GuildOrderReagentTree.h"
 #include "runtime/GuildOrderRefundPolicy.h"

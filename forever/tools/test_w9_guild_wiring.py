@@ -56,12 +56,14 @@ class TestW9GuildWiring(unittest.TestCase):
 
     def test_order_store_guarded_and_rank_checked(self):
         orders_cpp = read("forever/src/host/TbHostGuildOrders.cpp")
+        access_cpp = read("forever/src/host/TbHostGuildOrderAccess.cpp")
         if MUTATE:
-            orders_cpp = orders_cpp.replace("CanEditOfficerNotes", "AlwaysAllowRank")
+            orders_cpp = orders_cpp.replace("guild_order_access::MayGiveOrders", "AlwaysAllowRank")
         self.assertIn("CharacterSchemaHasCompat", orders_cpp)
         self.assertIn("CharacterQueryGuardedCompat", orders_cpp)
         self.assertNotIn("CharacterDatabase.Query", orders_cpp)
-        self.assertIn("CanEditOfficerNotes", orders_cpp)
+        self.assertIn("guild_order_access::MayGiveOrders", orders_cpp)
+        self.assertIn("CanEditOfficerNotes", access_cpp)
 
     def test_command_and_state_wired(self):
         scripts = read("forever/src/TbScripts.cpp")

@@ -68,7 +68,7 @@ Recipe tools stay available as long as [`AiPlayerbot.CraftToolsAlways`](../serve
 - Guild orders only work while `AiPlayerbot.AutoDoQuests = 1` (the default). With quest travel off, `.bot order` answers `disabled`.
 - Guild bank item withdrawals and guild bank gold use are controlled by [`AiPlayerbot.GuildOrderBankWithdraw`](../server/settings/guild-orders.md#aiplayerbotguildorderbankwithdraw) and [`AiPlayerbot.GuildOrderBankGold`](../server/settings/guild-orders.md#aiplayerbotguildorderbankgold); both default to `1`.
 
-An order on a fish sends the bot to a fishing spot in the planned zone. The bot is granted a pole good enough for the zone plus lures, and re-applies the lure while fishing. If even the best pole and lure cannot reach the zone, the search answers `lowskill`.
+An order on a fish is played as a fishing plan: on the Turtle build the bot walks to a fishing spot in the planned zone, is granted a pole good enough for the zone plus lures, and re-applies the lure while fishing; if even the best pole and lure cannot reach the zone, the search answers `lowskill`. The ForeverCore build has no fishing yet: a Farm order on a fishing-loot item ends `noskill` when the bot never learned Fishing, `noskill` with reason `lowskill` when its gear cannot reach any source zone, and `cant` with reason `nosource` otherwise.
 
 ## Where the bot gets items
 
@@ -145,8 +145,8 @@ If the bot and other guild bots cannot get one of the materials, that item goes 
 Mail items to a guild bot that has Enchanting with the subject `disenchant` and it breaks them down for you, no meeting needed.
 - The bot disenchants what its skill allows, loots the results itself, and mails exactly what that cast made back (`Disenchanted: <item>`); the rest comes back with a reason (`lowskill` when the item needs more skill, `cannot disenchant` for anything with no disenchant loot, `noskill` from a bot without Enchanting).
 - Mail from a guild member without that subject is taken into the bags as usual, never disenchanted.
-- Queued items and landed results are never sold, auctioned, equipped or used for anything else while they wait; the bot casts when it can (not in combat, moving or mounted), collects at a mailbox, and mails every item back with no gold taken and nothing of its own added. A restart re-queues instead of losing the item.
-- **Disenchant by trade:** whisper the bot `disenchant`, then trade it within 2 minutes and put the items in the normal trade slots. The offer must be items only (no gold, nothing of the bot's own) and fit its free room ("I only have room for N items" otherwise); each item is queued exactly like mailed ones and the materials come back by mail. A bot without Enchanting answers "I can't disenchant." instead. A running enchant order's trade with its giver still comes first: the drop-off only applies outside that window.
+- Queued items and landed results are never sold, auctioned, equipped or used for anything else while they wait; the bot casts when it can (not in combat, moving or mounted), collects at a mailbox, and mails every item back with no gold taken and nothing of its own added. The bot pays the normal postage on each result mail, so its own money must cover it. A restart re-queues instead of losing the item.
+- **Disenchant by trade:** whisper the bot `disenchant`, then trade it within 2 minutes and put the items in the normal trade slots. The offer must be items only (no gold, nothing of the bot's own) and fit its free room ("I only have room for N items" otherwise); each item is queued exactly like mailed ones and the materials come back by mail. A bot without Enchanting answers "I can't disenchant." instead. A running enchant order's trade with its giver still comes first: the drop-off only applies outside that window. (The ForeverCore port serves the mail path; the trade drop-off is not ported yet.)
 
 ## Delivery
 

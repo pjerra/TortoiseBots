@@ -228,7 +228,9 @@ TortoiseBots.World.GroupQuests = 1
 #
 #    TortoiseBots.World.CapitalErrands
 #        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
-#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates).
+#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates). Also lets a free bot within
+#                     150 yd of a riding trainer or its race's mount vendor learn riding and buy the mount with its own
+#                     gold (normal at 40, epic at 60); nothing is granted.
 #        Default:     1
 #
 
@@ -251,6 +253,16 @@ TortoiseBots.World.GuildMail = 1
 #
 
 TortoiseBots.World.GuildMail.AllowMixedGuild = 0
+
+#
+#    TortoiseBots.World.GuildOrderBotRank
+#        Description: Guild orders: give every module-owned bot in a guild that also has a real player one shared
+#                     guild rank, so the master can open guild bank tabs to it (`.tb guildorder rank <rank>`).
+#                     Off: ranks are never changed and `.tb guildorder access` reports that no rank is managed.
+#        Default:     1
+#
+
+TortoiseBots.World.GuildOrderBotRank = 1
 
 #
 #    TortoiseBots.Dashboard.TraceDir

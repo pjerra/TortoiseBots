@@ -1,13 +1,14 @@
 
 #include "playerbot/MountDismountPolicy.h"
 #include "playerbot/policy/travel/MountShopPolicy.h"
+#include "playerbot/policy/travel/MountBreakEvenPolicy.h"
 #include "playerbot/GroupMembers.h"
 #include "playerbot/playerbot.h"
 #include "CheckMountStateAction.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/MountValues.h"
-#include "Battlegrounds/BattleGroundWS.h"
+#include "playerbot/TbCompatRIDE.h"
 #include "playerbot/TravelMgr.h"
 
 using namespace ai;
@@ -319,7 +320,7 @@ bool CheckMountStateAction::isUseful()
     if (!bot->IsInWorld())
         return false;
 
-    bool isOutdoor = bot->GetMap()->GetTerrain()->IsOutdoors(bot->getPositionX(), bot->getPositionY(), bot->getPositionZ());
+    bool isOutdoor = IsOutdoorsCompat(bot);
     if (!isOutdoor)
         return false;
 
@@ -350,16 +351,11 @@ bool CheckMountStateAction::isUseful()
     // Only mount if BG starts in less than 30 sec
     if (bot->InBattleGround())
     {
-        BattleGround* bg = bot->GetBattleGround();
-        if (bg && bg->GetStatus() == STATUS_WAIT_JOIN)
-        {
-            if (bg->GetStartDelayTime() > BG_START_DELAY_30S)
-                return false;
-        }
+        if (BattlegroundMountStartBlockedCompat(bot))
+            return false;
     }
 
-    MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(bot->GetMapId());
-    if ((!mapEntry || !mapEntry->IsMountAllowed()) && bot->GetMapId() != 531)
+    if (!MapAllowsMountsCompat(bot) && bot->GetMapId() != 531)
         return false;
 
     if (AI_VALUE(std::vector<MountValue>, "mount list").empty())
@@ -388,34 +384,10 @@ bool CheckMountStateAction::SafeMountRoll()
 
 bool CheckMountStateAction::CanMountInBg() const
 {
-    //Do not mount with or near flag.
-    if (bot->GetBattleGroundTypeId() == BattleGroundTypeId::BATTLEGROUND_WS)
-    {
-        BattleGroundWS* bg = (BattleGroundWS*)ai->GetBot()->GetBattleGround();
-
-        if (bot->HasAura(23333) || bot->HasAura(23335))
-        {
-            return false;
-        }
-        //check near A Flag
-        uint32 lowguid = 90000;
-        uint32 id = 179830;
-        if (!bg)
-            return false;
-        GameObject* AllianceflagStand = bg->GetBgMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, id, lowguid));
-
-        if (bot->IsWithinDistInMap(AllianceflagStand, 3.0f))
-            return false;
-
-        //check near H Flag
-        lowguid = 90001;
-        id = 179831;
-        GameObject* HordeflagStand = bg->GetBgMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, id, lowguid));
-
-        if (bot->IsWithinDistInMap(HordeflagStand, 3.0f))
-            return false;
-    }
-    return true;
+    // Turtle keeps the WS flag-stand rule; ForeverCore refuses the battleground
+    // branch (the client flag objects are not its objects). Both answer LESS,
+    // never more, than the legacy check.
+    return CanMountInBattlegroundCompat(bot);
 }
 
 float CheckMountStateAction::GetAttackDistance() const
@@ -479,7 +451,7 @@ float CheckMountStateAction::MountBreakEvenDistance() const
         castSec = GetSpellCastTime(spellInfo, bot) / 1000.0f;
     // breakEven = runSpeed * castTime / (mountBonus), where mountBonus is
     // the fractional gain (speed % / 100). Base run is 7 y/s in 1.12.
-    return 7.0f * castSec / (bestSpeed / 100.0f) * sPlayerbotAIConfig.mountBreakEvenFactor;
+    return ai::MountBreakEvenDistance(7.0f, castSec, bestSpeed, sPlayerbotAIConfig.mountBreakEvenFactor);
 }
 
 bool CheckMountStateAction::Mount(Player* requester, bool limitSpeedToGroup)

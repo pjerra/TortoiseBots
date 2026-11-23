@@ -5,6 +5,7 @@
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -1640,7 +1641,8 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
-            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me));
+            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me) ||
+             tbhost::guild_orders::HasActiveDisenchantErrand(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif
@@ -1657,7 +1659,10 @@ void BotMgr::Update(uint32 diff)
         if (bot.free && _capitalErrandsEnabled)
             tbhost::errands::TickCapitalErrands(me, diff);
         if (bot.free && _guildMailEnabled)
+        {
+            tbhost::guild_orders::TickDisenchantService(me, diff);
             tbhost::guild_mail::TickGuildMail(me, diff);
+        }
 #endif
     };
 

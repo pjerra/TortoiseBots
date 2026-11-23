@@ -234,8 +234,6 @@ void UpdateBotAreaTriggers(Player*, BotAreaTriggerState&, std::vector<uint32_t> 
 BotCheatMask CheatAction::GetCheatMask(std::string) { NoteMisc(); return BotCheatMask(0); }
 // EmoteAction.cpp: how many chat variants a text emote has. 1 = only the plain one.
 uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { NoteMisc(); return 1; }
-// MountValues.cpp
-bool MountValue::IsMountSpell(uint32) { NoteMisc(); return false; }
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
@@ -326,11 +324,6 @@ InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, 
 {
     return player ? player->CanEquipNewItem(slot, dest, item, true) : EQUIP_ERR_ITEM_NOT_FOUND;
 }
-// MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
-uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
-uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
-uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
-bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
 // GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
 namespace TortoiseBots { namespace GuildOrders {
 void RefreshOrderProtectedSet(Player*) { NotePool(); }

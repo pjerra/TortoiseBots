@@ -379,7 +379,7 @@ struct DisenchantQueueEntry
 {
     uint32_t botGuidLow = 0;
     uint32_t senderGuidLow = 0;
-    uint32_t itemGuidLow = 0; // live bag guid the intake moved; 0 once the cast consumed it
+    uint64_t itemGuidLow = 0; // live bag guid the intake moved; 0 once the cast consumed it
     uint32_t itemId = 0;
     std::string itemName;
     bool pendingResults = false;
