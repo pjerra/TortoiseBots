@@ -24,6 +24,20 @@ struct Brain;
 // True when this build contains the engine (TORTOISEBOTS_SLICE1).
 bool Built();
 
+// The per-tick bot-update budget the host applies to the pool, in the engine's
+// own keys so the operator keeps TB's names and file: AiPlayerbot.PoolTickBudgetUs,
+// CombatTickBudgetUs, TargetWorldTickMs and PoolBudgetWhenTickOverMs. The values
+// are the engine config's after its first load; a build without the engine (or
+// before that load) answers the TB defaults.
+struct TickBudgetConfig
+{
+    uint32 poolUs = 22000;
+    uint32 combatUs = 15000;
+    uint32 targetMs = 100;
+    uint32 gateMs = 0;
+};
+TickBudgetConfig ReadTickBudgetConfig();
+
 // Loads the engine's own configuration (PlayerbotAIConfig) once, before the first brain (WorldScript::OnWorldInitialized
 // calls it when the engine is built in and the module is enabled, so the first bot does not pay for it). Safe to call again:
 // a success is remembered and later calls return at once; a failure is NOT remembered, the next call tries again (the next

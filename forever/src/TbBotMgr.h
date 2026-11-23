@@ -6,6 +6,7 @@
 
 #include "ObjectGuid.h"
 #include "ai/playerbot/FollowTrailPolicy.h"   // shared with the Turtle build, no core includes
+#include "runtime/AdaptiveBudget.h"          // the tick-budget controller, shared with the Turtle build
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
 #include "ai/playerbot/policy/death/GhostRescuePolicy.h"   // W1: when a ghost may be rescued (core-free)
 #include "ai/playerbot/policy/world/FreeMapCapPolicy.h"     // F-population: the per-map free-bot cap (core-free)
@@ -184,6 +185,23 @@ public:
 
     void Update(uint32 diff);
 
+    // What the last Update did with the tick budget, for `.tb perf`: the
+    // controller's effective budgets, the pool pass it cut, and how much of it
+    // the bots consumed (fed back to the controller next pass).
+    struct BudgetStats
+    {
+        uint32 poolUs = 0;         // effective pool ceiling (controller output)
+        uint32 combatUs = 0;       // effective combat ceiling, added to the pool's
+        uint32 budgetUs = 0;       // the sum one pass could spend; 0 = no budget
+        uint32 targetMs = 0;       // controller target; 0 = the controller is off
+        double smoothedTickMs = 0.0;
+        bool held = false;         // over target, but the core kept it there, not the pool
+        uint32 poolBots = 0;       // bots the budget could cut
+        uint32 processed = 0;      // of those, given a turn this pass
+        bool cut = false;          // the pass stopped at the budget
+    };
+    BudgetStats LastBudget() const { return _lastBudget; }
+
 private:
     // Slice 4 entry job of one bot (see StartEntry).
     struct Entry
@@ -212,6 +230,7 @@ private:
         bool wantParty = false;      // joins the master's party once both are in the world (Login with a master)
         uint32 ownerLoadingMs = 0;   // how long the account's real session has been loading a character
         uint32 thinkMs = 0;
+        uint32 lastTurnMs = 0;       // world time of this bot's last pass, so a budgeted bot gets the time since its last turn
         bool useEngine = false;      // marked "engine": runs the real PlayerbotAI instead of the spike's follow/assist
         bool engineFailed = false;   // the brain could not be built: the bot stays on the spike behaviour until re-marked
         std::string engineNote;      // why, for `.tb where`
@@ -279,6 +298,13 @@ private:
     void FreeThink(Bot& bot, Player* me);
     void GhostRescue(Bot& bot, Player* me);
     void TickQuestGroups(uint32 diff);
+    // A bot the pool budget may cut: not under a real player (a live master or
+    // an owner's alt) and done with loading, teleports and logouts, so a turn
+    // has AI work to give.
+    bool Budgetable(Bot const& bot) const;
+    // Feeds the previous world tick to the AdaptiveBudget controller, re-syncs it
+    // from the engine's keys, and hands this pass its budget.
+    void UpdateTickBudget(uint32 diff);
     void EnsureEntrance(Bot const& bot, Player* me);
     bool IsCommandedHere(Bot const& bot, Player* me) const;
     void DeadBackstop(Bot& bot, Player* me);
@@ -319,6 +345,21 @@ private:
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
     world::FreeMapCaps _freeMapCaps;  // F-population: TortoiseBots.Free.MaxPerMap.* (dungeon 5, raids 10/20/40, 0 = no cap)
+    // Tick budget (runtime/AdaptiveBudget.h): the controller moves the effective
+    // pool/combat ceilings each pass from the measured previous world tick. The
+    // configured values stay the hard maximum; 0 in either means no budget.
+    AdaptiveBudget _adaptiveBudget{50, 10000, 15000};
+    bool _budgetSynced = false;
+    uint32 _budgetTargetMs = 0;
+    uint32 _budgetPoolCeilingUs = 0;
+    uint32 _budgetCombatCeilingUs = 0;
+    uint32 _budgetGateMs = 0;
+    uint64 _budgetUs = 0;              // the sum this pass could spend; 0 = no budget
+    uint32 _lastPoolTurnsMs = 0;       // budgeted turns the previous pass spent
+    std::vector<ObjectGuid> _turnOrder; // the pass order of the bots the budget may cut
+    std::vector<ObjectGuid> _alwaysOrder; // bots never cut: player-owned, loading, teleporting or logging out
+    ObjectGuid _nextPoolTurn;           // first bot the previous pass cut off (first this pass)
+    BudgetStats _lastBudget;
     // N1 (package N): NO decision is cached by instance id alone (the core hands out ids from one pool for all maps and reuses them): what is kept is keyed by
     // (map id, instance id), and a cached trigger is used only when its target is that map. The entrance itself is read from the instance script every time.
     std::map<std::pair<uint32, uint32>, uint32> _entryTriggerByInstance;   // (map, instance) -> the area trigger the last entry into it used

@@ -224,6 +224,16 @@ bool Built()
     return true;
 }
 
+TickBudgetConfig ReadTickBudgetConfig()
+{
+    TickBudgetConfig config;
+    config.poolUs = sPlayerbotAIConfig.poolTickBudgetUs;
+    config.combatUs = sPlayerbotAIConfig.combatTickBudgetUs;
+    config.targetMs = sPlayerbotAIConfig.targetWorldTickMs;
+    config.gateMs = sPlayerbotAIConfig.poolBudgetWhenTickOverMs;
+    return config;
+}
+
 std::string EnsureConfig()
 {
     // The Turtle host calls sPlayerbotAIConfig.Initialize() once at startup (host/BotHostAdapter.cpp:116). Here it is
@@ -636,6 +646,7 @@ namespace TortoiseBots
 namespace engine
 {
 bool Built() { return false; }
+TickBudgetConfig ReadTickBudgetConfig() { return TickBudgetConfig(); }
 std::string EnsureConfig() { return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)"; }
 Brain* Create(Player*, Player*, std::string& error, bool /*free*/)
 {
