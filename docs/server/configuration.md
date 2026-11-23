@@ -21,7 +21,7 @@ relates_to:
 
 Bot settings live in two files created during installation:
 
-1. `aiplayerbot.conf`: next to `mangosd.conf`. Gameplay flags, party behaviour, AI thresholds, autonomous services. Template: `ai/playerbot/aiplayerbot.conf.dist.in` (installed as `aiplayerbot.conf.dist`). A custom path can be set with `AiPlayerbot.ConfigFile` in `mangosd.conf`.
+1. `aiplayerbot.conf`: next to `mangosd.conf`. Gameplay flags, party behaviour, AI thresholds, autonomous services. Template: `ai/playerbot/aiplayerbot.conf.dist.in` for the Turtle core build, or the generated `forever/conf/aiplayerbot.conf.dist` for the ForeverCore build (each is installed as `aiplayerbot.conf.dist`). A custom path can be set with `AiPlayerbot.ConfigFile` in `mangosd.conf`. The [key census](config-keys.md) names every key the loader advertises and whether the Forever build consumes it; a key the Forever build does not consume is left out of the Forever template.
 2. `modules/tortoise_bots.conf`: in the server configuration directory. Module-level options such as log verbosity. Template: `conf/tortoise_bots.conf.dist`.
 
 ## Install and update
