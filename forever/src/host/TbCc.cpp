@@ -895,9 +895,9 @@ bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (line.reset)
     {
         // The factory kit again (default combat, non-combat, dead and reaction strategies, the forced role's line).
+        // TB's `reset strats`: drop the saved lists first, or the rebuild would load them straight back.
+        sPlayerbotDbStore.InvalidateStrategySnapshots(ai);
         ai->ResetStrategies();
-        if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
-            sPlayerbotDbStore.Save(ai);
         Reply reply(handler, args, "strategy");
         reply.Begin();
         reply.Line(Rec("strategy").S("bot", bot->GetName()).S("op", "reset").S("tag", "SETUP").S("status", "ok"));

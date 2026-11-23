@@ -74,6 +74,8 @@ def check_reset(cpp):
     assert "ai->ResetStrategies()" in body, "reset is the engine's own rebuild (PlayerbotAI::ResetStrategies)"
     assert body.index("ResetStrategies()") < body.index('S("op", "reset")'), \
         "the rebuild happens before its ok record"
+    assert body.index("InvalidateStrategySnapshots(ai)") < body.index("ResetStrategies()"), \
+        "reset drops the saved lists before the rebuild (TB reset strats), or they load straight back"
     assert '"reset takes one bot' in body, "the role target refuses reset (it takes one bot)"
     assert "sPlayerbotDbStore.Save" in cpp and "bExplicitDbStoreSave" in cpp, "changes are saved like TB (#135), unless ExplicitDbStoreSave"
 
