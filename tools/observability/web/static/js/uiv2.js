@@ -2,7 +2,7 @@
 // Dashboard UI v2 switch (v1/v2 per viewer, server default) and optional 3D model viewer.
 // Runs in <head> so the right skin is applied before the first paint.
 // Order: ?ui=v1|v2 in the URL (remembered), then the viewer's saved choice, else the server default from
-// the <meta name="tbdash-ui"> the daemon injects, else v1.
+// the <meta name="tbdash-ui"> the daemon injects, else v2.
 (function () {
   var KEY = 'tbdash.ui';
 
@@ -59,7 +59,7 @@
     model3d: meta('tbdash-ui-3d') === '1'
   };
 
-  var chosen = meta('tbdash-ui') === 'v2' ? 'v2' : 'v1';
+  var chosen = meta('tbdash-ui') === 'v1' ? 'v1' : 'v2';
   try {
     var q = new URLSearchParams(window.location.search).get('ui');
     if (valid(q)) {

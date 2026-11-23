@@ -73,7 +73,7 @@ func TestUISwitchWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`flag.String("ui", getEnv("TBDASH_UI", "v1")`,
+		`flag.String("ui", getEnv("TBDASH_UI", "v2")`,
 		`flag.Bool("ui-3d", getEnv("TBDASH_UI_3D", "") == "1"`,
 		`mux.HandleFunc("GET /api/v1/ui", requireAuth(uiInfoHandler(*uiDefault, *ui3d)))`,
 		"injectUIMeta(indexHTML, *uiDefault, *ui3d)",
