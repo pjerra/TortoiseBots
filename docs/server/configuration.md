@@ -119,3 +119,6 @@ Raid diagnostics stay opt-in through
 | `TortoiseBots.AutoTools` | `1` | Pool and free bots get the missing tool of a profession they know (pick, knife, hammer, rod, spanner, fishing pole) into their bags. |
 | `TortoiseBots.AutoHunterPet` | `1` | Hunter bots at level 10 without a pet get their race's starter pet and the pet-control spells; an existing pet is never replaced. |
 | `TortoiseBots.AutoFood` | `1` | Pool and free bots carry level-fitting food (and water for mana users), topped up when they run low. |
+| `TortoiseBots.World.Pickpocket` | `1` | Free and pool rogue bots that know Stealth and Pick Pocket pick the pockets of a nearby humanoid that still has pickpocket loot, then take the coins and items. A creature is not retried before its own refill timer; bots without the two spells are skipped. |
+| `TortoiseBots.World.Lockboxes` | `1` | Free and pool rogue bots with enough Lockpicking open the lockboxes in their own bags and take the loot. |
+| `TortoiseBots.World.LockboxMail` | `1` | A bot holding a lockbox it cannot open mails it to the best rogue bot in its own guild (online or offline), which opens it and mails the contents, coins minus the return postage, back to the sender. Only bots are served; a real player's mail is never taken. |
