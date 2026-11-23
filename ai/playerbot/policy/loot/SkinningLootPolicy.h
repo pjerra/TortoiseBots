@@ -46,6 +46,19 @@ namespace ai
         return internalLootType == kSkinningLootType ? kSkinningSkillId : kNoGatherSkill;
     }
 
+    // Whether a corpse is ready for the Skinning cast. The core's own gate
+    // (Spell::CheckCast, SPELL_EFFECT_SKINNING) asks for UNIT_FLAG_SKINNABLE
+    // and the viewer's loot gone or emptied; a loot of type LOOT_SKINNING
+    // means this bot already took its skin (Creature::IsSkinnedBy).
+    // `hasLoot` is whether the bot has a loot object on the corpse at all (on
+    // ForeverCore loot is per viewer), `lootLooted` that it has nothing left.
+    inline bool CorpseReadyForSkinning(bool skinnableFlag, bool alreadySkinnedByBot, bool hasLoot, bool lootLooted)
+    {
+        if (!skinnableFlag || alreadySkinnedByBot)
+            return false;
+        return !hasLoot || lootLooted;
+    }
+
     // True when the server-side loot type marks a skinning window. Used to
     // bypass the ordinary IsLootAllowed filter for skins, exactly as the old
     // (dead) wire-type check intended.

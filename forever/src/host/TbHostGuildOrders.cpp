@@ -1,6 +1,7 @@
 #include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostGuildOrderEnchant.h"
 #include "host/TbHostGuildOrderFish.h"
+#include "host/TbHostGuildOrderSkin.h"
 #include "host/TbHostFishing.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderAccess.h"
@@ -852,6 +853,7 @@ uint32_t BotBagItemCount(Player* bot, uint32_t itemId)
 void LoadOrders()
 {
     tbhost::guild_order_fish::LoadFishingSources();
+    tbhost::guild_order_skin::LoadSkinSources();
 
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);

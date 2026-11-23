@@ -187,14 +187,19 @@ inline void SetLootGuidCompat(Player* /*bot*/, ObjectGuid const& /*guid*/) {}
 // object). The skill a corpse asks for is still named for the code behind the line (T's helper is ai/cmangos-compat-shim.h:59; F: the
 // creature difficulty's own accessor, CreatureData.h:475).
 // Slice 9: a CHEST (GAMEOBJECT_TYPE_CHEST) is opened by the opening cast and its window is read like a corpse's (the poll of TbCompat_S9.h), so a chest
-// is not "unported": false = the code below runs for it. Everything else that needs a cast (a herb or ore node, a skin, a lock the bot picks) stays
-// the named feature and answers true. Spec unknown U3: whether the lock of the gunpowder chest opens for a bot through `open loot`, one boot decides.
+// is not "unported": false = the code below runs for it. Skin is ported too (TbCompat_V2.h CorpseSkinnableByCompat): a creature's Skinning cast runs,
+// and the poll announces its LOOT_SKINNING window. Everything else that needs a cast (a herb or ore node through the brain, a lock the bot picks)
+// stays the named feature and answers true. Spec unknown U3: whether the lock of the gunpowder chest opens for a bot through `open loot`, one boot decides.
 inline bool LootGatherUnportedCompat(WorldObject* object)
 {
     if (object)
+    {
+        if (object->ToCreature())
+            return false;                               // the skinning cast below is ported
         if (GameObject* chest = object->ToGameObject())
             if (chest->GetGoType() == GAMEOBJECT_TYPE_CHEST)
                 return false;
+    }
     tbcompat::Unported(tbcompat::Feature::GatheringLoot);
     return true;
 }
