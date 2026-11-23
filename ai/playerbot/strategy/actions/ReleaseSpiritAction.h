@@ -344,7 +344,7 @@ namespace ai
                         sPlayerbotAIConfig.logEvent(ai, "RepopAction", "graveyard");
                         // A sub-10 pool bot landed above its level (valley GY in
                         // the next town) goes straight home (LowbieGraveyardPolicy.h).
-                        TortoiseBots::BotManager::Instance().SendStrandedLowbieHome(bot);
+                        SendStrandedLowbieHomeCompat(bot);
                         return true;
                     }
                     sLog.outDetail("Repop: nearest graveyard for bot #%d %s:%d <%s> is off-map/far (map %u), using spawn/homebind instead",

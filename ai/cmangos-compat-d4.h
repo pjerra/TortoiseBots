@@ -98,5 +98,5 @@ inline WorldSafeLocsEntry const* ClosestGraveyardCompat(Player* bot)
 // `bot->GetRace() == RACE_GOBLIN || bot->GetRace() == RACE_HIGH_ELF`.
 inline bool RepopUsesHomebindCompat(Player* bot) { return bot->GetRace() == RACE_GOBLIN || bot->GetRace() == RACE_HIGH_ELF; }
 
-// `bot->TeleportToHomebind();` (the caller sends the heartbeat, as before).
-inline bool TeleportToHomebindCompat(Player* bot) { bot->TeleportToHomebind(); return true; }
+// `bot->TeleportToHomebind(0, hearthCooldown);` (the caller sends the heartbeat, as before).
+inline bool TeleportToHomebindCompat(Player* bot, bool hearthCooldown = true) { bot->TeleportToHomebind(0, hearthCooldown); return true; }

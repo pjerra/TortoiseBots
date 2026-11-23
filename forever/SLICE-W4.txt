@@ -373,3 +373,10 @@ ai/playerbot/strategy/generic/DebugStrategy.cpp
 # mount aura speeds); see forever/docs/MOUNT-RIDE-NOTES.md.
 ai/playerbot/strategy/actions/CheckMountStateAction.cpp
 ai/playerbot/strategy/values/MountValues.cpp
+
+# TBF #146 (stuck rescue): the legacy move/combat stuck triggers and the unstuck action (5-minute reset, 15-minute
+# hearthstone -> repop -> teleport chain, combat-stuck give-up, travel-target keep/retire). The host's ghost rescue
+# stays; this is the generic pass every bot gets. The navmesh, graveyard and homebind reads go through the W1 pair,
+# the homebind teleport through the D4 pair.
+ai/playerbot/strategy/triggers/StuckTriggers.cpp
+ai/playerbot/strategy/actions/UnstuckAction.cpp

@@ -7,6 +7,7 @@
 // a corpse is never cross-map; and the Turtle side keeps every legacy teleport because these helpers answer true there.
 #pragma once
 
+#include <ctime>
 #include <list>
 
 #include "Globals/ObjectMgr.h"
@@ -86,6 +87,21 @@ inline float SafeLocYCompat(WorldSafeLocsEntry const* entry)
 inline float SafeLocZCompat(WorldSafeLocsEntry const* entry)
 {
     return entry ? entry->Loc.GetPositionZ() : 0.0f;
+}
+
+// The area id of the player's home bind (T Turtle Player::GetHomeBindAreaId, F the public m_homebindAreaId,
+// Player.h:2822). F fills it from the bound position: SetHomebind(*this, GetAreaId()) at init (Player.cpp:466), the
+// character_homebind load (Player.cpp:21692) and a terrain read of m_homebind on the save/refresh path (Player.cpp:21727).
+// 0 when the player is null (no area).
+inline uint32 HomeBindAreaIdCompat(Player* bot)
+{
+    return bot ? bot->m_homebindAreaId : 0;
+}
+
+// Start time (seconds since the epoch) of the player's current duel, 0 without one. The timing test belongs to the caller.
+inline time_t DuelStartTimeCompat(Player* bot)
+{
+    return bot && bot->duel ? bot->duel->StartTime : 0;
 }
 
 inline MapEntry const* MapEntryW1Compat(uint32 mapId)

@@ -157,6 +157,7 @@ inline WorldSafeLocsEntry const* ClosestGraveyardCompat(Player* bot)
 // point (RepopAction). F: those two custom starts do not exist; every bot has its racial start (PlayerInfo createPosition).
 inline bool RepopUsesHomebindCompat(Player* /*bot*/) { return false; }
 
-// Teleport to the homebind. T `TeleportToHomebind()` then `SendHeartBeat()` (the caller sends the beat through SendHeartBeatCompat). F: the
-// core's own homebind field, the target RepopAtGraveyard uses itself for a ghost under the map (Player.cpp:5285).
-inline bool TeleportToHomebindCompat(Player* bot) { return bot->TeleportTo(bot->m_homebind); }
+// Teleport to the homebind. T `TeleportToHomebind(options, hearthCooldown)` then `SendHeartBeat()` (the caller sends the beat through
+// SendHeartBeatCompat). F: the core's own homebind field, the target RepopAtGraveyard uses itself for a ghost under the map
+// (Player.cpp:5285); a teleport there has no hearthstone cooldown, so the flag only exists to keep the signature shared.
+inline bool TeleportToHomebindCompat(Player* bot, bool /*hearthCooldown*/ = true) { return bot->TeleportTo(bot->m_homebind); }
