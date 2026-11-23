@@ -4,10 +4,10 @@
 #include <utility>
 #include <vector>
 
-// ForeverCore mount model: there is no collection_mount table and no sMountMgr. A mount item carries
-// its own mount spell, and the speed of a mount is the amount of its SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED
-// aura (Unit::UpdateSpeed, Unit.cpp:9312), not a rider-skill ladder. Riding skill gates the retail mount
-// capability (Unit::GetMountCapability, Unit.cpp:8892), not the classic mount aura.
+// ForeverCore mount model: there is no collection_mount table and no sMountMgr. A mount item teaches its
+// mount spell when used (1132: 55884 learns 580). The mount spell holds only the mounted aura and a mount
+// type; the speed comes from that type's capability, picked by SKILL_RIDING (Unit::GetMountCapability,
+// Unit.cpp:8892).
 inline std::optional<uint32> MountSpellForCollectionItemCompat(uint32)
 {
     return std::nullopt;
@@ -23,10 +23,13 @@ inline std::unordered_set<uint32> LoadLootMountItemsCompat()
     return {};
 }
 
-// No rider ladder on this core: MountValue::GetSpeedFor reads the mount aura itself.
-inline uint32 RiderMountSpeedCompat(Player*)
+// ForeverCore mount spells carry only the mounted aura and a mount type (e.g. 580: aura 78, misc 358, no speed
+// aura); the core picks the speed from the type's capabilities by SKILL_RIDING (Unit.cpp:8892-8913). Classic
+// capabilities: riding 75 -> +60 %, 150 -> +100 %. Values are base-1 like the mirrored aura amounts.
+inline uint32 RiderMountSpeedCompat(Player* bot)
 {
-    return 0;
+    uint32 const riding = bot ? bot->GetSkillValue(SKILL_RIDING) : 0;
+    return riding >= 150 ? 99 : riding >= 75 ? 59 : 0;
 }
 
 // One riding skill on this core (SharedDefines.h:5966); the per-race skill lines are Turtle data.
@@ -40,10 +43,15 @@ inline bool MountSpeedAlways100Compat(SpellEntry const*)
     return false;
 }
 
-// Every mount aura on ForeverCore keeps its own amount; none scales with SKILL_RIDING.
-inline bool MountSpeedIgnoresRidingSkillCompat(SpellEntry const*)
+// A mount spell with its own speed aura keeps it; the rest scale with SKILL_RIDING (RiderMountSpeedCompat).
+inline bool MountSpeedIgnoresRidingSkillCompat(SpellEntry const* spellInfo)
 {
-    return true;
+    if (!spellInfo)
+        return false;
+    for (int i = 0; i < 3; ++i)
+        if (spellInfo->EffectApplyAuraName[i] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
+            return true;
+    return false;
 }
 
 // Classic indoor dismount rule (Player::IsMountRestrictedHere, Player.cpp:7095) plus the battleground
