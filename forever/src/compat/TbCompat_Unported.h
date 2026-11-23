@@ -524,6 +524,28 @@ inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& lootObject, bool /*
 // (MSG_MOVE_SET_FACING from the mover) has nothing left to do.
 inline void BroadcastFacingCompat(Player* /*bot*/) {}
 
+// The debug aura command: T builds a SpellAuraHolder with one Aura per aura effect and stores it on the unit; F's
+// Unit::AddAura(SpellInfo const*, effMask, target) creates the same auras from the core's spell record (Unit.cpp:13078-13109),
+// with the unit as caster and target as on T. The mask covers the aura effects of the first three slots, the slots the mirror
+// spell entry keeps (T's MAX_EFFECT_INDEX loop).
+inline bool ApplyDebugAuraCompat(Unit* unit, SpellEntry const* spellInfo)
+{
+    SpellInfo const* core = tbcompat::SpellCore(spellInfo);
+    if (!unit || !core)
+        return false;
+
+    uint32 effMask = 0;
+    for (SpellEffectInfo const& effect : core->GetEffects())
+    {
+        if (effect.EffectIndex >= MAX_EFFECT_INDEX)
+            continue;
+        if (effect.IsAreaAuraEffect() || effect.Effect == SPELL_EFFECT_APPLY_AURA || effect.Effect == SPELL_EFFECT_PERSISTENT_AREA_AURA)
+            effMask |= 1u << effect.EffectIndex;
+    }
+
+    return unit->AddAura(core, effMask, unit) != nullptr;
+}
+
 // Whether a bot may enter an area trigger's map: the instance is full, an encounter is in progress, or the bot is locked to a
 // different instance. T asks its dungeon persistent state and player bind; F asks the instance locks, in the same order its own
 // InstanceMap::CannotEnter applies (Map.cpp:3145-3175), so a bot and a player disagree on nothing.

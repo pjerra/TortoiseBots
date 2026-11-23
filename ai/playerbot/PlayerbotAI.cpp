@@ -5769,30 +5769,7 @@ bool PlayerbotAI::AddAura(Unit* unit, uint32 spellId)
         return false;
     }
 
-    return UnportedBlockResultCompat(tbcompat::Feature::AuraHolders, false, [&](auto* unit) -> bool
-    {
-        auto* holder = CreateSpellAuraHolder(spellInfo, unit, unit, unit);
-
-        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-        {
-            uint8 eff = spellInfo->Effect[i];
-            if (eff >= MAX_SPELL_EFFECTS)
-                continue;
-            if (IsAreaAuraEffect(eff) ||
-                eff == SPELL_EFFECT_APPLY_AURA ||
-                eff == SPELL_EFFECT_PERSISTENT_AREA_AURA)
-            {
-                int32 basePoints = spellInfo->CalculateSimpleValue(SpellEffectIndex(i));
-                int32 damage = basePoints;
-                Aura* aur = CreateAura(spellInfo, SpellEffectIndex(i), &damage, holder, unit);
-                holder->AddAura(aur, SpellEffectIndex(i));
-            }
-        }
-        if (!unit->AddSpellAuraHolder(holder))
-            holder = nullptr;
-
-        return true;
-    }, unit);
+    return ApplyDebugAuraCompat(unit, spellInfo);
 }
 
 std::list<Unit*> PlayerbotAI::GetAllHostileUnitsAroundWO(WorldObject* wo, float distanceAround)
