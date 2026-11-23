@@ -204,9 +204,9 @@ bool IsCasting(Player* bot)
 uint8 BaseMacroState(Player* bot, TortoiseBots::engine::Telemetry const& engineState)
 {
     using namespace TortoiseBots::dashboard_state;
-    if (!bot->IsAlive())
+    if (!bot->IsAlive() || engineState.deadState)
         return Dead;
-    if (bot->IsInCombat() || engineState.state == "combat")
+    if (bot->IsInCombat() || engineState.combatState)
         return Combat;
     if (bot->isMoving() || (bot->GetMotionMaster() && (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE ||
             bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE ||
@@ -444,7 +444,7 @@ void TrackBots(std::vector<Player*> const& bots, std::unordered_map<ObjectGuid, 
             t.unreachableDurationMs = 0;
             t.unreachableReported = false;
         }
-        if (t.state == Combat && engineState.state == "combat" && !engineState.currentTarget.IsEmpty() && engineState.targetHostile)
+        if (t.state == Combat && engineState.combatState && !engineState.currentTarget.IsEmpty() && engineState.targetHostile)
         {
             bool const unreachable = engineState.targetDistance > 45.0f || !engineState.targetInLos;
             if (unreachable)

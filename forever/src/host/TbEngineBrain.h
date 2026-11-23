@@ -90,7 +90,8 @@ std::vector<std::string> Describe(Brain const* brain);
 struct Telemetry
 {
     bool engine = false;
-    std::string state;              // PlayerbotAI::BotStateToString (combat, dead, non-combat)
+    bool combatState = false;       // the engine is in BOT_STATE_COMBAT
+    bool deadState = false;         // the engine is in BOT_STATE_DEAD
     std::string lastAction;
     std::string lastTrigger;
     std::string combatStrategies;

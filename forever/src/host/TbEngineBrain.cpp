@@ -700,7 +700,8 @@ bool ReadTelemetry(Player* bot, Telemetry& out)
         return false;
 
     out.engine = true;
-    out.state = PlayerbotAI::BotStateToString(pai->GetState());
+    out.combatState = pai->GetState() == BotState::BOT_STATE_COMBAT;
+    out.deadState = pai->GetState() == BotState::BOT_STATE_DEAD;
     if (Action const* last = pai->GetLastExecutedAction(pai->GetState()))
         out.lastAction = const_cast<Action*>(last)->getName();
     out.lastTrigger = pai->GetLastExecutedTrigger(pai->GetState());
