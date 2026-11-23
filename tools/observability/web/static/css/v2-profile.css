@@ -439,16 +439,15 @@ html[data-ui="v2"] .profile-drawer .gear-empty .gear-icon-box {
 }
 
 html[data-ui="v2"] .armory-weapons {
-  width: min(100%, 340px);
+  width: min(100%, 540px);
   margin: 16px auto 20px;
   gap: 12px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 html[data-ui="v2"] .profile-drawer .gear-weapon-item {
-  min-height: 0;
-  aspect-ratio: 1 / 1.04;
-  justify-content: center;
+  min-height: 118px;
+  justify-content: flex-start;
   gap: 8px;
   padding: 12px 8px;
   border: 1px solid var(--v2-line);
