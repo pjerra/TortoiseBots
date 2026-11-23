@@ -283,15 +283,15 @@ std::unordered_map<uint32_t, std::vector<RecipeFact>> BuildRecipeIndex()
         TortoiseBots::prof::SkillFirstAid,
         TortoiseBots::prof::SkillCooking
     };
-    for (uint32_t skillId : kCraftSkills)
+    // Forever's recipes sit on child skill lines ("Classic Tailoring"), so each row is mapped to its classic profession.
+    for (SkillLineAbilityEntry const* ability : sSkillLineAbilityStore)
     {
-        auto const* abilities = sDB2Manager.GetSkillLineAbilitiesBySkill(skillId);
-        if (!abilities)
+        if (!ability || !ability->Spell || !ability->SkillLine)
             continue;
-        for (SkillLineAbilityEntry const* ability : *abilities)
+        uint32_t const skillId = Player::GetClassicProfessionSkill(ability->SkillLine);
+        if (std::find(std::begin(kCraftSkills), std::end(kCraftSkills), skillId) == std::end(kCraftSkills))
+            continue;
         {
-            if (!ability || !ability->Spell)
-                continue;
             SpellInfo const* spell = sSpellMgr->GetSpellInfo(uint32_t(ability->Spell), DIFFICULTY_NONE);
             if (!spell)
                 continue;

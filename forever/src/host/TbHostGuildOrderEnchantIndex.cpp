@@ -2,9 +2,9 @@
 //
 // TB built this table from its own spell and skill-line stores
 // (ai/playerbot/GuildOrderEnchants.cpp). ForeverCore keeps the same rows in
-// DB2, so the scan reads the Enchanting skill line through
-// sDB2Manager.GetSkillLineAbilitiesBySkill (DB2Stores.h) and each spell
-// through sSpellMgr (SpellMgr.h). The matching rules themselves live in
+// DB2, so the scan reads SkillLineAbility rows whose classic profession
+// (Player::GetClassicProfessionSkill) is Enchanting and each spell through
+// sSpellMgr (SpellMgr.h). The matching rules themselves live in
 // runtime/GuildOrderEnchantPolicy.h and are unit tested on their own.
 //
 // The catalogue is built once, on the first caller, so a build that never
@@ -13,6 +13,7 @@
 
 #include "DB2Stores.h"
 #include "Log.h"
+#include "Player.h"
 #include "SharedDefines.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -82,15 +83,13 @@ void BuildGuildOrderEnchantIndex()
         return;
     Built() = true;
 
-    std::vector<SkillLineAbilityEntry const*> const* abilities =
-        sDB2Manager.GetSkillLineAbilitiesBySkill(kSkillEnchanting);
-    if (!abilities)
-        return;
-
+    // Forever's recipes sit on child skill lines ("Classic Enchanting"), not on 333 itself.
     std::unordered_map<uint32_t, std::vector<SkillLineAbilityEntry const*>> bySpell;
-    for (SkillLineAbilityEntry const* ability : *abilities)
+    for (SkillLineAbilityEntry const* ability : sSkillLineAbilityStore)
     {
-        if (!ability || ability->Spell <= 0)
+        if (!ability || ability->Spell <= 0 || !ability->SkillLine)
+            continue;
+        if (Player::GetClassicProfessionSkill(ability->SkillLine) != kSkillEnchanting)
             continue;
         bySpell[uint32_t(ability->Spell)].push_back(ability);
     }
@@ -109,7 +108,7 @@ void BuildGuildOrderEnchantIndex()
             : uint32_t(spell->GetEffects().front().Effect);
         bool rowOk = false;
         for (SkillLineAbilityEntry const* ability : rows)
-            if (IsCatalogueEnchantRow(uint32_t(ability->SkillLine), hasEnchant, createsItem, isSkillStep, effect0))
+            if (IsCatalogueEnchantRow(kSkillEnchanting, hasEnchant, createsItem, isSkillStep, effect0))
             {
                 rowOk = true;
                 break;
