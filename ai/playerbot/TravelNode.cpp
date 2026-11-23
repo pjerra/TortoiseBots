@@ -2708,6 +2708,8 @@ void TravelNodeMap::generateTransportNodes()
                 //Loop over the path and connect stop locations.
                 for (size_t pathIndex = 0; pathIndex < path.size(); ++pathIndex)
                 {
+                    if (!TaxiPathNodePresentCompat(path, pathIndex))
+                        continue;
                     WorldPosition pos = WorldPosition(TaxiPathNodeMapIdCompat(path, pathIndex), TaxiPathNodeXCompat(path, pathIndex),
                         TaxiPathNodeYCompat(path, pathIndex), TaxiPathNodeZCompat(path, pathIndex), 0);
 
@@ -2753,6 +2755,8 @@ void TravelNodeMap::generateTransportNodes()
                     //Continue from start until first stop and connect to end.
                     for (size_t pathIndex = 0; pathIndex < path.size(); ++pathIndex)
                     {
+                        if (!TaxiPathNodePresentCompat(path, pathIndex))
+                            continue;
                         WorldPosition pos = WorldPosition(TaxiPathNodeMapIdCompat(path, pathIndex), TaxiPathNodeXCompat(path, pathIndex),
                             TaxiPathNodeYCompat(path, pathIndex), TaxiPathNodeZCompat(path, pathIndex), 0);
 
@@ -3402,6 +3406,9 @@ void TravelNodeMap::generateTaxiPaths()
         std::vector<WorldPosition> ppath;
         ppath.reserve(nodes.size() + 2);
 
+        if (!TaxiPathNodePresentCompat(nodes, 0))
+            continue;
+
         WorldPosition firstLeg(TaxiPathNodeMapIdCompat(nodes, 0), TaxiPathNodeXCompat(nodes, 0),
             TaxiPathNodeYCompat(nodes, 0), TaxiPathNodeZCompat(nodes, 0), 0.0);
         if (startNode->fDist(firstLeg) > 0.1f)
@@ -3409,6 +3416,8 @@ void TravelNodeMap::generateTaxiPaths()
 
         for (size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex)
         {
+            if (!TaxiPathNodePresentCompat(nodes, nodeIndex))
+                continue;
             WorldPosition leg(TaxiPathNodeMapIdCompat(nodes, nodeIndex), TaxiPathNodeXCompat(nodes, nodeIndex),
                 TaxiPathNodeYCompat(nodes, nodeIndex), TaxiPathNodeZCompat(nodes, nodeIndex), 0.0);
             if (!leg.isValid() || leg.GetMapId() != startPos.GetMapId())

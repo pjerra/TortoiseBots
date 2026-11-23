@@ -283,6 +283,9 @@ inline float TaxiPathNodeXCompat(TaxiPathNodeList const& nodes, std::size_t i) {
 inline float TaxiPathNodeYCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.Y; }
 inline float TaxiPathNodeZCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Loc.Z; }
 inline uint32 TaxiPathNodeDelayCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i]->Delay; }
+// A path that skips a point number leaves a null slot: sTaxiPathNodesByPath is resized by the
+// table's path length and filled at the node's own index (DB2Stores.cpp:1638-1642).
+inline bool TaxiPathNodePresentCompat(TaxiPathNodeList const& nodes, std::size_t i) { return i < nodes.size() && nodes[i] != nullptr; }
 // ===============================================================================================================
 // W5T: THE PER-LINK CHECKS AND THE EXECUTOR (TravelNodePath::getCost, MovementAction::UseTaxi/UseTransport)
 // ===============================================================================================================

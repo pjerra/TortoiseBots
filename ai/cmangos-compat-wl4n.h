@@ -146,6 +146,9 @@ inline float TaxiPathNodeXCompat(TaxiPathNodeList const& nodes, std::size_t i) {
 inline float TaxiPathNodeYCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i].y; }
 inline float TaxiPathNodeZCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i].z; }
 inline uint32 TaxiPathNodeDelayCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i].delay; }
+// Turtle's node list holds values, so a skipped point is a default entry that the callers'
+// isValid() test drops; nothing here is null.
+inline bool TaxiPathNodePresentCompat(TaxiPathNodeList const& nodes, std::size_t i) { return i < nodes.size(); }
 
 // The start position of a race and class: the T fields.
 inline uint32 PlayerInfoMapIdCompat(PlayerInfo const* info) { return info->mapId; }
