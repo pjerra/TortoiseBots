@@ -199,11 +199,11 @@ public:
     }
 
     bool Ready() const { return _mesh && _query; }
-    dtNavMesh* Mesh() const { return _mesh; }
+    dtNavMesh const* Mesh() const { return _mesh; }
     dtNavMeshQuery const* Query() const { return _query; }
 
 private:
-    dtNavMesh* _mesh = nullptr;
+    dtNavMesh const* _mesh = nullptr;
     dtNavMeshQuery const* _query = nullptr;
 };
 
@@ -213,7 +213,7 @@ inline bool NavMeshTileLoadedCompat(uint32 mapId, uint32 /*instanceId*/, int gri
     float pointX, float pointY, float pointZ)
 {
     MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
-    dtNavMesh* navMesh = mmap ? mmap->GetNavMesh(mapId) : nullptr;
+    dtNavMesh const* navMesh = mmap ? mmap->GetNavMesh(mapId) : nullptr;
     if (!navMesh)
         return false;
 
