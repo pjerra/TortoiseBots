@@ -350,3 +350,6 @@ ai/playerbot/strategy/actions/TellReputationAction.cpp
 ai/playerbot/strategy/generic/NoAoeStrategy.cpp
 ai/playerbot/strategy/generic/ConserveManaStrategy.cpp
 ai/playerbot/strategy/generic/MimicConsumableStrategy.cpp
+
+# Unregistered row keys: the check-values pre-warm
+ai/playerbot/strategy/actions/CheckValuesAction.cpp
