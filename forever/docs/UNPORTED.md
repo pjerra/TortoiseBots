@@ -6,7 +6,7 @@ The to-do list of the later slices. Each row is one entry of the closed table in
 On Turtle (`ai/cmangos-compat-unported.h`) every helper is the original call. The boot line and `.tb unported` print the counts (host lines in
 `SLICE1-R6A-NOTES.md`, "NEEDS FROM host"). A later slice that ports a feature deletes its row, its enum entry and its helpers.
 
-72 features after slice 2's R5 (the boot line; was 56 after slice 1's R6A; slice 2 removed `loot object stack` and `heal estimate`, merged the loot rows and added `item usage`); S3 rewrites `incoming: forced speed change`, `incoming: knock back` and `jump, fall and knockback` and keeps the count. (Creature immunity data and the GM visibility were ported in R9, SLICE1-R9-NOTES.md.) "Call sites" are the places in the legacy tree that call a helper of the feature (or a `UnportedBlock*Compat` with it), counted by the build tree at the commit of this file; the `Incoming:` rows count packet table rows (the tables hold 54 rows; packet cases dealt with directly are counted by `RegisterDirectPacketCasesCompat`).
+72 features after slice 2's R5 (the boot line; was 56 after slice 1's R6A; slice 2 removed `loot object stack` and `heal estimate`, merged the loot rows and added `item usage`); S3 rewrites `incoming: forced speed change`, `incoming: knock back` and `jump, fall and knockback` and keeps the count. (Creature immunity data and the GM visibility were ported in R9, SLICE1-R9-NOTES.md.) "Call sites" are the places in the legacy tree that call a helper of the feature (or a `UnportedBlock*Compat` with it), counted by the build tree at the commit of this file; the `Incoming:` rows count packet table rows (the tables hold 54 rows; packet cases dealt with directly are counted by `RegisterDirectPacketCasesCompat`). 67 now: instance bind, the debug aura apply, the speed cheat and the debug spell visuals are ported.
 
 | Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
 |---|---|---|---|---|
@@ -88,13 +88,6 @@ Rows and stand-ins added by the slice-2 link (R3, `SLICE2-R3-NOTES.md` section 7
 | Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
 |---|---|---|---|---|
 | item usage | `ai::ItemUsageValue` and its helpers: is an item needed for a quest, a future upgrade, an equip use, a recipe (lead decision D2: money only, the item-usage value is a later slice) | `IsNeededForQuest` (LootObjectStack.cpp), `IsFutureUpgrade` (LootStrategyValue.cpp), `QueryItemUsageForEquip` (LootValues.cpp), `GetRecipeSpell` (UseItemAction.cpp) | false / `ITEM_USAGE_NONE` / 0: not needed, not an upgrade, no recipe; the `item usage` key is not registered and the missing-key stand-in answers `ITEM_USAGE_NONE` | `ItemUsageValue.cpp` (2,419 lines, 53 census places) and its RandomItemMgr reads |
-
-<!-- slice 3, porting worker -->
-Row added by the slice-3 porting worker (`SLICE3-P-NOTES.md` section 7). Helper: `DebugSpellVisualCompat` in `forever/src/compat/TbCompat_S3.h` (Turtle twin: `ai/cmangos-compat-s3.h`).
-
-| Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
-|---|---|---|---|---|
-| debug spell visuals | the two colour cues the `debug threat` strategy plays on a bot (high / medium threat): `Unit::SendPlaySpellVisual(kitId)` on T plays a 1.12 SpellVisualKit.dbc index; ForeverCore's `SendPlaySpellVisual` takes a target and a spell visual id of the new client | 2 (ThreatStrategy.cpp 2) | nothing is shown (counted, logged once); the bot's fight is unchanged, the strategy only draws | pick two visual kit ids of the F client (`SendPlaySpellVisualKit`, Unit.cpp:12989) and send them from the helper |
 
 <!-- slice 4, porting worker P4 -->
 Rows added by the slice-4 porting worker (`SLICE4-P-NOTES.md` section 5): 76 features in the boot line now (74 after slice 3, two added here; `incoming: reclaim corpse` above is the renamed row). Helpers in `forever/src/compat/TbCompat_D4.h` (Turtle twin `ai/cmangos-compat-d4.h`).
