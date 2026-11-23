@@ -216,9 +216,8 @@ bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 // false exactly as before. StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in either (R9): PositionAction.cpp is in the slice.
 
 // =====================================================================================================================
-// Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
-// =====================================================================================================================
-void BuildGuildOrderEnchantIndex() { NotePool(); }
+// Startup tables of other managers. Owner file: GuildOrderSources.cpp. Nothing is built.
+// (The enchant catalogue is real now: host/TbHostGuildOrderEnchantIndex.cpp.)
 void BuildGuildOrderSourceIndex() { NotePool(); }
 std::vector<GuildOrderEntrySource> GuildOrderSourcesFor(uint32_t) { NotePool(); return {}; }
 
