@@ -32,7 +32,6 @@
     X(IncomingKnockBack, "incoming: knock back", "the 1.12 knock-back packet and the client jump a bot answered it with; ForeverCore flies a bot server-side and the host waits the flight out and lands it (S3)") \
     X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout); since S1-R2 a real whisper or party line reaches the bot through the host hook (PlayerScript::OnChat -> chatin::Judge -> PlayerbotAI::HandleCommand); the 1.12 packet case stays dead") \
     X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); since S2 the host session reads the core's typed packet (the engine's wait grows by the pushback, SPELL_DELAYED), the 1.12 case stays unregistered") \
-    X(JumpFall, "jump, fall and knockback", "bot-started jumps and the 1.12 jump/land packets; ForeverCore moves by spline and movement generators, and a core-started flight lands with the core's own fall damage (S3)") \
     X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
     X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
     X(SpawnGuid, "guid from spawn data", "an object guid built from a spawn record (creature data id + spawn id, 1.12 guid layout); ForeverCore keys spawns by spawn id and map, not by guid counter") \
@@ -52,15 +51,14 @@
     X(InstanceBind, "instance bind", "instance saves and binds (DungeonPersistentState, InstancePlayerBind, GetBoundInstance) for the area trigger admission check; ForeverCore has InstanceLock") \
     X(Camp, "camp, rest bonus, water breathing", "the camp kit skill (SKILL_SURVIVAL2), rest bonus (SetRestBonus), the water breathing interval, the fishing zone of an area (AreaEntry::GetById)") \
     X(SpeedCheat, "speed cheat", "UpdateSpeed(type, forced, ratio) with a forced rate; ForeverCore recomputes speed from auras") \
-    X(MovementInterrupt, "movement interrupt and heartbeat", "MovementGenerator::Interrupt and Player::SendHeartBeat; ForeverCore movement generators have no such calls") \
+    X(MovementInterrupt, "movement heartbeat", "Player::SendHeartBeat, the client heartbeat a real-player-controlled bot sends; a headless host bot never needs it. The movement generator interrupt is real: the near-teleport ack calls the core's MotionMaster::InterruptOnTeleport") \
     X(AddonChat, "chat channels, addon bridge, chat tags", "addon messages (SendAddonMessage, BuildChatPacket with a chat tag), chat channels (ChannelMgr by team) and guild chat; ForeverCore chat is typed packets") \
     X(GuildRanks, "guild", "guild rank rights and member slots (Guild::GetRanksSize, GetMemberSlot, HasRankRight); ForeverCore has Guild::Member and rank ids") \
     X(AuraHolders, "aura holders (debug apply)", "SpellAuraHolder and CreateSpellAuraHolder for the debug aura command; ForeverCore creates auras from SpellInfo") \
     X(SpawnIdOfGuid, "spawn id of a creature", "the spawn record of a creature or game object found by the guid counter (T GetCreatureDataPair(guid.GetCounter()), GetGODataPair); ForeverCore's guid counter is not a spawn id (findings item 20)") \
     X(CreatureLevels, "creature template level", "CreatureInfo::level_max (T); ForeverCore templates scale levels per difficulty") \
     X(PoolsAndEvents, "pools and game events", "the pool and game event of a creature or game object found by its guid counter (PoolMgr::IsPartOfAPool, GameEventMgr::GetGameEventId); ForeverCore keys both by spawn id") \
-    X(SummonSlots, "summon-object slots", "the four summon object slots of a player (m_ObjectSlotGuid, SPELL_EFFECT_SUMMON_OBJECT_SLOT1-4: totems, traps); ForeverCore has one slot effect and different bookkeeping") \
-    X(SpellData, "spell data (icon ids, item charges)", "SpellEntry::SpellIconID and Item::GetSpellCharges(index) on the mirror spell entry; ForeverCore reads them from SpellInfo / ItemEffectEntry") \
+    X(SpellData, "spell data (icon ids)", "SpellEntry::SpellIconID on the mirror spell entry (paladin heal classification, icon comparison); ForeverCore keeps IconFileDataId, not the 1.12 icon index. The item charges are real: ItemSpellChargesCompat maps the legacy slot index to the item's ItemEffectEntry") \
     X(BossTactics, "boss and raid tactics", "boss-specific hold, taunt, heal, position and spawn rules (BossTacticsActions, Fankriss, Patchwerk, Viscidus, Solnius, meet-and-heal holds, boss stands, boss tactics and dungeon plan tables); the link stand-ins answer: no boss rule applies (R6B)") \
     X(TravelMgr, "travel and exploration", "TravelMgr, the travel node map, paths, travel targets and destinations, area levels, quest travel table, taxi node zones; nothing is loaded and every query answers: no route, no target (R6B)") \
     X(RandomItems, "random item tables", "RandomItemMgr food picks, reagent and vendor tables; gear generation is handled by W6b TbGearGen + GearSetPolicy") \

@@ -215,7 +215,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (43 of its keys)
+    // the registry of StrategyContext (44 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -264,6 +264,7 @@ namespace slice
             creators["pull back"] = [](PlayerbotAI* ai) { return new PullBackStrategy(ai); };
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionStrategy(ai); };
             creators["sit"] = [](PlayerbotAI* ai) { return new SitStrategy(ai); };
+            creators["follow jump"] = [](PlayerbotAI* ai) { return new FollowJumpStrategy(ai); };
         }
     };
 
@@ -409,7 +410,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (62 of its keys)
+    // the registry of ChatActionContext (63 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -477,6 +478,7 @@ namespace slice
             creators["reset values"] = [](PlayerbotAI* ai) { return new ResetValuesAction(ai); };
             creators["reset ai soft"] = [](PlayerbotAI* ai) { return new ResetAiAction(ai, false); };
             creators["cs"] = [](PlayerbotAI* ai) { return new CustomStrategyEditAction(ai); };
+            creators["jump"] = [](PlayerbotAI* ai) { return new JumpAction(ai); };
         }
     };
 
@@ -651,7 +653,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (66 of its keys)
+    // the registry of ChatTriggerContext (67 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -723,6 +725,7 @@ namespace slice
             creators["reset strats"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset strats"); };
             creators["reset values"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reset values"); };
             creators["cs"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cs"); };
+            creators["jump"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "jump"); };
         }
     };
 
@@ -974,7 +977,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 55, kActions = 169, kTriggers = 213, kValues = 222;
+    constexpr unsigned kStrategies = 56, kActions = 170, kTriggers = 214, kValues = 222;
 }
 }
 

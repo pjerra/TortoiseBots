@@ -557,8 +557,10 @@ inline bool SessionHasInstantLogoutCompat(WorldSession* session) { return sessio
 template <class P>
 inline void RemoveOnTransportFlagCompat(P* /*bot*/) {}
 
-// The movement generator interrupt and the movement heartbeat of T. Failure value: nothing is sent or interrupted.
-inline void InterruptCurrentMovementCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
+// The movement generator interrupt of T's near-teleport ack. F's MotionMaster has the same call for its own teleport
+// handling: it deactivates the top generator, which a non-resumable generator cleans up on its next update. The
+// heartbeat below stays unported.
+inline void InterruptCurrentMovementCompat(Player* bot) { bot->GetMotionMaster()->InterruptOnTeleport(); }
 inline void SendHeartBeatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
 
 // PROPER: drop stale transport state. T: no transport but MOVEFLAG_ONTRANSPORT still set -> clear the flag and the transport data.
@@ -697,13 +699,42 @@ inline void SendChatPacketCompat(Facade& /*facade*/, Player* /*from*/, Player* /
 // ===============================================================================================================
 // SPELLS (PlayerbotAISpells.cpp)
 // ===============================================================================================================
-// Hand an object the bot summoned on another map back to its owner (T: the four summon object slots of the player). Failure value:
-// nothing is handed back.
-inline void ReleaseForeignSummonObjectsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/) { tbcompat::Unported(tbcompat::Feature::SummonSlots); }
+// Release the summon-object slot before a cast (traps, lightwells, ritual objects). T reads one of four slots from
+// effects 104-107; this core routes only effect 104 (SPELL_EFFECT_SUMMON_OBJECT_SLOT1) to a slot, and its own summon
+// effect replaces the object while RemoveGameObject clears the entry, so only the bot's stale entry is left to drop.
+// T's guard exists for the 1.12 guid-counter collision, where the slot names a stranger's object on this map;
+// ForeverCore guids are unique, so a slot naming an object the bot does not own is stale and is cleared.
+inline void ReleaseForeignSummonObjectsCompat(Player* bot, SpellEntry const* spellInfo)
+{
+    if (!spellInfo->HasEffect(SPELL_EFFECT_SUMMON_OBJECT_SLOT1))
+        return;
+
+    // EffectSummonObject stores the object in slot `effect - SPELL_EFFECT_SUMMON_OBJECT_SLOT1`, and only effect 104
+    // reaches it, so slot 0 is the one a bot can hold.
+    ObjectGuid& slot = bot->m_ObjectSlot[0];
+    if (slot.IsEmpty())
+        return;
+
+    GameObject* obj = bot->GetMap()->GetGameObject(slot);
+    if (obj && obj->GetOwnerGUID() != bot->GetGUID())
+        slot.Clear();
+}
 // Whether the spell's icon id is this one (T `SpellIconID == icon`). Failure value: false.
 inline bool SpellIconIdIsCompat(SpellEntry const* /*spell*/, uint32 /*icon*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return false; }
-// The charges of an item's spell by index (T `Item::GetSpellCharges(index)`). Failure value: 0 charges.
-inline int32 ItemSpellChargesCompat(Item const* /*item*/, uint8 /*index*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return 0; }
+// The charges of an item's spell by its legacy (1.12) slot index (T `Item::GetSpellCharges(index)`). ForeverCore keeps
+// the charges per ItemEffectEntry; the mirror prototype fills its Spells[] by LegacySlotIndex (TbItemPrototype.cpp), so
+// the same index finds the effect. Failure value: 0 charges (no effect in that slot).
+inline int32 ItemSpellChargesCompat(Item const* item, uint8 index)
+{
+    if (!item)
+        return 0;
+
+    for (ItemEffectEntry const* effect : item->GetEffects())
+        if (effect && effect->LegacySlotIndex == index)
+            return item->GetSpellCharges(effect);
+
+    return 0;
+}
 
 // @@END@@
 #endif // TB_UNPORTED_TABLE_ONLY

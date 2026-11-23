@@ -626,34 +626,25 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         if (!fallAfterJump)
         {
             bot->m_movementInfo.AddMovementFlag(MOVEFLAG_FALLINGFAR);
-
-            UnportedBlockCompat(tbcompat::Feature::JumpFall, [&](auto* player)
-            {
-                WorldPacket stop(MSG_MOVE_STOP);
-                stop << player->m_movementInfo;
-                QueuePacket(stop);
-            }, bot);
-
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
+            // Turtle's bot is its own client: the stop and land packets are what ends the jump there.
+            WorldPacket stop(MSG_MOVE_STOP);
+            stop << bot->m_movementInfo;
+            QueuePacket(stop);
+#endif
             bot->m_movementInfo.SetMovementFlags(MOVEFLAG_NONE);
             bot->m_movementInfo.jump = MovementInfo::JumpInfo();
-
-            UnportedBlockCompat(tbcompat::Feature::JumpFall, [&](auto* player)
-            {
-                WorldPacket land(MSG_MOVE_FALL_LAND);
-                land << player->m_movementInfo;
-                QueuePacket(land);
-            }, bot);
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
+            WorldPacket land(MSG_MOVE_FALL_LAND);
+            land << bot->m_movementInfo;
+            QueuePacket(land);
+#endif
             sLog.outDetail("%s: Jump: Landed, landTime: %u", CStrCompat(bot->GetName()), curTime);
 
-            // Player::IsFalling() (m_fallStartZ != 0, set by SetFallInformation() above
-            // this block and in the knockback handler) is what actually gates CanMove().
-            // It's meant to clear via Player::UpdateFallInformationIfNeed() when the
-            // MSG_MOVE_FALL_LAND packet just queued above is processed by
-            // WorldSession::HandleMovementOpcodes - but that processing is unreliable for
-            // an AI-synthesized packet (dropped if the bot's movespline isn't finalized,
-            // rejected by anti-cheat, etc.), and when it's dropped m_fallStartZ is never
-            // reset, permanently blocking the bot from moving again. Clear it here
-            // directly so landing doesn't depend on that fragile round-trip.
+            // Turtle's Player::IsFalling() reads the fall start (m_fallStartZ), which only the core's own
+            // CMSG_MOVE_FALL_LAND handling clears; an AI-synthesized land packet is unreliable there. A ForeverCore
+            // flight is landed by the host watcher, which leaves the same bookkeeping. Clear the start here on both,
+            // so a landing never leaves the bot stuck on a fall it already finished.
             SetFallInformationCompat(bot, 0.0f);
             jumpTime = 0;
             fallAfterJump = false;
