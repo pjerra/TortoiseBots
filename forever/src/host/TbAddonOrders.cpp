@@ -29,6 +29,7 @@
 #include "ItemTemplate.h"
 #include "ObjectAccessor.h"
 #include "ObjectGuid.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "SharedDefines.h"
 #include "SpellInfo.h"
