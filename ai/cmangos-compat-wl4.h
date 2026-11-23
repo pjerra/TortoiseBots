@@ -1130,6 +1130,10 @@ inline void TravelLoadTaxiZonesCompat(std::unordered_map<uint32, uint32>& zones)
 inline bool TravelFishingCompat() { return true; }
 inline int32 FishingBaseSkillWL4(uint32 areaId) { return sObjectMgr.GetFishingBaseSkillLevel(areaId); }
 
+// The fish table stores the classic area flag; Turtle's positions carry that
+// flag, so the row keeps it as-is.
+inline int32 StoredFishAreaKeyWL4(int32 storedFlag, uint32 /*mapId*/) { return storedFlag; }
+
 inline uint32 FishingZoneOfWL4(ai::AsyncGuidPosition const& pos)
 {
     uint32 zone, subzone;

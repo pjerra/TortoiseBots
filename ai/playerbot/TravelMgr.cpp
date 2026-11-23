@@ -2784,7 +2784,7 @@ void TravelMgr::LoadFishLocations()
 
     auto result = TravelWorldQueryCompat("SELECT `name`, `map_id`, `position_x`, `position_y`, `position_z`, `orientation`, `description` FROM `ai_playerbot_named_location` WHERE `name` LIKE 'FISH_LOCATION%'");
 
-    if (!result)
+    if (!result || !result->GetRowCount())
     {
         if (!sPlayerbotAIConfig.generateFishLocations)
         {
@@ -2816,7 +2816,7 @@ void TravelMgr::LoadFishLocations()
 
         AsyncGuidPosition* point = &fishPoints.emplace_back(GuidPosition(0, WorldPosition(mapId, positionX, positionY, positionZ, orientation)));
 
-        int32 areaFlag = stoi(description);
+        int32 areaFlag = StoredFishAreaKeyWL4(stoi(description), mapId);
         point->setAreaFlag(areaFlag);
         uint32 zone = GetFishZone(*point);
 
@@ -2919,6 +2919,36 @@ bool TravelMgr::FishZoneNearestSpot(uint32 zoneId, WorldPosition const& from, Wo
             distanceSq = dist;
             found = true;
         }
+    }
+    return found;
+}
+
+bool TravelMgr::NearestFishSpotOnMap(uint32 mapId, WorldPosition const& from, float maxDistance,
+    uint32 maxZoneSkill, WorldPosition& spot, uint32& zoneId, int32& zoneSkill) const
+{
+    bool found = false;
+    float bestDistance = maxDistance;
+    for (AsyncGuidPosition const& point : fishPoints)
+    {
+        if (point.WorldPosition::GetMapId() != mapId)
+            continue;
+        float const distance = from.distance(point);
+        if (!(distance < bestDistance))
+            continue;
+
+        uint32 const pointZone = GetFishZone(point);
+        if (!pointZone)
+            continue;
+
+        int32 const required = FishingBaseSkillWL4(pointZone);
+        if (required > 0 && uint32(required) > maxZoneSkill)
+            continue;
+
+        found = true;
+        bestDistance = distance;
+        spot = WorldPosition(mapId, point.getX(), point.getY(), point.getZ(), point.getO());
+        zoneId = pointZone;
+        zoneSkill = required;
     }
     return found;
 }

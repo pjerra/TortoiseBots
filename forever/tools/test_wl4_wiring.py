@@ -190,9 +190,20 @@ class TurtleSide(unittest.TestCase):
 
 
 class FishAndTaxi(unittest.TestCase):
-    def test_fishing_and_taxi_do_less_on_fervercore(self):
-        self.assertIn("inline bool TravelFishingCompat() { return false; }", COMPAT_F)
+    def test_fishing_is_real_and_taxi_does_less_on_fervercore(self):
+        # TBF #155: the fish-location store is loaded on ForeverCore too; the
+        # classic area flag in the FISH_LOCATION rows is mapped to an area id
+        # (the store's key on this core) through the area table once.
+        self.assertIn("inline bool TravelFishingCompat() { return true; }", COMPAT_F)
         self.assertIn("inline bool TravelFishingCompat() { return true; }", COMPAT_T)
+        self.assertIn("AreaIdOfStoredFishFlagWL4", COMPAT_F)
+        self.assertIn("StoredFishAreaKeyWL4", COMPAT_F)
+        self.assertIn("StoredFishAreaKeyWL4", COMPAT_T)
+        self.assertIn("StoredFishAreaKeyWL4(stoi(description), mapId)",
+            func(MGR, "void TravelMgr::LoadFishLocations()"))
+        self.assertIn("AreaBit", COMPAT_F)
+        self.assertIn("FishingBaseSkillQuietWL4", COMPAT_F)
+        self.assertIn("skill_fishing_base_level", COMPAT_F)
         self.assertIn("if (!TravelFishingCompat())", func(MGR, "void TravelMgr::LoadFishLocations()"))
         self.assertIn("if (!TravelFishingCompat())", func(MGR, "void TravelMgr::SaveFishLocations()"))
         self.assertNotIn("sObjectMgr.GetFishingBaseSkillLevel(", MGR)
