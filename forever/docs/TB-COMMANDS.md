@@ -47,7 +47,10 @@ The verbs of rounds R1-R3 (`forever/docs/PC-R1-NOTES.md` .. `PC-R3-NOTES.md`; ev
 | `.bot add <name>` | logs one of the caller's own characters in as a bot (a GM: any character not online); it joins the caller's party. Owner verbs below need it first |
 | `.bot logout <bot>` (alias `remove`) | logs the caller's bot out |
 | `.bot follow <bot> [member]`, `.bot stay <bot>`, `.bot attack <bot>`, `.bot flee <bot>` | tactical orders queued for the bot's engine tick (`attack` reads the caller's selected unit; `flee` runs from the fight) |
+| `.bot stats` | TB's fleet line: how many bots the caller may see are online, how many of those the caller owns, and how many run an engine |
 | `.bot stats <bot>` | one line from the bot's own objects: level, class, health %, mana %, money in `g/s/c`, zone id and name, `alive|dead`, and the movement it keeps (`follow|stay|free`) |
+| `.bot version` (aliases `v`, `about`, `credits`) | the build id, the `TBM:VERSION` line and the author notice (`NOTICE.md`); public metadata, shown even when `TortoiseBots.Player.Commands = 0` |
+| `.bot features` | the server's player-facing switches as chat lines, the same list the addon Info window reads (`host/TbAddonInfo.cpp` kFeatures) |
 | `.bot summon <bot>` | brings the bot to the caller's side through the `.tb tele` path. Owner or GM; the caller must be the bot's master (a GM need not be). Refused `teleporting`/`in-flight` while the caller or the bot is being teleported or rides a taxi, and `on-cooldown` inside the per-bot wait |
 | `.bot maintenance <bot>` | refresh one owned bot's kit (reagents, bandages, hunter ammo), repair it for free, save it. Owner tier only (the caller owns the bot, or a GameMaster); pool bots are refused. Off unless `AiPlayerbot.OwnedBotMaintenanceEnabled = 1` (default 0, in `forever/conf/aiplayerbot.conf.dist`); potions, food, paid consumables and thrown top-ups are not ported |
 | `.bot totem <bot\|party> <earth\|fire\|water\|air> <totem\|auto\|none>`, `set <earth>,<fire>,<water>,<air>`, `mode <auto\|prepull\|manual>`, `status` | a shaman's per-slot totem orders, read by the totem triggers (`ShamanTotemCommandPolicy.h`): `auto` keeps the subgroup pick, `none` leaves the slot empty, a totem name holds that totem (short names work: `mana spring`). `set` sets all four at once. Shamans only (`not-shaman`); a totem the bot never trained is refused `not-known`, and a `set` is validated for every slot before any slot of that bot changes. Owner tier; `status` is tactical. Values live until logout (#135 adds persistence) |
@@ -960,3 +963,36 @@ See [ONYXIA.md](ONYXIA.md) for damage gates, checked routes and live-test limits
 
 * `.bot autogear <bot> [quality|ilvl]`: incremental upgrades-only re-gearing for same-account owned bots (and GMs; pool bots refused, bot must be alive, bot in active run refused). Gated by `AiPlayerbot.OwnedBotAutogearEnabled` (default `0`), capped by `AiPlayerbot.OwnedBotAutogearQualityCap` (default `2`, uncommon) and `AiPlayerbot.OwnedBotAutogearIlvlCap` (default `0`, uncapped). Warns if the equipped ranged weapon has no matching ammo in bags.
 * `.autogear [player] <spec> [ilvl]`: top-level command for real players (bots refused; dead, in-combat, or shapeshifted targets refused). GM-only by default (`AiPlayerbot.PlayerAutogearForAll = 0`); when `1`, non-GMs may gear themselves only. Equips upgrades only, moves replaced items to bags or mails them if bags are full, warns on missing ranged ammo, and logs `PlayerAutogear: caller=...`.
+
+## Diagnostics (#142)
+
+The GM whisper words are the legacy bot commands; permission is the bot engine's own tier table
+(`PlayerbotAI::AuthTierForCommand`: `debug`, `cdebug`, `log` and `set value` are GameMaster-only).
+
+* `/w <bot> debug` (or `cdebug`) turns the bot's action-line feedback on; `debug off` turns it off;
+  `debug help` lists the subcommands. The lines themselves are the `debug` strategy's
+  (`PlayerbotAIConfig::CanLogAction` reads it), so `co +debug` / `co -debug` work the same way.
+* `/w <bot> debug <remote>` (**no space before the subcommand** in the action name: the engine's own
+  `debug <remote>` path answers these): `state`, `position`, `tpos`, `target`, `hp`, `combat`, `strategy`,
+  `action`, `values`, `travel`, `traveldetail`, `budget`. `debug action` prints the last action the engine
+  ran, which is the headless "action line".
+* `/w <bot> log [debug|detail|minimal|basic|?]` sets or reads the bot's legacy log level.
+* `/w <bot> set value group size <n>`, `guild size <n>`, `rpg style <n>` set the saved preferences.
+* The debug subcommands that need the 1.12 client (fake spell visuals and `SpellAuraHolder` auras,
+  transports and map-ray probes, travel-node readers, the position path planner, item/trade/mail
+  readers) answer `debug <name>: not ported to ForeverCore (...)`; their files are not in the build.
+  The engine text diagnostics (values, actions, strategies, combat facts, quest/level state) are real.
+
+Server-side diagnostics:
+
+* `BOTPERF` — one `TortoiseBots: BOTPERF passUs=... maxUs=... ticks=... coreMs=... bots=... engines=...
+  owned=... mastered=... free=... pool=...` line in the `tortoisebots` log every 30 s of tick time while
+  the module is enabled. `passUs`/`maxUs` are the module pass (the same window `.tb perf` reports), `coreMs`
+  the rest of the world tick, and the six counts are read once from the live bot table.
+* `action_counts.csv` — with `AiPlayerbot.ActionCountsLog = 1`, the engine counts every executed action and
+  the module writes the cumulative snapshot every 5 minutes of tick time (first write truncates and writes
+  the header; later writes append). The file lives under the engine's log directory.
+* `CastCancel` rows in `bot_events.csv` — with `AiPlayerbot.RaidBossDiagnostics = 1` and `bot_events.csv` in
+  `AiPlayerbot.AllowedLogFiles`, every module-side cast cancel writes one row (site, slot, spell, cast
+  percent, target, distance moved).
+

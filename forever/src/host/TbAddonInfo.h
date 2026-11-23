@@ -8,7 +8,9 @@
 // called from f-roster's roster reply on the same thread).
 #pragma once
 
+#include <string>
 #include <string_view>
+#include <vector>
 
 class Player;
 
@@ -25,5 +27,9 @@ void RegisterAddonVerbsInfo();
 // empty when no bot holds a mark). Called from f-roster's roster reply, where
 // TB emits it; this piece owns the lines, f-roster owns the roster.
 void AppendCcAssign(Player* requester);
+
+// The Info window's switches as chat lines, `.bot features` (TB commands/Info.cpp HandleFeatures):
+// one `TortoiseBots: feature <id>=<value> (<label>)` per switch, the same list the addon verb sends.
+std::vector<std::string> FeaturesChatLines();
 } // namespace addoninfo
 } // namespace TortoiseBots

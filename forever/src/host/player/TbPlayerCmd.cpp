@@ -23,6 +23,7 @@
 #include "DatabaseEnv.h"
 #include "DB2Stores.h"
 #include "Define.h"
+#include "GitRevision.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
@@ -31,6 +32,7 @@
 #include "ScriptMgr.h"
 #include "SharedDefines.h"
 #include "WorldSession.h"
+#include "host/TbAddonInfo.h"
 #include "host/TbOrdersApi.h"
 #include "host/TbAutogear.h"
 
@@ -223,7 +225,10 @@ bool HandleHelp(Player* player, Caller const& caller)
     Say(player, "TortoiseBots: help: .bot stay <bot> - stand where it is");
     Say(player, "TortoiseBots: help: .bot attack <bot> - attack your selected target");
     Say(player, "TortoiseBots: help: .bot flee <bot> - run from the fight");
+    Say(player, "TortoiseBots: help: .bot stats - your bot fleet in one line");
     Say(player, "TortoiseBots: help: .bot stats <bot> - its level, class, health, mana, money, zone and movement");
+    Say(player, "TortoiseBots: help: .bot version - module version and credits");
+    Say(player, "TortoiseBots: help: .bot features - the server's player-facing switches");
     Say(player, "TortoiseBots: help: .bot summon <bot> - bring it to your side (its master only; a short per-bot wait)");
     // Every player may add and log out its own characters (D-7), so the owner rows are shown to all: a new owner owns no bot yet.
     Say(player, "TortoiseBots: help: .bot add <name> - log one of your own characters in as a bot (it joins your party)");
@@ -593,6 +598,24 @@ bool HandleSummon(Player* player, Caller const& caller, OwnerScope const& scope,
     return true;
 }
 
+// TB's `.bot version` / `.bot about` / `.bot credits` (commands/Info.cpp HandleVersion): the build id, the
+// addon version line and the author notice NOTICE.md requires.
+bool HandleVersion(Player* player)
+{
+    Say(player, "TortoiseBots: version: forever-port (core " + std::string(GitRevision::GetFullVersion()) + ")");
+    Say(player, "TBM:VERSION|forever-port");
+    Say(player, "TortoiseBots: version: by Sagiroth - https://github.com/Sagiroth/TortoiseBots (AGPL-3.0 or GPL-2.0+, source available)");
+    return true;
+}
+
+// TB's `.bot features` (commands/Info.cpp HandleFeatures): the same switches the addon's Info window reads.
+bool HandleFeatures(Player* player)
+{
+    for (std::string const& line : addoninfo::FeaturesChatLines())
+        Say(player, line);
+    return true;
+}
+
 // D-9: one line built from the bot's own objects on the world thread (no engine tick, no `stats` whisper onto another channel):
 // level, class, health %, mana %, money in g/s/c, the zone id and name, alive/dead, and the movement it was last told to keep.
 bool HandleStats(Player* player, Caller const& caller, OwnerScope const& scope, std::string_view tail)
@@ -600,7 +623,23 @@ bool HandleStats(Player* player, Caller const& caller, OwnerScope const& scope, 
     std::string_view const name = FirstWord(tail);
     if (name.empty())
     {
-        Refuse(player, "stats", "usage", ".bot stats <bot>");
+        // TB's `.bot stats`: one line about the fleet the caller may see. TBF has no random bots, so
+        // the owned and engine counts replace TB's random and AI counts.
+        std::uint32_t online = 0, owned = 0, engines = 0;
+        for (ObjectGuid const& guid : BotMgr::Instance().BotGuids())
+        {
+            Player* fleetBot = ObjectAccessor::FindPlayer(guid);
+            if (!fleetBot || !fleetBot->IsInWorld())
+                continue;
+            BotFacts const facts = FactsOf(player, fleetBot, scope);
+            if (!caller.gm && !Visible(caller, facts))
+                continue;
+            ++online;
+            owned += facts.account != 0 ? 1 : 0;
+            engines += BrainWord(guid) == "engine" ? 1 : 0;
+        }
+        Say(player, "TortoiseBots: stats: " + std::to_string(online) + " bot(s) online, " + std::to_string(owned) +
+                        " owned by you, " + std::to_string(engines) + " with an engine");
         return true;
     }
     Player* bot = nullptr;
@@ -685,6 +724,12 @@ bool Dispatch(Player* player, std::string_view rest)
     caller.guid = player->GetGUID().GetCounter();
 
     std::string const verb = Lower(FirstWord(rest));
+    // Public build metadata, TB's AlwaysVisible rows: not part of the order surface, so the player-commands
+    // switch does not hide them.
+    if (verb == "version" || verb == "v" || verb == "about" || verb == "credits")
+        return HandleVersion(player);
+    if (verb == "features")
+        return HandleFeatures(player);
     if (!s_commands && !caller.gm)
     {
         Refuse(player, verb.empty() ? "bot" : verb, "players-off", "player commands are off (TortoiseBots.Player.Commands = 0)");

@@ -14,6 +14,7 @@
 #include "Group.h"
 #include "Player.h"
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -207,6 +208,14 @@ void HandleRun(Player* requester, std::string_view args)
     // the addon keeps them on bridge instead of hanging the click.
     addon::Err(requester, "run " + request.sub, "unsupported", "not available on this server yet");
 }
+std::vector<std::string> BuildFeaturesChatLines()
+{
+    std::vector<std::string> lines;
+    lines.reserve(std::size(kFeatures));
+    for (Feature const& feature : kFeatures)
+        lines.push_back("TortoiseBots: feature " + std::string(feature.id) + "=" + FeatureValue(feature) + " (" + feature.label + ")");
+    return lines;
+}
 } // namespace
 
 void AppendCcAssign(Player* requester)
@@ -234,6 +243,11 @@ void AppendCcAssign(Player* requester)
     for (auto const& row : rows)
         addon::Send(requester, CcLine(row.first, row.second));
     addon::Send(requester, std::string(kCcEnd));
+}
+
+std::vector<std::string> FeaturesChatLines()
+{
+    return BuildFeaturesChatLines();
 }
 
 void RegisterAddonVerbsInfo()
