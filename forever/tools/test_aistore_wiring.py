@@ -77,31 +77,28 @@ class Registration(unittest.TestCase):
 
 
 class StoreWiring(unittest.TestCase):
-    def test_load_save_defined_once_in_the_slice_store(self):
+    def test_load_save_reset_invalidate_defined_in_slice_store(self):
         store = code_only(STORE_CPP.read_text())
         self.assertIn("void PlayerbotDbStore::Load(PlayerbotAI* ai, std::string preset)", store)
         self.assertIn("void PlayerbotDbStore::Save(PlayerbotAI* ai, std::string preset)", store)
+        self.assertIn("void PlayerbotDbStore::Reset(PlayerbotAI* ai, std::string preset)", store)
+        self.assertIn("void PlayerbotDbStore::InvalidateStrategySnapshots(PlayerbotAI* ai)", store)
         stubs = code_only(STUBS.read_text())
         self.assertNotIn("PlayerbotDbStore::Load", stubs)
         self.assertNotIn("PlayerbotDbStore::Save", stubs)
+        self.assertNotIn("PlayerbotDbStore::Reset", stubs)
+        self.assertNotIn("PlayerbotDbStore::InvalidateStrategySnapshots", stubs)
 
-    def test_strategy_rows_left_for_135(self):
-        forever = "\n".join(
-            (p.read_text(encoding="utf-8", errors="replace") for p in (ROOT / "forever/src").rglob("*.cpp")))
-        self.assertNotIn("PlayerbotDbStore::Reset(", forever)
-        self.assertNotIn("PlayerbotDbStore::InvalidateStrategySnapshots(", forever)
-        # the save clears value rows only (one DELETE, keyed to 'value'); a full Reset (delete everything)
-        # would eat #135's strategy rows. The statement text lives in the pure header (SliceDbStorePure.h);
-        # the store TU only moves the built strings into the guarded transaction.
+    def test_strategy_lists_saved_and_loaded(self):
         pure = code_only(STORE_H.read_text())
-        deletes = re.findall(r"DELETE FROM `ai_playerbot_db_store`", pure)
-        self.assertEqual(len(deletes), 1)
-        self.assertIn("AND `key` = 'value'", pure)
+        self.assertIn("BuildSaveAllStatements", pure)
+        self.assertIn("BuildInvalidateStrategySnapshotsSql", pure)
+        self.assertIn("FormatStrategies", pure)
         store = code_only(STORE_CPP.read_text())
-        self.assertIn("statements.deleteSql", store)
-        self.assertIn("statements.insertSql", store)
-        # the load applies value rows only
-        self.assertIn('!= ValueKey()', store)
+        for key in ('"co"', '"nc"', '"dead"', '"react"'):
+            self.assertIn(key, store)
+        self.assertIn("ClearStrategies", store)
+        self.assertIn("ReleasePullHold", store)
 
     def test_no_direct_database_call_in_the_store(self):
         # neither the store TU nor the pure header it builds its statements from touches a database pool
@@ -114,23 +111,39 @@ class StoreWiring(unittest.TestCase):
             self.assertEqual(direct, [], path.name)
         store = code_only(STORE_CPP.read_text())
         # every statement runs after the schema probe, through the characters-DB guard
-        for func in ("LoadValues", "SaveValues"):
-            body = re.search(r"void %s\(.*?\)\n\{(.*?)\n\}\n" % func, store, re.S).group(1)
-            self.assertIn("SchemaReady()", body)
-            self.assertLess(body.index("SchemaReady()"), body.index("GuardedCompat("))
+        for func in ("LoadValues", "SaveValues", "LoadAll", "SaveAll", "ResetAll", "InvalidateStrategySnapshots",
+                     "QueryValuesOnly", "DeleteAllValues", "QueryDistinctPresets"):
+            m = re.search(r"(?:void|QueryResult) %s\(.*?\)\n\{(.*?)\n\}\n" % func, store, re.S)
+            self.assertIsNotNone(m, func)
+            body = m.group(1)
+            self.assertIn("SchemaReady()", body, func)
+            self.assertLess(body.index("SchemaReady()"), body.index("GuardedCompat("), func)
         self.assertIn("CharacterTransactGuardedCompat(", store)
 
-    def test_teardown_saves_by_stored_guid(self):
+    def test_teardown_saves_by_stored_guid_and_create_preserves_loaded_movement(self):
         engine = code_only(ENGINE.read_text())
         dispose = engine[engine.index("void Dispose(Brain* brain)"):engine.index("delete brain;", engine.index("void Dispose(Brain* brain)"))]
         self.assertIn("aistore::SaveValues(brain->ai, brain->guidLow, std::string())", dispose)
         self.assertLess(dispose.index("aistore::SaveValues"), dispose.index("RemoveAI"))
+        self.assertIn("if (!pai->HasActiveMovementStrategy())", engine)
 
-    def test_strategy_autosave_gate_stays_off(self):
+    def test_strategy_autosave_and_invalidation_wired(self):
         compat = (ROOT / "forever/src/compat/TbCompat_Unported.h").read_text()
         m = re.search(r"inline bool DbStoreBeginCompat\(.*?\{(.*?)\}", code_only(compat), re.S)
         self.assertIsNotNone(m)
-        self.assertIn("return false", m.group(1))
+        self.assertIn("return true", m.group(1))
+        tbcc = code_only((ROOT / "forever/src/host/TbCc.cpp").read_text())
+        self.assertIn("sPlayerbotDbStore.Save(ai)", tbcc)
+        orders = code_only((ROOT / "forever/src/host/TbOrders.cpp").read_text())
+        self.assertIn("sPlayerbotDbStore.InvalidateStrategySnapshots(ai)", orders)
+        self.assertIn("ai::slice::aistore::InvalidateStrategySnapshots", orders)
+
+    def test_reset_actions_compiled_and_registered(self):
+        slice_list = (ROOT / "forever/SLICE-W4.txt").read_text()
+        self.assertIn("ai/playerbot/strategy/actions/ResetAiAction.cpp", slice_list)
+        ctx = CTX.read_text()
+        for key in ('"reset ai"', '"reset strats"', '"reset values"', '"reset ai soft"', '"de"', '"react"', '"all"'):
+            self.assertIn(key, ctx)
 
 
 class SqlDelivery(unittest.TestCase):

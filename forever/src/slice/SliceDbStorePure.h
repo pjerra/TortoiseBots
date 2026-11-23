@@ -12,7 +12,8 @@
 #include <functional>
 #include <string>
 #include <vector>
-
+// <utility> for the key/value pairs BuildLoadPlan takes.
+#include <utility>
 namespace ai
 {
 namespace slice
@@ -73,6 +74,169 @@ inline SaveStatements BuildSaveStatements(uint32_t guid, std::string preset, std
         out.insertSql.push_back(head + row + "')");
     }
     return out;
+}
+
+inline std::string FormatStrategies(std::vector<std::string> const& strategies)
+{
+    std::string out;
+    for (std::string const& s : strategies)
+    {
+        if (!out.empty())
+            out += ',';
+        out += '+';
+        out += s;
+    }
+    return out;
+}
+
+// --- Strategy snapshot load plan ---
+//
+// The saved co/nc/dead/react rows REPLACE the kit-built engines: Load clears
+// an engine whose own row was read and replays the saved rows verbatim, with
+// no baseline added first. The slice kits hold no chat/quest (nc) or chat (co),
+// so a baseline would invent strategies the kit never had, and it would re-add
+// a strategy the player explicitly removed (`nc -loot` must survive a relog).
+// TB's baseline guards years-old snapshots; this table is new and kit changes
+// invalidate snapshots on the role/spec path, so verbatim replace is exact.
+// A bot with no saved rows gets an empty plan: its kit stands untouched.
+struct LoadOp
+{
+    std::string key;    // one of co, nc, dead, react
+    std::string value;  // the saved row, verbatim ("+a,+b")
+};
+
+struct LoadPlan
+{
+    bool clearCombat = false;
+    bool clearNonCombat = false;
+    std::vector<LoadOp> ops;
+};
+
+// Drops an empty-qualifier custom attach (`+custom`, `+custom::`) from one saved
+// strategy row. Attaching it stores the engine entry under the name `custom::`,
+// which no later lookup of `custom` finds again; it can do nothing (no lines
+// can be stored under the empty name) and only pollutes snapshots.
+inline std::string DropEmptyCustomAttach(std::string const& row)
+{
+    std::string out;
+    std::size_t from = 0;
+    while (true)
+    {
+        std::size_t comma = row.find(',', from);
+        std::string piece = row.substr(from, comma == std::string::npos ? std::string::npos : comma - from);
+        std::string bare = piece;
+        if (!bare.empty() && (bare[0] == '+' || bare[0] == '-' || bare[0] == '~'))
+            bare.erase(0, 1);
+        bool drop = bare == "custom";
+        if (!drop && bare.size() >= 8 && bare.compare(0, 8, "custom::") == 0)
+        {
+            std::string qualifier = bare.substr(8);
+            std::size_t first = qualifier.find_first_not_of(" \t");
+            std::size_t last = qualifier.find_last_not_of(" \t");
+            drop = first == std::string::npos || last == std::string::npos;
+        }
+        if (!drop)
+        {
+            if (!out.empty())
+                out += ',';
+            out += piece;
+        }
+        if (comma == std::string::npos)
+            break;
+        from = comma + 1;
+    }
+    return out;
+}
+
+inline LoadPlan BuildLoadPlan(std::vector<std::pair<std::string, std::string>> const& rows)
+{
+    LoadPlan plan;
+    for (std::pair<std::string, std::string> const& row : rows)
+    {
+        if (row.first == "co")
+            plan.clearCombat = true;
+        else if (row.first == "nc")
+            plan.clearNonCombat = true;
+        else if (row.first != "dead" && row.first != "react")
+            continue;
+        std::string value = DropEmptyCustomAttach(row.second);
+        if (value.empty())
+            continue;
+        plan.ops.push_back({ row.first, value });
+    }
+    return plan;
+}
+
+// Pool bots behave like TB random bots for the strategy store: a pool bot with
+// no real player relation (no real master, guild or friend) neither loads nor
+// saves co/nc/dead/react rows, so a bot that levels or changes spec always
+// rebuilds the current kit on login instead of replaying a stale snapshot.
+// Owned alts and bots commanded by a real player keep the normal store.
+inline bool SkipPoolStrategies(bool isPoolBot, bool hasRealPlayerRelation)
+{
+    return isPoolBot && !hasRealPlayerRelation;
+}
+
+struct StrategyRow
+{
+    std::string key;
+    std::string value;
+};
+
+inline SaveStatements BuildSaveAllStatements(uint32_t guid, std::string preset,
+    std::vector<std::string> const& valueRows, std::vector<StrategyRow> const& stratRows,
+    std::function<void(std::string&)> const& escape)
+{
+    escape(preset);
+    SaveStatements out;
+    std::string const guidStr = std::to_string(guid);
+    out.deleteSql = "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + guidStr + " AND `preset` = '" + preset + "'";
+    std::string const prefix = "INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (" +
+        guidStr + ", '" + preset + "', '";
+    for (std::string row : valueRows)
+    {
+        escape(row);
+        out.insertSql.push_back(prefix + "value', '" + row + "')");
+    }
+    for (StrategyRow const& sr : stratRows)
+    {
+        std::string key = sr.key;
+        std::string val = sr.value;
+        escape(key);
+        escape(val);
+        out.insertSql.push_back(prefix + key + "', '" + val + "')");
+    }
+    return out;
+}
+
+inline std::string BuildResetSql(uint32_t guid, std::string preset, std::function<void(std::string&)> const& escape)
+{
+    escape(preset);
+    return "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) + " AND `preset` = '" + preset + "'";
+}
+
+inline std::string BuildInvalidateStrategySnapshotsSql(uint32_t guid)
+{
+    return "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) +
+        " AND `key` IN ('co','nc','dead','react')";
+}
+
+inline std::string BuildSelectValueOnlySql(uint32_t guid, std::string preset,
+    std::function<void(std::string&)> const& escape)
+{
+    escape(preset);
+    return "SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) +
+        " AND `preset` = '" + preset + "' AND `key` = 'value'";
+}
+
+inline std::string BuildDeleteAllValuesSql(uint32_t guid)
+{
+    return "DELETE FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid) + " AND `key` = 'value'";
+}
+
+inline std::string BuildSelectDistinctPresetsSql(uint32_t guid)
+{
+    return "SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = " + std::to_string(guid);
 }
 
 }

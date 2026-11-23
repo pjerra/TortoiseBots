@@ -16,6 +16,7 @@
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
+#include "host/TbAddonAi.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #include "host/TbPetFactory.h"
@@ -568,6 +569,8 @@ public:
             { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "talents", TortoiseBots::talents::HandleTalentsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "blessing", TortoiseBots::blessing::HandleBlessingChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
+            { "ai",       TortoiseBots::aipreset::HandleAiCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "cs",       TortoiseBots::aipreset::HandleCsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -1759,6 +1762,7 @@ void AddSC_tortoisebots()
     TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
     TortoiseBots::choice::RegisterAddonVerbsChoice();   // #133 c-choice: `choice` verb + `choice` cap (host/TbAddonChoice.cpp)
     TortoiseBots::behsvc::RegisterAddonVerbsBehaviorService(); // #133 c-behsvc: `behavior` + `service` addon verbs
+    TortoiseBots::aipreset::RegisterAddonVerbsAi(); // #135 P135-C: `ai` verb + `ai` cap (host/TbAddonAi.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)

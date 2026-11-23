@@ -29,6 +29,7 @@
 #include "host/run/TbRunOrdersPure.h"
 #include "slice/SliceHybridPolicy.h"
 #include "slice/SliceSpecPolicy.h"
+#include "slice/SliceDbStore.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -51,6 +52,7 @@
 #include "playerbot/AiFactory.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/PlayerbotDbStore.h"
 #include "playerbot/PullStartPolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
@@ -603,6 +605,8 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     if (o.verb == "co" || o.verb == "nc")
     {
         ai->ChangeStrategy(o.arg, o.verb == "co" ? BotState::BOT_STATE_COMBAT : BotState::BOT_STATE_NON_COMBAT);
+        if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
+            sPlayerbotDbStore.Save(ai);
         return "ok";
     }
     if (o.verb == "role")
@@ -615,6 +619,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
             Roles()[bot->GetGUID()] = role;
         else
             Roles().erase(bot->GetGUID());
+        sPlayerbotDbStore.InvalidateStrategySnapshots(ai);
         ApplyKit(ai, role, true);
         return "ok";
     }
@@ -627,6 +632,7 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     {
         int8 const tab = int8(std::atoi(o.arg.c_str()));
         PlayerbotAIStorage::Instance().SetPlayerForcedSpecTab(bot->GetGUID(), tab);
+        sPlayerbotDbStore.InvalidateStrategySnapshots(ai);
         ApplyKit(ai, ai->GetForcedRole(), false);
         return "ok";
     }
@@ -1844,6 +1850,7 @@ bool HandleSpec(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (!ai)
         {
             PlayerbotAIStorage::Instance().SetPlayerForcedSpecTab(bot->GetGUID(), int8(tab));
+            ai::slice::aistore::InvalidateStrategySnapshots(bot->GetGUID().GetCounter());
             rec.S("status", "stored");
             reply.Line(rec);
             continue;

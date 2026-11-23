@@ -312,6 +312,7 @@ ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/strategy/actions/AhAction.cpp
 ai/playerbot/TravelNode.cpp
 runtime/BotNameService.cpp
+ai/playerbot/strategy/actions/ResetAiAction.cpp
 
 # Reactions: flee, kite, runaway, avoid aoe, racials, mark rti, focus, spread distance, target values
 ai/playerbot/strategy/generic/FleeStrategy.cpp

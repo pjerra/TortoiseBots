@@ -318,7 +318,8 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free)
         // order "follow" makes (SetMovementStrategy("follow")).
         // W1: a free bot is masterless; it owns the ground it stands on. "free" is the engine's own movement marker (not "wander",
         // which this slice does not register, and not "follow"): it drops passive and leaves the grind kit's movement alone.
-        pai->SetMovementStrategy(free && !master ? "free" : "follow");
+        if (!pai->HasActiveMovementStrategy())
+            pai->SetMovementStrategy(free && !master ? "free" : "follow");
         // How long the world thread was held (the `.tb perf` worst tick of an engine start): the constructor builds the context and the four engines,
         // ResetStrategies applies the default strategies.
         sLog.outString("TortoiseBots engine: brain of %s built in %lld ms (PlayerbotAI constructor %lld, strategies %lld, movement %lld)", bot->GetName().c_str(),
