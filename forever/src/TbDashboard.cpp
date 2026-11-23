@@ -947,6 +947,17 @@ void SendCycle()
         if (Player* bot = mgr.FindBot(guid); bot && bot->IsInWorld() && bot->FindMap() && !bot->IsBeingTeleported())
             bots.push_back(bot);
 
+    // Real players ride the same roster: the sessions with a socket, never the headless bot sessions.
+    std::vector<Player*> players;
+    for (auto const& sessionEntry : sWorld->GetAllSessions())
+    {
+        WorldSession* session = sessionEntry.second;
+        if (!session || session->IsBot())
+            continue;
+        if (Player* player = session->GetPlayer(); player && player->IsInWorld())
+            players.push_back(player);
+    }
+
     std::unordered_map<ObjectGuid, TortoiseBots::engine::Telemetry> telemetry;
     telemetry.reserve(bots.size());
     for (Player* bot : bots)
@@ -970,11 +981,11 @@ void SendCycle()
         grandTotal += totals[state];
     auto ratio = [&](size_t state) { return grandTotal ? double(totals[state]) / double(grandTotal) : 0.0; };
 
-    uint32 const sessions = sWorld->GetActiveSessionCount();
-    uint32 const humans = sessions > bots.size() ? uint32(sessions - bots.size()) : 0;
+    uint32 const humans = uint32(players.size());
     uint64 const seq = ++s.seq;
     time_t const now = GameTime::GetGameTime();
-    size_t const total = bots.empty() ? 0 : (bots.size() + BotsPerBatch - 1) / BotsPerBatch;
+    size_t const rosterSize = bots.size() + players.size();
+    size_t const total = rosterSize == 0 ? 0 : (rosterSize + BotsPerBatch - 1) / BotsPerBatch;
 
     std::ostringstream hb;
     TortoiseBots::PlayerLagWindow::Stats const tick = s.tickWindow.Compute();
@@ -1001,9 +1012,41 @@ void SendCycle()
         std::ostringstream ss;
         ss << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
            << ",\"type\":\"BOT_BATCH\",\"batch_index\":" << batch << ",\"total_batches\":" << total << ",\"bots\":[";
-        size_t const end = std::min(bots.size(), (batch + 1) * BotsPerBatch);
+        size_t const end = std::min(rosterSize, (batch + 1) * BotsPerBatch);
         for (size_t i = batch * BotsPerBatch; i < end; ++i)
         {
+            if (i != batch * BotsPerBatch)
+                ss << ',';
+            if (i >= bots.size())
+            {
+                // A real player: the same list/map fields, no bot-only detail.
+                Player* player = players[i - bots.size()];
+                Powers const power = player->GetPowerType();
+                std::string target;
+                if (Unit* unit = ObjectAccessor::GetUnit(*player, player->GetTarget()))
+                    target = unit->GetName();
+                Group* group = player->GetGroup();
+                TortoiseBots::engine::Telemetry const noEngine;
+                ss << "{\"name\":\"" << Escape(player->GetName()) << "\",\"guid\":" << player->GetGUID().GetCounter()
+                   << ",\"player\":true,\"kind\":\"player\",\"class\":\"" << ClassName(player->GetClass()) << "\",\"role\":\"\""
+                   << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
+                   << ",\"subgroup\":" << (group ? uint32(group->GetMemberGroup(player->GetGUID())) : 0)
+                   << (player->FindMap() && player->FindMap()->IsRaid() ? ",\"raid\":true" : "")
+                   << ",\"level\":" << uint32(player->GetLevel())
+                   << ",\"hp\":" << player->GetHealth() << ",\"max_hp\":" << player->GetMaxHealth()
+                   << ",\"power\":" << ShownPower(player, power, player->GetPower(power))
+                   << ",\"max_power\":" << ShownPower(player, power, player->GetMaxPower(power))
+                   << ",\"power_type\":\"" << PowerName(power) << "\""
+                   << ",\"map\":" << player->GetMapId() << ",\"zone\":" << player->GetZoneId() << ",\"instance\":" << player->GetInstanceId()
+                   << ",\"x\":" << player->GetPositionX() << ",\"y\":" << player->GetPositionY() << ",\"z\":" << player->GetPositionZ()
+                   << ",\"o\":" << player->GetOrientation()
+                   << ",\"target\":\"" << Escape(target) << "\",\"strategy\":\"\",\"state\":\""
+                   << TortoiseBots::dashboard_state::Name(BaseMacroState(player, noEngine)) << "\""
+                   << ",\"xp\":" << player->GetXP() << ",\"next_xp\":" << player->GetXPForNextLevel()
+                   << ",\"guild\":\"" << Escape(player->GetGuildName()) << "\"" << UiMapFields(player) << "}";
+                continue;
+            }
+
             Player* bot = bots[i];
             Powers const power = bot->GetPowerType();
             std::string target;
@@ -1013,9 +1056,8 @@ void SendCycle()
             Sender::BrainInfo const& brain = s.brains[bot->GetGUID()];
             TortoiseBots::engine::Telemetry const& engineState = telemetry[bot->GetGUID()];
             uint8 const botState = s.track.count(bot->GetGUID()) ? s.track[bot->GetGUID()].state : uint8(TortoiseBots::dashboard_state::Idle);
-            if (i != batch * BotsPerBatch)
-                ss << ',';
             ss << "{\"name\":\"" << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter()
+               << ",\"player\":false"
                << ",\"kind\":\"" << (mgr.MasterOf(bot->GetGUID()).IsEmpty() ? "pool" : "hired") << "\""
                << ",\"class\":\"" << ClassName(bot->GetClass()) << "\",\"role\":\"" << Escape(brain.role) << "\""
                << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
