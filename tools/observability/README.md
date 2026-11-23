@@ -191,7 +191,11 @@ switches from the top-bar button (`UI v2` / `UI v1`); the choice is kept in that
   (default `v1`). The daemon injects it into the page head as
   `<meta name="tbdash-ui" content="v1|v2">`, ahead of the switch script, so the first paint is
   already right; `GET /api/v1/ui` answers `{"default":"v1","model3d":false}` behind the GM session.
-- `--ui-3d` / `TBDASH_UI_3D=1` enables the v2 3D model viewer; off by default.
+- `--ui-3d` / `TBDASH_UI_3D=1` enables the v2 3D model viewer; off by default. It loads Wowhead's
+  viewer only after the operator clicks `Show 3D`, proxies only the modelviewer asset paths behind the
+  GM session, and caches them in `<user cache>/tbdash-model3d`. Gear needs the `display_id` field the
+  module writes into `tortoisebots-items.json`; without it the character still renders, without armour.
+  A dead CDN shows one short line in the stage and leaves the profile usable (no retry loop).
 - Every v2 rule is scoped under `html[data-ui="v2"]`; with v2 off the page is unchanged.
 
 The v2 palette and layout ideas are adapted from ForeverCMS and SahtoutCMS (both MIT); see

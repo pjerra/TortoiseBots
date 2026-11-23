@@ -1,0 +1,139 @@
+/* Dashboard UI v2 optional 3D preview. Everything is scoped to the v2 skin;
+   v1 keeps the stage hidden and never loads a script. */
+html[data-ui="v2"] .v2-model-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-ui="v2"] .m3d-view {
+  position: absolute;
+  inset: 0 0 44px 0;
+}
+
+html[data-ui="v2"] .m3d-view canvas {
+  display: block;
+}
+
+/* Idle call to action, centred in the empty stage. */
+html[data-ui="v2"] .m3d-show {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  padding: 10px 20px;
+  border: 1px solid #f2dfa8;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f0d68f 0%, #d8ab4e 100%);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .45);
+  color: var(--v2-gold-ink);
+  font-family: var(--v2-font-display);
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+html[data-ui="v2"] .m3d-show:hover {
+  background: linear-gradient(180deg, #ffe9ad 0%, #e6bb5d 100%);
+}
+
+html[data-ui="v2"] .m3d-show:disabled {
+  opacity: .6;
+  cursor: progress;
+}
+
+html[data-ui="v2"] .m3d-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--v2-line);
+  background: linear-gradient(180deg, rgba(7, 9, 19, .25), rgba(7, 9, 19, .92));
+}
+
+html[data-ui="v2"] .m3d-note,
+html[data-ui="v2"] .m3d-hint {
+  color: var(--v2-faint);
+  font-size: .66rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] .m3d-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-ui="v2"] .m3d-actions button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 2px;
+  background: rgba(11, 12, 22, .8);
+  color: var(--v2-gold);
+  font-size: .78rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+html[data-ui="v2"] .m3d-actions button:hover {
+  border-color: var(--v2-gold);
+  background: rgba(232, 196, 106, .12);
+}
+
+html[data-ui="v2"] .m3d-reset {
+  font-size: .66rem !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] .m3d-status {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  max-width: min(86%, 420px);
+  padding: 8px 14px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 3px;
+  background: rgba(7, 9, 19, .88);
+  color: var(--v2-gold-light);
+  font-size: .74rem;
+  letter-spacing: .05em;
+  text-align: center;
+}
+
+html[data-ui="v2"] .m3d-status.is-error {
+  border-color: rgba(229, 83, 75, .55);
+  color: #ffb4ae;
+}
+
+html[data-ui="v2"] .m3d-status-bottom {
+  top: auto;
+  bottom: 56px;
+  transform: translateX(-50%);
+  color: var(--v2-dim);
+}
+
+@media (max-width: 720px) {
+  html[data-ui="v2"] .m3d-note {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  html[data-ui="v2"] .m3d-hint {
+    display: none;
+  }
+}
