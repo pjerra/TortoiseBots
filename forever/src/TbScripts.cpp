@@ -98,7 +98,11 @@
 #include "host/TbAddonRoster.h"
 #include "host/TbAddonBlessing.h"
 #include "host/TbAddonChoice.h"
+#include "host/TbAddonInv.h"
 #include "host/TbAddonBehaviorService.h"
+#include "host/TbAddonTrade.h"
+#include "host/TbAddonProfessions.h"
+#include "host/TbAddonLootLog.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -569,6 +573,7 @@ public:
             { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "talents", TortoiseBots::talents::HandleTalentsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "blessing", TortoiseBots::blessing::HandleBlessingChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
+            { "lootlog", TortoiseBots::lootlog::HandleLootLogChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
             { "ai",       TortoiseBots::aipreset::HandleAiCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "cs",       TortoiseBots::aipreset::HandleCsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
@@ -1762,6 +1767,10 @@ void AddSC_tortoisebots()
     TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
     TortoiseBots::choice::RegisterAddonVerbsChoice();   // #133 c-choice: `choice` verb + `choice` cap (host/TbAddonChoice.cpp)
     TortoiseBots::behsvc::RegisterAddonVerbsBehaviorService(); // #133 c-behsvc: `behavior` + `service` addon verbs
+    TortoiseBots::inv::RegisterAddonVerbsInv();   // #134 i-inv: the `inv`/`inventory`/`item` verbs + `inventory` cap (host/TbAddonInv.cpp)
+    TortoiseBots::trade::RegisterAddonVerbsTrade(); // #134 P134-C: `trade` addon verb + trade window driver
+    TortoiseBots::professions::RegisterAddonVerbsProfessions(); // #134 P134-D: `professions` verb + `professions` cap (host/TbAddonProfessions.cpp)
+    TortoiseBots::lootlog::RegisterAddonVerbsLootLog(); // #134 i-loot: `lootlog` verb + `loot-log` cap (host/TbAddonLootLog.cpp)
     TortoiseBots::aipreset::RegisterAddonVerbsAi(); // #135 P135-C: `ai` verb + `ai` cap (host/TbAddonAi.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
