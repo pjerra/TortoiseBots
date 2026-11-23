@@ -18,6 +18,7 @@
 #include "host/TbHostTransport.h"
 #include "host/TbOnyxia.h"
 #include "host/TbOnyxiaGround.h"
+#include "slice/SliceDbStore.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -204,6 +205,10 @@ void Dispose(Brain* brain)
         brain->session->SetCastResultSink(false);
     // PlayerbotAIAdapter::Shutdown (:149-158): RemoveAI first (hooks resolve the AI through the registry, so none can
     // reach it afterwards), then the action log, then the AI itself.
+    // Piece c-store: the saved values go to characters.ai_playerbot_db_store before the AI is gone (by guidLow: the
+    // Player may be mid-logout, so no Player is touched). A brain that never entered the world saved nothing anyway.
+    if (brain->ai && brain->guidLow)
+        ai::slice::aistore::SaveValues(brain->ai, brain->guidLow, std::string());
     if (brain->bot)
         PlayerbotAIStorage::Instance().RemoveAI(brain->bot);
     if (brain->guidLow)
@@ -313,7 +318,8 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free)
         // order "follow" makes (SetMovementStrategy("follow")).
         // W1: a free bot is masterless; it owns the ground it stands on. "free" is the engine's own movement marker (not "wander",
         // which this slice does not register, and not "follow"): it drops passive and leaves the grind kit's movement alone.
-        pai->SetMovementStrategy(free && !master ? "free" : "follow");
+        if (!pai->HasActiveMovementStrategy())
+            pai->SetMovementStrategy(free && !master ? "free" : "follow");
         // How long the world thread was held (the `.tb perf` worst tick of an engine start): the constructor builds the context and the four engines,
         // ResetStrategies applies the default strategies.
         sLog.outString("TortoiseBots engine: brain of %s built in %lld ms (PlayerbotAI constructor %lld, strategies %lld, movement %lld)", bot->GetName().c_str(),

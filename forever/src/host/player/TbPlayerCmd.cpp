@@ -76,8 +76,18 @@ bool OwnsGameAccount(OwnerScope const& scope, std::uint32_t gameAccount)
 }
 
 // D-6: one line per answer, the module's name first, then the verb (and the bot, once a verb names one). Never an account id or name.
+namespace
+{
+std::vector<std::string>* s_replySink = nullptr;   // set while an addon verb runs; world thread only, never kept
+}
+
 void Say(Player* player, std::string const& line)
 {
+    if (s_replySink)
+    {
+        s_replySink->push_back(line);
+        return;
+    }
     if (!player || !player->GetSession())
         return;
     ChatHandler handler(player->GetSession());
@@ -87,6 +97,19 @@ void Say(Player* player, std::string const& line)
 void Refuse(Player* player, std::string const& verb, char const* code, std::string const& text)
 {
     Say(player, "TortoiseBots: " + verb + ": refused " + code + ": " + text);
+}
+
+void SetReplySink(std::vector<std::string>* sink)
+{
+    s_replySink = sink;
+}
+
+bool CaptureReply(std::string const& line)
+{
+    if (!s_replySink)
+        return false;
+    s_replySink->push_back(line);
+    return true;
 }
 
 namespace
@@ -749,6 +772,8 @@ void LoadConfig() { }
 void AddScripts() { }
 bool Dispatch(Player*, std::string_view) { return false; }
 bool CallerOwnsBotForChat(Player const&, Player const&) { return false; }
+void SetReplySink(std::vector<std::string>*) { }
+bool CaptureReply(std::string const&) { return false; }
 }
 }
 

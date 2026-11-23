@@ -682,6 +682,14 @@ void WarlockCursesRaidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
 
 void WarlockAutoPetStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 {
+    // A saved `.bot choice pet` order owns the demon while set: the same
+    // row WarlockPetStrategy carries for the spec-pet strategies. Those are
+    // never added when the "pet" placeholder loses to its "pet auto"
+    // sibling, so without this the order has no owner at runtime. Above
+    // the default ladder, like the choice row outranks manual and spec rows.
+    triggers.push_back(new TriggerNode(
+        "choice pet",
+        NextAction::array(0, new NextAction("choice pet", ACTION_HIGH + 1), NULL)));
     // One row per demon, keyed by the default policy: exactly one trigger is
     // active, so the ladder (Felhunter, Succubus, Voidwalker, Imp) picks the
     // strongest demon the warlock knows without relying on an impossible cast

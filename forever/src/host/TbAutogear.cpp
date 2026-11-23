@@ -61,6 +61,8 @@ struct AutogearUpgrade
 
 void Say(Player* player, std::string const& text)
 {
+    if (player::CaptureReply(text))
+        return;
     if (!player || !player->GetSession())
         return;
     ChatHandler handler(player->GetSession());
