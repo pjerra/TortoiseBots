@@ -183,14 +183,14 @@ client copy is unreadable.
 
 ## UI v2
 
-The dashboard ships two skins: v1 (the original) and v2 (dark navy with gold framing). A viewer
+The dashboard ships two skins: v2 (dark navy with gold framing, the default) and v1 (the original). A viewer
 switches from the top-bar button (`UI v2` / `UI v1`); the choice is kept in that browser. A link
 `?ui=v2` or `?ui=v1` switches that page load too and is remembered.
 
 - `--ui v1|v2` / `TBDASH_UI` sets the server default for viewers that have no saved choice
-  (default `v1`). The daemon injects it into the page head as
+  (default `v2`). The daemon injects it into the page head as
   `<meta name="tbdash-ui" content="v1|v2">`, ahead of the switch script, so the first paint is
-  already right; `GET /api/v1/ui` answers `{"default":"v1","model3d":false}` behind the GM session.
+  already right; `GET /api/v1/ui` answers `{"default":"v2","model3d":false}` by default behind the GM session.
 - `--ui-3d` / `TBDASH_UI_3D=1` enables the v2 3D model viewer; off by default. It loads Wowhead's
   viewer only after the operator clicks `Show 3D`, proxies only the modelviewer asset paths behind the
   GM session, and caches them in `<user cache>/tbdash-model3d`. Gear needs the `display_id` field the

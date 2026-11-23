@@ -97,7 +97,7 @@ func main() {
 	udpPort := flag.Int("udp-port", getEnvInt("UDP_PORT", 9195), "UDP telemetry listener port")
 	forwardUDP := flag.String("forward-udp", getEnv("FORWARD_UDP", ""), "Comma-separated host:port list; every telemetry datagram is also sent to each (empty = no forwarding)")
 	acceptReplay := flag.Bool("accept-replay", getEnv("TBDASH_ACCEPT_REPLAY", "") == "1", "Accept replayed telemetry (`turtle-agent dashboard-replay` marks it with \"replay\":true); off by default so a recording never shadows a live module (env TBDASH_ACCEPT_REPLAY=1)")
-	uiDefault := flag.String("ui", getEnv("TBDASH_UI", "v1"), "Default dashboard skin: v1 (classic) or v2 (dark navy and gold); each viewer can switch and the choice is kept in that browser (env TBDASH_UI)")
+	uiDefault := flag.String("ui", getEnv("TBDASH_UI", "v2"), "Default dashboard skin: v2 (dark navy and gold) or v1 (classic); each viewer can switch and the choice is kept in that browser (env TBDASH_UI)")
 	ui3d := flag.Bool("ui-3d", getEnv("TBDASH_UI_3D", "") == "1", "Enable the UI v2 3D model viewer (env TBDASH_UI_3D=1)")
 	core := flag.String("core", getEnv("TBDASH_CORE", "turtle"), "Core flavor: turtle (default) or forever (env TBDASH_CORE)")
 	dbHost := flag.String("db-host", getEnv("DB_HOST", "127.0.0.1"), "MariaDB / MySQL host")
@@ -170,7 +170,7 @@ func main() {
 	}
 	*uiDefault = normalizeUI(*uiDefault)
 	if *uiDefault == "" {
-		*uiDefault = "v1"
+		*uiDefault = "v2"
 	}
 	if *uiDefault != "v1" && *uiDefault != "v2" {
 		log.Fatalf("Unknown -ui %q (want v1 or v2)", *uiDefault)
