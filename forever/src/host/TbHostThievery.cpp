@@ -20,7 +20,6 @@
 
 #include "TbBotMgr.h"
 #include "host/TbHostCapitalErrands.h"
-#include "host/TbHostFishing.h" // profession errands own the walk too (prof::HasActiveErrand checks it)
 #include "host/TbHostGuild.h"
 #include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrderDisenchant.h"
@@ -296,6 +295,8 @@ Item* FindBoxForMail(Player* bot)
     Item* found = nullptr;
     bot->ForEachItem(ItemSearchLocation::Inventory, [&](Item* item)
     {
+        if (item->IsSoulBound())
+            return ItemSearchCallbackResult::Continue;
         LockboxGate const gate = ClassifyBox(bot, item);
         if (!LockboxNeedsABetterRogue(gate) && !LockboxNeedsARogue(gate))
             return ItemSearchCallbackResult::Continue;
