@@ -61,7 +61,7 @@ class D4Wiring(unittest.TestCase):
         self.assertIn("group->RemoveMember(guid, 0)", T_HEADER)
         self.assertIn("sObjectMgr.GetClosestGraveYard(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId(), bot->GetTeam())", T_HEADER)
         self.assertIn("bot->GetRace() == RACE_GOBLIN || bot->GetRace() == RACE_HIGH_ELF", T_HEADER)
-        self.assertIn("bot->TeleportToHomebind();", T_HEADER)
+        self.assertIn("bot->TeleportToHomebind(0, hearthCooldown);", T_HEADER)
         self.assertIn("bot->GetUInt32Value(PLAYER_SELF_RES_SPELL)", T_HEADER)
         self.assertIn("bot->GetSession()->HandleSelfResOpcode(packet);", T_HEADER)
 
