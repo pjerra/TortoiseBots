@@ -319,7 +319,8 @@ PRESET_KEYS = {
 # behaviour toggles that stay off until a player enables them.
 S209_KEYS = {
     "strategy": "dps aoe, "
-                "map, map full",
+                "map, map full, "
+                "attack tagged, preheal, silent",
     "action": "dps aoe, "
               "remove blessing of salvation, remove greater blessing of salvation, "
               "check values",

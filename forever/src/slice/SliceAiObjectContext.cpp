@@ -97,6 +97,7 @@
 #include "playerbot/strategy/generic/MimicConsumableStrategy.h"
 #include "playerbot/strategy/generic/NoAoeStrategy.h"
 #include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
+#include "playerbot/strategy/generic/NonCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
@@ -212,7 +213,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (37 of its keys)
+    // the registry of StrategyContext (40 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -255,6 +256,9 @@ namespace slice
             creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
             creators["map"] = [](PlayerbotAI* ai) { return new MapStrategy(ai); };
             creators["map full"] = [](PlayerbotAI* ai) { return new MapFullStrategy(ai); };
+            creators["attack tagged"] = [](PlayerbotAI* ai) { return new AttackTaggedStrategy(ai); };
+            creators["preheal"] = [](PlayerbotAI* ai) { return new PreHealStrategy(ai); };
+            creators["silent"] = [](PlayerbotAI* ai) { return new SilentStrategy(ai); };
         }
     };
 
@@ -958,7 +962,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 49, kActions = 166, kTriggers = 210, kValues = 221;
+    constexpr unsigned kStrategies = 52, kActions = 166, kTriggers = 210, kValues = 221;
 }
 }
 
