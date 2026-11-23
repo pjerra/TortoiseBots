@@ -4,6 +4,7 @@
 #pragma once
 
 #include "LootPackets.h"           // WorldPackets::Loot::LootUnit / LootRelease / LootMoney (the typed packets of the loot handlers)
+#include "ItemUseCastPolicy.h"     // ShouldStopMovingForItemCast / ItemCastDurationMs (the action duration of an item use)
 #include "../TbBotSession.h"     // TortoiseBots::BotSession, CastResult (the in-tick cast refusal of the item cast, R0 notes U1)
 
 // ===============================================================================================================
@@ -365,8 +366,9 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
     }
 
     SpellInfo const* coreSpell = sSpellMgr.GetSpellInfo(spellData.SpellId, DIFFICULTY_NONE);
-    bool const hasCastOrChannel = coreSpell && (coreSpell->CalcCastTime() > 0 || coreSpell->IsChanneled());
-    if (foodOrDrink || hasCastOrChannel)
+    int32 const castTimeMs = coreSpell ? coreSpell->CalcCastTime() : 0;
+    bool const channeled = coreSpell && coreSpell->IsChanneled();
+    if (TortoiseBots::ShouldStopMovingForItemCast(foodOrDrink, castTimeMs, channeled))
         ai->StopMoving();
 
     TortoiseBots::CastResult stale;
@@ -374,10 +376,19 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
 
     uint32 const countBefore = bot->GetItemCount(itemId);
     SpellCastTargets targets;
-    if (item)
-        targets.SetItemTarget(item);
-    else if (unit)
-        targets.SetUnitTarget(unit);
+    switch (TortoiseBots::DecideItemCastTargetKind(item != nullptr, unit != nullptr))
+    {
+        case TortoiseBots::ItemCastTargetKind::Item:
+            targets.SetItemTarget(item);
+            out.item = item;
+            break;
+        case TortoiseBots::ItemCastTargetKind::Unit:
+            targets.SetUnitTarget(unit);
+            out.unit = unit;
+            break;
+        case TortoiseBots::ItemCastTargetKind::Self:
+            break;
+    }
 
     bot->CastItemUseSpell(itemUsed, spellData.SpellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
     // itemUsed may be gone now (the last of a stack is consumed by the cast): not touched again.
@@ -398,12 +409,7 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
         return out;
 
     out.cast = true;
-    if (foodOrDrink)
-        out.castDuration = 24000;                       // food and drink: the sit of the legacy action (UseItemAction.cpp: SetDuration(24000))
-    else if (coreSpell && coreSpell->IsChanneled())
-        out.castDuration = coreSpell->GetDuration() > 0 ? uint32(coreSpell->GetDuration()) : 8000;
-    else if (coreSpell && coreSpell->CalcCastTime() > 0)
-        out.castDuration = uint32(coreSpell->CalcCastTime());
+    out.castDuration = TortoiseBots::ItemCastDurationMs(foodOrDrink, castTimeMs, channeled, coreSpell ? coreSpell->GetDuration() : 0);
     return out;
 }
 
@@ -525,10 +531,6 @@ inline bool BotUseItemOpenLockCheckCompat(SpellType* /*self*/) { tbcompat::Unpor
 // use"). Failure value: false (not used).
 inline bool QueueGameObjectUseCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
 
-inline bool ItemUseUnportedCompat(bool /*foodOrDrink*/)
-{
-    return false;
-}
 inline void RemoveStealthAurasCompat(Player* bot)
 {
     if (bot)

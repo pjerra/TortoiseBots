@@ -19,6 +19,12 @@ int main()
     CHECK(DecideItemCastTargetKind(false, true) == ItemCastTargetKind::Unit);
     CHECK(DecideItemCastTargetKind(false, false) == ItemCastTargetKind::Self);
 
+    // Family 1, potions / healthstones / mana consumables: used from the bags with no explicit target (self), instant.
+    // CastItemSpellCompat passes these to Player::CastItemUseSpell as an empty SpellCastTargets, what a client sends for it.
+    CHECK(DecideItemCastTargetKind(false, false) == ItemCastTargetKind::Self);
+    CHECK(!ShouldStopMovingForItemCast(false, 0, false));
+    CHECK(ItemCastDurationMs(false, 0, false, 0) == 0u);
+
     // Movement: instant potions/healthstones/trinkets do not stop movement; food/drink, cast-time, and channeled spells do.
     CHECK(!ShouldStopMovingForItemCast(false, 0, false));
     CHECK(ShouldStopMovingForItemCast(true, 0, false));
