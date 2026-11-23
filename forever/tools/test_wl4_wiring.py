@@ -298,6 +298,37 @@ class Generator(unittest.TestCase):
         self.assertIn("LoadMapAndVMap(x, y)", f)
         self.assertIn("LoadMMap(instanceId, x, y)", f)
 
+    def test_the_first_boot_build_runs_only_when_the_store_is_empty_and_on(self):
+        # A missing table is not an empty store: emptyGraph leaves hasToFullGen clear and generateAll returns, so no build
+        # that could never be saved runs on every boot.
+        all_fn = func(TRAVEL, "void TravelNodeMap::generateAll()")
+        self.assertLess(all_fn.index("if (!hasToFullGen)"), all_fn.index("generateNodes();"))
+        self.assertIn("sPlayerbotAIConfig.generateTravelNodes", all_fn)
+        self.assertIn("generatePaths(false);", all_fn)
+        store = func(TRAVEL, "void TravelNodeMap::loadNodeStore()")
+        self.assertIn("hasToFullGen = true;", store)
+        self.assertNotIn("skipping startup graph generation", store)
+        # The walk links are the generator's own Detour pass (no bot), not buildPath.
+        sync = func(TRAVEL, "void TravelNodeMap::generateWalkPathMapSync(")
+        self.assertIn("LinkTravelNodesDetour(", sync)
+        link = func(TRAVEL, "bool LinkTravelNodesDetour(")
+        self.assertIn("FindTravelWalkPath(", link)
+        find = func(TRAVEL, "TravelDetourPath FindTravelWalkPath(")
+        self.assertIn("TravelGenNavMeshCompat", find)
+        self.assertIn("findNearestPoly", find)
+        self.assertIn("findStraightPath", find)
+        # Both cores own the navmesh access: one class per side, with the core's own calls.
+        self.assertIn("class TravelGenNavMeshCompat", COMPAT_FN)
+        self.assertIn("class TravelGenNavMeshCompat", COMPAT_TN)
+        self.assertIn("mmap->GetNavMesh(mapId, instanceId)", COMPAT_FN)
+        self.assertIn("NavMeshTileLoadedCompat", COMPAT_FN)
+        self.assertIn("NavMeshTileLoadedCompat", COMPAT_TN)
+        # The slider: on by default in the code and in both shipped templates.
+        code = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+        self.assertIn('GetBoolDefault("AiPlayerbot.GenerateTravelNodes", true)', code)
+        self.assertIn("AiPlayerbot.GenerateTravelNodes = 1", (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text())
+        self.assertIn("AiPlayerbot.GenerateTravelNodes = 1", (ROOT / "forever/conf/aiplayerbot.conf.dist").read_text())
+
 
 class StandIns(unittest.TestCase):
     def test_the_travel_stand_ins_are_gone(self):

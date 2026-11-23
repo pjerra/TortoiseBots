@@ -12,17 +12,17 @@ linear (section 6) and adds the runtime checks the review asked for (section 7).
 
 ## 0. The graph data itself is round B, not this one
 
-This branch ships the **schema and the loader of the node graph, not the graph**: `data/sql/world/20260824090000_world.sql`
-creates the three `ai_playerbot_travelnode*` tables empty, and no migration carries nodes, links or path points. The data is
-the generation boot's output - round B of the plan (decision D3), which runs the generator once on a server that has the map
-data and writes the rows with the saver this round ports - and it is deliberately not started here (`generatePaths` refuses
-on the pinned core's PathInfo area filter, section 2).
+The schema below ships empty and **no migration carries nodes, links or path points**: `data/sql/world/20260824090000_world.sql`
+creates the three `ai_playerbot_travelnode*` tables empty. The generator now fills them itself on a fresh install (section 12,
+the first-boot build): it runs once, synchronously, when the tables were read and are empty, and writes the rows with the
+saver this round ports. The rows are server data, never client-derived data, and they are not committed.
 
-Until that boot runs, a deployed server has **no graph**, and that is a clean no-op: `loadNodeStore` asks the schema guard
-first, sees the tables missing or the datasets empty, logs one line, and leaves the graph empty; `generateAll` returns on the
-empty node list; travel has no route and picks no target. No query ever reaches a missing table (ForeverCore aborts the
-server on one), no error is logged, and the destination build (round A2) still runs. Section 7's runtime check covers this
-state at every boot. When round B's rows exist, the same code path loads them.
+With no rows and generation off (or with the tables missing, when the build cannot be saved), a deployed server has **no
+graph**, and that is a clean no-op: `loadNodeStore` asks the schema guard first, sees the tables missing, logs one line, and
+leaves the graph empty; `generateAll` returns on the empty node list; travel has no route and picks no target. No query ever
+reaches a missing table (ForeverCore aborts the server on one), no error is logged, and the destination build (round A2)
+still runs. Section 7's runtime check covers this state at every boot. When generated rows exist, the same code path loads
+them.
 
 ## 1. What runs
 
@@ -88,8 +88,10 @@ care: the area-trigger existence check in `TravelPath::UpcommingSpecialMovement`
 one function in `forever/src/compat/TbCompat_WL4.cpp` (declared there for `TravelMgr.cpp`): `loadNodeStore()`, then
 `generateAll()`, the two print helpers and (only when `generateTravelNodes` is set) the saver - the same order as the Turtle
 pair's inline body. `loadNodeStore` is the only reader of the three tables and it asks `TravelNodeQueryCompat` (the
-`WorldQueryCompat` guard) first, so an absent schema never reaches a query. With no rows, `generateAll` returns at its
-`m_nodes.empty()` gate: no map offsets, no transfer table, no taxi pass, no coverage scan.
+`WorldQueryCompat` guard) first, so an absent schema never reaches a query. With no rows and `AiPlayerbot.GenerateTravelNodes`
+on, `generateAll` seeds the nodes and runs the walk-link pass (section 12), then builds the map offsets, transfers, taxi legs
+and coverage from the new graph; with generation off, or when the tables are missing, it returns at its `m_nodes.empty()`
+gate with no map offsets, no transfer table, no taxi pass and no coverage scan.
 
 ## 6. Path-point loading is linear
 
@@ -106,7 +108,7 @@ installs nothing; the caller holds the server lock and restores the binary):
 | Scenario | Database | Must show |
 |---|---|---|
 | `a` | the three tables dropped | one guard line (`world table `ai_playerbot_travelnode` is missing, or lacks a column this query names: not read`), exactly one `the travel-node tables are missing or incomplete; the travel graph stays empty and travel does nothing`; no node row read; no `Calculating mapoffset`; the A2 destination index still built (`>> travel destinations keep ... spawn points`) |
-| `b` | the three tables, empty | one `travel-node dataset is empty or unavailable; skipping startup graph generation`; no guard refusal; no graph generation |
+| `b` | the three tables, empty (`AiPlayerbot.GenerateTravelNodes` on) | one `travel-node dataset is empty; node seeding starts at startup, walk links follow synchronously`; the `-Generating nodes`, `travel walk links started` and `travel walk links done` lines; node and link rows saved; a second boot loads them and does not generate again |
 | `c` | three nodes, a link to a node id with no row (the out-of-map link) and its path points, one real link with three ordered points | `>> Loaded 3 travelNodes.`, both link rows read, the graph's derived data built (`Calculating mapoffset`), boot ready - the unknown target is skipped, never dereferenced |
 | `final` | the three tables dropped again | the shipped state: one absent-graph line, `tb status` enabled, RSS recorded |
 
@@ -238,3 +240,41 @@ mid-queue, its build failed on a file that is not in this branch, so the gates r
 | Turtle `vm-build` | `COMPILE_SECONDS=1427 CMAKE_RC=0 MAKE_RC=0` |
 | Turtle `vm-test tb` | `RESULT: PASS kind=tb wt=wt-w4a1 sha=80b7ec9fd dirty=0 files=4030` |
 
+
+## 12. The first-boot build (TBF #239 part 1, TB #1680)
+
+The tables ship empty, so the module builds the graph once itself, at world startup, when the store was read and is empty
+and `AiPlayerbot.GenerateTravelNodes` is on (default on). Nothing runs per tick, in the background or on a reload.
+
+| Piece | Where |
+|---|---|
+| Call site, once after the world is up | `tortoisebots_world::OnWorldInitialized` (`forever/src/TbScripts.cpp:273`) -> `LoadEngineConfig` -> `PlayerbotAIConfig::Initialize` (`ai/playerbot/PlayerbotAIConfig.cpp`) -> `TravelMgr::LoadQuestTravelTable` -> `TravelGraphLoadCompat` -> `loadNodeStore` + `generateAll` |
+| Seed when the store is readable and empty | `TravelNodeMap::loadNodeStore` sets `hasToFullGen`; `generateAll` runs `generateNodes()` and then `generatePaths` |
+| Walking links without a bot | `TravelNodeMap::generateWalkPathMapSync` -> `LinkTravelNodesDetour` -> `FindTravelWalkPath`: raw Detour on the map's navmesh (no `Unit`, no `WorldObject`) |
+| Navmesh access and the per-tile probe | `TravelGenNavMeshCompat` and `NavMeshTileLoadedCompat` in the WL4 pair: ForeverCore `MMapManager::instance()->GetNavMesh` + a thread-local query under `MMap::NavMeshReadLock`; Turtle `MMapFactory` `GetNavMesh`/`GetNavMeshQuery` |
+| Save | the existing saver, one transaction (`TravelDbBeginCompat`/`TravelNodeExecuteCompat`/`TravelDbCommitCompat`) |
+| Double-remove fix | `removeLowNodes` de-duplicates through `TravelGenAppendUniqueRemovals`; `removeNode` refuses a node not in `m_nodes`; `removeNodes` pops from the back; `removeLinkTo(NULL)` skips the node itself |
+
+Detour calls used (all in the core source, no invented API): `MMapManager::GetNavMesh(mapId, instanceId)`
+(MMapManager.h:72), `dtNavMeshQuery::init` (MMapManager.cpp:458), `findNearestPoly`, `findPath`, `findStraightPath`
+(PathGenerator.cpp:439, 748, 920), `dtNavMesh::calcTileLoc`/`getTileAt` (PathGenerator.cpp:1375-1383). The filter is
+`NAV_GROUND | NAV_WATER` (MMapDefines.h:76-78). Tile loading is the core's `TerrainInfo::LoadMapAndVMap`/`LoadMMap`
+through `WorldPosition::loadMapAndVMaps` -> `loadMapAndVMap`; `isMmapLoaded` is now a per-tile probe (the mesh existing is
+not enough).
+
+The policy (`ai/playerbot/policy/travel/TravelGraphGenPolicy.h`, test `tools/test_travel_graph_gen_policy.cpp`) holds the
+density limits (8 links, 400 yd, 1.5x existing-route shortcut), the 3 yd nearest-poly ceiling, the two-point jump and
+endpoint-slope gates, the taxi leg guard and the small-cluster removal de-duplication.
+
+Cost (estimate, not measured on ForeverCore): the build is one `findPath` per candidate pair, at most 8 per node on its
+map. Class-era node counts are ~200-500 nodes on the two continents and a few dozen per instance map, so the two
+continents dominate: roughly a few thousand Detour queries and the route-cost pass that scans creatures near every path
+point. TB measured 2256 nodes / 5921 links / 56 maps in about four minutes on Turtle; on ForeverCore expect the same
+order (minutes, mostly the route-cost pass), with the first boot online only after it finishes.
+
+Node sources and ForeverCore data: start areas (`PlayerInfo`), flight masters/innkeepers/spirit healers (creature templates
+by npcflag), area triggers (`sAreaTriggerStore` + `ObjectMgr::GetAreaTrigger`), transports (`GameObjectInfo::moTransport` +
+taxi path nodes), flight links (`TaxiNodes`/`TaxiPath`/`TaxiPathNode` stores), static portals (`spell_caster` game objects +
+`SpellTargetPosition`), zone means (`sTravelMgr` destinations). Every source has a ForeverCore store; no source is lost.
+`generateZoneMeanNodes` depends on the A2 destination build running first (`LoadQuestTravelTable` does that), and
+`generateTransportNodes` only sees transports whose `moTransport.taxiPathID` has a `TaxiPathNode` list.

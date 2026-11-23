@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "Maps/MoveMap.h" // MMapManager: the navmesh and per-tile probe of the generator
 #include "TbCompat_S5.h" // WorldQueryCompat: the single-table SELECT guard (backticked table and column names)
 #include "TbCompat_W3.h" // LegacyFormatW3: printf formatting for the saver's INSERT/UPDATE statements
 #include "TbCompat_WL4.h" // CreatureLevelMaxWL4: the classic creature level (round A2)
@@ -19,6 +20,7 @@
 #include "playerbot/policy/travel/CreatureLevelPolicy.h"
 // The per-link flight decision (known ends, fare, faction, classic maps).
 #include "playerbot/policy/travel/TaxiChoicePolicy.h"
+#include "playerbot/policy/travel/TravelGraphGenPolicy.h"
 #include "playerbot/policy/travel/TravelGraphPolicy.h"
 // The old size format of a log line (T `SIZEFMTD`, shared/Util.h). ForeverCore logs through a printf Format, so the size_t
 // conversion is the same one.
@@ -367,3 +369,57 @@ inline bool CreatureCanInitiateAttackCompat(Creature* creature, Unit* target) { 
 
 // The combat reach of `from` against `to`: T takes the target (and the extra flags), F reads the unit's own reach (Unit.h).
 inline float CombatReachToCompat(Unit* from, Unit* /*to*/) { return from->GetCombatReach(); }
+
+// ===============================================================================================================
+// THE GENERATOR'S NAVMESH SEARCHES (TravelNode.cpp's first-boot walk linking, WorldPosition::isMmapLoaded)
+// ===============================================================================================================
+// One map's navmesh for the generator's own Detour queries, held under the navmesh read lock: no tile load or unload can
+// change the mesh while a query runs, and the query is the calling thread's own (the query MMapManager hands out per
+// instance is shared and not thread-safe, MMapManager.h:69-71). GetNavMesh (MMapManager.h:72) answers null until the map's
+// mesh data exists, which the caller's tile load creates.
+class TravelGenNavMeshCompat
+{
+public:
+    TravelGenNavMeshCompat(uint32 mapId, uint32 instanceId)
+    {
+        MMAP::MMapManager* mmap = MMAP::MMapManager::instance();
+        _mesh = mmap ? mmap->GetNavMesh(mapId, instanceId) : nullptr;
+        _ready = _mesh && dtStatusSucceed(_query.init(_mesh, kMaxNodes));
+    }
+
+    bool Ready() const { return _ready; }
+    dtNavMesh* Mesh() const { return _mesh; }
+    dtNavMeshQuery const* Query() const { return &_query; }
+
+private:
+    // The core's own instance query node pool (MMapManager.cpp:39: long bot routes ran out at 1024).
+    static constexpr int kMaxNodes = 8192;
+    // The documented pattern for a search off a map-update thread (MMapManager.h:107-112): the thread flag, then the
+    // shared tile lock for the whole search.
+    MMAP::ScopedThreadNavMeshQuery _threadQuery;
+    MMAP::NavMeshReadLock _lock;
+    dtNavMesh* _mesh = nullptr;
+    dtNavMeshQuery _query;
+    bool _ready = false;
+};
+
+// Is the navmesh tile of this grid loaded? The mesh existing is not enough: loadMapAndVMap skips a tile whose probe answers
+// yes (WorldPosition.cpp), and a Detour query over a missing tile finds no polygon. Detour reads the world point as
+// (y, z, x) and calcTileLoc answers (tx, ty) = (gridY, gridX) (PathGenerator.cpp:1375-1383 does the same probe).
+inline bool NavMeshTileLoadedCompat(uint32 mapId, uint32 instanceId, int gridX, int gridY,
+    float pointX, float pointY, float pointZ)
+{
+    MMAP::ScopedThreadNavMeshQuery threadQuery;
+    MMAP::NavMeshReadLock lock;
+    MMAP::MMapManager* mmap = MMAP::MMapManager::instance();
+    dtNavMesh* navMesh = mmap ? mmap->GetNavMesh(mapId, instanceId) : nullptr;
+    if (!navMesh)
+        return false;
+
+    float const point[3] = { pointY, pointZ, pointX };
+    int tx = 0, ty = 0;
+    navMesh->calcTileLoc(point, &tx, &ty);
+    if (!ai::TravelGenTileCoordsMatch(tx, ty, gridX, gridY))
+        return false;
+    return navMesh->getTileAt(tx, ty, 0) != nullptr;
+}

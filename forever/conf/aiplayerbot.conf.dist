@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 321 keys, 312 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 384 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 334 keys, 325 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 371 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -437,6 +437,12 @@ AiPlayerbot.WorldPvpSeek = 2
 # AiPlayerbot.ImmuneSpellIds  (string, PlayerbotAIConfig.cpp:828)
 AiPlayerbot.ImmuneSpellIds = 19428
 
+# AiPlayerbot.RandomBotTimedLogout  (bool, PlayerbotAIConfig.cpp:834)
+AiPlayerbot.RandomBotTimedLogout = 1
+
+# AiPlayerbot.LevelLadder  (bool, PlayerbotAIConfig.cpp:835)
+AiPlayerbot.LevelLadder = 1
+
 # AiPlayerbot.LevelLadderBandSize  (int, PlayerbotAIConfig.cpp:836)
 AiPlayerbot.LevelLadderBandSize = 5
 
@@ -482,11 +488,17 @@ AiPlayerbot.BotsSaveEpics = 1
 # AiPlayerbot.AuctionPriceRefreshInterval  (int, PlayerbotAIConfig.cpp:888)
 AiPlayerbot.AuctionPriceRefreshInterval = 60
 
+# AiPlayerbot.AhMarketEnabled  (bool, PlayerbotAIConfig.cpp:892)
+AiPlayerbot.AhMarketEnabled = 1
+
 # AiPlayerbot.AhMarketInterval  (int, PlayerbotAIConfig.cpp:893)
 AiPlayerbot.AhMarketInterval = 120
 
 # AiPlayerbot.AhMarketBatchSize  (int, PlayerbotAIConfig.cpp:896)
 AiPlayerbot.AhMarketBatchSize = 1
+
+# AiPlayerbot.AhMarketBuyer  (bool, PlayerbotAIConfig.cpp:899)
+AiPlayerbot.AhMarketBuyer = 1
 
 # AiPlayerbot.AhMarketBudgetUs  (int, PlayerbotAIConfig.cpp:900)
 AiPlayerbot.AhMarketBudgetUs = 2000
@@ -560,6 +572,12 @@ AiPlayerbot.HuntRares = 1
 # AiPlayerbot.RepopAtGraveyard  (bool, PlayerbotAIConfig.cpp:977)
 AiPlayerbot.RepopAtGraveyard = 1
 
+# AiPlayerbot.TurtleMountAtLevel  (int, PlayerbotAIConfig.cpp:978)
+AiPlayerbot.TurtleMountAtLevel = 18
+
+# AiPlayerbot.LevelUpMounts  (bool, PlayerbotAIConfig.cpp:979)
+AiPlayerbot.LevelUpMounts = 1
+
 # AiPlayerbot.AvoidHostileTowns  (bool, PlayerbotAIConfig.cpp:984)
 AiPlayerbot.AvoidHostileTowns = 1
 
@@ -577,6 +595,9 @@ AiPlayerbot.BotLootRateUncommon = 1.0
 
 # AiPlayerbot.BotLootRateRare  (float, PlayerbotAIConfig.cpp:998)
 AiPlayerbot.BotLootRateRare = 1.0
+
+# AiPlayerbot.RandomBotLftEnabled  (bool, PlayerbotAIConfig.cpp:999)
+AiPlayerbot.RandomBotLftEnabled = 1
 
 # AiPlayerbot.HireMinAccountSecurity  (int, PlayerbotAIConfig.cpp:1007)
 AiPlayerbot.HireMinAccountSecurity = 0
@@ -741,6 +762,9 @@ AiPlayerbot.OpenGoSpell = 6477
 # AiPlayerbot.RandomChangeMultiplier  (float, PlayerbotAIConfig.cpp:1200)
 AiPlayerbot.RandomChangeMultiplier = 1.0
 
+# AiPlayerbot.CombatStrategies  (string, PlayerbotAIConfig.cpp:1206)
+AiPlayerbot.CombatStrategies = 
+
 # AiPlayerbot.CommandPrefix  (string, PlayerbotAIConfig.cpp:1211)
 AiPlayerbot.CommandPrefix = 
 
@@ -753,6 +777,9 @@ AiPlayerbot.PerfMonEnabled = 0
 
 # AiPlayerbot.ExplicitDbStoreSave  (bool, PlayerbotAIConfig.cpp:1215)
 AiPlayerbot.ExplicitDbStoreSave = 0
+
+# AiPlayerbot.RandomBotBgEnabled  (bool, PlayerbotAIConfig.cpp:1225)
+AiPlayerbot.RandomBotBgEnabled = 1
 
 # AiPlayerbot.ClassRace.UseFixedClassRaceCounts  (bool, PlayerbotAIConfig.cpp:1236)
 AiPlayerbot.ClassRace.UseFixedClassRaceCounts = 0
@@ -783,6 +810,9 @@ AiPlayerbot.DebugFilter = add gathering loot,check values,emote,check mount stat
 
 # AiPlayerbot.RandomBotAccountPrefix  (string, PlayerbotAIConfig.cpp:1389)
 AiPlayerbot.RandomBotAccountPrefix = RNDBOT
+
+# AiPlayerbot.XPRate  (float, PlayerbotAIConfig.cpp:1402)
+AiPlayerbot.XPRate = 3.0
 
 # AiPlayerbot.DisableActivityPriorities  (bool, PlayerbotAIConfig.cpp:1403)
 AiPlayerbot.DisableActivityPriorities = 1
@@ -822,6 +852,9 @@ AiPlayerbot.GearScoreCheck = 0
 
 # AiPlayerbot.LevelCheck  (int, PlayerbotAIConfig.cpp:1426)
 AiPlayerbot.LevelCheck = 30
+
+# AiPlayerbot.RandomBotInvitePlayer  (bool, PlayerbotAIConfig.cpp:1431)
+AiPlayerbot.RandomBotInvitePlayer = 0
 
 # AiPlayerbot.RandomBotGroupNearby  (bool, PlayerbotAIConfig.cpp:1432)
 AiPlayerbot.RandomBotGroupNearby = 0
@@ -949,6 +982,12 @@ AiPlayerbot.AutoTrainSpells = yes
 # AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1506)
 AiPlayerbot.AutoLearnTrainerSpells = 1
 
+# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1507)
+AiPlayerbot.AutoLearnQuestSpells = 1
+
+# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1508)
+AiPlayerbot.AutoLearnQuestSpellsAlts = 0
+
 # AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1510)
 AiPlayerbot.PetAutoTrain = 1
 
@@ -956,26 +995,26 @@ AiPlayerbot.PetAutoTrain = 1
 AiPlayerbot.AutoDoQuests = 1
 
 # AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1514)
-AiPlayerbot.GenerateTravelNodes = 0
+AiPlayerbot.GenerateTravelNodes = 1
 
 # AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1515)
 AiPlayerbot.GenerateFishLocations = 0
 
-# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1523)
+# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1522)
 AiPlayerbot.SyncAltLevelToMaster = 0
 
-# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1524)
+# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1523)
 AiPlayerbot.TalentsInPublicNote = 1
 
-# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1556)
+# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1555)
 #   default is computed in the code: uint32(BotSelfBotLevel::GM_ONLY)
 # AiPlayerbot.SelfBotLevel =
 
-# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1557)
+# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1556)
 AiPlayerbot.ToggleAlwaysOnlineAccounts = 
 
-# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1558)
+# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1557)
 AiPlayerbot.ToggleAlwaysOnlineChars = 
 
-# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1577)
+# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1576)
 AiPlayerbot.TargetPosRecalcDistance = 0.1

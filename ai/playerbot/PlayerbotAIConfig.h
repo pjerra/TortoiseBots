@@ -1436,9 +1436,8 @@ public:
     bool petAutoTrainAlts;
     bool autoDoQuests;
     bool autoShareConjuredOnTrade;
-    // TravelNode cache generation can load every map and rewrite its database
-    // cache. Keep it opt-in; direct movement and quest destinations do not
-    // require a generated graph for the owned-bot MVP.
+    // First-boot travel graph generation (TravelNode.cpp): when the travel tables are empty, node seeding and walk linking
+    // run once, synchronously, during startup, before bots log in; later boots load the saved graph. Opt-out.
     bool generateTravelNodes;
     bool asyncTravelPartitions;
     // Fish-location generation scans populated grids and writes the resulting
