@@ -26,7 +26,8 @@
 
 #include "ai/playerbot/UnportedFeatures.h"   // the closed list of feature names (core-free: the Turtle side names the same features)
 #ifndef TB_UNPORTED_TABLE_ONLY
-#include "CinematicMgr.h"   // EndCinematicIfWatchingCompat (a core type: the table-only includers do not need it)
+#include "CinematicMgr.h"       // EndCinematicIfWatchingCompat (a core type: the table-only includers do not need it)
+#include "InstanceLockMgr.h"    // CanEnterAreaCompat (InstanceLock, MapDb2Entries)
 #endif
 
 namespace tbcompat
@@ -523,11 +524,68 @@ inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& lootObject, bool /*
 // (MSG_MOVE_SET_FACING from the mover) has nothing left to do.
 inline void BroadcastFacingCompat(Player* /*bot*/) {}
 
-// Whether a bot may enter an area trigger's map (instance full, encounter in progress, bound to another save). Failure value (R9): false
-// ("may not"): the lock checks are not ported, so the bot does not walk into an instance on its own (it was true, "no restriction known").
+// The debug aura command: T builds a SpellAuraHolder with one Aura per aura effect and stores it on the unit; F's
+// Unit::AddAura(SpellInfo const*, effMask, target) creates the same auras from the core's spell record (Unit.cpp:13078-13109),
+// with the unit as caster and target as on T. The mask covers the aura effects of the first three slots, the slots the mirror
+// spell entry keeps (T's MAX_EFFECT_INDEX loop).
+inline bool ApplyDebugAuraCompat(Unit* unit, SpellEntry const* spellInfo)
+{
+    SpellInfo const* core = tbcompat::SpellCore(spellInfo);
+    if (!unit || !core)
+        return false;
+
+    uint32 effMask = 0;
+    for (SpellEffectInfo const& effect : core->GetEffects())
+    {
+        if (effect.EffectIndex >= MAX_EFFECT_INDEX)
+            continue;
+        if (effect.IsAreaAuraEffect() || effect.Effect == SPELL_EFFECT_APPLY_AURA || effect.Effect == SPELL_EFFECT_PERSISTENT_AREA_AURA)
+            effMask |= 1u << effect.EffectIndex;
+    }
+
+    return unit->AddAura(core, effMask, unit) != nullptr;
+}
+
+// Whether a bot may enter an area trigger's map: the instance is full, an encounter is in progress, or the bot is locked to a
+// different instance. T asks its dungeon persistent state and player bind; F asks the instance locks, in the same order its own
+// InstanceMap::CannotEnter applies (Map.cpp:3145-3175), so a bot and a player disagree on nothing.
 // Only random bots ask (PlayerbotAI::CanEnterArea), and a host bot is never one.
 template <class Area>
-inline bool CanEnterAreaCompat(Player* /*bot*/, Area const* /*area*/) { tbcompat::Unported(tbcompat::Feature::InstanceBind); return false; }
+inline bool CanEnterAreaCompat(Player* bot, Area const* area)
+{
+    if (!bot || !area)
+        return false;
+
+    uint32 const mapId = area->GetMapId();
+    MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
+    if (!mapEntry)
+        return false;
+
+    // The instance the bot would enter: its own lock, its group's, or the group's recent one (the core's teleport path uses the same).
+    Map* map = sMapMgr.FindMap(mapId, sMapMgr.FindInstanceIdForPlayer(mapId, bot));
+    if (!map || !map->IsDungeon())
+        return true;
+
+    // must not check when teleporting around the same map
+    if (bot->GetMapId() == mapId)
+        return true;
+
+    InstanceMap* instance = map->ToInstanceMap();
+    if (instance->GetPlayersCountExceptGMs() >= instance->GetMaxPlayers())
+        return false;
+
+    // An encounter in progress closes the instance. T checks it for every dungeon; the core's own admission only does so for raids
+    // (Map.cpp:3161), and the difference stays because this is the bot's area-trigger rule, not the core's teleport rule.
+    if (InstanceScript* script = instance->GetInstanceScript(); script && script->IsEncounterInProgress())
+        return false;
+
+    // A player locked to another instance of the same map may not join this one.
+    if (InstanceLock const* lock = instance->GetInstanceLock())
+        if (sInstanceLockMgr.CanJoinInstanceLock(bot->GetGUID(), MapDb2Entries(mapEntry, map->GetMapDifficulty()), lock) != TRANSFER_ABORT_NONE)
+            return false;
+
+    return true;
+}
 
 // PROPER: take the bot off its mount. T removes the mount auras, unmounts and recomputes the run speed (forced and not); F's
 // Dismount() and a speed update do the same.
@@ -545,8 +603,14 @@ inline void SetRestBonusCompat(Player* /*bot*/, float /*bonus*/) { tbcompat::Unp
 inline void ClearWaterBreathingCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
 // The zone of a fishing area (T `AreaEntry::GetById(id)->ZoneId`). Failure value: 0 ("no zone found": the caller keeps the area id).
 inline uint32 FishingZoneOfAreaCompat(uint32 /*areaId*/) { tbcompat::Unported(tbcompat::Feature::Camp); return 0; }
-// The movespeed cheat (T `UpdateSpeed(type, true, 10)` for walk, run and swim). Failure value: no change.
-inline void SpeedCheatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SpeedCheat); }
+// The movespeed cheat: T `UpdateSpeed(type, true, 10)` forces a 10x rate for walk, run and swim; F sets that rate directly
+// (Unit::SetSpeedRate is where the forced update writes it, Unit.cpp:9480), and the core recomputes its aura part on top.
+inline void SpeedCheatCompat(Player* bot)
+{
+    bot->SetSpeedRate(MOVE_WALK, 10.0f);
+    bot->SetSpeedRate(MOVE_RUN, 10.0f);
+    bot->SetSpeedRate(MOVE_SWIM, 10.0f);
+}
 
 // PROPER: whether the session's account logs out at once. T compares its security level with the InstantLogout setting; F has the
 // permission RBAC_PERM_INSTANT_LOGOUT for exactly that (MiscHandler.cpp:251).

@@ -442,6 +442,33 @@ inline void BroadcastFacingCompat(Player* bot)
     bot->GetMover()->SendMessageToSetExcept(&data, bot);
 }
 
+// PlayerbotAI::AddAura's debug apply, moved word for word: a SpellAuraHolder with one Aura per aura effect.
+inline bool ApplyDebugAuraCompat(Unit* unit, SpellEntry const* spellInfo)
+{
+    SpellAuraHolder* holder = CreateSpellAuraHolder(spellInfo, unit, unit, unit);
+
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        uint8 eff = spellInfo->Effect[i];
+        if (eff >= MAX_SPELL_EFFECTS)
+            continue;
+        if (IsAreaAuraEffect(eff) ||
+            eff == SPELL_EFFECT_APPLY_AURA ||
+            eff == SPELL_EFFECT_PERSISTENT_AREA_AURA)
+        {
+            int32 basePoints = spellInfo->CalculateSimpleValue(SpellEffectIndex(i));
+            int32 damage = basePoints;
+            Aura* aur = CreateAura(spellInfo, SpellEffectIndex(i), &damage, holder, unit);
+            holder->AddAura(aur, SpellEffectIndex(i));
+        }
+    }
+
+    if (!unit->AddSpellAuraHolder(holder))
+        holder = nullptr;
+
+    return true;
+}
+
 // PlayerbotAI::CanEnterArea's random-bot branch, moved word for word (Area is the AreaTrigger).
 template <class Area>
 inline bool CanEnterAreaCompat(Player* bot, Area const* area)
