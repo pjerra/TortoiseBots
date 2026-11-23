@@ -557,8 +557,10 @@ inline bool SessionHasInstantLogoutCompat(WorldSession* session) { return sessio
 template <class P>
 inline void RemoveOnTransportFlagCompat(P* /*bot*/) {}
 
-// The movement generator interrupt and the movement heartbeat of T. Failure value: nothing is sent or interrupted.
-inline void InterruptCurrentMovementCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
+// The movement generator interrupt of T's near-teleport ack. F's MotionMaster has the same call for its own teleport
+// handling: it deactivates the top generator, which a non-resumable generator cleans up on its next update. The
+// heartbeat below stays unported.
+inline void InterruptCurrentMovementCompat(Player* bot) { bot->GetMotionMaster()->InterruptOnTeleport(); }
 inline void SendHeartBeatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
 
 // PROPER: drop stale transport state. T: no transport but MOVEFLAG_ONTRANSPORT still set -> clear the flag and the transport data.

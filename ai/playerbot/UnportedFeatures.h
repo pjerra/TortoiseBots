@@ -52,7 +52,7 @@
     X(InstanceBind, "instance bind", "instance saves and binds (DungeonPersistentState, InstancePlayerBind, GetBoundInstance) for the area trigger admission check; ForeverCore has InstanceLock") \
     X(Camp, "camp, rest bonus, water breathing", "the camp kit skill (SKILL_SURVIVAL2), rest bonus (SetRestBonus), the water breathing interval, the fishing zone of an area (AreaEntry::GetById)") \
     X(SpeedCheat, "speed cheat", "UpdateSpeed(type, forced, ratio) with a forced rate; ForeverCore recomputes speed from auras") \
-    X(MovementInterrupt, "movement interrupt and heartbeat", "MovementGenerator::Interrupt and Player::SendHeartBeat; ForeverCore movement generators have no such calls") \
+    X(MovementInterrupt, "movement heartbeat", "Player::SendHeartBeat, the client heartbeat a real-player-controlled bot sends; a headless host bot never needs it. The movement generator interrupt is real: the near-teleport ack calls the core's MotionMaster::InterruptOnTeleport") \
     X(AddonChat, "chat channels, addon bridge, chat tags", "addon messages (SendAddonMessage, BuildChatPacket with a chat tag), chat channels (ChannelMgr by team) and guild chat; ForeverCore chat is typed packets") \
     X(GuildRanks, "guild", "guild rank rights and member slots (Guild::GetRanksSize, GetMemberSlot, HasRankRight); ForeverCore has Guild::Member and rank ids") \
     X(AuraHolders, "aura holders (debug apply)", "SpellAuraHolder and CreateSpellAuraHolder for the debug aura command; ForeverCore creates auras from SpellInfo") \
