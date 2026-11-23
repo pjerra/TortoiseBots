@@ -1,1 +1,367 @@
-/* Dashboard UI v2 (map). Every rule is scoped under html[data-ui="v2"] so v1 stays untouched. */
+/* Dashboard UI v2 — Map tab. Every rule is scoped to html[data-ui="v2"]; v1 never matches. */
+
+/* Hero. The markup carries `hidden` so v1 does not show it. */
+html[data-ui="v2"] #tab-map .v2-hero {
+  display: block;
+  margin: 2px 0 22px;
+}
+
+html[data-ui="v2"] #tab-map .v2-kicker {
+  color: var(--v2-gold);
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] #tab-map .v2-display {
+  margin: 10px 0;
+  color: var(--v2-gold-light);
+  font-family: var(--v2-font-display);
+  font-size: clamp(2rem, 3.6vw, 3rem);
+  font-weight: 600;
+  letter-spacing: .01em;
+  line-height: 1.04;
+}
+
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  html[data-ui="v2"] #tab-map .v2-display {
+    background: linear-gradient(180deg, #fff8e2 0%, var(--v2-gold) 62%, var(--v2-gold-deep) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+html[data-ui="v2"] #tab-map .v2-lede {
+  max-width: 64ch;
+  color: var(--v2-dim);
+  font-size: .9rem;
+  line-height: 1.6;
+}
+
+/* Filters sit beside the map as a panel; the map keeps the rest of the width. */
+html[data-ui="v2"] #tab-map .toolbar-card {
+  float: right;
+  width: 320px;
+  margin: 0 0 18px 22px;
+  padding: 18px;
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 16px 42px rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+html[data-ui="v2"] #tab-map::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+html[data-ui="v2"] #tab-map .toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 11px;
+}
+
+html[data-ui="v2"] #tab-map .toolbar-label {
+  color: var(--v2-faint);
+  font-size: .64rem;
+  letter-spacing: .16em;
+}
+
+html[data-ui="v2"] #tab-map .toolbar .input {
+  width: 100%;
+  max-width: none;
+  padding: 7px 11px;
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: 6px;
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] #tab-map .toolbar .input:hover {
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] #tab-map .toolbar .input:focus {
+  border-color: var(--v2-gold);
+  box-shadow: 0 0 0 3px rgba(232, 196, 106, .14);
+}
+
+html[data-ui="v2"] #tab-map .toolbar .badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  background: rgba(232, 196, 106, .07);
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  color: var(--v2-gold);
+  font-family: var(--v2-font-ui);
+  font-size: .64rem;
+  letter-spacing: .1em;
+}
+
+html[data-ui="v2"] #tab-map .toolbar .check {
+  margin-left: 0;
+  color: var(--v2-dim);
+  font-size: .8rem;
+}
+
+html[data-ui="v2"] #tab-map .toolbar .check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--v2-gold);
+}
+
+html[data-ui="v2"] #tab-map .world-chips-wrapper {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] #tab-map .world-chips-wrapper .seg {
+  display: flex;
+  width: 100%;
+  padding: 3px;
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+}
+
+html[data-ui="v2"] #tab-map .world-chips-wrapper .seg-btn {
+  flex: 1 1 0;
+  padding: 6px 8px;
+  border-radius: 999px;
+  color: var(--v2-dim);
+  font-size: .74rem;
+  font-weight: 600;
+}
+
+html[data-ui="v2"] #tab-map .world-chips-wrapper .seg-btn:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] #tab-map .world-chips-wrapper .seg-btn.active {
+  background: rgba(232, 196, 106, .1);
+  box-shadow: inset 0 0 0 1px var(--v2-line-strong);
+}
+
+html[data-ui="v2"] #tab-map .world-chips-wrapper .seg-count {
+  color: var(--v2-gold);
+  opacity: 1;
+}
+
+html[data-ui="v2"] #tab-map .zone-chips {
+  max-height: 270px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--v2-line-strong) transparent;
+}
+
+html[data-ui="v2"] #tab-map .zone-chips .btn {
+  background: rgba(232, 196, 106, .04);
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  color: var(--v2-dim);
+  font-weight: 500;
+}
+
+html[data-ui="v2"] #tab-map .zone-chips .btn:hover {
+  background: rgba(232, 196, 106, .1);
+  border-color: var(--v2-line-strong);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] #tab-map .zone-chips .btn span {
+  color: var(--v2-gold);
+  opacity: 1;
+}
+
+html[data-ui="v2"] #tab-map .btn.toggle-zone-chips-btn {
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] #tab-map .btn.toggle-zone-chips-btn:hover {
+  border-color: var(--v2-line-strong);
+  color: var(--v2-gold-light);
+}
+
+/* Legend pills, rebuilt by app.js from the classes on the map. */
+html[data-ui="v2"] #tab-map .map-legend {
+  gap: 6px;
+}
+
+html[data-ui="v2"] #tab-map .map-legend:not(:empty) {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] #tab-map .map-legend span {
+  padding: 4px 10px 4px 8px;
+  background: rgba(232, 196, 106, .05);
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  color: var(--v2-dim);
+  font-size: .7rem;
+  letter-spacing: .03em;
+}
+
+html[data-ui="v2"] #tab-map .map-legend i {
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .65);
+}
+
+/* The map sits in a gold-lined frame with a dark mat and corner brackets. */
+html[data-ui="v2"] #tab-map .map-stage {
+  overflow: hidden;
+}
+
+html[data-ui="v2"] #tab-map .map-viewport {
+  background: #05070f;
+  border: 6px solid #0b0c16;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px var(--v2-line-strong),
+    0 0 0 5px rgba(232, 196, 106, .05),
+    0 18px 50px rgba(0, 0, 0, .45);
+}
+
+html[data-ui="v2"] #tab-map .map-viewport::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(232, 196, 106, .5), inset 0 0 70px rgba(0, 0, 0, .5);
+  background-image:
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold)),
+    linear-gradient(var(--v2-gold), var(--v2-gold));
+  background-repeat: no-repeat;
+  background-size: 26px 2px, 2px 26px, 26px 2px, 2px 26px, 26px 2px, 2px 26px, 26px 2px, 2px 26px;
+  background-position:
+    left 6px top 6px, left 6px top 6px,
+    right 6px top 6px, right 6px top 6px,
+    left 6px bottom 6px, left 6px bottom 6px,
+    right 6px bottom 6px, right 6px bottom 6px;
+}
+
+html[data-ui="v2"] #tab-map .map-note {
+  color: var(--v2-dim);
+  font-size: .76rem;
+}
+
+html[data-ui="v2"] #tab-map .map-note a {
+  color: var(--v2-gold);
+  text-decoration: none;
+  border-bottom: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] #tab-map .map-note a:hover {
+  color: var(--v2-gold-light);
+  border-bottom-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] #tab-map .zone-noart {
+  background: rgba(11, 12, 22, .94);
+  border: 1px solid var(--v2-line);
+  border-radius: 8px;
+  color: var(--v2-dim);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+}
+
+html[data-ui="v2"] #tab-map .map-tooltip {
+  background: rgba(11, 12, 22, .97);
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .6);
+}
+
+/* Markers keep their class fills; a dark halo separates them from the artwork. */
+html[data-ui="v2"] #tab-map .bot-dot {
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .95));
+}
+
+html[data-ui="v2"] #tab-map #world-view .bot-dot {
+  box-shadow: 0 0 0 1px rgba(7, 9, 19, .9);
+}
+
+html[data-ui="v2"] #tab-map .bot-dot.player-dot {
+  box-shadow: 0 0 0 1px rgba(7, 9, 19, .9), 0 0 7px rgba(0, 0, 0, .55);
+}
+
+html[data-ui="v2"] #tab-map .bot-select-ring {
+  border-color: var(--v2-gold);
+  box-shadow: 0 0 10px rgba(232, 196, 106, .9);
+}
+
+html[data-ui="v2"] #tab-map .input:focus-visible,
+html[data-ui="v2"] #tab-map .seg-btn:focus-visible,
+html[data-ui="v2"] #tab-map .btn:focus-visible {
+  outline: 2px solid var(--v2-gold);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  html[data-ui="v2"] #tab-map .toolbar-card {
+    float: none;
+    width: auto;
+    margin: 0 0 16px;
+  }
+
+  html[data-ui="v2"] #tab-map .toolbar {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  html[data-ui="v2"] #tab-map .toolbar .input {
+    width: auto;
+    flex: 1 1 150px;
+  }
+
+  html[data-ui="v2"] #tab-map .toolbar .badge {
+    align-self: center;
+  }
+}
+
+@media (max-width: 600px) {
+  html[data-ui="v2"] #tab-map .v2-hero {
+    margin-bottom: 16px;
+  }
+
+  html[data-ui="v2"] #tab-map .v2-display {
+    font-size: 2rem;
+  }
+
+  html[data-ui="v2"] #tab-map .v2-lede {
+    font-size: .85rem;
+  }
+
+  html[data-ui="v2"] #tab-map .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  html[data-ui="v2"] #tab-map .toolbar .input {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  html[data-ui="v2"] #tab-map .toolbar .badge {
+    align-self: flex-start;
+  }
+}
