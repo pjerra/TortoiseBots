@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 334 keys, 325 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 371 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 337 keys, 328 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 368 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -39,18 +39,22 @@ AiPlayerbot.DungeonRunAuraTactics = 0
 AiPlayerbot.DungeonRunAuraGatedTargets = 0
 
 # AiPlayerbot.DungeonRunPackFocusSparesTacticUnits  (bool, PlayerbotAIConfig.cpp:155)
+#   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
 AiPlayerbot.DungeonRunPackFocusSparesTacticUnits = 0
 
 # AiPlayerbot.DungeonRunGuardLeavesAssignedTank  (bool, PlayerbotAIConfig.cpp:161)
+#   TBF: hard-coded to 0, the value below is ignored (forever/docs/RUN-KNOBS-139-NOTES.md)
 AiPlayerbot.DungeonRunGuardLeavesAssignedTank = 0
 
 # AiPlayerbot.DungeonRunTankPostOwnsSubject  (bool, PlayerbotAIConfig.cpp:166)
+#   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
 AiPlayerbot.DungeonRunTankPostOwnsSubject = 0
 
 # AiPlayerbot.DungeonRunTankPostKeepsUnit  (bool, PlayerbotAIConfig.cpp:171)
 AiPlayerbot.DungeonRunTankPostKeepsUnit = 0
 
 # AiPlayerbot.DungeonRunSeekAura  (bool, PlayerbotAIConfig.cpp:174)
+#   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
 AiPlayerbot.DungeonRunSeekAura = 0
 
 # AiPlayerbot.DungeonRunSeekMeetNoHeal  (bool, PlayerbotAIConfig.cpp:178)
@@ -111,6 +115,7 @@ AiPlayerbot.DungeonRunTauntGate = 0
 AiPlayerbot.DungeonRunMaxMinutes = 180
 
 # AiPlayerbot.DungeonRunAggroRingYd  (float, PlayerbotAIConfig.cpp:234)
+#   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
 AiPlayerbot.DungeonRunAggroRingYd = 20.0
 
 # AiPlayerbot.DungeonRunPackClearMarginYd  (float, PlayerbotAIConfig.cpp:237)
@@ -132,6 +137,7 @@ AiPlayerbot.DungeonRunNearWipeStopParty = 0
 AiPlayerbot.DungeonRunAutoCc = 0
 
 # AiPlayerbot.DungeonRunAutoCcAbove  (int, PlayerbotAIConfig.cpp:253)
+#   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
 AiPlayerbot.DungeonRunAutoCcAbove = 6
 
 # AiPlayerbot.DungeonRunWalkBackAfterWonFight  (bool, PlayerbotAIConfig.cpp:255)
@@ -148,6 +154,15 @@ AiPlayerbot.DungeonRunFightForward = 1
 
 # AiPlayerbot.DungeonRunLightRest  (bool, PlayerbotAIConfig.cpp:262)
 AiPlayerbot.DungeonRunLightRest = 1
+
+# AiPlayerbot.DungeonRunPlayerLed  (bool, PlayerbotAIConfig.cpp:264)
+AiPlayerbot.DungeonRunPlayerLed = 1
+
+# AiPlayerbot.DungeonRunPlayerLedPullYd  (float, PlayerbotAIConfig.cpp:265)
+AiPlayerbot.DungeonRunPlayerLedPullYd = 40.0
+
+# AiPlayerbot.DungeonRunPlayerLedAwayMinutes  (int, PlayerbotAIConfig.cpp:266)
+AiPlayerbot.DungeonRunPlayerLedAwayMinutes = 10
 
 # AiPlayerbot.BotLfgGroups  (bool, PlayerbotAIConfig.cpp:269)
 AiPlayerbot.BotLfgGroups = 0

@@ -122,9 +122,9 @@ bool ReadParty(Party const& ctx, ResolvedParty& party, OrderAnswer& refusal)
     }
     party.lead = lead;
     // A run binds every member to the lead bot itself (SyncBinding -> BindMember), whatever commander the lead may have of its
-    // own; that is the binding the members' orders must line up with, and what the "not-bound" refusal names. Outside a run the
-    // player's own commander stands.
-    party.expectedCommander = ctx.fromRun ? lead->GetGUID() : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
+    // own; that is the binding the members' orders must line up with, and what the "not-bound" refusal names. A player-led run
+    // (issue #139) binds nothing: its members keep the player as their commander. Outside a run the player's own commander stands.
+    party.expectedCommander = ctx.fromRun ? (ctx.commander.IsEmpty() ? lead->GetGUID() : ctx.commander) : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
     party.bots.push_back(lead);
     if (ctx.members.empty())
     {
@@ -830,7 +830,7 @@ OrderAnswer DoReviveParty(Party const& ctx, ResolvedParty const& party, std::str
     {
         if (bot->IsAlive())
         {
-            if (bot != party.lead)
+            if (bot != party.lead || !ctx.commander.IsEmpty())     // a player-led run's tank follows the player like the rest
             {
                 if (h3::CommanderGuid(bot->GetGUID()) != party.expectedCommander)
                     return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`): it would not follow.");
@@ -846,7 +846,7 @@ OrderAnswer DoReviveParty(Party const& ctx, ResolvedParty const& party, std::str
         }
         batch.Add(bot, "release", true, false);
         // After its release the revived bot follows the lead again (the follow runs in the same tick, after the release).
-        if (bot != party.lead && h3::CommanderGuid(bot->GetGUID()) == party.expectedCommander)
+        if ((bot != party.lead || !ctx.commander.IsEmpty()) && h3::CommanderGuid(bot->GetGUID()) == party.expectedCommander)
             batch.Add(bot, "follow", false, false);
     }
     if (!dead)
@@ -894,7 +894,7 @@ OrderAnswer IssueOrder(Party const& ctx, std::string const& order, uint32 nowMs,
         case od::Verb::Stay:
             return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("stay"); });
         case od::Verb::Follow:
-            return DoPartyWide(ctx, party, order, nowMs, [&](Player* bot) { return std::string((ctx.fromRun && bot == party.lead) ? "stay" : "follow"); });
+            return DoPartyWide(ctx, party, order, nowMs, [&](Player* bot) { return std::string((ctx.fromRun && bot == party.lead && ctx.commander.IsEmpty()) ? "stay" : "follow"); });
         case od::Verb::Hold:
             return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("hold"); });
         case od::Verb::ReviveParty:
@@ -935,6 +935,15 @@ OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gath
     Party party;
     party.leader = rec.leader;
     party.owner = rec.leader;
+    party.commander = rec.commander;     // empty for a bot-led run: the members are bound to the lead bot
+    if (IsPlayerLed(rec))
+    {
+        // A player-led run orders only the roster it accepted at the start (`bound` plus the tank), never every bot the group holds now: a bot that joined later, or was
+        // rebound to another commander, is not this player's to order (TickRun drops it from the roster). The tank itself in the list keeps it non-empty (ReadParty skips the lead).
+        party.members.push_back(rec.leader);
+        for (auto const& entry : rec.bound)
+            party.members.push_back(entry.first);
+    }
     party.runRec = &rec;
     party.fromRun = true;
     party.persistentIcons = false;
@@ -1038,6 +1047,64 @@ bool StartCheck(ObjectGuid leader, std::string& code, std::string& message)
             message = slot.name + " is not a host bot in the world.";
             return false;
         }
+        if (!AiOf(member))
+        {
+            code = "no-engine";
+            message = slot.name + " has no running engine (`.tb engine <bot> on`).";
+            return false;
+        }
+    }
+    return true;
+}
+
+// Issue #139: the same question for a player-led run's tank bot (StartCheck's tank tests, kept in step with it by test_slice10_fix_wiring.py's pins on the
+// original). The tank need not lead its group (the player does); it is in a party, and every BOT of that party has a running engine (the real players are not
+// ordered). Codes: not-bot no-engine no-tank not-grouped.
+bool PlayerLedStartCheck(ObjectGuid tank, std::string& code, std::string& message)
+{
+    Player* lead = ObjectAccessor::FindPlayer(tank);
+    if (!Usable(lead) || !IsHostBot(lead))
+    {
+        code = "not-bot";
+        message = "The tank is not a host bot in the world.";
+        return false;
+    }
+    if (!AiOf(lead))
+    {
+        code = "no-engine";
+        message = NameOf(lead) + " has no running engine (`.tb engine <bot> on`).";
+        return false;
+    }
+    Group* group = lead->GetGroup();
+    if (!group)
+    {
+        code = "not-grouped";
+        message = NameOf(lead) + " is not in a party.";
+        return false;
+    }
+    if (!PlayerbotAI::IsTank(lead, true))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " has no tank role: set it with `.tb role " + NameOf(lead) + " tank` and let one engine tick pass, then start the run.";
+        return false;
+    }
+    if (!TortoiseBots::slice::hybrid::CanLeadRun(unsigned(lead->GetClass())))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " cannot lead a run as its tank: only a warrior tank and a bear druid can.";
+        return false;
+    }
+    if (!AiOf(lead)->HasStrategy("pull", BotState::BOT_STATE_COMBAT))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " has no tank kit with a pull strategy: its role says tank but its kit cannot tank.";
+        return false;
+    }
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        Player* member = ObjectAccessor::FindPlayer(slot.guid);
+        if (slot.guid == tank || !Usable(member) || !IsHostBot(member))
+            continue;
         if (!AiOf(member))
         {
             code = "no-engine";

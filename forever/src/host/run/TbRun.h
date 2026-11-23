@@ -12,6 +12,7 @@
 #include "host/run/TbRunRecoverPure.h"
 #include "host/run/TbRunHooks.h"
 #include "runtime/DungeonRunPolicy.h"
+#include "runtime/PlayerLedPolicy.h"
 
 #include "ObjectGuid.h"
 
@@ -50,6 +51,12 @@ struct RunRec
     ObjectGuid leader;
     std::string leaderName;
     std::string planName;
+    // Issue #139 (opt-in, `.tb run start <tank> <plan> lead=player`): a non-empty `commander` is the player who leads the party and walks; `leader` above
+    // is then the tank bot (the run's pulls and facts read it), every other bot keeps the player as its commander and follows him, and `pl` is the
+    // Turtle player-led state (runtime/PlayerLedPolicy.h). Empty: the default, a bot-led run (decision D1).
+    ObjectGuid commander;
+    std::string commanderName;
+    PlayerLed::State pl;
     DungeonRun::Run run;        // the Turtle run: state Running|Paused|Done, phase Begin..Hold, the step index, the note
     uint32 startedMs = 0;       // GameTime::GetGameTimeMS() at the start
     uint32 endedMs = 0;         // the same clock when the run stopped or finished; 0 while it goes on (elapsed= stops there)
@@ -109,6 +116,8 @@ struct RunRec
     std::string preHolder;                       // ... the first bot that does
 };
 
+inline bool IsPlayerLed(RunRec const& rec) { return !rec.commander.IsEmpty(); }
+
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
 RunRec* Find(ObjectGuid leader);
 RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
@@ -158,6 +167,12 @@ struct StartOutcome
 // Checks the party and starts the run (binds every other member to the leader). Nothing changes when a code is returned.
 // `fromStep` (`.tb run start <leader> <plan> from step N|leg L`): a placed start; the run begins at that plan index and a walk back never goes before it.
 StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
+
+// Issue #139: the opt-in player-led start. `commander` is the player who typed `lead=player` (he leads the party), `tank` the bot named on the command.
+// Nothing is bound (every bot of the party is commanded by the player already, `not-commanded` otherwise); nothing changes when a code is returned.
+// Codes: those of StartRun, plus disabled commander-is-bot not-grouped raid not-leader group-bound no-bots group-too-large not-controllable not-live
+// bot-bound tank-not-in-party tank-not-bot no-tank not-commanded.
+StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan const* plan, uint32 nowMs);
 
 struct StopOutcome
 {

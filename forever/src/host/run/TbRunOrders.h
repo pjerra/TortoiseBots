@@ -36,6 +36,7 @@ struct Party
     ObjectGuid leader;                                                                      // lead bot guid
     std::vector<ObjectGuid> members;                                                        // optional explicit members (if empty, read from leader->GetGroup())
     ObjectGuid owner;                                                                       // order/icon owner (leader for a run, commander for `.tb cmd`)
+    ObjectGuid commander;                                                                   // a player-led run's player (issue #139): the bots' commander the followers must be bound to; empty: the lead bot
     RunRec* runRec = nullptr;                                                               // non-null only when called from a dungeon run (for cc/task verbs)
     bool fromRun = false;                                                                   // the order's origin: true = the run issued it itself (any of its moves may wade shallow water, TbRunLiquid.h), false = a player's `.tb cmd` (the RFC liquid rule)
     bool persistentIcons = false;                                                           // true for `.tb cmd`: keep the skull raid icon on attack/pull targets
@@ -86,5 +87,9 @@ void ForgetRunOrders(ObjectGuid leader);
 // a running engine. False with a code and a reason for `.tb run start` to refuse truthfully: not-bot no-engine not-leader no-tank. It does NOT look at the
 // commander binding (C6 binds the members after this check): `Issue` refuses `not-bound` itself for a follower that is not bound to the leader.
 bool StartCheck(ObjectGuid leader, std::string& code, std::string& message);
+
+// Issue #139: the same question for a player-led run's tank bot. It need not lead its group (the player does); it is a host bot with an engine, the tank role and
+// a tank kit that carries `pull`, in a party, and every bot of that party has a running engine (the real players are not ordered). Codes: not-bot no-engine no-tank not-grouped.
+bool PlayerLedStartCheck(ObjectGuid tank, std::string& code, std::string& message);
 }
 }
