@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 class Player;
@@ -14,7 +15,14 @@ namespace TortoiseBots
 namespace player
 {
 struct OwnerScope;
+struct BotFacts;
 bool OwnsGameAccount(OwnerScope const& scope, std::uint32_t gameAccount);
+// The bot lookup, the live facts of the pure rule and the reply channel, shared with the round-1 choice handlers
+// (TbChoiceCmd.cpp). `Say` writes one "TortoiseBots: ..." line; `Refuse` the "TortoiseBots: <verb>: refused <code>: <text>" one.
+bool ResolveBot(std::string_view name, Player*& bot, std::string& code);
+BotFacts FactsOf(Player* requester, Player* bot, OwnerScope const& scope);
+void Say(Player* player, std::string const& line);
+void Refuse(Player* player, std::string const& verb, char const* code, std::string const& text);
 // TortoiseBots.Player.Commands and TortoiseBots.Player.MaxBots, read at world config load and on a reload.
 void LoadConfig();
 // Registers the `tortoisebots_player_cmd` PlayerScript whose PlayerScript::OnCommand claims the word `bot`. Nothing with the engine off.

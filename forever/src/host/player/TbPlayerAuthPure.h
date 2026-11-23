@@ -21,6 +21,29 @@ enum class Tier
     Owner,
 };
 
+inline std::string LowerWord(std::string_view word)
+{
+    std::string out;
+    out.reserve(word.size());
+    for (char c : word)
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    return out;
+}
+
+// The class-choice commands (#133: `.bot totem`, `.bot behavior`, `.bot blessing`, `.bot choice`, `.bot service`). Every write and
+// every cast is Owner tier; `status` and the bare service query read only and are Tactical. Fail closed: anything not pinned
+// Tactical is Owner, and `TierOf` above is untouched by these verbs.
+inline Tier TierOfChoice(std::string_view verb, std::string_view sub)
+{
+    std::string const verbWord = LowerWord(verb);
+    std::string const subWord = LowerWord(sub);
+    if (subWord == "status")
+        return Tier::Tactical;
+    if (verbWord == "service" && subWord.empty())
+        return Tier::Tactical;
+    return Tier::Owner;
+}
+
 inline Tier TierOf(std::string_view verb)
 {
     auto lower = [](std::string_view word)

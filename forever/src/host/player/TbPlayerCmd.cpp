@@ -2,6 +2,7 @@
 // caller and answers. Round 1 serves `help` and `who`; the pure rule (tiers, ownership, login cap, cooldown) is TbPlayerAuthPure.h
 // and is tested standalone by forever/tools/test_player_auth.cpp.
 #include "host/player/TbPlayerCmd.h"
+#include "host/player/TbChoiceCmd.h"
 #include "host/player/TbPlayerAuthPure.h"
 #include "host/player/TbUpkeep.h"
 
@@ -69,6 +70,20 @@ bool OwnsGameAccount(OwnerScope const& scope, std::uint32_t gameAccount)
     return scope.Owns(gameAccount);
 }
 
+// D-6: one line per answer, the module's name first, then the verb (and the bot, once a verb names one). Never an account id or name.
+void Say(Player* player, std::string const& line)
+{
+    if (!player || !player->GetSession())
+        return;
+    ChatHandler handler(player->GetSession());
+    handler.SendSysMessage(line);
+}
+
+void Refuse(Player* player, std::string const& verb, char const* code, std::string const& text)
+{
+    Say(player, "TortoiseBots: " + verb + ": refused " + code + ": " + text);
+}
+
 namespace
 {
 bool s_commands = true;
@@ -120,20 +135,6 @@ std::string_view AfterFirstWord(std::string_view text)
     while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
         ++i;
     return text.substr(i);
-}
-
-// D-6: one line per answer, the module's name first, then the verb (and the bot, once a verb names one). Never an account id or name.
-void Say(Player* player, std::string const& line)
-{
-    if (!player || !player->GetSession())
-        return;
-    ChatHandler handler(player->GetSession());
-    handler.SendSysMessage(line);
-}
-
-void Refuse(Player* player, std::string const& verb, char const* code, std::string const& text)
-{
-    Say(player, "TortoiseBots: " + verb + ": refused " + code + ": " + text);
 }
 
 std::string ClassName(uint8 classId)
@@ -195,6 +196,8 @@ bool HandleHelp(Player* player, Caller const& caller)
     Say(player, "TortoiseBots: help: .bot add <name> - log one of your own characters in as a bot (it joins your party)");
     Say(player, "TortoiseBots: help: .bot logout <bot> - log your bot out");
     Say(player, "TortoiseBots: help: .bot maintenance <bot> - refresh your bot's kit and repair (when enabled)");
+    Say(player, "TortoiseBots: help: .bot totem <bot|party> <earth|fire|water|air> <totem|auto|none> | set <earth>,<fire>,<water>,<air> | mode <auto|prepull|manual> | status - a shaman's totems, until logout");
+    Say(player, "TortoiseBots: help: .bot behavior <bot|party> <loot|aoe|autocc|savemana|boost|threat|potions|mimic|spread|hold|noblink|offheal|offdps> <on|off> | status - behaviour toggles, until logout");
     return true;
 }
 
@@ -520,6 +523,10 @@ bool Dispatch(Player* player, std::string_view rest)
         return HandleOrderVerb(player, caller, scope, verb, AfterFirstWord(rest));
     if (verb == "maintenance")
         return HandleMaintenance(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "totem")
+        return choice::HandleTotem(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "behavior" || verb == "behaviour")
+        return choice::HandleBehavior(player, caller, scope, AfterFirstWord(rest));
     if (verb == "autogear")
         return autogear::HandleBotAutogear(player, caller.gm, scope, AfterFirstWord(rest));
 
