@@ -40,3 +40,561 @@ html[data-ui="v2"] {
   --text-dim: var(--v2-faint);
   --radius: var(--v2-radius);
 }
+
+/* Cinzel (SIL OFL 1.1, see static/fonts/OFL.txt): variable, latin + latin-ext subsets. */
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/static/fonts/cinzel-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/static/fonts/cinzel-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------- Page ---------- */
+html[data-ui="v2"] {
+  scrollbar-color: color-mix(in srgb, var(--v2-gold) 32%, transparent) transparent;
+}
+
+html[data-ui="v2"] body {
+  background-color: var(--v2-bg);
+  background-image:
+    radial-gradient(1100px 640px at 82% -12%, color-mix(in srgb, var(--v2-gold) 9%, transparent), transparent 62%),
+    radial-gradient(900px 560px at 4% 0%, color-mix(in srgb, var(--v2-alliance) 9%, transparent), transparent 58%),
+    radial-gradient(1000px 760px at 50% 118%, color-mix(in srgb, var(--v2-alliance) 7%, transparent), transparent 62%);
+  background-attachment: fixed;
+  color: var(--v2-text);
+  font-family: var(--v2-font-ui);
+}
+
+html[data-ui="v2"] ::selection {
+  background: color-mix(in srgb, var(--v2-gold) 32%, transparent);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] a {
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] a:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] :focus-visible {
+  outline: 2px solid var(--v2-gold);
+  outline-offset: 2px;
+}
+
+html[data-ui="v2"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html[data-ui="v2"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html[data-ui="v2"] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--v2-gold) 26%, transparent);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 7px;
+}
+
+html[data-ui="v2"] ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--v2-gold) 45%, transparent);
+  background-clip: padding-box;
+}
+
+html[data-ui="v2"] input[type="checkbox"],
+html[data-ui="v2"] input[type="radio"] {
+  accent-color: var(--v2-gold);
+}
+
+/* ---------- Sidebar ---------- */
+html[data-ui="v2"] .sidebar {
+  background: linear-gradient(180deg, #0c0e1d 0%, var(--v2-bg-2) 46%, #06070f 100%);
+  border-right: 1px solid var(--v2-line);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--v2-gold) 8%, transparent);
+}
+
+html[data-ui="v2"] .sidebar-header {
+  border-bottom: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] .brand-icon {
+  color: var(--v2-gold);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--v2-gold) 55%, transparent));
+}
+
+html[data-ui="v2"] .brand-title {
+  font-family: var(--v2-font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .brand-version {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .menu-category {
+  font-family: var(--v2-font-display);
+  font-weight: 600;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  color: color-mix(in srgb, var(--v2-gold) 58%, transparent);
+}
+
+html[data-ui="v2"] .menu-item {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .menu-item:hover {
+  background-color: color-mix(in srgb, var(--v2-gold) 7%, transparent);
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .menu-item.active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--v2-gold) 15%, transparent), color-mix(in srgb, var(--v2-gold) 4%, transparent));
+  color: var(--v2-gold-light);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v2-gold) 12%, transparent);
+}
+
+html[data-ui="v2"] .menu-item.active::before {
+  background: var(--v2-gold);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--v2-gold) 60%, transparent);
+}
+
+html[data-ui="v2"] .menu-item.active .menu-icon {
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] .menu-icon {
+  color: currentColor;
+}
+
+html[data-ui="v2"] .sidebar-footer {
+  border-top: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] .footer-link {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .footer-link:hover {
+  color: var(--v2-gold-light);
+}
+
+/* ---------- Topbar ---------- */
+html[data-ui="v2"] .topbar {
+  background-color: var(--bg-header);
+  border-bottom: 1px solid var(--v2-line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+}
+
+html[data-ui="v2"] .page-title {
+  font-family: var(--v2-font-display);
+  font-weight: 600;
+  font-size: 1.02rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .status-pill:not(.online):not(.stale) {
+  background: color-mix(in srgb, var(--v2-gold) 4%, transparent);
+  border-color: var(--v2-line);
+}
+
+html[data-ui="v2"] .quick-find input {
+  background: var(--v2-bg-2);
+  border-color: var(--v2-line);
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .quick-find input:focus {
+  border-color: var(--v2-gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-gold) 20%, transparent);
+}
+
+html[data-ui="v2"] .quick-find-icon,
+html[data-ui="v2"] .quick-find-key {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .quick-find-key {
+  border-color: var(--v2-line);
+}
+
+html[data-ui="v2"] .quick-find-results {
+  background: var(--v2-panel-solid);
+  border-color: var(--v2-line-strong);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .6);
+}
+
+html[data-ui="v2"] .qf-row.active,
+html[data-ui="v2"] .qf-row:hover {
+  background: color-mix(in srgb, var(--v2-gold) 10%, transparent);
+}
+
+html[data-ui="v2"] .qf-name {
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .refresh-picker select {
+  background: var(--v2-bg-2);
+  border-color: var(--v2-line);
+  color: var(--v2-text);
+}
+
+/* ---------- Cards and panels ---------- */
+html[data-ui="v2"] .card,
+html[data-ui="v2"] .kpi {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--v2-panel-solid) 96%, var(--v2-gold) 4%), var(--v2-panel-solid));
+  border: 1px solid var(--v2-line);
+  border-left: 3px solid var(--v2-gold-deep);
+  border-radius: var(--v2-radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--v2-gold) 7%, transparent);
+}
+
+html[data-ui="v2"] .kpi {
+  border-left-width: 1px;
+  border-top: 2px solid color-mix(in srgb, var(--v2-gold) 55%, transparent);
+}
+
+html[data-ui="v2"] .kpi-link:hover {
+  background: var(--v2-panel-hover);
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .card-title {
+  font-family: var(--v2-font-display);
+  font-weight: 600;
+  font-size: 0.84rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .card-hint {
+  color: var(--v2-dim);
+  font-family: var(--v2-font-ui);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-ui="v2"] .card-link {
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] .card-link:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .section-label {
+  font-family: var(--v2-font-display);
+  font-weight: 600;
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  color: color-mix(in srgb, var(--v2-gold) 62%, transparent);
+}
+
+html[data-ui="v2"] .kpi-label,
+html[data-ui="v2"] .toolbar-label {
+  font-family: var(--v2-font-display);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--v2-gold) 62%, transparent);
+}
+
+html[data-ui="v2"] .kpi-value {
+  font-family: var(--v2-font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+html[data-ui="v2"] .kpi-sub {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .health-banner {
+  background: color-mix(in srgb, var(--v2-red) 12%, transparent);
+  border-color: color-mix(in srgb, var(--v2-red) 45%, transparent);
+}
+
+/* Gold corner brackets for big frames. */
+html[data-ui="v2"] .v2-frame {
+  position: relative;
+}
+
+html[data-ui="v2"] .v2-frame::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  pointer-events: none;
+  opacity: .75;
+  background:
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left top / 13px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left top / 1px 13px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right top / 13px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right top / 1px 13px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left bottom / 13px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left bottom / 1px 13px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right bottom / 13px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right bottom / 1px 13px no-repeat;
+}
+
+/* ---------- Tables ---------- */
+html[data-ui="v2"] .data-table th,
+html[data-ui="v2"] .dgn-table th {
+  background: var(--v2-panel-solid);
+  color: color-mix(in srgb, var(--v2-gold) 66%, transparent);
+  letter-spacing: 0.12em;
+  border-bottom: 1px solid var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .data-table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--v2-gold) 7%, transparent);
+}
+
+html[data-ui="v2"] .data-table tbody tr:hover td,
+html[data-ui="v2"] .dgn-run-row:hover td {
+  background-color: color-mix(in srgb, var(--v2-gold) 5%, transparent);
+}
+
+html[data-ui="v2"] .data-table th.sort-active {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .data-table th.sortable:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .data-table th.sortable:focus-visible {
+  outline: 2px solid var(--v2-gold);
+  outline-offset: -2px;
+}
+
+html[data-ui="v2"] .row-selected td {
+  background: color-mix(in srgb, var(--v2-gold) 9%, transparent);
+}
+
+html[data-ui="v2"] .bots-table tbody tr:hover td:first-child {
+  background-color: #16182a;
+}
+
+html[data-ui="v2"] .bots-table .row-selected td:first-child {
+  background-color: #1d2033;
+}
+
+html[data-ui="v2"] .dgn-run-row td {
+  border-bottom: 1px solid color-mix(in srgb, var(--v2-gold) 7%, transparent);
+}
+
+/* ---------- Controls ---------- */
+html[data-ui="v2"] .btn {
+  background: var(--v2-panel-solid);
+  border-color: color-mix(in srgb, var(--v2-gold) 38%, transparent);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .btn:hover {
+  background: color-mix(in srgb, var(--v2-gold) 11%, transparent);
+  border-color: var(--v2-gold);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .btn-primary {
+  background: linear-gradient(180deg, var(--v2-gold), var(--v2-gold-deep));
+  border-color: var(--v2-gold);
+  color: var(--v2-gold-ink);
+}
+
+html[data-ui="v2"] .btn-primary:hover {
+  background: linear-gradient(180deg, var(--v2-gold-light), var(--v2-gold));
+  border-color: var(--v2-gold-light);
+  color: var(--v2-gold-ink);
+}
+
+html[data-ui="v2"] .btn:disabled,
+html[data-ui="v2"] .cmd-controls-row .btn:disabled {
+  opacity: .45;
+}
+
+html[data-ui="v2"] .input,
+html[data-ui="v2"] select.input,
+html[data-ui="v2"] .cmd-controls-row select,
+html[data-ui="v2"] .cmd-controls-row input {
+  background: var(--v2-bg-2);
+  border-color: var(--v2-line);
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .input:focus {
+  border-color: var(--v2-gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-gold) 20%, transparent);
+}
+
+html[data-ui="v2"] select option {
+  background: var(--v2-panel-solid);
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .check {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .seg {
+  background: var(--bg-input);
+  border-color: var(--v2-line);
+}
+
+html[data-ui="v2"] .seg-btn {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .seg-btn:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .seg-btn.active,
+html[data-ui="v2"] .cmd-page-seg .seg-btn[aria-pressed="true"] {
+  background: linear-gradient(180deg, var(--v2-gold), var(--v2-gold-deep));
+  color: var(--v2-gold-ink);
+  box-shadow: none;
+}
+
+html[data-ui="v2"] .chip {
+  background: color-mix(in srgb, var(--v2-gold) 3%, transparent);
+  border-color: var(--v2-line);
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .chip:hover {
+  color: var(--v2-gold-light);
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .chip.active {
+  background: color-mix(in srgb, var(--v2-gold) 13%, transparent);
+  border-color: var(--v2-gold);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .chip b {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .chip-warn.active {
+  background: color-mix(in srgb, var(--v2-red) 14%, transparent);
+  border-color: color-mix(in srgb, var(--v2-red) 60%, transparent);
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .chip-warn.active b {
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .close-btn:hover {
+  color: var(--v2-gold-light);
+  background: color-mix(in srgb, var(--v2-gold) 9%, transparent);
+}
+
+/* ---------- Badges ---------- */
+/* Bare badges only: status and item-quality badges keep their own colours. */
+html[data-ui="v2"] .badge:not([class*="badge-"]) {
+  background: color-mix(in srgb, var(--v2-gold) 10%, transparent);
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] .badge-info {
+  background: color-mix(in srgb, var(--v2-gold) 15%, transparent);
+  color: var(--v2-gold-light);
+}
+
+/* ---------- Tab bars ---------- */
+html[data-ui="v2"] .cmd-tab {
+  border-color: var(--v2-line);
+}
+
+html[data-ui="v2"] .cmd-tab:hover {
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .cmd-tab.on {
+  border-color: var(--v2-gold);
+  box-shadow: inset 0 -2px 0 var(--v2-gold);
+}
+
+html[data-ui="v2"] .cmd-tab:focus-visible,
+html[data-ui="v2"] .cmd-mini:focus-visible {
+  outline: 2px solid var(--v2-gold);
+}
+
+html[data-ui="v2"] .cmd-mini:hover {
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .cmd-botlink:hover,
+html[data-ui="v2"] .cmd-botlink:focus-visible {
+  color: var(--v2-gold-light);
+  border-bottom-color: currentColor;
+}
+
+html[data-ui="v2"] .cmd-h,
+html[data-ui="v2"] .cmd-subgroup {
+  font-family: var(--v2-font-display);
+  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--v2-gold) 62%, transparent);
+}
+
+html[data-ui="v2"] .dgn-head h2,
+html[data-ui="v2"] .stat-group h3 {
+  font-family: var(--v2-font-display);
+  letter-spacing: 0.06em;
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .armory-subtab {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .armory-subtab:hover {
+  background: color-mix(in srgb, var(--v2-gold) 8%, transparent);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .armory-subtab.active {
+  background: color-mix(in srgb, var(--v2-gold) 13%, transparent);
+  border-color: var(--v2-gold);
+  color: var(--v2-gold-light);
+}
+
+/* ---------- Terminal ---------- */
+html[data-ui="v2"] .console-container {
+  background-color: var(--v2-bg-2);
+  border-color: var(--v2-line);
+}
+
+html[data-ui="v2"] .console-header {
+  background-color: var(--v2-panel-solid);
+  border-color: var(--v2-line);
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .console-body {
+  color: var(--v2-dim);
+}
