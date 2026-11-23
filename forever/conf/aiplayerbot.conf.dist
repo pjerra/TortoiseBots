@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 339 keys, 330 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 366 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 341 keys, 332 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 364 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -601,6 +601,12 @@ AiPlayerbot.MountBreakEvenFactor = 1.5
 
 # AiPlayerbot.AvoidHostileTowns  (bool, PlayerbotAIConfig.cpp:984)
 AiPlayerbot.AvoidHostileTowns = 1
+
+# AiPlayerbot.UnstuckHearthLevelFit  (bool, PlayerbotAIConfig.cpp:985)
+AiPlayerbot.UnstuckHearthLevelFit = 1
+
+# AiPlayerbot.UnstuckHearthMinDistance  (float, PlayerbotAIConfig.cpp:986)
+AiPlayerbot.UnstuckHearthMinDistance = 300.0
 
 # AiPlayerbot.BotQuestLogUpkeep  (bool, PlayerbotAIConfig.cpp:989)
 AiPlayerbot.BotQuestLogUpkeep = 1
