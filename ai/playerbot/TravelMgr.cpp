@@ -2807,11 +2807,11 @@ void TravelMgr::LoadFishLocations()
         Field* fields = result->Fetch();
 
         std::string name = FieldTextW3(fields[0]);
-        uint32 mapId = fields[1].GetUInt32();
-        float positionX = fields[2].GetFloat();
-        float positionY = fields[3].GetFloat();
-        float positionZ = fields[4].GetFloat();
-        float orientation = fields[5].GetFloat();
+        uint32 mapId = fields[1].GetUInt16();
+        float positionX = float(fields[2].GetDouble());
+        float positionY = float(fields[3].GetDouble());
+        float positionZ = float(fields[4].GetDouble());
+        float orientation = float(fields[5].GetDouble());
         std::string description = FieldTextW3(fields[6]);
 
         AsyncGuidPosition* point = &fishPoints.emplace_back(GuidPosition(0, WorldPosition(mapId, positionX, positionY, positionZ, orientation)));
