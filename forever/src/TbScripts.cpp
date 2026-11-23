@@ -107,6 +107,7 @@
 #include "host/TbAddonTrade.h"
 #include "host/TbAddonProfessions.h"
 #include "host/TbAddonLootLog.h"
+#include "host/TbAddonOrders.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -1893,6 +1894,7 @@ void AddSC_tortoisebots()
     TortoiseBots::professions::RegisterAddonVerbsProfessions(); // #134 P134-D: `professions` verb + `professions` cap (host/TbAddonProfessions.cpp)
     TortoiseBots::lootlog::RegisterAddonVerbsLootLog(); // #134 i-loot: `lootlog` verb + `loot-log` cap (host/TbAddonLootLog.cpp)
     TortoiseBots::aipreset::RegisterAddonVerbsAi(); // #135 P135-C: `ai` verb + `ai` cap (host/TbAddonAi.cpp)
+    TortoiseBots::addonorders::RegisterAddonVerbsOrders(); // #155: `order` verb + guild-order caps (host/TbAddonOrders.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)

@@ -67,6 +67,7 @@ struct RankRow
     uint32_t rid = 0;
     uint32_t order = 0;
     std::string name;
+    uint32_t rights = 0;   // GuildBankRights mask from guild_rank.rights
 };
 
 // ForeverCore aborts the world on a statement naming a missing table or column
@@ -111,7 +112,7 @@ std::vector<RankRow> ReadRanks(uint32_t guildId)
     std::vector<RankRow> out;
     if (!guildId)
         return out;
-    std::string const sql = "SELECT `rid`, `RankOrder`, `rname` FROM `guild_rank` WHERE `guildid` = "
+    std::string const sql = "SELECT `rid`, `RankOrder`, `rname`, `rights` FROM `guild_rank` WHERE `guildid` = "
         + std::to_string(guildId) + " ORDER BY `RankOrder`";
     QueryResult result = QueryGuarded(sql, "guild_rank");
     if (!result)
@@ -123,6 +124,7 @@ std::vector<RankRow> ReadRanks(uint32_t guildId)
         row.rid = fields[0].GetUInt32();
         row.order = fields[1].GetUInt32();
         row.name = fields[2].GetString();
+        row.rights = fields[3].GetUInt32();
         out.push_back(std::move(row));
     } while (result->NextRow());
     std::sort(out.begin(), out.end(), [](RankRow const& a, RankRow const& b) { return a.order < b.order; });
@@ -345,16 +347,25 @@ bool BuildAccessReport(uint32_t guildId, Player* asker, AccessReport& out)
     uint32_t rankId = 0;
     if (!botRank || !RankIdOfOrder(ranks, botRank, rankId))
         return true;
+    uint32_t rankRights = 0;
     for (RankRow const& rank : ranks)
         if (rank.rid == rankId)
+        {
             out.rankName = rank.name;
+            rankRights = rank.rights;
+        }
 
     std::vector<uint32_t> tabsOk, tabsDenied;
-    SplitBankTabs(ReadTabRights(guildId, rankId), kBankRightDepositItem, tabsOk, tabsDenied);
+    std::vector<uint8_t> const tabRights = ReadTabRights(guildId, rankId);
+    SplitBankTabs(tabRights, kBankRightDepositItem, tabsOk, tabsDenied);
     out.enabled = true;
     out.botRank = botRank;
     out.tabsOk = FormatTabList(tabsOk);
     out.tabsDenied = FormatTabList(tabsDenied);
+    // The access line's gold bit: a bank exists and the bot rank itself may
+    // withdraw guild money (Forever keeps that as a rank right, not a rule
+    // tied to the rank order).
+    out.bankGold = !tabRights.empty() && (rankRights & GR_RIGHT_WITHDRAW_GOLD) != 0;
     out.canSetRank = CanSetRank(guildId, asker);
     return true;
 }

@@ -1000,3 +1000,44 @@ Server-side diagnostics:
   `AiPlayerbot.AllowedLogFiles`, every module-side cast cancel writes one row (site, slot, spell, cast
   percent, target, distance moved).
 
+## 4. Addon order window (`TBM` `order` verb)
+
+`TBFM` (TortoiseBotsForeverManager) speaks the guild-order window over the addon channel. The module
+answers the `order` verb (`forever/src/host/TbAddonOrders.cpp`) and advertises the capability tokens
+`guild-orders`, `guild-order-nobuy` and `guild-order-steps`; `RegisterVerb` also advertises the verb
+itself, so the addon routes the command natively instead of the `.tb` bridge.
+
+Accepted payloads (the reply shapes are the ones `BotOrder.lua:57-75` parses):
+
+| Payload | Answer |
+|---|---|
+| `order list` | `TBM:ORDER_BEGIN`, `TBM:ORDER_ACCESS`, one `TBM:ORDER` per row, `TBM:ORDER_END` |
+| `order access` | one `TBM:ORDER_ACCESS` |
+| `order rank <idx>` | `ACTION_ACK order rank:<idx> 1 rank`, then a fresh `TBM:ORDER_ACCESS` |
+| `order reassign <bot> <newBot>` | `ACTION_ACK order bot:<bot> 1 reassign` |
+| `order <bot> cancel` | `ACTION_ACK order bot:<bot> 1 cancel` |
+| `order <bot> steps` | `TBM:ORDER_STEPS_BEGIN`, `TBM:ORDER_STEP` rows, `TBM:ORDER_STEPS_END` |
+| `order <bot> preview <farm\|craft> <item> <n> [bring=..]` | one `TBM:ORDER_PREVIEW` |
+| `order <bot> <farm\|craft> <item> <n> [hours\|inf] [keep] [gold=..] [bring=..]` | `ACTION_ACK order bot:<bot> 1 <farm\|craft>`, then a fresh list snapshot |
+| `order search <bot> <farm\|craft> [cat=..] <text>` | `TBM:ORDER_ITEMS_BEGIN`, `TBM:ORDER_ITEM` rows, `TBM:ORDER_ITEMS_END` |
+| `order search <bot> enchant <text>` | an empty `TBM:ORDER_ENCHANTS` pair |
+| `order search <craft\|enchant> <text>` | `TBM:ORDER_WHO` rows (empty for enchant) |
+| `order <bot> enchant <spell>` / `meet` | `ACTION_ERR` (enchant orders are not implemented) |
+
+Rules:
+
+* `order list`, `access`, `search`, `preview` and `steps` reuse the existing `.tb guildorder` code:
+  the read verbs are replayed through a capturing `ChatHandler` and their stable records are reshaped,
+  so the two transports cannot drift. Mutations call the same store, access and reassign functions with
+  the same permission gates (`MayGiveOrders`, `MayChangeBotRank`).
+* Buy orders are refused and `guild-order-nobuy` is always advertised (owner rule: no Buy option for
+  players). Enchant search answers an empty pair; enchant create/meet refuse.
+* The store has no live `TBM:ORDER` push yet, so a newly created order is reported with a list snapshot
+  right after the ACK; progress then follows the addon's 30 s `order list` poll.
+* Fields the module's read records do not carry are sent as their protocol's "none" value, never
+  invented: `zone`/`difficulty`/`chance`/`minLevel` on search items, `minutes`/`zone`/`difficulty` on the
+  preview. A preview reagent's shortfall rides the `farm` lane (the order sources it), not the
+  player-must-send lane.
+* The `ORDER_ACCESS` gold bit comes from the bot rank's own `guild_rank.rights` withdraw-gold right and
+  only when the guild has a bank tab.
+
