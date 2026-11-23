@@ -99,6 +99,7 @@
 #include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
 #include "playerbot/strategy/generic/NonCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
+#include "playerbot/strategy/generic/PullStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
@@ -172,6 +173,7 @@
 #include "playerbot/strategy/values/NearestCorpsesValue.h"
 #include "playerbot/strategy/values/NearestFriendlyPlayersValue.h"
 #include "playerbot/strategy/values/NearestGameObjects.h"
+#include "playerbot/strategy/values/NearestNonBotPlayersValue.h"
 #include "playerbot/strategy/values/NearestNpcsValue.h"
 #include "playerbot/strategy/values/NearestUnitsValue.h"
 #include "playerbot/strategy/values/NewPlayerNearbyValue.h"
@@ -213,7 +215,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (40 of its keys)
+    // the registry of StrategyContext (43 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -259,6 +261,9 @@ namespace slice
             creators["attack tagged"] = [](PlayerbotAI* ai) { return new AttackTaggedStrategy(ai); };
             creators["preheal"] = [](PlayerbotAI* ai) { return new PreHealStrategy(ai); };
             creators["silent"] = [](PlayerbotAI* ai) { return new SilentStrategy(ai); };
+            creators["pull back"] = [](PlayerbotAI* ai) { return new PullBackStrategy(ai); };
+            creators["collision"] = [](PlayerbotAI* ai) { return new CollisionStrategy(ai); };
+            creators["sit"] = [](PlayerbotAI* ai) { return new SitStrategy(ai); };
         }
     };
 
@@ -301,7 +306,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (91 of its keys)
+    // the registry of ActionContext (94 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -398,6 +403,9 @@ namespace slice
             creators["remove blessing of salvation"] = [](PlayerbotAI* ai) { return new RemoveBlessingOfSalvationAction(ai); };
             creators["remove greater blessing of salvation"] = [](PlayerbotAI* ai) { return new RemoveGreaterBlessingOfSalvationAction(ai); };
             creators["check values"] = [](PlayerbotAI* ai) { return new CheckValuesAction(ai); };
+            creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
+            creators["move out of collision"] = [](PlayerbotAI* ai) { return new MoveOutOfCollisionAction(ai); };
+            creators["sit"] = [](PlayerbotAI* ai) { return new SitAction(ai); };
         }
     };
 
@@ -494,7 +502,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (137 of its keys)
+    // the registry of TriggerContext (140 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -637,6 +645,9 @@ namespace slice
             creators["not dps aoe target active"] = [](PlayerbotAI* ai) { return new NotDpsAoeTargetActiveTrigger(ai); };
             creators["has blessing of salvation"] = [](PlayerbotAI* ai) { return new HasBlessingOfSalvationTrigger(ai); };
             creators["has greater blessing of salvation"] = [](PlayerbotAI* ai) { return new HasGreaterBlessingOfSalvationTrigger(ai); };
+            creators["should pull"] = [](PlayerbotAI* ai) { return new ShouldPullTrigger(ai); };
+            creators["collision"] = [](PlayerbotAI* ai) { return new CollisionTrigger(ai); };
+            creators["sit"] = [](PlayerbotAI* ai) { return new SitTrigger(ai); };
         }
     };
 
@@ -731,7 +742,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (221 of its keys)
+    // the registry of ValueContext (222 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -958,11 +969,12 @@ namespace slice
             creators["unreachable targets"] = [](PlayerbotAI* ai) { return new UnreachableTargetsValue(ai); };
             creators["current position"] = [](PlayerbotAI* ai) { return new CurrentPositionValue(ai); };
             creators["time since last change"] = [](PlayerbotAI* ai) { return new TimeSinceLastChangeValue(ai); };
+            creators["nearest non bot players"] = [](PlayerbotAI* ai) { return new NearestNonBotPlayersValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 52, kActions = 166, kTriggers = 210, kValues = 221;
+    constexpr unsigned kStrategies = 55, kActions = 169, kTriggers = 213, kValues = 222;
 }
 }
 
