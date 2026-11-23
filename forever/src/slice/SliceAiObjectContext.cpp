@@ -97,6 +97,7 @@
 #include "playerbot/strategy/generic/NoAoeStrategy.h"
 #include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
+#include "playerbot/strategy/generic/PullStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
@@ -209,7 +210,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (35 of its keys)
+    // the registry of StrategyContext (36 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -250,6 +251,7 @@ namespace slice
             creators["spread"] = [](PlayerbotAI* ai) { return new SpreadStrategy(ai); };
             creators["no blink instance"] = [](PlayerbotAI* ai) { return new NoBlinkInstanceStrategy(ai); };
             creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
+            creators["pull back"] = [](PlayerbotAI* ai) { return new PullBackStrategy(ai); };
         }
     };
 
@@ -291,7 +293,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (87 of its keys)
+    // the registry of ActionContext (88 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -384,6 +386,7 @@ namespace slice
             creators["apply oil"] = [](PlayerbotAI* ai) { return new ImbueWithOilAction(ai); };
             creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
             creators["reach party member for totem"] = [](PlayerbotAI* ai) { return new ReachPartyMemberForTotemAction(ai); };
+            creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
         }
     };
 
@@ -480,7 +483,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (134 of its keys)
+    // the registry of TriggerContext (135 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -620,6 +623,7 @@ namespace slice
             creators["has poison debuff"] = [](PlayerbotAI* ai) { return new HasPoisonDebuffTrigger(ai); };
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
             creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
+            creators["should pull"] = [](PlayerbotAI* ai) { return new ShouldPullTrigger(ai); };
         }
     };
 
@@ -938,7 +942,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 46, kActions = 162, kTriggers = 207, kValues = 214;
+    constexpr unsigned kStrategies = 47, kActions = 163, kTriggers = 208, kValues = 214;
 }
 }
 

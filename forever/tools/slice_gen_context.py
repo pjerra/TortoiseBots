@@ -71,7 +71,7 @@ SLICE2_KEYS = {
              "loot strategy, should get money, inventory item ids, incoming heals",
 }
 # Slice 3 (porting worker, FOREVER-SLICE3-SPEC section 3, listed with creator file:line in forever/docs/SLICE3-KEYS.md): the tank, the pull, the stay
-# and wait strategies and the order actions. Keys the spec deliberately leaves out: `should pull`, `pull nearest target`, `chat`, `pull back`.
+# and wait strategies and the order actions. Keys the spec deliberately leaves out: `chat` (the three pull rows are in PULL_KEYS).
 SLICE3_KEYS = {
     "strategy": "tank assist, threat, stay, free, passive, tank face, wait for attack",
     "action": "tank assist, stay, return to stay position, pull my target, end pull, pull start, pull action, pull end, reach pull, "
@@ -314,7 +314,17 @@ PRESET_KEYS = {
     "trigger": "cs",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS)
+# The pull rows slice 3 left out. A tank's kit keeps "pull" on the combat engine, so the one row that can start a
+# fight without an order is the non-combat `should pull`: it fires only in a dungeon, on a tank, with a live
+# grouped party where nobody fights and the healer has mana (PullTriggers.cpp), and it pulls a reachable target.
+# "pull back" is the return leg the ordered pulls switch on with ChangeStrategy("+pull back", ALL).
+PULL_KEYS = {
+    "strategy": "pull back",
+    "action": "pull nearest target",
+    "trigger": "should pull",
+    "value": "",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, PULL_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
