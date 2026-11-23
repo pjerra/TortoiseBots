@@ -49,7 +49,6 @@
     X(TransportBoarding, "transports", "boarding, leaving and riding transports (MoveOnTransport, MoveOffTransport, UseTransport, FollowOnTransport, AddPassenger, RemovePassenger, transport movement info); ForeverCore's passenger model and spline transform differ") \
     X(NavmeshProbe, "navmesh and path internals", "the navmesh-island unstick probe over MMapFactory / PathInfo::FindWalkPoly, and the 1.12 path type and nav flag bits (PATHFIND_*, NAV_*); ForeverCore's MMapManager and path flags differ") \
     X(CinematicCamera, "cinematic and camera", "cinematic state (watching_cinematic_entry, CinematicEnd); ForeverCore keeps a cinematic manager object") \
-    X(InstanceBind, "instance bind", "instance saves and binds (DungeonPersistentState, InstancePlayerBind, GetBoundInstance) for the area trigger admission check; ForeverCore has InstanceLock") \
     X(Camp, "camp, rest bonus, water breathing", "the camp kit skill (SKILL_SURVIVAL2), rest bonus (SetRestBonus), the water breathing interval, the fishing zone of an area (AreaEntry::GetById)") \
     X(SpeedCheat, "speed cheat", "UpdateSpeed(type, forced, ratio) with a forced rate; ForeverCore recomputes speed from auras") \
     X(MovementInterrupt, "movement interrupt and heartbeat", "MovementGenerator::Interrupt and Player::SendHeartBeat; ForeverCore movement generators have no such calls") \
