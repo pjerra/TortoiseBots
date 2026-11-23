@@ -350,7 +350,7 @@ std::vector<MountValue> FullMountListValue::Calculate()
 
         mounts.push_back(MountValue(pProto));
 
-        GAI_VALUE2(std::list<int32>, "item vendor list", pProto->ItemId);
+        GAI_VALUE2_COMPAT(std::list<int32>, "item vendor list", pProto->ItemId);
     }
 
     for (uint32 id = 0; id < sSpellTemplate.GetMaxEntry(); ++id)
@@ -425,7 +425,7 @@ uint32 MountSkillTypeValue::Calculate()
 std::vector<int32> AvailableMountVendors::Calculate()
 {
     std::vector<int32> mountVendors;
-    std::vector<MountValue> const& mountList = GAI_VALUE_REF(std::vector<MountValue>, "full mount list");
+    std::vector<MountValue> const mountList = GAI_VALUE_COMPAT(std::vector<MountValue>, "full mount list");
 
     for (auto const& mount : mountList)
     {
@@ -439,7 +439,7 @@ std::vector<int32> AvailableMountVendors::Calculate()
         if (usage != ItemUsage::ITEM_USAGE_EQUIP)
             continue;
 
-        for (auto& vendor : GAI_VALUE2(std::list<int32>, "item vendor list", itemId))
+        for (auto& vendor : GAI_VALUE2_COMPAT(std::list<int32>, "item vendor list", itemId))
             if(std::find(mountVendors.begin(), mountVendors.end(), vendor) == mountVendors.end())
                 mountVendors.push_back(vendor);
     }
