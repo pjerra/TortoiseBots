@@ -34,9 +34,9 @@ static JudgementPaladin P(uint64_t id, bool healer, bool wisdom = true, bool lig
     return p;
 }
 
-static JudgementKind Kind(uint64_t self, const std::vector<JudgementPaladin>& group)
+static JudgementKind Kind(uint64_t self, const std::vector<JudgementPaladin>& group, bool tankMayOwnWisdom = false)
 {
-    return JudgementKindFor(self, group.data(), group.size());
+    return JudgementKindFor(self, group.data(), group.size(), tankMayOwnWisdom);
 }
 
 static void TestOwnership()
@@ -118,9 +118,74 @@ static void TestTankNeverOwns()
     CHECK(Kind(3, protRetRet) == JudgementKind::Light);
 }
 
+static void TestTankDungeonWisdom()
+{
+    // Lone Protection tank in a 5-man dungeon with the flag on: owns Wisdom if known.
+    CHECK(Kind(1, { P(1, false, true, true, true) }, true) == JudgementKind::Wisdom);
+    CHECK(Kind(1, { P(1, false, false, true, true) }, true) == JudgementKind::None);
+
+    // Tank + Retribution (knows Wisdom): Retribution owns Wisdom, tank owns None.
+    std::vector<JudgementPaladin> protRet = { P(1, false, true, true, true), P(2, false) };
+    CHECK(Kind(1, protRet, true) == JudgementKind::None);
+    CHECK(Kind(2, protRet, true) == JudgementKind::Wisdom);
+
+    // Tank + Retribution (lacks Wisdom, has Light): Retribution takes Light, tank backfills Wisdom.
+    std::vector<JudgementPaladin> protRetNoWis = { P(1, false, true, true, true), P(2, false, false, true) };
+    CHECK(Kind(1, protRetNoWis, true) == JudgementKind::Wisdom);
+    CHECK(Kind(2, protRetNoWis, true) == JudgementKind::Light);
+
+    // Tank + Holy (both seals): Holy owns Light, tank backfills Wisdom.
+    std::vector<JudgementPaladin> protHoly = { P(1, false, true, true, true), P(2, true) };
+    CHECK(Kind(1, protHoly, true) == JudgementKind::Wisdom);
+    CHECK(Kind(2, protHoly, true) == JudgementKind::Light);
+
+    // Tank + Holy (Wisdom only): Holy backfills Wisdom, tank owns None.
+    std::vector<JudgementPaladin> protHolyWis = { P(1, false, true, true, true), P(2, true, true, false) };
+    CHECK(Kind(1, protHolyWis, true) == JudgementKind::None);
+    CHECK(Kind(2, protHolyWis, true) == JudgementKind::Wisdom);
+
+    // Tank + Retribution + Holy: non-tanks own both, tank owns None.
+    std::vector<JudgementPaladin> trio = { P(1, false, true, true, true), P(2, false), P(3, true) };
+    CHECK(Kind(1, trio, true) == JudgementKind::None);
+    CHECK(Kind(2, trio, true) == JudgementKind::Wisdom);
+    CHECK(Kind(3, trio, true) == JudgementKind::Light);
+
+    // Two tanks: the lowest guid tank owns Wisdom, the second tank owns None.
+    std::vector<JudgementPaladin> twoTanks = { P(5, false, true, true, true), P(3, false, true, true, true) };
+    CHECK(Kind(3, twoTanks, true) == JudgementKind::Wisdom);
+    CHECK(Kind(5, twoTanks, true) == JudgementKind::None);
+
+    // A tank that prefers Righteousness on bosses does not refill an empty slot
+    // with Wisdom mid-cycle; it only swaps for a refresh.
+    CHECK(!ShouldCastUpkeepSeal(JudgementKind::Wisdom, false, false, false, false, false));
+    CHECK(ShouldCastUpkeepSeal(JudgementKind::Wisdom, false, false, true, true, false));
+    CHECK(ShouldCastUpkeepSeal(JudgementKind::Wisdom, true, false, true, true, false));
+}
+
+static void TestProtWantedSeal()
+{
+    // Below Seal of Wisdom's first rank (38 on this server): always Righteousness.
+    CHECK(ProtPaladinWantedSeal(true, true, false, true, false) == ProtPaladinSeal::Righteousness);
+    CHECK(ProtPaladinWantedSeal(true, true, false, false, false) == ProtPaladinSeal::Righteousness);
+
+    // Low mana: always Wisdom regardless of zone or boss.
+    CHECK(ProtPaladinWantedSeal(true, true, true, true, true) == ProtPaladinSeal::Wisdom);
+    CHECK(ProtPaladinWantedSeal(true, false, false, true, true) == ProtPaladinSeal::Wisdom);
+    CHECK(ProtPaladinWantedSeal(false, true, false, true, true) == ProtPaladinSeal::Wisdom);
+
+    // 5-man dungeon with the flag on: Wisdom on trash, Righteousness on a boss.
+    CHECK(ProtPaladinWantedSeal(true, true, false, false, true) == ProtPaladinSeal::Wisdom);
+    CHECK(ProtPaladinWantedSeal(true, true, true, false, true) == ProtPaladinSeal::Righteousness);
+
+    // Raids / solo (not 5-man) or the flag off: Righteousness above medium mana.
+    CHECK(ProtPaladinWantedSeal(true, false, false, false, true) == ProtPaladinSeal::Righteousness);
+    CHECK(ProtPaladinWantedSeal(false, true, false, false, true) == ProtPaladinSeal::Righteousness);
+}
+
 static void TestSealAvailability()
 {
-    // Seal of Light (baseLevel 30) and Seal of Wisdom (baseLevel 18) are learned at different levels.
+    // Seal of Light and Seal of Wisdom are learned at different levels (the
+    // Forever paladin trainer teaches Seal of Wisdom rank 1 at 38).
     // A Retribution paladin that has not learned Wisdom yet takes Light.
     CHECK(Kind(1, { P(1, false, false, true) }) == JudgementKind::Light);
     // A healer that only has Light owns Light.
@@ -210,7 +275,7 @@ static void TestSealAndJudge()
 }
 
 // One 10 s cycle end to end for a Retribution owner: the Seal swap and the
-// Judgement come in that order, once, and the next cycle starts clean.
+// Judgement come in that order, once, and the Seal stays after the judgement.
 static void TestCycle()
 {
     const JudgementKind kind = JudgementKind::Wisdom;
@@ -226,15 +291,17 @@ static void TestCycle()
     wantedSealUp = true;         // Seal of Wisdom cast
     CHECK(!ShouldCastUpkeepSeal(kind, anySealUp, wantedSealUp, needs, ready));
     CHECK(ShouldCastUpkeepJudgement(kind, wantedSealUp, needs));
-    // Judged: debuff fresh, Seal spent, Judgement on cooldown.
+    // Judged: the debuff is fresh and the judgement is on cooldown; on this
+    // core the Seal stays up, so nothing is re-sealed.
     remaining = 10000;
-    anySealUp = false;
-    wantedSealUp = false;
     ready = false;
     needs = JudgementNeedsRefresh(true, remaining);
     CHECK(!needs);
     CHECK(!ShouldCastUpkeepJudgement(kind, wantedSealUp, needs));
-    // The empty slot is refilled with the owner's Seal straight away (no wasted swap next cycle).
+    CHECK(!ShouldCastUpkeepSeal(kind, anySealUp, wantedSealUp, needs, ready));
+    // A dropped Seal is refilled straight away (no wasted swap next cycle).
+    anySealUp = false;
+    wantedSealUp = false;
     CHECK(ShouldCastUpkeepSeal(kind, anySealUp, wantedSealUp, needs, ready));
 }
 
@@ -242,6 +309,8 @@ int main()
 {
     TestOwnership();
     TestTankNeverOwns();
+    TestTankDungeonWisdom();
+    TestProtWantedSeal();
     TestSealAvailability();
     TestTarget();
     TestAffordable();

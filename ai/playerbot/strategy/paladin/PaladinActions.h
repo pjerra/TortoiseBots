@@ -1,6 +1,7 @@
 #pragma once
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
+#include "playerbot/ServerFacade.h"
 
 namespace ai
 {
@@ -15,11 +16,11 @@ namespace ai
 	{
 	public:
 		CastJudgementAction(PlayerbotAI* ai) : CastMeleeDebuffSpellAction(ai, "judgement") { range = 10.0f; }
-		// A Judgement spends the seal, so every one of them is followed by a fresh seal:
-		// the pair is a tenth of a level-20 paladin's mana, and the "judgement" trigger asks
-		// for it on every new target. Below medium mana the seal that is up is Seal of
-		// Wisdom (see the "medium mana" triggers) - judging it away throws out the one thing
-		// that refills the bar. Keep the seal, keep swinging.
+		// On this core a Judgement casts the active seal's debuff and leaves the seal up
+		// (classic_spell_pal_judgement), so nothing has to be re-sealed afterwards. The
+		// action still needs a seal up: with none the script applies nothing. Below
+		// medium mana the 6 % cost is not worth it, and the seal that is up is usually
+		// Seal of Wisdom, the thing that refills the bar. Keep the seal, keep swinging.
 		virtual bool isUseful();
 	};
 
@@ -105,9 +106,45 @@ namespace ai
 	class CastHolyStrikeAction : public CastMeleeSpellAction
 	{
 	public:
-		// Tortoise ranks R1-8 (679..10333): melee strike with Mending Light
-		// sustain and Judgement-duration refresh. Core owns targeting.
+		// Holy Strike R1-8 (679..10333): melee strike with a normalized weapon
+		// hit. Core owns targeting.
 		CastHolyStrikeAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "holy strike") {}
+	};
+
+	// Holy melee-weave: Holy Strike only when already in melee reach, never a
+	// reason to walk in (the weave's own "reach melee" row walks in first).
+	class CastHolyStrikeInReachAction : public CastHolyStrikeAction
+	{
+	public:
+		CastHolyStrikeInReachAction(PlayerbotAI* ai) : CastHolyStrikeAction(ai) {}
+		bool isUseful() override
+		{
+			Unit* target = GetTarget();
+			return target && bot->CanReachWithMeleeAutoAttack(target) && CastHolyStrikeAction::isUseful();
+		}
+	protected:
+		std::string GetReachActionName() override { return ""; }
+	};
+
+	// Starts the auto-attack of a weaving healer that reached its target. A
+	// healer's own rows never arm it, so the melee swings (and Seal of Wisdom's
+	// mana procs) would otherwise never happen.
+	class CastHolyMeleeAttackAction : public Action
+	{
+	public:
+		CastHolyMeleeAttackAction(PlayerbotAI* ai) : Action(ai, "holy melee attack") {}
+		bool isUseful() override
+		{
+			Unit* target = AI_VALUE(Unit*, "current target");
+			return target && sServerFacade.IsAlive(target) && bot->CanReachWithMeleeAutoAttack(target);
+		}
+		bool Execute(Event&) override
+		{
+			Unit* target = AI_VALUE(Unit*, "current target");
+			if (!target || !sServerFacade.IsAlive(target))
+				return false;
+			return bot->Attack(target, true);
+		}
 	};
 
 	class CastBulwarkAction : public CastMeleeSpellAction

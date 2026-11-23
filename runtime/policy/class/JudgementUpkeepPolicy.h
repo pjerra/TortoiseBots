@@ -6,21 +6,22 @@
 // Paladin Judgement upkeep (AiPlayerbot.PaladinJudgementUpkeep, default 1).
 //
 // With the toggle on, paladin bots in a group keep Judgement of Wisdom and
-// Judgement of Light up on the boss / the tank's elite target. Vanilla
-// mechanics (spell_template, 1.18.1): Judgement (20271) is castable only with a
-// Seal up, spends that Seal and applies the Seal's judgement debuff; Seal of
-// Wisdom (20166, ranks 20356 / 20357 ...) leaves Judgement of Wisdom, Seal of
-// Light (20165, ranks 20347 ...) leaves Judgement of Light, Seal of
-// Righteousness / Command leave none that the group benefits from. The debuff
-// lasts 10 s (vanilla) and Judgement has a 10 s cooldown, so one paladin per debuff
-// re-judges every cycle as the debuff runs out.
+// Judgement of Light up on the boss / the tank's elite target. ForeverCore
+// mechanics (SpellInfo.cpp ClassicSealJudgements, classic_spell_pal_judgement):
+// Judgement (20271) needs a Seal up, casts that Seal's judgement debuff and
+// leaves the Seal up (vanilla 1.12 spent it); Seal of Wisdom (20166, ranks
+// 20356 / 20357 ...) leaves Judgement of Wisdom, Seal of Light (20165, ranks
+// 20347 ...) leaves Judgement of Light, Seal of Righteousness / Command leave
+// none that the group benefits from. The debuff lasts 10 s, so one paladin
+// per debuff re-judges as it runs out.
 //
 // Which debuff, and who owns it, is a pure function of the paladins in the
 // group, so it is unit-tested on its own (tools/test_judgement_upkeep_policy.cpp)
 // and every paladin bot reaches the same answer without talking to the others:
 //   - a paladin in the tank role never owns a judgement (a Protection tank
-//     keeps Seal of Righteousness for threat); if no other paladin can own a
-//     debuff, it is simply not upkept;
+//     keeps Seal of Righteousness for threat), except a 5-man dungeon tank
+//     with AiPlayerbot.ProtPaladinDungeonWisdom when no non-tank paladin can
+//     own Wisdom; if nobody can own a debuff, it is simply not upkept;
 //   - a non-tank, non-healing paladin (Retribution) owns Judgement of Wisdom,
 //     a healing paladin owns Judgement of Light (mod-playerbots' per-role
 //     pairing: dps judges Wisdom, the heal strategy judges Light);
@@ -55,9 +56,8 @@ struct JudgementPaladin
     bool canLight = false;  // knows Seal of Light
 };
 
-// Re-judge when the debuff has this long left or less (ms). The debuff lasts
-// 10 s and Judgement's cooldown is 10 s, so the window is never what holds a
-// refresh back: the cooldown is. It lets the Seal swap start a global early.
+// Re-judge when the debuff has this long left or less (ms), so the Seal swap
+// (when the tank needs one) and the judgement land before the debuff lapses.
 inline constexpr int kJudgementRefreshWindowMs = 4000;
 
 // Target must have at least this much health left to be worth a Seal + Judgement.
@@ -70,8 +70,10 @@ inline constexpr uint8_t kJudgementHealerMinManaPct = 50;
 inline constexpr std::size_t kMaxJudgementPaladins = 40;
 
 // The debuff `self` owns, None when it owns none. `paladins` is every paladin
-// bot of the group that is alive and in reach, `self` included.
-inline JudgementKind JudgementKindFor(uint64_t self, const JudgementPaladin* paladins, std::size_t count)
+// bot of the group that is alive and in reach, `self` included. When
+// `tankMayOwnWisdom` is true (5-man dungeon with ProtPaladinDungeonWisdom),
+// a tank paladin may backfill Wisdom if no non-tank paladin can own it.
+inline JudgementKind JudgementKindFor(uint64_t self, const JudgementPaladin* paladins, std::size_t count, bool tankMayOwnWisdom = false)
 {
     if (!paladins || count == 0)
         return JudgementKind::None;
@@ -79,14 +81,16 @@ inline JudgementKind JudgementKindFor(uint64_t self, const JudgementPaladin* pal
         count = kMaxJudgementPaladins;
 
     // role: 0 = non-healers, 1 = healers, -1 = any. Lowest guid wins; `skip`
-    // (when `skipValid`) is a paladin that already owns the other debuff.
-    auto pick = [&](int role, bool needWisdom, bool needLight, uint64_t skip, bool skipValid) -> const JudgementPaladin*
+    // (when `skipValid`) is a paladin that already owns the other debuff;
+    // `allowTank` restricts the pick to tank-role paladins (the 5-man
+    // backfill) instead of excluding them.
+    auto pick = [&](int role, bool needWisdom, bool needLight, uint64_t skip, bool skipValid, bool allowTank) -> const JudgementPaladin*
     {
         const JudgementPaladin* best = nullptr;
         for (std::size_t i = 0; i < count; ++i)
         {
             const JudgementPaladin& p = paladins[i];
-            if (p.tank)
+            if (p.tank != allowTank)
                 continue;
             if (skipValid && p.id == skip)
                 continue;
@@ -103,16 +107,20 @@ inline JudgementKind JudgementKindFor(uint64_t self, const JudgementPaladin* pal
     };
 
     // Preferred owners by role.
-    const JudgementPaladin* wisdom = pick(0, true, false, 0, false);
-    const JudgementPaladin* light = pick(1, false, true, 0, false);
+    const JudgementPaladin* wisdom = pick(0, true, false, 0, false, false);
+    const JudgementPaladin* light = pick(1, false, true, 0, false, false);
 
-    // Backfill a debuff nobody of its role can own with a paladin that owns
-    // nothing yet (a second Retribution paladin takes Light, a second Holy
+    // Backfill a debuff nobody of its role can own with a non-tank paladin that
+    // owns nothing yet (a second Retribution paladin takes Light, a second Holy
     // paladin takes Wisdom). A lone paladin never owns both.
     if (!wisdom)
-        wisdom = pick(-1, true, false, light ? light->id : 0, light != nullptr);
+        wisdom = pick(-1, true, false, light ? light->id : 0, light != nullptr, false);
     if (!light)
-        light = pick(-1, false, true, wisdom ? wisdom->id : 0, wisdom != nullptr);
+        light = pick(-1, false, true, wisdom ? wisdom->id : 0, wisdom != nullptr, false);
+
+    // In 5-man dungeons, if no non-tank paladin can own Wisdom, the tank may.
+    if (!wisdom && tankMayOwnWisdom)
+        wisdom = pick(-1, true, false, 0, false, true);
 
     if (wisdom && wisdom->id == self)
         return JudgementKind::Wisdom;
@@ -152,15 +160,17 @@ inline bool JudgementNeedsRefresh(bool debuffPresent, int32_t remainingMs)
     return !debuffPresent || remainingMs <= kJudgementRefreshWindowMs;
 }
 
-// Cast the owner's Seal now? An empty Seal slot is always filled with the
-// owner's Seal (so no Seal is wasted on a swap later); a different Seal that
-// is up is swapped only when the debuff needs a refresh AND Judgement is off
-// cooldown, never mid-cycle.
-inline bool ShouldCastUpkeepSeal(JudgementKind kind, bool anySealUp, bool wantedSealUp, bool needsRefresh, bool judgementReady)
+// Cast the owner's Seal now? An empty Seal slot is filled with the owner's
+// Seal when `refillEmptySlot` is true (so no Seal is wasted on a swap later);
+// a tank that uses Seal of Righteousness on bosses sets `refillEmptySlot` to
+// false so it only swaps to Wisdom when the debuff needs a refresh and
+// Judgement is ready. A different Seal that is up is swapped only under that
+// same condition, never mid-cycle.
+inline bool ShouldCastUpkeepSeal(JudgementKind kind, bool anySealUp, bool wantedSealUp, bool needsRefresh, bool judgementReady, bool refillEmptySlot = true)
 {
     if (kind == JudgementKind::None || wantedSealUp)
         return false;
-    if (!anySealUp)
+    if (!anySealUp && refillEmptySlot)
         return true;
     return needsRefresh && judgementReady;
 }
@@ -169,6 +179,30 @@ inline bool ShouldCastUpkeepSeal(JudgementKind kind, bool anySealUp, bool wanted
 inline bool ShouldCastUpkeepJudgement(JudgementKind kind, bool wantedSealUp, bool needsRefresh)
 {
     return kind != JudgementKind::None && wantedSealUp && needsRefresh;
+}
+
+enum class ProtPaladinSeal : uint8_t
+{
+    Righteousness = 0,
+    Wisdom,
+};
+
+// Single decision for which Seal a Protection paladin wants in combat, so
+// Seal of Righteousness and Seal of Wisdom never flip-flop.
+inline ProtPaladinSeal ProtPaladinWantedSeal(
+    bool featureEnabled,
+    bool inFiveManDungeon,
+    bool targetIsBoss,
+    bool lowMana,
+    bool knowsWisdom)
+{
+    if (!knowsWisdom)
+        return ProtPaladinSeal::Righteousness;
+    if (lowMana)
+        return ProtPaladinSeal::Wisdom;
+    if (featureEnabled && inFiveManDungeon && !targetIsBoss)
+        return ProtPaladinSeal::Wisdom;
+    return ProtPaladinSeal::Righteousness;
 }
 
 } // namespace TortoiseBots
