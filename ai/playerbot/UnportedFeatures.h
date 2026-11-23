@@ -32,7 +32,6 @@
     X(IncomingKnockBack, "incoming: knock back", "the 1.12 knock-back packet and the client jump a bot answered it with; ForeverCore flies a bot server-side and the host waits the flight out and lands it (S3)") \
     X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout); since S1-R2 a real whisper or party line reaches the bot through the host hook (PlayerScript::OnChat -> chatin::Judge -> PlayerbotAI::HandleCommand); the 1.12 packet case stays dead") \
     X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); since S2 the host session reads the core's typed packet (the engine's wait grows by the pushback, SPELL_DELAYED), the 1.12 case stays unregistered") \
-    X(JumpFall, "jump, fall and knockback", "bot-started jumps and the 1.12 jump/land packets; ForeverCore moves by spline and movement generators, and a core-started flight lands with the core's own fall damage (S3)") \
     X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
     X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
     X(SpawnGuid, "guid from spawn data", "an object guid built from a spawn record (creature data id + spawn id, 1.12 guid layout); ForeverCore keys spawns by spawn id and map, not by guid counter") \
