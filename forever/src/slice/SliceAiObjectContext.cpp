@@ -25,6 +25,7 @@
 #include "playerbot/strategy/actions/CancelChannelAction.h"
 #include "playerbot/strategy/actions/ChangeStrategyAction.h"
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
+#include "playerbot/strategy/actions/CheckValuesAction.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/CombatActions.h"
 #include "playerbot/strategy/actions/CustomStrategyEditAction.h"
@@ -96,6 +97,7 @@
 #include "playerbot/strategy/generic/MimicConsumableStrategy.h"
 #include "playerbot/strategy/generic/NoAoeStrategy.h"
 #include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
+#include "playerbot/strategy/generic/NonCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
 #include "playerbot/strategy/generic/RacialsStrategy.h"
@@ -105,6 +107,7 @@
 #include "playerbot/strategy/generic/StayStrategy.h"
 #include "playerbot/strategy/generic/TankAssistStrategy.h"
 #include "playerbot/strategy/generic/ThreatStrategy.h"
+#include "playerbot/strategy/generic/TravelStrategy.h"
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
 #include "playerbot/strategy/generic/UsePotionsStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
@@ -196,6 +199,7 @@
 #include "playerbot/strategy/values/SpellIdValue.h"
 #include "playerbot/strategy/values/Stances.h"
 #include "playerbot/strategy/values/StatsValues.h"
+#include "playerbot/strategy/values/StuckValues.h"
 #include "playerbot/strategy/values/TalentSpecValue.h"
 #include "playerbot/strategy/values/TankTargetValue.h"
 #include "playerbot/strategy/values/TargetValue.h"
@@ -209,7 +213,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (35 of its keys)
+    // the registry of StrategyContext (40 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -250,6 +254,11 @@ namespace slice
             creators["spread"] = [](PlayerbotAI* ai) { return new SpreadStrategy(ai); };
             creators["no blink instance"] = [](PlayerbotAI* ai) { return new NoBlinkInstanceStrategy(ai); };
             creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
+            creators["map"] = [](PlayerbotAI* ai) { return new MapStrategy(ai); };
+            creators["map full"] = [](PlayerbotAI* ai) { return new MapFullStrategy(ai); };
+            creators["attack tagged"] = [](PlayerbotAI* ai) { return new AttackTaggedStrategy(ai); };
+            creators["preheal"] = [](PlayerbotAI* ai) { return new PreHealStrategy(ai); };
+            creators["silent"] = [](PlayerbotAI* ai) { return new SilentStrategy(ai); };
         }
     };
 
@@ -268,7 +277,7 @@ namespace slice
         }
     };
 
-    // the registry of AssistStrategyContext (3 of its keys)
+    // the registry of AssistStrategyContext (4 of its keys)
     class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -277,6 +286,7 @@ namespace slice
             creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
             creators["auto cc"] = [](PlayerbotAI* ai) { return new AutoCcStrategy(ai); };
             creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistStrategy(ai); };
+            creators["dps aoe"] = [](PlayerbotAI* ai) { return new DpsAoeStrategy(ai); };
         }
     };
 
@@ -291,7 +301,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (87 of its keys)
+    // the registry of ActionContext (91 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -384,6 +394,10 @@ namespace slice
             creators["apply oil"] = [](PlayerbotAI* ai) { return new ImbueWithOilAction(ai); };
             creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
             creators["reach party member for totem"] = [](PlayerbotAI* ai) { return new ReachPartyMemberForTotemAction(ai); };
+            creators["dps aoe"] = [](PlayerbotAI* ai) { return new DpsAoeAction(ai); };
+            creators["remove blessing of salvation"] = [](PlayerbotAI* ai) { return new RemoveBlessingOfSalvationAction(ai); };
+            creators["remove greater blessing of salvation"] = [](PlayerbotAI* ai) { return new RemoveGreaterBlessingOfSalvationAction(ai); };
+            creators["check values"] = [](PlayerbotAI* ai) { return new CheckValuesAction(ai); };
         }
     };
 
@@ -480,7 +494,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (134 of its keys)
+    // the registry of TriggerContext (137 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -620,6 +634,9 @@ namespace slice
             creators["has poison debuff"] = [](PlayerbotAI* ai) { return new HasPoisonDebuffTrigger(ai); };
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
             creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
+            creators["not dps aoe target active"] = [](PlayerbotAI* ai) { return new NotDpsAoeTargetActiveTrigger(ai); };
+            creators["has blessing of salvation"] = [](PlayerbotAI* ai) { return new HasBlessingOfSalvationTrigger(ai); };
+            creators["has greater blessing of salvation"] = [](PlayerbotAI* ai) { return new HasGreaterBlessingOfSalvationTrigger(ai); };
         }
     };
 
@@ -714,7 +731,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (214 of its keys)
+    // the registry of ValueContext (221 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -934,11 +951,18 @@ namespace slice
             creators["warlock spread attacker"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker", false, false, true, false); };
             creators["warlock spread attacker manual"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker manual", false, false, true, true); };
             creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };
+            creators["all targets"] = [](PlayerbotAI* ai) { return new AllTargetsValue(ai); };
+            creators["keepout set aside"] = [](PlayerbotAI* ai) { return new KeepoutSetAsideValue(ai); };
+            creators["runners let go"] = [](PlayerbotAI* ai) { return new RunnersLetGoValue(ai); };
+            creators["unreachable entries"] = [](PlayerbotAI* ai) { return new UnreachableEntriesValue(ai); };
+            creators["unreachable targets"] = [](PlayerbotAI* ai) { return new UnreachableTargetsValue(ai); };
+            creators["current position"] = [](PlayerbotAI* ai) { return new CurrentPositionValue(ai); };
+            creators["time since last change"] = [](PlayerbotAI* ai) { return new TimeSinceLastChangeValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 46, kActions = 162, kTriggers = 207, kValues = 214;
+    constexpr unsigned kStrategies = 52, kActions = 166, kTriggers = 210, kValues = 221;
 }
 }
 
