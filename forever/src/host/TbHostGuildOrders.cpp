@@ -1,5 +1,6 @@
 #include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -1014,6 +1015,7 @@ void OnBotLogout(uint32_t botGuidLow)
 {
     if (!botGuidLow)
         return;
+    DisenchantForgetBot(botGuidLow);
     g_hostGatherCraft.ClearPending(botGuidLow);
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
