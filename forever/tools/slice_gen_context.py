@@ -326,7 +326,8 @@ S209_KEYS = {
     "trigger": "not dps aoe target active, "
                "has blessing of salvation, has greater blessing of salvation",
     "value": "all targets, "
-             "keepout set aside, runners let go, unreachable entries, unreachable targets",
+             "keepout set aside, runners let go, unreachable entries, unreachable targets, "
+             "current position, time since last change",
 }
 KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS)
 

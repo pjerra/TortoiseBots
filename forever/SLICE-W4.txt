@@ -351,5 +351,6 @@ ai/playerbot/strategy/generic/NoAoeStrategy.cpp
 ai/playerbot/strategy/generic/ConserveManaStrategy.cpp
 ai/playerbot/strategy/generic/MimicConsumableStrategy.cpp
 
-# Unregistered row keys: the check-values pre-warm
+# Unregistered row keys: the check-values pre-warm and the corpse-run timer
 ai/playerbot/strategy/actions/CheckValuesAction.cpp
+ai/playerbot/strategy/values/StuckValues.cpp
