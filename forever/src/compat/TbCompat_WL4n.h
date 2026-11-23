@@ -40,6 +40,19 @@ inline QueryResult TravelNodeQueryCompat(char const* sql, bool* schemaMissing = 
     return WorldQueryCompat(sql, schemaMissing);
 }
 
+// A server set up without the module's SQL has no travel tables, so the first-start generation could never save its graph.
+// When generation is on, the loader creates the three empty tables first (the same statements forever/sql/world ships).
+inline void TravelNodeEnsureTablesCompat()
+{
+    static char const* const statements[] = {
+        "CREATE TABLE IF NOT EXISTS `ai_playerbot_travelnode` ( `id` mediumint unsigned NOT NULL, `name` varchar(1024) NOT NULL, `map_id` mediumint unsigned NOT NULL, `x` float NOT NULL, `y` float NOT NULL, `z` float NOT NULL, `linked` tinyint unsigned NOT NULL DEFAULT 0, PRIMARY KEY (`id`) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
+        "CREATE TABLE IF NOT EXISTS `ai_playerbot_travelnode_link` ( `node_id` mediumint unsigned NOT NULL, `to_node_id` mediumint unsigned NOT NULL, `type` tinyint unsigned NOT NULL DEFAULT 0, `object` bigint unsigned NOT NULL DEFAULT 0, `distance` float NOT NULL DEFAULT 0, `swim_distance` float NOT NULL DEFAULT 0, `extra_cost` float NOT NULL DEFAULT 0, `calculated` tinyint unsigned NOT NULL DEFAULT 0, `max_creature_0` tinyint unsigned NOT NULL DEFAULT 0, `max_creature_1` tinyint unsigned NOT NULL DEFAULT 0, `max_creature_2` tinyint unsigned NOT NULL DEFAULT 0, PRIMARY KEY (`node_id`, `to_node_id`) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
+        "CREATE TABLE IF NOT EXISTS `ai_playerbot_travelnode_path` ( `node_id` mediumint unsigned NOT NULL, `to_node_id` mediumint unsigned NOT NULL, `nr` mediumint unsigned NOT NULL, `map_id` mediumint unsigned NOT NULL, `x` float NOT NULL, `y` float NOT NULL, `z` float NOT NULL, PRIMARY KEY (`node_id`, `to_node_id`, `nr`) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
+    };
+    for (char const* statement : statements)
+        WorldDatabase.DirectExecute(statement);
+}
+
 // Are the three travel-node tables, with every column the saver writes, there? Asked once before the first write: a statement
 // naming a missing table or column aborts ForeverCore (the same rule WorldQueryCompat follows for reads), so the save is skipped
 // with one line instead (does less; the graph in memory is unaffected).

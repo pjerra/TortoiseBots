@@ -18,6 +18,11 @@ inline std::unique_ptr<QueryResult> TravelNodeQueryCompat(char const* sql, bool*
     return std::unique_ptr<QueryResult>(WorldDatabase.Query(sql));
 }
 
+// The travel tables come with this core's migrations.
+inline void TravelNodeEnsureTablesCompat()
+{
+}
+
 // The saver's tables: this core logs a missing table and answers null instead of aborting, so the save is attempted as before.
 inline bool TravelNodeStoreWritableCompat()
 {

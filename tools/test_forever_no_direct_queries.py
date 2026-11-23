@@ -38,9 +38,10 @@ CHAR_GUARD_CALLS = 3
 REALM_COUNT_FILE = "forever/src/TbBotMgr.cpp"
 REALM_COUNT_CALLS = 1
 # The travel slice's saver (W4-A1): its probe is WorldSchemaHasCompat (the S5 guard) for the three node tables, and the one raw
-# statement is the one-way write that follows a passing probe. The pair is forever/src/compat/TbCompat_WL4n.h.
+# statement is the one-way write that follows a passing probe; the second creates the three empty tables before the first-start
+# generation (CREATE TABLE IF NOT EXISTS, only with AiPlayerbot.GenerateTravelNodes on). The pair is forever/src/compat/TbCompat_WL4n.h.
 TRAVEL_SAVE_FILE = "forever/src/compat/TbCompat_WL4n.h"
-TRAVEL_SAVE_CALLS = 1
+TRAVEL_SAVE_CALLS = 2
 
 
 def strip_comments(text: str) -> str:

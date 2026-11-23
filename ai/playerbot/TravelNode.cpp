@@ -3933,6 +3933,9 @@ void TravelNodeMap::loadNodeStore()
     // The node store is optional module data: a database without the three tables (or with a missing column) reads as an empty
     // graph, one line, and travel then does nothing. TravelNodeQueryCompat asks information_schema first, because ForeverCore's
     // connection aborts the server on a missing table instead of answering null as Turtle does.
+    if (sPlayerbotAIConfig.generateTravelNodes)
+        TravelNodeEnsureTablesCompat();
+
     bool missing = false;
 
     auto const emptyGraph = [this](char const* why)
