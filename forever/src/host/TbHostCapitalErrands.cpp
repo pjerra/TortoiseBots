@@ -4,6 +4,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbHostAuction.h"
 #include "host/TbHostGuildMail.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
@@ -565,6 +566,7 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         return;
     }
     if (tbhost::prof::HasActiveErrand(bot) || tbhost::guild_mail::HasActiveErrand(bot) ||
+        tbhost::guild_orders::HasActiveDisenchantErrand(bot) ||
         tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
     {
         logRefusal("busy-errand-or-order");
