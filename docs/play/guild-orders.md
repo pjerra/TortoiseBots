@@ -68,7 +68,7 @@ Recipe tools stay available as long as [`AiPlayerbot.CraftToolsAlways`](../serve
 - Guild orders only work while `AiPlayerbot.AutoDoQuests = 1` (the default). With quest travel off, `.bot order` answers `disabled`.
 - Guild bank item withdrawals and guild bank gold use are controlled by [`AiPlayerbot.GuildOrderBankWithdraw`](../server/settings/guild-orders.md#aiplayerbotguildorderbankwithdraw) and [`AiPlayerbot.GuildOrderBankGold`](../server/settings/guild-orders.md#aiplayerbotguildorderbankgold); both default to `1`.
 
-An order on a fish sends the bot to a fishing spot in the planned zone. The bot is granted a pole good enough for the zone plus lures, and re-applies the lure while fishing. If even the best pole and lure cannot reach the zone, the search answers `lowskill`.
+An order on a fish is played as a fishing plan: on the Turtle build the bot walks to a fishing spot in the planned zone, is granted a pole good enough for the zone plus lures, and re-applies the lure while fishing; if even the best pole and lure cannot reach the zone, the search answers `lowskill`. The ForeverCore build has no fishing yet: a Farm order on a fishing-loot item ends `noskill` when the bot never learned Fishing, `noskill` with reason `lowskill` when its gear cannot reach any source zone, and `cant` with reason `nosource` otherwise.
 
 ## Where the bot gets items
 
