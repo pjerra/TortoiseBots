@@ -721,8 +721,20 @@ inline void ReleaseForeignSummonObjectsCompat(Player* bot, SpellEntry const* spe
 }
 // Whether the spell's icon id is this one (T `SpellIconID == icon`). Failure value: false.
 inline bool SpellIconIdIsCompat(SpellEntry const* /*spell*/, uint32 /*icon*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return false; }
-// The charges of an item's spell by index (T `Item::GetSpellCharges(index)`). Failure value: 0 charges.
-inline int32 ItemSpellChargesCompat(Item const* /*item*/, uint8 /*index*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return 0; }
+// The charges of an item's spell by its legacy (1.12) slot index (T `Item::GetSpellCharges(index)`). ForeverCore keeps
+// the charges per ItemEffectEntry; the mirror prototype fills its Spells[] by LegacySlotIndex (TbItemPrototype.cpp), so
+// the same index finds the effect. Failure value: 0 charges (no effect in that slot).
+inline int32 ItemSpellChargesCompat(Item const* item, uint8 index)
+{
+    if (!item)
+        return 0;
+
+    for (ItemEffectEntry const* effect : item->GetEffects())
+        if (effect && effect->LegacySlotIndex == index)
+            return item->GetSpellCharges(effect);
+
+    return 0;
+}
 
 // @@END@@
 #endif // TB_UNPORTED_TABLE_ONLY
