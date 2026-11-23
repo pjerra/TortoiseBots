@@ -126,11 +126,10 @@ PlayerConvenience& PlayerConvenience::Instance()
     return instance;
 }
 
-// The summon of a bot to its master: not ported. False = "not accepted", the callers then do nothing (they test the result). The
-// host's own BotMgr::Think already teleports a bot that is on another map or more than 100 yd from its master.
+// The summon of a bot to its master: false = "not accepted", the callers then do nothing (they test the result). The host's own
+// BotMgr::Think already teleports a bot that is on another map or more than 100 yd from its master.
 bool PlayerConvenience::RequestSummon(Player* /*requester*/, Player* /*bot*/, Player* /*anchor*/)
 {
-    tbcompat::Unported(tbcompat::Feature::PlayerSummon);
     return false;
 }
 

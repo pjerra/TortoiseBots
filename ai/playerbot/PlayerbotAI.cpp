@@ -250,7 +250,6 @@ PlayerbotAI::PlayerbotAI(Player* bot) :
     RegisterPacketHandlers(masterIncomingPacketHandlers, kMasterIncomingPacketHandlers, kMasterIncomingPacketHandlerCount);
     RegisterPacketHandlers(botOutgoingPacketHandlers, kBotOutgoingPacketHandlers, kBotOutgoingPacketHandlerCount);
     RegisterPacketHandlers(masterOutgoingPacketHandlers, kMasterOutgoingPacketHandlers, kMasterOutgoingPacketHandlerCount);
-    RegisterDirectPacketCasesCompat();
 
     // Issue #872: autonomous alts never auto-spend talents (B12). The
     // IsOwnedBot guard already covers companions; this covers the

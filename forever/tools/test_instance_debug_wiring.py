@@ -37,8 +37,8 @@ def check_rows(features, unported):
             raise AssertionError("a ForeverCore helper still counts Feature::" + name)
         if "Feature::" + name in T_UNPORTED:
             raise AssertionError("the Turtle twin still names Feature::" + name)
-    if features.count("    X(") != 67:
-        raise AssertionError("the boot line is not 67 features")
+    if features.count("    X(") != 54:
+        raise AssertionError("the boot line is not 54 features")
     for row in UNPORTED_ROWS:
         if "| " + row + " |" in unported:
             raise AssertionError("UNPORTED.md still has the row " + row)

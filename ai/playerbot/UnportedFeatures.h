@@ -17,7 +17,6 @@
     X(ItemUsePacket, "item use packet", "imbue / use an item by queueing a CMSG_USE_ITEM packet with a packed guid (1.12 layout)") \
     X(ItemSlotOfPrototype, "equip slot of an item prototype", "Player::FindEquipSlot on a prototype; ForeverCore asks about an Item (W6b gear generation uses GearSetPolicy::InventoryTypeFitsSlot)") \
     X(Companions, "companions", "spells with the summon critter effect (1.12 SPELL_EFFECT_SUMMON_CRITTER); ForeverCore has no such effect") \
-    X(IncomingLoot, "incoming: loot vote and roll won", "the loot vote (another roller's vote) and loot roll won packets (1.12 layouts) are not fed on ForeverCore; the start of a group-loot roll and the bot's own vote are real since slice 9 (the roll list of Player::GetLootRolls is polled, the vote goes through HandleLootRoll, greed only), the loot window is read from the core's Loot object") \
     X(IncomingTaxi, "incoming: taxi", "activate taxi and taxi node packets") \
     X(IncomingGroup, "incoming: group and party", "group invite, uninvite, set leader, party command, ready check, summon request and duel request packets") \
     X(IncomingTradeAndItems, "incoming: trade and item errors", "trade status, buy errors, item push, inventory change failure, master use item packets") \
@@ -26,23 +25,14 @@
     X(IncomingExperience, "incoming: experience and honor", "level up, xp gain and honor gain packets") \
     X(IncomingEmotes, "incoming: emotes", "text emote and emote packets") \
     X(IncomingObjectUse, "incoming: gossip, game object and area trigger", "gossip hello, game object use and area trigger packets") \
-    X(IncomingDeath, "incoming: reclaim corpse", "the release-spirit, reclaim-corpse and resurrect-request rows of the packet tables (1.12 layouts) a MASTER sends; the bot's own release (`release`, `auto release`), its corpse run (`find corpse`, `revive from corpse` through the core's HandleReclaimCorpse) and its spirit-healer revive (through HandleSpiritHealerActivate) are real since W1, its acceptance of a resurrection (`accept resurrect`) since slice 4") \
-    X(IncomingCastFailed, "incoming: cast failed trigger", "the 'cast failed' world-packet trigger is not fed (no strategy maps it); the result itself is heard through the host's cast-result queue, which since S2 also shortens the engine's wait (CAST_FAILED_ASYNC + SpellInterrupted, host path)") \
-    X(IncomingSpeedChange, "incoming: forced speed change", "the six forced-speed packets and the client acks the bot answers them with; ForeverCore applies SetSpeedRate at once, so a bot has nothing to ack (S3)") \
-    X(IncomingKnockBack, "incoming: knock back", "the 1.12 knock-back packet and the client jump a bot answered it with; ForeverCore flies a bot server-side and the host waits the flight out and lands it (S3)") \
-    X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout); since S1-R2 a real whisper or party line reaches the bot through the host hook (PlayerScript::OnChat -> chatin::Judge -> PlayerbotAI::HandleCommand); the 1.12 packet case stays dead") \
-    X(IncomingSpellState, "incoming: spell delay", "SMSG_SPELL_DELAYED (1.12 layout); since S2 the host session reads the core's typed packet (the engine's wait grows by the pushback, SPELL_DELAYED), the 1.12 case stays unregistered") \
     X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
     X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
     X(SpawnGuid, "guid from spawn data", "an object guid built from a spawn record (creature data id + spawn id, 1.12 guid layout); ForeverCore keys spawns by spawn id and map, not by guid counter") \
     X(GuidPositionWire, "wire form of a GuidPosition", "writing a GuidPosition into a packet buffer (1.12 layout)") \
     X(BattlegroundQueue, "battleground queue", "battleground template id from a queue type id (BattleGroundMgr::BGTemplateId); ForeverCore's queue type id is a struct and the mapping is not ported") \
     X(ChatLinks, "quest link: waits for D3", "extracting a quest id from a chat link (1.12 ChatHandler helper ExtractKeyFromLink); its link branch waits for D3, the spell and item halves are real since S1-R1") \
-    X(Pets, "pets and guardians", "pet spell learning and autocast, pet command packets, the controlled-guardian walk (1.12 Pet, CallForAllControlledUnits)") \
     X(GameObjectUse, "game object use", "using a game object by the use packet (lightwell, party portal, ritual objects); ForeverCore uses typed packets and a different interact check") \
     X(ItemCasts, "item and totem casts", "casting an item spell with a hand-built Spell (SpellCastTargets setters, triggered flags, SetCastItem, item cooldowns); ForeverCore constructs a Spell from SpellInfo") \
-    X(CustomStrategyStore, "custom strategy store", "reading custom strategy lines from ai_playerbot_custom_strategy; that table does not exist in ForeverCore characters schema") \
-    X(StrategyStoreTransactions, "strategy store transactions", "BeginTransaction(serial) / CommitTransaction() around saving strategies; ForeverCore transactions are objects and the ai_playerbot tables do not exist") \
     X(Skills, "skills", "skill lines ForeverCore does not name (thrown) and skill writes (SetSkill with the 1.12 argument list)") \
     X(Taxi, "taxi", "flight masters and taxi paths (Player::GetTaxi, TaxiPathEntry/TaxiNodesEntry fields, ActivateTaxiPathTo, CleanupFlagsOnTaxiPathFinished); ForeverCore's taxi model is different") \
     X(TransportBoarding, "transports", "boarding, leaving and riding transports (MoveOnTransport, MoveOffTransport, UseTransport, FollowOnTransport, AddPassenger, RemovePassenger, transport movement info); ForeverCore's passenger model and spline transform differ") \
@@ -63,7 +53,6 @@
     X(TalentSpecs, "talent spec tables", "TalentSpec and ClassSpecs, the premade talent specs and their checks; no spec is read (R6B)") \
     X(PoolServices, "pool and hire services", "the random-bot pool tables (RandomBotFacade caches, RandomBotAccountRegistry, AhBotSellerAccount), HireLifecycle, ClaimLifecycle, BotGearService (pinned cap), AltBotService (autonomous alts), the activity leases and the guild order store (TortoiseBots::GuildOrders); answers: not a pool bot, not hired, not claimed, no pinned cap, not autonomous, no order (R6B)") \
     X(Tracing, "trace and observability services", "WhyTraceService, RunTraceService and ObservabilityEmitter are switched off on ForeverCore, every hook a no-op (R6B); the combat monitor is ported (host/cmd/TbCmdCombat.cpp)") \
-    X(PlayerSummon, "player summon request", "PlayerConvenience::RequestSummon, the meeting-stone style summon of a bot to its master; the host's own placement (BotMgr::Think teleports a far bot next to its master) does that job (R6B)") \
     X(BotFactory, "bot factory (ammo, pets)", "PlayerbotFactory ammo and hunter pet set-up and pet training; nothing is created (R6B)") \
     X(ChatFilters, "chat filter chain", "CompositeChatFilter, the filters that rewrite a command line before the bot reads it; the line is used as it comes (R6B)") \
     X(CampSpots, "camp spots table", "CampMgr, the table of camp spots (ai_playerbot_camp) and the active camp list; empty (R6B)") \

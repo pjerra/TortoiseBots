@@ -189,7 +189,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 		WorldPacket p(packet);
 		p.rpos(0);
 		ObjectGuid casterGuid;
-        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingSpellState, p, casterGuid))
+        if (!PackedGuidReadCompat(tbcompat::Feature::PacketHandlerTables, p, casterGuid))
             return;
 		if (casterGuid != bot->getObjectGuid())
 			return;
@@ -204,7 +204,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 		WorldPacket p(packet);
 		p.rpos(0);
 		ObjectGuid casterGuid;
-        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingSpellState, p, casterGuid))
+        if (!PackedGuidReadCompat(tbcompat::Feature::PacketHandlerTables, p, casterGuid))
             return;
 
 		if (casterGuid != bot->getObjectGuid())
@@ -414,7 +414,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         ObjectGuid guid;
         uint32 counter = 0;
         float speed = 0.f;
-        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingSpeedChange, p, guid))
+        if (!PackedGuidReadCompat(tbcompat::Feature::PacketHandlerTables, p, guid))
         {
             botOutgoingPacketHandlers.AddPacket(packet);
             return;
@@ -428,7 +428,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             return;
         }
 
-        UnportedBlockCompat(tbcompat::Feature::IncomingSpeedChange, [&](auto* player)
+        UnportedBlockCompat(tbcompat::Feature::PacketHandlerTables, [&](auto* player)
         {
             WorldPacket ack(TortoiseBots::SpeedChangeAck::ClientOpcode(move), 8 + 4 + 30 + 4);
             TortoiseBots::SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), counter, player->m_movementInfo, speed);
@@ -466,7 +466,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         uint32 counter;
         float vcos, vsin, horizontalSpeed, verticalSpeed = 0.f;
 
-        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingKnockBack, p, guid))
+        if (!PackedGuidReadCompat(tbcompat::Feature::PacketHandlerTables, p, guid))
             return;
         p >> counter >> vcos >> vsin >> horizontalSpeed >> verticalSpeed;
         verticalSpeed = -verticalSpeed;
@@ -520,7 +520,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         bot->m_movementInfo.AddMovementFlag(MOVEFLAG_BACKWARD);
 
         // send ack
-        UnportedBlockCompat(tbcompat::Feature::IncomingKnockBack, [&](auto* player)
+        UnportedBlockCompat(tbcompat::Feature::PacketHandlerTables, [&](auto* player)
         {
             WorldPacket ack(CMSG_MOVE_KNOCK_BACK_ACK);
             player->m_movementInfo.jump.cosAngle = vcos;
