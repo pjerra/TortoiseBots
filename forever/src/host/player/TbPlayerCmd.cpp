@@ -198,6 +198,9 @@ bool HandleHelp(Player* player, Caller const& caller)
     Say(player, "TortoiseBots: help: .bot maintenance <bot> - refresh your bot's kit and repair (when enabled)");
     Say(player, "TortoiseBots: help: .bot totem <bot|party> <earth|fire|water|air> <totem|auto|none> | set <earth>,<fire>,<water>,<air> | mode <auto|prepull|manual> | status - a shaman's totems, until logout");
     Say(player, "TortoiseBots: help: .bot behavior <bot|party> <loot|aoe|autocc|savemana|boost|threat|potions|mimic|spread|hold|noblink|offheal|offdps> <on|off> | status - behaviour toggles, until logout");
+    Say(player, "TortoiseBots: help: .bot blessing <bot|party> <warrior|paladin|hunter|rogue|priest|shaman|mage|warlock|druid> <might|wisdom|kings|salvation|sanctuary|light|auto> | player <name> <blessing|auto> | status - a paladin's blessing orders, until logout");
+    Say(player, "TortoiseBots: help: .bot choice <bot|party> <aura|aspect|curse|poison_mh|poison_oh|sting|pet> <value|auto> | status - the ordered buff, poison or demon, until logout");
+    Say(player, "TortoiseBots: help: .bot service <bot> [portal <spellId> | conjure <food|water|healthstone>] - what a bot can conjure or portal");
     return true;
 }
 
@@ -527,6 +530,12 @@ bool Dispatch(Player* player, std::string_view rest)
         return choice::HandleTotem(player, caller, scope, AfterFirstWord(rest));
     if (verb == "behavior" || verb == "behaviour")
         return choice::HandleBehavior(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "blessing")
+        return choice::HandleBlessing(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "choice")
+        return choice::HandleChoice(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "service")
+        return choice::HandleService(player, caller, scope, AfterFirstWord(rest));
     if (verb == "autogear")
         return autogear::HandleBotAutogear(player, caller.gm, scope, AfterFirstWord(rest));
 

@@ -47,6 +47,11 @@ R1 ships two verbs:
 | `.bot maintenance <bot>` | refresh one owned bot's kit (reagents, bandages, hunter ammo), repair it for free, save it. Owner tier only (the caller owns the bot, or a GameMaster); pool bots are refused. Off unless `AiPlayerbot.OwnedBotMaintenanceEnabled = 1` (default 0, in `forever/conf/aiplayerbot.conf.dist`); potions, food, paid consumables and thrown top-ups are not ported |
 | `.bot totem <bot\|party> <earth\|fire\|water\|air> <totem\|auto\|none>`, `set <earth>,<fire>,<water>,<air>`, `mode <auto\|prepull\|manual>`, `status` | a shaman's per-slot totem orders, read by the totem triggers (`ShamanTotemCommandPolicy.h`): `auto` keeps the subgroup pick, `none` leaves the slot empty, a totem name holds that totem (short names work: `mana spring`). `set` sets all four at once. Shamans only (`not-shaman`); a totem the bot never trained is refused `not-known`, and a `set` is validated for every slot before any slot of that bot changes. Owner tier; `status` is tactical. Values live until logout (#135 adds persistence) |
 | `.bot behavior <bot\|party> <toggle> <on\|off>`, `status` | the old TB behaviour toggles (`loot`, `aoe` = "no aoe", `autocc`, `savemana` = "conserve mana", `boost`, `threat`, `potions`, `mimic`, `spread`, `hold`, `noblink`, `offheal`, `offdps`): `ChangeStrategy` on the toggle's state, read back with `HasStrategy`. Off-spec toggles (`offheal`, `offdps`) need paladin, priest, shaman or druid (`class`); a strategy this build does not register is `not-in-build`; a change that does not hold is `failed`. Owner tier; `status` is tactical and lists the toggles the class has. Values live until logout (#135 adds persistence) |
+| `.bot blessing <bot\|party> <class> <blessing\|auto>`, `player <name> <blessing\|auto>`, `status` | a paladin's blessing orders (`PaladinBlessingOrderPolicy.h`): the blessing each class gets (`might`, `wisdom`, `kings`, `salvation`, `sanctuary`, `light`, or `auto` for the automatic coverage pick), or a per-character exception (`player <name> <blessing\|auto>`; it wins over the class row). A non-paladin is refused `not-paladin`; a blessing the paladin has not trained is refused `not-known` and never stored. Owner tier; `status` is tactical and lists the class rows, the blessings the bot knows and its player exceptions. Values live until logout (#135 adds persistence) |
+| `.bot choice <bot\|party> <kind> <value\|auto>`, `status` | one ordered choice per kind (`ClassChoicePolicy.h`): `aura` (paladin), `aspect` and `sting` (hunter), `curse` and `pet` (warlock), `poison_mh` and `poison_oh` (rogue, by a usable poison item for that hand). `auto` keeps the automatic pick. A kind the class does not have is refused `class`; a word the bot cannot use is refused `not-known` and never stored. Owner tier; `status` is tactical and lists the kinds of the bot's class with the words it can use. Values live until logout (#135 adds persistence) |
+| `.bot service <bot>` | the bare query (tactical): one line `food=<0\|1> water=<0\|1> healthstone=<0\|1> portals=<id:City,...\|->`, any rank of a conjure line counting |
+| `.bot service <bot> portal <spellId>` | a mage's portal (owner tier): the policy decides first (`MagePortalPolicy.h`: `dead`, `combat`, `busy` while casting, `unknown` for a non-mage, an unknown city or a portal not learned, `group` when the caller is not in the bot's raid), then the rune is granted, the bot stops and stands, and the engine's `cast` action casts it. A build without that action answers `action-not-registered` |
+| `.bot service <bot> conjure <food\|water\|healthstone>` | the highest known rank of the line through the same `cast` action (owner tier): `dead`, `not-known` when the bot has no rank of the line, `action-not-registered` without the action |
 
 Replies: `TortoiseBots: help: <row>`, `TortoiseBots: who: <n> bot(s)`, `TortoiseBots: who: <Name> level <n> <class> map <id> <move> <brain>`,
 and `TortoiseBots: <verb>: refused <code>: <text>` with `usage`, `unknown-verb`, `players-off` (and later `not-a-bot`, `not-yours`, `in-run`, ...).
@@ -56,13 +61,14 @@ how many of a player's own characters may be in the world at once when `.bot add
 `TortoiseBots: maintenance <Name>: ok <n> item(s) granted, repaired, saved`, or `TortoiseBots: maintenance: refused <code>: <text>` with
 `pool` (a pool bot), `disabled` (the flag is off) or `dead`, after the owner-tier `not-a-bot`, `not-yours` and `in-run`.
 
-**The choice verbs (`totem`, `behavior`; #133 round 1).** The scope word is one bot's name or `party`: the bots in the caller's group the
-caller may order by the line's tier, in name order, at most 40 (a refused bot is counted, not fatal; there is no `raid` word, party covers
-a raid group). Every bot of a line is decided by the pure ownership rule first, and a `set` is validated for every target before the first
-value changes. A write replies `TortoiseBots: <verb> <Name>: ok <what>` per bot, then for `party` the count line
-`TortoiseBots: <verb> party: <n> set, <m> refused`; a per-bot refusal is `TortoiseBots: <verb> <Name>: refused <code>: <text>` with
-`usage`, `no-party`, `no-bot`, `not-a-bot`, `not-yours`, `in-run`, `no-engine`, `not-shaman`, `not-known`, `class`, `not-in-build` or
-`failed`. Persistence is #135: a value set here lives until logout.
+**The choice verbs (`totem`, `behavior`, `blessing`, `choice`, `service`; #133 rounds 1 and 2).** The scope word is one bot's name
+or `party`: the bots in the caller's group the caller may order by the line's tier, in name order, at most 40 (a refused bot is
+counted, not fatal; there is no `raid` word, party covers a raid group). Every bot of a line is decided by the pure ownership rule
+first, and a `set` is validated for every target before the first value changes. A write replies `TortoiseBots: <verb> <Name>: ok
+<what>` per bot, then for `party` the count line `TortoiseBots: <verb> party: <n> set, <m> refused`; a per-bot refusal is
+`TortoiseBots: <verb> <Name>: refused <code>: <text>` with `usage`, `no-party`, `no-bot`, `not-a-bot`, `not-yours`, `in-run`,
+`no-engine`, `not-shaman`, `not-paladin`, `not-known`, `class`, `not-in-build`, `failed`, `dead`, `unknown`, `group` or
+`action-not-registered`. Persistence is #135: a value set here lives until logout.
 
 ## 2. The older commands (free text, human readable)
 

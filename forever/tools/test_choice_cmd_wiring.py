@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Wiring pins and mutations for `.bot totem` and `.bot behavior` (#133 round 1, forever/docs/TB-COMMANDS.md section 1a).
+"""Wiring pins and mutations for `.bot totem` and `.bot behavior` (#133 round 1) and `.bot blessing`, `.bot choice` and
+`.bot service` (#133 round 2), all documented in forever/docs/TB-COMMANDS.md section 1a.
 
 The core calls cannot run without a server, so these tests pin where the handlers stand, the order in which they decide,
-validate and write, and the refusal codes they may answer; the pure table is reached through forever/tools/test_choice_cmd.cpp.
-Every assertion fails on the pre-R1 source (no verbs, no handlers, no table). With CHOICE_CMD_MUTATE=1 (run on the build VM)
-each mutation below is applied to the real sources and must turn the matching check red:
+validate and write, and the refusal codes they may answer; the pure rules are reached through forever/tools/test_choice_cmd.cpp.
+Every assertion fails on the pre-round source (no verb, no handler, no table row). With CHOICE_CMD_MUTATE=1 (run on the build
+VM) each mutation below is applied to the real sources and must turn the matching check red:
   status-owner            status classified as an owner-tier write
   aoe-not-inverted        `aoe` ("no aoe") read the right way round
   offspec-check-dropped   an off-spec toggle set on a class that has no off-spec strategies
   set-half-applied        a `set` writing one slot before the whole list is validated for that bot
   decide-after-set        a write reached before the ownership decision
+  poison-known-dropped    a poison order stored without checking the bot holds a usable poison item for it
+  portal-policy-skipped   a portal cast reached without the policy's refusal decision
+  non-paladin-stored      a blessing order stored on a bot that is not a paladin
 """
 import os
 import re
@@ -218,6 +222,147 @@ def check_unit_names(unit):
         assert f"case: {case}" in unit, f"missing case {case}"
 
 
+# ---- round 2: `.bot blessing`, `.bot choice`, `.bot service` ----
+
+BLESSING_SIG = r"bool HandleBlessing\(Player\* player, player::Caller const& caller, player::OwnerScope const& scope, std::string_view tail\)\s*\{"
+CHOICE_SIG = r"bool HandleChoice\(Player\* player, player::Caller const& caller, player::OwnerScope const& scope, std::string_view tail\)\s*\{"
+SERVICE_SIG = r"bool HandleService\(Player\* player, player::Caller const& caller, player::OwnerScope const& scope, std::string_view tail\)\s*\{"
+PALADIN_SIG = r"bool PaladinTarget\(Player\* player, std::string const& verb, Target const& target, PlayerbotAI\*& botAi\)\s*\{"
+CHOICE_KNOWN_SIG = r"bool ChoiceKnown\(PlayerbotAI\* botAi, Player\* bot, int kind, std::string const& word\)\s*\{"
+
+
+def check_dispatch_r2(cpp):
+    dispatch = function_body(cpp, r"bool Dispatch\(Player\* player, std::string_view rest\)\s*\{")
+    unknown = dispatch.index('"unknown-verb"')
+    for verb, call in (
+        ("blessing", "choice::HandleBlessing(player, caller, scope, AfterFirstWord(rest))"),
+        ("choice", "choice::HandleChoice(player, caller, scope, AfterFirstWord(rest))"),
+        ("service", "choice::HandleService(player, caller, scope, AfterFirstWord(rest))"),
+    ):
+        assert f'verb == "{verb}"' in dispatch, f"Dispatch does not route {verb}"
+        assert call in dispatch, f"Dispatch does not call {call.split('(')[0]}"
+        assert dispatch.index(f'verb == "{verb}"') < unknown, f"{verb} must answer before unknown-verb"
+
+
+def check_help_r2(cpp):
+    body = function_body(cpp, r"bool HandleHelp\(Player\* player, Caller const& caller\)")
+    for verb in (".bot blessing", ".bot choice", ".bot service"):
+        assert verb in body, f"help row for {verb} missing"
+    assert "until logout" in body, "the help rows must say the values live until logout (#135)"
+
+
+def check_blessing_rules(cpp):
+    body = function_body(cpp, BLESSING_SIG)
+    for need in ('"usage"', "ai::BlessingOrderClassIndex(", "ai::IsBlessingOrderWord(", "ai::BlessingOrderKey(",
+                 "ai::BlessingOrderPlayersKey()", "ai::SetBlessingPlayerOrder(", "PaladinTarget(", "BlessingKnown(",
+                 "TierOfChoice(verb, sub)", "TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets)"):
+        assert need in body, f"the blessing handler lacks {need}"
+    assert '"status"' in body, "the blessing handler has no status branch"
+    known = function_body(cpp, r"bool BlessingKnown\(PlayerbotAI\* botAi, std::string const& word\)\s*\{")
+    assert "ai::BlessingOrderSpell(" in known, "the blessing check reads the policy's spell"
+    assert "HasSpell(" in known, "the blessing check is the bot's own book"
+    assert "sPlayerbotDbStore" not in cpp, "persistence is #135"
+
+
+def check_blessing_order(cpp):
+    body = function_body(cpp, BLESSING_SIG)
+    write = branch(body, "bool const playerMode", None)
+    assert "TargetsOf(" in write, "the blessing write does not gather its targets"
+    assert write.index("TargetsOf(") < first_write(write), "the blessing write writes before the decision"
+    assert "PaladinTarget(" in write, "the blessing write does not run the paladin check"
+    assert write.index("PaladinTarget(") < first_write(write), "the blessing write writes before the class check"
+    assert "BlessingKnown(" in write, "the blessing write does not check the spell"
+    assert write.index("BlessingKnown(") < first_write(write), "the blessing write stores a spell the bot has not trained"
+    assert "PutValue(botAi, ai::BlessingOrderPlayersKey()" in write, "the player form stores the per-character exception"
+    assert "PutValue(botAi, ai::BlessingOrderKey(" in write, "the class form stores the class row"
+
+
+def check_paladin_guard(cpp):
+    body = function_body(cpp, PALADIN_SIG)
+    assert '"not-paladin"' in body, "a non-paladin is refused"
+    assert "if (target.bot->GetClass() != CLASS_PALADIN)" in body, "the refusal is the class"
+    assert body.index("CLASS_PALADIN") < body.index("return true;"), "the class is checked before the bot passes"
+
+
+def check_choice_rules(cpp):
+    body = function_body(cpp, CHOICE_SIG)
+    for need in ('"usage"', "ai::ChoiceKindIndex(", "ai::IsChoiceWord(", "ai::ChoiceKindsForClass(", '"class"',
+                 "ai::ChoiceOrderKey(", "ChoiceKnown(", "TierOfChoice(verb, sub)",
+                 "TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets)"):
+        assert need in body, f"the choice handler lacks {need}"
+    assert '"status"' in body, "the choice handler has no status branch"
+    known = function_body(cpp, CHOICE_KNOWN_SIG)
+    assert "if (ai::ChoiceKindUsesItem(kind))" in known, "a poison kind is a bag item, not a spell"
+    assert "ai::HasUsablePoisonItem(" in known, "a poison word is known by a usable poison item"
+    assert "ai::ChoicePoisonItemIds(" in known, "the poison coin's item ids are the policy's"
+    assert "ai::ChoiceSpell(" in known, "every other kind is a spell of the bot's own book"
+    assert "sPlayerbotDbStore" not in cpp, "persistence is #135"
+
+
+def check_choice_order(cpp):
+    body = function_body(cpp, CHOICE_SIG)
+    write = branch(body, "// `<kind> <value|auto>`", None)
+    assert "TargetsOf(" in write, "the choice write does not gather its targets"
+    assert write.index("TargetsOf(") < first_write(write), "the choice write writes before the decision"
+    assert "ai::ChoiceKindsForClass(" in write, "the choice write does not read the kinds of the bot's class"
+    assert write.index("ai::ChoiceKindsForClass(") < first_write(write), "the choice write stores a kind the class does not have"
+    assert "ChoiceKnown(" in write, "the choice write does not check the word"
+    assert write.index("ChoiceKnown(") < first_write(write), "the choice write stores a word the bot cannot use"
+
+
+def check_service_rules(cpp):
+    body = function_body(cpp, SERVICE_SIG)
+    for need in ('"usage"', "ai::FormatServicePortals(", "ai::ConjureFoodSpellName()", "ai::ConjureWaterSpellName()",
+                 "ai::CreateHealthstoneSpellName()", "ai::DecidePortalCast(", "ai::PortalRefusalCode(",
+                 "ai::PortalRefusalText(", "ai::PortalCityName(", "ai::PortalRuneItemId()", "AddItemCompat(",
+                 '"action-not-registered"', 'ActionRegistered(botAi, "cast")', 'DoSpecificAction("cast"',
+                 "HighestSpellOfLine(", "TierOfChoice(verb, sub)", "TargetsOf(player, caller, scope, verb, parsed,"):
+        assert need in body, f"the service handler lacks {need}"
+    query = branch(body, "if (sub.empty())", 'if (sub == "portal")')
+    assert "DoSpecificAction(" not in query, "the bare service query must not cast"
+    assert "AddItemCompat(" not in query, "the bare service query must not grant an item"
+
+
+def check_service_order(cpp):
+    body = function_body(cpp, SERVICE_SIG)
+    assert body.index("TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets)") >= 0
+    assert body.index("ai::DecidePortalCast(") < body.index('DoSpecificAction("cast"'), "the policy decides before the cast"
+    refusal = "if (decision.refusal != ai::PortalRefusal::None)"
+    assert refusal in body, "the portal policy's refusal is not answered"
+    assert body.index(refusal) < body.index("AddItemCompat("), \
+        "the refusal must answer before the rune is granted"
+    assert body.index('ActionRegistered(botAi, "cast")') < body.index('DoSpecificAction("cast"'), \
+        "a missing cast action must refuse before the cast"
+    assert body.index("HighestSpellOfLine(") < body.index('DoSpecificAction("cast"', body.index("HighestSpellOfLine(")), \
+        "conjure picks the rank before the cast"
+
+
+def check_off_build_r2(cpp):
+    off = cpp.split("#else", 1)[1]
+    for name in ("HandleBlessing", "HandleChoice", "HandleService"):
+        assert f"bool {name}(Player*, player::Caller const&, player::OwnerScope const&, std::string_view) {{ return false; }}" in off, \
+            f"the no-engine build does not stub {name}"
+
+
+def check_headers_r2(hdr):
+    for name in ("HandleBlessing", "HandleChoice", "HandleService"):
+        assert name in hdr, f"{name} missing from TbChoiceCmd.h"
+
+
+def check_docs_r2(doc):
+    section = doc[doc.index("## 1a. `.bot` (players)"):]
+    for verb in (".bot blessing", ".bot choice", ".bot service"):
+        assert verb in section, f"TB-COMMANDS.md 1a lacks the {verb} row"
+    assert "until logout" in section, "the doc must say the values live until logout (#135)"
+    for code in ("not-paladin", "not-known", "class", "action-not-registered", "unknown", "group"):
+        assert code in section, f"the doc must name the refusal code {code}"
+
+
+def check_unit_names_r2(unit):
+    for case in ("BlessingClassWords", "ChoiceKindForClass"):
+        assert f"case: {case}" in unit, f"missing case {case}"
+
+
 class Wiring(unittest.TestCase):
     def setUp(self):
         self.cpp = read(CHOICE_CPP)
@@ -274,6 +419,47 @@ class Wiring(unittest.TestCase):
         self.assertIn("using player::TierOfChoice;", self.pure)
         self.assertIn("using player::Tier;", self.pure)
 
+    # ---- round 2 ----
+
+    def test_dispatch_routes_the_round2_verbs(self):
+        check_dispatch_r2(self.cmd)
+
+    def test_round2_help_rows(self):
+        check_help_r2(self.cmd)
+
+    def test_blessing_rules(self):
+        check_blessing_rules(self.cpp)
+
+    def test_blessing_decides_before_it_writes(self):
+        check_blessing_order(self.cpp)
+
+    def test_the_paladin_guard(self):
+        check_paladin_guard(self.cpp)
+
+    def test_choice_rules(self):
+        check_choice_rules(self.cpp)
+
+    def test_choice_decides_before_it_writes(self):
+        check_choice_order(self.cpp)
+
+    def test_service_rules(self):
+        check_service_rules(self.cpp)
+
+    def test_service_decides_before_it_casts(self):
+        check_service_order(self.cpp)
+
+    def test_off_build_still_links_the_round2_handlers(self):
+        check_off_build_r2(self.cpp)
+
+    def test_the_header_names_the_round2_handlers(self):
+        check_headers_r2(self.hdr)
+
+    def test_the_round2_doc_rows(self):
+        check_docs_r2(self.doc)
+
+    def test_the_round2_cases_are_named(self):
+        check_unit_names_r2(self.unit)
+
 
 # ---- mutations (run on the build VM: CHOICE_CMD_MUTATE=1) ----
 
@@ -301,6 +487,19 @@ TEXT_MUTANTS = [
      '    if (sub == "set")\n    {\n        std::string stored[4];',
      '    if (sub == "set")\n    {\n        std::string stored[4];\n        for (int slot = 0; slot < 4; ++slot)\n            PutValue(AiOf(targets.empty() ? player : targets.front().bot), ai::TotemOrderKey(slot), stored[slot]);',
      check_totem_decide_before_write),
+    # round 2
+    ("poison-known-dropped",
+     "if (ai::ChoiceKindUsesItem(kind))",
+     "if (false)",
+     check_choice_rules),
+    ("portal-policy-skipped",
+     "if (decision.refusal != ai::PortalRefusal::None)",
+     "if (false)",
+     check_service_order),
+    ("non-paladin-stored",
+     "if (target.bot->GetClass() != CLASS_PALADIN)",
+     "if (false)",
+     check_paladin_guard),
 ]
 
 

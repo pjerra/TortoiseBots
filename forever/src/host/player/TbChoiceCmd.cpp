@@ -1,12 +1,14 @@
-// The `.bot totem` and `.bot behavior` handlers (#133 round 1). The pure rules are host/player/TbChoiceCmdPure.h (tested
-// standalone by forever/tools/test_choice_cmd.cpp); the bot lookup, the pure ownership decision and the reply channel are
-// TbPlayerCmd.cpp's, shared through TbPlayerCmd.h. Values live until logout: persistence is #135.
+// The `.bot totem` and `.bot behavior` handlers (#133 round 1) and `.bot blessing`, `.bot choice` and `.bot service` (#133
+// round 2). The pure rules are host/player/TbChoiceCmdPure.h and the class policies it reads (tested standalone by
+// forever/tools/test_choice_cmd.cpp); the bot lookup, the pure ownership decision and the reply channel are TbPlayerCmd.cpp's,
+// shared through TbPlayerCmd.h. Values live until logout: persistence is #135.
 #include "host/player/TbChoiceCmd.h"
 #include "host/player/TbChoiceCmdPure.h"
 #include "host/player/TbPlayerCmd.h"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,6 +17,7 @@
 
 // The bot brain's headers are written against cmangos names: the ForeverCore preinclude goes in front of them, as in TbCc.cpp.
 #include "compat/botpch_forever.h"
+#include "compat/TbCompat_K11w.h"   // AddItemCompat: the portal rune, the old Player::StoreNewItemInInventorySlot
 
 #include "TbBotMgr.h"
 #include "PlayerbotAIStorage.h"
@@ -23,10 +26,15 @@
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "playerbot/BotState.h"
+#include "playerbot/MagePortalPolicy.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/generic/ClassChoicePolicy.h"
 #include "playerbot/strategy/generic/OffSpecPolicy.h"
+#include "playerbot/strategy/paladin/PaladinBlessingOrderPolicy.h"
+#include "playerbot/strategy/rogue/RogueTriggers.h"
 #include "playerbot/strategy/shaman/ShamanTotemCommandPolicy.h"
 
 namespace TortoiseBots
@@ -62,14 +70,14 @@ BotState StateOf(ToggleState state)
 }
 
 // A stored manual value ("manual saved string"), the way the strategy glue reads it. Empty without an engine.
-std::string ValueOf(PlayerbotAI* botAi, char const* key)
+std::string ValueOf(PlayerbotAI* botAi, std::string const& key)
 {
     if (!botAi || !botAi->GetAiObjectContext())
         return std::string();
     return botAi->GetAiObjectContext()->GetValue<std::string>("manual saved string", key)->Get();
 }
 
-void PutValue(PlayerbotAI* botAi, char const* key, std::string const& value)
+void PutValue(PlayerbotAI* botAi, std::string const& key, std::string const& value)
 {
     botAi->GetAiObjectContext()->GetValue<std::string>("manual saved string", key)->Set(value);
 }
@@ -232,6 +240,141 @@ bool ShamanTarget(Player* player, std::string const& verb, Target const& target,
         return false;
     }
     return true;
+}
+
+// A blessing order belongs to a paladin only.
+bool PaladinTarget(Player* player, std::string const& verb, Target const& target, PlayerbotAI*& botAi)
+{
+    if (!LiveTarget(player, verb, target, botAi))
+        return false;
+    if (target.bot->GetClass() != CLASS_PALADIN)
+    {
+        RefuseBot(player, verb, target.bot, "not-paladin", "only paladins keep blessing orders");
+        return false;
+    }
+    return true;
+}
+
+// Whether the paladin's own book has the blessing the word names ("auto" needs nothing: it is the automatic pick).
+bool BlessingKnown(PlayerbotAI* botAi, std::string const& word)
+{
+    std::string const spell = ai::BlessingOrderSpell(word);
+    return spell.empty() || (botAi && botAi->HasSpell(spell));
+}
+
+// The status row: every class word with the stored order ("auto" when unset), the blessings the bot knows, and the
+// per-character exceptions.
+std::string BlessingStatusWords(PlayerbotAI* botAi)
+{
+    std::string out;
+    for (int i = 0; i < ai::kBlessingOrderClassCount; ++i)
+    {
+        std::string const stored = ValueOf(botAi, ai::BlessingOrderKey(i));
+        out += std::string(i ? "," : "") + ai::BlessingOrderClassWord(i) + "=" +
+               (ai::BlessingOrderSpell(stored).empty() ? "auto" : stored);
+    }
+    out += ",known=";
+    bool first = true;
+    for (int i = 0; i < ai::kBlessingOrderBlessingCount; ++i)
+    {
+        std::string const word = ai::BlessingOrderWord(i);
+        if (!BlessingKnown(botAi, word))
+            continue;
+        out += (first ? "" : "+") + word;
+        first = false;
+    }
+    std::string const players = ai::FormatBlessingPlayerOrders(
+        ai::ParseBlessingPlayerOrders(ValueOf(botAi, ai::BlessingOrderPlayersKey())));
+    if (!players.empty())
+        out += ",players=" + players;
+    return out;
+}
+
+// A choice word the bot can use (old TB's `ChoiceKnown`, commands/Choice.cpp:69): a trained spell, or for a poison (a bag
+// item, not a spell) a usable poison item for that hand.
+bool ChoiceKnown(PlayerbotAI* botAi, Player* bot, int kind, std::string const& word)
+{
+    if (ai::ChoiceKindUsesItem(kind))
+        return ai::HasUsablePoisonItem(botAi, bot, ai::ChoicePoisonItemIds(word));
+    return botAi && botAi->HasSpell(ai::ChoiceSpell(kind, word));
+}
+
+// The status row: every kind the class has, the stored word ("auto" when unset) and the words this bot can use.
+std::string ChoiceStatusWords(PlayerbotAI* botAi, Player* bot)
+{
+    std::string out;
+    for (int kind : ai::ChoiceKindsForClass(bot->GetClass()))
+    {
+        std::string const stored = ValueOf(botAi, ai::ChoiceOrderKey(kind));
+        out += std::string(out.empty() ? "" : ",") + ai::ChoiceKindWord(kind) + "=" + (stored.empty() ? "auto" : stored);
+        out += "," + std::string(ai::ChoiceKindWord(kind)) + ".known=";
+        bool first = true;
+        for (int i = 0; i < ai::ChoiceWordCount(kind); ++i)
+        {
+            std::string const word = ai::ChoiceWord(kind, i);
+            if (!ChoiceKnown(botAi, bot, kind, word))
+                continue;
+            out += (first ? "" : "+") + word;
+            first = false;
+        }
+    }
+    return out;
+}
+
+// The highest rank of a conjure line the bot's own book has (the id the cast should use), 0 when none: a rank is "higher"
+// when its spell level is, a tie broken by the spell id (the newer row).
+std::uint32_t HighestSpellOfLine(Player* bot, std::string const& line)
+{
+    if (!bot)
+        return 0;
+    std::string const prefix = player::LowerWord(line);
+    std::uint32_t best = 0;
+    std::uint32_t bestLevel = 0;
+    for (auto const& known : bot->GetSpellMap())
+    {
+        std::uint32_t const spellId = known.first;
+        if (known.second.state == PLAYERSPELL_REMOVED || known.second.disabled)
+            continue;
+        SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
+        if (!info)
+            continue;
+        if (player::LowerWord(info->SpellName[0]).compare(0, prefix.size(), prefix) != 0)
+            continue;
+        if (best == 0 || info->spellLevel > bestLevel || (info->spellLevel == bestLevel && spellId > best))
+        {
+            best = spellId;
+            bestLevel = info->spellLevel;
+        }
+    }
+    return best;
+}
+
+// Any rank of the line counts as known, for the service query.
+bool KnowsSpellLine(Player* bot, char const* line)
+{
+    return HighestSpellOfLine(bot, std::string(line)) != 0;
+}
+
+// The context's own action lookup (TbOrders.cpp's ActionRegistered); it caches what it finds, so asking never creates a
+// second object.
+bool ActionRegistered(PlayerbotAI* botAi, char const* key)
+{
+    return botAi->GetAiObjectContext() && botAi->GetAiObjectContext()->GetAction(key) != nullptr;
+}
+
+// A decimal spell id, 0 for anything else (a leading zero or an overflow reads as no id).
+std::uint32_t ParseSpellId(std::string const& word)
+{
+    if (word.empty() || word.size() > 9)
+        return 0;
+    std::uint32_t value = 0;
+    for (char c : word)
+    {
+        if (c < '0' || c > '9')
+            return 0;
+        value = value * 10 + static_cast<std::uint32_t>(c - '0');
+    }
+    return value;
 }
 }
 
@@ -479,6 +622,356 @@ bool HandleBehavior(Player* player, player::Caller const& caller, player::OwnerS
     Summary(player, verb, parsed, ok, refused);
     return true;
 }
+
+bool HandleBlessing(Player* player, player::Caller const& caller, player::OwnerScope const& scope, std::string_view tail)
+{
+    std::string const verb = "blessing";
+    std::string const usage =
+        ".bot blessing <bot|party> <warrior|paladin|hunter|rogue|priest|shaman|mage|warlock|druid> "
+        "<might|wisdom|kings|salvation|sanctuary|light|auto> | player <name> <might|wisdom|kings|salvation|sanctuary|light|auto> | "
+        "status";
+    std::vector<std::string> const words = ChoiceWords(tail);
+    if (words.empty())
+    {
+        player::Refuse(player, verb, "usage", usage);
+        return true;
+    }
+    ParsedScope const parsed = ParseScope(words[0]);
+    std::string const sub = words.size() > 1 ? words[1] : std::string();
+
+    if (sub == "status")
+    {
+        std::vector<Target> targets;
+        if (!TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets))
+            return true;
+        std::size_t ok = 0, refused = 0;
+        for (Target const& target : targets)
+        {
+            PlayerbotAI* botAi = nullptr;
+            if (!PaladinTarget(player, verb, target, botAi))
+            {
+                ++refused;
+                continue;
+            }
+            OkBot(player, verb, target.bot, "status " + BlessingStatusWords(botAi));
+            ++ok;
+        }
+        Summary(player, verb, parsed, ok, refused);
+        return true;
+    }
+
+    bool const playerMode = sub == "player";
+    int classIndex = -1;
+    std::string targetName;
+    std::string word;
+    if (playerMode)
+    {
+        if (words.size() < 4 || words[2].empty())
+        {
+            player::Refuse(player, verb, "usage", usage);
+            return true;
+        }
+        targetName = words[2];
+        word = words[3];
+    }
+    else
+    {
+        classIndex = ai::BlessingOrderClassIndex(sub);
+        if (classIndex < 0 || words.size() < 3)
+        {
+            player::Refuse(player, verb, "usage", usage);
+            return true;
+        }
+        word = words[2];
+    }
+    if (!ai::IsBlessingOrderWord(word))
+    {
+        player::Refuse(player, verb, "usage", "not a blessing: " + word);
+        return true;
+    }
+
+    std::vector<Target> targets;
+    if (!TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets))
+        return true;
+    std::size_t ok = 0, refused = 0;
+    for (Target const& target : targets)
+    {
+        PlayerbotAI* botAi = nullptr;
+        if (!PaladinTarget(player, verb, target, botAi))
+        {
+            ++refused;
+            continue;
+        }
+        if (!BlessingKnown(botAi, word))
+        {
+            RefuseBot(player, verb, target.bot, "not-known", "not trained: " + ai::BlessingOrderSpell(word));
+            ++refused;
+            continue;
+        }
+        if (playerMode)
+            PutValue(botAi, ai::BlessingOrderPlayersKey(),
+                ai::SetBlessingPlayerOrder(ValueOf(botAi, ai::BlessingOrderPlayersKey()), targetName, word));
+        else
+            PutValue(botAi, ai::BlessingOrderKey(classIndex), word);
+        OkBot(player, verb, target.bot,
+            "set " + (playerMode ? "player " + targetName : std::string(ai::BlessingOrderClassWord(classIndex))) + "=" + word);
+        ++ok;
+    }
+    Summary(player, verb, parsed, ok, refused);
+    return true;
+}
+
+bool HandleChoice(Player* player, player::Caller const& caller, player::OwnerScope const& scope, std::string_view tail)
+{
+    std::string const verb = "choice";
+    std::string const usage =
+        ".bot choice <bot|party> <aura|aspect|curse|poison_mh|poison_oh|sting|pet> <value|auto> | status";
+    std::vector<std::string> const words = ChoiceWords(tail);
+    if (words.empty())
+    {
+        player::Refuse(player, verb, "usage", usage);
+        return true;
+    }
+    ParsedScope const parsed = ParseScope(words[0]);
+    std::string const sub = words.size() > 1 ? words[1] : std::string();
+
+    if (sub == "status")
+    {
+        std::vector<Target> targets;
+        if (!TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets))
+            return true;
+        std::size_t ok = 0, refused = 0;
+        for (Target const& target : targets)
+        {
+            PlayerbotAI* botAi = nullptr;
+            if (!LiveTarget(player, verb, target, botAi))
+            {
+                ++refused;
+                continue;
+            }
+            if (ai::ChoiceKindsForClass(target.bot->GetClass()).empty())
+            {
+                RefuseBot(player, verb, target.bot, "class", "that class keeps no choice");
+                ++refused;
+                continue;
+            }
+            OkBot(player, verb, target.bot, "status " + ChoiceStatusWords(botAi, target.bot));
+            ++ok;
+        }
+        Summary(player, verb, parsed, ok, refused);
+        return true;
+    }
+
+    // `<kind> <value|auto>`
+    int const kind = ai::ChoiceKindIndex(sub);
+    std::string const word = words.size() > 2 ? words[2] : std::string();
+    if (kind < 0 || word.empty() || !ai::IsChoiceWord(kind, word))
+    {
+        player::Refuse(player, verb, "usage", usage);
+        return true;
+    }
+    std::vector<Target> targets;
+    if (!TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets))
+        return true;
+    std::size_t ok = 0, refused = 0;
+    for (Target const& target : targets)
+    {
+        PlayerbotAI* botAi = nullptr;
+        if (!LiveTarget(player, verb, target, botAi))
+        {
+            ++refused;
+            continue;
+        }
+        std::vector<int> const kinds = ai::ChoiceKindsForClass(target.bot->GetClass());
+        if (std::find(kinds.begin(), kinds.end(), kind) == kinds.end())
+        {
+            RefuseBot(player, verb, target.bot, "class", "that class keeps no " + std::string(ai::ChoiceKindWord(kind)) + " choice");
+            ++refused;
+            continue;
+        }
+        if (word != "auto" && !ChoiceKnown(botAi, target.bot, kind, word))
+        {
+            RefuseBot(player, verb, target.bot, "not-known",
+                std::string(ai::ChoiceKindUsesItem(kind) ? "no usable item: " : "not trained: ") + ai::ChoiceSpell(kind, word));
+            ++refused;
+            continue;
+        }
+        PutValue(botAi, ai::ChoiceOrderKey(kind), word);
+        OkBot(player, verb, target.bot, std::string(ai::ChoiceKindWord(kind)) + "=" + word);
+        ++ok;
+    }
+    Summary(player, verb, parsed, ok, refused);
+    return true;
+}
+
+bool HandleService(Player* player, player::Caller const& caller, player::OwnerScope const& scope, std::string_view tail)
+{
+    std::string const verb = "service";
+    std::string const usage =
+        ".bot service <bot|party> | portal <spellId> | conjure <food|water|healthstone>";
+    std::vector<std::string> const words = ChoiceWords(tail);
+    if (words.empty())
+    {
+        player::Refuse(player, verb, "usage", usage);
+        return true;
+    }
+    ParsedScope const parsed = ParseScope(words[0]);
+    std::string const sub = words.size() > 1 ? words[1] : std::string();
+    std::vector<Target> targets;
+    if (!TargetsOf(player, caller, scope, verb, parsed, TierOfChoice(verb, sub), targets))
+        return true;
+
+    // The bare query reads only (Tactical tier): what the bot can conjure and which portals it knows.
+    if (sub.empty())
+    {
+        std::size_t ok = 0, refused = 0;
+        for (Target const& target : targets)
+        {
+            PlayerbotAI* botAi = nullptr;
+            if (!LiveTarget(player, verb, target, botAi))
+            {
+                ++refused;
+                continue;
+            }
+            std::vector<std::uint32_t> known;
+            std::size_t count = 0;
+            ai::MagePortalSpell const* table = ai::MagePortalTable(&count);
+            for (std::size_t i = 0; i < count; ++i)
+                if (target.bot->HasSpell(table[i].spellId))
+                    known.push_back(table[i].spellId);
+            OkBot(player, verb, target.bot,
+                "food=" + std::to_string(KnowsSpellLine(target.bot, ai::ConjureFoodSpellName()) ? 1 : 0) +
+                " water=" + std::to_string(KnowsSpellLine(target.bot, ai::ConjureWaterSpellName()) ? 1 : 0) +
+                " healthstone=" + std::to_string(KnowsSpellLine(target.bot, ai::CreateHealthstoneSpellName()) ? 1 : 0) +
+                " portals=" + ai::FormatServicePortals(known));
+            ++ok;
+        }
+        Summary(player, verb, parsed, ok, refused);
+        return true;
+    }
+
+    if (sub == "portal")
+    {
+        std::uint32_t const spellId = ParseSpellId(words.size() > 2 ? words[2] : std::string());
+        if (!spellId || !*ai::PortalCityName(spellId))
+        {
+            player::Refuse(player, verb, "unknown", "unknown portal city");
+            return true;
+        }
+        std::size_t ok = 0, refused = 0;
+        for (Target const& target : targets)
+        {
+            PlayerbotAI* botAi = nullptr;
+            if (!LiveTarget(player, verb, target, botAi))
+            {
+                ++refused;
+                continue;
+            }
+            // The policy's own refusal order (MagePortalPolicy.h): dead, combat, casting, not a mage, not learned, not grouped.
+            ai::PortalCastFacts facts;
+            facts.alive = target.bot->IsAlive();
+            facts.inCombat = target.bot->IsInCombat();
+            facts.casting = target.bot->IsNonMeleeSpellCasted(false);
+            facts.isMage = target.bot->GetClass() == CLASS_MAGE;
+            facts.requesterGrouped = player && player->IsInSameRaidWith(target.bot);
+            ai::PortalCastDecision const decision = ai::DecidePortalCast(facts, spellId, target.bot->HasSpell(spellId),
+                target.bot->HasItemCount(ai::PortalRuneItemId(), 1), target.bot->isMoving());
+            if (decision.refusal != ai::PortalRefusal::None)
+            {
+                RefuseBot(player, verb, target.bot, ai::PortalRefusalCode(decision.refusal),
+                    ai::PortalRefusalText(decision.refusal));
+                ++refused;
+                continue;
+            }
+            if (!ActionRegistered(botAi, "cast"))
+            {
+                RefuseBot(player, verb, target.bot, "action-not-registered",
+                    "the legacy action `cast` is not registered in this build");
+                ++refused;
+                continue;
+            }
+            if (decision.needsRune)
+                AddItemCompat(target.bot, ai::PortalRuneItemId(), 1);
+            if (decision.needsStop)
+                botAi->StopMoving();
+            // A seated bot (drinking) would stand up and fail this one cast attempt.
+            if (target.bot->GetStandState() != UNIT_STAND_STATE_STAND)
+                target.bot->SetStandState(UNIT_STAND_STATE_STAND);
+            if (!botAi->DoSpecificAction("cast", ai::Event("service portal", std::to_string(spellId), player), true))
+            {
+                RefuseBot(player, verb, target.bot, "failed", "the cast did not run; try again");
+                ++refused;
+                continue;
+            }
+            OkBot(player, verb, target.bot, "portal " + std::string(ai::PortalCityName(spellId)));
+            ++ok;
+        }
+        Summary(player, verb, parsed, ok, refused);
+        return true;
+    }
+
+    if (sub == "conjure")
+    {
+        std::string const word = words.size() > 2 ? words[2] : std::string();
+        char const* line = nullptr;
+        if (word == "food")
+            line = ai::ConjureFoodSpellName();
+        else if (word == "water")
+            line = ai::ConjureWaterSpellName();
+        else if (word == "healthstone")
+            line = ai::CreateHealthstoneSpellName();
+        if (!line)
+        {
+            player::Refuse(player, verb, "usage", usage);
+            return true;
+        }
+        std::size_t ok = 0, refused = 0;
+        for (Target const& target : targets)
+        {
+            PlayerbotAI* botAi = nullptr;
+            if (!LiveTarget(player, verb, target, botAi))
+            {
+                ++refused;
+                continue;
+            }
+            if (!target.bot->IsAlive())
+            {
+                RefuseBot(player, verb, target.bot, "dead", "the bot is dead");
+                ++refused;
+                continue;
+            }
+            std::uint32_t const spellId = HighestSpellOfLine(target.bot, line);
+            if (!spellId)
+            {
+                RefuseBot(player, verb, target.bot, "not-known", std::string("has not trained: ") + line);
+                ++refused;
+                continue;
+            }
+            if (!ActionRegistered(botAi, "cast"))
+            {
+                RefuseBot(player, verb, target.bot, "action-not-registered",
+                    "the legacy action `cast` is not registered in this build");
+                ++refused;
+                continue;
+            }
+            if (target.bot->GetStandState() != UNIT_STAND_STATE_STAND)
+                target.bot->SetStandState(UNIT_STAND_STATE_STAND);
+            if (!botAi->DoSpecificAction("cast", ai::Event("service conjure", std::to_string(spellId), player), true))
+            {
+                RefuseBot(player, verb, target.bot, "failed", "the cast did not run; try again");
+                ++refused;
+                continue;
+            }
+            OkBot(player, verb, target.bot, "conjure " + word + " " + std::to_string(spellId));
+            ++ok;
+        }
+        Summary(player, verb, parsed, ok, refused);
+        return true;
+    }
+
+    player::Refuse(player, verb, "usage", usage);
+    return true;
+}
 }
 }
 
@@ -490,6 +983,9 @@ namespace choice
 {
 bool HandleTotem(Player*, player::Caller const&, player::OwnerScope const&, std::string_view) { return false; }
 bool HandleBehavior(Player*, player::Caller const&, player::OwnerScope const&, std::string_view) { return false; }
+bool HandleBlessing(Player*, player::Caller const&, player::OwnerScope const&, std::string_view) { return false; }
+bool HandleChoice(Player*, player::Caller const&, player::OwnerScope const&, std::string_view) { return false; }
+bool HandleService(Player*, player::Caller const&, player::OwnerScope const&, std::string_view) { return false; }
 }
 }
 
