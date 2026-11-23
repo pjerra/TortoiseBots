@@ -2808,10 +2808,10 @@ void TravelMgr::LoadFishLocations()
 
         std::string name = FieldTextW3(fields[0]);
         uint32 mapId = fields[1].GetUInt16();
-        float positionX = float(fields[2].GetDouble());
-        float positionY = float(fields[3].GetDouble());
-        float positionZ = float(fields[4].GetDouble());
-        float orientation = float(fields[5].GetDouble());
+        float positionX = FieldDoubleAsFloatW3(fields[2]);
+        float positionY = FieldDoubleAsFloatW3(fields[3]);
+        float positionZ = FieldDoubleAsFloatW3(fields[4]);
+        float orientation = FieldDoubleAsFloatW3(fields[5]);
         std::string description = FieldTextW3(fields[6]);
 
         AsyncGuidPosition* point = &fishPoints.emplace_back(GuidPosition(0, WorldPosition(mapId, positionX, positionY, positionZ, orientation)));
