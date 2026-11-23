@@ -1,5 +1,7 @@
 #include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderAccess.h"
+#include "host/TbHostGuildOrderReassign.h"
 
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -1316,7 +1318,7 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     if (!RequireBuilt(handler, words, "guildorder"))
         return false;
     if (words.w.empty())
-        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps");
+        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps|access|rank|reassign");
 
     std::string const sub = Lower(words.w[0]);
     Player* sender = SenderPlayer(handler);
@@ -1336,10 +1338,9 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
             return Fail(handler, words, "guildorder", "not-in-guild", bot->GetName());
         if (sender)
         {
-            if (tbhost::guild::GetGuildId(sender) != guildId)
-                return Fail(handler, words, "guildorder", "wrong-guild", bot->GetName());
-            if (!tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
-                return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
         }
         uint32_t const itemId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
         uint32_t const amount = static_cast<uint32_t>(std::strtoul(words.w[3].c_str(), nullptr, 10));
@@ -1431,8 +1432,12 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         if (!bot || !IsHostBot(bot))
             return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
         uint64_t const guildId = tbhost::guild::GetGuildId(bot);
-        if (sender && guildId && !tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
-            return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+        if (sender)
+        {
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
+        }
         if (!tbhost::guild_orders::CancelOrder(bot->GetGUID().GetCounter()))
             return Fail(handler, words, "guildorder", "not-found", bot->GetName());
         tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), false);
@@ -1480,8 +1485,12 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         if (!bot || !IsHostBot(bot))
             return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
         uint64_t const guildId = tbhost::guild::GetGuildId(bot);
-        if (sender && guildId && !tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
-            return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+        if (sender)
+        {
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
+        }
 
         auto const ord = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
         if (!ord)
@@ -1509,7 +1518,105 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         return true;
     }
 
-    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps");
+    if (sub == "access")
+    {
+        uint32_t guildId = 0;
+        if (words.w.size() >= 2)
+        {
+            if (Player* bot = FindOnline(words.w[1]))
+                guildId = static_cast<uint32_t>(tbhost::guild::GetGuildId(bot));
+            else
+                guildId = static_cast<uint32_t>(std::strtoul(words.w[1].c_str(), nullptr, 10));
+        }
+        else if (sender)
+            guildId = static_cast<uint32_t>(tbhost::guild::GetGuildId(sender));
+        if (!guildId)
+            return Fail(handler, words, "guildorder", "no-guild", "specify <bot|guild_id>");
+
+        tbhost::guild_order_access::AccessReport report;
+        if (!tbhost::guild_order_access::BuildAccessReport(guildId, sender, report))
+            return Fail(handler, words, "guildorder", "no-guild", "no such guild");
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "access").N("guild", guildId);
+        if (report.enabled)
+            r.N("rank", report.botRank).S("rankname", report.rankName)
+                .S("tabs", report.tabsOk).S("denied", report.tabsDenied);
+        else
+            r.S("rank", "-").S("rankname", "-").S("tabs", "-").S("denied", "-");
+        r.B("cansetrank", report.canSetRank).B("canorder", report.canGiveOrders);
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    if (sub == "rank")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "guildorder", "usage", "rank <rankIndex>");
+        uint32_t const guildId = sender ? static_cast<uint32_t>(tbhost::guild::GetGuildId(sender)) : 0;
+        if (!sender || !guildId)
+            return Fail(handler, words, "guildorder", "not-guild", "You are not in a guild.");
+        std::string code, detail;
+        if (!tbhost::guild_order_access::MayChangeBotRank(guildId, sender, code, detail))
+            return Fail(handler, words, "guildorder", code, detail);
+
+        uint32_t const wanted = static_cast<uint32_t>(std::strtoul(words.w[1].c_str(), nullptr, 10));
+        uint32_t moved = 0;
+        if (!tbhost::guild_order_access::SetBotRank(guildId, wanted, &code, &detail, &moved))
+            return Fail(handler, words, "guildorder", code, detail);
+
+        tbhost::guild_order_access::AccessReport report;
+        tbhost::guild_order_access::BuildAccessReport(guildId, sender, report);
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "rank").N("guild", guildId).N("rank", wanted).N("bots", moved)
+            .S("rankname", report.rankName).S("tabs", report.tabsOk).S("denied", report.tabsDenied)
+            .B("cansetrank", report.canSetRank).B("canorder", report.canGiveOrders);
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    if (sub == "reassign")
+    {
+        if (words.w.size() < 3)
+            return Fail(handler, words, "guildorder", "usage", "reassign <bot> <newBot>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
+        Player* newBot = FindOnline(words.w[2]);
+        if (!newBot || !IsHostBot(newBot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[2]);
+        uint64_t const guildId = tbhost::guild::GetGuildId(bot);
+        if (sender)
+        {
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
+        }
+
+        std::string code, detail;
+        if (!tbhost::guild_orders::ReassignOrder(bot->GetGUID().GetCounter(),
+                newBot->GetGUID().GetCounter(), code, detail))
+            return Fail(handler, words, "guildorder", code, detail);
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "reassign").S("bot", newBot->GetName()).S("from", bot->GetName());
+        if (auto const ord = tbhost::guild_orders::FindOrder(newBot->GetGUID().GetCounter()))
+            r.N("item", ord->itemId).N("have", ord->delivered).N("want", ord->amount)
+                .S("state", GuildOrders::StateToken(ord->state));
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|search|who|preview|steps|access|rank|reassign");
 }
 
 bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)

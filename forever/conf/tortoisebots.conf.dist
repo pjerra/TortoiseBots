@@ -255,6 +255,16 @@ TortoiseBots.World.GuildMail = 1
 TortoiseBots.World.GuildMail.AllowMixedGuild = 0
 
 #
+#    TortoiseBots.World.GuildOrderBotRank
+#        Description: Guild orders: give every module-owned bot in a guild that also has a real player one shared
+#                     guild rank, so the master can open guild bank tabs to it (`.tb guildorder rank <rank>`).
+#                     Off: ranks are never changed and `.tb guildorder access` reports that no rank is managed.
+#        Default:     1
+#
+
+TortoiseBots.World.GuildOrderBotRank = 1
+
+#
 #    TortoiseBots.Dashboard.TraceDir
 #        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
 #                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.

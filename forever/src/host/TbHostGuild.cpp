@@ -1,4 +1,5 @@
 #include "host/TbHostGuild.h"
+#include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildPure.h"
 
 #include "Creature.h"
@@ -187,6 +188,7 @@ bool AcceptInvite(Player* invitee, uint64_t guildId, std::string* failReason)
     if (invitee->GetGuildId() != guildId)
         return SetFail(failReason, "core-refused");
 
+    guild_order_access::ApplyBotRankOnJoin(invitee, static_cast<uint32_t>(guildId));
     TC_LOG_INFO("tortoisebots", "[W9] guild-join bot={} guild={}", invitee->GetName(), guildId);
     return true;
 }
