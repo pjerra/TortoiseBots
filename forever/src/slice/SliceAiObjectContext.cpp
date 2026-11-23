@@ -268,7 +268,7 @@ namespace slice
         }
     };
 
-    // the registry of AssistStrategyContext (3 of its keys)
+    // the registry of AssistStrategyContext (4 of its keys)
     class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -277,6 +277,7 @@ namespace slice
             creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
             creators["auto cc"] = [](PlayerbotAI* ai) { return new AutoCcStrategy(ai); };
             creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistStrategy(ai); };
+            creators["dps aoe"] = [](PlayerbotAI* ai) { return new DpsAoeStrategy(ai); };
         }
     };
 
@@ -291,7 +292,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (87 of its keys)
+    // the registry of ActionContext (88 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -384,6 +385,7 @@ namespace slice
             creators["apply oil"] = [](PlayerbotAI* ai) { return new ImbueWithOilAction(ai); };
             creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
             creators["reach party member for totem"] = [](PlayerbotAI* ai) { return new ReachPartyMemberForTotemAction(ai); };
+            creators["dps aoe"] = [](PlayerbotAI* ai) { return new DpsAoeAction(ai); };
         }
     };
 
@@ -480,7 +482,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (134 of its keys)
+    // the registry of TriggerContext (135 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -620,6 +622,7 @@ namespace slice
             creators["has poison debuff"] = [](PlayerbotAI* ai) { return new HasPoisonDebuffTrigger(ai); };
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
             creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
+            creators["not dps aoe target active"] = [](PlayerbotAI* ai) { return new NotDpsAoeTargetActiveTrigger(ai); };
         }
     };
 
@@ -938,7 +941,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 46, kActions = 162, kTriggers = 207, kValues = 214;
+    constexpr unsigned kStrategies = 47, kActions = 163, kTriggers = 208, kValues = 214;
 }
 }
 

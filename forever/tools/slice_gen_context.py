@@ -314,7 +314,16 @@ PRESET_KEYS = {
     "trigger": "cs",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS)
+# Rows the compiled kits fire but the slice left unregistered: the AoE dps row, the salvation removal row, the
+# check-values pre-warm, the target books the reach and give-up paths write, the corpse-run timers and three
+# behaviour toggles that stay off until a player enables them.
+S209_KEYS = {
+    "strategy": "dps aoe",
+    "action": "dps aoe",
+    "trigger": "not dps aoe target active",
+    "value": "",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
