@@ -1,5 +1,6 @@
 #include "host/TbHostCraftOrderPure.h"
 #include "host/TbHostGuildOrderFish.h"
+#include "host/TbHostFishing.h"
 #include "host/TbHostGuildOrders.h"
 
 #include "SpellInfo.h"
@@ -254,6 +255,7 @@ class HostGatherCraftProvider final : public IGatherCraftProvider
         uint32_t itemId = 0;
         uint32_t beforeCount = 0;
         bool isCraft = false;
+        bool isFish = false;
     };
     std::unordered_map<uint32_t, PendingStep> _pending;
     std::unordered_map<uint32_t, uint32_t> _pendingAhMail;
@@ -362,7 +364,8 @@ public:
     bool CanGather(uint32_t botGuidLow, uint32_t itemId) const override
     {
         Player* bot = FindOnlineBot(botGuidLow);
-        return bot && tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId);
+        return bot && (tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId) ||
+            tbhost::fishing::CanFishOrder(bot, itemId));
     }
 
     bool CanCraft(uint32_t botGuidLow, uint32_t itemId) const override
@@ -390,10 +393,16 @@ public:
 
         if (auto it = _pending.find(botGuidLow); it != _pending.end())
         {
-            uint32_t const afterCount = BagItemCount(bot, it->second.itemId);
-            tbhost::craft_order::PendingStepOutcome const outcome =
-                tbhost::craft_order::EvaluatePendingStep(it->second.beforeCount, afterCount, it->second.isCraft);
+            PendingStep const pending = it->second;
             _pending.erase(it);
+            uint32_t const afterCount = BagItemCount(bot, pending.itemId);
+            if (pending.isFish && tbhost::fishing::TakeCaught(bot))
+            {
+                outReason = "fishing";
+                return true;
+            }
+            tbhost::craft_order::PendingStepOutcome const outcome =
+                tbhost::craft_order::EvaluatePendingStep(pending.beforeCount, afterCount, pending.isCraft);
             outReason = outcome.reason;
             return outcome.ok;
         }
@@ -508,6 +517,21 @@ public:
                 return false;
             }
             outReason = stateOut.empty() ? "craft-failed" : stateOut;
+            return false;
+        }
+
+        if (tbhost::fishing::CanFishOrder(bot, itemId))
+        {
+            std::string fishReason;
+            if (tbhost::fishing::StartOrderErrand(bot, itemId, fishReason))
+            {
+                _pending[botGuidLow] = { itemId, beforeCount, false, true };
+                outReason = "fishing";
+                return false;
+            }
+            // The item is fishing loot, not a node: do not fall through to
+            // the gather search that cannot find it and would hide the reason.
+            outReason = fishReason.empty() ? "no-water" : fishReason;
             return false;
         }
 
@@ -1078,6 +1102,8 @@ void TickBotOrder(Player* bot)
     }
 
     OrderRecord rec = *ordOpt;
+    if (rec.type == OrderType::Farm)
+        tbhost::fishing::EnsureOrderFishing(bot, rec.itemId);
     uint32_t const inBagsBefore = BagItemCount(bot, rec.itemId);
     tbhost::guild::OrderGoldBudget const budget =
         tbhost::guild::RemainingOrderGoldCap(rec.hasGoldCap, rec.goldCap, rec.ahGoldSpent);
@@ -1219,7 +1245,7 @@ void TickBotOrder(Player* bot)
                 GiveOrder(rec);
             }
             std::string const res = ok ? reason : (reason.empty() ? "fail" : reason);
-            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering");
+            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering" || res == "fishing");
             bool const logInfo = ok || recordTick(false, inProgress, res);
             if (ok)
                 recordTick(true, false, "");

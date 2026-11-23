@@ -1,4 +1,5 @@
 #include "host/TbHostProfession.h"
+#include "host/TbHostFishing.h"
 
 #include "host/TbAutoToolsPure.h"
 #include "host/TbHostCraftOrderPure.h"
@@ -868,6 +869,8 @@ void TickErrands(Player* bot, uint32_t diffMs)
     if (!bot)
         return;
 
+    fishing::TickErrand(bot, diffMs);
+
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return;
@@ -1116,6 +1119,7 @@ void CancelOrderErrand(Player const* bot)
 {
     if (!bot)
         return;
+    fishing::CancelErrand(bot);
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return;
@@ -1128,6 +1132,8 @@ bool HasActiveErrand(Player const* bot)
 {
     if (!bot)
         return false;
+    if (fishing::HasActiveErrand(bot))
+        return true;
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return false;
@@ -1138,6 +1144,8 @@ std::string ActiveErrandPhase(Player const* bot)
 {
     if (!bot)
         return {};
+    if (fishing::HasActiveErrand(bot))
+        return fishing::ActiveErrandPhase(bot);
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return {};
@@ -1177,6 +1185,7 @@ void ClearFreeGatherTimer(uint64_t botGuidCounter)
 
 void ClearBotErrands(ObjectGuid const& botGuid)
 {
+    fishing::ClearErrand(botGuid);
     Errands().erase(botGuid);
     FreeGatherTimers().Clear(botGuid.GetCounter());
 }

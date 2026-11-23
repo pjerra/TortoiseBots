@@ -1,8 +1,10 @@
 #include "host/TbHostGuildOrderFish.h"
+#include "host/TbHostFishing.h"
 
 #include "host/TbHostGuildOrderFishPure.h"
 
 #include "DatabaseEnv.h"
+#include "compat/TbCompat_Fishing.h"
 #include "compat/TbCompat_S5.h"
 
 #include "DB2Stores.h"
@@ -15,6 +17,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace tbhost
@@ -29,9 +32,13 @@ struct FishingSourceState
 {
     std::mutex mutex;
     bool loaded = false;
-    // Item the loot can yield -> lowest positive skill_fishing_base_level among
-    // its source zones (0: no positive requirement).
+    // Item any fishing loot can yield -> lowest positive
+    // skill_fishing_base_level among its source zones (0: no positive
+    // requirement).
     std::unordered_map<std::uint32_t, std::uint32_t> minSkillByItem;
+    // The same, open water only: the host errand casts in open water.
+    std::unordered_map<std::uint32_t, std::uint32_t> minOpenWaterSkillByItem;
+    std::unordered_set<std::uint32_t> openWaterItems;
 };
 
 FishingSourceState& SourceState()
@@ -44,8 +51,7 @@ std::uint32_t AreaFishingSkill(std::uint32_t areaId)
 {
     if (!areaId)
         return 0;
-    AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId);
-    int32_t const required = area ? sObjectMgr->GetFishingBaseSkillLevel(area) : 0;
+    std::int32_t const required = tbcompat::FishingBaseSkill(areaId);
     return required > 0 ? std::uint32_t(required) : 0u;
 }
 
@@ -100,6 +106,8 @@ void ExpandReference(std::uint32_t refId, std::unordered_map<std::uint32_t, std:
 void LoadFishingSources()
 {
     std::unordered_map<std::uint32_t, std::uint32_t> minSkillByItem;
+    std::unordered_map<std::uint32_t, std::uint32_t> minOpenWaterSkillByItem;
+    std::unordered_set<std::uint32_t> openWaterItems;
     std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> refCache;
     std::unordered_map<std::uint32_t, bool> refExpanding;
 
@@ -112,12 +120,31 @@ void LoadFishingSources()
             it->second = skill;
     };
 
+    auto addOpenWaterItem = [&](std::uint32_t itemId, std::uint32_t skill)
+    {
+        if (!itemId)
+            return;
+        addItem(itemId, skill);
+        openWaterItems.insert(itemId);
+        auto [it, inserted] = minOpenWaterSkillByItem.emplace(itemId, skill);
+        if (!inserted && skill < it->second)
+            it->second = skill;
+    };
+
     auto addReference = [&](std::uint32_t refId, std::uint32_t skill)
     {
         std::vector<std::uint32_t> items;
         ExpandReference(refId, refCache, refExpanding, items);
         for (std::uint32_t itemId : items)
             addItem(itemId, skill);
+    };
+
+    auto addOpenWaterReference = [&](std::uint32_t refId, std::uint32_t skill)
+    {
+        std::vector<std::uint32_t> items;
+        ExpandReference(refId, refCache, refExpanding, items);
+        for (std::uint32_t itemId : items)
+            addOpenWaterItem(itemId, skill);
     };
 
     // Open water: the core rolls fishing_loot_template by area id, and the
@@ -132,9 +159,9 @@ void LoadFishingSources()
             std::uint32_t const itemId = fields[2].GetUInt32();
             std::uint32_t const skill = AreaFishingSkill(areaId);
             if (type == 0)
-                addItem(itemId, skill);
+                addOpenWaterItem(itemId, skill);
             else if (type == 1)
-                addReference(itemId, skill);
+                addOpenWaterReference(itemId, skill);
         } while (result->NextRow());
     }
 
@@ -173,8 +200,11 @@ void LoadFishingSources()
     FishingSourceState& state = SourceState();
     std::lock_guard<std::mutex> lock(state.mutex);
     state.minSkillByItem = std::move(minSkillByItem);
+    state.minOpenWaterSkillByItem = std::move(minOpenWaterSkillByItem);
+    state.openWaterItems = std::move(openWaterItems);
     state.loaded = true;
-    TC_LOG_INFO("tortoisebots", "[W9] fishing sources: {} items", uint32_t(state.minSkillByItem.size()));
+    TC_LOG_INFO("tortoisebots", "[W9] fishing sources: {} items ({} open water)",
+        uint32_t(state.minSkillByItem.size()), uint32_t(state.openWaterItems.size()));
 }
 
 bool IsFishingSource(std::uint32_t itemId)
@@ -186,21 +216,28 @@ bool IsFishingSource(std::uint32_t itemId)
     return state.minSkillByItem.find(itemId) != state.minSkillByItem.end();
 }
 
+bool IsOpenWaterFishingSource(std::uint32_t itemId)
+{
+    if (!itemId)
+        return false;
+    FishingSourceState& state = SourceState();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    return state.openWaterItems.find(itemId) != state.openWaterItems.end();
+}
+
 std::uint32_t MinFishingZoneSkill(std::uint32_t itemId)
 {
     if (!itemId)
         return 0;
     FishingSourceState& state = SourceState();
     std::lock_guard<std::mutex> lock(state.mutex);
-    auto const it = state.minSkillByItem.find(itemId);
-    return it == state.minSkillByItem.end() ? 0u : it->second;
+    auto const it = state.minOpenWaterSkillByItem.find(itemId);
+    return it == state.minOpenWaterSkillByItem.end() ? 0u : it->second;
 }
 
 bool HostFishingAvailable()
 {
-    // No fishing on this build: no fishing action is registered, and no host
-    // path casts the fishing spell, uses the bobber or takes the catch.
-    return false;
+    return fishing::HostAvailable();
 }
 
 std::optional<TortoiseBots::GuildOrders::OrderReason> ResolveFarmRefusal(Player* bot, std::uint32_t itemId)
@@ -209,20 +246,24 @@ std::optional<TortoiseBots::GuildOrders::OrderReason> ResolveFarmRefusal(Player*
         return std::nullopt;
 
     std::uint32_t minSkill = 0;
+    bool openWater = false;
     {
         FishingSourceState& state = SourceState();
         std::lock_guard<std::mutex> lock(state.mutex);
         auto const it = state.minSkillByItem.find(itemId);
         if (it == state.minSkillByItem.end())
             return std::nullopt;
-        minSkill = it->second;
+        auto const open = state.minOpenWaterSkillByItem.find(itemId);
+        openWater = open != state.minOpenWaterSkillByItem.end();
+        minSkill = openWater ? open->second : 0u;
     }
 
     bool const hasSkill = bot->HasSkill(SKILL_FISHING);
     std::uint32_t const botSkill = hasSkill ? bot->GetSkillValue(SKILL_FISHING) : 0;
     bool const reachable = TortoiseBots::GuildOrders::FishingZoneReachable(int32_t(minSkill), botSkill);
 
-    FishFarmVerdict const verdict = DecideFishFarmVerdict(true, hasSkill, reachable, HostFishingAvailable());
+    FishFarmVerdict const verdict = DecideFishFarmVerdict(
+        true, hasSkill, reachable, openWater && HostFishingAvailable());
     TortoiseBots::GuildOrders::OrderReason const reason = FishFarmReason(verdict);
     if (reason == TortoiseBots::GuildOrders::OrderReason::None)
         return std::nullopt;

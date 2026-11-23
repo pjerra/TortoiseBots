@@ -1,11 +1,8 @@
 #pragma once
 
-// Guild Farm orders on an item that only fishing can yield: the order-side
-// facts for the terminal farm step. The bot brain's fishing order path
-// (ai/playerbot/GuildOrderSources.cpp, FishAction.cpp) is not part of the
-// ForeverCore slice, so these orders cannot be worked here; this file lets the
-// store answer with the verdict the fishing plan itself would give instead of
-// a generic no-source, and keeps the fish source index for a later executor.
+// Guild Farm orders on an item that only fishing can yield: the boot-time fish
+// source index and the verdict for a farm step that cannot gather or craft the
+// item. The host fishing errand (TbHostFishing.cpp) works these orders.
 //
 // World thread only: the index is built once at order-store load, and the
 // verdict is read on a bot tick (memory only, no database access there).
@@ -31,14 +28,18 @@ void LoadFishingSources();
 // index is built.
 bool IsFishingSource(std::uint32_t itemId);
 
-// Lowest positive skill_fishing_base_level among the zones that yield the
-// item. 0 when no zone has a positive requirement (always reachable) or the
-// item is not a fishing source.
+// True when a plain open-water cast (fishing_loot_template, rolled by the
+// bobber's area) can yield the item. A fishing-hole-only item is not, and the
+// host errand, which casts in open water, cannot work it.
+bool IsOpenWaterFishingSource(std::uint32_t itemId);
+
+// Lowest positive skill_fishing_base_level among the open-water zones that
+// yield the item. 0 when no zone has a positive requirement (always
+// reachable) or no open-water zone yields the item.
 std::uint32_t MinFishingZoneSkill(std::uint32_t itemId);
 
-// Whether this build can execute a fishing order at all. False today: no
-// fishing action is registered on ForeverCore, and nothing casts the fishing
-// spell, uses the bobber or takes the catch.
+// Whether this build can execute a fishing order at all: the host fishing
+// errand walks to a fish location, casts, uses the bobber and takes the catch.
 bool HostFishingAvailable();
 
 // The reason a Farm order that can neither craft nor gather the item must end
