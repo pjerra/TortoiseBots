@@ -321,11 +321,13 @@ float DistanceToSpot(Player* bot, Errand const& errand)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-void Finish(Player* bot, Errand& errand, char const* reason)
+void Finish(Player* bot, Errand& errand, char const* reason, Facts const* facts = nullptr)
 {
     bool const caught = reason && std::string(reason) == "done";
-    TC_LOG_INFO("tortoisebots", "[W9] fish bot={} item={} result={} casts={}",
-        bot->GetName(), errand.itemId, reason ? reason : "done", std::uint32_t(errand.casts));
+    TC_LOG_INFO("tortoisebots", "[W9] fish bot={} item={} result={} casts={} bobber={} ready={} used={} loot={} channel={}",
+        bot->GetName(), errand.itemId, reason ? reason : "done", std::uint32_t(errand.casts),
+        facts && facts->hasBobber, facts && facts->bobberReady, facts && facts->bobberUsed,
+        facts && facts->lootAvailable, facts && facts->channelingFishing);
     if (caught)
         CaughtFlags()[bot->GetGUID()] = true;
     errand = Errand{};
@@ -474,7 +476,7 @@ void TickErrand(Player* bot, std::uint32_t diffMs)
     }
     if (decision.action == Action::Fail)
     {
-        Finish(bot, errand, decision.fail);
+        Finish(bot, errand, decision.fail, &facts);
         return;
     }
 
@@ -519,7 +521,7 @@ void TickErrand(Player* bot, std::uint32_t diffMs)
         errand.phase = Phase::CastingWait;
         errand.phaseMs = 0;
         if (result != SPELL_CAST_OK)
-            TC_LOG_DEBUG("tortoisebots", "[W9] fish cast-refused bot={} spell={} result={}",
+            TC_LOG_INFO("tortoisebots", "[W9] fish cast-refused bot={} spell={} result={}",
                 bot->GetName(), kFishingCastSpellId, std::uint32_t(result));
     };
 
