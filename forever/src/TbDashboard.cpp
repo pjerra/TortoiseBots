@@ -1,5 +1,6 @@
 #include "TbDashboard.h"
 #include "TbBotMgr.h"
+#include "host/TbEngineBrain.h"
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
@@ -854,6 +855,11 @@ void SendCycle()
 
     TrackBots(bots);
 
+    std::unordered_map<ObjectGuid, TortoiseBots::engine::Telemetry> telemetry;
+    telemetry.reserve(bots.size());
+    for (Player* bot : bots)
+        TortoiseBots::engine::ReadTelemetry(bot, telemetry[bot->GetGUID()]);
+
     uint32 counts[7] = {}; // combat moving busy stalled resting dead idle
     for (Player* bot : bots)
     {
@@ -901,6 +907,7 @@ void SendCycle()
                 target = unit->GetName();
             Group* group = bot->GetGroup();
             Sender::BrainInfo const& brain = s.brains[bot->GetGUID()];
+            TortoiseBots::engine::Telemetry const& engineState = telemetry[bot->GetGUID()];
             if (i != batch * BotsPerBatch)
                 ss << ',';
             ss << "{\"name\":\"" << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter()
@@ -918,6 +925,9 @@ void SendCycle()
                << ",\"o\":" << bot->GetOrientation()
                << ",\"target\":\"" << Escape(target) << "\",\"strategy\":\"" << Escape(brain.combat) << "\",\"strategies_nc\":\"" << Escape(brain.nonCombat)
                << "\",\"engine\":\"" << brain.engine << "\",\"engine_state\":\"" << Escape(brain.state) << "\",\"state\":\"" << StateOf(bot) << "\""
+               << ",\"last_action\":\"" << Escape(engineState.lastAction) << "\",\"last_trigger\":\"" << Escape(engineState.lastTrigger) << "\""
+               << ",\"travel_purpose\":\"" << Escape(engineState.travelPurpose) << "\",\"travel_to\":\"" << Escape(engineState.travelTo)
+               << "\",\"travel_status\":\"" << Escape(engineState.travelStatus) << "\",\"travel_dist\":" << engineState.travelDist
                << ",\"xp\":" << bot->GetXP() << ",\"next_xp\":" << bot->GetXPForNextLevel()
                << ",\"guild\":\"" << Escape(bot->GetGuildName()) << "\"" << UiMapFields(bot)
                << DriverFields(bot, s.track.count(bot->GetGUID()) ? s.track[bot->GetGUID()].since : now, now) << "}";

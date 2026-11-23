@@ -9,6 +9,7 @@
 #pragma once
 
 #include "Define.h"
+#include "ObjectGuid.h"
 #include <string>
 #include <vector>
 
@@ -82,6 +83,29 @@ std::string InjectSpellDelay(Player* bot, uint32 delayMs);
 
 // What `.tb where` prints for an engine bot: one line each for state, strategies and current target, and the cast-result counts.
 std::vector<std::string> Describe(Brain const* brain);
+
+// The engine's live view of one bot for the dashboard feed (world thread, member reads only): its state, the
+// last executed action and its trigger, the travel destination it is working, and the combat engine's current target.
+// False when the bot has no usable brain; the struct is left default in that case.
+struct Telemetry
+{
+    bool engine = false;
+    std::string state;              // PlayerbotAI::BotStateToString (combat, dead, non-combat)
+    std::string lastAction;
+    std::string lastTrigger;
+    std::string combatStrategies;
+    std::string travelPurpose;      // destination short name ("grind", "vendor", ...)
+    std::string travelTo;           // destination title
+    std::string travelStatus;       // none, prepare, ready, travel, work, cooldown, expired
+    int32 travelDist = -1;          // yards to the destination point (-1 = no active destination)
+    ObjectGuid currentTarget;       // the engine's "current target" value (empty = none)
+    std::string currentTargetName;
+    bool targetHostile = false;
+    float targetDistance = 0.0f;
+    bool targetInLos = true;
+};
+
+bool ReadTelemetry(Player* bot, Telemetry& out);
 
 // Executes a legacy action by key for `bot` (used by host world-life errands).
 bool RunAction(Player* bot, char const* action, char const* param);

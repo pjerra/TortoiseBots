@@ -43,6 +43,8 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/WorldPosition.h"
+#include "playerbot/TravelMgr.h"
+#include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/LastSpellCastValue.h"
@@ -626,6 +628,59 @@ bool RunAction(Player* bot, char const* action, char const* param)
         return false;
     return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
 }
+
+bool ReadTelemetry(Player* bot, Telemetry& out)
+{
+    out = Telemetry{};
+    if (!bot || !bot->IsInWorld())
+        return false;
+    PlayerbotAI* pai = PlayerbotAIStorage::Instance().GetAI(bot->GetGUID());
+    if (!pai || pai->GetBot() != bot || !pai->GetAiObjectContext())
+        return false;
+
+    out.engine = true;
+    out.state = PlayerbotAI::BotStateToString(pai->GetState());
+    if (Action const* last = pai->GetLastExecutedAction(pai->GetState()))
+        out.lastAction = const_cast<Action*>(last)->getName();
+    out.lastTrigger = pai->GetLastExecutedTrigger(pai->GetState());
+    std::string joined;
+    for (std::string_view strategy : pai->GetStrategies(BotState::BOT_STATE_COMBAT))
+    {
+        if (!joined.empty())
+            joined += ", ";
+        joined += strategy;
+    }
+    out.combatStrategies = std::move(joined);
+
+    AiObjectContext* context = pai->GetAiObjectContext();
+    if (ai::Value<ai::TravelTarget*>* value = context->GetValue<ai::TravelTarget*>("travel target"))
+        if (ai::TravelTarget* target = value->Get(); target && target->IsActive())
+            if (ai::TravelDestination* destination = target->GetDestination())
+            {
+                std::string const purpose = destination->GetShortName();
+                if (!purpose.empty() && purpose != "unknown" && purpose != "idle" && purpose != "none")
+                {
+                    // Same status names and order as TravelStatus (TravelMgr.h).
+                    static char const* const statusNames[] = { "none", "prepare", "ready", "travel", "work", "cooldown", "expired" };
+                    uint8 const status = uint8(target->GetStatus());
+                    out.travelPurpose = purpose;
+                    out.travelTo = destination->GetTitle();
+                    out.travelStatus = status < 7 ? statusNames[status] : "unknown";
+                    out.travelDist = int32(target->Distance(bot));
+                }
+            }
+
+    if (ai::Value<Unit*>* value = context->GetValue<Unit*>("current target"))
+        if (Unit* target = value->Get())
+        {
+            out.currentTarget = target->GetGUID();
+            out.currentTargetName = target->GetName();
+            out.targetHostile = bot->IsHostileTo(target);
+            out.targetDistance = bot->GetDistance(target);
+            out.targetInLos = bot->IsWithinLOSInMap(target);
+        }
+    return true;
+}
 }
 }
 
@@ -653,6 +708,7 @@ bool InFlight(Brain*) { return false; }
 std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
+bool ReadTelemetry(Player*, Telemetry& out) { out = Telemetry{}; return false; }
 bool RunAction(Player*, char const*, char const*) { return false; }
 }
 }
