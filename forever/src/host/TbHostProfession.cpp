@@ -897,6 +897,12 @@ void TickErrands(Player* bot, uint32_t diffMs)
         f.itemsGained = g.itemsGained;
         f.phaseElapsedMs = g.phaseElapsedMs;
 
+        TortoiseBots::prof::BagGain bagGain;
+        bool const lootPhase = g.phase == TortoiseBots::prof::GatherPhase::Casting || g.phase == TortoiseBots::prof::GatherPhase::Looting;
+        if (g.bagsTaken && lootPhase && !f.isCasting && !f.lootAvailable)
+            bagGain = TortoiseBots::prof::BagGainSince(g.bagsBefore, BagCounts(bot));
+        f.bagItemsGained = bagGain.gained;
+
         TortoiseBots::prof::GatherErrandStep const step = TortoiseBots::prof::StepGatherErrand(f);
         if (step.nextPhase != g.phase)
         {
@@ -906,6 +912,13 @@ void TickErrands(Player* bot, uint32_t diffMs)
 
         auto finishOk = [&]()
         {
+            if (g.itemsGained == 0 && bagGain.gained > 0)
+            {
+                g.itemsGained = bagGain.gained;
+                g.gainedItemId = bagGain.itemId;
+                if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(bagGain.itemId))
+                    g.gainedItemName = proto->GetName(LOCALE_enUS);
+            }
             uint16_t const afterSkill = g.lockSkillId ? bot->GetSkillValue(g.lockSkillId) : 0;
             TC_LOG_INFO("tortoisebots", "[W7] gather bot={} node={} skill={} before={} after={} item={} count={}",
                 bot->GetName(), g.nodeEntry, g.lockSkillId, g.beforeSkill, afterSkill,

@@ -188,6 +188,9 @@ struct GatherErrandFacts
     bool lootAvailable = false;
     bool lootAttempted = false;
     std::uint32_t itemsGained = 0;
+    // The core can store a node's loot straight into the bags without a loot window the errand sees,
+    // so a bag rise since the cast started also proves the gather.
+    std::uint32_t bagItemsGained = 0;
     std::uint32_t phaseElapsedMs = 0;
     std::uint32_t walkTimeoutMs = 20000;
     std::uint32_t castTimeoutMs = 10000;
@@ -241,6 +244,8 @@ inline GatherErrandStep StepGatherErrand(GatherErrandFacts const& f)
         case GatherPhase::Casting:
             if (f.lootAvailable)
                 return { GatherPhase::Looting, GatherErrandAction::LootNode, "pending:looting", "" };
+            if (f.bagItemsGained > 0)
+                return { GatherPhase::Done, GatherErrandAction::FinishOk, "ok", "" };
             if (!f.nodeExists)
                 return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:node-gone", "node-gone" };
             if (f.phaseElapsedMs >= f.castTimeoutMs)
@@ -255,7 +260,7 @@ inline GatherErrandStep StepGatherErrand(GatherErrandFacts const& f)
             return { GatherPhase::Casting, GatherErrandAction::Wait, "pending:casting", "" };
 
         case GatherPhase::Looting:
-            if (f.itemsGained > 0)
+            if (f.itemsGained > 0 || f.bagItemsGained > 0)
                 return { GatherPhase::Done, GatherErrandAction::FinishOk, "ok", "" };
             if (f.lootAttempted)
                 return { GatherPhase::Failed, GatherErrandAction::FinishFail, "fail:no-loot", "no-loot" };
