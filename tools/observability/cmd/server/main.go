@@ -42,6 +42,7 @@ import (
 	"tortoise-observability/internal/mechanics"
 	"tortoise-observability/internal/metrics"
 	"tortoise-observability/internal/model"
+	"tortoise-observability/internal/model3d"
 	"tortoise-observability/internal/plans"
 	"tortoise-observability/internal/ringbuf"
 	"tortoise-observability/internal/state"
@@ -753,6 +754,13 @@ func main() {
 	}))
 
 	mux.HandleFunc("GET /api/v1/ui", requireAuth(uiInfoHandler(*uiDefault, *ui3d)))
+
+	// Optional 3D character preview (-ui-3d / TBDASH_UI_3D=1): a same-origin,
+	// allowlisted cache of the Wowhead model viewer's assets and script.
+	model3dProxy := model3d.New(model3d.Config{Enabled: *ui3d})
+	mux.HandleFunc("GET /api/v1/model3d/asset/{path...}", requireAuth(model3dProxy.HandleAsset))
+	mux.HandleFunc("GET /api/v1/model3d/viewer.js", requireAuth(model3dProxy.HandleViewer))
+	mux.HandleFunc("GET /api/v1/model3d/character/{guid}", requireAuth(model3dCharacterHandler(armoryService, model3dProxy.Enabled())))
 
 	mux.HandleFunc("/api/v1/bots", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, store.Snapshot().Bots)
