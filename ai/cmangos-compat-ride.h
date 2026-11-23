@@ -124,10 +124,10 @@ inline bool CanMountInBattlegroundCompat(Player* bot)
             return false;
         if (bot->HasAura(23333) || bot->HasAura(23335))
             return false;
-        GameObject* allianceFlagStand = bg->GetBgMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, 179830, 90000));
+        GameObject* allianceFlagStand = bg->GetBgMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, uint32(179830), uint32(90000)));
         if (bot->IsWithinDistInMap(allianceFlagStand, 3.0f))
             return false;
-        GameObject* hordeFlagStand = bg->GetBgMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, 179831, 90001));
+        GameObject* hordeFlagStand = bg->GetBgMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, uint32(179831), uint32(90001)));
         if (bot->IsWithinDistInMap(hordeFlagStand, 3.0f))
             return false;
     }
