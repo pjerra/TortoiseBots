@@ -14,7 +14,7 @@ func TestCoreInfoPerCore(t *testing.T) {
 		core string
 		want string
 	}{
-		{"forever", `{"core":"forever","ported":{"raids":false,"coverage":false,"commander_orders":false,"combat":false}}`},
+		{"forever", `{"core":"forever","ported":{"raids":false,"coverage":false,"commander_orders":true,"combat":true}}`},
 		{"turtle", `{"core":"turtle","ported":{"raids":true,"coverage":true,"commander_orders":true,"combat":true}}`},
 		{"", `{"core":"turtle","ported":{"raids":true,"coverage":true,"commander_orders":true,"combat":true}}`},
 	}

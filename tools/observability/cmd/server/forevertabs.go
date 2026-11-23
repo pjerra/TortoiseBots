@@ -5,8 +5,8 @@ import (
 )
 
 // corePorted says which parts of the dashboard the game core feeds. The Turtle module feeds everything; ForeverCore (the port) does not
-// yet: its raid logic, the Commander orders and the commander card's live combat window are not ported. The pages read this once and say so
-// on the tabs it concerns instead of showing an empty list that looks like "nothing is happening".
+// yet: its raid logic and the boss tactic rows are not ported. The commander cards' orders and their live combat window are. The pages read
+// this once and say so on the tabs it concerns instead of showing an empty list that looks like "nothing is happening".
 type corePorted struct {
 	Raids           bool `json:"raids"`            // raid groups run by the module's raid logic (the Raids tab's fights and bosses)
 	Coverage        bool `json:"coverage"`         // the boss tactic rows the bots act on (the Raid coverage tab)
@@ -22,7 +22,7 @@ type coreView struct {
 // coreInfo answers GET /api/v1/core for the daemon's -core flavour.
 func coreInfo(core string) coreView {
 	if core == "forever" {
-		return coreView{Core: "forever"}
+		return coreView{Core: "forever", Ported: corePorted{CommanderOrders: true, Combat: true}}
 	}
 	return coreView{Core: "turtle", Ported: corePorted{Raids: true, Coverage: true, CommanderOrders: true, Combat: true}}
 }

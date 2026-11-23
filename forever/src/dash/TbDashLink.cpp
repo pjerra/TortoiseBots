@@ -1,5 +1,6 @@
 // The local sender shim: see TbDashLink.h. Built with TORTOISEBOTS_SLICE1 only.
 #include "dash/TbDashLink.h"
+#include "dash/TbDashEndpoint.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -46,14 +47,13 @@ void Load()
         return;
     std::string const host = sConfigMgr->GetStringDefault("TortoiseBots.Dashboard.Host", "127.0.0.1");
     int32 const port = sConfigMgr->GetIntDefault("TortoiseBots.Dashboard.Port", 9195);
-    boost::system::error_code ec;
-    boost::asio::ip::address const address = boost::asio::ip::make_address(host, ec);
-    if (ec)
+    std::string resolveError;
+    if (!dash::ResolveEndpoint(host, uint16(port), s.target, resolveError))
     {
         s.enabled = false;
         return;
     }
-    s.target = boost::asio::ip::udp::endpoint(address, uint16(port));
+    boost::system::error_code ec;
     s.socket = std::make_unique<boost::asio::ip::udp::socket>(s.io);
     s.socket->open(s.target.protocol(), ec);
     if (!ec)

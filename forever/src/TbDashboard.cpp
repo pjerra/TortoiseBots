@@ -1,5 +1,6 @@
 #include "TbDashboard.h"
 #include "TbBotMgr.h"
+#include "dash/TbDashEndpoint.h"
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
@@ -969,15 +970,14 @@ void LoadConfig()
     if (!s.enabled)
         return;
 
-    boost::system::error_code ec;
-    boost::asio::ip::address const address = boost::asio::ip::make_address(host, ec);
-    if (ec)
+    std::string resolveError;
+    if (!dash::ResolveEndpoint(host, uint16(port), s.target, resolveError))
     {
-        TC_LOG_ERROR("server.loading", "TortoiseBots: dashboard host '{}' is not an IP address; the dashboard gets no data", host);
+        TC_LOG_ERROR("server.loading", "TortoiseBots: cannot resolve dashboard host '{}' ({}); the dashboard gets no data", host, resolveError);
         s.enabled = false;
         return;
     }
-    s.target = boost::asio::ip::udp::endpoint(address, uint16(port));
+    boost::system::error_code ec;
     s.socket = std::make_unique<boost::asio::ip::udp::socket>(s.io);
     s.socket->open(s.target.protocol(), ec);
     if (!ec)
