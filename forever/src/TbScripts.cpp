@@ -23,6 +23,7 @@
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderAccess.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunHooks.h"
@@ -329,6 +330,7 @@ public:
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
                 tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
+                tbhost::guild_order_access::LoadBotRankAtStartup();  // the stored guild bot ranks (TBF #155)
                 TortoiseBots::h3::RebuildQuestEligibility();
             }
         }
