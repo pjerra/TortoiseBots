@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "Engine.h"
+#include "shaman/ShamanTotemCommandPolicy.h"
 #include "playerbot/PlayerbotAIConfig.h"
 // #include "playerbot/PerformanceMonitor.h" // E2E green
 #include "playerbot/BotActionLog.h"
@@ -585,9 +586,30 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                     LogAction("A:%s - USELESS src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
                     NoteOutcome(action, 'U');
                     actionExecutionListeners.Outcome(action, ActionOutcome::Useless, event, oldRelevance, relevance);
+                    // An explicit `totem drop` places the whole ordered set: the
+                    // 4 s drop stagger (CastTotemAction) refuses every slot queued
+                    // behind the first as USELESS, and a queued action never
+                    // retries — so without this only the first slot lands. While
+                    // the drop is fresh the basket rides again with its reach
+                    // chain intact; the stagger then places one slot per few
+                    // ticks and the basket dies with the window. Decayed
+                    // relevance keeps the rest of the tick's queue ahead of it.
+                    if (ai && event.getSource() == "totem drop")
+                    {
+                        AiObjectContext* dropContext = ai->GetAiObjectContext();
+                        ai::Value<time_t>* dropStamp = dropContext ?
+                            dropContext->GetValue<time_t>("manual time", ai::TotemDropTimeKey()) : nullptr;
+                        if (dropStamp && ai::TotemDropFresh(dropStamp->Get(), time(0)))
+                        {
+                            queue.Push(new ActionBasket(actionNode,
+                                relevance > 1.0f ? relevance - 1.0f : relevance, false, event));
+                            actionNode = nullptr;
+                        }
+                    }
                 }
             }
-            delete actionNode;
+            if (actionNode)
+                delete actionNode;
         }
     }
     while (basket && ++iterations <= iterationsPerTick);

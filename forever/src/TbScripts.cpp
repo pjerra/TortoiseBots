@@ -92,8 +92,12 @@
 #include "host/TbAddonChannel.h"
 #include "host/TbAddonInfo.h"
 #include "host/TbAddonActions.h"
+#include "host/TbAddonTotem.h"
 #include "host/TbAddonVerbs.h"
 #include "host/TbAddonRoster.h"
+#include "host/TbAddonBlessing.h"
+#include "host/TbAddonChoice.h"
+#include "host/TbAddonBehaviorService.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -563,6 +567,7 @@ public:
             { "craftorder", TortoiseBots::h3::HandleCraftOrder, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spec",   TortoiseBots::h3::HandleSpec,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "talents", TortoiseBots::talents::HandleTalentsCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "blessing", TortoiseBots::blessing::HandleBlessingChat, rbac::RBAC_PERM_COMMAND_GM, Console::No },
         };
         static ChatCommandTable commandTable =
         {
@@ -1748,8 +1753,12 @@ void AddSC_tortoisebots()
     TortoiseBots::addon::AddScripts();      // #130: PlayerScript::OnAddonMessageSent -> the TBM addon channel (host/TbAddonChannel.cpp)
     TortoiseBots::addoninfo::RegisterAddonVerbsInfo(); // #130 f-info: the "features" and "run" verbs (host/TbAddonInfo.cpp)
     TortoiseBots::action::RegisterAddonVerbsActions();   // #130 f-actions: the `action` verb + `action:<intent>` tokens
+    TortoiseBots::totem::RegisterAddonVerbsTotem();   // #133 c-totem: the `totem` verb + `totem` cap (host/TbAddonTotem.cpp)
     TortoiseBots::addonverbs::RegisterAddonVerbsPassthrough();   // #130 f-verbs: the `.bot` words the player layer answers (host/TbAddonVerbs.cpp)
     TortoiseBots::roster::RegisterAddonVerbsRoster();   // #130: `roster`/`list`/`alts` + handshake/BOTSTATE over the TBM channel (host/TbAddonRoster.cpp)
+    TortoiseBots::blessing::RegisterAddonVerbsBlessing(); // #133 c-blessing: `blessing` verb + `blessing`/`blessing-player` caps (host/TbAddonBlessing.cpp)
+    TortoiseBots::choice::RegisterAddonVerbsChoice();   // #133 c-choice: `choice` verb + `choice` cap (host/TbAddonChoice.cpp)
+    TortoiseBots::behsvc::RegisterAddonVerbsBehaviorService(); // #133 c-behsvc: `behavior` + `service` addon verbs
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)

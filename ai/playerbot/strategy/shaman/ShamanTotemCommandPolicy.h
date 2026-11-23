@@ -1,4 +1,5 @@
 #pragma once
+#include <ctime>
 #include <cctype>
 #include <cstdint>
 #include <string>
@@ -270,5 +271,18 @@ inline bool TotemDropWantsSlot(bool slotOccupied, std::string const& wantTotem)
     if (wantTotem.empty())
         return false;
     return !slotOccupied;
+}
+// An explicit `drop` owns the standing set for a while afterwards. The
+// queued slots land one per few ticks (the 4 s drop stagger), so a drop
+// that placed nothing yet must not be recalled away, and a slot the
+// stagger refused as USELESS must be re-queued rather than die one-shot.
+// Key of the per-bot "manual time" stamp the drop command writes; unset
+// (0, e.g. a bot that never got an explicit drop) is never fresh.
+inline char const* TotemDropTimeKey() { return "last totem drop time"; }
+// Covers the stagger across all four slots plus tick slack.
+inline constexpr long kTotemDropGraceSec = 60;
+inline bool TotemDropFresh(time_t lastDrop, time_t now)
+{
+    return lastDrop != time_t(0) && now >= lastDrop && now - lastDrop < kTotemDropGraceSec;
 }
 }

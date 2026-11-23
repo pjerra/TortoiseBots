@@ -28,7 +28,6 @@
 #include "playerbot/GuildOrderEnchants.h"
 #include "playerbot/GuildOrderSources.h"
 #include "playerbot/LootObjectStack.h"
-#include "playerbot/PlayerbotDbStore.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "playerbot/PlayerbotHelpMgr.h"
 #include "playerbot/PlayerbotTextMgr.h"
@@ -410,9 +409,8 @@ void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
 // PlayerbotFactory.cpp: the five pet and ammo members are real since slice 11 (forever/src/host/TbHostPetFactory.cpp).
 
-// PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load/save does nothing.
-void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
-void PlayerbotDbStore::Save(PlayerbotAI*, std::string) { NoteMisc(); }
+// PlayerbotDbStore.cpp: the VALUES half (Load/Save of the saved AI values) is real since piece c-store
+// (forever/src/slice/SliceDbStore.cpp); Reset and InvalidateStrategySnapshots stay out, their verbs are #135's.
 
 // RandomBotFacade loaders (runtime/PlayerbotRuntimeFacade.cpp): the pool caches are not built.
 void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
