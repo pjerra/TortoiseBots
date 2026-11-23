@@ -4616,10 +4616,14 @@
     if (el.armorySubtitle) {
       const level = live ? live.level : (s ? s.level : '');
       const zone = live ? `${getZoneName(live.zone, live.map)} (live)` : (s ? (s.online ? 'Online — position pending' : 'Offline') : '');
-      el.armorySubtitle.textContent = [
-        level !== '' ? `Level ${level}${s ? ` ${raceNameById(s.race)}` : ''} ${clsName}`.trim() : clsName,
-        zone
-      ].filter(Boolean).join(' · ');
+      // Chips for the v2 header; inline spans keep the v1 line identical.
+      const head = [];
+      if (level !== '') head.push(`<span class="armory-chip armory-chip-level">Level ${esc(level)}</span>`);
+      if (s && level !== '') head.push(`<span class="armory-chip armory-chip-race">${esc(raceNameById(s.race))}</span>`);
+      if (clsName) head.push(`<span class="armory-chip armory-chip-class">${esc(clsName)}</span>`);
+      let html = head.join(' ');
+      if (zone) html += `${html ? '<span class="armory-sub-sep"> · </span>' : ''}<span class="armory-chip armory-chip-zone">${esc(zone)}</span>`;
+      el.armorySubtitle.innerHTML = html;
     }
     if (el.armoryOnline) {
       el.armoryOnline.textContent = online ? 'Online' : 'Offline';
