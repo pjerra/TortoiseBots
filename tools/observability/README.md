@@ -196,6 +196,8 @@ switches from the top-bar button (`UI v2` / `UI v1`); the choice is kept in that
   GM session, and caches them in `<user cache>/tbdash-model3d`. Gear needs the `display_id` field the
   module writes into `tortoisebots-items.json`; without it the character still renders, without armour.
   A dead CDN shows one short line in the stage and leaves the profile usable (no retry loop).
+  Nothing from the game is shipped: models and textures are fetched on demand from Wowhead's public
+  CDN. Meant for a dashboard used locally or on a LAN, not one exposed to the internet.
 - Every v2 rule is scoped under `html[data-ui="v2"]`; with v2 off the page is unchanged.
 
 The v2 palette and layout ideas are adapted from ForeverCMS and SahtoutCMS (both MIT); see
