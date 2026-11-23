@@ -6,6 +6,7 @@
 #include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderQueues.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -1651,6 +1652,8 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
             tbhost::guild_orders::TickBotOrder(me);
+        if (me->IsAlive() && !me->IsInCombat() && !me->isMoving())
+            tbhost::guild_orders::TickGuildOrderQueues(me);
         if (bot.free && _professionsEnabled)
         {
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))

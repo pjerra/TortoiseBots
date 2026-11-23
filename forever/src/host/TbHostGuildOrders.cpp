@@ -4,6 +4,7 @@
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildOrderReassign.h"
 #include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderQueues.h"
 
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -945,6 +946,11 @@ bool GiveOrder(OrderRecord record)
     if (!record.createdAt)
         record.createdAt = now;
     record.updatedAt = now;
+    // Unspent guild gold outlives the order: the row parks as a refund stub
+    // instead of disappearing, and the refund pass pays it from any banker
+    // visit, then deletes the stub.
+    if (IsFinished(record.state) && record.guildGoldHeld > 0)
+        record.cancelled = true;
 
     std::string const sql = Trinity::StringFormat(
         "REPLACE INTO `tortoise_bots_guild_order` ({}, `ah_gold_spent`) VALUES "
@@ -1037,6 +1043,7 @@ void OnBotLogout(uint32_t botGuidLow)
     if (!botGuidLow)
         return;
     DisenchantForgetBot(botGuidLow);
+    ForgetGuildOrderQueueSession(botGuidLow);
     g_hostGatherCraft.ClearPending(botGuidLow);
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
