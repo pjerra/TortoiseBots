@@ -506,7 +506,11 @@ namespace ai
 		// holds no spot on that map.
 		bool FishZoneNearestSpot(uint32 zoneId, WorldPosition const& from, WorldPosition& spot, float& distanceSq) const;
 
-		EntryDestinationMap GetExploreLocs() const { return destinationMap.at(TravelDestinationPurpose::Explore); };
+		EntryDestinationMap GetExploreLocs() const
+		{
+			auto const itr = destinationMap.find(TravelDestinationPurpose::Explore);
+			return itr != destinationMap.end() ? itr->second : EntryDestinationMap();
+		}
 		DestinationList GetDestinations(const PlayerTravelInfo& info, uint32 purposeFlag = (uint32)TravelDestinationPurpose::None, const std::vector<int32>& entries = {}, bool onlyPossible = true, float maxDistance = 10000.0f) const;
 		void GetPartitionsLock(bool getLock = true);
 		static bool IsLocationLevelValid(const WorldPosition& position, const PlayerTravelInfo& info, uint32 purposeFlag = (uint32)TravelDestinationPurpose::None, int32 grindZoneFloor = 0, uint32 excludeZoneId = 0);
