@@ -35,6 +35,7 @@
 #include <ctime>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <unordered_map>
@@ -140,6 +141,17 @@ char const* Loc(LocalizedString const* str)
 {
     char const* text = str ? (*str)[sWorld->GetDefaultDbcLocale()] : nullptr;
     return text ? text : "";
+}
+
+uint32 ParseItemId(std::string const& s)
+{
+    if (s.empty())
+        return 0;
+    char* end = nullptr;
+    unsigned long v = std::strtoul(s.c_str(), &end, 10);
+    if (end == s.c_str() || v == 0 || v > 0x7FFFFFFF)
+        return 0;
+    return uint32(v);
 }
 
 // Hooks run on the map threads (MapUpdate.Threads > 1) while the feed cycle runs on the world thread: one lock over
@@ -1631,5 +1643,53 @@ void OnQuestStatusChange(Player* player, uint32 questId)
         case QUEST_STATUS_NONE: QueueEvent(player, "QuestDropped", title, std::to_string(questId)); break;
         default: break;
     }
+}
+
+// The engine's bot_events rows, narrowed to what the dashboard's activity rollup reads. Quests, kills, deaths and loot
+// already arrive through the core hooks above; the rest (vendor, trainer, repair, auction, mail, revives, PvP) only exist here.
+void OnBotActivity(std::string const& event, std::string const& info1, std::string const& info2, Player* bot, uint32 /*targetLevel*/)
+{
+    std::lock_guard lock(g_feedLock);
+    if (!IsBot(bot) || !Get().enabled)
+        return;
+    static std::set<std::string> const whitelist = {
+        // quests
+        "QuestRewarded", "AcceptQuestAction", "AcceptQuestShareAction", "TalkToQuestGiverAction", "QuestUpdateCompleteAction",
+        "QuestCompleted", "QuestDropped",
+        // loot & money
+        "StoreLootAction", "GatherLoot", "LootMoney", "RollWon",
+        // vendor / trainer / repair / auction
+        "SellAction", "BuyAction", "RepairAllAction", "TrainerAction", "NearbyService", "AhAction", "AhBidAction",
+        // guild orders: auction buys and relists for the guild, mail taken
+        "GuildAhBuy", "GuildAhRelist", "GuildAhRelistFailed", "MailAction",
+        // deaths, revives (ghost time) and give-ups
+        "BotDeath", "ReviveFromCorpseAction", "ReviveFromSpiritHealerAction", "RepopAction", "LongStuckFallback", "ReachGiveUp",
+        // explicit kill signal from XpGainAction
+        "Kill",
+        // open-world PvP seek: role grants, engagements, kills, deaths
+        "WorldPvpSeekGrant", "WorldPvpEngage", "WorldPvpKill", "WorldPvpDeath",
+    };
+    // Sent by the core hooks already; forwarding them too would count every kill, death, loot and quest twice.
+    static std::set<std::string> const covered = {
+        "Kill", "BotDeath", "StoreLootAction", "AcceptQuestAction", "QuestCompleted", "QuestRewarded", "QuestDropped",
+        "QuestUpdateCompleteAction",
+    };
+    if (!whitelist.count(event) || covered.count(event))
+        return;
+
+    static std::set<std::string> const itemEvents = {
+        "StoreLootAction", "GatherLoot", "SellAction", "BuyAction", "AhAction", "AhBidAction", "RollWon",
+    };
+    std::string extra;
+    if (itemEvents.count(event))
+        if (uint32 const itemId = ParseItemId(info2))
+            if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId))
+            {
+                std::ostringstream e;
+                e << ",\"item_id\":" << itemId << ",\"quality\":" << proto->GetQuality() << ",\"sell\":" << proto->GetSellPrice()
+                  << ",\"buy\":" << proto->GetBuyPrice();
+                extra = e.str();
+            }
+    QueueEvent(bot, event.c_str(), info1, info2, extra);
 }
 }

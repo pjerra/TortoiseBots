@@ -12,6 +12,7 @@
 #include "runtime/ObservabilityEmitter.h"
 #include "runtime/RunTrace.h"
 #include "runtime/WhyTrace.h"
+#include "TbDashboard.h"
 
 namespace TortoiseBots
 {
@@ -95,9 +96,10 @@ void ObservabilityEmitter::OnActionFailed(Player* /*bot*/, std::string const& /*
 {
 }
 
-void ObservabilityEmitter::EmitBotActivity(std::string const& /*event*/, std::string const& /*info1*/, std::string const& /*info2*/,
-    Player* /*bot*/, uint32 /*targetLevel*/)
+void ObservabilityEmitter::EmitBotActivity(std::string const& event, std::string const& info1, std::string const& info2,
+    Player* bot, uint32 targetLevel)
 {
+    Dashboard::OnBotActivity(event, info1, info2, bot, targetLevel);
 }
 
 // ---- CampMgr: no camp spots, no active camp. ----

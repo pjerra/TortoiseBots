@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Define.h"
+#include <string>
 
 class Creature;
 class Item;
@@ -25,4 +26,6 @@ void OnMoneyChanged(Player* player, int64 amount);
 void OnDamage(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spell);
 void OnHealOutcome(Unit* healer, uint32 raw, uint32 effective);
 void OnSpellCast(Player* player, SpellInfo const* spell);
+// The engine's bot_events rows (vendor, trainer, repair, auction, mail, revives, PvP, ...), filtered to the dashboard's activity feed.
+void OnBotActivity(std::string const& event, std::string const& info1, std::string const& info2, Player* bot, uint32 targetLevel);
 }
