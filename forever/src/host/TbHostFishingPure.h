@@ -4,6 +4,8 @@
 // forever/tools/test_fishing_host.cpp; TbHostFishing.cpp supplies the checks.
 #pragma once
 
+#include "playerbot/policy/loot/FishingSpotPolicy.h"
+
 #include <cstdint>
 
 namespace tbhost
@@ -144,6 +146,37 @@ inline Decision Step(Facts const& f)
         default:
             return { Action::Fail, Phase::Idle, "idle" };
     }
+}
+
+// Idle (masterless) fishing is one catch at a time inside the travelled
+// side-activity budget: one session per hour, at most 5 casts / 5 minutes.
+// These wrappers keep the host tick on the same numbers the legacy fish
+// action uses (ai/playerbot/policy/loot/FishingSpotPolicy.h).
+inline bool IdleSessionStartable(std::uint32_t sessionStartMs, std::uint32_t sessionEndMs,
+    int sessionCasts, std::uint32_t nowMs)
+{
+    return ai::FishingSessionStartable(sessionStartMs, sessionEndMs, sessionCasts, nowMs);
+}
+
+inline bool IdleSessionOver(std::uint32_t sessionStartMs, int sessionCasts, std::uint32_t nowMs)
+{
+    return ai::FishingSessionExpired(sessionStartMs, sessionCasts, nowMs);
+}
+
+// A failed water search parks the bot for 15 minutes instead of re-scanning
+// the terrain every tick; a running search keeps the 15 s throttle.
+inline bool IdleSearchAllowed(std::uint32_t lastSearchMs, std::uint32_t noWaterAtMs, std::uint32_t nowMs)
+{
+    if (noWaterAtMs != 0 && (nowMs - noWaterAtMs) < ai::FISH_NO_WATER_RETRY_MS)
+        return false;
+    return ai::FishingSearchAllowed(lastSearchMs, nowMs);
+}
+
+// A fishing hole wins over open water; a stand next to hostile spawns drops
+// the whole pick (the spot is a place to stand still, not a fight).
+inline bool IdleSpotChosen(bool holeFound, bool waterFound, bool guarded)
+{
+    return !guarded && (holeFound || waterFound);
 }
 
 } // namespace fishing

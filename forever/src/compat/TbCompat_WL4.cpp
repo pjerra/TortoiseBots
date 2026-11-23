@@ -599,4 +599,15 @@ std::int32_t FishingBaseSkill(std::uint32_t areaId)
 {
     return FishingBaseSkillQuietWL4(areaId);
 }
+
+bool SpotGuarded(std::uint32_t mapId, float x, float y, float z, float radiusYd,
+    std::uint32_t botLevel, bool horde)
+{
+    // A hostile spawn whose level_max + 2 reaches the bot's level (anything
+    // lower is grey). The point-danger index stores the static faction
+    // reaction and the max level per spawn cell.
+    WorldPosition const at(mapId, x, y, z);
+    std::uint32_t const highest = at.getHighestHostileLevelNear(radiusYd, horde ? HORDE : ALLIANCE);
+    return highest != 0 && highest + 2 >= botLevel;
+}
 } // namespace tbcompat

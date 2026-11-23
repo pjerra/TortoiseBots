@@ -210,6 +210,18 @@ TortoiseBots.Dashboard.RunSummaryDir = ""
 TortoiseBots.World.Professions = 0
 
 #
+#    TortoiseBots.World.Fishing
+#        Description: Allow free bots (`free`) to fish an occasional session at a fishing hole or nearby open water
+#                     (one session per hour, at most 5 casts / 5 minutes). The bot walks to the bank, casts with its
+#                     own pole and takes the catch; the secondary Fishing skill and a plain pole are granted like the
+#                     legacy factory does. Never in a dungeon or raid, never in combat, and a hostile spawn near the
+#                     bank moves the spot elsewhere.
+#        Default:     1
+#
+
+TortoiseBots.World.Fishing = 1
+
+#
 #    TortoiseBots.World.Auction
 #        Description: Allow bots to use the faction auction house (`.tb order ... ah`).
 #        Default:     0

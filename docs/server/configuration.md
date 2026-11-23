@@ -119,3 +119,4 @@ Raid diagnostics stay opt-in through
 | `TortoiseBots.AutoTools` | `1` | Pool and free bots get the missing tool of a profession they know (pick, knife, hammer, rod, spanner, fishing pole) into their bags. |
 | `TortoiseBots.AutoHunterPet` | `1` | Hunter bots at level 10 without a pet get their race's starter pet and the pet-control spells; an existing pet is never replaced. |
 | `TortoiseBots.AutoFood` | `1` | Pool and free bots carry level-fitting food (and water for mana users), topped up when they run low. |
+| `TortoiseBots.World.Fishing` | `1` | Free bots fish an occasional session at a fishing hole or nearby open water: one session per hour, at most 5 casts or 5 minutes. An unskilled bot is taught the secondary skill and given a plain pole; the catch goes into its own bags. |

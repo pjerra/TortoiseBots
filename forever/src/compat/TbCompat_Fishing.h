@@ -33,4 +33,11 @@ bool FishingStoreLoaded();
 // level of the chain has a row. Quiet: a missing sub-area row is normal.
 std::int32_t FishingBaseSkill(std::uint32_t areaId);
 
+// Whether a hostile spawn near the point is close to the bot's level. Static
+// spawn data only (no grid, no live units): the legacy
+// IsFishingSpotGuarded test, answered from the map's point-danger index.
+// Maps the index does not cover answer false (not guarded).
+bool SpotGuarded(std::uint32_t mapId, float x, float y, float z, float radiusYd,
+    std::uint32_t botLevel, bool horde);
+
 } // namespace tbcompat
