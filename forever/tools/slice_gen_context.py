@@ -23,7 +23,7 @@ OUT = chk.SLICE_CTX
 # forever/docs/SLICE1-R2-NOTES.md; at the time of writing there are none.
 # Slice 2 (R3, decision D6): SLICE2_KEYS below are the 69 keys of forever/docs/SLICE2-KEYS.md, added to the slice-1 lists.
 SLICE_KEYS = {
-    "strategy": "dps assist, close, follow, guard",
+    "strategy": "dps assist, close, follow, guard, no aoe, auto cc",
     "action": "melee, reach melee, follow, stop follow, dps assist, select new target, set combat state, "
               "set non combat state, set dead state, interrupt current spell, formation station, guard chat shortcut, guard, stance",
     "trigger": "combat start, combat end, death, enemy out of melee, invalid target, in pve, in pvp, in raid fight, "

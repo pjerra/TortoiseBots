@@ -18,6 +18,7 @@
 #include "Player.h"
 #include "Unit.h"
 
+#include "TbBotMgr.h"
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/PlayerbotAI.h"
@@ -49,11 +50,104 @@ bool ActionRegistered(PlayerbotAI* ai, char const* key)
 {
     return ai->GetAiObjectContext() && ai->GetAiObjectContext()->GetAction(key) != nullptr;
 }
+
+// M3 D7: the toggle table is a host setting per bot guid (memory, server uptime; no DB, PlayerbotDbStore is a stub). The
+// defaults match section 4.3: aoe on, autocc off, sap on, loot = whatever the kit has (`lootSet` false means leave it alone).
+struct ToggleSettings
+{
+    bool aoe = true;
+    bool autocc = false;
+    bool sap = true;
+    bool lootSet = false;
+    bool loot = false;
+};
+
+std::map<ObjectGuid, ToggleSettings>& Toggles()
+{
+    static std::map<ObjectGuid, ToggleSettings> table;
+    return table;
+}
+
+// The state each toggle's strategy lives in (section 4.3: aoe/autocc combat, sap/loot non-combat).
+BotState ToggleStateOf(std::string const& verb)
+{
+    return (verb == "aoe" || verb == "autocc") ? BotState::BOT_STATE_COMBAT : BotState::BOT_STATE_NON_COMBAT;
+}
+
+bool HasToggleStrategy(PlayerbotAI* ai, std::string const& verb)
+{
+    char const* key = ToggleStrategy(verb);
+    return key && *key && ai->HasStrategy(key, ToggleStateOf(verb));
+}
 }
 
 bool Enabled()
 {
     return sConfigMgr->GetBoolDefault("TortoiseBots.Orders.Tactical", true);
+}
+
+bool ReadToggle(Player* bot, std::string const& verb, bool& on)
+{
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    on = HasToggleStrategy(ai, verb);
+    // aoe and sap are negative strategies: their presence is OFF, their absence ON.
+    if (verb == "aoe" || verb == "sap")
+        on = !on;
+    return true;
+}
+
+// A `status` read is not meaningful for a bot the change path would refuse: sap on a non-rogue (the absent `no sap` would read
+// "on" for a class with no Sap) or a bot with no running engine. The callers refuse that bot and leave it out of the aggregate.
+bool ToggleStatusFault(Player* bot, std::string const& verb, std::string& code, std::string& detail)
+{
+    if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)
+    {
+        code = "no-rogue";
+        detail = "only a rogue has a Sap to toggle";
+        return true;
+    }
+    bool on = false;
+    if (!ReadToggle(bot, verb, on))
+    {
+        code = "no-engine";
+        detail = "the bot has no running engine to read";
+        return true;
+    }
+    return false;
+}
+
+void BeforeTick(Player* bot, PlayerbotAI* ai)
+{
+    if (!bot || !ai || !ai->GetAiObjectContext())
+        return;
+    ToggleSettings const& t = Toggles()[bot->GetGUID()];
+
+    // aoe: `no aoe` present = off, absent = on. Enforce from the table every tick (D7), so a co/nc change does not win.
+    {
+        bool const wantNoAoe = !t.aoe;
+        if (ai->HasStrategy("no aoe", BotState::BOT_STATE_COMBAT) != wantNoAoe)
+            ai->ChangeStrategy(wantNoAoe ? "+no aoe" : "-no aoe", BotState::BOT_STATE_COMBAT);
+    }
+    // autocc: `auto cc` present = on.
+    {
+        if (ai->HasStrategy("auto cc", BotState::BOT_STATE_COMBAT) != t.autocc)
+            ai->ChangeStrategy(t.autocc ? "+auto cc" : "-auto cc", BotState::BOT_STATE_COMBAT);
+    }
+    // sap: rogues only (a non-rogue has no Sap); `no sap` present = off.
+    if (bot->GetClass() == CLASS_ROGUE)
+    {
+        bool const wantNoSap = !t.sap;
+        if (ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT) != wantNoSap)
+            ai->ChangeStrategy(wantNoSap ? "+no sap" : "-no sap", BotState::BOT_STATE_NON_COMBAT);
+    }
+    // loot: only once the table has an entry (the kit default stands otherwise).
+    if (t.lootSet)
+    {
+        if (ai->HasStrategy("loot", BotState::BOT_STATE_NON_COMBAT) != t.loot)
+            ai->ChangeStrategy(t.loot ? "+loot" : "-loot", BotState::BOT_STATE_NON_COMBAT);
+    }
 }
 
 bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::string& detail)
@@ -73,7 +167,33 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
         detail = std::string("the legacy action `") + key + "` is not registered in this build";
         return false;
     };
-    // Every tactical verb needs a live bot (spec D2, and TB's own rule): a dead bot cannot stop, flee, guard, take a stance, engage or
+    std::string const& verb = spec.verb;
+
+    // M3: corpserun is the one tactical verb that acts on a dead bot, so it comes before the live-bot rule. A body needs the
+    // release gates (`no-entrance`); a ghost is already walked by the W1 dead engine (Run returns ok).
+    if (verb == "corpserun")
+    {
+        if (bot->IsAlive())
+        {
+            code = "not-dead";
+            detail = "the bot is not dead";
+            return false;
+        }
+        if (!bot->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+        {
+            if (!need("release"))
+                return false;
+            if (!BotMgr::Instance().ReleaseHasEntrance(bot))
+            {
+                code = "no-entrance";
+                detail = "the instance has no entrance point (no script or no trigger target): a release would revive the bot outside, so it is held";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Every other tactical verb needs a live bot (spec D2, and TB's own rule): a dead bot cannot stop, flee, guard, take a stance, engage or
     // rebuff, and a queued order would only run into its resurrection.
     if (!bot->IsAlive())
     {
@@ -81,7 +201,25 @@ bool Preflight(Player* bot, h3::OrderSpec const& spec, std::string& code, std::s
         detail = "the bot is dead";
         return false;
     }
-    std::string const& verb = spec.verb;
+    // M3 toggles: aoe/autocc/sap/loot [on|off|status]. The argument parses through the pure parser; sap is a rogue-only setting.
+    if (verb == "aoe" || verb == "autocc" || verb == "sap" || verb == "loot")
+    {
+        bool ok = false;
+        ParseToggle(spec.arg, ok);
+        if (!ok)
+        {
+            code = "bad-argument";
+            detail = verb + " [on|off|status]";
+            return false;
+        }
+        if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)
+        {
+            code = "no-rogue";
+            detail = "only a rogue has a Sap to toggle";
+            return false;
+        }
+        return true;
+    }
     if (verb == "stop")
         return true;
     if (verb == "flee")
@@ -427,6 +565,44 @@ std::string Run(Player* bot, PlayerbotAI* ai, std::string const& verb, std::stri
             PendingInterrupts()[bot->GetGUID()] = pending;
         return result;
     }
+    // M3 toggles: the queued Run writes the host table entry (D7) and changes the strategy at once; BeforeTick re-enforces it.
+    if (verb == "aoe" || verb == "autocc" || verb == "sap" || verb == "loot")
+    {
+        bool ok = false;
+        ToggleOp const op = ParseToggle(arg, ok);
+        if (!ok)
+            return "fail:bad-argument";
+        if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)
+            return "fail:no-rogue";
+        bool current = false;
+        if (!ReadToggle(bot, verb, current))
+            return "fail:no-engine";
+        ToggleSettings& t = Toggles()[bot->GetGUID()];
+        bool const wanted = ToggleWanted(op, current);
+        if (verb == "aoe")
+            t.aoe = wanted;
+        else if (verb == "autocc")
+            t.autocc = wanted;
+        else if (verb == "sap")
+            t.sap = wanted;
+        else
+        {
+            t.lootSet = true;
+            t.loot = wanted;
+        }
+        BeforeTick(bot, ai);
+        return "ok";
+    }
+    // M3 corpse run: a body is the release verb with its gates (`no-entrance`, checked in Preflight), then the W1 dead engine
+    // walks. A ghost is already walked by the engine, so the queued order answers ok without touching anything.
+    if (verb == "corpserun")
+    {
+        if (bot->IsAlive())
+            return "fail:not-dead";
+        if (bot->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+            return "ok";
+        return act("release", ai::Event("tb order", std::string(), requester)) ? "ok" : "fail:release";
+    }
     return "fail:unknown-verb";
 }
 
@@ -461,6 +637,11 @@ void SelfTestRecords(h3::Reply& reply)
     reply.Line(h3::Rec("cmd").S("verb", "engage").S("status", "accepted").N("bots", 5).S("result", "party 5").N("seconds", 5));
     reply.Line(h3::Rec("order").S("bot", "Mmage").S("verb", "interrupt").N("seq", 42).S("status", "queued"));
     reply.Line(h3::Rec("cmd").S("verb", "interrupt").S("status", "accepted").N("bots", 1).S("result", "bot:Mmage 1").S("action", "counterspell"));
+    reply.Line(h3::Rec("cmd").S("verb", "aoe").S("status", "accepted").N("bots", 5).S("result", "party 5").S("state", "off"));
+    reply.Line(h3::Rec("order").S("bot", "Mtank").S("verb", "aoe").N("seq", 43).S("status", "read").S("state", "on"));
+    reply.Line(h3::Rec("order").S("bot", "Mrogue").S("verb", "sap").S("status", "refused").S("code", "no-rogue").T("msg", "only a rogue has a Sap to toggle"));
+    reply.Line(h3::Rec("order").S("bot", "Mtank").S("verb", "corpserun").N("seq", 44).S("status", "queued"));
+    reply.Line(h3::Rec("order").S("bot", "Mtank").S("verb", "corpserun").S("status", "refused").S("code", "not-dead").T("msg", "the bot is not dead"));
     reply.Line(h3::Rec("selftest").S("case", "state-tactics").S("bot", "Mtank").S("stance", "behind").N("rebuff", 37));
 }
 }
@@ -502,6 +683,21 @@ Player* PickInterruptBot(std::vector<Player*> const&, Unit*, std::string& action
     reasons = "no-engine";
     return nullptr;
 }
+
+bool ReadToggle(Player*, std::string const&, bool& on)
+{
+    on = false;
+    return false;
+}
+
+bool ToggleStatusFault(Player*, std::string const&, std::string& code, std::string& detail)
+{
+    code = "no-engine";
+    detail = "the slice engine is not built";
+    return true;
+}
+
+void BeforeTick(Player*, PlayerbotAI*) {}
 
 void AppendState(h3::Rec&, Player*) {}
 void SelfTestRecords(h3::Reply&) {}

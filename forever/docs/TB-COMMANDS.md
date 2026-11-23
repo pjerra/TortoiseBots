@@ -864,9 +864,9 @@ Queue and acceptance never go through anything but the core: `WorldSession::Join
 the core: the module holds it back through `WorldScript::CanCreateBattleground` until a human's queue reaches the fill target, and
 re-schedules the core's queue update each pass so bots still waiting follow the human into his instance.
 
-## 23. Issue #131: tactical orders (M1-M2)
+## 23. Issue #131: tactical orders (M1-M3)
 
-The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`).
+The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, the toggles `aoe`/`autocc`/`sap`/`loot`, and `corpserun`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`). A toggle `status` is a read and answers in the command's own reply.
 
 Every tactical order except `engage` first ends a live engage hold (`HasEngagePullWindow()` → `EndPullWindow("order")`): the hold waits for the commander's first hit, and a new order replaces it. `stop` adds no `passive`, so a bot hit again defends itself; `hold` or `flee` is the order that keeps it out.
 
@@ -896,8 +896,10 @@ Acts on every bot of the caller's binding (lead and members) that is alive, or o
 | `engage [seconds 0-60]` | `seconds=<n>` (the default 4 when left out) | as above |
 | `rebuff` | - | as above |
 | `interrupt <guid> [bot]` | `action=<action>` | `result=bot:<name> 1`: one bot is picked (the named one only, else the first in party order with a castable interrupt) |
+| `aoe\|autocc\|sap\|loot [on\|off\|status] [bot]` | `state=<on\|off\|mixed>` | `result=party <n>` or `result=bot:<name> 1` (a `status` is a read) |
+| `corpserun [bot]` | - | `result=party <n>` or `result=bot:<name> 1` (no bot: every dead bound bot) |
 
-Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=|action=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
+Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=|action=|state=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
 
 ```
 cmd-begin #c1
@@ -915,6 +917,21 @@ cmd-end count=1 records=1 verb=engage lead=Mtank bots=5 ok=5 refused=0 #c2
 ### Pull options (M2)
 
 `pull|pullback <guid> [seconds 0-60] [ranged|body]` in `.tb cmd`; `pull <target> [seconds] [ranged|body]` in `.tb order`. `ai::ParsePullOrderOption` parses the words (any order, each once; `ranged` and `body` exclude each other) and the canonical text (`5 ranged`, `body`, ...) travels in the queued order. The seconds replace the party hold's join delay (`kPullJoinDelaySeconds`, 3 s, for both verbs when no seconds are given) and, for `pullback`, the strategy's DPS join delay (`AiPlayerbot.PullBackDpsJoinDelay` when no seconds are given). `ranged`/`body` call `PullStrategy::BeginCommand` for this command only, before `pull my target`, and are rolled back when the request refuses - for `pull` and `pullback` alike. The run policy's one body-pull retry after a ranged pullback refused as unreachable (`pull <guid> body`) now actually walks in (before M2 `body` was parsed and dropped). The kill switch does not cover these options: they are the judge's grammar.
+
+### Toggles and corpse run (M3)
+
+`aoe|autocc|sap|loot [on|off|status]` in both surfaces (`.tb cmd`: `[on|off|status] [bot]`; the two-word `auto cc` is accepted and normalised). A bare verb flips each bot's own state; `status` reads without queuing. The choice is a host setting per bot guid (memory, server uptime; no DB): `h3::BeforeEngineTick` re-enforces it every tick, so a `co`/`nc` change of the same strategy does not win and a `ResetStrategies` is covered. `free` does not clear a toggle. Defaults when never set: aoe on, autocc off, sap on, loot = the kit.
+
+| Toggle | Strategy | Present means |
+|---|---|---|
+| `aoe` | `no aoe` (combat) | off |
+| `autocc` | `auto cc` (combat) | on |
+| `sap` | `no sap` (non-combat) | off (rogues only; a non-rogue is refused `no-rogue`) |
+| `loot` | `loot` (non-combat) | on |
+
+`.tb cmd` answers `state=<on|off|mixed>`: the wanted state for a change, the bots' current state aggregated for a `status` read. `.tb order` answers `status=read state=<on|off>` for a `status`, `status=queued` for a change.
+
+`corpserun` (also `corpse run`) in `.tb order`, and `corpserun [bot]` in `.tb cmd` (no bot: every dead bound bot). An alive bot is refused `not-dead`. A body runs the existing `release` verb with its gates (`no-entrance`), then the W1 dead engine walks; a ghost answers `status=queued` with Run `ok` (the walk is already the engine's). `.tb state` `corpserun=` shows the leg.
 
 ### State and configuration
 

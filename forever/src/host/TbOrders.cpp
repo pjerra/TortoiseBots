@@ -133,7 +133,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 bool IsVerb(std::string const& word)
 {
     static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release", "sell", "buy", "repair", "train", "mail", "learn-prof", "gather", "craft", "taxi-learn", "fly", "ride", "ah", "tame",
-        "stop", "flee", "guard", "stance", "engage", "rebuff", "interrupt" };
+        "stop", "flee", "guard", "stance", "engage", "rebuff", "interrupt", "aoe", "autocc", "sap", "loot", "corpserun" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -839,6 +839,10 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         return;
     ObjectGuid const guid = bot->GetGUID();
 
+    // M3 (D7): re-enforce the per-bot toggle settings every tick, so a ResetStrategies or a `co`/`nc` change of the same
+    // strategy does not win over the host table.
+    tactics::BeforeTick(bot, ai);
+
     // H4: a dead bot with a pending resurrection from its own party answers it ("accept resurrect", the legacy action, with the offerer's guid as the event's
     // object: the shape the action reads). At most once per second per bot; the core's accept (ResurrectResponse, Response 0 = accept, MiscHandler.cpp:507-534)
     // is what the engine side turns the action into.
@@ -1234,13 +1238,24 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!who.ok())
         return Fail(handler, args, "order", who.code, who.detail);
     if (pos >= args.w.size())
-        return Fail(handler, args, "order", "missing-verb", "follow, stay, come, attack, pull, interrupt, endpull, hold, free, assist, co, nc, release, stop, flee, guard, stance, engage, rebuff");
+        return Fail(handler, args, "order", "missing-verb", "follow, stay, come, attack, pull, interrupt, endpull, hold, free, assist, co, nc, release, stop, flee, guard, stance, engage, rebuff, aoe, autocc, sap, loot, corpserun");
     std::string verb = Lower(args.w[pos++]);
     if (verb == "end")
     {
         if (pos < args.w.size() && Lower(args.w[pos]) == "pull")
             ++pos;
         verb = "endpull";
+    }
+    // M3: the two-word toggle and corpse-run forms (`auto cc`, `corpse run`) normalise to the one-word verbs.
+    if (verb == "auto" && pos < args.w.size() && Lower(args.w[pos]) == "cc")
+    {
+        ++pos;
+        verb = "autocc";
+    }
+    else if (verb == "corpse" && pos < args.w.size() && Lower(args.w[pos]) == "run")
+    {
+        ++pos;
+        verb = "corpserun";
     }
     if (!IsVerb(verb))
         return Fail(handler, args, "order", "unknown-verb", verb);
@@ -1265,6 +1280,43 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             unsigned seconds = 0;
             if (!tactics::ParseEngageSeconds(rest, seconds))
                 return Fail(handler, args, "order", "bad-argument", "engage [seconds 0-60]");
+        }
+        else if (verb == "aoe" || verb == "autocc" || verb == "sap" || verb == "loot")
+        {
+            bool ok = false;
+            tactics::ToggleOp const op = tactics::ParseToggle(rest, ok);
+            if (!ok)
+                return Fail(handler, args, "order", "bad-argument", verb + " [on|off|status]");
+            tacticArg = rest;
+            // A `status` is a read, not an order: answer the current state per bot without queuing (D1).
+            if (op == tactics::ToggleOp::Status)
+            {
+                Reply reply(handler, args, "order");
+                reply.Begin();
+                uint32 reads = 0, refused = 0;
+                for (Player* bot : who.bots)
+                {
+                    std::string code, detail;
+                    if (tactics::ToggleStatusFault(bot, verb, code, detail))
+                    {
+                        Rec rec("order");
+                        rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused").S("code", code).T("msg", detail);
+                        reply.Line(rec);
+                        ++refused;
+                        continue;
+                    }
+                    bool on = false;
+                    tactics::ReadToggle(bot, verb, on);
+                    Rec rec("order");
+                    rec.S("bot", bot->GetName()).S("verb", verb).S("status", "read").S("state", on ? "on" : "off");
+                    reply.Line(rec);
+                    ++reads;
+                }
+                Rec end("order");
+                end.S("verb", verb).N("bots", reads + refused).N("read", reads).N("queued", 0).N("refused", refused);
+                reply.End(end);
+                return true;
+            }
         }
     }
 
@@ -1340,7 +1392,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             verb == "fly" ? "fly <node id|name>" :
             verb == "ride" ? "ride <transport entry>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
     if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release" || verb == "repair" || verb == "gather" || verb == "taxi-learn" ||
-            verb == "stop" || verb == "flee" || verb == "guard" || verb == "rebuff") && !rest.empty())
+            verb == "stop" || verb == "flee" || verb == "guard" || verb == "rebuff" || verb == "corpserun") && !rest.empty())
         return Fail(handler, args, "order", "unexpected-argument", rest);
     if (verb == "learn-prof" && TortoiseBots::prof::SkillIdFromName(rest) == 0)
         return Fail(handler, args, "order", "bad-argument", "unknown or unsupported profession (fishing is out)");

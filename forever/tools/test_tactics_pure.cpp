@@ -119,6 +119,34 @@ static void TestInterruptTick()
     CHECK(window >= 1000 && window <= 4000);
 }
 
+static void TestToggles()
+{
+    // ParseToggle: empty = flip; on/off/status case-insensitive; anything else refused.
+    bool ok = false;
+    CHECK(t::ParseToggle("", ok) == t::ToggleOp::Flip && ok);
+    CHECK(t::ParseToggle("on", ok) == t::ToggleOp::On && ok);
+    CHECK(t::ParseToggle("OFF", ok) == t::ToggleOp::Off && ok);
+    CHECK(t::ParseToggle("status", ok) == t::ToggleOp::Status && ok);
+    CHECK(t::ParseToggle("maybe", ok) == t::ToggleOp::Flip && !ok);
+    CHECK(t::ParseToggle("flip", ok) == t::ToggleOp::Flip && !ok);
+
+    // ToggleWanted: the wanted state after the op against the current state.
+    CHECK(!t::ToggleWanted(t::ToggleOp::Flip, true));
+    CHECK(t::ToggleWanted(t::ToggleOp::Flip, false));
+    CHECK(t::ToggleWanted(t::ToggleOp::On, true));
+    CHECK(t::ToggleWanted(t::ToggleOp::On, false));
+    CHECK(!t::ToggleWanted(t::ToggleOp::Off, true));
+    CHECK(!t::ToggleWanted(t::ToggleOp::Off, false));
+
+    // AggregateState: one state when all agree, "mixed" when they do not.
+    CHECK(t::AggregateState({ true, true }) == "on");
+    CHECK(t::AggregateState({ false, false }) == "off");
+    CHECK(t::AggregateState({ true, false }) == "mixed");
+    CHECK(t::AggregateState({ false, true }) == "mixed");
+    CHECK(t::AggregateState({ true, true, false }) == "mixed");
+    CHECK(t::AggregateState({}) == "off");
+}
+
 int main()
 {
     TestEngageSeconds();
@@ -126,6 +154,7 @@ int main()
     TestVerbs();
     TestInterrupt();
     TestInterruptTick();
+    TestToggles();
     if (g_fail)
     {
         std::printf("%d of %d checks FAILED\n", g_fail, g_checks);
