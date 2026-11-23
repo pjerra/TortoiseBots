@@ -96,6 +96,7 @@
 #include "playerbot/strategy/generic/MimicConsumableStrategy.h"
 #include "playerbot/strategy/generic/NoAoeStrategy.h"
 #include "playerbot/strategy/generic/NoBlinkInstanceStrategy.h"
+#include "playerbot/strategy/generic/NonCombatStrategy.h"
 #include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/PullStrategy.h"
 #include "playerbot/strategy/generic/QuestStrategies.h"
@@ -170,6 +171,7 @@
 #include "playerbot/strategy/values/NearestCorpsesValue.h"
 #include "playerbot/strategy/values/NearestFriendlyPlayersValue.h"
 #include "playerbot/strategy/values/NearestGameObjects.h"
+#include "playerbot/strategy/values/NearestNonBotPlayersValue.h"
 #include "playerbot/strategy/values/NearestNpcsValue.h"
 #include "playerbot/strategy/values/NearestUnitsValue.h"
 #include "playerbot/strategy/values/NewPlayerNearbyValue.h"
@@ -210,7 +212,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (36 of its keys)
+    // the registry of StrategyContext (37 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -252,6 +254,7 @@ namespace slice
             creators["no blink instance"] = [](PlayerbotAI* ai) { return new NoBlinkInstanceStrategy(ai); };
             creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
             creators["pull back"] = [](PlayerbotAI* ai) { return new PullBackStrategy(ai); };
+            creators["collision"] = [](PlayerbotAI* ai) { return new CollisionStrategy(ai); };
         }
     };
 
@@ -293,7 +296,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (88 of its keys)
+    // the registry of ActionContext (89 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -387,6 +390,7 @@ namespace slice
             creators["use lightwell"] = [](PlayerbotAI* ai) { return new UseLightwellAction(ai); };
             creators["reach party member for totem"] = [](PlayerbotAI* ai) { return new ReachPartyMemberForTotemAction(ai); };
             creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
+            creators["move out of collision"] = [](PlayerbotAI* ai) { return new MoveOutOfCollisionAction(ai); };
         }
     };
 
@@ -483,7 +487,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (135 of its keys)
+    // the registry of TriggerContext (136 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -624,6 +628,7 @@ namespace slice
             creators["use trinket"] = [](PlayerbotAI* ai) { return new UseTrinketTrigger(ai); };
             creators["dispel enrage"] = [](PlayerbotAI* ai) { return new DispelEnrageOnTargetTrigger(ai); };
             creators["should pull"] = [](PlayerbotAI* ai) { return new ShouldPullTrigger(ai); };
+            creators["collision"] = [](PlayerbotAI* ai) { return new CollisionTrigger(ai); };
         }
     };
 
@@ -718,7 +723,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (214 of its keys)
+    // the registry of ValueContext (215 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -938,11 +943,12 @@ namespace slice
             creators["warlock spread attacker"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker", false, false, true, false); };
             creators["warlock spread attacker manual"] = [](PlayerbotAI* ai) { return new WarlockSpreadAttackerTargetValue(ai, "warlock spread attacker manual", false, false, true, true); };
             creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };
+            creators["nearest non bot players"] = [](PlayerbotAI* ai) { return new NearestNonBotPlayersValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 47, kActions = 163, kTriggers = 208, kValues = 214;
+    constexpr unsigned kStrategies = 48, kActions = 164, kTriggers = 209, kValues = 215;
 }
 }
 

@@ -93,6 +93,7 @@ ai/playerbot/strategy/values/LastSpellCastValue.cpp
 ai/playerbot/strategy/values/NearestAdsValue.cpp
 ai/playerbot/strategy/values/NearestFriendlyPlayersValue.cpp
 ai/playerbot/strategy/values/NearestGameObjects.cpp
+ai/playerbot/strategy/values/NearestNonBotPlayersValue.cpp
 ai/playerbot/strategy/values/NearestNpcsValue.cpp
 ai/playerbot/strategy/values/NearestUnitsValue.cpp
 ai/playerbot/strategy/values/NewPlayerNearbyValue.cpp

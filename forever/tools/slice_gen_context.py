@@ -136,8 +136,9 @@ SLICE11_KEYS = {
     "value": "pet dead, pet happy, active spell",
 }
 # World-life slice W1 (FOREVER-W1-W6A-SPEC section 1.3, forever/docs/W1-NOTES.md): the grind target value and its strategy, the
-# actions and triggers of the open-world dead kit, and the graveyard values. Left unregistered on purpose (each one does less, spec
-# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `collision`, `group`, `guild`; the travel
+# actions and triggers of the open-world dead kit, and the graveyard values. Left out of the free kit on purpose (each one does less, spec
+# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
+# COLLISION_KEYS, which a player can add, still not part of the free kit); the travel
 # target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
 # reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
 W1_KEYS = {
@@ -324,7 +325,17 @@ PULL_KEYS = {
     "trigger": "should pull",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, PULL_KEYS)
+# The collision row: the bot unstacked itself from a real player in TB. The full factory adds the strategy to every
+# random and real-player bot (AiFactory.cpp:1546, :1588, :1631); the slice kit does not, so the strategy stays a
+# player add (.bot nc collision) and the keys below only make that add work. The action is useful only when the
+# bot overlaps a unit and a non-bot player is within reach (MovementActions.cpp:5492).
+COLLISION_KEYS = {
+    "strategy": "collision",
+    "action": "move out of collision",
+    "trigger": "collision",
+    "value": "nearest non bot players",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, PULL_KEYS, COLLISION_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

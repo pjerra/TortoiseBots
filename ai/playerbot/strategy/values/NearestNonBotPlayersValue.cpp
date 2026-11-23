@@ -8,13 +8,11 @@
 #include "Maps/CellImpl.h"
 
 using namespace ai;
-using namespace MaNGOS;
 
 void NearestNonBotPlayersValue::FindUnits(std::list<Unit*> &targets)
 {
-    AnyUnitInObjectRangeCheck u_check(bot, range);
-    UnitListSearcher<AnyUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, range);
+    MaNGOS::AnyUnitInObjectRangeCheck u_check(bot, range);
+    VisitUnitsCompat(bot, targets, u_check, range);
 }
 
 bool NearestNonBotPlayersValue::AcceptUnit(Unit* unit)
