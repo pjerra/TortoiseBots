@@ -5,6 +5,8 @@
 // No legacy header is included here; PlayerbotAI is only forward-declared.
 #pragma once
 
+#include "DatabaseEnvFwd.h"
+
 #include <cstdint>
 #include <string>
 
@@ -17,12 +19,22 @@ namespace slice
 namespace aistore
 {
 
-// Reads this bot+preset's `value` rows into the context (strategy rows are #135's and are ignored). Does less
-// (no rows applied) when the table or a column is missing.
+// Reads this bot+preset's `value` rows into the context. Does less when the table or a column is missing.
 void LoadValues(PlayerbotAI* ai, uint32_t guid, std::string const& preset);
 // Writes the context's saved values over this bot+preset's `value` rows in one synchronous transaction (strategy
-// rows are left alone, #135). Does less (nothing written) when the table or a column is missing.
+// rows are left alone, used at brain teardown). Does less when the table or a column is missing.
 void SaveValues(PlayerbotAI* ai, uint32_t guid, std::string const& preset);
+
+// Full strategy + value store operations (P135-B).
+void LoadAll(PlayerbotAI* ai, uint32_t guid, std::string const& preset);
+void SaveAll(PlayerbotAI* ai, uint32_t guid, std::string const& preset);
+void ResetAll(uint32_t guid, std::string const& preset);
+void InvalidateStrategySnapshots(uint32_t guid);
+
+// Guarded helpers for ResetAiAction / ListAiAction.
+QueryResult QueryValuesOnly(uint32_t guid, std::string const& preset);
+void DeleteAllValues(uint32_t guid);
+QueryResult QueryDistinctPresets(uint32_t guid);
 
 }
 }

@@ -266,6 +266,19 @@ using ItemCastSpellBaseCompat = Spell;
 
 inline bool DbStoreBeginCompat(uint32 serialId) { CharacterDatabase.BeginTransaction(serialId); return true; }
 inline void DbStoreCommitCompat() { CharacterDatabase.CommitTransaction(); }
+inline uint64 DbStoreBotGuidCompat(Player* bot) { return bot ? bot->getObjectGuid().GetRawValue() : 0; }
+inline auto DbStoreQueryValuesCompat(uint64 guid)
+{
+    return CharacterDatabase.PQuery("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' and `preset` = '' and `key` = 'value'", guid);
+}
+inline void DbStoreDeleteValuesCompat(uint64 guid)
+{
+    CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' and `key` = 'value'", guid);
+}
+inline auto DbStoreQueryPresetsCompat(uint64 guid)
+{
+    return CharacterDatabase.PQuery("SELECT DISTINCT `preset` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu'", guid);
+}
 inline void LoadCustomStrategyLinesCompat(std::string const& qualifier, uint32 owner, std::list<std::string>& lines)
 {
     std::string safeQualifier = qualifier;
