@@ -378,7 +378,8 @@ void TrackBots(std::vector<Player*> const& bots, std::unordered_map<ObjectGuid, 
         else
             t.since = now;
         auto const engineItr = telemetry.find(bot->GetGUID());
-        TortoiseBots::engine::Telemetry const& engineState = engineItr != telemetry.end() ? engineItr->second : TortoiseBots::engine::Telemetry{};
+        static TortoiseBots::engine::Telemetry const noEngine;
+        TortoiseBots::engine::Telemetry const& engineState = engineItr != telemetry.end() ? engineItr->second : noEngine;
         bool const alive = bot->IsAlive();
         if (t.alive && !alive)
         {
