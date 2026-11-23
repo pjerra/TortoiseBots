@@ -433,7 +433,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (67 of its keys)
+    // the registry of ChatActionContext (68 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -447,6 +447,7 @@ namespace slice
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
+            creators["self resurrect"] = [](PlayerbotAI* ai) { return new SelfResurrectAction(ai); };
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
             creators["spirit healer"] = [](PlayerbotAI* ai) { return new SpiritHealerAction(ai); };
@@ -1016,7 +1017,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 72, kActions = 175, kTriggers = 219, kValues = 228;
+    constexpr unsigned kStrategies = 72, kActions = 176, kTriggers = 219, kValues = 228;
 }
 }
 
