@@ -37,7 +37,7 @@ struct Party
     std::vector<ObjectGuid> members;                                                        // optional explicit members (if empty, read from leader->GetGroup())
     ObjectGuid owner;                                                                       // order/icon owner (leader for a run, commander for `.tb cmd`)
     RunRec* runRec = nullptr;                                                               // non-null only when called from a dungeon run (for cc/task verbs)
-    bool fromRun = false;                                                                   // true for the run's own orders (gather, pull anchor on tank, late-failure tracking)
+    bool fromRun = false;                                                                   // the order's origin: true = the run issued it itself (any of its moves may wade shallow water, TbRunLiquid.h), false = a player's `.tb cmd` (the RFC liquid rule)
     bool persistentIcons = false;                                                           // true for `.tb cmd`: keep the skull raid icon on attack/pull targets
     std::function<bool(uint64 handle, std::string const& token, ObjectGuid& out)> resolveTarget;  // run handle or 32-hex guid -> ObjectGuid
 };

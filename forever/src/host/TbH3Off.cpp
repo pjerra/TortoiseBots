@@ -86,6 +86,9 @@ bool CheckBotAccess(ChatHandler* /*handler*/, ObjectGuid /*botGuid*/, std::strin
 bool CheckBotAccess(ChatHandler* /*handler*/, Player const* /*bot*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 bool CheckPartyLeadAccess(Player const* /*sender*/, Player const* /*leader*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 bool CheckPartyLeadAccess(ChatHandler* /*handler*/, Player const* /*leader*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+// proof-1 A: the `.tb run` observer guard is an engine-build rule like CheckBotAccess, and in this build it allows like the others.
+bool CheckRunObserverAccess(ChatHandler* /*handler*/, Player const* /*bot*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+bool CheckRunObserverAccess(ChatHandler* /*handler*/, ObjectGuid /*botGuid*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 // TB-1: `.tb hurt` and `.tb power` (TbScripts.cpp, compiled in both builds) stop at RequireEngine before they ask who the target is, and
 // `.tb role`, `.tb equip` and `.tb learn` are the NotBuilt stubs above, so this rule is never reached here. The symbol has to exist for the
 // option-OFF link all the same; it answers what the real handlers answer without the engine.

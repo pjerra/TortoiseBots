@@ -376,6 +376,19 @@ TortoiseBots.Free.MaxPerMap.Raid40 = 40
 TortoiseBots.Create.TestAccounts = ""
 
 #
+#    TortoiseBots.Run.GmObserver / TortoiseBots.Run.SelfRecover
+#        Description: `.tb run start|pause|resume|stop` only. GmObserver lets a GM (SEC_GAMEMASTER) start, pause, resume and stop a run whose bots the
+#                     ownership guard refuses, unless the commander chain from the bot reaches a real player (that player's party is never taken over).
+#                     SelfRecover lets the host answer the policy's "N regroups by itself at this step did not hold" pause itself: the dead bots
+#                     release their spirits and the run regroups again (revive wait, gather, rest, walk back), once per step and at most 3 times per
+#                     run, never when a member is 400+ yd away or on another map. No teleport, no GM revive, no summon.
+#        Default:     GmObserver 1, SelfRecover 1
+#
+
+TortoiseBots.Run.GmObserver = 1
+TortoiseBots.Run.SelfRecover = 1
+
+#
 #    --- BG (BATTLEGROUNDS-SPEC.md, round BG1) ---
 #
 #    TortoiseBots.Bg.Enable

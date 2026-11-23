@@ -177,6 +177,10 @@ bool CheckBotAccess(ChatHandler* handler, ObjectGuid botGuid, std::string& code,
 bool CheckBotAccess(ChatHandler* handler, Player const* bot, std::string& code, std::string& detail);
 bool CheckPartyLeadAccess(Player const* sender, Player const* leader, std::string& code, std::string& detail);
 bool CheckPartyLeadAccess(ChatHandler* handler, Player const* leader, std::string& code, std::string& detail);
+// proof-1 A: the narrow GM-observer exemption of `.tb run start|pause|resume|stop` (TbGuardPure.h, ObserverMayControlRun). CheckBotAccess first; when it
+// refuses, a GM whose commander chain from the bot reaches no real player may still control the run. Both is empty on an allowed answer.
+bool CheckRunObserverAccess(ChatHandler* handler, Player const* bot, std::string& code, std::string& detail);
+bool CheckRunObserverAccess(ChatHandler* handler, ObjectGuid botGuid, std::string& code, std::string& detail);
 
 // TB-1: the character a test-kit command changes: a host bot, or the sender's own character; another real player's character is refused. An empty `name`
 // means the sender (the no-name form of `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt`, `.tb power`). On a refusal `code`/`detail` say why and it returns null.

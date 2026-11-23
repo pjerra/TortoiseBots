@@ -65,7 +65,7 @@ void CountPulls(RunRec const& rec, uint32& pulls, uint32& done)
         if (plan->steps[i].kind != ai::PlanStepKind::Pull)
             continue;
         ++pulls;
-        if (i < passed && !rec.run.notCleared.count(i) && !listed(rec.run.unreachableSkips, i) && !listed(rec.run.noPathSkips, i)
+        if (i >= rec.run.startStep && i < passed && !rec.run.notCleared.count(i) && !listed(rec.run.unreachableSkips, i) && !listed(rec.run.noPathSkips, i)
             && !listed(rec.run.deferredPulls, i) && !listed(rec.run.deferGivenUp, i))
             ++done;
     }
@@ -88,7 +88,7 @@ void SetEndListener(EndListener listener)
     EndHook = listener;
 }
 
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs)
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
 {
     if (!plan || leader.IsEmpty() || Table().count(leader))
         return nullptr;
@@ -96,7 +96,8 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
     rec->leader = leader;
     rec->leaderName = leaderName;
     rec->planName = plan->name;
-    rec->run = DungeonRun::Start(plan);
+    rec->run = DungeonRun::Start(plan, fromStep);
+    rec->run.startStep = fromStep;      // a placed start: a walk back never goes before it (DungeonRun::ReplayFloor)
     rec->startedMs = nowMs;
     RunRec* raw = rec.get();
     Table()[leader] = std::move(rec);
@@ -1011,6 +1012,40 @@ void TickRun(RunRec& rec, uint32 nowMs)
         else if (!verdict.why.empty())
             Note(rec, nowMs, "gather-stop", at, verdict.why);
     }
+    // proof-1 B: the policy's own regroups at a step did not hold (its pause note says so, both sites). The host answers that pause itself, once per step and
+    // at most kMaxRecoversPerRun per run, with what a player party does: the dead release their spirits (the core revives them at the entrance, D2) and the
+    // policy's own resume runs a fresh regroup (revive wait, gather, rest, the wc-r9 walk back that pulls the respawned packs one at a time). No teleport,
+    // no GM revive, no summon; the order goes out from the run, so it is not an outside order.
+    if (run.state == State::Paused && recover::IsRegroupsDidNotHoldPause(run.note))
+    {
+        bool const optionOn = sConfigMgr->GetBoolDefault("TortoiseBots.Run.SelfRecover", true);
+        recover::Decision const verdict = recover::Decide(rec.recover, run.step, run.note, facts.maxMemberYd, optionOn);
+        int32 const at = run.step < plan->steps.size() ? int32(run.step) : -1;
+        if (verdict.recover)
+        {
+            bool deadToRelease = false;
+            if (Group* group = lead ? lead->GetGroup() : nullptr)
+                for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                {
+                    Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                    if (member && member->IsInWorld() && BotMgr::Instance().IsBot(member->GetGUID()) && !member->IsAlive() &&
+                        !member->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+                    {
+                        deadToRelease = true;
+                        break;
+                    }
+                }
+            if (deadToRelease)
+            {
+                Issue(rec, "revive party", nowMs);
+                BaselineOrders(rec);
+            }
+            DungeonRun::Resume(run);
+            Note(rec, nowMs, "self-recover", at, verdict.why);
+        }
+        else if (!verdict.why.empty())
+            Note(rec, nowMs, "self-recover-stop", at, verdict.why);
+    }
     // The searches the policy asks the glue for after its tick (Commander.cpp:13941-13971), once per request, here and never per tick (N6: ported in
     // TbRunStands.cpp; before N6 both answered "found nothing"). A stalled walk asks for a dry stand-in near the step's point, an approach whose hops
     // got no nearer to a pack or boss asks for a stand with sight of it.
@@ -1146,7 +1181,7 @@ void Update(uint32 diffMs)
     }
 }
 
-StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
 {
     StartOutcome out;
     auto const refuse = [&out](char const* code, std::string detail)
@@ -1213,7 +1248,9 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
         tasks::Forget(leader->GetGUID());   // S9 (O9)
         Remove(leader->GetGUID());
     }
-    RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs);
+    if (fromStep >= plan->steps.size())
+        return refuse("no-step", "the plan has no such step");
+    RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs, fromStep);
     if (!rec)
         return refuse("no-plan", "the run could not be created");
     for (Player* member : others)
@@ -1234,7 +1271,7 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
     rec->seenState = rec->run.state;
     rec->seenPhase = rec->run.phase;
     rec->seenStep = rec->run.step;
-    Note(*rec, nowMs, "start", 0, plan->name);
+    Note(*rec, nowMs, "start", int32(fromStep), plan->name);
     out.rec = rec;
     return out;
 }

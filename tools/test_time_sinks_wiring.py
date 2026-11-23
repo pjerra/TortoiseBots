@@ -137,10 +137,15 @@ class TimeSinksWiringTest(unittest.TestCase):
     def test_death_pauses_rearm_the_rescue(self):
         for start, pause in (
                 ("inline bool LeadRevivedAway(Run& r, const Facts& f)", 'Pause(r, "the lead bot died and came back "'),
-                ("inline bool WaitForFallen(Run& r, const Facts& f)", 'Pause(r, "the lead bot is dead: revive it, then .bot run resume ("'),
                 ("    if (wipe && !autoRegroup && !r.wipeStopDue)\n", 'Pause(r, std::to_string(partyDead) + " dead: regroup (cmd revive party), then .bot run resume ("')):
             block = body(POLICY, start, pause)
             self.assertTrue(block.rstrip().endswith("RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more"), start)
+        # A dead lead bot no longer pauses on the tick of the death (live run 5, steps 75/78: the step's wipe regroups
+        # were spent, so the pause came at once, three times in one run). Its wait is the regroup, bounded by the
+        # regroup's own revive clock, and the death still re-arms the rescue for the resume after that pause.
+        fallen = body(POLICY, "inline bool WaitForFallen(Run& r, const Facts& f)\n{", "\n}\n")
+        self.assertIn("if (lead)\n        RearmRescueAfterDeath(r); // a death: the resume after this regroup's own pause may teleport once more", fallen)
+        self.assertNotIn('Pause(r, "the lead bot is dead', fallen)
         # Resume and ResetStep still never re-arm (test_self_regroups_rearm_the_rescue), nor Pause itself.
         self.assertNotIn("RearmRescueAfterDeath", body(POLICY, "inline void Pause(Run& r, const std::string& why)", "\n}\n"))
 

@@ -12,7 +12,7 @@ DELETE FROM `ai_dungeon_step` WHERE `plan` = 'wailing_caverns';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'wailing_caverns';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'wailing_caverns';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('wailing_caverns', 43, '3840', '', '3671', 'forever-agent 109a2496 route export + core scripts', '31 legs, 302 steps, 193 unit rows, 7 bosses, 21 wade hops');
+('wailing_caverns', 43, '', '', '3840,3671,5048,5755,5761', 'forever-agent 109a2496 route export + core scripts', '31 legs, 302 steps, 193 unit rows, 7 bosses, 21 wade hops');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('wailing_caverns', 0, 'anacondra_a', ''),
 ('wailing_caverns', 1, 'anacondra_b', ''),

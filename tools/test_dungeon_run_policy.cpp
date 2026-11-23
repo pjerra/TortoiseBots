@@ -4592,8 +4592,10 @@ static void TestWipeAndLeadDeathPause()
     f.alive = 5;
     CHECK(Resume(r));
     CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
-    // The lead bot dead (the owner's wait rule): the party waits for it, a
-    // regroup the run counts; past kAutoRegroupsPerStep it pauses.
+    // The lead bot dead (the owner's wait rule): the party waits for it with a regroup, whatever this step's wipes
+    // already spent (live run 5, steps 75 and 78: a wipe's two regroups made the lead's later death pause on the next
+    // tick, three pauses in one run, each within a second of the death). The regroup's own revive bound is what
+    // pauses a lead bot that stays down.
     f.leadAlive = false;
     f.dead = 1;
     f.alive = 4;
@@ -4603,7 +4605,31 @@ static void TestWipeAndLeadDeathPause()
     r.regroup = false; // as if the regroup ended and the lead bot fell again
     r.autoRegroups = kAutoRegroupsPerStep;
     Tick(r, f);
-    CHECK(r.state == State::Paused && r.note.find("lead bot is dead") != std::string::npos);
+    CHECK(r.state == State::Running && r.regroup);
+    CHECK(r.autoRegroups == kAutoRegroupsPerStep); // the wipes' budget is untouched by the lead's death
+}
+
+// A dead lead bot whose party cannot raise it does not spin: the regroup sends `revive party` and its own revive
+// clock (kRegroupReviveMs) ends in the pause a resume rescues from.
+static void TestDeadLeadPausesOnTheRegroupsRevive()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 40)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.leadAlive = false;
+    f.dead = 1;
+    f.alive = 4;
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && r.regroup);
+    bool revived = false;
+    for (std::uint32_t ms = 0; ms <= kRegroupReviveMs + kRegroupGatherMs && r.state == State::Running; ms += kTickMs)
+    {
+        std::string const order = Tick(r, f);
+        revived = revived || order == "revive party";
+    }
+    CHECK(revived);
+    CHECK(r.state == State::Paused && r.note.find("still dead after") != std::string::npos);
 }
 
 static void TestFightCeiling()
@@ -15360,7 +15386,7 @@ static void TestLeadDeadAfterTheFightSummonsTheParty()
     f.members[0].x = 215;
     f.maxMemberYd = 0;
     Tick(r, f);
-    CHECK(r.regroup && r.holdDue && r.walkBackDue && r.autoRegroups == 1 && r.hold.empty());
+    CHECK(r.regroup && r.holdDue && r.walkBackDue && r.autoRegroups == 0 && r.hold.empty());
     CHECK(Tick(r, f) == "revive party");
     // Up at the entrance, 300 yd from where it fell.
     f.leadAlive = true;
@@ -38107,6 +38133,7 @@ int main()
     TestHopPullsNearUnitsFirst();
     TestHopNeverPullsAnEventUnit();
     TestWipeAndLeadDeathPause();
+    TestDeadLeadPausesOnTheRegroupsRevive();
     TestFewDeadReviveBeforePull();
     TestFewDeadRuleSkipsEvents();
     TestRegroupFightsFirst();

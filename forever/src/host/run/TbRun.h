@@ -9,6 +9,7 @@
 
 #include "host/TbH3.h"
 #include "host/run/TbRunGatherPure.h"
+#include "host/run/TbRunRecoverPure.h"
 #include "host/run/TbRunHooks.h"
 #include "runtime/DungeonRunPolicy.h"
 
@@ -26,7 +27,7 @@ namespace run
 {
 constexpr size_t kEventRing = 1024;   // a 63-minute run overflowed 200 events; `events since=` names the oldest seq kept
 
-// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop, and since
+// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop | self-recover | self-recover-stop, and since
 // slice 9 (package C9) open | object | loot | item | clear (a task or a wait step of the plan ended: `unit` = the object's or boss's entry, `why` = what it saw).
 // `step`, `leg` and `unit` are -1 when the event has none (the record then omits the key: an unknown number is never written as a number).
 struct RunEvent
@@ -88,6 +89,7 @@ struct RunRec
     bool seenWipe = false;
     std::set<std::string> seenDead;
     gather::Extension gatherExt;                 // G8: the regroup gather's bounded extensions at the current step (TbRunGatherPure.h)
+    recover::State recover;                     // proof-1 B: the self-recover after "regroups did not hold" pauses, per step and per run (TbRunRecoverPure.h)
     // G8 (review): the bots the run's own `cc` orders marked, name -> mark. Run::ccHolds does not survive a step advance, a resume or a regroup
     // (DungeonRun::ResetStep clears it) and the bots' `rti cc` / `run cc family` do: this is what ClearRunCc resets at the run's end, moving an entry it
     // could not settle to the pending retry (DropPendingCc/RetryPendingCc).
@@ -109,7 +111,7 @@ struct RunRec
 
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
 RunRec* Find(ObjectGuid leader);
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs);
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
 bool Remove(ObjectGuid leader);
 std::vector<RunRec*> All();                         // by leader name
 
@@ -154,7 +156,8 @@ struct StartOutcome
     RunRec* rec = nullptr;
 };
 // Checks the party and starts the run (binds every other member to the leader). Nothing changes when a code is returned.
-StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs);
+// `fromStep` (`.tb run start <leader> <plan> from step N|leg L`): a placed start; the run begins at that plan index and a walk back never goes before it.
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
 
 struct StopOutcome
 {

@@ -84,37 +84,50 @@ int main()
     auto oldExempt = [](bool originWet, bool refusedOnWay) { return originWet ? false : refusedOnWay; };
     CHECK(!oldExempt(true, true));
 
-    // ---- wading (ai::kPlanFlagWadeOk): a row's own hop may cross water up to kWadeDepthYd deep, never swimming water ----
+    // ---- wading: a run-issued move may cross water up to kSwimDepthYd deep, never swimming water ----
     // The point rule, in the order the core's liquid read gives it (status, level, depth_level = the ground under the liquid).
-    CHECK(L::kWadeDepthYd == 1.5f);
-    CHECK(L::WadePointOf(0, 99.0f, 0.0f, 0.0f) == L::WadeWay::Dry);                 // no liquid
-    CHECK(L::WadePointOf(0x04, 10.4f, 9.5f, 10.0f) == L::WadeWay::Shallow);         // 0.4 yd deep: a wade
-    CHECK(L::WadePointOf(0x04, 10.4f, 8.8f, 10.0f) == L::WadeWay::Refused);         // 1.6 yd deep: past the ceiling, swimming
-    CHECK(L::WadePointOf(0x04, 10.4f, 8.9f, 10.0f) == L::WadeWay::Shallow);         // exactly 1.5 yd: the ceiling itself wades
-    CHECK(L::WadePointOf(0x04, 10.4f, 7.0f, 10.0f) == L::WadeWay::Refused);         // 3.4 yd deep
-    CHECK(L::WadePointOf(0x08 | 0x10, 5.0f, 4.0f, 0.0f) == L::WadeWay::Refused);    // under water on the floor: swimming
-    CHECK(L::WadePointOf(0x01, 9.3f, 8.0f, 10.0f) == L::WadeWay::Dry);              // surface 0.7 below the walk: dry enough
-    CHECK(L::WadePointOf(0x01, 9.7f, 8.2f, 10.0f) == L::WadeWay::Shallow);          // within the 0.6 slack, 1.5 deep
-    CHECK(L::WadePointOf(0x02, 10.2f, 9.1f, 10.0f) == L::WadeWay::Shallow);         // walking on it, shallow
-    // The old rule on the same shallow point refuses: that is what a row WITHOUT the flag still gets (the RFC pause).
+    CHECK(L::kSwimDepthYd == 2.03128f);                                           // ForeverCore's UNDER_WATER band (collision height)
+    std::uint32_t const water = L::kWadeTypeWater;
+    CHECK(L::WadePointOf(0, 99.0f, 0.0f, 0.0f, water) == L::WadeWay::Dry);          // no liquid
+    CHECK(L::WadePointOf(0x04, 10.4f, 9.5f, 10.0f, water) == L::WadeWay::Shallow);  // 0.9 yd deep: a walk
+    CHECK(L::WadePointOf(0x04, 10.4f, 9.1f, 10.0f, water) == L::WadeWay::Shallow);  // 1.3 yd deep: still a walk
+    CHECK(L::WadePointOf(0x04, 10.4f, 8.1f, 10.0f, water) == L::WadeWay::Refused);  // 2.3 yd deep: past the swim band
+    CHECK(L::WadePointOf(0x04, 10.4f, 8.37f, 10.0f, water) == L::WadeWay::Shallow); // 2.03 yd: just inside the band
+    CHECK(L::WadePointOf(0x04, 10.4f, 8.36f, 10.0f, water) == L::WadeWay::Refused); // a hair past it: swim water
+    CHECK(L::WadePointOf(0x04, 10.4f, 7.0f, 10.0f, water) == L::WadeWay::Refused);  // 3.4 yd deep
+    CHECK(L::WadePointOf(0x08 | 0x10, 5.0f, 4.0f, 0.0f, water) == L::WadeWay::Refused); // under water on the floor: swimming
+    CHECK(L::WadePointOf(0x01, 9.3f, 8.0f, 10.0f, water) == L::WadeWay::Dry);       // surface 0.7 below the walk: dry enough
+    CHECK(L::WadePointOf(0x01, 9.7f, 8.2f, 10.0f, water) == L::WadeWay::Shallow);   // within the 0.6 slack, 1.5 deep
+    CHECK(L::WadePointOf(0x02, 10.2f, 9.1f, 10.0f, L::kWadeTypeOcean) == L::WadeWay::Shallow); // ocean water wades
+    // Lava, slime and dark water never wade, however shallow (the lava refusal RFC relies on stays); liquid far below is dry.
+    CHECK(L::WadePointOf(0x01, 9.7f, 8.2f, 10.0f, 0x01) == L::WadeWay::Refused);    // magma, 1.5 deep
+    CHECK(L::WadePointOf(0x04, 10.4f, 10.2f, 10.0f, 0x04) == L::WadeWay::Refused);  // slime, 0.2 deep
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x10) == L::WadeWay::Refused);  // dark water, 0.2 deep
+    CHECK(L::WadePointOf(0x01, 2.0f, 1.0f, 10.0f, 0x01) == L::WadeWay::Dry);        // lava far below the walk
+    // A mixed flag word is not water either: a hazardous bit ORed with water or ocean refuses.
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x02 | 0x10) == L::WadeWay::Refused); // ocean | dark water
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x08 | 0x01) == L::WadeWay::Refused); // water | magma
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x08 | 0x04) == L::WadeWay::Refused); // water | slime
+    CHECK(L::WadePointOf(0x02, 10.2f, 10.0f, 10.0f, 0x08 | 0x02) == L::WadeWay::Shallow); // water | ocean is still water
+    // The RFC rule on the same shallow point refuses: that is what a player's own `cmd move` still gets.
     CHECK(L::PointRefused(0x04, 10.4f, 10.0f));
-    // A hop across a shallow strip: allowed with the flag, and the same hop without the flag pauses (the exact pair the executor
-    // chooses between: PathWadeRefused for a wade row, PathPrefixRefused for every other row).
+    // A hop across a shallow strip: a run-issued move passes the wade rule, the same hop from a player pauses (the exact
+    // pair the executor chooses between: PathWadeRefused for the run's own move, PathPrefixRefused for a human's).
     std::vector<P> crossing = { {0, 0, 0}, {20, 0, 0} };
     auto shallowStrip = [](float x, float, float) { return x >= 8.0f && x <= 12.0f ? L::WadeWay::Shallow : L::WadeWay::Dry; };
     auto deepStrip = [](float x, float, float) { return x >= 8.0f && x <= 12.0f ? L::WadeWay::Refused : L::WadeWay::Dry; };
     CHECK(!L::PathWadeRefused(crossing, crossing.size(), shallowStrip));
     CHECK(L::PathWadeRefused(crossing, crossing.size(), deepStrip));
     auto wetStrip = [](float x, float, float) { return x >= 8.0f && x <= 12.0f; };
-    CHECK(L::PathPrefixRefused(crossing, crossing.size(), wetStrip));              // flagless: the pause every other plan keeps
+    CHECK(L::PathPrefixRefused(crossing, crossing.size(), wetStrip));              // a human move: the RFC pause
     CHECK(!L::PathPrefixRefused(crossing, crossing.size(), [](float, float, float) { return false; }));
-    // The executor's own choice, both ways on the same shallow hop: a row without the wade bit pauses, the row with it crosses.
-    auto hopRefused = [&](bool wadeRow) {
-        return wadeRow ? L::PathWadeRefused(crossing, crossing.size(), shallowStrip)
+    // The executor's own choice, both ways on the same shallow hop: a player's move pauses, the run's move crosses.
+    auto hopRefused = [&](bool fromRun) {
+        return fromRun ? L::PathWadeRefused(crossing, crossing.size(), shallowStrip)
                        : L::PathPrefixRefused(crossing, crossing.size(), wetStrip);
     };
-    CHECK(hopRefused(false));                                                     // no wade bit: "crosses or ends in liquid", the pause
-    CHECK(!hopRefused(true));                                                     // wade bit and a shallow hop: walked
+    CHECK(hopRefused(false));                                                     // a human move: "crosses or ends in liquid", the pause
+    CHECK(!hopRefused(true));                                                     // a run-issued move and a shallow hop: walked
     // A wet destination (the shallows themselves): the wade rule's destination sample is read the same way.
     auto wetEnd = [](float x, float, float) { return x >= 18.0f ? L::WadeWay::Shallow : L::WadeWay::Dry; };
     CHECK(!L::PathWadeRefused(crossing, crossing.size(), wetEnd));
@@ -128,13 +141,13 @@ int main()
     CHECK(!L::PathWadeRefused(one, one.size(), [](float, float, float) { return L::WadeWay::Shallow; }));
     CHECK(L::PathWadeRefused(one, one.size(), [](float, float, float) { return L::WadeWay::Refused; }));
     // The hop's MIDDLE point (a path vertex between dry ends), the point the live river hop is walked in parts through: shallow
-    // passes with the wade bit, deep refuses, and shallow without the bit still pauses with the RFC rule.
+    // passes for a run-issued move, deep refuses, and shallow from a player still pauses with the RFC rule.
     std::vector<P> middles = { {0, 0, 0}, {10, 0, 0}, {20, 0, 0} };
     auto midShallow = [](float x, float, float) { return x > 9.0f && x < 11.0f ? L::WadeWay::Shallow : L::WadeWay::Dry; };
     auto midDeep = [](float x, float, float) { return x > 9.0f && x < 11.0f ? L::WadeWay::Refused : L::WadeWay::Dry; };
-    CHECK(!L::PathWadeRefused(middles, middles.size(), midShallow));             // flagged hop, shallow middle: walked
-    CHECK(L::PathWadeRefused(middles, middles.size(), midDeep));                 // flagged hop, deep middle: pauses
-    CHECK(L::PathPrefixRefused(middles, middles.size(), wetStrip));              // flagless hop over the same shallow water: pauses
+    CHECK(!L::PathWadeRefused(middles, middles.size(), midShallow));             // run-issued, shallow middle: walked
+    CHECK(L::PathWadeRefused(middles, middles.size(), midDeep));                 // run-issued, deep middle: pauses
+    CHECK(L::PathPrefixRefused(middles, middles.size(), wetStrip));              // a human move over the same shallow water: pauses
     // The log's kept sample is the deepest wet one (a refused sample wins over a wading one, deeper within the same kind).
     L::WadeSample trace;
     trace.Keep(L::WadeWay::Dry, 0, 0.0f, 1.0f, 1.0f, 1.0f);
@@ -146,49 +159,41 @@ int main()
     trace.Keep(L::WadeWay::Refused, 0x04, 1.9f, 13.0f, 0.0f, 0.0f);
     CHECK(trace.refused && trace.depth == 2.0f && trace.x == 12.0f);            // a shallower refusal does not replace it
 
-    // ---- a move the run makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan
-    // point, the follow-up after a pull): it is no point of a row's own walk, so DungeonRun::MoveMayWade adds the leg's
-    // wet area (kWadeAreaYd of a flagged row's own hop) and the executor then asks the wade rule above. Live case: the
-    // run-2 pause "cmd move -37.2 291.3 refused: crosses or ends in liquid" after the Druid fight, a regroup move across
-    // the shallow river beside the leg's flagged hop.
-    ai::DungeonPlan plan;
-    auto row = [&plan](std::uint8_t leg, std::uint16_t seq, ai::PlanStepKind kind, float x, float y, float z, std::uint32_t flags)
-    {
-        ai::PlanStep s;
-        s.leg = leg;
-        s.seq = seq;
-        s.kind = kind;
-        s.x = x;
-        s.y = y;
-        s.z = z;
-        s.flags = flags;
-        plan.steps.push_back(s);
-    };
-    row(0, 0, ai::PlanStepKind::Move, -3.641f, 229.268f, -106.189f, 0);        // the row before the river hop
-    row(0, 1, ai::PlanStepKind::Pull, -61.367f, 323.721f, -106.561f, ai::kPlanFlagWadeOk);   // the first river hop (flagged)
-    row(0, 2, ai::PlanStepKind::Pull, -63.800f, 417.300f, -106.700f, 0);       // a dry row of the same leg
-    DR::Run run;
-    run.plan = &plan;
-    run.step = 2;                                                              // after the fight on the dry row: a regroup
-    CHECK(run.phase != DR::Phase::Walk);
-    // The point the live regroup move was refused on: ~6 yd off the flagged hop, inside the wet area. Shallow -> the move goes.
-    CHECK(DR::LegWetAreaAt(run, -37.2f, 291.3f));
-    CHECK(DR::MoveMayWade(run, plan.steps[run.step], -37.2f, 291.3f));
+    // ---- the run's own move: the permission (DR::MoveMayWade: the origin flag and a live plan step), then the wade rule ----
+    // Live run 4, step 60 of leg 6: the run's move to -30.3 133.5 was refused over a 0.2 yd cell at -28.5 135.4, on a
+    // leg whose rows carry no wet bit, with the lead dry at -8.7 157.1. Live run 3: the run's cross-leg regroup at
+    // -37.2 291.3 crossed the leg 4 river while the current step was leg 5. Both are run-issued moves: they wade.
+    CHECK(DR::MoveMayWade(true, true));
+    CHECK(!DR::MoveMayWade(false, true));                                      // a player's `.tb cmd move`: the RFC rule
+    std::vector<P> step60 = { {-8.7f, 157.1f, -106.2f}, {-30.3f, 133.5f, -105.1f} };
+    auto oneShallow = [](float x, float, float) { return x > -30.0f && x < -27.0f ? L::WadeWay::Shallow : L::WadeWay::Dry; };
+    auto oneDeep = [](float x, float, float) { return x > -30.0f && x < -27.0f ? L::WadeWay::Refused : L::WadeWay::Dry; };
+    CHECK(!L::PathWadeRefused(step60, step60.size(), oneShallow));             // the step-60 0.2 yd cell: the run walks it
+    CHECK(L::PathWadeRefused(step60, step60.size(), oneDeep));                 // deep water on any leg pauses the same move
+    // The same 0.2 yd cell as the log read it (status 0x01, level -105.9, depth 0.2, walk z -105.4): the RFC point rule
+    // refuses it for a human commander (surface within 0.6 yd of the walk), and the wade rule reads it as shallow.
+    CHECK(L::PointRefused(0x01, -105.9f, -105.4f));
+    CHECK(L::WadePointOf(0x01, -105.9f, -106.1f, -105.4f, L::kWadeTypeWater) == L::WadeWay::Shallow);
+    CHECK(L::PathPrefixRefused(step60, step60.size(), [](float, float, float) { return true; }));
+    // The run's regroup across shallow water passes; a player's identical move pauses with the RFC rule.
     std::vector<P> regroup = { {-21.6f, 251.4f, -104.2f}, {-37.2f, 291.3f, -104.8f} };
     auto shallow = [](float, float, float) { return L::WadeWay::Shallow; };
     auto deep = [](float, float, float) { return L::WadeWay::Refused; };
-    CHECK(!L::PathWadeRefused(regroup, regroup.size(), shallow));              // the regroup move across shallow water passes
-    // The same move on a dry leg (the flagged row's own point, but the bit gone): no wet area, the RFC rule pauses.
-    CHECK(!DR::LegWetAreaAt(run, -63.8f, 417.3f));                              // the leg's dry end: never in the wet area
-    plan.steps[1].flags = 0;
-    CHECK(!DR::MoveMayWade(run, plan.steps[run.step], -37.2f, 291.3f));
-    CHECK(L::PathPrefixRefused(regroup, regroup.size(), [](float, float, float) { return true; }));   // the RFC pause
-    // Deep water always pauses, permission or not (the core's measured depth is the judge).
-    plan.steps[1].flags = ai::kPlanFlagWadeOk;
-    CHECK(DR::MoveMayWade(run, plan.steps[run.step], -37.2f, 291.3f));
-    CHECK(L::PathWadeRefused(regroup, regroup.size(), deep));
-    // A point outside the leg's wet area keeps the rule even with the bit on the leg.
-    CHECK(!DR::LegWetAreaAt(run, -120.0f, 40.0f));
+    CHECK(!L::PathWadeRefused(regroup, regroup.size(), shallow));              // the run's regroup across shallow water passes
+    CHECK(L::PathPrefixRefused(regroup, regroup.size(), [](float, float, float) { return true; }));   // the human `cmd move` pauses
+    CHECK(L::PathWadeRefused(regroup, regroup.size(), deep));                  // deep water always pauses, permission or not
+    // Deep water under the permission: the run's move is judged by the real sample rule (WadePointOf over a synthetic bed),
+    // so a bed 3 yd under the surface refuses the hop whatever the origin, and a bed 1 yd under walks it. A human's move
+    // over the same shallow hop pauses with the RFC rule (wetStrip, above). The wet bit is no input of the permission.
+    auto bedAt = [](float bed) {
+        return [bed](float x, float, float z) {
+            return x >= 8.0f && x <= 12.0f ? L::WadePointOf(0x04, 10.0f, bed, z, L::kWadeTypeWater) : L::WadeWay::Dry;
+        };
+    };
+    bool const runMay = DR::MoveMayWade(true, true);
+    CHECK(runMay && !L::PathWadeRefused(crossing, crossing.size(), bedAt(9.0f)));  // 1 yd of water: the run walks it
+    CHECK(runMay && L::PathWadeRefused(crossing, crossing.size(), bedAt(7.0f)));   // 3 yd of water: the run pauses (depth)
+    CHECK(!DR::MoveMayWade(false, true) && L::PathPrefixRefused(crossing, crossing.size(), wetStrip));  // a human pauses
 
     if (failures)
         return 1;

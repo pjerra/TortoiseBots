@@ -54,6 +54,13 @@ inline char const* CodeOf(Verdict v)
     }
     return "";
 }
+
+// proof-1 A: the narrow GM-observer exemption of the `.tb run` verbs start, pause, resume and stop ONLY (no other command asks it). A GM may control a
+// run the ownership guard refuses, but never a party a real player owns: then the chain of commander guids ends at a player, not at a bot.
+inline bool ObserverMayControlRun(bool optionOn, bool senderIsGm, bool chainEndsAtPlayer)
+{
+    return optionOn && senderIsGm && !chainEndsAtPlayer;
+}
 }
 }
 }

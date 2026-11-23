@@ -290,7 +290,10 @@ static void TestPlacedRunNeverWalksBackBeforeItsStartStep()
     r.startStep = start;
     r.notCleared.insert(wipe - 3); // even with a skipped pack that sends it into the replay
     Facts f = Party(0.0f, 0.0f);
-    CHECK(ReplayFloor(r) == start);
+    // The floor is never before the run's start step, and with its packs cleared up to the wipe it is the move point of
+    // the last cleared camp (600 0): the run resumes there, not at its start step (which is where the replay began when
+    // this test was written).
+    CHECK(ReplayFloor(r) >= start && ReplayFloor(r) == IndexOf(plan, 600.0f, 0.0f));
     StartWalkBack(r, f);
     CHECK(r.walkBack && r.walkBackIdx >= start);
     // Up behind its start step (the entrance): teleported at once to the safe point by the wipe (590 0: 600 0 and the
@@ -318,10 +321,17 @@ static void TestPlacedRunNeverWalksBackBeforeItsStartStep()
     // The pre-start steps count as uncleared for the straight path (UnclearedForPath), the run's later ones as before.
     std::unordered_set<std::size_t> const uncleared = UnclearedForPath(r);
     CHECK(uncleared.count(0) && uncleared.count(start - 1) && !uncleared.count(start) && uncleared.count(wipe - 3));
-    // From the beginning (startStep 0) the floor is the old one.
+    // From the beginning (startStep 0) the floor is the last cleared step's move point (the pack at 600, 3 steps
+    // before the wiped one), not the run's start: a wipe at the route's last camp resumes from the camp before it,
+    // not from the entrance (WC run 6, RUN-WC-NOTES 13.1). Nothing cleared keeps floor 0.
     Run from0 = Start(&plan, wipe);
     from0.notCleared.insert(wipe - 3);
-    CHECK(ReplayFloor(from0) == 0 && UnclearedForPath(from0).size() == 1);
+    CHECK(ReplayFloor(from0) == IndexOf(plan, 600.0f, 0.0f) && UnclearedForPath(from0).size() == 1);
+    Run fresh = Start(&plan, wipe);
+    for (std::size_t i = 0; i < wipe; ++i)
+        if (plan.steps[i].kind == ai::PlanStepKind::Pull || plan.steps[i].kind == ai::PlanStepKind::Boss)
+            fresh.notCleared.insert(i);
+    CHECK(LastClearedStep(fresh) == static_cast<std::size_t>(-1) && ReplayFloor(fresh) == 0);
     // Placed at the very step that wiped: no move point of the run before it, so no walk back at all (the step's own
     // approach goes out from the entrance), never one to a point before it.
     Run at = Start(&plan, wipe);
@@ -466,30 +476,50 @@ static void TestStuckWalkBackIsRescuedNotPaused()
     CHECK(again.state == State::Paused && again.note.find("the lead bot is stuck") == 0);
 }
 
-// Stratholme r29 slot 4 / Maraudon r28b slot B: a full run's walk back after a wipe whose straight way failed (here it
-// passes a pack the run left uncleared, after both backoffs) would replay the plan's points from the entrance (1,205 yd
-// here). The rescue teleports the lead bot to the safe point on the way it came instead, once (ReplayRescue).
-static void TestLongReplayIsRescuedInAFullRun()
+// Stratholme r29 slot 4 / Maraudon r28b slot B: a full run's walk back after a wipe whose straight way failed. With
+// the packs cleared up to the wipe the replay starts at the last cleared step (RUN-WC-NOTES 13.1) and the old 1,205 yd
+// replay from the entrance -- and the rescue it needed -- is gone; with nothing cleared the old replay is there and the
+// rescue teleports the lead bot to the safe point on the way it came, once (ReplayRescue).
+static void TestLongReplayAndItsRescue()
 {
     std::size_t wipe = 0, side = 0;
     DungeonPlan plan = GnomereganShape(wipe, side);
     plan.steps.insert(plan.steps.begin() + 15, Pull(150.0f, 5.0f, 7300));
     ++wipe;
-    Run r = Start(&plan, wipe);
-    r.notCleared.insert(15);
-    Facts f = Party(0.0f, 0.0f); // revived at the entrance
-    StartWalkBack(r, f);
-    CHECK(r.walkBack && r.walkBackDirect && !r.strandDue); // the straight walk first, as before
-    WalkBackSim const sim = SimulateWalkBack(r, f);
-    CHECK(r.state == State::Running && !r.walkBack && r.step == wipe);
-    CHECK(sim.teleports == 1);
-    CHECK(NoteSeen(sim, "passes an uncleared pack: the replay of the plan's points would walk"));
-    CHECK(NoteSeen(sim, "is teleported to a safe point on the way it came (step " +
-        std::to_string(IndexOf(plan, 590.0f, 0.0f) + 1) + ") out of combat"));
-    CHECK(!NoteSeen(sim, "replaying the plan's points"));
-    CHECK(sim.walked < 60.0f); // 590 0 to the step's own point, not the corridor
-    std::cout << "full-run replay rescue: walked " << sim.walked << " yd after the teleport (old replay "
-              << RouteYards(plan, 0, wipe, 0.0f, 0.0f) << " yd)\n";
+    // The packs cleared up to the wipe: a short replay from the last cleared step, no teleport.
+    {
+        Run r = Start(&plan, wipe);
+        r.notCleared.insert(15);
+        Facts f = Party(0.0f, 0.0f); // revived at the entrance
+        StartWalkBack(r, f);
+        CHECK(r.walkBack && r.walkBackDirect && !r.strandDue); // the straight walk first, as before
+        WalkBackSim const sim = SimulateWalkBack(r, f);
+        CHECK(r.state == State::Running && !r.walkBack && r.step == wipe);
+        CHECK(sim.teleports == 0);
+        CHECK(!NoteSeen(sim, "is teleported to a safe point"));
+        CHECK(sim.walked < 650.0f); // the straight walk to the last cleared step, not the corridor's 1,205 yd
+    }
+    // Nothing cleared (the route's packs all skipped or out of reach): the old replay from the entrance, and the
+    // rescue teleports the lead bot to the safe point on the way it came instead, once.
+    {
+        Run r = Start(&plan, wipe);
+        for (std::size_t i = 0; i < wipe; ++i)
+            if (plan.steps[i].kind == ai::PlanStepKind::Pull)
+                r.notCleared.insert(i);
+        Facts f = Party(0.0f, 0.0f); // revived at the entrance
+        StartWalkBack(r, f);
+        CHECK(r.walkBack && r.walkBackDirect && !r.strandDue); // the straight walk first, as before
+        WalkBackSim const sim = SimulateWalkBack(r, f);
+        CHECK(r.state == State::Running && !r.walkBack && r.step == wipe);
+        CHECK(sim.teleports == 1);
+        CHECK(NoteSeen(sim, "passes an uncleared pack: the replay of the plan's points would walk"));
+        CHECK(NoteSeen(sim, "is teleported to a safe point on the way it came (step " +
+            std::to_string(IndexOf(plan, 590.0f, 0.0f) + 1) + ") out of combat"));
+        CHECK(!NoteSeen(sim, "replaying the plan's points"));
+        CHECK(sim.walked < 60.0f); // 590 0 to the step's own point, not the corridor
+        std::cout << "full-run replay rescue: walked " << sim.walked << " yd after the teleport (old replay "
+                  << RouteYards(plan, 0, wipe, 0.0f, 0.0f) << " yd)\n";
+    }
 }
 
 // The bounds of ReplayRescue: a replay shorter than kReplayRescueYd is walked; a real player in the party, the rescue
@@ -1571,19 +1601,35 @@ static void TestRoundOneRestAndShortcutNotes()
         CHECK(m.phase == Phase::Rest && m.restForEating);
     }
     CHECK(m.phaseMs >= 9 * kTickMs); // one rest, not a new one every tick
-    // The replay shortcut with no direct way there: the plan's next point.
-    std::size_t wipe = 0, side = 0;
-    DungeonPlan shape = GnomereganShape(wipe, side);
-    shape.steps.insert(shape.steps.begin() + 15, Pull(150.0f, 5.0f, 7300));
-    ++wipe;
-    Run r = Start(&shape, wipe);
-    r.notCleared.insert(15);
-    Facts e = Party(0.0f, 0.0f);
-    e.walkBackRescue = false;
-    StartWalkBack(r, e);
-    WalkBackSim const walls = SimulateWalkBack(r, e, 8000, false);
-    CHECK(r.step == wipe && NoteSeen(walls, "no direct way from step"));
-    CHECK(walls.walked > 1150.0f); // every point, the side leg too
+    // The replay shortcut with no direct way there: the plan's next point (TestReplayShortcutWithoutADirectWay, its
+    // own route: with nothing cleared a replay from the entrance meets the fold before the wipe's camp -- RUN-WC-NOTES
+    // 13.1 -- while the Gnomeregan-shaped route's fold sits behind the side leg's pulls, which end that search).
+}
+
+// The replay shortcut with no direct way there: the plan's next point. A fold at the route's start (out and back on
+// one point, 3 yd apart) and a wipe at the plan's only camp after it: nothing is cleared, so the replay walks from the
+// entrance, reaches the fold, and the glue's read of the way across it finds no direct path (shortcutOk false).
+static void TestReplayShortcutWithoutADirectWay()
+{
+    DungeonPlan fold;
+    for (int i = 0; i <= 10; ++i)
+        fold.steps.push_back(Move(10.0f * i, 0.0f)); // 0 .. 100
+    for (int i = 10; i >= 0; --i)
+        fold.steps.push_back(Move(103.0f, 10.0f * i)); // back out to 103 0, 3 yd east of the way in
+    fold.steps.push_back(Move(200.0f, 0.0f));
+    fold.steps.push_back(Pull(300.0f, 0.0f, 7300)); // the wipe's camp: the plan's only pull
+    std::size_t const wipe = fold.steps.size() - 1;
+    Run r = Start(&fold, wipe);
+    CHECK(LastClearedStep(r) == static_cast<std::size_t>(-1));
+    Facts f = Party(0.0f, 0.0f);
+    f.walkBackRescue = false;
+    StartWalkBack(r, f);
+    f.approachKnown = true;
+    f.approachIncomplete = true; // the straight way from the entrance fails: the plan's points are replayed
+    WalkBackSim const sim = SimulateWalkBack(r, f, 8000, false);
+    CHECK(r.step == wipe && r.state == State::Running);
+    CHECK(NoteSeen(sim, "no direct way from step"));
+    CHECK(!NoteSeen(sim, "left out")); // the fold's stretch was walked, not left out
 }
 
 // The placed run's teleport target follows the safe-point rule too: the first point from the start step on that no
@@ -1762,7 +1808,8 @@ static void TestDeathPauseRearmsTheRescue()
     Tick(a, Party(0.0f, 0.0f));
     CHECK(a.state == State::Paused && a.note.find("the lead bot died and came back") == 0);
     CHECK(a.strandStep == static_cast<std::size_t>(-1));
-    // WaitForFallen's pause (the lead bot dead).
+    // A lead death's own regroup (no pause: it is no retry the step's wipe budget counts, and the regroup bounds
+    // itself) re-arms the rescue as every death does.
     Run w = Start(&plan, wipe);
     w.startStep = start;
     w.strandStep = wipe;
@@ -1772,8 +1819,8 @@ static void TestDeathPauseRearmsTheRescue()
     d.dead = 1;
     d.alive = 4;
     Tick(w, d);
-    CHECK(w.state == State::Paused && w.note.find("the lead bot is dead: revive it") == 0);
-    CHECK(w.strandStep == static_cast<std::size_t>(-1));
+    CHECK(w.state == State::Running && w.regroup && w.walkBackDue && w.strandStep == static_cast<std::size_t>(-1));
+    CHECK(w.note.find("the lead bot is dead") != std::string::npos);
     // The failed tries of the step stay counted: spent, no teleport after the resume.
     Run t = Start(&plan, wipe);
     t.startStep = start;
@@ -2002,7 +2049,7 @@ int main()
     TestRouteShortcutRules();
     TestIncompletePathToTheTargetReplaysThePlansPoints();
     TestStuckWalkBackIsRescuedNotPaused();
-    TestLongReplayIsRescuedInAFullRun();
+    TestLongReplayAndItsRescue();
     TestShortReplayAndPlayersKeepTheReplay();
     TestRefusedReplayRescueReplaysThePlansPoints();
     TestJoinedPlayerCancelsTheReplayRescue();
@@ -2018,6 +2065,7 @@ int main()
     TestStuckRescueGoesToASafePoint();
     TestFightForwardNeedsTheGluesRead();
     TestRoundOneRestAndShortcutNotes();
+    TestReplayShortcutWithoutADirectWay();
     TestPlacedRescueTargetIsSafe();
     TestSecondWipeOnTheStepIsRescuedToo();
     TestLeadRevivedAwayRearmsTheRescue();
