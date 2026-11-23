@@ -38,6 +38,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <unordered_map>
 #include <list>
 #include <map>
@@ -91,6 +92,11 @@ struct Sender
         bool seen = false;
         std::string lastActionName;
         uint8 state = TortoiseBots::dashboard_state::Idle;
+        // A hostile combat target that stays out of reach or line of sight; the clock restarts when the target changes.
+        ObjectGuid unreachableTarget;
+        uint32 unreachableDurationMs = 0;
+        bool unreachableReported = false;
+        uint32 lastUnreachableReportMs = 0;
     };
     std::unordered_map<ObjectGuid, Track> track;
     // Rolling macro-state histogram: 90 buckets of 2 s, one column per state, so the ratios describe the last 3 min.
@@ -428,6 +434,45 @@ void TrackBots(std::vector<Player*> const& bots, std::unordered_map<ObjectGuid, 
         if (base == Idle && (t.lastActivityMs == 0 || nowMs - t.lastActivityMs >= IdleAfterMs))
             t.churnSinceMs = 0;
         t.state = RefineIdle(base, nowMs, t.lastActivityMs, t.churnSinceMs, t.lastCombatMs, t.lastXpMs);
+
+        // A hostile combat target that stays more than 45 yd away or out of line of sight for 10 s is unreachable. The
+        // engine's own "current target" is judged, not the selection, which outlives the fight.
+        if (engineState.currentTarget != t.unreachableTarget)
+        {
+            t.unreachableTarget = engineState.currentTarget;
+            t.unreachableDurationMs = 0;
+            t.unreachableReported = false;
+        }
+        if (t.state == Combat && engineState.state == "combat" && !engineState.currentTarget.IsEmpty() && engineState.targetHostile)
+        {
+            bool const unreachable = engineState.targetDistance > 45.0f || !engineState.targetInLos;
+            if (unreachable)
+            {
+                t.unreachableDurationMs += s.intervalMs;
+                bool const due = !t.unreachableReported || (nowMs - t.lastUnreachableReportMs) >= 30000;
+                if (t.unreachableDurationMs >= 10000 && due)
+                {
+                    t.unreachableReported = true;
+                    t.lastUnreachableReportMs = nowMs;
+                    std::ostringstream details;
+                    details << "Combat target '" << engineState.currentTargetName << "' unreachable / out of LoS for "
+                            << (t.unreachableDurationMs / 1000.0f) << "s (dist=" << std::fixed << std::setprecision(1)
+                            << engineState.targetDistance << ", inLos=" << (engineState.targetInLos ? "true" : "false") << ")";
+                    SendAnomaly(bot, "UNREACHABLE_TARGET", "WARN", engineState.currentTargetName, details.str(),
+                        engineState.combatStrategies, engineState.lastAction);
+                }
+            }
+            else
+            {
+                t.unreachableDurationMs = 0;
+                t.unreachableReported = false;
+            }
+        }
+        else
+        {
+            t.unreachableDurationMs = 0;
+            t.unreachableReported = false;
+        }
         t.seen = true;
         next[bot->GetGUID()] = t;
     }
