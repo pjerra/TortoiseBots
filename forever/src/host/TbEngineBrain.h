@@ -107,6 +107,18 @@ struct Telemetry
 
 bool ReadTelemetry(Player* bot, Telemetry& out);
 
+// True once the engine's own config file has been read (EnsureConfig succeeded). The Server panel only reports live
+// getters, so a build or a failed config load reports no engine settings.
+bool ConfigReady();
+
+// The engine settings for the Server panel, as JSON object members without braces. Empty when the engine config is
+// not loaded. `ServerBotsJson` feeds SERVER_INFO's `bots` object, `ServerDiagnosticsJson` its `diagnostics` object.
+std::string ServerBotsJson();
+std::string ServerDiagnosticsJson();
+
+// The engine's XP multiplier for bots (rates.bot_xp_mult). 1.0 before the engine config is loaded.
+float BotXpRate();
+
 // Executes a legacy action by key for `bot` (used by host world-life errands).
 bool RunAction(Player* bot, char const* action, char const* param);
 

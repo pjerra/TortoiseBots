@@ -325,15 +325,28 @@ void SendServerInfo()
        << "\",\"core_date\":\"" << Escape(GitRevision::GetDate()) << "\",\"uptime\":" << GameTime::GetUptime()
        << ",\"max_level\":" << sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL)
        << ",\"rates\":{\"xp_kill\":" << sWorld->getRate(RATE_XP_KILL) << ",\"xp_quest\":" << sWorld->getRate(RATE_XP_QUEST)
-       << ",\"drop_money\":" << sWorld->getRate(RATE_DROP_MONEY) << ",\"reputation\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
+       << ",\"drop_money\":" << sWorld->getRate(RATE_DROP_MONEY) << ",\"rep_gain\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
+       << ",\"reputation\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
        << ",\"xp_explore\":" << sWorld->getRate(RATE_XP_EXPLORE) << ",\"xp_bg_kill\":" << sWorld->getRate(RATE_XP_BG_KILL) << ",\"honor\":" << sWorld->getRate(RATE_HONOR)
+       << ",\"drop_poor\":" << sWorld->getRate(RATE_DROP_ITEM_POOR) << ",\"drop_uncommon\":" << sWorld->getRate(RATE_DROP_ITEM_UNCOMMON)
        << ",\"drop_item_normal\":" << sWorld->getRate(RATE_DROP_ITEM_NORMAL) << ",\"drop_item_rare\":" << sWorld->getRate(RATE_DROP_ITEM_RARE)
-       << ",\"drop_item_epic\":" << sWorld->getRate(RATE_DROP_ITEM_EPIC) << ",\"rest_ingame\":" << sWorld->getRate(RATE_REST_INGAME)
-       << ",\"skill_discovery\":" << sWorld->getRate(RATE_SKILL_DISCOVERY) << "}"
+       << ",\"drop_item_epic\":" << sWorld->getRate(RATE_DROP_ITEM_EPIC) << ",\"drop_legendary\":" << sWorld->getRate(RATE_DROP_ITEM_LEGENDARY)
+       << ",\"rest_ingame\":" << sWorld->getRate(RATE_REST_INGAME)
+       << ",\"skill_discovery\":" << sWorld->getRate(RATE_SKILL_DISCOVERY);
+    if (TortoiseBots::engine::ConfigReady())
+        ss << ",\"bot_xp_mult\":" << TortoiseBots::engine::BotXpRate();
+    ss << "}"
        << ",\"bots\":{\"enabled\":\"" << (mgr.Enabled() ? 1 : 0) << "\",\"online\":" << mgr.Count()
        << ",\"engine_by_default\":\"" << (sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false) ? 1 : 0)
-       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dashboard_interval_ms\":" << s.intervalMs << "}"
-       << ",\"diagnostics\":{\"core\":\"ForeverCore\",\"core_branch\":\"" << Escape(GitRevision::GetBranch()) << "\"}}";
+       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dashboard_interval_ms\":" << s.intervalMs;
+    std::string const engineBots = TortoiseBots::engine::ServerBotsJson();
+    if (!engineBots.empty())
+        ss << ',' << engineBots;
+    ss << "},\"diagnostics\":{\"core\":\"ForeverCore\",\"core_branch\":\"" << Escape(GitRevision::GetBranch()) << "\"";
+    std::string const engineDiagnostics = TortoiseBots::engine::ServerDiagnosticsJson();
+    if (!engineDiagnostics.empty())
+        ss << ',' << engineDiagnostics;
+    ss << "}}";
     Send(ss.str());
 }
 
