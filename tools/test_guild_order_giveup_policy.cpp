@@ -147,6 +147,12 @@ int main()
     CHECK(!IsNewItemRise(true, true, 4, 5));
     CHECK(!IsNewItemRise(true, false, 6, 0));
     CHECK(!IsNewItemRise(false, true, 6, 5));
+    // Full bags with none of the farmed item make room or end; with some it delivers.
+    CHECK(FullBagsWithoutStock(OrderType::Farm, 0));
+    CHECK(!FullBagsWithoutStock(OrderType::Farm, 2));
+    CHECK(!FullBagsWithoutStock(OrderType::Craft, 0));
+    CHECK(!FullBagsWithoutStock(OrderType::Buy, 0));
+
     // A delivering order with nothing in bags or mail goes back to work.
     CHECK(DeliveryLostItsStock(OrderState::Delivering, OrderReason::BagsFull, 0, 1, 0));
     CHECK(DeliveryLostItsStock(OrderState::Delivering, OrderReason::None, 1, 3, 0));

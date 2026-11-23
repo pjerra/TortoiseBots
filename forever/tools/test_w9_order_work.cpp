@@ -125,6 +125,32 @@ int main()
         ++passed;
     }
 
+    // 8. Full bags with some stock deliver now; without stock the source
+    //    ladder stays (a farm order still needs its junk-room pass first).
+    {
+        OrderStepInput in;
+        in.type = OrderType::Farm;
+        in.delivered = 0;
+        in.inBags = 3;
+        in.want = 10;
+        in.canGather = true;
+        in.canDeliverBank = true;
+        in.bagsFull = true;
+        OrderStepDecision const d = DecideOrderStep(in);
+        assert(d.action == OrderStepAction::DeliverBank);
+        assert(std::string(d.reason) == "bags-full");
+
+        in.canDeliverBank = false;
+        in.canDeliverMail = false;
+        assert(DecideOrderStep(in).action == OrderStepAction::CannotTravel);
+
+        in.bagsFull = false;
+        in.canDeliverBank = true;
+        OrderStepDecision const before = DecideOrderStep(in);
+        assert(before.action == OrderStepAction::Gather);
+        ++passed;
+    }
+
     std::cout << "PASS: test_w9_order_work (" << passed << " checks, 0 failed)\n";
     return 0;
 }

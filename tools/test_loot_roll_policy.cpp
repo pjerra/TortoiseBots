@@ -12,6 +12,7 @@
 
 using ai::LootMethodTakesRolls;
 using ai::LootRollVote;
+using ai::IsWonLootReliefEligible;
 using ai::LootVoteIsEcho;
 using ai::LootWireVote;
 using ai::PoliteRollVote;
@@ -19,6 +20,8 @@ using ai::RealPlayerCompetes;
 using ai::RecipeRollVote;
 using ai::RollWaitElapsed;
 using ai::RollWaitVoteMarginMs;
+using ai::SelectWonLootReliefIndex;
+using ai::WonLootReliefCandidate;
 using ai::TokenUsableByClass;
 using ai::UniqueCopyOwned;
 
@@ -130,6 +133,43 @@ int main()
         CHECK(LootVoteIsEcho(87, 2));
         CHECK(LootVoteIsEcho(100, 0));
         std::cout << "  [PASS] wire vote mapping, echoes ignored\n";
+    }
+
+    // Room-making picks (guild order full bags): grey first, cheapest stack,
+    // one slot at a time; capped, protected and non-junk items never go.
+    {
+        WonLootReliefCandidate c[6];
+        c[0].itemId = 11; c[0].quality = 0; c[0].usage = 12; c[0].stackSellValue = 50;  // grey, 50c
+        c[1].itemId = 12; c[1].quality = 0; c[1].usage = 0;  c[1].stackSellValue = 5;   // grey, 5c
+        c[2].itemId = 13; c[2].quality = 1; c[2].usage = 12; c[2].stackSellValue = 1;   // white, 1c
+        c[3].itemId = 14; c[3].quality = 0; c[3].usage = 12; c[3].stackSellValue = 1; c[3].isQuestItem = true;
+        c[4].itemId = 15; c[4].quality = 0; c[4].usage = 11; c[4].stackSellValue = 1;   // keep
+        c[5].itemId = 16; c[5].quality = 0; c[5].usage = 12; c[5].stackSellValue = 1; c[5].bagFitsWonItem = false;
+
+        // Cheapest grey that may go, not the white item's lower value.
+        CHECK(SelectWonLootReliefIndex(c, 6, false) == 1);
+        // An owned alt never has its bags emptied by the loot code.
+        CHECK(SelectWonLootReliefIndex(c, 6, true) == -1);
+        // A non-disposable usage is never picked (the grey/white cap is the
+        // call site's filter, applied before a candidate gets here).
+        WonLootReliefCandidate junk[1];
+        junk[0].itemId = 21; junk[0].quality = 1; junk[0].usage = 1;   // equip
+        CHECK(SelectWonLootReliefIndex(junk, 1, false) == -1);
+        // Quest, keep-usage, tool, ammo, reagent, key and hearthstone stay.
+        WonLootReliefCandidate guarded[7];
+        for (int i = 0; i < 7; ++i) { guarded[i].itemId = 30 + i; guarded[i].quality = 0; guarded[i].usage = 12; }
+        guarded[0].isQuestItem = true;
+        guarded[1].isProfessionTool = true;
+        guarded[2].isAmmo = true;
+        guarded[3].isReagentOrConsumableUsed = true;
+        guarded[4].isKey = true;
+        guarded[5].isHearthstone = true;
+        guarded[6].isGuildOrderStock = true;
+        for (int i = 0; i < 7; ++i)
+            CHECK(!IsWonLootReliefEligible(guarded[i], false));
+        guarded[0].isQuestItem = false;
+        CHECK(IsWonLootReliefEligible(guarded[0], false));
+        std::cout << "  [PASS] room-making picks grey/white junk only\n";
     }
 
     std::cout << "All loot-roll gate checks PASSED!\n";
