@@ -381,8 +381,19 @@ inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry co
 }
 
 // CastItemOnTargetCompat moved to TbCompat_I2.h.
-// The triggered flags of the n-th spell of an item cast (T: TRIGGERED_OLD_TRIGGERED after the first), and the item cooldowns.
-inline void AddSpellAndCategoryCooldownsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/, uint32 /*itemId*/) { tbcompat::Unported(tbcompat::Feature::ItemCasts); }
+// The item cooldowns a use starts (T: Player::AddSpellAndCategoryCooldowns). The core keeps both rows in SpellHistory:
+// StartCooldown takes the item's own ItemEffect row (its cooldown and spell category replace the spell's) and applies the
+// player's cooldown mods, the same numbers a real use gets from Spell::SendSpellCooldown. Reached where the action decides not
+// to spend the item (the PvP use-potion chance) and only needs its cooldown running.
+inline void AddSpellAndCategoryCooldownsCompat(Player* bot, SpellEntry const* spellInfo, uint32 itemId)
+{
+    if (!bot || !spellInfo)
+        return;
+    SpellInfo const* coreSpell = GetSpellInfoCompat(spellInfo);
+    SpellHistory* history = bot->GetSpellHistory();
+    if (coreSpell && history)
+        history->StartCooldown(coreSpell, itemId);
+}
 // Base class of ai::BotUseItemSpell: T's Spell. F cannot build a Spell from the mirror SpellEntry, so the class is only a
 // declaration there: its constructor counts the feature (nothing can reach it in the slice: the item cast above returns first).
 class ItemCastSpellBaseCompat
