@@ -25,8 +25,8 @@ int main()
     CHECK(!ShouldStopMovingForItemCast(false, 0, false));
     CHECK(ItemCastDurationMs(false, 0, false, 0) == 0u);
 
-    // Family 2, bandages (First Aid): the action names the bot itself as the unit target and every bandage rank has an 8 s cast,
-    // so CastItemSpellCompat stops the bot and gives the action the cast time.
+    // Family 2, bandages (First Aid): the action names the bot itself as the unit target and holds the action for the 8 s cast,
+    // so CastItemSpellCompat stops the bot and gives the action that cast time.
     CHECK(DecideItemCastTargetKind(false, true) == ItemCastTargetKind::Unit);
     CHECK(ShouldStopMovingForItemCast(false, 8000, false));
     CHECK(ItemCastDurationMs(false, 8000, false, 0) == 8000u);

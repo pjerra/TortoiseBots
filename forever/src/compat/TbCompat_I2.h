@@ -296,8 +296,9 @@ template <class LootType, class ViewerType, class Body>
 inline bool PersonalItemVisibleCompat(LootType const& loot, ViewerType* viewer, Body&&) { return loot.hasItemFor(viewer); }
 
 // ===============================================================================================================
-// ITEM USE: food and drink on the bot itself go through the core's own item cast; every other use is the named feature
-// "item use except food and drink" (UseItemAction.cpp, lead decisions D3 and "decided one by one")
+// ITEM USE: an owned item's on-use spell (self, unit or item target) goes through the core's own item cast. A game-object
+// target, an openable and a cast with no owned Item* keep the named feature (UseItemAction.cpp, lead decisions D3 and
+// "decided one by one")
 // ===============================================================================================================
 
 struct ItemSpellUseCompat
