@@ -16,6 +16,7 @@ Branch: `feat/w8-auction` (based on `main`, commit `495ffd943`).
 2. **Host seam (`forever/src/host/TbHostAuction.h`, `forever/src/host/TbHostAuction.cpp`)**:
    - `tbhost::ah::NpcIfCanInteract` + `IsFactionAuctionHouse`: checks `GetNPCIfCanInteractWith(..., UNIT_NPC_FLAG_AUCTIONEER, UNIT_NPC_FLAG_2_NONE)` and excludes neutral auction houses (`houseId == 7`).
    - `tbhost::ah::QueryMarketByItemId` / `QueryMarketByName` / `Owned`: reads `sAuctionMgr->GetAuctionsMap(...)` via `BuildListAuctionItems`, `BuildListBuckets`, and `BuildListOwnedItems` into local packet objects (never sent).
+     A commodity listing in an item-id list has no `Item` field (the core sends only `UnitPrice`), so its item id comes from the bucket key, then the posting, then the queried id (`ai::ResolveAhListingItemId`, `AhListingPolicy.h`); before this, commodity listings were dropped and the bot saw no market for stackables.
    - `tbhost::ah::UnitValue`: calls `AuctionBotVanilla::UnitValue(proto)` (verified to link into `worldserver` from the module).
    - `tbhost::ah::PostItem`, `PostCommodity`, `BuyItem`, `BuyCommodity` (quote + confirm), `Cancel`: dispatch through `WorldSession::HandleAuctionSellItem`, `HandleAuctionSellCommodity`, `HandleAuctionPlaceBid`, `HandleAuctionGetCommodityQuote`, `HandleAuctionConfirmCommoditiesPurchase`, `HandleAuctionRemoveItem`.
    - `ConfirmPendingPosts`: confirms async-committed posts on the next tick via `BuildListOwnedItems` and logs `[W8] post ... result=ok`.

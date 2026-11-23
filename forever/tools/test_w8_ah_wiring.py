@@ -71,6 +71,17 @@ class TestW8AhWiring(unittest.TestCase):
             sell_policy = sell_policy.replace("in.maxStackSize > 1", "false")
         check_stackable_and_host_wiring(sell_policy, host_src, ah_action)
 
+    def test_commodity_listings_are_read(self):
+        host_src = read("forever/src/host/TbHostAuction.cpp")
+        start = host_src.index("void AppendItemsFromResult(")
+        body = host_src[start:host_src.index("} // namespace", start)]
+        self.assertIn("ResolveAhListingItemId", body)
+        self.assertIn("AuctionBucketKey", body)
+        self.assertNotIn("if (!ai.Item)", body)
+        self.assertNotIn("if (!listed.Item)", body)
+        self.assertEqual(host_src.count("AppendItemsFromResult(bot, house,"), 2)
+        self.assertIn("out, itemId);", host_src)
+
     def test_unported_row_removed(self):
         unported_h = read("ai/playerbot/UnportedFeatures.h")
         unported_md = read("forever/docs/UNPORTED.md")

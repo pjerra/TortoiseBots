@@ -3,6 +3,7 @@
 //   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_w8_ah.cpp -o /tmp/test_w8_ah && /tmp/test_w8_ah
 
 #include "ai/playerbot/policy/ah/AhBuyPolicy.h"
+#include "ai/playerbot/policy/ah/AhListingPolicy.h"
 #include "ai/playerbot/policy/ah/AhSellPolicy.h"
 
 #include <cassert>
@@ -195,6 +196,64 @@ int main()
         assert(ai::AhClampCommodityBuyQty(10, 4, 50, 1000) == 4);
         assert(ai::AhClampCommodityBuyQty(10, 20, 50, 220) == 4);
         assert(ai::AhClampCommodityBuyQty(10, 20, 50, 40) == 0);
+        ++passed;
+    }
+
+    // Commodity listings in an item-id list come without the Item field: the item id comes from the
+    // bucket key, then the posting, then the queried id; a listing nobody names is still skipped.
+    {
+        ai::AhListingIdSources commodity;
+        commodity.bucketKeyItemId = 2589;
+        commodity.postingItemId = 2589;
+        commodity.queriedItemId = 2589;
+        assert(ai::ResolveAhListingItemId(commodity) == 2589);
+
+        ai::AhListingIdSources postingOnly;
+        postingOnly.postingItemId = 2589;
+        assert(ai::ResolveAhListingItemId(postingOnly) == 2589);
+
+        ai::AhListingIdSources queriedOnly;
+        queriedOnly.queriedItemId = 2589;
+        assert(ai::ResolveAhListingItemId(queriedOnly) == 2589);
+
+        ai::AhListingIdSources item;
+        item.itemFieldId = 15210;
+        item.bucketKeyItemId = 99;
+        assert(ai::ResolveAhListingItemId(item) == 15210);
+
+        assert(ai::ResolveAhListingItemId(ai::AhListingIdSources{}) == 0);
+        ++passed;
+    }
+
+    // Prices: a commodity listing (unit price, 5 Linen Cloth at 2500c) and an item listing (buyout for the stack).
+    {
+        ai::AhListingPrices const c = ai::ComputeAhListingPrices(true, 2500, 0, 5);
+        assert(c.isCommodity && c.unitPrice == 2500 && c.buyoutPrice == 12500);
+
+        ai::AhListingPrices const i = ai::ComputeAhListingPrices(false, 0, 5000, 1);
+        assert(!i.isCommodity && i.unitPrice == 5000 && i.buyoutPrice == 5000);
+
+        ai::AhListingPrices const zero = ai::ComputeAhListingPrices(false, 0, 300, 0);
+        assert(zero.unitPrice == 300);
+        ++passed;
+    }
+
+    // The visible commodity listing feeds the sell price: undercut of the 2500c unit price.
+    {
+        ai::AhSellInput in;
+        in.itemId = 2589;
+        in.itemClass = 0;
+        in.maxStackSize = 20;
+        in.count = 20;
+        in.vendorSellPrice = 13;
+        in.depositTotal = 10;
+        in.marketLowestUnitPrice = ai::ComputeAhListingPrices(true, 2500, 0, 5).unitPrice;
+        in.freeMoneyForAh = 100000;
+        in.isUsageAh = true;
+        ai::AhSellDecision const d = ai::DecideAhSell(in);
+        assert(d.shouldPost);
+        assert(d.kind == ai::AhPostKind::Commodity);
+        assert(d.unitPrice > 0 && d.unitPrice < 2500);
         ++passed;
     }
 
