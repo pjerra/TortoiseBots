@@ -99,6 +99,8 @@ struct Sender
     uint32 stateBucketElapsedMs = 0;
     struct BrainInfo { std::string role, combat, nonCombat, engine, state; };
     std::unordered_map<ObjectGuid, BrainInfo> brains;   // refreshed with BOT_STATS, read by every roster row
+    struct ActionFailure { uint32 firstMs = 0, lastReportMs = 0, count = 0; bool reported = false; };
+    std::unordered_map<std::string, ActionFailure> actionFailures;   // "guid|action" -> the current 2 s window
 };
 
 // A bot whose position has not changed for this long while its master is far (same map) is reported STUCK, at most once per StuckRepeatSecs.
@@ -295,7 +297,8 @@ void QueueEvent(Player* bot, char const* event, std::string const& info1, std::s
     s.events.push_back(ev.str());
 }
 
-void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details);
+void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details,
+    std::string const& strategy = "", std::string const& lastAction = "");
 
 void Send(std::string const& datagram)
 {
@@ -304,14 +307,16 @@ void Send(std::string const& datagram)
     s.socket->send_to(boost::asio::buffer(datagram), s.target, 0, ec);
 }
 
-void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details)
+void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details,
+    std::string const& strategy, std::string const& lastAction)
 {
     std::ostringstream a;
     a << "{\"ts\":" << GameTime::GetGameTime() << ",\"type\":\"" << type << "\",\"severity\":\"" << severity << "\",\"bot\":\""
       << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter() << ",\"class\":\"" << ClassName(bot->GetClass())
       << "\",\"level\":" << uint32(bot->GetLevel()) << ",\"map\":" << bot->GetMapId() << ",\"zone\":" << bot->GetZoneId()
       << ",\"pos\":{\"x\":" << bot->GetPositionX() << ",\"y\":" << bot->GetPositionY() << ",\"z\":" << bot->GetPositionZ()
-      << "},\"target\":\"" << Escape(target) << "\",\"strategy\":\"\",\"last_action\":\"\",\"details\":\"" << Escape(details) << "\"}";
+      << "},\"target\":\"" << Escape(target) << "\",\"strategy\":\"" << Escape(strategy) << "\",\"last_action\":\"" << Escape(lastAction)
+      << "\",\"details\":\"" << Escape(details) << "\"}";
     Send(a.str());
 }
 
@@ -1704,5 +1709,38 @@ void OnBotActivity(std::string const& event, std::string const& info1, std::stri
                 extra = e.str();
             }
     QueueEvent(bot, event.c_str(), info1, info2, extra);
+}
+
+void OnActionFailed(Player* bot, std::string const& actionName, std::string const& targetName, std::string const& strategy)
+{
+    std::lock_guard lock(g_feedLock);
+    Sender& s = Get();
+    if (!s.enabled || !IsBot(bot) || actionName.empty())
+        return;
+    uint32 const nowMs = GameTime::GetGameTimeMS();
+    std::string const key = std::to_string(bot->GetGUID().GetCounter()) + "|" + actionName;
+    Sender::ActionFailure& rec = s.actionFailures[key];
+    if (rec.firstMs == 0 || nowMs - rec.firstMs > 2000)
+    {
+        rec.firstMs = nowMs;
+        rec.count = 1;
+        rec.reported = false;
+    }
+    else
+        ++rec.count;
+    // One event per bot/action at most every 5 min; the failures keep coming every tick while the loop lasts.
+    if (rec.count >= 5 && !rec.reported && (rec.lastReportMs == 0 || nowMs - rec.lastReportMs > 300000))
+    {
+        rec.reported = true;
+        rec.lastReportMs = nowMs;
+        TortoiseBots::engine::Telemetry telemetry;
+        std::string activeStrategy = strategy;
+        if (activeStrategy.empty() && TortoiseBots::engine::ReadTelemetry(bot, telemetry))
+            activeStrategy = telemetry.combatStrategies;
+        SendAnomaly(bot, "ACTION_LOOP", "WARN", targetName, "Action '" + actionName + "' failed >= 5 times within 2 seconds",
+            activeStrategy, actionName);
+    }
+    if (s.actionFailures.size() > 4096)
+        s.actionFailures.clear();
 }
 }

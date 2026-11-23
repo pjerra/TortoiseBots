@@ -28,4 +28,6 @@ void OnHealOutcome(Unit* healer, uint32 raw, uint32 effective);
 void OnSpellCast(Player* player, SpellInfo const* spell);
 // The engine's bot_events rows (vendor, trainer, repair, auction, mail, revives, PvP, ...), filtered to the dashboard's activity feed.
 void OnBotActivity(std::string const& event, std::string const& info1, std::string const& info2, Player* bot, uint32 targetLevel);
+// The engine reports each failed action here; five failures of one action within 2 s become an ACTION_LOOP anomaly.
+void OnActionFailed(Player* bot, std::string const& actionName, std::string const& targetName, std::string const& strategy);
 }
