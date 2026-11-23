@@ -149,7 +149,8 @@ TortoiseBots.Dashboard.Enable = 1
 #
 #    TortoiseBots.Dashboard.Host
 #    TortoiseBots.Dashboard.Port
-#        Description: Where the dashboard listens for telemetry (its -udp-host / -udp-port). The host must be an IP address.
+#        Description: Where the dashboard listens for telemetry (its -udp-host / -udp-port). The host may be an IP address
+#                     or a host name, such as a dashboard container's name; a name is resolved when the config loads.
 #        Default:     127.0.0.1, 9195
 #
 
