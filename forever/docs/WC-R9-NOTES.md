@@ -45,7 +45,7 @@ Tests: `tools/test_run_wc_r9_policy.cpp` `TestHealerGateHoldsThePull` (a healer 
 out of sight holds with "no line of sight"; 30 yd exactly and in sight pulls; no gate asked for pulls as before),
 `TestHealerGateLeavesOtherPartiesAlone`, `TestHealerGateIsBounded` (the pull goes out after 25 s with "healer gate spent", also when an unrelated gather had already run 40 s,
 and the clock starts afresh once a healer covers the tank),
-`TestHealerGateHoldsTheWalkBackPull`; `forever/tools/test_run_wc.cpp` `TestHostAsksForTheRun9Gates` and
+`TestHealerGateHoldsTheWalkBackPull`, and proof-2's `TestHealerGateHoldsTheRfcTroggPull` (the merged Ragefire step 14, the host's own `ApplyConfig` facts); `forever/tools/test_run_wc.cpp` `TestHostAsksForTheRun9Gates` and
 `TestHealerGateAtTheShamblerCamp` (the real plan, step 82).
 
 ## Fix 2: the walk back after a wipe pulls the respawned packs one at a time

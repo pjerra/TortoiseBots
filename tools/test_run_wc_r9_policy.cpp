@@ -1,13 +1,18 @@
 // Standalone check for the WC run 9 fixes in the run leader (runtime/DungeonRunPolicy.h), from live run 8
 // (notes/live-wc-run8-2026-11-22.md, forever/docs/WC-R9-NOTES.md):
-//   g++ -std=c++17 -Wall -Wextra tools/test_run_wc_r9_policy.cpp -o /tmp/test_run_wc_r9_policy && /tmp/test_run_wc_r9_policy
+//   g++ -std=c++17 -Wall -Wextra -I. tools/test_run_wc_r9_policy.cpp -o /tmp/test_run_wc_r9_policy && /tmp/test_run_wc_r9_policy
 //  - the pull's healer gate (HealerOutOfReach): no pull goes out while no living healer stands within kPullHealerMaxYd of
 //    the tank in its line of sight, for at most kPullHealerHoldMs, then the pull goes out with a note that says so;
-//  - the walk back's pull cap (Facts::walkBackPullCap): a host that raises it keeps pulling the respawned packs on the way.
+//  - the walk back's pull cap (Facts::walkBackPullCap): a host that raises it keeps pulling the respawned packs on the way;
+//  - the gate holds the merged Ragefire Chasm step 14 (proof-2): the host's own ApplyConfig facts, the trogg pair and the
+//    five-pack as one pull of seven (TestHealerGateHoldsTheRfcTroggPull).
 #include "../runtime/DungeonRunPolicy.h"
+#include "../forever/src/host/run/TbRunFactsPure.h"
 
 #include <cstdlib>
 #include <iostream>
+
+namespace fx = TortoiseBots::run::facts;
 
 #define CHECK(x) do { \
     if (!(x)) { \
@@ -274,6 +279,63 @@ static void TestWalkBackPullCapIsTheHostsToRaise()
     }
 }
 
+// Proof-2: RFC step 14 as the plan now writes it, one pull of seven from the pair's stand. Run A (level 22), the 11-21 test3 run
+// (level 28) and the S6 walk (level 18) all lost step 14: the trogg pair and the five-pack were two rows, the pair stood 16.9 yd
+// from the five-pack's Shaman inside a same-level mob's 20 yd aggro, and the healer died in the tank's own second. The merged row
+// (leg 2 seq 4: the seven unit rows of forever/sql/world/2026_11_20_02_...sql, centroid -256.6 -35.0 -59.43, radius 20) is pulled
+// from the pair's stand (-205 -34 -49.9). The host's own facts (ApplyConfig asks for the gate): the party at the stand with a healer
+// 35 yd behind the tank is held with the gate's note; the healer 12 yd out in sight and the pull goes out.
+static void TestHealerGateHoldsTheRfcTroggPull()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(-256.6f, {11318, 11319})};
+    plan.steps[0].y = -35.0f;
+    plan.steps[0].z = -59.43f;
+    plan.steps[0].radius = 20.0f;
+
+    // The seven unit rows, at the distance the stand sees them (the pair 33.6 yd, the far Trogg 65.2).
+    auto rfcParty = [](float healerYd, bool sight) {
+        Facts f;
+        fx::Config cfg;
+        fx::ApplyConfig(f, cfg); // the host's own rules: the gate on (TbRunFactsPure.h)
+        f.total = 5;
+        f.alive = 5;
+        f.leadX = -205.0f;
+        f.leadY = -34.0f;
+        f.leadZ = -49.9f;
+        f.carrier = "Rfctank";
+        f.seen = true;
+        f.members = {Mem("Rfctank", 0), Mem("Rfcpri", healerYd, true, sight), Mem("Rfcmag", 8), Mem("Rfcrog", 9)};
+        f.maxMemberYd = std::max(healerYd, 9.0f);
+        if (f.maxMemberYd > kGatherYd)
+            f.maxMemberYd = kGatherYd; // the ordinary gather is satisfied: only the healer gate is under test
+        f.units = {Unit(11, 11318, 34.4f), Unit(12, 11318, 34.2f), Unit(13, 11319, 49.1f), Unit(14, 11318, 57.4f),
+                   Unit(15, 11318, 65.2f), Unit(16, 11319, 62.0f), Unit(17, 11318, 62.5f)};
+        return f;
+    };
+
+    // A healer 35 yd behind the tank at the stand: the pull is held with the gate's note, the party told to form up on the tank.
+    {
+        Run r = Start(&plan);
+        Facts f = rfcParty(35.0f, true);
+        std::string const order = Tick(r, f);
+        CHECK(order.rfind("move ", 0) == 0); // the gather order, to the stand
+        CHECK(r.phase == Phase::Gather);
+        CHECK(r.note == "pull held: the healer Rfcpri is 35.0 yd from the tank (more than 30.0)");
+        CHECK(Tick(r, f).empty()); // still held, no pull
+    }
+    // The healer walks in, in sight: the pull goes out on the merged row.
+    {
+        Run r = Start(&plan);
+        Facts f = rfcParty(35.0f, true);
+        Tick(r, f);
+        f.members[1].yd = 12.0f;
+        CHECK(Tick(r, f).rfind("pullback ", 0) == 0);
+        CHECK(r.phase == Phase::AwaitPull);
+        CHECK(r.healerHoldMs == 0);
+    }
+}
+
 int main()
 {
     TestHealerGateHoldsThePull();
@@ -281,6 +343,7 @@ int main()
     TestHealerGateIsBounded();
     TestHealerGateHoldsTheWalkBackPull();
     TestWalkBackPullCapIsTheHostsToRaise();
+    TestHealerGateHoldsTheRfcTroggPull();
     std::cout << "ok\n";
     return 0;
 }
