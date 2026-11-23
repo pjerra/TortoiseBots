@@ -654,6 +654,19 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
         case CapitalErrandKind::AuctionHouse:
             dest = tbhost::ah::FindNearestFactionAuctioneer(bot, kMaxTownVisitDistYd);
             break;
+        case CapitalErrandKind::Mount:
+            if (mountPlan.step == mountshop::Step::UseItem)
+            {
+                std::string refusal;
+                uint32_t spent = 0;
+                bool const ok = mountshop::ExecutePlan(bot, mountPlan, &spent, &refusal);
+                TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind=mount step=use-item ok={} spent={} {}",
+                    bot->GetName(), ok ? 1 : 0, spent, refusal);
+                FinishMountErrand(st, nowMs, ok, mountPlan.step);
+                return;
+            }
+            dest = ObjectAccessor::GetCreature(*bot, mountPlan.npc);
+            break;
         default:
             break;
     }
@@ -673,6 +686,16 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     if (bot->GetDistance(dest) <= INTERACTION_DISTANCE)
     {
         bot->StopMoving();
+        if (pick == CapitalErrandKind::Mount)
+        {
+            std::string refusal;
+            uint32_t spent = 0;
+            bool const ok = mountshop::ExecutePlan(bot, mountPlan, &spent, &refusal);
+            TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind=mount step={} ok={} spent={} {}",
+                bot->GetName(), mountshop::StepToken(mountPlan.step), ok ? 1 : 0, spent, refusal);
+            FinishMountErrand(st, nowMs, ok, mountPlan.step);
+            return;
+        }
         bool const ok = ExecuteErrandAtTarget(bot, pick, dest->GetGUID());
         TC_LOG_INFO("tortoisebots", "[W2] capital-errand bot={} kind={} ok={}",
             bot->GetName(), KindName(pick), ok ? 1 : 0);
