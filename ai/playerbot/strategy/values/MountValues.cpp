@@ -1,5 +1,4 @@
 #include "MountValues.h"
-#include "MountManager.hpp"
 #include "playerbot/ChatHelper.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "BudgetValues.h"
@@ -11,9 +10,11 @@
 #include "playerbot/RandomBotFacade.h"
 #include "../../../runtime/PlayerbotAIStorage.h"
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include "playerbot/TbCompatW3.h"
+#include "playerbot/TbCompatRIDE.h"
 
 using namespace ai;
 
@@ -77,23 +78,7 @@ uint32 MountValue::GetDynamicMountSpeed(uint32 spellId, Player* bot)
 
 uint32 MountValue::GetRiderMountSpeed(Player* bot)
 {
-    if (!bot)
-        return 0;
-    switch (bot->GetSkillValue(SKILL_RIDING))
-    {
-    case 75:
-        return 60;
-    case 150:
-        return 100;
-    case 0:
-        // Core applies ceil(level/2) on the uint level: integer division
-        // truncates first, so ceil is a no-op (19 -> 9, 39 -> 19).
-        return bot->GetLevel() / 2;
-    default:
-        // Core unmounts here (default branch); report unusable so selection
-        // skips the mount instead of looping cast->unmount.
-        return 0;
-    }
+    return RiderMountSpeedCompat(bot);
 }
 
 uint32 MountValue::GetDynamicMountSpeed(uint32 spellId, uint32 riderSpeed)
@@ -101,9 +86,9 @@ uint32 MountValue::GetDynamicMountSpeed(uint32 spellId, uint32 riderSpeed)
     SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return 0;
-    if (spellInfo->Custom & SPELL_CUSTOM_MOUNT_SPEED_100)
+    if (MountSpeedAlways100Compat(spellInfo))
         return 100;
-    if (spellInfo->Custom & SPELL_CUSTOM_IGNORE_RIDING_SKILL_MOUNT_SPEED)
+    if (MountSpeedIgnoresRidingSkillCompat(spellInfo))
         return GetSpeed(spellId);
     return riderSpeed;
 }
@@ -157,10 +142,10 @@ uint32 MountValue::GetSpeedFor(Player* bot, uint32 riderSpeed) const
 
 uint32 MountValue::GetMountSpell(uint32 itemId)
 {
-    // Tortoise collection mounts use a generic item spell (46499) and keep the
+    // Turtle collection mounts use a generic item spell (46499) and keep the
     // actual mount spell in the core-owned collection_mount table. Consult
     // that authoritative mapping before falling back to classic item spells.
-    if (std::optional<uint32> collectionSpell = sMountMgr.GetMountSpellId(itemId))
+    if (std::optional<uint32> collectionSpell = MountSpellForCollectionItemCompat(itemId))
         return *collectionSpell;
 
     const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
@@ -179,22 +164,7 @@ uint32 MountValue::GetMountSpell(uint32 itemId)
 
 std::vector<std::pair<uint32, uint32>> const& ai::CollectionMounts()
 {
-    static std::vector<std::pair<uint32, uint32>> mounts;
-    static bool loaded = false;
-    if (loaded)
-        return mounts;
-
-    loaded = true;
-    auto result = QueryGuardCompat(WorldDatabase.Query("SELECT itemId, spellId FROM collection_mount"));
-    if (!result)
-        return mounts;
-
-    do
-    {
-        Field* fields = result->Fetch();
-        mounts.emplace_back(fields[0].GetUInt32(), fields[1].GetUInt32());
-    } while (result->NextRow());
-
+    static std::vector<std::pair<uint32, uint32>> const mounts = LoadCollectionMountRowsCompat();
     return mounts;
 }
 
@@ -220,23 +190,7 @@ namespace
     // level 45 pool bot looks wrong (RandomBotShopMounts = 1 allows them).
     std::unordered_set<uint32> const& LootMountItems()
     {
-        static std::unordered_set<uint32> items;
-        static bool built = false;
-        if (!built)
-        {
-            built = true;
-            auto result = QueryGuardCompat(WorldDatabase.Query(
-                "SELECT DISTINCT c.itemId FROM collection_mount c WHERE "
-                "EXISTS (SELECT 1 FROM creature_loot_template l WHERE l.item = c.itemId) OR "
-                "EXISTS (SELECT 1 FROM gameobject_loot_template l WHERE l.item = c.itemId) OR "
-                "EXISTS (SELECT 1 FROM reference_loot_template l WHERE l.item = c.itemId)"));
-            if (result)
-            {
-                do
-                    items.insert(result->Fetch()[0].GetUInt32());
-                while (result->NextRow());
-            }
-        }
+        static std::unordered_set<uint32> const items = LoadLootMountItemsCompat();
         return items;
     }
 
@@ -327,10 +281,9 @@ bool MountValue::IsValidLocation(Player* bot)
     }
 
     // Ignore map check if spell have AreaId. AreaId already checked and this prevent special mount spells
-    MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(bot->GetMapId());
     if (bot->GetTypeId() == TYPEID_PLAYER &&
         !isAQ40Mounted &&   // [-ZERO] && !m_spellInfo->AreaId)
-        (!mapEntry || !mapEntry->IsMountAllowed()))
+        !MapAllowsMountsCompat(bot) && bot->GetMapId() != 531)
     {
         return false;  //SPELL_FAILED_NO_MOUNTS_ALLOWED;
     }
@@ -358,14 +311,8 @@ uint32 CurrentMountSpeedValue::Calculate()
     uint32 riderSpeed = speedBot ? MountValue::GetRiderMountSpeed(speedBot) : 0;
     for (uint32 t = 0; t < sizeof(kMountAuraTypes) / sizeof(kMountAuraTypes[0]); ++t)
     {
-        Unit::AuraList const& auras = unit->GetAurasByType(kMountAuraTypes[t]);
-
-        if (auras.empty())
-            continue;
-
-        for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); i++)
+        for (Aura* aura : AurasByTypeCompat(unit, kMountAuraTypes[t]))
         {
-            Aura* aura = *i;
             if (!aura)
                 continue;
 
@@ -403,7 +350,7 @@ std::vector<MountValue> FullMountListValue::Calculate()
 
         mounts.push_back(MountValue(pProto));
 
-        GAI_VALUE2(std::list<int32>, "item vendor list", pProto->ItemId);
+        GAI_VALUE2_COMPAT(std::list<int32>, "item vendor list", pProto->ItemId);
     }
 
     for (uint32 id = 0; id < sSpellTemplate.GetMaxEntry(); ++id)
@@ -472,41 +419,13 @@ std::string MountListValue::Format()
 
 uint32 MountSkillTypeValue::Calculate()
 {
-    switch (bot->GetRace())
-    {
-    case RACE_HUMAN:
-        return SKILL_RIDING_HORSE;
-    case RACE_ORC:
-        return SKILL_RIDING_WOLF;
-        break;
-    case RACE_NIGHTELF:
-        return SKILL_RIDING_TIGER;
-        break;
-    case RACE_DWARF:
-        return SKILL_RIDING_RAM;
-        break;
-    case RACE_TROLL:
-        return SKILL_RIDING_RAPTOR;
-        break;
-    case RACE_GNOME:
-        return SKILL_RIDING_MECHANOSTRIDER;
-        break;
-    case RACE_UNDEAD:
-        return SKILL_RIDING_UNDEAD_HORSE;
-        break;
-    case RACE_TAUREN:
-        return SKILL_RIDING_KODO;
-        break;
-    default:
-        return SKILL_RIDING;
-        break;
-    }
+    return RidingSkillForRaceCompat(bot->GetRace());
 }
 
 std::vector<int32> AvailableMountVendors::Calculate()
 {
     std::vector<int32> mountVendors;
-    std::vector<MountValue> const& mountList = GAI_VALUE_REF(std::vector<MountValue>, "full mount list");
+    std::vector<MountValue> const mountList = GAI_VALUE_COMPAT(std::vector<MountValue>, "full mount list");
 
     for (auto const& mount : mountList)
     {
@@ -520,7 +439,7 @@ std::vector<int32> AvailableMountVendors::Calculate()
         if (usage != ItemUsage::ITEM_USAGE_EQUIP)
             continue;
 
-        for (auto& vendor : GAI_VALUE2(std::list<int32>, "item vendor list", itemId))
+        for (auto& vendor : GAI_VALUE2_COMPAT(std::list<int32>, "item vendor list", itemId))
             if(std::find(mountVendors.begin(), mountVendors.end(), vendor) == mountVendors.end())
                 mountVendors.push_back(vendor);
     }
@@ -530,7 +449,8 @@ std::vector<int32> AvailableMountVendors::Calculate()
 
 bool CanTrainMountValue::Calculate()
 {
-    if (bot->GetSkill(AI_VALUE(uint32, "mount skilltype"), true, true) >= bot->GetSkill(AI_VALUE(uint32, "mount skilltype"), true, true, true))
+    uint32 const skill = AI_VALUE(uint32, "mount skilltype");
+    if (bot->GetSkillValue(skill) >= bot->GetPureMaxSkillValue(skill))
         return false;
 
     if (AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::mount) < AI_VALUE2(uint32, "total money needed for", (uint32)NeedMoneyFor::mount))

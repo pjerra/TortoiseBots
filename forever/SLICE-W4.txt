@@ -366,3 +366,10 @@ ai/playerbot/strategy/actions/DebugMiscCommands.cpp
 ai/playerbot/strategy/actions/LogLevelAction.cpp
 ai/playerbot/strategy/actions/SetValueAction.cpp
 ai/playerbot/strategy/generic/DebugStrategy.cpp
+
+# Riding (#152): the mount state action and the mount list/speed values. The break-even distance and the
+# dismount policy are pure headers already on both cores. The Turtle-only collection_mount mapping and the
+# rider-skill speed ladder are answered by forever/src/compat/TbCompat_RIDE.h (no collection mounts, static
+# mount aura speeds); see forever/docs/MOUNT-RIDE-NOTES.md.
+ai/playerbot/strategy/actions/CheckMountStateAction.cpp
+ai/playerbot/strategy/values/MountValues.cpp

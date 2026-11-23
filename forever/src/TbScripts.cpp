@@ -23,6 +23,8 @@
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderAccess.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunHooks.h"
@@ -81,6 +83,7 @@
 #include "host/TbAutoTools.h"
 #include "host/TbAutoHunterPet.h"
 #include "host/TbAutoFood.h"
+#include "host/TbMountShop.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -329,6 +332,8 @@ public:
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
                 tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
+                tbhost::guild_order_access::LoadBotRankAtStartup();  // the stored guild bot ranks
+                tbhost::guild_orders::LoadDisenchantQueue(); // W9: the disenchant service queue
                 TortoiseBots::h3::RebuildQuestEligibility();
             }
         }
@@ -572,6 +577,7 @@ public:
             { "castfail", HandleCastFail, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "level",  HandleLevel,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "train",  HandleTrain,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "mount",  HandleMount,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "hurt",   HandleHurt,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "power",  HandlePower,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -1185,6 +1191,70 @@ public:
         handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) and %u from the class skill lines, in %u pass(es); trainer pass not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
             name.c_str(), tally.trainerTaught, tally.trainers, tally.lineTaught, tally.passes,
             tally.trainerTally.known, tally.trainerTally.class_race, tally.trainerTally.level, tally.trainerTally.ability, tally.trainerTally.skill_line, tally.trainerTally.other);
+        return true;
+    }
+
+    // .tb mount <bot> [status|train|buy]: what the bot still needs and the nearest riding trainer / racial mount vendor;
+    // `train`/`buy` pay that NPC now and require the bot to stand within interaction range. The bot's own money is spent;
+    // nothing is granted.
+    static bool HandleMount(ChatHandler* handler, std::string name, Optional<std::string> verbArg)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+
+        std::string const verb = verbArg ? Lower(*verbArg) : std::string("status");
+        if (verb != "status" && verb != "train" && verb != "buy")
+            return Fail(handler, "usage: .tb mount <bot> [status|train|buy].");
+
+        float const range = (verb == "status") ? 150.0f : (INTERACTION_DISTANCE + 1.0f);
+        tbhost::mountshop::Plan const plan = tbhost::mountshop::FindPlan(bot, range);
+        tbhost::mountshop::Need const need = tbhost::mountshop::NeedOf(bot);
+        char const* needText = need == tbhost::mountshop::Need::TrainRiding ? "riding"
+            : need == tbhost::mountshop::Need::BuyMount ? "mount" : "none";
+        handler->PSendSysMessage("TortoiseBots: mount %s: level %u, riding %u/%u, need %s.",
+            bot->GetName().c_str(), uint32(bot->GetLevel()), uint32(bot->GetSkillValue(SKILL_RIDING)),
+            uint32(tbhost::mountshop::RidingTargetForLevel(bot->GetLevel())), needText);
+
+        if (plan.step == tbhost::mountshop::Step::TrainRiding)
+        {
+            Creature* trainer = ObjectAccessor::GetCreature(*bot, plan.npc);
+            handler->PSendSysMessage("TortoiseBots: mount train: %s (%u) %.1f yd, cost %u copper.",
+                trainer ? trainer->GetName().c_str() : "?", trainer ? trainer->GetEntry() : 0,
+                trainer ? bot->GetDistance(trainer) : 0.0f, plan.cost);
+        }
+        else if (plan.step == tbhost::mountshop::Step::BuyMount)
+        {
+            Creature* vendor = ObjectAccessor::GetCreature(*bot, plan.npc);
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(plan.itemId);
+            handler->PSendSysMessage("TortoiseBots: mount buy: %s (%u) %.1f yd, item %u \"%s\", cost %u copper.",
+                vendor ? vendor->GetName().c_str() : "?", vendor ? vendor->GetEntry() : 0,
+                vendor ? bot->GetDistance(vendor) : 0.0f, plan.itemId,
+                proto ? proto->GetName(LOCALE_enUS) : "?", plan.cost);
+        }
+        else if (plan.step == tbhost::mountshop::Step::UseItem)
+            handler->PSendSysMessage("TortoiseBots: mount use: item %u is in the bags.", plan.itemId);
+        else
+            handler->PSendSysMessage("TortoiseBots: mount plan: %s.", plan.reason.c_str());
+
+        if (verb == "status")
+            return true;
+        if (plan.step == tbhost::mountshop::Step::None)
+            return Fail(handler, "mount " + verb + ": " + plan.reason + ".");
+        if (verb == "train" && plan.step != tbhost::mountshop::Step::TrainRiding)
+            return Fail(handler, "mount train: riding is already trained; use `mount buy`.");
+        if (verb == "buy" && plan.step == tbhost::mountshop::Step::TrainRiding)
+            return Fail(handler, "mount buy: learn riding first (mount train).");
+
+        uint32 spent = 0;
+        std::string refusal;
+        bool const ok = tbhost::mountshop::ExecutePlan(bot, plan, &spent, &refusal);
+        if (!ok)
+            return Fail(handler, "mount " + verb + " refused: " + refusal + ".");
+        handler->PSendSysMessage("TortoiseBots: mount %s: ok, %u copper spent, riding %u/%u.", verb.c_str(), spent,
+            uint32(bot->GetSkillValue(SKILL_RIDING)), uint32(tbhost::mountshop::RidingTargetForLevel(bot->GetLevel())));
         return true;
     }
 

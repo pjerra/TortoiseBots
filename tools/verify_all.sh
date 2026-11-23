@@ -105,7 +105,7 @@ if command -v g++ >/dev/null 2>&1; then
     compile_one() {
         local src="$1" name
         name="$(basename "${src}" .cpp)"
-        if ! g++ -std=c++17 -Wall -Wextra "${src}" -o "${BUILD_DIR}/${name}" 2> "${BUILD_DIR}/${name}.compile.log"; then
+        if ! g++ -std=c++17 -Wall -Wextra -I. "${src}" -o "${BUILD_DIR}/${name}" 2> "${BUILD_DIR}/${name}.compile.log"; then
             echo "COMPILE FAILED: ${name} (last 20 lines):"
             tail -n 20 "${BUILD_DIR}/${name}.compile.log" | sed 's/^/    /'
             return 1

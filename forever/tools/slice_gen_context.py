@@ -380,7 +380,20 @@ DEBUG_KEYS = {
     "trigger": "debug, cdebug, log, set value",
     "value": "log level",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS)
+# Riding (#152, forever/docs/MOUNT-RIDE-NOTES.md): the mount state action, the mount list and the mount
+# speed values, and the travel-target state the action reads to mount on a long walk. Left unregistered on
+# purpose (each one does less): `enemy player target` and `has enemy player targets` (EnemyPlayerValue.cpp is
+# not in the slice, so the dismount decision sees the dps target only), `possible rpg targets`
+# (PossibleRpgTargetsValue.cpp is not in the slice, so the speculative safe-place mount never fires), and the
+# purchase values `mount skilltype`, `can train mount`, `can buy mount`, `available mount vendors`,
+# `full mount list` (the buy/train package registers them).
+MOUNT_KEYS = {
+    "strategy": "mount",
+    "action": "check mount state",
+    "trigger": "check mount state",
+    "value": "mount list, current mount speed, max mount speed, travel target traveling, travel target working",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
