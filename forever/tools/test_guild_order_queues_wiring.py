@@ -120,6 +120,9 @@ class TestGuildOrderQueuesWiring(unittest.TestCase):
         orders = read("forever/src/host/TbHostGuildOrders.cpp")
         self.assertIn("IsFinished(record.state) && record.guildGoldHeld > 0", orders)
         self.assertIn("record.cancelled = true;", orders)
+        # Cancelling a row that still holds gold parks the debt as a stub.
+        self.assertIn("if (it->second.guildGoldHeld > 0)", orders)
+        self.assertIn("refund stub the refund pass pays", orders)
         reassign = read("forever/src/host/TbHostGuildOrderReassign.cpp")
         self.assertIn("stub.cancelled = true;", reassign)
 
