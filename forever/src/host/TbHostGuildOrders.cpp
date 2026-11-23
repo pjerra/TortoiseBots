@@ -34,7 +34,6 @@
 #include "StringFormat.h"
 
 #include "playerbot/policy/ah/AhBuyPolicy.h"
-#include "playerbot/strategy/actions/LootRollAction.h"
 #include "PlayerbotAIStorage.h"
 #include "runtime/GuildOrderBringPolicy.h"
 #include "runtime/GuildOrderContract.h"
@@ -52,6 +51,14 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+
+// The engine's room-making pass (ai/playerbot/strategy/actions/LootRollAction.cpp).
+// Declared here, not included: that header pulls the bot-brain tree and the cmangos
+// compat shim, whose function-like macros also rename host calls (GetLeaderGuid).
+namespace ai
+{
+bool MakeRoomForGuildOrderLoot(PlayerbotAI* ai, Player* bot, uint32 itemId, uint32 count);
+}
 
 namespace tbhost
 {
