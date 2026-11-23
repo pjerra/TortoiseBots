@@ -48,6 +48,7 @@ struct AccessReport
     std::string rankName;
     std::string tabsOk = "-";   // 1-based bank tabs the bot rank may deposit into
     std::string tabsDenied = "-";
+    bool bankGold = false;      // a bank exists and the bot rank may withdraw gold
     bool canSetRank = false;    // the asker may run `.tb guildorder rank`
     bool canGiveOrders = false; // the asker may place, cancel or move orders
 };
