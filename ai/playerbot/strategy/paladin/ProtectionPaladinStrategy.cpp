@@ -67,16 +67,21 @@ void ProtectionPaladinStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "bulwark of the righteous",
         NextAction::array(0, new NextAction("bulwark of the righteous", ACTION_HIGH + 2), NULL)));
 
+    // AiPlayerbot.ProtPaladinDungeonWisdom: one wanted-Seal decision
+    // (runtime/policy/class/JudgementUpkeepPolicy.h ProtPaladinWantedSeal)
+    // keeps Wisdom on 5-man trash and Righteousness on bosses / above medium
+    // mana. A Judgement leaves the Seal up on this core, so the Righteousness
+    // row may also fire after the tank judged from Wisdom.
     triggers.push_back(new TriggerNode(
-        "medium mana",
-        NextAction::array(0, new NextAction("seal of wisdom", ACTION_HIGH + 1), NULL)));
+        "prot seal of wisdom",
+        NextAction::array(0, new NextAction("seal of wisdom", ACTION_NORMAL + 4), NULL)));
 
     triggers.push_back(new TriggerNode(
         "exorcism",
         NextAction::array(0, new NextAction("exorcism", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "seal",
+        "prot seal of righteousness",
         NextAction::array(0, new NextAction("seal of righteousness", ACTION_NORMAL + 2), NULL)));
 
     triggers.push_back(new TriggerNode(

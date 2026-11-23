@@ -2,8 +2,11 @@
 
 The Holy combat row must name `"seal in melee"`, a SealTrigger that also
 requires melee reach on the current target, so a holy paladin healing from
-range never recasts Seal of Wisdom between Judgement-upkeep seals. Ret/Prot
-keep the bare `"seal"` row; the medium party row still names
+range never recasts Seal of Wisdom between Judgement-upkeep seals. Ret keeps
+the bare `"seal"` row; Prot uses its own `"prot seal of righteousness"` /
+`"prot seal of wisdom"` pair (AiPlayerbot.ProtPaladinDungeonWisdom). The holy
+melee-weave rows (AiPlayerbot.HolyPaladinMeleeWeave) must exist without the
+dead Crusader Strike row. The medium party row still names
 `"holy light on party"` and the 70-90 % row `"flash of light on party"`.
 
 Run: python3 -m unittest tools/test_holy_paladin_heal_band_wiring.py
@@ -118,9 +121,10 @@ class HolyPaladinHealBandWiringTest(unittest.TestCase):
         self.assertIn('"seal in melee"', CONTEXT.read_text())
 
     def test_ret_prot_keep_bare_seal(self):
-        for path, cls in ((RET, "RetributionPaladinStrategy"), (PROT, "ProtectionPaladinStrategy")):
+        for path, cls, seal in ((RET, "RetributionPaladinStrategy", "seal"),
+                                (PROT, "ProtectionPaladinStrategy", "prot seal of righteousness")):
             combat = rows(method_body(path, cls, "InitCombatTriggers"))
-            self.assertTrue(any(trigger == "seal" for trigger, _, _ in combat), path.name)
+            self.assertTrue(any(trigger == seal for trigger, _, _ in combat), path.name)
 
     def test_heal_bands_unchanged(self):
         combat = rows(method_body(STRATEGY, "HolyPaladinStrategy", "InitCombatTriggers"))
@@ -128,6 +132,51 @@ class HolyPaladinHealBandWiringTest(unittest.TestCase):
                        "ACTION_MEDIUM_HEAL"), combat)
         self.assertIn(("party member almost full health", "flash of light on party",
                        "ACTION_LIGHT_HEAL"), combat)
+
+    def test_holy_weave_rows(self):
+        body = method_body(STRATEGY, "HolyPaladinStrategy", "InitCombatTriggers")
+        self.assertIn("if (sPlayerbotAIConfig.holyPaladinMeleeWeave)", body)
+        combat = rows(body)
+        self.assertIn(("holy melee weave reach", "reach melee", "ACTION_MOVE"), combat)
+        self.assertIn(("holy melee weave attack", "holy melee attack", "ACTION_NORMAL + 1"), combat)
+        self.assertIn(("holy strike", "holy strike in reach", "ACTION_NORMAL + 5"), combat)
+        # No paladin on ForeverCore learns Crusader Strike: the old row is gone.
+        self.assertFalse(any(trigger == "crusader strike" for trigger, _, _ in combat))
+
+    def test_prot_seal_rows(self):
+        body = method_body(PROT, "ProtectionPaladinStrategy", "InitCombatTriggers")
+        combat = rows(body)
+        self.assertIn(("prot seal of wisdom", "seal of wisdom", "ACTION_NORMAL + 4"), combat)
+        self.assertIn(("prot seal of righteousness", "seal of righteousness",
+                       "ACTION_NORMAL + 2"), combat)
+        self.assertFalse(any(trigger in ("seal", "medium mana") for trigger, _, _ in combat))
+
+    def test_weave_and_prot_creators_registered(self):
+        ctx = CONTEXT.read_text()
+        for name in ("holy melee weave reach", "holy melee weave attack",
+                     "holy strike in reach", "holy melee attack",
+                     "prot seal of wisdom", "prot seal of righteousness"):
+            self.assertIn('creators["%s"]' % name, ctx)
+
+    def test_range_trigger_holds_ground_for_weave(self):
+        text = (ROOT / "ai/playerbot/strategy/triggers/RangeTriggers.h").read_text()
+        self.assertIn("sPlayerbotAIConfig.holyPaladinMeleeWeave", text)
+        self.assertIn("HolyMeleeWeaveAllowed", text)
+
+    def test_judgement_upkeep_tank_backfill_wired(self):
+        impl = TRIGGERS_CPP.read_text()
+        self.assertIn("tankMayOwnWisdom", impl)
+        self.assertIn("sPlayerbotAIConfig.protPaladinDungeonWisdom", impl)
+
+    def test_config_keys_present(self):
+        source = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+        template = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+        generated = (ROOT / "forever/conf/aiplayerbot.conf.dist").read_text()
+        for key in ("AiPlayerbot.HolyPaladinMeleeWeave",
+                    "AiPlayerbot.ProtPaladinDungeonWisdom"):
+            self.assertIn(key, source)
+            self.assertIn(key + " = 1", template)
+            self.assertIn(key + " = 1", generated)
 
 if __name__ == "__main__":
     unittest.main()

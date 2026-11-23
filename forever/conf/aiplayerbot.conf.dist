@@ -3,7 +3,7 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 703 keys, 693 with a literal default, 10 computed; 18 reads with a non-literal key are not listed.
+# 705 keys, 695 with a literal default, 10 computed; 18 reads with a non-literal key are not listed.
 
 [AiPlayerbotConf]
 
@@ -2011,117 +2011,123 @@ AiPlayerbot.HunterCarveInReachOnly = 0
 # AiPlayerbot.PaladinJudgementUpkeep  (bool, PlayerbotAIConfig.cpp:1480)
 AiPlayerbot.PaladinJudgementUpkeep = 1
 
-# AiPlayerbot.OnyxiaWhelpsAndEggs  (bool, PlayerbotAIConfig.cpp:1481)
+# AiPlayerbot.ProtPaladinDungeonWisdom  (bool, PlayerbotAIConfig.cpp:1481)
+AiPlayerbot.ProtPaladinDungeonWisdom = 1
+
+# AiPlayerbot.HolyPaladinMeleeWeave  (bool, PlayerbotAIConfig.cpp:1482)
+AiPlayerbot.HolyPaladinMeleeWeave = 1
+
+# AiPlayerbot.OnyxiaWhelpsAndEggs  (bool, PlayerbotAIConfig.cpp:1483)
 AiPlayerbot.OnyxiaWhelpsAndEggs = 1
 
-# AiPlayerbot.DungeonTactics  (bool, PlayerbotAIConfig.cpp:1482)
+# AiPlayerbot.DungeonTactics  (bool, PlayerbotAIConfig.cpp:1484)
 AiPlayerbot.DungeonTactics = 1
 
-# AiPlayerbot.RaidReactions  (bool, PlayerbotAIConfig.cpp:1485)
+# AiPlayerbot.RaidReactions  (bool, PlayerbotAIConfig.cpp:1487)
 AiPlayerbot.RaidReactions = 0
 
-# AiPlayerbot.AvoidCreatureAuras  (bool, PlayerbotAIConfig.cpp:1487)
+# AiPlayerbot.AvoidCreatureAuras  (bool, PlayerbotAIConfig.cpp:1489)
 AiPlayerbot.AvoidCreatureAuras = 1
 
-# AiPlayerbot.AllowRepairedTaxiPaths  (bool, PlayerbotAIConfig.cpp:1488)
+# AiPlayerbot.AllowRepairedTaxiPaths  (bool, PlayerbotAIConfig.cpp:1490)
 AiPlayerbot.AllowRepairedTaxiPaths = 0
 
-# AiPlayerbot.BotInstantFlight  (bool, PlayerbotAIConfig.cpp:1489)
+# AiPlayerbot.BotInstantFlight  (bool, PlayerbotAIConfig.cpp:1491)
 AiPlayerbot.BotInstantFlight = 0
 
-# AiPlayerbot.TurnInRpg  (bool, PlayerbotAIConfig.cpp:1490)
+# AiPlayerbot.TurnInRpg  (bool, PlayerbotAIConfig.cpp:1492)
 AiPlayerbot.TurnInRpg = 0
 
-# AiPlayerbot.ShareTargets  (bool, PlayerbotAIConfig.cpp:1491)
+# AiPlayerbot.ShareTargets  (bool, PlayerbotAIConfig.cpp:1493)
 AiPlayerbot.ShareTargets = 1
 
-# AiPlayerbot.GlobalSoundEffects  (bool, PlayerbotAIConfig.cpp:1492)
+# AiPlayerbot.GlobalSoundEffects  (bool, PlayerbotAIConfig.cpp:1494)
 AiPlayerbot.GlobalSoundEffects = 0
 
-# AiPlayerbot.NonGmFreeSummon  (bool, PlayerbotAIConfig.cpp:1493)
+# AiPlayerbot.NonGmFreeSummon  (bool, PlayerbotAIConfig.cpp:1495)
 AiPlayerbot.NonGmFreeSummon = 0
 
-# AiPlayerbot.AutoPickReward  (string, PlayerbotAIConfig.cpp:1496)
+# AiPlayerbot.AutoPickReward  (string, PlayerbotAIConfig.cpp:1498)
 AiPlayerbot.AutoPickReward = yes
 
-# AiPlayerbot.AutoEquipUpgradeLoot  (bool, PlayerbotAIConfig.cpp:1497)
+# AiPlayerbot.AutoEquipUpgradeLoot  (bool, PlayerbotAIConfig.cpp:1499)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
 
-# AiPlayerbot.ClaimedBotSelfEquip  (bool, PlayerbotAIConfig.cpp:1498)
+# AiPlayerbot.ClaimedBotSelfEquip  (bool, PlayerbotAIConfig.cpp:1500)
 AiPlayerbot.ClaimedBotSelfEquip = 1
 
-# AiPlayerbot.EquipUpgradeThreshold  (float, PlayerbotAIConfig.cpp:1499)
+# AiPlayerbot.EquipUpgradeThreshold  (float, PlayerbotAIConfig.cpp:1501)
 AiPlayerbot.EquipUpgradeThreshold = 1.1
 
-# AiPlayerbot.SyncQuestWithPlayer  (bool, PlayerbotAIConfig.cpp:1500)
+# AiPlayerbot.SyncQuestWithPlayer  (bool, PlayerbotAIConfig.cpp:1502)
 AiPlayerbot.SyncQuestWithPlayer = 0
 
-# AiPlayerbot.SyncQuestForPlayer  (bool, PlayerbotAIConfig.cpp:1501)
+# AiPlayerbot.SyncQuestForPlayer  (bool, PlayerbotAIConfig.cpp:1503)
 AiPlayerbot.SyncQuestForPlayer = 0
 
-# AiPlayerbot.AutoTrainSpells  (string, PlayerbotAIConfig.cpp:1502)
+# AiPlayerbot.AutoTrainSpells  (string, PlayerbotAIConfig.cpp:1504)
 AiPlayerbot.AutoTrainSpells = yes
 
-# AiPlayerbot.AutoPickTalents  (string, PlayerbotAIConfig.cpp:1503)
+# AiPlayerbot.AutoPickTalents  (string, PlayerbotAIConfig.cpp:1505)
 AiPlayerbot.AutoPickTalents = full
 
-# AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1504)
+# AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1506)
 AiPlayerbot.AutoLearnTrainerSpells = 1
 
-# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1505)
+# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1507)
 AiPlayerbot.AutoLearnQuestSpells = 1
 
-# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1506)
+# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1508)
 AiPlayerbot.AutoLearnQuestSpellsAlts = 0
 
-# AiPlayerbot.AutoLearnDroppedSpells  (bool, PlayerbotAIConfig.cpp:1507)
+# AiPlayerbot.AutoLearnDroppedSpells  (bool, PlayerbotAIConfig.cpp:1509)
 AiPlayerbot.AutoLearnDroppedSpells = 0
 
-# AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1508)
+# AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1510)
 AiPlayerbot.PetAutoTrain = 1
 
-# AiPlayerbot.PetAutoTrainAlts  (bool, PlayerbotAIConfig.cpp:1509)
+# AiPlayerbot.PetAutoTrainAlts  (bool, PlayerbotAIConfig.cpp:1511)
 AiPlayerbot.PetAutoTrainAlts = 0
 
-# AiPlayerbot.AutoDoQuests  (bool, PlayerbotAIConfig.cpp:1510)
+# AiPlayerbot.AutoDoQuests  (bool, PlayerbotAIConfig.cpp:1512)
 AiPlayerbot.AutoDoQuests = 1
 
-# AiPlayerbot.AutoShareConjuredOnTrade  (bool, PlayerbotAIConfig.cpp:1511)
+# AiPlayerbot.AutoShareConjuredOnTrade  (bool, PlayerbotAIConfig.cpp:1513)
 AiPlayerbot.AutoShareConjuredOnTrade = 1
 
-# AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1512)
+# AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1514)
 AiPlayerbot.GenerateTravelNodes = 0
 
-# AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1513)
+# AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1515)
 AiPlayerbot.GenerateFishLocations = 0
 
-# AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1514)
+# AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1516)
 AiPlayerbot.AsyncTravelPartitions = 0
 
-# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1521)
+# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1523)
 AiPlayerbot.SyncAltLevelToMaster = 0
 
-# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1522)
+# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1524)
 AiPlayerbot.TalentsInPublicNote = 1
 
-# AiPlayerbot.ProfessionsGrowWithLevel  (bool, PlayerbotAIConfig.cpp:1523)
+# AiPlayerbot.ProfessionsGrowWithLevel  (bool, PlayerbotAIConfig.cpp:1525)
 AiPlayerbot.ProfessionsGrowWithLevel = 1
 
-# AiPlayerbot.BotProfessionSpecializations  (int, PlayerbotAIConfig.cpp:1524)
+# AiPlayerbot.BotProfessionSpecializations  (int, PlayerbotAIConfig.cpp:1526)
 AiPlayerbot.BotProfessionSpecializations = 2
 
-# AiPlayerbot.GearProgressionSystem.Enable  (bool, PlayerbotAIConfig.cpp:1527)
+# AiPlayerbot.GearProgressionSystem.Enable  (bool, PlayerbotAIConfig.cpp:1529)
 AiPlayerbot.GearProgressionSystem.Enable = 0
 
-# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1554)
+# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1556)
 #   default is computed in the code: uint32(BotSelfBotLevel::GM_ONLY)
 # AiPlayerbot.SelfBotLevel =
 
-# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1555)
+# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1557)
 AiPlayerbot.ToggleAlwaysOnlineAccounts = 
 
-# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1556)
+# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1558)
 AiPlayerbot.ToggleAlwaysOnlineChars = 
 
-# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1575)
+# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1577)
 AiPlayerbot.TargetPosRecalcDistance = 0.1
