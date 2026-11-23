@@ -6,6 +6,7 @@
 #include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderEnchant.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -1642,7 +1643,8 @@ void BotMgr::Update(uint32 diff)
         tbhost::prof::TickErrands(me, diff);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
             (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me) ||
-             tbhost::guild_orders::HasActiveDisenchantErrand(me));
+             tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
+             tbhost::guild_orders::HasActiveEnchantErrand(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif
@@ -1651,6 +1653,7 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
             tbhost::guild_orders::TickBotOrder(me);
+        tbhost::guild_orders::TickEnchantOrder(me);
         if (bot.free && _professionsEnabled)
         {
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))

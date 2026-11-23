@@ -24,7 +24,9 @@
 #include "SpellMgr.h"
 
 #include "playerbot/policy/profession/ProfessionPickPolicy.h"
+#include "playerbot/GuildOrderEnchants.h"
 #include "runtime/GuildOrderCategoryPolicy.h"
+#include "runtime/GuildOrderEnchantPolicy.h"
 #include "runtime/GuildOrderReadPolicy.h"
 #include "runtime/GuildOrderSearchPolicy.h"
 #include "runtime/GuildOrderStepHistoryPolicy.h"
@@ -471,14 +473,60 @@ bool ParseTypeToken(std::string const& token, OrderType& out)
     if (lower == "farm")  { out = OrderType::Farm;  return true; }
     if (lower == "craft") { out = OrderType::Craft; return true; }
     if (lower == "buy")   { out = OrderType::Buy;   return true; }
+    if (lower == "enchant") { out = OrderType::Enchant; return true; }
     return false;
 }
 
 bool RefuseType(ChatHandler* handler, Words const& words, std::string const& token)
 {
-    if (LowerCopy(token) == "enchant")
-        return Fail(handler, words, "guildorder", "bad-type", "enchant orders are not in this build");
     return Fail(handler, words, "guildorder", "bad-type", token);
+}
+
+// ---- enchant catalogue reads (search, who, preview) ----
+
+std::vector<EnchantEntry> const& EnchantCatalogue()
+{
+    static std::vector<EnchantEntry> const catalogue = []
+    {
+        ai::BuildGuildOrderEnchantIndex();
+        return ai::GuildOrderEnchants();
+    }();
+    return catalogue;
+}
+
+EnchantEntry const* EnchantEntryFor(uint32_t spellId)
+{
+    for (EnchantEntry const& entry : EnchantCatalogue())
+        if (entry.spellId == spellId)
+            return &entry;
+    return nullptr;
+}
+
+uint32_t EnchantSkill(Player* bot)
+{
+    if (!bot || !bot->HasSkill(TortoiseBots::prof::SkillEnchanting))
+        return 0;
+    return uint32_t(bot->GetSkillValue(TortoiseBots::prof::SkillEnchanting));
+}
+
+// Per-bot reagent rows: item, one cast's need, what the bot holds (bags plus
+// mail, like the search shows).
+std::vector<std::vector<std::string>> EnchantReagentRows(Player* bot, EnchantEntry const& entry)
+{
+    std::vector<std::vector<std::string>> rows;
+    for (auto const& [itemId, need] : entry.reagents)
+        rows.push_back({ std::to_string(itemId), std::to_string(need),
+            std::to_string(HeldCount(bot, itemId)) });
+    return rows;
+}
+
+uint32_t EnchantReagentsHeldInFull(Player* bot, EnchantEntry const& entry)
+{
+    uint32_t have = 0;
+    for (auto const& [itemId, need] : entry.reagents)
+        if (HeldCount(bot, itemId) >= need)
+            ++have;
+    return have;
 }
 
 // A player may read the orders of the guild the bot is in; the console and a
@@ -500,7 +548,7 @@ bool CheckGuildRead(ChatHandler* handler, Words const& words, Player* sender, ui
 bool HandleSearch(ChatHandler* handler, Words const& words, Player* sender)
 {
     if (words.w.size() < 3)
-        return Fail(handler, words, "guildorder", "usage", "search <bot> <farm|craft|buy> [cat=<kind>] <text>");
+        return Fail(handler, words, "guildorder", "usage", "search <bot> <farm|craft|buy|enchant> [cat=<kind>] <text>");
     Player* bot = FindOnline(words.w[1]);
     if (!bot || !IsHostBot(bot))
         return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
@@ -513,6 +561,50 @@ bool HandleSearch(ChatHandler* handler, Words const& words, Player* sender)
     OrderType type = OrderType::Farm;
     if (!ParseTypeToken(words.w[2], type))
         return RefuseType(handler, words, words.w[2]);
+
+    if (type == OrderType::Enchant)
+    {
+        std::string const query = JoinWords(words, 3);
+        if (query.size() < kSearchMinChars)
+            return Fail(handler, words, "guildorder", "usage", "search text needs at least 3 characters");
+        std::vector<std::string> const queryWords = SplitQueryWords(LowerCopy(query));
+        uint32_t const skill = EnchantSkill(bot);
+
+        struct EnchantHit
+        {
+            EnchantEntry const* entry = nullptr;
+            OrderReason verdict = OrderReason::NoRecipe;
+        };
+        std::vector<EnchantHit> hits;
+        for (EnchantEntry const& entry : EnchantCatalogue())
+        {
+            if (!EnchantSearchMatches(entry, queryWords))
+                continue;
+            bool const known = bot->HasSpell(entry.spellId);
+            if (!known)
+                continue;
+            hits.push_back(EnchantHit{ &entry, EnchantSearchVerdict(known, skill, entry.reqSkill) });
+        }
+        if (hits.size() > kSearchMaxRows)
+            hits.resize(kSearchMaxRows);
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        for (EnchantHit const& hit : hits)
+        {
+            Rec rec("orderitem");
+            rec.S("bot", bot->GetName()).N("spell", hit.entry->spellId).S("name", hit.entry->name)
+                .S("slot", EnchantSlotToken(hit.entry->slot)).N("reqskill", hit.entry->reqSkill)
+                .S("verdict", EnchantVerdictToken(hit.verdict))
+                .P("skill", { std::to_string(TortoiseBots::prof::SkillEnchanting), std::to_string(skill) })
+                .LP("reagents", EnchantReagentRows(bot, *hit.entry));
+            reply.Line(rec);
+        }
+        Rec end("guildorder-end");
+        end.S("bot", bot->GetName()).N("found", uint32_t(hits.size()));
+        reply.End(end);
+        return true;
+    }
 
     std::string query = JoinWords(words, 3);
     OrderItemCategory category = OrderItemCategory::Other;
@@ -616,7 +708,7 @@ std::vector<GuildBotView> GuildBots(uint32_t guildId)
 bool HandleWho(ChatHandler* handler, Words const& words, Player* sender)
 {
     if (words.w.size() < 2)
-        return Fail(handler, words, "guildorder", "usage", "who [<bot|guild_id>] <craft|farm> <text>");
+        return Fail(handler, words, "guildorder", "usage", "who [<bot|guild_id>] <craft|farm|enchant> <text>");
 
     std::size_t pos = 1;
     uint32_t guildId = 0;
@@ -637,7 +729,7 @@ bool HandleWho(ChatHandler* handler, Words const& words, Player* sender)
             return Fail(handler, words, "guildorder", "no-guild", "name a guild bot or guild id");
         ++pos;
         if (words.w.size() <= pos)
-            return Fail(handler, words, "guildorder", "usage", "who [<bot|guild_id>] <craft|farm> <text>");
+            return Fail(handler, words, "guildorder", "usage", "who [<bot|guild_id>] <craft|farm|enchant> <text>");
         if (!ParseTypeToken(words.w[pos], type))
             return RefuseType(handler, words, words.w[pos]);
     }
@@ -654,6 +746,62 @@ bool HandleWho(ChatHandler* handler, Words const& words, Player* sender)
     std::vector<GuildBotView> const bots = GuildBots(guildId);
     if (bots.empty())
         return Fail(handler, words, "guildorder", "no-bots", "no online guild bot");
+
+    if (type == OrderType::Enchant)
+    {
+        struct EnchantHit
+        {
+            EnchantEntry const* entry = nullptr;
+            std::vector<WhoBot> bots;
+        };
+        std::vector<EnchantHit> hits;
+        for (EnchantEntry const& entry : EnchantCatalogue())
+        {
+            if (!EnchantSearchMatches(entry, queryWords))
+                continue;
+            EnchantHit hit;
+            hit.entry = &entry;
+            for (GuildBotView const& view : bots)
+            {
+                uint32_t const skill = EnchantSkill(view.bot);
+                if (!view.bot->HasSpell(entry.spellId) ||
+                    (entry.reqSkill > 0 && skill < entry.reqSkill))
+                    continue;
+                WhoBot who;
+                who.name = view.name;
+                who.skill = skill;
+                who.have = EnchantReagentsHeldInFull(view.bot, entry);
+                who.need = uint32_t(entry.reagents.size());
+                who.busy = view.busy;
+                hit.bots.push_back(std::move(who));
+            }
+            if (!hit.bots.empty())
+                hits.push_back(std::move(hit));
+        }
+        if (hits.size() > kWhoMaxRows)
+            hits.resize(kWhoMaxRows);
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        for (EnchantHit& hit : hits)
+        {
+            SortWhoBots(hit.bots);
+            std::vector<std::vector<std::string>> parts;
+            parts.reserve(hit.bots.size());
+            for (WhoBot const& who : hit.bots)
+                parts.push_back({ who.name, std::to_string(who.skill), std::to_string(who.have),
+                    std::to_string(who.need), who.busy ? "yes" : "no" });
+            Rec rec("orderwho");
+            rec.N("guild", guildId).N("spell", hit.entry->spellId).S("name", hit.entry->name)
+                .S("type", "enchant").S("slot", EnchantSlotToken(hit.entry->slot))
+                .N("reqskill", hit.entry->reqSkill).LP("bots", parts);
+            reply.Line(rec);
+        }
+        Rec end("guildorder-end");
+        end.N("guild", guildId).N("found", uint32_t(hits.size()));
+        reply.End(end);
+        return true;
+    }
 
     struct Hit
     {
@@ -756,8 +904,9 @@ ItemRow const* IndexedItem(uint32_t itemId)
 
 bool HandlePreview(ChatHandler* handler, Words const& words, Player* sender)
 {
-    if (words.w.size() < 5)
-        return Fail(handler, words, "guildorder", "usage", "preview <bot> <farm|craft|buy> <item> <amount>");
+    if (words.w.size() < 4)
+        return Fail(handler, words, "guildorder", "usage",
+            "preview <bot> <farm|craft|buy> <item> <amount> | preview <bot> enchant <spell link or id>");
     Player* bot = FindOnline(words.w[1]);
     if (!bot || !IsHostBot(bot))
         return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
@@ -772,6 +921,46 @@ bool HandlePreview(ChatHandler* handler, Words const& words, Player* sender)
         return RefuseType(handler, words, words.w[2]);
     if (!PreviewTypeSupported(type))
         return Fail(handler, words, "guildorder", "bad-type", words.w[2]);
+
+    if (type == OrderType::Enchant)
+    {
+        if (words.w.size() != 4)
+            return Fail(handler, words, "guildorder", "unexpected-argument", words.w[4]);
+        uint32_t spellId = 0;
+        if (!ParseEnchantSpellToken(words.w[3], spellId))
+            return Fail(handler, words, "guildorder", "bad-spell", words.w[3]);
+        EnchantEntry const* entry = EnchantEntryFor(spellId);
+        if (!entry)
+            return Fail(handler, words, "guildorder", "bad-spell", words.w[3]);
+
+        uint32_t const skill = EnchantSkill(bot);
+        bool const known = bot->HasSpell(spellId);
+        OrderReason const verdict = EnchantSearchVerdict(known, skill, entry->reqSkill);
+        std::optional<OrderRecord> const existing = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
+        bool const replaces = existing.has_value() && !existing->cancelled;
+        bool const busy = existing.has_value() && !existing->cancelled && existing->type == OrderType::Enchant &&
+            !IsFinished(existing->state) &&
+            (!sender || existing->giverGuidLow != sender->GetGUID().GetCounter());
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec rec("orderpreview");
+        rec.S("bot", bot->GetName()).S("type", "enchant").N("spell", spellId)
+            .S("name", entry->name).S("slot", EnchantSlotToken(entry->slot))
+            .N("reqskill", entry->reqSkill).N("want", 1)
+            .S("verdict", EnchantVerdictToken(verdict))
+            .P("skill", { std::to_string(TortoiseBots::prof::SkillEnchanting), std::to_string(skill) })
+            .LP("reagents", EnchantReagentRows(bot, *entry))
+            .B("busy", busy).B("replaces", replaces);
+        reply.Line(rec);
+        Rec end("guildorder-end");
+        end.S("bot", bot->GetName()).N("spell", spellId);
+        reply.End(end);
+        return true;
+    }
+
+    if (words.w.size() < 5)
+        return Fail(handler, words, "guildorder", "usage", "preview <bot> <farm|craft|buy> <item> <amount>");
 
     uint32_t itemId = 0;
     if (!ParseUint(words.w[3], itemId) || !tbcompat::ItemProto(itemId))

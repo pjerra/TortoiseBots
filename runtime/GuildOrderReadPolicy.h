@@ -117,12 +117,14 @@ inline bool OrderBotBusy(bool hasOrder, bool cancelled, OrderState state)
     return hasOrder && !cancelled && (!IsFinished(state) || state == OrderState::Stocked);
 }
 
-// Preview is available for the order types TBF can place. Enchant orders are
-// not in this build; a Buy preview is allowed because a TBF Buy order is the
-// auction-house leg and its cost can be read before sending.
+// Preview is available for every order type TBF can place. A Buy preview is
+// allowed because a TBF Buy order is the auction-house leg and its cost can
+// be read before sending; an Enchant preview names the spell's reagents and
+// the bot's skill before the giver sends the order.
 inline bool PreviewTypeSupported(OrderType type)
 {
-    return type == OrderType::Farm || type == OrderType::Craft || type == OrderType::Buy;
+    return type == OrderType::Farm || type == OrderType::Craft || type == OrderType::Buy ||
+        type == OrderType::Enchant;
 }
 
 } // namespace GuildOrders

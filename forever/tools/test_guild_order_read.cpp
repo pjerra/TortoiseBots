@@ -76,7 +76,7 @@ int main()
         assert(PreviewTypeSupported(OrderType::Farm));
         assert(PreviewTypeSupported(OrderType::Craft));
         assert(PreviewTypeSupported(OrderType::Buy));
-        assert(!PreviewTypeSupported(OrderType::Enchant));
+        assert(PreviewTypeSupported(OrderType::Enchant));
 
         assert(IsBrowsableCategory(OrderItemCategory::Herb));
         assert(IsBrowsableCategory(OrderItemCategory::Ore));
