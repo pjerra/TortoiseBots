@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <vector>
 
+class ObjectGuid;
 class Player;
 struct Mail;
 
@@ -45,6 +46,12 @@ bool DeleteDisenchantRow(uint32_t botGuidLow, uint64_t itemGuidLow);
 // item and no cash on delivery: the service owns it, the generic mail take
 // must not pull it into the bags.
 bool IsDisenchantServiceMail(Player* bot, Mail* mail);
+
+// Every unlooted piece of the item's disenchant window, through the core's
+// own autostore handler; the window is released only when nothing is left.
+// Shared with the maintenance upkeep (TbHostProfessionUpkeep.cpp): both cast
+// the client's Disenchant on an item the bot owns.
+void TakeItemLoot(Player* bot, ObjectGuid const& itemGuid);
 
 // The per-bot service tick (world thread, beside TickBotOrder and
 // TickGuildMail): mail intake, the cast, loot collection, result mail.

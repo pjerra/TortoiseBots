@@ -9,6 +9,7 @@
 #include "host/TbHostGuildOrderQueues.h"
 #include "host/TbHostGuildOrderEnchant.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostProfessionUpkeep.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -243,6 +244,8 @@ void BotMgr::LoadConfig()
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
     _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
+    _disenchantUpkeepEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Disenchant", true);
+    _enchantGearEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.EnchantGear", true);
     _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
@@ -1645,7 +1648,8 @@ void BotMgr::Update(uint32 diff)
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
             (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me) ||
              tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
-             tbhost::guild_orders::HasActiveEnchantErrand(me));
+             tbhost::guild_orders::HasActiveEnchantErrand(me) ||
+             tbhost::upkeep::HasActiveUpkeepCast(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif
@@ -1669,6 +1673,8 @@ void BotMgr::Update(uint32 diff)
             tbhost::guild_orders::TickDisenchantService(me, diff);
             tbhost::guild_mail::TickGuildMail(me, diff);
         }
+        if (bot.free && (_disenchantUpkeepEnabled || _enchantGearEnabled))
+            tbhost::upkeep::TickProfessionUpkeep(me, diff, _disenchantUpkeepEnabled, _enchantGearEnabled);
 #endif
     };
 

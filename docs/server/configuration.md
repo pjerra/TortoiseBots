@@ -119,3 +119,5 @@ Raid diagnostics stay opt-in through
 | `TortoiseBots.AutoTools` | `1` | Pool and free bots get the missing tool of a profession they know (pick, knife, hammer, rod, spanner, fishing pole) into their bags. |
 | `TortoiseBots.AutoHunterPet` | `1` | Hunter bots at level 10 without a pet get their race's starter pet and the pet-control spells; an existing pet is never replaced. |
 | `TortoiseBots.AutoFood` | `1` | Pool and free bots carry level-fitting food (and water for mana users), topped up when they run low. |
+| `TortoiseBots.World.Disenchant` | `1` | Free bots with Enchanting break down disenchantable armor and weapons they carry (uncommon and above; rare and better only when no real player shares their guild) and keep the materials. |
+| `TortoiseBots.World.EnchantGear` | `1` | Free bots with Enchanting apply the best permanent enchant they know and can pay for to their worn gear, when it scores higher than the enchant already there. |

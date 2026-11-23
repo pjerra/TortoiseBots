@@ -1,5 +1,6 @@
 #include "host/TbHostProfession.h"
 #include "host/TbHostFishing.h"
+#include "host/TbHostProfessionUpkeep.h"
 
 #include "host/TbAutoToolsPure.h"
 #include "host/TbHostCraftOrderPure.h"
@@ -1188,6 +1189,7 @@ void ClearBotErrands(ObjectGuid const& botGuid)
     fishing::ClearErrand(botGuid);
     Errands().erase(botGuid);
     FreeGatherTimers().Clear(botGuid.GetCounter());
+    upkeep::ForgetProfessionUpkeep(botGuid.GetCounter());
 }
 
 void TickFreeGather(Player* bot)
