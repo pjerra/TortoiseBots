@@ -562,7 +562,7 @@ inline bool CanEnterAreaCompat(Player* bot, Area const* area)
         return false;
 
     // The instance the bot would enter: its own lock, its group's, or the group's recent one (the core's teleport path uses the same).
-    Map* map = sMapMgr->FindMap(mapId, sMapMgr->FindInstanceIdForPlayer(mapId, bot));
+    Map* map = sMapMgr.FindMap(mapId, sMapMgr.FindInstanceIdForPlayer(mapId, bot));
     if (!map || !map->IsDungeon())
         return true;
 
