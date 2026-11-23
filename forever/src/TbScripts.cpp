@@ -160,6 +160,17 @@ struct PerfWindow
     uint32 worldMaxMs = 0;
     uint64 botSumUs = 0;
     uint32 botMaxUs = 0;
+    // Tick budget: the effective allocations of the last pass, the turns the
+    // pool pass served against those it could cut, and how often it stopped.
+    uint64 poolBotsSum = 0;
+    uint64 processedSum = 0;
+    uint64 cutTicks = 0;
+    uint64 heldTicks = 0;
+    uint32 lastBudgetUs = 0;
+    uint32 lastPoolUs = 0;
+    uint32 lastCombatUs = 0;
+    uint32 targetMs = 0;
+    double smoothedMs = 0.0;
     void Reset() { *this = PerfWindow(); }
 };
 PerfWindow& Perf()
@@ -333,6 +344,16 @@ public:
         perf.worldMaxMs = std::max(perf.worldMaxMs, worldMs);
         perf.botSumUs += us;
         perf.botMaxUs = std::max(perf.botMaxUs, us);
+        BotMgr::BudgetStats const budget = BotMgr::Instance().LastBudget();
+        perf.poolBotsSum += budget.poolBots;
+        perf.processedSum += budget.processed;
+        perf.cutTicks += budget.cut ? 1 : 0;
+        perf.heldTicks += budget.held ? 1 : 0;
+        perf.lastBudgetUs = budget.budgetUs;
+        perf.lastPoolUs = budget.poolUs;
+        perf.lastCombatUs = budget.combatUs;
+        perf.targetMs = budget.targetMs;
+        perf.smoothedMs = budget.smoothedTickMs;
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
@@ -1305,6 +1326,10 @@ public:
         handler->PSendSysMessage("TortoiseBots: perf: %llu ticks; world update time avg %.2f ms, worst %u ms; module (sessions + engines) avg %.0f us, worst %u us; %u bot session(s).",
             (unsigned long long)perf.ticks, double(perf.worldSumMs) / double(perf.ticks), perf.worldMaxMs, double(perf.botSumUs) / double(perf.ticks),
             perf.botMaxUs, uint32(BotMgr::Instance().Count()));
+        handler->PSendSysMessage("TortoiseBots: budget: %u us (pool %u + combat %u; target %u ms, smoothed %.2f ms); %llu of %llu pool turn(s) served, %llu tick(s) cut short, %llu held (core-bound).",
+            perf.lastBudgetUs, perf.lastPoolUs, perf.lastCombatUs, perf.targetMs, perf.smoothedMs,
+            (unsigned long long)perf.processedSum, (unsigned long long)perf.poolBotsSum,
+            (unsigned long long)perf.cutTicks, (unsigned long long)perf.heldTicks);
         perf.Reset();
         return true;
     }
