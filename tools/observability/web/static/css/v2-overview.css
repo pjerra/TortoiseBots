@@ -1,1 +1,516 @@
-/* Dashboard UI v2 (overview). Every rule is scoped under html[data-ui="v2"] so v1 stays untouched. */
+/* Dashboard UI v2 — Overview and Bots tabs. Every rule is scoped under
+   html[data-ui="v2"] so the v1 skin stays untouched. */
+
+/* ---------- Page hero (topbar title) ---------- */
+/* :has() keeps the hero to the two tabs this sheet owns; the inline
+   display:none the tab switch writes is the only state signal available. */
+html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) .page-head,
+html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) .page-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) .page-head::before,
+html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) .page-head::before {
+  font-family: var(--v2-font-ui);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--v2-gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) .page-head::before {
+  content: "Tortoise WoW · Live overview";
+}
+
+html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) .page-head::before {
+  content: "Tortoise WoW · Fleet roster";
+}
+
+html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) #page-title,
+html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) #page-title {
+  font-family: var(--v2-font-display);
+  font-size: 1.34rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--v2-gold-light);
+}
+
+/* ---------- Cards shared by both tabs ---------- */
+html[data-ui="v2"] #tab-overview .card,
+html[data-ui="v2"] #tab-roster .card {
+  background-color: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-left: 3px solid var(--v2-gold-deep);
+  border-radius: var(--v2-radius);
+}
+
+html[data-ui="v2"] #tab-overview .card-head,
+html[data-ui="v2"] #tab-roster .card-head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] #tab-overview .card-title,
+html[data-ui="v2"] #tab-roster .card-title {
+  font-family: var(--v2-font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] #tab-overview .card-hint,
+html[data-ui="v2"] #tab-roster .card-hint {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--v2-faint);
+}
+
+html[data-ui="v2"] #tab-overview .card-link,
+html[data-ui="v2"] #tab-roster .card-link {
+  color: var(--v2-gold);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] #tab-overview .card-link:hover,
+html[data-ui="v2"] #tab-roster .card-link:hover {
+  color: var(--v2-gold-light);
+  text-decoration: none;
+}
+
+html[data-ui="v2"] #tab-overview .empty-hint,
+html[data-ui="v2"] #tab-roster .empty-hint {
+  color: var(--v2-dim);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+}
+
+html[data-ui="v2"] #tab-overview .badge,
+html[data-ui="v2"] #tab-roster .badge {
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--v2-font-ui);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+}
+
+/* ---------- Overview: stat strip ---------- */
+/* One framed strip with gold hairline dividers, like the live-map counters. */
+html[data-ui="v2"] #tab-overview .kpi-row {
+  gap: 1px;
+  background: var(--v2-line);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  overflow: hidden;
+}
+
+html[data-ui="v2"] #tab-overview .kpi {
+  background: linear-gradient(180deg, #0e0f1d 0%, var(--v2-panel-solid) 70%);
+  border: 0;
+  border-radius: 0;
+  padding: 15px 18px 13px;
+}
+
+html[data-ui="v2"] #tab-overview .kpi-label {
+  font-family: var(--v2-font-ui);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] #tab-overview .kpi-value {
+  font-family: var(--v2-font-display);
+  font-size: 2.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  color: var(--v2-gold-light);
+  margin: 7px 0 3px;
+}
+
+html[data-ui="v2"] #tab-overview .kpi-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  color: var(--v2-faint);
+}
+
+html[data-ui="v2"] #tab-overview .kpi-blue { color: var(--v2-alliance); }
+html[data-ui="v2"] #tab-overview .kpi-green { color: var(--v2-green); }
+html[data-ui="v2"] #tab-overview .kpi-amber { color: var(--v2-gold); }
+html[data-ui="v2"] #tab-overview .kpi-red { color: var(--v2-red); }
+
+html[data-ui="v2"] #tab-overview .kpi-link:hover {
+  background: var(--v2-panel-hover);
+}
+
+html[data-ui="v2"] #tab-overview .kpi-link:hover .kpi-value {
+  color: #fff;
+}
+
+html[data-ui="v2"] #tab-overview .snapshot-fresh { color: var(--v2-green); }
+html[data-ui="v2"] #tab-overview .snapshot-stale { color: var(--v2-gold); }
+html[data-ui="v2"] #tab-overview .snapshot-offline { color: var(--v2-red); }
+
+/* ---------- Overview: chart frames ---------- */
+html[data-ui="v2"] #tab-overview .chart-card {
+  position: relative;
+}
+
+html[data-ui="v2"] #tab-overview .chart-card::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) left top / 14px 1px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) left top / 1px 14px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) right top / 14px 1px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) right top / 1px 14px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) left bottom / 14px 1px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) left bottom / 1px 14px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) right bottom / 14px 1px no-repeat,
+    linear-gradient(var(--v2-line-strong), var(--v2-line-strong)) right bottom / 1px 14px no-repeat;
+}
+
+html[data-ui="v2"] #tab-overview .chart-card .chart-box {
+  height: 226px;
+  min-height: 226px;
+  padding: 8px 8px 4px;
+  border: 1px solid var(--v2-line);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(232, 196, 106, 0.035), transparent 55%), var(--v2-bg-2);
+}
+
+html[data-ui="v2"] #tab-overview .chart-legend {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] #tab-overview .legend-color {
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Overview: activity and attention lists ---------- */
+html[data-ui="v2"] #tab-overview .comp-row {
+  border-bottom: 1px solid rgba(232, 196, 106, 0.08);
+  border-radius: 3px;
+  padding: 4px 6px;
+}
+
+html[data-ui="v2"] #tab-overview .comp-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-ui="v2"] #tab-overview .comp-row.clickable:hover {
+  background: rgba(232, 196, 106, 0.06);
+}
+
+html[data-ui="v2"] #tab-overview .comp-name {
+  width: 84px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] #tab-overview .comp-bar-bg {
+  height: 7px;
+  background: rgba(232, 196, 106, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(232, 196, 106, 0.14);
+  border-radius: 2px;
+}
+
+html[data-ui="v2"] #tab-overview .comp-bar {
+  border-radius: 1px;
+}
+
+html[data-ui="v2"] #tab-overview .comp-count {
+  font-family: var(--v2-font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] #tab-overview .attention-row {
+  border-bottom: 1px solid rgba(232, 196, 106, 0.12);
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+html[data-ui="v2"] #tab-overview .attention-row.clickable:hover {
+  background: rgba(232, 196, 106, 0.06);
+}
+
+html[data-ui="v2"] #tab-overview .attention-meta {
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  color: var(--v2-faint);
+}
+
+html[data-ui="v2"] #tab-overview .attention-ok {
+  color: var(--v2-green);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- Overview: dungeon glance toggle ---------- */
+html[data-ui="v2"] #tab-overview .dg-filter {
+  letter-spacing: 0.06em;
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] #tab-overview .dg-filter input {
+  accent-color: var(--v2-gold);
+}
+
+/* ---------- Bots: toolbar ---------- */
+html[data-ui="v2"] #tab-roster .toolbar-card {
+  border-left-color: var(--v2-gold-deep);
+}
+
+html[data-ui="v2"] #tab-roster .input {
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: 4px;
+  color: var(--v2-text);
+  font-size: 0.78rem;
+}
+
+html[data-ui="v2"] #tab-roster .input::placeholder {
+  color: var(--v2-faint);
+}
+
+html[data-ui="v2"] #tab-roster .input:focus {
+  border-color: var(--v2-gold);
+  box-shadow: 0 0 0 2px rgba(232, 196, 106, 0.16);
+}
+
+html[data-ui="v2"] #tab-roster .seg {
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: 6px;
+  padding: 3px;
+}
+
+html[data-ui="v2"] #tab-roster .seg-btn {
+  border-radius: 4px;
+  font-family: var(--v2-font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] #tab-roster .seg-btn:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] #tab-roster .seg-btn.active {
+  background: rgba(232, 196, 106, 0.12);
+  color: var(--v2-gold-light);
+  box-shadow: inset 0 0 0 1px var(--v2-line-strong);
+}
+
+/* Filter chips: gold hairlines; the active one is a filled gold ticket. */
+html[data-ui="v2"] #tab-roster .chip-row {
+  gap: 5px;
+  margin-top: 9px;
+}
+
+html[data-ui="v2"] #tab-roster .chip {
+  border: 1px solid var(--v2-line);
+  border-radius: 4px;
+  background: rgba(232, 196, 106, 0.03);
+  color: var(--v2-dim);
+  font-family: var(--v2-font-ui);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 3px 10px 3px 8px;
+}
+
+html[data-ui="v2"] #tab-roster .chip:hover {
+  color: var(--v2-gold-light);
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] #tab-roster .chip.active {
+  background: rgba(232, 196, 106, 0.14);
+  border-color: var(--v2-line-strong);
+  color: var(--v2-gold-light);
+  box-shadow: inset 0 0 0 1px rgba(232, 196, 106, 0.12);
+}
+
+html[data-ui="v2"] #tab-roster .chip b {
+  font-family: var(--v2-font-ui);
+  font-size: 0.68rem;
+  color: var(--v2-gold-light);
+  opacity: 0.9;
+}
+
+html[data-ui="v2"] #tab-roster .chip-warn.active {
+  background: rgba(229, 83, 75, 0.16);
+  border-color: rgba(229, 83, 75, 0.55);
+  color: #ffb3ad;
+}
+
+/* ---------- Bots: table ---------- */
+html[data-ui="v2"] #tab-roster .data-table th {
+  background: var(--v2-panel-solid);
+  border-bottom: 1px solid var(--v2-line-strong);
+  color: var(--v2-dim);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  padding: 10px 12px;
+}
+
+html[data-ui="v2"] #tab-roster .data-table th.sortable:hover {
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] #tab-roster .data-table th.sort-active {
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] #tab-roster .data-table td {
+  border-bottom: 1px solid rgba(232, 196, 106, 0.08);
+  font-size: 0.8rem;
+}
+
+html[data-ui="v2"] #tab-roster .data-table tbody tr:hover td {
+  background-color: rgba(232, 196, 106, 0.05);
+}
+
+/* Sticky name column needs an opaque fill of its own. */
+html[data-ui="v2"] #tab-roster .bots-table th:first-child,
+html[data-ui="v2"] #tab-roster .bots-table td:first-child {
+  background-color: var(--v2-panel-solid);
+  box-shadow: 1px 0 0 var(--v2-line);
+}
+
+html[data-ui="v2"] #tab-roster .bots-table tbody tr:hover td:first-child {
+  background-color: #151423;
+}
+
+html[data-ui="v2"] #tab-roster .row-selected td {
+  background: rgba(232, 196, 106, 0.08);
+}
+
+html[data-ui="v2"] #tab-roster .bots-table .row-selected td:first-child {
+  background-color: #1c1a12;
+}
+
+html[data-ui="v2"] #tab-roster tr.row-offline {
+  opacity: 0.66;
+}
+
+html[data-ui="v2"] #tab-roster tr.row-offline:hover {
+  opacity: 1;
+}
+
+html[data-ui="v2"] #tab-roster .bot-link {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+html[data-ui="v2"] #tab-roster .bot-link:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--v2-gold);
+  text-underline-offset: 2px;
+}
+
+html[data-ui="v2"] #tab-roster .cell-muted {
+  color: var(--v2-faint);
+}
+
+/* Level is the fourth column in every roster view. */
+html[data-ui="v2"] #tab-roster .bots-table td:nth-child(4) {
+  color: var(--v2-gold-light);
+  font-family: var(--v2-font-ui);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+html[data-ui="v2"] #tab-roster .state-tag {
+  padding: 2px 8px 2px 6px;
+  border: 1px solid var(--v2-line);
+  border-radius: 3px;
+  background: rgba(232, 196, 106, 0.04);
+  font-family: var(--v2-font-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--v2-text);
+}
+
+html[data-ui="v2"] #tab-roster .state-tag i {
+  width: 6px;
+  height: 6px;
+}
+
+html[data-ui="v2"] #tab-roster .cell-bar-text {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] #tab-roster .progress-bar-bg {
+  height: 6px;
+  background: rgba(232, 196, 106, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(232, 196, 106, 0.14);
+  border-radius: 2px;
+}
+
+html[data-ui="v2"] #tab-roster .progress-bar-fill {
+  border-radius: 1px;
+}
+
+html[data-ui="v2"] #tab-roster .target-cell {
+  color: #f0867f;
+}
+
+html[data-ui="v2"] #tab-roster .table-empty {
+  color: var(--v2-dim);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  padding: 34px 12px !important;
+}
+
+/* Phone width: the stat strip wraps to two columns with the same hairlines. */
+@media (max-width: 600px) {
+  html[data-ui="v2"] #tab-overview .kpi-value {
+    font-size: 1.6rem;
+  }
+
+  html[data-ui="v2"] #tab-overview .kpi {
+    padding: 12px 13px 11px;
+  }
+
+  html[data-ui="v2"] body:has(#tab-overview:not([style*="none"])) #page-title,
+  html[data-ui="v2"] body:has(#tab-roster:not([style*="none"])) #page-title {
+    font-size: 1.1rem;
+  }
+}
