@@ -1026,10 +1026,10 @@ Accepted payloads (the reply shapes are the ones `BotOrder.lua:57-75` parses):
 
 Rules:
 
-* `order list`, `access`, `search`, `preview` and `steps` reuse the existing `.tb guildorder` code:
-  the read verbs are replayed through a capturing `ChatHandler` and their stable records are reshaped,
-  so the two transports cannot drift. Mutations call the same store, access and reassign functions with
-  the same permission gates (`MayGiveOrders`, `MayChangeBotRank`).
+* `order list` and `access` read the existing order store and access report; `search`, `who`, `preview`
+  and `steps` replay the existing `.tb guildorder` read verbs through a capturing `ChatHandler` and
+  reshape their stable records, so the two transports cannot drift. Mutations call the same store,
+  access and reassign functions with the same permission gates (`MayGiveOrders`, `MayChangeBotRank`).
 * Buy orders are refused and `guild-order-nobuy` is always advertised (owner rule: no Buy option for
   players). Enchant search answers an empty pair; enchant create/meet refuse.
 * The store has no live `TBM:ORDER` push yet, so a newly created order is reported with a list snapshot
