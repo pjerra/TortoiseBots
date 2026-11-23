@@ -38,6 +38,7 @@
 #include "Unit.h"
 
 #include "playerbot/BotActionLog.h"
+#include "playerbot/BotDiagnostics.h"
 #include "playerbot/BotState.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -626,6 +627,11 @@ bool RunAction(Player* bot, char const* action, char const* param)
         return false;
     return pai->DoSpecificAction(action, ai::Event("host", param ? std::string(param) : std::string(), bot), true);
 }
+
+void DumpActionCounts()
+{
+    ai::botdiag::DumpActionCounts();
+}
 }
 }
 
@@ -654,6 +660,7 @@ std::string InjectCastResult(Player*, uint32, uint32, bool) { return "this build
 std::string InjectSpellDelay(Player*, uint32) { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
 bool RunAction(Player*, char const*, char const*) { return false; }
+void DumpActionCounts() {}
 }
 }
 
