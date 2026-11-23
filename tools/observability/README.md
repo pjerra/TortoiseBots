@@ -181,6 +181,28 @@ that canvas, so the sizes must not change. It reads Turtle's newer patches
 Pass `--overlay-dbc` with the server's extracted `WorldMapOverlay.dbc` if the
 client copy is unreadable.
 
+## UI v2
+
+The dashboard ships two skins: v2 (dark navy with gold framing, the default) and v1 (the original). A viewer
+switches from the top-bar button (`UI v2` / `UI v1`); the choice is kept in that browser. A link
+`?ui=v2` or `?ui=v1` switches that page load too and is remembered.
+
+- `--ui v1|v2` / `TBDASH_UI` sets the server default for viewers that have no saved choice
+  (default `v2`). The daemon injects it into the page head as
+  `<meta name="tbdash-ui" content="v1|v2">`, ahead of the switch script, so the first paint is
+  already right; `GET /api/v1/ui` answers `{"default":"v2","model3d":false}` by default behind the GM session.
+- `--ui-3d` / `TBDASH_UI_3D=1` enables the v2 3D model viewer; off by default. It loads Wowhead's
+  viewer only after the operator clicks `Show 3D`, proxies only the modelviewer asset paths behind the
+  GM session, and caches them in `<user cache>/tbdash-model3d`. Gear needs the `display_id` field the
+  module writes into `tortoisebots-items.json`; without it the character still renders, without armour.
+  A dead CDN shows one short line in the stage and leaves the profile usable (no retry loop).
+  Nothing from the game is shipped: models and textures are fetched on demand from Wowhead's public
+  CDN. Meant for a dashboard used locally or on a LAN, not one exposed to the internet.
+- Every v2 rule is scoped under `html[data-ui="v2"]`; with v2 off the page is unchanged.
+
+The v2 palette and layout ideas are adapted from ForeverCMS and SahtoutCMS (both MIT); see
+[`web/THIRD_PARTY_NOTICES.md`](web/THIRD_PARTY_NOTICES.md).
+
 ## Security
 
 - **Session secret (`SESSION_SECRET`)**: the `tbm_session` cookie is signed with HMAC-SHA256. There is no shipped default key — unset, the daemon generates a random key at startup and logs a warning, so dashboard sessions end on a restart. Set `SESSION_SECRET` (any random string) to keep sessions across restarts.

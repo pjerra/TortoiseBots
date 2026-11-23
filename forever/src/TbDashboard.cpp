@@ -1312,6 +1312,15 @@ std::string ItemDetails(ItemTemplate const& item)
     return ss.str();
 }
 
+// The ItemDisplayInfo id the dashboard's 3D viewer feeds ZamModelViewer.
+uint32 DisplayOf(uint32 itemId)
+{
+    if (ItemModifiedAppearanceEntry const* modified = TransmogMgr::GetDefaultItemModifiedAppearance(itemId))
+        if (ItemAppearanceEntry const* appearance = sItemAppearanceStore.LookupEntry(modified->ItemAppearanceID))
+            return uint32(appearance->ItemDisplayInfoID);
+    return 0;
+}
+
 uint32 IconOf(uint32 itemId)
 {
     if (ItemModifiedAppearanceEntry const* modified = TransmogMgr::GetDefaultItemModifiedAppearance(itemId))
@@ -1567,7 +1576,7 @@ void WriteItemsFile()
         out << (n++ ? "," : "") << "{\"id\":" << id << ",\"name\":\"" << Escape(item.GetDefaultLocaleName()) << "\",\"quality\":" << item.GetQuality()
             << ",\"ilvl\":" << item.GetBaseItemLevel() << ",\"req_level\":" << item.GetBaseRequiredLevel() << ",\"class\":" << item.GetClass()
             << ",\"subclass\":" << item.GetSubClass() << ",\"inv_type\":" << uint32(item.GetInventoryType()) << ",\"sell\":" << item.GetSellPrice()
-            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << ItemDetails(item) << "}";
+            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << ",\"display_id\":" << DisplayOf(id) << ItemDetails(item) << "}";
     }
     out << "]}";
     out.close();

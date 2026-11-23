@@ -7,6 +7,12 @@
   <title>TortoiseBots — Server & Bot Observability</title>
   <link rel="stylesheet" href="/static/css/app.css?v=35">
   <link rel="stylesheet" href="/static/css/underperf.css?v=1">
+  <link rel="stylesheet" href="/static/css/v2-base.css?v=1">
+  <link rel="stylesheet" href="/static/css/v2-overview.css?v=1">
+  <link rel="stylesheet" href="/static/css/v2-profile.css?v=3">
+  <link rel="stylesheet" href="/static/css/v2-map.css?v=1">
+  <link rel="stylesheet" href="/static/css/v2-3d.css?v=1">
+  <script src="/static/js/uiv2.js?v=3"></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%232ea043%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><polygon points=%2212 2 2 7 12 12 22 7 12 2%22/><polyline points=%222 17 12 22 22 17%22/><polyline points=%222 12 12 17 22 12%22/></svg>">
 </head>
 <body>
@@ -148,6 +154,7 @@
           <select data-refresh-select aria-label="Refresh every"></select>
         </label>
         <button id="refresh-btn" class="btn btn-icon" title="Reload data from the daemon">Refresh</button>
+        <button type="button" id="ui-toggle" class="btn" aria-pressed="false" title="Switch to the v2 look. Kept in this browser.">UI v2</button>
       </div>
     </header>
 
@@ -392,6 +399,11 @@
 
       <!-- TAB: MAP — where the bots are -->
       <section id="tab-map" class="tab-view" style="display: none;">
+        <div class="v2-hero" hidden>
+          <div class="v2-kicker">WoW Forever &middot; Live World Map</div>
+          <h2 class="v2-display">Azeroth, live.</h2>
+          <p class="v2-lede">Every bot and player the server knows about, from the docks of Ratchet to the peaks of Hyjal. Hover a dot for details; click it to open the profile.</p>
+        </div>
         <div class="card toolbar-card">
           <div class="toolbar">
             <label for="zone-filter-input" class="toolbar-label">Zone</label>
@@ -880,6 +892,7 @@
               <div id="armory-gear-summary" class="armory-gear-summary"></div>
               <div class="armory-gear">
                 <div id="armory-gear-left" class="armory-gear-col"></div>
+                <div class="v2-model-stage" hidden aria-hidden="true"></div>
                 <div id="armory-gear-right" class="armory-gear-col"></div>
               </div>
               <div id="armory-gear-weapons" class="armory-weapons"></div>
@@ -939,6 +952,7 @@
 <script src="/static/js/coverage.js?v=1"></script>
 <script src="/static/js/trash.js?v=1"></script>
 <script src="/static/js/underperf.js?v=2"></script>
-<script src="/static/js/app.js?v=66"></script>
+<script src="/static/js/model3d.js?v=7"></script>
+<script src="/static/js/app.js?v=68"></script>
 </body>
 </html>

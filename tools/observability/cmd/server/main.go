@@ -42,6 +42,7 @@ import (
 	"tortoise-observability/internal/mechanics"
 	"tortoise-observability/internal/metrics"
 	"tortoise-observability/internal/model"
+	"tortoise-observability/internal/model3d"
 	"tortoise-observability/internal/plans"
 	"tortoise-observability/internal/ringbuf"
 	"tortoise-observability/internal/state"
@@ -96,6 +97,8 @@ func main() {
 	udpPort := flag.Int("udp-port", getEnvInt("UDP_PORT", 9195), "UDP telemetry listener port")
 	forwardUDP := flag.String("forward-udp", getEnv("FORWARD_UDP", ""), "Comma-separated host:port list; every telemetry datagram is also sent to each (empty = no forwarding)")
 	acceptReplay := flag.Bool("accept-replay", getEnv("TBDASH_ACCEPT_REPLAY", "") == "1", "Accept replayed telemetry (`turtle-agent dashboard-replay` marks it with \"replay\":true); off by default so a recording never shadows a live module (env TBDASH_ACCEPT_REPLAY=1)")
+	uiDefault := flag.String("ui", getEnv("TBDASH_UI", "v2"), "Default dashboard skin: v2 (dark navy and gold) or v1 (classic); each viewer can switch and the choice is kept in that browser (env TBDASH_UI)")
+	ui3d := flag.Bool("ui-3d", getEnv("TBDASH_UI_3D", "") == "1", "Enable the UI v2 3D model viewer (env TBDASH_UI_3D=1)")
 	core := flag.String("core", getEnv("TBDASH_CORE", "turtle"), "Core flavor: turtle (default) or forever (env TBDASH_CORE)")
 	dbHost := flag.String("db-host", getEnv("DB_HOST", "127.0.0.1"), "MariaDB / MySQL host")
 	dbPort := flag.Int("db-port", getEnvInt("DB_PORT", 3306), "MariaDB / MySQL port")
@@ -164,6 +167,13 @@ func main() {
 	}
 	if *core != "turtle" && *core != "forever" {
 		log.Fatalf("Unknown -core %q (want turtle or forever)", *core)
+	}
+	*uiDefault = normalizeUI(*uiDefault)
+	if *uiDefault == "" {
+		*uiDefault = "v2"
+	}
+	if *uiDefault != "v1" && *uiDefault != "v2" {
+		log.Fatalf("Unknown -ui %q (want v1 or v2)", *uiDefault)
 	}
 	if *core == "forever" {
 		if !flagSet("db-name") && os.Getenv("DB_LOGIN") == "" {
@@ -722,8 +732,12 @@ func main() {
 		s = strings.Replace(s, `<span class="brand-version">1.18.1</span>`, `<span class="brand-version" data-core="forever"></span>`, 1)
 		indexHTML = []byte(s)
 	}
+	indexHTML = injectUIMeta(indexHTML, *uiDefault, *ui3d)
 	dashboardHandler := requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// The page carries the server's skin default, so a cached copy would keep an
+		// old default after a restart with a different -ui.
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		_, _ = w.Write(indexHTML)
 	})
 
@@ -738,6 +752,15 @@ func main() {
 	mux.HandleFunc("/api/v1/status", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, store.Status())
 	}))
+
+	mux.HandleFunc("GET /api/v1/ui", requireAuth(uiInfoHandler(*uiDefault, *ui3d)))
+
+	// Optional 3D character preview (-ui-3d / TBDASH_UI_3D=1): a same-origin,
+	// allowlisted cache of the Wowhead model viewer's assets and script.
+	model3dProxy := model3d.New(model3d.Config{Enabled: *ui3d})
+	mux.HandleFunc("GET /api/v1/model3d/asset/{path...}", requireAuth(model3dProxy.HandleAsset))
+	mux.HandleFunc("GET /api/v1/model3d/viewer.js", requireAuth(model3dProxy.HandleViewer))
+	mux.HandleFunc("GET /api/v1/model3d/character/{guid}", requireAuth(model3dCharacterHandler(armoryService, model3dProxy.Enabled())))
 
 	mux.HandleFunc("/api/v1/bots", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, store.Snapshot().Bots)
