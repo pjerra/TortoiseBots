@@ -33,6 +33,8 @@ inline void GetRespawnCoordCompat(Creature const* creature, float& x, float& y, 
     creature->GetRespawnCoord(x, y, z, ori, dist);
 }
 
+inline uint32 GetFactionTemplateIdCompat(Unit const* unit) { return unit ? unit->GetFactionTemplateId() : 0; }
+
 inline float GetCombatReachCompat(Unit const* self, Unit const* victim, bool ability, float flatMod)
 {
     return self->GetCombatReach(victim, ability, flatMod);

@@ -314,7 +314,19 @@ PRESET_KEYS = {
     "trigger": "cs",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS)
+# TBF #142 (diagnostics): the whisper words `debug`/`cdebug` (the DebugAction families that survive on
+# ForeverCore plus the stubs in forever/src/slice/SliceDebugStubs.cpp), `log` (LogLevelAction), `set value`
+# (SetValueAction) and the log-level value they read. The debug strategies are registered too, so bare
+# `debug` can turn the bot's action-line feedback on (`-debug` turns it off). Kept apart from CH_KEYS so the
+# chat round's own test keeps its exact list.
+DEBUG_KEYS = {
+    "strategy": "debug, debug action, debug move, debug rpg, debug spell, debug travel, debug threat, debug mount, "
+                "debug grind, debug loot, debug log, debug logname, debug stuck, debug xp, debug equip",
+    "action": "debug, cdebug, log, set value",
+    "trigger": "debug, cdebug, log, set value",
+    "value": "log level",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, DEBUG_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

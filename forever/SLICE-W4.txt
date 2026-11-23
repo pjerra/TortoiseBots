@@ -350,3 +350,15 @@ ai/playerbot/strategy/actions/TellReputationAction.cpp
 ai/playerbot/strategy/generic/NoAoeStrategy.cpp
 ai/playerbot/strategy/generic/ConserveManaStrategy.cpp
 ai/playerbot/strategy/generic/MimicConsumableStrategy.cpp
+
+# Diagnostics (#142): the whisper debug/cdebug/log/set value words, the debug chat strategies,
+# the cast-cancel row and the action-counts dump. The Turtle-only debug families (spell
+# packets, transports, travel nodes, position paths, item/trade/mail) stay out; the stubs that
+# answer them are forever/src/slice/SliceDebugStubs.cpp.
+ai/playerbot/CastCancelLog.cpp
+ai/playerbot/strategy/actions/DebugAction.cpp
+ai/playerbot/strategy/actions/DebugEngineCommands.cpp
+ai/playerbot/strategy/actions/DebugMiscCommands.cpp
+ai/playerbot/strategy/actions/LogLevelAction.cpp
+ai/playerbot/strategy/actions/SetValueAction.cpp
+ai/playerbot/strategy/generic/DebugStrategy.cpp

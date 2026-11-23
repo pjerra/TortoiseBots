@@ -26,6 +26,32 @@
 using namespace ai;
 using namespace MaNGOS;
 
+namespace
+{
+// The old `PlayerbotHelpMgr::makeList` (PlayerbotHelpMgr.cpp:41) without pulling that file into the
+// ForeverCore build: one `[<part>]` per value, wrapped near 254 characters, newline separated.
+std::string JoinValueList(std::vector<std::string> const& parts, char const* partFormat = "[<part>]", uint32 maxLength = 254)
+{
+    std::string text;
+    std::string line;
+    for (std::string const& part : parts)
+    {
+        if (!line.empty() && part.size() + line.size() > maxLength)
+        {
+            line.pop_back();
+            text += line + "\n";
+            line.clear();
+        }
+        std::string item = partFormat;
+        size_t at = item.find("<part>");
+        if (at != std::string::npos)
+            item.replace(at, 6, part);
+        line += item + " ";
+    }
+    return text + line;
+}
+} // namespace
+
 bool DebugAction::HandleValues(Event& event, Player* requester, const std::string& text)
 {
     //    ai->TellPlayerNoFacing(requester, ai->GetAiObjectContext()->FormatValues(text.substr(7)));
@@ -60,7 +86,7 @@ bool DebugAction::HandleValues(Event& event, Player* requester, const std::strin
         values.push_back(name + "=" + text);
     }
 
-    std::string valuestring = sPlayerbotHelpMgr.makeList(values, "[<part>]");
+    std::string valuestring = JoinValueList(values);
 
     std::vector<std::string> lines = Qualified::getMultiQualifiers(valuestring, "\n");
     for (auto& line : lines)
