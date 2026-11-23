@@ -83,8 +83,8 @@ static bool LongStuckFallbackTeleport(PlayerbotAI* ai, Player* bot, Player* mast
     if (grave && !IsUsableGraveyardTarget(true, SafeLocMapIdCompat(grave) == bot->GetMapId(),
         botPos.fDist(WorldPosition(grave))))
     {
-        sLog.outDetail("Unstuck: nearest graveyard for bot #%d <%s> is off-map/far (map %u), using homebind instead",
-            bot->GetGUIDLow(), CStrCompat(bot->GetName()), SafeLocMapIdCompat(grave));
+        sLog.outDetail("Unstuck: nearest graveyard for bot #%u <%s> is off-map/far (map %u), using homebind instead",
+            uint32(bot->GetGUIDLow()), CStrCompat(bot->GetName()), SafeLocMapIdCompat(grave));
         grave = nullptr;
     }
     float const graveDist = grave
