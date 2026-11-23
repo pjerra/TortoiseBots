@@ -60,7 +60,7 @@ Recipe tools stay available as long as [`AiPlayerbot.CraftToolsAlways`](../serve
 | `stocked` | Keep order: delivered, the bank holds the ordered amount, watching it (checks about every 10 minutes). |
 | `mailed` | The bank refused, mailed to the guild master. |
 | `noskill` | The item needs a profession the bot lacks, or its skill is too low. |
-| `cant` | No source in level range, no source at all, only elite sources, a craft recipe the bot may not make (`norecipe` unknown, `enchant`, `bound` item, `needsprofession` item, or `cooldown` recipe), farm time ran out (`timeout`), no new item in 3 worked hours (`noprogress`), or stuck while crafting or delivering. |
+| `cant` | No room in the bags and nothing it may throw out (`bagsfull`), no source in level range, no source at all, only elite sources, a craft recipe the bot may not make (`norecipe` unknown, `enchant`, `bound` item, `needsprofession` item, or `cooldown` recipe), farm time ran out (`timeout`), no new item in 3 worked hours (`noprogress`), or stuck while crafting or delivering. |
 
 ## Requirements
 
@@ -73,6 +73,8 @@ An order on a fish sends the bot to a fishing spot in the planned zone. The bot 
 ## Where the bot gets items
 
 For the ordered item itself, the bot checks its own bags and mailbox, then farms it when it has the skill to. It goes to the auction house only when it cannot farm it (a buy order starts there on purpose). It never takes the finished item from the guild bank: the bank holds crafting materials.
+
+When its bags are full and it has none of the farmed item yet, the bot throws out grey or white junk to make room: grey before white, the cheapest stack first, and never green or better items, quest items, tools, ammo, reagents a spell it knows uses, its hearthstone, keys or bags. If it carries part of the order already, it delivers that instead of farming more (when a banker or mailbox is in reach). With nothing it may throw out, the order stops at once as `cant` with reason `bagsfull` rather than idling at nodes it cannot loot. The camp tent the bot brings along never takes its last free bag slot.
 
 For each missing crafting material, the bot works down a fixed list: its own bags and mailbox, then the guild bank (only the count still missing, skipped when the guild has no bank), then making it itself (crafting, then gathering or farming, or buying it from a shop), then the auction house, then asking another guild bot, and finally your need list (see below). The bot spends gold at the auction house only when it cannot make or farm the material.
 

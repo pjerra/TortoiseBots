@@ -6,6 +6,10 @@
 
 namespace ai
 {
+    // Frees bag room for a guild order's loot by destroying grey or white
+    // junk, the same picks as for a won roll. False when nothing may go.
+    bool MakeRoomForGuildOrderLoot(PlayerbotAI* ai, Player* bot, uint32 itemId, uint32 count);
+
     class LootStartRollAction : public ChatCommandAction
     {
     public:

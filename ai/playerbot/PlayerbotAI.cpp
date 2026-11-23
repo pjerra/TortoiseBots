@@ -1714,7 +1714,19 @@ void PlayerbotAI::EnsureAutoToolsKit()
         IsAutonomousCampEligible())
     {
         EnsureCampSurvivalSkillCompat(bot, TortoiseBots::CAMP_SURVIVAL_SKILL_CAP);
-        EnsureCheatItem(TortoiseBots::CAMP_TENT_ITEM_ID, 1);
+        // The bag walk stops at two free slots: that is all the check needs, and
+        // it keeps the scan off the 30 s kit pass's normal path otherwise.
+        uint32 freeSlots = 0;
+        for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END && freeSlots < 2; ++slot)
+            if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                ++freeSlots;
+        for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END && freeSlots < 2; ++bagSlot)
+            if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot))
+                if (ItemPrototype const* bagProto = GetItemProtoCompat(bag))
+                    if (bagProto->BagFamily == 0)
+                        freeSlots += bag->GetFreeSlots();
+        if (TortoiseBots::CampTentFitsBags(freeSlots))
+            EnsureCheatItem(TortoiseBots::CAMP_TENT_ITEM_ID, 1);
     }
     // MC rune douse: map gate first so open-world bots skip the bag counts;
     // one Quintessence while inside Molten Core so the rune actions never

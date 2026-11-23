@@ -156,6 +156,16 @@ inline bool SupplyFarmGivesUp(bool craftFarmLeg, uint32_t workedNoGainSec, bool 
     return workedNoGainSec >= limit;
 }
 
+// Full bags stop a farming bot from looting. With some of the farmed item it
+// goes to deliver; with none there is nothing to hand in, so it throws out
+// junk to make room, and when nothing may go the order ends at once instead
+// of walking past nodes until the no-progress limit. A craft order's reagent
+// farm is a different leg: its stock is a material, not the order item.
+inline bool FullBagsWithoutStock(OrderType type, uint32_t heldOfFarmedItem)
+{
+    return type == OrderType::Farm && heldOfFarmedItem == 0;
+}
+
 // A delivering order whose stock is gone (sold, listed or lost after full
 // bags sent it to deliver) has nothing to hand in: it goes back to work
 // instead of waiting forever for a delivery that never starts. Only plain
