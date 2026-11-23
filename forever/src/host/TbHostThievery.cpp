@@ -806,7 +806,7 @@ Creature* FindPickpocketTarget(Player* bot, BotState& st)
     float bestDist = kPickSearchYd + 1.0f;
     for (Creature* creature : creatures)
     {
-        if (!creature || creature == bot || !creature->IsInWorld())
+        if (!creature || !creature->IsInWorld())
             continue;
         if (!bot->IsHostileTo(creature) || !creature->InSamePhase(bot))
             continue;
