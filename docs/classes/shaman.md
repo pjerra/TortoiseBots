@@ -109,4 +109,4 @@ Bots spend one talent point per level from 10 to 60 along a preset build. The se
 
 ## Class settings
 
-The shaman tank spec is Not on WoW Forever yet; there is no tank talent build on this server. A shaman can still be put in the tank role, where it uses its melee kit.
+The shaman tank spec is Not on WoW Forever yet; there is no tank talent build on this server. An Enhancement shaman can still be put in the tank role, where it uses its melee kit, but it has no taunt.
