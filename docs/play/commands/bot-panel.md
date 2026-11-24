@@ -58,7 +58,7 @@ Aliases: `.bot v`, `.bot about`, `.bot credits`. Prints the build line, the `TBM
 .bot features
 ```
 
-Prints one `TortoiseBots: feature <key>=<value> (<label>)` line per server switch the addon's Info window reads: engine by default, pool, battlegrounds, tactical orders, player commands, bots per player, follow distance, master grace, auto-learn, auto-talents, auto-professions, auto-tools, hunter pet, auto food, class quest spells, the free-bot world switches (gathering, fishing, disenchanting, gear enchanting, auction house), group quests, capital errands, guild mail, rogue pickpocket and lockboxes, and the rest thresholds.
+Prints one `TortoiseBots: feature <key>=<value> (<label>)` line per server switch the addon's Info window reads: engine by default, pool, battlegrounds, tactical orders, player commands, bots per player, ritual fill (and its range and hold) and object use, follow distance, master grace, auto-learn, auto-talents, auto-professions, auto-tools, hunter pet, auto food, class quest spells, the free-bot world switches (gathering, fishing, disenchanting, gear enchanting, auction house), group quests, capital errands, guild mail, lockbox by guild mail, rogue pickpocket and lockboxes, and the rest thresholds.
 
 The addon's `features` request adds `features all <text>`, a search of the `TortoiseBots.*` and `AiPlayerbot.*` keys with values masked for secrets.
 
@@ -167,7 +167,7 @@ The addon's blessing verb also accepts `raid` as a party scope and reads `TBM:BL
 .bot service <bot|party> conjure <food|water|healthstone>
 ```
 
-The bare query answers `food=`, `water=`, `healthstone=` (1 when any rank of the conjure line is known, else 0) and `portals=` (`spellId:City` pairs, or `-`). `portal` casts a learned mage portal (out of combat, not dead, not casting, grouped with you; the rune is granted); `conjure` casts the highest known rank. Writes are owner tier; the query is tactical.
+The bare query answers `food=`, `water=`, `healthstone=` (1 when any rank of the conjure line is known, else 0) and `portals=` (`spellId:City` pairs, or `-`). In chat, `portal` and `conjure` currently refuse with `action-not-registered` because the `cast` action is not registered in this build; use the addon's `service` verb to cast a learned mage portal (out of combat, not dead, not casting, grouped with you; the rune is granted). Writes are owner tier; the query is tactical.
 
 ## Diagnostics (GameMaster)
 
@@ -192,5 +192,3 @@ The opt-in run recorder (`AiPlayerbot.RunTrace.Enabled`). Schema, files and the 
 ## Not on WoW Forever Yet
 
 `.bot status`, `.bot lease`, `.bot inv`, `.bot professions`, `.bot lootlog`, `.bot item`, `.bot trace` and `.bot why` as player chat commands do not exist here; the addon serves the inventory and profession panels, and the GameMaster uses `.tb` for loot history and diagnosis. There is no `.bot totem ... drop` in chat (the addon sends it), and no persistence for behaviour, totem, blessing or choice values across a logout.
-
-**Not on WoW Forever yet.**
