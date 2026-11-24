@@ -58,6 +58,7 @@
 #include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
 #include "playerbot/strategy/actions/RtiAction.h"
 #include "playerbot/strategy/actions/SaveManaAction.h"
+#include "playerbot/strategy/actions/SayAction.h"
 #include "playerbot/strategy/actions/SellAction.h"
 #include "playerbot/strategy/actions/SetValueAction.h"
 #include "playerbot/strategy/actions/ShareQuestAction.h"
@@ -433,7 +434,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (67 of its keys)
+    // the registry of ChatActionContext (68 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -506,6 +507,7 @@ namespace slice
             creators["cdebug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
             creators["log"] = [](PlayerbotAI* ai) { return new LogLevelAction(ai); };
             creators["set value"] = [](PlayerbotAI* ai) { return new SetValueAction(ai); };
+            creators["speak"] = [](PlayerbotAI* ai) { return new SpeakAction(ai); };
         }
     };
 
@@ -681,7 +683,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (71 of its keys)
+    // the registry of ChatTriggerContext (72 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -758,6 +760,7 @@ namespace slice
             creators["cdebug"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cdebug"); };
             creators["log"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "log"); };
             creators["set value"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "set value"); };
+            creators["speak"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "speak"); };
         }
     };
 
@@ -1016,7 +1019,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 72, kActions = 175, kTriggers = 219, kValues = 228;
+    constexpr unsigned kStrategies = 72, kActions = 176, kTriggers = 220, kValues = 228;
 }
 }
 

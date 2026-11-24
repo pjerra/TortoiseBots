@@ -39,7 +39,7 @@
     X(CinematicCamera, "cinematic and camera", "cinematic state (watching_cinematic_entry, CinematicEnd); ForeverCore keeps a cinematic manager object") \
     X(Camp, "camp, rest bonus, water breathing", "the camp kit skill (SKILL_SURVIVAL2), rest bonus (SetRestBonus), the water breathing interval, the fishing zone of an area (AreaEntry::GetById)") \
     X(MovementInterrupt, "movement heartbeat", "Player::SendHeartBeat, the client heartbeat a real-player-controlled bot sends; a headless host bot never needs it. The movement generator interrupt is real: the near-teleport ack calls the core's MotionMaster::InterruptOnTeleport") \
-    X(AddonChat, "chat channels, addon bridge, chat tags", "addon messages (SendAddonMessage, BuildChatPacket with a chat tag), chat channels (ChannelMgr by team) and guild chat; ForeverCore chat is typed packets") \
+    X(AddonChat, "chat channels, addon bridge, chat tags", "addon messages (SendAddonMessage, BuildChatPacket with a chat tag) and chat channels (ChannelMgr by team); ForeverCore chat is typed packets") \
     X(GuildRanks, "guild", "guild rank rights and member slots (Guild::GetRanksSize, GetMemberSlot, HasRankRight); ForeverCore has Guild::Member and rank ids") \
     X(SpawnIdOfGuid, "spawn id of a creature", "the spawn record of a creature or game object found by the guid counter (T GetCreatureDataPair(guid.GetCounter()), GetGODataPair); ForeverCore's guid counter is not a spawn id (findings item 20)") \
     X(CreatureLevels, "creature template level", "CreatureInfo::level_max (T); ForeverCore templates scale levels per difficulty") \
