@@ -90,8 +90,8 @@ class FreeHost(unittest.TestCase):
         self.assertIn("TortoiseBots::world::FreeWorldKit()", kit)
         self.assertIn("for (char const* const* kit = TortoiseBots::world::FreeWorldKit(); *kit; ++kit)", kit)
         policy = (ROOT / "ai/playerbot/policy/world/FreeKitPolicy.h").read_text()
-        self.assertIn('{ "grind", "food", "loot", "roll", "default", "buff", nullptr }', policy)
-        for absent in ('"follow"', '"wander"', '"rpg"', '"travel"', '"maintenance"', '"guild"'):
+        self.assertIn('{ "grind", "travel", "food", "loot", "roll", "default", "buff", nullptr }', policy)
+        for absent in ('"follow"', '"wander"', '"rpg"', '"maintenance"', '"guild"'):
             self.assertNotIn(absent, kit, absent)
         self.assertIn("return;", kit)
 

@@ -137,9 +137,9 @@ SLICE11_KEYS = {
 }
 # World-life slice W1 (FOREVER-W1-W6A-SPEC section 1.3, forever/docs/W1-NOTES.md): the grind target value and its strategy, the
 # actions and triggers of the open-world dead kit, and the graveyard values. Left out of the free kit on purpose (each one does less, spec
-# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
-# COLLISION_KEYS, which a player can add, still not part of the free kit); the travel
-# target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
+# section 1.3): `rpg`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
+# COLLISION_KEYS, which a player can add, still not part of the free kit); the travel keys are TRAVEL_KEYS below and `travel`
+# is in the free kit; `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
 # reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
 W1_KEYS = {
     "strategy": "grind",
@@ -393,7 +393,20 @@ MOUNT_KEYS = {
     "trigger": "check mount state",
     "value": "mount list, current mount speed, max mount speed, travel target traveling, travel target working",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS)
+# Travel chooser and walker: the travel strategy rows, the actions that pick a destination and walk
+# to it, and the values they read. `travel` joins the free kit (ai/playerbot/policy/world/FreeKitPolicy.h), so a
+# free bot picks a destination and walks there; the rpg keys that would sell on arrival belong to #147. Left out
+# on purpose: `has focus travel target` (only the rpg-quest row reads it, and that row cannot fire without
+# `rpg quest`), `travel target traveling`/`travel target working` (registered with the mount keys).
+TRAVEL_KEYS = {
+    "strategy": "travel, travel once, explore",
+    "action": "travel, choose travel target, choose group travel target, refresh travel target, request travel target, "
+              "request named travel target, request quest travel target, reset travel target, move to travel target",
+    "trigger": "",
+    "value": "travel target active, travel target ready, no active travel destinations, need travel purpose, "
+             "should travel named, should leave outgrown zone, vendor trip needed",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

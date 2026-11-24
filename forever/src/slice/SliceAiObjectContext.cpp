@@ -28,6 +28,7 @@
 #include "playerbot/strategy/actions/CheckMountStateAction.h"
 #include "playerbot/strategy/actions/CheckValuesAction.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
+#include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
 #include "playerbot/strategy/actions/CombatActions.h"
 #include "playerbot/strategy/actions/CustomStrategyEditAction.h"
 #include "playerbot/strategy/actions/DebugAction.h"
@@ -46,6 +47,7 @@
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
 #include "playerbot/strategy/actions/MailAction.h"
+#include "playerbot/strategy/actions/MoveToTravelTargetAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
@@ -72,6 +74,7 @@
 #include "playerbot/strategy/actions/TellReputationAction.h"
 #include "playerbot/strategy/actions/TellTargetAction.h"
 #include "playerbot/strategy/actions/TrainerAction.h"
+#include "playerbot/strategy/actions/TravelAction.h"
 #include "playerbot/strategy/actions/UnequipAction.h"
 #include "playerbot/strategy/actions/UseConsumableAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
@@ -222,7 +225,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (60 of its keys)
+    // the registry of StrategyContext (63 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -288,6 +291,9 @@ namespace slice
             creators["debug xp"] = [](PlayerbotAI* ai) { return new DebugXpStrategy(ai); };
             creators["debug equip"] = [](PlayerbotAI* ai) { return new DebugEquipStrategy(ai); };
             creators["mount"] = [](PlayerbotAI* ai) { return new MountStrategy(ai); };
+            creators["travel"] = [](PlayerbotAI* ai) { return new TravelStrategy(ai); };
+            creators["travel once"] = [](PlayerbotAI* ai) { return new TravelOnceStrategy(ai); };
+            creators["explore"] = [](PlayerbotAI* ai) { return new ExploreStrategy(ai); };
         }
     };
 
@@ -330,7 +336,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (94 of its keys)
+    // the registry of ActionContext (103 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -430,6 +436,15 @@ namespace slice
             creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
             creators["move out of collision"] = [](PlayerbotAI* ai) { return new MoveOutOfCollisionAction(ai); };
             creators["sit"] = [](PlayerbotAI* ai) { return new SitAction(ai); };
+            creators["travel"] = [](PlayerbotAI* ai) { return new TravelAction(ai); };
+            creators["choose travel target"] = [](PlayerbotAI* ai) { return new ChooseTravelTargetAction(ai); };
+            creators["choose group travel target"] = [](PlayerbotAI* ai) { return new ChooseGroupTravelTargetAction(ai); };
+            creators["refresh travel target"] = [](PlayerbotAI* ai) { return new RefreshTravelTargetAction(ai); };
+            creators["request travel target"] = [](PlayerbotAI* ai) { return new RequestTravelTargetAction(ai); };
+            creators["request named travel target"] = [](PlayerbotAI* ai) { return new RequestNamedTravelTargetAction(ai); };
+            creators["request quest travel target"] = [](PlayerbotAI* ai) { return new RequestQuestTravelTargetAction(ai); };
+            creators["reset travel target"] = [](PlayerbotAI* ai) { return new ResetTargetAction(ai); };
+            creators["move to travel target"] = [](PlayerbotAI* ai) { return new MoveToTravelTargetAction(ai); };
         }
     };
 
@@ -778,7 +793,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (228 of its keys)
+    // the registry of ValueContext (235 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1012,11 +1027,18 @@ namespace slice
             creators["max mount speed"] = [](PlayerbotAI* ai) { return new MaxMountSpeedValue(ai); };
             creators["travel target traveling"] = [](PlayerbotAI* ai) { return new TravelTargetTravelingValue(ai); };
             creators["travel target working"] = [](PlayerbotAI* ai) { return new TravelTargetWorkingValue(ai); };
+            creators["travel target active"] = [](PlayerbotAI* ai) { return new TravelTargetActiveValue(ai); };
+            creators["travel target ready"] = [](PlayerbotAI* ai) { return new TravelTargetReadyValue(ai); };
+            creators["no active travel destinations"] = [](PlayerbotAI* ai) { return new NoActiveTravelDestinationsValue(ai); };
+            creators["need travel purpose"] = [](PlayerbotAI* ai) { return new NeedTravelPurposeValue(ai); };
+            creators["should travel named"] = [](PlayerbotAI* ai) { return new ShouldTravelNamedValue(ai); };
+            creators["should leave outgrown zone"] = [](PlayerbotAI* ai) { return new ShouldLeaveOutgrownZoneValue(ai); };
+            creators["vendor trip needed"] = [](PlayerbotAI* ai) { return new VendorTripNeededValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 72, kActions = 175, kTriggers = 219, kValues = 228;
+    constexpr unsigned kStrategies = 75, kActions = 184, kTriggers = 219, kValues = 235;
 }
 }
 

@@ -1,8 +1,10 @@
 // Standalone test of W1's free-bot kit (ai/playerbot/policy/world/FreeKitPolicy.h):
 //   g++ -std=c++17 -O1 -Wall -Wextra -If. forever/tools/test_free_kit_policy.cpp -o /tmp/test_free_kit_policy && /tmp/test_free_kit_policy
 //
-// The kit is a decision (spec D4): the class spec strategy plus grind, food, loot, roll, default and buff, and nothing else. A
-// missing strategy here means the bot does less; an extra one (follow, wander, rpg, travel) would make it follow or journey.
+// The kit is a decision (spec D4, extended with the travel strategy): the class spec strategy plus grind, travel, food, loot,
+// roll, default and buff,
+// and nothing else. A missing strategy here means the bot does less; an extra one (follow, wander, rpg) would make it follow or
+// take rpg orders.
 #include "ai/playerbot/policy/world/FreeKitPolicy.h"
 
 #include <cstdio>
@@ -34,11 +36,11 @@ int main()
 
     // The world kit, exactly, in order.
     char const* const* kit = w::FreeWorldKit();
-    char const* const expected[] = { "grind", "food", "loot", "roll", "default", "buff", nullptr };
+    char const* const expected[] = { "grind", "travel", "food", "loot", "roll", "default", "buff", nullptr };
     for (int i = 0; expected[i] || kit[i]; ++i)
         CHECK(kit[i] && expected[i] && std::strcmp(kit[i], expected[i]) == 0);
     for (int i = 0; kit[i]; ++i)
-        for (char const* banned : { "follow", "wander", "rpg", "travel", "tfish", "maintenance", "guild", "group", "collision" })
+        for (char const* banned : { "follow", "wander", "rpg", "tfish", "maintenance", "guild", "group", "collision" })
             CHECK(std::strcmp(kit[i], banned) != 0);
 
     if (g_fail)
