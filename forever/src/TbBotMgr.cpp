@@ -15,6 +15,7 @@
 #include "host/TbHostThievery.h"
 #include "host/TbHostProfessionUpkeep.h"
 #include "host/TbHostWorldPvp.h"
+#include "host/TbHostRitualFill.h"
 #include "host/TbHostShareMobs.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -1619,6 +1620,10 @@ void BotMgr::Update(uint32 diff)
     // S1-R2: the chat lines the hook queued since the last update, resolved and judged here, on the world thread, before any bot's
     // engine step reads its inbox.
     TortoiseBots::chatin::DrainArrivals();
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    // #14: the ritual fill's own once-a-second pass (the objects real players use, the summons that are channeled, the held bots).
+    tbhost::ritualfill::Tick(diff);
+#endif
 
     ConfirmCreations();
     std::vector<ObjectGuid> finished;

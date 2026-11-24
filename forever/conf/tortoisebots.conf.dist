@@ -679,6 +679,41 @@ TortoiseBots.Player.Commands = 1
 
 TortoiseBots.Player.MaxBots = 4
 
+#    --- Multi-user objects: bots fill them (#14) ---
+#
+#    TortoiseBots.RitualFill.Enable
+#        Description: A player's own group bots join a multi-user object the player uses (a summoning ritual, the Uldaman altars,
+#                     the scripted Blackrock Altar in UBRS): they walk to it, use it and stand still until it is done or
+#                     HoldSeconds runs out. Only the initiator's own group bots act; tanks and healers are picked last.
+#                     0 = off (no keys below are read, no packet is recorded).
+#        Default:     1
+#
+
+TortoiseBots.RitualFill.Enable = 1
+
+#    TortoiseBots.RitualFill.Range
+#        Description: How far from the object (yards) a bot may be picked to fill it. 1 to 100.
+#        Default:     30
+#
+
+TortoiseBots.RitualFill.Range = 30
+
+#    TortoiseBots.RitualFill.HoldSeconds
+#        Description: The longest a bot stands at a filled object before it is let go, in seconds (1 to 600). A scripted altar whose
+#                     completion the core never counts is bounded by this alone.
+#        Default:     120
+#
+
+TortoiseBots.RitualFill.HoldSeconds = 120
+
+#    TortoiseBots.ObjectUse.Commands
+#        Description: The chat words `use <object>` (whisper, or `<BotName> use ...` / `all use ...` in party chat), `ritual <name>`
+#                     and `soulstone [name]` to a bot.
+#        Default:     1
+#
+
+TortoiseBots.ObjectUse.Commands = 1
+
 #    --- Auto-learn ---
 #
 #    TortoiseBots.AutoLearnOnLevel

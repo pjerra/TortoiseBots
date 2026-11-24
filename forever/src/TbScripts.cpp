@@ -38,6 +38,7 @@
 #include "host/gear/TbGearGen.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostWorldPvp.h"
+#include "host/TbHostRitualFill.h"
 #include "runtime/PassingBuffsService.h"
 #if defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
 #include "host/TbLuaBots.h"
@@ -600,6 +601,9 @@ public:
             TC_LOG_INFO("tortoisebots", "bot {} left the world", player->GetName());
         TortoiseBots::cmd::NoteLogout(player);    // P2: a lead's departure, or the commander's grace (a shutdown keeps the binding)
         TortoiseBots::place::NoteLogout(player);  // #15: a commander's rallies, holds and pending cursor request go with it
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        tbhost::ritualfill::NoteLogout(player);   // #14: a bot's ritual-fill hold (and the targets it started) goes with it
+#endif
         // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
         BotMgr::Instance().OnPlayerLogout(player);
     }
@@ -610,7 +614,14 @@ class tortoisebots_server : public ServerScript
 {
 public:
     tortoisebots_server() : ServerScript("tortoisebots_server") { }
-    void OnPacketReceive(WorldSession* session, WorldPacket& packet) override { TortoiseBots::place::OnPacket(session, packet); }
+    void OnPacketReceive(WorldSession* session, WorldPacket& packet) override
+    {
+        TortoiseBots::place::OnPacket(session, packet);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // #14: a real player's use of a multi-user object; the packet is only read here (host/TbHostRitualFill.h).
+        tbhost::ritualfill::OnPacket(session, packet);
+#endif
+    }
 };
 
 class tortoisebots_commands : public CommandScript
