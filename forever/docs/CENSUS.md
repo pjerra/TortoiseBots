@@ -1,5 +1,37 @@
 # Port census
 
+## State today (2026-11-24)
+
+Measured on a local PC (12 threads) against the newest ForeverCore branch `forever` (25be61f58f, 0.1.39.1) with this
+repository at `dev` 77614ed00. The core of `forever-bots` at the pin is the same code (it only adds the PlayerbotV2
+module, which stays off), so the numbers hold for the pin too.
+
+| What | Files | Compile clean | Error places | Time |
+|---|---|---|---|---|
+| The build list, `forever/SLICE-W4.txt` (what the module compiles with `TORTOISEBOTS_SLICE1=ON`) | 375 | 375 | 0 | 3.3 min |
+| The whole tree (every `.cpp` outside `forever/` and `tools/`) | 651 | 470 | 4,041 (in 206 files); 36 includes of a header ForeverCore does not have | 6.1 min |
+
+Everything the ForeverCore build compiles is clean. The 181 files with errors are outside the build: Turtle-only host
+and service code that ForeverCore replaces with its own in `forever/src/host` (`runtime/BotManager.cpp`,
+`host/HireRecruiterScript.cpp`, the hire, auction-bot, LFT and battleground queue services), and features that are not
+ported (`commands/Commander.cpp` 785 places, `BossTacticsActions.cpp` 306, `BattleGroundTactics.cpp` 215 and the AV file
+160, `PlayerbotFactory.cpp` 175, `RandomItemMgr.cpp` 119). The features still answered "not ported yet" are in
+`UNPORTED.md`.
+
+Local run (Docker image `forever-builder-clang:local`, the core configured with `-G Ninja -DBUILD_TORTOISEBOTS=1
+-DTORTOISEBOTS_SLICE1=ON` into `<build>`; no compile needed):
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e FOREVER_CENSUS_LIST=forever/SLICE-W4.txt \
+  -v <core>:/src:ro -v <build>:/build -v <out>:/census forever-builder-clang:local \
+  python3 /src/src/modules/TortoiseBots/forever/tools/port_census.py /build /census 12
+```
+
+Leave `FOREVER_CENSUS_LIST` empty for the whole tree. Everything below is the history of the port: the numbers of each
+round at its own core pin, kept as they were measured.
+
+## History
+
 `forever/tools/port_census.py` compiles every `.cpp` of the bot brain syntax-only against ForeverCore, with
 `forever/src/compat/botpch_forever.h` in front (as `ai/botpch.h` is on the Turtle core), and counts distinct error
 places. A place is one file, line and message; a mistake in a header counts once however many files include it.
@@ -202,6 +234,9 @@ core pin d02645dd21 (slot 1, `~/ForeverCore-d02645dd`): `files 289  compile clea
 files)  includes of a header ForeverCore does not have 0` (run folder
 `yulon-ubuntu2:~/forever-build/census-runs/integ8-s1-SLICE-W4/`). `slice_gen_context.py --check` up to date;
 `slice_registry_check.py` `(a)=0  (b)=232` (223 on the W4 branch: the sixteen files above name more keys).
+
+*Closed since:* `MaintenanceValues.cpp` is in the build list now and `vendor trip needed` is registered
+(`SliceAiObjectContext.cpp`), so the Vendor and Repair purposes resolve. The text of that day follows.
 
 The vendor travel need does not resolve on this branch: `TravelPurposeGateRegisteredCompat` needs W2's `vendor trip needed`
 value, #93 registers the `sell`/`repair` actions, the `maintenance` strategy and its budget values but not that value
