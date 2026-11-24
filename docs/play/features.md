@@ -32,15 +32,15 @@ New here? Read [Getting Started](getting-started.md) first.
 
 | Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Log one of your own characters in as a bot; it joins your party | Always | `TortoiseBots.Player.Commands = 1` | [`.bot add`](commands/roster-and-hiring.md#bot-add) |
+| Log one of your own characters in as a bot; it joins your party | Always | `TortoiseBots.Player.Commands = 1` | [`.bot add`](commands/roster-and-hiring.md#logging-in-and-out) |
 | Up to four of your characters online as bots at once | Always | `TortoiseBots.Player.MaxBots = 4` | [Roster](commands/roster-and-hiring.md) |
 | `.bot logout` logs one out | Always | — | [Roster](commands/roster-and-hiring.md) |
 | `.bot who` lists the bots you may order; a GM may add `all` | Always | — | [Inspecting](commands/bot-panel.md) |
 | `.bot stats [bot]` gives one line about the fleet or one bot | Always | — | [Inspecting](commands/bot-panel.md) |
-| `.bot summon <bot>` brings a bot to your side | Yes | `AiPlayerbot.OwnedBotSummonCooldown = 300` (seconds between summons of the same bot) | [Summon](commands/roster-and-hiring.md#bot-summon) |
+| `.bot summon <bot>` brings a bot to your side | Yes | `AiPlayerbot.OwnedBotSummonCooldown = 300` (seconds between summons of the same bot) | [Summon](commands/roster-and-hiring.md#summon) |
 | `.bot follow`, `stay`, `attack`, `flee` give a bot one order | Always | — | [Whisper commands](commands/whispers.md) |
-| `.bot maintenance <bot>` refills the kit and repairs | No | `AiPlayerbot.OwnedBotMaintenanceEnabled = 0` | [Maintenance](commands/roster-and-hiring.md#bot-maintenance) |
-| `.bot autogear <bot>` dresses an owned bot in fitting gear | No | `AiPlayerbot.OwnedBotAutogearEnabled = 0` | [Autogear](commands/roster-and-hiring.md#bot-autogear) |
+| `.bot maintenance <bot>` refills the kit and repairs | No | `AiPlayerbot.OwnedBotMaintenanceEnabled = 0` | [Maintenance](commands/roster-and-hiring.md#maintenance) |
+| `.bot autogear <bot>` dresses an owned bot in fitting gear | No | `AiPlayerbot.OwnedBotAutogearEnabled = 0` | [Autogear](commands/roster-and-hiring.md#gearing) |
 | `.autogear` for your own player character | GM only | `AiPlayerbot.PlayerAutogearForAll = 0` | [Autogear](commands/roster-and-hiring.md#autogear) |
 
 The bot answers `TortoiseBots: <verb>: ...` on the channel you typed on. A refused order names a short code (`refused too-many: ...`), never an account.
@@ -50,10 +50,10 @@ The bot answers `TortoiseBots: <verb>: ...` on the channel you typed on. A refus
 | Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
 | `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `come`, `hold`, `free` orders | Always | — | [Party actions](commands/party-actions.md) |
-| `pull`, `pullback`, `end pull` with seconds or `ranged`/`body` | Always | — | [Pullback](commands/party-actions.md#bot-action-pullback) |
-| `interrupt` picks a party member who can interrupt | Always | — | [Interrupt](commands/party-actions.md#bot-action-interrupt) |
-| `focus skull` marks your target and sends the party at it | Always | — | [Focus](commands/party-actions.md#bot-action-focus-skull) |
-| `cc clear` clears a crowd-control mark | Always | — | [Crowd control](commands/party-actions.md#bot-action-cc) |
+| `pull`, `pullback`, `end pull` with seconds or `ranged`/`body` | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| `interrupt` picks a party member who can interrupt | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| `focus skull` marks your target and sends the party at it | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| `cc clear` clears a crowd-control mark | Always | — | [Crowd control](commands/party-actions.md#crowd-control) |
 | Assigning a party CC mark (`cc <mark>`) | No | — | [Known limitations](known-limitations.md) |
 | Behaviour toggles: `loot`, `aoe`, `autocc`, `savemana`, `boost`, `threat`, `potions`, `mimic`, `spread`, `hold`, `noblink`, `offheal`, `offdps` | Always | — | [`.bot behavior`](commands/bot-panel.md) |
 | A shaman's totem set, a paladin's blessing, an aura/aspect/poison/sting/pet choice | Always | — | [`.bot choice`](commands/bot-panel.md) |
@@ -67,7 +67,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | :--- | :---: | :--- | :--- |
 | Class rotations for all nine classes, role and spec from talents | Always | — | [Class overview](../classes/overview.md) |
 | Party bots help each other against the same attackers | Yes | `AiPlayerbot.ShareTargets = 1` | [Shared behaviour](../classes/overview.md#shared-bot-behaviors) |
-| Tank opens a pull with a ranged weapon | Yes | `AiPlayerbot.RangedPull = 1` | [Pull](commands/party-actions.md#bot-action-pull) |
+| Tank opens a pull with a ranged weapon | Yes | `AiPlayerbot.RangedPull = 1` | [Addon actions](commands/party-actions.md#addon-action-buttons) |
 | Bots step out of harmful ground effects | Yes | `AiPlayerbot.HazardEvasionDistance = 12` | [Raid reactions](dungeons-and-raids.md#hazards) |
 | Hunter: Aspect of the Viper when low on mana | Yes | `AiPlayerbot.HunterViperOnLowMana` | [Hunter](../classes/hunter.md) |
 | Paladin: keeps Judgements up | Yes | `AiPlayerbot.PaladinJudgementUpkeep` | [Paladin](../classes/paladin.md) |
@@ -96,7 +96,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Free bots fish at a nearby hole | Yes | `TortoiseBots.World.Fishing = 1` | [Professions](../world/living-world.md) |
 | Free bots disenchant junk and enchant their own gear | Yes | `TortoiseBots.World.Disenchant = 1`, `TortoiseBots.World.EnchantGear = 1` | [Professions](../world/living-world.md) |
 | Free bots gather herbs and ore | No | `TortoiseBots.World.Professions = 0` | [Professions](../world/living-world.md) |
-| Free bots pick pockets and open lockboxes | Yes | `TortoiseBots.World.Pickpocket = 1`, `TortoiseBots.World.Lockboxes = 1` | [Rogue](../classes/rogue.md) |
+| Free rogue bots pick pockets and open lockboxes | Yes | `TortoiseBots.World.Pickpocket = 1`, `TortoiseBots.World.Lockboxes = 1` | [Rogue](../classes/rogue.md) |
 | Free bots mail lockboxes to a guild rogue and get the contents back | Yes | `TortoiseBots.World.LockboxMail = 1` | [Social](../world/social.md) |
 | Nearby free bots form a party for a shared group quest | Yes | `TortoiseBots.World.GroupQuests = 1` | [Social](../world/social.md) |
 | Free bots take part in guilds (accept an invite, answer guild whispers) | Yes | `TortoiseBots.World.Guilds = 1` | [Social](../world/social.md) |
@@ -160,8 +160,8 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Web dashboard feed (roster, map, activity, issues) | Yes | `TortoiseBots.Dashboard.Enable = 1` | [Dashboard](../server/dashboard.md) |
 | Run trace of a party, started by a server admin | No | `AiPlayerbot.RunTrace.Enabled = 0` | [Run trace](../server/run-trace.md) |
 | Decision capture of a run leader | No | `AiPlayerbot.DecisionCapture.Enabled = 0` | [Decision capture](../server/decision-capture.md) |
-| Module log lines in their own category | Yes | `Logger.tortoisebots = 3,Console Server` | [Logging](known-limitations.md) |
-| GameMaster `/tb` commands for the pool, queues and diagnostics | Always | — | [Admin commands](../server/admin-commands.md) |
+| Module log lines in their own category | Yes | `Logger.tortoisebots = 3,Console Server` | [Logging](../server/settings/logging.md) |
+| GameMaster `.tb` commands for the pool, queues and diagnostics | Always | — | [Admin commands](../server/admin-commands.md) |
 
 ## Not on WoW Forever yet
 
