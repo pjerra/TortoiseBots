@@ -4,7 +4,7 @@
 // The fill takes free (masterless) host bots one at a time and groups them with the player who queued, until the party
 // has the composition the core's own finder asks for: 1 tank, 1 healer, 3 damage (DungeonFinding/LFG.h:28-33). The
 // player's declared role takes one of those slots. The eligibility list is TortoiseBots' LFT fill (runtime/
-// LftBotFillService.cpp:125-146): in the world, a free bot, ungrouped, not in a battleground or its queue, not
+// LftBotFillService.cpp:126-147): in the world, a free bot, ungrouped, not in a battleground or its queue, not
 // teleporting, not on a taxi, not in combat, alive, level 10 or more. `IsFreeBot` is the hold against taking a bot that
 // is already commanded or grouped (BotMgr::BindMaster clears free, TbBotMgr.cpp:493-506).
 #pragma once

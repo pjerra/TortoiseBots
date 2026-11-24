@@ -1190,6 +1190,52 @@ bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::stri
     return Enqueue(bot, std::move(order), code, detail, seq);
 }
 
+uint8 BotNaturalRoles(Player* bot)
+{
+    return bot ? uint8(AiFactory::GetPlayerRoles(bot)) : uint8(0);
+}
+
+bool SetBotRole(Player* bot, uint8 role, std::string& code, std::string& detail)
+{
+    PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+    if (!ai || !ai->GetAiObjectContext())
+    {
+        code = "no-engine";
+        detail = "the bot has no running engine (`.tb engine <bot> on`)";
+        return false;
+    }
+    TortoiseBots::slice::hybrid::TankOrderStep const plan = TortoiseBots::slice::hybrid::PlanTankOrder(
+        unsigned(bot->GetClass()), role == RoleTank,
+        PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == RoleTank,
+        ai->GetForcedRole() == RoleTank);
+    if (plan.refuse)
+    {
+        if (plan.clearStored)
+            PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), 0);
+        if (auto stored = Roles().find(bot->GetGUID()); stored != Roles().end() && stored->second == RoleTank)
+            Roles().erase(stored);
+        if (plan.clearAi)
+            ApplyKit(ai, 0, true);
+        else if (plan.clearStored)
+            ApplyKit(ai, ai->GetForcedRole(), false);
+        code = "no-tank-kit";
+        detail = bot->GetName() + " has no tank kit in this slice: the tank role needs a warrior, a druid (bear) or a paladin (protection, recorded only)";
+        return false;
+    }
+    PlayerbotAIStorage::Instance().SetPlayerForcedRole(bot->GetGUID(), role);
+    if (role)
+        Roles()[bot->GetGUID()] = role;
+    else
+        Roles().erase(bot->GetGUID());
+    sPlayerbotDbStore.InvalidateStrategySnapshots(ai);
+    ApplyKit(ai, role, true);
+    // A bot taken out of free play keeps the free movement strategy through ApplyKit; a fill bot follows the player it was grouped with.
+    ai->SetMovementStrategy("follow");
+    code.clear();
+    detail.clear();
+    return true;
+}
+
 // R6 (review item 1): see TbOrdersApi.h. The queue part is the pure CancelFromRun (TbOrderQueuePure.h, tools/test_run_cancel.cpp).
 uint32 CancelRunOrders(ObjectGuid bot)
 {
