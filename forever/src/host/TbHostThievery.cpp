@@ -602,7 +602,7 @@ struct MailPayload
     uint64_t boxCoins = 0;
 };
 
-void StartMailWalk(Player* bot, BotState& st, MailTask task, MailPayload payload);
+bool StartMailWalk(Player* bot, BotState& st, MailTask task, MailPayload payload);
 
 void FinishBox(Player* bot, BotState& st)
 {
@@ -649,8 +649,7 @@ void FinishBox(Player* bot, BotState& st)
     payload.boxName = boxName;
     payload.items = std::move(gained);
     payload.boxCoins = coins;
-    StartMailWalk(bot, st, MailTask::SendReturn, std::move(payload));
-    if (st.mailTask != MailTask::SendReturn)
+    if (!StartMailWalk(bot, st, MailTask::SendReturn, std::move(payload)))
         TC_LOG_ERROR("tortoisebots", "[W7] lockbox-return bot={} to={}: the contents stay in the rogue's bags, no mailbox",
             bot->GetName(), senderName);
 }
@@ -994,20 +993,21 @@ void TickWalk(Player* bot, BotState& st)
 // Sends the bot to a mailbox and runs the pending task there (or on the spot
 // when a mailbox is already in reach). The payload rides in the state because
 // the visit can come ticks later.
-void ResumeMailTask(Player* bot, BotState& st)
+// False when no mailbox is in walking range (the task is dropped).
+bool ResumeMailTask(Player* bot, BotState& st)
 {
     if (GameObject* mailbox = tbhost::town::FindNearestMailbox(bot))
     {
         st.walking = false;
         ExecuteMailTask(bot, st, mailbox);
-        return;
+        return true;
     }
     GameObject* mailbox = tbhost::town::FindNearestMailbox(bot, kMailboxWalkYd);
     if (!mailbox)
     {
         TC_LOG_DEBUG("tortoisebots", "[W7] thievery-skip bot={} reason=no-mailbox", bot->GetName());
         ClearMailTask(st);
-        return;
+        return false;
     }
     if (bot->isMoving())
         bot->StopMoving();
@@ -1016,9 +1016,10 @@ void ResumeMailTask(Player* bot, BotState& st)
     st.walkStartedMs = st.nowMs;
     bot->GetMotionMaster()->MovePoint(0, mailbox->GetPositionX(), mailbox->GetPositionY(),
         mailbox->GetPositionZ());
+    return true;
 }
 
-void StartMailWalk(Player* bot, BotState& st, MailTask task, MailPayload payload)
+bool StartMailWalk(Player* bot, BotState& st, MailTask task, MailPayload payload)
 {
     ClearMailTask(st);
     st.mailTask = task;
@@ -1027,7 +1028,7 @@ void StartMailWalk(Player* bot, BotState& st, MailTask task, MailPayload payload
     st.mailItemGuidLow = payload.itemGuidLow;
     st.boxCoins = payload.boxCoins;
     st.returnItems = std::move(payload.items);
-    ResumeMailTask(bot, st);
+    return ResumeMailTask(bot, st);
 }
 
 void ReceiveLockboxMail(Player* bot, BotState& st, GameObject* mailbox)
