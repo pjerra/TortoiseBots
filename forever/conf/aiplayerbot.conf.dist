@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 368 keys, 359 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 337 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 369 keys, 360 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 336 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -996,6 +996,9 @@ AiPlayerbot.BotLogDebug = 0
 
 # AiPlayerbot.DefaultFormation  (string, PlayerbotAIConfig.cpp:1461)
 AiPlayerbot.DefaultFormation = chaos
+
+# AiPlayerbot.BotAcceptDuelMinimumLevel  (int, PlayerbotAIConfig.cpp:1465)
+AiPlayerbot.BotAcceptDuelMinimumLevel = 10
 
 # AiPlayerbot.RandomBotFormGuild  (bool, PlayerbotAIConfig.cpp:1467)
 AiPlayerbot.RandomBotFormGuild = 0

@@ -74,6 +74,7 @@ struct BotErrandState
     uint64_t ahCooldownUntilMs = 0;
     uint64_t mountCooldownUntilMs = 0;
     uint64_t duelCooldownUntilMs = 0;
+    bool duelFightLogged = false;
     uint64_t nextDebugLogMs = 0;
     ActiveErrand current;
 };
@@ -390,48 +391,75 @@ void FinishMountErrand(BotErrandState& st, uint64_t nowMs, bool ok, mountshop::S
     st.nextGlobalTryMs = nowMs + pause;
 }
 
-void HandleDuels(Player* bot, BotErrandState& st, uint64_t nowMs)
+uint8_t DuelMinLevel()
 {
-    auto const& mgr = TortoiseBots::BotMgr::Instance();
-    uint8_t const minDuelLevel = mgr.BotAcceptDuelMinLevel();
-    uint8_t const myHpPct = static_cast<uint8_t>(std::clamp<float>(bot->GetHealthPct(), 0.0f, 100.0f));
+    return static_cast<uint8_t>(std::clamp<uint32_t>(TortoiseBots::engine::DuelMinimumLevel(), 1, 255));
+}
 
-    if (bot->duel)
+// Answers whatever duel the core has put this bot in. A challenger the bot knows as its real player master is
+// accepted at any health, anyone else only at 90% or more; both rules are TB's (AcceptDuelAction.h:16-38).
+void RespondToDuel(Player* bot, BotErrandState& st, uint64_t nowMs)
+{
+    if (!bot->duel)
     {
-        if (bot->duel->State == DUEL_STATE_CHALLENGED && bot != bot->duel->Initiator)
-        {
-            Player* initiator = bot->duel->Initiator;
-            bool const initiatorIsBot = initiator && mgr.IsBot(initiator->GetGUID());
-            bool const accept = ShouldAcceptBotDuel(
-                true,
-                bot->IsAlive(),
-                bot->IsInCombat(),
-                initiatorIsBot,
-                bot->GetLevel(),
-                minDuelLevel,
-                myHpPct);
-
-            WorldPackets::Duel::DuelResponse resp{ WorldPacket(CMSG_DUEL_RESPONSE) };
-            resp.ArbiterGUID = *bot->m_playerData->DuelArbiter;
-            resp.Accepted = accept;
-            resp.Forfeited = !accept;
-            bot->GetSession()->HandleDuelResponseOpcode(resp);
-            st.duelCooldownUntilMs = nowMs + kDuelCooldownMs;
-            TC_LOG_INFO("tortoisebots", "[W2] duel-response bot={} initiator={} accept={}",
-                bot->GetName(), initiator ? initiator->GetName() : "?", accept ? 1 : 0);
-        }
-        else if (bot->duel->State == DUEL_STATE_IN_PROGRESS && bot->duel->Opponent && !bot->GetVictim())
-        {
-            bot->Attack(bot->duel->Opponent, true);
-        }
+        st.duelFightLogged = false;
         return;
     }
 
+    auto const& mgr = TortoiseBots::BotMgr::Instance();
+
+    if (bot->duel->State == DUEL_STATE_CHALLENGED && bot != bot->duel->Initiator)
+    {
+        Player* initiator = bot->duel->Initiator;
+        ObjectGuid const masterGuid = mgr.MasterOf(bot->GetGUID());
+        Player* master = masterGuid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(masterGuid);
+        // TB's HasRealPlayerMaster: a master with a network session; a bot master does not earn the exemption.
+        bool const masterIsRealPlayer = master && master->GetSession() && !master->GetSession()->IsBot();
+        bool const challengerIsMaster = masterIsRealPlayer && master == initiator;
+        uint8_t const myHpPct = static_cast<uint8_t>(std::clamp<float>(bot->GetHealthPct(), 0.0f, 100.0f));
+        bool const accept = ShouldAcceptBotDuel(
+            bot->IsAlive(),
+            bot->IsInCombat(),
+            challengerIsMaster,
+            bot->GetLevel(),
+            DuelMinLevel(),
+            myHpPct);
+
+        WorldPackets::Duel::DuelResponse resp{ WorldPacket(CMSG_DUEL_RESPONSE) };
+        resp.ArbiterGUID = *bot->m_playerData->DuelArbiter;
+        resp.Accepted = accept;
+        resp.Forfeited = !accept;
+        bot->GetSession()->HandleDuelResponseOpcode(resp);
+        st.duelCooldownUntilMs = nowMs + kDuelCooldownMs;
+        TC_LOG_INFO("tortoisebots", "[W2] duel-response bot={} initiator={} accept={}",
+            bot->GetName(), initiator ? initiator->GetName() : "?", accept ? 1 : 0);
+        return;
+    }
+
+    if (bot->duel->State == DUEL_STATE_IN_PROGRESS && bot->duel->Opponent)
+    {
+        if (!bot->GetVictim())
+            bot->Attack(bot->duel->Opponent, true);
+        if (!st.duelFightLogged)
+        {
+            st.duelFightLogged = true;
+            TC_LOG_INFO("tortoisebots", "[W2] duel-fight bot={} opponent={}",
+                bot->GetName(), bot->duel->Opponent->GetName());
+        }
+    }
+}
+
+void ScanForBotDuel(Player* bot, BotErrandState& st, uint64_t nowMs)
+{
     if (!bot->IsAlive() || bot->IsInCombat() || bot->isMoving() || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         return;
     if (nowMs < st.nextDuelScanMs || nowMs < st.duelCooldownUntilMs || !IsInDuelingArea(bot))
         return;
     st.nextDuelScanMs = nowMs + kDuelScanIntervalMs;
+
+    auto const& mgr = TortoiseBots::BotMgr::Instance();
+    uint8_t const minDuelLevel = DuelMinLevel();
+    uint8_t const myHpPct = static_cast<uint8_t>(std::clamp<float>(bot->GetHealthPct(), 0.0f, 100.0f));
 
     std::list<Player*> nearbyPlayers;
     Trinity::AnyUnitInObjectRangeCheck check(bot, kDuelSearchDistYd);
@@ -495,7 +523,8 @@ void TickCapitalErrands(Player* bot, uint32_t /*diffMs*/)
     uint64_t const nowMs = GameTime::GetGameTimeMS();
     BotErrandState& st = States()[bot->GetGUID()];
 
-    HandleDuels(bot, st, nowMs);
+    if (!bot->duel)
+        ScanForBotDuel(bot, st, nowMs);
 
     if (st.current.active)
     {
@@ -721,6 +750,14 @@ bool HasActiveErrand(Player const* bot)
         return false;
     auto const itr = States().find(bot->GetGUID());
     return itr != States().end() && itr->second.current.active;
+}
+
+void TickDuelResponse(Player* bot)
+{
+    if (!bot || !bot->IsInWorld() || !bot->FindMap() || bot->IsBeingTeleported())
+        return;
+
+    RespondToDuel(bot, States()[bot->GetGUID()], GameTime::GetGameTimeMS());
 }
 
 void ClearBotCapitalErrands(ObjectGuid const& botGuid)
