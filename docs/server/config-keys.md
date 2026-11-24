@@ -354,7 +354,7 @@ relates_to:
 | `AiPlayerbot.InnervateManaThreshold` | `25` | int | yes | `ai/playerbot/strategy/druid/DruidActions.h`, `ai/playerbot/strategy/druid/DruidInnervateHelper.h`, `ai/playerbot/strategy/druid/DruidTriggers.h` |
 | `AiPlayerbot.RandomGearMaxLevel` | `100` | int | yes | `forever/src/host/TbAutogear.cpp`, `forever/src/host/gear/TbGearGen.cpp` |
 | `AiPlayerbot.RandomGearMaxDiff` | `9` | int | no | **not wired** — nothing in the Forever build reads it |
-| `AiPlayerbot.RandomGearMaxItemLevelAboveLevel` | `1` | int | yes | `ai/playerbot/PlayerbotFactory.h`, `forever/src/host/TbAutogear.cpp` |
+| `AiPlayerbot.RandomGearMaxItemLevelAboveLevel` | `1` | int | yes | `ai/playerbot/PlayerbotFactory.h`, `forever/src/host/TbAutogear.cpp`, `forever/src/host/gear/TbGearGen.cpp` |
 | `AiPlayerbot.HireGearMaxItemLevelAboveLevel` | `5` | int | yes | `ai/playerbot/PlayerbotFactory.h` |
 | `AiPlayerbot.RandomGearMaxSourceTier` | `0` | int | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.RandomGearAllowReputation` | `0` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp`, `ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp` |
