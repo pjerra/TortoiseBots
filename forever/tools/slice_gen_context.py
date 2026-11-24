@@ -405,7 +405,7 @@ TRAVEL_KEYS = {
               "request named travel target, request quest travel target, reset travel target, move to travel target",
     "trigger": "",
     "value": "travel target active, travel target ready, no active travel destinations, need travel purpose, "
-             "should travel named, should leave outgrown zone, vendor trip needed",
+             "should travel named, should leave outgrown zone, vendor trip needed, not",
 }
 # Stuck rescue: the 5-minute move reset and the 15-minute hearthstone -> repop -> teleport chain, the combat-stuck
 # give-up and the four triggers that fire them (MaintenanceStrategy, ClassStrategy, CombatStrategy, DeadStrategy). `repop` is
