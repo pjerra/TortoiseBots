@@ -33,6 +33,7 @@ HELPERS = (
     "QuestRequiredTargetEntriesCompat",
     "QuestEverRewardedCompat",
     "QuestRewardPendingCompat",
+    "QuestLogCapacityCompat",
 )
 
 # Turtle-only spellings that would not compile (or would read the wrong table) on ForeverCore.
@@ -99,11 +100,25 @@ class Pair(unittest.TestCase):
                              name + " differs between the two cores")
 
 
+# The field spellings differ per core (Turtle `QuestStatusData::m_status`, ForeverCore `Status`), so the body asks the
+# pair: a raw field here compiles on one core and breaks the other.
+CROSS_CORE = (
+    "QuestStatusIncompleteWL4",
+    "QuestStatusCompleteWL4",
+    "QuestLogCapacityCompat",
+)
+
+
 class Adapted(unittest.TestCase):
     def test_no_turtle_only_spelling_survives(self):
         source = read(SOURCE)
         for gone in GONE:
             self.assertNotIn(gone, source, gone + " is still read by QuestValues.cpp")
+
+    def test_the_cross_core_helpers_are_used(self):
+        source = read(SOURCE)
+        for name in CROSS_CORE:
+            self.assertIn(name, source, name + " is not read by QuestValues.cpp")
 
     def test_the_objectmgr_subclass_is_gone_from_the_header(self):
         self.assertNotIn("QuestObjectMgr", read(HEADER))

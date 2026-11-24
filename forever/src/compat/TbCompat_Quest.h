@@ -5,6 +5,7 @@
 #include "QuestPackets.h"
 #include "playerbot/policy/quest/QuestFilterPolicy.h"
 
+#include <algorithm>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -206,6 +207,13 @@ inline bool QuestEverRewardedCompat(Player* bot, uint32 questId)
 inline bool QuestRewardPendingCompat(Player* bot, uint32 questId)
 {
     return bot && bot->IsActiveQuest(questId);
+}
+
+// How many quests the log holds: ForeverCore keeps 40 update slots but a player may only fill CONFIG_QUEST_LOG_SIZE of
+// them (Player::SatisfyQuestLog, Player.cpp:16858-16872), so the configured value is the capacity the bot can use.
+inline uint8 QuestLogCapacityCompat()
+{
+    return uint8(std::min<uint32>(sWorld.getIntConfig(CONFIG_QUEST_LOG_SIZE), uint32(MAX_QUEST_LOG_SIZE)));
 }
 
 inline bool AcceptQuestDirectCompat(Player* bot, Quest const* quest, WorldObject* giver)

@@ -163,6 +163,13 @@ inline bool QuestRewardPendingCompat(Player* bot, uint32 questId)
     return bot && !bot->getQuestStatusMap()[questId].m_rewarded;
 }
 
+// How many quests the log holds: this core fills every one of its MAX_QUEST_LOG_SIZE slots (Player::SatisfyQuestLog,
+// Player.cpp:15462-15466); ForeverCore caps the fill at a world setting.
+inline uint8 QuestLogCapacityCompat()
+{
+    return uint8(MAX_QUEST_LOG_SIZE);
+}
+
 inline bool AcceptQuestDirectCompat(Player* bot, Quest const* quest, WorldObject* giver)
 {
     if (!bot || !quest || !giver)

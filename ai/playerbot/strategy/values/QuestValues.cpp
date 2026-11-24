@@ -256,9 +256,7 @@ std::list<GuidPosition> ActiveQuestTakersValue::Calculate()
 			continue;
 		}
 
-		QuestStatus status = questStatusData.Status;
-
-		if ((status != QUEST_STATUS_COMPLETE || bot->GetQuestRewardStatus(questId)) && (!QuestIsAutoCompleteCompat(quest) || !bot->CanTakeQuest(quest, false)))
+		if ((!QuestStatusCompleteWL4(questStatusData) || bot->GetQuestRewardStatus(questId)) && (!QuestIsAutoCompleteCompat(quest) || !bot->CanTakeQuest(quest, false)))
 			continue;
 
 		auto q = questMap.find(questId);
@@ -314,7 +312,7 @@ std::list<GuidPosition> ActiveQuestObjectivesValue::Calculate()
 			continue;
 		}
 
-		if (questStatusData.Status != QUEST_STATUS_INCOMPLETE)
+		if (!QuestStatusIncompleteWL4(questStatusData))
 			continue;
 
 		for (uint32 objective = 0; objective < QuestObjectiveSlotCountWL4(quest); objective++)
@@ -387,7 +385,7 @@ bool NeedForQuestValue::Calculate()
 
 		QuestStatusData statusData = questStatus.second;
 
-		if (statusData.Status != QUEST_STATUS_INCOMPLETE)
+		if (!QuestStatusIncompleteWL4(statusData))
 			continue;
 
 		for (uint32 objective = 0; objective < QuestObjectiveSlotCountWL4(quest); objective++)
@@ -413,8 +411,10 @@ bool NeedForQuestValue::Calculate()
 
 uint8 FreeQuestLogSlotValue::Calculate()
 {
+	uint8 capacity = QuestLogCapacityCompat();
+
 	uint8 numQuest = 0;
-	for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+	for (uint8 slot = 0; slot < capacity; ++slot)
 	{
 		uint32 questId = GetQuestSlotIdCompat(bot, slot);
 
@@ -428,7 +428,7 @@ uint8 FreeQuestLogSlotValue::Calculate()
 		numQuest++;
 	}
 
-	return MAX_QUEST_LOG_SIZE - numQuest;
+	return capacity - numQuest;
 }
 
 bool HasFinishedQuestValue::Calculate()
@@ -597,7 +597,7 @@ bool NeedQuestObjectiveValue::Calculate()
         return QuestRewardPendingCompat(bot, questId); //Still need the reward
     }
 
-	if (questStatus.Status != QUEST_STATUS_INCOMPLETE)
+	if (!QuestStatusIncompleteWL4(questStatus))
 		return false;
 
 	if (getQualifier().find(",") == std::string::npos) //Status of entire quest.
