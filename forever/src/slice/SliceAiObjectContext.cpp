@@ -91,6 +91,7 @@
 #include "playerbot/strategy/actions/ValueActions.h"
 #include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/actions/WhoAction.h"
+#include "playerbot/strategy/generic/AttackEnemyPlayersStrategy.h"
 #include "playerbot/strategy/generic/AutoCcStrategy.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
@@ -132,12 +133,14 @@
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
 #include "playerbot/strategy/generic/UsePotionsStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
+#include "playerbot/strategy/generic/WorldPvpStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
 #include "playerbot/strategy/triggers/ChatCommandTrigger.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
 #include "playerbot/strategy/triggers/LootTriggers.h"
 #include "playerbot/strategy/triggers/PullTriggers.h"
+#include "playerbot/strategy/triggers/PvpTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
 #include "playerbot/strategy/triggers/RpgTriggers.h"
 #include "playerbot/strategy/triggers/RtiTriggers.h"
@@ -163,6 +166,7 @@
 #include "playerbot/strategy/values/DpsTargetValue.h"
 #include "playerbot/strategy/values/DuelTargetValue.h"
 #include "playerbot/strategy/values/EnemyHealerTargetValue.h"
+#include "playerbot/strategy/values/EnemyPlayerValue.h"
 #include "playerbot/strategy/values/EngineValues.h"
 #include "playerbot/strategy/values/EstimatedLifetimeValue.h"
 #include "playerbot/strategy/values/Formations.h"
@@ -242,7 +246,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (70 of its keys)
+    // the registry of StrategyContext (72 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -318,6 +322,8 @@ namespace slice
             creators["rpg maintenance"] = [](PlayerbotAI* ai) { return new RpgMaintenanceStrategy(ai); };
             creators["emote"] = [](PlayerbotAI* ai) { return new EmoteStrategy(ai); };
             creators["duel"] = [](PlayerbotAI* ai) { return new DuelStrategy(ai); };
+            creators["pvp"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayersStrategy(ai); };
+            creators["world pvp"] = [](PlayerbotAI* ai) { return new WorldPvpStrategy(ai); };
         }
     };
 
@@ -360,7 +366,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (124 of its keys)
+    // the registry of ActionContext (125 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -490,6 +496,7 @@ namespace slice
             creators["smart destroy item"] = [](PlayerbotAI* ai) { return new SmartDestroyItemAction(ai); };
             creators["greet"] = [](PlayerbotAI* ai) { return new GreetAction(ai); };
             creators["attack duel opponent"] = [](PlayerbotAI* ai) { return new AttackDuelOpponentAction(ai); };
+            creators["attack enemy player"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayerAction(ai); };
         }
     };
 
@@ -595,7 +602,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (159 of its keys)
+    // the registry of TriggerContext (160 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -760,6 +767,7 @@ namespace slice
             creators["quest log nearly full"] = [](PlayerbotAI* ai) { return new QuestLogNearlyFullTrigger(ai); };
             creators["new player nearby"] = [](PlayerbotAI* ai) { return new NewPlayerNearbyTrigger(ai); };
             creators["no attackers"] = [](PlayerbotAI* ai) { return new NoAttackersTrigger(ai); };
+            creators["enemy player near"] = [](PlayerbotAI* ai) { return new EnemyPlayerNear(ai); };
         }
     };
 
@@ -862,7 +870,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (266 of its keys)
+    // the registry of ValueContext (269 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1134,11 +1142,14 @@ namespace slice
             creators["should service nearby npc"] = [](PlayerbotAI* ai) { return new ShouldServiceNearbyNpcValue(ai); };
             creators["nearby service fail parks"] = [](PlayerbotAI* ai) { return new NearbyServiceFailParksValue(ai); };
             creators["already seen players"] = [](PlayerbotAI* ai) { return new AlreadySeenPlayersValue(ai); };
+            creators["enemy player target"] = [](PlayerbotAI* ai) { return new EnemyPlayerValue(ai); };
+            creators["enemy player targets"] = [](PlayerbotAI* ai) { return new EnemyPlayersValue(ai); };
+            creators["has enemy player targets"] = [](PlayerbotAI* ai) { return new HasEnemyPlayersValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 82, kActions = 208, kTriggers = 240, kValues = 266;
+    constexpr unsigned kStrategies = 84, kActions = 209, kTriggers = 241, kValues = 269;
 }
 }
 

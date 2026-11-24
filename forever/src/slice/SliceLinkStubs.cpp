@@ -60,12 +60,10 @@
 #include "playerbot/strategy/actions/ViscidusActions.h"
 #include "playerbot/strategy/generic/ThreatStrategy.h"
 #include "playerbot/strategy/triggers/EmeraldSanctumDungeonTriggers.h"
-#include "playerbot/strategy/values/EnemyPlayerValue.h"
 #include "playerbot/strategy/values/FankrissSpawnTarget.h"
 #include "playerbot/strategy/values/GrindTargetValue.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/MountValues.h"
-#include "playerbot/strategy/values/WorldPvpSeekChecks.h"
 #include "playerbot/policy/combat/TauntHeldTargetPolicy.h"
 
 #include <algorithm>
@@ -241,12 +239,6 @@ uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { Not
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
-// EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
-// The real answer outside a battleground is 60 yd (EnemyPlayerValue.cpp:276). In one the real values are 40 (10 late in Alterac Valley); battlegrounds are
-// not ported, so the shortest of them answers (less).
-float EnemyPlayerValue::GetMaxAttackDistance(Player* bot) { NoteMisc(); return bot && bot->InBattleground() ? 10.0f : 60.0f; }
-bool WorldPvpSeekChecks::IsSeeking(PlayerbotAI*, Player*) { NoteMisc(); return false; }
-bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI*, Player*, Player*) { NoteMisc(); return false; }
 
 // ChatFilter.cpp: the base filter is the real body (ChatFilter.cpp:11, it strips the "@..." prefix). The chain of role, class, race, rti, level and group filters
 // is not ported, so a line that opens with "@" (a command for a role or a group the bot cannot check) is refused (R9): the empty text means "not for this bot".
