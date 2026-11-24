@@ -104,7 +104,9 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Free bots who are in a guild mail surplus gold and materials to guildmates | Yes | `TortoiseBots.World.GuildMail = 1` | [Social](../world/social.md) |
 | Free bots seek world PvP | Yes | `AiPlayerbot.WorldPvpSeek = 2`, `AiPlayerbot.WorldPvpSeekBotPercent = 25` | [PvP](../world/queues.md) |
 | Free bots chase rare spawns | Yes | `AiPlayerbot.HuntRares = 1` | [Living world](../world/living-world.md) |
-| Autonomous long-distance travel | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| Free bots pick a destination and travel there by foot, flight path or boat/zeppelin | Always | — (`AiPlayerbot.GenerateTravelNodes = 1` builds and saves the graph) | [Travel](../world/living-world.md) |
+| Travel for grind spots, towns, vendors and repairs, and leaving an outgrown zone | Yes | — | [Living world](../world/living-world.md) |
+| Travel to trainers, the auction house, mail, bosses or gathering nodes as a destination | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 | Autonomous alt-bots (your alt keeps playing after it leaves your group) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 | Camp spots and Traveler's Tents | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 
@@ -172,7 +174,7 @@ These are part of the Turtle WoW build that this page used to describe, or of ol
 - **Claimed guild bots.** A pool bot cannot be claimed as your own by a guild invite.
 - **Boss and raid tactics.** No per-boss interrupt, positioning or add rules; `AiPlayerbot.RaidReactions` is off and the boss-tactic tables are not loaded.
 - **Turtle custom raids and dungeons.**
-- **Autonomous travel and the travel network.** Long walks, flight paths and boats are not planned by the bot brain; a server admin can order a single flight or ride.
+- **Travel destinations outside the reduced set.** Bots travel for grind spots, towns, vendors, repairs and leaving an outgrown zone; a trainer, auction house, mailbox, boss or gathering node is not a travel destination.
 - **Camp spots.**
 - **The offline auction-house seller.** The organic bot market exists, the separate seller service does not.
 - **Lineages and pool adoption.** The Forever pool creates and resets its own characters; it does not adopt old accounts or roll level-1 alts from level 60s.
