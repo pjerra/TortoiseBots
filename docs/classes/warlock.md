@@ -27,7 +27,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ### Affliction
 - Applies and maintains *Curse of Agony*, *Siphon Life*, and *Immolate* on primary targets. *Corruption* upkeep runs through the shared warlock rotation.
 - Spreads *Corruption*, *Siphon Life*, and *Immolate* across secondary attackers under the AoE strategy.
-- Uses *Dark Pact* (pet mana) and *Life Tap* (own health) to replenish mana.
+- Uses *Life Tap* (own health) to replenish mana.
 - Channels *Drain Life* for self-sustain and *Drain Soul* on dying enemies (at or below 20% health) to harvest shards.
 
 ### Demonology
@@ -56,6 +56,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ## Custom abilities
 
 - **Rain of Fire:** channels pause during [party threat back-off](overview.md#shared-bot-behaviors) if the warlock holds 50% or more tank threat.
+- **Dark Pact:** Not on WoW Forever yet.
 - **Dark Harvest:** Not on WoW Forever yet.
 - **Power Overwhelming:** Not on WoW Forever yet.
 
