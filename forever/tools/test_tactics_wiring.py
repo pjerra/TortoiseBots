@@ -372,6 +372,79 @@ def check_status_fault_codes(src):
             raise AssertionError(f"ToggleStatusFault lacks {needle}")
 
 
+# ---- M4: `cmd cc` for the whole party ----
+def check_cc_runs_without_a_run(src):
+    c = strip_comments(src)
+    if "DoCc(ctx.runRec, ctx, party, p)" not in c or "DoCcClear(ctx.runRec, ctx, party, p)" not in c:
+        raise AssertionError("IssueOrder no longer hands cc / cc clear to DoCc / DoCcClear with the run pointer")
+    if "ctx.runRec ? DoCc" in c or "ctx.runRec ? DoCcClear" in c or "not carried out by `.tb cmd`.\");\n        case od::Verb::CcClear" in c:
+        raise AssertionError("cc is again refused without a run")
+    case = c[c.find("case od::Verb::Cc:"):c.find("case od::Verb::Open:")]
+    if "unsupported" in case:
+        raise AssertionError("the cc cases still answer unsupported")
+
+
+def check_cc_bookkeeping_only_with_run(src):
+    c = strip_comments(src)
+    for name in ("OrderAnswer DoCc(", "OrderAnswer DoCcClear("):
+        body = function_body(c, name)
+        guard = body.find("if (rec)")
+        for call in ("DropPendingCc(", "h8::CcOwned"):
+            at = body.find(call)
+            if at < 0:
+                raise AssertionError(f"{name}: lost {call}")
+            if guard < 0 or guard > at:
+                raise AssertionError(f"{name}: {call} runs without the run guard `if (rec)`")
+
+
+def check_cc_pick_call(src):
+    body = function_body(strip_comments(src), "OrderAnswer DoCc(")
+    if "tactics::PickCcPlayer(" not in body:
+        raise AssertionError("DoCc does not pick a bot for an order with no bot named")
+    if "h8::ApplyCcOrder(party.lead, bot, p.mark, guid, family" not in body:
+        raise AssertionError("DoCc does not apply the picked family token through h8::ApplyCcOrder")
+    if 'no-cc-bot' not in body:
+        raise AssertionError("DoCc lost the no-cc-bot refusal")
+
+
+def check_cc_clear_all(src):
+    body = function_body(strip_comments(src), "OrderAnswer DoCcClear(")
+    if "targets = party.bots" not in body:
+        raise AssertionError("`cc clear` with no bot no longer clears every bound bot")
+    if "h8::ClearCcOrder(" not in body:
+        raise AssertionError("DoCcClear lost h8::ClearCcOrder")
+    if 'answer.text += " failed=" + failedNames' not in body:
+        raise AssertionError("a partial `cc clear` no longer names the bots it could not clear")
+
+
+def check_cc_pick_rules(src):
+    body = function_body(strip_comments(src), "inline CcPick PickCcBot(")
+    for pin in ("row.autoPick", "row.prePull && (targetEngaged || c.inCombat)", "c.denied & ai::CcPermissions::KindFromSpellName(row.spell)",
+                "DungeonRun::CcFits(row.family, creatureType)", "DungeonRun::RunCcTierRank(row.tier)"):
+        if pin not in body:
+            raise AssertionError(f"PickCcBot lost `{pin}`")
+    token = function_body(strip_comments(src), "inline DungeonRun::CcFamily CcFamilyFromToken(")
+    if 'token == "none"' not in token:
+        raise AssertionError("CcFamilyFromToken treats `none` as a family")
+
+
+def check_cc_parse_none(src):
+    c = strip_comments(src)
+    if 'DungeonRun::CcFamilyTokenNorm(args[2]) != "none"' not in c:
+        raise AssertionError("the 3-word cc form treats `none` as a family")
+    if 'args.size() < 2 || args.size() > 4' not in c:
+        raise AssertionError("cc <mark> <guid> without a bot is not accepted")
+    if "args.size() == 1" not in c:
+        raise AssertionError("`cc clear` alone is not accepted")
+
+
+def check_cc_host_pick(src):
+    body = function_body(strip_comments(src), "Player* PickCcPlayer(")
+    for pin in ('HasStrategy("cc", BotState::BOT_STATE_COMBAT)', "h8::CcDeniedForOwner(", "KnownCcFamilies(bot)", "GetCreatureType()", "target->IsInCombat()"):
+        if pin not in body:
+            raise AssertionError(f"PickCcPlayer lost `{pin}`")
+
+
 SOURCES = {
     "orders": lambda: read(HOST / "TbOrders.cpp"),
     "cmd_orders": lambda: read(CMD / "TbCmdOrders.cpp"),
@@ -379,6 +452,7 @@ SOURCES = {
     "tactics_pure": lambda: read(HOST / "TbTacticsPure.h"),
     "cmd_tactics": lambda: read(CMD / "TbCmdTactics.cpp"),
     "run_orders": lambda: read(HOST / "run" / "TbRunOrders.cpp"),
+    "run_orders_pure": lambda: read(HOST / "run" / "TbRunOrdersPure.h"),
     "gen": lambda: read(ROOT / "forever" / "tools" / "slice_gen_context.py"),
     "w4": lambda: read(ROOT / "forever" / "SLICE-W4.txt"),
 }
@@ -494,6 +568,27 @@ class Wiring(unittest.TestCase):
     def test_status_fault_codes(self):
         check_status_fault_codes(self.sources["tactics"])
 
+    def test_cc_runs_without_a_run(self):
+        check_cc_runs_without_a_run(self.sources["run_orders"])
+
+    def test_cc_run_bookkeeping_only_with_a_run(self):
+        check_cc_bookkeeping_only_with_run(self.sources["run_orders"])
+
+    def test_cc_picks_a_bot_when_none_is_named(self):
+        check_cc_pick_call(self.sources["run_orders"])
+
+    def test_cc_clear_clears_every_bound_bot(self):
+        check_cc_clear_all(self.sources["run_orders"])
+
+    def test_cc_pick_follows_the_run_table(self):
+        check_cc_pick_rules(self.sources["tactics_pure"])
+
+    def test_cc_grammar_forms(self):
+        check_cc_parse_none(self.sources["run_orders_pure"])
+
+    def test_cc_host_pick_reads_the_live_facts(self):
+        check_cc_host_pick(self.sources["tactics"])
+
 
 MUTATIONS = [
     ("drop-stop-verb", "orders", lambda s: re.sub(r'"stop",', "", s, count=1), check_is_verb),
@@ -529,6 +624,16 @@ MUTATIONS = [
     ("drop-order-status-validation", "orders", lambda s: s.replace("ToggleStatusFault(", "ReadToggle(", 1), lambda src: check_status_validates(src, read(CMD / "TbCmdTactics.cpp"))),
     ("drop-cmd-status-validation", "cmd_tactics", lambda s: s.replace("ToggleStatusFault(", "ReadToggle(", 1), lambda src: check_status_validates(read(HOST / "TbOrders.cpp"), src)),
     ("drop-no-rogue-status-fault", "tactics", lambda s: s.replace('code = "no-rogue";', 'code = "x";', 1), check_status_fault_codes),
+    ("cc-unsupported-without-run", "run_orders", lambda s: s.replace("return DoCc(ctx.runRec, ctx, party, p);", 'return ctx.runRec ? DoCc(ctx.runRec, ctx, party, p) : Refuse("unsupported", "no");', 1), check_cc_runs_without_a_run),
+    ("cc-bookkeeping-without-run", "run_orders", lambda s: s.replace("    if (rec)\n    {\n        DropPendingCc(bot->GetName());      // a newer", "    {\n        DropPendingCc(bot->GetName());      // a newer", 1), check_cc_bookkeeping_only_with_run),
+    ("cc-drop-pick", "run_orders", lambda s: s.replace("tactics::PickCcPlayer(", "tactics::PickInterruptBot(", 1), check_cc_pick_call),
+    ("cc-clear-one-bot", "run_orders", lambda s: s.replace("targets = party.bots;", "targets.push_back(party.lead);", 1), check_cc_clear_all),
+    ("cc-clear-hides-failures", "run_orders", lambda s: s.replace('answer.text += " failed=" + failedNames;', "", 1), check_cc_clear_all),
+    ("cc-drop-prepull", "tactics_pure", lambda s: s.replace("row.prePull && (targetEngaged || c.inCombat)", "false", 1), check_cc_pick_rules),
+    ("cc-drop-deny", "tactics_pure", lambda s: s.replace("c.denied & ai::CcPermissions::KindFromSpellName(row.spell)", "false", 1), check_cc_pick_rules),
+    ("cc-none-is-a-family", "tactics_pure", lambda s: s.replace('token.empty() || token == "none"', "token.empty()", 1), check_cc_pick_rules),
+    ("cc-parse-none-family", "run_orders_pure", lambda s: s.replace(' && DungeonRun::CcFamilyTokenNorm(args[2]) != "none"', "", 1), check_cc_parse_none),
+    ("cc-host-drop-deny", "tactics", lambda s: s.replace("h8::CcDeniedForOwner(", "h8::CcOwnerOf(", 1), check_cc_host_pick),
     ("drop-before-tick-enforce", "tactics", lambda s: s.replace('if (ai->HasStrategy("no aoe", BotState::BOT_STATE_COMBAT) != wantNoAoe)\n            ai->ChangeStrategy(wantNoAoe ? "+no aoe" : "-no aoe", BotState::BOT_STATE_COMBAT);', "", 1), check_before_tick_toggles),
 ]
 

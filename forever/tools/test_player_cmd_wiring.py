@@ -274,11 +274,14 @@ class Wiring(unittest.TestCase):
 
     def test_flee_is_a_verb(self):
         orders = read(SRC / "host" / "TbOrders.cpp")
+        # PR #194 (tactical orders M1) moved the tactical verbs' execution out of TbOrders.cpp into TbTactics.cpp;
+        # TbOrders still lists `flee` among the verbs and refuses an argument to it.
+        tactics = read(SRC / "host" / "TbTactics.cpp")
         self.assertIn('"flee"', orders)
-        self.assertIn("flee chat shortcut", orders)
-        self.assertIn('verb == "flee"', orders)
-        self.assertIn('o.verb == "flee"', orders)
-        self.assertIn("fail:flee", orders)
+        self.assertIn("flee chat shortcut", tactics)
+        self.assertIn('verb == "flee"', tactics)
+        self.assertIn('act("flee chat shortcut"', tactics)
+        self.assertIn("fail:flee", tactics)
 
     def test_add_handler_present(self):
         cmd = read(PLAYER / "TbPlayerCmd.cpp")

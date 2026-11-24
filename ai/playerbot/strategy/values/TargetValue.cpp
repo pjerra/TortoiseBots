@@ -99,6 +99,9 @@ bool FindNonCcTargetStrategy::OnlyCcMarksLeft(Unit* except)
     // Live enemies seen, `except` included: an empty list is not "only marks
     // left" (CcOnlyMarksLeft).
     int seen = 0;
+    // A crowd-controlled mark in its fight-start window opened the fight
+    // (the order's own sheep pulled it alone): not the end of one (CcOpeningHold).
+    bool openingHold = false;
     for (ObjectGuid const& guid : attackers)
     {
         Unit* unit = ai->GetUnit(guid);
@@ -116,8 +119,11 @@ bool FindNonCcTargetStrategy::OnlyCcMarksLeft(Unit* except)
         ++seen;
         if (!IsCcMark(unit))
             return CcOnlyMarksLeft(seen, true);
+        if (!openingHold && IsCrowdControlled(ai, unit))
+            if (Creature* creature = unit->ToCreature())
+                openingHold = CcOpeningHold(true, static_cast<long>(CombatTimeCompat(creature)));
     }
-    return CcOnlyMarksLeft(seen, false);
+    return CcOnlyMarksLeft(seen, false, openingHold);
 }
 
 bool CcGuard::OnlyMarksLeftCached()

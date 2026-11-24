@@ -81,7 +81,9 @@ def check_registration():
     generator = read(FOREVER / "tools" / "slice_gen_context.py")
     if "DEBUG_KEYS = {" not in generator:
         raise AssertionError("slice_gen_context.py has no DEBUG_KEYS list")
-    if "PRESET_KEYS, DEBUG_KEYS)" not in generator:
+    # Key groups were appended to the KEYS call after DEBUG_KEYS by the mount/walk round (#245); what this
+    # pin is about is that DEBUG_KEYS is part of KEYS, not where in the call it stands.
+    if "DEBUG_KEYS," not in generator:
         raise AssertionError("slice_gen_context.py KEYS does not include DEBUG_KEYS")
     for check, script in (("--check", "slice_gen_context.py"), ("--quiet", "slice_registry_check.py")):
         run = subprocess.run([sys.executable, str(FOREVER / "tools" / script), check],

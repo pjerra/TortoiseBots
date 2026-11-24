@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <set>
 #include <vector>
 #include "Group.h"
 #include "ObjectAccessor.h"
@@ -28,7 +29,9 @@
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/PlayerbotDbStore.h"
+#include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/Engine.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 #include "PlayerbotAIStorage.h"
@@ -115,6 +118,59 @@ void ResetTargets(PlayerbotAI* ai)
     for (char const* key : { "rti cc target", "rti target", "cc target" })
         if (ai::Value<Unit*>* value = ai->GetAiObjectContext()->GetValue<Unit*>(key))
             value->Reset();
+}
+
+// The class action that carries a cc family, found in the engine's action graph (TB's FindCcAction probe,
+// commands/BotCommandContext.cpp:739-790): the first crowd-control action whose spell is the family's spell.
+std::string CcActionFor(PlayerbotAI* ai, std::string const& spell)
+{
+    if (!ai || !ai->GetAiObjectContext())
+        return std::string();
+    std::set<std::string> names;
+    ai->GetAiObjectContext()->GetSupportedActions(names);
+    for (std::string const& name : names)
+    {
+        ai::Action* action = ai->GetAiObjectContext()->GetAction(name);
+        if (action && action->IsCrowdControlAction() && action->GetCrowdControlSpellName() == spell)
+            return name;
+    }
+    return std::string();
+}
+
+// TB's immediate-cast probe after a cc assignment (commands/Action.cpp RunCcOrder): the mature AI stays responsible for the cast, but the
+// order starts it now instead of hoping the fight-start trigger finds the mark. A target out of reach (or sight) is no answer: the mature
+// action is queued so its own `reach cc` prerequisite walks the bot in and the cast follows. Without this an order given before its pack
+// opened did nothing at all (live #208: three accepted `cmd cc` orders, no Polymorph, the mark killed with the pack).
+void StartCcCast(Player* leader, Player* bot, PlayerbotAI* ai, Unit* target, std::string const& family)
+{
+    char const* const spell = CcFamilySpellName(family);
+    if (!spell || !bot || !ai || !target || !ai->GetAiObjectContext())
+        return;
+    std::string const action = CcActionFor(ai, spell);
+    if (action.empty())
+        return;
+    ai::AiObjectContext* context = ai->GetAiObjectContext();
+    // Every pick re-resolves from the new mark: drop the cached targets, the family's own pick and the attacker list (TB's resetProbeValues).
+    ResetTargets(ai);
+    if (ai::Value<Unit*>* ccTarget = context->GetValue<Unit*>("cc target", spell))
+        ccTarget->Reset();
+    if (ai::Value<std::list<ObjectGuid>>* attackers = context->GetValue<std::list<ObjectGuid>>("possible attack targets"))
+        attackers->Reset();
+
+    // TB sets the selection, the current target and the facing before the probe (a seated or turned bot refuses the cast otherwise).
+    bot->SetSelectionGuid(target->GetObjectGuid());
+    if (ai::Value<Unit*>* current = context->GetValue<Unit*>("current target"))
+        current->Set(target);
+    sServerFacade.SetFacingTo(bot, target);
+    ai->DropQueuedMovementOrders();
+    ai->EndStayForOrder();
+
+    ai::Event const event("tb cc", family, leader);
+    if (ai->DoSpecificAction(action, event, true))
+        return;
+    // The direct run bypassed the prerequisites on purpose; the queued one keeps them, so `reach cc` moves the bot first.
+    if (ai::Engine* engine = ai->GetCurrentEngine())
+        engine->QueueAction(action, ACTION_PASSTROUGH, event);
 }
 
 // The two values a clear resets (TbCcPure.h ClearCcState).
@@ -264,6 +320,9 @@ bool ApplyCcOrder(Player* leader, Player* bot, std::string const& mark, ObjectGu
             ResetTargets(touchedAi);
         return Refuse(code, detail, "failed", "the mark, the bot's `rti cc` or its `run cc family` did not take; everything was put back");
     }
+    // The order is true: start its cast now (TB's immediate probe). A target still out of reach keeps the mature action queued and its own
+    // `reach cc` walks the bot in; the fight-start trigger stays the fallback (StartCcCast).
+    StartCcCast(leader, bot, ai, target, wantedFamily);
     return true;
 }
 

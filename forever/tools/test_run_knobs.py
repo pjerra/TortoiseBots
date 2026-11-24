@@ -180,13 +180,18 @@ def main():
     for k, (key, dflt, status, where, note) in rows.items():
         marker = "# AiPlayerbot.%s  (" % k
         at = conf.find(marker)
+        # #144 (chore/config-keys-144, merged in #242) ships only keys a compiled file reads and consumes: an
+        # unread knob whose member nothing consumes is left out (docs/server/config-keys.md still lists it), while
+        # one that is shipped must say so in a TBF note. A read key ships without a TBF note.
+        wants_note = status in ("not-read", "hard-coded", "ported-other")
         if at < 0:
+            if wants_note:
+                continue
             fail("conf.dist has no entry for " + k)
             continue
         entry = conf[at:conf.find("\n\n", at)]
-        wants = status in ("not-read", "hard-coded", "ported-other")
-        if wants != ("#   TBF:" in entry):
-            fail("conf.dist entry of %s %s a TBF note" % (k, "lacks" if wants else "has"))
+        if wants_note != ("#   TBF:" in entry):
+            fail("conf.dist entry of %s %s a TBF note" % (k, "lacks" if wants_note else "has"))
     print("keys: %d  %s" % (len(rows), "  ".join("%s=%d" % kv for kv in sorted(counts.items()))))
     if failures:
         print("%d failure(s)" % len(failures))

@@ -86,8 +86,10 @@ def r5_read_set():
 # Names of the constructor's tables the slice leaves unregistered on purpose: each is a bool/uint8/uint32, which the stand-in covers (its
 # answer is false/0, the safe "do not" answer). Everything else an R5 action reads must be a registered value.
 TABLE_VALUES_NOT_REGISTERED = {
-    "can sell", "should sell", "vendor trip needed", "can fight boss", "free quest log slots",
-    "can ah sell", "should ah sell", "can repair", "should repair", "can fight equal",
+    # #147/#256 (the free-bot life and quest travel rounds) registered the town and quest values this set used to
+    # hold (can sell, should sell, vendor trip needed, free quest log slots, can repair, should repair, can fight
+    # equal); only these three are still unregistered.
+    "can fight boss", "can ah sell", "should ah sell",
 }
 
 

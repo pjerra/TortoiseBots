@@ -1,0 +1,99 @@
+name: core-watch
+
+# Every 6 hours: the tips of the ForeverCore branches `forever` and `forever-bots` in Karrz1/TrinityCore, read through
+# the public REST API (a few calls), compared with forever/PINNED_CORE and with the last-seen tips. The last-seen tips
+# are kept in the issue itself, in a marker comment on its first line, so no cache, variable or extra token is needed.
+# A changed tip comments on the ONE open issue "New ForeverCore release" (or opens it): the new sha, the commit title and a
+# compare link, plus the state of the upstream PRs 375, 376, 381 and 382. Needs issues: write only.
+on:
+  schedule:
+    - cron: "37 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: core-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  core-watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      UP: Karrz1/TrinityCore
+      TITLE: New ForeverCore release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: forever/PINNED_CORE
+          sparse-checkout-cone-mode: false
+
+      - name: Compare the tips with the last seen ones
+        run: |
+          set -euo pipefail
+          pin="$(tr -d '[:space:]' <forever/PINNED_CORE)"
+          tip() { gh api "repos/${UP}/commits/$1" --jq '[.sha, (.commit.message | split("\n")[0])] | @tsv'; }
+          IFS=$'\t' read -r f_sha f_msg < <(tip forever)
+          IFS=$'\t' read -r b_sha b_msg < <(tip forever-bots)
+
+          # The store: the one open issue with this title (most recent first); the marker is its body's first line.
+          num="$(gh api "repos/${REPO}/issues?state=open&per_page=100" --jq "[.[] | select(.pull_request == null) | select(.title == \"${TITLE}\")][0].number // empty")"
+          seen_f=""; seen_b=""
+          if [ -n "$num" ]; then
+            body="$(gh api "repos/${REPO}/issues/${num}" --jq .body)"
+            marker="$(printf '%s\n' "$body" | head -1)"
+            seen_f="$(sed -n 's/.*forever=\([0-9a-f]*\).*/\1/p' <<<"$marker")"
+            seen_b="$(sed -n 's/.*forever-bots=\([0-9a-f]*\).*/\1/p' <<<"$marker")"
+          fi
+          # No issue yet: the baseline for forever-bots is the pin (the pin is a forever-bots commit); `forever` has none.
+          [ -n "$num" ] || seen_b="$pin"
+
+          changes=""
+          [ "$f_sha" = "$seen_f" ] || changes="$changes forever"
+          [ "$b_sha" = "$seen_b" ] || changes="$changes forever-bots"
+          echo "pin=${pin:0:10} forever=${f_sha:0:10} (seen ${seen_f:0:10}) forever-bots=${b_sha:0:10} (seen ${seen_b:0:10}) changed:${changes:- none}"
+          if [ -z "$changes" ]; then exit 0; fi
+
+          cmp() { # name sha from-sha
+            if [ -n "$3" ] && [ "$3" != "$2" ]; then
+              echo "- \`$1\` ${2:0:10}: https://github.com/${UP}/compare/${3:0:10}...${2:0:10}"
+            else
+              echo "- \`$1\` ${2:0:10}: https://github.com/${UP}/commit/${2}"
+            fi
+          }
+          prline() {
+            gh api "repos/${UP}/pulls/$1" --jq '"- #\(.number) \(.title): " + (if .merged then "merged" else .state end) + (if .draft then " (draft)" else "" end) + " (updated \(.updated_at[0:10]))"' 2>/dev/null || echo "- #$1: not readable"
+          }
+          {
+            echo "ForeverCore moved ($(date -u +%FT%TZ)). Pinned in forever/PINNED_CORE: \`${pin:0:10}\`."
+            echo
+            echo "**New tips**"
+            for c in $changes; do
+              if [ "$c" = forever ]; then echo "- \`forever\` ${f_sha}: ${f_msg}"; else echo "- \`forever-bots\` ${b_sha}: ${b_msg}"; fi
+            done
+            echo
+            echo "**Compare**"
+            for c in $changes; do
+              if [ "$c" = forever ]; then cmp forever "$f_sha" "$seen_f"; else cmp forever-bots "$b_sha" "$seen_b"; fi
+            done
+            if [ "$pin" != "$b_sha" ]; then echo "- the pin to \`forever-bots\`: https://github.com/${UP}/compare/${pin:0:10}...${b_sha:0:10}"; fi
+            echo
+            echo "**Karrz1/TrinityCore PRs**"
+            for p in 375 376 381 382; do prline "$p"; done
+          } >"$RUNNER_TEMP/comment.md"
+
+          marker="<!-- core-watch forever=${f_sha} forever-bots=${b_sha} -->"
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"
+            { echo "$marker"; printf '%s\n' "$body" | tail -n +2; } >"$RUNNER_TEMP/body.md"
+            gh issue edit "$num" --repo "$REPO" --body-file "$RUNNER_TEMP/body.md"
+          else
+            { echo "$marker"; echo "Tracks the ForeverCore branches \`forever\` and \`forever-bots\` of ${UP} (workflow core-watch). The first line is the last-seen marker: do not edit it."; echo; cat "$RUNNER_TEMP/comment.md"; } >"$RUNNER_TEMP/body.md"
+            gh issue create --repo "$REPO" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi

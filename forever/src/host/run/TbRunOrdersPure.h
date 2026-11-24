@@ -38,8 +38,8 @@ enum class Verb : uint8_t
     Follow,         // follow        (same)
     Hold,           // hold          (+passive in combat and non-combat)
     Summon,         // summon <bot>: refused by decision D3
-    Cc,             // cc <mark> <handle> <bot> [family]            (G8: h8::ApplyCcOrder)
-    CcClear,        // cc clear <bot> [<mark> <handle>]             (G8: h8::ClearCcOrder)
+    Cc,             // cc <mark> <handle> [<bot>|<family>] [family] (G8: h8::ApplyCcOrder; no bot: M4's pick)
+    CcClear,        // cc clear [<bot> [<mark> <handle>]]           (G8: h8::ClearCcOrder; no bot: every bound bot)
     Open,           // S9 (O9): open <object> <bot>: a door, a lever, a chest (TbRunTasks)
     Loot,           // S9 (O9): loot <corpse or object> <bot> [item]
     LootMethod,     // S9 (O9): lootmethod <ffa|group|rr|master|nbg> [threshold]
@@ -136,11 +136,6 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
         code = "invalid";
         message = "Usage: " + usage;
         return false;
-    };
-    auto const handleOf = [&](std::string const& token)
-    {
-        uint64_t raw = 0;
-        return RemoteCommander::ParseGuid(token, raw) ? raw : uint64_t(0);
     };
     auto const targetOf = [&](std::string const& token, uint64_t& handleOut, std::string& tokenOut)
     {
@@ -257,31 +252,40 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
         };
         if (!args.empty() && lower(args[0]) == "clear")
         {
-            // cc clear <bot> [<mark> <handle>]: the bot's crowd-control mark goes; the icon only while it still holds that unit.
+            // cc clear: every bound bot's crowd-control mark goes (M4, D13). cc clear <bot> [<mark> <handle>]: the bot's crowd-control mark goes; the icon
+            // only while it still holds that unit.
+            if (args.size() == 1)
+            {
+                out.verb = Verb::CcClear;
+                return true;
+            }
             if (args.size() != 2 && args.size() != 4)
-                return invalid("cc clear <bot> [<mark> <guid>]");
+                return invalid("cc clear [<bot> [<mark> <guid>]]");
             out.verb = Verb::CcClear;
             out.bot = args[1];
             if (args.size() == 4)
             {
                 out.mark = lower(args[2]);
-                if (!IsRaidMarkWord(out.mark) || !handleOf(args[3]))
-                    return invalid("cc clear <bot> [<mark> <guid>]");
-                out.handle = handleOf(args[3]);
+                if (!IsRaidMarkWord(out.mark) || !targetOf(args[3], out.handle, out.targetToken))
+                    return invalid("cc clear [<bot> [<mark> <guid>]]");
             }
             return true;
         }
-        // cc <mark> <handle> <bot> [family]: the run names the bot always (the Turtle command's selected-bot form has no run behind it).
-        if (args.size() < 3 || args.size() > 4)
-            return invalid("cc <mark> <guid> <bot> [family]");
+        // cc <mark> <handle> [<bot>|<family>] [family] (M4, D13): the run names the bot always; `.tb cmd` may leave it out, and then the module picks the
+        // bot from the run's cc table. With three words the last is a family when CcOrderFamilyKnown says so (and it is not `none`), else a bot; a bot
+        // named like a family word writes the four-word form `cc <mark> <guid> <bot> none`.
+        if (args.size() < 2 || args.size() > 4)
+            return invalid("cc <mark> <guid> [<bot>|<family>] [family]");
         out.mark = lower(args[0]);
-        if (!IsRaidMarkWord(out.mark) || !handleOf(args[1]))
-            return invalid("cc <mark> <guid> <bot> [family]");
+        if (!IsRaidMarkWord(out.mark) || !targetOf(args[1], out.handle, out.targetToken))
+            return invalid("cc <mark> <guid> [<bot>|<family>] [family]");
         if (args.size() == 4 && !DungeonRun::CcOrderFamilyKnown(args[3]))
-            return invalid("cc <mark> <guid> <bot> [family]");
+            return invalid("cc <mark> <guid> [<bot>|<family>] [family]");
         out.verb = Verb::Cc;
-        out.handle = handleOf(args[1]);
-        out.bot = args[2];
+        if (args.size() == 3 && DungeonRun::CcOrderFamilyKnown(args[2]) && DungeonRun::CcFamilyTokenNorm(args[2]) != "none")
+            out.family = DungeonRun::CcFamilyTokenNorm(args[2]);
+        else if (args.size() >= 3)
+            out.bot = args[2];
         if (args.size() == 4)
             out.family = DungeonRun::CcFamilyTokenNorm(args[3]);
         return true;
@@ -305,7 +309,7 @@ inline bool ParseOrder(std::string const& order, Parsed& out, std::string& code,
             return false;
         }
     code = "invalid";
-    message = "Usage: attack <guid> [bot] / pull|pullback <guid> [seconds 0-60] [ranged|body] / focus <guid> / cc <mark> <guid> <bot> [family] / cc clear <bot> [<mark> <guid>] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr|master|nbg> [threshold]";
+    message = "Usage: attack <guid> [bot] / pull|pullback <guid> [seconds 0-60] [ranged|body] / focus <guid> / cc <mark> <guid> [<bot>|<family>] [family] / cc clear [<bot> [<mark> <guid>]] / move <x> <y> <z> [direct] / walk <bot> <x> <y> <z> / stay / follow / hold / rest / revive party / open <object> <bot> / loot <corpse or object> <bot> [item] / lootmethod <ffa|group|rr|master|nbg> [threshold]";
     return false;
 }
 

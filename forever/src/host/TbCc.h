@@ -6,8 +6,9 @@
 // read back from the world after the change.
 //
 // ApplyCcOrder / ClearCcOrder are the same work as a CALL (package G8's run verbs `cc <mark> <guid> <bot> [family]` and `cc clear` use them). They are the
-// REWRITE of Turtle's RunCcOrder (commands/Action.cpp:581-835) and `.bot cmd cc` (commands/Commander.cpp:6870-6950), not a port: no cast is started here
-// (the mage's `cc` strategy polymorphs the `rti cc` unit when the fight starts), nothing is saved to a database (the host keeps no bot store).
+// port of Turtle's RunCcOrder (commands/Action.cpp:581-835) and `.bot cmd cc` (commands/Commander.cpp:6870-6950), including its immediate-cast probe (the
+// class action runs once after the read-back; out of reach, the mature action is queued behind its own `reach cc`); the `cc` strategy's fight-start trigger
+// stays the fallback. Nothing is saved to a database (the host keeps no bot store).
 //
 // Compiled with and without TORTOISEBOTS_SLICE1 (the default build answers `error code=engine-not-built`, as TbH4.cpp does).
 // Threading: every function runs on the world thread (TbH3.h).

@@ -146,7 +146,10 @@ def check(hook_cpp, hook_h, cmd_cpp, cmd_h, brain, factory, context, generator, 
     update_body = update[1].split("\nvoid ", 1)[0]
     if "TortoiseBots::chatin::DrainArrivals();" not in update_body:
         raise AssertionError("the arrival drain must be in BotMgr::Update")
-    if update_body.index("TortoiseBots::chatin::DrainArrivals();") > update_body.index("for (auto& [guid, bot] : _bots)"):
+    # #143 (tick budget) walks the bots in the always/turn order and reads them const; the drain still
+    # runs above every bot loop.
+    bot_loop = update_body.index("for (auto const& [guid, bot] : _bots)")
+    if update_body.index("TortoiseBots::chatin::DrainArrivals();") > bot_loop:
         raise AssertionError("the arrival drain must run before the bots' engine steps")
     # the subgroup rule itself, in the pure decision, after the ownership rule
     if "if (facts.kind != KindWhisper && !facts.sameSubGroup)" not in pure_h:
@@ -421,8 +424,8 @@ class ChatInWiring(unittest.TestCase):
                                 "std::string text = RestAfter(std::string_view(tail), 3); (void)std::stoi(text.c_str());")),
             # a narrow index over the text
             (3, CMD_H.replace("class ChatHandler;", "class ChatHandler;\nstatic_assert(sizeof(unsigned char) == 1, \"x\");\ninline void NarrowIndex(std::string const& text) { for (uint8 i = 0; i < text.size(); ++i) {} }")),
-            # the row back to "nothing hears chat"
-            (12, UNPORTED_MD.replace("host hook", "no listener")),
+            # the row back to "nothing hears chat" (#244 dropped it from UNPORTED.md, so the mutation adds it)
+            (12, UNPORTED_MD + "\n| incoming: chat message | whisper and party chat | 0 table rows | handler rows not registered | none |\n"),
             # `.tb hear` undocumented
             (14, DOCS.replace("`.tb hear", "`.tb listen")),
             # the census list trimmed

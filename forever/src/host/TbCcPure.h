@@ -39,6 +39,25 @@ inline CcClearTarget CcClearTargetOf(bool markNamed, bool unitNamed, int namedIn
     return target;
 }
 
+// The spell a cc family token names, spelled the way the class actions spell it ("shackleundead" -> "shackle undead"); nullptr for
+// "none" and anything unknown. The token is the normalized family (runtime/CcOrderFamily.h: lower case, alphanumerics only). The
+// cc order's immediate-cast probe finds the class action through it (TbCc.cpp CcActionFor), as TB's FindCcAction does.
+inline char const* CcFamilySpellName(std::string const& token)
+{
+    if (token == "polymorph") return "polymorph";
+    if (token == "shackleundead") return "shackle undead";
+    if (token == "banish") return "banish";
+    if (token == "hibernate") return "hibernate";
+    if (token == "seduction") return "seduction";
+    if (token == "freezingtrap") return "freezing trap";
+    if (token == "sap") return "sap";
+    if (token == "repentance") return "repentance";
+    if (token == "scarebeast") return "scare beast";
+    if (token == "fear") return "fear";
+    return nullptr;
+}
+
+
 // One icon slot to take down and the unit it holds now (read BEFORE the values are reset, so an icon a player moved since is left alone).
 template <class Guid>
 struct CcClearPlan
