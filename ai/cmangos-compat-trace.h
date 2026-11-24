@@ -40,7 +40,7 @@ inline uint32 HarmfulGroundAuraCompat(Player* bot)
     for (auto const& entry : AuraHolderMapCompat(bot))
     {
         SpellAuraHolder* holder = entry.second;
-        if (!holder || AuraIsPositiveCompat(holder) || holder->GetCasterGuid() == self)
+        if (!holder || holder->IsPositive() || holder->GetCasterGuid() == self)
             continue;
         if (!holder->IsPersistent() && !holder->IsAreaAura())
             continue;
