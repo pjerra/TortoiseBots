@@ -22,8 +22,8 @@ assert '"free"' in apply_body and "SetMovementStrategy" in apply_body, (
 m_tick = re.search(r"void BeforeEngineTick\([^)]*\)\s*\{(?P<body>.*?\n)\}", orders, re.S)
 assert m_tick, "BeforeEngineTick not found in TbOrders.cpp"
 tick_body = m_tick.group("body")
-assert "lastRoleCheck" in tick_body and "AiFactory::GetPlayerRoles(bot)" in tick_body, (
-    "BeforeEngineTick must throttle AiFactory::GetPlayerRoles(bot) with lastRoleCheck"
+assert "LastRoleCheckMs()" in tick_body and "AiFactory::GetPlayerRoles(bot)" in tick_body, (
+    "BeforeEngineTick must throttle AiFactory::GetPlayerRoles(bot) with LastRoleCheckMs()"
 )
 
 print("PASS: test_tank_heal_wiring")
