@@ -17,30 +17,27 @@ that the module logs in as headless sessions, with no game client.
 
 ## What works today
 
-Bots are driven by GM commands, `.tb ...` in chat (GM account) or `tb ...` on the worldserver console. The full list
-with the reply format is in [`forever/docs/TB-COMMANDS.md`](forever/docs/TB-COMMANDS.md).
+Players drive their bots with `.bot ...` in chat, no GM account needed, or with the in-game panel
+[TortoiseBotsForeverManager](https://github.com/TortoiseBots/TortoiseBotsForeverManager), which talks to the server over
+the addon channel. Server admins use `.tb ...` in chat (GM account) or `tb ...` on the worldserver console; the list with
+the reply format is in [`forever/docs/TB-COMMANDS.md`](forever/docs/TB-COMMANDS.md).
 
-- Creating bot characters, logging them in and out, putting them in a party with a player.
-- The real TortoiseBots engine on each bot: following and fighting. Warrior and priest are ported; the other classes
-  are not yet.
-- Party orders: attack, pull, follow, stay, come, free, focus, roles (tank, healer, DPS), a commander for a party.
-- Dungeons: entering an instance, death and revive, and a full Ragefire Chasm run led by a tank bot from a dungeon plan.
-- Doors, chests, looting and bags.
+- Your own characters as bots: log them in, summon them, put them in your party and give them orders.
+- The TortoiseBots engine for all nine classes, with tank, healer and DPS roles, specs and talent builds.
+- Party orders: attack, pull, pullback, follow, stay, come, free, focus, crowd-control and interrupt controls.
+- Dungeons: entering an instance, death and revive, run leading from a dungeon plan, and dungeon fill with free bots
+  (`.bot lfg join`).
+- A bot pool and the living world (bots that log in on a schedule, roam, quest and level on their own), guild orders,
+  the bots' own auction market, and battleground fill for Warsong Gulch and Arathi Basin. Most of these are off by
+  default; [What bots can do](docs/play/features.md) lists each one with its switch.
 - The observability dashboard (`tools/observability`, started with `run-dashboard-forever.sh`): live map, bot
   roster, character sheets.
 
-Not there yet:
+Not there yet: hired companions, alt-bots, boss and raid tactics, Alterac Valley and arenas, and the Turtle WoW custom
+content. The full list is in [Known limitations](docs/play/known-limitations.md); the engine parts that still answer
+"not ported yet" are in [`forever/docs/UNPORTED.md`](forever/docs/UNPORTED.md).
 
-- The `.bot` player commands and the addon protocol. The in-game panel,
-  [TortoiseBotsForeverManager](https://github.com/TortoiseBots/TortoiseBotsForeverManager), works through `.tb` until
-  then.
-- Pool bots and the living world (roaming, questing, levelling on their own), hired bots, the auction house, guild
-  orders, battlegrounds and most of the rest of the TortoiseBots feature list.
-- The open list of engine parts that still answer "not ported yet":
-  [`forever/docs/UNPORTED.md`](forever/docs/UNPORTED.md).
-
-The guides under [`docs/`](docs/README.md) describe TortoiseBots on Tortoise WoW 1.18.1. They show what the port is
-heading for, not what works on ForeverCore today.
+The guides under [`docs/`](docs/README.md) describe the WoW Forever build.
 
 ## Build
 
