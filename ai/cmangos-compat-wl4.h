@@ -1209,7 +1209,7 @@ inline void QuestObjectiveCountersWL4(Player* bot, uint32 questId, Quest const* 
 }
 
 inline TaxiNodesEntry const* TaxiNodeLookupWL4(uint32 nodeId) { return sObjectMgr.GetTaxiNodeEntry(nodeId); }
-inline char const* TaxiNodeNameWL4(TaxiNodesEntry const* node) { return node ? node->name : ""; }
+inline char const* TaxiNodeNameWL4(TaxiNodesEntry const* node) { return node && !node->name.empty() ? node->name[0].c_str() : ""; }
 
 inline char const* MoveSplineOriginWL4(Movement::MoveSpline const& spline) { return spline.GetMovementOrigin(); }
 inline int32 MoveSplineTimeElapsedWL4(Movement::MoveSpline const& spline) { return spline.timeElapsed(); }
