@@ -80,9 +80,8 @@ async function listPage(cls, spec, kind) {
 async function overview(cls, spec) {
   const f = await frame('/forever/' + cls + '/' + spec);
   const t = f.contentDocument.querySelector('article').innerText;
-  const parts = ((t.split('Stat priority')[1] || '').split('Gear')[0]).split('\n').map(s => s.trim()).filter(s => s && s !== '›');
-  const stats = []; for (let i = 0; i + 1 < parts.length; i += 2) stats.push([parts[i], +parts[i + 1]]);
-  await post('overview_' + cls + '_' + spec, {cls, spec, stats}); f.remove();
+  const tokens = ((t.split('Stat priority')[1] || '').split('Gear')[0]).split('\n').map(s => s.trim()).filter(Boolean);
+  await post('overview_' + cls + '_' + spec, {cls, spec, tokens}); f.remove();
 }
 // Spec share of each class's level 60s, from the classes page.
 async function population() {

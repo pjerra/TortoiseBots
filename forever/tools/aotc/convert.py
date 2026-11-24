@@ -94,10 +94,22 @@ for kind in ('gear', 'enchants'):
 rows = []
 for p in sorted(raw.glob('overview_*.json')):
     d = json.loads(p.read_text(encoding='utf-8'))
-    for i, (stat, w) in enumerate(d['stats']):
-        rows.append([d['cls'], d['spec'], i + 1, stat, w])
+    # tokens: "Healing 245 › Spell Power 136 ≈ Intellect (about equal) 132 › ..."; "≈" ties a stat to the one before it
+    order, tied, name = 0, False, None
+    for tok in d['tokens']:
+        if tok == '≈':
+            tied = True
+        elif tok in ('›', '(about equal)'):
+            continue
+        elif re.fullmatch(r'\d+', tok) and name:
+            if not tied:
+                order += 1
+            rows.append([d['cls'], d['spec'], order, name, tok, 'yes' if tied else ''])
+            name, tied = None, False
+        else:
+            name = tok
 if rows:
-    write('stat-priority-60.csv', ['class', 'spec', 'order', 'stat', 'weight'], rows)
+    write('stat-priority-60.csv', ['class', 'spec', 'order', 'stat', 'weight', 'about_equal_to_previous'], rows)
 
 p = raw / 'census.json'
 if p.exists():

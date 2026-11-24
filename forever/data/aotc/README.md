@@ -12,7 +12,7 @@ holds the most points.
 | `talent-picks.csv` | For every spec, level group (`10-19` … `50-59`, `60`, `all`) and talent: the share of characters with enough points who took it (`pick_pct`), the usual rank, the talent's spell id, and its place in the tree (`tab`, `row`, `col`). `our_trait_node`, `our_talent_id` and `our_max_rank` match it to our trees in `talent-trees-70959.csv` (from PR #235) by class and name. All 9,807 rows match. |
 | `talent-tree-points.csv` | Average points per tree for every spec and level group. It shows how the points move into each tree while players level. |
 | `talent-splits-60.csv` | The 20 most common point splits (e.g. `12/8/31`) per spec at 60, with share and character count. |
-| `stat-priority-60.csv` | aotc.gg's stat priority per spec at 60 (stat and weight, highest first). |
+| `stat-priority-60.csv` | aotc.gg's stat priority per spec at 60: order, stat and weight, highest first. Stats the site marks as about equal share an order number (`about_equal_to_previous` = yes). |
 | `gear-60.csv` | The 20 most worn items per slot, and item-set bonus use (`Set: …` rows), per spec at 60. `population` is `best_geared` (the top-geared characters) or `all_60`. `wowhead_id` is the item id. |
 | `enchants-60.csv` | The most used enchants per slot, per spec at 60, in the same two populations. `wowhead_id` names the item that teaches or applies the enchant (empty for "No enchant"). |
 | `spec-population.csv` | The share of each spec among a class's level 60 characters. |

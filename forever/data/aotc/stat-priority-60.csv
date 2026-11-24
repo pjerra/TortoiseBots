@@ -1,182 +1,163 @@
-class,spec,order,stat,weight
-druid,balance,1,Spell Power,173
-druid,balance,2,Intellect,134
-druid,balance,3,Stamina,91
-druid,balance,4,≈,
-druid,balance,5,(about equal),87
-druid,balance,6,Spirit,80
-druid,balance,7,Crit,24
-druid,feral,1,Stamina,151
-druid,feral,2,Agility,87
-druid,feral,3,Strength,78
-druid,feral,4,Attack Power,41
-druid,feral,5,Healing,36
-druid,feral,6,Intellect,31
-druid,restoration,1,Healing,251
-druid,restoration,2,Intellect,120
-druid,restoration,3,≈,
-druid,restoration,4,(about equal),120
-druid,restoration,5,≈,
-druid,restoration,6,(about equal),119
-druid,restoration,7,Stamina,99
-druid,restoration,8,Strength,10
-hunter,beast-mastery,1,Agility,174
-hunter,beast-mastery,2,Attack Power,111
-hunter,beast-mastery,3,Stamina,101
-hunter,beast-mastery,4,Intellect,48
-hunter,beast-mastery,5,≈,
-hunter,beast-mastery,6,(about equal),46
-hunter,beast-mastery,7,≈,
-hunter,beast-mastery,8,(about equal),44
-hunter,marksmanship,1,Agility,179
-hunter,marksmanship,2,Attack Power,111
-hunter,marksmanship,3,Stamina,99
-hunter,marksmanship,4,Intellect,53
-hunter,marksmanship,5,Crit,50
-hunter,marksmanship,6,Hit,43
-hunter,survival,1,Agility,161
-hunter,survival,2,Attack Power,123
-hunter,survival,3,Stamina,102
-hunter,survival,4,Crit,53
-hunter,survival,5,Intellect,50
-hunter,survival,6,Hit,38
-mage,arcane,1,Spell Power,192
-mage,arcane,2,Intellect,162
-mage,arcane,3,Stamina,91
-mage,arcane,4,Spirit,48
-mage,arcane,5,Hit,36
-mage,arcane,6,Crit,17
-mage,fire,1,Spell Power,181
-mage,fire,2,Intellect,154
-mage,fire,3,Stamina,91
-mage,fire,4,Spirit,47
-mage,fire,5,Hit,29
-mage,fire,6,Crit,18
-mage,frost,1,Spell Power,182
-mage,frost,2,Intellect,157
-mage,frost,3,Stamina,94
-mage,frost,4,Spirit,47
-mage,frost,5,Hit,30
-mage,frost,6,Crit,15
-paladin,holy,1,Healing,233
-paladin,holy,2,Spell Power,115
-paladin,holy,3,≈,
-paladin,holy,4,(about equal),111
-paladin,holy,5,≈,
-paladin,holy,6,(about equal),110
-paladin,holy,7,Spirit,70
-paladin,holy,8,Strength,26
-paladin,protection,1,Stamina,168
-paladin,protection,2,Intellect,73
-paladin,protection,3,Strength,67
-paladin,protection,4,≈,
-paladin,protection,5,(about equal),66
-paladin,protection,6,Defense,38
-paladin,protection,7,Hit,22
-paladin,retribution,1,Stamina,133
-paladin,retribution,2,Strength,87
-paladin,retribution,3,Intellect,78
-paladin,retribution,4,Spell Power,69
-paladin,retribution,5,Crit,35
-paladin,retribution,6,Attack Power,33
-priest,discipline,1,Healing,226
-priest,discipline,2,Intellect,137
-priest,discipline,3,≈,
-priest,discipline,4,(about equal),137
-priest,discipline,5,Spirit,118
-priest,discipline,6,Stamina,96
-priest,discipline,7,Mana per 5,9
-priest,holy,1,Healing,245
-priest,holy,2,Spell Power,136
-priest,holy,3,≈,
-priest,holy,4,(about equal),132
-priest,holy,5,Spirit,124
-priest,holy,6,Stamina,95
-priest,holy,7,Mana per 5,9
-priest,shadow,1,Spell Power,153
-priest,shadow,2,Intellect,127
-priest,shadow,3,≈,
-priest,shadow,4,(about equal),124
-priest,shadow,5,Stamina,100
-priest,shadow,6,Spirit,88
-priest,shadow,7,Hit,14
-rogue,assassination,1,Agility,147
-rogue,assassination,2,Attack Power,135
-rogue,assassination,3,Stamina,109
-rogue,assassination,4,Hit,52
-rogue,assassination,5,≈,
-rogue,assassination,6,(about equal),51
-rogue,assassination,7,Spirit,28
-rogue,combat,1,Agility,144
-rogue,combat,2,Attack Power,135
-rogue,combat,3,Stamina,112
-rogue,combat,4,Crit,51
-rogue,combat,5,Hit,48
-rogue,combat,6,Strength,26
-rogue,subtlety,1,Attack Power,139
-rogue,subtlety,2,≈,
-rogue,subtlety,3,(about equal),138
-rogue,subtlety,4,Stamina,114
-rogue,subtlety,5,Crit,50
-rogue,subtlety,6,Hit,44
-rogue,subtlety,7,Strength,26
-shaman,elemental,1,Spell Power,170
-shaman,elemental,2,Intellect,138
-shaman,elemental,3,Stamina,95
-shaman,elemental,4,Healing,62
-shaman,elemental,5,≈,
-shaman,elemental,6,(about equal),59
-shaman,elemental,7,Hit,27
-shaman,enhancement,1,Stamina,111
-shaman,enhancement,2,Intellect,96
-shaman,enhancement,3,Spell Power,72
-shaman,enhancement,4,≈,
-shaman,enhancement,5,(about equal),71
-shaman,enhancement,6,Crit,58
-shaman,enhancement,7,≈,
-shaman,enhancement,8,(about equal),56
-shaman,restoration,1,Healing,237
-shaman,restoration,2,Spell Power,128
-shaman,restoration,3,≈,
-shaman,restoration,4,(about equal),126
-shaman,restoration,5,Stamina,100
-shaman,restoration,6,Spirit,83
-shaman,restoration,7,Crit,17
-warlock,affliction,1,Spell Power,183
-warlock,affliction,2,Intellect,123
-warlock,affliction,3,Stamina,112
-warlock,affliction,4,Spirit,42
-warlock,affliction,5,Hit,26
-warlock,affliction,6,Crit,13
-warlock,demonology,1,Spell Power,188
-warlock,demonology,2,Intellect,128
-warlock,demonology,3,Stamina,110
-warlock,demonology,4,Spirit,45
-warlock,demonology,5,Hit,32
-warlock,demonology,6,Crit,13
-warlock,destruction,1,Spell Power,191
-warlock,destruction,2,Intellect,130
-warlock,destruction,3,Stamina,110
-warlock,destruction,4,Spirit,45
-warlock,destruction,5,Hit,30
-warlock,destruction,6,Crit,15
-warrior,arms,1,Stamina,151
-warrior,arms,2,Strength,116
-warrior,arms,3,Attack Power,77
-warrior,arms,4,Crit,49
-warrior,arms,5,Hit,45
-warrior,arms,6,≈,
-warrior,arms,7,(about equal),43
-warrior,fury,1,Stamina,130
-warrior,fury,2,Attack Power,106
-warrior,fury,3,≈,
-warrior,fury,4,(about equal),105
-warrior,fury,5,Crit,68
-warrior,fury,6,Hit,52
-warrior,fury,7,Agility,44
-warrior,protection,1,Stamina,175
-warrior,protection,2,Strength,118
-warrior,protection,3,Attack Power,51
-warrior,protection,4,Hit,44
-warrior,protection,5,Agility,41
-warrior,protection,6,Defense,30
+class,spec,order,stat,weight,about_equal_to_previous
+druid,balance,1,Spell Power,173,
+druid,balance,2,Intellect,134,
+druid,balance,3,Stamina,91,
+druid,balance,3,Healing,87,yes
+druid,balance,4,Spirit,80,
+druid,balance,5,Crit,24,
+druid,feral,1,Stamina,151,
+druid,feral,2,Agility,87,
+druid,feral,3,Strength,78,
+druid,feral,4,Attack Power,41,
+druid,feral,5,Healing,36,
+druid,feral,6,Intellect,31,
+druid,restoration,1,Healing,251,
+druid,restoration,2,Intellect,120,
+druid,restoration,2,Spirit,120,yes
+druid,restoration,2,Spell Power,119,yes
+druid,restoration,3,Stamina,99,
+druid,restoration,4,Strength,10,
+hunter,beast-mastery,1,Agility,174,
+hunter,beast-mastery,2,Attack Power,111,
+hunter,beast-mastery,3,Stamina,101,
+hunter,beast-mastery,4,Intellect,48,
+hunter,beast-mastery,4,Crit,46,yes
+hunter,beast-mastery,4,Hit,44,yes
+hunter,marksmanship,1,Agility,179,
+hunter,marksmanship,2,Attack Power,111,
+hunter,marksmanship,3,Stamina,99,
+hunter,marksmanship,4,Intellect,53,
+hunter,marksmanship,5,Crit,50,
+hunter,marksmanship,6,Hit,43,
+hunter,survival,1,Agility,161,
+hunter,survival,2,Attack Power,123,
+hunter,survival,3,Stamina,102,
+hunter,survival,4,Crit,53,
+hunter,survival,5,Intellect,50,
+hunter,survival,6,Hit,38,
+mage,arcane,1,Spell Power,192,
+mage,arcane,2,Intellect,162,
+mage,arcane,3,Stamina,91,
+mage,arcane,4,Spirit,48,
+mage,arcane,5,Hit,36,
+mage,arcane,6,Crit,17,
+mage,fire,1,Spell Power,181,
+mage,fire,2,Intellect,154,
+mage,fire,3,Stamina,91,
+mage,fire,4,Spirit,47,
+mage,fire,5,Hit,29,
+mage,fire,6,Crit,18,
+mage,frost,1,Spell Power,182,
+mage,frost,2,Intellect,157,
+mage,frost,3,Stamina,94,
+mage,frost,4,Spirit,47,
+mage,frost,5,Hit,30,
+mage,frost,6,Crit,15,
+paladin,holy,1,Healing,233,
+paladin,holy,2,Spell Power,115,
+paladin,holy,2,Stamina,111,yes
+paladin,holy,2,Intellect,110,yes
+paladin,holy,3,Spirit,70,
+paladin,holy,4,Strength,26,
+paladin,protection,1,Stamina,168,
+paladin,protection,2,Intellect,73,
+paladin,protection,3,Strength,67,
+paladin,protection,3,Spell Power,66,yes
+paladin,protection,4,Defense,38,
+paladin,protection,5,Hit,22,
+paladin,retribution,1,Stamina,133,
+paladin,retribution,2,Strength,87,
+paladin,retribution,3,Intellect,78,
+paladin,retribution,4,Spell Power,69,
+paladin,retribution,5,Crit,35,
+paladin,retribution,6,Attack Power,33,
+priest,discipline,1,Healing,226,
+priest,discipline,2,Intellect,137,
+priest,discipline,2,Spell Power,137,yes
+priest,discipline,3,Spirit,118,
+priest,discipline,4,Stamina,96,
+priest,discipline,5,Mana per 5,9,
+priest,holy,1,Healing,245,
+priest,holy,2,Spell Power,136,
+priest,holy,2,Intellect,132,yes
+priest,holy,3,Spirit,124,
+priest,holy,4,Stamina,95,
+priest,holy,5,Mana per 5,9,
+priest,shadow,1,Spell Power,153,
+priest,shadow,2,Intellect,127,
+priest,shadow,2,Healing,124,yes
+priest,shadow,3,Stamina,100,
+priest,shadow,4,Spirit,88,
+priest,shadow,5,Hit,14,
+rogue,assassination,1,Agility,147,
+rogue,assassination,2,Attack Power,135,
+rogue,assassination,3,Stamina,109,
+rogue,assassination,4,Hit,52,
+rogue,assassination,4,Crit,51,yes
+rogue,assassination,5,Spirit,28,
+rogue,combat,1,Agility,144,
+rogue,combat,2,Attack Power,135,
+rogue,combat,3,Stamina,112,
+rogue,combat,4,Crit,51,
+rogue,combat,5,Hit,48,
+rogue,combat,6,Strength,26,
+rogue,subtlety,1,Attack Power,139,
+rogue,subtlety,1,Agility,138,yes
+rogue,subtlety,2,Stamina,114,
+rogue,subtlety,3,Crit,50,
+rogue,subtlety,4,Hit,44,
+rogue,subtlety,5,Strength,26,
+shaman,elemental,1,Spell Power,170,
+shaman,elemental,2,Intellect,138,
+shaman,elemental,3,Stamina,95,
+shaman,elemental,4,Healing,62,
+shaman,elemental,4,Spirit,59,yes
+shaman,elemental,5,Hit,27,
+shaman,enhancement,1,Stamina,111,
+shaman,enhancement,2,Intellect,96,
+shaman,enhancement,3,Spell Power,72,
+shaman,enhancement,3,Strength,71,yes
+shaman,enhancement,4,Crit,58,
+shaman,enhancement,4,Attack Power,56,yes
+shaman,restoration,1,Healing,237,
+shaman,restoration,2,Spell Power,128,
+shaman,restoration,2,Intellect,126,yes
+shaman,restoration,3,Stamina,100,
+shaman,restoration,4,Spirit,83,
+shaman,restoration,5,Crit,17,
+warlock,affliction,1,Spell Power,183,
+warlock,affliction,2,Intellect,123,
+warlock,affliction,3,Stamina,112,
+warlock,affliction,4,Spirit,42,
+warlock,affliction,5,Hit,26,
+warlock,affliction,6,Crit,13,
+warlock,demonology,1,Spell Power,188,
+warlock,demonology,2,Intellect,128,
+warlock,demonology,3,Stamina,110,
+warlock,demonology,4,Spirit,45,
+warlock,demonology,5,Hit,32,
+warlock,demonology,6,Crit,13,
+warlock,destruction,1,Spell Power,191,
+warlock,destruction,2,Intellect,130,
+warlock,destruction,3,Stamina,110,
+warlock,destruction,4,Spirit,45,
+warlock,destruction,5,Hit,30,
+warlock,destruction,6,Crit,15,
+warrior,arms,1,Stamina,151,
+warrior,arms,2,Strength,116,
+warrior,arms,3,Attack Power,77,
+warrior,arms,4,Crit,49,
+warrior,arms,5,Hit,45,
+warrior,arms,5,Agility,43,yes
+warrior,fury,1,Stamina,130,
+warrior,fury,2,Attack Power,106,
+warrior,fury,2,Strength,105,yes
+warrior,fury,3,Crit,68,
+warrior,fury,4,Hit,52,
+warrior,fury,5,Agility,44,
+warrior,protection,1,Stamina,175,
+warrior,protection,2,Strength,118,
+warrior,protection,3,Attack Power,51,
+warrior,protection,4,Hit,44,
+warrior,protection,5,Agility,41,
+warrior,protection,6,Defense,30,
