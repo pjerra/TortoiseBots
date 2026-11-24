@@ -2,7 +2,7 @@
 id: server-settings-party
 title: Party & Quality-of-Life Settings
 category: server
-summary: Configuration settings for player-owned bots, alt-bots, follow behavior, summoning, and party loot.
+summary: Configuration settings for owned bots, alt level sync, follow behaviour and formations, maintenance, autogear, party loot and quest sync.
 tags: [config, party, alts, qol]
 relates_to:
   - play-commands-party-actions
@@ -11,403 +11,241 @@ relates_to:
 
 # Party & Quality-of-Life Settings
 
-These settings configure player-owned bots, alt-bots, formation positioning, and party convenience options. Settings go in `aiplayerbot.conf`; see [How configuration works](../configuration.md).
+These settings configure the bots a player logs in as their own characters (`.bot add`), how they follow, the party maintenance and autogear commands, and a few party conveniences. Settings go in `aiplayerbot.conf`; see [How configuration works](../configuration.md).
+
+The bot engine reads `aiplayerbot.conf` once, when it first starts a bot, so a change needs a server restart.
+
+> **Which bots these settings apply to.** They shape the bot engine. Every bot the pool logs in, and every character a player adds with `.bot add`, runs the engine. A bot a GameMaster logs in with `.tb login <character> <master>` runs it only with `TortoiseBots.Slice.EngineByDefault = 1` in `tortoisebots.conf`, or after `.tb engine <character> on`.
 
 ## Summary
 
 | Setting | Default | What it does |
 | :--- | :---: | :--- |
-| [`AiPlayerbot.SyncAltLevelToMaster`](#aiplayerbotsyncaltleveltomaster) | `0` | Automatically levels grouped owned bot alts to match the leader level. |
-| [`AiPlayerbot.BoostFollow`](#aiplayerbotboostfollow) | `1` | Causes bots trailing far behind to mount up to catch up. |
-| [`AiPlayerbot.DungeonFollowHoldBeforePacks`](#aiplayerbotdungeonfollowholdbeforepacks) | `0` | Stops follower bots outside unpulled pack aggro radius (attack detection range). |
-| [`AiPlayerbot.DefaultFormation`](#aiplayerbotdefaultformation) | `chaos` | Sets default idle follow formation around the party leader. |
-| [`AiPlayerbot.RaidFollowWedge`](#aiplayerbotraidfollowwedge) | `0` | Spreads raid and dungeon followers behind the leader and has far stragglers walk the leader's path. |
-| [`AiPlayerbot.TeleportLandingFall`](#aiplayerbotteleportlandingfall) | `0` | Lands a bot on the floor under a near-teleport destination that ends in mid-air. |
-| [`AiPlayerbot.NonGmFreeSummon`](#aiplayerbotnongmfreesummon) | `0` | Enables the free instant summon action for non-staff players. |
-| [`AiPlayerbot.OwnedBotMaintenanceEnabled`](#aiplayerbotownedbotmaintenanceenabled) | `0` | Enables the maintenance command for owned and hired companion bots. |
-| [`AiPlayerbot.OwnedBotAutogearEnabled`](#aiplayerbotownedbotautogearenabled) | `0` | Enables automated incremental re-gearing for owned and hired bots. |
-| [`AiPlayerbot.OwnedBotAutogearQualityCap`](#aiplayerbotownedbotautogearqualitycap) | `2` | Caps the maximum item quality allowed during automatic re-gearing. |
-| [`AiPlayerbot.OwnedBotAutogearIlvlCap`](#aiplayerbotownedbotautogearilvlcap) | `0` | Caps the maximum item level allowed during automatic re-gearing. |
+| [`AiPlayerbot.SyncAltLevelToMaster`](#aiplayerbotsyncaltleveltomaster) | `0` | Levels a bot in your group up to your level. |
+| [`AiPlayerbot.BoostFollow`](#aiplayerbotboostfollow) | `1` | Lets a bot far behind mount up to catch up. |
+| [`AiPlayerbot.DungeonFollowHoldBeforePacks`](#aiplayerbotdungeonfollowholdbeforepacks) | `0` | Stops a follower short of an unpulled pack in a dungeon. |
+| [`AiPlayerbot.DefaultFormation`](#aiplayerbotdefaultformation) | `chaos` | The idle formation bots take around the leader. |
+| [`AiPlayerbot.RaidFollowWedge`](#aiplayerbotraidfollowwedge) | `0` | Spreads instance followers behind the leader and has stragglers walk its path. |
+| [`AiPlayerbot.TeleportLandingFall`](#aiplayerbotteleportlandingfall) | `0` | Drops a bot to the floor after a teleport that ends in mid-air. |
+| [`AiPlayerbot.OwnedBotMaintenanceEnabled`](#aiplayerbotownedbotmaintenanceenabled) | `0` | Enables `.bot maintenance`. |
+| [`AiPlayerbot.OwnedBotAutogearEnabled`](#aiplayerbotownedbotautogearenabled) | `0` | Enables `.bot autogear`. |
+| [`AiPlayerbot.OwnedBotAutogearQualityCap`](#aiplayerbotownedbotautogearqualitycap) | `2` | Highest item quality `.bot autogear` may give. |
+| [`AiPlayerbot.OwnedBotAutogearIlvlCap`](#aiplayerbotownedbotautogearilvlcap) | `0` | Highest item level `.bot autogear` may give. |
 | [`AiPlayerbot.PlayerAutogearForAll`](#aiplayerbotplayerautogearforall) | `0` | Lets every player run `.autogear` on themselves instead of GMs only. |
-| [`AiPlayerbot.OwnedBotSummonWhenGroup`](#aiplayerbotownedbotsummonwhengroup) | `0` | Automatically teleports owned bots to leader when accepting group invite. |
-| [`AiPlayerbot.OwnedBotSummonAllowInCombat`](#aiplayerbotownedbotsummonallowincombat) | `0` | Allows group accept summoning while either leader or bot is in combat. |
-| [`AiPlayerbot.OwnedBotSummonAllowMasterDead`](#aiplayerbotownedbotsummonallowmasterdead) | `0` | Allows group accept summoning while the party leader is dead. |
-| [`AiPlayerbot.OwnedBotSummonAllowBotDead`](#aiplayerbotownedbotsummonallowbotdead) | `0` | Allows group accept summoning while the invited bot is dead. |
-| [`AiPlayerbot.OwnedBotSummonRevive`](#aiplayerbotownedbotsummonrevive) | `0` | Revives a dead bot before teleporting it on group accept. |
-| [`AiPlayerbot.OwnedBotSummonRepair`](#aiplayerbotownedbotsummonrepair) | `0` | Automatically repairs bot durability upon group accept summon arrival. |
-| [`AiPlayerbot.OwnedBotSummonCooldown`](#aiplayerbotownedbotsummoncooldown) | `300` | Minimum seconds required between group accept summons per bot. |
-| [`AiPlayerbot.RollBadItemsWithPlayer`](#aiplayerbotrollbaditemswithplayer) | `0` | Forces bots to roll Need on dungeon drops for empty gear slots. |
-| [`AiPlayerbot.AltBots`](#aiplayerbotaltbots) | `0` | Allows dismissed owned alts to continue roaming and playing independently. |
-| [`AiPlayerbot.AltBotsLogoutWithOwner`](#aiplayerbotaltbotslogoutwithowner) | `0` | Forces active alt-bots to log out when their account owner logs out. |
-| [`AiPlayerbot.SummonAtInnkeepersEnabled`](#aiplayerbotsummonatinnkeepersenabled) | `1` (built in) | Enables summoning owned bots while near an innkeeper NPC. |
-| [`AiPlayerbot.SyncQuestForPlayer`](#aiplayerbotsyncquestforplayer) | `0` (built in) | Completes quests for player master when a companion bot turns them in. |
-| [`AiPlayerbot.SyncQuestWithPlayer`](#aiplayerbotsyncquestwithplayer) | `0` | Completes quests for bots when the player master turns them in. |
-| [`AiPlayerbot.BotCheats`](#aiplayerbotbotcheats) | `repair,breath` | Convenience and sustenance cheats granted to owned companion bots and alts. |
+| [`AiPlayerbot.OwnedBotSummonCooldown`](#aiplayerbotownedbotsummoncooldown) | `300` | Seconds between two `.bot summon` uses for one bot. |
+| [`AiPlayerbot.RollBadItemsWithPlayer`](#aiplayerbotrollbaditemswithplayer) | `0` | Lets bots need-roll filler equipment instead of greeding it. |
+| [`AiPlayerbot.SyncQuestForPlayer`](#aiplayerbotsyncquestforplayer) | `0` | Completes your copy of a quest when your bot turns it in. |
+| [`AiPlayerbot.SyncQuestWithPlayer`](#aiplayerbotsyncquestwithplayer) | `0` | Completes a bot's quest when you turn it in. |
 
-## Settings
+## Owned bots
+
+A player logs one of their own characters in as a bot with `.bot add <name>`. It joins their party and follows them; `.bot logout <name>` sends it away. Both characters must be on the same Battle.net account, the player must lead the group (and the party must have room), and one player may run only a few at once (`TortoiseBots.Player.MaxBots`, default 4). See [Roster and character commands](../../play/commands/roster-and-hiring.md).
 
 ### `AiPlayerbot.SyncAltLevelToMaster`
-Automatically levels owned bot alts to match your character level while grouped. Enable this if you want your alts to stay viable party companions without manual grinding.
+Levels a bot in your group up to your level.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-While an owned (non-random) bot is in your group and you are the group leader, it gains one character level per AI update until its level equals your level.
+While a bot is in your group, you are the group leader, and you are alive, the bot gains one character level per AI update until it matches your level (never past the server's maximum level). Each gain writes an `AltLevelSync` row to `bot_events.csv` when that log is enabled.
 
-This applies only to owned (non-random) bots, never to random pool bots or hired mercenaries.
+The bot must be in your group to benefit; a bot that is merely following you is not levelled.
 
 </details>
 
+## Follow and formations
+
 ### `AiPlayerbot.BoostFollow`
-Causes bots that have fallen far behind the party leader to mount up and ride to catch up. Enable this to prevent followers from straggling on long journeys.
+Lets a bot that has fallen far behind mount up and catch up.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When a follower bot falls farther behind the leader than its configured reaction distance (150 yards), the bot evaluates its mount state. If eligible, it mounts up and rides until it reaches standard follow distance.
-
-This behavior uses standard movement speeds and is safe around combat.
+When a follower is farther than `ReactDistance` (150 yd by default) behind its leader and is not mounted and not in combat, it asks the mount logic to mount up. It then rides until it is back at normal follow distance. This uses normal mounts and normal speed; it is not a speed cheat.
 
 </details>
 
 ### `AiPlayerbot.DungeonFollowHoldBeforePacks`
-Prevents follower bots from running through unpulled monster packs when trailing behind their leader in dungeons. Enable this for cleaner dungeon navigation.
+Stops a follower before an unpulled pack in a dungeon.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Inside a dungeon or raid instance, while the bot is not in combat, a bot whose leader is more than 30 yards ahead calculates its own travel path along the route. The leader may be fighting: a bot far behind still stops before the packs on its way to that fight (the pack the leader fights is already in combat and never holds the bot).
+Inside a dungeon or raid, with the bot out of combat and its leader more than 30 yards ahead, the bot walks the route to the leader itself instead of using the core follow. If an unpulled hostile creature stands on that route, the bot stops 3 yards outside its aggro radius and waits. It stays on until the leader is closer than 25 yards, the pack is gone, or the route changes.
 
-If an unpulled hostile creature stands along that path, the bot stops 3 yards outside the creature aggro radius and holds its position rather than running through. The bot whispers its master once per pack (at most every 30 seconds): `Pack in the way: <name>. Waiting here - pull it or come back for me.`
-
-While holding, the follow action keeps the bot standing there. It resumes moving once the pack is defeated, when the route changes, or when the leader returns within 25 yards. Only creatures on the bot's sight list count, and paths are rechecked once per second. This check is suspended while the bot or the leader is on a transport.
+While waiting it whispers its master once per pack, at most every 30 seconds: `Pack in the way: <name>. Waiting here - pull it or come back for me.` The check runs once per second and is suspended on a transport.
 
 </details>
 
 ### `AiPlayerbot.DefaultFormation`
-Sets the default idle spatial arrangement party bots form around the leader. Change this if you prefer a tighter or more structured marching order.
-**Default:** `chaos` · **Values:** `near`, `melee`, `queue`, `chaos`, `circle`, `line`, `shield`, `arrow`, `far` (also accepts `default`, `custom`) · **Restart:** needed
+The idle formation bots take around the party leader.
+**Default:** `chaos` · **Values:** `near`, `melee`, `queue`, `chaos`, `circle`, `line`, `shield`, `arrow`, `far` (also `default` = `near`, and `custom`) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Idle party bots arrange themselves in the chosen geometric formation relative to the group leader orientation:
-- `chaos`: loose cluster around the leader with slight randomized offsets to avoid unnatural stacking.
-- `near`: tight following radius within melee interaction range.
-- `melee`: follow formation keyed to the master's target at follow range.
-- `far`: follow formation holding the follow angle at follow range.
-- `circle`: evenly spaced ring surrounding the leader.
-- `line`: horizontal line abreast with the leader.
-- `shield`: role-aware lines with tanks holding forward of the leader and the rest grouped behind.
-- `arrow`: arrowhead formation with role groups staged in depth behind the leader's facing direction.
-- `queue`: single-file column trailing behind the leader.
+- `chaos`: a loose cluster with small random offsets, so bots do not stack.
+- `near`: a tight circle inside melee reach.
+- `melee`: follow positions keyed to the leader's target.
+- `far`: holds the follow angle at a longer range.
+- `circle`: an evenly spaced ring around the leader.
+- `line`: a line abreast of the leader.
+- `shield`: role-aware lines, tanks forward and the rest behind.
+- `arrow`: an arrowhead behind the leader's facing.
+- `queue`: a single-file column.
 
-Bots then stand in their slot and follow the leader normally.
-
-Individual bots can be assigned custom formations during gameplay using the [`.bot formation`](../../play/commands/party-actions.md#bot-formation) command.
+Each bot keeps this formation while it follows; a dungeon or raid can override it with `RaidFollowWedge`.
 
 </details>
 
 ### `AiPlayerbot.RaidFollowWedge`
-Inside a dungeon or raid, followers stand in a 150 degree arc directly behind the group leader instead of around it, and a straggler walks the leader's own path.
+Spreads instance followers behind the leader and makes stragglers walk the leader's path.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Inside a dungeon or raid, while the bot is in a group, the configured formation gives way to a `near` formation spread over a 150 degree wedge behind the leader. No slot is ahead of or beside the leader, so a move row that passes a pack no longer puts a follower in front of the tank. With more than ten followers the wedge uses a second ring three yards further back; tanks and healers stay on the inner ring.
+Inside a dungeon or raid, the chosen formation gives way to a `near` formation spread over a 150-degree arc directly behind the leader, so no slot is ahead of or beside the tank. The follow distance is `AiPlayerbot.RaidFollowDistance` (4 yd).
 
-The follow distance in the wedge is `AiPlayerbot.RaidFollowDistance` (4 yd). A follower more than 20 yards behind the leader, while neither of them is in combat, walks the leader's recorded recent positions instead of the direct route to its slot, so stairs and corners are taken the way the leader took them.
+With more than ten followers the non-tank, non-healer bots use a second ring 3 yards further back; tanks and healers stay on the inner ring.
 
-The open world, and a bot whose player chose a formation with [`.bot formation`](../../play/commands/party-actions.md#bot-formation), keep the configured formation. `0` keeps the configured formation everywhere.
+A follower more than 20 yards behind the leader, with neither in combat, walks the leader's recorded recent positions instead of the direct line to its slot, so stairs and corners are taken the way the leader took them. The open world keeps the configured formation.
 
 </details>
 
 ### `AiPlayerbot.TeleportLandingFall`
-Lands a bot whose near teleport (a summon, Jin'do's Banish) ends in mid-air on the floor under its destination.
+Drops a bot to the floor after a teleport that ends in mid-air.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-A player's client makes it fall to the floor after the server moves it. A bot has no client, so a teleport that ends above the floor left its server position there: Jin'do's Banish (spell 24466) drops a player 12 yd over the Zul'Gurub pit floor, and melee bots hovered there, never walked back into the fight, and dealt no damage.
+A player's client makes the character fall to the floor after the server moves it. A bot has no client, so a teleport that ends above the floor can leave it hovering. A known case is Jin'do's Banish in Zul'Gurub, which drops a character over the pit floor; melee bots then hovered there and never walked back into the fight.
 
-With this on, every near teleport reads the floor under the destination (the navmesh and the map's floor; the higher walkable one wins, and a map-only floor counts only within `AiPlayerbot.JumpHeightLimit`) and starts the jump landing's simulated fall: the bot hovers for about the fall time plus one second, then lands on the floor and plays on. A destination less than a yard above its floor does not fall, so a summon or revive port that lands on the ground is unaffected. It changes every near teleport, so it is off by default.
-
-</details>
-
-### `AiPlayerbot.NonGmFreeSummon`
-Allows non-staff players to use the free instant summon action to teleport bots directly to their location. Enable this on private realms for fast party regrouping.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When enabled, players without GM permissions can execute the in-chat summon action to teleport party bots straight to them.
-
-Without this setting, bots must travel physically, use meeting stones, or rely on innkeeper travel mechanics. This setting leaves `.bot summon <Name>` with its own ownership and state checks.
+With this on, every near teleport looks for the floor under its destination (navigation mesh and map floor); a floor taken from the map alone counts only within `AiPlayerbot.JumpHeightLimit`. The bot then plays the landing fall: it hovers for about the fall time plus a second, lands and carries on. A destination less than a yard above its floor does not fall, so an ordinary summon or revive is unaffected. Because it changes every near teleport, it is off by default.
 
 </details>
+
+## Maintenance and gear
 
 ### `AiPlayerbot.OwnedBotMaintenanceEnabled`
-Enables the comprehensive maintenance command for owned and hired companions. Use this to let players easily replenish reagents and repairs on their bots.
+Enables the `.bot maintenance` command.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When enabled, players can execute `.bot maintenance <Name>` to perform full upkeep on their owned bots or hired companions. Upkeep restocks reagents, potions, food, consumables, bandages and ammunition (including thrown), and fully repairs durability.
+`.bot maintenance <bot>` restocks the bot's class reagents and the cloth bandages for its First Aid skill, tops up its ammunition, repairs all equipped gear and saves the character. Potions, food, thrown weapons and other consumables are not restocked.
 
-When disabled, attempting to run the command informs the player that maintenance is disabled. This command cannot be used on random pool bots.
+With this off the command answers that maintenance is disabled. An owner or a GameMaster may run it on an owned bot; random pool bots are refused.
 
 </details>
 
 ### `AiPlayerbot.OwnedBotAutogearEnabled`
-Enables automatic incremental equipment upgrades for owned bots and hired companions. Enable this to reduce manual inventory management for your alts.
+Enables the `.bot autogear` command.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Allows players to run `.bot autogear <Name> [quality|ilvl]` to equip level-appropriate items directly from candidate pools.
+`.bot autogear <bot> [quality|ilvl]` equips a bot with better items from the same gear pool a new bot is geared from, choosing by its class and spec. It only upgrades: the replaced item goes to the bot's bags, or to its mailbox when the bags are full. An owner gears their own bots; a GameMaster may gear any bot. Pool bots, dead bots and bots in an active dungeon run are refused.
 
-When enabled, the bot selects items fitting its class and spec stat weightings up to the configured item level and quality caps. Off by default; pool bots do not use this command.
+With this off the command answers that owned-bot autogear is disabled. Random pool bots are not geared this way.
 
 </details>
 
 ### `AiPlayerbot.OwnedBotAutogearQualityCap`
-Caps the maximum item quality that can be granted when running the autogear command. Adjust this to prevent bots from generating overly powerful gear.
-**Default:** `2` · **Values:** `0` poor, `1` common, `2` uncommon (green), `3` rare (blue), `4` epic (purple), `5` legendary · **Restart:** needed
+Highest item quality `.bot autogear` may give.
+**Default:** `2` · **Values:** `0` poor, `1` common, `2` uncommon, `3` rare, `4` epic, `5` legendary · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Restricts candidate equipment selected by `.bot autogear` to the specified item quality tier or lower.
-
-Quality keywords supplied in player commands are clamped to this ceiling. The default of `2` restricts autogear to uncommon (green) items.
+A quality named in the command is clamped to this ceiling. The default `2` keeps autogear to uncommon items.
 
 </details>
 
 ### `AiPlayerbot.OwnedBotAutogearIlvlCap`
-Caps the maximum item level of equipment that can be granted when running the autogear command. Set this to match your server progression tier.
-**Default:** `0` · **Values:** `0` (no cap) or maximum item level · **Restart:** needed
+Highest item level `.bot autogear` may give.
+**Default:** `0` (no cap) · **Values:** item level · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Limits candidate equipment selected by `.bot autogear` to items at or below the specified item level.
-
-When set to `0`, no item level cap is enforced and candidate equipment is bounded only by the bot character level and quality cap. Explicit item level arguments in player commands are clamped to this ceiling.
+Limits candidate items to this item level or lower. `0` leaves the character level and the quality cap as the only limits; an item level named in the command is clamped to this ceiling.
 
 </details>
 
 ### `AiPlayerbot.PlayerAutogearForAll`
-Opens `.autogear` — which gears a real player the way a spawned bot gets geared — beyond the GameMaster staff.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+Lets every player gear themselves with `.autogear`.
+**Default:** `0` · **Values:** `0` GMs only, `1` every player on themselves · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-`.autogear` equips a real player with items picked from the same gear pool, scoring and level/quality limits a spawned bot of the same level receives. It only upgrades: replaced items go to the target's bags, or to their own mailbox when the bags are full.
+`.autogear [player name] <spec> [ilvl]` equips a real player from the same gear pool a spawned bot of that level gets, with the same scoring and limits. It only upgrades; replaced items go to the bags or the mailbox.
 
-- `0` (default): only GameMasters can run `.autogear`, on any real online player including themselves.
-- `1`: every player can run `.autogear` on themselves only. Naming another player is refused.
+- `0`: only a GameMaster can run it, on any online player including themselves.
+- `1`: every player can run it, on themselves only.
 
-This flag never changes bot gearing: owned bots keep `.bot autogear`, controlled by [`AiPlayerbot.OwnedBotAutogearEnabled`](#aiplayerbotownedbotautogearenabled). Characters on a Turtle challenge mode (Hardcore, Slow & Steady, ...) are GM-only for `.autogear` whatever this flag is set to.
-
-</details>
-
-### `AiPlayerbot.OwnedBotSummonWhenGroup`
-Automatically teleports an owned bot or hired companion to the leader when accepting a group invitation. Enable this to assemble your team instantly.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When an owned bot or hired companion accepts an invitation into your group while located far away (beyond sight distance on the same map), it queues an async summon to your location. Cross-map joins stay manual.
-
-This rule applies only to owned bots and hired mercenaries, never to random pool bots. Additional conditions (combat, death, and cooldowns) are governed by the companion summon settings below.
-
-</details>
-
-### `AiPlayerbot.OwnedBotSummonAllowInCombat`
-Controls whether group accept summoning can fire while either the leader or the bot is engaged in combat. Enable with caution.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When set to `1`, group accept summons will teleport the bot even if the player or bot is currently in combat.
-
-When set to `0`, active combat blocks the instant teleport upon group join.
-
-</details>
-
-### `AiPlayerbot.OwnedBotSummonAllowMasterDead`
-Controls whether group accept summoning can fire while the group leader is dead.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When set to `1`, group accept summoning teleports the bot even while the leader is dead.
-
-When set to `0`, the leader must be alive for group accept summoning to trigger.
-
-</details>
-
-### `AiPlayerbot.OwnedBotSummonAllowBotDead`
-Controls whether group accept summoning can teleport an invited bot that is currently dead. Pair with revive settings.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-A dead bot is refused without a teleport unless `AiPlayerbot.OwnedBotSummonRevive` also resurrects it first.
-
-</details>
-
-### `AiPlayerbot.OwnedBotSummonRevive`
-Automatically revives a dead bot when it is summoned to the leader upon group invitation acceptance. Useful for quick recovery.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When set to `1`, a dead bot is revived before it is teleported to the group leader.
-
-Requires `AiPlayerbot.OwnedBotSummonAllowBotDead = 1` to be effective.
-
-</details>
-
-### `AiPlayerbot.OwnedBotSummonRepair`
-Automatically repairs bot equipment durability upon arrival from a group accept summon. Prevents broken gear after wipes.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When enabled, all equipped gear on the bot is restored to 100% durability upon arrival.
-
-Repairs occur out of combat unless `AiPlayerbot.OwnedBotSummonAllowInCombat` is also enabled.
+Characters on a challenge mode stay GM-only whatever this says. Bots are never geared by this command; owned bots use `.bot autogear`.
 
 </details>
 
 ### `AiPlayerbot.OwnedBotSummonCooldown`
-Specifies the minimum cooldown in seconds between group accept summons for each bot. Prevents exploit loops.
-**Default:** `300` · **Values:** seconds (`0..3600`; `0` disables cooldown) · **Restart:** needed
+Seconds between two `.bot summon` uses for the same bot.
+**Default:** `300` · **Values:** seconds (`0` to `3600`; `0` no wait) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Enforces a 5-minute delay between group accept teleports per bot.
-
-Repeated uninvite and invite cycles within this window refuse the automatic teleport. This ensures the summon mechanism cannot be abused to gain free in-combat resurrections or repairs.
+`.bot summon <bot>` brings a bot to its master. The caller must be that bot's master (a GameMaster may summon any bot), and after a use the same bot cannot be summoned again for this many seconds, so it cannot be used in a loop.
 
 </details>
+
+## Party loot and quests
 
 ### `AiPlayerbot.RollBadItemsWithPlayer`
-Rolls Need on filler-classed (BAD_EQUIP) equipment anywhere.
+Lets a bot need-roll equipment that is only filler for its slot.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When enabled, bots roll Need on equipment the item scoring classes as filler for their slot, anywhere it drops.
-
-Genuine upgrades are Needed regardless of this flag. Pool bots and alts wait for humans to roll and step down to Greed if any human rolls Need; hires with an active master roll at once, and autonomous alt-bots without a master only Greed or Pass.
-
-</details>
-
-### `AiPlayerbot.AltBots`
-Allows owned alts brought into the world to continue playing autonomously when removed from the player party. Enable for a personalized world.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When enabled (`1`), an owned alt brought in with `.bot add` that leaves the owner party continues playing in the world as an autonomous alt-bot.
-
-It adopts random pool leisure and progression strategies, occupying one pool bot slot. It remains active until dismissed with `.bot remove`, re-invited, or logged into by the player. When disabled (`0`), a kicked alt remains an idle companion.
-
-</details>
-
-### `AiPlayerbot.AltBotsLogoutWithOwner`
-Controls whether active autonomous alt-bots log out when their account owner disconnects from the realm.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When alt-bots are enabled, setting this to `1` causes all active alt-bots belonging to a player to log out automatically when that player logs out.
-
-When set to `0`, alt-bots remain active in the world until manually removed or until the server restarts. Alt-bots do not persist across server restarts.
-
-</details>
-
-### `AiPlayerbot.SummonAtInnkeepersEnabled`
-Enables summoning owned companion bots while the player master is near an innkeeper NPC.
-**Default:** `1` (built in; the key is not in the template — add it to `aiplayerbot.conf` to change it) · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Allows players to summon their owned companion bots when standing within sight distance (`AiPlayerbot.SightDistance`, 60 yd default) of any innkeeper NPC, in addition to standard meeting stone summon locations. The bot (or player) must carry a Hearthstone and its hearthstone cooldown must be ready.
-
-Set to `0` if you want companion bot summoning restricted to meeting stones in range and explicit summon commands.
+Item scoring labels some drops as filler for the bot's spec. With this on, the bot rolls Need on them; with it off, a bot that has a real player master greeds them instead (a bot without a master still needs them). A real upgrade is always a Need roll regardless of this setting.
 
 </details>
 
 ### `AiPlayerbot.SyncQuestForPlayer`
-Completes quests for the real-player master when a companion bot turns them in.
-**Default:** `0` (built in; the key is not in the template — add it to `aiplayerbot.conf` to change it) · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When enabled, whenever a bot interacts with a quest giver and completes a quest, that quest is automatically completed for the real-player master as well if the master is on the quest and eligible.
-
-When disabled (`0`), quests turned in by bots do not automatically complete for the master.
-
-</details>
-
-### `AiPlayerbot.SyncQuestWithPlayer`
-Completes quests for companion bots when the player master turns them in.
+Completes your copy of a quest when your bot turns it in.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When enabled, bots automatically complete quests the moment the player master hands them in, and bots ignore looting quest items.
-
-When disabled (`0`), bots track and collect quest objectives and hand in quests independently.
+When a bot turns in a quest and its master is on the same quest (incomplete or failed), the master's copy is completed too.
 
 </details>
 
-### `AiPlayerbot.BotCheats`
-Convenience and survival cheats active on player-owned companion bots and alts.
-**Default:** `repair,breath` · **Values:** comma-separated cheat flags · **Restart:** needed
+### `AiPlayerbot.SyncQuestWithPlayer`
+Completes a bot's quest when you turn it in.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Configures the cheat mask applied to player-owned bots and alts. Available cheat keywords include:
-
-- `repair`: No durability loss, including resurrection sickness.
-- `breath`: Grants underwater breathing to prevent drowning while navigating water.
-- `item`: Grants unlimited conjured sustenance items and spell reagents.
-- `gold`: Free repairs and vendor purchases.
-- `health`: Rapid health regeneration.
-- `mana` / `power`: Rapid mana/resource regeneration.
-- `cooldown`: Eliminates ability cooldowns.
-- `movespeed`: Greatly increases movement speed.
-- `attackspeed`: Greatly increases attack speed.
-- `taxi`: Unlocks all flight paths.
-- `quest`: Quests complete immediately.
-
-Masterless random pool bots use [`AiPlayerbot.RndBotCheats`](world-population.md#aiplayerbotrndbotcheats) instead. Hired companions are also random-flagged, so they read `RndBotCheats` except for maintenance, autogear, and group-accept summoning, which accept active hires. Autonomous alt-bots also get the `item` cheat.
+When the master has a quest complete and the bot's copy is still incomplete or failed, the bot's copy is completed at its next turn-in. Bots then do not pick up quest items they no longer need.
 
 </details>
+
+## Not in this build
+
+These settings from the Turtle WoW version have no effect in the WoW Forever build:
+
+- **Autonomous alts** (`AltBots`, `AltBotsLogoutWithOwner`): the autonomous-alt service is not part of this build, so these two keys change nothing.
+- **Automatic summon on group invite** (`OwnedBotSummonWhenGroup`, `OwnedBotSummonAllowInCombat`, `OwnedBotSummonAllowMasterDead`, `OwnedBotSummonAllowBotDead`, `OwnedBotSummonRevive`, `OwnedBotSummonRepair`): use `.bot summon <bot>` instead.
+- **Innkeeper summoning** (`SummonAtInnkeepersEnabled`) and the free non-GM instant summon (`NonGmFreeSummon`): `.bot summon` has its own ownership checks.
+- **Cheat flags** (`BotCheats`, `RndBotCheats`): bots play by normal game rules here; none of the cheat keywords is applied.
