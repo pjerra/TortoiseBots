@@ -5,6 +5,7 @@
 
 #include <ctime>
 
+#include "playerbot/GuidPosition.h"
 #include "playerbot/strategy/actions/EmoteAction.h"          // TalkAction::GetRandomEmote
 #include "playerbot/strategy/values/TrainerValues.h"          // TrainerSpellLearnableNow
 
