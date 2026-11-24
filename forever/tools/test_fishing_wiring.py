@@ -138,7 +138,8 @@ class TestFishingWiring(unittest.TestCase):
         if MUTATE:
             host = host.replace("if (!EnsureFishingSpell(bot))", "if (false)")
         # The rank spells are Learned rows, so the skill grant must teach one.
-        self.assertIn("sDB2Manager.GetSkillLineAbilitiesBySkill(SKILL_FISHING)", host)
+        self.assertIn("Player::GetClassicProfessionSkill(ability->SkillLine) != SKILL_FISHING", host)
+        self.assertNotIn("GetSkillLineAbilitiesBySkill(SKILL_FISHING)", host)
         self.assertIn("GetValueForTierIndex(rank - 1)", host)
         self.assertIn("bot->LearnSpell(pick, false)", host)
         self.assertNotIn("kFishingCastSpellId", host)

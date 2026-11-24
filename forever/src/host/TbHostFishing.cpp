@@ -260,12 +260,11 @@ std::vector<FishingRankSpell> const& FishingRankSpells()
     static std::vector<FishingRankSpell> const table = []()
     {
         std::vector<FishingRankSpell> out;
-        std::vector<SkillLineAbilityEntry const*> const* abilities =
-            sDB2Manager.GetSkillLineAbilitiesBySkill(SKILL_FISHING);
-        if (!abilities)
-            return out;
-        for (SkillLineAbilityEntry const* ability : *abilities)
+        // Forever's profession rows sit on child skill lines, so the fishing line is found through its classic parent.
+        for (SkillLineAbilityEntry const* ability : sSkillLineAbilityStore)
         {
+            if (Player::GetClassicProfessionSkill(ability->SkillLine) != SKILL_FISHING)
+                continue;
             SpellInfo const* spell = sSpellMgr->GetSpellInfo(ability->Spell, DIFFICULTY_NONE);
             if (!spell)
                 continue;
@@ -308,7 +307,10 @@ std::uint32_t EnsureFishingSpell(Player* bot)
         return 0;
     std::vector<FishingRankSpell> const& ranks = FishingRankSpells();
     if (ranks.empty())
+    {
+        TC_LOG_INFO("tortoisebots", "[W9] fish rank spell bot={} result=no-rank-spells", bot->GetName());
         return 0;
+    }
     std::uint32_t const skill = bot->GetSkillValue(SKILL_FISHING);
     std::uint32_t pick = ranks.back().spellId;
     for (FishingRankSpell const& rank : ranks)
@@ -324,6 +326,8 @@ std::uint32_t EnsureFishingSpell(Player* bot)
             TC_LOG_INFO("tortoisebots", "[W9] fish rank spell bot={} spell={} skill={}",
                 bot->GetName(), pick, skill);
     }
+    if (!bot->HasSpell(pick))
+        TC_LOG_INFO("tortoisebots", "[W9] fish rank spell bot={} spell={} skill={} result=not-learned", bot->GetName(), pick, skill);
     return bot->HasSpell(pick) ? pick : 0;
 }
 
