@@ -22,6 +22,36 @@ struct QuestTriageViewCompat
 
 inline std::string QuestTitleCompat(Quest const* quest) { return quest->GetTitle(); }
 inline void RemoveQuestFromLogCompat(Player* bot, uint32 questId) { bot->RemoveQuest(questId); }
+
+// The quest relation walk (ForeverCore side: forever/src/compat/TbCompat_Quest.h, over the core's QuestRelationResult).
+// Creatures are keyed by their positive entry, game objects by their negative one, as the relation maps store them.
+template <class Fn>
+inline void ForEachQuestRelationCompat(int32 entry, bool starter, Fn const& fn)
+{
+    if (!entry)
+        return;
+
+    QuestRelationsMapBounds bounds;
+    if (entry > 0)
+        bounds = starter ? sObjectMgr.GetCreatureQuestRelationsMapBounds(uint32(entry))
+                         : sObjectMgr.GetCreatureQuestInvolvedRelationsMapBounds(uint32(entry));
+    else
+        bounds = starter ? sObjectMgr.GetGOQuestRelationsMapBounds(uint32(-entry))
+                         : sObjectMgr.GetGOQuestInvolvedRelationsMapBounds(uint32(-entry));
+
+    for (QuestRelationsMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
+        fn(uint32(itr->second));
+}
+
+// The entries a quest's source item must be used on.
+inline std::vector<int32> QuestRequiredTargetEntriesCompat(uint32 itemId)
+{
+    std::vector<int32> entries;
+    ItemRequiredTargetMapBounds bounds = sObjectMgr.GetItemRequiredTargetMapBounds(itemId);
+    for (ItemRequiredTargetMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
+        entries.push_back(int32(itr->second.m_uiTargetEntry));
+    return entries;
+}
 inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* quest)
 {
     std::vector<std::pair<uint32, uint32>> items;
@@ -117,6 +147,27 @@ inline bool QuestIsAcceptedStatusCompat(QuestStatus status)
 inline bool QuestIsAvailableStatusCompat(QuestStatus status)
 {
     return status == QUEST_STATUS_AVAILABLE || status == QUEST_STATUS_NONE;
+}
+
+// The reward state of a quest (ForeverCore side: forever/src/compat/TbCompat_Quest.h). Both read the log row's
+// `m_rewarded` flag; the indexed access matches the callers' own `getQuestStatusMap()[id]` reads, so a missing row
+// answers "not rewarded" without throwing.
+inline bool QuestEverRewardedCompat(Player* bot, uint32 questId)
+{
+    return bot && bot->getQuestStatusMap()[questId].m_rewarded;
+}
+
+// A rewarded row can stay in the log here (repeatable quests), so the flag decides, not the row's presence.
+inline bool QuestRewardPendingCompat(Player* bot, uint32 questId)
+{
+    return bot && !bot->getQuestStatusMap()[questId].m_rewarded;
+}
+
+// How many quests the log holds: this core fills every one of its MAX_QUEST_LOG_SIZE slots (Player::SatisfyQuestLog,
+// Player.cpp:15462-15466); ForeverCore caps the fill at a world setting.
+inline uint8 QuestLogCapacityCompat()
+{
+    return uint8(MAX_QUEST_LOG_SIZE);
 }
 
 inline bool AcceptQuestDirectCompat(Player* bot, Quest const* quest, WorldObject* giver)

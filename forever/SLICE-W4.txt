@@ -389,7 +389,7 @@ ai/playerbot/strategy/values/MountValues.cpp
 ai/playerbot/strategy/triggers/StuckTriggers.cpp
 ai/playerbot/strategy/actions/UnstuckAction.cpp
 
-# TBF #147 (free-bot rpg, package A): the rpg brain - pick an NPC/object, walk to it, and run the rpg verbs (accept,
+# (free-bot rpg, package A): the rpg brain - pick an NPC/object, walk to it, and run the rpg verbs (accept,
 # turn in, sell, buy, repair, train through the host town seam). The Turtle-only parts (trainer tables, taxi packet
 # fields, duel/social members, gossip menu probes) go through the new TbCompat_Life pair; unported services answer
 # "not there" through forever/src/slice/SliceLinkStubs.cpp (fishing order, downtime window, petitions) and the host
@@ -401,3 +401,7 @@ ai/playerbot/strategy/actions/MoveToRpgTargetAction.cpp
 ai/playerbot/strategy/generic/RpgStrategy.cpp
 ai/playerbot/strategy/values/PossibleRpgTargetsValue.cpp
 ai/playerbot/strategy/triggers/RpgTriggers.cpp
+# TBF #147, package B (quest values): the stock quest values the travel quest rows and the rpg quest verbs read (dialog
+# status, free log slots, need quest objective, need for quest, can use item on). The relation walk and the reward-state
+# answers go through the quest compat pair on both cores.
+ai/playerbot/strategy/values/QuestValues.cpp
