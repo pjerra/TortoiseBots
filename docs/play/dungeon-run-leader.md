@@ -231,7 +231,7 @@ Walk back to the stand after every guarded fight is opt-in with `AiPlayerbot.Dun
 
 - A stale flag gets 20 s grace, then the ceiling runs.
 - An unattackable-only fight is let go, with no ceiling.
-- A pause for the fight ceiling goes on by itself when only such idle nest units keep the party in combat.
+- A pause for the fight ceiling goes on by itself only when every engaged unit cannot be attacked; respawn-nest units are real fights on WoW Forever.
 - Charmed and fake-death units read as cannot-attack.
 - A game-event-gated boss is skipped, not paused.
 - Off-plan-map bots never hold fights, and bots never leave the plan map by follow, flee, or trigger.
