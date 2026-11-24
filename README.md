@@ -3,7 +3,7 @@
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/sagiroth)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/FT2rZcXm3)
 
-# TortoiseBots for WoW Forever
+# TortoiseBots for ForeverCore
 
 The **ForeverCore port** of [TortoiseBots](https://github.com/Sagiroth/TortoiseBots), the native PlayerBots module for
 Tortoise WoW 1.18.1. This repository runs the same bot brain on **ForeverCore**
