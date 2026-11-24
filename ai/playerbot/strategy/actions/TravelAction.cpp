@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include "AcceptQuestAction.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatWL4.h"
 #include "playerbot/TbCompatW3.h"
 
 
@@ -53,23 +54,21 @@ bool TravelAction::Execute(Event& event)
             auto statusIt = statuses.find(questId);
             std::string const anchorKey = "quest objective stall::" + std::to_string(questId);
             bool const inLog = quest && statusIt != statuses.end() &&
-                !statusIt->second.m_rewarded &&
-                statusIt->second.m_status == QUEST_STATUS_INCOMPLETE;
+                QuestStatusIncompleteWL4(statusIt->second);
             // Exploration / event / spell objectives carry no kill or item
             // requirement and complete by other means - exempt: nothing to
             // count, so the verdict could never clear them fairly.
             bool trackable = false;
-            std::array<std::uint32_t, QUEST_OBJECTIVES_COUNT> curKill = {};
-            std::array<std::uint32_t, QUEST_OBJECTIVES_COUNT> curItem = {};
+            std::array<std::uint32_t, 4> curKill = {};
+            std::array<std::uint32_t, 4> curItem = {};
             if (inLog)
             {
-                for (uint32 o = 0; o < QUEST_OBJECTIVES_COUNT; ++o)
+                for (uint32 o = 0; o < QuestObjectiveSlotCountWL4(quest); ++o)
                 {
-                    curKill[o] = statusIt->second.m_creatureOrGOcount[o];
-                    curItem[o] = statusIt->second.m_itemcount[o];
+                    QuestObjectiveCountersWL4(bot, questId, quest, o, curKill[o], curItem[o]);
                     trackable = trackable || ai::QuestObjectiveTrackable(
-                        quest->ReqCreatureOrGOId[o], quest->ReqCreatureOrGOCount[o],
-                        quest->ReqItemId[o], quest->ReqItemCount[o]);
+                        QuestReqCreatureOrGOIdWL4(quest, o), QuestReqCreatureOrGOCountWL4(quest, o),
+                        QuestReqItemIdWL4(quest, o), QuestReqItemCountWL4(quest, o));
                 }
             }
             if (!inLog || !trackable)
@@ -114,8 +113,8 @@ bool TravelAction::Execute(Event& event)
             dynamic_cast<QuestObjectiveTravelDestination*>(target->GetDestination()))
         {
             Quest const* quest = sObjectMgr.GetQuestTemplate(objective->GetQuestId());
-            uint32 const itemId = quest ? quest->ReqItemId[objective->GetObjective()] : 0;
-            uint32 const itemCount = quest ? quest->ReqItemCount[objective->GetObjective()] : 0;
+            uint32 const itemId = quest ? QuestReqItemIdWL4(quest, objective->GetObjective()) : 0;
+            uint32 const itemCount = quest ? QuestReqItemCountWL4(quest, objective->GetObjective()) : 0;
             ItemPrototype const* proto = itemId ? GetItemProtoByIdCompat(itemId) : nullptr;
             Creature* vendor = proto && objective->GetEntry() > 0 ?
                 bot->FindNearestCreature((uint32)objective->GetEntry(), INTERACTION_DISTANCE * 4) : nullptr;

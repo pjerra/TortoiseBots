@@ -19,6 +19,8 @@
 #include "playerbot/policy/rpg/RpgMixerPolicy.h"
 #include "../../policy/gear/VendorTripPolicy.h"
 #include "playerbot/strategy/values/TravelValues.h"
+#include "playerbot/TbCompatWL4.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "playerbot/strategy/values/MaintenanceValues.h"
 #include "playerbot/TravelNode.h"
 #include "playerbot/strategy/values/SharedValueContext.h"
@@ -67,18 +69,7 @@ namespace
             default:
                 break;
         }
-        if (!(info->npc_flags & UNIT_NPC_FLAG_GOSSIP))
-            return false;
-        GossipMenuItemsMapBounds menuItems = sObjectMgr.GetGossipMenuItemsMapBounds(info->gossip_menu_id);
-        if (menuItems.first == menuItems.second)
-            menuItems = sObjectMgr.GetGossipMenuItemsMapBounds(0);
-        for (auto itr = menuItems.first; itr != menuItems.second; ++itr)
-        {
-            GossipMenuItems const& item = itr->second;
-            if (item.option_id == GOSSIP_OPTION_GUILD_BANKER && (item.npc_option_npcflag & info->npc_flags))
-                return true;
-        }
-        return false;
+        return GuildBankerGossipWL4(info);
     }
 
     // Entry lists for the delivery/buy searches, built once: scanning every
@@ -93,22 +84,10 @@ namespace
             for (uint32 entry = 0; entry < sCreatureStorage.GetMaxEntry(); ++entry)
             {
                 CreatureInfo const* info = sCreatureStorage.LookupEntry<CreatureInfo>(entry);
-                if (!info || !(info->npc_flags & UNIT_NPC_FLAG_GOSSIP))
+                if (!info || std::find(found.begin(), found.end(), int32(entry)) != found.end())
                     continue;
-                if (std::find(found.begin(), found.end(), int32(entry)) != found.end())
-                    continue;
-                GossipMenuItemsMapBounds menuItems = sObjectMgr.GetGossipMenuItemsMapBounds(info->gossip_menu_id);
-                if (menuItems.first == menuItems.second)
-                    menuItems = sObjectMgr.GetGossipMenuItemsMapBounds(0);
-                for (auto itr = menuItems.first; itr != menuItems.second; ++itr)
-                {
-                    GossipMenuItems const& item = itr->second;
-                    if (item.option_id == GOSSIP_OPTION_GUILD_BANKER && (item.npc_option_npcflag & info->npc_flags))
-                    {
-                        found.push_back(int32(entry));
-                        break;
-                    }
-                }
+                if (GuildBankerGossipWL4(info))
+                    found.push_back(int32(entry));
             }
             return found;
         }();
@@ -345,8 +324,8 @@ static void WanderOnEmptyPick(PlayerbotAI* ai, Player* bot)
     SET_AI_VALUE2(time_t, "manual time", "empty pick wander at", time(0));
     for (int attempt = 0; attempt < 4; ++attempt)
     {
-        float const angle = rand_norm_f() * 2 * M_PI_F;
-        float const reach = 20.0f + rand_norm_f() * 30.0f;
+        float const angle = RandNormCompat() * 2 * M_PI_F;
+        float const reach = 20.0f + RandNormCompat() * 30.0f;
         WorldPosition spot(bot->GetMapId(), botPos.getX() + cos(angle) * reach, botPos.getY() + sin(angle) * reach, botPos.getZ());
         if (!spot.ClosestCorrectPoint(10.0f, 20.0f, bot->GetInstanceId()) || spot.isInWater())
             continue;
@@ -842,7 +821,7 @@ bool ChooseTravelTargetAction::Execute(Event& event)
             newTarget.getPosition())
         {
             AreaTableEntry const* area = newTarget.getPosition()->GetArea();
-            uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+            uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area)) : 0;
             if (zoneId)
                 TortoiseBots::GuildOrders::CommitAuctionZone(bot->GetGUIDLow(), zoneId);
         }
@@ -1345,7 +1324,7 @@ static bool RouteIsSurvivableUncached(Player* bot, WorldPosition const& start, W
     // cross danger no waypoint sits in. Head leg keeps its original free
     // level pass; the town rule on it is what strands town bots (B1).
     AreaTableEntry const* startArea = start.GetArea();
-    uint32 const startZoneId = startArea ? (AreaZoneIdCompat(startArea) ? AreaZoneIdCompat(startArea) : startArea->Id) : 0;
+    uint32 const startZoneId = startArea ? (AreaZoneIdCompat(startArea) ? AreaZoneIdCompat(startArea) : AreaIdWL4(startArea)) : 0;
     ai::RouteStartGround ground(
         ai::TravelRouteAreaTooHigh(start.GetAreaLevel(), bot->GetLevel()),
         avoidTowns && start.IsGuardedHostileTownFor(bot, ai::TRAVEL_ROUTE_SAMPLE_RADIUS_YD, false));
@@ -1356,7 +1335,7 @@ static bool RouteIsSurvivableUncached(Player* bot, WorldPosition const& start, W
         if (!p)
             continue;
         AreaTableEntry const* nodeArea = p->GetArea();
-        uint32 const nodeZoneId = nodeArea ? (AreaZoneIdCompat(nodeArea) ? AreaZoneIdCompat(nodeArea) : nodeArea->Id) : 0;
+        uint32 const nodeZoneId = nodeArea ? (AreaZoneIdCompat(nodeArea) ? AreaZoneIdCompat(nodeArea) : AreaIdWL4(nodeArea)) : 0;
         bool const exemptLevel = ground.LevelExempt(nodeZoneId, startZoneId);
         int32 const level = p->GetAreaLevel();
         if (!exemptLevel && ai::TravelRouteAreaTooHigh(level, bot->GetLevel()))
@@ -1396,7 +1375,7 @@ static bool RouteIsSurvivableUncached(Player* bot, WorldPosition const& start, W
     if (ok && prevNode)
     {
         AreaTableEntry const* destArea = position->GetArea();
-        uint32 const destZoneId = destArea ? (AreaZoneIdCompat(destArea) ? AreaZoneIdCompat(destArea) : destArea->Id) : 0;
+        uint32 const destZoneId = destArea ? (AreaZoneIdCompat(destArea) ? AreaZoneIdCompat(destArea) : AreaIdWL4(destArea)) : 0;
         bool const tailExemptLevel = ground.LevelExempt(destZoneId, startZoneId);
         bool const tailExemptTown = ground.TownExempt(start.distance(*position));
         if (!RouteLegIsSurvivable(bot, *prevNode->getPosition(), *position, nullptr,
@@ -1661,9 +1640,9 @@ ai::TravelPickOutcome ChooseTravelTargetAction::SetBestTargetSliced(Player* requ
                     }
 
                     AreaTableEntry const* area = position->GetArea();
-                    uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+                    uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area)) : 0;
                     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
-                        (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
+                        (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(AreaIdWL4(area)))))
                     {
                         ai->TellDebug(requester, "Skipping " + destination->GetTitle() + " - custom starting zone", "debug travel");
                         ++rejects["customzone"];
@@ -1934,7 +1913,7 @@ bool ChooseGroupTravelTargetAction::Execute(Event& event)
         }
     }
 
-    std::shuffle(groupPlayers.begin(), groupPlayers.end(), *GetRandomGenerator());
+    ShuffleCompat(groupPlayers.begin(), groupPlayers.end());
 
     PlayerTravelInfo info(bot);
 
@@ -2240,7 +2219,7 @@ bool RequestTravelTargetAction::Execute(Event& event)
         // reason is "capital" (trainers/AH/bank live there). Unknown zones
         // exclude nothing.
         AreaTableEntry const* botArea = WorldPosition(bot).GetArea();
-        uint32 botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : botArea->Id) : 0;
+        uint32 botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : AreaIdWL4(botArea)) : 0;
         outgrownExcludeZone = ZoneMigrationExcludeZone(botZoneId,
             WorldPosition(bot).HasAreaFlag(AREA_FLAG_CAPITAL));
     }
@@ -2472,7 +2451,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             std::string parentName;
             if (logged && logged->parentBotGuidLow &&
                 !PlayerNameByGuidCompat(
-                    ObjectGuid(HIGHGUID_PLAYER, logged->parentBotGuidLow), parentName))
+                    PlayerGuidCompat(logged->parentBotGuidLow), parentName))
                 parentName.clear();
             sPlayerbotAIConfig.logEvent(ai, "GuildOrderRequest", travelName, leg,
                 logged ? TortoiseBots::GuildOrders::OrderParentToken(
@@ -2603,7 +2582,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
     else if (travelName == "guild order" && AI_VALUE(bool, "has guild order delivery"))
     {
         Team team = bot->GetTeam();
-        uint32 botFaction = bot->GetFactionTemplateId();
+        uint32 botFaction = GetFactionTemplateIdCompat(bot);
         bool mailLeg = TortoiseBots::GuildOrders::DeliveryMailsAfterNoBanker(
             uint32(AI_VALUE2(int32, "manual int", "guild order no banker")));
         // A guild with no bank tabs has nowhere to deposit: skip the banker
@@ -2650,9 +2629,9 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                 if (position->IsEnemyHomeZoneFor(team))
                                     return true;
                                 FactionTemplateEntry const* bankerFaction =
-                                    sObjectMgr.GetFactionTemplateEntry(dest->GetCreatureInfo()->faction);
+                                    GetFactionTemplateEntryCompat(dest->GetCreatureInfo()->faction);
                                 FactionTemplateEntry const* botTemplate =
-                                    sObjectMgr.GetFactionTemplateEntry(botFaction);
+                                    GetFactionTemplateEntryCompat(botFaction);
                                 if (bankerFaction && botTemplate &&
                                     PlayerbotAI::GetFactionReaction(botTemplate, bankerFaction) < REP_NEUTRAL)
                                     return true;
@@ -2667,7 +2646,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
     else if (travelName == "guild order" && HasGuildOrderBankSupply(bot->GetGUIDLow()))
     {
         Team team = bot->GetTeam();
-        uint32 botFaction = bot->GetFactionTemplateId();
+        uint32 botFaction = GetFactionTemplateIdCompat(bot);
         *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async((sPlayerbotAIConfig.asyncTravelPartitions ? std::launch::async : std::launch::deferred), [partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center, team, botFaction, entries = GuildBankerEntries()]()
             {
                 PartitionedTravelList list = sTravelMgr.GetPartitions(center, partitions, travelInfo,
@@ -2685,8 +2664,8 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                 position->IsEnemyHomeZoneFor(team))
                                 return true;
                             FactionTemplateEntry const* bankerFaction =
-                                sObjectMgr.GetFactionTemplateEntry(dest->GetCreatureInfo()->faction);
-                            FactionTemplateEntry const* botTemplate = sObjectMgr.GetFactionTemplateEntry(botFaction);
+                                GetFactionTemplateEntryCompat(dest->GetCreatureInfo()->faction);
+                            FactionTemplateEntry const* botTemplate = GetFactionTemplateEntryCompat(botFaction);
                             return bankerFaction && botTemplate &&
                                 PlayerbotAI::GetFactionReaction(botTemplate, bankerFaction) < REP_NEUTRAL;
                         }), travelPoints.end());
@@ -2875,7 +2854,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                 if (source.flag != TortoiseBots::GuildOrders::SourceFish)
                     continue;
                 uint32_t fishZone = uint32_t(-(source.entry + ai::kFishingZoneEntryBias));
-                AreaTableEntry const* fishArea = AreaEntry::GetById(uint32_t(-(source.entry + ai::kFishingZoneEntryBias)));
+                AreaTableEntry const* fishArea = AreaDbEntryWL4(uint32_t(-(source.entry + ai::kFishingZoneEntryBias)));
                 if (fishArea && AreaZoneIdCompat(fishArea))
                     fishZone = AreaZoneIdCompat(fishArea);
                 if (fishZone != farmZoneId)
@@ -2999,7 +2978,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                     if (!pos)
                                         return true;
                                     AreaTableEntry const* area = pos->GetArea();
-                                    uint32_t zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+                                    uint32_t zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area)) : 0;
                                     return zoneId != farmZoneId;
                                 }), points.end());
                         }
@@ -3014,7 +2993,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
         else if (ahSupply)
         {
             Team team = bot->GetTeam();
-            uint32 botFaction = bot->GetFactionTemplateId();
+            uint32 botFaction = GetFactionTemplateIdCompat(bot);
             uint32 botGuidLow = bot->GetGUIDLow();
             *AI_VALUE(FutureDestinations*, "future travel destinations") = std::async((sPlayerbotAIConfig.asyncTravelPartitions ? std::launch::async : std::launch::deferred), [partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center, team, botFaction, botGuidLow, entries = AuctioneerEntries()]()
                 {
@@ -3045,7 +3024,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                 if (committed)
                                 {
                                     AreaTableEntry const* area = position->GetArea();
-                                    uint32_t zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+                                    uint32_t zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area)) : 0;
                                     if (zoneId != committed)
                                         return true;
                                     return false;
@@ -3053,9 +3032,9 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                                 if (position->IsEnemyHomeZoneFor(team))
                                     return true;
                                 FactionTemplateEntry const* auctioneerFaction =
-                                    sObjectMgr.GetFactionTemplateEntry(dest->GetCreatureInfo()->faction);
+                                    GetFactionTemplateEntryCompat(dest->GetCreatureInfo()->faction);
                                 FactionTemplateEntry const* botTemplate =
-                                    sObjectMgr.GetFactionTemplateEntry(botFaction);
+                                    GetFactionTemplateEntryCompat(botFaction);
                                 if (auctioneerFaction && botTemplate &&
                                     PlayerbotAI::GetFactionReaction(botTemplate, auctioneerFaction) < REP_NEUTRAL)
                                     return true;
@@ -3066,12 +3045,12 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                         return list;
                     // The faction house comes first: a neutral (goblin) house
                     // is only offered when no friendly one is in the search.
-                    FactionTemplateEntry const* botTemplate = sObjectMgr.GetFactionTemplateEntry(botFaction);
+                    FactionTemplateEntry const* botTemplate = GetFactionTemplateEntryCompat(botFaction);
                     auto neutralHouse = [botTemplate](TravelPoint const& point)
                     {
                         EntryTravelDestination* dest = (EntryTravelDestination*)std::get<TravelDestination*>(point);
                         FactionTemplateEntry const* auctioneerFaction =
-                            sObjectMgr.GetFactionTemplateEntry(dest->GetCreatureInfo()->faction);
+                            GetFactionTemplateEntryCompat(dest->GetCreatureInfo()->faction);
                         return auctioneerFaction && botTemplate &&
                             PlayerbotAI::GetFactionReaction(botTemplate, auctioneerFaction) < REP_FRIENDLY;
                     };
@@ -3161,7 +3140,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
         for (uint32 entry = 0; entry < sGOStorage.GetMaxEntry(); ++entry)
         {
             GameObjectInfo const* goInfo = sObjectMgr.GetGameObjectInfo(entry);
-            if (goInfo && goInfo->type == GAMEOBJECT_TYPE_SPELL_FOCUS && goInfo->spellFocus.focusId == focusId)
+            if (goInfo && SpellFocusIdWL4(goInfo) == focusId)
                 focusEntries.push_back(-(int32)entry);
         }
 
@@ -3387,7 +3366,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
         for (auto& [questId, questStatus] : questMap)
         {
             uint32 flag = 0;
-            if (questStatus.m_rewarded)
+            if (QuestStatusRewardedWL4(questStatus))
                 continue;
 
             Quest const* questTemplate = sObjectMgr.GetQuestTemplate(questId);
@@ -3493,11 +3472,11 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
         uint32 finished = 0, active = 0;
         for (auto& [questId, questStatus] : bot->getQuestStatusMap())
         {
-            if (questStatus.m_rewarded)
+            if (QuestStatusRewardedWL4(questStatus))
                 continue;
 
             active++;
-            if (questStatus.m_status == QUEST_STATUS_COMPLETE)
+            if (QuestStatusCompleteWL4(questStatus))
                 finished++;
         }
 
@@ -3586,7 +3565,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
         }
 
         for (auto& [questId, questStatus] : bot->getQuestStatusMap())
-            if (!questStatus.m_rewarded && questStatus.m_status == QUEST_STATUS_COMPLETE)
+            if (QuestStatusCompleteWL4(questStatus))
                 readyToHandIn++;
 
         sLog.outBasic("QUESTPROBE: %s has %u finished and unhanded-in, %u quests in the log; offered %u taker, %u objective, %u giver destinations",

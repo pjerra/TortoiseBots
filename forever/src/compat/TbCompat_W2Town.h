@@ -31,7 +31,6 @@ struct TrainerSpell
     uint32 reqLevel = 0;
 };
 
-#define MAIL_STATIONERY_AUCTION MAIL_STATIONERY_NORMAL
 
 inline Creature* VendorIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 {

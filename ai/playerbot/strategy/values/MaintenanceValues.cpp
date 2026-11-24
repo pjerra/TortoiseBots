@@ -17,6 +17,8 @@
 #include "playerbot/policy/gear/VendorWeaponUpgradePolicy.h"
 #include "playerbot/playerbot.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatWL4.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "SharedValueContext.h"
 #include "playerbot/WorldPosition.h"
 
@@ -254,7 +256,7 @@ bool ai::HasRewardableFinishedQuest(PlayerbotAI* ai)
 
     for (auto& [questId, status] : bot->getQuestStatusMap())
     {
-        if (status.m_rewarded || status.m_status != QUEST_STATUS_COMPLETE)
+        if (!QuestStatusCompleteWL4(status))
             continue;
 
         Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
@@ -344,15 +346,15 @@ GuidPosition ai::NearbyServiceTarget(PlayerbotAI* ai)
         // (indoor NPC, unreachable ledge): the NPC is skipped for all verbs
         // until the park expires instead of failing at tick speed with no
         // verb park to trip.
-        if (parks.Parked(guidP.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::Approach), time(0)))
+        if (parks.Parked(GuidKeyCompat(guidP), NearbyServiceRankOf(NearbyServiceKind::Approach), time(0)))
             continue;
 
         if (needsTurnIn && isQuestGiver && AI_VALUE2(bool, "can turn in quest npc", guidP.GetEntry()) &&
-            !parks.Parked(guidP.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::TurnIn), time(0)))
+            !parks.Parked(GuidKeyCompat(guidP), NearbyServiceRankOf(NearbyServiceKind::TurnIn), time(0)))
             kind = NearbyServiceKind::TurnIn;
         else if (needsAccept && isQuestGiver && AI_VALUE2(bool, "can accept quest npc", guidP.GetEntry()) &&
             AcceptAllQuestsAction::OffersAcceptableQuest(ai, bot, guidP.GetWorldObject(bot->GetInstanceId())) &&
-            !parks.Parked(guidP.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::Accept), time(0)))
+            !parks.Parked(GuidKeyCompat(guidP), NearbyServiceRankOf(NearbyServiceKind::Accept), time(0)))
             kind = NearbyServiceKind::Accept;
         else if (needsVendor && guidP.HasNpcFlag(UNIT_NPC_FLAG_VENDOR))
         {
@@ -361,13 +363,13 @@ GuidPosition ai::NearbyServiceTarget(PlayerbotAI* ai)
             // verbs on the same NPC (turn-in/accept above) are untouched.
             Creature* vendorCreature = serviceCreature;
             if (vendorCreature && SellAction::HasVendorStock(vendorCreature) &&
-                !parks.Parked(guidP.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::Vendor), time(0)))
+                !parks.Parked(GuidKeyCompat(guidP), NearbyServiceRankOf(NearbyServiceKind::Vendor), time(0)))
                 kind = NearbyServiceKind::Vendor;
         }
         else if (needsTrainer && guidP.HasNpcFlag(UNIT_NPC_FLAG_TRAINER) &&
             RpgTrainTrigger::IsTrainerOf(guidP.GetCreatureTemplate(), bot) &&
             RpgTrainTrigger::TeachesAffordableSpell(ai, guidP, bot) &&
-            !parks.Parked(guidP.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::Trainer), time(0)))
+            !parks.Parked(GuidKeyCompat(guidP), NearbyServiceRankOf(NearbyServiceKind::Trainer), time(0)))
             kind = NearbyServiceKind::Trainer;
 
         nearby.push_back(guidP);
@@ -705,7 +707,7 @@ bool ShouldAHSellValue::Calculate()
 
     for (auto& item : items)
     {
-        if (!item->GetUInt32Value(ITEM_FIELD_DURABILITY)) //Fully broken or no durability: skipped, as before.
+        if (!ItemDurabilityCompat(item)) //Fully broken or no durability: skipped, as before.
             continue;
 
         //What repairing it would cost now: the damage only, 0 when nothing is
@@ -743,16 +745,16 @@ bool CanGetMailValue::Calculate() {
         return false;
 
     time_t cur_time = time(0);
-    MasterPlayer* master = bot->GetSession() ? bot->GetSession()->GetMasterPlayer() : nullptr;
+    MasterPlayer* master = MailOwnerCompat(bot);
     if (!master)
         return false;
 
-    for (PlayerMails::iterator itr = master->GetMailBegin(); itr != master->GetMailEnd(); ++itr)
+    for (auto itr = MailBeginCompat(master); itr != MailEndCompat(master); ++itr)
     {
         if ((*itr)->state == MAIL_STATE_DELETED || cur_time < (*itr)->deliver_time)
             continue;
 
-        if ((*itr)->has_items || (*itr)->money)
+        if (MailHasItemsCompat(*itr) || (*itr)->money)
         {
             return true;
         }
@@ -764,7 +766,7 @@ bool CanGetMailValue::Calculate() {
 bool ShouldGetMailValue::Calculate() {
     time_t cur_time = time(0);
 
-    MasterPlayer* master = bot->GetSession() ? bot->GetSession()->GetMasterPlayer() : nullptr;
+    MasterPlayer* master = MailOwnerCompat(bot);
     if (!master)
         return false;
 
@@ -782,20 +784,20 @@ bool ShouldGetMailValue::Calculate() {
     if (TortoiseBots::GuildOrders::RelistClaimPending(relistRows))
         return true;
 
-    for (PlayerMails::iterator itr = master->GetMailBegin(); itr != master->GetMailEnd(); ++itr)
+    for (auto itr = MailBeginCompat(master); itr != MailEndCompat(master); ++itr)
     {
         if ((*itr)->state == MAIL_STATE_DELETED || cur_time < (*itr)->deliver_time)
             continue;
 
         int32 waitingInBoxTime = cur_time - (*itr)->deliver_time;
 
-        if (hasBuyOrder && (*itr)->has_items && (*itr)->stationery == MAIL_STATIONERY_AUCTION)
+        if (hasBuyOrder && MailHasItemsCompat(*itr) && (*itr)->stationery == MAIL_STATIONERY_AUCTION)
         {
             return true;
         }
 
         if (hasRelistLedger && (*itr)->stationery == MAIL_STATIONERY_AUCTION &&
-            ((*itr)->has_items || (*itr)->money))
+            (MailHasItemsCompat(*itr) || (*itr)->money))
         {
             return true;
         }
@@ -805,7 +807,7 @@ bool ShouldGetMailValue::Calculate() {
             return false;
         }
 
-        if ((*itr)->has_items && waitingInBoxTime > HOUR * 4) //Items are allowed to sit in the mail for max 4 hours.
+        if (MailHasItemsCompat(*itr) && waitingInBoxTime > HOUR * 4) //Items are allowed to sit in the mail for max 4 hours.
         {
             return true;
         }

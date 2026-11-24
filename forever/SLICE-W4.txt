@@ -52,8 +52,6 @@ ai/playerbot/strategy/generic/ClassStrategy.cpp
 ai/playerbot/strategy/generic/CombatStrategy.cpp
 ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
-ai/playerbot/strategy/generic/GuardStrategy.cpp
-ai/playerbot/strategy/generic/NoAoeStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp
 ai/playerbot/strategy/triggers/BotStateTriggers.cpp
@@ -93,7 +91,6 @@ ai/playerbot/strategy/values/LastSpellCastValue.cpp
 ai/playerbot/strategy/values/NearestAdsValue.cpp
 ai/playerbot/strategy/values/NearestFriendlyPlayersValue.cpp
 ai/playerbot/strategy/values/NearestGameObjects.cpp
-ai/playerbot/strategy/values/NearestNonBotPlayersValue.cpp
 ai/playerbot/strategy/values/NearestNpcsValue.cpp
 ai/playerbot/strategy/values/NearestUnitsValue.cpp
 ai/playerbot/strategy/values/NewPlayerNearbyValue.cpp
@@ -313,8 +310,19 @@ ai/playerbot/TravelMgr.cpp
 ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/strategy/actions/AhAction.cpp
 ai/playerbot/TravelNode.cpp
+# Round W4-A3 (the chooser, the walker and the travel action): the strategy rows that drive them, the
+# vendor/maintenance values they read, and the stock-worth check in MaintenanceValues.cpp.
+ai/playerbot/strategy/generic/TravelStrategy.cpp
+ai/playerbot/strategy/actions/ChooseTravelTargetAction.cpp
+ai/playerbot/strategy/actions/MoveToTravelTargetAction.cpp
+ai/playerbot/strategy/actions/TravelAction.cpp
+ai/playerbot/strategy/values/MaintenanceValues.cpp
 runtime/BotNameService.cpp
 ai/playerbot/strategy/actions/ResetAiAction.cpp
+
+# Guard and collision files the W1 list no longer carries (the slice still builds them).
+ai/playerbot/strategy/generic/GuardStrategy.cpp
+ai/playerbot/strategy/values/NearestNonBotPlayersValue.cpp
 
 # Reactions: flee, kite, runaway, avoid aoe, racials, mark rti, focus, spread distance, target values
 ai/playerbot/strategy/generic/FleeStrategy.cpp

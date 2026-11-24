@@ -9,6 +9,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <list>
 #include <memory>
@@ -1164,4 +1165,68 @@ inline bool TravelWorldTableMissingCompat(char const* table)
 inline bool TravelPrecomputeAreaLevelsCompat() { return false; }
 inline void TravelBeginTransactionCompat() { WorldDatabase.BeginTransaction(); }
 inline void TravelCommitTransactionCompat() { WorldDatabase.CommitTransaction(); }
+
+// ===============================================================================================================
+// ROUND A3 (the travel chooser, walker and action): the original expressions of the helpers in TbCompat_WL4.h.
+// ===============================================================================================================
+
+inline bool GuildBankerGossipWL4(CreatureInfo const* info)
+{
+    if (!info || !(info->npc_flags & UNIT_NPC_FLAG_GOSSIP))
+        return false;
+    auto menuItems = sObjectMgr.GetGossipMenuItemsMapBounds(info->gossip_menu_id);
+    if (menuItems.first == menuItems.second)
+        menuItems = sObjectMgr.GetGossipMenuItemsMapBounds(0);
+    for (auto itr = menuItems.first; itr != menuItems.second; ++itr)
+        if (itr->second.option_id == GOSSIP_OPTION_GUILD_BANKER && (itr->second.npc_option_npcflag & info->npc_flags))
+            return true;
+    return false;
+}
+
+inline uint32 SpellFocusIdWL4(GameObjectInfo const* info)
+{
+    return info && info->type == GAMEOBJECT_TYPE_SPELL_FOCUS ? info->spellFocus.focusId : 0;
+}
+
+inline bool QuestStatusRewardedWL4(QuestStatusData const& status) { return status.m_rewarded; }
+inline bool QuestStatusIncompleteWL4(QuestStatusData const& status) { return !status.m_rewarded && status.m_status == QUEST_STATUS_INCOMPLETE; }
+inline bool QuestStatusCompleteWL4(QuestStatusData const& status) { return !status.m_rewarded && status.m_status == QUEST_STATUS_COMPLETE; }
+
+inline uint32 QuestObjectiveSlotCountWL4(Quest const* /*quest*/) { return QUEST_OBJECTIVES_COUNT; }
+inline int32 QuestReqCreatureOrGOIdWL4(Quest const* quest, uint32 index) { return quest && index < QUEST_OBJECTIVES_COUNT ? quest->ReqCreatureOrGOId[index] : 0; }
+inline uint32 QuestReqCreatureOrGOCountWL4(Quest const* quest, uint32 index) { return quest && index < QUEST_OBJECTIVES_COUNT ? quest->ReqCreatureOrGOCount[index] : 0; }
+inline void QuestObjectiveCountersWL4(Player* bot, uint32 questId, Quest const* /*quest*/, uint32 index, uint32& kill, uint32& item)
+{
+    kill = 0;
+    item = 0;
+    if (!bot || index >= QUEST_OBJECTIVES_COUNT)
+        return;
+    auto const found = bot->getQuestStatusMap().find(questId);
+    if (found == bot->getQuestStatusMap().end())
+        return;
+    kill = found->second.m_creatureOrGOcount[index];
+    item = found->second.m_itemcount[index];
+}
+
+inline TaxiNodesEntry const* TaxiNodeLookupWL4(uint32 nodeId) { return sObjectMgr.GetTaxiNodeEntry(nodeId); }
+inline char const* TaxiNodeNameWL4(TaxiNodesEntry const* node) { return node ? node->name : ""; }
+
+inline char const* MoveSplineOriginWL4(Movement::MoveSpline const& spline) { return spline.GetMovementOrigin(); }
+inline int32 MoveSplineTimeElapsedWL4(Movement::MoveSpline const& spline) { return spline.timeElapsed(); }
+
+inline void LiftSetTransportWL4(Player* bot, ObjectGuid guid, uint32 now)
+{
+    if (!bot)
+        return;
+    bot->m_movementInfo.SetTransportData(guid, 0.0f, 0.0f, 0.0f, bot->GetOrientation(), now);
+    bot->m_movementInfo.AddMovementFlag(MOVEFLAG_ONTRANSPORT);
+}
+inline ObjectGuid LiftTransportGuidWL4(Player* bot) { return bot ? bot->m_movementInfo.GetTransportGuid() : ObjectGuid(); }
+inline void LiftClearTransportWL4(Player* bot)
+{
+    if (!bot)
+        return;
+    bot->m_movementInfo.ClearTransportData();
+    bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+}
 }
