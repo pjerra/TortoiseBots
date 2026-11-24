@@ -123,7 +123,7 @@ nodes:
   - id: play-dungeon-reference
     path: play/dungeon-reference.md
     category: play
-    summary: Boss kill orders, creature IDs, pooled rares, and event triggers for 18 5-player dungeons in Turtle WoW.
+    summary: The dungeon plans the run leader uses on WoW Forever, with each plan's map and boss order, and the dungeons that have no plan yet.
   - id: play-dungeon-run-leader
     path: play/dungeon-run-leader.md
     category: play
@@ -131,7 +131,7 @@ nodes:
   - id: play-boss-tactics
     path: play/boss-tactics.md
     category: play
-    summary: The per-boss tactics table (ai_boss_tactic), the stand sets (ai_boss_stand) and the opt-in boss tactics strategy that applies them.
+    summary: Boss tactics are not on WoW Forever yet; bots fight with their ordinary class and raid AI.
   - id: play-refusal-rows
     path: play/refusal-rows.md
     category: play
