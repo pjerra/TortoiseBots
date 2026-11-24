@@ -9,6 +9,7 @@
 #include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostGuildOrderQueues.h"
 #include "host/TbHostGuildOrderEnchant.h"
+#include "host/TbHostFishing.h"
 #include "host/TbHostProfession.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
@@ -246,6 +247,7 @@ void BotMgr::LoadConfig()
     _guildFormingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildForming", false);
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
     _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
+    _fishingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Fishing", true);
     _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
@@ -1646,10 +1648,12 @@ void BotMgr::Update(uint32 diff)
         // and the brain is gone by then.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
+        tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
             (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me) ||
              tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
-             tbhost::guild_orders::HasActiveEnchantErrand(me));
+             tbhost::guild_orders::HasActiveEnchantErrand(me) ||
+             tbhost::fishing::HasActiveIdleErrand(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif

@@ -55,6 +55,7 @@ Feature const kFeatures[] = {
     { "auto-food", "TortoiseBots.AutoFood", true, 1, "Auto food" },
     { "class-quests", "TortoiseBots.ClassQuestSpells", true, 0, "Class quest spells" },
     { "world-gather", "TortoiseBots.World.Professions", true, 0, "Free-bot gathering" },
+    { "world-fishing", "TortoiseBots.World.Fishing", true, 1, "Free-bot fishing" },
     { "world-auction", "TortoiseBots.World.Auction", true, 0, "Bot auction house" },
     { "group-quests", "TortoiseBots.World.GroupQuests", true, 1, "Group quests" },
     { "capital-errands", "TortoiseBots.World.CapitalErrands", true, 1, "Capital errands" },
