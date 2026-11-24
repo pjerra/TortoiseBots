@@ -38,7 +38,7 @@ The pullback waits are `AiPlayerbot.PullBackMaxReturnTime` (15 seconds for the t
 - Bots use their own class control: Polymorph, Sap, Shackle Undead, Banish, Hibernate, Freezing Trap and fear effects. A bot keeps damage off a unit it is holding.
 - `cc clear` clears the bot's mark. Assigning a mark from the party (`cc <mark>`) is **not on WoW Forever yet**; a GameMaster can set one with `.tb cc <bot> <mark> <unit>`.
 - Area spells are not the main danger they are in the Turtle build: the engine checks its area targets, but it does not have the full Turtle CC-protection rules. Call your AoE off with the `aoe` behaviour toggle when a pull depends on a sheep or a sap.
-- Pets follow the same orders. A hunter's pet and a warlock's demon attack what their owner attacks; a seduced or polymorphed unit is left alone by the pet.
+- Pets follow their owner's target. A hunter's pet and a warlock's demon are part of the fight.
 
 ## Interrupts and dispels
 
@@ -66,7 +66,7 @@ Bots step out of harmful ground effects and area auras when `AiPlayerbot.HazardE
 - Bots in your group take part in the group's loot rolls. They roll for gear they can use; a bot does not Need an item just to fill a bag.
 - `AiPlayerbot.RollBadItemsWithPlayer = 0`: bots do not roll Need on items that only fill an empty gear slot while a player is in the group.
 - A GameMaster can inspect a bot's bags, equipment and recent rolls with `.tb gear`, `.tb equip` and `.tb lootlog`.
-- Mages and warlocks can conjure food, water and healthstones. Ask with `.bot service <bot>`; the addon's trade verb moves items between you and a bot.
+- Mages and warlocks can conjure food, water and healthstones. `.bot service <bot>` reports what a bot knows; `.bot service <bot> conjure <food|water|healthstone>` orders it. The addon's trade verb moves items between you and a bot.
 
 ## The run leader (GameMaster) {#run-leader}
 
