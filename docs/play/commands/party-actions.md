@@ -57,6 +57,7 @@ The party and actions panels send `action <intent>` to the server over the addon
 | `end pull` | Aborts the running pull. |
 | `come` / `hold` / `comestay` | Walks the bots to your spot and sets them to stay. |
 | `follow` / `stay` | Formation follow, or stay in place. |
+| `free` | Releases stay/follow so the bot acts on its own. |
 | `focus skull` | Marks your target (or the existing Skull) and orders focused damage. |
 | `cc clear [bot]` | Clears a bot's crowd-control mark. |
 | `release` | Releases dead bots' spirits. |
@@ -128,7 +129,7 @@ A GameMaster with a standing binding gives the party-wide versions through `.tb 
 .tb cmd state [bot]
 ```
 
-`loot`, `open` and `gossip` walk the bot to the object and act through the bot's own interaction rules. `use` is parsed but refused: the item-use path is not ported. `lootmethod` sets the party's method on the lead bot's group. `state` reads each bot's current task.
+`loot`, `open`, `use` (on a game object) and `gossip` walk the bot to the target and act through the bot's own interaction rules. Using an item (`.tb cmd use <itemId>` or `item:<id>`) is refused as `unsupported`. `lootmethod` sets the party's method on the lead bot's group. `state` reads each bot's current task.
 
 ## Strategies
 
@@ -142,10 +143,8 @@ Changes the bot's combat (`co`) or non-combat (`nc`) strategy set; `reset` resto
 
 ## Other Order Verbs
 
-`.tb order <bot|party [leader]> <verb>` gives the same engine actions to one bot or a bot party without a commander binding: `follow`, `stay`, `come`, `attack`, `pull`, `endpull`, `hold`, `assist`, `release`, `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `aoe`, `autocc`, `sap`, `loot`, `corpserun`, `co`/`nc`, and upkeep orders such as `repair`, `sell`, `train` and `rest`. See [Commander Commands](commander.md#single-bot-orders).
+`.tb order <bot|party [leader]> <verb>` gives the same engine actions to one bot or a bot party without a commander binding: `follow`, `stay`, `come`, `attack`, `pull`, `pullback`, `focus`, `endpull`, `hold`, `assist`, `release`, `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `aoe`, `autocc`, `sap`, `loot`, `corpserun`, `co`/`nc`, and upkeep orders such as `repair`, `sell`, `train` and `rest`. See [Commander Commands](commander.md#single-bot-orders).
 
 ## Not on WoW Forever Yet
 
-These Turtle actions are absent here: `.bot action ...`; the other single-bot chat commands (`.bot guard`, `.bot free`, `.bot ready`, `.bot interrupt`, `.bot pullback`, `.bot formation`, `.bot strategy`, `.bot loot`, `.bot repair`, `.bot sell`, `.bot rest`, `.bot downtime`, `.bot use`); per-bot focus marks; the `free` movement order; ready checks; trade from an order; the `raid ...` intents; auto-CC and Sap from an addon action; and the `use-object` button. Some remain reachable in another form: crowd control through `.tb cc` / `.tb cmd cc`, toggles through `.tb cmd aoe|autocc|sap` and `.bot behavior`, and object use through `.tb cmd open`.
-
-**Not on WoW Forever yet.**
+These Turtle actions are absent here: `.bot action ...`; the other single-bot chat commands (`.bot guard`, `.bot free`, `.bot ready`, `.bot interrupt`, `.bot pullback`, `.bot formation`, `.bot strategy`, `.bot loot`, `.bot repair`, `.bot sell`, `.bot rest`, `.bot downtime`, `.bot use`); per-bot focus marks; ready checks; trade from an order; the `raid ...` intents; auto-CC and Sap from an addon action; and the `use-object` button. Some remain reachable in another form: crowd control through `.tb cc` / `.tb cmd cc`, toggles through `.tb cmd aoe|autocc|sap` and `.bot behavior`, and object use through `.tb cmd open`.
