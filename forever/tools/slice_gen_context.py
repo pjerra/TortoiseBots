@@ -197,6 +197,17 @@ W6_KEYS = {
     "trigger": "equipment audit, item push result",
     "value": "",
 }
+# Two more keys the compiled strategies fire stay out for a proved reason, not by oversight.
+# `auto complete quest` (AutoCompleteQuestAction.cpp): its completing list holds only the placeholder quest 0, so it can act only
+# through the `quest` cheat, and no bot can hold that cheat here (CheatAction::GetCheatMask is the slice stub that answers 0; the
+# per-bot SetCheat lives in the uncompiled CheatAction.cpp). The quest objective credits it calls (the flat ReqItemId/
+# ReqCreatureOrGOId arrays, CastedCreatureOrGO, KilledMonster(CreatureInfo*)) are not ForeverCore APIs either; the debug quest
+# command's Forever stub says the same. A creator registered for it would do nothing on this build.
+# `check mail` (CheckMailAction.cpp): its guild branch takes mail straight into the bags with no mailbox, but every compiled mail
+# take and send goes through the core's session handlers, which require an interactable mailbox (WorldSession::CanOpenMailBox,
+# MailHandler.cpp:34). It would also take the disenchant and lockbox service mail the host chains own (TbHostGuildOrderDisenchant's
+# IsDisenchantServiceMail, TbHostThievery's IsLockboxServiceMail) and delete returned mail behind the core's back. Mail reading and
+# delivery stay with `mail` at a mailbox (W2) and the rpg/travel mail rows.
 # W2 (D): vendor, repair, trainer, mail read (actions + budget values).
 W2_KEYS = {
     "strategy": "",
