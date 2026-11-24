@@ -9,8 +9,9 @@ non-combat kit and to a free bot's kit. The pins:
   * every key stays in the generator and the generated SliceAiObjectContext.cpp registers it with the full build's own
     creator; slice_registry_check.py (a) is empty and none of the keys is left in (b);
   * the strategy is in a commanded bot's non-combat kit and in the free kit (the free kit test pins the array too);
-  * only the greeting row of the strategy is live: the other rows name actions and triggers the slice leaves out, which the
-    engine skips, so the bot greets and does not start emoting on its own;
+  * only the rows that need no packet are live: the greeting row and (TBF #209 round 3) the periodic emote and the mount
+    animation (their pins are in test_w209d_emote_wiring.py). `talk` and the two `receive * emote` rows name triggers no
+    Forever code feeds, so the engine skips them, and a bot that a real player owns stays quiet;
   * the three config keys ship with the code's defaults: EnableGreet on, GreetCooldown 600 s, RandomBotGreet off (TB
     parity), and the shipped file equals the code fallbacks;
   * the guards that make the behaviour safe stay in the sources: EnableGreet gates the strategy row, GreetAction's own
@@ -100,14 +101,17 @@ class Registered(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout[-2000:] + proc.stderr)
         self.assertIn("(a) slice keys that are not in the full build, or map elsewhere: 0", proc.stdout)
 
-    def test_only_the_greeting_row_of_the_strategy_is_live(self):
+    def test_the_live_rows_of_the_strategy(self):
         registered = chk.slice_registry()
         self.assertIn("new player nearby", registered["trigger"])
         self.assertIn("new player nearby", registered["value"])
-        # The strategy's other rows name legacy actions and triggers this slice does not compile; the engine skips them
-        # (forever/src/slice/SliceMissingKeyGuard.h), so the bot waves and does not start emoting or talking on its own.
-        for kind, key in (("action", "emote"), ("action", "talk"), ("action", "mount anim"),
-                          ("trigger", "seldom"), ("trigger", "receive text emote"), ("trigger", "receive emote")):
+        # The greeting row, and the two rows that need no packet (the periodic emote and the mount animation). The rest
+        # name triggers nothing on Forever feeds (no legacy packet handler table, no emote poll), so the engine skips
+        # those rows; a bot with a real master also keeps the strategy's own quiet gate on the ambient rows.
+        for kind, key in (("action", "greet"), ("action", "emote"), ("action", "mount anim")):
+            self.assertIn(key, registered[kind], "%s '%s' must stay registered" % (kind, key))
+        for kind, key in (("action", "talk"), ("trigger", "seldom"),
+                          ("trigger", "receive text emote"), ("trigger", "receive emote")):
             self.assertNotIn(key, registered[kind], "%s '%s' must stay unregistered" % (kind, key))
 
 

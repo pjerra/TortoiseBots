@@ -474,16 +474,30 @@ GUILD_KEYS = {
     "trigger": "speak",
     "value": "",
 }
-# TBF #158 (social): greeting. The `emote` strategy's only live row is `new player nearby` -> `greet`; its other rows name
-# the `emote`, `talk` and `mount anim` actions and the `seldom`, `receive text emote` and `receive emote` triggers, which the
-# slice does not register, so the engine skips them (the bot does less, never crashes). `already seen players` is the
-# encounter memory GreetAction reads and writes. GreetAction.cpp and EmoteStrategy.cpp are on the build list
-# (forever/SLICE-W4.txt).
+# TBF #158 (social): greeting. `new player nearby` -> `greet`; the strategy's own emote and mount-animation rows are the
+# separate EMOTE_KEYS group below. `already seen players` is the encounter memory GreetAction reads and writes.
+# GreetAction.cpp and EmoteStrategy.cpp are on the build list (forever/SLICE-W4.txt).
 SOCIAL_KEYS = {
     "strategy": "emote",
     "action": "greet",
     "trigger": "new player nearby",
     "value": "already seen players",
+}
+# TBF #209 round 3 (emote): the two rows of the emote strategy that need no packet. A masterless bot's `random` row plays
+# one emote at a real player within AiPlayerbot.TooCloseDistance (EmoteAction::GetTarget skips bots, so an audience of bots
+# means no emote) and `last emote` keeps TB's 5-25 second cooldown between them; a `random` row plays the mount-special
+# animation of a mounted, still bot. A commanded bot keeps TB's quiet gate (it gets neither the emote nor the talk row).
+# Left out on purpose: `seldom` -> `talk` (idle chatter) and
+# `receive text emote` / `receive emote` -> `emote`. The two receive triggers exist in the full build, but the Forever
+# slice registers no legacy packet handler table (RegisterPacketHandlersCompat) and polls only the three loot and quest
+# events (PollPacketEventCompat), so no emote packet ever reaches a trigger and the rows could not fire. `talk target` is
+# the book the compiled TalkAction writes; registered so that action never reads a missing ObjectGuid, even though no row
+# creates it.
+EMOTE_KEYS = {
+    "strategy": "",
+    "action": "emote, mount anim",
+    "trigger": "",
+    "value": "last emote, talk target",
 }
 # Duels: TB's duel strategy (strategy/generic/DuelStrategy.cpp, strategy/generic/DuelStrategy.h): the bot takes
 # its duel opponent as the target (`attack duel opponent` reads `duel target`, registered since slice 1) and the class kit
@@ -517,7 +531,7 @@ BG2_KEYS = {
     "trigger": "",
     "value": "enemy flag carrier, team flag carrier",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, EMOTE_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
