@@ -73,6 +73,7 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { re
 bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "onyxia"); }
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "state"); }
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "threat"); }
+bool HandleSchool(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "school"); }
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "learn"); }
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "equip"); }
 bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "removeitem"); }

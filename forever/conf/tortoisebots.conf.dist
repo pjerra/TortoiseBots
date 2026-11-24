@@ -28,6 +28,29 @@ TortoiseBots.Spike.FollowDistance = 3
 TortoiseBots.ClassQuestSpells = 0
 
 #
+#    TortoiseBots.SpellSchool.Enable
+#        Description: Casters cast a school the target takes instead of one it is immune to, and a school it takes much more
+#                     from than their main one (the Death Talon frost vulnerability, a frost-immune slime). Only the five caster
+#                     kits (fire/frost/arcane mage, the three warlock specs, shadow priest, balance druid, elemental shaman);
+#                     healers and melee never switch. 0 = no bot switches and no spell name is resolved at startup.
+#                     `.tb school <bot>` reports what the switch sees without casting anything.
+#        Default:     0
+#
+
+TortoiseBots.SpellSchool.Enable = 0
+
+#
+#    TortoiseBots.SpellSchool.VulnerableMinPct
+#        Description: The extra damage a fallback school must take before a caster leaves its main school, measured in
+#                     percentage points above the main school's taken percent: with the main school at 100, 10 means the
+#                     fallback must take at least 110. A target immune to the main school switches whatever this value is.
+#                     0 to 1000.
+#        Default:     10
+#
+
+TortoiseBots.SpellSchool.VulnerableMinPct = 10
+
+#
 #    TortoiseBots.Slice.EngineByDefault
 #        Description: A bot that logs in runs on the real bot engine (PlayerbotAI) instead of the spike's follow/assist.
 #                     A bot that logs in without a master has nothing to follow, so the engine runs it as a free bot

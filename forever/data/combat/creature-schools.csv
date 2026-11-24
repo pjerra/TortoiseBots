@@ -1,0 +1,15 @@
+# Creature schools (issue #48): the crowd the spell-school switch needs a statement about, one row per creature entry.
+#
+# Ships header-only. A row is added only after checking the creature has NO school bit in its CreatureImmunitiesId row and NO
+# aura at the core pin (scripted damage hooks, so the core's own reads answer nothing and the row is the only source):
+#
+# entry:       creature_template.entry.
+# name:        the creature's name, for a human reading the file (never matched against anything).
+# immune_mask: schools the creature is immune to, bits 1 << school (0 = no extra immunity).
+# vuln_mask:   schools it takes extra damage from, the same bits; the switch counts +50 percent for each, and only where the
+#              core shows no damage-taken aura for that school.
+# source:      where the statement comes from (the script hook or the capture that proves it). Never empty.
+#
+# Owner: the data collaborator (Waterys). Generated into forever/src/host/data/TbSchoolData.gen.h by
+# forever/tools/gen_data_tables.py; edit this file, never the header.
+entry,name,immune_mask,vuln_mask,source

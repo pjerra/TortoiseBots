@@ -16,6 +16,7 @@
 #include "host/chat/TbChatIn.h"
 #include "host/TbCc.h"
 #include "host/TbThrown.h"
+#include "host/TbSchool.h"
 #include "host/TbHybrid.h"
 #include "host/TbTactics.h"
 #include "host/run/TbRunHooks.h"
@@ -44,6 +45,7 @@
 #include "compat/TbCompat_P.h"
 #include "compat/TbCompat_V.h"
 #include "compat/TbCompat_W6.h"
+#include "playerbot/AiFactory.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/AiObjectContext.h"
@@ -534,6 +536,50 @@ bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
     Rec end("threat");
     end.N("mobs", mobs.size()).N("bots", who.bots.size()).P("target", LabelParts(who.label));
+    reply.End(end);
+    return true;
+}
+
+// ---- `.tb school <bot|party [leader]> [#token]` (#48: what the school switch sees) ----
+
+bool HandleSchool(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "school"))
+        return false;
+    bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party";
+    size_t pos = 0;
+    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows, false, false);
+    if (!who.ok())
+        return Fail(handler, args, "school", who.code, who.detail);
+    if (pos < args.w.size())
+        return Fail(handler, args, "school", "unexpected-argument", args.w[pos]);
+
+    Reply reply(handler, args, "school");
+    reply.Begin();
+    for (Player* bot : who.bots)
+    {
+        // The unit the bot is fighting, else the one it has selected: read only.
+        Unit* target = bot->GetVictim();
+        if (!target)
+            target = bot->GetSelectedUnit();
+        school::Reading const reading = school::Read(target);
+        school::SpecSchools const spec = school::SchoolsOf(bot, AiFactory::GetPlayerSpecTab(bot));
+        std::string taken;
+        for (int schoolIndex = 0; schoolIndex < ai::kSchoolCount; ++schoolIndex)
+            taken += (schoolIndex ? "," : "") + std::to_string(int(reading.state.takenPct[schoolIndex]));
+        Rec rec("school");
+        rec.S("bot", bot->GetName())
+            .N("tgt", target ? target->GetEntry() : 0)
+            .N("immune", reading.state.immuneMask)
+            .S("taken", taken)
+            .S("main", ai::SchoolWord(spec.mainSchool))
+            .S("pick", ai::SchoolWord(school::PickFor(spec, target)))
+            .S("src", reading.coreReading ? "core" : (reading.dataRow ? "data" : "none"));
+        reply.Line(rec);
+    }
+    Rec end("school");
+    end.N("bots", who.bots.size()).B("on", school::Enabled()).N("gain", school::MinGainPct()).P("target", LabelParts(who.label));
     reply.End(end);
     return true;
 }

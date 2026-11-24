@@ -1154,3 +1154,33 @@ TortoiseBots: LFG fill: released Mtank (player left)
 `.bot lfg` is the same service for the caller's own character: `TortoiseBots: lfg: queued dps for Stratholme (39); need
 tank, healer, dps, dps`, `TortoiseBots: lfg: waiting for Stratholme (39) as dps; need ...; filled ...`,
 `TortoiseBots: lfg: left; released 2 bot(s)`, and a refusal as `TortoiseBots: lfg: refused <code>: <text>`.
+
+## Spell-school switch read-out (#48 round 1)
+
+### `.tb school <bot|party [leader]> [#token]`
+READ ONLY: what the school switch sees of one bot and its current target (the unit it is fighting, else the one it selected).
+The switch itself is round 2; this round only answers the question, so a live test can prove the reads before anything casts.
+`school-begin`, one `school` line per bot, `school-end`.
+
+| Key | Meaning |
+|---|---|
+| `bot` | the bot's name |
+| `tgt` | the entry of the target the reads are about, `0` when the bot has none |
+| `immune` | the schools the target is immune to, bits `1 << school` (sum of the template row, the core's own immunity read and the data row) |
+| `taken` | the damage the target takes from each school as a percent, seven numbers in school order `normal,holy,fire,nature,frost,shadow,arcane` (100 = plain damage; the Death Talon frost vulnerability reads above 100 on `frost`) |
+| `main` | the main school of the bot's class and spec (the first row of `school-nukes.csv`), or `-` for a spec with no rows (every healer and melee spec) |
+| `pick` | the school the switch would cast instead, or `-` to stay (also `-` while the switch is off) |
+| `src` | where the statement came from: `core` (the template, an aura immunity or a damage-taken aura), `data` (`creature-schools.csv` is the only source) or `none` |
+
+End line: `school-end count=<lines> records=<records> bots=<n> on=yes|no gain=<percent> target=<label> #token`.
+
+```
+school-begin #s1
+school bot=Flivmage tgt=14887 immune=0 taken=100,100,100,100,150,100,100 main=frost pick=- src=core #s1
+school-end count=1 records=1 bots=1 on=yes gain=10 target=Flivmage #s1
+```
+
+Config keys (`forever/conf/tortoisebots.conf.dist`): `TortoiseBots.SpellSchool.Enable` (default `0`; off = no bot ever
+switches, and no spell name is looked up) and `TortoiseBots.SpellSchool.VulnerableMinPct` (default `10`; how many percentage
+points above the main school's taken percent a fallback school must take before a caster leaves its main school; `0` to
+`1000`).

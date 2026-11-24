@@ -88,6 +88,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbSpellDelayPure.h"
 #include "host/TbAutoTrain.h"
+#include "host/TbSchool.h"
 #include "host/TbAutoSkillSpells.h"
 #include "host/TbClassQuestSpells.h"
 #include "host/TbTalents.h"
@@ -241,11 +242,14 @@ public:
         TortoiseBots::autotools::LoadConfig();     // auto-grant missing profession tools to pool/free bots, on by default
         TortoiseBots::autohunterpet::LoadConfig(); // starter pet on level 10 / login for hunter bots without a pet
         TortoiseBots::autofood::LoadConfig();
+        TortoiseBots::school::LoadConfig();        // #48: the spell-school switch and the gain it needs
         // A reload that turns the switch on builds the index at once (the stores are loaded by then); one that turns it off drops it.
+        // BuildIndex reads the switch, so the load above must stay above this block.
         if (reload)
         {
             tbhost::autotrain::BuildIndex();
             TortoiseBots::questspells::BuildIndex();
+            TortoiseBots::school::BuildIndex();
         }
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
@@ -334,6 +338,8 @@ public:
         // store into a table that is never rebuilt.
         tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
+        // The spell-school tables (#48): the names resolve in the spell mirror, which is ready just above.
+        TortoiseBots::school::BuildIndex();
         // The class quests' spells, once, from the loaded quest store; a quest reload rebuilds it.
         tbhost::autotrain::LoadConfig();
         tbhost::autotrain::BuildIndex();
@@ -668,6 +674,7 @@ public:
             { "onyxia", TortoiseBots::onyxia::HandleCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "state",  TortoiseBots::h3::HandleState,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "threat", TortoiseBots::h3::HandleThreat, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "school", TortoiseBots::h3::HandleSchool, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // #48: the school switch's read-out (host/TbSchool.h)
             { "learn",  TortoiseBots::h3::HandleLearn,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "equip",  TortoiseBots::h3::HandleEquip,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "itemscan", TortoiseBots::h3::HandleItemScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },

@@ -1,0 +1,37 @@
+# Spell-school nukes of the caster specs (issue #48): the damage spell a spec casts of each school it can switch to.
+#
+# class,spec: the class (`mage`, `warlock`, `priest`, `druid`, `shaman`) and the kit spec name of its talent tab
+#             (forever/src/slice/SliceAiFactory.cpp AddDefaultCombatStrategies: mage arcane|fire|frost, warlock
+#             affliction|demonology|destruction, priest shadow, druid balance, shaman elemental). A spec with no rows
+#             (every healer and melee spec) never switches.
+# school:     the core's SpellEntry::School by name (normal, holy, fire, nature, frost, shadow, arcane).
+# spell_name: resolved in the spell mirror at OnWorldInitialized; a name the store lacks, or whose school differs from this
+#             column, is logged and skipped (nothing is guessed from the name).
+# order:      0 is the spec's main school; the fallbacks follow in increasing school order (the pure policy breaks a tie on
+#             the lower school index, and forever/tools/test_gen_data_tables.py pins that the file agrees).
+#
+# Owner: the data collaborator (Waterys). Generated into forever/src/host/data/TbSchoolData.gen.h by
+# forever/tools/gen_data_tables.py; edit this file, never the header.
+class,spec,school,spell_name,order
+mage,fire,fire,Fireball,0
+mage,fire,frost,Frostbolt,1
+mage,fire,arcane,Arcane Missiles,2
+mage,frost,frost,Frostbolt,0
+mage,frost,fire,Fireball,1
+mage,frost,arcane,Arcane Missiles,2
+mage,arcane,arcane,Arcane Missiles,0
+mage,arcane,fire,Fireball,1
+mage,arcane,frost,Frostbolt,2
+warlock,affliction,shadow,Shadow Bolt,0
+warlock,affliction,fire,Searing Pain,1
+warlock,demonology,shadow,Shadow Bolt,0
+warlock,demonology,fire,Searing Pain,1
+warlock,destruction,shadow,Shadow Bolt,0
+warlock,destruction,fire,Searing Pain,1
+priest,shadow,shadow,Mind Blast,0
+priest,shadow,holy,Smite,1
+druid,balance,nature,Wrath,0
+druid,balance,arcane,Starfire,1
+shaman,elemental,nature,Lightning Bolt,0
+shaman,elemental,fire,Flame Shock,1
+shaman,elemental,frost,Frost Shock,2

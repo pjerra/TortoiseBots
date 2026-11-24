@@ -37,6 +37,7 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args);      /
 bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb state <bot|party [leader]> [#token]
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args);     // .tb threat <bot|party [leader]> [#token]
+bool HandleSchool(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb school <bot|party [leader]> [#token]
 bool HandleLearn(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb learn <bot> <spell id>... [#token]
 bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail args);      // .tb equip <bot> <item id> [replace] [#token]
 bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail args);  // .tb removeitem [<character>] <item id> [count] [#token]
