@@ -13,9 +13,9 @@ on:
           - 'custom (specify custom version below)'
         default: 'patch (bug fixes, tidy up, small tweaks: 1.0.X)'
       custom_version:
-        description: 'Custom version (used if custom selected, e.g. 1.0.0)'
+        description: 'Custom version (when filled in, used instead of the bump, e.g. 1.2.0; the first release is 1.0.0)'
         required: false
-        default: '1.0.0'
+        default: ''
 
 permissions:
   contents: write
@@ -29,15 +29,11 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     if: github.actor == 'Sagiroth' || github.actor == 'sagiroth'
-    environment: release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Deploy key (release environment, main only): the main ruleset
-          # lets it push the changelog commit and tags; GITHUB_TOKEN cannot.
-          ssh-key: ${{ secrets.CHANGELOG_DEPLOY_KEY }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -75,27 +71,14 @@ jobs:
           except Exception:
               pass
 
-          if not latest_semver and os.path.exists("VERSION"):
-              try:
-                  with open("VERSION", "r") as f:
-                      parsed = parse_semver(f.read().strip())
-                      if parsed:
-                          latest_semver = parsed
-              except Exception:
-                  pass
-
-          if bump.startswith("custom") or not latest_semver:
-              if custom_ver and parse_semver(custom_ver):
-                  target_ver = custom_ver
-              elif not latest_semver:
-                  target_ver = custom_ver if custom_ver else "1.0.0"
-              else:
-                  target_ver = f"{latest_semver[0]}.{latest_semver[1]}.{latest_semver[2]}"
+          if custom_ver and parse_semver(custom_ver):
+              target_ver = custom_ver
+          elif not latest_semver:
+              # VERSION still carries the TortoiseBots number; the port starts at 1.0.0.
+              target_ver = "1.0.0"
           else:
               maj, min_, pat = latest_semver
-              if bump.startswith("patch"):
-                  target_ver = f"{maj}.{min_}.{pat + 1}"
-              elif bump.startswith("minor"):
+              if bump.startswith("minor"):
                   target_ver = f"{maj}.{min_ + 1}.0"
               elif bump.startswith("major"):
                   target_ver = f"{maj + 1}.0.0"
@@ -119,13 +102,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          OPENCODE_ENDPOINT: ${{ secrets.OPENCODE_ENDPOINT }}
-          OPENCODE_MODEL: ${{ secrets.OPENCODE_MODEL }}
+          OPENCODE_ENDPOINT: ${{ vars.OPENCODE_ENDPOINT || secrets.OPENCODE_ENDPOINT }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL || secrets.OPENCODE_MODEL }}
+          OPENCODE_REASONING_EFFORT: ${{ vars.OPENCODE_REASONING_EFFORT || secrets.OPENCODE_REASONING_EFFORT }}
         run: |
           python3 tools/generate_changelog.py \
             --write \
             --out-notes /tmp/release_notes.md \
-            --out-delta /tmp/discord_notes.md \
             --tag "${{ steps.version.outputs.release_tag }}" \
             --date "${{ steps.version.outputs.release_tag }} (${{ steps.version.outputs.release_date }})"
 
@@ -154,13 +137,13 @@ jobs:
           if gh release view "${{ steps.version.outputs.release_tag }}" --json tagName >/dev/null 2>&1; then
             echo "Release ${{ steps.version.outputs.release_tag }} already exists. Updating release notes..."
             gh release edit "${{ steps.version.outputs.release_tag }}" \
-              --title "TortoiseBots ${{ steps.version.outputs.release_tag }}" \
+              --title "TortoiseBotsForever ${{ steps.version.outputs.release_tag }}" \
               "${NOTES_ARGS[@]}" \
               --latest
           else
             echo "Creating new release ${{ steps.version.outputs.release_tag }}..."
             gh release create "${{ steps.version.outputs.release_tag }}" \
-              --title "TortoiseBots ${{ steps.version.outputs.release_tag }}" \
+              --title "TortoiseBotsForever ${{ steps.version.outputs.release_tag }}" \
               "${NOTES_ARGS[@]}" \
               --target main \
               --latest
@@ -186,29 +169,3 @@ jobs:
             tortoise-observability-windows-amd64.exe \
             tortoise-observability-sha256.txt \
             --clobber
-
-      - name: Post Full Changelog to Discord
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          # The full list of this release's changes goes to the changelog
-          # thread (the short announcement below goes to the release thread).
-          python3 tools/post_discord_changelog.py \
-            --notes /tmp/discord_notes.md \
-            --title "TortoiseBots ${{ steps.version.outputs.release_tag }}" \
-            --tag "${{ steps.version.outputs.release_tag }}" \
-            --thread-id "${{ vars.DISCORD_CHANGELOG_THREAD_ID || secrets.DISCORD_CHANGELOG_THREAD_ID || '1559276000293158953' }}" \
-            --username "TortoiseBots Releases"
-
-      - name: Post Release Announcement to Discord
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          python3 tools/post_discord_changelog.py \
-            --notes /tmp/discord_notes.md \
-            --title "TortoiseBots ${{ steps.version.outputs.release_tag }}" \
-            --tag "${{ steps.version.outputs.release_tag }}" \
-            --thread-id "${{ vars.DISCORD_RELEASE_THREAD_ID || secrets.DISCORD_RELEASE_THREAD_ID || '1560007927828586586' }}" \
-            --username "TortoiseBots Releases" \
-            --changelog-thread-id "${{ vars.DISCORD_CHANGELOG_THREAD_ID || secrets.DISCORD_CHANGELOG_THREAD_ID || '1559276000293158953' }}" \
-            --short

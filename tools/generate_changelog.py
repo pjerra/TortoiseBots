@@ -2,7 +2,7 @@
 """
 tools/generate_changelog.py
 
-Automated changelog generator for TortoiseBots.
+Automated changelog generator for TortoiseBotsForever.
 Pulls merged PRs from GitHub since the last tag or CHANGELOG entry,
 uses an OpenCode / OpenAI-compatible model (e.g. DeepSeek) to summarize them
 into human-readable gamer-friendly notes, and optionally updates CHANGELOG.md
@@ -139,7 +139,7 @@ def generate_summary_with_ai(prs, api_key, base_url, model):
     pr_text = "\n\n".join(pr_summaries)
 
     system_prompt = (
-        "You write release notes for TortoiseBots, an optional bot module for Tortoise WoW 1.18.1 "
+        "You write release notes for TortoiseBotsForever, an optional bot module for ForeverCore servers (WoW Forever) "
         "(AI companions and a living world of bots). Most readers are players, not programmers: "
         "they want to know what they will notice in game.\n"
         "Rules:\n"
@@ -153,7 +153,7 @@ def generate_summary_with_ai(prs, api_key, base_url, model):
         "put the most noticeable gameplay changes first.\n"
         "4. Put changes players never see (CI, build, docs, licensing, tests, code cleanup) under one final "
         "'Behind the scenes' header, at most one short bullet per topic, and combine related pull requests into one bullet.\n"
-        "5. End every bullet with its pull request link(s) as markdown, like [#123](https://github.com/Sagiroth/TortoiseBots/pull/123).\n"
+        "5. End every bullet with its pull request link(s) as markdown, like [#123](https://github.com/TortoiseBots/TortoiseBotsForever/pull/123).\n"
         "6. When a pull request body lists several changes (one line per pull request number, e.g. '- #456 ...'), "
         "cover every listed change and link the listed pull request number (not the daily merge PR); rule 4 may combine "
         "behind-the-scenes items, but no listed number may be left out.\n"
@@ -170,6 +170,9 @@ def generate_summary_with_ai(prs, api_key, base_url, model):
         ],
         "temperature": 0.3
     }
+    effort = os.environ.get("OPENCODE_REASONING_EFFORT", "").strip()
+    if effort:
+        payload["reasoning_effort"] = effort
 
     if base_url.endswith("/chat/completions"):
         url = base_url
@@ -232,7 +235,7 @@ def update_or_prepend_changelog(date_str, summary_text):
         else:
             new_content = content.rstrip() + "\n\n" + header
     else:
-        new_content = f"# Changelog\n\nAll notable changes to TortoiseBots are documented here.\n\n## {date_str}\n\n{summary_text}\n"
+        new_content = f"# Changelog\n\nAll notable changes to TortoiseBotsForever are documented here.\n\n## {date_str}\n\n{summary_text}\n"
 
     with open(CHANGELOG_PATH, "w", encoding="utf-8") as f:
         f.write(new_content.strip() + "\n")
@@ -446,7 +449,7 @@ def main():
         with open(os.environ["GITHUB_OUTPUT"], "a") as gh_out:
             gh_out.write("has_changes=true\n")
             gh_out.write(f"release_tag={release_tag}\n")
-            gh_out.write(f"release_title=TortoiseBots ({args.date})\n")
+            gh_out.write(f"release_title=TortoiseBotsForever ({args.date})\n")
             gh_out.write(f"release_exists={'true' if exists else 'false'}\n")
 
 
