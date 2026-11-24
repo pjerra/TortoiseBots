@@ -1,4 +1,4 @@
-name: Generate Changelog & Release
+name: Release
 
 on:
   workflow_dispatch:

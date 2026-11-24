@@ -244,13 +244,11 @@ use a fake SOAP server (`internal/control/*_test.go`); never a real one.
 No host Go toolchain is assumed: `docker run --rm -v "$PWD/tools/observability:/src" -w /src golang:1.22-alpine sh -c 'go vet ./... && go test ./...'`. Live check: the server logs `Observability telemetry active`, and `/metrics` (default port 8095) shows `mangos_server_online 1` and a rising `tortoisebots_snapshots_total`.
 
 Operators without Go use the prebuilt binaries instead of building: every
-daily release (`vYYYY-MM-DD`) carries
+release carries
 `tortoise-observability-linux-amd64` and
-`tortoise-observability-windows-amd64.exe`, built by
-`.github/workflows/dashboard-binaries.yml` (`go vet` + `go test` +
-`CGO_ENABLED=0` static builds; also triggered by emitter wire changes).
-Per-merge tags are plain git tags, not Releases, so binaries attach only to
-the daily release (the workflow waits for it). The
+`tortoise-observability-windows-amd64.exe`, built by the Release workflow
+(`.github/workflows/generate-changelog.yml`: `go vet` + `go test` +
+`CGO_ENABLED=0` static builds). The
 one-command setup (`run-dashboard.sh` / `run-dashboard.ps1`) downloads the
 binary, wires DB env from `mangosd.conf`, enables telemetry in
 `aiplayerbot.conf`, and starts the daemon — see the operator guide above.
