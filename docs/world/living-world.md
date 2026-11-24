@@ -33,7 +33,7 @@ A free bot runs a small kit: grind, travel, food, loot, roll, its class kit, buf
 
 ```mermaid
 flowchart TD
-    Login["Login where it logged out"] --> Pick["Pick a leisure task:<br/>quest, grind, camp, explore"]
+    Login["Login where it logged out"] --> Pick["Pick a leisure task:<br/>quest, grind, inn stay, explore"]
     Pick --> Travel["Walk to the destination"]
     Travel --> Work["Fight, loot, complete quest objectives"]
     Work --> Rest["Eat and drink to the stop line"]
@@ -127,7 +127,7 @@ Bots keep what they find and equip what is better:
 
 - **Loot upgrades:** with [`AiPlayerbot.AutoEquipUpgradeLoot`](../server/settings/world-population.md#aiplayerbotautoequipupgradeloot) on (it is), a bot equips a drop that beats the item in the slot. [`AiPlayerbot.EquipUpgradeThreshold`](../server/settings/world-population.md#aiplayerbotequipupgradethreshold) (1.1) is the margin an item must clear.
 - **Pool gear top-up:** [`AiPlayerbot.PoolGearTopUpOnLevel`](../server/settings/world-population.md#aiplayerbotpoolgeartopuponlevel) is off; when on, a pool bot fills empty slots and replaces clearly outdated grey and white gear once per level, never green or better.
-- **Autogear for your own bots:** `.bot autogear` (and the addon's autogear action) builds a level-appropriate outfit for an owned or hired bot from [`AiPlayerbot.RandomGearMaxLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxlevel) and [`AiPlayerbot.RandomGearMaxItemLevelAboveLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxitemlevelabovelevel), skipping the item ids in [`AiPlayerbot.RandomGearBlacklist`](../server/settings/world-population.md#aiplayerbotrandomgearblacklist).
+- **Autogear for your own bots:** `.bot autogear <bot>` re-gears one of your own bots; pool bots are refused and keep progressing on their own. The command is off until [`AiPlayerbot.OwnedBotAutogearEnabled`](../server/settings/world-population.md#aiplayerbotownedbotautogearnabled) is turned on, and it stays within the quality and item-level caps. The player-facing `.autogear` builds a level-appropriate outfit within [`AiPlayerbot.RandomGearMaxLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxlevel) and [`AiPlayerbot.RandomGearMaxItemLevelAboveLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxitemlevelabovelevel), skipping the item ids in [`AiPlayerbot.RandomGearBlacklist`](../server/settings/world-population.md#aiplayerbotrandomgearblacklist).
 - **No starting kit:** the Turtle build's hand-made starting bags, ammo pouches, thrown weapons and seed gear are not part of this build. Bots start with what the core gives a new character.
 
 <a id="mount-rules"></a>

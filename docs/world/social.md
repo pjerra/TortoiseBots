@@ -59,7 +59,7 @@ Bots take part in guild life when `TortoiseBots.World.Guilds` is on (it is on by
 <a id="trading-with-pool-bots"></a>
 ## Trading with a bot you own
 
-A bot never answers a trade request on its own. The bot's owner drives the window through the TortoiseBotsForeverManager addon's trade action: select the bot (or name it) and the bot opens the window, puts up nothing by itself, and accepts when you accept.
+A bot never answers a trade request on its own. The bot's owner drives the window through the TortoiseBotsForeverManager addon's trade action: select the bot (or name it) and the bot opens the window and accepts when you accept.
 
 - **Who may trade:** the bot's owner (any GameMaster too). A stranger's trade request to a pool bot gets no answer and never completes; there is no setting that opens pool bots to strangers.
 - **Your own party bots:** the same rule. Alts and hired companions trade with their owner, and with nobody else.

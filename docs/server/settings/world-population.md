@@ -173,6 +173,20 @@ It fills empty slots and replaces clearly outdated grey and white items; green o
 Lets a claimed guild bot at level 60 equip its own upgrades.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
+### `AiPlayerbot.OwnedBotAutogearEnabled`
+Allows `.bot autogear <bot>` for bots you own.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+A pool bot is always refused and keeps its own gear progression.
+
+### `AiPlayerbot.OwnedBotAutogearQualityCap`
+Highest item quality `.bot autogear` may put on an owned bot.
+**Default:** `2` · **Values:** quality 0 to 5 (a larger value is read as 5) · **Restart:** needed
+
+### `AiPlayerbot.OwnedBotAutogearIlvlCap`
+Item-level ceiling for `.bot autogear` on an owned bot.
+**Default:** `0` · **Values:** item level, `0` = no cap beyond the quality cap · **Restart:** needed
+
 ### `AiPlayerbot.RandomGearMaxLevel`
 Item-level ceiling for generated gear.
 **Default:** `100` · **Values:** item level · **Restart:** needed
