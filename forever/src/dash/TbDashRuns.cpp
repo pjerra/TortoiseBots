@@ -183,6 +183,9 @@ P::RunView ViewOf(run::RunRec const& rec, int64 nowUnix, uint32 nowMs)
                 auto const it = rec.bossDead.find(step.entry);
                 b.read = it != rec.bossDead.end();
                 b.dead = b.read && it->second;
+                auto const killed = rec.bossKilledMs.find(step.entry);
+                if (killed != rec.bossKilledMs.end())
+                    b.killedAtS = int64_t(killed->second / 1000u);
                 v.bosses.push_back(std::move(b));
             }
     }
@@ -197,6 +200,24 @@ P::RunView ViewOf(run::RunRec const& rec, int64 nowUnix, uint32 nowMs)
     v.startedMs = rec.startedMs;
     v.deaths = rec.deaths;
     v.wipes = rec.wipes;
+    auto const spots = [](std::vector<run::RunSpot> const& from)
+    {
+        std::vector<P::SpotView> out;
+        out.reserve(from.size());
+        for (run::RunSpot const& s : from)
+        {
+            P::SpotView spot;
+            spot.tS = int64_t(s.tMs / 1000u);
+            spot.x = s.x;
+            spot.y = s.y;
+            spot.z = s.z;
+            spot.role = s.role;
+            out.push_back(std::move(spot));
+        }
+        return out;
+    };
+    v.wipeSpots = spots(rec.wipeSpots);
+    v.deathSpots = spots(rec.deathSpots);
     auto const unixOf = [&](uint32 ms) { return nowUnix - int64(nowMs >= ms ? (nowMs - ms) / 1000u : 0u); };
     v.startedUnix = unixOf(rec.startedMs);
     v.endedUnix = rec.endedMs ? unixOf(rec.endedMs) : 0;

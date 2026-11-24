@@ -27,16 +27,20 @@
 #include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/CheckMountStateAction.h"
 #include "playerbot/strategy/actions/CheckValuesAction.h"
+#include "playerbot/strategy/actions/ChooseRpgTargetAction.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
+#include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
 #include "playerbot/strategy/actions/CombatActions.h"
 #include "playerbot/strategy/actions/CustomStrategyEditAction.h"
 #include "playerbot/strategy/actions/DebugAction.h"
+#include "playerbot/strategy/actions/DestroyItemAction.h"
 #include "playerbot/strategy/actions/DropQuestAction.h"
 #include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
 #include "playerbot/strategy/actions/GiveItemAction.h"
+#include "playerbot/strategy/actions/GreetAction.h"
 #include "playerbot/strategy/actions/HelpAction.h"
 #include "playerbot/strategy/actions/ImbueAction.h"
 #include "playerbot/strategy/actions/LeaveGroupAction.h"
@@ -46,6 +50,8 @@
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/LootRollAction.h"
 #include "playerbot/strategy/actions/MailAction.h"
+#include "playerbot/strategy/actions/MoveToRpgTargetAction.h"
+#include "playerbot/strategy/actions/MoveToTravelTargetAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
@@ -56,10 +62,13 @@
 #include "playerbot/strategy/actions/RepairAllAction.h"
 #include "playerbot/strategy/actions/ResetAiAction.h"
 #include "playerbot/strategy/actions/ReviveFromCorpseAction.h"
+#include "playerbot/strategy/actions/RpgAction.h"
+#include "playerbot/strategy/actions/RpgSubActions.h"
 #include "playerbot/strategy/actions/RtiAction.h"
 #include "playerbot/strategy/actions/SaveManaAction.h"
 #include "playerbot/strategy/actions/SayAction.h"
 #include "playerbot/strategy/actions/SellAction.h"
+#include "playerbot/strategy/actions/ServiceNearbyNpcAction.h"
 #include "playerbot/strategy/actions/SetValueAction.h"
 #include "playerbot/strategy/actions/ShareQuestAction.h"
 #include "playerbot/strategy/actions/SpreadDistanceAction.h"
@@ -73,7 +82,9 @@
 #include "playerbot/strategy/actions/TellReputationAction.h"
 #include "playerbot/strategy/actions/TellTargetAction.h"
 #include "playerbot/strategy/actions/TrainerAction.h"
+#include "playerbot/strategy/actions/TravelAction.h"
 #include "playerbot/strategy/actions/UnequipAction.h"
+#include "playerbot/strategy/actions/UnstuckAction.h"
 #include "playerbot/strategy/actions/UseConsumableAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/UseTrinketAction.h"
@@ -89,6 +100,7 @@
 #include "playerbot/strategy/generic/DeadStrategy.h"
 #include "playerbot/strategy/generic/DebugStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
+#include "playerbot/strategy/generic/EmoteStrategy.h"
 #include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FocusStrategy.h"
 #include "playerbot/strategy/generic/FocusTargetStrategy.h"
@@ -110,6 +122,7 @@
 #include "playerbot/strategy/generic/RacialsStrategy.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
 #include "playerbot/strategy/generic/ReactionStrategy.h"
+#include "playerbot/strategy/generic/RpgStrategy.h"
 #include "playerbot/strategy/generic/RunawayStrategy.h"
 #include "playerbot/strategy/generic/StayStrategy.h"
 #include "playerbot/strategy/generic/TankAssistStrategy.h"
@@ -125,7 +138,9 @@
 #include "playerbot/strategy/triggers/LootTriggers.h"
 #include "playerbot/strategy/triggers/PullTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
+#include "playerbot/strategy/triggers/RpgTriggers.h"
 #include "playerbot/strategy/triggers/RtiTriggers.h"
+#include "playerbot/strategy/triggers/StuckTriggers.h"
 #include "playerbot/strategy/triggers/WorldPacketTrigger.h"
 #include "playerbot/strategy/values/ActiveSpellValue.h"
 #include "playerbot/strategy/values/AlwaysLootListValue.h"
@@ -195,11 +210,13 @@
 #include "playerbot/strategy/values/PetTargetValue.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
+#include "playerbot/strategy/values/PossibleRpgTargetsValue.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
 #include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/strategy/values/RaidTargetValues.h"
 #include "playerbot/strategy/values/RandomBotUpdateValue.h"
 #include "playerbot/strategy/values/RangeValues.h"
+#include "playerbot/strategy/values/RpgValues.h"
 #include "playerbot/strategy/values/RtiTargetValue.h"
 #include "playerbot/strategy/values/RtiValue.h"
 #include "playerbot/strategy/values/SelfTargetValue.h"
@@ -215,6 +232,7 @@
 #include "playerbot/strategy/values/TargetValue.h"
 #include "playerbot/strategy/values/ThreatValues.h"
 #include "playerbot/strategy/values/TravelValues.h"
+#include "playerbot/strategy/values/VendorValues.h"
 #include "playerbot/strategy/values/WaitForAttackTimeValue.h"
 
 using namespace ai;
@@ -223,7 +241,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (60 of its keys)
+    // the registry of StrategyContext (69 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -289,6 +307,15 @@ namespace slice
             creators["debug xp"] = [](PlayerbotAI* ai) { return new DebugXpStrategy(ai); };
             creators["debug equip"] = [](PlayerbotAI* ai) { return new DebugEquipStrategy(ai); };
             creators["mount"] = [](PlayerbotAI* ai) { return new MountStrategy(ai); };
+            creators["travel"] = [](PlayerbotAI* ai) { return new TravelStrategy(ai); };
+            creators["travel once"] = [](PlayerbotAI* ai) { return new TravelOnceStrategy(ai); };
+            creators["explore"] = [](PlayerbotAI* ai) { return new ExploreStrategy(ai); };
+            creators["rpg"] = [](PlayerbotAI* ai) { return new RpgStrategy(ai); };
+            creators["rpg quest"] = [](PlayerbotAI* ai) { return new RpgQuestStrategy(ai); };
+            creators["rpg vendor"] = [](PlayerbotAI* ai) { return new RpgVendorStrategy(ai); };
+            creators["rpg explore"] = [](PlayerbotAI* ai) { return new RpgExploreStrategy(ai); };
+            creators["rpg maintenance"] = [](PlayerbotAI* ai) { return new RpgMaintenanceStrategy(ai); };
+            creators["emote"] = [](PlayerbotAI* ai) { return new EmoteStrategy(ai); };
         }
     };
 
@@ -331,7 +358,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (94 of its keys)
+    // the registry of ActionContext (123 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -431,10 +458,39 @@ namespace slice
             creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
             creators["move out of collision"] = [](PlayerbotAI* ai) { return new MoveOutOfCollisionAction(ai); };
             creators["sit"] = [](PlayerbotAI* ai) { return new SitAction(ai); };
+            creators["travel"] = [](PlayerbotAI* ai) { return new TravelAction(ai); };
+            creators["choose travel target"] = [](PlayerbotAI* ai) { return new ChooseTravelTargetAction(ai); };
+            creators["choose group travel target"] = [](PlayerbotAI* ai) { return new ChooseGroupTravelTargetAction(ai); };
+            creators["refresh travel target"] = [](PlayerbotAI* ai) { return new RefreshTravelTargetAction(ai); };
+            creators["request travel target"] = [](PlayerbotAI* ai) { return new RequestTravelTargetAction(ai); };
+            creators["request named travel target"] = [](PlayerbotAI* ai) { return new RequestNamedTravelTargetAction(ai); };
+            creators["request quest travel target"] = [](PlayerbotAI* ai) { return new RequestQuestTravelTargetAction(ai); };
+            creators["reset travel target"] = [](PlayerbotAI* ai) { return new ResetTargetAction(ai); };
+            creators["move to travel target"] = [](PlayerbotAI* ai) { return new MoveToTravelTargetAction(ai); };
+            creators["unstuck"] = [](PlayerbotAI* ai) { return new UnstuckAction(ai); };
+            creators["reset"] = [](PlayerbotAI* ai) { return new ResetAction(ai); };
+            creators["hearthstone"] = [](PlayerbotAI* ai) { return new UseHearthStoneAction(ai); };
+            creators["rpg"] = [](PlayerbotAI* ai) { return new RpgAction(ai); };
+            creators["choose rpg target"] = [](PlayerbotAI* ai) { return new ChooseRpgTargetAction(ai); };
+            creators["move to rpg target"] = [](PlayerbotAI* ai) { return new MoveToRpgTargetAction(ai); };
+            creators["service nearby npc"] = [](PlayerbotAI* ai) { return new ServiceNearbyNpcAction(ai); };
+            creators["rpg stay"] = [](PlayerbotAI* ai) { return new RpgStayAction(ai); };
+            creators["rpg work"] = [](PlayerbotAI* ai) { return new RpgWorkAction(ai); };
+            creators["rpg emote"] = [](PlayerbotAI* ai) { return new RpgEmoteAction(ai); };
+            creators["rpg cancel"] = [](PlayerbotAI* ai) { return new RpgCancelAction(ai); };
+            creators["rpg use"] = [](PlayerbotAI* ai) { return new RpgUseAction(ai); };
+            creators["rpg start quest"] = [](PlayerbotAI* ai) { return new RpgStartQuestAction(ai); };
+            creators["rpg end quest"] = [](PlayerbotAI* ai) { return new RpgEndQuestAction(ai); };
+            creators["rpg sell"] = [](PlayerbotAI* ai) { return new RpgSellAction(ai); };
+            creators["rpg buy"] = [](PlayerbotAI* ai) { return new RpgBuyAction(ai); };
+            creators["rpg repair"] = [](PlayerbotAI* ai) { return new RpgRepairAction(ai); };
+            creators["rpg train"] = [](PlayerbotAI* ai) { return new RpgTrainAction(ai); };
+            creators["smart destroy item"] = [](PlayerbotAI* ai) { return new SmartDestroyItemAction(ai); };
+            creators["greet"] = [](PlayerbotAI* ai) { return new GreetAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (69 of its keys)
+    // the registry of ChatActionContext (70 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -508,6 +564,7 @@ namespace slice
             creators["cdebug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
             creators["log"] = [](PlayerbotAI* ai) { return new LogLevelAction(ai); };
             creators["set value"] = [](PlayerbotAI* ai) { return new SetValueAction(ai); };
+            creators["repop"] = [](PlayerbotAI* ai) { return new RepopAction(ai); };
             creators["speak"] = [](PlayerbotAI* ai) { return new SpeakAction(ai); };
         }
     };
@@ -535,7 +592,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (140 of its keys)
+    // the registry of TriggerContext (158 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -681,6 +738,24 @@ namespace slice
             creators["should pull"] = [](PlayerbotAI* ai) { return new ShouldPullTrigger(ai); };
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionTrigger(ai); };
             creators["sit"] = [](PlayerbotAI* ai) { return new SitTrigger(ai); };
+            creators["move stuck"] = [](PlayerbotAI* ai) { return new MoveStuckTrigger(ai); };
+            creators["move long stuck"] = [](PlayerbotAI* ai) { return new MoveLongStuckTrigger(ai); };
+            creators["combat stuck"] = [](PlayerbotAI* ai) { return new CombatStuckTrigger(ai); };
+            creators["combat long stuck"] = [](PlayerbotAI* ai) { return new CombatLongStuckTrigger(ai); };
+            creators["no rpg target"] = [](PlayerbotAI* ai) { return new NoRpgTargetTrigger(ai); };
+            creators["far from rpg target"] = [](PlayerbotAI* ai) { return new FarFromRpgTargetTrigger(ai); };
+            creators["rpg"] = [](PlayerbotAI* ai) { return new RpgTrigger(ai); };
+            creators["rpg wander"] = [](PlayerbotAI* ai) { return new RpgWanderTrigger(ai); };
+            creators["rpg start quest"] = [](PlayerbotAI* ai) { return new RpgStartQuestTrigger(ai); };
+            creators["rpg end quest"] = [](PlayerbotAI* ai) { return new RpgEndQuestTrigger(ai); };
+            creators["rpg sell"] = [](PlayerbotAI* ai) { return new RpgSellTrigger(ai); };
+            creators["rpg buy"] = [](PlayerbotAI* ai) { return new RpgBuyTrigger(ai); };
+            creators["rpg repair"] = [](PlayerbotAI* ai) { return new RpgRepairTrigger(ai); };
+            creators["rpg train"] = [](PlayerbotAI* ai) { return new RpgTrainTrigger(ai); };
+            creators["rpg use"] = [](PlayerbotAI* ai) { return new RpgUseTrigger(ai); };
+            creators["rpg quest use"] = [](PlayerbotAI* ai) { return new RpgQuestUseTrigger(ai); };
+            creators["quest log nearly full"] = [](PlayerbotAI* ai) { return new QuestLogNearlyFullTrigger(ai); };
+            creators["new player nearby"] = [](PlayerbotAI* ai) { return new NewPlayerNearbyTrigger(ai); };
         }
     };
 
@@ -782,7 +857,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (228 of its keys)
+    // the registry of ValueContext (266 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1016,11 +1091,49 @@ namespace slice
             creators["max mount speed"] = [](PlayerbotAI* ai) { return new MaxMountSpeedValue(ai); };
             creators["travel target traveling"] = [](PlayerbotAI* ai) { return new TravelTargetTravelingValue(ai); };
             creators["travel target working"] = [](PlayerbotAI* ai) { return new TravelTargetWorkingValue(ai); };
+            creators["travel target active"] = [](PlayerbotAI* ai) { return new TravelTargetActiveValue(ai); };
+            creators["travel target ready"] = [](PlayerbotAI* ai) { return new TravelTargetReadyValue(ai); };
+            creators["no active travel destinations"] = [](PlayerbotAI* ai) { return new NoActiveTravelDestinationsValue(ai); };
+            creators["need travel purpose"] = [](PlayerbotAI* ai) { return new NeedTravelPurposeValue(ai); };
+            creators["should travel named"] = [](PlayerbotAI* ai) { return new ShouldTravelNamedValue(ai); };
+            creators["should leave outgrown zone"] = [](PlayerbotAI* ai) { return new ShouldLeaveOutgrownZoneValue(ai); };
+            creators["vendor trip needed"] = [](PlayerbotAI* ai) { return new VendorTripNeededValue(ai); };
+            creators["not"] = [](PlayerbotAI* ai) { return new NotValue(ai); };
+            creators["distance moved since"] = [](PlayerbotAI* ai) { return new DistanceMovedSinceValue(ai); };
+            creators["money"] = [](PlayerbotAI* ai) { return new MoneyValue(ai); };
+            creators["home bind"] = [](PlayerbotAI* ai) { return new HomeBindValue(ai); };
+            creators["possible rpg targets"] = [](PlayerbotAI* ai) { return new PossibleRpgTargetsValue(ai); };
+            creators["next rpg action"] = [](PlayerbotAI* ai) { return new NextRpgActionValue(ai); };
+            creators["can fight equal"] = [](PlayerbotAI* ai) { return new CanFightEqualValue(ai); };
+            creators["free quest log slots"] = [](PlayerbotAI* ai) { return new FreeQuestLogSlotValue(ai); };
+            creators["has rewardable finished quest"] = [](PlayerbotAI* ai) { return new HasFinishedQuestValue(ai); };
+            creators["dialog status"] = [](PlayerbotAI* ai) { return new DialogStatusValue(ai); };
+            creators["dialog status quest"] = [](PlayerbotAI* ai) { return new DialogStatusQuestValue(ai); };
+            creators["can accept quest npc"] = [](PlayerbotAI* ai) { return new CanAcceptQuestValue(ai); };
+            creators["can accept quest low level npc"] = [](PlayerbotAI* ai) { return new CanAcceptQuestLowLevelValue(ai); };
+            creators["need quest reward"] = [](PlayerbotAI* ai) { return new NeedQuestRewardValue(ai); };
+            creators["can turn in quest npc"] = [](PlayerbotAI* ai) { return new CanTurnInQuestValue(ai); };
+            creators["can repeat quest npc"] = [](PlayerbotAI* ai) { return new CanRepeatQuestValue(ai); };
+            creators["need quest objective"] = [](PlayerbotAI* ai) { return new NeedQuestObjectiveValue(ai); };
+            creators["can use item on"] = [](PlayerbotAI* ai) { return new CanUseItemOn(ai); };
+            creators["need for quest"] = [](PlayerbotAI* ai) { return new NeedForQuestValue(ai); };
+            creators["has nearby quest taker"] = [](PlayerbotAI* ai) { return new HasNearbyQuestTakerValue(ai); };
+            creators["can sell"] = [](PlayerbotAI* ai) { return new CanSellValue(ai); };
+            creators["can buy"] = [](PlayerbotAI* ai) { return new CanBuyValue(ai); };
+            creators["can repair"] = [](PlayerbotAI* ai) { return new CanRepairValue(ai); };
+            creators["should repair"] = [](PlayerbotAI* ai) { return new ShouldRepairValue(ai); };
+            creators["should sell"] = [](PlayerbotAI* ai) { return new ShouldSellValue(ai); };
+            creators["can get mail"] = [](PlayerbotAI* ai) { return new CanGetMailValue(ai); };
+            creators["vendor has useful item"] = [](PlayerbotAI* ai) { return new VendorHasUsefulItemValue(ai); };
+            creators["nearby service target"] = [](PlayerbotAI* ai) { return new NearbyServiceTargetValue(ai); };
+            creators["should service nearby npc"] = [](PlayerbotAI* ai) { return new ShouldServiceNearbyNpcValue(ai); };
+            creators["nearby service fail parks"] = [](PlayerbotAI* ai) { return new NearbyServiceFailParksValue(ai); };
+            creators["already seen players"] = [](PlayerbotAI* ai) { return new AlreadySeenPlayersValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 72, kActions = 177, kTriggers = 220, kValues = 228;
+    constexpr unsigned kStrategies = 81, kActions = 207, kTriggers = 238, kValues = 266;
 }
 }
 

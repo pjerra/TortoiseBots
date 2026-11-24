@@ -7,7 +7,7 @@
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/policy/combat/CombatStuckPolicy.h"
 #include "playerbot/TravelMgr.h"
-#include "runtime/BotManager.h"
+#include "playerbot/TbCompatW1.h"
 
 using namespace ai;
 
@@ -28,7 +28,7 @@ static bool HearthLeadsSomewhereUseful(PlayerbotAI* ai, Player* bot)
     // hearthstone cooldown. 0 disables the gate.
     if (sPlayerbotAIConfig.unstuckHearthMinDistance > 0.0f)
     {
-        WorldPosition const home = bot->GetHomeBindLocation();
+        WorldPosition const home(HomeBindLocationCompat(bot));
         if (home.isValid() && WorldPosition(bot).fDist(home) < sPlayerbotAIConfig.unstuckHearthMinDistance)
             return false;
     }
@@ -37,7 +37,7 @@ static bool HearthLeadsSomewhereUseful(PlayerbotAI* ai, Player* bot)
         return true;
 
     int32 homeLevel = 0;
-    if (!sTravelMgr.TryGetValidatedAreaLevel(bot->GetHomeBindAreaId(), homeLevel))
+    if (!sTravelMgr.TryGetValidatedAreaLevel(HomeBindAreaIdCompat(bot), homeLevel))
         return false;
 
     return homeLevel + 10 >= (int32)bot->GetLevel();
@@ -73,18 +73,18 @@ static bool LongStuckFallbackTeleport(PlayerbotAI* ai, Player* bot, Player* mast
         return false;
 
     WorldPosition const botPos(bot);
-    WorldPosition home = bot->GetHomeBindLocation();
-    WorldSafeLocsEntry const* grave = sObjectMgr.GetClosestGraveYard(
-        bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId(), bot->GetTeam());
+    WorldPosition home(HomeBindLocationCompat(bot));
+    WorldSafeLocsEntry const* grave = ClosestGraveyardCompat(bot, bot->GetMapId(),
+        bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetTeam());
     // Same guard as RepopAction: the core lookup can return a graveyard on
     // another map (entryFar) or thousands of yards away when the bot's zone
     // links nothing usable (GraveyardTeleportPolicy.h). Such a pick is not a
     // rescue target - drop it so the policy below degrades to homebind.
-    if (grave && !IsUsableGraveyardTarget(true, grave->map_id == bot->GetMapId(),
+    if (grave && !IsUsableGraveyardTarget(true, SafeLocMapIdCompat(grave) == bot->GetMapId(),
         botPos.fDist(WorldPosition(grave))))
     {
-        sLog.outDetail("Unstuck: nearest graveyard for bot #%d <%s> is off-map/far (map %u), using homebind instead",
-            bot->GetGUIDLow(), bot->GetName(), grave->map_id);
+        sLog.outDetail("Unstuck: nearest graveyard for bot #%u <%s> is off-map/far (map %u), using homebind instead",
+            uint32(bot->GetGUIDLow()), CStrCompat(bot->GetName()), SafeLocMapIdCompat(grave));
         grave = nullptr;
     }
     float const graveDist = grave
@@ -122,24 +122,25 @@ static bool LongStuckFallbackTeleport(PlayerbotAI* ai, Player* bot, Player* mast
     if (bot->GetTransport())
     {
         bot->GetTransport()->RemovePassenger(bot);
-        bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+        RemoveOnTransportFlagCompat(bot);
     }
 
     bool moved = false;
     if (grave)
     {
-        moved = bot->TeleportTo(grave->map_id, grave->x, grave->y, grave->z, 0.0f);
+        moved = bot->TeleportTo(SafeLocMapIdCompat(grave), SafeLocXCompat(grave), SafeLocYCompat(grave),
+            SafeLocZCompat(grave), 0.0f);
         if (moved)
             sPlayerbotAIConfig.logEvent(ai, "LongStuckFallback", "graveyard", master ? master->GetName() : "");
         // A sub-10 pool bot landed above its level (valley GY in the next
         // town) goes straight home (LowbieGraveyardPolicy.h).
         if (moved)
-            TortoiseBots::BotManager::Instance().SendStrandedLowbieHome(bot);
+            SendStrandedLowbieHomeCompat(bot);
     }
     else
     {
         // A rescue, not a hearth: keep the hearthstone cooldown untouched.
-        moved = bot->TeleportToHomebind(0, false);
+        moved = TeleportToHomebindCompat(bot, false);
         if (moved)
             sPlayerbotAIConfig.logEvent(ai, "LongStuckFallback", "homebind", master ? master->GetName() : "");
     }
@@ -185,7 +186,7 @@ static void GiveUpCombatStuckTarget(PlayerbotAI* ai, Player* bot)
 
     Unit* target = AI_VALUE(Unit*, "current target");
     ObjectGuid attackGuid = AI_VALUE(ObjectGuid, "attack target");
-    if (!target && attackGuid)
+    if (!target && !attackGuid.IsEmpty())
         target = ai->GetUnit(attackGuid);
     if (!ShouldGiveUpCombatStuckTarget(target != nullptr,
         target && !sServerFacade.UnitIsDead(target), target == bot,

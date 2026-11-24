@@ -439,8 +439,8 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 }
 
 // W1 (spec D4): a free bot's non-combat kit is its class spec strategy plus the world kit, both from the pure policy
-// (policy/world/FreeKitPolicy.h; forever/tools/test_free_kit_policy.cpp). No follow, no wander, no rpg, travel, quests, vendors,
-// or group/guild strategy.
+// (policy/world/FreeKitPolicy.h; forever/tools/test_free_kit_policy.cpp). No follow, no wander, no rpg, quests, vendors,
+// or group/guild strategy; travel is the one world move a free bot makes.
 static_assert(TortoiseBots::world::ClassWarrior == CLASS_WARRIOR, "FreeKitPolicy.h: warrior id");
 static_assert(TortoiseBots::world::ClassPaladin == CLASS_PALADIN, "FreeKitPolicy.h: paladin id");
 static_assert(TortoiseBots::world::ClassHunter == CLASS_HUNTER, "FreeKitPolicy.h: hunter id");
@@ -467,10 +467,17 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         nonCombatEngine->addStrategy(TortoiseBots::world::FreeSpecStrategy(player->GetClass()));
         for (char const* const* kit = TortoiseBots::world::FreeWorldKit(); *kit; ++kit)
             nonCombatEngine->addStrategy(*kit);
+        // Questing is the owner's config: with AiPlayerbot.AutoDoQuests off a free bot only grinds and travels, exactly
+        // as the full build gates its rpg strategy.
+        if (sPlayerbotAIConfig.autoDoQuests)
+            nonCombatEngine->addStrategy("rpg");
         return;
     }
     if (!player)
         return;
+    // Commanded bots greet a real player; a free bot gets the strategy from its own kit, and GreetAction gates pool-like
+    // bots behind AiPlayerbot.RandomBotGreet.
+    nonCombatEngine->addStrategy("emote");
     int const tab = KitSpecTab(player, facade);
 
     switch (player->GetClass())

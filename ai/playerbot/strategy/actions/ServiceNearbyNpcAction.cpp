@@ -48,7 +48,7 @@ bool ServiceNearbyNpcAction::Execute(Event& event)
 
         AiObjectContext* context = ai->GetAiObjectContext();
         NearbyServiceFailParks parks = AI_VALUE(NearbyServiceFailParks, "nearby service fail parks");
-        parks.RecordFail(target.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::Approach), time(0));
+        parks.RecordFail(GuidKeyCompat(target), NearbyServiceRankOf(NearbyServiceKind::Approach), time(0));
         SET_AI_VALUE(NearbyServiceFailParks, "nearby service fail parks", parks);
         RESET_AI_VALUE(GuidPosition, "nearby service target");
         RESET_AI_VALUE(bool, "should service nearby npc");

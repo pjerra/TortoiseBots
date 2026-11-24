@@ -130,3 +130,13 @@ tests, pure check PASS, Go suite green).
 * Wiring: 9 tests, OK.
 * Go: `go test ./...` in `tools/observability` -> ok for every package; `go vet ./...` clean; `go test -race ./internal/dungeons` ok. `-race ./cmd/server` fails on pre-existing races in `fightdetail_test.go`/`runtotals_test.go` (commit d6ab15ab9, not this work); `vm-test ta` is not applicable here (no go.mod at the worktree root; the harness's go1.22 install fails before it runs anything).
 * Turtle: `vm-build ~/wt-dash-runs --wait` -> `MAKE_RC=0`, job rc 0; `vm-test tb ~/wt-dash-runs` -> `RESULT: PASS kind=tb sha=a8c950a76 dirty=1`, rc 0, `vm_duration=1641s` (the dirty file was this notes edit, docs only; committed after the run).
+
+## Update (TBF #141): boss kill times and wipe/death places
+
+The port's summary now fills what it left empty: `bosses[].killed_at_s` is the first second the run read a plan boss
+dead (`RunRec::bossKilledMs`, set by `NoteBossKilled` in `TbRun.cpp`), and two new arrays carry the places the party
+fell: `wipe_spots` (the centroid of the dead, with the first dead bot's role) and `death_spots` (each member's death
+position and role). `wipes`/`deaths` stay counts, the keys `internal/dungeons/run.go` indexes; the positions are
+additive keys so a reader that does not know them ignores them. Both lists are capped at 200 spots. The logic is in
+the run leader's own `Observe` (one player lookup per death, one walk of the party per wipe; never per tick), and the
+JSON is `TbDashRunsPure.h` (`SpotsJson`). `dash_runs_check.cpp` pins a killed_at_s number and both spot arrays.

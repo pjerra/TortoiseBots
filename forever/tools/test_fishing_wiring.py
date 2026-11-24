@@ -133,6 +133,32 @@ class TestFishingWiring(unittest.TestCase):
         self.assertIn("getHighestHostileLevelNear", impl)
         self.assertIn("highest + 2 >= botLevel", impl)
 
+    def test_the_bot_learns_and_casts_its_fishing_rank_spell(self):
+        host = read("forever/src/host/TbHostFishing.cpp")
+        if MUTATE:
+            host = host.replace("if (!EnsureFishingSpell(bot))", "if (false)")
+        # The rank spells are Learned rows, so the skill grant must teach one.
+        self.assertIn("Player::GetClassicProfessionSkill(ability->SkillLine) != SKILL_FISHING", host)
+        self.assertNotIn("GetSkillLineAbilitiesBySkill(SKILL_FISHING)", host)
+        self.assertIn("GetValueForTierIndex(rank - 1)", host)
+        self.assertIn("bot->LearnSpell(pick, false)", host)
+        self.assertNotIn("kFishingCastSpellId", host)
+        self.assertNotIn("CastSpell(dest,", host)
+        # Legacy fish action form: the spell the bot knows, aimed at the bot.
+        self.assertIn("bot->CastSpell(bot, spellId)", host)
+        # Both the idle gear and the order grant run it.
+        self.assertEqual(host.count("EnsureFishingSpell(bot)"), 3)
+
+    def test_the_cast_waits_for_the_picked_spot(self):
+        pure = read("forever/src/host/TbHostFishingPure.h")
+        if MUTATE:
+            pure = pure.replace("kCastSpotYd = 2.5f", "kCastSpotYd = 12.0f")
+        self.assertIn("kCastSpotYd = 2.5f", pure)
+        self.assertIn("f.dryStand ? kCastSpotYd : kCastRangeYd", pure)
+        host = read("forever/src/host/TbHostFishing.cpp")
+        self.assertIn("facts.dryStand = errand.idle;", host)
+        self.assertNotIn("f.distanceToSpot <= 12.0f", pure)
+
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:

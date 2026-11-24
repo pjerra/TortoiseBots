@@ -12,6 +12,7 @@
 #include "Bag.h"
 #include "CellImpl.h"
 #include "Collision/Maps/MapDefines.h"
+#include "DB2Stores.h"
 #include "GameObject.h"
 #include "GameObjectPackets.h"
 #include "GameTime.h"
@@ -49,8 +50,8 @@ namespace fishing
 namespace
 {
 
-constexpr std::uint32_t kFishingCastSpellId = 7731;
 constexpr std::uint32_t kBaseFishingPoleItemId = 6256;   // Fishing Pole
+constexpr std::uint32_t kFishingBobberEntry = 35591;     // Fishing Bobber
 constexpr float kWalkSpotRangeYd = 800.0f;
 constexpr std::uint32_t kMaxSkillValue = 300;
 
@@ -241,6 +242,95 @@ void EnsureLure(Player* bot, std::int32_t requiredSkill)
             TortoiseBots::GuildOrders::kFishingLureGrantCount - have);
 }
 
+// A bot is granted the Fishing skill by SetSkill, and the skill alone teaches
+// nothing: the rank spells (Apprentice 7620 .. Artisan 18248) are
+// SkillLineAbilityAcquireMethod::Learned rows, so the core's own skill ->
+// spell pass skips them and the bot never owns a fishing cast. Each rank
+// spell carries the bobber summon and SPELL_EFFECT_SKILL for its rank
+// (75/150/225/300), so a fishing bot learns the rank its skill fits and casts
+// that, the same grant a trainer visit gives a player.
+struct FishingRankSpell
+{
+    std::uint32_t spellId;
+    std::uint16_t rank;      // SPELL_EFFECT_SKILL value for SKILL_FISHING
+};
+
+std::vector<FishingRankSpell> const& FishingRankSpells()
+{
+    static std::vector<FishingRankSpell> const table = []()
+    {
+        std::vector<FishingRankSpell> out;
+        // Forever's profession rows sit on child skill lines, so the fishing line is found through its classic parent.
+        for (SkillLineAbilityEntry const* ability : sSkillLineAbilityStore)
+        {
+            if (Player::GetClassicProfessionSkill(ability->SkillLine) != SKILL_FISHING)
+                continue;
+            SpellInfo const* spell = sSpellMgr->GetSpellInfo(ability->Spell, DIFFICULTY_NONE);
+            if (!spell)
+                continue;
+            bool bobber = false;
+            std::uint16_t rank = 0;
+            for (SpellEffectInfo const& effect : spell->GetEffects())
+            {
+                if (effect.Effect == SPELL_EFFECT_TRANS_DOOR && effect.MiscValue == int32(kFishingBobberEntry))
+                    bobber = true;
+                else if (effect.Effect == SPELL_EFFECT_SKILL && effect.MiscValue == int32(SKILL_FISHING))
+                    rank = std::uint16_t(effect.CalcValue());
+            }
+            if (bobber && rank)
+                out.push_back({ spell->Id, rank });
+        }
+        std::sort(out.begin(), out.end(), [](FishingRankSpell const& left, FishingRankSpell const& right)
+        {
+            return left.rank < right.rank;
+        });
+        return out;
+    }();
+    return table;
+}
+
+std::uint16_t FishingRankCap(Player* bot, std::uint16_t rank)
+{
+    SkillRaceClassInfoEntry const* raceClass =
+        sDB2Manager.GetSkillRaceClassInfo(SKILL_FISHING, bot->GetRace(), bot->GetClass());
+    SkillTiersEntry const* tiers = raceClass ? sObjectMgr->GetSkillTier(raceClass->SkillTierID) : nullptr;
+    return tiers && rank ? std::uint16_t(tiers->GetValueForTierIndex(rank - 1)) : 0;
+}
+
+// The rank spell the skill value fits: the lowest rank whose cap still covers
+// the value. A successful cast only raises the skill step (EffectSkill), so
+// the bot never drops below the value the host wrote. Learned like a trainer
+// visit; 0 when the data has no fishing rank spell.
+std::uint32_t EnsureFishingSpell(Player* bot)
+{
+    if (!bot || !bot->HasSkill(SKILL_FISHING))
+        return 0;
+    std::vector<FishingRankSpell> const& ranks = FishingRankSpells();
+    if (ranks.empty())
+    {
+        TC_LOG_INFO("tortoisebots", "[W9] fish rank spell bot={} result=no-rank-spells", bot->GetName());
+        return 0;
+    }
+    std::uint32_t const skill = bot->GetSkillValue(SKILL_FISHING);
+    std::uint32_t pick = ranks.back().spellId;
+    for (FishingRankSpell const& rank : ranks)
+        if (FishingRankCap(bot, rank.rank) >= skill)
+        {
+            pick = rank.spellId;
+            break;
+        }
+    if (!bot->HasSpell(pick))
+    {
+        bot->LearnSpell(pick, false);
+        if (bot->HasSpell(pick))
+            TC_LOG_INFO("tortoisebots", "[W9] fish rank spell bot={} spell={} skill={}",
+                bot->GetName(), pick, skill);
+    }
+    if (!bot->HasSpell(pick))
+        TC_LOG_INFO("tortoisebots", "[W9] fish rank spell bot={} spell={} skill={} result=not-learned", bot->GetName(), pick, skill);
+    return bot->HasSpell(pick) ? pick : 0;
+}
+
 // Idle fishing needs only what the legacy factory hands every bot: the
 // secondary skill and a pole. No tiered pole or lure (orders plan those).
 bool EnsureIdleFishingGear(Player* bot)
@@ -253,6 +343,8 @@ bool EnsureIdleFishingGear(Player* bot)
         bot->SetSkill(SKILL_FISHING, 1, std::max<std::uint16_t>(1, maxValue), maxValue);
     }
     if (!bot->HasSkill(SKILL_FISHING))
+        return false;
+    if (!EnsureFishingSpell(bot))
         return false;
     if (!FindFishingPole(bot))
         GrantItem(bot, kBaseFishingPoleItemId, 1);
@@ -650,6 +742,8 @@ bool EnsureOrderFishing(Player* bot, std::uint32_t itemId)
     }
     if (!bot->HasSkill(SKILL_FISHING))
         return false;
+    if (!EnsureFishingSpell(bot))
+        return false;
 
     std::int32_t const minSkill = std::int32_t(guild_order_fish::MinFishingZoneSkill(itemId));
     EnsurePoleFor(bot, minSkill);
@@ -736,6 +830,7 @@ static void TickActive(Player* bot, std::uint32_t diffMs)
     facts.alive = bot->IsAlive();
     facts.inCombat = bot->IsInCombat();
     facts.hasSpot = errand.hasSpot;
+    facts.dryStand = errand.idle;
     facts.channelingFishing = IsChannelingFishing(bot);
     facts.hasBobber = bobber != nullptr;
     facts.bobberReady = bobber && bobber->getLootState() == GO_READY;
@@ -789,11 +884,17 @@ static void TickActive(Player* bot, std::uint32_t diffMs)
         float const dy = errand.castY - bot->GetPositionY();
         if (dx != 0.0f || dy != 0.0f)
             bot->SetFacingTo(std::atan2(dy, dx));
-        // The bobber lands at the destination, so it lands in the water point
-        // the store or the open-water search chose (the core otherwise picks a
-        // close point and the bobber can fall on land).
-        Position const dest(errand.castX, errand.castY, errand.castZ);
-        SpellCastResult const result = bot->CastSpell(dest, kFishingCastSpellId);
+        // The core resolves the fishing target from the caster, not from a
+        // supplied destination (TARGET_DEST_CASTER_FISHING rolls its own point
+        // 10-20 yd in front), so the cast is the legacy fish action's
+        // "<spell> <bot>": the known rank spell, aimed by the bot's facing.
+        std::uint32_t const spellId = EnsureFishingSpell(bot);
+        if (!spellId)
+        {
+            Finish(bot, errand, "no-spell");
+            return;
+        }
+        SpellCastResult const result = bot->CastSpell(bot, spellId);
         errand.casts += 1;
         if (errand.idle)
         {
@@ -809,7 +910,7 @@ static void TickActive(Player* bot, std::uint32_t diffMs)
         errand.phaseMs = 0;
         if (result != SPELL_CAST_OK)
             TC_LOG_INFO("tortoisebots", "[W9] fish cast-refused bot={} spell={} result={}",
-                bot->GetName(), kFishingCastSpellId, std::uint32_t(result));
+                bot->GetName(), spellId, std::uint32_t(result));
     };
 
     auto useBobber = [&]()

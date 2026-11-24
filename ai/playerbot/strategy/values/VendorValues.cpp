@@ -7,6 +7,7 @@
 #include "runtime/HireLifecycle.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "SharedValueContext.h"
 
 using namespace ai;
@@ -23,22 +24,19 @@ VendorMap* VendorMapValue::Calculate()
         if (!cInfo)
             continue;
 
-        VendorItemList vendorItems;
         VendorItemData const* vItems = sObjectMgr.GetNpcVendorItemList(entry);
 
-        if (vItems)
-            for (auto vItem : vItems->m_items)
-                if (!vItem->maxcount) //Ignore limited amount items.
-                    vendorpMap->insert(std::make_pair(vItem->item, entry));
+        for (VendorItem const* vItem : VendorItemRefsCompat(vItems))
+            if (!vItem->maxcount) //Ignore limited amount items.
+                vendorpMap->insert(std::make_pair(vItem->item, entry));
 
-        uint32 vendorId = cInfo->vendor_id;
+        uint32 vendorId = VendorTemplateIdCompat(cInfo);
         if (vendorId)
         {
-            vItems = sObjectMgr.GetNpcVendorTemplateItemList(vendorId);
-            if (vItems)
-                for (auto vItem : vItems->m_items)
-                    if (!vItem->maxcount) //Ignore limited amount items.
-                        vendorpMap->insert(std::make_pair(vItem->item, entry));
+            vItems = VendorTemplateItemsCompat(vendorId);
+            for (VendorItem const* vItem : VendorItemRefsCompat(vItems))
+                if (!vItem->maxcount) //Ignore limited amount items.
+                    vendorpMap->insert(std::make_pair(vItem->item, entry));
         }
     }
 
@@ -50,7 +48,9 @@ std::list<int32> ItemVendorListValue::Calculate()
 {
     uint32 itemId = stoi(getQualifier());
 
-    VendorMap* vendorMap = GAI_VALUE(VendorMap*, "vendor map");
+    VendorMap* vendorMap = GAI_VALUE_COMPAT(VendorMap*, "vendor map");
+    if (!vendorMap)
+        return {};
 
     std::list<int32> entries;
 
@@ -70,23 +70,15 @@ bool VendorHasUsefulItemValue::Calculate()
     if (!cInfo)
         return false;
 
-    VendorItemList vendorItems;
-    VendorItemData const* vItems = sObjectMgr.GetNpcVendorItemList(entry);
+    std::vector<VendorItem const*> vendorItems;
+    for (VendorItem const* vItem : VendorItemRefsCompat(sObjectMgr.GetNpcVendorItemList(entry)))
+        vendorItems.push_back(vItem);
 
-    if (vItems)
-        for (auto vItem : vItems->m_items)
-                vendorItems.push_back(vItem);
-
-    uint32 vendorId = cInfo->vendor_id;
+    uint32 vendorId = VendorTemplateIdCompat(cInfo);
 
     if (vendorId)
-    {
-        vItems = sObjectMgr.GetNpcVendorTemplateItemList(vendorId);
-
-        if (vItems)
-            for (auto vItem : vItems->m_items)
-                vendorItems.push_back(vItem);
-    }
+        for (VendorItem const* vItem : VendorItemRefsCompat(VendorTemplateItemsCompat(vendorId)))
+            vendorItems.push_back(vItem);
 
     std::unordered_map <ItemUsage, uint32> freeMoney;
 

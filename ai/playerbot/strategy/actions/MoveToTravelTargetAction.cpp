@@ -12,6 +12,8 @@
 #include "playerbot/LootObjectStack.h"
 #include "Maps/PathFinder.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatWL4.h"
+#include "playerbot/TbCompatWL4n.h"
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/TravelLegChainPolicy.h"
 #include "playerbot/policy/travel/FlightErrandPolicy.h"
@@ -528,7 +530,7 @@ bool MoveToTravelTargetAction::TravelLegChainDue(PlayerbotAI* ai, Player* bot)
     if (!bot || bot->IsInCombat() || bot->IsTaxiFlying() || bot->IsFlying() ||
         bot->IsMounted() || bot->IsBeingTeleported() || bot->GetTransport() ||
         bot->InBattleGround() || bot->IsInWater() || IsUnderwaterCompat(bot) ||
-        bot->HasMovementFlag(MOVEFLAG_SWIMMING))
+        HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING))
         return false;
     if (bot->GetMap() && bot->GetMap()->IsDungeon())
         return false;
@@ -552,9 +554,9 @@ bool MoveToTravelTargetAction::TravelLegChainDue(PlayerbotAI* ai, Player* bot)
             return false;
 
     Movement::MoveSpline const& spline = *bot->movespline;
-    char const* origin = spline.GetMovementOrigin();
+    char const* origin = MoveSplineOriginWL4(spline);
     bool ownLeg = origin != nullptr && std::strcmp(origin, "DispatchMovement") == 0;
-    return TravelLegChainDecide(ownLeg, spline.timeElapsed(), spline.Initialized(), spline.Finalized())
+    return TravelLegChainDecide(ownLeg, MoveSplineTimeElapsedWL4(spline), spline.Initialized(), spline.Finalized())
         == TravelLegChainVerdict::Chain;
 }
 
@@ -646,23 +648,23 @@ void ai::DecideFlightPlanForTarget(PlayerbotAI* ai, Player* bot, TravelTarget co
 
     uint32 const fromNode = sObjectMgr.GetNearestTaxiNode(botLocation.getX(), botLocation.getY(),
         botLocation.getZ(), botLocation.GetMapId(), bot->GetTeam());
-    if (!fromNode || !bot->GetTaxi().IsTaximaskNodeKnown(fromNode))
+    if (!fromNode || !PlayerTaxiMaskKnowsCompat(bot, fromNode))
         return;
 
-    TaxiNodesEntry const* fromEntry = sObjectMgr.GetTaxiNodeEntry(fromNode);
+    TaxiNodesEntry const* fromEntry = TaxiNodeLookupWL4(fromNode);
     if (!fromEntry || !fromEntry->MountCreatureID[bot->GetTeam() == ALLIANCE ? 1 : 0])
         return;
-    if (fromEntry->map_id != botLocation.GetMapId())
+    if (TaxiNodeMapIdCompat(fromEntry) != botLocation.GetMapId())
         return;
 
     uint32 const toNode = sObjectMgr.GetNearestTaxiNode(location.getX(), location.getY(),
         location.getZ(), location.GetMapId(), bot->GetTeam());
     if (!toNode || toNode == fromNode)
         return;
-    if (!bot->GetTaxi().IsTaximaskNodeKnown(toNode))
+    if (!PlayerTaxiMaskKnowsCompat(bot, toNode))
         return;
 
-    TaxiNodesEntry const* toEntry = sObjectMgr.GetTaxiNodeEntry(toNode);
+    TaxiNodesEntry const* toEntry = TaxiNodeLookupWL4(toNode);
     if (!toEntry || !toEntry->MountCreatureID[bot->GetTeam() == ALLIANCE ? 1 : 0])
         return;
 
@@ -682,14 +684,14 @@ void ai::DecideFlightPlanForTarget(PlayerbotAI* ai, Player* bot, TravelTarget co
     if (!sTravelMgr.TryGetValidatedAreaLevel(destZoneId, destAreaLevel) || destAreaLevel <= 0)
         return;
     AreaTableEntry const* destZone = GetAreaEntryByAreaID(destZoneId);
-    bool const destZoneIsCapital = destZone && (destZone->Flags & AREA_FLAG_CAPITAL);
+    bool const destZoneIsCapital = AreaHasFlagsCompat(destZone, AREA_FLAG_CAPITAL);
     uint32 const botLevel = bot->GetLevel();
     // Bot's own tile is always resident (the bot stands on it): no vmap load.
     bool const botInCapital = botLocation.HasAreaFlag(AREA_FLAG_CAPITAL);
     if (!ai::FlightTransportDestinationUsable(botLevel, botInCapital, destAreaLevel, destZoneIsCapital))
         return;
 
-    WorldPosition const landPos(toEntry->map_id, toEntry->x, toEntry->y, toEntry->z);
+    WorldPosition const landPos(TaxiNodeMapIdCompat(toEntry), TaxiNodeXCompat(toEntry), TaxiNodeYCompat(toEntry), TaxiNodeZCompat(toEntry));
     if (!ai::FlightTransportLegWorthwhile(tripDistance, botLocation.distance(location), landPos.distance(location)))
         return;
 
@@ -720,14 +722,14 @@ static bool TryBoardFlightToTarget(PlayerbotAI* ai, Player* bot, TravelTarget* t
     if (!ReadFlightPlan(ai, fromNode, toNode))
         return false;
 
-    TaxiNodesEntry const* fromEntry = sObjectMgr.GetTaxiNodeEntry(fromNode);
-    TaxiNodesEntry const* toEntry = sObjectMgr.GetTaxiNodeEntry(toNode);
+    TaxiNodesEntry const* fromEntry = TaxiNodeLookupWL4(fromNode);
+    TaxiNodesEntry const* toEntry = TaxiNodeLookupWL4(toNode);
     if (!fromEntry || !toEntry)
     {
         ClearFlightPlan(ai);
         return false;
     }
-    if (!bot->GetTaxi().IsTaximaskNodeKnown(fromNode) || !bot->GetTaxi().IsTaximaskNodeKnown(toNode))
+    if (!PlayerTaxiMaskKnowsCompat(bot, fromNode) || !PlayerTaxiMaskKnowsCompat(bot, toNode))
     {
         ClearFlightPlan(ai);
         return false;
@@ -738,7 +740,7 @@ static bool TryBoardFlightToTarget(PlayerbotAI* ai, Player* bot, TravelTarget* t
         return false;
     }
 
-    WorldPosition const masterPos(fromEntry->map_id, fromEntry->x, fromEntry->y, fromEntry->z);
+    WorldPosition const masterPos(TaxiNodeMapIdCompat(fromEntry), TaxiNodeXCompat(fromEntry), TaxiNodeYCompat(fromEntry), TaxiNodeZCompat(fromEntry));
     if (masterPos.GetMapId() != botLocation.GetMapId())
     {
         ClearFlightPlan(ai);
@@ -753,7 +755,7 @@ static bool TryBoardFlightToTarget(PlayerbotAI* ai, Player* bot, TravelTarget* t
     Creature* flightMaster = nullptr;
     for (ObjectGuid guid : npcs)
     {
-        flightMaster = bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_FLIGHTMASTER);
+        flightMaster = FlightMasterIfCanInteractCompat(bot, guid);
         if (flightMaster)
             break;
     }
@@ -770,7 +772,7 @@ static bool TryBoardFlightToTarget(PlayerbotAI* ai, Player* bot, TravelTarget* t
     }
     ai::BotInstantFlightFinish(bot, { fromNode, toNode });
 
-    sPlayerbotAIConfig.logEvent(ai, "TaxiFlight", fromEntry->name[LOCALE_enUS], toEntry->name[LOCALE_enUS]);
+    sPlayerbotAIConfig.logEvent(ai, "TaxiFlight", TaxiNodeNameWL4(fromEntry), TaxiNodeNameWL4(toEntry));
     ClearFlightPlan(ai);
     return true;
 }
@@ -811,8 +813,8 @@ bool MoveToTravelTargetAction::TryStepTowardTarget(WorldPosition const& location
     float const baseAngle = botPos.getAngleTo(location);
     for (int attempt = 0; attempt < 2; ++attempt)
     {
-        float const angle = baseAngle + (rand_norm_f() - 0.5f) * M_PI_F;
-        float const reach = std::min(gap, 40.0f + rand_norm_f() * 40.0f);
+        float const angle = baseAngle + (RandNormCompat() - 0.5f) * M_PI_F;
+        float const reach = std::min(gap, 40.0f + RandNormCompat() * 40.0f);
         WorldPosition stone(bot->GetMapId(), botPos.getX() + cos(angle) * reach, botPos.getY() + sin(angle) * reach, botPos.getZ());
         if (!stone.ClosestCorrectPoint(10.0f, 30.0f, bot->GetInstanceId()))
             continue;
@@ -867,7 +869,7 @@ bool MoveToTravelTargetAction::TryMesaLift(WorldPosition const& location, float&
     uint32 goalZone = 0;
     if (botZone == ai::kBarrensZone || botZone == ai::kThousandNeedlesZone)
         if (AreaTableEntry const* area = location.GetArea())
-            goalZone = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
+            goalZone = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area);
     ai::MesaLiftPick const pick = ai::MesaLiftFor(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), botZone,
         location.GetMapId(), location.getX(), location.getY(), location.getZ(), goalZone);
     if (pick.dir == ai::MesaLiftDir::None || !MayRideLift(ai, bot))
@@ -932,10 +934,9 @@ bool MoveToTravelTargetAction::TryMesaLift(WorldPosition const& location, float&
     }
 
     ai->StopMoving();
-    bot->m_movementInfo.SetTransportData(carObject->GetObjectGuid(), 0.0f, 0.0f, 0.0f, bot->GetOrientation(), now);
-    bot->m_movementInfo.AddMovementFlag(MOVEFLAG_ONTRANSPORT);
+    LiftSetTransportWL4(bot, carObject->GetObjectGuid(), now);
     bot->GetMap()->PlayerRelocation(bot, car.x, car.y, car.z + ai::LiftCarOffset(car, now), bot->GetOrientation());
-    bot->SendHeartBeat();
+    SendHeartBeatCompat(bot);
 
     rideLift = pick.lift;
     rideMapId = bot->GetMapId();
@@ -959,7 +960,7 @@ bool MoveToTravelTargetAction::ContinueMesaLiftRide()
     uint32 const now = WorldTimer::getMSTime();
     float const carZ = car.z + ai::LiftCarOffset(car, now);
     bool const arrived = ai::LiftParkedLeft(car, now, rideToTop) > 0;
-    bool const onCar = bot->m_movementInfo.GetTransportGuid() == rideCarGuid;
+    bool const onCar = LiftTransportGuidWL4(bot) == rideCarGuid;
     bool const placeable = bot->IsInWorld() && !bot->IsBeingTeleported() && bot->GetMapId() == rideMapId;
     bool const abort = !onCar || !placeable || !bot->IsAlive();
 
@@ -975,15 +976,14 @@ bool MoveToTravelTargetAction::ContinueMesaLiftRide()
         fabs(carZ - ai::LiftLevelZ(car, true)) < fabs(carZ - ai::LiftLevelZ(car, false));
     if (onCar)
     {
-        bot->m_movementInfo.ClearTransportData();
-        bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+        LiftClearTransportWL4(bot);
     }
     if (placeable)
     {
         // Off the car where it stands, then walk onto the station floor.
         float const levelZ = ai::LiftLevelZ(car, top);
         bot->GetMap()->PlayerRelocation(bot, car.x, car.y, levelZ, bot->GetOrientation());
-        bot->SendHeartBeat();
+        SendHeartBeatCompat(bot);
         WorldPosition off(bot->GetMapId(), car.x, car.y, levelZ);
         if (off.isMmapLoaded(bot->GetInstanceId()) && off.ClosestCorrectPoint(8.0f, 6.0f, bot->GetInstanceId()))
         {
@@ -1077,9 +1077,9 @@ bool MoveToTravelTargetAction::Execute(Event& event)
         if (TryBoardFlightToTarget(ai, bot, target, botLocation, location))
             return true;
 
-        TaxiNodesEntry const* stageEntry = sObjectMgr.GetTaxiNodeEntry(planFrom);
-        if (!stageEntry || stageEntry->map_id != botLocation.GetMapId() ||
-            !bot->GetTaxi().IsTaximaskNodeKnown(planFrom))
+        TaxiNodesEntry const* stageEntry = TaxiNodeLookupWL4(planFrom);
+        if (!stageEntry || TaxiNodeMapIdCompat(stageEntry) != botLocation.GetMapId() ||
+            !PlayerTaxiMaskKnowsCompat(bot, planFrom))
         {
             // Stale plan (unlearned node, cross-map master): drop it so the
             // walk below resumes toward the final destination.
@@ -1087,10 +1087,10 @@ bool MoveToTravelTargetAction::Execute(Event& event)
         }
         else
         {
-            x = stageEntry->x;
-            y = stageEntry->y;
-            z = stageEntry->z;
-            mapId = stageEntry->map_id;
+            x = TaxiNodeXCompat(stageEntry);
+            y = TaxiNodeYCompat(stageEntry);
+            z = TaxiNodeZCompat(stageEntry);
+            mapId = TaxiNodeMapIdCompat(stageEntry);
         }
         hasFlightPlan = ReadFlightPlan(ai, planFrom, planTo);
     }
@@ -1330,7 +1330,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             if (purpose == "guild order" && TortoiseBots::GuildOrders::TravelPathUnreachable(pathTag))
             {
                 AreaTableEntry const* area = location.GetArea();
-                uint32_t const zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
+                uint32_t const zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : AreaIdWL4(area)) : 0;
                 if (zoneId)
                     TortoiseBots::GuildOrders::NoteFarmZoneTargetFailed(bot->GetGUIDLow(), zoneId,
                         location.GetMapId(), location.getX(), location.getY(), location.getZ());

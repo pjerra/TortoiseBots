@@ -11,6 +11,8 @@
 #include "../../runtime/policy/hire/HireQuestPolicy.h"
 #include "../../../runtime/AltBotService.h"
 #include "../../../runtime/DowntimeService.h"
+#include "playerbot/TbCompatW1.h"
+#include "playerbot/TbCompatW2Town.h"
 #include "playerbot/strategy/values/TrainerValues.h"
 #include "playerbot/CampMgr.h"
 #include "playerbot/policy/rpg/CampPolicy.h"
@@ -19,6 +21,10 @@
 #include <ctime>
 #include "playerbot/TbCompatW2.h"
 #include "playerbot/TbCompatW3.h"
+#include "playerbot/TbCompatLife.h"
+#include "playerbot/TbCompatWL4.h"
+#include "playerbot/TbCompatWL4n.h"
+#include "playerbot/TbCompatRIDE.h"
 using namespace ai;
 
 bool RpgTrigger::IsActive()
@@ -50,19 +56,19 @@ bool RpgTaxiTrigger::IsActive()
     if (guidP.IsHostileTo(bot))
         return false;
 
-    uint32 node = sObjectMgr.GetNearestTaxiNode(guidP.getX(), guidP.getY(), guidP.getZ(), guidP.GetMapId(), bot->GetTeam());
+    uint32 node = sObjectMgr.GetNearestTaxiNode(guidP.getX(), guidP.getY(), guidP.getZ(), guidP.getMapId(), bot->GetTeam());
 
     if (!node)
         return false;
 
-    if (!bot->GetTaxi().IsTaximaskNodeKnown(node))
+    if (!PlayerTaxiMaskKnowsCompat(bot, node))
         return false;
 
     std::vector<uint32> nodes;
     for (uint32 i = 0; i < sTaxiPathStore.GetNumRows(); ++i)
     {
         TaxiPathEntry const* entry = sTaxiPathStore.LookupEntry(i);
-        if (entry && entry->from == node && (bot->GetTaxi().IsTaximaskNodeKnown(entry->to) || bot->IsTaxiCheater()))
+        if (entry && TaxiPathFromCompat(entry) == node && (PlayerTaxiMaskKnowsCompat(bot, TaxiPathToCompat(entry)) || bot->IsTaxiCheater()))
         {
             return true;
         }
@@ -86,9 +92,9 @@ bool RpgDiscoverTrigger::IsActive()
     if (bot->IsTaxiCheater())
         return false;
 
-    uint32 node = sObjectMgr.GetNearestTaxiNode(guidP.getX(), guidP.getY(), guidP.getZ(), guidP.GetMapId(), bot->GetTeam());
+    uint32 node = sObjectMgr.GetNearestTaxiNode(guidP.getX(), guidP.getY(), guidP.getZ(), guidP.getMapId(), bot->GetTeam());
 
-    if (bot->GetTaxi().IsTaximaskNodeKnown(node))
+    if (PlayerTaxiMaskKnowsCompat(bot, node))
         return false;
 
     return true;
@@ -113,7 +119,7 @@ bool RpgStartQuestTrigger::IsActive()
     if (guidP.IsUnit())
     {
         Unit* unit = guidP.GetUnit(bot->GetInstanceId());
-        if (unit && !unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER))
+        if (unit && !UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_QUESTGIVER))
             return false;
     }
 
@@ -294,90 +300,35 @@ bool RpgRepairTrigger::IsActive()
     return false;
 }
 
-bool RpgTrainTrigger::IsTrainerOf(CreatureInfo const* cInfo, Player* pPlayer)
+bool RpgTrainTrigger::IsTrainerOf(GuidPosition const& guidP, Player* pPlayer)
 {
-
-    switch (cInfo->trainer_type)
-    {
-    case TRAINER_TYPE_CLASS:
-        if (pPlayer->GetClass() != cInfo->trainer_class)
-        {
-            return false;
-        }
-        break;
-    case TRAINER_TYPE_PETS:
-        if (pPlayer->GetClass() != CLASS_HUNTER)
-        {
-            return false;
-        }
-        break;
-    case TRAINER_TYPE_MOUNTS:
-        if (cInfo->trainer_race && pPlayer->GetRace() != cInfo->trainer_race)
-        {
-            // Allowed to train if exalted
-            if (FactionTemplateEntry const* faction_template = sFactionTemplateStore.LookupEntry(cInfo->faction))
-            {
-                if (pPlayer->GetReputationRank(faction_template->faction) == REP_EXALTED)
-                    return true;
-            }
-            return false;
-        }
-        break;
-    case TRAINER_TYPE_TRADESKILLS:
-        if (cInfo->trainer_spell && !pPlayer->HasSpell(cInfo->trainer_spell))
-        {
-            return false;
-        }
-        break;
-    default:
-        return false;                                   // checked and error output at creature_template loading
-    }
-    return true;
+    return RpgTrainerIsOfCompat(guidP, pPlayer);
 }
 
 bool RpgTrainTrigger::TeachesAffordableSpell(PlayerbotAI* ai, GuidPosition guidP, Player* bot)
 {
-    CreatureInfo const* cInfo = guidP.GetCreatureTemplate();
-
-    if (!cInfo)
+    if (!guidP.GetCreatureTemplate())
         return false;
 
-    // check present spell in trainer spell list
-    TrainerSpellData const* cSpells = sObjectMgr.GetNpcTrainerSpells(guidP.GetEntry());
-
-    uint32 trainerId = cInfo->trainer_id;
-    TrainerSpellData const* tSpells = trainerId ? sObjectMgr.GetNpcTrainerTemplateSpells(trainerId) : nullptr;
-
-    if (!cSpells && !tSpells)
-    {
-        return false;
-    }
-
+    // The live creature is what both cores read the trainer rows from: the visit (TrainerAction) and the trip decision
+    // must agree on the rows, so both ask the same object the bot is standing next to.
     Creature* trainer = guidP.GetCreature(bot->GetInstanceId());
-    float fDiscountMod = trainer ? bot->GetReputationPriceDiscount(trainer) : 1.0f;
 
-    uint32 const spendable = TrainerSpendableMoney(ai, (TrainerType)cInfo->trainer_type);
+    if (!trainer)
+        return false;
 
-    TrainerSpellMap trainer_spells;
-    if (cSpells)
-        trainer_spells.insert(cSpells->spellList.begin(), cSpells->spellList.end());
-    if (tSpells)
-        trainer_spells.insert(tSpells->spellList.begin(), tSpells->spellList.end());
+    float const fDiscountMod = bot->GetReputationPriceDiscount(trainer);
+    uint32 const spendable = TrainerSpendableMoney(ai, RpgTrainerTypeCompat(guidP, bot));
 
-    for (TrainerSpellMap::const_iterator itr = trainer_spells.begin(); itr != trainer_spells.end(); ++itr)
+    for (TrainerSpell const& tSpell : CollectTrainerSpellsCompat(trainer))
     {
-        TrainerSpell const* tSpell = &itr->second;
-
-        if (!tSpell)
-            continue;
-
         // Same rows, price and budget as the visit (TrainerAction) and the
         // trip decision: a row the trainer would refuse to teach at this
         // level is not a reason to walk over.
-        if (!TrainerSpellLearnableNow(bot, tSpell))
+        if (!RpgTrainerRowEligibleCompat(bot, trainer, tSpell))
             continue;
 
-        if (TrainerSpellPrice(tSpell, fDiscountMod) > spendable)
+        if (TrainerSpellPrice(&tSpell, fDiscountMod) > spendable)
             continue;
 
         return true;
@@ -396,17 +347,14 @@ bool RpgTrainTrigger::IsActive()
     if (guidP.IsHostileTo(bot))
         return false;
 
-    if (!IsTrainerOf(guidP.GetCreatureTemplate(), bot))
+    if (!IsTrainerOf(guidP, bot))
         return false;
     // Issue #872: autonomous alts train class spells only - never mount,
     // pet or tradeskill trainers (B11 spends gold on trainer spells, but
     // riding/pet training is a mount purchase by another name).
-    if (TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid()))
-    {
-        CreatureInfo const* cInfo = guidP.GetCreatureTemplate();
-        if (!cInfo || cInfo->trainer_type != TRAINER_TYPE_CLASS)
-            return false;
-    }
+    if (TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid()) &&
+        RpgTrainerTypeCompat(guidP, bot) != TRAINER_TYPE_CLASS)
+        return false;
 
     return TeachesAffordableSpell(ai, guidP, bot);
 }
@@ -449,7 +397,7 @@ bool RpgHomeBindTrigger::IsActive()
         return false;
 
     //Do not update for realplayers/always online when at max level.
-    if ((ai->IsRealPlayer() || sPlayerbotAIConfig.IsFreeAltBot(bot)) && bot->GetLevel() == DEFAULT_MAX_LEVEL)
+    if ((ai->IsRealPlayer() || sPlayerbotAIConfig.IsFreeAltBot(bot)) && bot->GetLevel() == MaxLevelCompat())
         return false;
 
     WorldPosition currentBind = AI_VALUE(WorldPosition, "home bind");
@@ -554,8 +502,12 @@ bool RpgUseTrigger::IsActive()
     // PlayerbotAI::UpdateAI would end it, but do not seek cameras out.
     case GAMEOBJECT_TYPE_FISHINGNODE:                   // 17 fishing bobber
     case GAMEOBJECT_TYPE_SUMMONING_RITUAL:              // 18
+    // The auction-house and lottery-kiosk types are Turtle's: the Forever client has no such object, so no bot can meet
+    // one (the same two rows of the list answer nothing there).
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     case GAMEOBJECT_TYPE_AUCTIONHOUSE:
     case GAMEOBJECT_TYPE_LOTTERY_KIOSK:
+#endif
     case GAMEOBJECT_TYPE_SPELLCASTER:                   // 22
     case GAMEOBJECT_TYPE_MEETINGSTONE:                  // 23
     case GAMEOBJECT_TYPE_FLAGSTAND:                     // 24
@@ -617,7 +569,7 @@ bool RpgCraftTrigger::IsActive()
             if (guidP.GetGameObjectInfo()->type != GAMEOBJECT_TYPE_SPELL_FOCUS)
                 continue;
 
-            if (guidP.GetGameObjectInfo()->spellFocus.focusId != pSpellInfo->RequiresSpellFocus)
+            if (SpellFocusIdWL4(guidP.GetGameObjectInfo()) != pSpellInfo->RequiresSpellFocus)
                 continue;
         }
 
@@ -763,11 +715,11 @@ bool RpgDuelTrigger::IsActive()
         return false;
 
     // caster or target already have requested duel
-    if (bot->m_duel || player->m_duel || !player->GetSocial() || player->GetSocial()->HasIgnore(bot->getObjectGuid()))
+    if (RpgInDuelCompat(bot) || RpgInDuelCompat(player) || !player->GetSocial() || RpgSocialIgnoreCompat(player, bot))
         return false;
 
     AreaTableEntry const* targetAreaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(player));
-    if (targetAreaEntry && !(targetAreaEntry->Flags & AREA_FLAG_DUEL))
+    if (targetAreaEntry && !RpgAreaAllowsDuelCompat(targetAreaEntry))
     {
         // Dueling isn't allowed here
         return false;
@@ -815,30 +767,25 @@ bool RpgGossipTalkTrigger::IsActive()
         TortoiseBots::IsHireQuestRecruiterEntry((uint32)guidP.GetEntry()))
         return false;
 
-    GossipMenuItemsMapBounds pMenuItemBounds = sObjectMgr.GetGossipMenuItemsMapBounds(guidP.GetCreatureTemplate()->gossip_menu_id);
-    if (pMenuItemBounds.first == pMenuItemBounds.second)
-        return false;
-
     Creature* creature = guidP.GetCreature(bot->GetInstanceId());
 
     if (!creature)
         return false;
 
+    if (!RpgCreatureHasGossipMenuCompat(creature, guidP.GetCreatureTemplate()))
+        return false;
+
     if (!creature->IsGossip())
         return false;
 
-
-    if (!ScriptMgrW3().OnGossipHello(bot, creature))
-    {
-        bot->PrepareGossipMenu(creature, creature->GetDefaultGossipMenuId());
-    }
+    RpgPrepareGossipMenuCompat(bot, creature);
 
     if (!bot->PlayerTalkClass)
         return false;
 
     GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
 
-    if (!menu.MenuItemCount())
+    if (!RpgGossipMenuItemCountCompat(menu))
         return false;
 
     return true;
@@ -899,7 +846,9 @@ bool RpgCampTrigger::IsActive()
         }
     }
 
-    bool const outdoors = bot->GetTerrain() && bot->GetTerrain()->IsOutdoors(spot->x, spot->y, spot->z);
+    // The spot is inside the camp scan radius (40 yd), so the unit's own outdoor flag answers for it: ForeverCore
+    // keeps no point query (Object::IsOutdoors is updated from the vmaps per unit).
+    bool const outdoors = IsOutdoorsCompat(bot);
     bool const blockedZone = TortoiseBots::IsCampBlockedZone(spot->zoneId ? spot->zoneId : bot->GetZoneId());
 
     if (tentNearby)
@@ -922,7 +871,7 @@ bool RpgCampTrigger::IsActive()
         state.moveStartedMs = now;
         if (!state.hasSavedRestBonus)
         {
-            state.savedRestBonus = bot->GetRestBonus();
+            state.savedRestBonus = RpgRestBonusCompat(bot);
             state.hasSavedRestBonus = true;
         }
         state.stayCapMs = TortoiseBots::ComputeJoinSitDurationMs(
@@ -946,7 +895,7 @@ bool RpgCampTrigger::IsActive()
         !bot->HasItemCount(TortoiseBots::CAMP_TENT_ITEM_ID, 1))
         return false;
 
-    time_t const gameTime = sWorld.GetGameTime();
+    time_t const gameTime = RpgGameTimeCompat();
     std::tm tmBuf{};
 #ifdef _WIN32
     localtime_s(&tmBuf, &gameTime);
@@ -1004,7 +953,7 @@ bool RpgCampTrigger::IsActive()
     state.moveStartedMs = now;
     if (!state.hasSavedRestBonus)
     {
-        state.savedRestBonus = bot->GetRestBonus();
+        state.savedRestBonus = RpgRestBonusCompat(bot);
         state.hasSavedRestBonus = true;
     }
     state.stayCapMs = sPlayerbotAIConfig.campSitDurationSec * 1000;

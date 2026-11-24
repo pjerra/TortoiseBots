@@ -31,6 +31,30 @@ inline VendorItemData const* VendorTemplateItemsCompat(Creature* vendor)
     return vendor ? vendor->GetVendorTemplateItems() : nullptr;
 }
 
+inline uint32 VendorTemplateIdCompat(CreatureInfo const* cInfo)
+{
+    return cInfo ? cInfo->vendor_id : 0;
+}
+
+inline VendorItemData const* VendorTemplateItemsCompat(uint32 vendorId)
+{
+    if (!vendorId)
+        return nullptr;
+    return sObjectMgr.GetNpcVendorTemplateItemList(vendorId);
+}
+
+// A vendor list as pointers on both cores: Turtle keeps VendorItem* in the list, ForeverCore keeps the values.
+inline std::vector<VendorItem const*> VendorItemRefsCompat(VendorItemData const* list)
+{
+    std::vector<VendorItem const*> out;
+    if (!list)
+        return out;
+    for (VendorItem* item : list->m_items)
+        if (item)
+            out.push_back(item);
+    return out;
+}
+
 inline bool SellItemToVendorCompat(Player* bot, Creature* /*vendor*/, ObjectGuid const& vendorguid, Item* item, uint32 count)
 {
     if (!bot || !item)

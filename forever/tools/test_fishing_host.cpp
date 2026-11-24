@@ -49,7 +49,8 @@ int main()
         CHECK(d.fail && std::string(d.fail) == "no-water");
     }
 
-    // Walking: far away asks for a move, near switches to the cast, and a
+    // Walking: far away asks for a move, an order near the water point
+    // switches to the cast, an idle bot stands on its dry spot first, and a
     // bot that cannot get there fails after a minute.
     {
         Facts f = At(Phase::Walking);
@@ -57,6 +58,16 @@ int main()
         CHECK(d.action == Action::MoveToSpot);
         CHECK(d.next == Phase::Walking);
         f.distanceToSpot = 5.9f;
+        d = Step(f);
+        CHECK(d.action == Action::None);
+        CHECK(d.next == Phase::Casting);
+        f.phase = Phase::Walking;
+        f.dryStand = true;
+        f.distanceToSpot = 5.9f;
+        d = Step(f);
+        CHECK(d.action == Action::MoveToSpot);
+        CHECK(d.next == Phase::Walking);
+        f.distanceToSpot = 2.4f;
         d = Step(f);
         CHECK(d.action == Action::None);
         CHECK(d.next == Phase::Casting);

@@ -3,6 +3,7 @@
 // moved, not changed), so the Turtle behaviour is untouched. Found through ai/playerbot/TbCompatW1.h (`__has_include`).
 #pragma once
 
+#include <ctime>
 #include <list>
 // The Turtle post-revive relocation (macros at the end of this file) reads the Turtle host manager.
 #include "runtime/BotManager.h"
@@ -71,6 +72,16 @@ inline float SafeLocYCompat(WorldSafeLocsEntry const* entry)
 inline float SafeLocZCompat(WorldSafeLocsEntry const* entry)
 {
     return entry ? entry->z : 0.0f;
+}
+
+inline uint32 HomeBindAreaIdCompat(Player* bot)
+{
+    return bot ? bot->GetHomeBindAreaId() : 0;
+}
+
+inline time_t DuelStartTimeCompat(Player* bot)
+{
+    return bot && bot->m_duel ? bot->m_duel->startTime : 0;
 }
 
 inline MapEntry const* MapEntryW1Compat(uint32 mapId)

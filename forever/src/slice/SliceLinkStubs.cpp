@@ -49,6 +49,11 @@
 #include "playerbot/strategy/values/MaintenanceValues.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "../../../runtime/GuildOrderStore.h"
+#include "../../../runtime/GuildOrderAccess.h"
+#include "playerbot/strategy/actions/GuildCreateActions.h"
+#include "playerbot/strategy/actions/GuildOrderBuyAction.h"
+#include "../../../runtime/DowntimeService.h"
+#include "playerbot/strategy/triggers/RpgTriggers.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
 #include "playerbot/strategy/actions/WorldBuffAction.h"
@@ -421,17 +426,6 @@ bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteB
 
 }
 
-// =====================================================================================================================
-// W1 (world life, grind and live). Owned by W1: no other package edits this block (the slice-9 item stand-ins above belong to W6a).
-// =====================================================================================================================
-namespace ai
-{
-// `can fight elite` is MaintenanceValues.h's inline CanFightEliteValue; its Calculate names ShouldSellValue::GroupMemberLeavingForVendor,
-// which lives in MaintenanceValues.cpp (17 places, not in the slice). A free bot has no group, so the call is never reached; for any other
-// bot the answer "a group member is leaving" makes the value false, so no elite is ever picked (LESS).
-bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI*) { NoteMisc(); return true; }
-}
-
 // behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the
 // summon's restore does not put it back on follow. The real function returns false when the bot has no summon record, which is always
 // the case here (ForeverCore keeps no summon bookkeeping): the host's BotMgr::Think places a far bot next to its master itself.
@@ -449,11 +443,19 @@ bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { return false; 
 #include "playerbot/TravelMgr.h"
 namespace ai
 {
-bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
-void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
-// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these three are its plain helpers.
+// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these are its plain helpers.
 uint32 TrainerSpellPrice(TrainerSpell const* tSpell, float discountMod) { return uint32(floor(tSpell->spellCost * discountMod)); }
 bool TrainerTrainsForFree(PlayerbotAI* ai) { return sPlayerbotAIConfig.autoTrainSpells == "free" || ai->HasCheat(BotCheatMask::gold); }
+// The visit's green-row gate. On ForeverCore the visit asks the host seam instead (TrainerAction checks
+// UsesForeverTrainerCompat and CanTeachTrainerSpellForeverCompat), so this body is only reached on a core without the
+// seam: no row is teachable then, which keeps the visit from paying for one.
+bool TrainerSpellLearnableNow(Player* bot, TrainerSpell const* tSpell)
+{
+    (void)bot;
+    (void)tSpell;
+    NoteMisc();
+    return false;
+}
 uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
 {
     if (TrainerTrainsForFree(ai))
@@ -471,6 +473,65 @@ uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
 }
 
 // =====================================================================================================================
+// The travel chooser and walker call the order store, the guild bank access and the trainer trigger helpers. None is
+// ported, so each answers "nothing exists": no order (Find/RelistEntries are the host's), no bank, no trainer.
+// =====================================================================================================================
+namespace TortoiseBots
+{
+namespace GuildOrders
+{
+void SetState(uint32_t, OrderState, OrderReason) { NotePool(); }
+void SetFarmZone(uint32_t, uint32_t, uint8_t, uint32_t, uint32_t) { NotePool(); }
+void SetSupply(uint32_t, SupplyStep, uint32_t, uint32_t, SupplyStep, OrderReason, uint32_t) { NotePool(); }
+void CommitAuctionZone(uint32_t, uint32_t) { NotePool(); }
+void NoteSearchFailed(uint32_t, uint32_t) { NotePool(); }
+void NoteSearchLanded(uint32_t) { NotePool(); }
+void NoteFarmZoneTargetFailed(uint32_t, uint32_t, uint32_t, float, float, float) { NotePool(); }
+uint32_t GuildBankTabCount(uint32_t) { NotePool(); return 0; }
+void NoteBankEmpty(uint32_t, uint32_t) { NotePool(); }
+void NoteMailEmpty(uint32_t, uint32_t) { NotePool(); }
+uint32_t NoteSupplySearchFailed(uint32_t, SupplyStep, uint32_t) { NotePool(); return 0; }
+uint32_t NoteArrivedAuctionVisit(uint32_t, bool) { NotePool(); return 0; }
+bool AuctionReentryAllowed(uint32_t, uint32_t) { NotePool(); return true; }
+}
+}
+
+namespace ai
+{
+// FishValues.cpp (the fishing order session) is not in the slice: no order fishes, so the rpg walk never stands down for
+// one. Owner: ai/playerbot/strategy/values/FishValues.cpp.
+bool IsOrderFishing(PlayerbotAI*) { NoteMisc(); return false; }
+// GuildCreateActions.cpp (the charter errands) is not in the slice: no petition can be bought. Owner:
+// ai/playerbot/strategy/actions/GuildCreateActions.cpp.
+bool BuyPetitionAction::canBuyPetition(Player*) { NoteMisc(); return false; }
+Unit* GuildOrderAuctioneerNear(PlayerbotAI*, Player*) { NotePool(); return nullptr; }
+uint32 OrderMailboxItems(Player*, uint32) { NotePool(); return 0; }
+std::vector<GuildOrderZoneSlice> GuildOrderZonesFor(int32_t) { NotePool(); return {}; }
+bool GuildOrderPreyHostileToBot(Player*, int32_t) { NotePool(); return false; }
+// No spot is screened: every fishing destination counts as guarded and is skipped (LESS: none is walked).
+bool IsFishingSpotGuarded(Player*, WorldPosition const&, float) { NoteMisc(); return true; }
+TortoiseBots::GuildOrders::SourcePlan PlanGuildOrderSources(Player*, uint32_t, TortoiseBots::GuildOrders::OrderType, bool)
+{
+    NotePool();
+    TortoiseBots::GuildOrders::SourcePlan plan;
+    plan.verdict = TortoiseBots::GuildOrders::OrderReason::NoSource;
+    return plan;
+}
+void AdvanceGuildOrderAfterAuction(PlayerbotAI*, Player*, TortoiseBots::GuildOrders::OrderRecord const&, TortoiseBots::GuildOrders::OrderReason) { NotePool(); }
+}
+
+// DowntimeService (runtime/DowntimeService.cpp) is not in the slice: no errand window is ever open, so the rpg quest
+// verbs stay on (the same answer a server without `.tb downtime` gives).
+namespace TortoiseBots
+{
+bool DowntimeService::IsDowntimeActive(PlayerbotAI*) { NoteMisc(); return false; }
+}
+
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no per-bot value store and no pinned-bot set.
+std::string RandomBotFacade::GetData(uint32, std::string) { NotePool(); return std::string(); }
+bool RandomBotFacade::IsPinnedBot(uint32) { NotePool(); return false; }
+
+// =====================================================================================================================
 // W3 (quests): the alt-bot service and the random-bot value store are not ported, so the quest actions record nothing in
 // them: no quest is "taken by an alt" and a drop leaves no pool value behind.
 // =====================================================================================================================
@@ -481,3 +542,11 @@ void AltBotService::AddTakenQuest(Player*, uint32_t) { NotePool(); }
 bool AltBotService::IsTakenQuest(uint32_t, uint32_t) const { NotePool(); return false; }
 }
 void RandomBotFacade::SetValue(Player*, std::string, uint32, std::string, int32) { NotePool(); }
+
+// =====================================================================================================================
+// Free-bot life: the shared value context the rpg/quest/town values reach also builds the trainer table and the
+// battlemaster list. Neither is ported (no trainer travel, no battleground queue from the open world), so both are empty.
+// =====================================================================================================================
+#include "playerbot/strategy/values/PvpValues.h"
+ai::trainableSpellMap* ai::TrainableSpellMapValue::Calculate() { NoteMisc(); return new trainableSpellMap(); }
+std::list<CreatureDataPair const*> ai::BgMastersValue::Calculate() { NoteMisc(); return {}; }

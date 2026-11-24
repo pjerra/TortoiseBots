@@ -1,7 +1,10 @@
 #pragma once
 
 // W1 (spec D4): the non-combat kit of a free bot, as a pure decision. The factory adds the class's spec strategy plus the world
-// kit; no follow, no wander, no rpg, travel, quest, vendor, maintenance, group or guild strategy. Core-free, so
+// kit; no follow, no wander, no rpg, quest, vendor, maintenance, group or guild strategy. The travel strategy is in the kit:
+// a free bot picks a destination and walks to it. The emote strategy is in it too, so a free bot can greet a real player when
+// the owner turns AiPlayerbot.RandomBotGreet on (off by default; GreetAction does the gating). `rpg` is added by the factory on top of this array when
+// AiPlayerbot.AutoDoQuests is on (a config choice, not part of the pure kit). Core-free, so
 // forever/tools/test_free_kit_policy.cpp checks it; the factory static_asserts the class ids are the core's.
 //
 // Class ids are the client's (SharedDefines.h): warrior 1, paladin 2, hunter 3, rogue 4, priest 5, shaman 7, mage 8,
@@ -46,7 +49,7 @@ inline char const* FreeSpecStrategy(std::uint8_t classId)
 // list). Everything here is registered in the slice's context.
 inline char const* const* FreeWorldKit()
 {
-    static char const* const kit[] = { "grind", "food", "loot", "roll", "default", "buff", nullptr };
+    static char const* const kit[] = { "grind", "travel", "food", "loot", "roll", "default", "buff", "emote", nullptr };
     return kit;
 }
 

@@ -26,6 +26,11 @@
 #endif
 
 #include <revision.h>
+#ifndef REVISION_HASH      // ForeverCore's revision.h is GitRevision.h, a class rather than the Turtle macros
+#include "GitRevision.h"
+#define REVISION_HASH GitRevision::GetHash()
+#define REVISION_DATE GitRevision::GetDate()
+#endif
 #include <string>
 
 namespace TortoiseBots {

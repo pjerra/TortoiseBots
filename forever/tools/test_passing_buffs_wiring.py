@@ -29,6 +29,15 @@ class PassingBuffsWiring(unittest.TestCase):
         self.assertIn("sRandomBotFacade.IsFreeBot(bot)", SERVICE)
         self.assertIn('#include "../ai/playerbot/RandomBotFacade.h"', SERVICE)
 
+    def test_the_sweep_rolls_a_new_meeting_and_not_a_known_pair(self):
+        # The gate takes the pair's presence on the previous sweep un-negated:
+        # PassingIsNewMeeting() does the inversion once. Passing `!seenLastSweep`
+        # inverted it twice, so every actual meeting was skipped and only a pair
+        # already standing there rolled (the player walking past never did).
+        self.assertIn("bool const seenLastSweep = m_seenPairs.find(key) != m_seenPairs.end();", SERVICE)
+        self.assertIn("if (!ai::PassingIsNewMeeting(seenLastSweep))", SERVICE)
+        self.assertNotIn("PassingIsNewMeeting(!", SERVICE)
+
     def test_the_world_tick_calls_the_sweep_in_the_slice_block(self):
         call = "TortoiseBots::PassingBuffsService::Instance().Update(diff);"
         at = SCRIPTS.index(call)

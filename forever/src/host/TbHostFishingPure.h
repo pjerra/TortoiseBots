@@ -41,6 +41,7 @@ struct Facts
     bool alive = true;
     bool inCombat = false;
     bool hasSpot = false;
+    bool dryStand = false;        // idle: the spot is the bank to stand on
     bool channelingFishing = false;
     bool hasBobber = false;
     bool bobberReady = false;
@@ -65,6 +66,14 @@ struct Decision
 // One transition. `Casting` always asks for a cast; the caller increments
 // `casts` and moves to CastingWait. A failed cast or a lost bobber retries up
 // to three times, then the errand fails so the order tick records the miss.
+// `dryStand` is an idle spot (the bank to stand on); an order spot is the
+// water point itself, and the legacy 12 yd stop keeps that bot on the bank.
+// The core resolves the fishing destination from the caster (10-20 yd in
+// front), so an idle bot must stand on its spot or the cast lands short of
+// the water the spot was chosen against.
+inline constexpr float kCastSpotYd = 2.5f;
+inline constexpr float kCastRangeYd = 12.0f;
+
 inline Decision Step(Facts const& f)
 {
     if (!f.inWorld)
@@ -79,7 +88,7 @@ inline Decision Step(Facts const& f)
     switch (f.phase)
     {
         case Phase::Walking:
-            if (f.distanceToSpot <= 12.0f)
+            if (f.distanceToSpot <= (f.dryStand ? kCastSpotYd : kCastRangeYd))
                 return { Action::None, Phase::Casting, nullptr };
             // The spot pick may be hundreds of yards away on foot.
             if (f.phaseMs > 240000)
