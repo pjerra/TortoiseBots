@@ -18,7 +18,7 @@ The features the bots use while online are in [What bots can do](../play/feature
 
 ## The pool registry
 
-Two character-database tables hold the pool:
+Three character-database tables hold the pool:
 
 | Table | What it holds |
 | :--- | :--- |
@@ -34,7 +34,7 @@ Two character-database tables hold the pool:
 ## Enabling and creating
 
 ```ini
-# modules/tortoise_bots.conf
+# worldserver.conf.d/tortoisebots.conf
 TortoiseBots.Enable = 1
 TortoiseBots.Pool.Enable = 1
 TortoiseBots.Pool.CreatePerMinute = 30

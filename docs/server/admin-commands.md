@@ -129,7 +129,7 @@ Decision capture is not a command: it starts with a run when `AiPlayerbot.Decisi
 
 ## Configuration reload
 
-`.reload config` re-reads the module's own `tortoise_bots.conf` keys: enable, pool, battleground, dashboard, automation, player commands, commander bindings and their friends. It does **not** re-read `aiplayerbot.conf`: the engine reads that file when the engine configuration loads, so an engine setting needs a restart (or a failed load retried by the reload). `TortoiseBots.Pool.Reset` is read only at world startup; `.reload config` never starts a reset.
+`.reload config` re-reads the module's own `worldserver.conf.d/tortoisebots.conf` keys: enable, pool, battleground, dashboard, automation, player commands, commander bindings and their friends. It does **not** re-read `aiplayerbot.conf`: the engine reads that file when the engine configuration loads, so an engine setting needs a restart (or a failed load retried by the reload). `TortoiseBots.Pool.Reset` is read only at world startup; `.reload config` never starts a reset.
 
 See [Configuration](configuration.md) for the files and their install rules.
 
