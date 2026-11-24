@@ -44,7 +44,7 @@ The party and actions panels send `action <intent>` to the server over the addon
 
 | Intent | What happens |
 | :--- | :--- |
-| `attack` | Every scoped bot attacks your target (a selected bot is the whole scope). |
+| `attack` | Sends the scoped bots at your target. |
 | `interrupt` | The first scoped bot with a ready interrupt casts it at your target. |
 | `stop` | Stops attacks; movement is kept. |
 | `flee` | Breaks combat and runs the flee behaviour. |
@@ -52,8 +52,8 @@ The party and actions panels send `action <intent>` to the server over the addon
 | `stance <near\|tank\|turnback\|behind>` | Sets the combat stance. |
 | `engage [seconds 0-60]` | Holds the bots until your first hit, then joins after the delay (default 4). |
 | `rebuff` | Opens the force-rebuff window out of combat. |
-| `pull [seconds] [ranged\|body]` | The tank pulls the target; the party holds and then joins. |
-| `pullback [seconds] [ranged\|body]` | The tank opens from range and returns to you. |
+| `pull [seconds] [ranged\|body]` | Orders a pull by the tank; a bot that cannot pull refuses. The party holds and then joins. |
+| `pullback [seconds] [ranged\|body]` | Orders the tank to open from range and return to you. |
 | `end pull` | Aborts the running pull. |
 | `come` / `hold` / `comestay` | Walks the bots to your spot and sets them to stay. |
 | `follow` / `stay` | Formation follow, or stay in place. |
@@ -64,9 +64,9 @@ The party and actions panels send `action <intent>` to the server over the addon
 | `learn` | Trains at a nearby trainer. |
 | `rest` / `drink` / `eat` | Sits, eats and drinks. |
 
-The scope is your selected bot when it is a live bot you may order, otherwise the bots of your party you may order. Refusals come back as `TBM:ACTION_ERR|<intent>|<code>|<message>`; success as `TBM:ACTION_ACK|<intent>|<scope>|<count>|<detail>`.
+The scope is your selected bot when it is a live bot you may order, otherwise the bots of your party you may order, or, when you are ungrouped, the bots you master. Refusals come back as `TBM:ACTION_ERR|<intent>|<code>|<message>`; success as `TBM:ACTION_ACK|<intent>|<scope>|<count>|<detail>`.
 
-The addon lights a button only for an intent the server advertises; an intent the build refuses answers `TBM:ACTION_ERR`.
+The server advertises one token per intent in its list (`action:<intent>`), plus the `pull-seconds`, `flee` and `engage` capabilities. An intent the build refuses answers `TBM:ACTION_ERR`.
 
 ## Crowd Control
 
@@ -146,6 +146,6 @@ Changes the bot's combat (`co`) or non-combat (`nc`) strategy set; `reset` resto
 
 ## Not on WoW Forever Yet
 
-These Turtle actions are absent here: `.bot action ...`, `.bot follow/stay/guard/free/ready/attack/interrupt/pullback/formation/strategy/loot/repair/sell/rest/downtime/use` as chat commands beyond the four single-bot verbs above, per-bot focus marks, the `free` movement order, ready checks, trade from an order, the `raid ...` intents, auto-CC and Sap from an addon action, and the `use-object` button. Some remain reachable in another form: crowd control through `.tb cc` / `.tb cmd cc`, toggles through `.tb cmd aoe|autocc|sap` and `.bot behavior`, and object use through `.tb cmd open`.
+These Turtle actions are absent here: `.bot action ...`; the other single-bot chat commands (`.bot guard`, `.bot free`, `.bot ready`, `.bot interrupt`, `.bot pullback`, `.bot formation`, `.bot strategy`, `.bot loot`, `.bot repair`, `.bot sell`, `.bot rest`, `.bot downtime`, `.bot use`); per-bot focus marks; the `free` movement order; ready checks; trade from an order; the `raid ...` intents; auto-CC and Sap from an addon action; and the `use-object` button. Some remain reachable in another form: crowd control through `.tb cc` / `.tb cmd cc`, toggles through `.tb cmd aoe|autocc|sap` and `.bot behavior`, and object use through `.tb cmd open`.
 
 **Not on WoW Forever yet.**

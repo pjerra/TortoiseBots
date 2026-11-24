@@ -2,7 +2,7 @@
 id: play-commands-roster-and-hiring
 title: Roster and Character Commands
 category: play
-summary: Commands for logging your own characters in as bots, summing them up, gearing and maintaining them.
+summary: Commands for logging your own characters in as bots, listing them, summoning, gearing and maintaining them.
 tags: [commands, roster, alts, gear]
 relates_to:
   - play-commands
@@ -72,7 +72,7 @@ There is no away-summary store: the addon's `alts` request lists the free bots y
 - `.tb login` logs any character in. Without a master it follows the typing GameMaster; `free` logs in a masterless bot that runs the free kit; from the console without a master it stands still.
 - `.tb group` puts a bot into the party of a bot or your own character and makes that character its master; `.tb ungroup` removes it and clears the master.
 - `.tb tele` is the test setup teleport, including into a character's instance; `revive` raises a dead source at the landing point.
-- `.tb free <bot> on|off` switches a bot between master-following and free play.
+- `.tb free <bot> on|off` turns an ungrouped, masterless bot into a free bot; `off` takes the free kit away (without a master it then stands).
 
 ## Free Bots
 
@@ -139,10 +139,9 @@ The default ceiling is what a spawned bot of that level gets (rare at most); `il
 .tb gear audit [level]
 ```
 
-- `upgrade` runs the bot's own equip-upgrades pass and reports the slots it changed.
-- `set` builds a fresh gear set for the level and quality (default: the bot's level and the level's quality cap). The spec word is optional; without one the bot's current spec is used.
+- `upgrade` runs the bot's own equip-upgrades pass and reports the slots it changed. It needs a logged-in host bot with a running engine and no combat.
+- `set` builds a fresh gear set for the level and quality (default: the bot's level and the level's quality cap). The spec word is optional; without one the bot's current spec is used. It also accepts your own character as the target.
 - `audit` reports the generated gear index for the level (defaults: 10, 30 and 60).
-- A named bot must be a logged-in host bot; `upgrade` also needs a running engine and no combat.
 
 ## Roles and Specs
 

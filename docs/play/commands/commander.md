@@ -13,9 +13,9 @@ relates_to:
 
 # Commander Commands
 
-On WoW Forever, group command is a GameMaster command surface: `.tb` typed in chat by a GameMaster, or `tb` on the worldserver console. A normal player's own bots take single-bot orders only (`.bot follow`, `.bot stay`, `.bot attack`, `.bot flee`); party-wide commander orders are not open to players yet.
+On WoW Forever, the commander machinery is a GameMaster command surface: `.tb` typed in chat by a GameMaster, or `tb` on the worldserver console. A normal player's bots take single-bot chat orders (`.bot follow`, `.bot stay`, `.bot attack`, `.bot flee`) and the addon's party action buttons; `.tb master` and `.tb cmd` are not open to players.
 
-The commander commands bind a group of bots to one commander. That commander stands outside the bot party and gives orders from anywhere. The bots' own combat AI still fights; the orders say what to fight, where to stand, and where to walk.
+The commander commands bind a group of bots to one commander. The commander usually stands outside the bot party and can give orders from anywhere on their map. The bots' own combat AI still fights; the orders say what to fight, where to stand, and where to walk.
 
 ## Summary
 
@@ -34,10 +34,10 @@ The commander commands bind a group of bots to one commander. That commander sta
 ```
 
 - The commander must be a logged-in bot or your own character. A bot cannot command itself.
-- `party <leader>` binds every bot of that bot-led party. `party <leader> <commander>` names a lead bot explicitly.
+- Addresses: one bot by name; `party <leader>` for every host bot in that character's party, with that character as the binding's lead; `party` alone for the bots already bound to you, else the one commander's bots, else the one bot-led party.
 - `none` releases the bots; they go back to following their own masters.
-- Binding does not move anyone: the usual case is a commander outside the bot party, but a player leading their own bot party can name it too, and then the lead is a bot of that party.
-- A binding ends by itself when the party it was made on stops being that party: the lead leaves the world or the party, the group leadership changes, another player joins, the party becomes a raid or grows past five, the lead lies dead past the dead grace, or the commander is away past the master grace.
+- Binding does not move anyone and does not change the group.
+- A binding ends by itself when the party it was made on stops being that party: the lead leaves the world or the party, the group leadership changes, another player joins a binding whose commander is outside the party, the party becomes a raid or grows past five, the lead lies dead past the dead grace, the commander leaves an in-party binding, or the commander is away past the master grace.
 - Bindings are kept in memory only unless `TortoiseBots.Commander.KeepBindings = 1` (default `0`), so a restart drops them.
 
 ## Reading a Binding
@@ -54,7 +54,7 @@ Reports every binding, or the one commander's. There is no separate bind or unbi
 .tb cmd <verb> [arguments]
 ```
 
-The orders go to the party your binding commands; `.tb cmd` needs a player character as the sender and a standing binding (`not-bound` otherwise). Each accepted order is logged on the binding card.
+The orders go to the party your binding commands; `.tb cmd` needs a player character as the sender and a standing binding (`not-bound` otherwise). Combat, movement and placement orders are logged on the binding card; object tasks are not.
 
 | Verb | Use |
 | :--- | :--- |
