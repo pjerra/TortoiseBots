@@ -58,7 +58,7 @@ Bots manage their own money by balancing earnings against repairs, training and 
 <summary>Mount savings & trainer reserves in detail</summary>
 
 - **Trainer reserve:** bots keep back the money for upcoming class ranks. A trainer visit charges only ranks the bot can learn at its level.
-- **Mount travel:** [`AiPlayerbot.MountBreakEvenFactor`](../server/settings/economy.md#aiplayerbotmountbreakevenfactor) keeps bots on foot for short trips: roughly 350 yards on a 9% mount, 50 yards on a 60% mount and 30 yards on a 100% mount with the default `1.5`. `0` mounts for any trip.
+- **Mount travel:** [`AiPlayerbot.MountBreakEvenFactor`](../server/settings/economy.md#aiplayerbotmountbreakevenfactor) keeps bots on foot for short trips: roughly 50 yards on a 60% mount and 30 yards on a 100% mount with the default `1.5` (`0` mounts for any trip).
 
 </details>
 
