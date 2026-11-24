@@ -187,7 +187,7 @@ nodes:
   - id: server-settings-dungeons-raids
     path: server/settings/dungeons-raids.md
     category: server
-    summary: Configuration flags for encounter mechanics, hazard avoidance, raid tactics, and creature auras.
+    summary: "Settings for the run leader and for bot behaviour in dungeons: pulls and rests, retreats, charmed allies, threat lines, creature auras, the combat monitor and reach."
   - id: server-settings-combat
     path: server/settings/combat.md
     category: server
