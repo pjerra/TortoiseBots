@@ -2,8 +2,8 @@
 id: server-settings-guild-orders
 title: Guild order settings
 category: server
-summary: Configuration switches for guild bank supplies, guild bank gold and sub-orders between guild bots.
-tags: [config, guild, orders, guild-bank, gold, sub-orders]
+summary: Configuration switches for guild bank access and the bot rank that guild orders use.
+tags: [config, guild, orders, guild-bank, rank]
 relates_to:
   - play-guild-orders
   - server-settings-economy
@@ -11,68 +11,39 @@ relates_to:
 
 # Guild Order Settings
 
-These settings control how orders use the guild bank and sub-orders between guild bots. They go in `aiplayerbot.conf`; see [How configuration works](../configuration.md). Guild bank rank and tab permissions still apply.
+Guild orders use the guild bank and one shared bot rank. The rank switch lives in `tortoisebots.conf`; see [How configuration works](../configuration.md). Bank tab permissions still apply.
 
 ## Summary
 
 | Setting | Default | What it does |
 | :--- | :---: | :--- |
-| [`AiPlayerbot.GuildOrderBankWithdraw`](#aiplayerbotguildorderbankwithdraw) | `1` | Lets orders withdraw only the missing item or reagent count from the guild bank before shopping or farming. |
-| [`AiPlayerbot.GuildOrderBankGold`](#aiplayerbotguildorderbankgold) | `1` | Lets orders cover an auction purchase with guild bank money after spending the bot's own gold. |
-| [`AiPlayerbot.GuildOrderPlayerBuy`](#aiplayerbotguildorderplayerbuy) | `0` | Lets players give Buy orders for finished goods from the auction house. |
-| [`AiPlayerbot.GuildOrderSubOrders`](#aiplayerbotguildordersuborders) | `1` | Lets orders ask another guild bot to make or farm a missing item. |
-| [`AiPlayerbot.GuildOrderSubOrderDepth`](#aiplayerbotguildordersuborderdepth) | `3` | How deep sub-order branches may nest. |
-| [`AiPlayerbot.GuildOrderAuctionVisits`](#aiplayerbotguildorderauctionvisits) | `3` | How many arrived auction-house trips without reaching an auctioneer move the order leg on. |
-| [`AiPlayerbot.GuildOrderBotRank`](#aiplayerbotguildorderbotrank) | `1` | Whether bots in a guild with a real player share one rank for guild bank access. |
-| [`AiPlayerbot.CraftToolsAlways`](#aiplayerbotcrafttoolsalways) | `1` | Bots always have the tools their recipes need and never sell or auction them. |
-### `AiPlayerbot.GuildOrderBankWithdraw`
+| [`TortoiseBots.World.GuildOrderBotRank`](#tortoisebotsworldguildorderbotrank) | `1` | Gives every bot in a guild with a real player one shared rank. |
 
-Allows guild orders to take only the missing item or crafting material count from accessible guild bank tabs.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+## Settings
 
-When off, orders skip the guild bank item step and continue to the auction house or the bot's own gathering and crafting. The core guild bank still checks rank access and records each withdrawal.
+### `TortoiseBots.World.GuildOrderBotRank`
+Whether bots in a guild with a real player share one rank for guild bank access.
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** no, read on demand (`.reload config` applies it)
 
-### `AiPlayerbot.GuildOrderBankGold`
+When on, a bot joining such a guild takes the guild's bot rank (the lowest by default), so all bots share one rank the master can open bank tabs to. A rank you give a bot by hand stays. Guilds made only of bots keep their own ranks. With the switch off the server applies no ranks and the access report shows no rank.
 
-Allows guild orders to use guild bank money to cover an auction house purchase after the bot's own gold.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+See [bot rank and bank access](../../play/guild-orders.md#guild-bank-access).
 
-An order's optional `gold=<copper>` cap limits its total guild bank withdrawals. If omitted, there is no order cap, except caps set for the item branch. Use `gold=0` to forbid guild bank money for the order. The core guild bank checks money access and records each withdrawal.
+## Features not in the Forever build
 
 ### `AiPlayerbot.GuildOrderPlayerBuy`
+**Not on WoW Forever yet.** Players cannot give Buy orders at all: the addon and the server refuse a Buy order, whatever this key says. Farm and craft orders still buy missing materials on the auction house themselves.
 
-Lets players give Buy orders for finished goods from the auction house (`.bot order <bot> buy ...`, and the Buy option in the addon order window).
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+### Bank withdrawals and guild gold
 
-When off, a player's Buy order is refused and the addon hides Buy. Farm and craft orders still buy materials on the auction house themselves while they work, the way they do today.
+**Not on WoW Forever yet.** Orders never take items or gold from the guild bank; a bot spends only its own gold. `AiPlayerbot.GuildOrderBankWithdraw` and `AiPlayerbot.GuildOrderBankGold` therefore have no effect. The `gold=<copper>` cap on an order does still cap the bot's own auction spending.
 
-### `AiPlayerbot.GuildOrderSubOrders`
+### Sub-orders
 
-Allows working orders to place sub-orders on other guild bots when the ordering bot can neither make nor farm a missing item.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
-
-When off, the supply step reports no candidate and the item lands on the parent's need list instead. Reagents any vendor sells without a stock limit are bought by the crafter and never delegated.
+**Not on WoW Forever yet.** A craft order does not ask another guild bot for a missing material; an item it cannot make or farm ends the order. `AiPlayerbot.GuildOrderSubOrders` and `AiPlayerbot.GuildOrderSubOrderDepth` do nothing.
 
 ### `AiPlayerbot.GuildOrderAuctionVisits`
-
-How many arrived trips at the order's auction house end the buying step when no auctioneer comes into interact range. The bot first commits to one auction house instead of wandering between cities; after this many visits with nobody to buy from, the order moves to gathering, farming or asking another guild bot, the same as when the auction house has no listing. `0` disables the exit (the leg keeps waiting for a seller).
-**Default:** `3` · **Values:** `0` disables, `1` and up move on after that many visits · **Restart:** needed
-
-### `AiPlayerbot.GuildOrderSubOrderDepth`
-
-How many levels a sub-order branch may hold, counting the top-level order as 1.
-**Default:** `3` · **Values:** `1`-`16` (out of range falls back to `3`) · **Restart:** needed
-
-The same item never appears twice in one branch, whatever the depth.
-
-### `AiPlayerbot.GuildOrderBotRank`
-
-Whether bots joining a guild with a real player get one bot rank (the lowest by default) and bank tab 1 is kept open to it. See [bot rank and bank access](../../play/guild-orders.md#guild-bank-access).
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+**Not on WoW Forever yet.** The Forever auction step is one search at the nearest faction auctioneer within 300 yards, so there is no counted-visit exit.
 
 ### `AiPlayerbot.CraftToolsAlways`
-
-Bots always have the tools their recipes need (Arclight Spanner, Blacksmith Hammer and the like).
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
-
-When on, a missing tool is added to the bot's bags when it crafts, and bots never sell or auction a recipe tool. When off, only the item cheat adds tools, and tools sell like other items.
+**Not on WoW Forever yet.** Recipe tools on Forever come from [`TortoiseBots.AutoTools`](../configuration.md#forevercore-module-keys-tortoisebotsconf), which gives free and pool bots the tool of every profession they know, so a craft order does not need this key. `AiPlayerbot.GuildOrderBotRank` is also not read; the switch is `TortoiseBots.World.GuildOrderBotRank` above.
