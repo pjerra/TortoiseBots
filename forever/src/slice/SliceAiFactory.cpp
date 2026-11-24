@@ -475,6 +475,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     }
     if (!player)
         return;
+    // Commanded bots greet a real player; a free bot gets the strategy from its own kit, and GreetAction gates pool-like
+    // bots behind AiPlayerbot.RandomBotGreet.
+    nonCombatEngine->addStrategy("emote");
     int const tab = KitSpecTab(player, facade);
 
     switch (player->GetClass())
