@@ -2,7 +2,7 @@
 id: server-install
 title: Building, Installing & Updating TortoiseBots
 category: server
-summary: How to build, compile, and configure TortoiseBots natively with the Tortoise WoW core, and verify your running build version.
+summary: How to build the module for WoW Forever (ForeverCore), install its configuration and database files, enable the bot engine, and check the running build.
 tags: [server, install, build, cmake, compile, update, version]
 relates_to:
   - server-configuration
@@ -12,93 +12,125 @@ relates_to:
 
 # Building, Installing & Updating TortoiseBots
 
-TortoiseBots compiles natively as an in-tree module for the Tortoise WoW 1.18.1 server core. This page covers cloning the module, compiling with CMake, config file and database setup, and checking which version is running.
+TortoiseBots compiles as an in-tree module for **ForeverCore**, the TrinityCore-based server for WoW Forever (Classic 1.60.1 client). Unlike the Turtle WoW build, the module has two layers:
+
+- the session, host services, pool and `.tb` commands, which always build;
+- the legacy bot engine, which builds only with `TORTOISEBOTS_SLICE1=ON`. Without it bots have no brain and `.bot` is unknown to the core.
+
+The pinned core commit is in `forever/PINNED_CORE`. The module does not patch the core: it uses the public game API and `ScriptMgr` hooks.
 
 For what the settings mean, see [How configuration works](configuration.md).
 
 ## Prerequisites
 
-A working build environment meeting the [`tortoise-wow`](https://github.com/tortoise-wow/tortoise-wow) repository requirements on the `main` branch.
+A working build environment for the pinned ForeverCore checkout (CMake, a C++ compiler, MySQL client libraries). Build the server itself first; the module is one more static library in that build.
 
-## Quick Build & Installation
+## Quick build
 
-From the root of your `tortoise-wow` server checkout:
+From the root of the ForeverCore checkout:
 
-### 1. Clone the Module
-
-Clone TortoiseBots into the `modules/` directory:
+### 1. Put the module in the tree
 
 ```bash
-git clone https://github.com/Sagiroth/TortoiseBots.git modules/TortoiseBots
+git clone https://github.com/Sagiroth/TortoiseBots.git src/modules/TortoiseBots
 ```
 
-### 2. Configure with CMake
+The core discovers it through `trinity_add_module`; no core file is edited.
+
+### 2. Configure
 
 ```bash
-cmake -B build \
-  -DMODULES=static \
-  -DMODULE_TORTOISEBOTS=static
+cmake -S . -B build \
+  -DBUILD_TORTOISEBOTS=1 \
+  -DTORTOISEBOTS_SLICE1=ON
 ```
 
-| CMake Option | Purpose |
-| :--- | :--- |
-| `MODULES` | Static module linkage into the core executable. |
-| `MODULE_TORTOISEBOTS` | Selects TortoiseBots as the active native bot engine. |
+| CMake option | Default | Purpose |
+| :--- | :---: | :--- |
+| `BUILD_TORTOISEBOTS` | OFF | Builds the module at all. |
+| `TORTOISEBOTS_SLICE1` | OFF | Also builds the legacy bot engine, the engine's config and `.bot`. OFF gives the session/host-only module. |
+| `BUILD_PLAYERBOT_V2` | OFF | Must stay OFF: the configure stops when both bot systems are asked for. |
+| `BUILD_FOREVER_LUA` | OFF | Builds the module's provider for the ForeverLua engine. It needs the `ForeverLua` module beside this one (`src/modules/ForeverLua`), otherwise configure stops with the expected path. |
+| `TORTOISEBOTS_DEBUG_INFO` | OFF | Compiles the module with debug info (`-g`) for backtraces. |
 
-### 3. Compile the Server
+### 3. Build and install
 
 ```bash
 cmake --build build -j"$(nproc)"
-```
-
-### 4. Install Binaries and Assets
-
-```bash
 cmake --install build
 ```
 
-## Configuration Files and Database Migrations
+## Configuration files
 
-### Configuration Files
+The install writes the module's templates and never overwrites a live file:
 
-On install:
-
-- `aiplayerbot.conf.dist` is installed next to `mangosd.conf`. On the first install only, `aiplayerbot.conf` is created from it. Later installs keep your edited file.
-- `modules/tortoise_bots.conf` is created from the `conf/tortoise_bots.conf.dist` template the same way: created once, never overwritten.
-
-### SQL Migrations
-
-Module database updates live in `data/sql/world/` and `data/sql/character/` of the module source tree. The core's automatic database updater reads these directories and applies new migrations at startup. No manual SQL patches needed.
-
-> Caution: the updater applies every pending migration file it finds, including ones older than your newest applied migration (for example after a crash, a stale container, or a restored database). If your world database holds custom or hand-applied rows, either set `Database.AutoUpdate.Enabled = 0` in `mangosd.conf` before restarting and apply migrations by hand, or keep a known-good backup and confirm the pending list first. See `CONTRIBUTING.md` (migrations are re-run when their content changes).
-
-## Verifying Your Build Version
-
-The version comes from the repository root `VERSION` file, written by the release workflow on every release. If the file is unreadable or absent, the build reports `dev`.
-
-Four ways to check the running version:
-
-| Verification Method | Where to Look | Expected Output |
+| File | Installed from | Read by |
 | :--- | :--- | :--- |
-| **Server startup log** | Server console or `Server.log` | `TortoiseBots <version> (AI enabled\|disabled)`, plus the author/source attribution line. |
-| **In-game chat command** | `.bot version` (aliases `.bot v`, `.bot about`, `.bot credits`) | `TortoiseBots <version>`, `TBM:VERSION|<version>`, and the author attribution line. |
-| **Addon roster reply** | Addon roster responses carrying `TBM:VERSION|<version>` | The addon shows the server version from this line (shows `server ?` when the connected module never sends it). |
-| **Git release tags** | Git repository tags | Semver release tags (e.g. `v1.4.0`), alongside older per-merge `<UTC date>-v<N>` build tags. |
+| `modules/tortoise_bots.conf` (created once) | `forever/conf/tortoisebots.conf.dist` | The module itself (`TortoiseBots.*` keys: enable, pool, battleground, dashboard, automation, player commands). |
+| `aiplayerbot.conf` | `forever/conf/aiplayerbot.conf.dist`, only in a `TORTOISEBOTS_SLICE1` build | The legacy engine, at engine start, from **the same folder as `worldserver.conf`**. The installed `.dist` is a template; the deployment copies it next to `worldserver.conf` as `aiplayerbot.conf`. |
 
-If the log shows `dev`, the build had no readable root `VERSION` file.
+- Set `TortoiseBots.Enable = 1` in `modules/tortoise_bots.conf`. The shipped default is `0`: the module loads, its commands refuse and nothing ticks.
+- The engine's `aiplayerbot.conf` is read through the engine's own config reader, not the core's. If it is missing, the server logs `TortoiseBots: engine configuration not loaded (...)` and the next engine start tries again.
+- `TortoiseBots.Pool.Enable = 0`, `TortoiseBots.Bg.Enable = 0` and `AiPlayerbot.RunTrace.Enabled = 0` are off by default because they are big features; see [Bot pool](bot-pool.md), [Queues](../world/queues.md) and [Run trace](run-trace.md).
 
-## Updating TortoiseBots
+## Database
 
-1. Pull the latest module code:
-   ```bash
-   cd modules/TortoiseBots
-   git pull origin main
+The module ships SQL in two folders, both idempotent and both delivered by the core's updater or by hand:
+
+| Folder | Contents |
+| :--- | :--- |
+| `forever/sql/world/` | Dungeon plan tables and plan rows, boss rows, spec weight scales, travel-node tables, the zone-level cache. |
+| `forever/sql/characters/` | Module tables: pool registry and reset state, commander bindings, guild orders and guild bot rank, disenchant queue, AI value store, custom strategies. |
+
+### Delivering it through the core updater
+
+1. Copy `forever/sql/world/` to `<SourceDirectory>/sql/tortoisebots/world/` and `forever/sql/characters/` to `<SourceDirectory>/sql/tortoisebots/characters/`.
+2. Once per database, add the include row:
+   ```sql
+   INSERT INTO updates_include (path, state) VALUES ('$/sql/tortoisebots/world', 'RELEASED');
+   INSERT INTO updates_include (path, state) VALUES ('$/sql/tortoisebots/characters', 'RELEASED');
    ```
-2. From the core repository root, recompile and reinstall:
+   The first row goes into the world database, the second into the characters database.
+3. Restart the worldserver. The updater applies every file it has not seen (or whose hash changed) in file-name order.
+
+### Applying a file by hand
+
+On a server without the include rows, run the file against the right database, for example:
+
+```bash
+mysql -u USER -p world < forever/sql/world/2026_11_20_00_tortoisebots_plans.sql
+mysql -u USER -p characters < forever/sql/characters/2026_11_20_01_tb_pool.sql
+```
+
+The SQL files name their database in their statements, so they can also be piped into a client already connected to the server.
+
+**Self-created tables.** Several character tables are also created by the module itself the first time the feature is enabled, when the database user may create tables: the pool tables, the commander binding, the guild bot rank, the disenchant queue and the AI store. That path is for a server whose user may not. A missing table disables that feature with one logged line; it never aborts the server.
+
+## Checking the build
+
+| Where | What you should see |
+| :--- | :--- |
+| Server startup log | `TortoiseBots (ForeverCore port, spike): enabled` (or `disabled` when `TortoiseBots.Enable = 0`). |
+| Server log | `TortoiseBots: engine configuration loaded in <n> ms` in a `TORTOISEBOTS_SLICE1` build; a warning naming the reason when it is missing. |
+| Server log | The first `not ported yet` line, when the engine reaches one of the unported services. |
+| `.tb status` | `TortoiseBots: enabled, <n> bot session(s).` |
+| `.bot version` | `TortoiseBots: version: forever-port (core <core version>)`, the addon line `TBM:VERSION|forever-port`, and the author line. |
+| `.tb unported` | The closed list of unported features with the number of times the engine reached each. |
+
+There is no release semver in the module itself: the build identifies itself as `forever-port` plus the core revision the module was compiled against.
+
+## Updating
+
+1. Pull the module:
    ```bash
-   cd ../..
+   cd src/modules/TortoiseBots
+   git pull
+   ```
+2. Re-run configure, build and install from the core root:
+   ```bash
+   cmake -S . -B build -DBUILD_TORTOISEBOTS=1 -DTORTOISEBOTS_SLICE1=ON
    cmake --build build -j"$(nproc)"
    cmake --install build
    ```
-3. Restart `mangosd`. The core auto-updater applies new SQL migrations automatically, and your `aiplayerbot.conf` settings stay intact. If the database may hold custom content or a stale container may have rendered an old config, check the pending migrations first (or set `Database.AutoUpdate.Enabled = 0` and apply them by hand).
-4. If the update adds new settings, check `aiplayerbot.conf.dist` and merge the keys you want.
+3. Copy any new SQL and restart. Your `modules/tortoise_bots.conf` and `aiplayerbot.conf` are kept; merge new keys from the `.dist` templates by hand.
+4. Check `.tb unported` if you want to know which engine services the new build still lacks.

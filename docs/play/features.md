@@ -2,7 +2,7 @@
 id: play-features
 title: What Bots Can Do
 category: play
-summary: Catalog of the major bot capabilities, default states, configuration toggles, and engine limits.
+summary: Catalog of what the WoW Forever build does, with its player commands, bot engine, pool, guild orders, auction market, queues, switches and defaults.
 tags: [features, capabilities, settings, defaults]
 relates_to:
   - play-getting-started
@@ -13,221 +13,171 @@ relates_to:
 
 # What Bots Can Do
 
+This page describes the TortoiseBots module as it runs on **WoW Forever** (ForeverCore, Classic 1.60.1 client). Features of the Turtle WoW version that are not built here are listed at the end: [Not on WoW Forever yet](#not-on-wow-forever-yet).
+
 How to read the tables:
 
-- **On?** — whether a fresh server has it switched on. "Always" means there is no switch.
-- **Setting** — the line in the server's `aiplayerbot.conf` that changes it. Only the person who runs the server can change it.
+- **On?** — the shipped default. "Always" means there is no switch.
+- **Where** — the line in `modules/tortoise_bots.conf` (`TortoiseBots.*`) or `aiplayerbot.conf` (`AiPlayerbot.*`) that changes it. Only the server admin can change it.
 - **More** — where it is explained.
+
+Two things must be true before any row below works:
+
+1. The server is built with the bot engine (`TORTOISEBOTS_SLICE1=ON`) and the module is enabled (`TortoiseBots.Enable = 1`, off by default). Without the engine there are no bots and `.bot` is unknown; without the switch the module loads but does nothing.
+2. Pool bots need the pool turned on and started; your own alts are logged in by you with `.bot add`.
 
 New here? Read [Getting Started](getting-started.md) first.
 
-## Your Party (Owned Bots, Hiring, Following, Commands)
+## Your Own Characters
 
-### Your own alts
-
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Log in your alts as bots and command them | Always | — | [`.bot add`](commands/roster-and-hiring.md#bot-add) |
-| An alt that leaves your group keeps playing on its own (alt-bot) | No | [`AiPlayerbot.AltBots`](../server/settings/party.md#aiplayerbotaltbots) | [Alt-bots](commands/roster-and-hiring.md#alt-bots-autonomous-alts) |
-| Alt-bots log out when you log out | No | [`AiPlayerbot.AltBotsLogoutWithOwner`](../server/settings/party.md#aiplayerbotaltbotslogoutwithowner) | [Alt-bots](commands/roster-and-hiring.md#alt-bots-autonomous-alts) |
-| Alts in your group level up to your level | No | [`AiPlayerbot.SyncAltLevelToMaster`](../server/settings/party.md#aiplayerbotsyncaltleveltomaster) | [Getting started](getting-started.md#levelling-spells-and-gear) |
-| `.bot maintenance`: refill reagents, ammo, food and repair | No | [`AiPlayerbot.OwnedBotMaintenanceEnabled`](../server/settings/party.md#aiplayerbotownedbotmaintenanceenabled) | [Maintenance](commands/roster-and-hiring.md#bot-maintenance) |
-| `.bot autogear`: dress a bot in level-fitting gear | No | [`AiPlayerbot.OwnedBotAutogearEnabled`](../server/settings/party.md#aiplayerbotownedbotautogearenabled) | [Autogear](commands/roster-and-hiring.md#bot-autogear) |
-| `.autogear` for your own player character | GM only | [`AiPlayerbot.PlayerAutogearForAll`](../server/settings/party.md#aiplayerbotplayerautogearforall) | [Autogear for players](commands/roster-and-hiring.md#autogear) |
+| Log one of your own characters in as a bot; it joins your party | Always | `TortoiseBots.Player.Commands = 1` | [`.bot add`](commands/roster-and-hiring.md#logging-in-and-out) |
+| Up to four of your characters online as bots at once | Always | `TortoiseBots.Player.MaxBots = 4` | [Roster](commands/roster-and-hiring.md) |
+| `.bot logout` logs one out | Always | — | [Roster](commands/roster-and-hiring.md) |
+| `.bot who` lists the bots you may order; a GM may add `all` | Always | — | [Inspecting](commands/bot-panel.md) |
+| `.bot stats [bot]` gives one line about the fleet or one bot | Always | — | [Inspecting](commands/bot-panel.md) |
+| `.bot summon <bot>` brings a bot to your side | Yes | `AiPlayerbot.OwnedBotSummonCooldown = 300` (seconds between summons of the same bot) | [Summon](commands/roster-and-hiring.md#summon) |
+| `.bot follow`, `stay`, `attack`, `flee` give a bot one order | Always | — | [Whisper commands](commands/whispers.md) |
+| `.bot maintenance <bot>` refills the kit and repairs | No | `AiPlayerbot.OwnedBotMaintenanceEnabled = 0` | [Maintenance](commands/roster-and-hiring.md#maintenance) |
+| `.bot autogear <bot>` dresses an owned bot in fitting gear | No | `AiPlayerbot.OwnedBotAutogearEnabled = 0` | [Autogear](commands/roster-and-hiring.md#gearing) |
+| `.autogear` for your own player character | GM only | `AiPlayerbot.PlayerAutogearForAll = 0` | [Autogear](commands/roster-and-hiring.md#autogear) |
 
-### Hired companions
+The bot answers `TortoiseBots: <verb>: ...` on the channel you typed on. A refused order names a short code (`refused too-many: ...`), never an account.
 
-| Feature | On? | Setting | More |
+## Party Controls
+
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Hire companions at `<Mercenary Hire>` recruiters | Yes | [`AiPlayerbot.HireEnabled`](../server/settings/hiring.md#aiplayerbothireenabled) | [Hiring](commands/roster-and-hiring.md#bot-hire) |
-| Hire with the `.bot hire` command anywhere | No | [`AiPlayerbot.HireAnywhere`](../server/settings/hiring.md#aiplayerbothireanywhere) | [Hiring](commands/roster-and-hiring.md#bot-hire) |
-| Hire a whole raid in one go (needs hiring anywhere on, and more than 4 hires allowed) | No | [`AiPlayerbot.HireAnywhere`](../server/settings/hiring.md#aiplayerbothireanywhere), [`AiPlayerbot.HireMaxBotsPerPlayer`](../server/settings/hiring.md#aiplayerbothiremaxbotsperplayer) | [Raid hires](commands/roster-and-hiring.md#bot-hire-raid) |
-| Level 60 hires in fixed gear tier sets | Yes | [`AiPlayerbot.HireGearTiersEnabled`](../server/settings/hiring.md#aiplayerbothiregeartiersenabled) | [Mercenary contracts](commands/roster-and-hiring.md#mercenary-contracts) |
-| Gear tier unlocks count for your whole account | No | [`AiPlayerbot.HireGearUnlockAccountWide`](../server/settings/hiring.md#aiplayerbothiregearunlockaccountwide) | [Recruiter services](commands/roster-and-hiring.md#capital-recruiter-services) |
-| All gear tier quests offered at once | No | [`AiPlayerbot.HireGearAllQuestsAvailable`](../server/settings/hiring.md#aiplayerbothiregearallquestsavailable) | [Recruiter services](commands/roster-and-hiring.md#capital-recruiter-services) |
-| Hires loot and roll on loot | No | [`AiPlayerbot.HireLoot`](../server/settings/hiring.md#aiplayerbothireloot) | [Loot rules](dungeons-and-raids.md#loot-rolling-rules) |
-| Hires come along into battlegrounds | No | [`AiPlayerbot.HireAllowPvP`](../server/settings/hiring.md#aiplayerbothireallowpvp) | [Battlegrounds](../world/queues.md#battlegrounds-with-your-own-party-bots) |
-| Hire the other faction at neutral inns | No | [`AiPlayerbot.HireCrossFactionNeutralInns`](../server/settings/hiring.md#aiplayerbothirecrossfactionneutralinns) | [Hiring](commands/roster-and-hiring.md) |
-| Buy world buffs at capital recruiters | Yes | [`AiPlayerbot.WorldBuffsEnabled`](../server/settings/hiring.md#aiplayerbotworldbuffsenabled) | [World buffs](commands/roster-and-hiring.md#world-buffs-at-capital-recruiters) |
-| Keep world buffs when entering a raid | No | [`AiPlayerbot.WorldBuffsKeepInRaids`](../server/settings/hiring.md#aiplayerbotworldbuffskeepinraids) | [World buffs](commands/roster-and-hiring.md#world-buffs-at-capital-recruiters) |
+| `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `come`, `hold`, `free` orders | Always | — | [Party actions](commands/party-actions.md) |
+| `pull`, `pullback`, `end pull` with seconds or `ranged`/`body` | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| `interrupt` picks a party member who can interrupt | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| `focus skull` marks your target and sends the party at it | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| `cc clear` clears a crowd-control mark | Always | — | [Crowd control](commands/party-actions.md#crowd-control) |
+| Assigning a party CC mark (`cc <mark>`) | No | — | [Known limitations](known-limitations.md) |
+| Behaviour toggles: `loot`, `aoe`, `autocc`, `savemana`, `boost`, `threat`, `potions`, `mimic`, `spread`, `hold`, `noblink`, `offheal`, `offdps` | Always | — | [`.bot behavior`](commands/bot-panel.md) |
+| A shaman's totem set, a paladin's blessing, an aura/aspect/poison/sting/pet choice | Always | — | [`.bot choice`](commands/bot-panel.md) |
+| `rest`, `drink`, `eat`, `repair`, `sell`, `learn`, `release` orders | Always | — | [Whisper commands](commands/whispers.md) |
 
-### Guild bots
-
-| Feature | On? | Setting | More |
-| :--- | :---: | :--- | :--- |
-| Invite a pool bot into your guild and command it like your own alt (hires, your own alts, full guilds and queued bots excluded) | Always | — | [Guild bots](getting-started.md#guild-bots) |
-| Order guild bots to farm, buy or craft items for the guild bank | Yes | [`AiPlayerbot.AutoDoQuests`](../server/settings/world-population.md#aiplayerbotautodoquests) | [Guild orders](guild-orders.md) |
-
-### Orders, following and summoning
-
-| Feature | On? | Setting | More |
-| :--- | :---: | :--- | :--- |
-| Party orders: attack, pull, stay, follow, CC, focus | Always | — | [Party actions](commands/party-actions.md) |
-| Orders by whisper | Always | — | [Whisper commands](commands/whispers.md) |
-| The `/tbm` addon (once you install it) | Always | — | [Addon](commands/addon.md) |
-| Follow formations | Always | — | [Formations](commands/party-actions.md#bot-formation) |
-| Followers far behind mount up to catch up | Yes | [`AiPlayerbot.BoostFollow`](../server/settings/party.md#aiplayerbotboostfollow) | [Follow](commands/party-actions.md#bot-action-follow) |
-| Followers far behind stop before packs you skipped | No | [`AiPlayerbot.DungeonFollowHoldBeforePacks`](../server/settings/party.md#aiplayerbotdungeonfollowholdbeforepacks) | [Dungeon tactics](dungeons-and-raids.md#running-ahead-past-packs) |
-| Summon your bots near an innkeeper | Yes | [`AiPlayerbot.SummonAtInnkeepersEnabled`](../server/settings/party.md#aiplayerbotsummonatinnkeepersenabled) | [Setting](../server/settings/party.md#aiplayerbotsummonatinnkeepersenabled) |
-| Bots that accept your invite are summoned to you | No | [`AiPlayerbot.OwnedBotSummonWhenGroup`](../server/settings/party.md#aiplayerbotownedbotsummonwhengroup) | [Summon on invite](commands/roster-and-hiring.md#automatic-summon-on-group-accept) |
-| ...also in combat / while you are dead / while the bot is dead | No | [`InCombat`](../server/settings/party.md#aiplayerbotownedbotsummonallowincombat), [`MasterDead`](../server/settings/party.md#aiplayerbotownedbotsummonallowmasterdead), [`BotDead`](../server/settings/party.md#aiplayerbotownedbotsummonallowbotdead) | [Summon on invite](commands/roster-and-hiring.md#automatic-summon-on-group-accept) |
-| ...and revived / repaired on arrival | No | [`Revive`](../server/settings/party.md#aiplayerbotownedbotsummonrevive), [`Repair`](../server/settings/party.md#aiplayerbotownedbotsummonrepair) | [Summon on invite](commands/roster-and-hiring.md#automatic-summon-on-group-accept) |
-| Free instant summon by whispering a bot (not `.bot summon`) | No | [`AiPlayerbot.NonGmFreeSummon`](../server/settings/party.md#aiplayerbotnongmfreesummon) | [Setting](../server/settings/party.md#aiplayerbotnongmfreesummon) |
-| Your quest completes when your companion turns it in | No | [`AiPlayerbot.SyncQuestForPlayer`](../server/settings/party.md#aiplayerbotsyncquestforplayer) | [Setting](../server/settings/party.md#aiplayerbotsyncquestforplayer) |
-| Ready check waits until buffs are refreshed | No | [`AiPlayerbot.ForceRebuffOnReadyCheck`](../server/settings/world-population.md#aiplayerbotforcerebuffonreadycheck) | [Ready check](commands/party-actions.md#bot-action-ready) |
-| Bots Need on items for empty gear slots | No | [`AiPlayerbot.RollBadItemsWithPlayer`](../server/settings/party.md#aiplayerbotrollbaditemswithplayer) | [Loot rules](dungeons-and-raids.md#loot-rolling-rules) |
-| Command a bot-only party from anywhere (remote commander) | No | [`AiPlayerbot.RemoteCommander`](../server/settings/performance.md#aiplayerbotremotecommander) | [Remote commander](commands/commander.md) |
+These are the party orders both the `.tb order` console command and the addon's `action` verb accept. Chat users get the four movement/combat orders (`.bot follow`, `stay`, `attack`, `flee`); the rest are reached through the addon or as a server admin with `.tb order`.
 
 ## Combat & Classes
 
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Rotations for all nine classes, spec and role picked from talents | Always | — | [Class overview](../classes/overview.md) |
-| Bots share interrupts and dispels | Always | — | [Interrupts](commands/party-actions.md#bot-action-interrupt) |
-| Party bots help each other against the same attackers | Yes | [`AiPlayerbot.ShareTargets`](../server/settings/combat.md#aiplayerbotsharetargets) | [Shared behaviour](../classes/overview.md#shared-bot-behaviors) |
-| Tank pulls with a ranged weapon before closing in | Yes | [`AiPlayerbot.RangedPull`](../server/settings/combat.md#aiplayerbotrangedpull) | [Pull](commands/party-actions.md#bot-action-pull) |
-| Healers deal damage and damage dealers heal when it is quiet | Yes | [`AiPlayerbot.EnableOffSpecStrategies`](../server/settings/class-behaviour.md#aiplayerbotenableoffspecstrategies) | [Off-spec rules](../classes/overview.md#healer-off-dps-offdps) |
-| Hunter: Aspect of the Viper when low on mana | Yes | [`AiPlayerbot.HunterViperOnLowMana`](../server/settings/class-behaviour.md#aiplayerbothunterviperonlowmana) | [Hunter](../classes/hunter.md#turtle-wow-custom-spells) |
-| Paladin: keep Judgements up on bosses | Yes | [`AiPlayerbot.PaladinJudgementUpkeep`](../server/settings/class-behaviour.md#aiplayerbotpaladinjudgementupkeep) | [Paladin](../classes/paladin.md#utility--interrupts) |
-| Rogue: Feint and Vanish to drop threat | Yes | [`AiPlayerbot.RogueDungeonThreatDrops`](../server/settings/class-behaviour.md#aiplayerbotroguedungeonthreatdrops) | [Rogue](../classes/rogue.md#utility--interrupts) |
-| Warlock: demon picked by spec | Yes | [`AiPlayerbot.WarlockPetBySpec`](../server/settings/class-behaviour.md#aiplayerbotwarlockpetbyspec) | [Warlock](../classes/warlock.md#utility--interrupts) |
-| Warlock: DoTs and Drain Soul skip targets that are about to die | No | [`AiPlayerbot.WarlockRaidRotation`](../server/settings/class-behaviour.md#aiplayerbotwarlockraidrotation) | [Warlock](../classes/warlock.md#class-settings) |
+| Class rotations for all nine classes, role and spec from talents | Always | — | [Class overview](../classes/overview.md) |
+| Party bots help each other against the same attackers | Yes | `AiPlayerbot.ShareTargets = 1` | [Shared behaviour](../classes/overview.md#shared-bot-behaviors) |
+| Tank opens a pull with a ranged weapon | Yes | `AiPlayerbot.RangedPull = 1` | [Addon actions](commands/party-actions.md#addon-action-buttons) |
+| Bots step out of harmful ground effects | Yes | `AiPlayerbot.HazardEvasionDistance = 12` | [Raid reactions](dungeons-and-raids.md#hazards) |
+| Hunter: Aspect of the Viper when low on mana | Yes | `AiPlayerbot.HunterViperOnLowMana` | [Hunter](../classes/hunter.md) |
+| Paladin: keeps Judgements up | Yes | `AiPlayerbot.PaladinJudgementUpkeep` | [Paladin](../classes/paladin.md) |
+| Rogue: Feint and Vanish to drop threat in dungeons | Yes | `AiPlayerbot.RogueDungeonThreatDrops` | [Rogue](../classes/rogue.md) |
+| Warlock: demon picked by spec | Yes | `AiPlayerbot.WarlockPetBySpec` | [Warlock](../classes/warlock.md) |
 
 ## Dungeons & Raids
 
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Pullback: tank pulls and runs back to you around a corner | Always | — | [Pullback](commands/party-actions.md#bot-action-pullback) |
-| Crowd control marks are respected | Always | — | [Crowd control](commands/party-actions.md#bot-action-cc) |
-| Bots release, run back and revive after a wipe | Always | — | [Wipe recovery](dungeons-and-raids.md#wipe-recovery--instance-navigation) |
-| Raid boss tactics (Molten Core to Naxxramas) | Always | — | [Raid tactics](dungeons-and-raids.md#specific-encounter-tactics) |
-| Bomb carriers run out of the raid | Always | — | [Raid reactions](dungeons-and-raids.md#universal-raid-reactions) |
-| Turtle raid tactics (Emerald Sanctum, Karazhan) | Yes | [`AiPlayerbot.EnableCustomRaidTactics`](../server/settings/dungeons-raids.md#aiplayerbotenablecustomraidtactics) | [Custom raids](dungeons-and-raids.md#custom-turtle-raids) |
-| Onyxia: kill whelps, avoid eggs | Yes | [`AiPlayerbot.OnyxiaWhelpsAndEggs`](../server/settings/dungeons-raids.md#aiplayerbotonyxiawhelpsandeggs) | [Onyxia](dungeons-and-raids.md#specific-encounter-tactics) |
-| Stay out of permanent boss auras | Yes | [`AiPlayerbot.AvoidCreatureAuras`](../server/settings/dungeons-raids.md#aiplayerbotavoidcreatureauras) | [Raid reactions](dungeons-and-raids.md#universal-raid-reactions) |
-| Bots walk a stored dungeon route by themselves (run leader, work in progress) | Yes | [`AiPlayerbot.DungeonSelfClear`](../server/settings/dungeons-raids.md#aiplayerbotdungeonselfclear) | [Run leader](dungeon-run-leader.md) |
-| 5-man boss rules (what to interrupt, which add first) for normal parties; run-leader and commander parties use them anyway | Yes | [`AiPlayerbot.DungeonTactics`](../server/settings/dungeons-raids.md#aiplayerbotdungeontactics) | [Boss tactics](boss-tactics.md) |
+| Bots fight, interrupt, crowd-control and loot in an instance | Always | — | [Dungeons & raids](dungeons-and-raids.md) |
+| Party bots roll on group loot | Always | — | [Loot rules](dungeons-and-raids.md#loot) |
+| A commanded bot's body in a dungeon releases and returns after the backstop | Yes | `TortoiseBots.Slice.DeadBackstopSeconds = 180` | [Wipes](dungeons-and-raids.md#dead-bots) |
+| A bot far behind holds before a skipped pack | No | `AiPlayerbot.DungeonFollowHoldBeforePacks = 0` | [Following](dungeons-and-raids.md#following) |
+| Run leader walks a stored dungeon plan (a server-admin command) | Yes | `AiPlayerbot.DungeonSelfClear = 1` | [Run leader](dungeon-run-leader.md) |
+| Boss-specific raid tactics (Molten Core to Naxxramas) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| Turtle custom raids (Emerald Sanctum, Karazhan) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 
-## The Living World (Pool Bots Leveling, Questing, Wandering)
+## The Living World
 
-### What pool bots do
-
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Quest, grind and turn in quests | Always | — | [Living world](../world/living-world.md#open-world-activities) |
-| Gather herbs, ore and skins; fish | Always | — | [Professions](../world/living-world.md#initial-skills--professions) |
-| Travel on foot, by flight path and boat | Always | — | [Travel](../world/living-world.md#open-world-activities) |
-| Move on to new zones when a zone gets too easy | Yes | [`AiPlayerbot.LeaveOutgrownZones`](../server/settings/world-population.md#aiplayerbotleaveoutgrownzones) | [Living world](../world/living-world.md#open-world-activities) |
-| Keep the quest log tidy | Yes | [`AiPlayerbot.BotQuestLogUpkeep`](../server/settings/world-population.md#aiplayerbotbotquestlogupkeep) | [Living world](../world/living-world.md#open-world-activities) |
-| Avoid walking past enemy town guards | Yes | [`AiPlayerbot.AvoidHostileTowns`](../server/settings/world-population.md#aiplayerbotavoidhostiletowns) | [Living world](../world/living-world.md#open-world-activities) |
-| Wander around when they have nothing to do | Yes | [`AiPlayerbot.UseWanderAsDefaultFollowStrategy`](../server/settings/world-population.md#aiplayerbotusewanderasdefaultfollowstrategy) | [Living world](../world/living-world.md#open-world-activities) |
+| A pool of bots that log in and out on a schedule | No | `TortoiseBots.Pool.Enable = 0`, then `.tb pool start` | [Bot pool](../server/bot-pool.md) |
+| Free bots quest, grind, loot, vendor, repair and train | Always | — | [Living world](../world/living-world.md) |
+| Free bots run capital errands (mail, bank, trainer, auctioneer) and duel at the gates | Yes | `TortoiseBots.World.CapitalErrands = 1` | [Living world](../world/living-world.md) |
+| Free bots fish at a nearby hole | Yes | `TortoiseBots.World.Fishing = 1` | [Professions](../world/living-world.md) |
+| Free bots disenchant junk and enchant their own gear | Yes | `TortoiseBots.World.Disenchant = 1`, `TortoiseBots.World.EnchantGear = 1` | [Professions](../world/living-world.md) |
+| Free bots gather herbs and ore | No | `TortoiseBots.World.Professions = 0` | [Professions](../world/living-world.md) |
+| Free rogue bots pick pockets and open lockboxes | Yes | `TortoiseBots.World.Pickpocket = 1`, `TortoiseBots.World.Lockboxes = 1` | [Rogue](../classes/rogue.md) |
+| Free bots mail lockboxes to a guild rogue and get the contents back | Yes | `TortoiseBots.World.LockboxMail = 1` | [Social](../world/social.md) |
+| Nearby free bots form a party for a shared group quest | Yes | `TortoiseBots.World.GroupQuests = 1` | [Social](../world/social.md) |
+| Free bots take part in guilds (accept an invite, answer guild whispers) | Yes | `TortoiseBots.World.Guilds = 1` | [Social](../world/social.md) |
+| Free bots found their own guilds | No | `TortoiseBots.World.GuildForming = 0` | [Social](../world/social.md) |
+| Free bots who are in a guild mail surplus gold and materials to guildmates | Yes | `TortoiseBots.World.GuildMail = 1` | [Social](../world/social.md) |
+| Free bots seek world PvP | Yes | `AiPlayerbot.WorldPvpSeek = 2`, `AiPlayerbot.WorldPvpSeekBotPercent = 25` | [PvP](../world/queues.md) |
+| Free bots chase rare spawns | Yes | `AiPlayerbot.HuntRares = 1` | [Living world](../world/living-world.md) |
+| Free bots pick a destination and travel there by foot, flight path or boat/zeppelin | Always | — (`AiPlayerbot.GenerateTravelNodes = 1` builds and saves the graph) | [Travel](../world/living-world.md) |
+| Travel for grind spots, towns, vendors and repairs, and leaving an outgrown zone | Yes | — | [Living world](../world/living-world.md) |
+| Travel to trainers, the auction house, mail, bosses or gathering nodes as a destination | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| Autonomous alt-bots (your alt keeps playing after it leaves your group) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| Camp spots and Traveler's Tents | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 
-### Levelling, spells and gear
+## Levelling, Spells and Gear
 
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Learn class trainer spells for free on level-up (pool bots and hires) | Yes | [`AiPlayerbot.AutoLearnTrainerSpells`](../server/settings/world-population.md#aiplayerbotautolearntrainerspells) | [Class spells](../world/living-world.md#class-spells) |
-| Learn class quest spells for free | Yes | [`AiPlayerbot.AutoLearnQuestSpells`](../server/settings/world-population.md#aiplayerbotautolearnquestspells) | [Class spells](../world/living-world.md#class-spells) |
-| Your alts learn class quest spells for free | No | [`AiPlayerbot.AutoLearnQuestSpellsAlts`](../server/settings/world-population.md#aiplayerbotautolearnquestspellsalts) | [Class spells](../world/living-world.md#class-spells) |
-| Hunter and warlock pets train themselves on level-up (pool bots and hires) | Yes | [`AiPlayerbot.PetAutoTrain`](../server/settings/world-population.md#aiplayerbotpetautotrain) | [Class spells](../world/living-world.md#class-spells) |
-| Your alts' pets train themselves on level-up | No | [`AiPlayerbot.PetAutoTrainAlts`](../server/settings/world-population.md#aiplayerbotpetautotrainalts) | [Class spells](../world/living-world.md#class-spells) |
-| Learn spells from dungeon and raid books at 60 | No | [`AiPlayerbot.AutoLearnDroppedSpells`](../server/settings/world-population.md#aiplayerbotautolearndroppedspells) | [Class spells](../world/living-world.md#class-spells) |
-| Starter outfit for new bots | Yes | [`AiPlayerbot.RandomGearUpgradeEnabled`](../server/settings/world-population.md#aiplayerbotrandomgearupgradeenabled) | [Starter gear](../world/living-world.md#field-kits--equipment-upkeep) |
-| Gear upgrades at level milestones | Yes | [`AiPlayerbot.RandomGearProgression`](../server/settings/world-population.md#aiplayerbotrandomgearprogression) | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
-| Equip better gear they loot | Yes | [`AiPlayerbot.AutoEquipUpgradeLoot`](../server/settings/world-population.md#aiplayerbotautoequipupgradeloot) | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
-| Reputation and PvP items in their gear | No | [`AiPlayerbot.RandomGearAllowReputation`](../server/settings/world-population.md#aiplayerbotrandomgearallowreputation), [`AiPlayerbot.RandomGearAllowPvP`](../server/settings/world-population.md#aiplayerbotrandomgearallowpvp) | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
-| Swift Riding Turtle at level 18 | Yes | [`AiPlayerbot.TurtleMountAtLevel`](../server/settings/world-population.md#aiplayerbotturtlemountatlevel) | [Mounts](../world/living-world.md#mount-rules) |
-| Racial mounts at levels 40 and 60 | Yes | [`AiPlayerbot.LevelUpMounts`](../server/settings/world-population.md#aiplayerbotlevelupmounts) | [Mounts](../world/living-world.md#mount-rules) |
-| Shop, other-race and raid-drop mounts too | No | [`AiPlayerbot.RandomBotShopMounts`](../server/settings/world-population.md#aiplayerbotrandombotshopmounts) | [Mounts](../world/living-world.md#mount-rules) |
+| Bots learn their class trainer spells for free on login and level-up | Yes | `TortoiseBots.AutoLearnOnLevel = 1` | [Class spells](../world/living-world.md#class-spells) |
+| Bots spend free talent points on a premade build | Yes | `TortoiseBots.AutoTalentsOnLevel = 1` | [Talents](getting-started.md#levelling-spells-and-gear) |
+| Pool bots learn two professions, First Aid and Cooking at level 5 | Yes | `TortoiseBots.AutoProfessions = 1` | [Professions](../world/living-world.md) |
+| Pool and free bots get the gathering and crafting tools they need | Yes | `TortoiseBots.AutoTools = 1` | [Professions](../world/living-world.md) |
+| Hunter bots get a starter pet and its control spells | Yes | `TortoiseBots.AutoHunterPet = 1` | [Hunter](../classes/hunter.md) |
+| Pool and free bots get level-fitting food and water | Yes | `TortoiseBots.AutoFood = 1` | [Living world](../world/living-world.md) |
+| Bots learn the class-quest spells a player would earn | No | `TortoiseBots.ClassQuestSpells = 0` | [Class spells](../world/living-world.md#class-spells) |
+| Bots keep gear that fits their level as they level | Yes | `AiPlayerbot.RandomGearProgression = 1` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
+| Bots equip better gear they loot | Yes | `AiPlayerbot.AutoEquipUpgradeLoot = 1` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
+| Reputation and PvP items in generated gear | No | `AiPlayerbot.RandomGearAllowReputation = 0`, `AiPlayerbot.RandomGearAllowPvP = 0` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
+| Bots learn to ride and buy their race's mount with their own gold | Yes | `AiPlayerbot.LevelUpMounts = 1` | [Mounts](../world/living-world.md#mount-rules) |
+| Shop and other-race mounts | No | `AiPlayerbot.RandomBotShopMounts = 0` | [Mounts](../world/living-world.md#mount-rules) |
 
-### Death and getting unstuck
+## Guild Orders
 
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Release to the nearest graveyard | Yes | [`AiPlayerbot.RepopAtGraveyard`](../server/settings/world-population.md#aiplayerbotrepopatgraveyard) | [Living world](../world/living-world.md#autonomous-bot-lifecycle) |
-| Move bots that keep dying in a too-hard zone | Yes | [`AiPlayerbot.RelocateHopelessDeaths`](../server/settings/world-population.md#aiplayerbotrelocatehopelessdeaths) | [Living world](../world/living-world.md#autonomous-bot-lifecycle) |
-| Teleport a stuck bot to where it was going | Yes | [`AiPlayerbot.StuckTravelTeleport`](../server/settings/world-population.md#aiplayerbotstucktravelteleport) | [Living world](../world/living-world.md#open-world-activities) |
-| Set the hearthstone to an inn near the bot's level | Yes | [`AiPlayerbot.UnstuckHearthLevelFit`](../server/settings/world-population.md#aiplayerbotunstuckhearthlevelfit) | [Living world](../world/living-world.md#autonomous-bot-lifecycle) |
-| Melee pool bots never flee in combat | No | [`AiPlayerbot.PoolMeleeHoldGround`](../server/settings/performance.md#aiplayerbotpoolmeleeholdground) | [Shared behaviour](../classes/overview.md#shared-bot-behaviors) |
-
-### How the pool is filled (server admins)
-
-| Feature | On? | Setting | More |
-| :--- | :---: | :--- | :--- |
-| Create bot accounts and log the pool in at startup | Yes | [`RandomBotAutoCreate`](../server/settings/world-population.md#aiplayerbotrandombotautocreate), [`RandomBotAutologin`](../server/settings/world-population.md#aiplayerbotrandombotautologin), [`RandomBotLoginAtStartup`](../server/settings/world-population.md#aiplayerbotrandombotloginatstartup) | [Bot pool](../server/bot-pool.md) |
-| New bots start spread over levels 5-60 | Yes | [`RandomBotStartLevelMin`/`Max`](../server/settings/world-population.md#aiplayerbotrandombotstartlevelmin--randombotstartlevelmax) | [Level seed](../world/living-world.md#level-seed--distribution) |
-| Online bots spread evenly over level bands | Yes | [`AiPlayerbot.LevelLadder`](../server/settings/world-population.md#aiplayerbotlevelladder) | [Level seed](../world/living-world.md#level-seed--distribution) |
-| New bots spread evenly over starting zones | Yes | [`AiPlayerbot.RandomBotEvenStartZones`](../server/settings/world-population.md#aiplayerbotrandombotevenstartzones) | [Starting zones](../world/living-world.md#level-seeding--starter-progression) |
-| New bots from level 10 start in a zone that fits their level | Yes | [`AiPlayerbot.EnableRandomTeleports`](../server/settings/world-population.md#aiplayerbotenablerandomteleports) | [Starting zones](../world/living-world.md#level-seeding--starter-progression) |
-| Bots also start in the isolated custom starting zones | No | [`AiPlayerbot.AllowIsolatedCustomStartingZones`](../server/settings/world-population.md#aiplayerbotallowisolatedcustomstartingzones) | [Starting zones](../world/living-world.md#level-seeding--starter-progression) |
-| Use flight paths that need repaired client data | No | [`AiPlayerbot.AllowRepairedTaxiPaths`](../server/settings/world-population.md#aiplayerbotallowrepairedtaxipaths) | [Travel](../world/living-world.md#open-world-activities) |
-| Rebuild the pool and re-roll levels | No | [`AiPlayerbot.RandomBotPoolReset`](../server/settings/world-population.md#aiplayerbotrandombotpoolreset) | [Bot pool](../server/bot-pool.md) |
-| All bots stay fully active (no throttling) | Yes | [`AiPlayerbot.DisableActivityPriorities`](../server/settings/performance.md#aiplayerbotdisableactivitypriorities) | [Setting](../server/settings/performance.md#aiplayerbotdisableactivitypriorities) |
-| Bots near players always react at full speed | No | [`AiPlayerbot.ForceActiveWhenNearPlayer`](../server/settings/performance.md#aiplayerbotforceactivewhennearplayer) | [Setting](../server/settings/performance.md#aiplayerbotforceactivewhennearplayer) |
-
-## Social (Invites, Guilds, Trading)
-
-| Feature | On? | Setting | More |
-| :--- | :---: | :--- | :--- |
-| Pool bots invite you to their group (not while you are `/dnd`) | No | [`AiPlayerbot.RandomBotInvitePlayer`](../server/settings/world-population.md#aiplayerbotrandombotinviteplayer) | [Invites](../world/social.md#grouping--party-invites) |
-| Pool bots group with each other | No | [`AiPlayerbot.RandomBotGroupNearby`](../server/settings/world-population.md#aiplayerbotrandombotgroupnearby) | [Invites](../world/social.md#grouping--party-invites) |
-| Pool bots join your guild when invited (hires, your own alts, full guilds and queued bots excluded) | Always | — | [Guilds](../world/social.md#guilds) |
-| Bots found guilds of their own | No | [`AiPlayerbot.RandomBotFormGuild`](../server/settings/world-population.md#aiplayerbotrandombotformguild) | [Guilds](../world/social.md#guilds) |
-| Companion mages conjure food and water and trade it to group members who have none | Yes | — | [Trading](../world/social.md#trading-with-pool-bots) |
-| Your companions greet players they meet | Yes | [`AiPlayerbot.EnableGreet`](../server/settings/world-population.md#aiplayerbotenablegreet) | [Greetings](../world/social.md#greetings--emotes) |
-| Pool bots greet players too | No | [`AiPlayerbot.RandomBotGreet`](../server/settings/world-population.md#aiplayerbotrandombotgreet) | [Greetings](../world/social.md#greetings--emotes) |
-| Autonomous bots set up Traveler's Tent + campfire camps at scenic spots | Yes | [`AiPlayerbot.CampEnabled`](../server/settings/world-population.md#aiplayerbotcampenabled) | [Camp settings](../server/settings/world-population.md#aiplayerbotcampenabled) |
-| Trade with pool bots that are not yours | No | [`AiPlayerbot.PoolBotTradeMode`](../server/settings/world-population.md#aiplayerbotpoolbottrademode) | [Trading](../world/social.md#trading-with-pool-bots) |
+| Send a bot in your guild to farm, buy or craft an item for the guild bank | Yes | `.tb guildorder create <bot> <item> <amount> [farm\|craft\|buy]` | [Guild orders](guild-orders.md) |
+| A dedicated crafting order with a status board | Yes | `.tb craftorder create <bot> <item> <amount>` | [Guild orders](guild-orders.md) |
+| Mail an item to a guild enchanter with the subject `disenchant` and get the materials back | Yes | `TortoiseBots.World.GuildMail = 1` | [Guild orders](guild-orders.md) |
+| Give the guild's bots one shared rank so they can open a bank tab | Yes | `TortoiseBots.World.GuildOrderBotRank = 1` | [Guild orders](guild-orders.md) |
 
 ## Economy (Auction House)
 
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Bots sell junk and repair at vendors | Always | — | [Vendors](../world/economy.md#vendor-liquidation--repairs) |
-| Bots earn their gold from kills, quests and sales | Always | — | [Economy](../world/economy.md#economic-philosophy) |
-| Bots sell their loot on the auction house | Yes | [`AiPlayerbot.AhMarketEnabled`](../server/settings/economy.md#aiplayerbotahmarketenabled) | [Auction house](../world/economy.md#living-auction-house) |
-| Bots buy upgrades on the auction house with their own gold | Yes | [`AiPlayerbot.AhMarketBuyer`](../server/settings/economy.md#aiplayerbotahmarketbuyer) | [Auction house](../world/economy.md#living-auction-house) |
-| Offline AHBot stocks empty or low-population auction houses | No | [`AiPlayerbot.AhBot.Enabled`](../server/settings/economy.md#aiplayerbotahbotenabled) | [Economy settings](../server/settings/economy.md#aiplayerbotahbotenabled) |
-| Offline AHBot buyer bids on and buys player auctions | No | [`AiPlayerbot.AhBot.Buyer.Enabled`](../server/settings/economy.md#aiplayerbotahbotbuyerenabled) | [Economy settings](../server/settings/economy.md#aiplayerbotahbotbuyerenabled) |
+| Bots sell junk and repair at vendors | Always | — | [Economy](../world/economy.md) |
+| Free bots post their own loot at a nearby auctioneer | No | `TortoiseBots.World.Auction = 0` (also needs `AiPlayerbot.AhMarketEnabled = 1`) | [Auction house](../world/economy.md#living-auction-house) |
+| Free bots buy upgrades on the auction house | No | `TortoiseBots.World.Auction = 0` (also needs `AiPlayerbot.AhMarketBuyer = 1`) | [Auction house](../world/economy.md#living-auction-house) |
+| A separate offline auction-house seller (`AiPlayerbot.AhBot.*`) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 
-## Dungeon Finder & Battlegrounds
+## Dungeon Fill & Battlegrounds
 
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Pool bots fill missing roles when you queue for a dungeon (LFT) | Yes | [`AiPlayerbot.RandomBotLftEnabled`](../server/settings/queues.md#aiplayerbotrandombotlftenabled) | [LFT](../world/queues.md#looking-for-turtles-lft-dungeon-autofill) |
-| Bots respec into a missing role for LFT | No | [`AiPlayerbot.RandomBotLftAllowRoleBorrow`](../server/settings/queues.md#aiplayerbotrandombotlftallowroleborrow) | [LFT](../world/queues.md#looking-for-turtles-lft-dungeon-autofill) |
-| An LFT group walks to the dungeon together | Always | — | [LFT](../world/queues.md#looking-for-turtles-lft-dungeon-autofill) |
-| Pool bots fill battleground queues when players queue | Yes | [`AiPlayerbot.RandomBotBgEnabled`](../server/settings/queues.md#aiplayerbotrandombotbgenabled) | [Battlegrounds](../world/queues.md#battleground-auto-queue-human-demand) |
-| Bot-only Warsong Gulch matches when no player queues | Yes | [`AiPlayerbot.RandomBotBgAutonomous`](../server/settings/queues.md#aiplayerbotrandombotbgautonomous) | [Bot matches](../world/queues.md#autonomous-bot-only-matches) |
-| Your alts join a battleground with you (Join as Group; hires stay out unless allowed in) | Always | — | [Your party in BGs](../world/queues.md#battlegrounds-with-your-own-party-bots) |
-| Bots play the objectives in WSG, AB, AV, Sunnyglade Valley and Blood Ring | Always | — | [Battleground AI](../world/queues.md#battleground-auto-queue-human-demand) |
-| WSG teams split into attackers, defenders and midfielders | No | [`AiPlayerbot.WsgFlagRoles`](../server/settings/queues.md#aiplayerbotwsgflagroles) | [Battleground AI](../world/queues.md#battleground-auto-queue-human-demand) |
-| Level-up gear top-up for pool bots | No | [`AiPlayerbot.PoolGearTopUpOnLevel`](../server/settings/economy.md#aiplayerbotpoolgeartopuponlevel) | [Economy](../server/settings/economy.md#aiplayerbotpoolgeartopuponlevel) |
-| Level-up money top-up for pool bots | No | [`AiPlayerbot.PoolMoneyTopUp`](../server/settings/economy.md#aiplayerbotpoolmoneytopup) | [Economy](../server/settings/economy.md#aiplayerbotpoolmoneytopup) |
+| `.bot lfg join <dungeon id> <tank\|healer\|dps>` fills your group with free bots | Yes | `AiPlayerbot.RandomBotLftEnabled = 1` | [Dungeon fill](../world/queues.md) |
+| Bots keep the role they have; no borrowing a role | Yes | `AiPlayerbot.RandomBotLftAllowRoleBorrow = 0` | [Dungeon fill](../world/queues.md) |
+| Battleground fill for human WSG and AB queues | No | `TortoiseBots.Bg.Enable = 0` | [Battlegrounds](../world/queues.md) |
+| Bot-only battleground matches | No | `TortoiseBots.Bg.Autonomous = 0` | [Battlegrounds](../world/queues.md) |
+| Alterac Valley, arenas and the random queue | No | `TortoiseBots.Bg.Maps = "wsg,ab"` | [Battlegrounds](../world/queues.md) |
 
-## Server & Monitoring (Dashboard, Logs)
+## Server & Monitoring
 
-For server admins.
-
-| Feature | On? | Setting | More |
+| Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| In-game bot panel and status | Always | — | [Bot panel](commands/bot-panel.md) |
-| GameMaster pool commands | Always | — | [Admin commands](../server/admin-commands.md) |
-| Web dashboard feed | Yes | [`AiPlayerbot.Observability`](../server/settings/logging.md#aiplayerbotobservability) | [Dashboard](../server/dashboard.md) |
-| Per-bot action logs (kept 3 days) | Yes | [`AiPlayerbot.EnableActionLog`](../server/settings/logging.md#aiplayerbotenableactionlog) | [Action logs](../server/settings/logging.md#aiplayerbotenableactionlog) |
-| Action logs only for bots in a group | Yes | [`AiPlayerbot.LogInGroupOnly`](../server/settings/performance.md#aiplayerbotlogingrouponly) | [Log scope](../server/settings/logging.md#aiplayerbotactionlogscope) |
-| Count action successes and failures | No | [`AiPlayerbot.ActionCountsLog`](../server/settings/logging.md#aiplayerbotactioncountslog) | [Setting](../server/settings/logging.md#aiplayerbotactioncountslog) |
-| Logs of the previous run are kept | Always | — | [Log rotation](../server/settings/logging.md#log-rotation--previous-run-logs) |
-| Build item caches at startup | Yes | [`AiPlayerbot.GenerateItemCaches`](../server/settings/performance.md#aiplayerbotgenerateitemcaches) | [Setting](../server/settings/performance.md#aiplayerbotgenerateitemcaches) |
-| Build travel network at startup | Yes | [`AiPlayerbot.GenerateTravelNodes`](../server/settings/performance.md#aiplayerbotgeneratetravelnodes) | [Setting](../server/settings/performance.md#aiplayerbotgeneratetravelnodes) |
-| Travel lookups in the background | No | [`AiPlayerbot.AsyncTravelPartitions`](../server/settings/performance.md#aiplayerbotasynctravelpartitions) | [Setting](../server/settings/performance.md#aiplayerbotasynctravelpartitions) |
-| Refresh bot values on a timer | No | [`AiPlayerbot.ValueRefreshAtInterval`](../server/settings/performance.md#aiplayerbotvaluerefreshatinterval) | [Setting](../server/settings/performance.md#aiplayerbotvaluerefreshatinterval) |
+| Web dashboard feed (roster, map, activity, issues) | Yes | `TortoiseBots.Dashboard.Enable = 1` | [Dashboard](../server/dashboard.md) |
+| Run trace of a party, started by a server admin | No | `AiPlayerbot.RunTrace.Enabled = 0` | [Run trace](../server/run-trace.md) |
+| Decision capture of a run leader | No | `AiPlayerbot.DecisionCapture.Enabled = 0` | [Decision capture](../server/decision-capture.md) |
+| Module log lines in their own category | Yes | `Logger.tortoisebots = 3,Console Server` | [Logging](../server/settings/logging.md) |
+| GameMaster `.tb` commands for the pool, queues and diagnostics | Always | — | [Admin commands](../server/admin-commands.md) |
 
-## What Bots Cannot Do (Yet)
+## Not on WoW Forever yet
 
-| Missing | What to do instead |
-| :--- | :--- |
-| Clear most instances by themselves: the run leader is work in progress and only a few routes are checked | Lead the instance yourself. [Details](known-limitations.md#dungeon-run-leader-work-in-progress) |
-| Challenge a player to a duel on its own: bots answer a player's challenge and fight it with their class kit | Challenge the bot yourself. [Details](../server/settings/combat.md#aiplayerbotbotacceptduelminimumlevel) |
-| Check a herb or ore node before walking to it | Nothing; the bot walks on after finding it empty. [Details](known-limitations.md#blocked--incomplete-features) |
-| Climb steep, many-floored stairs reliably | `.bot summon <Name>` out of combat. [Details](known-limitations.md#known-quirks-and-workarounds) |
+These are part of the Turtle WoW build that this page used to describe, or of old TortoiseBots releases. None of them is built into the Forever module; none has a setting here.
+
+- **Hired companions and recruiters.** No `.bot hire`, no mercenary contracts, no recruiter world buffs, no gear tiers.
+- **Autonomous alt-bots.** An own alt that leaves your group does not start playing by itself.
+- **Claimed guild bots.** A pool bot cannot be claimed as your own by a guild invite.
+- **Boss and raid tactics.** No per-boss interrupt, positioning or add rules; `AiPlayerbot.RaidReactions` is off and the boss-tactic tables are not loaded.
+- **Turtle custom raids and dungeons.**
+- **Travel destinations outside the reduced set.** Bots travel for grind spots, towns, vendors, repairs and leaving an outgrown zone; a trainer, auction house, mailbox, boss or gathering node is not a travel destination.
+- **Camp spots.**
+- **The offline auction-house seller.** The organic bot market exists, the separate seller service does not.
+- **Lineages and pool adoption.** The Forever pool creates and resets its own characters; it does not adopt old accounts or roll level-1 alts from level 60s.
+- **`Enemy player` battleground roles and AV.** Only WSG and AB are wired.
+
+For the full technical reason and the exact list of `not ported yet` features, see [Known limitations](known-limitations.md).

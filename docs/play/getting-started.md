@@ -2,7 +2,7 @@
 id: play-getting-started
 title: Getting Started with TortoiseBots
 category: play
-summary: How to set up your client, spawn companion bots from your own account, hire mercenaries, and adventure together.
+summary: How to set up your client, log your own characters in as bots, order them around, and meet the free bots that live on a WoW Forever server.
 tags: [getting-started, quickstart, roster, party, alts, addon]
 relates_to:
   - play-commands-roster-and-hiring
@@ -14,73 +14,96 @@ relates_to:
 
 # Getting Started with TortoiseBots
 
-TortoiseBots fills the realm with bots and lets you take some of them along: your own alts, hired companions, or bots you invite into your guild. This page gets your first party going.
+TortoiseBots fills a **WoW Forever** realm with bots and lets you take some of them along: your own characters, or bots that live in the world and may join your party. This page gets your first party going.
 
 ## What you need
 
-- A character to play, and a few more characters (alts) on the same account that you want as bots.
-- The [TortoiseBotsManager](commands/addon.md) addon (`/tbm`) in your client's `Interface/AddOns/` folder. Optional, but much easier than typing commands.
-- A server that runs TortoiseBots.
+- A character to play, and one to four more characters on your own account that you want as bots.
+- A server that runs TortoiseBots **with the bot engine** and has the module switched on (`TortoiseBots.Enable = 1`, off by default).
+- The [TortoiseBotsForeverManager](commands/addon.md) addon (`/tbfm`, also `/tb`, `/tbot` and `/tortoise`) in your client's `Interface/AddOns/` folder. Optional, but easier than typing commands.
 
-## The Kinds of Bots
+The `.bot` command is for players only while `TortoiseBots.Player.Commands = 1` (the default). A server admin can turn it off; then only GameMasters may use `.bot`.
+
+## The kinds of bots
 
 | Kind | What it is | How you get one | When you are done with it |
 | :--- | :--- | :--- | :--- |
-| **Pool bot** | A bot that lives in the world: levels, quests, grinds, sells on the auction house. | You don't. It may invite you to its group (nearby, similar level, and never while you are `/dnd`) or fill your dungeon finder (LFT) group when roles are missing. | It carries on with its own life. |
-| **Own alt** | A character on your own account, played by the server. | `.bot add <Name>` or **Login** in `/tbm`. | `.bot remove <Name>` (or `.bot rm`) logs it out. If it just leaves your group, it starts playing on its own ([alt-bot](#when-your-alt-leaves-the-group)). |
-| **Hired companion** | A temporary character made for you, at your level. | Talk to a `<Mercenary Hire>` recruiter in an inn or a capital. Costs gold (about 1.5 gold at level 60, less at low level; each extra hire costs more). Up to 4 at once by default (the server can raise this to 39 for raids). | Deleted when you dismiss it, it leaves your party, or you stay logged out past the grace time (5 minutes by default). |
-| **Guild bot** | A pool bot you invited into your guild. | `/ginvite <Name>` on a pool bot of your faction with no guild (see the conditions below). | It stays in your guild, keeps its own life, and you can command it like your own alt. See [Guild bots](#guild-bots). |
+| **Free bot** (pool bot) | A bot that lives in the world: quests, grinds, loots, sells, trains. Pool bots are free bots that the server's pool logs in and out on a schedule. | You don't. One may join your group for a shared quest or fill your dungeon-fill request. | It carries on with its own life. |
+| **Own alt** | A character on your own account, played by the server. | `.bot add <Name>` or the addon's roster. | `.bot logout <Name>` logs it out. |
+
+Hired companions and claimed guild bots from the Turtle WoW build are not on WoW Forever: there is no `.bot hire`, no recruiter, and a guild invite does not make a pool bot yours. See [What bots can do](features.md#not-on-wow-forever-yet).
 
 ## Your first party
 
 | Step | With the addon | With chat commands |
 | :--- | :--- | :--- |
-| 1. Log in your alt | `/tbm` → **Roster** tab → select the alt → **Login** | `.bot add <Name>` |
-| 2. Invite it | **Invite** | `.bot invite <Name>` |
+| 1. Log in your alt | `/tbfm` → roster → **Login** (the addon sends the same `.bot add`) | `.bot add <Name>` |
+| 2. See it | roster list | `.bot who` |
 | 3. Bring it to you | **Summon** | `.bot summon <Name>` |
-| 4. Log it out later | **Logout** | `.bot remove <Name>` |
+| 4. Give an order | party action buttons | `.bot follow <Name>`, `.bot stay <Name>`, `.bot attack <Name>`, `.bot flee <Name>` |
+| 5. Log it out later | **Logout** | `.bot logout <Name>` |
 
-- The alt logs in where you last left it and follows you.
-- Want to play the alt yourself? Just log into it from the character screen; the bot session ends by itself.
-- Missing a class? Hire one at a recruiter. Hired companions join your party by themselves. Full details: [Roster and Hiring Commands](commands/roster-and-hiring.md#bot-hire).
+- The bot joins your party when it logs in.
+- Up to four of your own characters can be online as bots at once (`TortoiseBots.Player.MaxBots`). An account can hold only one session, so a character already logged in by a person cannot become a bot.
+- Want to play the alt yourself? Log into it from the character screen; the bot session ends by itself.
+- `.bot stats` shows the fleet in one line; `.bot stats <Name>` shows one bot's level, class, health, mana, money, zone and whether it follows, stays or is free.
+- A summoned bot arrives next to you only when neither of you is in combat, the bot is alive, and neither of you is on a taxi or being teleported; the same bot has a short wait between summons (`AiPlayerbot.OwnedBotSummonCooldown`, 300 seconds by default).
 
-## When your alt leaves the group
+`.bot help` prints the commands your server allows. The short list is: `add`, `logout`, `who`, `stats`, `summon`, `follow`, `stay`, `attack`, `flee`, `maintenance`, `autogear`, `totem`, `behavior`, `blessing`, `choice`, `service`, `lfg`, `version`, `features`.
 
-> On a default server an own alt that **leaves your group** (you kick it, it leaves, or the group breaks up) does not stop: it becomes an **alt-bot** and plays on its own like a pool bot. If it is level 10 or higher it is first teleported to a zone that fits its level, never a capital (an alt left in an instance, a battleground or on a boat leaves through the instance entrance portal, or to its battleground entry or a graveyard, first).
+## Ordering bots in the field
 
-| You want to... | Do this |
-| :--- | :--- |
-| Stop it playing | `.bot remove <Name>` (logs it out) |
-| Take it back as your companion | `.bot add <Name>`, or invite it into your group again (only your own group's invite reclaims it) |
-| Play it yourself | Log into it from the character screen |
+The addon's `action` command sends the same party orders a GameMaster can send with `.tb order`. These intents work on WoW Forever:
 
-- It keeps playing while you are logged out, until the server restarts ([`AiPlayerbot.AltBotsLogoutWithOwner`](../server/settings/party.md#aiplayerbotaltbotslogoutwithowner) = `1` logs it out with you).
-- When it stops, it whispers you what it did: levels, quests, deaths, gold.
-- It plays carefully with your character: no auction house, mail, trade or guild bank; its own automation never destroys items, and it sells only grey and unneeded white items.
-- Hardcore characters never become alt-bots.
-- This is off by default. The server switches it on with [`AiPlayerbot.AltBots`](../server/settings/party.md#aiplayerbotaltbots) = `1`; while it is off, the alt just stands where you left it.
+| What you want | Intent | What the bot does |
+| :--- | :--- | :--- |
+| Attack your target | `attack` | Attacks the unit you have selected. |
+| Pull a pack | `pull` (optionally seconds, `ranged` or `body`) | The tank pulls and brings the pack to the group. |
+| Pull around a corner | `pullback` | The tank pulls from range and runs back to your spot. |
+| Stop a pull | `end pull` | Gives up the pull and returns. |
+| Stop moving | `stay` | Holds position. |
+| Follow again | `follow` | Follows you in formation. |
+| Come here | `come`, `hold`, `comestay` | Walks to your spot. |
+| Free a bot | `free` | Stops following; the bot goes its own way. |
+| Flee | `flee` | Runs from the fight. |
+| Guard | `guard` | Guards the spot. |
+| Interrupt | `interrupt` | Picks a party member who can interrupt and sends it. |
+| Focus a target | `focus skull` | Marks the target Skull and sends the party at it. |
+| Clear a CC mark | `cc clear` | Clears the bot's crowd-control mark. |
+| Train / rest / repair / sell | `learn`, `rest`, `drink`, `eat`, `repair`, `sell` | Runs the errand at a nearby NPC. |
+| Release | `release` | Releases the bot's spirit. |
 
-More: [Alt-Bots](commands/roster-and-hiring.md#alt-bots-autonomous-alts).
+Other actions of the Turtle build — `cc <mark>`, `aoe`, `auto cc`, `sap`, `loot`, `corpse run`, `trade`, `use`, `ready`, `raid ...` — answer `unsupported` on WoW Forever. The technical reason is in [Known limitations](known-limitations.md).
 
-## Guild bots
+## Free bots and the pool
 
-Invite a pool bot into your guild with `/ginvite <Name>`. It joins when it has no guild, is your faction, is not hired, is not more than 30 levels above you and is not queued for a battleground or dungeon (a full guild also refuses). From then on:
+A fresh install has no bots in the world. The server admin enables the pool and starts it:
 
-- **It is yours to command:** whispers, `.bot` commands, trade, gear, summon, the same as your own alts. Only you (the player who invited it) get this, not the rest of the guild.
-- **It still lives its own life** when you do not use it: questing, levelling, selling junk.
-- **It keeps its gear for your raids:** at level 60 it no longer swaps gear or sells anything to vendors by itself; while levelling it never sells blue or epic items.
-- **It survives pool resets**, and shows in the **Guild** tab of `/tbm`.
-- **It takes [guild orders](guild-orders.md):** farm, buy or craft items for the guild bank.
-- Removing it from the guild ends all of this.
+1. `TortoiseBots.Pool.Enable = 1` in `modules/tortoise_bots.conf`.
+2. `.tb pool create <n>` makes pool characters (up to `TortoiseBots.Pool.MaxCharacters`, 50 by default).
+3. `.tb pool start` keeps `TortoiseBots.Pool.TargetOnline` bots online (0 by default; `.tb pool population low|high` uses the 10/50 presets).
+
+Free bots quest, grind, loot, vendor, repair, train, run capital errands, fish, disenchant and may take a guild invite. The full list is in [What bots can do](features.md) and [Bot pool](../server/bot-pool.md).
+
+## Guilds
+
+A free bot may accept `/ginvite` from your guild when it has no guild (`TortoiseBots.World.Guilds = 1`, on by default). It keeps living its own life. A server admin gives it [guild orders](guild-orders.md) with `.tb` (a guild leader who has no GM rights cannot): farm, buy or craft an item for the guild bank, or mail it an item to disenchant.
+
+A guild invite does **not** make the bot your companion: you cannot order it with `.bot` commands unless it is one of your own characters or the server has bound it to you as a commander.
 
 ## Levelling, spells and gear
 
-| | Own alt / alt-bot | Hired companion | Pool bot / guild bot |
-| :--- | :--- | :--- | :--- |
-| **Class spells** | Train it yourself: take it to its class trainer, **target the trainer**, whisper `trainer` (it pays with its own gold) | Free, learned at every level-up | Free, learned at every level-up |
-| **Levels** | Earned by playing. Optional: [`AiPlayerbot.SyncAltLevelToMaster`](../server/settings/party.md#aiplayerbotsyncaltleveltomaster) levels it up to you while grouped (off by default) | Hired at your level (or at the level you asked for) | Earned by playing |
-| **Gear** | What you give it; it also equips upgrades it loots | Comes with a kit; at level 60 a gear tier set ([contracts](commands/roster-and-hiring.md#mercenary-contracts)) | Starter outfit once, then loot, quests and the auction house (claimed guild bots also auto-equip upgrades, keep displaced gear in bags, and never replace items you put on them until cleared with `keep none`) |
-| **Loot rolls** | Rolls, never Needs against you | Never loots, always passes (off by default) | Rolls, never Needs against you |
+| | Own alt | Free bot / pool bot |
+| :--- | :--- | :--- |
+| **Class spells** | Learned free on login and every level-up (`TortoiseBots.AutoLearnOnLevel`) | Learned free on login and every level-up |
+| **Talents** | Spent automatically on a premade build (`TortoiseBots.AutoTalentsOnLevel`) | Spent automatically on a premade build |
+| **Professions** | Not granted automatically | Two professions, First Aid and Cooking at level 5 (`TortoiseBots.AutoProfessions`) |
+| **Tools and food** | Not granted automatically | Gathering/crafting tools and level-fitting food and water (`TortoiseBots.AutoTools`, `TortoiseBots.AutoFood`) |
+| **Gear** | What you give it; it also equips upgrades it loots | Gear from loot, quests and generated upgrades (`AiPlayerbot.RandomGearProgression`, `AiPlayerbot.AutoEquipUpgradeLoot`) |
+| **Mounts** | Yours to buy | Learns to ride and buys its race's mount with its own gold at 40 and 60 (`AiPlayerbot.LevelUpMounts`) |
+| **Loot rolls** | Rolls with the group | Rolls with the group |
+
+The bot engine does not use Turtle-only custom spells, races or content.
 
 ## Building a balanced 5-man party
 
@@ -90,22 +113,8 @@ One tank, one healer, one melee damage dealer and two ranged damage dealers:
 | :--- | :--- | :--- |
 | **Tank** | Protection Warrior, Bear Druid, Protection Paladin | Holds threat, taunts, interrupts |
 | **Healer** | Holy Priest, Restoration Shaman, Holy Paladin, Restoration Druid | Healing and dispels |
-| **Melee DPS** | Combat or Assassination Rogue, Fury Warrior, Cat Druid | Burst, interrupts, Sap before the pull |
+| **Melee DPS** | Combat or Assassination Rogue, Fury Warrior, Cat Druid | Burst, interrupts |
 | **Ranged DPS** (2) | Frost or Fire Mage, Marksmanship Hunter, Affliction Warlock | Polymorph, Freezing Trap, Banish, conjured food and water |
-
-## Basic controls in the field
-
-The buttons are in `/tbm` (Summon is on the **Roster** tab).
-
-| You want to... | Button | Command | What the bots do |
-| :--- | :--- | :--- | :--- |
-| Bring a bot to you | **Summon** | [`.bot summon <Name>`](commands/roster-and-hiring.md#bot-summon) | The bot itself must be out of combat and alive: it appears about 5 yards from you after a 3-second portal. |
-| Kill one target first | **Focus Skull** | [`.bot action focus skull`](commands/party-actions.md#bot-action-focus-skull) | Your target gets the Skull mark and every party bot attacks it. |
-| Pull a pack around a corner | **Pullback** | [`.bot action pullback`](commands/party-actions.md#bot-action-pullback) | The tank pulls your target and runs back to you; the others wait at your spot until it arrives. Stand behind a corner first. |
-| Stop moving | **Stay** | [`.bot action stay`](commands/party-actions.md#bot-action-stay) | Bots hold their position. |
-| Follow again | **Follow** | [`.bot action follow`](commands/party-actions.md#bot-action-follow) | Bots follow you in formation. |
-| Crowd-control a mob | **CC Mark** | [`.bot action cc <mark>`](commands/party-actions.md#bot-action-cc) | A bot that can CC your target (Polymorph, Sap, Shackle...) keeps it out of the fight. |
-| Protect crowd control | **AoE** (toggle) | [`.bot action aoe off`](commands/party-actions.md#bot-action-aoe) | Bots stop using area spells. |
 
 ## Where next
 
