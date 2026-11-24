@@ -277,6 +277,7 @@ ai/playerbot/FleeManager.cpp
 # W6a (item usage, equip upgrades), W2 (sell, buy, repair, trainer, mail) and W3 (quests): the legacy files these items add.
 ai/playerbot/RandomItemWeights.cpp
 ai/playerbot/strategy/actions/EquipAction.cpp
+ai/playerbot/strategy/actions/PoolGearTopUpAction.cpp
 ai/playerbot/strategy/generic/MaintenanceStrategy.cpp
 ai/playerbot/strategy/actions/SellAction.cpp
 ai/playerbot/strategy/actions/BuyAction.cpp

@@ -17,8 +17,11 @@ inline void LogGearIndexBuilt(uint32 count, long long elapsedMs)
 } // namespace
 
 #include "compat/botpch_forever.h"
+#include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/policy/item/GearSetPolicy.h"
+#include "runtime/GearItemLevelCapPolicy.h"
+#include "runtime/GearSeedQualityPolicy.h"
 
 #include <algorithm>
 #include <chrono>
@@ -233,6 +236,175 @@ std::vector<GearAuditEntry> AuditGearIndex(uint32 level)
         out.push_back({ slot, count });
     }
     return out;
+}
+
+GearSetOutcome TopUpGearForTarget(Player* target, uint32 levelArg, uint32 slotMask)
+{
+    GearSetOutcome outcome;
+    if (!target)
+    {
+        outcome.errorCode = "no-such-player";
+        outcome.errorDetail = "target is null";
+        return outcome;
+    }
+
+    if (!Index().initialized)
+        InitGearIndex();
+
+    uint8 const playerClass = target->GetClass();
+    uint32 specId = sRandomItemMgr.GetPlayerSpecId(target);
+    if (!specId)
+        specId = sRandomItemMgr.GetFallbackSpecId(playerClass);
+    std::string const canonicalSpec = ai::CanonicalSpecName(playerClass, sRandomItemMgr.GetSpecName(specId));
+
+    uint32 const level = levelArg > 0 ? std::clamp<uint32>(levelArg, 1, 60) : std::clamp<uint32>(target->GetLevel(), 1, 60);
+    uint8 const maxQuality = ai::TargetMaxQualityForLevel(level);
+    uint8 const minQuality = static_cast<uint8>(TortoiseBots::GearQualityFloor(level, false));
+    // The owner's pool-bot ceiling (GearItemLevelCapPolicy.h): level + RandomGearMaxItemLevelAboveLevel, never above
+    // RandomGearMaxLevel. A pool bot never wears generated gear above what its own level could have earned.
+    uint32 const maxItemLevel = TortoiseBots::GearItemLevelCap(level,
+        sPlayerbotAIConfig.randomGearMaxItemLevelAboveLevel, sPlayerbotAIConfig.randomGearMaxLevel);
+    bool const canDualWield = target->CanDualWield();
+
+    outcome.ok = true;
+    outcome.specName = canonicalSpec;
+    outcome.level = level;
+    outcome.maxQuality = maxQuality;
+
+    bool mainHandIsTwoHanded = false;
+    if (Item* mainHand = target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
+        if (ItemTemplate const* tpl = mainHand->GetTemplate())
+            mainHandIsTwoHanded = tpl->GetInventoryType() == INVTYPE_2HWEAPON;
+
+    // A worn off-hand outside the mask is earned gear and stays: a two-hander may not replace the main hand either.
+    bool const offhandIsReplaced = (slotMask & (1u << EQUIPMENT_SLOT_OFFHAND)) != 0;
+    bool const keepWornOffhand = !offhandIsReplaced &&
+        target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) != nullptr;
+
+    std::vector<uint32> alreadyPicked;
+    for (uint8 paired : { EQUIPMENT_SLOT_FINGER1, EQUIPMENT_SLOT_FINGER2, EQUIPMENT_SLOT_TRINKET1, EQUIPMENT_SLOT_TRINKET2 })
+        if (Item* worn = target->GetItemByPos(INVENTORY_SLOT_BAG_0, paired))
+            alreadyPicked.push_back(worn->GetEntry());
+
+    for (uint8 slot : ai::GearSetSlotOrder())
+    {
+        if (!(slotMask & (1u << slot)))
+            continue;
+
+        GearSlotResult res;
+        res.slot = slot;
+
+        if (slot == EQUIPMENT_SLOT_OFFHAND && mainHandIsTwoHanded)
+        {
+            res.status = "refused";
+            res.code = "two-hand";
+            outcome.slots.push_back(res);
+            ++outcome.failed;
+            continue;
+        }
+
+        bool const allowTwoHand = slot != EQUIPMENT_SLOT_MAINHAND || !keepWornOffhand;
+        std::vector<ai::GearItemCandidate> ranked = ai::FilterCandidatesForSlot(
+            Index().bySlot[slot], playerClass, canonicalSpec, level, slot, maxQuality, canDualWield, mainHandIsTwoHanded,
+            alreadyPicked);
+        ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
+            [minQuality, maxItemLevel](ai::GearItemCandidate const& c)
+            {
+                return c.quality < minQuality || c.itemLevel > maxItemLevel;
+            }), ranked.end());
+        if (!allowTwoHand)
+            ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
+                [](ai::GearItemCandidate const& c) { return c.inventoryType == INVTYPE_2HWEAPON; }), ranked.end());
+
+        if (ranked.empty())
+        {
+            res.status = "refused";
+            res.code = "no-item";
+            outcome.slots.push_back(res);
+            ++outcome.failed;
+            continue;
+        }
+
+        for (ai::GearItemCandidate& c : ranked)
+            if (ItemPrototype const* proto = tbcompat::ItemProto(c.itemId))
+            {
+                ItemSpecType itSpec;
+                c.score = sRandomItemMgr.CalculateStatWeight(playerClass, static_cast<uint8>(specId), proto, itSpec);
+            }
+        ai::SortCandidatesForSlot(ranked);
+
+        bool equippedSlot = false;
+        std::string lastFailCode = "no-item";
+        for (ai::GearItemCandidate const& cand : ranked)
+        {
+            bool const twoHander = cand.inventoryType == INVTYPE_2HWEAPON;
+            uint16 dest = 0;
+            // The core's slot rules (proficiency, level, class, a two-hander taking the pair's off hand), with the
+            // worn piece still in place. Only a passing candidate may spend it.
+            if (target->CanEquipNewItem(slot, dest, cand.itemId, true) != EQUIP_ERR_OK)
+                continue;
+
+            Item* worn = target->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (worn && worn->GetEntry() == cand.itemId)
+            {
+                res.itemId = cand.itemId;
+                res.itemLevel = cand.itemLevel;
+                res.score = cand.score;
+                res.status = "kept";
+                equippedSlot = true;
+                alreadyPicked.push_back(cand.itemId);
+                break;
+            }
+
+            // The top-up only touches empty or clearly outdated slots, so the worn piece is spent, not stowed: TB's
+            // seed destroys it too, and a pool bot gets no saleable bag trash.
+            if (worn)
+            {
+                target->DestroyItem(worn->GetBagSlot(), worn->GetSlot(), true);
+                worn = nullptr;
+            }
+            if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
+            {
+                if (Item* off = target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+                    target->DestroyItem(off->GetBagSlot(), off->GetSlot(), true);
+                if (target->CanEquipNewItem(slot, dest, cand.itemId, false) != EQUIP_ERR_OK)
+                {
+                    lastFailCode = "core-refused";
+                    continue;
+                }
+            }
+
+            Item* equipped = target->EquipNewItem(dest, cand.itemId, ItemContext::NONE, true);
+            Item* check = target->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (equipped && check && check->GetEntry() == cand.itemId)
+            {
+                res.itemId = cand.itemId;
+                res.itemLevel = cand.itemLevel;
+                res.score = cand.score;
+                res.status = "equipped";
+                equippedSlot = true;
+                alreadyPicked.push_back(cand.itemId);
+                if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
+                    mainHandIsTwoHanded = true;
+                ++outcome.equipped;
+                break;
+            }
+
+            lastFailCode = "core-refused";
+            if (equipped)
+                target->DestroyItem(equipped->GetBagSlot(), equipped->GetSlot(), true);
+        }
+
+        if (!equippedSlot)
+        {
+            res.status = "refused";
+            res.code = lastFailCode;
+            ++outcome.failed;
+        }
+        outcome.slots.push_back(res);
+    }
+
+    return outcome;
 }
 
 GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint32 levelArg, int32 qualityArg)
