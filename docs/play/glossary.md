@@ -24,7 +24,7 @@ Short explanations of the abbreviations and project terms used in these docs. Ea
 | **Commander binding** | A server-side link between a player (the commander) and a bot party, made with `.tb master`. A GameMaster uses it to give party orders and to start a run. See [Run leader](dungeon-run-leader.md). |
 | **Run leader** | The bot that walks a stored dungeon plan with a bound party. Started by a GameMaster with `.tb run`. |
 | **Dungeon fill** | The module's own group filler behind `.bot lfg join <dungeon id> <role>`: it adds free bots to your group when a role is missing. It is not the Turtle WoW dungeon finder. See [Queues](../world/queues.md). |
-| **Setting / feature flag** | A line in `modules/tortoise_bots.conf` (`TortoiseBots.*`) or `aiplayerbot.conf` (`AiPlayerbot.*`) that turns a feature on or off. See [How configuration works](../server/configuration.md). |
+| **Setting / feature flag** | A line in `tortoisebots.conf` (`TortoiseBots.*`) or `aiplayerbot.conf` (`AiPlayerbot.*`) that turns a feature on or off. See [How configuration works](../server/configuration.md). |
 | **TBM** | The TortoiseBotsForeverManager addon, opened with `/tbfm` (aliases `/tb`, `/tbot`, `/tortoise`). It talks to the server with `TBM:` addon messages. See [Addon](commands/addon.md). |
 | **Pullback** | A pull where the tank tags a pack and runs back around a corner, so the mobs come to the group out of line of sight. See the addon's `pullback` action in [Party actions](commands/party-actions.md#addon-action-buttons). |
 | **`.tb`** | The GameMaster and server-console command family. Players cannot use it. See [Admin commands](../server/admin-commands.md). |
