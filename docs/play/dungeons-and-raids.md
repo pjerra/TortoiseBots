@@ -27,7 +27,7 @@ A bot party on **WoW Forever** fights with the same class AI it uses in the open
 | You want | Order | What happens |
 | :--- | :--- | :--- |
 | Open a pull | `pull` (or `.bot attack <Name>` on your target) | The tank attacks. With `AiPlayerbot.RangedPull = 1` it opens with a ranged weapon before closing in. |
-| Pull around a corner | `pullback` | The tank pulls from range and runs back to your spot; the party waits for it. |
+| Pull around a corner | `pullback` (addon action) | The tank pulls from range and runs back to your spot; the party waits for it. |
 | Abandon a pull | `end pull` | The tank drops the pull and returns. |
 | Give the pull time | `pull 5`, `pull ranged`, `pull body` | Sets the opener or a wait in seconds (up to 60). |
 
@@ -42,7 +42,7 @@ The pullback waits are `AiPlayerbot.PullBackMaxReturnTime` (15 seconds for the t
 
 ## Interrupts and dispels
 
-`interrupt` picks one party member that can interrupt the current cast and sends it. The engine also interrupts on its own when a dangerous cast is in progress (`AiPlayerbot.InterruptIgnoresThreat`, `AiPlayerbot.InterruptAllowStun`). Healers and hybrid bots dispel what their class can dispel.
+The addon's `interrupt` action picks one party member that can interrupt the current cast and sends it. The engine also interrupts on its own when a dangerous cast is in progress (`AiPlayerbot.InterruptIgnoresThreat`, `AiPlayerbot.InterruptAllowStun`). Healers and hybrid bots dispel what their class can dispel.
 
 ## Hazards
 
@@ -81,7 +81,7 @@ The run leader walks a stored dungeon plan for a bound party. It is a **server-a
 ```
 
 - The lead bot must be in your party and bound to a commander first. A player-led start (`lead=player`) is opt-in and still experimental.
-- Plans live in the world database (`ai_dungeon_plan`, `ai_dungeon_step_unit`). `.tb plan check <plan> <character>` checks that every unit of a plan can be found in a fresh instance.
+- Plans live in the world database (`ai_dungeon_plan`, `ai_dungeon_step_unit`). `.tb plan <plan> check <character>` checks that every unit of a plan can be found in a fresh instance.
 - The run pulls, fights, loots, opens doors and regroups. It is work in progress: expect a plan to get stuck at a step, and use `.tb run status` and `.tb run events` to see where.
 
 See [Dungeon run leader](dungeon-run-leader.md) for the full command set and route fields.
@@ -93,4 +93,4 @@ See [Dungeon run leader](dungeon-run-leader.md) for the full command set and rou
 
 ## Turtle content
 
-The [dungeon reference](dungeon-reference.md) and the Turtle raid guides were written for the Turtle WoW client. Their creature IDs, custom raids and custom spells do not apply to WoW Forever. Use them only as general layout notes, never as a source of IDs or boss behaviour.
+The [dungeon reference](dungeon-reference.md) is written for WoW Forever and lists the Forever plans and creature entries. Turtle raid guides and Turtle custom raids do not apply to WoW Forever.
