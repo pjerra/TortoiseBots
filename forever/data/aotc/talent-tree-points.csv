@@ -1,0 +1,568 @@
+class,spec,levels,tab,tree,avg_points,chars
+druid,balance,10-19,0,Balance,4.8,60692
+druid,balance,10-19,1,Feral Combat,0.2,60692
+druid,balance,10-19,2,Restoration,0.4,60692
+druid,balance,20-29,0,Balance,12.6,28380
+druid,balance,20-29,1,Feral Combat,0.6,28380
+druid,balance,20-29,2,Restoration,1.6,28380
+druid,balance,30-39,0,Balance,20.6,13417
+druid,balance,30-39,1,Feral Combat,0.3,13417
+druid,balance,30-39,2,Restoration,3.7,13417
+druid,balance,40-49,0,Balance,30.0,8110
+druid,balance,40-49,1,Feral Combat,0.1,8110
+druid,balance,40-49,2,Restoration,5.4,8110
+druid,balance,50-59,0,Balance,34.6,5837
+druid,balance,50-59,1,Feral Combat,0.0,5837
+druid,balance,50-59,2,Restoration,10.1,5837
+druid,balance,60,0,Balance,37.3,3874
+druid,balance,60,1,Feral Combat,0.1,3874
+druid,balance,60,2,Restoration,13.7,3874
+druid,balance,all,0,Balance,12.6,120310
+druid,balance,all,1,Feral Combat,0.3,120310
+druid,balance,all,2,Restoration,2.3,120310
+druid,feral,10-19,0,Balance,0.1,168261
+druid,feral,10-19,1,Feral Combat,5.2,168261
+druid,feral,10-19,2,Restoration,0.1,168261
+druid,feral,20-29,0,Balance,0.2,180144
+druid,feral,20-29,1,Feral Combat,14.4,180144
+druid,feral,20-29,2,Restoration,0.6,180144
+druid,feral,30-39,0,Balance,0.2,115114
+druid,feral,30-39,1,Feral Combat,23.6,115114
+druid,feral,30-39,2,Restoration,0.8,115114
+druid,feral,40-49,0,Balance,1.2,57803
+druid,feral,40-49,1,Feral Combat,31.3,57803
+druid,feral,40-49,2,Restoration,2.8,57803
+druid,feral,50-59,0,Balance,4.3,31025
+druid,feral,50-59,1,Feral Combat,33.1,31025
+druid,feral,50-59,2,Restoration,7.2,31025
+druid,feral,60,0,Balance,7.4,15639
+druid,feral,60,1,Feral Combat,33.8,15639
+druid,feral,60,2,Restoration,9.8,15639
+druid,feral,all,0,Balance,0.7,567986
+druid,feral,all,1,Feral Combat,16.8,567986
+druid,feral,all,2,Restoration,1.3,567986
+druid,restoration,10-19,0,Balance,0.3,38510
+druid,restoration,10-19,1,Feral Combat,0.3,38510
+druid,restoration,10-19,2,Restoration,4.9,38510
+druid,restoration,20-29,0,Balance,1.8,35747
+druid,restoration,20-29,1,Feral Combat,1.1,35747
+druid,restoration,20-29,2,Restoration,12.3,35747
+druid,restoration,30-39,0,Balance,2.4,20543
+druid,restoration,30-39,1,Feral Combat,2.2,20543
+druid,restoration,30-39,2,Restoration,20.1,20543
+druid,restoration,40-49,0,Balance,4.9,8514
+druid,restoration,40-49,1,Feral Combat,1.4,8514
+druid,restoration,40-49,2,Restoration,28.8,8514
+druid,restoration,50-59,0,Balance,10.7,4513
+druid,restoration,50-59,1,Feral Combat,0.9,4513
+druid,restoration,50-59,2,Restoration,33.4,4513
+druid,restoration,60,0,Balance,14.2,5382
+druid,restoration,60,1,Feral Combat,0.7,5382
+druid,restoration,60,2,Restoration,36.0,5382
+druid,restoration,all,0,Balance,2.6,113209
+druid,restoration,all,1,Feral Combat,1.0,113209
+druid,restoration,all,2,Restoration,14.4,113209
+hunter,beast-mastery,10-19,0,Beast Mastery,5.5,255862
+hunter,beast-mastery,10-19,1,Marksmanship,0.3,255862
+hunter,beast-mastery,10-19,2,Survival,0.0,255862
+hunter,beast-mastery,20-29,0,Beast Mastery,14.3,256478
+hunter,beast-mastery,20-29,1,Marksmanship,0.7,256478
+hunter,beast-mastery,20-29,2,Survival,0.0,256478
+hunter,beast-mastery,30-39,0,Beast Mastery,23.6,140483
+hunter,beast-mastery,30-39,1,Marksmanship,0.9,140483
+hunter,beast-mastery,30-39,2,Survival,0.1,140483
+hunter,beast-mastery,40-49,0,Beast Mastery,31.1,62480
+hunter,beast-mastery,40-49,1,Marksmanship,3.9,62480
+hunter,beast-mastery,40-49,2,Survival,0.1,62480
+hunter,beast-mastery,50-59,0,Beast Mastery,31.8,30123
+hunter,beast-mastery,50-59,1,Marksmanship,12.5,30123
+hunter,beast-mastery,50-59,2,Survival,0.2,30123
+hunter,beast-mastery,60,0,Beast Mastery,31.9,13481
+hunter,beast-mastery,60,1,Marksmanship,18.6,13481
+hunter,beast-mastery,60,2,Survival,0.6,13481
+hunter,beast-mastery,all,0,Beast Mastery,15.5,758907
+hunter,beast-mastery,all,1,Marksmanship,1.6,758907
+hunter,beast-mastery,all,2,Survival,0.1,758907
+hunter,marksmanship,10-19,0,Beast Mastery,0.5,83727
+hunter,marksmanship,10-19,1,Marksmanship,5.1,83727
+hunter,marksmanship,10-19,2,Survival,0.1,83727
+hunter,marksmanship,20-29,0,Beast Mastery,1.9,72446
+hunter,marksmanship,20-29,1,Marksmanship,12.8,72446
+hunter,marksmanship,20-29,2,Survival,0.3,72446
+hunter,marksmanship,30-39,0,Beast Mastery,2.5,31751
+hunter,marksmanship,30-39,1,Marksmanship,21.5,31751
+hunter,marksmanship,30-39,2,Survival,0.3,31751
+hunter,marksmanship,40-49,0,Beast Mastery,3.4,11784
+hunter,marksmanship,40-49,1,Marksmanship,31.0,11784
+hunter,marksmanship,40-49,2,Survival,0.7,11784
+hunter,marksmanship,50-59,0,Beast Mastery,5.6,4722
+hunter,marksmanship,50-59,1,Marksmanship,36.0,4722
+hunter,marksmanship,50-59,2,Survival,3.0,4722
+hunter,marksmanship,60,0,Beast Mastery,4.5,5810
+hunter,marksmanship,60,1,Marksmanship,36.8,5810
+hunter,marksmanship,60,2,Survival,9.8,5810
+hunter,marksmanship,all,0,Beast Mastery,1.7,210240
+hunter,marksmanship,all,1,Marksmanship,13.2,210240
+hunter,marksmanship,all,2,Survival,0.6,210240
+hunter,survival,10-19,0,Beast Mastery,0.2,10536
+hunter,survival,10-19,1,Marksmanship,0.2,10536
+hunter,survival,10-19,2,Survival,5.1,10536
+hunter,survival,20-29,0,Beast Mastery,0.5,10296
+hunter,survival,20-29,1,Marksmanship,1.0,10296
+hunter,survival,20-29,2,Survival,13.6,10296
+hunter,survival,30-39,0,Beast Mastery,0.8,8308
+hunter,survival,30-39,1,Marksmanship,1.3,8308
+hunter,survival,30-39,2,Survival,22.8,8308
+hunter,survival,40-49,0,Beast Mastery,3.9,5892
+hunter,survival,40-49,1,Marksmanship,3.0,5892
+hunter,survival,40-49,2,Survival,28.5,5892
+hunter,survival,50-59,0,Beast Mastery,8.1,3756
+hunter,survival,50-59,1,Marksmanship,7.1,3756
+hunter,survival,50-59,2,Survival,29.5,3756
+hunter,survival,60,0,Beast Mastery,7.9,2950
+hunter,survival,60,1,Marksmanship,12.8,2950
+hunter,survival,60,2,Survival,30.3,2950
+hunter,survival,all,0,Beast Mastery,2.2,41738
+hunter,survival,all,1,Marksmanship,2.5,41738
+hunter,survival,all,2,Survival,18.0,41738
+mage,arcane,10-19,0,Arcane,4.7,90889
+mage,arcane,10-19,1,Fire,0.1,90889
+mage,arcane,10-19,2,Frost,0.3,90889
+mage,arcane,20-29,0,Arcane,13.7,67762
+mage,arcane,20-29,1,Fire,0.2,67762
+mage,arcane,20-29,2,Frost,0.9,67762
+mage,arcane,30-39,0,Arcane,23.2,35775
+mage,arcane,30-39,1,Fire,0.3,35775
+mage,arcane,30-39,2,Frost,1.2,35775
+mage,arcane,40-49,0,Arcane,31.2,17248
+mage,arcane,40-49,1,Fire,1.7,17248
+mage,arcane,40-49,2,Frost,2.2,17248
+mage,arcane,50-59,0,Arcane,33.0,8550
+mage,arcane,50-59,1,Fire,7.8,8550
+mage,arcane,50-59,2,Frost,3.8,8550
+mage,arcane,60,0,Arcane,33.4,5893
+mage,arcane,60,1,Fire,13.6,5893
+mage,arcane,60,2,Frost,4.0,5893
+mage,arcane,all,0,Arcane,14.1,226117
+mage,arcane,all,1,Fire,0.9,226117
+mage,arcane,all,2,Frost,1.0,226117
+mage,fire,10-19,0,Arcane,0.3,42054
+mage,fire,10-19,1,Fire,4.8,42054
+mage,fire,10-19,2,Frost,0.3,42054
+mage,fire,20-29,0,Arcane,0.6,27018
+mage,fire,20-29,1,Fire,13.2,27018
+mage,fire,20-29,2,Frost,0.9,27018
+mage,fire,30-39,0,Arcane,0.9,10188
+mage,fire,30-39,1,Fire,22.4,10188
+mage,fire,30-39,2,Frost,1.1,10188
+mage,fire,40-49,0,Arcane,2.8,3420
+mage,fire,40-49,1,Fire,29.9,3420
+mage,fire,40-49,2,Frost,2.2,3420
+mage,fire,50-59,0,Arcane,7.6,1117
+mage,fire,50-59,1,Fire,32.1,1117
+mage,fire,50-59,2,Frost,4.4,1117
+mage,fire,60,0,Arcane,11.4,633
+mage,fire,60,1,Fire,32.5,633
+mage,fire,60,2,Frost,7.1,633
+mage,fire,all,0,Arcane,0.7,84430
+mage,fire,all,1,Fire,11.2,84430
+mage,fire,all,2,Frost,0.8,84430
+mage,frost,10-19,0,Arcane,0.3,146878
+mage,frost,10-19,1,Fire,0.1,146878
+mage,frost,10-19,2,Frost,4.9,146878
+mage,frost,20-29,0,Arcane,0.7,123937
+mage,frost,20-29,1,Fire,0.1,123937
+mage,frost,20-29,2,Frost,14.3,123937
+mage,frost,30-39,0,Arcane,0.8,67591
+mage,frost,30-39,1,Fire,0.1,67591
+mage,frost,30-39,2,Frost,23.7,67591
+mage,frost,40-49,0,Arcane,1.8,32138
+mage,frost,40-49,1,Fire,0.1,32138
+mage,frost,40-49,2,Frost,33.3,32138
+mage,frost,50-59,0,Arcane,7.3,17936
+mage,frost,50-59,1,Fire,0.4,17936
+mage,frost,50-59,2,Frost,37.0,17936
+mage,frost,60,0,Arcane,13.3,10159
+mage,frost,60,1,Fire,0.7,10159
+mage,frost,60,2,Frost,36.9,10159
+mage,frost,all,0,Arcane,1.3,398639
+mage,frost,all,1,Fire,0.1,398639
+mage,frost,all,2,Frost,15.6,398639
+paladin,holy,10-19,0,Holy,4.7,47073
+paladin,holy,10-19,1,Protection,0.2,47073
+paladin,holy,10-19,2,Retribution,0.5,47073
+paladin,holy,20-29,0,Holy,12.4,28038
+paladin,holy,20-29,1,Protection,1.0,28038
+paladin,holy,20-29,2,Retribution,1.5,28038
+paladin,holy,30-39,0,Holy,20.7,13548
+paladin,holy,30-39,1,Protection,1.1,13548
+paladin,holy,30-39,2,Retribution,2.8,13548
+paladin,holy,40-49,0,Holy,26.7,6642
+paladin,holy,40-49,1,Protection,1.8,6642
+paladin,holy,40-49,2,Retribution,6.6,6642
+paladin,holy,50-59,0,Holy,29.7,2672
+paladin,holy,50-59,1,Protection,4.3,2672
+paladin,holy,50-59,2,Retribution,10.5,2672
+paladin,holy,60,0,Holy,31.8,2776
+paladin,holy,60,1,Protection,7.0,2776
+paladin,holy,60,2,Retribution,12.2,2776
+paladin,holy,all,0,Holy,11.9,100749
+paladin,holy,all,1,Protection,1.0,100749
+paladin,holy,all,2,Retribution,2.1,100749
+paladin,protection,10-19,0,Holy,0.1,63596
+paladin,protection,10-19,1,Protection,5.1,63596
+paladin,protection,10-19,2,Retribution,0.3,63596
+paladin,protection,20-29,0,Holy,0.3,60537
+paladin,protection,20-29,1,Protection,14.0,60537
+paladin,protection,20-29,2,Retribution,0.8,60537
+paladin,protection,30-39,0,Holy,0.3,42101
+paladin,protection,30-39,1,Protection,22.0,42101
+paladin,protection,30-39,2,Retribution,2.7,42101
+paladin,protection,40-49,0,Holy,0.4,28436
+paladin,protection,40-49,1,Protection,29.3,28436
+paladin,protection,40-49,2,Retribution,5.6,28436
+paladin,protection,50-59,0,Holy,1.0,16345
+paladin,protection,50-59,1,Protection,32.1,16345
+paladin,protection,50-59,2,Retribution,11.6,16345
+paladin,protection,60,0,Holy,1.6,10726
+paladin,protection,60,1,Protection,34.2,10726
+paladin,protection,60,2,Retribution,15.2,10726
+paladin,protection,all,0,Holy,0.4,221741
+paladin,protection,all,1,Protection,17.2,221741
+paladin,protection,all,2,Retribution,3.1,221741
+paladin,retribution,10-19,0,Holy,0.1,181432
+paladin,retribution,10-19,1,Protection,0.1,181432
+paladin,retribution,10-19,2,Retribution,5.4,181432
+paladin,retribution,20-29,0,Holy,0.6,186556
+paladin,retribution,20-29,1,Protection,0.7,186556
+paladin,retribution,20-29,2,Retribution,14.1,186556
+paladin,retribution,30-39,0,Holy,1.0,112612
+paladin,retribution,30-39,1,Protection,1.0,112612
+paladin,retribution,30-39,2,Retribution,22.5,112612
+paladin,retribution,40-49,0,Holy,3.5,54708
+paladin,retribution,40-49,1,Protection,1.1,54708
+paladin,retribution,40-49,2,Retribution,30.5,54708
+paladin,retribution,50-59,0,Holy,9.7,27397
+paladin,retribution,50-59,1,Protection,3.8,27397
+paladin,retribution,50-59,2,Retribution,31.1,27397
+paladin,retribution,60,0,Holy,12.4,13597
+paladin,retribution,60,1,Protection,7.4,13597
+paladin,retribution,60,2,Retribution,31.2,13597
+paladin,retribution,all,0,Holy,1.5,576302
+paladin,retribution,all,1,Protection,0.9,576302
+paladin,retribution,all,2,Retribution,15.8,576302
+priest,discipline,10-19,0,Discipline,4.1,95627
+priest,discipline,10-19,1,Holy,0.2,95627
+priest,discipline,10-19,2,Shadow Magic,0.2,95627
+priest,discipline,20-29,0,Discipline,12.6,85569
+priest,discipline,20-29,1,Holy,0.8,85569
+priest,discipline,20-29,2,Shadow Magic,2.0,85569
+priest,discipline,30-39,0,Discipline,20.1,60392
+priest,discipline,30-39,1,Holy,1.6,60392
+priest,discipline,30-39,2,Shadow Magic,3.0,60392
+priest,discipline,40-49,0,Discipline,27.4,17850
+priest,discipline,40-49,1,Holy,4.7,17850
+priest,discipline,40-49,2,Shadow Magic,2.7,17850
+priest,discipline,50-59,0,Discipline,30.4,5053
+priest,discipline,50-59,1,Holy,11.5,5053
+priest,discipline,50-59,2,Shadow Magic,2.4,5053
+priest,discipline,60,0,Discipline,31.5,3001
+priest,discipline,60,1,Holy,18.2,3001
+priest,discipline,60,2,Shadow Magic,1.3,3001
+priest,discipline,all,0,Discipline,12.8,267492
+priest,discipline,all,1,Holy,1.4,267492
+priest,discipline,all,2,Shadow Magic,1.6,267492
+priest,holy,10-19,0,Discipline,0.7,41373
+priest,holy,10-19,1,Holy,4.8,41373
+priest,holy,10-19,2,Shadow Magic,0.1,41373
+priest,holy,20-29,0,Discipline,1.8,36976
+priest,holy,20-29,1,Holy,12.3,36976
+priest,holy,20-29,2,Shadow Magic,0.9,36976
+priest,holy,30-39,0,Discipline,2.8,15694
+priest,holy,30-39,1,Holy,20.5,15694
+priest,holy,30-39,2,Shadow Magic,1.1,15694
+priest,holy,40-49,0,Discipline,6.4,6703
+priest,holy,40-49,1,Holy,27.6,6703
+priest,holy,40-49,2,Shadow Magic,1.1,6703
+priest,holy,50-59,0,Discipline,13.8,3633
+priest,holy,50-59,1,Holy,30.6,3633
+priest,holy,50-59,2,Shadow Magic,0.7,3633
+priest,holy,60,0,Discipline,18.2,4804
+priest,holy,60,1,Holy,32.5,4804
+priest,holy,60,2,Shadow Magic,0.3,4804
+priest,holy,all,0,Discipline,2.9,109183
+priest,holy,all,1,Holy,13.1,109183
+priest,holy,all,2,Shadow Magic,0.6,109183
+priest,shadow,10-19,0,Discipline,1.3,77953
+priest,shadow,10-19,1,Holy,0.2,77953
+priest,shadow,10-19,2,Shadow Magic,4.8,77953
+priest,shadow,20-29,0,Discipline,1.9,68929
+priest,shadow,20-29,1,Holy,0.4,68929
+priest,shadow,20-29,2,Shadow Magic,12.5,68929
+priest,shadow,30-39,0,Discipline,2.0,36329
+priest,shadow,30-39,1,Holy,0.3,36329
+priest,shadow,30-39,2,Shadow Magic,22.4,36329
+priest,shadow,40-49,0,Discipline,3.0,32450
+priest,shadow,40-49,1,Holy,0.6,32450
+priest,shadow,40-49,2,Shadow Magic,32.0,32450
+priest,shadow,50-59,0,Discipline,9.7,23034
+priest,shadow,50-59,1,Holy,1.2,23034
+priest,shadow,50-59,2,Shadow Magic,33.7,23034
+priest,shadow,60,0,Discipline,14.1,11169
+priest,shadow,60,1,Holy,1.7,11169
+priest,shadow,60,2,Shadow Magic,35.2,11169
+priest,shadow,all,0,Discipline,3.1,249864
+priest,shadow,all,1,Holy,0.5,249864
+priest,shadow,all,2,Shadow Magic,17.0,249864
+rogue,assassination,10-19,0,Assassination,4.1,30319
+rogue,assassination,10-19,1,Combat,0.6,30319
+rogue,assassination,10-19,2,Subtlety,0.1,30319
+rogue,assassination,20-29,0,Assassination,12.3,16564
+rogue,assassination,20-29,1,Combat,2.1,16564
+rogue,assassination,20-29,2,Subtlety,0.5,16564
+rogue,assassination,30-39,0,Assassination,19.6,7327
+rogue,assassination,30-39,1,Combat,3.8,7327
+rogue,assassination,30-39,2,Subtlety,0.9,7327
+rogue,assassination,40-49,0,Assassination,28.9,3182
+rogue,assassination,40-49,1,Combat,3.9,3182
+rogue,assassination,40-49,2,Subtlety,2.4,3182
+rogue,assassination,50-59,0,Assassination,31.5,2248
+rogue,assassination,50-59,1,Combat,9.1,2248
+rogue,assassination,50-59,2,Subtlety,4.2,2248
+rogue,assassination,60,0,Assassination,31.9,1644
+rogue,assassination,60,1,Combat,15.1,1644
+rogue,assassination,60,2,Subtlety,4.0,1644
+rogue,assassination,all,0,Assassination,11.2,61284
+rogue,assassination,all,1,Combat,2.3,61284
+rogue,assassination,all,2,Subtlety,0.7,61284
+rogue,combat,10-19,0,Assassination,0.5,131668
+rogue,combat,10-19,1,Combat,5.1,131668
+rogue,combat,10-19,2,Subtlety,0.1,131668
+rogue,combat,20-29,0,Assassination,1.2,122710
+rogue,combat,20-29,1,Combat,13.7,122710
+rogue,combat,20-29,2,Subtlety,0.3,122710
+rogue,combat,30-39,0,Assassination,1.4,78761
+rogue,combat,30-39,1,Combat,23.1,78761
+rogue,combat,30-39,2,Subtlety,0.3,78761
+rogue,combat,40-49,0,Assassination,3.0,43082
+rogue,combat,40-49,1,Combat,31.9,43082
+rogue,combat,40-49,2,Subtlety,0.3,43082
+rogue,combat,50-59,0,Assassination,10.1,23957
+rogue,combat,50-59,1,Combat,34.0,23957
+rogue,combat,50-59,2,Subtlety,0.5,23957
+rogue,combat,60,0,Assassination,15.5,12830
+rogue,combat,60,1,Combat,34.7,12830
+rogue,combat,60,2,Subtlety,0.8,12830
+rogue,combat,all,0,Assassination,2.2,413008
+rogue,combat,all,1,Combat,16.5,413008
+rogue,combat,all,2,Subtlety,0.3,413008
+rogue,subtlety,10-19,0,Assassination,0.3,26104
+rogue,subtlety,10-19,1,Combat,0.4,26104
+rogue,subtlety,10-19,2,Subtlety,4.9,26104
+rogue,subtlety,20-29,0,Assassination,0.8,24978
+rogue,subtlety,20-29,1,Combat,1.1,24978
+rogue,subtlety,20-29,2,Subtlety,13.4,24978
+rogue,subtlety,30-39,0,Assassination,1.1,17647
+rogue,subtlety,30-39,1,Combat,1.8,17647
+rogue,subtlety,30-39,2,Subtlety,21.9,17647
+rogue,subtlety,40-49,0,Assassination,2.9,9464
+rogue,subtlety,40-49,1,Combat,4.7,9464
+rogue,subtlety,40-49,2,Subtlety,27.6,9464
+rogue,subtlety,50-59,0,Assassination,8.3,4560
+rogue,subtlety,50-59,1,Combat,7.4,4560
+rogue,subtlety,50-59,2,Subtlety,28.7,4560
+rogue,subtlety,60,0,Assassination,13.6,3318
+rogue,subtlety,60,1,Combat,8.6,3318
+rogue,subtlety,60,2,Subtlety,28.8,3318
+rogue,subtlety,all,0,Assassination,1.8,86071
+rogue,subtlety,all,1,Combat,2.1,86071
+rogue,subtlety,all,2,Subtlety,15.5,86071
+shaman,elemental,10-19,0,Elemental Combat,4.6,36019
+shaman,elemental,10-19,1,Enhancement,0.3,36019
+shaman,elemental,10-19,2,Restoration,0.1,36019
+shaman,elemental,20-29,0,Elemental Combat,13.3,19861
+shaman,elemental,20-29,1,Enhancement,1.0,19861
+shaman,elemental,20-29,2,Restoration,0.6,19861
+shaman,elemental,30-39,0,Elemental Combat,21.8,8520
+shaman,elemental,30-39,1,Enhancement,1.0,8520
+shaman,elemental,30-39,2,Restoration,1.9,8520
+shaman,elemental,40-49,0,Elemental Combat,29.0,5100
+shaman,elemental,40-49,1,Enhancement,1.7,5100
+shaman,elemental,40-49,2,Restoration,4.8,5100
+shaman,elemental,50-59,0,Elemental Combat,31.4,3917
+shaman,elemental,50-59,1,Enhancement,4.5,3917
+shaman,elemental,50-59,2,Restoration,9.0,3917
+shaman,elemental,60,0,Elemental Combat,32.2,2785
+shaman,elemental,60,1,Enhancement,8.4,2785
+shaman,elemental,60,2,Restoration,10.4,2785
+shaman,elemental,all,0,Elemental Combat,12.8,76202
+shaman,elemental,all,1,Enhancement,1.2,76202
+shaman,elemental,all,2,Restoration,1.6,76202
+shaman,enhancement,10-19,0,Elemental Combat,0.1,134684
+shaman,enhancement,10-19,1,Enhancement,5.4,134684
+shaman,enhancement,10-19,2,Restoration,0.1,134684
+shaman,enhancement,20-29,0,Elemental Combat,0.2,143510
+shaman,enhancement,20-29,1,Enhancement,14.9,143510
+shaman,enhancement,20-29,2,Restoration,0.2,143510
+shaman,enhancement,30-39,0,Elemental Combat,0.2,109109
+shaman,enhancement,30-39,1,Enhancement,23.7,109109
+shaman,enhancement,30-39,2,Restoration,1.0,109109
+shaman,enhancement,40-49,0,Elemental Combat,1.4,64584
+shaman,enhancement,40-49,1,Enhancement,29.5,64584
+shaman,enhancement,40-49,2,Restoration,4.3,64584
+shaman,enhancement,50-59,0,Elemental Combat,6.1,34199
+shaman,enhancement,50-59,1,Enhancement,31.8,34199
+shaman,enhancement,50-59,2,Restoration,6.7,34199
+shaman,enhancement,60,0,Elemental Combat,11.9,16323
+shaman,enhancement,60,1,Enhancement,32.3,16323
+shaman,enhancement,60,2,Restoration,6.8,16323
+shaman,enhancement,all,0,Elemental Combat,1.1,502409
+shaman,enhancement,all,1,Enhancement,17.8,502409
+shaman,enhancement,all,2,Restoration,1.5,502409
+shaman,restoration,10-19,0,Elemental Combat,0.1,28905
+shaman,restoration,10-19,1,Enhancement,0.2,28905
+shaman,restoration,10-19,2,Restoration,5.3,28905
+shaman,restoration,20-29,0,Elemental Combat,0.4,31638
+shaman,restoration,20-29,1,Enhancement,1.4,31638
+shaman,restoration,20-29,2,Restoration,13.3,31638
+shaman,restoration,30-39,0,Elemental Combat,0.4,13830
+shaman,restoration,30-39,1,Enhancement,1.8,13830
+shaman,restoration,30-39,2,Restoration,22.2,13830
+shaman,restoration,40-49,0,Elemental Combat,0.3,6325
+shaman,restoration,40-49,1,Enhancement,3.3,6325
+shaman,restoration,40-49,2,Restoration,31.6,6325
+shaman,restoration,50-59,0,Elemental Combat,0.2,3334
+shaman,restoration,50-59,1,Enhancement,8.4,3334
+shaman,restoration,50-59,2,Restoration,36.3,3334
+shaman,restoration,60,0,Elemental Combat,0.1,4540
+shaman,restoration,60,1,Enhancement,12.2,4540
+shaman,restoration,60,2,Restoration,38.6,4540
+shaman,restoration,all,0,Elemental Combat,0.3,88572
+shaman,restoration,all,1,Enhancement,2.1,88572
+shaman,restoration,all,2,Restoration,15.6,88572
+warlock,affliction,10-19,0,Affliction,5.1,161178
+warlock,affliction,10-19,1,Demonology,0.2,161178
+warlock,affliction,10-19,2,Destruction,0.1,161178
+warlock,affliction,20-29,0,Affliction,14.1,126982
+warlock,affliction,20-29,1,Demonology,0.7,126982
+warlock,affliction,20-29,2,Destruction,0.3,126982
+warlock,affliction,30-39,0,Affliction,23.0,68228
+warlock,affliction,30-39,1,Demonology,1.1,68228
+warlock,affliction,30-39,2,Destruction,0.3,68228
+warlock,affliction,40-49,0,Affliction,32.3,32156
+warlock,affliction,40-49,1,Demonology,2.3,32156
+warlock,affliction,40-49,2,Destruction,0.4,32156
+warlock,affliction,50-59,0,Affliction,36.6,15630
+warlock,affliction,50-59,1,Demonology,6.8,15630
+warlock,affliction,50-59,2,Destruction,1.3,15630
+warlock,affliction,60,0,Affliction,37.3,9034
+warlock,affliction,60,1,Demonology,10.5,9034
+warlock,affliction,60,2,Destruction,3.2,9034
+warlock,affliction,all,0,Affliction,14.9,413208
+warlock,affliction,all,1,Demonology,1.1,413208
+warlock,affliction,all,2,Destruction,0.3,413208
+warlock,demonology,10-19,0,Affliction,0.3,64266
+warlock,demonology,10-19,1,Demonology,4.8,64266
+warlock,demonology,10-19,2,Destruction,0.1,64266
+warlock,demonology,20-29,0,Affliction,1.5,48938
+warlock,demonology,20-29,1,Demonology,13.3,48938
+warlock,demonology,20-29,2,Destruction,0.4,48938
+warlock,demonology,30-39,0,Affliction,1.6,28144
+warlock,demonology,30-39,1,Demonology,22.7,28144
+warlock,demonology,30-39,2,Destruction,0.3,28144
+warlock,demonology,40-49,0,Affliction,4.4,16275
+warlock,demonology,40-49,1,Demonology,30.1,16275
+warlock,demonology,40-49,2,Destruction,0.9,16275
+warlock,demonology,50-59,0,Affliction,10.3,9375
+warlock,demonology,50-59,1,Demonology,31.0,9375
+warlock,demonology,50-59,2,Destruction,3.3,9375
+warlock,demonology,60,0,Affliction,10.3,5210
+warlock,demonology,60,1,Demonology,31.2,5210
+warlock,demonology,60,2,Destruction,9.5,5210
+warlock,demonology,all,0,Affliction,2.1,172208
+warlock,demonology,all,1,Demonology,14.7,172208
+warlock,demonology,all,2,Destruction,0.8,172208
+warlock,destruction,10-19,0,Affliction,0.3,28969
+warlock,destruction,10-19,1,Demonology,0.3,28969
+warlock,destruction,10-19,2,Destruction,4.5,28969
+warlock,destruction,20-29,0,Affliction,1.5,17564
+warlock,destruction,20-29,1,Demonology,0.8,17564
+warlock,destruction,20-29,2,Destruction,12.6,17564
+warlock,destruction,30-39,0,Affliction,2.2,6878
+warlock,destruction,30-39,1,Demonology,1.0,6878
+warlock,destruction,30-39,2,Destruction,21.1,6878
+warlock,destruction,40-49,0,Affliction,3.5,2357
+warlock,destruction,40-49,1,Demonology,1.6,2357
+warlock,destruction,40-49,2,Destruction,29.6,2357
+warlock,destruction,50-59,0,Affliction,6.6,712
+warlock,destruction,50-59,1,Demonology,5.3,712
+warlock,destruction,50-59,2,Destruction,32.6,712
+warlock,destruction,60,0,Affliction,8.7,713
+warlock,destruction,60,1,Demonology,8.7,713
+warlock,destruction,60,2,Destruction,33.6,713
+warlock,destruction,all,0,Affliction,1.2,57193
+warlock,destruction,all,1,Demonology,0.8,57193
+warlock,destruction,all,2,Destruction,10.7,57193
+warrior,arms,10-19,0,Arms,4.9,77919
+warrior,arms,10-19,1,Fury,0.2,77919
+warrior,arms,10-19,2,Protection,0.2,77919
+warrior,arms,20-29,0,Arms,13.6,52582
+warrior,arms,20-29,1,Fury,1.0,52582
+warrior,arms,20-29,2,Protection,0.4,52582
+warrior,arms,30-39,0,Arms,23.4,29876
+warrior,arms,30-39,1,Fury,1.1,29876
+warrior,arms,30-39,2,Protection,0.3,29876
+warrior,arms,40-49,0,Arms,30.9,13528
+warrior,arms,40-49,1,Fury,3.8,13528
+warrior,arms,40-49,2,Protection,0.3,13528
+warrior,arms,50-59,0,Arms,32.0,5284
+warrior,arms,50-59,1,Fury,11.9,5284
+warrior,arms,50-59,2,Protection,0.6,5284
+warrior,arms,60,0,Arms,32.8,2461
+warrior,arms,60,1,Fury,17.1,2461
+warrior,arms,60,2,Protection,1.1,2461
+warrior,arms,all,0,Arms,13.5,181650
+warrior,arms,all,1,Fury,1.4,181650
+warrior,arms,all,2,Protection,0.3,181650
+warrior,fury,10-19,0,Arms,0.4,43096
+warrior,fury,10-19,1,Fury,4.9,43096
+warrior,fury,10-19,2,Protection,0.2,43096
+warrior,fury,20-29,0,Arms,0.8,36421
+warrior,fury,20-29,1,Fury,14.0,36421
+warrior,fury,20-29,2,Protection,0.3,36421
+warrior,fury,30-39,0,Arms,0.9,20575
+warrior,fury,30-39,1,Fury,23.2,20575
+warrior,fury,30-39,2,Protection,0.6,20575
+warrior,fury,40-49,0,Arms,2.4,13486
+warrior,fury,40-49,1,Fury,32.8,13486
+warrior,fury,40-49,2,Protection,0.4,13486
+warrior,fury,50-59,0,Arms,9.2,10149
+warrior,fury,50-59,1,Fury,35.0,10149
+warrior,fury,50-59,2,Protection,0.6,10149
+warrior,fury,60,0,Arms,15.4,7557
+warrior,fury,60,1,Fury,34.9,7557
+warrior,fury,60,2,Protection,0.7,7557
+warrior,fury,all,0,Arms,2.3,131284
+warrior,fury,all,1,Fury,17.2,131284
+warrior,fury,all,2,Protection,0.3,131284
+warrior,protection,10-19,0,Arms,0.1,147301
+warrior,protection,10-19,1,Fury,0.1,147301
+warrior,protection,10-19,2,Protection,5.5,147301
+warrior,protection,20-29,0,Arms,0.3,139429
+warrior,protection,20-29,1,Fury,0.2,139429
+warrior,protection,20-29,2,Protection,14.6,139429
+warrior,protection,30-39,0,Arms,0.4,83400
+warrior,protection,30-39,1,Fury,0.4,83400
+warrior,protection,30-39,2,Protection,23.8,83400
+warrior,protection,40-49,0,Arms,1.0,41866
+warrior,protection,40-49,1,Fury,3.0,41866
+warrior,protection,40-49,2,Protection,31.3,41866
+warrior,protection,50-59,0,Arms,2.4,23445
+warrior,protection,50-59,1,Fury,10.1,23445
+warrior,protection,50-59,2,Protection,32.2,23445
+warrior,protection,60,0,Arms,4.6,14086
+warrior,protection,60,1,Fury,13.8,14086
+warrior,protection,60,2,Protection,32.6,14086
+warrior,protection,all,0,Arms,0.6,449527
+warrior,protection,all,1,Fury,1.4,449527
+warrior,protection,all,2,Protection,16.4,449527

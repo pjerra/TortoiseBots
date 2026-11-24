@@ -1,0 +1,21 @@
+list,rank,pair,pct_of_all,chars
+most,1,Undead Paladin,6.5,464k
+most,2,Human Paladin,5.2,368k
+most,3,Night Elf Druid,4.1,294k
+most,4,Tauren Druid,4.1,294k
+most,5,Dwarf Shaman,3.9,276k
+most,6,Night Elf Hunter,3.4,239k
+most,7,Undead Priest,3.3,233k
+most,8,Human Warlock,2.9,205k
+most,9,Undead Warlock,2.8,197k
+most,10,Orc Hunter,2.7,194k
+least,1,Dwarf Rogue,0.3,19k
+least,2,Dwarf Priest,0.4,27k
+least,3,High Order Skyborne Rogue,0.4,29k
+least,4,Troll Rogue,0.4,32k
+least,5,High Order Skyborne Warrior,0.5,33k
+least,6,Windshaper Skyborne Warrior,0.5,38k
+least,7,Orc Rogue,0.5,38k
+least,8,Gnome Warrior,0.5,39k
+least,9,Troll Warrior,0.6,44k
+least,10,Windshaper Skyborne Rogue,0.6,45k

@@ -1,0 +1,23 @@
+what,name,pct,count
+death_cause_normal,Monsters,69,65563776
+death_cause_normal,Other players,9,8917067
+death_cause_normal,Dungeons and raids,17,15937108
+death_cause_normal,Environment,4,4180055
+death_cause_pvp,Monsters,45,60153423
+death_cause_pvp,Other players,39,52087842
+death_cause_pvp,Dungeons and raids,13,17960847
+death_cause_pvp,Environment,3,4262087
+travel,Flight paths taken,70,
+travel,Times hearthed,28,
+travel,Summons accepted,0.9,
+travel,Mage portals taken,0.7,
+consume,Beverages drunk,50,
+consume,Food eaten,30,
+consume,Health potions,7,
+consume,Bandages used,7,
+consume,Mana potions,3,
+consume,Elixirs,3,
+consume,Healthstones used,1,
+bandage,Linen Bandage,47,
+bandage,Heavy Linen,26,
+bandage,Heavy Wool,6,
