@@ -11,6 +11,7 @@
 #include "Log.h"
 #include "Mail.h"
 #include "MailPackets.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "PetitionMgr.h"
 #include "PetitionPackets.h"
@@ -193,6 +194,23 @@ bool AcceptInvite(Player* invitee, uint64_t guildId, std::string* failReason)
     return true;
 }
 
+bool DeclineInvite(Player* invitee, std::string* failReason)
+{
+    if (!invitee || !invitee->GetSession() || !invitee->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    if (invitee->GetGuildId() != 0)
+        return SetFail(failReason, "already-in-guild");
+    if (!invitee->GetGuildIdInvited())
+        return SetFail(failReason, "no-invite");
+
+    WorldPackets::Guild::GuildDeclineInvitation packet{ WorldPacket(CMSG_GUILD_DECLINE_INVITATION) };
+    invitee->GetSession()->HandleGuildDeclineInvitation(packet);
+
+    if (invitee->GetGuildIdInvited() != 0)
+        return SetFail(failReason, "core-refused");
+    return true;
+}
+
 bool SetMemberRank(Player* setter, ObjectGuid const& targetGuid, uint8_t rankOrder, std::string* failReason)
 {
     if (!setter || !setter->GetSession() || !setter->IsInWorld())
@@ -204,6 +222,138 @@ bool SetMemberRank(Player* setter, ObjectGuid const& targetGuid, uint8_t rankOrd
     packet.Member = targetGuid;
     packet.RankOrder = static_cast<int32>(rankOrder);
     setter->GetSession()->HandleGuildAssignRank(packet);
+    return true;
+}
+
+bool LeaveGuild(Player* bot, std::string* failReason)
+{
+    if (!bot || !bot->GetSession() || !bot->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    uint64_t const guildId = bot->GetGuildId();
+    if (!guildId)
+        return SetFail(failReason, "not-in-guild");
+
+    WorldPackets::Guild::GuildLeave packet{ WorldPacket(CMSG_GUILD_LEAVE) };
+    bot->GetSession()->HandleGuildLeave(packet);
+
+    if (bot->GetGuildId() == guildId)
+        return SetFail(failReason, "core-refused");
+
+    TC_LOG_INFO("tortoisebots", "[W9] guild-leave bot={} guild={}", bot->GetName(), guildId);
+    return true;
+}
+
+bool PromoteMember(Player* actor, ObjectGuid const& targetGuid, std::string* failReason)
+{
+    if (!actor || !actor->GetSession() || !actor->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    uint64_t const guildId = actor->GetGuildId();
+    if (!guildId)
+        return SetFail(failReason, "not-in-guild");
+    Guild const* guild = sGuildMgr->GetGuildById(guildId);
+    if (!guild || !guild->GetMember(targetGuid))
+        return SetFail(failReason, "not-a-member");
+    if (!HasAnyRankRight(guildId, actor->GetGUID(), GR_RIGHT_PROMOTE))
+        return SetFail(failReason, "no-rank-right");
+
+    WorldPackets::Guild::GuildPromoteMember packet{ WorldPacket(CMSG_GUILD_PROMOTE_MEMBER) };
+    packet.Promotee = targetGuid;
+    actor->GetSession()->HandleGuildPromoteMember(packet);
+    return true;
+}
+
+bool DemoteMember(Player* actor, ObjectGuid const& targetGuid, std::string* failReason)
+{
+    if (!actor || !actor->GetSession() || !actor->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    uint64_t const guildId = actor->GetGuildId();
+    if (!guildId)
+        return SetFail(failReason, "not-in-guild");
+    Guild const* guild = sGuildMgr->GetGuildById(guildId);
+    if (!guild || !guild->GetMember(targetGuid))
+        return SetFail(failReason, "not-a-member");
+    if (!HasAnyRankRight(guildId, actor->GetGUID(), GR_RIGHT_DEMOTE))
+        return SetFail(failReason, "no-rank-right");
+
+    WorldPackets::Guild::GuildDemoteMember packet{ WorldPacket(CMSG_GUILD_DEMOTE_MEMBER) };
+    packet.Demotee = targetGuid;
+    actor->GetSession()->HandleGuildDemoteMember(packet);
+    return true;
+}
+
+bool RemoveMember(Player* actor, ObjectGuid const& targetGuid, std::string* failReason)
+{
+    if (!actor || !actor->GetSession() || !actor->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    uint64_t const guildId = actor->GetGuildId();
+    if (!guildId)
+        return SetFail(failReason, "not-in-guild");
+    Guild const* guild = sGuildMgr->GetGuildById(guildId);
+    if (!guild || !guild->GetMember(targetGuid))
+        return SetFail(failReason, "not-a-member");
+    if (!HasAnyRankRight(guildId, actor->GetGUID(), GR_RIGHT_REMOVE))
+        return SetFail(failReason, "no-rank-right");
+
+    WorldPackets::Guild::GuildOfficerRemoveMember packet{ WorldPacket(CMSG_GUILD_OFFICER_REMOVE_MEMBER) };
+    packet.Removee = targetGuid;
+    actor->GetSession()->HandleGuildOfficerRemoveMember(packet);
+    return true;
+}
+
+bool SetLeader(Player* actor, std::string const& targetName, std::string* failReason)
+{
+    if (!actor || !actor->GetSession() || !actor->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    uint64_t const guildId = actor->GetGuildId();
+    if (!guildId)
+        return SetFail(failReason, "not-in-guild");
+    std::string name = targetName;
+    if (!normalizePlayerName(name))
+        return SetFail(failReason, "empty-target");
+    Guild const* guild = sGuildMgr->GetGuildById(guildId);
+    if (!guild || guild->GetLeaderGUID() != actor->GetGUID())
+        return SetFail(failReason, "not-leader");
+    bool member = false;
+    for (auto const& [guid, slot] : guild->GetMembers())
+        if (slot.GetName() == name)
+        {
+            member = true;
+            break;
+        }
+    if (!member)
+        return SetFail(failReason, "not-a-member");
+
+    WorldPackets::Guild::GuildSetGuildMaster packet{ WorldPacket(CMSG_GUILD_SET_GUILD_MASTER) };
+    packet.NewMasterName = name;
+    actor->GetSession()->HandleGuildSetGuildMaster(packet);
+    return true;
+}
+
+uint32_t CharterCost()
+{
+    return uint32_t(sWorld->getIntConfig(CONFIG_CHARTER_COST_GUILD));
+}
+
+bool SayToGuild(Player* bot, std::string const& text, std::string* failReason)
+{
+    if (!bot || !bot->GetSession() || !bot->IsInWorld())
+        return SetFail(failReason, "not-in-world");
+    uint64_t const guildId = bot->GetGuildId();
+    if (!guildId)
+        return SetFail(failReason, "not-in-guild");
+    if (text.empty())
+        return SetFail(failReason, "empty-text");
+
+    Guild const* guild = sGuildMgr->GetGuildById(guildId);
+    if (!guild)
+        return SetFail(failReason, "no-such-guild");
+    Guild::Member const* member = guild->GetMember(bot->GetGUID());
+    if (!member)
+        return SetFail(failReason, "not-a-member");
+    if (!guild->HasAnyRankRight(member->GetRankId(), GR_RIGHT_GCHATSPEAK))
+        return SetFail(failReason, "no-speak-right");
+
+    guild->BroadcastToGuild(bot->GetSession(), false, text, LANG_UNIVERSAL);
     return true;
 }
 

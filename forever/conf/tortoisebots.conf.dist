@@ -255,6 +255,27 @@ TortoiseBots.World.GuildMail = 1
 TortoiseBots.World.GuildMail.AllowMixedGuild = 0
 
 #
+#    TortoiseBots.World.Guilds
+#        Description: Free (pool) bots take part in guilds: an outstanding guild invite is accepted (and declined when
+#                     the guild already has 1000 members or is on the other side), a bot walks out of a guild that
+#                     reaches 1000 members, and the owner's guild management whispers (guild invite/join/leave/
+#                     promote/demote/remove/leader) are answered. Bots never leave a player's guild otherwise.
+#        Default:     1
+#
+
+TortoiseBots.World.Guilds = 1
+
+#
+#    TortoiseBots.World.GuildForming
+#        Description: Allow a free bot above level 10 with the core's charter price in its own purse, no guild and no
+#                     invite to buy a guild charter at a nearby petitioner, gather signatures from nearby free bots of
+#                     its faction and turn it in, founding "<Bot> Guild". The bot pays the charter itself.
+#        Default:     0
+#
+
+TortoiseBots.World.GuildForming = 0
+
+#
 #    TortoiseBots.World.GuildOrderBotRank
 #        Description: Guild orders: give every module-owned bot in a guild that also has a real player one shared
 #                     guild rank, so the master can open guild bank tabs to it (`.tb guildorder rank <rank>`).
