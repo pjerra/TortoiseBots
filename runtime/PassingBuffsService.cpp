@@ -166,8 +166,8 @@ void PassingBuffsService::SweepNow(std::vector<Player*> const& realPlayers)
                 break;
             PairKey key{bot->GetGUIDLow(), player->GetGUIDLow()};
             m_seenPairsNext.emplace(key, true);
-            bool known = m_seenPairs.find(key) != m_seenPairs.end();
-            if (!ai::PassingIsNewMeeting(!known))
+            bool const seenLastSweep = m_seenPairs.find(key) != m_seenPairs.end();
+            if (!ai::PassingIsNewMeeting(seenLastSweep))
                 continue;
             if (TryHeal(bot, player, now) || TryBuff(bot, player, now))
                 ++casts;
