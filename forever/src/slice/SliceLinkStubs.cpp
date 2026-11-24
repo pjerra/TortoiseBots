@@ -35,7 +35,6 @@
 #include "playerbot/Talentspec.h"
 #include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/CheatAction.h"
-#include "playerbot/strategy/actions/EmoteAction.h"
 #include "playerbot/strategy/actions/EquipAction.h"
 #include "playerbot/strategy/actions/FankrissFocusActions.h"
 #include "playerbot/strategy/actions/FankrissRaidActions.h"
@@ -234,8 +233,6 @@ void UpdateBotAreaTriggers(Player*, BotAreaTriggerState&, std::vector<uint32_t> 
 
 // CheatAction.cpp: the mask of cheats a config string names. 0 = none (the cheat actions are not in the slice).
 BotCheatMask CheatAction::GetCheatMask(std::string) { NoteMisc(); return BotCheatMask(0); }
-// EmoteAction.cpp: how many chat variants a text emote has. 1 = only the plain one.
-uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { NoteMisc(); return 1; }
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.

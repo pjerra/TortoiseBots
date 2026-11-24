@@ -5,6 +5,7 @@
 
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TbCompatW1.h"
 #include "playerbot/TbCompatW2.h"
 using namespace ai;
 
@@ -115,16 +116,14 @@ bool EmoteActionBase::Emote(Unit* target, uint32 type, bool textEmote)
 
     if (textEmote)
     {
-        WorldPacket data(SMSG_TEXT_EMOTE);
-        data << type;
-        data << urand(0, GetNumberOfEmoteVariants((TextEmotes)type, bot->GetRace(), bot->GetGender()) - 1);
-        data << ((bot->GetSelectionGuid() && urand(0, 1)) ? bot->GetSelectionGuid() : ObjectGuid());
-        bot->GetSession()->HandleTextEmoteOpcode(data);
+        uint32 variant = urand(0, GetNumberOfEmoteVariants((TextEmotes)type, bot->GetRace(), bot->GetGender()) - 1);
+        ObjectGuid const selection = bot->GetSelectionGuid();
+        PlayTextEmoteCompat(bot, type, variant, (!selection.IsEmpty() && urand(0, 1)) ? selection : ObjectGuid());
     }
     else
-        bot->HandleEmoteCommand(type);
+        bot->HandleEmoteCommand((::Emote)type);
 
-    if (oldSelection)
+    if (!oldSelection.IsEmpty())
         bot->SetSelectionGuid(oldSelection);
 
     return true;
@@ -579,16 +578,13 @@ bool EmoteActionBase::ReceiveEmote(Player* requester, Player* source, uint32 emo
 
     if (textEmote)
     {
-        WorldPacket data(SMSG_TEXT_EMOTE);
-        data << textEmote;
-        data << urand(0, GetNumberOfEmoteVariants((TextEmotes)textEmote, bot->GetRace(), bot->GetGender()) - 1);
-        data << ((source && urand(0, 1)) ? source->getObjectGuid() : ObjectGuid());
-        bot->GetSession()->HandleTextEmoteOpcode(data);
+        uint32 variant = urand(0, GetNumberOfEmoteVariants((TextEmotes)textEmote, bot->GetRace(), bot->GetGender()) - 1);
+        PlayTextEmoteCompat(bot, textEmote, variant, (source && urand(0, 1)) ? source->getObjectGuid() : ObjectGuid());
     }
     else
     {
         if (emoteId)
-            bot->HandleEmoteCommand(emoteId);
+            bot->HandleEmoteCommand((::Emote)emoteId);
     }
 
     return true;
@@ -640,7 +636,7 @@ bool EmoteAction::Execute(Event& event)
         if (allowEmote && pSource && (pSource->getObjectGuid() != bot->getObjectGuid()) &&
             !TortoiseBots::BotManager::Instance().IsBot(pSource->getObjectGuid()))
         {
-            sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_TEXT_EMOTE %d from player #%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), text_emote, pSource->GetGUIDLow(), CStrCompat(pSource->GetName()));
+            sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_TEXT_EMOTE %d from player #%d <%s>", uint32(bot->GetGUIDLow()), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), text_emote, uint32(pSource->GetGUIDLow()), CStrCompat(pSource->GetName()));
             emote = text_emote;
         }
     }
@@ -662,7 +658,7 @@ bool EmoteAction::Execute(Event& event)
         {
             if ((pSource->getObjectGuid() != bot->getObjectGuid()) && (pSource->GetSelectionGuid() == bot->getObjectGuid() || (urand(0, 1) && sServerFacade.isInFront(pSource, bot, 10.0f, M_PI_F))))
             {
-                sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_EMOTE %d from player #%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), emoteId, pSource->GetGUIDLow(), CStrCompat(pSource->GetName()));
+                sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_EMOTE %d from player #%d <%s>", uint32(bot->GetGUIDLow()), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), emoteId, uint32(pSource->GetGUIDLow()), CStrCompat(pSource->GetName()));
                 std::vector<uint32> types;
                 for (int32 i = sEmotesTextStore.GetNumRows(); i >= 0; --i)
                 {
@@ -670,21 +666,21 @@ bool EmoteAction::Execute(Event& event)
                     if (!em)
                         continue;
 
-                    if (em->textid == EMOTE_ONESHOT_TALK)
+                    if (TextEmoteAnimIdCompat(em) == EMOTE_ONESHOT_TALK)
                         continue;
 
-                    if (em->textid == EMOTE_ONESHOT_QUESTION)
+                    if (TextEmoteAnimIdCompat(em) == EMOTE_ONESHOT_QUESTION)
                         continue;
 
-                    if(em->textid == EMOTE_ONESHOT_EXCLAMATION)
+                    if(TextEmoteAnimIdCompat(em) == EMOTE_ONESHOT_EXCLAMATION)
                         continue;
 
-                    if (em->textid == EMOTE_ONESHOT_EAT)
+                    if (TextEmoteAnimIdCompat(em) == EMOTE_ONESHOT_EAT)
                         continue;
 
-                    if (em->textid == emoteId)
+                    if (TextEmoteAnimIdCompat(em) == emoteId)
                     {
-                        types.push_back(em->Id);
+                        types.push_back(TextEmoteRowIdCompat(em));
                     }
                 }
                 if (types.size())
@@ -744,14 +740,12 @@ bool EmoteAction::Execute(Event& event)
 
     if (!param.empty() && textEmotes.find(param) != textEmotes.end())
     {
-        WorldPacket data(SMSG_TEXT_EMOTE);
-        data << textEmotes[param];
-        data << urand(0, GetNumberOfEmoteVariants((TextEmotes)textEmotes[param], bot->GetRace(), bot->GetGender()) - 1);
-        data << ((bot->GetSelectionGuid() && urand(0, 1)) ? bot->GetSelectionGuid() : ObjectGuid());
-        bot->GetSession()->HandleTextEmoteOpcode(data);
+        uint32 variant = urand(0, GetNumberOfEmoteVariants((TextEmotes)textEmotes[param], bot->GetRace(), bot->GetGender()) - 1);
+        ObjectGuid const selection = bot->GetSelectionGuid();
+        PlayTextEmoteCompat(bot, textEmotes[param], variant, (!selection.IsEmpty() && urand(0, 1)) ? selection : ObjectGuid());
 
         if (emotes.find(param) != emotes.end())
-            bot->HandleEmoteCommand(emotes[param]);
+            bot->HandleEmoteCommand((::Emote)emotes[param]);
 
         return true;
     }
@@ -815,11 +809,8 @@ bool TalkAction::Execute(Event& event)
         context->GetValue<ObjectGuid>("talk target")->Set(target->getObjectGuid());
         //return Emote(target, GetRandomEmote(target, true), true);
         uint32 emote = GetRandomEmote(target, true);
-        WorldPacket data(SMSG_TEXT_EMOTE);
-        data << emote;
-        data << urand(0, GetNumberOfEmoteVariants((TextEmotes)emote, bot->GetRace(), bot->GetGender()) - 1);
-        data << ((target && urand(0, 1)) ? target->getObjectGuid() : ObjectGuid());
-        bot->GetSession()->HandleTextEmoteOpcode(data);
+        uint32 variant = urand(0, GetNumberOfEmoteVariants((TextEmotes)emote, bot->GetRace(), bot->GetGender()) - 1);
+        PlayTextEmoteCompat(bot, emote, variant, (target && urand(0, 1)) ? target->getObjectGuid() : ObjectGuid());
         return true;
     }
 
@@ -849,7 +840,7 @@ uint32 TalkAction::GetRandomEmote(Unit* unit, bool textEmote)
             types.push_back(TEXTEMOTE_TALK);
             types.push_back(TEXTEMOTE_TALKEX);
             types.push_back(TEXTEMOTE_TALKQ);
-            if (unit && (unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_TRAINER) || unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER)))
+            if (unit && (UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_TRAINER) || UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_QUESTGIVER)))
             {
                 types.push_back(TEXTEMOTE_SALUTE);
             }
@@ -874,7 +865,7 @@ uint32 TalkAction::GetRandomEmote(Unit* unit, bool textEmote)
         types.push_back(EMOTE_ONESHOT_TALK);
         types.push_back(EMOTE_ONESHOT_EXCLAMATION);
         types.push_back(EMOTE_ONESHOT_QUESTION);
-        if (unit && (unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_TRAINER) || unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER)))
+        if (unit && (UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_TRAINER) || UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_QUESTGIVER)))
         {
             types.push_back(EMOTE_ONESHOT_SALUTE);
         }
@@ -1356,8 +1347,7 @@ bool MountAnimAction::isUseful()
 
 bool MountAnimAction::Execute(Event& event)
 {
-    WorldPacket p;
-    bot->GetSession()->HandleMountSpecialAnimOpcode(p);
+    MountSpecialAnimCompat(bot);
 
     return true;
 }

@@ -444,3 +444,8 @@ ai/playerbot/strategy/generic/BattlegroundStrategy.cpp
 
 # W6a follow-up: the pool gear top-up action, appended so the W1 prefix stays verbatim (test_wl4_wiring pins it).
 ai/playerbot/strategy/actions/PoolGearTopUpAction.cpp
+
+# TBF #209 round 3 (emote): the emote, talk and mount-animation actions of the emote strategy, appended so the W1 prefix
+# stays verbatim. The slice registers `emote` and `mount anim` (EMOTE_KEYS); `talk` and the two receive rows stay out
+# because their triggers never fire here (no legacy packet handler table, no emote poll).
+ai/playerbot/strategy/actions/EmoteAction.cpp
