@@ -76,6 +76,7 @@ bool AhAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
     std::string text = TrimCopy(event.GetParam());
+    marketSurplusSeller_ = event.getSource() == "host";
 
     AhSetLastFailCodeCompat(bot, "");
     if (!AhIsWorldAuctionEnabledCompat())
@@ -130,6 +131,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
     uint32 freeMoney = AI_VALUE2(uint32, "free money for", static_cast<uint32>(NeedMoneyFor::ah));
     bool postedAny = false;
     std::string lastSellFail;
+    bool const marketSurplusSeller = marketSurplusSeller_ && !isExplicitSell;
 
     for (Item* item : items)
     {
@@ -167,13 +169,15 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         in.reservedTradeGood = AhIsTradeGoodReservedCompat(bot, proto->ItemId, proto->Class);
         in.explicitItem = isExplicitSell;
         in.isUsageAh = (usage == ItemUsage::ITEM_USAGE_AH);
+        in.marketSurplus = marketSurplusSeller &&
+            (usage == ItemUsage::ITEM_USAGE_NONE || usage == ItemUsage::ITEM_USAGE_VENDOR);
         in.isProfessionTool = IsAhProfessionTool(proto->ItemId, ItemUsageValue::IsCraftingTool(proto->ItemId));
         in.worldAuctionEnabled = AhIsWorldAuctionEnabledCompat();
 
         AhSellDecision const decision = DecideAhSell(in);
         if (!decision.shouldPost)
         {
-            if (isExplicitSell)
+            if (lastSellFail.empty())
                 lastSellFail = decision.reason;
             continue;
         }

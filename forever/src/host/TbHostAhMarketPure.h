@@ -51,7 +51,6 @@ struct SweepCandidateInput
     bool inWorld = false;
     bool alive = false;
     bool inCombat = false;
-    bool moving = false;
     bool casting = false;
     bool inDuel = false;
     bool grouped = false;
@@ -61,9 +60,11 @@ struct SweepCandidateInput
 };
 
 // The sweep only touches a bot that is idle, alone and free; a bot with nothing to sell is not walked to an auctioneer.
+// A traveling bot is a candidate: the market takes the next walk (TB's seller has no movement gate either), so the
+// engine's own travel target does not keep every free bot out of the sweep.
 inline bool IsSweepCandidate(SweepCandidateInput const& in)
 {
-    return in.freeBot && in.inWorld && in.alive && !in.inCombat && !in.moving && !in.casting &&
+    return in.freeBot && in.inWorld && in.alive && !in.inCombat && !in.casting &&
            !in.inDuel && !in.grouped && in.openWorldMap && !in.busyElsewhere && in.hasSellableStock;
 }
 

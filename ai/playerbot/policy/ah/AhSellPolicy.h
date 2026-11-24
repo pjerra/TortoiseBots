@@ -83,6 +83,9 @@ struct AhSellInput
     bool reservedTradeGood = false;
     bool explicitItem = false;
     bool isUsageAh = false;
+    // The automatic market posts a free bot's surplus. Its item-usage verdict may be VENDOR or
+    // NONE because the bot would not pay a trip for a small markup; a market posting pays none.
+    bool marketSurplus = false;
     bool isProfessionTool = false;
     bool worldAuctionEnabled = true;
 };
@@ -116,7 +119,7 @@ inline AhSellDecision DecideAhSell(AhSellInput const& in)
         out.reason = "profession-tool";
         return out;
     }
-    if (!in.explicitItem && !in.isUsageAh)
+    if (!in.explicitItem && !in.isUsageAh && !in.marketSurplus)
     {
         out.reason = "not-ah-usage";
         return out;

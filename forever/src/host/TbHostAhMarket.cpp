@@ -150,7 +150,6 @@ SweepCandidateInput BuildCandidate(Player* bot)
     in.inWorld = bot->IsInWorld();
     in.alive = bot->IsAlive();
     in.inCombat = bot->IsInCombat();
-    in.moving = bot->isMoving();
     in.casting = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) != nullptr;
     in.inDuel = bot->duel != nullptr;
     in.grouped = bot->GetGroup() != nullptr;
@@ -174,10 +173,10 @@ void StartWalk(Player* bot, Creature* auctioneer, BotMarketState& state, uint64_
 
 void ContinueWalk(Player* bot, BotMarketState& state, uint64_t nowMs, uint64_t retryMs)
 {
-    auto finish = [&](char const* result, char const* reason)
+    auto finish = [&](char const* result, std::string const& reason)
     {
         std::string line = std::string("[W8] ah-market bot=") + bot->GetName() + " kind=sell result=" + result;
-        if (reason)
+        if (!reason.empty())
             line += std::string(" reason=") + reason;
         LogInfo(line);
         ClearBotAhMarket(bot->GetGUID());
@@ -212,7 +211,14 @@ void ContinueWalk(Player* bot, BotMarketState& state, uint64_t nowMs, uint64_t r
     bot->StopMoving();
     bool const posted = TortoiseBots::engine::RunAction(bot, "ah", "vendor");
     state.nextTryMs = nowMs + retryMs;
-    finish(posted ? "posted" : "refused", nullptr);
+    std::string reason;
+    if (!posted)
+    {
+        reason = ah::TakeLastFailCode(bot);
+        if (reason.empty())
+            reason = "unknown";
+    }
+    finish(posted ? "posted" : "refused", reason);
 }
 
 void RunCycle(uint64_t nowMs)
@@ -289,8 +295,14 @@ void RunCycle(uint64_t nowMs)
             state.nextTryMs = nowMs + retryMs;
             if (ok)
                 ++posted;
-            LogInfo(std::string("[W8] ah-market bot=") + bot->GetName() + " kind=sell result=" +
-                (ok ? "posted" : "refused"));
+            std::string line = std::string("[W8] ah-market bot=") + bot->GetName() + " kind=sell result=" +
+                (ok ? "posted" : "refused");
+            if (!ok)
+            {
+                std::string reason = ah::TakeLastFailCode(bot);
+                line += std::string(" reason=") + (reason.empty() ? "unknown" : reason);
+            }
+            LogInfo(line);
         }
         else
         {

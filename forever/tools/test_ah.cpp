@@ -36,8 +36,43 @@ int main()
         assert(!d.shouldPost);
         assert(std::string(d.reason) == "not-ah-usage");
 
+        // The automatic market posts a free bot's surplus: its own usage verdict may be VENDOR/NONE
+        // because a personal trip would not pay for a small markup. It still refuses kept gear.
+        in.marketSurplus = true;
+        assert(ai::DecideAhSell(in).shouldPost);
+        in.marketSurplus = false;
+
         in.isUsageAh = true;
         assert(ai::DecideAhSell(in).shouldPost);
+        ++passed;
+    }
+
+    // 1b. Market surplus never bypasses the ownership and keep gates.
+    {
+        ai::AhSellInput in;
+        in.itemId = 2264;
+        in.maxStackSize = 1;
+        in.count = 1;
+        in.vendorSellPrice = 50;
+        in.depositTotal = 15;
+        in.marketLowestUnitPrice = 200;
+        in.freeMoneyForAh = 500;
+        in.marketSurplus = true;
+
+        in.soulbound = true;
+        assert(!ai::DecideAhSell(in).shouldPost);
+        in.soulbound = false;
+
+        in.isW6aUpgrade = true;
+        assert(!ai::DecideAhSell(in).shouldPost);
+        in.isW6aUpgrade = false;
+
+        in.isProfessionTool = true;
+        assert(!ai::DecideAhSell(in).shouldPost);
+        in.isProfessionTool = false;
+
+        in.depositTotal = 1000;
+        assert(!ai::DecideAhSell(in).shouldPost);
         ++passed;
     }
 
