@@ -64,7 +64,7 @@ Mage	Fire	Hot Streak	not on Forever	ai/playerbot/strategy/mage/MageTriggers.cpp:
 Warlock	Demonology	Soul Link, Demonic Sacrifice, Fel Domination	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp:56-254	demon kit
 Warlock	Destruction	Conflagrate, Shadowburn, Rain of Fire	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp:21	Destruction kit
 Warlock	all	Imp, Voidwalker, Succubus, Felhunter	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/WarlockAiObjectContext.cpp	all four summon spells exist
-Warlock	Affliction	Dark Pact	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp:29	pet mana
+Warlock	Affliction	Dark Pact	not on Forever	ai/playerbot/strategy/warlock/WarlockActions.h:147	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp:29	no client SpellName entry; the row cannot resolve
 Warlock	Affliction	Dark Harvest	not on Forever	forever/data/waterys/class-review/warlock.md:34	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp	no Forever spell by this name
 Warlock	Demonology	Power Overwhelming	not on Forever	forever/data/waterys/class-review/warlock.md:34	ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp	no Forever spell by this name
 Druid	Restoration	Swiftmend, Nature's Swiftness, Tranquility	available	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:49-234	heal kit
