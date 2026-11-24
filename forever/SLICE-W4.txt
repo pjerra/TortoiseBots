@@ -382,7 +382,7 @@ ai/playerbot/strategy/generic/DebugStrategy.cpp
 ai/playerbot/strategy/actions/CheckMountStateAction.cpp
 ai/playerbot/strategy/values/MountValues.cpp
 
-# TBF #146 (stuck rescue): the legacy move/combat stuck triggers and the unstuck action (5-minute reset, 15-minute
+# Stuck rescue: the legacy move/combat stuck triggers and the unstuck action (5-minute reset, 15-minute
 # hearthstone -> repop -> teleport chain, combat-stuck give-up, travel-target keep/retire). The host's ghost rescue
 # stays; this is the generic pass every bot gets. The navmesh, graveyard and homebind reads go through the W1 pair,
 # the homebind teleport through the D4 pair.
@@ -411,3 +411,8 @@ ai/playerbot/strategy/values/QuestValues.cpp
 ai/playerbot/strategy/values/VendorValues.cpp
 ai/playerbot/strategy/actions/DestroyItemAction.cpp
 ai/playerbot/strategy/actions/ServiceNearbyNpcAction.cpp
+# Guild participation: the owner's `speak` whisper word, so a guilded bot can talk in guild chat
+# (SayAction -> PlayerbotAI::SayToGuild -> GuildSayCompat, forever/src/compat/TbCompat_P.h). The accept, stay and
+# founding drivers are host code (forever/src/host/TbHostGuildJoin.cpp), not a legacy action.
+ai/playerbot/strategy/actions/SayAction.cpp
+runtime/PassingBuffsService.cpp

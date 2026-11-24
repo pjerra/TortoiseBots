@@ -970,6 +970,28 @@ See [ONYXIA.md](ONYXIA.md) for damage gates, checked routes and live-test limits
 * `.bot autogear <bot> [quality|ilvl]`: incremental upgrades-only re-gearing for same-account owned bots (and GMs; pool bots refused, bot must be alive, bot in active run refused). Gated by `AiPlayerbot.OwnedBotAutogearEnabled` (default `0`), capped by `AiPlayerbot.OwnedBotAutogearQualityCap` (default `2`, uncommon) and `AiPlayerbot.OwnedBotAutogearIlvlCap` (default `0`, uncapped). Warns if the equipped ranged weapon has no matching ammo in bags.
 * `.autogear [player] <spec> [ilvl]`: top-level command for real players (bots refused; dead, in-combat, or shapeshifted targets refused). GM-only by default (`AiPlayerbot.PlayerAutogearForAll = 0`); when `1`, non-GMs may gear themselves only. Equips upgrades only, moves replaced items to bags or mails them if bags are full, warns on missing ranged ammo, and logs `PlayerAutogear: caller=...`.
 
+## Guilds
+
+Free (pool) bots take part in guilds under `TortoiseBots.World.Guilds` (default 1) and found their own under
+`TortoiseBots.World.GuildForming` (default 0); both keys are documented in `forever/conf/tortoisebots.conf.dist`.
+
+* **Accept and stay.** A free bot with an outstanding guild invite accepts it at its next world tick, unless the guild
+  already holds 1000 members or is on the other side (`AllowTwoSide.Interaction.Guild` off). A refused invite is
+  declined, so it is not re-read every tick. Nothing else takes a bot out of a guild: it leaves only when the guild
+  reaches 1000 members. On joining, the guild-order bot rank rule (`TortoiseBots.World.GuildOrderBotRank`) still
+  applies, because `tbhost::guild::AcceptInvite` is the one join path.
+* **Founding.** With the forming key on, a free bot above level 10 with the core's charter price in its own purse buys
+  a charter at a petitioner NPC within 30 yd, nearby free bots of its faction sign it, and the bot turns it in at a
+  petitioner. The charter is paid by the bot; no money is granted. Log: `[W9] guild-charter`, `guild-sign`,
+  `guild-founded` (and `guild-* -refused`).
+* **Owner whispers** (the whisper must reach the bot at all: the sender is its master, its commander or in its party;
+  among those, only its master or a game master may manage the guild, others are refused): `guild invite <name>`, `guild join`, `guild leave`, `guild promote <name>`, `guild demote <name>`,
+  `guild remove <name>`, `guild leader <name>`. Invite, promote, demote and remove need the bot's own rank right;
+  leader needs the bot to be the guild master. The bot answers in a whisper, and the server log carries
+  `[W9] guild-whisper bot=<bot> from=<sender> cmd=<verb> target=<name> result=ok|fail:<code>`.
+* **Guild chat.** `/w <bot> speak /g <text>` makes the bot say the line in its guild chat, through the guild's real
+  speak right (a rank without `GR_RIGHT_GCHATSPEAK` says nothing).
+
 ## Diagnostics (#142)
 
 The GM whisper words are the legacy bot commands; permission is the bot engine's own tier table

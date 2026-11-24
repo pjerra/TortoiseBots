@@ -210,6 +210,36 @@ TortoiseBots.Dashboard.RunSummaryDir = ""
 TortoiseBots.World.Professions = 0
 
 #
+#    TortoiseBots.World.Fishing
+#        Description: Allow free bots (`free`) to fish an occasional session at a fishing hole or nearby open water
+#                     (one session per hour, at most 5 casts / 5 minutes). The bot walks to the bank, casts with its
+#                     own pole and takes the catch; the secondary Fishing skill and a plain pole are granted like the
+#                     legacy factory does. Never in a dungeon or raid, never in combat, and a hostile spawn near the
+#                     bank moves the spot elsewhere.
+#        Default:     1
+#
+
+TortoiseBots.World.Fishing = 1
+#    TortoiseBots.World.Disenchant
+#        Description: Allow free bots (`free`) with Enchanting to break down disenchantable armor and weapons they carry
+#                     (uncommon and above; rare and better only when no real player shares their guild) and collect the
+#                     materials. Bots need no reagents for it.
+#        Default:     1
+#
+
+TortoiseBots.World.Disenchant = 1
+
+#
+#    TortoiseBots.World.EnchantGear
+#        Description: Allow free bots (`free`) with Enchanting to apply the best permanent enchant they know and can pay
+#                     for to their worn gear, when it scores higher than the enchant already there. The profession grants
+#                     its recipes, Disenchant and a rod as the skill allows; reagents come from the bot's own bags.
+#        Default:     1
+#
+
+TortoiseBots.World.EnchantGear = 1
+
+#
 #    TortoiseBots.World.Auction
 #        Description: Allow bots to use the faction auction house: `.tb order ... ah`, and — while
 #                     AiPlayerbot.AhMarketEnabled is on — free bots posting their own loot at a nearby
@@ -257,6 +287,27 @@ TortoiseBots.World.GuildMail = 1
 TortoiseBots.World.GuildMail.AllowMixedGuild = 0
 
 #
+#    TortoiseBots.World.Guilds
+#        Description: Free (pool) bots take part in guilds: an outstanding guild invite is accepted (and declined when
+#                     the guild already has 1000 members or is on the other side), a bot walks out of a guild that
+#                     reaches 1000 members, and the owner's guild management whispers (guild invite/join/leave/
+#                     promote/demote/remove/leader) are answered. Bots never leave a player's guild otherwise.
+#        Default:     1
+#
+
+TortoiseBots.World.Guilds = 1
+
+#
+#    TortoiseBots.World.GuildForming
+#        Description: Allow a free bot above level 10 with the core's charter price in its own purse, no guild and no
+#                     invite to buy a guild charter at a nearby petitioner, gather signatures from nearby free bots of
+#                     its faction and turn it in, founding "<Bot> Guild". The bot pays the charter itself.
+#        Default:     0
+#
+
+TortoiseBots.World.GuildForming = 0
+
+#
 #    TortoiseBots.World.GuildOrderBotRank
 #        Description: Guild orders: give every module-owned bot in a guild that also has a real player one shared
 #                     guild rank, so the master can open guild bank tabs to it (`.tb guildorder rank <rank>`).
@@ -265,6 +316,37 @@ TortoiseBots.World.GuildMail.AllowMixedGuild = 0
 #
 
 TortoiseBots.World.GuildOrderBotRank = 1
+
+#
+#    TortoiseBots.World.Pickpocket
+#        Description: Allow free and pool rogue bots that know Stealth and Pick Pocket to sneak up on a nearby
+#                     humanoid whose pockets are not empty yet, pick them, and take the loot (coins and items).
+#                     A creature whose pockets were just picked is not retried before its own refill timer.
+#                     Bots without the two spells are skipped; no class spell is granted for this.
+#        Default:     1
+#
+
+TortoiseBots.World.Pickpocket = 1
+
+#
+#    TortoiseBots.World.Lockboxes
+#        Description: Allow free and pool rogue bots with enough Lockpicking to open the lockboxes in their own bags
+#                     (Pick Lock, then open and take the loot).
+#        Default:     1
+#
+
+TortoiseBots.World.Lockboxes = 1
+
+#
+#    TortoiseBots.World.LockboxMail
+#        Description: Allow a bot holding a lockbox it cannot open (not a rogue, no Pick Lock, or Lockpicking too low)
+#                     to mail it to the best rogue bot in its own guild (online or offline), which opens it and mails
+#                     the contents, coins minus the return postage, back to the sender. Only bots are served and only
+#                     bots are mailed; a real player's mail is never taken. With no capable rogue the box stays put.
+#        Default:     1
+#
+
+TortoiseBots.World.LockboxMail = 1
 
 #
 #    TortoiseBots.Dashboard.TraceDir
@@ -296,6 +378,24 @@ TortoiseBots.Pool.Enable = 0
 #
 
 TortoiseBots.Pool.CreatePerMinute = 30
+
+#
+#    TortoiseBots.Pool.Reset
+#        Description: Rebuild the pool on world startup: delete every ready pool character one per tick, then refill to
+#                     MaxCharacters. `off` (the default) never resets. `once:<token>` resets on the next startup only while
+#                     the token differs from the last completed one (1-128 printable, non-space characters); leaving the same
+#                     token in place makes every later start a no-op. `always` resets on every startup (development only)
+#                     and never overwrites a stored once-token. Anything else is refused with one error line.
+#                     Read only during world startup: `.reload config` never starts a reset, and no `.tb` command does.
+#                     Needs `Pool.Enable = 1` and `Pool.CreatePerMinute > 0` so the pool can be refilled. It deletes only
+#                     `ready` rows of the pool's own accounts; characters on pool accounts without a ready row are kept and
+#                     counted. A pool-led guild with any member outside the pool, a target owning an auction listing, a
+#                     target account with a player session, or an unreadable database refuses the reset before any deletion.
+#                     A reset to MaxCharacters can shrink a pool that was larger than the cap.
+#        Default:     "off"
+#
+
+TortoiseBots.Pool.Reset = "off"
 
 #
 #    TortoiseBots.Pool.MaxCharacters

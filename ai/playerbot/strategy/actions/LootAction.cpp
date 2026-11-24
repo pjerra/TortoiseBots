@@ -247,9 +247,9 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         return windowOpened;
     }
 
-    // Gathering and skinning (a cast on the object or the corpse and the window that follows) are not ported on ForeverCore ("loot: gathering and
-    // skinning"); a chest is (slice 9: the opening cast, its window read like a corpse's). False = the open failed, which OpenLootAction counts and
-    // abandons after three tries.
+    // The corpse's skin (a cast and the window that follows) is ported; herb and ore nodes through this open path are not ("loot: game objects,
+    // pickpocketing and disenchant loot"); a chest is (slice 9: the opening cast, its window read like a corpse's). False = the open failed, which
+    // OpenLootAction counts and abandons after three tries.
     if (LootGatherUnportedCompat(ai->GetWorldObject(lootObject.guid)))
         return false;
 

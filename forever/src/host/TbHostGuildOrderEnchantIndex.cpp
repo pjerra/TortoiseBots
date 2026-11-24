@@ -11,7 +11,11 @@
 // asks for it pays nothing. World thread only.
 #include "playerbot/GuildOrderEnchants.h"
 
+#include "host/TbAddonProfessions.h"
+#include "runtime/GuildOrderEnchantPolicy.h"
+
 #include "DB2Stores.h"
+#include "ObjectMgr.h"
 #include "Log.h"
 #include "Player.h"
 #include "SharedDefines.h"
@@ -54,20 +58,6 @@ std::string Lowered(std::string text)
 // The lowest trainer requirement that teaches the spell: the skill line
 // ability row's own min rank (DB2Structure.h:3722), the same value the
 // craft index reads (TbHostGuildOrderRead.cpp BuildRecipeIndex).
-uint32_t RequiredSkill(std::vector<SkillLineAbilityEntry const*> const& rows)
-{
-    uint32_t required = 0;
-    for (SkillLineAbilityEntry const* row : rows)
-    {
-        if (!row || row->MinSkillLineRank <= 0)
-            continue;
-        uint32_t const rank = uint32_t(row->MinSkillLineRank);
-        if (!required || rank < required)
-            required = rank;
-    }
-    return required;
-}
-
 bool HasEffect(SpellInfo const* spell, SpellEffects effect)
 {
     for (SpellEffectInfo const& row : spell->GetEffects())
@@ -127,7 +117,15 @@ void BuildGuildOrderEnchantIndex()
         entry.name = name ? name : "";
         entry.lowerName = Lowered(entry.name);
         entry.slot = slot;
-        entry.reqSkill = RequiredSkill(rows);
+        // ForeverCore's skill-line rows carry rank 1 for every recipe; the real gate is the trainer's rank or the recipe
+        // item's. An enchant with neither (a reputation or raid reward) has no rank here, so the upkeep never grants it.
+        auto const trainerIt = TortoiseBots::professions::TrainerMinSkillBySpell().find(spellId);
+        auto const itemIt = TortoiseBots::professions::RecipeItemBySpell().find(spellId);
+        ItemTemplate const* recipe = itemIt != TortoiseBots::professions::RecipeItemBySpell().end()
+            ? sObjectMgr->GetItemTemplate(itemIt->second) : nullptr;
+        bool const fromTrainer = trainerIt != TortoiseBots::professions::TrainerMinSkillBySpell().end();
+        entry.reqSkill = TortoiseBots::GuildOrders::EnchantReqSkillCombine(fromTrainer, fromTrainer ? trainerIt->second : 0,
+            recipe != nullptr, recipe ? recipe->GetRequiredSkillRank() : 0);
         for (uint8_t i = 0; i < MAX_SPELL_REAGENTS; ++i)
             if (spell->ReagentCount[i] > 0 && spell->Reagent[i] > 0)
                 entry.reagents.emplace_back(uint32_t(spell->Reagent[i]), uint32_t(spell->ReagentCount[i]));

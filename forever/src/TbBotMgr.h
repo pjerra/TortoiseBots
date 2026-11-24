@@ -35,6 +35,9 @@ public:
     uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
     uint8 BotAcceptDuelMinLevel() const { return _botAcceptDuelMinLevel; }
     bool GuildMailAllowMixed() const { return _guildMailAllowMixed; }
+    // Free-bot guild participation (accept/stay/management whispers) and the autonomous founding legs.
+    bool GuildsEnabled() const { return _guildsEnabled; }
+    bool GuildFormingEnabled() const { return _guildFormingEnabled; }
 
     // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
     // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
@@ -351,8 +354,13 @@ private:
     bool _capitalErrandsEnabled = false;
     bool _guildMailEnabled = false;
     bool _guildMailAllowMixed = false;
+    bool _guildsEnabled = false;
+    bool _guildFormingEnabled = false;
     bool _groupQuestsEnabled = false;
     bool _professionsEnabled = false;
+    bool _fishingEnabled = false;
+    bool _disenchantUpkeepEnabled = true;
+    bool _enchantGearEnabled = true;
     uint8 _botAcceptDuelMinLevel = 10;
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds

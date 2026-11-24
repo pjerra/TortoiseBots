@@ -5,11 +5,15 @@
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostAhMarket.h"
 #include "host/TbHostGuildMail.h"
+#include "host/TbHostGuildJoin.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostGuildOrderQueues.h"
 #include "host/TbHostGuildOrderEnchant.h"
+#include "host/TbHostFishing.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostThievery.h"
+#include "host/TbHostProfessionUpkeep.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -242,8 +246,16 @@ void BotMgr::LoadConfig()
     _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", true);
     _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", true);
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    _guildsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Guilds", true);
+    _guildFormingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildForming", false);
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
     _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
+    _fishingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Fishing", true);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::thievery::LoadConfig(); // the host thievery services are slice-only, like their tick
+#endif
+    _disenchantUpkeepEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Disenchant", true);
+    _enchantGearEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.EnchantGear", true);
     _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
@@ -733,6 +745,8 @@ void BotMgr::OnPlayerLogout(Player* player)
     tbhost::errands::ClearBotCapitalErrands(leaving);
     tbhost::ah_market::ClearBotAhMarket(leaving);
     tbhost::guild_mail::ClearBotGuildMail(leaving);
+    tbhost::guildjoin::ForgetBot(leaving);
+    tbhost::thievery::ForgetBot(leaving.GetCounter());
 #endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
@@ -1644,17 +1658,27 @@ void BotMgr::Update(uint32 diff)
         // and the brain is gone by then.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
+        tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);
+        if (bot.free)
+            tbhost::thievery::TickThievery(me, diff);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
             (tbhost::errands::HasActiveErrand(me) || tbhost::ah_market::HasActiveErrand(me) ||
              tbhost::guild_mail::HasActiveErrand(me) ||
              tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
-             tbhost::guild_orders::HasActiveEnchantErrand(me));
+             tbhost::guild_orders::HasActiveEnchantErrand(me) ||
+             tbhost::fishing::HasActiveIdleErrand(me) ||
+             tbhost::thievery::HasActiveErrand(me) ||
+             tbhost::upkeep::HasActiveUpkeepCast(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported() && !pauseEngineForErrand)
             engine::Tick(bot.brain.get(), aiElapsed);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // A free bot answers an outstanding guild invite, keeps clear of the member limit and (when the
+        // founding key is on) founds its own guild. Cheap while no invite stands and forming is off.
+        if (_guildsEnabled && bot.free)
+            tbhost::guildjoin::TickFreeBotGuild(me, _guildFormingEnabled);
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
             tbhost::guild_orders::TickBotOrder(me);
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving())
@@ -1674,6 +1698,8 @@ void BotMgr::Update(uint32 diff)
             tbhost::guild_orders::TickDisenchantService(me, diff);
             tbhost::guild_mail::TickGuildMail(me, diff);
         }
+        if (bot.free && (_disenchantUpkeepEnabled || _enchantGearEnabled))
+            tbhost::upkeep::TickProfessionUpkeep(me, diff, _disenchantUpkeepEnabled, _enchantGearEnabled);
 #endif
     };
 
@@ -1744,6 +1770,8 @@ void BotMgr::Update(uint32 diff)
         tbhost::errands::ClearBotCapitalErrands(guid);
         tbhost::ah_market::ClearBotAhMarket(guid);
         tbhost::guild_mail::ClearBotGuildMail(guid);
+        tbhost::guildjoin::ForgetBot(guid);
+        tbhost::thievery::ForgetBot(guid.GetCounter());
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);

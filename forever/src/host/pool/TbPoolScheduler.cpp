@@ -17,6 +17,7 @@
 #ifdef TORTOISEBOTS_SLICE1
 
 #include "host/pool/TbPoolRegistry.h"
+#include "host/pool/TbPoolReset.h"
 #include "TbBotMgr.h"
 
 #include "ai/playerbot/policy/world/PoolSchedulePolicy.h"
@@ -69,6 +70,7 @@ struct State
     bool running = false;
     bool stopping = false;
     bool warnedOff = false;
+    bool warnedReset = false;
     std::uint32_t accMs = 0;
     world::PoolScheduleSettings settings;
     world::PoolFaction nextFaction = world::PoolFaction::Alliance;
@@ -367,8 +369,23 @@ bool Update(std::uint32_t diff)
         s.running = false;
         s.stopping = Draining(s) != 0;
     }
+    else if (!Reset::PoolAvailable())
+    {
+        // A startup reset is running (or failed): no new logins, but the bots in the world are still drained.
+        if (!s.warnedReset)
+        {
+            s.warnedReset = true;
+            TC_LOG_WARN("tortoisebots", "TortoiseBots: the pool reset is in progress or failed: no new logins until the reset finishes or the server restarts; {}",
+                Draining(s) ? "draining the bots in the world" : "nothing is scheduled");
+        }
+        s.running = false;
+        s.stopping = Draining(s) != 0;
+    }
     else
+    {
         s.warnedOff = false;
+        s.warnedReset = false;
+    }
     s.accMs += diff;
     if (s.accMs < 1000)
         return false;
@@ -385,6 +402,11 @@ SwitchResult Start()
     if (!Enabled())
     {
         result.message = "the pool is off (TortoiseBots.Pool.Enable = 0) or its tables are missing: see the server log";
+        return result;
+    }
+    if (!Reset::PoolAvailable())
+    {
+        result.message = "the pool reset is in progress or failed: no new logins until it finishes or the server restarts";
         return result;
     }
     if (s.running)

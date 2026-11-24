@@ -96,7 +96,8 @@ class L9Wiring(unittest.TestCase):
         poll = body(F_HEADER, "PollPacketEventCompat")
         self.assertIn("memo.rolls.count({ owner, slot })", poll)
         self.assertIn("memo.rolls.insert({ owner, slot });", poll)
-        self.assertIn("memo.windows.count(loot->GetOwnerGUID())", poll)
+        self.assertIn("memo.windows.count(owner)", poll)
+        self.assertIn("loot->loot_type == LOOT_SKINNING", poll)   # a skin window has no LootOpenCompat of its own
         self.assertIn("IsGameObject()", poll)        # a corpse window is raised by LootOpenCompat, an area-loot neighbour never
         self.assertIn("NoteLootWindowAnnouncedCompat(bot, guid);", I2)
         self.assertIn("PollPacketEventCompat(bot, getName(), *this);", TRIGGER)

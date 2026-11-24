@@ -1,14 +1,20 @@
 #include "host/TbHostFishing.h"
 
+#include "host/TbHostCapitalErrands.h"
 #include "host/TbHostFishingPure.h"
+#include "host/TbHostGuildMail.h"
+#include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderEnchant.h"
 #include "host/TbHostGuildOrderFish.h"
 #include "compat/TbCompat_Fishing.h"
 #include "runtime/GuildOrderFishingPolicy.h"
 
 #include "Bag.h"
 #include "CellImpl.h"
+#include "Collision/Maps/MapDefines.h"
 #include "GameObject.h"
 #include "GameObjectPackets.h"
+#include "GameTime.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Item.h"
@@ -17,6 +23,8 @@
 #include "Loot.h"
 #include "LootPackets.h"
 #include "Map.h"
+#include "Maps/TerrainMgr.h"
+#include "ModelIgnoreFlags.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
 #include "Player.h"
@@ -49,11 +57,15 @@ constexpr std::uint32_t kMaxSkillValue = 300;
 struct Errand
 {
     bool active = false;
+    bool idle = false;          // free-bot side activity, not a guild order
     bool hasSpot = false;
     std::uint32_t itemId = 0;
-    float spotX = 0.0f;
+    float spotX = 0.0f;         // where the bot stands
     float spotY = 0.0f;
     float spotZ = 0.0f;
+    float castX = 0.0f;         // where the bobber should land
+    float castY = 0.0f;
+    float castZ = 0.0f;
     std::int32_t zoneSkill = 0;
     Phase phase = Phase::Idle;
     std::uint32_t phaseMs = 0;
@@ -66,6 +78,15 @@ struct Errand
     std::uint32_t itemsGained = 0;
 };
 
+struct IdleSession
+{
+    std::uint32_t startMs = 0;      // 0 = no open session
+    std::uint32_t endMs = 0;        // when the last one ended; starts the hourly cooldown
+    int casts = 0;
+    std::uint32_t lastSearchMs = 0; // 15 s search throttle
+    std::uint32_t noWaterAtMs = 0;  // 15 min park after a failed search
+};
+
 std::unordered_map<ObjectGuid, Errand>& Errands()
 {
     static std::unordered_map<ObjectGuid, Errand> map;
@@ -76,6 +97,28 @@ std::unordered_map<ObjectGuid, bool>& CaughtFlags()
 {
     static std::unordered_map<ObjectGuid, bool> map;
     return map;
+}
+
+std::unordered_map<ObjectGuid, IdleSession>& IdleSessions()
+{
+    static std::unordered_map<ObjectGuid, IdleSession> map;
+    return map;
+}
+
+void EndIdleSession(Player* bot, char const* reason)
+{
+    auto it = IdleSessions().find(bot->GetGUID());
+    if (it == IdleSessions().end())
+        return;
+    IdleSession& session = it->second;
+    if (session.startMs == 0 && session.casts == 0)
+        return;
+    int const casts = session.casts;
+    session.startMs = 0;
+    session.endMs = GameTime::GetGameTimeMS();
+    session.casts = 0;
+    TC_LOG_INFO("tortoisebots", "[W9] fish idle end bot={} result={} casts={}",
+        bot->GetName(), reason ? reason : "done", casts);
 }
 
 bool IsFishingPole(Item const* item)
@@ -198,6 +241,24 @@ void EnsureLure(Player* bot, std::int32_t requiredSkill)
             TortoiseBots::GuildOrders::kFishingLureGrantCount - have);
 }
 
+// Idle fishing needs only what the legacy factory hands every bot: the
+// secondary skill and a pole. No tiered pole or lure (orders plan those).
+bool EnsureIdleFishingGear(Player* bot)
+{
+    if (!bot)
+        return false;
+    if (!bot->HasSkill(SKILL_FISHING))
+    {
+        std::uint16_t const maxValue = std::uint16_t(std::min<std::uint32_t>(kMaxSkillValue, bot->GetMaxSkillValueForLevel()));
+        bot->SetSkill(SKILL_FISHING, 1, std::max<std::uint16_t>(1, maxValue), maxValue);
+    }
+    if (!bot->HasSkill(SKILL_FISHING))
+        return false;
+    if (!FindFishingPole(bot))
+        GrantItem(bot, kBaseFishingPoleItemId, 1);
+    return FindFishingPole(bot) != nullptr;
+}
+
 bool ApplyLure(Player* bot, Item* pole)
 {
     if (!bot || !pole || pole->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) != 0)
@@ -250,6 +311,208 @@ GameObject* FindOwnedBobber(Player* bot)
     }
     return nullptr;
 }
+
+struct WaterSpot
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+struct WaterCacheEntry
+{
+    bool hasWater = false;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    std::uint32_t atMs = 0;
+};
+
+// One water verdict per map cell, shared by all bots for 30 minutes: the
+// radial search is ~88 terrain/LOS probes, so a cell is never scanned twice
+// while bots stay near it. World thread only (the bot manager's tick), so no
+// lock is needed.
+std::unordered_map<std::uint64_t, WaterCacheEntry>& WaterCache()
+{
+    static std::unordered_map<std::uint64_t, WaterCacheEntry> cache;
+    return cache;
+}
+
+float FishableWaterLevelAt(Player* bot, float x, float y, float z)
+{
+    Map* map = bot ? bot->GetMap() : nullptr;
+    TerrainInfo* terrain = map ? map->GetTerrain() : nullptr;
+    if (!terrain)
+        return INVALID_HEIGHT;
+    float ground = 0.0f;
+    float const waterLevel = terrain->GetWaterOrGroundLevel(bot->GetPhaseShift(), map->GetId(), x, y, z, &ground);
+    if (waterLevel <= INVALID_HEIGHT || ground <= INVALID_HEIGHT)
+        return INVALID_HEIGHT;
+    if (!ai::FishingWaterDeepEnough(waterLevel, ground))
+        return INVALID_HEIGHT;
+    LiquidData liquid{};
+    if (terrain->GetLiquidStatus(bot->GetPhaseShift(), map->GetId(), x, y, ground, {}, &liquid) == LIQUID_MAP_NO_WATER)
+        return INVALID_HEIGHT;
+    // Magma and slime are not fishing water.
+    if (liquid.type_flags.HasFlag(map_liquidHeaderTypeFlags::Magma) ||
+        liquid.type_flags.HasFlag(map_liquidHeaderTypeFlags::Slime))
+        return INVALID_HEIGHT;
+    // A surface query can echo the bot's own water tile from above it.
+    if (waterLevel > z + 0.5f)
+        return INVALID_HEIGHT;
+    return waterLevel;
+}
+
+// Open-water search: coarse rings outward from the bot, 8 directions, and the
+// first ring with fishable water wins; the middle candidate keeps the cast
+// square to the bank. Bounded and cached per cell, never a world scan.
+bool FindNearbyWater(Player* bot, float fromX, float fromY, float fromZ, float radius, WaterSpot& out)
+{
+    if (!bot || !bot->GetMap())
+        return false;
+    CellCoord const cell = Trinity::ComputeCellCoord(fromX, fromY);
+    std::uint64_t const key = ai::FishingCellKey(bot->GetMapId(), std::int32_t(cell.x_coord), std::int32_t(cell.y_coord));
+    std::uint32_t const now = GameTime::GetGameTimeMS();
+    if (auto it = WaterCache().find(key); it != WaterCache().end() && ai::FishingWaterCacheFresh(it->second.atMs, now))
+    {
+        if (!it->second.hasWater)
+            return false;
+        out = { it->second.x, it->second.y, it->second.z };
+        return true;
+    }
+
+    float const pi = 3.14159265358979323846f;
+    std::vector<WaterSpot> found;
+    for (float dist = ai::FISH_MIN_CAST_DISTANCE; dist <= radius + ai::FISH_MAX_CAST_DISTANCE; dist += ai::FISH_SEARCH_STEP)
+    {
+        found.clear();
+        for (int i = 0; i < ai::FISH_SEARCH_DIRECTIONS; ++i)
+        {
+            float const angle = 2.0f * pi * float(i) / float(ai::FISH_SEARCH_DIRECTIONS);
+            float const x = fromX + std::cos(angle) * dist;
+            float const y = fromY + std::sin(angle) * dist;
+            float const waterZ = FishableWaterLevelAt(bot, x, y, fromZ);
+            if (waterZ <= INVALID_HEIGHT)
+                continue;
+            float const eyeZ = bot->GetPositionZ() + bot->GetCollisionHeight();
+            if (!bot->GetMap()->isInLineOfSight(bot->GetPhaseShift(), bot->GetPositionX(), bot->GetPositionY(), eyeZ,
+                    x, y, waterZ, LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+                continue;
+            found.push_back({ x, y, waterZ });
+        }
+        if (!found.empty())
+            break;
+    }
+
+    WaterCacheEntry entry;
+    entry.atMs = now;
+    if (found.empty())
+    {
+        WaterCache()[key] = entry;
+        return false;
+    }
+    WaterSpot const pick = found[found.size() / 2];
+    entry.hasWater = true;
+    entry.x = pick.x;
+    entry.y = pick.y;
+    entry.z = pick.z;
+    WaterCache()[key] = entry;
+    out = pick;
+    return true;
+}
+
+// A nearest visible fishing hole within `radius`, else false. Pools win over
+// open water at pick time.
+bool FindFishingHole(Player* bot, float radius, WaterSpot& out)
+{
+    if (!bot || !bot->GetMap())
+        return false;
+    std::list<GameObject*> objects;
+    Trinity::GameObjectInRangeCheck check(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), radius, 0);
+    Trinity::GameObjectListSearcher<Trinity::GameObjectInRangeCheck> searcher(bot, objects, check);
+    Cell::VisitGridObjects(bot, searcher, radius);
+
+    GameObject* nearest = nullptr;
+    float best = radius;
+    for (GameObject* go : objects)
+    {
+        if (!go || !go->isSpawned() || go->GetGoType() != GAMEOBJECT_TYPE_FISHINGHOLE)
+            continue;
+        float const dist = bot->GetDistance2d(go->GetPositionX(), go->GetPositionY());
+        if (dist <= best)
+        {
+            best = dist;
+            nearest = go;
+        }
+    }
+    if (!nearest)
+        return false;
+    out = { nearest->GetPositionX(), nearest->GetPositionY(), nearest->GetPositionZ() };
+    return true;
+}
+
+// Dry stand at `from` that can cast at the water point, else false. The cast
+// lands out from the bank, so the water must sit inside the 10-20 yd window.
+bool FindShoreCastSpot(Player* bot, float fromX, float fromY, float fromZ, WaterSpot const& water, WaterSpot& out)
+{
+    Map* map = bot ? bot->GetMap() : nullptr;
+    TerrainInfo* terrain = map ? map->GetTerrain() : nullptr;
+    if (!map || !terrain)
+        return false;
+    float const dx = water.x - fromX;
+    float const dy = water.y - fromY;
+    float const dist = std::sqrt(dx * dx + dy * dy);
+    if (!ai::FishingCastInRange(dist))
+        return false;
+    if (terrain->IsInWater(bot->GetPhaseShift(), map->GetId(), fromX, fromY, fromZ))
+        return false;
+    float const ground = map->GetHeight(bot->GetPhaseShift(), fromX, fromY, fromZ + 2.0f, true);
+    if (ground <= INVALID_HEIGHT)
+        return false;
+    if ((water.z - 0.5f) > fromZ && (water.z - 0.5f) > ground)
+        return false;
+    float const eyeZ = bot->GetPositionZ() + bot->GetCollisionHeight();
+    if (!map->isInLineOfSight(bot->GetPhaseShift(), bot->GetPositionX(), bot->GetPositionY(), eyeZ,
+            water.x, water.y, water.z, LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+        return false;
+    out = { fromX, fromY, ground };
+    return true;
+}
+
+// Water is near but not castable from here: sample the bot-to-water ray from
+// the closest point that still reaches (20 yd off the water) back toward the
+// bot and take the nearest dry stand that casts. Fixed samples, no scan.
+bool StepTowardFishableWater(Player* bot, float fromX, float fromY, float fromZ,
+    WaterSpot const& water, float radius, WaterSpot& out)
+{
+    if (!bot || !bot->GetMap())
+        return false;
+    float const dx = water.x - fromX;
+    float const dy = water.y - fromY;
+    float const dist = std::sqrt(dx * dx + dy * dy);
+    if (dist < 1.0f || dist > radius + ai::FISH_MAX_CAST_DISTANCE)
+        return false;
+    float const stepFrom = std::max(0.0f, dist - ai::FISH_MAX_CAST_DISTANCE);
+    for (float back = stepFrom; back <= dist - 1.0f; back += ai::FISH_SEARCH_STEP)
+    {
+        float const t = back / dist;
+        float const sx = fromX + dx * t;
+        float const sy = fromY + dy * t;
+        float const sz = bot->GetMap()->GetHeight(bot->GetPhaseShift(), sx, sy, fromZ + 2.0f, true);
+        if (sz <= INVALID_HEIGHT)
+            continue;
+        WaterSpot stand;
+        if (FindShoreCastSpot(bot, sx, sy, sz, water, stand))
+        {
+            out = stand;
+            return true;
+        }
+    }
+    return false;
+}
+
+constexpr float kGuardRadiusYd = 35.0f;
+constexpr std::uint32_t kOpenWorldMapMaxId = 1;
 
 // The catch may come from the open water (the loot's owner is the bobber) or
 // from a fishing-hole pool the core picked next to the bobber (the loot's
@@ -324,12 +587,27 @@ float DistanceToSpot(Player* bot, Errand const& errand)
 void Finish(Player* bot, Errand& errand, char const* reason, Facts const* facts = nullptr)
 {
     bool const caught = reason && std::string(reason) == "done";
-    TC_LOG_INFO("tortoisebots", "[W9] fish bot={} item={} result={} casts={} bobber={} ready={} used={} loot={} channel={}",
-        bot->GetName(), errand.itemId, reason ? reason : "done", std::uint32_t(errand.casts),
-        facts && facts->hasBobber, facts && facts->bobberReady, facts && facts->bobberUsed,
-        facts && facts->lootAvailable, facts && facts->channelingFishing);
-    if (caught)
-        CaughtFlags()[bot->GetGUID()] = true;
+    if (errand.idle)
+    {
+        TC_LOG_INFO("tortoisebots", "[W9] fish idle bot={} result={} casts={} bobber={} ready={} used={} loot={} channel={}",
+            bot->GetName(), reason ? reason : "done", std::uint32_t(errand.casts),
+            facts && facts->hasBobber, facts && facts->bobberReady, facts && facts->bobberUsed,
+            facts && facts->lootAvailable, facts && facts->channelingFishing);
+        // A terminal state closes the side activity now; other misses keep the
+        // session (the next search may find water within the budget).
+        std::string const result = reason ? reason : "done";
+        if (result == "combat" || result == "dead" || result == "not-in-world")
+            EndIdleSession(bot, result.c_str());
+    }
+    else
+    {
+        TC_LOG_INFO("tortoisebots", "[W9] fish bot={} item={} result={} casts={} bobber={} ready={} used={} loot={} channel={}",
+            bot->GetName(), errand.itemId, reason ? reason : "done", std::uint32_t(errand.casts),
+            facts && facts->hasBobber, facts && facts->bobberReady, facts && facts->bobberUsed,
+            facts && facts->lootAvailable, facts && facts->channelingFishing);
+        if (caught)
+            CaughtFlags()[bot->GetGUID()] = true;
+    }
     errand = Errand{};
 }
 
@@ -409,6 +687,9 @@ bool StartOrderErrand(Player* bot, std::uint32_t itemId, std::string& outReason)
     errand.spotX = spot.x;
     errand.spotY = spot.y;
     errand.spotZ = spot.z;
+    errand.castX = spot.x;
+    errand.castY = spot.y;
+    errand.castZ = spot.z;
     errand.zoneSkill = spot.zoneSkill;
     errand.phase = Phase::Walking;
     EnsurePoleFor(bot, spot.zoneSkill);
@@ -425,7 +706,7 @@ bool StartOrderErrand(Player* bot, std::uint32_t itemId, std::string& outReason)
     return true;
 }
 
-void TickErrand(Player* bot, std::uint32_t diffMs)
+static void TickActive(Player* bot, std::uint32_t diffMs)
 {
     if (!bot)
         return;
@@ -504,16 +785,22 @@ void TickErrand(Player* bot, std::uint32_t diffMs)
         if (bot->IsMounted())
             bot->Dismount();
         bot->StopMoving();
-        float const dx = errand.spotX - bot->GetPositionX();
-        float const dy = errand.spotY - bot->GetPositionY();
+        float const dx = errand.castX - bot->GetPositionX();
+        float const dy = errand.castY - bot->GetPositionY();
         if (dx != 0.0f || dy != 0.0f)
             bot->SetFacingTo(std::atan2(dy, dx));
         // The bobber lands at the destination, so it lands in the water point
-        // the store chose (the core otherwise picks a close point and the
-        // bobber can fall on land).
-        Position const dest(errand.spotX, errand.spotY, errand.spotZ);
+        // the store or the open-water search chose (the core otherwise picks a
+        // close point and the bobber can fall on land).
+        Position const dest(errand.castX, errand.castY, errand.castZ);
         SpellCastResult const result = bot->CastSpell(dest, kFishingCastSpellId);
         errand.casts += 1;
+        if (errand.idle)
+        {
+            auto session = IdleSessions().find(bot->GetGUID());
+            if (session != IdleSessions().end() && session->second.startMs != 0)
+                session->second.casts += 1;
+        }
         errand.castSent = true;
         errand.bobberUsed = false;
         errand.lootTries = 0;
@@ -578,6 +865,187 @@ bool HasActiveErrand(Player const* bot)
     return it != Errands().end() && it->second.active;
 }
 
+void TickErrand(Player* bot, std::uint32_t diffMs)
+{
+    if (!bot)
+        return;
+    auto it = Errands().find(bot->GetGUID());
+    if (it == Errands().end() || !it->second.active || it->second.idle)
+        return;
+    TickActive(bot, diffMs);
+}
+
+bool HasActiveIdleErrand(Player const* bot)
+{
+    if (!bot)
+        return false;
+    auto it = Errands().find(bot->GetGUID());
+    return it != Errands().end() && it->second.active && it->second.idle;
+}
+
+namespace
+{
+void CancelIdleErrand(Player* bot)
+{
+    auto it = Errands().find(bot->GetGUID());
+    if (it != Errands().end() && it->second.active && it->second.idle)
+    {
+        if (bot->isMoving())
+            bot->StopMoving();
+        it->second = Errand{};
+    }
+    // Keep the ended session: its hourly cooldown survives a free toggle.
+    EndIdleSession(bot, "disabled");
+}
+}
+
+void TickIdle(Player* bot, std::uint32_t diffMs, bool enabled)
+{
+    if (!bot)
+        return;
+    ObjectGuid const guid = bot->GetGUID();
+    if (!enabled)
+    {
+        // A bot that stopped being free (a master, a group, the switch off)
+        // must not keep the engine paused for a fishing spot.
+        CancelIdleErrand(bot);
+        return;
+    }
+
+    IdleSession& session = IdleSessions()[guid];
+    std::uint32_t const now = GameTime::GetGameTimeMS();
+    bool const idleActive = HasActiveIdleErrand(bot);
+    bool const orderActive = !idleActive && HasActiveErrand(bot);
+
+    if (session.startMs != 0 && IdleSessionOver(session.startMs, session.casts, now))
+    {
+        if (idleActive)
+            Finish(bot, Errands()[guid], "budget spent");
+        EndIdleSession(bot, "budget spent");
+        return;
+    }
+
+    if (idleActive)
+    {
+        TickActive(bot, diffMs);
+        if (!HasActiveIdleErrand(bot))
+            session.lastSearchMs = now;
+        return;
+    }
+    if (orderActive)
+        return;
+    if (tbhost::errands::HasActiveErrand(bot) || tbhost::guild_mail::HasActiveErrand(bot) ||
+        tbhost::guild_orders::HasActiveDisenchantErrand(bot) || tbhost::guild_orders::HasActiveEnchantErrand(bot))
+        return;
+    // Open world only: a dungeon or raid bot is on a run, not on a bank.
+    if (bot->GetMapId() > kOpenWorldMapMaxId)
+    {
+        if (session.startMs != 0)
+            EndIdleSession(bot, "left-open-world");
+        return;
+    }
+
+    if (!bot->IsInWorld() || !bot->IsAlive() || bot->IsInCombat())
+    {
+        if (session.startMs != 0)
+            EndIdleSession(bot, bot->IsInCombat() ? "combat" : (!bot->IsAlive() ? "dead" : "not-in-world"));
+        return;
+    }
+    if (bot->isMoving() || bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) || bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+        return;
+    if (session.startMs == 0 && !IdleSessionStartable(0, session.endMs, 0, now))
+        return;
+    if (!IdleSearchAllowed(session.lastSearchMs, session.noWaterAtMs, now))
+        return;
+    session.lastSearchMs = now;
+
+    if (!EnsureIdleFishingGear(bot))
+        return;
+
+    float const radius = ai::FISH_SEARCH_RADIUS_MASTERLESS;
+    float const botX = bot->GetPositionX();
+    float const botY = bot->GetPositionY();
+    float const botZ = bot->GetPositionZ();
+
+    WaterSpot hole;
+    WaterSpot water;
+    WaterSpot stand;
+    WaterSpot cast;
+    bool holeFound = FindFishingHole(bot, radius, hole);
+    bool holeStand = false;
+    if (holeFound)
+    {
+        holeStand = FindShoreCastSpot(bot, botX, botY, botZ, hole, stand) ||
+            StepTowardFishableWater(bot, botX, botY, botZ, hole, radius, stand);
+        if (holeStand)
+            cast = hole;
+        else
+            holeFound = false;
+    }
+
+    bool waterFound = false;
+    bool waterStand = false;
+    if (!holeStand)
+    {
+        waterFound = FindNearbyWater(bot, botX, botY, botZ, radius, water);
+        if (waterFound)
+        {
+            waterStand = FindShoreCastSpot(bot, botX, botY, botZ, water, stand) ||
+                StepTowardFishableWater(bot, botX, botY, botZ, water, radius, stand);
+        }
+        if (!waterStand)
+            waterFound = false;
+        else
+            cast = water;
+    }
+
+    bool guarded = false;
+    if (holeStand || waterStand)
+        guarded = tbcompat::SpotGuarded(bot->GetMapId(), stand.x, stand.y, stand.z, kGuardRadiusYd,
+            bot->GetLevel(), bot->GetTeam() == HORDE);
+
+    if (!IdleSpotChosen(holeFound, waterFound, guarded))
+    {
+        session.noWaterAtMs = now;
+        TC_LOG_INFO("tortoisebots", "[W9] fish idle search bot={} hole={} water={} guarded={}",
+            bot->GetName(), holeFound, waterFound, guarded);
+        return;
+    }
+
+    std::uint32_t const areaId = sTerrainMgr.GetAreaId(bot->GetPhaseShift(), bot->GetMapId(), cast.x, cast.y, cast.z);
+    std::int32_t const zoneSkill = tbcompat::FishingBaseSkill(areaId);
+    if (!ai::FishingZoneSkillOk(zoneSkill, bot->GetSkillValue(SKILL_FISHING)))
+    {
+        session.noWaterAtMs = now;
+        TC_LOG_INFO("tortoisebots", "[W9] fish idle lowskill bot={} zone={} need={} skill={}",
+            bot->GetName(), areaId, zoneSkill, bot->GetSkillValue(SKILL_FISHING));
+        return;
+    }
+
+    session.noWaterAtMs = 0;
+    if (session.startMs == 0)
+    {
+        session.startMs = now;
+        session.casts = 0;
+    }
+
+    Errand& errand = Errands()[guid];
+    errand = Errand{};
+    errand.active = true;
+    errand.idle = true;
+    errand.hasSpot = true;
+    errand.spotX = stand.x;
+    errand.spotY = stand.y;
+    errand.spotZ = stand.z;
+    errand.castX = cast.x;
+    errand.castY = cast.y;
+    errand.castZ = cast.z;
+    errand.zoneSkill = zoneSkill;
+    errand.phase = Phase::Walking;
+    TC_LOG_INFO("tortoisebots", "[W9] fish idle start bot={} hole={} zone={} need={} skill={} spot={:.1f},{:.1f}",
+        bot->GetName(), holeFound, areaId, zoneSkill, bot->GetSkillValue(SKILL_FISHING), stand.x, stand.y);
+}
+
 bool TakeCaught(Player* bot)
 {
     if (!bot)
@@ -615,12 +1083,14 @@ void CancelErrand(Player const* bot)
     if (it != Errands().end())
         it->second = Errand{};
     CaughtFlags().erase(bot->GetGUID());
+    IdleSessions().erase(bot->GetGUID());
 }
 
 void ClearErrand(ObjectGuid const& botGuid)
 {
     Errands().erase(botGuid);
     CaughtFlags().erase(botGuid);
+    IdleSessions().erase(botGuid);
 }
 
 } // namespace fishing

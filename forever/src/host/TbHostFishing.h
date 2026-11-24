@@ -1,11 +1,11 @@
 #pragma once
 
-// Host fishing for guild Farm orders on a fish (TBF #155). The legacy
-// FishAction/FishValues travel kit is not in the ForeverCore slice (no travel
-// strategy, no ChooseTravelTargetAction, no CastCustomSpellAction), so the
-// order path fishes here: the bot walks to a spot from the shipped
-// FISH_LOCATION data, casts 7731, uses its own bobber when it splashes and
-// takes the catch. The errand state is world-thread only and memory only.
+// Host fishing on ForeverCore: guild Farm orders on a fish and free-bot idle
+// fishing. The legacy FishAction/FishValues travel kit is not in the
+// ForeverCore slice (no travel strategy, no ChooseTravelTargetAction, no
+// CastCustomSpellAction), so both paths fish here: the bot walks to a spot,
+// casts 7731, uses its own bobber when it splashes and takes the catch. The
+// errand state is world-thread only and memory only.
 #include "ObjectGuid.h"
 
 #include <cstdint>
@@ -33,7 +33,14 @@ bool StartOrderErrand(Player* bot, std::uint32_t itemId, std::string& outReason)
 // One per-bot tick: walk, cast, use the bobber, take the loot.
 void TickErrand(Player* bot, std::uint32_t diffMs);
 
+// Idle fishing for a free (masterless) bot: searches a fishing hole or open
+// water nearby, works one catch at a time inside the hourly session budget
+// and cancels itself when `enabled` turns false. Called for every bot; cheap
+// when no idle session exists.
+void TickIdle(Player* bot, std::uint32_t diffMs, bool enabled);
+
 bool HasActiveErrand(Player const* bot);
+bool HasActiveIdleErrand(Player const* bot);
 std::string ActiveErrandPhase(Player const* bot);
 
 // True once after an errand finished with a catch (any fish, not only the

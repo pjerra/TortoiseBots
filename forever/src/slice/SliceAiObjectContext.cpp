@@ -65,6 +65,7 @@
 #include "playerbot/strategy/actions/RpgSubActions.h"
 #include "playerbot/strategy/actions/RtiAction.h"
 #include "playerbot/strategy/actions/SaveManaAction.h"
+#include "playerbot/strategy/actions/SayAction.h"
 #include "playerbot/strategy/actions/SellAction.h"
 #include "playerbot/strategy/actions/ServiceNearbyNpcAction.h"
 #include "playerbot/strategy/actions/SetValueAction.h"
@@ -485,7 +486,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatActionContext (68 of its keys)
+    // the registry of ChatActionContext (70 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -499,6 +500,7 @@ namespace slice
             creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
             creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
             creators["release"] = [](PlayerbotAI* ai) { return new ReleaseSpiritAction(ai); };
+            creators["self resurrect"] = [](PlayerbotAI* ai) { return new SelfResurrectAction(ai); };
             creators["pet"] = [](PlayerbotAI* ai) { return new SetPetAction(ai); };
             creators["roll"] = [](PlayerbotAI* ai) { return new RollAction(ai); };
             creators["spirit healer"] = [](PlayerbotAI* ai) { return new SpiritHealerAction(ai); };
@@ -559,6 +561,7 @@ namespace slice
             creators["log"] = [](PlayerbotAI* ai) { return new LogLevelAction(ai); };
             creators["set value"] = [](PlayerbotAI* ai) { return new SetValueAction(ai); };
             creators["repop"] = [](PlayerbotAI* ai) { return new RepopAction(ai); };
+            creators["speak"] = [](PlayerbotAI* ai) { return new SpeakAction(ai); };
         }
     };
 
@@ -751,7 +754,7 @@ namespace slice
         }
     };
 
-    // the registry of ChatTriggerContext (71 of its keys)
+    // the registry of ChatTriggerContext (72 of its keys)
     class SliceChatTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -828,6 +831,7 @@ namespace slice
             creators["cdebug"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cdebug"); };
             creators["log"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "log"); };
             creators["set value"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "set value"); };
+            creators["speak"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "speak"); };
         }
     };
 
@@ -1122,7 +1126,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 80, kActions = 204, kTriggers = 236, kValues = 264;
+    constexpr unsigned kStrategies = 80, kActions = 206, kTriggers = 237, kValues = 264;
 }
 }
 

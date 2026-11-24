@@ -6,6 +6,7 @@
 #include "../ai/playerbot/PassingBuffsPolicy.h"
 #include "../ai/playerbot/PlayerbotAI.h"
 #include "../ai/playerbot/PlayerbotAIConfig.h"
+#include "../ai/playerbot/RandomBotFacade.h"
 #include "../ai/playerbot/ServerFacade.h"
 #include "../host/ModuleLog.h"
 
@@ -37,7 +38,8 @@ bool EligibleBot(Player* bot)
         bot->InBattleGround() || bot->IsTaxiFlying() || !bot->GetSession() ||
         !IsHeadlessCompat(bot->GetSession()))
         return false;
-    if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid()))
+    // A pool bot is the free flag on both hosts (the Turtle random-bot record has no ForeverCore counterpart); a master clears it.
+    if (!sRandomBotFacade.IsFreeBot(bot))
         return false;
     if (bot->GetGroup())
         return false;
@@ -60,7 +62,7 @@ bool EligiblePlayer(Player* player, Player* bot)
         return false;
     if (player->IsGameMaster() && !player->IsGMVisible())
         return false;
-    if (player->GetVisibility() == VISIBILITY_OFF)
+    if (PlayerHiddenGmCompat(player))
         return false;
     if (!sServerFacade.IsFriendlyTo(bot, player))
         return false;
@@ -138,9 +140,7 @@ void PassingBuffsService::SweepNow(std::vector<Player*> const& realPlayers)
             continue;
 
         std::list<Unit*> nearby;
-        MaNGOS::AnyFriendlyUnitInObjectRangeCheck check(player, sPlayerbotAIConfig.sightDistance);
-        MaNGOS::UnitListSearcher<MaNGOS::AnyFriendlyUnitInObjectRangeCheck> searcher(nearby, check);
-        Cell::VisitAllObjects(player, searcher, sPlayerbotAIConfig.sightDistance);
+        VisitFriendlyUnitsCompat(player, nearby, sPlayerbotAIConfig.sightDistance);
 
         std::vector<Player*> bots;
         for (Unit* unit : nearby)

@@ -20,6 +20,8 @@ inline constexpr uint32_t kItemBlacksmithHammer = 5956;
 inline constexpr uint32_t kItemFishingPole = 6256;
 inline constexpr uint32_t kItemArclightSpanner = 6219;
 inline constexpr uint32_t kItemRunedCopperRod = 6218;
+inline constexpr uint32_t kItemThievesTools = 5060;   // the Pick Lock (1804) tool
+inline constexpr uint32_t kSkillLockpicking = 633;
 
 inline constexpr std::array<uint32_t, 8> kMiningPickIds = {
     756,    // Tunnel Pick
@@ -52,7 +54,7 @@ struct ToolRule
     uint32_t grantItemId = 0;
 };
 
-inline constexpr std::array<ToolRule, 7> kProfessionToolRules = {{
+inline constexpr std::array<ToolRule, 8> kProfessionToolRules = {{
     { prof::SkillMining, kItemMiningPick },
     { prof::SkillSkinning, kItemSkinningKnife },
     { prof::SkillBlacksmithing, kItemBlacksmithHammer },
@@ -60,6 +62,7 @@ inline constexpr std::array<ToolRule, 7> kProfessionToolRules = {{
     { prof::SkillEngineering, kItemBlacksmithHammer },
     { prof::SkillEngineering, kItemArclightSpanner },
     { prof::SkillEnchanting, kItemRunedCopperRod },
+    { kSkillLockpicking, kItemThievesTools },
 }};
 
 template <typename HasItemFn, std::size_t N>
