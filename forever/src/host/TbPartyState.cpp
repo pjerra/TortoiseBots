@@ -12,6 +12,7 @@
 #include "host/TbHostGuildOrders.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbLuaBotsPure.h"   // TBF-B1 finding 6: RoleWord, the role word both `.tb state` and the provider write
 #include "host/chat/TbChatIn.h"
 #include "host/TbCc.h"
 #include "host/TbThrown.h"
@@ -90,13 +91,12 @@ std::vector<std::string> Names(PlayerbotAI* ai, BotState state)
     return names;
 }
 
-std::string RoleOf(Player* bot, PlayerbotAI* ai)
+std::string RoleOf(Player* bot, PlayerbotAI* /*ai*/)
 {
-    if (ai ? PlayerbotAI::IsTank(bot, true) : PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == 1)
-        return "tank";
-    if (ai ? PlayerbotAI::IsHeal(bot, true) : PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == 2)
-        return "healer";
-    return ai || PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) ? "dps" : "none";
+    // TBF-B1 third review finding 6: the word is never empty. IsTank/IsHeal read the forced role, the engine's strategies when there
+    // is one, and the bot's talents otherwise (AiFactory::GetPlayerRoles); neither needs a PlayerbotAI object, so the word is right
+    // before the brain is built and while it is away (an entry walk, a master away, masterAway), and dps is the fallback.
+    return luabots::RoleWord(PlayerbotAI::IsTank(bot, true), PlayerbotAI::IsHeal(bot, true));
 }
 
 std::string DistanceTo(Player* bot, Player* other)
@@ -953,6 +953,36 @@ bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     reply.End(end);
     return true;
 }
+
+// Bot API (TBF-B1): the words the provider copies into a Bot handle, the same ones `.tb state` writes. Only the engine
+// build carries their code: a slice build without ForeverLua must stay exactly as it was.
+#if defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+std::string RoleText(Player* bot, PlayerbotAI* ai)
+{
+    return RoleOf(bot, ai);   // never empty (finding 6)
+}
+
+bool RoleForced(ObjectGuid bot)
+{
+    return PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot) != 0;
+}
+
+std::string SpecText(Player* bot)
+{
+    uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);
+    if (!specId)
+        specId = sRandomItemMgr.GetFallbackSpecId(bot->GetClass());
+    return sRandomItemMgr.GetSpecName(specId);
+}
+
+std::string EngineStateText(Player* bot, PlayerbotAI* ai)
+{
+    std::string state = !bot->IsAlive() ? "dead" : bot->IsInCombat() ? "combat" : "non-combat";
+    if (ai)
+        state = ai->GetState() == BotState::BOT_STATE_DEAD ? "dead" : ai->GetState() == BotState::BOT_STATE_COMBAT ? "combat" : "non-combat";
+    return state;
+}
+#endif
 }
 }
 

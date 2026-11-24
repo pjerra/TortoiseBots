@@ -44,6 +44,12 @@ bool BotRunKillFirst(Player* bot, uint32_t entry);              // BotCommands::
 std::vector<uint32_t> const* BotRunArmedTriggers(Player* bot);  // BotCommands::RunArmedAreaTriggers (null: none armed)
 uint32_t BotRunPlanMap(Player* bot);                            // BotCommands::BoundRunPlanMap (0: no bound run)
 
+// TBF-B1 review finding 7: a bot that leaves the world (BotMgr::OnPlayerLogout) takes its ENDED run record with it: the record otherwise
+// stays in the table until the same leader starts a new run, so a pool character's churn grew the table and the provider's cursors for
+// good. The record's unread events are flushed first (TbRun.h's flush listener); a LIVE run is left alone (the tick stops it through its
+// own rule). World thread only.
+void OnBotLogout(ObjectGuid leader);
+
 // `.tb grammar selftest`: one `plan`, `leg`, `unit`, `run` and `event` record with fixed example values, built by the real record writers.
 void SelfTestRecords(h3::Reply& reply);
 }

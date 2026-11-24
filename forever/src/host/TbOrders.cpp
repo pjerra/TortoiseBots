@@ -19,6 +19,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbOrdersApi.h"
 #include "host/TbOrderQueuePure.h"
+#include "host/TbOrderRingPure.h"
 #include "host/TbTactics.h"
 #include "host/TbTacticsPure.h"
 #include "host/cmd/TbCmdBinding.h"
@@ -104,6 +105,10 @@ struct Order
 struct BotRec
 {
     std::deque<Order> queue;
+    // TBF-B1 review finding 2: every transition of every order (queued, ok, fail:<code>), read one per snapshot by the provider
+    // through the ring's own cursor. The `seq/verb/result` slot below stays the record's newest word for `.tb state`; an order a
+    // newer one overwrote still reaches the engine as its own transition, and the ring is erased with the record at logout.
+    OrderTransitionRing ring;
     uint32 seq = 0;             // the last order that finished or is queued
     std::string verb = "none";
     std::string result = "none";   // ok | fail:<code> | queued
@@ -128,6 +133,20 @@ std::map<ObjectGuid, uint8>& Roles()
 {
     static std::map<ObjectGuid, uint8> roles;
     return roles;
+}
+
+// TBF-B1 review finding 7: the two wait clocks of the engine hooks below. They are per-bot state like the order record, so they are
+// erased with it at logout instead of growing with every bot guid that ever ticked.
+std::map<ObjectGuid, uint32>& LastAcceptMs()
+{
+    static std::map<ObjectGuid, uint32> last;
+    return last;
+}
+
+std::map<ObjectGuid, uint32>& LastRoleCheckMs()
+{
+    static std::map<ObjectGuid, uint32> last;
+    return last;
 }
 
 uint32& SeqCounter()
@@ -845,6 +864,7 @@ bool Enqueue(Player* bot, Order order, std::string& code, std::string& detail, u
     rec.seq = order.seq;
     rec.verb = order.verb;
     rec.result = "queued";
+    rec.ring.Push(order.seq, order.verb, "queued");
     rec.queue.push_back(std::move(order));
     return true;
 }
@@ -906,9 +926,8 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
     if (!bot->IsAlive() && bot->IsResurrectRequested() && ActionRegistered(ai, "accept resurrect"))
         if (Player* offerer = ResurrectOffererOf(bot))
         {
-            static std::map<ObjectGuid, uint32> lastAccept;
             uint32 const nowMs = NowMs();
-            uint32& last = lastAccept[guid];
+            uint32& last = LastAcceptMs()[guid];
             if (!last || nowMs - last >= 1000)
             {
                 last = nowMs;
@@ -938,9 +957,8 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         bool const hasTankKit = ai->ContainsStrategy(STRATEGY_TYPE_TANK);
         if (bot->GetGroup() || hasTankKit)
         {
-            static std::map<ObjectGuid, uint32> lastRoleCheck;
             uint32 const nowMs = NowMs();
-            uint32& last = lastRoleCheck[guid];
+            uint32& last = LastRoleCheckMs()[guid];
             if (!last || nowMs - last >= 1000)
             {
                 last = nowMs;
@@ -972,7 +990,10 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         {
             auto pendingRec = Recs().find(guid);
             if (pendingRec != Recs().end() && pendingRec->second.seq == pendingSeq)
+            {
                 pendingRec->second.result = pendingResult;
+                pendingRec->second.ring.Push(pendingSeq, "interrupt", pendingResult);
+            }
             if (pendingResult != "ok" && pendingResult.compare(0, 7, "pending") != 0)
                 sLog.outString("TortoiseBots order: %s seq %u (interrupt) -> %s", bot->GetName().c_str(), pendingSeq, pendingResult.c_str());
         }
@@ -990,6 +1011,7 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         if (hasErrandUpdate && rec->second.result != errandResult)
         {
             rec->second.result = errandResult;
+            rec->second.ring.Push(rec->second.seq, rec->second.verb, errandResult);
             if (errandResult.compare(0, 5, "fail:") == 0)
                 sLog.outString("TortoiseBots order: %s seq %u (%s) -> %s", bot->GetName().c_str(), rec->second.seq, rec->second.verb.c_str(), errandResult.c_str());
         }
@@ -1010,6 +1032,9 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         std::string result = now - order.queuedAt > OrderMaxAgeMs ? "fail:expired" : Run(bot, ai, order);
         if (result == "ok" || result.compare(0, 7, "pending") == 0)
             NoteRanOrderPassive(rec->second, order);
+        // TBF-B1 review finding 2: this order's own outcome is kept for the provider whatever the record's newest word is (a newer
+        // order may have taken `seq` over, and its ok/fail used to be the only one the API ever saw).
+        rec->second.ring.Push(order.seq, order.verb, result);
         if (rec->second.seq == order.seq)       // a later order of the same bot keeps the later one's name and seq
             rec->second.result = result;
         if (result != "ok" && result.compare(0, 7, "pending") != 0)
@@ -1032,6 +1057,29 @@ OrderStatus LastOrder(ObjectGuid bot)
         status.result = rec->second.result;
     }
     return status;
+}
+
+bool PollOrderEvent(ObjectGuid bot, OrderStatus& out)
+{
+    auto rec = Recs().find(bot);
+    if (rec == Recs().end())
+        return false;
+    OrderTransitionRing::Entry entry;
+    if (!rec->second.ring.Take(entry))
+        return false;
+    out.seq = entry.seq;
+    out.verb = entry.verb;
+    out.result = entry.result;
+    return true;
+}
+
+void ForgetBotRecords(ObjectGuid bot)
+{
+    // TBF-B1 review finding 7: the bot's order record (the ring with it), the accept clock and the role-check clock go at logout:
+    // none of them grows with every bot guid that ever ticked, and nothing of the old session reaches the next reader.
+    Recs().erase(bot);
+    LastAcceptMs().erase(bot);
+    LastRoleCheckMs().erase(bot);
 }
 
 uint8 WantedRole(ObjectGuid bot)
@@ -1361,7 +1409,10 @@ uint32 CancelRunOrders(ObjectGuid bot)
     size_t const removed = CancelFromRun(rec->second.queue, [&lastCancelled](Order const& order) { lastCancelled = std::max(lastCancelled, order.seq); });
     // The bot's last order was one of them: its result must not read "queued" (nothing is going to run it), and the run's late-failure read hears the truth.
     if (removed && rec->second.seq == lastCancelled)
+    {
         rec->second.result = "fail:cancelled";
+        rec->second.ring.Push(rec->second.seq, rec->second.verb, "fail:cancelled");   // finding 2: the ticket hears the truth
+    }
     return uint32(removed);
 }
 
