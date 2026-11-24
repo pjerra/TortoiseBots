@@ -71,6 +71,8 @@
 #include <list>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -152,6 +154,7 @@ struct BotState
     uint64_t boxPhaseMs = 0;
     uint32_t boxCastAttempts = 0;
     uint32_t boxOpenAttempts = 0;
+    std::unordered_set<uint64_t> failedBoxes;   // boxes this rogue could not open; not retried until it logs out
     uint64_t boxCoins = 0;
     std::unordered_map<uint32_t, uint32_t> bagBefore;
     uint64_t moneyBefore = 0;
@@ -275,12 +278,12 @@ std::string ItemName(Item* item)
 
 // The first bag box this bot may work on now (locked with enough skill, or
 // already unlocked with loot inside).
-Item* FindOpenableBox(Player* bot)
+Item* FindOpenableBox(Player* bot, std::unordered_set<uint64_t> const& failed)
 {
     Item* found = nullptr;
     bot->ForEachItem(ItemSearchLocation::Inventory, [&](Item* item)
     {
-        if (!LockboxOpenable(ClassifyBox(bot, item)))
+        if (failed.count(item->GetGUID().GetCounter()) || !LockboxOpenable(ClassifyBox(bot, item)))
             return ItemSearchCallbackResult::Continue;
         found = item;
         return ItemSearchCallbackResult::Stop;
@@ -660,6 +663,8 @@ void AbortBox(Player* bot, BotState& st, char const* reason)
     if (st.boxSenderLow)
         TC_LOG_ERROR("tortoisebots", "[W7] lockbox-return bot={} to={} item={} guid={}: the box stays with the rogue ({})",
             bot->GetName(), st.boxSenderName, st.boxItemId, st.boxItemGuidLow, reason);
+    if (std::string_view(reason) != "dead" && std::string_view(reason) != "combat")   // an interruption is retried, a failure is not
+        st.failedBoxes.insert(st.boxItemGuidLow);
     EndBox(st);
 }
 
@@ -1345,7 +1350,7 @@ void TickThievery(Player* bot, uint32_t diffMs)
     if (LockboxesEnabled() && bot->GetClass() == CLASS_ROGUE && st.nowMs >= st.nextBoxScanMs)
     {
         st.nextBoxScanMs = st.nowMs + kBoxScanIntervalMs;
-        if (Item* box = FindOpenableBox(bot))
+        if (Item* box = FindOpenableBox(bot, st.failedBoxes))
         {
             TC_LOG_INFO("tortoisebots", "[W7] lockbox-start bot={} item={} guid={} own=1",
                 bot->GetName(), box->GetEntry(), box->GetGUID().GetCounter());

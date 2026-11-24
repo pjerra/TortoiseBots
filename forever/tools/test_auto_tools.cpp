@@ -92,7 +92,19 @@ int main()
         CHECK(missing.empty(), "toolless professions need no tools");
     }
 
+    {
+        std::set<uint32_t> const skills = { kSkillLockpicking };
+        std::set<uint32_t> items;
+        std::vector<uint32_t> const missing = MissingToolsForSkills(
+            [&](uint32_t s) { return skills.count(s) > 0; },
+            [&](uint32_t i) { return items.count(i) > 0; });
+        CHECK(missing.size() == 1 && missing[0] == kItemThievesTools, "lockpicking needs thieves' tools");
+        items.insert(kItemThievesTools);
+        CHECK(MissingToolsForSkills([&](uint32_t s) { return skills.count(s) > 0; },
+            [&](uint32_t i) { return items.count(i) > 0; }).empty(), "a rogue with the tools gets nothing");
+    }
+
     if (g_failures == 0)
-        std::printf("PASS: test_auto_tools (5 cases, 0 failed)\n");
+        std::printf("PASS: test_auto_tools (6 cases, 0 failed)\n");
     return g_failures == 0 ? 0 : 1;
 }
