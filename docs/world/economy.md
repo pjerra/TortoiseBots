@@ -77,7 +77,7 @@ flowchart TD
 - **Bot sellers:** [`AiPlayerbot.AhMarketEnabled`](../server/settings/economy.md#aiplayerbotahmarketenabled) runs the seller pass every [`AiPlayerbot.AhMarketInterval`](../server/settings/economy.md#aiplayerbotahmarketinterval) seconds. A free bot with sellable stock that is out of combat, ungrouped and on an open-world map walks to a faction auctioneer within 500 yards and posts what its own rules accept. A bot already at an auctioneer posts at once. Nobody is teleported.
 - **Bot buyers:** [`AiPlayerbot.AhMarketBuyer`](../server/settings/economy.md#aiplayerbotahmarketbuyer) lets a free bot that is already standing at a faction auctioneer scan the house (on a [`AiPlayerbot.AhMarketChanceBuy`](../server/settings/economy.md#aiplayerbotahmarketchancebuy) roll) and buy an affordable weapon or armour upgrade with its own gold. The buyer never walks, never teleports and skips its own listings.
 - **Native mail settlement:** all bot auction transactions use the core's auction and mail systems. Gold owed to a player arrives in that player's mailbox.
-- **No offline stocking:** the offline AHBot stock and buyer service is **Not on WoW Forever yet.** The house is filled by the bots that are online.
+- **No offline stocking:** the offline AHBot stock and buyer service is **Not on ForeverCore yet.** The house is filled by the bots that are online.
 
 <details>
 <summary>Organic buyer mechanics in detail</summary>
@@ -94,4 +94,4 @@ flowchart TD
 
 - **Watch it:** the server log prints one `[W8] ah-market` line per seller pass and one `[W8] ah-market-buy` line per buyer scan, with the bot and result.
 - **Keep the house honest:** [`AiPlayerbot.AhSellBlacklist`](../server/settings/economy.md#aiplayerbotahsellblacklist) names item ids bots never list; items any vendor sells without a stock limit are skipped automatically.
-- **Drop-rate tuning is not available here:** the green and blue loot boost (`AiPlayerbot.BotLootRateUncommon` / `BotLootRateRare`) is **Not on WoW Forever yet.**
+- **Drop-rate tuning is not available here:** the green and blue loot boost (`AiPlayerbot.BotLootRateUncommon` / `BotLootRateRare`) is **Not on ForeverCore yet.**

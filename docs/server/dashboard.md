@@ -2,7 +2,7 @@
 id: server-dashboard
 title: Observability Dashboard & Telemetry
 category: server
-summary: How the WoW Forever build feeds the optional web dashboard over UDP, the module settings that control it, and what each tab and API answers.
+summary: How the ForeverCore build feeds the optional web dashboard over UDP, the module settings that control it, and what each tab and API answers.
 tags: [server, observability, telemetry, dashboard, metrics, prometheus]
 relates_to:
   - server-settings-logging

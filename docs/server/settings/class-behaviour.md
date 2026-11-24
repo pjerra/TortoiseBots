@@ -22,7 +22,7 @@ These settings configure class-specific artificial intelligence behaviors, abili
 | Setting | Default | What it does |
 | :--- | :---: | :--- |
 | [`AiPlayerbot.AnnounceSunderStacks`](#aiplayerbotannouncesunderstacks) | `0` | A warrior says in party or raid chat when its elite or boss target has five Sunder Armor stacks. |
-| [`AiPlayerbot.EnableOffSpecStrategies`](#aiplayerbotenableoffspecstrategies) | `1` | Not on WoW Forever yet: the Forever build never adds off-spec kits. |
+| [`AiPlayerbot.EnableOffSpecStrategies`](#aiplayerbotenableoffspecstrategies) | `1` | Not on ForeverCore yet: the Forever build never adds off-spec kits. |
 | [`AiPlayerbot.HolyPaladinMeleeWeave`](#aiplayerbotholypaladinmeleeweave) | `1` | Grouped Holy paladins walk into melee of non-raid targets to weave Holy Strike and Seal of Wisdom when no urgent heal is needed. |
 | [`AiPlayerbot.HunterCarveInReachOnly`](#aiplayerbothuntercarveinreachonly) | `0` | Survival hunters cast Carve only on a target already in melee reach, never walking in for it. |
 | [`AiPlayerbot.HunterViperOnLowMana`](#aiplayerbothunterviperonlowmana) | `1` | Switches hunters to Aspect of the Viper when low on mana. |
@@ -51,7 +51,7 @@ A warrior bot, tank or damage dealer, that sees five *Sunder Armor* stacks on it
 </details>
 
 ### `AiPlayerbot.EnableOffSpecStrategies`
-**Not on WoW Forever yet.** The key is still read, but the Forever build's kit builder never adds an off-spec kit, so a hybrid bot fights with its spec kit only.
+**Not on ForeverCore yet.** The key is still read, but the Forever build's kit builder never adds an off-spec kit, so a hybrid bot fights with its spec kit only.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 Players can still switch a kit on or off per bot at any time (`/w <BotName> co +offheal` or `/w <BotName> co -offdps`); that path is separate from this default. See [healer off-DPS](../../classes/overview.md#healer-off-dps-offdps) and [off-healing](../../classes/overview.md#dps-off-healing-offheal) for what each kit does.

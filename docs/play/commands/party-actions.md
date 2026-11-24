@@ -13,7 +13,7 @@ relates_to:
 
 # Tactical Party Actions
 
-You do not micromanage abilities: you give an order and the bots carry it out with their normal rotations. On WoW Forever there are three order surfaces:
+You do not micromanage abilities: you give an order and the bots carry it out with their normal rotations. On ForeverCore there are three order surfaces:
 
 | Surface | Who | What it covers |
 | :--- | :--- | :--- |
@@ -144,7 +144,7 @@ Changes the bot's combat (`co`) or non-combat (`nc`) strategy set; `reset` resto
 
 `.tb order <bot|party [leader]> <verb>` gives the same engine actions to one bot or a bot party without a commander binding: `follow`, `stay`, `come`, `attack`, `pull`, `pullback`, `focus`, `endpull`, `hold`, `assist`, `release`, `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `aoe`, `autocc`, `sap`, `loot`, `corpserun`, `co`/`nc`, and upkeep orders such as `repair`, `sell`, `train` and `rest`. See [Commander Commands](commander.md#single-bot-orders).
 
-## Not on WoW Forever Yet
+## Not on ForeverCore Yet
 
 These Turtle actions are absent here: `.bot action ...`; the other single-bot chat commands (`.bot guard`, `.bot free`, `.bot ready`, `.bot interrupt`, `.bot pullback`, `.bot formation`, `.bot strategy`, `.bot loot`, `.bot repair`, `.bot sell`, `.bot rest`, `.bot downtime`, `.bot use`); per-bot focus marks; ready checks; trade from an order; the `raid ...` intents; auto-CC and Sap from an addon action; and the `use-object` button. Some remain reachable in another form: crowd control through `.tb cc` / `.tb cmd cc`, toggles through `.tb cmd aoe|autocc|sap` and `.bot behavior`, and object use through `.tb cmd open`.
 

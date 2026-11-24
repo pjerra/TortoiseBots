@@ -2,7 +2,7 @@
 id: play-commands
 title: Bot Commands Overview
 category: play
-summary: The channels that command bots on WoW Forever, the player `.bot` verbs, the addon channel and the GameMaster `.tb` host commands.
+summary: The channels that command bots on ForeverCore, the player `.bot` verbs, the addon channel and the GameMaster `.tb` host commands.
 tags: [commands, player-controls, cli]
 relates_to:
   - play-commands-party-actions
@@ -89,8 +89,8 @@ The addon talks to the server as addon messages prefixed `TBM`, and the server a
 
 ## Whispers
 
-The words a bot obeys by whisper or party chat, their tiers and their parameters are on the [Whisper Commands](whispers.md) page. The `.bot command <BotName> ...` proxy of the Turtle build is not on WoW Forever yet.
+The words a bot obeys by whisper or party chat, their tiers and their parameters are on the [Whisper Commands](whispers.md) page. The `.bot command <BotName> ...` proxy of the Turtle build is not on ForeverCore yet.
 
 ## Party-wide commands elsewhere
 
-The party action, commander and hiring pages describe the full design. Where a page describes a command you cannot find in this index, this page is the current list for the WoW Forever build.
+The party action, commander and hiring pages describe the full design. Where a page describes a command you cannot find in this index, this page is the current list for the ForeverCore build.

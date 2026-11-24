@@ -2,7 +2,7 @@
 id: play-refusal-rows
 title: Refusal and Abort Rows
 category: play
-summary: The rule that a decision not to act says why, the run notes and log rows that follow it on WoW Forever, and where the Turtle-only row inventory went.
+summary: The rule that a decision not to act says why, the run notes and log rows that follow it on ForeverCore, and where the Turtle-only row inventory went.
 tags: [guide, observability, logging, dungeon, tactics]
 relates_to:
   - play-boss-tactics
@@ -66,6 +66,6 @@ These are `r.note` / `r.stragglerFail` texts from `runtime/DungeonRunPolicy.h`, 
 
 ## Where the Turtle row inventory went
 
-The long catalogue of boss-tactics rows (`seek pull`, `seek take`, the Son meet, Cause Insanity, the tank-swap and spread rows) and their reason-code tables described the Turtle build's `BossTacticsActions.cpp`. That file is not part of the Forever build, so none of those rows is written here: **Not on WoW Forever yet.** The module still compiles the boss-tactics manager and the threat values, but the actions that emitted those rows are absent.
+The long catalogue of boss-tactics rows (`seek pull`, `seek take`, the Son meet, Cause Insanity, the tank-swap and spread rows) and their reason-code tables described the Turtle build's `BossTacticsActions.cpp`. That file is not part of the Forever build, so none of those rows is written here: **Not on ForeverCore yet.** The module still compiles the boss-tactics manager and the threat values, but the actions that emitted those rows are absent.
 
 The templates that belonged to that catalogue (walk-out pick tally, take words, meet refusal words, spread verdicts) are therefore gone from this page rather than left to mislead a parser author.

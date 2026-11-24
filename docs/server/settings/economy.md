@@ -208,16 +208,16 @@ A pool bot at level 5 or higher gets its empty slots, and grey or white items si
 ## Features and keys the Forever build does not use
 
 ### `AiPlayerbot.AhBot.Enabled`
-**Not on WoW Forever yet.** The offline AHBot stock service (seller account, listing pool, house targets, `AhBot.*` keys) is not built; the host answers "no auction bot sellers".
+**Not on ForeverCore yet.** The offline AHBot stock service (seller account, listing pool, house targets, `AhBot.*` keys) is not built; the host answers "no auction bot sellers".
 
 ### `AiPlayerbot.AhBot.Buyer.Enabled`
-**Not on WoW Forever yet.** The offline AHBot buyer is not built either.
+**Not on ForeverCore yet.** The offline AHBot buyer is not built either.
 
 ### `AiPlayerbot.PoolMoneyTopUp`
-**Not on WoW Forever yet.** The level-up money top-up for pool bots is not built.
+**Not on ForeverCore yet.** The level-up money top-up for pool bots is not built.
 
 ### `AiPlayerbot.BotLootRateUncommon` / `AiPlayerbot.BotLootRateRare`
-**Not on WoW Forever yet.** These keys are not in the Forever template. The extra green and blue roll only ever runs for a "random bot", and no bot is one in the Forever build, so both multipliers do nothing.
+**Not on ForeverCore yet.** These keys are not in the Forever template. The extra green and blue roll only ever runs for a "random bot", and no bot is one in the Forever build, so both multipliers do nothing.
 
 ### Unused economy keys
 

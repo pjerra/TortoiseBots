@@ -16,7 +16,7 @@ QUESTS	engine	Quest accept/turn-in/share/drop and quest travel objectives	yes (s
 LOOT-ROLL	engine	Corpse looting, item use, group loot votes and won-roll reporting	yes (slice)	loot/roll keys; forever/src/host/TbRollVote, TbRollWon	slice list; generator SLICE9_KEYS
 GUILD	host	Guild participation, mail, order board, farm/craft/enchant/disenchant/fish services	yes (slice); tables in forever/sql	forever/src/host/TbHostGuild*, TbHostGuildOrder*	guarded characters-DB reads
 AH	host	Auction-house market reading/supply and seller/buyer service	yes (slice)	forever/src/host/TbHostAhMarket*, TbHostAuction	module-owned, no direct core auction writes
-LFG	host	Dungeon-finder fill: module-owned queue groups a player with bots; nothing writes sLFGMgr	yes (slice)	forever/src/host/TbHostLfgFill.cpp, TbLfgFillPure.h	1.60 client has no dungeon list
+LFG	host	Dungeon-finder fill: module-owned queue groups a player with bots; nothing writes sLFGMgr	yes (slice)	forever/src/host/TbHostLfgFill.cpp, TbLfgFillPure.h	client has no dungeon list
 BG	host	Battleground queue fill, invites, leaves and spirit-healer handling	yes	forever/src/host/bg/TbBgQueue.cpp, TbBgMapData.cpp	world-tick service
 PVP-SEEK	host	Gives the open-world PvP seek role to a share of free bots	yes (slice)	forever/src/host/TbHostWorldPvp.cpp	world-tick service; engine keys pvp/world pvp
 PROFESSIONS	host	Professional errands: gather timers, craft, trainer, fishing, pickpocketing	yes (slice)	forever/src/host/TbHostProfession.cpp, TbHostFishing.cpp, TbHostThievery.cpp	world-tick service

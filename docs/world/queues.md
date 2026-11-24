@@ -17,7 +17,7 @@ This page explains how free pool bots fill a player's dungeon party and how they
 <a id="looking-for-turtles-lft-dungeon-autofill"></a>
 ## Dungeon fill: `.bot lfg`
 
-The 1.60 client has no dungeon-finder window. The module runs its own queue, and you fill it from chat:
+The client has no dungeon-finder window. The module runs its own queue, and you fill it from chat:
 
 | Command | What it does |
 | :--- | :--- |
@@ -58,7 +58,7 @@ Bot objective play is not there yet: a bot in a match fights the players who att
 Your own bots (alts) queue the normal way through the battlemaster's **Join as Group**: the core queues every member of your party. In a match they follow you and fight alongside you, and they leave with you. The fill never queues these bots itself, but a party bot inside a match counts toward `TortoiseBots.Bg.MaxBots`.
 
 <a id="autonomous-bot-only-matches"></a>
-## Not on WoW Forever yet
+## Not on ForeverCore yet
 
 - The Looking for Turtles dungeon tool; the module's `.bot lfg` queue replaces it.
 - Bot-only battleground matches with no real player in the queue.

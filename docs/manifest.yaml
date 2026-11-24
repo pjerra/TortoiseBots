@@ -20,7 +20,7 @@ categories:
   world:
     description: "Living world systems: bot lifecycles, leveling, economy, and PvP/dungeon queues."
   classes:
-    description: "Deep-dive documentation for all 9 playable classes, specs and shared behavior on WoW Forever."
+    description: "Deep-dive documentation for all 9 playable classes, specs and shared behavior on ForeverCore."
   server:
     description: "Installation, server configuration, settings reference, pool management, and observability."
   developers:
@@ -75,19 +75,19 @@ nodes:
   - id: play-glossary
     path: play/glossary.md
     category: play
-    summary: Short explanations of abbreviations and TortoiseBots terms used across the WoW Forever documentation.
+    summary: Short explanations of abbreviations and TortoiseBots terms used across the ForeverCore documentation.
   - id: play-getting-started
     path: play/getting-started.md
     category: play
-    summary: How to log your own characters in as bots on WoW Forever, order them, and meet the free bots.
+    summary: How to log your own characters in as bots on ForeverCore, order them, and meet the free bots.
   - id: play-features
     path: play/features.md
     category: play
-    summary: Catalog of what the WoW Forever build does, with its player commands, engine, pool, guild orders, market, queues, switches and defaults.
+    summary: Catalog of what the ForeverCore build does, with its player commands, engine, pool, guild orders, market, queues, switches and defaults.
   - id: play-commands
     path: play/commands/README.md
     category: play
-    summary: "The command channels on WoW Forever: the player .bot verbs, the addon channel, the GameMaster .tb host commands and their permission tiers."
+    summary: "The command channels on ForeverCore: the player .bot verbs, the addon channel, the GameMaster .tb host commands and their permission tiers."
   - id: play-commands-party-actions
     path: play/commands/party-actions.md
     category: play
@@ -119,11 +119,11 @@ nodes:
   - id: play-dungeons-and-raids
     path: play/dungeons-and-raids.md
     category: play
-    summary: How companion bots fight in WoW Forever instances, including pulling, crowd control, interrupts, hazards, wipe recovery, loot and the GameMaster run leader.
+    summary: How companion bots fight in ForeverCore instances, including pulling, crowd control, interrupts, hazards, wipe recovery, loot and the GameMaster run leader.
   - id: play-dungeon-reference
     path: play/dungeon-reference.md
     category: play
-    summary: The dungeon plans the run leader uses on WoW Forever, with each plan's map and boss order, and the dungeons that have no plan yet.
+    summary: The dungeon plans the run leader uses on ForeverCore, with each plan's map and boss order, and the dungeons that have no plan yet.
   - id: play-dungeon-run-leader
     path: play/dungeon-run-leader.md
     category: play
@@ -131,15 +131,15 @@ nodes:
   - id: play-boss-tactics
     path: play/boss-tactics.md
     category: play
-    summary: Boss tactics are not on WoW Forever yet; bots fight with their ordinary class and raid AI.
+    summary: Boss tactics are not on ForeverCore yet; bots fight with their ordinary class and raid AI.
   - id: play-refusal-rows
     path: play/refusal-rows.md
     category: play
-    summary: "The rule that a decision not to act says why, the run notes and log rows that follow it on WoW Forever, and where the Turtle-only row inventory went."
+    summary: "The rule that a decision not to act says why, the run notes and log rows that follow it on ForeverCore, and where the Turtle-only row inventory went."
   - id: play-known-limitations
     path: play/known-limitations.md
     category: play
-    summary: What the WoW Forever build does not do yet, which Turtle WoW features are absent, and the timers and quirks to expect.
+    summary: What the ForeverCore build does not do yet, which Turtle WoW features are absent, and the timers and quirks to expect.
 
   # World
   - id: world-living-world
@@ -163,7 +163,7 @@ nodes:
   - id: server-install
     path: server/install.md
     category: server
-    summary: How to build, install and update TortoiseBots for WoW Forever (ForeverCore), including configuration and database delivery.
+    summary: How to build, install and update TortoiseBots for ForeverCore, including configuration and database delivery.
   - id: server-configuration
     path: server/configuration.md
     category: server
@@ -179,7 +179,7 @@ nodes:
   - id: server-settings-hiring
     path: server/settings/hiring.md
     category: server
-    summary: Mercenary hiring, hire prices, gear tiers and recruiter world buffs are not part of the WoW Forever build; bots come from the bot pool or from a player's own characters.
+    summary: Mercenary hiring, hire prices, gear tiers and recruiter world buffs are not part of the ForeverCore build; bots come from the bot pool or from a player's own characters.
   - id: server-settings-class-behaviour
     path: server/settings/class-behaviour.md
     category: server
@@ -223,11 +223,11 @@ nodes:
   - id: server-bot-pool
     path: server/bot-pool.md
     category: server
-    summary: How the WoW Forever pool creates its accounts and characters, keeps a target online, prunes failed rows and resets at startup.
+    summary: How the ForeverCore pool creates its accounts and characters, keeps a target online, prunes failed rows and resets at startup.
   - id: server-dashboard
     path: server/dashboard.md
     category: server
-    summary: How the WoW Forever build feeds the optional web dashboard, the module settings behind it, and what its tabs and APIs show.
+    summary: How the ForeverCore build feeds the optional web dashboard, the module settings behind it, and what its tabs and APIs show.
   - id: server-run-trace
     path: server/run-trace.md
     category: server

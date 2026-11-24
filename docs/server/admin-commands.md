@@ -2,7 +2,7 @@
 id: server-admin-commands
 title: Administrator & GM Commands
 category: server
-summary: The GameMaster and server-console commands of the WoW Forever build, covering pool, dungeon fill, battlegrounds, guild orders, runs and diagnostics.
+summary: The GameMaster and server-console commands of the ForeverCore build, covering pool, dungeon fill, battlegrounds, guild orders, runs and diagnostics.
 tags: [admin, gm, commands, bot-pool, diagnostics]
 relates_to:
   - server-bot-pool
@@ -135,4 +135,4 @@ See [Configuration](configuration.md) for the files and their install rules.
 
 ## Commands from the Turtle build that do not exist here
 
-`.bot pool ...`, `.bot ah ...`, `.ahbot ...`, `.bot camp ...`, `.bot command ...`, `.bot hire ...`, `.bot run ...` and `.bot trace ...` are not registered on WoW Forever. Use the `.tb` commands above; player commands are `.bot` and are listed by `.bot help`.
+`.bot pool ...`, `.bot ah ...`, `.ahbot ...`, `.bot camp ...`, `.bot command ...`, `.bot hire ...`, `.bot run ...` and `.bot trace ...` are not registered on ForeverCore. Use the `.tb` commands above; player commands are `.bot` and are listed by `.bot help`.

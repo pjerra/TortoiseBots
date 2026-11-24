@@ -2,7 +2,7 @@
 id: docs-index
 title: TortoiseBots Documentation
 category: reference
-summary: Start page, role-based navigation, task finder, and audience directory for the WoW Forever documentation catalog.
+summary: Start page, role-based navigation, task finder, and audience directory for the ForeverCore documentation catalog.
 tags: [index, start, navigation, directory]
 relates_to:
   - play-getting-started
@@ -14,7 +14,7 @@ relates_to:
 
 # TortoiseBots Documentation
 
-Welcome to the TortoiseBots documentation catalog for **WoW Forever** (ForeverCore, Classic 1.60.1 client). This knowledge base covers player commands, class mechanics, the living world, server configuration and developer architecture.
+Welcome to the TortoiseBots documentation catalog for **ForeverCore**. This knowledge base covers player commands, class mechanics, the living world, server configuration and developer architecture.
 
 ## Start Here
 

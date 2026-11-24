@@ -71,8 +71,8 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 ## Custom abilities
 
 - **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers.
-- **Aspect of the Wolf:** Not on WoW Forever yet.
-- **Lacerate:** Not on WoW Forever yet.
+- **Aspect of the Wolf:** Not on ForeverCore yet.
+- **Lacerate:** Not on ForeverCore yet.
 
 ---
 

@@ -2,7 +2,7 @@
 id: play-getting-started
 title: Getting Started with TortoiseBots
 category: play
-summary: How to set up your client, log your own characters in as bots, order them around, and meet the free bots that live on a WoW Forever server.
+summary: How to set up your client, log your own characters in as bots, order them around, and meet the free bots that live on a ForeverCore server.
 tags: [getting-started, quickstart, roster, party, alts, addon]
 relates_to:
   - play-commands-roster-and-hiring
@@ -14,7 +14,7 @@ relates_to:
 
 # Getting Started with TortoiseBots
 
-TortoiseBots fills a **WoW Forever** realm with bots and lets you take some of them along: your own characters, or bots that live in the world and may join your party. This page gets your first party going.
+TortoiseBots fills a **ForeverCore** realm with bots and lets you take some of them along: your own characters, or bots that live in the world and may join your party. This page gets your first party going.
 
 ## What you need
 
@@ -31,7 +31,7 @@ The `.bot` command is for players only while `TortoiseBots.Player.Commands = 1` 
 | **Free bot** (pool bot) | A bot that lives in the world: quests, grinds, loots, sells, trains. Pool bots are free bots that the server's pool logs in and out on a schedule. | You don't. One may join your group for a shared quest or fill your dungeon-fill request. | It carries on with its own life. |
 | **Own alt** | A character on your own account, played by the server. | `.bot add <Name>` or the addon's roster. | `.bot logout <Name>` logs it out. |
 
-Hired companions and claimed guild bots from the Turtle WoW build are not on WoW Forever: there is no `.bot hire`, no recruiter, and a guild invite does not make a pool bot yours. See [What bots can do](features.md#not-on-wow-forever-yet).
+Hired companions and claimed guild bots from the Turtle WoW build are not on ForeverCore: there is no `.bot hire`, no recruiter, and a guild invite does not make a pool bot yours. See [What bots can do](features.md#not-on-forevercore-yet).
 
 ## Your first party
 
@@ -53,7 +53,7 @@ Hired companions and claimed guild bots from the Turtle WoW build are not on WoW
 
 ## Ordering bots in the field
 
-The addon's `action` command sends the same party orders a GameMaster can send with `.tb order`. These intents work on WoW Forever:
+The addon's `action` command sends the same party orders a GameMaster can send with `.tb order`. These intents work on ForeverCore:
 
 | What you want | Intent | What the bot does |
 | :--- | :--- | :--- |
@@ -72,7 +72,7 @@ The addon's `action` command sends the same party orders a GameMaster can send w
 | Train / rest / repair / sell | `learn`, `rest`, `drink`, `eat`, `repair`, `sell` | Runs the errand at a nearby NPC. |
 | Release | `release` | Releases the bot's spirit. |
 
-Other actions of the Turtle build — `cc <mark>`, `aoe`, `auto cc`, `sap`, `loot`, `corpse run`, `trade`, `use`, `ready`, `raid ...` — answer `unsupported` on WoW Forever. The technical reason is in [Known limitations](known-limitations.md).
+Other actions of the Turtle build — `cc <mark>`, `aoe`, `auto cc`, `sap`, `loot`, `corpse run`, `trade`, `use`, `ready`, `raid ...` — answer `unsupported` on ForeverCore. The technical reason is in [Known limitations](known-limitations.md).
 
 ## Free bots and the pool
 

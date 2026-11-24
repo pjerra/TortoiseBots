@@ -117,7 +117,7 @@ The module is inert when `TortoiseBots.Enable = 0`: no bot is created or logged 
 | Guild | `TbHostGuild`, `TbHostGuildJoin`, `TbHostGuildMail`, `TbHostGuildOrders*`, `TbHostGuildOrder*` | Guild participation, mail, order board, farm/craft/enchant/disenchant/fish services. |
 | Auction house | `TbHostAuction`, `TbHostAhMarket*` | Market reading/supply and the seller/buyer service the engine consumes. |
 | Errands/professions | `TbHostCapitalErrands`, `TbHostProfession`, `TbHostFishing`, `TbHostThievery` | Capital errands, profession travel/craft, fishing, pickpocketing. |
-| LFG fill | `TbHostLfgFill` | Module-owned dungeon-finder fill (the 1.60 client has no dungeon list; nothing writes `sLFGMgr`). |
+| LFG fill | `TbHostLfgFill` | Module-owned dungeon-finder fill (the client has no dungeon list; nothing writes `sLFGMgr`). |
 | Open-world PvP | `TbHostWorldPvp` | Gives the seek role to a share of free bots and honours the core's PvP state. |
 | Raids | `TbTactics`, `TbH3`, `TbH4`, `TbOnyxia`, `TbOnyxiaGround` | Raid tactics, group-fight commands, boss observation. |
 | Automations | `TbAutoTrain`, `TbAutoSkillSpells`, `TbClassQuestSpells`, `TbTalents`, `TbAutoProfs`, `TbAutoTools`, `TbAutoHunterPet`, `TbAutoFood`, `TbAutogear`, `TbMountShop` | Login/level syncs that keep bots trained, geared, fed and mounted. |

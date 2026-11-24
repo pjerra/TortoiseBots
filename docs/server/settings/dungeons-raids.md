@@ -16,7 +16,7 @@ relates_to:
 
 These settings shape how bots behave in dungeons and how the run leader paces a clear. They go in `aiplayerbot.conf`; see [How configuration works](../configuration.md). Commands are typed in game or in the server console with the `.tb` prefix, and the run leader's commands need Game Master rights.
 
-Every value is read when the bot engine starts, so a change needs a server restart. A setting that this page does not list is not read by the WoW Forever build: writing it into the file changes nothing.
+Every value is read when the bot engine starts, so a change needs a server restart. A setting that this page does not list is not read by the ForeverCore build: writing it into the file changes nothing.
 
 ## Summary
 
@@ -257,7 +257,7 @@ The run leader treats a "die together" group of boss units as one fight.
 
 With this on, the run leader reads the linked-death groups from the world database's boss-tactic rows. It reports the group's units together by health, records which of them fall and when, and never sends a straggler pull at one member alone: the group is fought together.
 
-The Forever SQL creates the boss-tactic table but ships no rows for it, so on a stock database there is nothing to group. Other boss-tactic rows still do nothing here; see [Not on WoW Forever yet](#not-on-wow-forever-yet).
+The Forever SQL creates the boss-tactic table but ships no rows for it, so on a stock database there is nothing to group. Other boss-tactic rows still do nothing here; see [Not on ForeverCore yet](#not-on-forevercore-yet).
 
 </details>
 
@@ -279,7 +279,7 @@ How many near wipes within the window pause a run once the fight is over.
 <details>
 <summary>How it works in detail</summary>
 
-A pause keeps the binding and the plan; `.tb run resume <leader>` goes on. This only happens in a party run with [`AiPlayerbot.DungeonRunNearWipeStopParty`](#aiplayerbotdungeonrunnearwipestopparty) on: a run cannot be a raid on the WoW Forever build (`.tb run start` refuses a raid group with `group-raid`).
+A pause keeps the binding and the plan; `.tb run resume <leader>` goes on. This only happens in a party run with [`AiPlayerbot.DungeonRunNearWipeStopParty`](#aiplayerbotdungeonrunnearwipestopparty) on: a run cannot be a raid on the ForeverCore build (`.tb run start` refuses a raid group with `group-raid`).
 
 </details>
 
@@ -293,7 +293,7 @@ Only read while [`AiPlayerbot.DungeonRunNearWipeStop`](#aiplayerbotdungeonrunnea
 Whether a party run gets the near-wipe stop.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
-A run cannot be a raid on the WoW Forever build, so `0` means the near-wipe stop never happens.
+A run cannot be a raid on the ForeverCore build, so `0` means the near-wipe stop never happens.
 
 ### `AiPlayerbot.DungeonRunPackClearMarginYd`
 The band around a pull step's radius in which one of its living units still counts as left behind.
@@ -457,17 +457,17 @@ One `BossReachHover` row per bot per 5 seconds goes to `bot_events.csv` when tha
 
 </details>
 
-## Not on WoW Forever yet
+## Not on ForeverCore yet
 
-These settings exist in the configuration file but do nothing on the WoW Forever build:
+These settings exist in the configuration file but do nothing on the ForeverCore build:
 
-- **Boss tactics (general):** the per-boss rows of the `ai_boss_tactic` table (interrupt, kill first, stay behind, spread, tank post, burn mana, ranged only, use object, tank swap, add crew, gate hold, heal reserve, avoid cast, pull gate) do nothing for bots, and so do their keys: `DungeonTactics`, `EnableCustomRaidTactics`, `DungeonRunBossSpread`, `DungeonRunBossSpreadSlots`, `DungeonRunBossProtectionPotion`, `DungeonRunBurnMana`, `DungeonRunRangedOnly`, `DungeonRunAvoidCastAll`, `DungeonRunHealReserve`, `DungeonRunAddCrew`, `DungeonRunGateHold`, `DungeonRunKillFirstGrid`, `DungeonRunUseObject`, `DungeonRunTankSwap`, `DungeonRunTankPost` (with its `HoldSpot`, `Leash`, `OwnsSubject`, `OwnsUnit`, `Main`, `KeepsUnit`, `Taunts`, `Walks`, `Waits` and `Healers` keys), `DungeonRunPullGate`, `DungeonRunTauntAfterSkipsMain`, `DungeonRunAuraTactics`. **Not on WoW Forever yet.**
-- **Boss tactics (seek and Hakkar):** `DungeonRunSeekAura`, `DungeonRunSeekPullCycle`, `DungeonRunSeekSonMeet` (with `MeetTakeReach`, `MeetPrePlace`, `MeetPrePlaceLate`, `MeetPrePlaceHold`, `ShotWaitsReceiver`, `MeetNoHeal` and `TakenSonThreatCap`), `DungeonRunSeekTakeEdge`, `DungeonRunSeekNearestTake`, `DungeonRunSeekNearestTakeReach`, `DungeonRunSeekVictimRelief`, `DungeonRunSeekWalkoutFocus`, `DungeonRunSeekWalkoutHoldCombat`, `DungeonRunSeekWalkoutFaceCast`, `DungeonRunSeekWalkoutStandLog`, `DungeonRunSeekWalkoutStandSight`, `DungeonRunSeekSiphonClock`, `DungeonRunSeekCycleRoll`. **Not on WoW Forever yet.**
-- **Boss tactics (threat, carrier and encounter extras):** `DungeonRunThreatResetWindow`, `DungeonRunCarrierStrike`, `DungeonRunCarrierScan`, `DungeonRunShadeHealerCover`, `DungeonRunImmuneBossVictimEscape`, `FankrissSwapStacks`, `PatchwerkOpeningDelay`, `OnyxiaWhelpsAndEggs`, `BossTacticsKeepsEngagedBoss`, `DungeonRunFactJudgeCharmedLead`. **Not on WoW Forever yet.**
-- **Boss stand seats** from the `ai_boss_stand` table: `BossStandOutranksBreathDodge`, `BossStandEvents`, `BossStandWholeRaid`. **Not on WoW Forever yet.**
-- **Raid runs:** `DungeonRunRaid`, `DungeonRunRaidBossRules`, `DungeonRunRaidHealerGuard`, `RaidHealerSeatsByClass`. **Not on WoW Forever yet.**
-- **Bot LFG groups:** `BotLfgGroups`, `BotLfgChat`, `BotLfgFillAfterMinutes`, `BotLfgGroupsPer100Bots`, `BotLfgMaxGroups`, `BotLfgOnlyWithPlayersOnline`. **Not on WoW Forever yet.**
-- **Run leader: aggro and pulls:** `DungeonSelfClear`, `DungeonRunAggroEstimate`, `DungeonRunAggroCeiling`, `DungeonRunAggroRingYd`, `DungeonRunAggroWalkRing`, `DungeonRunAutoCcAbove`, `DungeonRunAutoCcRisky`, `DungeonRunStragglerPull`, `DungeonRunRespawnNest`, `DungeonRunTotemFocus`, `DungeonRunPackFocusSparesTacticUnits`, `DungeonRunPullStand`, `DungeonRunStandClearance`, `DungeonRunStandDiscipline`, `DungeonRunStandPullPreCc`. **Not on WoW Forever yet.**
-- **Run leader: loot, death and recovery:** `DungeonRunRezHold`, `DungeonRunLootFfa`, `DungeonRunGiveItems`, `DungeonRunBotKeysForPlayers`, `DungeonRunWalkBackRescue`, `DungeonRunDryWalk`, `RunTeleportReturnYd`, `DungeonReviveHoldYd`. **Not on WoW Forever yet.**
-- **Other combat extras:** `HazardEvasionDistance`, `ReactionHealCastGuardPct`, `AirborneWandYieldsToNukes`, `HoverCastHoldsSpread`, `SpreadRangedMinRange`, `RaidEntryByCommander`. **Not on WoW Forever yet.**
-- **Scripted area triggers for bots** (`BotAreaTriggers`), including a run's own trigger steps: the script never runs. **Not on WoW Forever yet.**
+- **Boss tactics (general):** the per-boss rows of the `ai_boss_tactic` table (interrupt, kill first, stay behind, spread, tank post, burn mana, ranged only, use object, tank swap, add crew, gate hold, heal reserve, avoid cast, pull gate) do nothing for bots, and so do their keys: `DungeonTactics`, `EnableCustomRaidTactics`, `DungeonRunBossSpread`, `DungeonRunBossSpreadSlots`, `DungeonRunBossProtectionPotion`, `DungeonRunBurnMana`, `DungeonRunRangedOnly`, `DungeonRunAvoidCastAll`, `DungeonRunHealReserve`, `DungeonRunAddCrew`, `DungeonRunGateHold`, `DungeonRunKillFirstGrid`, `DungeonRunUseObject`, `DungeonRunTankSwap`, `DungeonRunTankPost` (with its `HoldSpot`, `Leash`, `OwnsSubject`, `OwnsUnit`, `Main`, `KeepsUnit`, `Taunts`, `Walks`, `Waits` and `Healers` keys), `DungeonRunPullGate`, `DungeonRunTauntAfterSkipsMain`, `DungeonRunAuraTactics`. **Not on ForeverCore yet.**
+- **Boss tactics (seek and Hakkar):** `DungeonRunSeekAura`, `DungeonRunSeekPullCycle`, `DungeonRunSeekSonMeet` (with `MeetTakeReach`, `MeetPrePlace`, `MeetPrePlaceLate`, `MeetPrePlaceHold`, `ShotWaitsReceiver`, `MeetNoHeal` and `TakenSonThreatCap`), `DungeonRunSeekTakeEdge`, `DungeonRunSeekNearestTake`, `DungeonRunSeekNearestTakeReach`, `DungeonRunSeekVictimRelief`, `DungeonRunSeekWalkoutFocus`, `DungeonRunSeekWalkoutHoldCombat`, `DungeonRunSeekWalkoutFaceCast`, `DungeonRunSeekWalkoutStandLog`, `DungeonRunSeekWalkoutStandSight`, `DungeonRunSeekSiphonClock`, `DungeonRunSeekCycleRoll`. **Not on ForeverCore yet.**
+- **Boss tactics (threat, carrier and encounter extras):** `DungeonRunThreatResetWindow`, `DungeonRunCarrierStrike`, `DungeonRunCarrierScan`, `DungeonRunShadeHealerCover`, `DungeonRunImmuneBossVictimEscape`, `FankrissSwapStacks`, `PatchwerkOpeningDelay`, `OnyxiaWhelpsAndEggs`, `BossTacticsKeepsEngagedBoss`, `DungeonRunFactJudgeCharmedLead`. **Not on ForeverCore yet.**
+- **Boss stand seats** from the `ai_boss_stand` table: `BossStandOutranksBreathDodge`, `BossStandEvents`, `BossStandWholeRaid`. **Not on ForeverCore yet.**
+- **Raid runs:** `DungeonRunRaid`, `DungeonRunRaidBossRules`, `DungeonRunRaidHealerGuard`, `RaidHealerSeatsByClass`. **Not on ForeverCore yet.**
+- **Bot LFG groups:** `BotLfgGroups`, `BotLfgChat`, `BotLfgFillAfterMinutes`, `BotLfgGroupsPer100Bots`, `BotLfgMaxGroups`, `BotLfgOnlyWithPlayersOnline`. **Not on ForeverCore yet.**
+- **Run leader: aggro and pulls:** `DungeonSelfClear`, `DungeonRunAggroEstimate`, `DungeonRunAggroCeiling`, `DungeonRunAggroRingYd`, `DungeonRunAggroWalkRing`, `DungeonRunAutoCcAbove`, `DungeonRunAutoCcRisky`, `DungeonRunStragglerPull`, `DungeonRunRespawnNest`, `DungeonRunTotemFocus`, `DungeonRunPackFocusSparesTacticUnits`, `DungeonRunPullStand`, `DungeonRunStandClearance`, `DungeonRunStandDiscipline`, `DungeonRunStandPullPreCc`. **Not on ForeverCore yet.**
+- **Run leader: loot, death and recovery:** `DungeonRunRezHold`, `DungeonRunLootFfa`, `DungeonRunGiveItems`, `DungeonRunBotKeysForPlayers`, `DungeonRunWalkBackRescue`, `DungeonRunDryWalk`, `RunTeleportReturnYd`, `DungeonReviveHoldYd`. **Not on ForeverCore yet.**
+- **Other combat extras:** `HazardEvasionDistance`, `ReactionHealCastGuardPct`, `AirborneWandYieldsToNukes`, `HoverCastHoldsSpread`, `SpreadRangedMinRange`, `RaidEntryByCommander`. **Not on ForeverCore yet.**
+- **Scripted area triggers for bots** (`BotAreaTriggers`), including a run's own trigger steps: the script never runs. **Not on ForeverCore yet.**

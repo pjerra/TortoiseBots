@@ -15,4 +15,4 @@ NathanHandley/mod-ah-bot-plus	f6858329	auction seller/buyer and pricing	forever/
 VMaNGOS / ike3 (credited in the core NOTICE)	n/a	raid brain, speech lines, rpg, battleground paths, travel	ai/playerbot/*	adapt	yes (slice)	behaviour reimplemented; credit stays in the core notice
 TortoiseBots local	n/a	Life Tap, pet and AoE fixes	warlock strategy files	keep	yes (slice)	no donor counterpart
 TortoiseBots local	n/a	Turtle custom spells and classic talent trees (Master Strike, Savage Bite, class-quest rows, tree presets)	none on Forever	reject	no	Forever data and the trait-tree talent API do not carry Turtle custom content
-mod-playerbots (WotLK)	n/a	expansion-only classes and abilities (Death Knight, TBC/WotLK spells)	none	reject	no	out of scope for the 1.60 data set
+mod-playerbots (WotLK)	n/a	expansion-only classes and abilities (Death Knight, TBC/WotLK spells)	none	reject	no	out of scope for the client data set

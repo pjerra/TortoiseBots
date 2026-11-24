@@ -1,8 +1,8 @@
 ---
 id: play-dungeon-reference
-title: WoW Forever 5-Man Dungeon Reference
+title: ForeverCore 5-Man Dungeon Reference
 category: play
-summary: The dungeon plans the run leader uses on WoW Forever, with each plan's map and boss order, and the dungeons that have no plan yet.
+summary: The dungeon plans the run leader uses on ForeverCore, with each plan's map and boss order, and the dungeons that have no plan yet.
 tags: [dungeon, reference, bosses, instances, plans]
 relates_to:
   - play-dungeons-and-raids
@@ -10,7 +10,7 @@ relates_to:
   - play-known-limitations
 ---
 
-# WoW Forever 5-Man Dungeon Reference
+# ForeverCore 5-Man Dungeon Reference
 
 Companion bots follow you through a dungeon; they do not explore or clear it on their own. The exception is the [dungeon run leader](dungeon-run-leader.md) (`.tb run`, a GameMaster command, on by default but still work in progress): it walks a stored dungeon route by itself ([settings](../server/settings/dungeons-raids.md#aiplayerbotdungeonselfclear)).
 
@@ -58,6 +58,6 @@ The Forever install ships no plan for these dungeons:
 
 A dungeon with no plan can still be cleared by a human leader with companion bots; only the self-driving run leader needs one.
 
-## Not on WoW Forever yet
+## Not on ForeverCore yet
 
-These Turtle WoW dungeons are **not on WoW Forever yet**: Crescent Grove, Dragonmaw Retreat, Emerald Sanctum, Frostmane Hollow, Gilneas City, Hateforge Quarry, Karazhan Crypt, Lower Karazhan Halls, Upper Karazhan Halls, Stormwind Vault, Stormwrought Ruins, Timbermaw Hold and Windhorn Canyon.
+These Turtle WoW dungeons are **not on ForeverCore yet**: Crescent Grove, Dragonmaw Retreat, Emerald Sanctum, Frostmane Hollow, Gilneas City, Hateforge Quarry, Karazhan Crypt, Lower Karazhan Halls, Upper Karazhan Halls, Stormwind Vault, Stormwrought Ruins, Timbermaw Hold and Windhorn Canyon.

@@ -2,7 +2,7 @@
 id: server-bot-pool
 title: Managing & Resetting the Bot Pool
 category: server
-summary: How the WoW Forever pool creates its own accounts and characters, keeps a target number online, prunes failed rows, and resets at world startup.
+summary: How the ForeverCore pool creates its own accounts and characters, keeps a target number online, prunes failed rows, and resets at world startup.
 tags: [server, pool, reset, admin, database, registry]
 relates_to:
   - server-settings-world-population

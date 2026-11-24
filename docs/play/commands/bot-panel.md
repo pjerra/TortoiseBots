@@ -12,7 +12,7 @@ relates_to:
 
 # Bot Panel and Inspection
 
-On WoW Forever, the bot panel is split between chat commands (`.bot ...`) and addon requests the TortoiseBotsForeverManager GUI sends over the addon channel. Chat replies are plain system lines; addon requests get `TBM:` lines plus an ACK or ERR.
+On ForeverCore, the bot panel is split between chat commands (`.bot ...`) and addon requests the TortoiseBotsForeverManager GUI sends over the addon channel. Chat replies are plain system lines; addon requests get `TBM:` lines plus an ACK or ERR.
 
 ## Summary
 
@@ -189,6 +189,6 @@ Writes every AI tick of one bot to the server log for up to 120 seconds (default
 
 The opt-in run recorder (`AiPlayerbot.RunTrace.Enabled`). Schema, files and the scorer: [Run Trace](../../server/run-trace.md).
 
-## Not on WoW Forever Yet
+## Not on ForeverCore Yet
 
 `.bot status`, `.bot lease`, `.bot inv`, `.bot professions`, `.bot lootlog`, `.bot item`, `.bot trace` and `.bot why` as player chat commands do not exist here; the addon serves the inventory and profession panels, and the GameMaster uses `.tb` for loot history and diagnosis. There is no `.bot totem ... drop` in chat (the addon sends it), and no persistence for behaviour, totem, blessing or choice values across a logout.

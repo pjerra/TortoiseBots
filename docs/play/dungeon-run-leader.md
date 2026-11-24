@@ -142,7 +142,7 @@ A player can ask the server to fill his own group with bots:
 .bot lfg leave
 ```
 
-The caller becomes the party's leader and the module adds bots one at a time, on its own timer (`AiPlayerbot.RandomBotLftUpdateInterval`, default `15000` ms, clamped 5000–60000 ms) at most `AiPlayerbot.RandomBotLftMaxFillsPerInterval` per pass (default 1), while `AiPlayerbot.RandomBotLftEnabled` is on (default 1). `status` names the dungeon, the role, the slots still open and the bots already added; `leave` releases them. This is not the run leader: a bot LFG group with its own leader is not on WoW Forever yet.
+The caller becomes the party's leader and the module adds bots one at a time, on its own timer (`AiPlayerbot.RandomBotLftUpdateInterval`, default `15000` ms, clamped 5000–60000 ms) at most `AiPlayerbot.RandomBotLftMaxFillsPerInterval` per pass (default 1), while `AiPlayerbot.RandomBotLftEnabled` is on (default 1). `status` names the dungeon, the role, the slots still open and the bots already added; `leave` releases them. This is not the run leader: a bot LFG group with its own leader is not on ForeverCore yet.
 
 ## Run leader
 
@@ -166,7 +166,7 @@ Once a second the run reads the party and the current step's surroundings and an
 | `pull` | Walks in hops toward the centre until within 60 yd, gathers the party within 20 yd (30 s), then sends pullback, where a pull with no fight in 25 s is retried once and then that unit is passed, and a unit surviving 3 pulled fights is left as out of reach. |
 | `boss` | Runs like a pull in kill order, pulls a neutral boss and leaves only a friendly one alone, needs the boss's death in sight (a dead unit in the step radius plus 60 yd, or within 60 yd of the lead bot once seen alive), and waits `timeout_s` for an absent boss before pausing. |
 | Team flags | Skips an other-team pull unless the party already stands within 60 yd and a unit of it is not friendly, and always walks to an other-team boss and skips it only when every unit there is friendly. |
-| `loot` | Counts the step done when any party bot already carries the item, else sends the loot order and pauses when the item is still missing after; a loot-rule refusal pauses. The free-for-all detour (`DungeonRunLootFfa`) is **Not on WoW Forever yet**: a run starts and goes on only on group loot or need-before-greed. |
+| `loot` | Counts the step done when any party bot already carries the item, else sends the loot order and pauses when the item is still missing after; a loot-rule refusal pauses. The free-for-all detour (`DungeonRunLootFfa`) is **Not on ForeverCore yet**: a run starts and goes on only on group loot or need-before-greed. |
 | `open` | Pauses when the carrier lacks the key item, else sends the open order and waits for its task. |
 | `use_item`, `use_on` | Sends the matching order once a carrier with the items is found, where a `use_on` ACK alone does not end the step because the object must change state or the boss must show within 30 s. |
 | `wait_object`, `wait_clear` | Waits as the Step kinds table says, bounded by `timeout_s`. |
@@ -184,7 +184,7 @@ The run protects itself with these rules:
 
 - It gathers the party before a pull and pulls only what is near.
 - It guards from the stand, attacking mobs that hit the party.
-- Respawn-nest handling is **Not on WoW Forever yet** (`AiPlayerbot.DungeonRunRespawnNest` is not read): a unit that comes back in its nest is an ordinary unit for the run.
+- Respawn-nest handling is **Not on ForeverCore yet** (`AiPlayerbot.DungeonRunRespawnNest` is not read): a unit that comes back in its nest is an ordinary unit for the run.
 - The nest-aware gather spot is off with the respawn-nest handling.
 - It never pulls what a later step owns.
 - It ends a pull or boss step past the 180 s fight ceiling once the game confirms that step's own units are dead or gone from the map (a unit that merely dropped out of the run's reads is not dead) and lets the walk go on, even while unrelated mobs (respawning trash, a patrol that walked in) still fight: those are fought by the bots' ordinary combat and do not hold the step. A boss step ends as soon as the boss's corpse is confirmed, whatever keeps the party in the combat afterwards. Younger fights, a combat flag with nothing engaged, and a row with its own units left keep the rules as before.
@@ -195,15 +195,15 @@ The run protects itself with these rules:
 - It regroups by itself after 3 dead or a wipe, within the fight ceiling of 180 s (420 s on a boss), by reviving the party, gathering it, and walking back.
 - It waits for every fallen member until that bot is back alive within 20 yd of the lead bot.
 - It recovers a lead bot that is back at the entrance alone by regrouping on it and walking back over the plan's own points.
-- It always holds for a party resurrection when a living resurrector is available (`AiPlayerbot.DungeonRunRezHold` is hard-coded on in WoW Forever; the setting has no effect).
-- A revived bot over 40 yd away or 8 yd of height walks back; the run leader does not summon bots on WoW Forever (summon orders are refused as `unsupported`).
+- It always holds for a party resurrection when a living resurrector is available (`AiPlayerbot.DungeonRunRezHold` is hard-coded on in ForeverCore; the setting has no effect).
+- A revived bot over 40 yd away or 8 yd of height walks back; the run leader does not summon bots on ForeverCore (summon orders are refused as `unsupported`).
 - It regroups on resume by reviving, gathering over 60-180 s, and walking back.
 - It gathers back on the run's anchor when a fight left the lead bot off it.
 - It passes hop pulls that draw no fight for the rest of the run.
 - It walks back over the plan's own points across a navmesh hole.
 - It sends no step while a member is dead and regroups first.
 - It retries a refused gather once and then skips it.
-- It stops waiting for a straggler at the gather ceiling (30 s, 60 s on regroup); the straggler walks back (no summon on WoW Forever).
+- It stops waiting for a straggler at the gather ceiling (30 s, 60 s on regroup); the straggler walks back (no summon on ForeverCore).
 - It first walks a straggler by path; there is no summon to fall back on (summon orders are refused as `unsupported`).
 - It never summons a member onto a lead bot that stands off the floor: more than 3 yards of air under it, read the way the teleport landing reads the floor, so a lead bot left hovering in mid-air is no summon point and its own landing or rescue comes first. A wedged member's teleport return is no summon and still runs. A lead bot on a game-object platform or an elevator counts as on the floor. A lead bot left hanging that way for 30 seconds pauses the run with both heights.
 - It runs a member with attackers back to the party as a passive follower within 120 yd.
@@ -219,19 +219,19 @@ The run protects itself with these rules:
 - A patroller within 30 yd past the radius is waited up to 60 s.
 - A pull the tank cannot start from range is retried once as a walk-in pull before the standing search, the deferral and the pause apply.
 - A refused pull whose stand search found none while the lead bot stands on a navmesh island hops it off first instead of pausing.
-- Risky fear families (`AiPlayerbot.DungeonRunAutoCcRisky`) are **Not on WoW Forever yet**.
+- Risky fear families (`AiPlayerbot.DungeonRunAutoCcRisky`) are **Not on ForeverCore yet**.
 - `AiPlayerbot.DungeonRunNearWipeStopParty` gives parties the near-wipe stop too (raid default).
 - `AiPlayerbot.DungeonRunPackClearMarginYd` (default 10) is the pack-clear band, and `AiPlayerbot.DungeonRunPackClearRepulls` (default 3) the repulls before pausing.
-- The raid healer-guard (`AiPlayerbot.DungeonRunRaidHealerGuard`) is **Not on WoW Forever yet** (a run never leads a raid).
+- The raid healer-guard (`AiPlayerbot.DungeonRunRaidHealerGuard`) is **Not on ForeverCore yet** (a run never leads a raid).
 
 Retreat at 2 dead is opt-in with `AiPlayerbot.DungeonRunRetreatAt2Dead = 1` (default `0`), see the [dungeon and raid settings](../server/settings/dungeons-raids.md#aiplayerbotdungeonrunretreatat2dead).
-Walk back to the stand after every guarded fight is opt-in with `AiPlayerbot.DungeonRunWalkBackAfterWonFight = 1` (default `0`). `DungeonRunWalkBackRescue` and `DungeonRunDryWalk` are hard-coded off on WoW Forever (the settings have no effect).
+Walk back to the stand after every guarded fight is opt-in with `AiPlayerbot.DungeonRunWalkBackAfterWonFight = 1` (default `0`). `DungeonRunWalkBackRescue` and `DungeonRunDryWalk` are hard-coded off on ForeverCore (the settings have no effect).
 
 ### Combat reads
 
 - A stale flag gets 20 s grace, then the ceiling runs.
 - An unattackable-only fight is let go, with no ceiling.
-- A pause for the fight ceiling goes on by itself only when every engaged unit cannot be attacked; respawn-nest units are real fights on WoW Forever.
+- A pause for the fight ceiling goes on by itself only when every engaged unit cannot be attacked; respawn-nest units are real fights on ForeverCore.
 - Charmed and fake-death units read as cannot-attack.
 - A game-event-gated boss is skipped, not paused.
 - Off-plan-map bots never hold fights, and bots never leave the plan map by follow, flee, or trigger.
@@ -244,7 +244,7 @@ Every fight's skull comes from the run: the plan's `kill_first` unit of that fig
 A `kill_first` target that is only passive so far — it is in no combat yet, or has stopped fighting while the adds still do — keeps the run's skull while it lives and can be attacked: the pack's fallback never replaces it, and only its death frees the skull for the pack's own best unit.
 A pull or move step whose fight has no `kill_first` unit of the pack focuses the pack's own best unit instead, so every pulled group gets a skull: a mana user (a healer or a caster) before the rest, and the nearest of that class to the lead bot within 15 yd of it. A unit the party cannot attack, one the run's crowd control holds, one evading and one whose focus order was refused a moment ago are passed over; the skull moves to the next unit when the focused one dies.
 A boss step's fight does the same for its adds: never the boss itself, never an add the boss-tactics `kill_first` or `linked_death` rows name, and no fallback skull once only the boss is left. An event and a rest fight keep their own rule.
-No boss-tactic rows are shipped on WoW Forever, so the fallback skull never has a tactic unit to spare (`DungeonRunPackFocusSparesTacticUnits` is not read).
+No boss-tactic rows are shipped on ForeverCore, so the fallback skull never has a tactic unit to spare (`DungeonRunPackFocusSparesTacticUnits` is not read).
 A skull a player moves onto a living hostile of the fight becomes the focus ahead of the run's own pick, `kill_first` included: every bot is sent to that unit by GUID and the player's mark stays where they put it; while the target lives, the run picks nothing else. The run knows its own skull only while the marked mob is still alive in that fight and the mark is still the one it set.
 
 ### Rest gate
@@ -253,23 +253,23 @@ The rest gate runs after every fight and before every step.
 It rests a living bot under 80% health, a healer under 50% mana, or other mana under 35% mana until 90% health, 80% healer mana, or 60% other mana, or for 60 s, and checks again every 20 s.
 With `AiPlayerbot.DungeonRunLightRest = 1` (default `1`), before a plain pull or with no fight ahead it starts only under 60% health, 35% healer mana, or 25% other mana, and ends at 75% health, 60% healer mana, or 45% other mana.
 With `AiPlayerbot.DungeonRunFightForward = 1` (default `1`), the next pack within 30 yd is pulled from where the tank stands.
-- Walking to and pulling a waited-for unit that never comes (`AiPlayerbot.DungeonRunStragglerPull`) is **Not on WoW Forever yet**.
+- Walking to and pulling a waited-for unit that never comes (`AiPlayerbot.DungeonRunStragglerPull`) is **Not on ForeverCore yet**.
 - A fight held open only by the run's own crowd control is broken one held unit at a time, without re-applying the hold.
 - A charmed group member is never a fight's unit: orders at it are refused and the reads leave it out.
 
 ### Aggro estimate
 
-**Not on WoW Forever yet.** The run does not estimate what a pull would wake; `AiPlayerbot.DungeonRunAggroEstimate`, `DungeonRunAggroCeiling`, `DungeonRunAggroWalkRing` and `DungeonRunAggroRingYd` are not read by this build.
+**Not on ForeverCore yet.** The run does not estimate what a pull would wake; `AiPlayerbot.DungeonRunAggroEstimate`, `DungeonRunAggroCeiling`, `DungeonRunAggroWalkRing` and `DungeonRunAggroRingYd` are not read by this build.
 
 ### Pull stand
 
-**Not on WoW Forever yet.** The run does not place a firing stand before a pull: `AiPlayerbot.DungeonRunPullStand`, `DungeonRunStandClearance`, `DungeonRunStandPullPreCc` and `DungeonRunStandDiscipline` are not read by this build, and the run's own automatic crowd control (`DungeonRunAutoCc`, `DungeonRunAutoCcAbove`) is forced off. The bots still use their class crowd control.
+**Not on ForeverCore yet.** The run does not place a firing stand before a pull: `AiPlayerbot.DungeonRunPullStand`, `DungeonRunStandClearance`, `DungeonRunStandPullPreCc` and `DungeonRunStandDiscipline` are not read by this build, and the run's own automatic crowd control (`DungeonRunAutoCc`, `DungeonRunAutoCcAbove`) is forced off. The bots still use their class crowd control.
 
 ### Totem focus
 
-**Not on WoW Forever yet.** The run does not focus a totem first (`AiPlayerbot.DungeonRunTotemFocus` is not read).
+**Not on ForeverCore yet.** The run does not focus a totem first (`AiPlayerbot.DungeonRunTotemFocus` is not read).
 
-While the lead bot (the main tank) is charmed, a Brain Wash Totem is judged friendly against him. The first living, uncharmed commanded bot judges the kill-first read, the engaged units, the raid guard's anchor and the focus order's target instead (`AiPlayerbot.DungeonRunFactJudgeCharmedLead` is hard-coded on in WoW Forever; the setting has no effect). See [Boss Tactics](boss-tactics.md).
+While the lead bot (the main tank) is charmed, a Brain Wash Totem is judged friendly against him. The first living, uncharmed commanded bot judges the kill-first read, the engaged units, the raid guard's anchor and the focus order's target instead (`AiPlayerbot.DungeonRunFactJudgeCharmedLead` is hard-coded on in ForeverCore; the setting has no effect). See [Boss Tactics](boss-tactics.md).
 
 ### Events
 
@@ -290,7 +290,7 @@ It finishes by flag `8` when the instance data reads `param` (with flag `32` rea
 
 ### Keys and doors
 
-The plan can carry locked-door rows (`ai_dungeon_leg_need`), but the run does not read them on WoW Forever, so it never waits on a key or Lockpicking and never skips a leg for a missing key. `AiPlayerbot.DungeonRunGiveItems` is not read and `AiPlayerbot.DungeonRunBotKeysForPlayers` is hard-coded off on this build. An `open` step in the plan still uses its key item as the Step kinds table says.
+The plan can carry locked-door rows (`ai_dungeon_leg_need`), but the run does not read them on ForeverCore, so it never waits on a key or Lockpicking and never skips a leg for a missing key. `AiPlayerbot.DungeonRunGiveItems` is not read and `AiPlayerbot.DungeonRunBotKeysForPlayers` is hard-coded off on this build. An `open` step in the plan still uses its key item as the Step kinds table says.
 
 ### Player-led runs
 

@@ -56,9 +56,9 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ## Custom abilities
 
 - **Rain of Fire:** channels pause during [party threat back-off](overview.md#shared-bot-behaviors) if the warlock holds 50% or more tank threat.
-- **Dark Pact:** Not on WoW Forever yet.
-- **Dark Harvest:** Not on WoW Forever yet.
-- **Power Overwhelming:** Not on WoW Forever yet.
+- **Dark Pact:** Not on ForeverCore yet.
+- **Dark Harvest:** Not on ForeverCore yet.
+- **Power Overwhelming:** Not on ForeverCore yet.
 
 ---
 
@@ -75,7 +75,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 - **Healthstones & Soulstones:** Creates Healthstones out of combat and uses them in combat. Stores one Soulstone out of combat, prioritizing the party healer, then the tank, then the leader. Each warlock keeps one stone up at a time; a second warlock stones the next target. You can order a Healthstone with `.bot service <Name> conjure healthstone` and trade it through the addon.
 - **Weapon Stones & Buffs:** Conjures and carries *Spellstones* (Affliction/Demonology) or *Firestones* (Destruction) in bags. Maintains *Demon Armor* (*Demon Skin* fallback) and *Unending Breath* on self and party while swimming.
 - **Curse Overrides:** Defaults to spec-appropriate curses (*Curse of Agony* or *Curse of the Elements*; second warlocks in raids cover *Recklessness* over Shadow). Players can order one curse per warlock with [`.bot choice <bot> curse <shadow|weakness|elements|agony|doom|tongues|exhaustion|recklessness|auto>`](../play/commands/bot-panel.md#bot-choice) (GameMasters can also use `.tb strategy`). Exhaustion snares runners. Curse claims prevent duplicate picks on the main curse rows.
-- **Crowd Control:** Casts *Fear* on assigned CC marks (skipping undead, mechanical, or already controlled targets; off in dungeons, raids, and real-player groups, and the `aoe fear` override is not registered on WoW Forever yet) and *Banish* on Demons and Elementals. Area spells avoid targets near CC marks.
+- **Crowd Control:** Casts *Fear* on assigned CC marks (skipping undead, mechanical, or already controlled targets; off in dungeons, raids, and real-player groups, and the `aoe fear` override is not registered on ForeverCore yet) and *Banish* on Demons and Elementals. Area spells avoid targets near CC marks.
 
 ---
 

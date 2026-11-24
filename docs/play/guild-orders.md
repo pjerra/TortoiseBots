@@ -39,7 +39,7 @@ Example: 20 Copper Ore from a bot:
 
 The addon preview checks the order before it is created: an item the bot cannot source, or a craft it cannot make, is refused there.
 
-**Not on WoW Forever yet:** Buy orders (the server refuses them), enchant orders (refused), sub-orders to other guild bots, guild bank withdrawals and guild gold, the order time limit, keep/restock orders and the materials-you-bring option. The last three are stored but do not change what the bot does.
+**Not on ForeverCore yet:** Buy orders (the server refuses them), enchant orders (refused), sub-orders to other guild bots, guild bank withdrawals and guild gold, the order time limit, keep/restock orders and the materials-you-bring option. The last three are stored but do not change what the bot does.
 
 ## States
 

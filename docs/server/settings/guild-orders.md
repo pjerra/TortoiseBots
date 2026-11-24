@@ -39,18 +39,18 @@ See [bot rank and bank access](../../play/guild-orders.md#guild-bank-access).
 ## Features not in the Forever build
 
 ### `AiPlayerbot.GuildOrderPlayerBuy`
-**Not on WoW Forever yet.** Players cannot give Buy orders from the addon: it refuses one with `buy-disabled`, whatever this key says. Only the GM command `.tb guildorder create <bot> <item> <amount> buy` accepts a Buy order. Farm and craft orders still buy missing materials on the auction house themselves.
+**Not on ForeverCore yet.** Players cannot give Buy orders from the addon: it refuses one with `buy-disabled`, whatever this key says. Only the GM command `.tb guildorder create <bot> <item> <amount> buy` accepts a Buy order. Farm and craft orders still buy missing materials on the auction house themselves.
 
 ### Bank withdrawals and guild gold
 
-**Not on WoW Forever yet.** Orders never take items or gold from the guild bank; a bot spends only its own gold. `AiPlayerbot.GuildOrderBankWithdraw` and `AiPlayerbot.GuildOrderBankGold` therefore have no effect. The `gold=<copper>` cap on an order does still cap the bot's own auction spending.
+**Not on ForeverCore yet.** Orders never take items or gold from the guild bank; a bot spends only its own gold. `AiPlayerbot.GuildOrderBankWithdraw` and `AiPlayerbot.GuildOrderBankGold` therefore have no effect. The `gold=<copper>` cap on an order does still cap the bot's own auction spending.
 
 ### Sub-orders
 
-**Not on WoW Forever yet.** A craft order does not ask another guild bot for a missing material; an item it cannot make or farm ends the order. `AiPlayerbot.GuildOrderSubOrders` and `AiPlayerbot.GuildOrderSubOrderDepth` do nothing.
+**Not on ForeverCore yet.** A craft order does not ask another guild bot for a missing material; an item it cannot make or farm ends the order. `AiPlayerbot.GuildOrderSubOrders` and `AiPlayerbot.GuildOrderSubOrderDepth` do nothing.
 
 ### `AiPlayerbot.GuildOrderAuctionVisits`
-**Not on WoW Forever yet.** The Forever auction step is one search at the nearest faction auctioneer within 300 yards, so there is no counted-visit exit.
+**Not on ForeverCore yet.** The Forever auction step is one search at the nearest faction auctioneer within 300 yards, so there is no counted-visit exit.
 
 ### `AiPlayerbot.GuildOrderBotRank`
-**Not on WoW Forever yet.** This key has no effect; the switch is `TortoiseBots.World.GuildOrderBotRank` above.
+**Not on ForeverCore yet.** This key has no effect; the switch is `TortoiseBots.World.GuildOrderBotRank` above.
