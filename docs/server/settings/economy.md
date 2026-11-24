@@ -22,11 +22,11 @@ For player trading permissions with open-world bots, see [`AiPlayerbot.PoolBotTr
 | :--- | :---: | :--- |
 | [`AiPlayerbot.AhMarketEnabled`](#aiplayerbotahmarketenabled) | `1` | Enables bots posting surplus items and bidding from their own bags on the Auction House. |
 | [`AiPlayerbot.AhMarketInterval`](#aiplayerbotahmarketinterval) | `120` | Interval in seconds between seller ticks that attempt bot auction postings. |
-| [`AiPlayerbot.AhMarketBatchSize`](#aiplayerbotahmarketbatchsize) | `1` | Maximum bots (one listing each) attempted per seller tick (effective 1..5). |
-| [`AiPlayerbot.AhMarketBuyer`](#aiplayerbotahmarketbuyer) | `1` | Pool bots standing at an auctioneer bid on and buy auctions with their own gold. |
-| [`AiPlayerbot.AhMarketBudgetUs`](#aiplayerbotahmarketbudgetus) | `2000` | Microsecond time budget ceiling per world tick for the organic buyer scan. |
-| [`AiPlayerbot.AhMarketMaxOperations`](#aiplayerbotahmarketmaxoperations) | `32` | Maximum organic buyer scan work steps processed per tick. |
-| [`AiPlayerbot.AhMarketChanceBuy`](#aiplayerbotahmarketchancebuy) | `10` | Percentage chance per cycle to scan listings for organic buyer bids. |
+| [`AiPlayerbot.AhMarketBatchSize`](#aiplayerbotahmarketbatchsize) | `1` | Maximum sellers visited per seller tick (effective 1..5). |
+| [`AiPlayerbot.AhMarketBuyer`](#aiplayerbotahmarketbuyer) | `1` | Free bots standing at a faction auctioneer buy upgrades there with their own gold. |
+| [`AiPlayerbot.AhMarketBudgetUs`](#aiplayerbotahmarketbudgetus) | `2000` | Microsecond time budget ceiling for one buyer page scan. |
+| [`AiPlayerbot.AhMarketMaxOperations`](#aiplayerbotahmarketmaxoperations) | `32` | Maximum item probes in one buyer page scan. |
+| [`AiPlayerbot.AhMarketChanceBuy`](#aiplayerbotahmarketchancebuy) | `10` | Percentage chance per seller pass to run a buyer page scan. |
 | [`AiPlayerbot.AhMarketBuyValue`](#aiplayerbotahmarketbuyvalue) | `80` | Required perceived value percentage before a bot purchases an auction. |
 | [`AiPlayerbot.AhMarketMaxSpendPerBot`](#aiplayerbotahmarketmaxspendperbot) | `0` | Maximum copper for a single organic buyer purchase (0 = no cap). |
 | [`AiPlayerbot.AhMarketVariance`](#aiplayerbotahmarketvariance) | `10` | Percentage price variance applied to organic buyer baseline valuations. |
@@ -58,20 +58,20 @@ For player trading permissions with open-world bots, see [`AiPlayerbot.PoolBotTr
 ## Settings
 
 ### `AiPlayerbot.AhMarketEnabled`
-Enables the autonomous Auction House market service for pool bots.
+Enables the autonomous Auction House market service for free pool bots.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When enabled, random pool bots with AH-profitable surplus items in their bags post them to the Auction House using native auction listings.
+Also needs `TortoiseBots.World.Auction = 1`. When both are on, free masterless bots with loot their own sell rules accept walk to a faction auctioneer in their zone (500 yd at most) and post it; bots already standing at an auctioneer post at once. Listings go through the core's auction handlers, so deposits and throttles are the core's.
 
 This system requires `AiPlayerbot.RandomBotAutologin = 1`. Failed auction attempts are rate-limited per bot to prevent spam.
 
 </details>
 
 ### `AiPlayerbot.AhMarketInterval`
-Interval in seconds between seller ticks that attempt bot auction postings.
+Interval in seconds between seller passes.
 **Default:** `120` · **Values:** seconds (5..3600) · **Restart:** needed
 
 <details>
@@ -82,59 +82,59 @@ Defines how frequently the seller loop runs its posting pass for eligible bots.
 </details>
 
 ### `AiPlayerbot.AhMarketBatchSize`
-Maximum bots (one listing each) attempted per seller tick.
+Maximum sellers visited per seller tick.
 **Default:** `1` · **Values:** integers (effective 1..5; 0 is treated as 1) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Caps the number of eligible seller bots attempted per seller tick (0 is treated as 1 and values above 5 are capped at 5), with each chosen bot posting one item listing, spreading auction load across server ticks.
+Caps the number of eligible seller bots visited per seller tick (0 is treated as 1 and values above 5 are capped at 5). A visited bot posts every item its own seller rules accept, either at the auctioneer it already stands next to or after walking to a faction auctioneer within 500 yd in its zone; it never teleports and never creates an item.
 
 </details>
 
 ### `AiPlayerbot.AhMarketBuyer`
-Pool bots standing at an auctioneer bid on and buy auctions with their own gold.
+Free bots standing at a faction auctioneer buy upgrades there with their own gold.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Simulates demand by having bots buy sensibly priced player auctions. When a purchase happens, the bid or buyout is placed through native auction handling.
+Simulates demand by having bots buy sensibly priced auctions. When a purchase happens, the buyout is placed through native auction handling.
 
-Purchases are organic: only bots already standing at an auctioneer bid, and only with their own gold.
+Purchases are organic: only a free bot already standing at a faction auctioneer buys, and only with its own gold. A page scan considers weapons and armour it can use, of uncommon quality or better, that its own item-usage value calls an upgrade; own and same-account listings are never bought. The `ah bid` price ceiling and the bot's purse bound the price.
 
 </details>
 
 ### `AiPlayerbot.AhMarketBudgetUs`
-Microsecond execution budget allocated per world tick for the organic buyer scan.
+Microsecond execution budget allocated for one buyer page scan.
 **Default:** `2000` · **Values:** microseconds (100..20000) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Caps the CPU time spent on the organic buyer scan within any single server tick. The service yields work when this budget is reached, preventing auction processing from causing world tick latency.
+Caps the CPU time spent on one page of the organic buyer scan (one market pass). The scan stops probing items when this budget is reached, so a pass cannot stretch the world tick.
 
 </details>
 
 ### `AiPlayerbot.AhMarketMaxOperations`
-Maximum number of organic buyer scan work steps processed during a single server tick.
+Maximum number of item probes in one buyer page scan.
 **Default:** `32` · **Values:** operations (1..256) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Places a hard ceiling on organic buyer scan work steps handled per tick, even if time remains within `AhMarketBudgetUs`.
+Places a hard ceiling on the item-usage probes one page scan may make, even if time remains within `AhMarketBudgetUs`. The scan also never asks more than eight items per page.
 
 </details>
 
 ### `AiPlayerbot.AhMarketChanceBuy`
-Percentage chance per engine cycle that the organic buyer enters a house scan.
+Percentage chance per seller pass that the organic buyer runs a house page scan.
 **Default:** `10` · **Values:** percentage (0..100) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Controls how likely the organic market service is to enter the buyer scan when `AiPlayerbot.AhMarketBuyer` is on.
+Controls how likely the organic market service is to run its buyer scan on a seller pass when `AiPlayerbot.AhMarketBuyer` is on. `100` scans on every pass; `0` never buys.
 
 </details>
 
@@ -150,13 +150,13 @@ A higher threshold makes the buyer more discerning, requiring listings to be pri
 </details>
 
 ### `AiPlayerbot.AhMarketMaxSpendPerBot`
-Maximum copper amount for a single organic buyer bid or buyout.
+Maximum copper amount for a single organic buyer purchase.
 **Default:** `0` · **Values:** copper amount (0 = no cap) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Refuses any single bid or buyout above this price; it does not track cumulative spend.
+A scan candidate whose cheapest non-own listing is above this price is skipped; it does not track cumulative spend.
 
 </details>
 
