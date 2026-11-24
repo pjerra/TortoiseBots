@@ -11,6 +11,7 @@
 #include "host/TbHostGuildOrderEnchant.h"
 #include "host/TbHostFishing.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostThievery.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -248,6 +249,9 @@ void BotMgr::LoadConfig()
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
     _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
     _fishingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Fishing", true);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::thievery::LoadConfig(); // the host thievery services are slice-only, like their tick
+#endif
     _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
@@ -737,6 +741,7 @@ void BotMgr::OnPlayerLogout(Player* player)
     tbhost::errands::ClearBotCapitalErrands(leaving);
     tbhost::guild_mail::ClearBotGuildMail(leaving);
     tbhost::guildjoin::ForgetBot(leaving);
+    tbhost::thievery::ForgetBot(leaving.GetCounter());
 #endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
@@ -1649,11 +1654,14 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
         tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);
+        if (bot.free)
+            tbhost::thievery::TickThievery(me, diff);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
             (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me) ||
              tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
              tbhost::guild_orders::HasActiveEnchantErrand(me) ||
-             tbhost::fishing::HasActiveIdleErrand(me));
+             tbhost::fishing::HasActiveIdleErrand(me) ||
+             tbhost::thievery::HasActiveErrand(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif
@@ -1751,6 +1759,7 @@ void BotMgr::Update(uint32 diff)
         tbhost::errands::ClearBotCapitalErrands(guid);
         tbhost::guild_mail::ClearBotGuildMail(guid);
         tbhost::guildjoin::ForgetBot(guid);
+        tbhost::thievery::ForgetBot(guid.GetCounter());
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);

@@ -298,6 +298,37 @@ TortoiseBots.World.GuildForming = 0
 TortoiseBots.World.GuildOrderBotRank = 1
 
 #
+#    TortoiseBots.World.Pickpocket
+#        Description: Allow free and pool rogue bots that know Stealth and Pick Pocket to sneak up on a nearby
+#                     humanoid whose pockets are not empty yet, pick them, and take the loot (coins and items).
+#                     A creature whose pockets were just picked is not retried before its own refill timer.
+#                     Bots without the two spells are skipped; no class spell is granted for this.
+#        Default:     1
+#
+
+TortoiseBots.World.Pickpocket = 1
+
+#
+#    TortoiseBots.World.Lockboxes
+#        Description: Allow free and pool rogue bots with enough Lockpicking to open the lockboxes in their own bags
+#                     (Pick Lock, then open and take the loot).
+#        Default:     1
+#
+
+TortoiseBots.World.Lockboxes = 1
+
+#
+#    TortoiseBots.World.LockboxMail
+#        Description: Allow a bot holding a lockbox it cannot open (not a rogue, no Pick Lock, or Lockpicking too low)
+#                     to mail it to the best rogue bot in its own guild (online or offline), which opens it and mails
+#                     the contents, coins minus the return postage, back to the sender. Only bots are served and only
+#                     bots are mailed; a real player's mail is never taken. With no capable rogue the box stays put.
+#        Default:     1
+#
+
+TortoiseBots.World.LockboxMail = 1
+
+#
 #    TortoiseBots.Dashboard.TraceDir
 #        Description: Where the module writes a summary of every dungeon or raid run with bots (bosses killed and when,
 #                     wipes, deaths, party, outcome) for the dashboard's Dungeon runs tab. Empty = <LogsDir>/runs.

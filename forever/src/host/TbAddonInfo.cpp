@@ -60,6 +60,9 @@ Feature const kFeatures[] = {
     { "group-quests", "TortoiseBots.World.GroupQuests", true, 1, "Group quests" },
     { "capital-errands", "TortoiseBots.World.CapitalErrands", true, 1, "Capital errands" },
     { "guild-mail", "TortoiseBots.World.GuildMail", true, 1, "Guild mail" },
+    { "world-pickpocket", "TortoiseBots.World.Pickpocket", true, 1, "Rogue pickpocket" },
+    { "world-lockboxes", "TortoiseBots.World.Lockboxes", true, 1, "Rogue lockbox opening" },
+    { "world-lockbox-mail", "TortoiseBots.World.LockboxMail", true, 1, "Lockbox by guild mail" },
     { "rest-health", "TortoiseBots.Slice.RestHealthPct", false, 90, "Rest at health %" },
     { "rest-mana", "TortoiseBots.Slice.RestManaPct", false, 80, "Rest at mana %" },
 };
