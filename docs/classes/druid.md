@@ -91,7 +91,7 @@ Movement slows like daze or chill do not break form. Physical roots break form o
 - **Interrupts & Stuns:** Casts *Bash* in Bear Form to interrupt spells and stun dangerous casters. Uses *Feral Charge* to gap-close on distant targets.
 - **Combat Resurrection:** Casts *Rebirth* on dead party members during combat.
 - **Out-of-Combat Resurrection:** Uses *Rebirth* out of combat only when no priest, paladin, or shaman is available to cast a standard resurrection.
-- **Innervate:** Casts *Innervate* on the lowest-mana party healer below the low-mana line (15 default, must still be below it even when manually boosted), shifting to caster form first. Feral cats will shift out to feed an empty healer.
+- **Innervate:** Casts *Innervate* on the lowest-mana party healer below `AiPlayerbot.InnervateManaThreshold` (25% default, must still be below it even when manually boosted), shifting to caster form first. Feral cats will shift out to feed an empty healer.
 - **Barkskin:** Casts *Barkskin* at medium health (50–70%) in Balance and Restoration specs; Feral cats and bears skip it to keep their form bonuses.
 - **Party Buffs:** Maintains *Mark of the Wild* (and *Gift of the Wild*) and *Thorns* on allies, prioritizing tanks for *Thorns*. Multiple druids coordinate buff claims to prevent duplicate casts.
 - **Solo Survival:** Solo druids level 10+ with mana at or above the low-mana line stand their ground and self-heal rather than fleeing when outnumbered.
@@ -108,7 +108,7 @@ Bots spend one talent point per level from 10 to 60 along a preset build. The se
 | **Feral** | Tank or Melee DPS | `0 / 41 / 10` | One shared build: Leader of the Pack, Lacerate, Primal Bite, Rend and Tear, Heart of the Wild. |
 | **Restoration** | Healer | `10 / 0 / 41` | Swiftmend, Nature's Swiftness, Wild Growth, Bloom, Gift of Nature. |
 
-A feral druid plays Bear only when it holds the tank role (`.bot role`, a hire, or the dungeon finder); otherwise the same build fights as Cat DPS.
+A feral druid plays Bear only when it holds the tank role (`.tb role` or `.bot lfg`); otherwise the same build fights as Cat DPS.
 
 <details>
 <summary>Leveling order</summary>
