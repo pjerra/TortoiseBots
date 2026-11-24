@@ -15,11 +15,6 @@ The module plugs into the core's module system (`src/modules/`) and does not cha
 public game API and script hooks. Bots are ordinary characters that the module logs in as headless sessions, with no
 game client. The core builds and runs the same without the module.
 
-> [!WARNING]
-> **Work in progress, private repository.** Not everything from the Tortoise WoW build is on WoW Forever yet; see
-> [Known limitations](docs/play/known-limitations.md). Do not mention this repository in public places (TortoiseBots
-> PRs, docs, Discord).
-
 > [!TIP]
 > **New here? Start with [Getting Started](docs/play/getting-started.md).**
 > It covers client setup, the [TortoiseBotsForeverManager](https://github.com/TortoiseBots/TortoiseBotsForeverManager)
