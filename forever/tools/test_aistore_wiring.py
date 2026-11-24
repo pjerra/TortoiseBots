@@ -72,8 +72,10 @@ class Registration(unittest.TestCase):
         self.assertIn('creators["manual saved string"]', full)
         generated = CTX.read_text()
         self.assertIn('creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };', generated)
-        self.assertIn("ValueContext (269 of its keys)", generated)
-        self.assertIn("kValues = 269", generated)
+        # The "following party" value (quest travel gates answer for a free bot's own party, merged in #256)
+        # raised the registered value count from 269 to 270.
+        self.assertIn("ValueContext (270 of its keys)", generated)
+        self.assertIn("kValues = 270", generated)
 
 
 class StoreWiring(unittest.TestCase):

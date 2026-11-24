@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Wiring pins for the class-quest spells (forever/src/host/TbClassQuestSpells.{h,cpp} and its hooks).
 
-Run on the build VM (the core pins read the slot's source tree):
+The repo pins run anywhere:
     python3 forever/tools/test_class_quest_spells_wiring.py
+The core pins read a core checkout (FOREVER_CORE, default ~/forever-build/src-4); without one they skip, the
+way verify_all.sh skips its core steps, instead of failing:
     FOREVER_CORE=~/forever-build/src-4 python3 forever/tools/test_class_quest_spells_wiring.py
     FOREVER_CORE=~/forever-build/src-4 python3 forever/tools/test_class_quest_spells_wiring.py --mutate
 
@@ -19,16 +21,26 @@ ROOT = FOREVER.parent
 CORE = Path(os.environ.get("FOREVER_CORE", str(Path.home() / "forever-build" / "src-4")))
 
 
+CORE_FILES = {
+    "questdef": CORE / "src/server/game/Quests/QuestDef.h",
+    "player": CORE / "src/server/game/Entities/Player/Player.cpp",
+    "scriptmgr": CORE / "src/server/game/Scripting/ScriptMgr.h",
+}
+
+
+def core_absent():
+    return [key for key, path in CORE_FILES.items() if not path.is_file()]
+
+
 def sources():
+    core = {key: (path.read_text() if path.is_file() else "") for key, path in CORE_FILES.items()}
     return {
         "scripts": (FOREVER / "src" / "TbScripts.cpp").read_text(),
         "host": (FOREVER / "src" / "host" / "TbClassQuestSpells.cpp").read_text(),
         "host_h": (FOREVER / "src" / "host" / "TbClassQuestSpells.h").read_text(),
         "conf": (FOREVER / "conf" / "tortoisebots.conf.dist").read_text(),
         "cmake": (ROOT / "CMakeLists.txt").read_text(),
-        "questdef": (CORE / "src/server/game/Quests/QuestDef.h").read_text(),
-        "player": (CORE / "src/server/game/Entities/Player/Player.cpp").read_text(),
-        "scriptmgr": (CORE / "src/server/game/Scripting/ScriptMgr.h").read_text(),
+        **core,
     }
 
 
@@ -53,9 +65,14 @@ def check_level_sync(s):
 def check_config_load(s):
     body = member_body(s["scripts"], "void OnConfigLoad(bool reload) override")
     assert "TortoiseBots::questspells::LoadConfig();" in body
-    # A config reload builds (switch on) or drops (switch off) the index at once.
-    load_at = body.index("TortoiseBots::questspells::LoadConfig();")
-    assert "if (reload)\n            TortoiseBots::questspells::BuildIndex();" in body[load_at:]
+    # A config reload builds (switch on) or drops (switch off) the index at once. #206 (forever-pool-seed)
+    # put the auto-learn index next to it inside the same `if (reload)` block; what this pin is about is
+    # that the questspells index is rebuilt in the reload branch, not on the switch.
+    tail = body[body.index("TortoiseBots::questspells::LoadConfig();"):]
+    assert "TortoiseBots::questspells::BuildIndex();" in tail, "a config reload must build the quest spell index at once"
+    build_at = tail.index("TortoiseBots::questspells::BuildIndex();")
+    assert "if (reload)" in tail[:build_at], "a config reload must build the quest spell index at once"
+    assert "Enabled()" not in tail[:build_at], "the index must be built (or dropped) on reload even with the switch off"
 
 
 def check_world_init_builds(s):
@@ -103,6 +120,8 @@ def check_off_build_has_it(s):
 
 
 def check_core_pins(s):
+    if core_absent():
+        raise unittest.SkipTest("no ForeverCore checkout at %s (set FOREVER_CORE)" % CORE)
     assert "int32 GetClassicMinLevel() const" in s["questdef"]
     assert "uint32 GetSrcSpell() const" in s["questdef"]
     assert "std::vector<QuestRewardDisplaySpell> RewardDisplaySpell;" in s["questdef"]
@@ -119,8 +138,8 @@ MUTATIONS = {
     "world_init_builds": ("scripts", "        if (TortoiseBots::questspells::Enabled())\n            TortoiseBots::questspells::BuildIndex();\n", ""),
     "reload_rebuilds": ("scripts", "        if (command == \"reload all\" || command.find(\"quest\") != std::string_view::npos)\n            TortoiseBots::questspells::BuildIndex();",
                         "        if (TortoiseBots::questspells::Enabled() && (command == \"reload all\" || command.find(\"quest\") != std::string_view::npos))\n            TortoiseBots::questspells::BuildIndex();"),
-    "config_reload_builds": ("scripts", "        if (reload)\n            TortoiseBots::questspells::BuildIndex();\n", ""),
-    "conf_key": ("conf", "TortoiseBots.ClassQuestSpells = 1", "TortoiseBots.ClassQuestSpells = 0"),
+    "config_reload_builds": ("scripts", "            tbhost::autotrain::BuildIndex();\n            TortoiseBots::questspells::BuildIndex();\n", "            tbhost::autotrain::BuildIndex();\n"),
+    "conf_key": ("conf", "TortoiseBots.ClassQuestSpells = 0", "TortoiseBots.ClassQuestSpells = 1"),
     "config_load": ("scripts", "        TortoiseBots::questspells::LoadConfig();", ""),
     "learn_only": ("host", "bot->LearnSpell(row->spellId, false);", "bot->CastSpell(bot, row->spellId, true);"),
     "off_build_has_it": ("cmake", "host/TbHost[^/]*", "host/TbHost[^/]*|host/TbClassQuestSpells"),
@@ -174,6 +193,10 @@ class ClassQuestSpellsWiring(unittest.TestCase):
 def mutate():
     caught = 0
     for name, (key, old, new) in MUTATIONS.items():
+        if name == "core_pins" and core_absent():
+            print("mutation %s: skipped (no core checkout)" % name)
+            caught += 1
+            continue
         mutated = sources()
         if old not in mutated[key]:
             print("mutation %s: no longer applies" % name, file=sys.stderr)

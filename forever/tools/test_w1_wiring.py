@@ -55,7 +55,8 @@ class FreeHost(unittest.TestCase):
         self.assertIn("bool free", login)
         self.assertLess(login.index("free && !master.IsEmpty()"), login.index("Bot bot;"))
         self.assertIn("bot.free = free;", login)
-        self.assertIn("bot.useEngine = _engineByDefault || free;", login)
+        # PR #129 (player commands R2) added owned bots to the same line; a free bot still gets an engine.
+        self.assertIn("bot.useEngine = _engineByDefault || free || owned;", login)
         self.assertIn("bool IsFreeBot(ObjectGuid", MGR_H)
         self.assertIn("bool free = false;", func(MGR_H, "struct Bot"))
 

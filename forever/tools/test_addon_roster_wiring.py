@@ -125,8 +125,11 @@ class Wiring(unittest.TestCase):
 
     def test_chat_entry_untouched(self):
         # The piece answers over the addon channel only; `.bot who` keeps its
-        # chat grammar and owns the only `who all` widening.
-        self.assertNotIn("TBM:", self.player_cmd)
+        # chat grammar and owns the only `who all` widening. The chat entry's only
+        # TBM line is `.bot version`'s (PR #142, merged in #242): the roster tokens
+        # never reach it.
+        for token in re.findall(r'"TBM:[A-Z_]+', strip_comments(self.player_cmd)):
+            self.assertEqual(token, '"TBM:VERSION', f"the chat entry sends {token}")
         self.assertIn('"all"', self.player_cmd)
 
     def test_pure_shapes_are_core_free(self):

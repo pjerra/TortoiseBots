@@ -82,7 +82,9 @@ class Wiring(unittest.TestCase):
         self.assertLess(master.index("cmd::NoteMaster("), master.index('Rec end("master")'))
         order = function_body(self.orders, r"bool HandleOrder\(ChatHandler\* handler, Trinity::ChatCommands::Tail tail\)\s*\{")
         self.assertIn("cmd::NoteOrder(outcomes, verb, rest)", order)
-        self.assertLess(order.index("cmd::NoteOrder("), order.index('Rec end("order")'))
+        # The main order path notes before it ends the reply; `interrupt` (tactical orders M2, PR #201) has
+        # its own earlier answer and notes after it, so the last pair is the one this pin is about.
+        self.assertLess(order.rindex("cmd::NoteOrder("), order.rindex('Rec end("order")'))
         self.assertIn("outcomes.push_back({ bot, code })", order)                 # refused bot, its own code
         self.assertIn("outcomes.push_back({ bot, std::string() })", order)        # queued bot
         # The order-log hook lives in the executor `Issue(Party...)`, the one path the run tick, `.tb run order` and `.tb cmd` share.

@@ -60,7 +60,11 @@ class TestAiPresetWiring(unittest.TestCase):
         self.assertIn('addon::RegisterVerb("ai", &HandleAiVerb)', ai_cpp)
         self.assertIn('addon::AdvertiseCap("ai")', ai_cpp)
         self.assertIn("player::Tier::Owner", ai_cpp)
-        self.assertIn("h3::NotBuilt(handler, args, cmd)", ai_cpp)
+        # PR #238 (fix/slice-off-build) made the OFF stub answer engine-not-built itself instead of
+        # calling h3::NotBuilt; the reply still says the engine is not built.
+        self.assertIn("bool NotBuilt(ChatHandler* handler)", ai_cpp)
+        self.assertIn("error code=engine-not-built", ai_cpp)
+        self.assertIn("return NotBuilt(handler);", ai_cpp)
 
     def test_sql_and_no_direct_queries(self):
         sql = SQL.read_text()
