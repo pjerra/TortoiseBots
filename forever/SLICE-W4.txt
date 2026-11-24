@@ -388,3 +388,10 @@ ai/playerbot/strategy/values/MountValues.cpp
 # the homebind teleport through the D4 pair.
 ai/playerbot/strategy/triggers/StuckTriggers.cpp
 ai/playerbot/strategy/actions/UnstuckAction.cpp
+
+# TBF #147 (free-bot life, package C: town verbs): the vendor map and useful-stock values, the bag-pressure destroy
+# action and the 50-yard nearby service bridge. Vendor stock comes through the W2 pair (TbCompat_W2Town.h +
+# ai/cmangos-compat-w2town.h); ForeverCore has no vendor template list, so only the entry list is read there.
+ai/playerbot/strategy/values/VendorValues.cpp
+ai/playerbot/strategy/actions/DestroyItemAction.cpp
+ai/playerbot/strategy/actions/ServiceNearbyNpcAction.cpp
