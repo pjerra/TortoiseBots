@@ -542,3 +542,11 @@ void AltBotService::AddTakenQuest(Player*, uint32_t) { NotePool(); }
 bool AltBotService::IsTakenQuest(uint32_t, uint32_t) const { NotePool(); return false; }
 }
 void RandomBotFacade::SetValue(Player*, std::string, uint32, std::string, int32) { NotePool(); }
+
+// =====================================================================================================================
+// Free-bot life: the shared value context the rpg/quest/town values reach also builds the trainer table and the
+// battlemaster list. Neither is ported (no trainer travel, no battleground queue from the open world), so both are empty.
+// =====================================================================================================================
+#include "playerbot/strategy/values/PvpValues.h"
+ai::trainableSpellMap* ai::TrainableSpellMapValue::Calculate() { NoteMisc(); return new trainableSpellMap(); }
+std::list<CreatureDataPair const*> ai::BgMastersValue::Calculate() { NoteMisc(); return {}; }
