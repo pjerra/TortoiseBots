@@ -93,6 +93,7 @@
 #include "playerbot/strategy/actions/WhoAction.h"
 #include "playerbot/strategy/generic/AttackEnemyPlayersStrategy.h"
 #include "playerbot/strategy/generic/AutoCcStrategy.h"
+#include "playerbot/strategy/generic/BattlegroundStrategy.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
@@ -217,6 +218,7 @@
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 #include "playerbot/strategy/values/PossibleRpgTargetsValue.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/strategy/values/PvpValues.h"
 #include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/strategy/values/RaidTargetValues.h"
 #include "playerbot/strategy/values/RandomBotUpdateValue.h"
@@ -246,7 +248,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (72 of its keys)
+    // the registry of StrategyContext (73 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -324,6 +326,7 @@ namespace slice
             creators["duel"] = [](PlayerbotAI* ai) { return new DuelStrategy(ai); };
             creators["pvp"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayersStrategy(ai); };
             creators["world pvp"] = [](PlayerbotAI* ai) { return new WorldPvpStrategy(ai); };
+            creators["battleground"] = [](PlayerbotAI* ai) { return new BattlegroundStrategy(ai); };
         }
     };
 
@@ -870,7 +873,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (270 of its keys)
+    // the registry of ValueContext (272 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1146,11 +1149,13 @@ namespace slice
             creators["enemy player target"] = [](PlayerbotAI* ai) { return new EnemyPlayerValue(ai); };
             creators["enemy player targets"] = [](PlayerbotAI* ai) { return new EnemyPlayersValue(ai); };
             creators["has enemy player targets"] = [](PlayerbotAI* ai) { return new HasEnemyPlayersValue(ai); };
+            creators["enemy flag carrier"] = [](PlayerbotAI* ai) { return new FlagCarrierValue(ai, false, true); };
+            creators["team flag carrier"] = [](PlayerbotAI* ai) { return new FlagCarrierValue(ai, true, true); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 84, kActions = 209, kTriggers = 241, kValues = 270;
+    constexpr unsigned kStrategies = 85, kActions = 209, kTriggers = 241, kValues = 272;
 }
 }
 

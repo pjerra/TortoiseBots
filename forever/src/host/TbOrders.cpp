@@ -22,6 +22,7 @@
 #include "host/TbTactics.h"
 #include "host/TbTacticsPure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbMasterBindPure.h"
 #include "host/cmd/TbPlace.h"
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
@@ -1941,8 +1942,29 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Player* commander = release ? nullptr : FindOnline(name);
     if (!release && !commander)
         return Fail(handler, args, "master", "no-such-player", name + " is not in the world");
+    std::map<ObjectGuid, cmd::master_bind::Verdict> verdicts;   // per bot, when the plain rule refuses the commander (BG2 row 5)
     if (!release && !MayLeadBots(handler, commander->GetGUID()))   // N5
-        return Fail(handler, args, "master", "not-allowed", name + " is neither a host bot nor your own character: it cannot be made the commander of bots");
+    {
+        // BG2 live row 5 (host/cmd/TbMasterBindPure.h): where the plain rule refuses the commander, one battleground instance and one
+        // team still let an operator bind a pool bot to the human he watches. Every other refusal stays, and a command whose every
+        // bot is refused refuses the way it always did (nothing is changed).
+        bool bindable = false;
+        for (Player* bot : who.bots)
+        {
+            cmd::master_bind::Facts facts;
+            facts.botInstance = bot->GetBattlegroundId();
+            facts.commanderInstance = commander->GetBattlegroundId();
+            facts.sameTeam = bot->GetBGTeam() == commander->GetBGTeam();
+            verdicts[bot->GetGUID()] = cmd::master_bind::Judge(facts);
+            bindable = bindable || verdicts[bot->GetGUID()] == cmd::master_bind::Verdict::Allowed;
+        }
+        if (!bindable)
+        {
+            auto const itr = verdicts.find(who.bots.front()->GetGUID());
+            cmd::master_bind::Verdict const verdict = itr == verdicts.end() ? cmd::master_bind::Verdict::NotAllowed : itr->second;
+            return Fail(handler, args, "master", cmd::master_bind::CodeOf(verdict), cmd::master_bind::DetailOf(verdict, name));
+        }
+    }
     if (!release && IsHostBot(commander))
     {
         std::string code, detail;
@@ -1954,6 +1976,12 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");
 
     uint32 done = 0, queued = 0, refused = 0;
+    std::vector<Player*> boundBots;   // what really bound or released: h3's table, after the host's answer
+    // BG2 live row 5 (review F2): the KIND is per bot. A bot bound while it and the commander stand in one battleground instance on one team is a bg
+    // member (never stored; it ends only with that match, host/cmd/TbCmdBindingLifePure.h BgBook/CheckBg); any other bot is normal. Each kind is
+    // read from the core's own instance and team facts for that bot and handed to the binding check beside it; the instance is the commander's.
+    std::vector<cmd::life::Kind> boundKinds;   // one per boundBots entry
+    uint32 const commanderInstance = (!release && commander) ? commander->GetBattlegroundId() : 0;
     Reply reply(handler, args, "master");
     reply.Begin();
     auto const emit = [&](Rec const& rec) { reply.Line(rec); };
@@ -1962,6 +1990,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         ObjectGuid const guid = bot->GetGUID();
         Rec rec("master");
         rec.S("bot", bot->GetName());
+        cmd::life::Kind kind = cmd::life::Kind::Normal;
         if (release)
         {
             // N4b: the host's answer is checked; on a failure nothing changes (the binding table is written only after the host accepted it).
@@ -1977,6 +2006,19 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else
         {
+            if (!verdicts.empty())
+            {
+                // BG2 row 5: the commander is another real player; only a bot inside the same match instance and on the same team binds.
+                auto const itr = verdicts.find(guid);
+                cmd::master_bind::Verdict const verdict = itr == verdicts.end() ? cmd::master_bind::Verdict::NotAllowed : itr->second;
+                if (verdict != cmd::master_bind::Verdict::Allowed)
+                {
+                    ++refused;
+                    rec.S("status", "refused").S("code", cmd::master_bind::CodeOf(verdict)).S("msg", cmd::master_bind::DetailOf(verdict, name));
+                    emit(rec);
+                    continue;
+                }
+            }
             // What the engine's own hire flow does with a master (BotManager::BindBotMaster: the host's master guid and the engine's pointer), and the
             // binding `IsInCommandedGroup` answers from. The party is not touched: the commander stays outside it (spec D2).
             if (!TortoiseBots::BotManager::Instance().BindBotMaster(guid, commander->GetGUID()))
@@ -1987,10 +2029,18 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 continue;
             }
             SetCommander(guid, commander->GetGUID());
+            // The kind THIS bot gets, decided where the binding check will read it: both in one match instance and on one team.
+            cmd::master_bind::Facts bgFacts;
+            bgFacts.botInstance = bot->GetBattlegroundId();
+            bgFacts.commanderInstance = commanderInstance;
+            bgFacts.sameTeam = bot->GetBGTeam() == commander->GetBGTeam();
+            kind = cmd::master_bind::IsBgBind(bgFacts) ? cmd::life::Kind::Bg : cmd::life::Kind::Normal;
             Group* group = bot->GetGroup();
             rec.S("commander", commander->GetName()).B("commander_in_party", group && group->IsMember(commander->GetGUID()));
         }
         ++done;
+        boundBots.push_back(bot);
+        boundKinds.push_back(kind);
         // The kit depends on the binding (the commanded threat back-off, AiFactory.cpp:633-642): a running engine rebuilds it at its next tick.
         if (PlayerbotAI* ai = AiOf(bot))
         {
@@ -2011,7 +2061,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("status", "bound");
         emit(rec);
     }
-    cmd::NoteMaster(who.bots, who.leader, commander);   // P1: the commander record (lead, boundAt) beside h3's table
+    cmd::NoteMaster(boundBots, boundKinds, who.leader, commander, commanderInstance);   // P1: the commander record (lead, boundAt) beside h3's table — only what really bound (or was released), each with its own kind
     Rec end("master");
     end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", who.bots.size()).N("bound", done).N("queued", queued).N("refused", refused);
     reply.End(end);

@@ -426,10 +426,18 @@ ai/playerbot/strategy/generic/EmoteStrategy.cpp
 ai/playerbot/strategy/generic/DuelStrategy.cpp
 
 # Open-world PvP seek: the `world pvp` and `pvp` strategies and the enemy-player target values. The host hands the role
-# to a share of free bots (forever/src/host/TbHostWorldPvp.cpp); `EnemyPlayerNear` gets its own translation unit because
-# PvpTriggers.cpp carries the Warsong Gulch flag code the Forever slice does not build.
+# to a share of free bots (forever/src/host/TbHostWorldPvp.cpp); `EnemyPlayerNear` keeps its own translation unit.
 ai/playerbot/strategy/generic/WorldPvpStrategy.cpp
 ai/playerbot/strategy/generic/AttackEnemyPlayersStrategy.cpp
 ai/playerbot/strategy/values/EnemyPlayerValue.cpp
 ai/playerbot/strategy/values/WorldPvpSeekChecks.cpp
 ai/playerbot/strategy/triggers/EnemyPlayerNearTrigger.cpp
+
+# BG2: the PvP fight kit of a bot inside a battleground (BATTLEGROUNDS-SPEC.md D9). The remaining enemy player values, the
+# flag triggers and the battleground strategy compile against the core through the BG pair (TbCompat_BG.h +
+# ai/cmangos-compat-bg.h); the battleground strategy is the one PlayerbotAI looks for in a bot inside a match.
+# BattleGroundTactics.cpp and the battlemaster queue stay out (BG1 queues through the core). EnemyPlayerValue.cpp and
+# AttackEnemyPlayersStrategy.cpp are listed above (the open-world PvP seek port built them first).
+ai/playerbot/strategy/values/PvpValues.cpp
+ai/playerbot/strategy/triggers/PvpTriggers.cpp
+ai/playerbot/strategy/generic/BattlegroundStrategy.cpp

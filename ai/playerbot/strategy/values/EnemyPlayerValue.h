@@ -36,5 +36,8 @@ namespace ai
         virtual Unit* Calculate() override;
 
         static float GetMaxAttackDistance(Player* bot);
+
+    private:
+        Unit* PickInBattleground(std::list<ObjectGuid> const& enemyPlayers);
     };
 }

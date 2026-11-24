@@ -92,7 +92,8 @@ struct PendingRelease
 
 struct State
 {
-    std::map<ObjectGuid, Meta> metas;               // by commander
+    std::map<ObjectGuid, Meta> metas;               // by commander: the NORMAL members' record (a bg member is never in it)
+    L::BgBook bg;                                   // the bg members (BG2 review F2/F3): per bot, in memory only, never stored
     std::vector<PendingRelease> pending;            // releases a group hook recorded: run by the next Maintain tick
     P::OrderStore log;                              // the cards' last orders, by card key; no whole-store commander cap
     struct Role { std::string role; uint32 atMs = 0; };
@@ -225,6 +226,19 @@ std::vector<ObjectGuid> BoundTo(ObjectGuid commander)
     return bots;
 }
 
+// The commander's NORMAL bots: h3's, less the ones bound inside a battleground (TbCmdBindingLifePure.h BgBook). The record, its followers, its release
+// and its row are made of these only, so a bg member is never stored, never judged by the record's rules and never released with it.
+std::vector<ObjectGuid> NormalBoundTo(ObjectGuid commander)
+{
+    std::vector<uint64_t> bound;
+    for (ObjectGuid bot : BoundTo(commander))
+        bound.push_back(bot.GetCounter());
+    std::vector<ObjectGuid> normal;
+    for (uint64_t bot : L::NormalMembers(Get().bg, commander.GetCounter(), bound))
+        normal.push_back(ObjectGuid::Create<HighGuid::Player>(bot));
+    return normal;
+}
+
 L::Stored RowOf(ObjectGuid commander, Meta const& m)
 {
     L::Stored row;
@@ -288,7 +302,7 @@ void PointFollowerAtLead(Meta& m, Player* bot, Player* lead)
 // gets its own follow target back.
 void SyncFollowers(ObjectGuid commander, Meta& m, ObjectGuid previousLead)
 {
-    std::vector<ObjectGuid> const bound = BoundTo(commander);
+    std::vector<ObjectGuid> const bound = NormalBoundTo(commander);
     ObjectGuid const restoreLead = previousLead.IsEmpty() ? m.lead : previousLead;
     for (auto it = m.followers.begin(); it != m.followers.end();)
     {
@@ -328,7 +342,7 @@ Group* ReleaseGroup(ObjectGuid commander, Meta const& m)
     Group* leadGroup = lead ? lead->GetGroup() : nullptr;
     Group* byId = m.groupId ? sGroupMgr->GetGroupByGUID(ObjectGuid::Create<HighGuid::Party>(m.groupId)) : nullptr;
     Group* viaMember = nullptr;
-    for (ObjectGuid bot : BoundTo(commander))
+    for (ObjectGuid bot : NormalBoundTo(commander))
         if (Player* player = InWorld(bot))
             if (Group* group = player->GetGroup())
                 if (!m.groupId || Ctr(group->GetGUID()) == m.groupId)
@@ -418,11 +432,13 @@ void ReleaseCommander(ObjectGuid commander, L::End end, Group* partyGroup = null
     s.metas.erase(it);
     bool const wasReleasing = s.releasing;
     s.releasing = true;
-    if (m.flags & L::FlagInParty)
+    // The record holds the normal members only; only an in-party one reaches into its party (a bg member never does: ReleaseBgMember).
+    if (L::ReleaseReachesParty(L::Kind::Normal, m.flags))
         ApplyPartyAction(commander, m, end, partyKnown ? partyGroup : ReleaseGroup(commander, m));
     for (Follower const& follower : m.followers)
         RestoreFollower(follower, m.lead);
-    for (ObjectGuid bot : BoundTo(commander))
+    // The normal members only: the commander's bg members keep their own bind and end only with their match.
+    for (ObjectGuid bot : NormalBoundTo(commander))
     {
         // A released bot must not keep its former commander as its master (review fix: it kept following and teleporting to him; the `.tb master
         // none` command clears the master the same way).
@@ -438,6 +454,56 @@ void ReleaseCommander(ObjectGuid commander, L::End end, Group* partyGroup = null
         sLog.outError("TortoiseBots: the commander binding of %s ended (%s) but its stored row was not deleted: the release is not complete, the row is retried and is not restored", NameOf(commander).c_str(), L::EndCode(end));
     else
         sLog.outString("TortoiseBots: the commander binding of %s was released: %s (%s)", NameOf(commander).c_str(), L::EndText(end), L::EndCode(end));
+}
+
+// One bg member's release (BG2 review F3: each bot on its own). It never reaches into a group: the battleground raid's leader is the match's
+// (L::ReleaseReachesParty is false for Kind::Bg), so the bot leaves the binding, not the raid. The commander's other members, of either kind, stay.
+void ReleaseBgMember(uint64_t bot, uint64_t commander, L::End end)
+{
+    State& s = Get();
+    L::DropBg(s.bg, bot);
+    ObjectGuid const botGuid = PlayerGuid(bot);
+    ObjectGuid const commanderGuid = PlayerGuid(commander);
+    if (h3::CommanderGuid(botGuid) == commanderGuid)
+    {
+        TortoiseBots::BotManager::Instance().ClearBotMaster(botGuid);
+        h3::SetCommander(botGuid, ObjectGuid::Empty);
+    }
+    s.log.Retain(StandingKeys());
+    sLog.outString("TortoiseBots: the battleground bind of %s to %s was released: %s (%s)", NameOf(botGuid).c_str(), NameOf(commanderGuid).c_str(),
+        L::EndText(end), L::EndCode(end));
+}
+
+// Every bg member on its own facts (L::CheckBg): the two live instance ids, the two logins and h3's commander. `leaving` is a character that is
+// logging out now (still in the world during the hook): it reads as offline, so a logout ends its binds at once.
+void RunBgCheck(ObjectGuid leaving = ObjectGuid::Empty)
+{
+    State& s = Get();
+    if (s.bg.empty())
+        return;
+    std::vector<L::BgLive> live;
+    for (L::BgMember const& member : s.bg)
+    {
+        ObjectGuid const botGuid = PlayerGuid(member.bot);
+        ObjectGuid const commanderGuid = PlayerGuid(member.commander);
+        Player* bot = botGuid == leaving ? nullptr : InWorld(botGuid);
+        Player* commanderPlayer = commanderGuid == leaving ? nullptr : InWorld(commanderGuid);
+        L::BgLive facts;
+        facts.bot = member.bot;
+        facts.botOnline = bot != nullptr;
+        facts.botInstance = bot ? bot->GetBattlegroundId() : 0;
+        facts.botCommander = h3::CommanderGuid(botGuid).GetCounter();
+        facts.commanderOnline = commanderPlayer != nullptr;
+        facts.commanderInstance = commanderPlayer ? commanderPlayer->GetBattlegroundId() : 0;
+        live.push_back(facts);
+    }
+    for (L::BgVerdict const& verdict : L::CheckBg(s.bg, live, BotMgr::Instance().Enabled()))
+    {
+        if (verdict.release)
+            ReleaseBgMember(verdict.bot, verdict.commander, verdict.end);
+        else
+            L::DropBg(s.bg, verdict.bot);   // h3 gives it to someone else now: releasing would undo that bind
+    }
 }
 
 // The GroupScript hooks never release inside the hook: the core is still using the group (Group::Disband even deletes it), so a
@@ -672,7 +738,7 @@ void RestoreOne(ObjectGuid commander)
     SyncFollowers(commander, m, ObjectGuid::Empty);
     RefreshGroupId(m, InWorld(m.lead));
     sLog.outString("TortoiseBots: the commander binding of %s was restored (lead %s, %u bot(s))", NameOf(commander).c_str(), NameOf(m.lead).c_str(),
-        uint32(BoundTo(commander).size()));
+        uint32(NormalBoundTo(commander).size()));
 }
 
 void TryRestore()
@@ -759,6 +825,8 @@ void Maintain()
     s.maintainAtMs = nowMs;
     // A stored row whose DELETE did not land is owed whether or not a binding stands: retry it before the early return below.
     store::RetryErases();
+    // The bg members first, each on its own: a commander's record (or none) never decides them.
+    RunBgCheck();
     if (s.metas.empty())
         return;
     TryRestore();
@@ -977,16 +1045,19 @@ void NoteLogout(Player* player)
     if (!player || World::IsStopped())
         return;     // a server shutdown keeps every binding and its row: that is what a restore is for
     State& s = Get();
-    std::vector<ObjectGuid> releases;
+    // A bg member ends with its match, and a logout is leaving it: the bot's own bind, or all of the commander's, at once (no grace - the match does
+    // not wait for a re-login). The commander's normal record takes its own grace below.
+    RunBgCheck(player->GetGUID());
+    std::vector<std::pair<ObjectGuid, L::End>> releases;
     for (auto& [commander, m] : s.metas)
     {
         if (commander == player->GetGUID())
             m.commanderGoneSinceMs = m.commanderGoneSinceMs ? m.commanderGoneSinceMs : NowMs();   // the bots wait for their master's grace
         else if (m.lead == player->GetGUID())
-            releases.push_back(commander);
+            releases.emplace_back(commander, L::End::LeadLeft);
     }
-    for (ObjectGuid commander : releases)
-        ReleaseCommander(commander, L::End::LeadLeft);
+    for (auto const& [commander, end] : releases)
+        ReleaseCommander(commander, end);
 }
 
 bool IsCommandedBy(Player* commander, Player* bot)
@@ -994,6 +1065,11 @@ bool IsCommandedBy(Player* commander, Player* bot)
     if (!commander || !bot)
         return false;
     State const& s = Get();
+    // A bg member is commanded while h3 binds it to this commander and it is still inside the match it was bound in (no record, no lead party).
+    if (L::BgMember const* member = L::FindBg(s.bg, bot->GetGUID().GetCounter()))
+        if (member->commander == commander->GetGUID().GetCounter())
+            return L::MayCommand(true, false, h3::CommanderGuid(bot->GetGUID()) == commander->GetGUID(),
+                member->instance && bot->GetBattlegroundId() == member->instance);
     auto const it = s.metas.find(commander->GetGUID());
     bool const stands = it != s.metas.end() && it->second.restored;
     // The record is only half the answer: h3's table must bind this very bot to this very commander too (review fix: a party member commanded by
@@ -1203,9 +1279,31 @@ void NoteLog(ObjectGuid commander, CT::OrderRecord rec)
 
 // ---- hooks ----
 
-void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* commander)
+// ---- the normal record a bind rebuilds (only its normal members: TbCmdBindingLifePure.h NormalRecordUpdate) ----
+
+namespace
 {
-    (void)bots;
+// A member of the record was rebound inside a match (it is a bg member now): it leaves the record and its row, a lead that left hands over.
+void ShrinkToNormal(ObjectGuid commander, Meta& m)
+{
+    State& s = Get();
+    ObjectGuid const previousLead = m.lead;
+    m.members.erase(std::remove_if(m.members.begin(), m.members.end(), [&](ObjectGuid member) {
+        L::BgMember const* bg = L::FindBg(s.bg, member.GetCounter());
+        return bg && bg->commander == commander.GetCounter();
+    }), m.members.end());
+    if (m.members.empty())
+        return;
+    if (std::find(m.members.begin(), m.members.end(), m.lead) == m.members.end())
+        m.lead = NormalBoundTo(commander).empty() ? m.members.front() : NormalBoundTo(commander).front();
+    SyncFollowers(commander, m, previousLead);
+    SaveRow(commander, m);
+}
+
+}
+
+void NoteMaster(std::vector<Player*> const& bots, std::vector<L::Kind> const& kinds, Player* leader, Player* commander, uint32 bgInstance)
+{
     State& s = Get();
     int64 const now = NowUnix();
     if (!commander)
@@ -1216,6 +1314,11 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
         for (Player* bot : bots)
             if (bot)
                 addressed.push_back(bot->GetGUID());
+        // A released bg member leaves the book with it (h3 no longer gives it to the book's commander).
+        for (ObjectGuid bot : addressed)
+            if (L::BgMember const* member = L::FindBg(s.bg, bot.GetCounter()))
+                if (h3::CommanderGuid(bot).GetCounter() != member->commander)
+                    L::DropBg(s.bg, bot.GetCounter());
         std::vector<ObjectGuid> commanders;
         for (auto const& [cmd, m] : s.metas)
             commanders.push_back(cmd);
@@ -1244,7 +1347,7 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
             // A released lead hands the binding to a follower that is still bound (the old code kept it in the row and in m.lead).
             ObjectGuid const previousLead = m.lead;
             if (h3::CommanderGuid(m.lead) != cmd)
-                m.lead = BoundTo(cmd).empty() ? m.members.front() : BoundTo(cmd).front();
+                m.lead = NormalBoundTo(cmd).empty() ? m.members.front() : NormalBoundTo(cmd).front();
             if (m.lead != previousLead)
                 SyncFollowers(cmd, m, previousLead);       // the followers pointed at the released lead get their own targets back
             if (m.members.size() != before || m.lead != previousLead)
@@ -1252,56 +1355,104 @@ void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* comman
         }
         return;
     }
-    // Only what h3 holds now counts: a bot the host refused is not bound, whatever the command asked.
-    std::vector<ObjectGuid> const bound = BoundTo(commander->GetGUID());
-    if (bound.empty())
+    // The kind is per bot (BG2 review F2, TbCmdBindingLifePure.h BgBook): every bot that really bound takes the kind the handler read for IT, and the
+    // instance is the commander's (the handler's), never a bot of the record. Only what h3 holds now counts: a bot the host refused is not bound.
+    ObjectGuid const commanderGuid = commander->GetGUID();
+    std::vector<L::BindResult> results;
+    for (size_t i = 0; i < bots.size(); ++i)
+        if (bots[i])
+        {
+            L::BindResult result;
+            result.bot = bots[i]->GetGUID().GetCounter();
+            result.bound = h3::CommanderGuid(bots[i]->GetGUID()) == commanderGuid;
+            result.kind = i < kinds.size() ? kinds[i] : L::Kind::Normal;
+            results.push_back(result);
+        }
+    // A command in which nothing bound changes nothing: not the book, not the record.
+    if (!L::ApplyBind(s.bg, commanderGuid.GetCounter(), results, bgInstance))
         return;
-    Meta& m = s.metas[commander->GetGUID()];
-    // A pending row whose party never came back is REPLACED by this explicit bind: its old (offline) lead is not part of what just bound, and keeping
-    // it would make the new row invalid and release the new binding at once (review fix).
-    if (!m.restored)
+    auto const existing = s.metas.find(commanderGuid);
+    std::vector<uint64_t> recordMembers;
+    if (existing != s.metas.end())
+        for (ObjectGuid member : existing->second.members)
+            recordMembers.push_back(member.GetCounter());
+    switch (L::NormalRecordUpdate(results, recordMembers))
     {
-        m.lead = ObjectGuid::Empty;
-        m.members.clear();
-        m.followers.clear();
-        m.leadDeadSinceMs = 0;
-        m.commanderGoneSinceMs = 0;
-        m.boundAt = 0;
+        case L::NormalUpdate::Keep:
+            // Only bg bots bound: the normal record (members, row, rules, pending events) stays exactly as it was.
+            break;
+        case L::NormalUpdate::Shrink:
+            // A member of the record was rebound inside the match: it is bg now and leaves the record (and its row); the rest stands.
+            ShrinkToNormal(commander->GetGUID(), existing->second);
+            break;
+        case L::NormalUpdate::Drop:
+        {
+            // It was the record's last member: the record and its row go without a release (the bot is bound, as bg).
+            Meta const& m = existing->second;
+            for (Follower const& follower : m.followers)
+                RestoreFollower(follower, m.lead);
+            DropPending(commander->GetGUID());
+            store::Erase(commander->GetGUID().GetCounter());
+            s.metas.erase(existing);
+            break;
+        }
+        case L::NormalUpdate::Rebind:
+        {
+            // A normal bot bound: the record is rebuilt from the commander's normal members (lead, flags, row); his bg members are never in it.
+            std::vector<ObjectGuid> const bound = NormalBoundTo(commander->GetGUID());
+            if (bound.empty())
+                break;
+            Meta& m = s.metas[commander->GetGUID()];
+            // A pending row whose party never came back is REPLACED by this explicit bind: its old (offline) lead is not part of what just bound, and keeping
+            // it would make the new row invalid and release the new binding at once (review fix).
+            if (!m.restored)
+            {
+                m.lead = ObjectGuid::Empty;
+                m.members.clear();
+                m.followers.clear();
+                m.leadDeadSinceMs = 0;
+                m.commanderGoneSinceMs = 0;
+                m.boundAt = 0;
+            }
+            ObjectGuid const previousLead = m.lead;
+            if (!m.boundAt)
+                m.boundAt = now;
+            // The lead the bind named: the host bot it addressed, when that bot is bound to this commander (as a normal member: a bg member never leads the
+            // record). A player addressed through `party <player>` (a commander leading his own party names himself) has no commander of his own for h3 to
+            // answer with, so the lead is a bot of the party instead - a tank first, then the party's order - never an arbitrary bot bound elsewhere.
+            L::LeadFacts leadFacts;
+            leadFacts.namedLeader = leader ? leader->GetGUID().GetCounter() : 0;
+            leadFacts.namedLeaderIsBotOfCommander = leader && h3::CommanderGuid(leader->GetGUID()) == commander->GetGUID();
+            if (leader && L::FindBg(s.bg, leader->GetGUID().GetCounter()))
+                leadFacts.namedLeaderIsBotOfCommander = false;
+            leadFacts.previousLead = previousLead.GetCounter();
+            Group* leaderGroup = leader && !leadFacts.namedLeaderIsBotOfCommander ? leader->GetGroup() : nullptr;
+            uint32 const nowMs = uint32(NowMs());
+            for (ObjectGuid bot : bound)
+            {
+                leadFacts.bound.push_back(bot.GetCounter());
+                Player* player = InWorld(bot);
+                if (!leaderGroup || !player || player->GetGroup() != leaderGroup)
+                    continue;
+                leadFacts.partyBots.push_back(bot.GetCounter());
+                if (RoleOf(player, nowMs) == "tank")
+                    leadFacts.partyTanks.push_back(bot.GetCounter());
+            }
+            m.lead = PlayerGuid(L::PickLead(leadFacts));
+            Group* group = InWorld(m.lead) ? InWorld(m.lead)->GetGroup() : nullptr;
+            bool const inParty = group && group->IsMember(commander->GetGUID());
+            m.flags = L::FlagsOf(inParty, group && group->isRaidGroup(), inParty && group->IsLeader(commander->GetGUID()), false);
+            m.groupId = GroupKey(group);
+            m.restored = true;
+            DropPending(commander->GetGUID());
+            m.commanderGoneSinceMs = 0;
+            m.members = bound;
+            // A lead change first puts the followers' own targets back (they were pointed at the old lead), then the new lead is pointed at.
+            SyncFollowers(commander->GetGUID(), m, previousLead);
+            SaveRow(commander->GetGUID(), m);
+            break;
+        }
     }
-    ObjectGuid const previousLead = m.lead;
-    if (!m.boundAt)
-        m.boundAt = now;
-    // The lead the bind named: the host bot it addressed, when that bot is bound to this commander. A player addressed through `party <player>` (a
-    // commander leading his own party names himself) has no commander of his own for h3 to answer with, so the lead is a bot of the party instead -
-    // a tank first, then the party's order - never an arbitrary bot bound elsewhere.
-    L::LeadFacts leadFacts;
-    leadFacts.namedLeader = leader ? leader->GetGUID().GetCounter() : 0;
-    leadFacts.namedLeaderIsBotOfCommander = leader && h3::CommanderGuid(leader->GetGUID()) == commander->GetGUID();
-    leadFacts.previousLead = previousLead.GetCounter();
-    Group* leaderGroup = leader && !leadFacts.namedLeaderIsBotOfCommander ? leader->GetGroup() : nullptr;
-    uint32 const nowMs = uint32(NowMs());
-    for (ObjectGuid bot : bound)
-    {
-        leadFacts.bound.push_back(bot.GetCounter());
-        Player* player = InWorld(bot);
-        if (!leaderGroup || !player || player->GetGroup() != leaderGroup)
-            continue;
-        leadFacts.partyBots.push_back(bot.GetCounter());
-        if (RoleOf(player, nowMs) == "tank")
-            leadFacts.partyTanks.push_back(bot.GetCounter());
-    }
-    m.lead = PlayerGuid(L::PickLead(leadFacts));
-    Group* group = InWorld(m.lead) ? InWorld(m.lead)->GetGroup() : nullptr;
-    bool const inParty = group && group->IsMember(commander->GetGUID());
-    m.flags = L::FlagsOf(inParty, group && group->isRaidGroup(), inParty && group->IsLeader(commander->GetGUID()), false);
-    m.groupId = GroupKey(group);
-    m.restored = true;
-    DropPending(commander->GetGUID());
-    m.commanderGoneSinceMs = 0;
-    m.members = bound;
-    // A lead change first puts the followers' own targets back (they were pointed at the old lead), then the new lead is pointed at.
-    SyncFollowers(commander->GetGUID(), m, previousLead);
-    SaveRow(commander->GetGUID(), m);
     PruneToStanding(s);
 }
 
@@ -1582,7 +1733,7 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     return false;
 }
 
-void NoteMaster(std::vector<Player*> const&, Player*, Player*) {}
+void NoteMaster(std::vector<Player*> const&, std::vector<life::Kind> const&, Player*, Player*, uint32) {}
 void NoteOrder(std::vector<std::pair<Player*, std::string>> const&, std::string const&, std::string const&) {}
 void NoteRunOrder(ObjectGuid, std::string const&, bool, std::string const&, std::string const&) {}
 bool ResolveBinding(ObjectGuid, ObjectGuid&, std::vector<ObjectGuid>&) { return false; }

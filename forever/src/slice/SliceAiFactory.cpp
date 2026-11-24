@@ -80,6 +80,7 @@
 #include "TraitMgr.h"
 #include "TraitPacketsCommon.h"
 #include "SliceLog.h"
+#include <functional>
 #include <map>
 #include <unordered_map>
 #include "SliceHybridPolicy.h"
@@ -346,8 +347,56 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
     return static_cast<BotRoles>(EffectiveRole(player, nullptr));
 }
 
+// BG2 (spec D9): inside a battleground the engines get the PvP kit on top of the class kit. Both kit functions below return from inside
+// their class switches, so the additions run from a scope guard when the function ends, after the class kit has been added, whichever
+// return it takes. The class kits themselves are not touched.
+namespace
+{
+class AtScopeExit
+{
+public:
+    explicit AtScopeExit(std::function<void()> action) : m_action(std::move(action)) {}
+    ~AtScopeExit() { m_action(); }
+    AtScopeExit(AtScopeExit const&) = delete;
+    AtScopeExit& operator=(AtScopeExit const&) = delete;
+
+private:
+    std::function<void()> m_action;
+};
+
+// "pvp" lets the bot take an enemy player as a target (its "enemy player near" trigger), "duel" never belongs in a battleground. A
+// free bot drops the chase-away strategies of the open world; a bound bot (a human master) keeps its escort movement.
+void ApplyBattlegroundCombatKit(Player* player, PlayerbotAI* const facade, Engine* combatEngine)
+{
+    if (!player || !combatEngine || !player->InBattleground())
+        return;
+    combatEngine->addStrategy("pvp");
+    combatEngine->removeStrategy("duel");
+    combatEngine->removeStrategy("flee");
+    combatEngine->removeStrategy("cast time");
+    combatEngine->removeStrategy("threat");
+    if (!(facade && facade->HasRealPlayerMaster()))
+        combatEngine->removeStrategy("follow");
+}
+
+// "battleground" is the strategy PlayerbotAI::UpdateAIGroupMaster looks for in the non-combat engine of a bot inside a match (it resets the
+// strategies on every tick without it). A free bot has no grind in a battleground.
+void ApplyBattlegroundNonCombatKit(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
+{
+    if (!player || !nonCombatEngine || !player->InBattleground())
+        return;
+    nonCombatEngine->addStrategies("pvp", "battleground", NULL);
+    if (!(facade && facade->HasRealPlayerMaster()))
+    {
+        nonCombatEngine->removeStrategy("grind");
+        nonCombatEngine->removeStrategy("follow");
+    }
+}
+} // namespace
+
 void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* combatEngine)
 {
+    AtScopeExit const battlegroundKit([&] { ApplyBattlegroundCombatKit(player, facade, combatEngine); });
     if (!player)
         return;
     combatEngine->addStrategy("racials");
@@ -460,6 +509,7 @@ static_assert(TortoiseBots::world::ClassDruid == CLASS_DRUID, "FreeKitPolicy.h: 
 
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
+    AtScopeExit const battlegroundKit([&] { ApplyBattlegroundNonCombatKit(player, facade, nonCombatEngine); });
     if (nonCombatEngine)
     {
         nonCombatEngine->addStrategy("maintenance");

@@ -111,7 +111,7 @@ group they touch is not in an outer `Group` call.
 
 | File | What |
 |---|---|
-| `forever/src/host/cmd/TbCmdBindingLifePure.h` | pure: the stored row's five fields and `Valid`, the release verdict `Decide` (the shared `CheckBinding`'s reasons plus the two graces), the party reason mapping, `DeferredRelease` (what a group hook's recorded event earns on its tick), the command gate `MayCommand`, `Departed`, and the restore gate `PlanRestore` (commander AND lead in the world). Tested standalone |
+| `forever/src/host/cmd/TbCmdBindingLifePure.h` | pure: the stored row's five fields and `Valid`, the release verdict `Decide` (the shared `CheckBinding`'s reasons plus the two graces), the per-bot kind (`BgBook`, `ApplyBind`, `NormalRecordUpdate`, `CheckBg`, `BgBindEnd`: a bg member is never in the record, never takes the world reasons and is never stored), the party reason mapping, `DeferredRelease` (what a group hook's recorded event earns on its tick), the command gate `MayCommand`, `Departed`, and the restore gate `PlanRestore` (commander AND lead in the world). Tested standalone |
 | `forever/src/host/cmd/TbCmdBindingStore.{h,cpp}` | the characters-database row: config (re-read on every reload), the guard `CharacterQueryCompat` (query form, its own table, the five-column check before every write; the raw statements are `forever/src/compat/TbCompat_CharStore.h`'s), the CREATE TABLE IF NOT EXISTS once per config, one atomic upsert / one DELETE with a read-back, a failed DELETE kept pending (never offered to a restore, retried every second, replaced by a newer save), load once per load |
 | `forever/src/compat/TbCompat_CharStore.h` | the characters-database side of the schema guard: the information_schema probe, the guarded SELECT and the guarded synchronous statement (`forever/src/compat/TbCompat_S5.h` is the world twin) |
 | `forever/src/host/cmd/TbCmdBinding.{h,cpp}` | the record beside h3's table (flags, members, followers and their saved follow targets, the in-memory group counter, the two timers), the release, the party action, the restore, the command gate (`HasPending`/`ResolveBinding`/`IsCommandedBy`), the P1 card and the P2 hooks |
@@ -121,7 +121,7 @@ group they touch is not in an outer `Group` call.
 | `forever/src/host/run/TbRunOrders.cpp`, `TbRun.cpp` | the order-log hook moved into `Issue` |
 | `forever/sql/characters/2026_11_20_00_tb_commander_binding.sql`, `forever/sql/README.md` | the row's DDL and its delivery |
 | `forever/conf/tortoisebots.conf.dist` | `TortoiseBots.Commander.KeepBindings = 0` with its documentation |
-| `forever/tools/cmd_binding_life_check.cpp`, `test_cmd_p2_wiring.py` | the P2 check (89 checks) and the wiring pins/mutations |
+| `forever/tools/cmd_binding_life_check.cpp`, `test_cmd_p2_wiring.py` | the P2 check (120 checks) and the wiring pins/mutations |
 | `forever/tools/cmd_binding_store_check.cpp`, `forever/tools/cmd_binding_store_fakes/*` | the store's own TU compiled against fake `Config.h`/`DatabaseEnv.h`/`Log.h`/`StringFormat.h`, whose result set has the core's contract (`Query` answers a set already standing on its first row, and null for no rows): one and many rows, Save's read-back, a write/DELETE that did not land, a refused DELETE kept pending (out of `Rows()`, across a reload, retried, replaced by a newer save), refused rows, the key off, a missing column |
 
 ## Gates (slot 7, core pin 6517af05; counts are after the final fix round of 2026-11-20)
