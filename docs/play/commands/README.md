@@ -51,7 +51,7 @@ The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `fl
 | `.bot stats [<bot>]` | One line about your fleet, or about one bot. | [Bot Panel](bot-panel.md) |
 | `.bot maintenance <bot>` | Refreshes the bot's kit and repairs it, when upkeep is enabled. | [Roster and Hiring](roster-and-hiring.md) |
 | `.bot autogear <bot> [quality\|ilvl]` | Gears your own bot in level-appropriate items. | [Roster and Hiring](roster-and-hiring.md) |
-| `.bot behavior <bot\|party> <toggle> <on\|off>` | Turns a persistent behaviour on or off (loot, AoE, auto CC, mana saving, potions, and more). | [Bot Panel](bot-panel.md) |
+| `.bot behavior <bot\|party> <toggle> <on\|off>` (also `behaviour`) | Turns a persistent behaviour on or off (loot, AoE, auto CC, mana saving, potions, and more). | [Bot Panel](bot-panel.md) |
 | `.bot totem <bot\|party> ...` | Pins a shaman's totems per element, sets them as a set, or shows them. | [Bot Panel](bot-panel.md) |
 | `.bot blessing <bot\|party> ...` | Orders a paladin's blessing per class, or for one player. | [Bot Panel](bot-panel.md) |
 | `.bot choice <bot\|party> ...` | Orders a paladin aura, hunter aspect, warlock curse, rogue poison or pet. | [Bot Panel](bot-panel.md) |
