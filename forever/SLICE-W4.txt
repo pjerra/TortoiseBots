@@ -51,7 +51,6 @@ ai/playerbot/strategy/actions/RemoveAuraAction.cpp
 ai/playerbot/strategy/generic/ClassStrategy.cpp
 ai/playerbot/strategy/generic/CombatStrategy.cpp
 ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
-ai/playerbot/strategy/generic/DuelStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp
@@ -422,3 +421,6 @@ runtime/PassingBuffsService.cpp
 # skipped. The masters/pool split is GreetAction's own (RandomBotGreet gates pool bots).
 ai/playerbot/strategy/actions/GreetAction.cpp
 ai/playerbot/strategy/generic/EmoteStrategy.cpp
+
+# Duels: the duel strategy (duel target -> attack duel opponent), so a bot fights a duel with its class kit.
+ai/playerbot/strategy/generic/DuelStrategy.cpp

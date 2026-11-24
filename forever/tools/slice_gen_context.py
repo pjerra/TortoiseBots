@@ -477,7 +477,7 @@ SOCIAL_KEYS = {
     "trigger": "new player nearby",
     "value": "already seen players",
 }
-# TBF #163 (duels): TB's duel strategy (strategy/generic/DuelStrategy.cpp, strategy/generic/DuelStrategy.h): the bot takes
+# Duels: TB's duel strategy (strategy/generic/DuelStrategy.cpp, strategy/generic/DuelStrategy.h): the bot takes
 # its duel opponent as the target (`attack duel opponent` reads `duel target`, registered since slice 1) and the class kit
 # rotates on it. `duel requested` is registered so the row exists, but the Forever bot session receives no duel packet
 # (UnportedFeatures.h), so it never fires; the host answers the core's Player::duel state instead and `accept duel` is
