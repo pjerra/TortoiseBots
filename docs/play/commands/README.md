@@ -31,7 +31,7 @@ This page is the index of the command surfaces the Forever build actually has. E
 
 Party-wide orders are the addon channel's `action` verb, not chat text. The addon's Fight, Camp and Party panels send it; a typed `.bot action <intent>` in chat is refused as an unknown verb.
 
-The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `free`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. A parseable intent the server does not run answers one `TBM:ACTION_ERR` line with its reason (raid tactics, party CC picks, behaviour toggles, trade, use-object and ready checks are named there).
+The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `free`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. A parseable intent the server does not run answers one `TBM:ACTION_ERR` line with its reason (raid tactics, party CC picks, behaviour toggles, trade, use-object and ready checks are named there).
 
 ## Player commands (`.bot`)
 
@@ -55,8 +55,8 @@ The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `fl
 | `.bot totem <bot\|party> ...` | Pins a shaman's totems per element, sets them as a set, or shows them. | [Bot Panel](bot-panel.md) |
 | `.bot blessing <bot\|party> ...` | Orders a paladin's blessing per class, or for one player. | [Bot Panel](bot-panel.md) |
 | `.bot choice <bot\|party> ...` | Orders a paladin aura, hunter aspect, warlock curse, rogue poison or pet. | [Bot Panel](bot-panel.md) |
-| `.bot service <bot> [portal <spellId>\|conjure <food\|water\|healthstone>]` | What the bot can conjure or portal. | [Bot Panel](bot-panel.md) |
-| `.bot lfg join <dungeon id> <tank\|healer\|dps>` / `.bot lfg status` / `.bot lfg leave` | The dungeon fill for your own character: queues you, shows the open slots and the bots it added, and releases them. | [Dungeon Run Leader](../dungeon-run-leader.md) |
+| `.bot service <bot\|party> [portal <spellId>\|conjure <food\|water\|healthstone>]` | Lists what the bot can conjure or portal (`portal` and `conjure` currently refuse in chat because the `cast` action is not registered; use the addon for mage portals). | [Bot Panel](bot-panel.md) |
+| `.bot lfg join <dungeon id> <tank\|healer\|dps>` / `.bot lfg status` / `.bot lfg leave` | The dungeon fill for your own character: queues you, shows the open slots and the bots it added, and releases them. | [Queues](../../world/queues.md) |
 
 A refused `.bot` line answers `TortoiseBots: <verb>: refused <code>: <text>`.
 
