@@ -18,7 +18,7 @@ This page describes the TortoiseBots module as it runs on **WoW Forever** (Forev
 How to read the tables:
 
 - **On?** — the shipped default. "Always" means there is no switch.
-- **Where** — the line in `modules/tortoise_bots.conf` (`TortoiseBots.*`) or `aiplayerbot.conf` (`AiPlayerbot.*`) that changes it. Only the server admin can change it.
+- **Where** — the line in `tortoisebots.conf` (`TortoiseBots.*`, installed in `worldserver.conf.d/tortoisebots.conf`) or `aiplayerbot.conf` (`AiPlayerbot.*`) that changes it. Only the server admin can change it.
 - **More** — where it is explained.
 
 Two things must be true before any row below works:
@@ -32,8 +32,8 @@ New here? Read [Getting Started](getting-started.md) first.
 
 | Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| Log one of your own characters in as a bot; it joins your party | Always | `TortoiseBots.Player.Commands = 1` | [`.bot add`](commands/roster-and-hiring.md#logging-in-and-out) |
-| Up to four of your characters online as bots at once | Always | `TortoiseBots.Player.MaxBots = 4` | [Roster](commands/roster-and-hiring.md) |
+| Log one of your own characters in as a bot; it joins your party | Yes | `TortoiseBots.Player.Commands = 1` | [`.bot add`](commands/roster-and-hiring.md#logging-in-and-out) |
+| Up to four of your characters online as bots at once | Yes | `TortoiseBots.Player.MaxBots = 4` | [Roster](commands/roster-and-hiring.md) |
 | `.bot logout` logs one out | Always | — | [Roster](commands/roster-and-hiring.md) |
 | `.bot who` lists the bots you may order; a GM may add `all` | Always | — | [Inspecting](commands/bot-panel.md) |
 | `.bot stats [bot]` gives one line about the fleet or one bot | Always | — | [Inspecting](commands/bot-panel.md) |
@@ -105,7 +105,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Free bots seek world PvP | Yes | `AiPlayerbot.WorldPvpSeek = 2`, `AiPlayerbot.WorldPvpSeekBotPercent = 25` | [PvP](../world/queues.md) |
 | Free bots chase rare spawns | Yes | `AiPlayerbot.HuntRares = 1` | [Living world](../world/living-world.md) |
 | Free bots pick a destination and travel there by foot, flight path or boat/zeppelin | Always | — (`AiPlayerbot.GenerateTravelNodes = 1` builds and saves the graph) | [Travel](../world/living-world.md) |
-| Travel for grind spots, towns, vendors and repairs, and leaving an outgrown zone | Yes | — | [Living world](../world/living-world.md) |
+| Travel for quests, grind spots, towns, vendors and repairs, and leaving an outgrown zone | Yes | — | [Living world](../world/living-world.md) |
 | Travel to trainers, the auction house, mail, bosses or gathering nodes as a destination | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 | Autonomous alt-bots (your alt keeps playing after it leaves your group) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
 | Camp spots and Traveler's Tents | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
@@ -174,7 +174,7 @@ These are part of the Turtle WoW build that this page used to describe, or of ol
 - **Claimed guild bots.** A pool bot cannot be claimed as your own by a guild invite.
 - **Boss and raid tactics.** No per-boss interrupt, positioning or add rules; `AiPlayerbot.RaidReactions` is off and the boss-tactic tables are not loaded.
 - **Turtle custom raids and dungeons.**
-- **Travel destinations outside the reduced set.** Bots travel for grind spots, towns, vendors, repairs and leaving an outgrown zone; a trainer, auction house, mailbox, boss or gathering node is not a travel destination.
+- **Travel destinations outside the reduced set.** Bots travel for quests, grind spots, towns, vendors, repairs and leaving an outgrown zone; a trainer, auction house, mailbox, boss or gathering node is not a travel destination.
 - **Camp spots.**
 - **The offline auction-house seller.** The organic bot market exists, the separate seller service does not.
 - **Lineages and pool adoption.** The Forever pool creates and resets its own characters; it does not adopt old accounts or roll level-1 alts from level 60s.
