@@ -22,7 +22,7 @@ These settings configure class-specific artificial intelligence behaviors, abili
 | Setting | Default | What it does |
 | :--- | :---: | :--- |
 | [`AiPlayerbot.AnnounceSunderStacks`](#aiplayerbotannouncesunderstacks) | `0` | A warrior says in party or raid chat when its elite or boss target has five Sunder Armor stacks. |
-| [`AiPlayerbot.EnableOffSpecStrategies`](#aiplayerbotenableoffspecstrategies) | `1` | Gives hybrid bots their off-spec kit by default: healers deal damage, DPS specs off-heal. |
+| [`AiPlayerbot.EnableOffSpecStrategies`](#aiplayerbotenableoffspecstrategies) | `1` | Not on WoW Forever yet: the Forever build never adds off-spec kits. |
 | [`AiPlayerbot.HolyPaladinMeleeWeave`](#aiplayerbotholypaladinmeleeweave) | `1` | Grouped Holy paladins walk into melee of non-raid targets to weave Holy Strike and Seal of Wisdom when no urgent heal is needed. |
 | [`AiPlayerbot.HunterCarveInReachOnly`](#aiplayerbothuntercarveinreachonly) | `0` | Survival hunters cast Carve only on a target already in melee reach, never walking in for it. |
 | [`AiPlayerbot.HunterViperOnLowMana`](#aiplayerbothunterviperonlowmana) | `1` | Switches hunters to Aspect of the Viper when low on mana. |
@@ -51,17 +51,10 @@ A warrior bot, tank or damage dealer, that sees five *Sunder Armor* stacks on it
 </details>
 
 ### `AiPlayerbot.EnableOffSpecStrategies`
-When new bots are created, hybrid-class bots get their off-spec strategy on top of their spec kit: healing specs (Discipline/Holy priests, Restoration shamans and druids, Holy paladins) get `offdps`, and hybrid damage specs (Shadow priests, Elemental/Enhancement shamans, Retribution paladins, Cat/Balance druids) get `offheal`. See [healer off-DPS](../../classes/overview.md#healer-off-dps-offdps) and [off-healing](../../classes/overview.md#dps-off-healing-offheal) for what each kit does.
+**Not on WoW Forever yet.** The key is still read, but the Forever build's kit builder never adds an off-spec kit, so a hybrid bot fights with its spec kit only.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
-<details>
-<summary>How it works in detail</summary>
-
-The toggle only sets the default on newly created bots. Players can still switch either kit on or off per bot at any time (`/w <BotName> co +offheal`, `/w <BotName> co -offdps`, or [`.bot strategy`](../../play/commands/party-actions.md#bot-strategy)), regardless of this setting.
-
-When set to `0`, hybrid bots fight with their spec kit only: healers cast no damage spells, and DPS specs never heal. This does not touch solo priest healers in the open-world pool, which keep `offdps` so they can fight alone.
-
-</details>
+Players can still switch a kit on or off per bot at any time (`/w <BotName> co +offheal` or `/w <BotName> co -offdps`); that path is separate from this default. See [healer off-DPS](../../classes/overview.md#healer-off-dps-offdps) and [off-healing](../../classes/overview.md#dps-off-healing-offheal) for what each kit does.
 
 ### `AiPlayerbot.HunterCarveInReachOnly`
 Makes Survival hunters cast Carve only on a target that is already within melee reach, instead of walking onto it. It is off by default (new behaviour flags ship off) but recommended on: turn it on so a hunter at a tank-held boss stays at range instead of walking in and being carried back out.
@@ -99,7 +92,7 @@ Makes grouped Holy paladin bots walk into melee of non-raid targets to weave *Ho
 
 - When set to `0`, Holy paladins stay at casting range and only heal.
 - When set to `1` (default), a grouped Holy paladin whose groupmates (and itself) are all at or above `AiPlayerbot.MediumHealth` walks into melee of its current target, keeps *Seal of Wisdom* up, auto-attacks, and casts *Holy Strike* on cooldown.
-- *Seal of Wisdom* restores mana on melee hits on this server (roughly 15 procs a minute, ~50 mana per proc at rank 1), so the swings pay for the next heal.
+- *Seal of Wisdom* restores mana on melee hits on this server, so the swings pay for the next heal.
 - Holy Strike exists for paladins here; there is no player *Crusader Strike*, so Holy Strike is the only strike.
 - Never walks into melee when solo or in a raid, and healing or moving into heal range always takes priority over melee-weaving.
 
@@ -185,7 +178,7 @@ In PvE situations (open world and dungeons, excluding raids and PvP), warlocks s
 
 If the warlock has not yet learned its spec demon, it falls through the available summon hierarchy: Felhunter, Succubus, Voidwalker, and Imp. If the warlock is in a party that has no tank, it keeps the Voidwalker summoned to act as the group tank.
 
-The demon choice evaluates when the warlock has no active pet. Pool bots also swap an existing default demon when shards permit. Player pet strategy commands (such as `.bot strategy +pet imp`) or active pets on owned bots are never replaced. When set to `0`, warlocks summon the Voidwalker once learned, or the Imp before learning it.
+The demon choice evaluates when the warlock has no active pet. Pool bots also swap an existing default demon when shards permit. A player's own pet order (`/w <BotName> co +pet imp`) or an active pet on an owned bot is never replaced. When set to `0`, warlocks summon the Voidwalker once learned, or the Imp before learning it.
 
 </details>
 
@@ -201,7 +194,7 @@ Stops the warlock rotation from spending casts on a target that is about to die,
 - *Drain Soul* only harvests from trash, never from a boss, and only while the warlock holds fewer than two Soul Shards. The shard row also sits below *Shadowburn*, so a dying trash mob takes the instant first.
 - In combat *Life Tap* only fires when two *Shadow Bolts* cannot be paid for, instead of at the 40% medium-mana line. The health floor and the out-of-combat top-up band are unchanged.
 
-Manual curse strategies a player turns on (`.bot strategy +curse …`) are player orders and are never gated. When set to `0`, every row behaves as before.
+Manual curse strategies a player turns on (`/w <BotName> co +curse …`) are player orders and are never gated. When set to `0`, every row behaves as before.
 
 </details>
 
