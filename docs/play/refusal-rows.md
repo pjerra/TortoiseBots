@@ -39,7 +39,7 @@ These are `r.note` / `r.stragglerFail` texts from `runtime/DungeonRunPolicy.h`, 
 | Teleport failed | `the teleport of the stranded lead bot failed (<why>)` | `StrandFailed` |
 | Revive summon refused | `<name> summoned to it, refused (<answer>)` | `OrderRefused` |
 | Free-for-all loot refused | `loot: free-for-all refused (<answer>): looking for another bot to take it` | `OrderRefused` |
-| Generic order refused | `<order> refused: <answer>` | `OrderRefused` |
+| Generic order refused | `cmd <order> refused: <answer>` | `OrderRefused` |
 | Walk to the body refused | `regroup: the walk to the body was refused (<answer>)` | `OrderRefused` |
 | Gather refused | `gather refused (<answer>): <sending it once more\|going on without it>` | `OrderRefused` |
 | Stand point refused | `back to the stand point refused (<answer>): <going on from here\|...>` | `OrderRefused` |

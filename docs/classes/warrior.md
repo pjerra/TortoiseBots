@@ -33,7 +33,6 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - Casts *Shield Slam* on cooldown (or when procced by Improved Shield Slam).
   - Uses *Thunder Clap* against 2 or more melee attackers.
   - Opens with *Shield Slam* when it is ready and treats *Sunder Armor* as the filler while the stack builds.
-  - On an opt-in Patchwerk tank role (`patchwerk main` or `patchwerk soak`, see [Patchwerk roles](../play/dungeons-and-raids.md#patchwerk-opt-in-roles)) it casts *Shield Slam* whenever it can and keeps using *Sunder Armor* past five stacks while Shield Slam and Revenge are unavailable, to hold a threat lead.
 - **Mitigation & Taunts:**
   - Activates *Shield Wall* at low health (20–50%) and holds *Last Stand* for critical health emergencies (below 20%). Both lines are the `CriticalHealth` (20) and `LowHealth` (50) defaults.
   - Taunts with *Taunt* immediately if any attacker peels onto non-tank party members.
@@ -42,7 +41,8 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - Saves *Challenging Shout* for real emergencies: 3 or more loose mobs on non-tanks, not for a pack it already holds.
 
 ### Arms & Fury (Melee DPS)
-  - With `AiPlayerbot.WarriorGapCloser` on (off by default), out of combat and with the target 8-25 yards away, opens with *Charge* (Fury swaps to Battle Stance for it and back to Berserker Stance after); a crowd-controlled mob is never charged, and in a dungeon only a mob already in the fight is.
+- **Opening (both specs):** With `AiPlayerbot.WarriorGapCloser` on (off by default), out of combat and with the target 8-25 yards away, opens with *Charge* (Fury swaps to Battle Stance for it and back to Berserker Stance after); a crowd-controlled mob is never charged, and in a dungeon only a mob already in the fight is.
+- **Arms:**
   - Fights in Battle Stance, maintaining *Rend*, casting *Mortal Strike* on cooldown and *Overpower* on dodges. It swaps to Berserker Stance for *Pummel* and *Intercept*, then back to Battle Stance, but never dances for anything else — and never casts *Thunder Clap* in a group (a tank-only spell; solo Arms keeps it).
   - Cleaves packs with *Sweeping Strikes* (Battle Stance, 3 or more attackers in melee) and *Whirlwind* (only while already in Berserker Stance). *Sweeping Strikes* and its rage spenders agree on the pack size, so on two targets Arms keeps its single-target cycle instead of holding damage back for a buff that never fires. *Sweeping Strikes* is never started, and is dropped, beside a mob under the party's crowd control.
 - **Fury:**
@@ -69,9 +69,8 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - *Fury:* Uses *Pummel* (in Berserker Stance).
   - *Arms:* Uses *Pummel* first (stepping into Berserker Stance and back to Battle), falling back to *Shield Bash* without stance dancing.
   - Interrupts only fire on active cast bars or channels; delayed instants never trigger interrupts.
-- **Shouts:** Maintains *Battle Shout* on party members (skipping if an equal or stronger *Blessing of Might* is active, or below 10 rage). Protection maintains *Demoralizing Shout*. *Intimidating Shout* is off in dungeons and raids unless the group opts in with `co +aoe fear`.
+- **Shouts:** Maintains *Battle Shout* on party members (skipping if an equal or stronger *Blessing of Might* is active, or below 10 rage). Protection maintains *Demoralizing Shout*. *Intimidating Shout* is off in dungeons and raids (the `aoe fear` override is not registered on WoW Forever yet).
 - **Rage gates:** *Disarm* is only cast on a target that carries a weapon and only with the 20 rage it costs; *Bloodrage* is held while its cooldown runs, below medium health (70%), or below 20 rage to spend. Unusable rows are skipped, so low-rage ticks go to *Sunder Armor* and *Revenge* instead.
-- **Hold Ground Opt-In:** When [PoolMeleeHoldGround](../server/settings/performance.md#aiplayerbotpoolmeleeholdground) is enabled, pool warriors fight through low-health emergencies using *Shield Wall* and *Last Stand* rather than fleeing.
 
 ---
 

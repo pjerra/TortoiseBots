@@ -82,7 +82,7 @@ Shamans maintain 4-element totem sets tailored to group composition:
 - **Dispels:** Strips enemy buffs with *Purge* and cleanses allies using *Cure Poison* and *Cure Disease*.
 - **Resurrection:** Revives dead allies out of combat with *Ancestral Spirit*.
 - **Ghost Wolf:** Shifts to *Ghost Wolf* when carrying a flag in PvP.
-- **Player Totem Controls:** Players can customize totem sets via [`.bot totem`](../play/commands/bot-panel.md#bot-totem) or manage them with `drop` and `status`.
+- **Player Totem Controls:** Players can customize totem sets via [`.bot totem`](../play/commands/bot-panel.md#bot-totem) (`set`, per-element slot, `mode <auto|prepull|manual>`, and `status`); the addon's totem action can also `drop` the set.
 
 ---
 
