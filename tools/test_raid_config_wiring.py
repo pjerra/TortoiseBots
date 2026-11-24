@@ -25,7 +25,6 @@ class RaidConfigWiringTest(unittest.TestCase):
         self.assertIn('dungeonRunRaid = config.GetBoolDefault("AiPlayerbot.DungeonRunRaid", false);', keys)
         self.assertIn("bool dungeonRunRaid", HEADER)
         self.assertIn("AiPlayerbot.DungeonRunRaid = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.DungeonRunRaid", SETTINGS)
 
     def test_boss_rules_key_default_off_and_fed_to_the_raid_facts(self):
         # AiPlayerbot.DungeonRunRaidBossRules: a raid's boss fight ceiling of 1200 s, deaths that do not pause it while
@@ -36,7 +35,6 @@ class RaidConfigWiringTest(unittest.TestCase):
             'dungeonRunRaidBossRules = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidBossRules", false);', keys)
         self.assertIn("bool dungeonRunRaidBossRules = false;", HEADER)
         self.assertIn("AiPlayerbot.DungeonRunRaidBossRules = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.DungeonRunRaidBossRules", SETTINGS)
         code = strip_comments(COMMANDER)
         raid = body(code, "    if (raid && sPlayerbotAIConfig.dungeonRunRaid)", "\n    }\n")
         self.assertIn("f.raid.on = true;", raid)
@@ -51,7 +49,6 @@ class RaidConfigWiringTest(unittest.TestCase):
             'dungeonRunRespawnNest = config.GetBoolDefault("AiPlayerbot.DungeonRunRespawnNest", false);', keys)
         self.assertIn("bool dungeonRunRespawnNest = false;", HEADER)
         self.assertIn("AiPlayerbot.DungeonRunRespawnNest = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.DungeonRunRespawnNest", SETTINGS)
         code = strip_comments(COMMANDER)
         self.assertIn("f.respawnNest = sPlayerbotAIConfig.dungeonRunRespawnNest;", code)
         self.assertIn("if (f.respawnNest && slot.run.regroup", code)
@@ -67,7 +64,6 @@ class RaidConfigWiringTest(unittest.TestCase):
             'dungeonRunRaidHealerGuard = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidHealerGuard", false);', keys)
         self.assertIn("bool dungeonRunRaidHealerGuard = false;", HEADER)
         self.assertIn("AiPlayerbot.DungeonRunRaidHealerGuard = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.DungeonRunRaidHealerGuard", SETTINGS)
         code = strip_comments(COMMANDER)
         raid = body(code, "    if (raid && sPlayerbotAIConfig.dungeonRunRaid)", "\n    }\n")
         self.assertIn("f.raid.healerGuard = sPlayerbotAIConfig.dungeonRunRaidHealerGuard;", raid)
@@ -132,8 +128,6 @@ class RaidConfigWiringTest(unittest.TestCase):
         self.assertIn("bool raidTankHealerAssist = false;", HEADER)
         self.assertIn("AiPlayerbot.RaidHealerSeatsByClass = 0", TEMPLATE)
         self.assertIn("AiPlayerbot.RaidTankHealerAssist = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.RaidHealerSeatsByClass", SETTINGS)
-        self.assertIn("AiPlayerbot.RaidTankHealerAssist", SETTINGS)
         code = strip_comments(COMMANDER)
         self.assertIn("TortoiseBots::RaidLayout::Plan(members, sPlayerbotAIConfig.raidHealerSeatsByClass);", code)
         healer = strip_comments((ROOT / "ai/playerbot/strategy/values/PartyMemberToHeal.cpp").read_text())

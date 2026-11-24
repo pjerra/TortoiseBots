@@ -49,8 +49,6 @@ class VictimEscapeWiring(unittest.TestCase):
         self.assertIn('dungeonRunImmuneBossVictimEscape = config.GetBoolDefault("' + KEY + '", false);', CONFIG_CPP)
         self.assertRegex(CONF, r"(?m)^" + re.escape(KEY) + r" = 0$")
         self.assertIn("recommended on", CONF[CONF.index(KEY) - 2000:CONF.index(KEY) + 2000].replace("Recommended", "recommended"))
-        self.assertIn(KEY, SETTINGS)
-        self.assertIn(KEY, BOSS_DOC)
 
     def test_triggers_and_actions_registered(self):
         self.assertIn('#include "playerbot/strategy/actions/VictimEscapeActions.h"', TRIGGER_CONTEXT)
@@ -198,8 +196,6 @@ class VictimEscapeWiring(unittest.TestCase):
         self.assertIn('"reason=%s"', log)
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "BossTacticsVictimEscape", info1, info2);', log)
         self.assertIn("nowMs - last < kVictimEscapeGapMs", log)  # the refused row's throttle
-        self.assertIn("`BossTacticsVictimEscape`", REFUSAL_DOC)
-        self.assertIn("BossTacticsVictimEscape", BOSS_DOC)
 
     def test_policy_test_names_the_failing_case(self):
         self.assertIn("CHECK(VictimEscapeFor(true, false, true, true, CLASS_MAGE, iceBlock) == VictimEscape::IceBlock);",

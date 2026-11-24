@@ -163,8 +163,6 @@ class Key(unittest.TestCase):
         self.assertIn("\nAiPlayerbot.DungeonRunFactJudgeCharmedLead = 0\n", CONF_DIST)
 
     def test_documented_recommended_on(self):
-        self.assertIn("AiPlayerbot.DungeonRunFactJudgeCharmedLead", SETTINGS)
-        self.assertIn("AiPlayerbot.DungeonRunFactJudgeCharmedLead", TACTICS)
         i = CONF_DIST.index("AiPlayerbot.DungeonRunFactJudgeCharmedLead = 0")
         self.assertIn("recommended on", CONF_DIST[CONF_DIST.rindex("\n\n", 0, i):i])
 

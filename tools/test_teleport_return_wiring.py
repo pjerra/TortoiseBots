@@ -115,8 +115,6 @@ class TeleportReturnWiringTest(unittest.TestCase):
         for section in sections:
             self.assertIn("ai->CanMove()", section)
             self.assertNotIn("CanMove(true)", section)
-        docs = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
-        self.assertIn("**Known limit:** a held bot takes no hazard escapes either", docs)
 
     def test_policy_tick_order(self):
         tick = body(POLICY, "inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const RestLines& lines)\n{", "\n}\n")

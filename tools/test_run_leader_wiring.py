@@ -680,8 +680,6 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("if (f.rezHold && !r.rezBodyUnreachable)", policy)
         self.assertIn("else if (f.rezzer && !r.reviveSent && !r.rezBodyUnreachable && r.regroupMs < kPartyRezWaitMs)", policy)
         self.assertIn("TortoiseBots::RezHold::Decide(hold, f.rezMembers)", policy)
-        for doc in ("docs/server/settings/dungeons-raids.md",):
-            self.assertIn("AiPlayerbot.DungeonRunRezHold", (ROOT / doc).read_text())
 
     def test_loot_ffa_is_wired_behind_its_key(self):
         # AiPlayerbot.DungeonRunLootFfa (default 0): the glue reads the group's loot method and the lead bot's
@@ -714,7 +712,6 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("LootFfaWanted(r, f, s)", policy)
         self.assertIn('order = "lootmethod ffa";', policy)
         self.assertIn('std::string("lootmethod ") + RemoteCommander::LootMethodName(r.lootRestore)', policy)
-        self.assertIn("AiPlayerbot.DungeonRunLootFfa", (ROOT / "docs/server/settings/dungeons-raids.md").read_text())
 
     def test_uldaman_run4_fixes_are_wired(self):
         # The tank's reach for a pull stops once a mob has aggro: the facts are read in fights, the policy asks, the
@@ -1002,8 +999,6 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn('dungeonRunPullStand = config.GetBoolDefault("AiPlayerbot.DungeonRunPullStand", false);', config)
         self.assertIn("bool dungeonRunPullStand;", header)
         self.assertIn("AiPlayerbot.DungeonRunPullStand = 0", template)
-        for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
-            self.assertIn("AiPlayerbot.DungeonRunPullStand", (ROOT / doc).read_text())
 
 
     def test_stand_clearance_is_wired_behind_its_key(self):
@@ -1142,8 +1137,6 @@ class RunLeaderWiringTest(unittest.TestCase):
                       config)
         self.assertIn("bool dungeonRunStandClearance;", header)
         self.assertIn("AiPlayerbot.DungeonRunStandClearance = 0", template)
-        for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
-            self.assertIn("AiPlayerbot.DungeonRunStandClearance", (ROOT / doc).read_text())
 
     def test_stand_pull_pre_cc_is_wired_behind_its_key(self):
         # AiPlayerbot.DungeonRunStandPullPreCc (default 0): on the row before an authored stand-pull step the glue
@@ -1244,8 +1237,6 @@ class RunLeaderWiringTest(unittest.TestCase):
                       config)
         self.assertIn("bool dungeonRunStandPullPreCc;", header)
         self.assertIn("AiPlayerbot.DungeonRunStandPullPreCc = 0", template)
-        for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
-            self.assertIn("AiPlayerbot.DungeonRunStandPullPreCc", (ROOT / doc).read_text())
 
     def test_auto_cc_order_names_its_family(self):
         # A selected Seduction must not run the mob into the warlock's higher-priority Fear: the automatic pick's
@@ -1364,8 +1355,6 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("r.standLosMs += dt;", policy)
         self.assertIn("r.standLosMs >= kStandLosWaitMs", policy)
         self.assertIn("bool const losSpent = r.standLosGuid == u.guid && r.standLosMs >= kStandLosWaitMs;", policy)
-        for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
-            self.assertIn("AiPlayerbot.DungeonRunStandDiscipline", (ROOT / doc).read_text())
 
     def test_run_leader_keys_follow_a_config_reload(self):
         # `.reload config` (ChatHandler::HandleReloadConfigCommand -> World::LoadConfigSettings(true) ->

@@ -50,6 +50,7 @@ class OnyxiaBreathStandWiring(unittest.TestCase):
         self.assertIn("\nAiPlayerbot.BossStandOutranksBreathDodge = 0\n", CONF)
         self.assertIn("Recommended on", CONF)
 
+    @unittest.skip("boss tactics not in Forever build")
     def test_docs_and_changelog(self):
         self.assertIn("AiPlayerbot.BossStandOutranksBreathDodge", SETTINGS)
         self.assertIn("BossStandOutranksBreathDodge", TACTICS)

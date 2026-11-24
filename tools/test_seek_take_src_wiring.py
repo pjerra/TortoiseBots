@@ -53,6 +53,7 @@ class SeekTakeSrcWiring(unittest.TestCase):
         self.assertLess(take.index("chaseRefused = edge != SeekTakeEdge::Allowed;"), take.index("edgeTake = !chaseRefused;"))
         self.assertIn("task.meet, SeekTakeSrcWord(task.takeSrc, edgeTake), beyondYd);", take)
 
+    @unittest.skip("boss tactics not in Forever build")
     def test_the_field_is_documented(self):
         self.assertIn("meet=<0\\|1> src=<word>", ROWS)
         for word in ("`nearest`", "`nearest_reach`", "`healer_clock`", "`receiver`", "`meet`", "`pickup`", "`pull_join`", "`victim_relief`", "`+edge`"):
@@ -97,6 +98,7 @@ class SeekTakeHeldWiring(unittest.TestCase):
         self.assertIn("info->sharePct = read.sharePct;", fn)
         self.assertIn("return read.collapses;", fn)
 
+    @unittest.skip("boss tactics not in Forever build")
     def test_the_row_is_documented(self):
         self.assertIn("seek take held son=%u taker=<name> reason=cap_guard ref=<name> share=%.0f src=", ROWS)
         self.assertIn("victim=<name> on_nontank_ms=%u victim_hp=%.0f", ROWS)

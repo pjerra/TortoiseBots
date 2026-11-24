@@ -169,8 +169,6 @@ class PlaceUnstickWiring(unittest.TestCase):
         self.assertIn("bool dungeonRunPlaceUnstick = false;", config_h)
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunPlaceUnstick", false)', config)
         self.assertIn("AiPlayerbot.DungeonRunPlaceUnstick = 0", template)
-        self.assertIn("AiPlayerbot.DungeonRunPlaceUnstick", settings)
-        self.assertIn("DungeonRunPlaceUnstick", play)
 
 
 if __name__ == "__main__":

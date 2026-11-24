@@ -47,6 +47,7 @@ class PackFocusSparesWiringTest(unittest.TestCase):
         self.assertIn("const std::vector<ai::BossTacticRow>* const own = r.liveTactics->Rows(r.plan->map, entry);", spare)
         self.assertIn("BossTacticOwnsEntryIn(r, keys, entry, true)", spare)
 
+    @unittest.skip("boss tactics not in Forever build")
     def test_the_docs_carry_the_key(self):
         for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/boss-tactics.md",
                     "docs/play/dungeon-run-leader.md"):

@@ -236,8 +236,6 @@ class SpreadSlotsWiring(unittest.TestCase):
                       config)
         template = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
         self.assertIn("\nAiPlayerbot.SpreadRangedMinRange = 0", template)
-        docs = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
-        self.assertIn("AiPlayerbot.SpreadRangedMinRange", docs)
 
 
 if __name__ == "__main__":

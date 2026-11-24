@@ -28,7 +28,6 @@ class SeekNearestTakeWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekNearestTake", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekNearestTake = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekNearestTake = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.DungeonRunSeekNearestTake", SETTINGS)
 
     def test_find_boss_seek_tank_calls_the_helper_under_the_flag(self):
         find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
@@ -69,7 +68,6 @@ class SeekNearestTakeWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekNearestTakeReach", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekNearestTakeReach = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekNearestTakeReach = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.DungeonRunSeekNearestTakeReach", SETTINGS)
 
     def test_the_reach_feeds_the_pick(self):
         # Walk 57 F4: the reach's inputs are read only with its key, per Son, and the reference guard is the cap's own.

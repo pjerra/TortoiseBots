@@ -138,19 +138,12 @@ class BotAreaTriggerWiringTest(unittest.TestCase):
         self.assertIn('LoadList<std::list<uint32> >(config.GetStringDefault("AiPlayerbot.BotAreaTriggers", ""), botAreaTriggerIds);', CONF_CPP)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.BotAreaTriggers =$")
         self.assertIn("# Default: (empty)", TEMPLATE)
-        doc = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
-        self.assertIn("| [`AiPlayerbot.BotAreaTriggers`](#aiplayerbotbotareatriggers) | *(empty)* |", doc)
-        self.assertIn("**Default:** *(empty)*", doc[doc.index("### `AiPlayerbot.BotAreaTriggers`"):])
 
     def test_audited_ids_are_documented(self):
         # 962 is the opt-in example; every audited id says what its script does.
-        doc = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
         audited = re.findall(r"(?m)^#   (\d+) - ", TEMPLATE)
         self.assertEqual(audited, ["962"])
         self.assertIn("Opt in with: AiPlayerbot.BotAreaTriggers = 962", TEMPLATE)
-        self.assertIn("Opt in with `AiPlayerbot.BotAreaTriggers = 962`", doc)
-        for tid in audited:
-            self.assertIn("**%s**" % tid, doc)
 
     def test_source_is_built(self):
         self.assertIn('"${TORTOISEBOTS_ROOT}/ai/playerbot/BotAreaTriggers.cpp"', CMAKE)

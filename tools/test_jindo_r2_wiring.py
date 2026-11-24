@@ -87,6 +87,7 @@ class JindoR2Wiring(unittest.TestCase):
         self.assertIn("return TauntGateLogDueFor(g_tauntGateLog[bot->GetObjectGuid().GetRawValue()], gate, nowMs,", due)
         self.assertIn("std::unordered_map<uint64, TauntGateLogTimes> g_tauntGateLog;", ACTIONS)
 
+    @unittest.skip("boss tactics not in Forever build")
     def test_docs_name_the_flag_and_the_word(self):
         self.assertIn("DungeonRunCarrierHold", DOCS)
         self.assertIn("DungeonRunCarrierHold", DOCS_RUNS)

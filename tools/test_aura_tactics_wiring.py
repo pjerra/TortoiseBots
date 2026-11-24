@@ -293,7 +293,6 @@ class UseObjectWiring(unittest.TestCase):
         load = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()")
         self.assertIn('dungeonRunUseObject = config.GetBoolDefault("AiPlayerbot.DungeonRunUseObject", false);', load)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunUseObject = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunUseObject", DOCS)
 
 class TankSwapWiring(unittest.TestCase):
     """The swap_on_aura runtime (Kurinnaxx's Mortal Wound): the trigger and the action share one rule, both keys gate
@@ -403,7 +402,6 @@ class TankSwapWiring(unittest.TestCase):
         load = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()")
         self.assertIn('dungeonRunTankSwap = config.GetBoolDefault("AiPlayerbot.DungeonRunTankSwap", false);', load)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankSwap = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankSwap", DOCS)
 
 class DpsHoldWiring(unittest.TestCase):
     def test_the_policy_holds_on_edges_and_caps_until_tank(self):

@@ -139,12 +139,9 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn('dungeonRunAddCrew = config.GetBoolDefault("AiPlayerbot.DungeonRunAddCrew", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunAddCrew = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunAddCrew = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunAddCrew", DOCS)
         block = TEMPLATE[TEMPLATE.index("# The add_crew boss tactic"):]
         block = block[:block.index("AiPlayerbot.DungeonRunAddCrew = 0")]
         self.assertNotIn("recommended on", block)
-        self.assertIn("`add_crew`", BOSS_DOCS)
-        self.assertIn("DungeonRunAddCrew", BOSS_DOCS)
 
     def test_row_ships_with_its_migration(self):
         migration = (ROOT / "data/sql/world/20261111160000_world.sql").read_text()

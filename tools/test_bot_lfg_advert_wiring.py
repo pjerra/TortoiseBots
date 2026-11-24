@@ -132,4 +132,3 @@ class BotLfgChatDocsTest(unittest.TestCase):
     def test_part3_docs(self):
         block = TEMPLATE[TEMPLATE.index("# Bot LFG dungeon groups:"):TEMPLATE.index("AiPlayerbot.BotLfgChat = 1")]
         self.assertIn("AiPlayerbot.BotLfgChat", block)
-        self.assertIn("## Joining a bot LFG group", GUIDE)

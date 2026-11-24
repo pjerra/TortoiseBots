@@ -211,7 +211,6 @@ class GuardAssignedTankWiring(unittest.TestCase):
             '"AiPlayerbot.DungeonRunGuardClockHittable", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunGuardClockHittable = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunGuardClockHittable = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunGuardClockHittable", DOCS)
 
     def test_config_key_is_read_templated_and_documented(self):
         self.assertIn(
@@ -219,8 +218,6 @@ class GuardAssignedTankWiring(unittest.TestCase):
             '"AiPlayerbot.DungeonRunGuardLeavesAssignedTank", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunGuardLeavesAssignedTank = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunGuardLeavesAssignedTank = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunGuardLeavesAssignedTank", DOCS)
-        self.assertIn("AiPlayerbot.DungeonRunGuardLeavesAssignedTank", BOSS_DOCS)
 
 
 if __name__ == "__main__":

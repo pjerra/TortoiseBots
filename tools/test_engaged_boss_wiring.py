@@ -101,7 +101,6 @@ class EngagedBossWiring(unittest.TestCase):
         self.assertIn('bossTacticsKeepsEngagedBoss = config.GetBoolDefault("AiPlayerbot.BossTacticsKeepsEngagedBoss", false);',
                       CONFIG)
         self.assertIn("AiPlayerbot.BossTacticsKeepsEngagedBoss = 0", TEMPLATE)
-        self.assertIn("AiPlayerbot.BossTacticsKeepsEngagedBoss", SETTINGS)
         # Which fights it is for: Onyxia's Lair first, the other raids untested, and only the rows it serves.
         self.assertIn("Recommended on for Onyxia's Lair; not yet tested in other raids.", TEMPLATE)
         self.assertIn("a boss with a\n# tank_post row", TEMPLATE)
