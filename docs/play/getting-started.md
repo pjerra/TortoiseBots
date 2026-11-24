@@ -49,7 +49,7 @@ Hired companions and claimed guild bots from the Turtle WoW build are not on WoW
 - `.bot stats` shows the fleet in one line; `.bot stats <Name>` shows one bot's level, class, health, mana, money, zone and whether it follows, stays or is free.
 - A summoned bot arrives next to you only when neither of you is in combat, the bot is alive, and neither of you is on a taxi or being teleported; the same bot has a short wait between summons (`AiPlayerbot.OwnedBotSummonCooldown`, 300 seconds by default).
 
-`.bot help` prints the commands your server allows. The short list is: `add`, `logout`, `who`, `stats`, `summon`, `follow`, `stay`, `attack`, `flee`, `maintenance`, `autogear`, `totem`, `behavior`, `blessing`, `choice`, `service`, `lfg`, `version`, `features`.
+`.bot help` prints the commands your server allows. The player `.bot` verbs are: `add`, `logout`, `who`, `stats`, `summon`, `follow`, `stay`, `attack`, `flee`, `maintenance`, `autogear`, `totem`, `behavior`, `blessing`, `choice`, `service`, `lfg`, `version`, `features`.
 
 ## Ordering bots in the field
 
@@ -79,7 +79,7 @@ Other actions of the Turtle build — `cc <mark>`, `aoe`, `auto cc`, `sap`, `loo
 
 A fresh install has no bots in the world. The server admin enables the pool and starts it:
 
-1. `TortoiseBots.Pool.Enable = 1` in `modules/tortoise_bots.conf`.
+1. `TortoiseBots.Pool.Enable = 1` in `tortoisebots.conf` (`worldserver.conf.d/tortoisebots.conf`).
 2. `.tb pool create <n>` makes pool characters (up to `TortoiseBots.Pool.MaxCharacters`, 50 by default).
 3. `.tb pool start` keeps `TortoiseBots.Pool.TargetOnline` bots online (0 by default; `.tb pool population low|high` uses the 10/50 presets).
 
