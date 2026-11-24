@@ -3,10 +3,15 @@
 //
 // M1: the six verbs of the round, the engage seconds (0-60, empty = the default 4) and the stance word (`turn` is `turnback`).
 // M2: `interrupt` and the probe order the picked bot's action follows. The later rounds append their own functions next to these.
+// M4: `PickCcBot`, the whole-party crowd-control pick over the run's own table (DungeonRun::kRunCc).
 #pragma once
+
+#include "ai/playerbot/policy/combat/CcPermissionPolicy.h"
+#include "runtime/DungeonRunPolicy.h"
 
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -234,6 +239,102 @@ inline char const* InterruptTickResult(InterruptTick tick)
         case InterruptTick::TimedOut: return "fail:interrupt";
         default: return "pending:interrupt";
     }
+}
+
+// ---- M4: `cc <mark> <guid>` for the whole party (D12) ----
+// One bot as the pick sees it. `known` is the CcBit of every run family the bot has the spell for, `denied` the owner's deny mask in
+// ai::CcPermissions kinds (CcDeniedForOwner), `hasCcKit` whether the bot's combat kit carries the `cc` strategy (today the mage's and the
+// rogue's; #123 adds the rest, and this pick needs no change for them).
+struct CcCandidate
+{
+    std::string name;
+    bool alive = true;
+    bool inCombat = false;
+    bool hasCcKit = false;
+    std::uint32_t known = 0;
+    std::uint32_t denied = 0;
+};
+
+struct CcPick
+{
+    bool found = false;
+    size_t index = 0;                                   // into the candidate list
+    DungeonRun::CcFamily family = DungeonRun::CcFamily::None;
+    std::string familyToken;                            // the token the `cc` order carries (CcFamilyToken)
+    std::string reasons;                                // when !found: `name:reason;...` (dead, no-cc-kit, no-fitting-spell, denied, in-combat)
+};
+
+// The family a token names ("polymorph", "shackleundead", ...): None for "", "none" and anything that is not a family of the run's table.
+inline DungeonRun::CcFamily CcFamilyFromToken(std::string const& text)
+{
+    std::string const token = DungeonRun::CcFamilyTokenNorm(text);
+    if (token.empty() || token == "none")
+        return DungeonRun::CcFamily::None;
+    for (DungeonRun::RunCcSpell const& row : DungeonRun::kRunCc)
+        if (DungeonRun::CcFamilyTokenNorm(row.spell) == token)
+            return row.family;
+    return DungeonRun::CcFamily::None;
+}
+
+// The bot and the family for a `cc <mark> <guid>` with no bot named. Over every (bot, family row) pair of the run's table (the same one the run's
+// automatic crowd control reads) the best one wins: tier A before S before R, then the table order (polymorph before sap), then the party order.
+// A row qualifies when it is an automatic pick (Freezing Trap is not), the target's creature type fits it (CcFits), the bot knows the spell and
+// carries the `cc` kit, and the owner's permissions do not deny its kind. A `prePull` row (Sap) also needs the target and the bot out of combat.
+// `only` (not None) restricts the pick to that family. With no pick `reasons` names each bot's reason.
+inline CcPick PickCcBot(std::vector<CcCandidate> const& cands, std::uint32_t creatureType, bool targetEngaged,
+    DungeonRun::CcFamily only = DungeonRun::CcFamily::None)
+{
+    CcPick best;
+    int bestRank = 0;
+    std::string reasons;
+    for (size_t ci = 0; ci < cands.size(); ++ci)
+    {
+        CcCandidate const& c = cands[ci];
+        char const* reason = nullptr;
+        if (!c.alive)
+            reason = "dead";
+        else if (!c.hasCcKit)
+            reason = "no-cc-kit";
+        else
+        {
+            bool fits = false, denied = false;
+            bool eligible = false;
+            for (size_t ri = 0; ri < sizeof(DungeonRun::kRunCc) / sizeof(DungeonRun::kRunCc[0]); ++ri)
+            {
+                DungeonRun::RunCcSpell const& row = DungeonRun::kRunCc[ri];
+                if (!row.autoPick || (only != DungeonRun::CcFamily::None && row.family != only))
+                    continue;
+                if (!(c.known & DungeonRun::CcBit(row.family)) || !DungeonRun::CcFits(row.family, creatureType))
+                    continue;
+                fits = true;
+                if (c.denied & ai::CcPermissions::KindFromSpellName(row.spell))
+                {
+                    denied = true;
+                    continue;
+                }
+                if (row.prePull && (targetEngaged || c.inCombat))
+                    continue;
+                eligible = true;
+                int const rank = DungeonRun::RunCcTierRank(row.tier) * 100 + int(ri);
+                if (!best.found || rank < bestRank)
+                {
+                    best.found = true;
+                    best.index = ci;
+                    best.family = row.family;
+                    bestRank = rank;
+                }
+            }
+            if (!eligible)
+                reason = !fits ? "no-fitting-spell" : denied ? "denied" : "in-combat";
+        }
+        if (reason)
+            reasons += (reasons.empty() ? "" : ";") + c.name + ":" + reason;
+    }
+    if (best.found)
+        best.familyToken = DungeonRun::CcFamilyToken(best.family);
+    else
+        best.reasons = reasons;
+    return best;
 }
 }
 }

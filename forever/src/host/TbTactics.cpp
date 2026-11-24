@@ -19,6 +19,7 @@
 #include "Unit.h"
 
 #include "TbBotMgr.h"
+#include "host/TbCc.h"
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/PlayerbotAI.h"
@@ -367,6 +368,77 @@ Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::st
 
 namespace
 {
+// Whether the bot knows any rank of a family's spell (the run's own spell tables, DungeonRunPolicy.h).
+template <size_t N>
+bool KnowsAny(Player const* bot, uint32 const (&spells)[N])
+{
+    for (uint32 const id : spells)
+        if (bot->HasSpell(id))
+            return true;
+    return false;
+}
+
+// The CcBit of every run family the bot has a spell for. Seduction is the succubus' pet spell, not the warlock's: it is never read here.
+uint32 KnownCcFamilies(Player const* bot)
+{
+    using DungeonRun::CcBit;
+    using DungeonRun::CcFamily;
+    uint32 known = 0;
+    if (KnowsAny(bot, DungeonRun::kPolymorphSpells))
+        known |= CcBit(CcFamily::Polymorph);
+    if (KnowsAny(bot, DungeonRun::kShackleUndeadSpells))
+        known |= CcBit(CcFamily::Shackle);
+    if (KnowsAny(bot, DungeonRun::kBanishSpells))
+        known |= CcBit(CcFamily::Banish);
+    if (KnowsAny(bot, DungeonRun::kSapSpells))
+        known |= CcBit(CcFamily::Sap);
+    if (KnowsAny(bot, DungeonRun::kHibernateSpells))
+        known |= CcBit(CcFamily::Hibernate);
+    if (KnowsAny(bot, DungeonRun::kFreezingTrapSpells))
+        known |= CcBit(CcFamily::FreezingTrap);
+    if (KnowsAny(bot, DungeonRun::kRepentanceSpells))
+        known |= CcBit(CcFamily::Repentance);
+    if (KnowsAny(bot, DungeonRun::kFearSpells))
+        known |= CcBit(CcFamily::Fear);
+    if (KnowsAny(bot, DungeonRun::kScareBeastSpells))
+        known |= CcBit(CcFamily::ScareBeast);
+    return known;
+}
+}
+
+Player* PickCcPlayer(std::vector<Player*> const& bots, Unit* target, std::string const& onlyFamily, Player* sender, std::string& familyToken,
+    std::string& reasons)
+{
+    familyToken.clear();
+    reasons.clear();
+    std::vector<CcCandidate> cands;
+    for (Player* bot : bots)
+    {
+        CcCandidate cand;
+        cand.name = bot ? std::string(bot->GetName()) : std::string();
+        PlayerbotAI* ai = AiOf(bot);
+        cand.alive = bot && bot->IsInWorld() && bot->IsAlive() && !bot->IsInFlight() && !bot->IsBeingTeleported();
+        if (cand.alive)
+        {
+            cand.inCombat = bot->IsInCombat();
+            cand.hasCcKit = ai && ai->HasStrategy("cc", BotState::BOT_STATE_COMBAT);
+            cand.known = KnownCcFamilies(bot);
+            cand.denied = h8::CcDeniedForOwner(h8::CcOwnerOf(bot, sender), bot->GetClass());
+        }
+        cands.push_back(cand);
+    }
+    CcPick const pick = PickCcBot(cands, target ? uint32(target->GetCreatureType()) : 0u, target && target->IsInCombat(), CcFamilyFromToken(onlyFamily));
+    if (!pick.found)
+    {
+        reasons = pick.reasons;
+        return nullptr;
+    }
+    familyToken = pick.familyToken;
+    return bots[pick.index];
+}
+
+namespace
+{
 // An interrupt order still trying (see kInterruptWindowMs): one per bot, the newest order replaces the older one.
 struct PendingInterrupt
 {
@@ -680,6 +752,13 @@ void CancelPendingInterrupt(Player*) {}
 Player* PickInterruptBot(std::vector<Player*> const&, Unit*, std::string& action, std::string& reasons)
 {
     action.clear();
+    reasons = "no-engine";
+    return nullptr;
+}
+
+Player* PickCcPlayer(std::vector<Player*> const&, Unit*, std::string const&, Player*, std::string& familyToken, std::string& reasons)
+{
+    familyToken.clear();
     reasons = "no-engine";
     return nullptr;
 }

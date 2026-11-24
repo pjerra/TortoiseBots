@@ -115,8 +115,8 @@ class G8Wiring(unittest.TestCase):
         self.assertIn("h8::ClearCcOrder(", clear)
         self.assertIn("ObjectAccessor::FindPlayerByName(", clear)    # a bot that left the group is still found
         orders = text("forever/src/host/run/TbRunOrders.cpp")
-        self.assertIn("h8::CcOwnedRecord(rec.ccOwned", orders)
-        self.assertIn("h8::CcOwnedForget(rec.ccOwned", orders)
+        self.assertIn("h8::CcOwnedRecord(rec->ccOwned", orders)
+        self.assertIn("h8::CcOwnedForget(rec->ccOwned", orders)
 
     # Review round 2: an unavailable bot and a refused teardown clear are kept pending, retried, and visible; a newer assignment takes the bot over.
     def test_cc_teardown_is_retried(self):

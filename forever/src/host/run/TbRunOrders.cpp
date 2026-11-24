@@ -13,6 +13,7 @@
 #include "host/TbCc.h"
 #include "host/TbCcPure.h"
 #include "host/TbOrdersApi.h"
+#include "host/TbTactics.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
@@ -758,44 +759,107 @@ OrderAnswer DoFocus(Party const& ctx, ResolvedParty const& party, od::Parsed con
 
 // G8: `cc <mark> <handle> <bot> [family]`. The run's crowd-control assignment (the plan's cc rows) is carried out SYNCHRONOUSLY by h8::ApplyCcOrder, the same
 // call `.tb cc` makes: the group's raid icon goes onto the unit, the bot's `rti cc` and `run cc family` are set, and the change is read back (undone when it
-// did not hold). No cast is started here: the mage's `cc` strategy polymorphs the `rti cc` unit when its fight starts. Nothing is queued, so nothing can
-// fail late: the answer is the final one. A refusal changes nothing (ApplyCcOrder puts everything back).
-OrderAnswer DoCc(RunRec& rec, Party const& ctx, ResolvedParty const& party, od::Parsed const& p)
+// did not hold). The order then starts the cast itself (ApplyCcOrder's StartCcCast: TB's immediate probe, the mature action queued behind its own `reach cc`
+// when the unit is out of reach); the `cc` strategy's fight-start trigger stays the fallback. A refusal changes nothing (ApplyCcOrder puts everything back),
+// so an accepted answer is the final one.
+// M4 (tactical orders D12/D13): a commander's `cc <mark> <guid> [family]` names no bot: tactics::PickCcPlayer picks one from the run's own cc table, then the
+// same ApplyCcOrder runs with the picked family token. `rec` is the run when a run sent the order: only then is the run's bookkeeping (a pending clear, the
+// bots it marked) touched; a commander's order has no run behind it.
+OrderAnswer DoCc(RunRec* rec, Party const& ctx, ResolvedParty const& party, od::Parsed const& p)
 {
-    Player* bot = FindBotNamed(party, p.bot);
-    if (!bot)
-        return Refuse("no-bot", "That bot is not in your commanded group.");
-    if (!bot->IsAlive() || bot->IsInFlight() || bot->IsBeingTeleported())
-        return Refuse("unavailable", NameOf(bot) + " is dead, on a taxi or teleporting.");
+    Player* bot = nullptr;
+    bool const pick = p.bot.empty();
+    if (!pick)
+    {
+        bot = FindBotNamed(party, p.bot);
+        if (!bot)
+            return Refuse("no-bot", "That bot is not in your commanded group.");
+        if (!bot->IsAlive() || bot->IsInFlight() || bot->IsBeingTeleported())
+            return Refuse("unavailable", NameOf(bot) + " is dead, on a taxi or teleporting.");
+    }
     ObjectGuid guid;
     od::Judged judged;
     Unit* target = ResolveUnit(ctx, party, p.handle, p.targetToken, guid, judged);
     if (!target)
         return Refuse(judged.ok ? od::Refused("invalid-target", "No unit with that GUID is on the group's map and instance.") : judged);
+    std::string family = p.family;
+    if (pick)
+    {
+        // Skull is the party's kill mark: refused before a bot is picked for it (ApplyCcOrder refuses it too).
+        if (p.mark == "skull")
+            return Refuse("invalid", "skull is the party's kill mark and never a crowd-control mark.");
+        std::string reasons;
+        bot = tactics::PickCcPlayer(party.bots, target, p.family, ObjectAccessor::FindPlayer(ctx.owner), family, reasons);
+        if (!bot)
+            return Refuse("no-cc-bot", reasons.empty() ? std::string("No bot of the group can crowd-control that unit.") : reasons);
+    }
     std::string code, detail;
-    if (!h8::ApplyCcOrder(party.lead, bot, p.mark, guid, p.family, code, &detail))
+    if (!h8::ApplyCcOrder(party.lead, bot, p.mark, guid, family, code, &detail))
         return Refuse(od::CcAnswerCode(code), detail.empty() ? "The crowd-control order was refused (" + code + ")." : detail);
-    DropPendingCc(bot->GetName());      // a newer assignment: an older run's pending clear must leave it alone
-    h8::CcOwnedRecord(rec.ccOwned, bot->GetName(), p.mark);
-    return Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
+    if (rec)
+    {
+        DropPendingCc(bot->GetName());      // a newer assignment: an older run's pending clear must leave it alone
+        h8::CcOwnedRecord(rec->ccOwned, bot->GetName(), p.mark);
+    }
+    OrderAnswer answer = Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
+    if (pick && !family.empty())
+        answer.text += " family=" + family;
+    return answer;
 }
 
 // G8: `cc clear <bot> [<mark> <handle>]`: the bot's `rti cc` and `run cc family` go to none; with a mark and a unit the party's icon goes too, only while it
 // still holds that unit. A handle that no longer names a unit is refused invalid-target (the icon cannot be matched to a unit that is not known).
-OrderAnswer DoCcClear(RunRec& rec, ResolvedParty const& party, od::Parsed const& p)
+// M4 (D13): `cc clear` alone clears every bot of the party (the same call each): `party <n cleared>`.
+OrderAnswer DoCcClear(RunRec* rec, Party const& ctx, ResolvedParty const& party, od::Parsed const& p)
 {
-    Player* bot = FindBotNamed(party, p.bot);
-    if (!bot)
-        return Refuse("no-bot", "That bot is not in your commanded group.");
+    std::vector<Player*> targets;
+    if (p.bot.empty())
+        targets = party.bots;
+    else
+    {
+        Player* named = FindBotNamed(party, p.bot);
+        if (!named)
+            return Refuse("no-bot", "That bot is not in your commanded group.");
+        targets.push_back(named);
+    }
     ObjectGuid guid;
-    if (!p.mark.empty() && !ResolveHandle(rec.leader, p.handle, guid))
-        return Refuse("invalid-target", "No unit with that GUID is known to this run.");
-    std::string code, detail;
-    if (!h8::ClearCcOrder(party.lead, bot, p.mark, guid, code, &detail))
-        return Refuse(od::CcAnswerCode(code), detail.empty() ? "The crowd-control clear was refused (" + code + ")." : detail);
-    DropPendingCc(bot->GetName());
-    h8::CcOwnedForget(rec.ccOwned, bot->GetName());
-    return Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
+    if (!p.mark.empty())
+    {
+        bool const known = rec ? ResolveHandle(rec->leader, p.handle, guid) : (ctx.resolveTarget && ctx.resolveTarget(p.handle, p.targetToken, guid));
+        if (!known)
+            return Refuse("invalid-target", "No unit with that GUID is known to this run.");
+    }
+    uint32 cleared = 0;
+    std::string firstCode, firstDetail, failedNames;
+    for (Player* bot : targets)
+    {
+        std::string code, detail;
+        if (!h8::ClearCcOrder(party.lead, bot, p.mark, guid, code, &detail))
+        {
+            failedNames += (failedNames.empty() ? "" : ",") + NameOf(bot);
+            if (firstCode.empty())
+            {
+                firstCode = code;
+                firstDetail = detail.empty() ? "The crowd-control clear was refused (" + code + ")." : detail;
+            }
+            continue;
+        }
+        ++cleared;
+        if (rec)
+        {
+            DropPendingCc(bot->GetName());
+            h8::CcOwnedForget(rec->ccOwned, bot->GetName());
+        }
+    }
+    if (!cleared)
+        return Refuse(od::CcAnswerCode(firstCode.empty() ? std::string("failed") : firstCode), firstDetail.empty() ? std::string("No bot of the group had a crowd-control mark to clear.") : firstDetail);
+    if (!p.bot.empty())
+        return Accept(OrderAnswer(), "bot:" + NameOf(targets.front()), 1);
+    // A bot the clear could not reach (no engine, a refused read-back) keeps its mark: the answer says so instead of passing for a full clear.
+    OrderAnswer answer = Accept(OrderAnswer(), "party", cleared);
+    if (!failedNames.empty())
+        answer.text += " failed=" + failedNames;
+    return answer;
 }
 
 // A party-wide order with no argument (rest, stay, follow, hold): the bots that pass their pre-flight take it; at least one must. `verbFor` names the verb per bot.
@@ -900,9 +964,9 @@ OrderAnswer IssueOrder(Party const& ctx, std::string const& order, uint32 nowMs,
         case od::Verb::ReviveParty:
             return DoReviveParty(ctx, party, order, nowMs);
         case od::Verb::Cc:
-            return ctx.runRec ? DoCc(*ctx.runRec, ctx, party, p) : Refuse("unsupported", "The order `cc` is not carried out by `.tb cmd`.");
+            return DoCc(ctx.runRec, ctx, party, p);
         case od::Verb::CcClear:
-            return ctx.runRec ? DoCcClear(*ctx.runRec, party, p) : Refuse("unsupported", "The order `cc` is not carried out by `.tb cmd`.");
+            return DoCcClear(ctx.runRec, ctx, party, p);
         // S9 (O9): the object, loot and loot-method orders are the task module's (TbRunTasks.cpp); `use <item>` is refused with its reason.
         case od::Verb::Open:
         case od::Verb::Loot:

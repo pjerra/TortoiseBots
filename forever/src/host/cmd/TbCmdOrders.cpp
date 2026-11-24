@@ -30,7 +30,7 @@ bool HandleCmd(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (args.badToken)
         return h3::Fail(handler, args, "cmd", "bad-token", "a token starts with # and holds 1-32 characters of [A-Za-z0-9_.:-]");
     if (args.w.empty())
-        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, interrupt, focus, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod, place, rally, fallback, resume, stop, flee, guard, stance, engage, rebuff, aoe, autocc, sap, loot, corpserun");
+        return h3::Fail(handler, args, "cmd", "missing-verb", "move, walk, pull, pullback, attack, interrupt, focus, cc, rest, revive party, stay, follow, hold, loot, open, use, gossip, state, lootmethod, place, rally, fallback, resume, stop, flee, guard, stance, engage, rebuff, aoe, autocc, sap, loot, corpserun");
 
     Player* sender = h3::SenderPlayer(handler);
     if (!sender)

@@ -625,7 +625,7 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
 
-* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull|pullback <32-hex guid> [seconds 0-60] [ranged|body]`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`) answer their own `cmd` reply and are described in section 23; `cc` is a judge change of its own round.
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull|pullback <32-hex guid> [seconds 0-60] [ranged|body]`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`) answer their own `cmd` reply and are described in section 23; `cc` is the lifted judge's and answers the usual `cmd` reply (section 23, "Whole-party cc (M4)").
 * **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
 * **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
 * **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
@@ -874,7 +874,7 @@ Queue and acceptance never go through anything but the core: `WorldSession::Join
 the core: the module holds it back through `WorldScript::CanCreateBattleground` until a human's queue reaches the fill target, and
 re-schedules the core's queue update each pass so bots still waiting follow the human into his instance.
 
-## 23. Issue #131: tactical orders (M1-M3)
+## 23. Issue #131: tactical orders (M1-M4)
 
 The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, the toggles `aoe`/`autocc`/`sap`/`loot`, and `corpserun`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`). A toggle `status` is a read and answers in the command's own reply.
 
@@ -942,6 +942,23 @@ cmd-end count=1 records=1 verb=engage lead=Mtank bots=5 ok=5 refused=0 #c2
 `.tb cmd` answers `state=<on|off|mixed>`: the wanted state for a change, the bots' current state aggregated for a `status` read. `.tb order` answers `status=read state=<on|off>` for a `status`, `status=queued` for a change.
 
 `corpserun` (also `corpse run`) in `.tb order`, and `corpserun [bot]` in `.tb cmd` (no bot: every dead bound bot). An alive bot is refused `not-dead`. A body runs the existing `release` verb with its gates (`no-entrance`), then the W1 dead engine walks; a ghost answers `status=queued` with Run `ok` (the walk is already the engine's). `.tb state` `corpserun=` shows the leg.
+
+### Whole-party cc (M4)
+
+`.tb cmd cc <mark> <guid> [<bot>|<family>] [family]` and `.tb cmd cc clear [<bot> [<mark> <guid>]]` now run without a dungeon run (before M4 they answered `unsupported`). The judge's grammar (`TbRunOrdersPure.h`): with no bot, the module picks one; the run policy's own `cc <mark> <guid> <bot> [family]` is unchanged.
+
+* `cc <mark> <guid>`: the pick. `cc <mark> <guid> <word>`: `<word>` is the family when `CcOrderFamilyKnown` accepts it and it is not `none` (`polymorph`, `shackleundead`, `banish`, `hibernate`, `seduction`, `freezingtrap`, `sap`, `repentance`, `scarebeast`, `fear`), else a bot. A bot named like a family word writes `cc <mark> <guid> <bot> none`. `<guid>` is the 32-hex text `.tb state` prints (or a run handle).
+* The pick reuses the run's table (`DungeonRun::kRunCc`): over every (bot, family) pair the best wins: tier A before S before R, then the table order (polymorph before sap), then the party order. A pair qualifies when the family is an automatic pick (Freezing Trap is not), `CcFits` accepts the target's creature type, the bot carries the `cc` strategy in its combat kit and knows a rank of the spell, and the owner's `.tb cc ... deny` permissions do not deny the family's kind (fear is denied by default). A `prePull` row (Sap) also needs the target and the bot out of combat. A named family limits the pick to it. Candidates are the lead and the bound members. Kits that carry `cc` today: mage and rogue; more with no change here once the kits (#123) carry it.
+* Answer: `result=bot:<name> 1 family=<token>`; the picked bot has `rticc=<mark>` and `ccfam=<token>` in `.tb state` (the same `h8::ApplyCcOrder` as `.tb cc`). No pick: `error code=no-cc-bot msg=<name>:<reason>;...` with the reasons `dead`, `no-cc-kit`, `no-fitting-spell`, `denied`, `in-combat` (Sap). Skull is refused `invalid` (the party's kill mark), as before.
+* The order starts the cast, as TB's `RunCcOrder` does: once the mark, `rti cc` and `ccfam` read back, the bot selects and faces the unit, the class crowd-control action that carries the picked family is found through the action graph and run once; when the unit is out of reach the mature action is queued so its own `reach cc` prerequisite walks the bot in and the cast follows (the fight-start trigger stays the fallback). The chooser also takes the bot's `rti cc target` first, at any range, before the engaged-attacker tournament (`CcChooserTakesAssignedMark`), so an order given before its pack opens still has a target. A hand-written order with no family (`none`) starts no probe.
+* `cc clear` alone clears every bound bot's crowd-control mark and its icon (`h8::ClearCcOrder` for each; `result=party <n cleared>`, with ` failed=<names>` appended when a bot could not be cleared: it keeps its mark). `cc clear <bot> [<mark> <guid>]` is unchanged.
+* The run's own bookkeeping (the pending clear, the bots a run marked) is touched only when a run sent the order.
+
+```
+cmd-begin #c1
+cmd verb=cc status=accepted bots=1 result=bot%3AMmage%201%20family%3Dpolymorph #c1
+cmd-end count=1 records=1 verb=cc lead=Mtank bots=1 #c1
+```
 
 ### State and configuration
 

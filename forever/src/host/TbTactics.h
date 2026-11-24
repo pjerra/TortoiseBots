@@ -51,6 +51,13 @@ void CancelPendingInterrupt(Player* bot);
 // wins over an earlier bot that would have to walk (PickInterrupt's first pass).
 Player* PickInterruptBot(std::vector<Player*> const& bots, Unit* target, std::string& action, std::string& reasons);
 
+// M4 (D12): the bot for `cc <mark> <guid>` with no bot named, among `bots` (the party order): the pick over the run's cc table
+// (PickCcBot in TbTacticsPure.h) with the live facts of each bot (alive, in combat, the `cc` strategy of its combat kit, the family spells it
+// knows, the owner's deny mask). `onlyFamily` ("" = any) is a family token. On success `familyToken` is the family the order carries; without a
+// pick `reasons` is `name:reason;...` (dead, no-cc-kit, no-fitting-spell, denied, in-combat). `sender` is the commander when it is in the world.
+Player* PickCcPlayer(std::vector<Player*> const& bots, Unit* target, std::string const& onlyFamily, Player* sender, std::string& familyToken,
+    std::string& reasons);
+
 // M3: reads one toggle's current state from the live strategy (aoe/autocc/sap/loot). False when the bot has no engine. The
 // table's wanted state is not consulted: this is what the strategy reads now, so `status` and a flip's current value start here.
 bool ReadToggle(Player* bot, std::string const& verb, bool& on);
