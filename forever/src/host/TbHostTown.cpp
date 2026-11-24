@@ -369,7 +369,6 @@ GameObject* FindNearestMailbox(Player* bot, float maxDistYd)
 
     GameObject* best = nullptr;
     float bestDist = scanRange + 1.0f;
-    uint32_t const botZone = bot->GetZoneId();
     for (GameObject* go : objects)
     {
         if (!go || !go->isSpawned() || go->GetGoType() != GAMEOBJECT_TYPE_MAILBOX)
@@ -381,7 +380,11 @@ GameObject* FindNearestMailbox(Player* bot, float maxDistYd)
         }
         else
         {
-            if (go->GetZoneId() != botZone || !go->InSamePhase(bot))
+            // A city's floor is a WMO while the surrounding ground is terrain, and the
+            // area lookup flips between the two on a small z tolerance, so two objects
+            // a few yards apart can report different zones; the map and walk distance
+            // bound this search instead.
+            if (!go->InSamePhase(bot))
                 continue;
             if (!go->GetGOInfo() || go->GetGOInfo()->IconName == "Point")
                 continue;
