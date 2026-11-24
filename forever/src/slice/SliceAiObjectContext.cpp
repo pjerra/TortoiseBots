@@ -370,7 +370,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (126 of its keys)
+    // the registry of ActionContext (130 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -500,6 +500,10 @@ namespace slice
             creators["rpg train"] = [](PlayerbotAI* ai) { return new RpgTrainAction(ai); };
             creators["smart destroy item"] = [](PlayerbotAI* ai) { return new SmartDestroyItemAction(ai); };
             creators["greet"] = [](PlayerbotAI* ai) { return new GreetAction(ai); };
+            creators["use random recipe"] = [](PlayerbotAI* ai) { return new UseRandomRecipeAction(ai); };
+            creators["use random quest item"] = [](PlayerbotAI* ai) { return new UseRandomQuestItemAction(ai); };
+            creators["throw grenade"] = [](PlayerbotAI* ai) { return new ThrowGrenadeAction(ai); };
+            creators["oil of immolation"] = [](PlayerbotAI* ai) { return new UseOilOfImmolationAction(ai); };
             creators["attack duel opponent"] = [](PlayerbotAI* ai) { return new AttackDuelOpponentAction(ai); };
             creators["attack enemy player"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayerAction(ai); };
         }
@@ -1157,7 +1161,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 85, kActions = 210, kTriggers = 241, kValues = 272;
+    constexpr unsigned kStrategies = 85, kActions = 214, kTriggers = 241, kValues = 272;
 }
 }
 
