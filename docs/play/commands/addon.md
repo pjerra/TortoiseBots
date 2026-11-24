@@ -28,7 +28,7 @@ It is a different addon from the Turtle build's TortoiseBotsManager. The two sha
 
 ## Tabs
 
-The window groups the work the way a party does it. A tab appears only when the server says it can fill it.
+The window groups the work the way a party does it. Fight, Camp, Party, Guild, Roster and Log are always shown; Raid appears while you are in a raid, and Dungeon and Loot appear only when the server advertises `dungeon-run` or `loot-log`.
 
 | Tab | What it is for |
 | :--- | :--- |
@@ -48,7 +48,7 @@ The addon sends short verbs over the addon channel, not chat text. The Forever s
 
 | Verb | What it does |
 | :--- | :--- |
-| `action <intent>` | The party-wide orders: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `free`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. |
+| `action <intent>` | The party-wide orders: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `free`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. |
 | `roster` / `list` | The roster snapshot, the handshake trailer and the party's movement states. |
 | `who`, `stats`, `add`, `logout`, `remove`, `summon`, `maintenance`, `autogear` | The same words as the `.bot` commands of those names. |
 | `alts` | One line per owned bot playing on its own (free mode). |
@@ -66,7 +66,7 @@ A verb the server cannot run answers one `TBM:ACTION_ERR|<verb>|<code>|<text>` l
 
 ### Capabilities
 
-The handshake sends `TBM:CAPS` with the features this server really has. Always: `claimed-roster`, `inventory`, `professions`, `loot-log`, `behavior`, `service`, `totem`, `blessing`, `blessing-player`, `choice`, `ai`, `pull-seconds`, `flee`, `engage`. While the guild-order index is ready: `guild-orders`, `guild-order-steps`. While player Buy orders are refused: `guild-order-nobuy`. For a GameMaster: `tb-gm`. The addon only lights a button whose capability is on the line.
+The handshake sends `TBM:CAPS` with the features this server really has. Always: `claimed-roster`, `inventory`, `professions`, `loot-log`, `behavior`, `service`, `totem`, `blessing`, `blessing-player`, `choice`, `ai`, `pull-seconds`, `flee`, `engage`, `guild-orders`, `guild-order-steps`, `guild-order-nobuy`. For a GameMaster: `tb-gm`. The addon only lights a button whose capability is on the line.
 
 ## Transport
 
