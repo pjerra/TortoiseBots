@@ -8,7 +8,6 @@ on:
       - 'docs/**'
       - '**/*.md'
       - 'VERSION'
-      - '.github/workflows/notify-discord-issue.yml'
       - '.github/workflows/generate-changelog.yml'
       - '.github/workflows/dashboard-binaries.yml'
       # tools/ is never compiled into the server (scripts, offline tests, dashboard)
@@ -21,7 +20,6 @@ on:
       - 'docs/**'
       - '**/*.md'
       - 'VERSION'
-      - '.github/workflows/notify-discord-issue.yml'
       - '.github/workflows/generate-changelog.yml'
       - '.github/workflows/dashboard-binaries.yml'
       # tools/ is never compiled into the server (scripts, offline tests, dashboard)
