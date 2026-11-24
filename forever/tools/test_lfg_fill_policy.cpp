@@ -161,7 +161,9 @@ int main()
         player.inGroup = true;
         CHECK(!lfg::ShouldRelease(player));
         player.inGroup = false;
-        CHECK(lfg::ShouldRelease(player));
+        CHECK(!lfg::ShouldRelease(player));   // queued solo, no bot yet
+        player.hasClaims = true;
+        CHECK(lfg::ShouldRelease(player));    // the party a bot joined is gone
         player.inGroup = true;
         player.online = false;
         CHECK(lfg::ShouldRelease(player));
