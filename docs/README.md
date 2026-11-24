@@ -31,16 +31,16 @@ Welcome to the TortoiseBots documentation catalog for **WoW Forever** (ForeverCo
 | :--- | :--- |
 | Log my own alt in as a bot and summon it | [Getting started](play/getting-started.md) |
 | See every bot feature and switch in one place | [What bots can do](play/features.md) |
-| Pull a pack around a corner | [Pullback](play/commands/party-actions.md#bot-action-pullback) |
-| Stop bots from breaking crowd control | [Crowd control](play/commands/party-actions.md#bot-action-cc) |
-| Direct my party to interrupt a caster | [Interrupt](play/commands/party-actions.md#bot-action-interrupt) |
-| Inspect a bot's equipment, bags or stats | [Bot panel](play/commands/bot-panel.md#bot-panel-commands) |
+| Pull a pack around a corner | [Pullback](play/commands/party-actions.md#addon-action-buttons) |
+| Stop bots from breaking crowd control | [Toggles](play/commands/party-actions.md#toggles) |
+| Direct my party to interrupt a caster | [Interrupt](play/commands/party-actions.md#addon-action-buttons) |
+| Inspect a bot's stats | [Bot panel](play/commands/bot-panel.md#inspection) |
 | Read the kill orders and mechanics of a 5-man dungeon | [Dungeon reference](play/dungeon-reference.md) (Turtle data: layouts only, not Forever IDs) |
 | Handle a wipe and get back to the instance | [Dead bots and wipes](play/dungeons-and-raids.md#dead-bots) |
 | Fill a missing tank or healer role with free bots | [Dungeon fill](play/commands/roster-and-hiring.md) and [Queues](world/queues.md) |
 | Send a bot in my guild to farm, buy or craft for the bank | [Guild orders](play/guild-orders.md) |
 | See how bots use the auction house | [Living AH](world/economy.md#living-auction-house) |
-| Summon a lost or stuck companion | [Summon](play/commands/roster-and-hiring.md#bot-summon) |
+| Summon a lost or stuck companion | [Summon](play/commands/roster-and-hiring.md#summon) |
 | Understand the class AI | [Class overview](classes/overview.md) |
 | Watch the bot fleet on a live web map | [Observability dashboard](server/dashboard.md) |
 | Create, start or reset the bot pool | [Bot pool](server/bot-pool.md) |
@@ -55,8 +55,8 @@ Welcome to the TortoiseBots documentation catalog for **WoW Forever** (ForeverCo
 | [Getting started](play/getting-started.md) | Client setup, `/tbm`, your own alts, first party, free bots. |
 | [What bots can do](play/features.md) | The feature catalog, default states and setting names per area, plus what is not on Forever. |
 | [Command directory](play/commands/README.md) | All player commands, permissions and channel syntax. |
-| [Party actions](play/commands/party-actions.md) | Combat intents: attack, pull, pullback, interrupt, cc clear, formations. |
-| [Roster and hiring](play/commands/roster-and-hiring.md) | Adding and logging out your alts; the hire section is Turtle-era and not on Forever. |
+| [Party actions](play/commands/party-actions.md) | Combat intents: attack, pull, pullback, interrupt, CC clear, toggles and object tasks. |
+| [Roster and character commands](play/commands/roster-and-hiring.md) | Adding and logging out your alts, summoning, maintenance and gearing. |
 | [Bot panel](play/commands/bot-panel.md) | Inspection, gear, inventory and behaviour toggles. |
 | [Whisper commands](play/commands/whispers.md) | One-to-one bot orders grouped by combat, rest, trade and town. |
 | [Addon (TortoiseBotsForeverManager)](play/commands/addon.md) | The `/tbm` UI and the `TBM:` message protocol. |
