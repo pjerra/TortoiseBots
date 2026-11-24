@@ -115,6 +115,17 @@ class Wiring(unittest.TestCase):
             self.assertNotIn(forbidden, strip_comments(self.header), forbidden)
         self.assertIn('#include "ChatCommand.h"', self.header)
 
+    def test_player_entry_is_the_callers_own_character(self):
+        player_cmd = read(SRC / "host/player/TbPlayerCmd.cpp")
+        self.assertIn('#include "host/TbHostLfgFill.h"', player_cmd)
+        self.assertIn("return lfg::HandlePlayerLfg(player, AfterFirstWord(rest));", player_cmd)
+        self.assertIn(".bot lfg join <dungeon id> <tank|healer|dps> | status | leave", player_cmd)
+        self.assertIn("bool HandlePlayerLfg(Player* who, std::string_view tail);", self.header)
+        self.assertIn("TortoiseBots::player::Say(", self.service)
+        self.assertIn('TortoiseBots::player::Refuse(who, "lfg", code, detail)', self.service)
+        # The player entry has no name argument: the queue entry is always the caller's own character.
+        self.assertNotIn("h3::FindOnline(", strip_comments(self.service))
+
     def test_role_commit_is_the_tb_role_commit(self):
         self.assertIn("uint8 BotNaturalRoles(Player* bot);", self.api)
         self.assertIn("bool SetBotRole(Player* bot, uint8 role, std::string& code, std::string& detail);", self.api)

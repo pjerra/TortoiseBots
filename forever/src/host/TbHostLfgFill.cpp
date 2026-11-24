@@ -9,6 +9,7 @@
 #include "host/TbH3.h"
 #include "host/TbLfgFillPure.h"
 #include "host/TbOrdersApi.h"
+#include "host/player/TbPlayerCmd.h"
 
 #include "compat/botpch_forever.h"
 
@@ -26,6 +27,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdlib>
 #include <map>
@@ -633,6 +635,107 @@ bool HandleLfg(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return true;
     }
     return h3::Fail(handler, args, "lfg", "unknown-verb", "join, status or leave");
+}
+
+bool HandlePlayerLfg(Player* who, std::string_view tail)
+{
+    if (!who)
+        return false;
+    auto const say = [who](std::string const& line) { TortoiseBots::player::Say(who, line); };
+    auto const refuse = [who](char const* code, std::string const& detail) { TortoiseBots::player::Refuse(who, "lfg", code, detail); };
+    auto const firstWord = [](std::string_view text, std::string_view& rest) -> std::string_view
+    {
+        std::size_t i = 0;
+        while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        std::size_t const begin = i;
+        while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        std::string_view const word = text.substr(begin, i - begin);
+        while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        rest = text.substr(i);
+        return word;
+    };
+    auto const needText = [](std::vector<std::string> const& names)
+    {
+        std::string out;
+        for (std::string const& name : names)
+            out += (out.empty() ? "" : ", ") + name;
+        return out.empty() ? std::string("none") : out;
+    };
+
+    std::string_view rest;
+    std::string const verb = h3::Lower(firstWord(tail, rest));
+    if (verb.empty() || verb == "status")
+    {
+        bool found = false;
+        StatusRow row;
+        for (StatusRow const& candidate : Rows())
+        {
+            if (h3::Lower(candidate.player) != h3::Lower(who->GetName()))
+                continue;
+            row = candidate;
+            found = true;
+            break;
+        }
+        if (!found)
+        {
+            say("TortoiseBots: lfg: not queued (join <dungeon id> <tank|healer|dps>)");
+            return true;
+        }
+        std::string filled;
+        for (std::string const& pair : row.filled)
+            filled += (filled.empty() ? "" : ", ") + pair;
+        say("TortoiseBots: lfg: " + std::string(row.complete ? "complete" : "waiting") + " for " + row.dungeonName + " (" +
+            std::to_string(row.dungeon) + ") as " + lfgfill::RoleName(row.role) + "; need " + needText(row.need) +
+            "; filled " + (filled.empty() ? std::string("none") : filled));
+        return true;
+    }
+    if (verb == "join")
+    {
+        std::string_view const dungeonText = firstWord(rest, rest);
+        std::string_view const roleText = firstWord(rest, rest);
+        if (dungeonText.empty() || roleText.empty())
+        {
+            refuse("usage", ".bot lfg join <dungeon id> <tank|healer|dps>");
+            return true;
+        }
+        std::uint32_t dungeonId = 0;
+        if (!ParseDungeonId(std::string(dungeonText), dungeonId))
+        {
+            refuse("bad-dungeon", std::string(dungeonText) + " is not a dungeon id (for example 39)");
+            return true;
+        }
+        std::uint8_t const role = lfgfill::RoleOf(h3::Lower(roleText));
+        if (!role)
+        {
+            refuse("bad-role", "the role is tank, healer (heal) or dps (damage)");
+            return true;
+        }
+        JoinResult const joined = Join(who, dungeonId, role);
+        if (!joined.ok)
+        {
+            refuse(joined.code.c_str(), joined.detail);
+            return true;
+        }
+        say("TortoiseBots: lfg: queued " + std::string(lfgfill::RoleName(role)) + " for " + joined.dungeonName + " (" +
+            std::to_string(dungeonId) + "); need " + needText(joined.need));
+        return true;
+    }
+    if (verb == "leave")
+    {
+        LeaveResult const left = Leave(who);
+        if (!left.queued)
+        {
+            say("TortoiseBots: lfg: not queued");
+            return true;
+        }
+        say("TortoiseBots: lfg: left; released " + std::to_string(left.released.size()) + " bot(s)");
+        return true;
+    }
+    refuse("unknown-verb", "no such command; try .bot lfg join|status|leave");
+    return true;
 }
 
 void RegisterScripts()

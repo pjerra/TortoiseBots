@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class ChatHandler;
@@ -25,6 +26,10 @@ namespace lfg
 // `.tb lfg join <dungeon id> <tank|healer|dps> [#token]`, `status [<player>]`, `leave`. GM or console; join needs the
 // sender's own character as the leader. Without the engine build the same command answers NotBuilt (TbH3Off.cpp).
 bool HandleLfg(ChatHandler* handler, Trinity::ChatCommands::Tail args);
+
+// `.bot lfg join|status|leave`: the same service for the caller's own character (host/player/TbPlayerCmd.cpp). Replies are
+// chat lines; false only when there is no player.
+bool HandlePlayerLfg(Player* who, std::string_view tail);
 
 // The WorldScript that runs one fill pass per AiPlayerbot.RandomBotLftUpdateInterval.
 void RegisterScripts();
