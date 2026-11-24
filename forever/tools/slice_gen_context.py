@@ -440,11 +440,17 @@ LIFE_RPG_KEYS = {
 # The stock quest values (package B): dialog status for a giver/taker, the log slots, the objective rows and the two
 # item-on-quest answers. The `active quest givers/takers/objectives` spawn-index values stay unregistered (TB registers
 # them nowhere either) and the shared quest maps cannot be generated.
+# `following party` is the group answer every quest travel gate ANDs in before its own verb (TravelMgr.cpp,
+# QuestRelationTravelDestination::IsActive and QuestObjectiveTravelDestination::IsActive read
+# "group or" of "following party,can accept/turn in quest npc::<entry>" and "following party,need quest objective::<q>,<o>").
+# The value answers through the bot's own party, so a free bot with no master is its own authority (PartyFollowPolicy.h);
+# the key itself must exist, or the gate reads the inert false and every quest destination is inactive - no bot walks to
+# a giver, a taker or an objective, and the quest search parks with "rejected[inactive=...]".
 LIFE_QUEST_KEYS = {
     "strategy": "",
     "action": "",
     "trigger": "",
-    "value": "free quest log slots, has rewardable finished quest, dialog status, dialog status quest, "
+    "value": "following party, free quest log slots, has rewardable finished quest, dialog status, dialog status quest, "
              "can accept quest npc, can accept quest low level npc, need quest reward, can turn in quest npc, "
              "can repeat quest npc, need quest objective, can use item on, need for quest, has nearby quest taker",
 }

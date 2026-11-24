@@ -84,6 +84,7 @@ KEYS = [
     ("value", "possible rpg targets"),
     ("value", "next rpg action"),
     ("value", "can fight equal"),
+    ("value", "following party"),
     ("value", "free quest log slots"),
     ("value", "has rewardable finished quest"),
     ("value", "dialog status"),
@@ -168,6 +169,22 @@ class Generator(unittest.TestCase):
     def test_the_deliberately_inert_rows_stay_out(self):
         for kind, key in UNREGISTERED:
             self.assertNotIn(key, gen.KEYS[kind], "%s '%s' must not be registered" % (kind, key))
+
+
+# A key named inside a "group or"/"and" qualifier is invisible to slice_registry_check.py, which only parses macro
+# arguments: an unregistered one reads the inert false at runtime and silently removes the whole row. The quest travel
+# gates are the ones this bit: with `following party` missing, every quest destination - giver, taker and objective -
+# answered inactive and no free bot walked to one.
+GATE_SOURCE = "ai/playerbot/TravelMgr.cpp"
+
+
+class QuestTravelGates(unittest.TestCase):
+    def test_the_group_answer_and_every_verb_it_guards_are_registered(self):
+        self.assertIn("following party", gen.KEYS["value"])
+        gates = re.findall(r'"following party,([a-z ]+)::', read(GATE_SOURCE))
+        self.assertGreaterEqual(len(gates), 4, "the quest travel gates no longer read 'following party' qualifiers")
+        for name in gates:
+            self.assertIn(name, gen.KEYS["value"], "value '%s' is gated in but not registered" % name)
 
 
 class Registered(unittest.TestCase):

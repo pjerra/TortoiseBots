@@ -285,12 +285,13 @@ struct PlayerFacts
     bool online = false;
     bool inWorld = false;
     bool inGroup = false;
+    bool hasClaims = false;   // a fill bot already joined: a solo player waiting for the first bot is not in a party yet
 };
 
 // The fill lets go of every bot it grouped once the player is gone or out of the party.
 inline bool ShouldRelease(PlayerFacts const& player)
 {
-    return !player.online || !player.inWorld || !player.inGroup;
+    return !player.online || !player.inWorld || (player.hasClaims && !player.inGroup);
 }
 
 // A party holds five (MAX_GROUP_SIZE): the player and four bots.
