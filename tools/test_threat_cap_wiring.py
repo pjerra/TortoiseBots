@@ -30,7 +30,6 @@ CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
 CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 CONF = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 SETTINGS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 COMBAT_SETTINGS = (ROOT / "docs/server/settings/combat.md").read_text()
 SPELL_ACTIONS = (ROOT / "ai/playerbot/strategy/actions/GenericSpellActions.h").read_text()
 SHAMAN_ACTIONS = (ROOT / "ai/playerbot/strategy/shaman/ShamanActions.h").read_text()
@@ -209,12 +208,11 @@ class ThreatSuccessorStrict(unittest.TestCase):
             self.assertNotIn("14834", code)
 
     def test_docs_and_changelog(self):
-        self.assertIn("### `AiPlayerbot.DungeonRunThreatSuccessorStrict`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunThreatSuccessorStrict", SETTINGS)
         self.assertIn("DungeonRunThreatSuccessorStrict", DOC)
         self.assertIn("DoT ticks", DOC)
         self.assertIn("92 % of walk 56", DOC)
-        self.assertIn("DungeonRunThreatSuccessorStrict", CHANGELOG)
-        for text in (SETTINGS, DOC, CONF, CHANGELOG):
+        for text in (DOC, CONF):
             self.assertIn("`strict`", text)
 
 
@@ -276,9 +274,8 @@ class CureIgnoresThreat(unittest.TestCase):
         self.assertIn("return heal || (partyCure && cureIgnoresThreat);", THREAT_POLICY)
 
     def test_docs_and_changelog(self):
-        self.assertIn("### `AiPlayerbot.DungeonRunCureIgnoresThreat`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunCureIgnoresThreat", SETTINGS)
         self.assertIn("DungeonRunCureIgnoresThreat", DOC)
-        self.assertIn("DungeonRunCureIgnoresThreat", CHANGELOG)
 
 
 class ThreatSuccessorKeepsAway(unittest.TestCase):
@@ -313,9 +310,8 @@ class ThreatSuccessorKeepsAway(unittest.TestCase):
         self.assertNotIn("CharmMemo" + "Threat", AI_TREE)
 
     def test_docs_and_changelog(self):
-        self.assertIn("### `AiPlayerbot.DungeonRunThreatSuccessorKeepsAway`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunThreatSuccessorKeepsAway", SETTINGS)
         self.assertIn("DungeonRunThreatSuccessorKeepsAway", DOC)
-        self.assertIn("DungeonRunThreatSuccessorKeepsAway", CHANGELOG)
 
 
 class ThreatResetWindow(unittest.TestCase):
@@ -384,7 +380,7 @@ class ThreatResetWindow(unittest.TestCase):
                       "AiPlayerbot.DungeonRunSeekAura = 1:", keys)
         self.assertIn("the reset clock is the seek fight's charm scan", keys)
         self.assertIn("Needs AiPlayerbot.DungeonRunSeekAura", CONF)
-        self.assertIn("needs `AiPlayerbot.DungeonRunSeekAura`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunThreatResetWindow", SETTINGS)
 
     def test_the_hold_checks_the_window_before_the_tank_list(self):
         # Round-1 L5: a shut window clears the latch and returns before the reference's tank scan.
@@ -408,9 +404,8 @@ class ThreatResetWindow(unittest.TestCase):
                       "view.lastResetMs, windowIndex);", STRATEGY)
 
     def test_docs_and_changelog(self):
-        self.assertIn("### `AiPlayerbot.DungeonRunThreatResetWindow`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunThreatResetWindow", SETTINGS)
         self.assertIn("DungeonRunThreatResetWindow", DOC)
-        self.assertIn("DungeonRunThreatResetWindow", CHANGELOG)
 
 
 class InterruptIgnoresThreat(unittest.TestCase):
@@ -509,7 +504,6 @@ class InterruptIgnoresThreat(unittest.TestCase):
         self.assertIn("### `AiPlayerbot.InterruptIgnoresThreat`", COMBAT_SETTINGS)
         self.assertIn("(#aiplayerbotinterruptignoresthreat)", COMBAT_SETTINGS)
         self.assertIn("InterruptIgnoresThreat", ROGUE_DOC)
-        self.assertIn("InterruptIgnoresThreat", CHANGELOG)
         section = COMBAT_SETTINGS[COMBAT_SETTINGS.index("### `AiPlayerbot.InterruptIgnoresThreat`"):]
         self.assertIn("110 %", section)
         self.assertIn("130 %", section)

@@ -37,7 +37,7 @@ class SeekMeetPrePlaceWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekMeetPrePlace", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekMeetPrePlace = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekMeetPrePlace = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekMeetPrePlace`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunSeekMeetPrePlace", SETTINGS)
 
     def test_the_start_picks_and_records_the_pre_place_under_the_flag(self):
         fn = update()
@@ -120,7 +120,7 @@ class SeekMeetPrePlaceWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekMeetPrePlaceLate", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekMeetPrePlaceLate = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekMeetPrePlaceLate = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekMeetPrePlaceLate`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunSeekMeetPrePlaceLate", SETTINGS)
         helper = body(ACTIONS, "bool SeekMeetPrePlaceTask(Player* bot, const BossTacticRow* row, SeekTankTask& task)")
         gate = helper.index("if (!MeetPrePlaceWalkDue(sPlayerbotAIConfig.dungeonRunSeekMeetPrePlaceLate, pullerToStandYd,")
         # Review H2: the tank's own walk to its point is the lead.

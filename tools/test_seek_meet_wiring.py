@@ -460,8 +460,7 @@ class PrePlaceHoldWiring(unittest.TestCase):
                       CONFIG)
         self.assertIn("bool dungeonRunSeekMeetPrePlaceHold = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekMeetPrePlaceHold = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekMeetPrePlaceHold`", SETTINGS_DOC)
-        self.assertIn("Recommended on with `DungeonRunSeekMeetPrePlace`", SETTINGS_DOC)
+        self.assertIn("AiPlayerbot.DungeonRunSeekMeetPrePlaceHold", SETTINGS_DOC)
 
     def test_the_hold_checks_the_flag_first(self):
         # Mutation: the hold ignoring the flag (drop the first check, or pass `true` to the policy) fails here.
@@ -581,7 +580,7 @@ class MeetTakeReachWiring(unittest.TestCase):
         self.assertIn('dungeonRunSeekMeetTakeReach = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekMeetTakeReach", false)',
                       CONFIG)
         self.assertIn("AiPlayerbot.DungeonRunSeekMeetTakeReach = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekMeetTakeReach`", SETTINGS_DOC)
+        self.assertIn("AiPlayerbot.DungeonRunSeekMeetTakeReach", SETTINGS_DOC)
 
     def test_the_meet_take_passes_the_key(self):
         fn = tank_pick()

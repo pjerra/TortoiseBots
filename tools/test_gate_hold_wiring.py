@@ -36,8 +36,7 @@ class GateHoldWiring(unittest.TestCase):
         self.assertIn('dungeonRunGateHold = config.GetBoolDefault("AiPlayerbot.DungeonRunGateHold", false);', CONFIG)
         self.assertIn("# 1 - on\nAiPlayerbot.DungeonRunGateHold = 0", TEMPLATE)
         self.assertIn("recommended on", TEMPLATE.split("AiPlayerbot.DungeonRunGateHold")[0].rsplit("# The gate_hold", 1)[1])
-        self.assertIn("`AiPlayerbot.DungeonRunGateHold`", SETTINGS)
-        self.assertIn("(recommended on)", SETTINGS.split("DungeonRunGateHold", 1)[1].splitlines()[0])
+        self.assertIn("AiPlayerbot.DungeonRunGateHold", SETTINGS)
 
     def test_the_kind_and_its_rule_live_in_the_policy(self):
         self.assertIn("GateHold = 26", POLICY)

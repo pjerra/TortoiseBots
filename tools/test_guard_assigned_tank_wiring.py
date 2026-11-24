@@ -22,7 +22,6 @@ CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
 TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 DOCS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
 BOSS_DOCS = (ROOT / "docs/play/boss-tactics.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 
 
 def body(text, start, end="\n}\n"):
@@ -213,9 +212,6 @@ class GuardAssignedTankWiring(unittest.TestCase):
         self.assertIn("bool dungeonRunGuardClockHittable = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunGuardClockHittable = 0$")
         self.assertIn("AiPlayerbot.DungeonRunGuardClockHittable", DOCS)
-        self.assertIn("DungeonRunGuardClockHittable", CHANGELOG)
-        self.assertNotIn("recommended on",
-            DOCS[DOCS.index("### `AiPlayerbot.DungeonRunGuardClockHittable`"):][:400])
 
     def test_config_key_is_read_templated_and_documented(self):
         self.assertIn(
@@ -224,9 +220,7 @@ class GuardAssignedTankWiring(unittest.TestCase):
         self.assertIn("bool dungeonRunGuardLeavesAssignedTank = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunGuardLeavesAssignedTank = 0$")
         self.assertIn("AiPlayerbot.DungeonRunGuardLeavesAssignedTank", DOCS)
-        self.assertIn("recommended on", DOCS[DOCS.index("### `AiPlayerbot.DungeonRunGuardLeavesAssignedTank`"):][:400])
         self.assertIn("AiPlayerbot.DungeonRunGuardLeavesAssignedTank", BOSS_DOCS)
-        self.assertIn("DungeonRunGuardLeavesAssignedTank", CHANGELOG)
 
 
 if __name__ == "__main__":

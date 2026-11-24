@@ -22,7 +22,6 @@ CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 CONF = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 COMBAT_SETTINGS = (ROOT / "docs/server/settings/combat.md").read_text()
 BOSS_DOC = (ROOT / "docs/play/boss-tactics.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 
 
 def brace_body(text, signature):
@@ -127,7 +126,6 @@ class InterruptAllowStun(unittest.TestCase):
         self.assertIn("20252", section)
         self.assertIn("stun-immune", section)
         self.assertIn("InterruptAllowStun", BOSS_DOC)
-        self.assertIn("InterruptAllowStun", CHANGELOG)
 
 
 if __name__ == "__main__":

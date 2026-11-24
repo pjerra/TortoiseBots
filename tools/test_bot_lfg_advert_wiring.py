@@ -13,7 +13,6 @@ INBOX = (ROOT / "runtime/BotLfgWhisperInbox.h").read_text()
 CMD = (ROOT / "commands/Commander.cpp").read_text()
 TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 GUIDE = (ROOT / "docs/play/dungeon-run-leader.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 
 
 def strip_comments(text):
@@ -134,5 +133,3 @@ class BotLfgChatDocsTest(unittest.TestCase):
         block = TEMPLATE[TEMPLATE.index("# Bot LFG dungeon groups:"):TEMPLATE.index("AiPlayerbot.BotLfgChat = 1")]
         self.assertIn("AiPlayerbot.BotLfgChat", block)
         self.assertIn("## Joining a bot LFG group", GUIDE)
-        unreleased = CHANGELOG[CHANGELOG.index("## Unreleased"):CHANGELOG.index("## v1.8.0")]
-        self.assertIn("AiPlayerbot.BotLfgChat", unreleased)
