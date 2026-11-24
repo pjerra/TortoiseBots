@@ -1,412 +1,173 @@
 ---
 id: play-commands-roster-and-hiring
-title: Roster & Hiring Commands
+title: Roster and Character Commands
 category: play
-summary: Commands for managing owned alts, hiring mercenary companions, and recruiter services.
-tags: [commands, roster, hiring, mercenaries]
+summary: Commands for logging your own characters in as bots, listing them, summoning, gearing and maintaining them.
+tags: [commands, roster, alts, gear]
 relates_to:
   - play-commands
   - play-getting-started
-  - server-settings-hiring
   - server-settings-party
 ---
 
-# Roster & Hiring Commands
+# Roster and Character Commands
 
-TortoiseBots provides tools to manage owned alternate characters (alts) as bots, hire temporary mercenary companions, and customize group compositions.
+On WoW Forever you bring your own characters into the world as bots, or a GameMaster logs any bot in. There is no mercenary hiring, no recruiter service and no autonomous alt-bot that plays while you are offline.
 
 ## Summary
 
-| Command | Parameters / Syntax | What It Does |
+| Command | Who | What it does |
 | :--- | :--- | :--- |
-| [`.bot roster`](#bot-roster) | None | Displays owned character states and active CC marks. |
-| [`.bot add`](#bot-add) | `<Name>` | Logs in an owned alt as an active companion bot. |
-| [`.bot alts`](#bot-alts) | None | Shows what each autonomous alt did since your last logout. |
-| [`.bot remove`](#bot-remove) | `<Name>` | Logs out an owned bot or dismisses a hired companion. |
-| [`.bot hire`](#bot-hire) | `<class> [role] [race] [gender] [tier] [level=<n>]` | Recruits a mercenary companion from a recruiter. |
-| [`.bot hire raid`](#bot-hire-raid) | `<preset\|composition> [tier] [level=<n>]` | Recruits up to 39 mercenary companions for a raid (40 in a commander's bound raid). |
-| [`.bot role`](#bot-role) | `<Name\|self> <tank\|healer\|dps\|clear>` | Sets group role overrides for bots or the player, including class specs (such as `holy` or `bear`). |
-| [`.bot invite`](#bot-invite) | `<Name>` | Sends a party invite to an online owned bot. |
-| [`.bot uninvite`](#bot-uninvite) | `<Name>` | Removes an owned bot or dismisses a companion. |
-| [`.bot summon`](#bot-summon) | `<Name>` | Teleports an owned bot or hire to your coordinates. |
-| [`.bot maintenance`](#bot-maintenance) | `<Name>` | Refreshes a bot's reagents, ammunition, and repairs (needs its switch on). |
-| [`.bot autogear`](#bot-autogear) | `<Name> [quality\|ilvl]` | Dresses an owned or hired bot in level-fitting gear (needs its switch on). |
-| [`.bot gear`](#bot-gear) | `<Name\|raid Commander> tier\|preset` | Gears a bot or a bound raid to a hire tier under an item-level cap (GM). |
-| [`.bot release`](#bot-release) | None | Commands dead companion bots to release spirit. |
-| [`.bot corpse run`](#bot-corpse-run) | None | Commands spirit bots to return to their corpses. |
-| [`.bot learn`](#bot-learn) | None | Commands nearby companion bots to train new spells. |
-| [`.bot trade`](#bot-trade) | Target Bot | Opens a trade window with a targeted companion. |
+| [`.bot who`](#roster) | player | Lists the bots you may order (aliases `roster`, `list`). |
+| [`.bot add`](#logging-in-and-out) | player | Logs one of your own characters in as a bot in your party. |
+| [`.bot logout`](#logging-in-and-out) | owner | Logs a bot out (alias `remove`). |
+| [`.bot summon`](#summon) | master or GM | Brings a bot to your side. |
+| [`.bot maintenance`](#maintenance) | owner | Tops up reagents, bandages and ammo, repairs and saves. |
+| [`.bot autogear`](#gearing) | owner | Equips better gear up to a quality or item-level cap. |
+| [`.autogear`](#gearing-a-player) | GM, or self | Gears a real player for a spec. |
+| [`.tb login`](#game-master-roster-commands) | GM | Logs a character in, with a master or as a free bot. |
+| [`.tb gear`](#gearing) | GM | Runs an upgrade pass or a generated gear set on bots. |
+| [`.tb role`](#roles-and-specs) | GM | Sets `tank`, `healer`, `dps` or `none`. |
+| [`.tb spec`](#roles-and-specs) | GM | Chooses the talent spec the bot's kit is built from. |
 
----
-
-## Roster and Lifecycle Commands
-
-### `.bot roster`
-
-Shows the characters on your account that the roster looks up (deleted characters and pool-bot accounts excluded; a GM also sees explicitly shared characters). It answers over structured protocol streams (`TBM:ROSTER_BEGIN/END`, `TBM:ALTBOTS`, `TBM:CC_ASSIGN_BEGIN/END`, `TBM:CLAIMED_BEGIN/END`, plus trailer streams such as `TBM:BOTSTATE_*`, `TBM:VERSION`, `TBM:CAPS` and `TBM:TRANSPORT`).
+## Roster
 
 ```text
+.bot who [all]
 .bot roster
+.bot list
 ```
 
-- **Character States:** Reports account character lifecycle states (`offline`, `online`, `starting`, `removing`) along with a distinct `grouped` flag indicating party membership.
-- **CC Snapshot:** Lists active crowd control mark assignments for bots you can control in your party. A bot is included only if it is in your party, has the `cc` combat strategy active, and has a mark set (since Moon is the default, mark presence alone is insufficient). Hires in your party are included in CC assignments even though they are omitted from the account character roster. When you are ungrouped, the snapshot falls back to the bots you control.
+Prints the count, then one line per online bot you may order: name, level, class, map id, movement (`follow`, `stay` or `free`) and brain (`engine` or `spike`). A GameMaster's `.bot who all` lists every bot in the world.
 
-### `.bot alts`
+The addon's Roster window asks `roster` over the addon channel and gets the same visible bots as structured rows: location, class, grouped flag, the free bots, the crowd-control assignments, and each grouped bot's movement state. It also gets an empty claimed-guild list, because the Forever build has no claimed-bot store.
 
-Shows one line per autonomous alt-bot on your account: what it did since your last logout (levels, gold, quests, deaths, newly equipped green-or-better items, where it is and what it is doing). An alt with no change reports `no change` with its zone and activity.
+There is no away-summary store: the addon's `alts` request lists the free bots you can see, each with the line "<name> is playing on its own (free mode)".
 
-```text
-.bot alts
-```
-
-You also get the same lines in chat the moment you log in. The addon reads the matching `TBM:ALTSUM|<name>|<text>` lines (closed by `TBM:ALTSUM_END|<count>`); the chat text stays plain so it works without the addon. Only your own autonomous alts are listed, never hires or pool bots.
-
-
-### `.bot add`
-
-Logs in an owned alternate character from your account as a headless companion bot.
+## Logging In and Out
 
 ```text
 .bot add <CharacterName>
-```
-
-The character enters the world and follows you; invite it to your group with `.bot invite <CharacterName>`. To play the character yourself, simply log into it from character selection; the server cleanly disconnects the bot session and logs your human client in.
-
-### `.bot remove`
-
-Logs out an active companion bot.
-
-```text
+.bot logout <CharacterName>
 .bot remove <CharacterName>
 ```
 
-`.bot rm` is an alias of `.bot remove`. (`.bot logout` is a separate command: it only works on an online bot.) When used on an **owned alt**, the character logs out and keeps all progress. When used on a **hired companion**, the hire agreement ends now and the temporary character is deleted once its session is gone.
+- `.bot add` logs one of your own characters (same Battle.net account; a GameMaster may add any character) in as a bot and joins it to your party. You must lead your group if you are grouped, the character must be offline and not already a bot, the party must have room (five members, no raid), and `TortoiseBots.Player.MaxBots` (default 4) caps how many of your characters are in the world.
+- Refusals: `not-found`, `already-online`, `not-leader`, `too-many`, `not-yours`, `login-refused`.
+- `.bot logout` and its alias `.bot remove` log an owned bot out; the character keeps all progress. `not-found` means no such online bot.
+- To play the character yourself, log into it from the character screen; the bot session is disconnected.
 
-### `.bot hire`
-
-Recruits a fresh mercenary companion from a Mercenary Recruiter NPC.
-
-```text
-.bot hire <class> [role] [race] [gender] [tier] [level=<n>]
-```
-
-By default (`AiPlayerbot.HireAnywhere = 0`), the `.bot hire` chat command always refuses — you must use the recruiter's gossip dialogue at an inn or major city. Setting [`AiPlayerbot.HireAnywhere`](../../server/settings/hiring.md#aiplayerbothireanywhere) to `1` allows the chat command to work anywhere.
-
-<details>
-<summary>Hiring options, level syntax, and equipment tiers</summary>
-
-- **Level Syntax:** companions match your level when you give no level. Write it as `level=`, `level:`, `lvl=`, `lvl:` or `lvl <n>`, bare `level <n>`, or a bare number $\ge 12$ as the last argument.
-- **Clamping & Refusals:** `level=0` is refused (there is no level 0). A hire above your limit is lowered to it with notice (your level by default, level 60 for a GameMaster). Non-numeric and double levels are refused. A bare number anywhere but last is refused (`Unclear number … put the level last`).
-- **Tier & Druid Spec Words:** tier words `t<N>`, `tier<N>`, or instance names `mc`, `bwl`, `zg`, `aq`, `naxx`, `kara`. Druid `cat` means cat damage, `balance` stays, and a bare `feral` means the bear tank.
-- **Shaman Tank:** `.bot hire shaman tank` hires the experimental shaman tank (level 10 and above; recruiter menu: "Enhancement (Tank) (experimental)"). Refused while [`AiPlayerbot.ShamanTankEnabled`](../../server/settings/hiring.md#aiplayerbotshamantankenabled) is `0`.
-- **Intro & Respec:** Once it is grouped with you (and in world), it posts its spec/spell intro once in party chat, or raid chat when grouped as a raid. Hiring a tier kit respecs talents and refits equipment.
-- **Equipment Tiers:** Level 60 companions can be hired in fixed Best-in-Slot gear sets (Tiers 0 through 7). Tiers unlock per character via recruiter quests (or account-wide if [`AiPlayerbot.HireGearUnlockAccountWide`](../../server/settings/hiring.md#aiplayerbothiregearunlockaccountwide) is enabled): Tier 0 (Standard), Tier 1 (Pre-raid), Tier 2 (Zul'Gurub), Tier 3 (Molten Core), Tier 4 (Blackwing Lair), Tier 5 (Ahn'Qiraj), Tier 6 (Naxxramas), Tier 7 (Karazhan).
-- **Temporary Character:** Hires exist while you are online, plus a disconnect grace period ([`AiPlayerbot.HireDisconnectGracePeriod`](../../server/settings/hiring.md#aiplayerbothiredisconnectgraceperiod)). Removing them deletes the temporary character.
-- **PvE-only:** Hired companions leave you when you enter a battleground. With [`AiPlayerbot.HireAllowPvP`](../../server/settings/hiring.md#aiplayerbothireallowpvp) set to `1` they may stay and fight in battlegrounds.
-- **Other Faction:** With [`AiPlayerbot.HireCrossFactionNeutralInns`](../../server/settings/hiring.md#aiplayerbothirecrossfactionneutralinns) set to `1` on a realm with cross-faction groups, recruiters at neutral inns also offer the other faction's classes and races. Such a hire is attacked by your side's city guards and cannot use your flight paths.
-</details>
-
-### `.bot hire raid`
-
-Recruits up to 39 mercenary companions for a raid in a single operation.
+## GameMaster Roster Commands
 
 ```text
-.bot hire raid <preset|composition> [tier] [level=<1-60>]
+.tb login <character> [<master>|free]
+.tb logout <character>
+.tb group <bot> <master>
+.tb ungroup <bot>
+.tb tele <character> to <character> [revive]
+.tb tele <bot|party [leader]> <map> <x> <y> <z> [o] [revive]
+.tb free <bot> on|off
 ```
 
-Requires [`AiPlayerbot.HireAnywhere = 1`](../../server/settings/hiring.md#aiplayerbothireanywhere) even at a recruiter (proximity alone does not enable it).
-- **Leadership:** party leader permissions only when the party must convert to a raid (would overflow 5). Otherwise no leadership needed.
-- **Room:** converts your group to a raid if needed. Checks your hire limit and the raid's free seats.
-- **Level:** optional `level=` (or `level <n>`, `lvl=`) hires the whole roster at that level. Same clamp as [`.bot hire`](#bot-hire), but an over-asked raid level is lowered quietly. No level means your level.
+- `.tb login` logs any character in. Without a master it follows the typing GameMaster; `free` logs in a masterless bot that runs the free kit; from the console without a master it stands still.
+- `.tb group` puts a bot into the party of a bot or your own character and makes that character its master; `.tb ungroup` removes it and clears the master.
+- `.tb tele` is the test setup teleport, including into a character's instance; `revive` raises a dead source at the landing point.
+- `.tb free <bot> on|off` turns an ungrouped, masterless bot into a free bot; `off` takes the free kit away (without a master it then stands).
 
-<details>
-<summary>Raid compositions, batching, and quotes</summary>
+## Free Bots
 
-- **Compositions:** Specify counts by role (e.g. `.bot hire raid 3t 12h 24d`) or combine roles and classes (e.g. `.bot hire raid 3 warrior:tank 12 priest:healer 19 hunter 5 mage`). Standard presets: `zg`, `aq20`, `onyxia`, `mc`, `bwl`, `aq40`, `naxx`.
-- **Upfront Quote:** Total cost is quoted upfront. If you lack sufficient gold, the command reports `Nothing was hired` and aborts without creating partial bots.
-- **Batching & Pause:** Bots are spawned 2 per 250 ms in priority order: tanks first, then healers, then DPS. Spawning automatically pauses while the player is on a loading screen and stops if the player leaves the group.
-- **Summary:** Emits a final `Hired N...` message and `TBM:HIRE_RAID` protocol summary.
-- **The 40th bot of a bound raid:** a raid you play in holds you and 39 companions. The commander of a [bound raid](commander.md) (`.bot commander bind <LeadBot> raid`) stands outside the raid group, so the raid holds 40 bots.
-- **How the 40th joins:** his `.bot hire` (or `.bot hire raid`) joins the lead bot's raid and the binding. Only the new bot is placed in the layout (a free seat in the subgroup of its role; nobody else moves).
-- **Limits:** needs `AiPlayerbot.HireMaxBotsPerPlayer = 39`. A commander inside the group, or with no raid bound, keeps the limit of 39. A full bound raid refuses the hire with a message.
-- **End of the binding:** when it is released and he owns more than 39 companions, the most recently hired leave with a chat line naming them.
-- **Mustering hire that loses its seat:** a hire still being created when the binding changes is cancelled instead: its character is deleted and the fee returned (by mail when he is offline). It never joins as an ordinary party member.
+A free bot has no master and runs the free kit: grind, loot, corpse-run, gathering and the world services the `TortoiseBots.World.*` switches allow. `.bot who` shows it as `free`. It is the closest thing to an "alt playing on its own"; it has no progress summary and no separate login for it.
 
-</details>
-
-### `.bot role`
-
-Overrides party role assignments used by the AI strategy engine to select specs and rotations.
-
-```text
-.bot role <Name|self> <tank|healer|dps|clear>
-```
-
-- `<Name>`: Sets the role for a specific companion bot and rebuilds its combat strategy kit. You may use your own character name instead of `self`. `.bot role self` sets the requesting player's own runtime role override and does not target a bot.
-- `tank`, `healer` (alias `heal`), `dps`: Sets the designated combat role. `tank` on a shaman bot installs the shaman tank kit.
-- Class-spec ids (`arms`, `fury`, `protection`, `holy`, `retribution`, `discipline`, `shadow`, `hybrid`, `restoration`, `balance`, `boomkin`, `cat`, `bear`, `bm`, `mm`, `survival`, `combat`, `assa`, `subtlety`, `ele`, `enh`, `frost`, `fire`, `arcane`, `affliction`, `demonology`, `destruction`): map to the role and apply that spec's strategies for the bot's own class, so `holy`, `protection` and `restoration` mean the right spec on each class. Rejected when the bot's class has no such spec. On a paladin, priest, shaman or druid a spec id also sets that spec's off-spec default: a healer spec turns `offdps` on and `offheal` off, a damage spec the other way round, a tank spec turns both off (both off with `AiPlayerbot.EnableOffSpecStrategies = 0`; `hybrid` keeps its own `offdps`).
-- A role or spec change rebuilds the whole kit, so the [`.bot behavior`](bot-panel.md#bot-behavior) switches go back to their defaults. [`.bot choice`](bot-panel.md#bot-choice) orders, the focus mark, the formation and CC marks are kept.
-- `clear` (aliases `none`, `reset`): Clears the override and restores automatic role inference based on talents and gear.
-
-### `.bot invite`
-
-Sends a party invitation to an online companion bot owned by your account.
-
-```text
-.bot invite <CharacterName>
-```
-
-### `.bot uninvite`
-
-Removes a companion bot from your current party.
-
-```text
-.bot uninvite <CharacterName>
-```
-
-`.bot kick` is an alias of `.bot uninvite`. If used on an owned alt while [`AiPlayerbot.AltBots`](../../server/settings/party.md#aiplayerbotaltbots) is enabled, the alt starts playing on its own. Removing a hired companion ends the hire now; the temporary character is deleted once its session is gone.
-
-### `.bot summon`
-
-Teleports an owned bot or hired companion to your current location. The bot itself must be alive and out of combat (your own combat does not matter).
+## Summon
 
 ```text
 .bot summon <CharacterName>
 ```
 
-Teleportation takes 3 seconds. On arrival the bot resumes following you. It anchors where it lands only if you gave `stay`, `guard`, `hold` or `comestay` after the summon request (`come` later re-enables follow-restore). A live hunter pet or warlock demon is summoned with the bot and arrives beside it; a dead pet stays where it fell.
-<a id="automatic-summon-on-group-accept"></a>With [`AiPlayerbot.OwnedBotSummonWhenGroup`](../../server/settings/party.md#aiplayerbotownedbotsummonwhengroup) on, owned bots and hires that accept a party invite are summoned automatically (same map, beyond sight distance; pool bots never).
-Cooldown and combat/death/revive/repair behavior follow the matching `OwnedBotSummon*` settings below.
+- You must be the bot's master (a GameMaster may summon any bot). The bot must be alive, out of combat, not on a taxi and not already teleporting; in an instance the shared entry rules apply.
+- The wait is `AiPlayerbot.OwnedBotSummonCooldown` (default 300 s, `0` = no wait, capped at 3600). Only a summon whose teleport started counts against it; a GameMaster is not held by it.
+- Refusals name a code: `not-found`, `not-a-bot`, `not-yours`, `not-master`, `teleporting`, `in-flight`, `in-combat`, `dead`, `already-on-map`, `not-in-group`, `teleport-refused`, `on-cooldown`.
+- There is no revive, repair or "summon on group accept" behaviour: the other `OwnedBotSummon*` keys are not read.
 
-| Setting | What it changes |
-| :--- | :--- |
-| [`OwnedBotSummonCooldown`](../../server/settings/party.md#aiplayerbotownedbotsummoncooldown) | Wait between auto-summons |
-| [`OwnedBotSummonAllowInCombat`](../../server/settings/party.md#aiplayerbotownedbotsummonallowincombat) | Summon while the bot fights |
-| [`OwnedBotSummonAllowMasterDead`](../../server/settings/party.md#aiplayerbotownedbotsummonallowmasterdead) | Summon while you are dead |
-| [`OwnedBotSummonAllowBotDead`](../../server/settings/party.md#aiplayerbotownedbotsummonallowbotdead) | Summon a dead bot |
-| [`OwnedBotSummonRevive`](../../server/settings/party.md#aiplayerbotownedbotsummonrevive) | Revive on arrival |
-| [`OwnedBotSummonRepair`](../../server/settings/party.md#aiplayerbotownedbotsummonrepair) | Repair on arrival |
-
-### `.bot maintenance`
-
-Refreshes an owned bot's consumables, reagents, arrows or bullets, potions, food, bandages, thrown items, and repairs damaged gear.
+## Maintenance
 
 ```text
 .bot maintenance <CharacterName>
 ```
 
-Set [`AiPlayerbot.OwnedBotMaintenanceEnabled`](../../server/settings/party.md#aiplayerbotownedbotmaintenanceenabled) to `1` first (off by default). Only applies to owned alts and hired companions, never random pool bots.
+Set `AiPlayerbot.OwnedBotMaintenanceEnabled = 1` first; it is off by default and answers `disabled` otherwise. An owner or GameMaster may run it on a live owned bot; pool bots are refused.
+
+It tops up the class reagent table, First Aid bandages and hunter ammo, repairs all durability for free, and saves the character. Potions, food, thrown weapons and paid consumables are not topped up.
+
+## Gearing
 
 ### `.bot autogear`
-
-Evaluates a bot's level and automatically equips level-appropriate equipment up to configured quality and item level caps.
 
 ```text
 .bot autogear <CharacterName> [quality|ilvl]
 ```
 
-Set [`AiPlayerbot.OwnedBotAutogearEnabled`](../../server/settings/party.md#aiplayerbotownedbotautogearenabled) to `1` first (off by default). Defaults to uncommon (green) gear unless specified (e.g. `blue` or `200`). Ranged weapons are selected to match existing ammunition in the bot's bags. Note: autogear hands out no ammo; hunter ammunition must be stocked separately.
-
-For real players, use [`.autogear`](#autogear) instead — `.bot autogear` only works on owned or hired bots.
-
-### `.bot gear`
-
-Gears one bot, or every bot of a commander's bound group, to a hire gear tier under an item-level cap. GameMaster only, in game or from the console.
-
-```text
-.bot gear <Name> tier <0-7> [ilvl=<N>] [noenchants]
-.bot gear raid <Commander> tier <0-7> [ilvl=<N>] [noenchants]
-.bot gear <Name|raid <Commander>> preset <name>
-```
-
-The named bot must be online and a bot; `raid <Commander>` gears every bot of the commander's bound group (the lead bot's group when bound, else the commander's own group). Each bot must be level 60, alive and in the world; the kit is the hire tier for the bot's class and its talent spec (the role decides when the spec cannot be read), and skipped slots are reported as capped when the cap holds them back.
-Bag items the bot had before the call are never destroyed: above-cap pieces already in the bags stay, and only a created-then-unused piece is removed. A worn piece the kit replaces is destroyed, the same way hire provisioning swaps a hire's gear (bots only; real players are refused); anything still worn above the cap is moved to the bags. The pin holds afterwards, across logout and login: the bot will not auto-equip an above-cap piece again until another `.bot gear` sets a new cap (or no cap), the hire is dismissed, or the character is deleted. Real players are never targets.
-
-Named presets live in [`AiPlayerbot.BotGearPresets`](../../server/settings/hiring.md#aiplayerbotbotgearpresets) (`lkh`, `zg`, `aq20`, `timbermaw`, `onyxia`, `mc`, `bwl`, `es`, `aq40`, `naxx`, `kara40`, `prebis`, `t1`, `t2`).
+Dresses one of your own bots (or any bot, for a GameMaster) in better gear. Set `AiPlayerbot.OwnedBotAutogearEnabled = 1` first; off by default, and the answer says so. Pool bots, dead bots and bots inside a running dungeon run are refused. The option is a quality word (`poor`/`gray`, `white`, `green`, `blue`, `purple`, `legendary` and their synonyms) or an item-level number; the caps default to `AiPlayerbot.OwnedBotAutogearQualityCap` and `AiPlayerbot.OwnedBotAutogearIlvlCap`. Ranged weapons follow the ammo in the bot's bags; autogear hands out no ammo.
 
 ### `.autogear`
-
-Gears a **real player** the way a spawned bot gets geared: items picked for the character's level and the chosen spec from the same gear pool the bots use, under the same item level and quality limits. Upgrades only — nothing already worn is lost.
 
 ```text
 .autogear [player name] <spec> [ilvl]
 ```
 
-With no player name the command gears the selected player (yourself when nothing suitable is selected). The class comes from the character, so you only type the spec. A single word is read as a spec, so `.autogear resto` with someone targeted gears them, not you.
-The target must be a real player who is online, alive and out of combat; bots are refused. A druid must leave their shapeshift form first. Challenge-mode characters (Hardcore, Slow & Steady, ...) are GM-only whatever the settings below are.
+Gears a real player (or yourself when no name is given): upgrades only, replaced pieces to the bags (or mailed when the bags are full), and nothing destroyed. The target must be online, alive and out of combat; a druid must leave its shapeshift form. With `AiPlayerbot.PlayerAutogearForAll = 0` (default) it is GameMaster-only; with `1` every player may gear only themselves. Challenge-mode characters stay GameMaster-only.
 
-**Specs and aliases.** A tank variant can be typed with a hyphen or a space. Short aliases work too. An unknown or missing spec changes nothing and lists the valid specs for the target's class:
-
-| Class | Specs | Short aliases |
-| :--- | :--- | :--- |
-| Warrior | `arms`, `fury`, `protection` | `prot`, `tank` |
-| Paladin | `holy`, `protection`, `retribution` | `prot`, `ret` |
-| Hunter | `beast`, `marksmanship`, `survival` | `bm`, `mm`, `surv` |
-| Rogue | `assassination`, `combat`, `subtlety` | `sin`, `sub` |
-| Priest | `discipline`, `holy`, `shadow` | `disc` |
-| Shaman | `elemental`, `enhancement`, `enhancement-tank`, `restoration` | `ele`, `enh`, `resto` |
-| Mage | `arcane`, `fire`, `frost` | — |
-| Warlock | `affliction`, `demonology`, `destruction` | `afflic`, `demo`, `destro` |
-| Druid | `balance`, `feral`, `feral-tank`, `restoration` | `moonkin`, `cat`, `bear`, `resto` |
-
-**Upgrades only.** An item goes on only if it scores better for the chosen spec than what is in that slot. Replaced items go to the target's bags (mailed when the bags are full, with no expiry). Nothing is destroyed.
-A slot holding something better than the pool would give (for example a manually added epic) is left alone. Pieces of an item set that gives an active set bonus are kept whole. A two-handed weapon must beat the current main-hand **and** off-hand pieces together before it displaces the pair. A unique-equipped item is never worn twice (counting what is already equipped).
-
-**Level and quality limits.** Only items the player can wear at the current level (required level ≤ player level). The default ceiling matches a spawned bot of that level (rare at most).
-The optional `ilvl` argument can only lower that ceiling — a higher value is clamped to the default and the reply says so. At level 60 (max level) it may also **raise** the ceiling, e.g. `.autogear Thrall protection 90` picks the best items up to item level 90, epic included.
-
-**Gear only.** No weapon skills, bags, ammo or consumables are given. If the equipped ranged weapon has no matching ammo in the bags, the command answers with a missing-ammo warning like `.bot autogear` gives (without the maintenance hint).
-
-**Who can use it.** By default GMs only, on any real online player including themselves. With [`AiPlayerbot.PlayerAutogearForAll`](../../server/settings/party.md#aiplayerbotplayerautogearforall) = `1`, every player can use it — but only on themselves. It is free and has no cooldown.
-
-Examples:
-
-```text
-.autogear Thrall enhancement-tank        # GM gears Thrall as a shaman tank
-.autogear enhancement tank               # gears the selected player (space form)
-.autogear resto                          # gears the selected player as resto (yourself when nothing is selected)
-.autogear <shaman> enhancement 15        # ceiling lowered to item level 15
-.autogear <60 warrior> protection 90     # at level 60: ceiling raised to 90
-```
-
-### `.bot release`
-
-Releases dead companion bots to the graveyard: every dead bot in scope, or only the selected bot when one is selected. Also available as `.bot action release`.
-
-```text
-.bot release
-```
-
-### `.bot corpse run`
-
-Commands companion bots in spirit form to path back to their corpse location or instance entrance. Also available as `.bot action corpse run`, `.bot corpse` and `.bot corpserun`.
-
-```text
-.bot corpse run
-```
-
-### `.bot learn`
-
-Commands companion bots standing near class trainers to purchase all available, affordable spells and ability ranks. Also available as `.bot action learn`.
-
-```text
-.bot learn
-```
-
-Target your trainer NPC (the one you have selected) before issuing the command: every bot shares your target.
-
-### `.bot trade`
-
-Opens a direct trading window with your targeted companion bot. Also available as `.bot action trade`.
-
-```text
-.bot trade
-```
-
-### `.bot order`
-
-Gives a guild bot an order to fetch items for real: it farms, buys or crafts them and brings them to the guild bank. One order per bot; a new order replaces the old one (except an unfinished enchant order of another giver: only that giver, the guild master, or a rank that may remove members replaces it; anyone else gets `busy`). Orders survive restarts, and an order on an offline bot runs when it comes back online (craft orders need the bot online: its recipes cannot be checked while it is offline, so those are refused with `norecipe`). Full guide: [Guild Orders](../guild-orders.md).
-
-```text
-.bot order <BotName> farm <item link or id> <amount> [hours|inf] [keep] [gold=<copper>]
-.bot order <BotName> buy <item link or id> <amount> [hours|inf] [keep] [gold=<copper>]
-.bot order <BotName> craft <item link or id> <amount> [hours|inf] [keep] [gold=<copper>]
-.bot order <BotName> cancel (cancelling a parent cancels its whole sub-order branch)
-.bot order <BotName> meet (enchant order: records a Meet press in the bot's capital)
-.bot order <BotName> preview <farm|craft> <item link or id> <amount>
-.bot order list
-.bot order search <BotName> <farm|buy|craft> [cat=<kind>] <text> (the bot must be online to search)
-.bot order reassign <SubOrderBot> <NewBot>
-.bot order rank <rankIndex>
-.bot order access
-.bot order <BotName> steps
-```
-
-- **Who may give orders:** you must be a real player in the bot's guild, and your guild rank must be allowed to edit officer notes. Anyone else gets an error.
-- **Amount:** 1-200. Only items that can go to the bank can be ordered (no bind-on-pickup, quest or temporary items).
-- **Buy needs the server option:** `.bot order <BotName> buy` is refused unless [`AiPlayerbot.GuildOrderPlayerBuy`](../../server/settings/guild-orders.md#aiplayerbotguildorderplayerbuy) is `1` (off by default). Farm and craft orders still buy materials themselves.
-- **Preview:** `.bot order <BotName> preview <farm|craft>` answers what the bot would do (reagents held, farm zone, auction house, sub-orders, your need list, rough time, gold cap), read-only and never on a timer. A refused craft answers with its reason instead.
-- **Hours:** optional whole hours 1-24; no hours given (or `inf`) means no time limit. A capped order farms that long in worked time per round, then ends as `cant` with reason `timeout` after delivering what it holds.
-- **No progress:** every order, capped or not, ends when the bot worked 3 hours without gaining a single order item (a craft order watches its current reagent). It still brings what it holds, ending as `cant` with reason `noprogress`. Any new item resets the 3 hours.
-- **Keep:** add `keep` before an optional `gold=<copper>` to keep the ordered amount in stock: after delivery the order watches the bank and restocks what drops below it. Each round gets the full hours again; a round that ends mailed, `cant` or `noskill` ends the keep.
-- **Guild gold:** add `gold=<copper>` after the other options to cap this order's guild bank money for auction house purchases; the bot's own gold is spent first. Omit it for no cap (`gold=0` blocks guild gold use).
-- **Progress:** `.bot order list` shows every order in your guild with have/want counts, the current supply step and any missing items; the order giver also gets live updates when those change.
-- **States:** `working`, `waiting` (grouped with a player, or `needitems`), `delivering`, `done`, `stocked` (keep order watching a filled bank), `mailed`, `noskill` and `cant` (no source, no recipe, time ran out, no progress, or stuck). Full list: [Guild Orders](../guild-orders.md#states).
-- **Needs travel data:** guild orders only work while `AiPlayerbot.AutoDoQuests = 1` (the default). With quest travel off, the source index stays empty, `guild-orders` disappears from `TBM:CAPS`, and `.bot order` answers `disabled`.
-- **Offline craft orders:** giving a craft order to an offline bot is refused with `norecipe` (its recipes cannot be checked while it is offline).
-- **Guild bank:** deposits and withdrawals follow the bot's guild rank (the game logs withdrawals). A refused supply withdrawal sends the bot on to the auction house or farming.
-- **Undeliverable finished items** are mailed to the guild master instead (`mailed`). Bots in a guild with a real player join at the guild's bot rank (by default the lowest rank); bank tab 1 opens to that rank by itself, open more tabs to it if you want. All-bot guilds keep their own ranks.
-- **Rank tools:** `.bot order rank <rankIndex>` moves every bot to another rank (only a player whose rank may promote and demote members). `.bot order access` shows what the bots can reach.
-- **Sub-orders:** when the ordering bot cannot get a material itself, it asks another guild bot to make or farm it (up to 3 levels deep; the same item never appears twice in one branch). Sub-orders deliver into the guild bank, show indented under the parent in the addon, and go live to the player who gave the root order.
-- **Failed and moved sub-orders:** a failed sub-order puts its item on the parent's need list instead of failing the parent. Move one with `.bot order reassign` (same permission as giving orders); only bots without a running or watched (`stocked`) order of their own qualify.
-
----
-
-## Alt-Bots: Autonomous Alts
-
-An **alt-bot** is one of your own alts that plays on its own, like a pool bot, while you do something else. Off by default; the server switches it on with [`AiPlayerbot.AltBots`](../../server/settings/party.md#aiplayerbotaltbots) = `1`.
-
-### Start and stop
-
-| You want to... | Do this |
+| Class | Spec words (aliases) |
 | :--- | :--- |
-| Start one | Log the alt in (`.bot add <Name>`), have it in your group, then let it leave the group: `.bot uninvite <Name>`, kick it, or break up the group. It must leave while you are online. |
-| Stop it | `.bot remove <Name>` logs it out. |
-| Take it back as your companion | `.bot add <Name>`, or invite it into your group again (only your own group's invite reclaims it). |
-| Play it yourself | Log into it from the character screen. |
+| Warrior | `arms`, `fury` (`dw`, `dualwield`), `protection` (`prot`, `tank`) |
+| Paladin | `holy` (`healer`, `heal`), `protection` (`prot`, `tank`), `retribution` (`ret`, `retri`) |
+| Hunter | `beast` (`beast mastery`, `bm`), `marksmanship` (`marks`, `mm`), `survival` (`surv`) |
+| Rogue | `assassination` (`assas`, `sin`, `daggers`), `combat` (`swords`), `subtlety` (`subtle`, `sub`) |
+| Priest | `discipline` (`disc`), `holy` (`healer`, `heal`), `shadow` |
+| Shaman | `elemental` (`elem`, `ele`, `caster`), `enhancement` (`enhance`, `enh`), `enhancement tank` (`enh tank`, `tank`), `restoration` (`resto`, `healer`, `heal`) |
+| Mage | `arcane`, `fire`, `frost` |
+| Warlock | `affliction` (`afflic`, `affli`), `demonology` (`demo`), `destruction` (`destro`) |
+| Druid | `balance` (`moonkin`, `boomkin`), `feral` (`feral dps`, `cat`), `feral tank` (`bear`, `tank`), `restoration` (`resto`, `healer`, `heal`) |
 
-- **Where it goes:** if it was in an instance, a battleground or on a boat, it first leaves through the instance entrance portal, or to its battleground entry or a graveyard. At level 10 and higher it is then teleported to a zone that fits its level, never a capital (like a pool bot); below 10 it skips only the scatter and stays where it is.
-- **What it tells you:** when it starts it whispers you how to stop it; when it stops it whispers a summary (levels, quests, deaths, gold). When you log in you get one line per alt for what it did since your last logout; [`.bot alts`](#bot-alts) repeats the same lines any time.
-- **How long it plays:** while you are logged out too, until you stop it or the server restarts. With [`AiPlayerbot.AltBotsLogoutWithOwner`](../../server/settings/party.md#aiplayerbotaltbotslogoutwithowner) = `1` it logs out with you. A server crash can lose progress it had not saved yet.
-- **Pool size:** each alt-bot takes the place of one pool bot, which comes back when the alt-bot stops.
-- **Hardcore characters** never become alt-bots.
+The default ceiling is what a spawned bot of that level gets (rare at most); `ilvl` can only lower it until level 60, where it may raise it, which also opens epic quality.
 
-### What it will and will not do
+### `.tb gear`
 
-| Does | Does not |
-| :--- | :--- |
-| Quest, grind, travel by flight path and boat, rest, gather, fish | Use the auction house, mail, trade or a guild bank (so it never walks to a capital for the auction house) |
-| Sell grey items and white items it does not need (never soulbound, equipped or better-than-white); only those count when it decides to walk to a vendor | Sell or destroy items on its own (an explicit `.bot destroy` style command of yours still works) |
-| Equip upgrades it finds (the old piece goes to its bags) | Need on loot (it rolls Greed or Pass at most) |
-| Leave an instance when it is alone in it (and keeps 10 quest-log slots free) | Abandon quests it did not take itself |
-| | Buy mounts, bags or talent resets |
+```text
+.tb gear <bot|party [leader]> upgrade
+.tb gear <bot|party [leader]> set [<spec>] [level=<n>] [quality=<word>]
+.tb gear audit [level]
+```
 
-### Other players
+- `upgrade` runs the bot's own equip-upgrades pass and reports the slots it changed. It needs a logged-in host bot with a running engine and no combat.
+- `set` builds a fresh gear set for the level and quality (default: the bot's level and the level's quality cap). The spec word is optional; without one the bot's current spec is used. It also accepts your own character as the target.
+- `audit` reports the generated gear index for the level (defaults: 10, 30 and 60).
 
-- Other players may invite your alt-bot into their group and give it fight and movement orders, but only your account (or a GM) can reclaim it that way.
-- Only your account (or a GM) may trade with it, change its gear, spend its talents, manage its quests or log it out.
-- It accepts a guild invite only from your account (or a GM) and never leaves its guild by itself.
-- Grouping with it ties it to the group's instance locks, as for any player.
+## Roles and Specs
 
----
+```text
+.tb role <bot|party [leader]> tank|healer|dps|none
+.tb spec <bot|party [leader]> <tab 0|1|2|spec name|none>
+.tb talents <bot>
+```
 
-## Capital Recruiter Services
+`.tb role` sets the forced role and rebuilds the kit. `tank` needs a class with a tank kit: warrior, bear druid, or a protection paladin (recorded only); a shaman, priest, mage or rogue is refused `no-tank-kit`. `none` restores automatic role inference.
 
-The six capital city Mercenary Recruiters (Stormwind, Ironforge, Darnassus, Orgrimmar, Undercity, Thunder Bluff) offer special services for level-60 characters.
+`.tb spec` chooses the talent spec the kit is built from (`none` = automatic). `.tb talents <bot>` shows and applies the talent build; see [Configuration](../../server/configuration.md).
 
-### World Buffs at Capital Recruiters
+## Guild Orders
 
-Level-60 players can purchase world buffs for themselves and group or raid members within 40 yards of the recruiter. Each buff unlocks permanently for your character after completing a one-time quest:
+Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder create|list|cancel|status|search|preview|access|rank|reassign ...`, or the addon's Guild tab, which sends `order ...` over the addon channel. The full guide is [Guild Orders](../guild-orders.md).
 
-| World Buff | Unlock Requirement | Purchase Cost |
-| :--- | :--- | :--- |
-| **Rallying Cry of the Dragonslayer** (2 h) | Slay Onyxia or Nefarian | 10g + 2g per person |
-| **Warchief's Blessing** (1 h) | Slay Rend Blackhand | 10g + 2g per person |
-| **Spirit of Zandalar** (2 h) | Slay Hakkar | 10g + 2g per person |
-| **Dire Maul Tribute** (2 h, all three) | Earn guard's favor in Dire Maul | 10g + 2g per person |
-| **Sayge's Dark Fortune** (2 h, choice of 8) | Consult Sayge at Darkmoon Faire | 6g + 1g per person |
-| **Songflower Serenade** (1 h) | Cleanse songflower in Felwood | 4g + 1g per person |
-| **Traces of Silithyst** (30 min) | Defeat 5 opposing players in Silithus | 2g + 40s per person |
+## Other Character Actions
 
-- **Recruiter Rules:** Players must complete the unlock quest before purchasing; buffs provide no quest XP or rewards; world buff purchases only apply to the purchaser's own group or raid (no bot can purchase buffs, and bystanders outside it receive nothing); the menu shows the quest or the purchase for each buff, never both. See [Hiring and Recruiter Settings](../../server/settings/hiring.md).
+- Release a dead bot: `.tb order <bot> release` (refused `no-entrance` inside an instance without an entrance point), or `.tb cmd revive party` to raise bound bots.
+- Corpse run: `.tb cmd corpserun [bot]`.
+- Train at a trainer: `.tb order <bot> train`.
+- Trade: the addon's trade verb (`trade [<bot>]`).
 
-### Mercenary Contracts
+## Not on WoW Forever Yet
 
-When [`AiPlayerbot.HireGearTiersEnabled`](../../server/settings/hiring.md#aiplayerbothiregeartiersenabled) is enabled (1), capital recruiters offer the **Mercenary Contracts** dialogue. This tracks seven progressive unlock quests (quest IDs `90100` through `90106` for Tiers 1 through 7) that grant access to high-tier mercenary equipment sets:
+Mercenary hiring (`.bot hire`, `.bot hire raid`), recruiter menus, capital world-buff services, mercenary contracts, autonomous alt-bots (`.bot alts` summaries, alt progress, `AiPlayerbot.AltBots`), `.bot invite` / `.bot uninvite`, `.bot gear` tier and preset names, `.bot role` spec ids, and the chat `.bot release` / `.bot corpse run` / `.bot learn` / `.bot trade` commands are not in this build. Their settings stay in `aiplayerbot.conf.dist`, but no gameplay code reads them.
 
-- Contracts must be open in your quest log to earn credit.
-- Bots never earn unlock credit for themselves; humans in reward distance are still credited even if a bot lands the killing blow.
-- Contracts unlock once per character ever. The Four Horsemen in Naxxramas counts as a single encounter kill when all four horsemen are defeated.
-- Abandoning and retaking a contract restores previously recorded boss kill progress.
-- Detailed tier equipment lists are documented in the [Hire Gear Reference](../../reference/hire-gear.md).
+**Not on WoW Forever yet.**

@@ -91,19 +91,19 @@ nodes:
   - id: play-commands-party-actions
     path: play/commands/party-actions.md
     category: play
-    summary: Tactical party actions, live combat toggles, and direct movement commands for player-led parties.
+    summary: Party combat orders, toggles and movement on the party chat command, the addon and the GameMaster order commands.
   - id: play-commands-commander
     path: play/commands/commander.md
     category: play
-    summary: Remote commander mode and intent commands for directing bot-only parties from anywhere.
+    summary: GameMaster commands that bind bots to a commander, issue party orders, and report a binding.
   - id: play-commands-roster-and-hiring
     path: play/commands/roster-and-hiring.md
     category: play
-    summary: Commands for managing owned alts, hiring mercenary companions, and recruiter services.
+    summary: Commands for logging your own characters in as bots, listing them, summoning, gearing and maintaining them.
   - id: play-commands-bot-panel
     path: play/commands/bot-panel.md
     category: play
-    summary: Commands for inspecting bot state, managing gear and inventory, and toggling runtime behaviors.
+    summary: Chat and addon commands that inspect a bot, show its bags and professions, and set behaviours, totems, blessings and choices.
   - id: play-commands-whispers
     path: play/commands/whispers.md
     category: play
