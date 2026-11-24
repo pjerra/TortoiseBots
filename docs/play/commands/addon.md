@@ -88,12 +88,12 @@ Every structured line starts with `TBM:`. The ones the Forever server sends:
 | `ALTSUM`, `ALTSUM_END` | One summary line per such bot, then the count. |
 | `CC_ASSIGN_BEGIN`, `CC_ASSIGN`, `CC_ASSIGN_END` | The party bots holding a crowd-control mark. |
 | `CLAIMED_BEGIN`, `CLAIMED_END` | The claimed guild-bot snapshot. The Forever build keeps no guild-bot store, so the pair is always empty. |
-| `BOTSTATE_BEGIN`, `BOTSTATE`, `BOTSTATE_END` | The party bots' movement state (`move=follow\|stay\|free\|...`). |
+| `BOTSTATE_BEGIN`, `BOTSTATE`, `BOTSTATE_END` | The party bots' movement and behaviour state (`move=follow\|stay\|free\|...`, `sap=<on|off>`, class toggles and active specs). |
 | `INV_BEGIN`, `INV_EQ`, `INV_ITEM`, `INV_END` | One bot's inventory snapshot: money, equipped items with durability, carried items, free and total slots. |
 | `PROF_BEGIN`, `PROF`, `RECIPE`, `RECIPE_MISSING`, `PROF_END` | A bot's professions, known recipes (with their skill steps and order verdict) and learnable recipes. |
 | `TOTEM`, `BLESSING`, `CHOICE`, `SERVICE` | The shaman totem loadout, paladin blessings, class choices, and what a bot can conjure or portal. |
 | `LOOT_BEGIN`, `LOOT`, `LOOT_END` | One page of loot and roll history with the cursor for the next page. |
-| `ORDER_BEGIN`, `ORDER`, `ORDER_END` | The guild order list. |
+| `ORDER_BEGIN`, `ORDER`, `ORDER_END` | The guild order list: each row is `TBM:ORDER\|<bot>\|<type>\|<itemId>\|<item>\|<have>\|<want>\|<state>\|<reason>\|<zone>\|<difficulty>\|<hours>\|<keep>\|<parent>\|<goldCap>\|<step>\|<need>\|<carry>\|<bring>`. `<hours>` is `1`–`24` or `inf` (no time limit); `<carry>` is the count in the bot's bags and mailbox not delivered yet (`0` once the hand-off succeeded). |
 | `ORDER_ACCESS` | The guild's bot rank and what it reaches: bank tabs, guild gold and whether you may change the rank. |
 | `ORDER_STEPS_BEGIN`, `ORDER_STEP`, `ORDER_STEPS_END` | The on-demand step timeline of one order. |
 | `ORDER_ENCHANTS_BEGIN`, `ORDER_ENCHANT`, `ORDER_ENCHANTS_END` | An enchant search result. |

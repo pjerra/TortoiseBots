@@ -157,7 +157,7 @@ The default ceiling is what a spawned bot of that level gets (rare at most); `il
 
 ## Guild Orders
 
-Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder create|list|cancel|status|search|preview|access|rank|reassign ...`, or the addon's Guild tab, which sends `order ...` over the addon channel. The full guide is [Guild Orders](../guild-orders.md).
+Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder create|list|cancel|status|search|preview|access|rank|reassign ...`, or the addon's Guild tab, which sends `order ...` over the addon channel (no hours given (or `inf`) means no time limit). The full guide is [Guild Orders](../guild-orders.md).
 
 ## Other Character Actions
 

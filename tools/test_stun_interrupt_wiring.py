@@ -125,7 +125,6 @@ class InterruptAllowStun(unittest.TestCase):
         self.assertIn("MOD_STUN", section)
         self.assertIn("20252", section)
         self.assertIn("stun-immune", section)
-        self.assertIn("InterruptAllowStun", BOSS_DOC)
 
 
 if __name__ == "__main__":

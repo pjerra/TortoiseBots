@@ -231,7 +231,7 @@ Lets pure interrupts ignore the threat back-off, the way heals already do.
 <details>
 <summary>How it works in detail</summary>
 
-A bot with the `threat` strategy in a group normally stops single-target spell casts when its threat on the target reaches 80 % of the tank's. That rule also covered interrupt rows, so a damage dealer over the line let enemy casts finish. With this on, Kick, Pummel, Shield Bash, Bash, Counterspell and Silence are exempt while they would not pull the mob off the tank. Off by default, so a shipped configuration plays as before. Recommended on.
+A bot with the `threat` strategy in a group normally stops single-target spell casts when its threat on the target reaches 80 % of the tank's. That rule also covered interrupt rows (including `on enemy healer`), so a damage dealer over the line let enemy casts finish. With this on, Kick, Pummel, Shield Bash, Bash, Counterspell and Silence are exempt while the bot's threat plus the interrupt's flat threat stays under the pull line (110 % of the tank's threat in melee, 130 % at range). A vetoed interrupt logs a `ThreatCapInterrupt` row. Off by default, so a shipped configuration plays as before. Recommended on.
 
 </details>
 
@@ -242,9 +242,9 @@ Counts a stun as an interrupt.
 <details>
 <summary>How it works in detail</summary>
 
-With this on, Bash, Hammer of Justice, War Stomp, Repentance and Intercept's stun interrupt a cast the target is not immune to. The core already stops a non-melee cast when a stun lands, so the victim's cast needs no special interrupt flag.
+With this on, stun spells carrying a `MOD_STUN` aura effect (Bash, Hammer of Justice, War Stomp, Repentance) and Intercept (`20252`, whose triggered effect stuns) interrupt a cast the target is not immune to. The core already stops a non-melee cast when a stun lands, so the victim's cast needs no special interrupt flag.
 
-A stun is never picked for a target that cannot be stunned, and a boss counts as unstunnable. Recommended on.
+A stun is never picked for a stun-immune target, and a boss counts as unstunnable. Recommended on.
 
 </details>
 
@@ -255,7 +255,7 @@ Refuses a cast the target's facing makes impossible, before asking the core.
 <details>
 <summary>How it works in detail</summary>
 
-Two casts fail because of where the target looks: a from-behind-only spell such as Backstab while the target faces the bot, and Gouge while it does not. The old cast check found this out by asking the core on every attempt, which sent a spell failure to nearby clients each time, and it read the Gouge answer as castable. With this on the bot runs both tests itself first and simply does not try. Recommended on.
+Two casts fail because of where the target looks: a from-behind-only spell such as Backstab while the target faces the bot, and Gouge while it does not. The old cast check found this out by asking the core on every attempt, which sent a spell failure to nearby clients each time, and it read the Gouge answer as castable. With this on the precheck runs before the core's other cast checks. It can only refuse a cast that the core always refuses on facing. Recommended on.
 
 </details>
 

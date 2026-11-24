@@ -45,7 +45,7 @@ The addon preview checks the order before it is created: an item the bot cannot 
 
 The order row shows a state and, for a refusal, a reason.
 
-- The count is what reached the guild bank (or the giver by mail), not what the bot still carries.
+- The count is what reached the guild bank (or the giver by mail), not what the bot still carries. While an order runs, the carried figure shows items in the bot's bags and mailbox not delivered yet; once handed off (`done` or `mailed`) it drops to `0`, while a `cant` row keeps the last scanned figure.
 - A finished order stays visible until you cancel it or give a new one.
 
 | State | Meaning |
