@@ -373,3 +373,4 @@ ai/playerbot/strategy/generic/DebugStrategy.cpp
 # mount aura speeds); see forever/docs/MOUNT-RIDE-NOTES.md.
 ai/playerbot/strategy/actions/CheckMountStateAction.cpp
 ai/playerbot/strategy/values/MountValues.cpp
+runtime/PassingBuffsService.cpp

@@ -31,6 +31,7 @@
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
 #include "host/TbHostProfession.h"
+#include "runtime/PassingBuffsService.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -345,6 +346,9 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::PassingBuffsService::Instance().Update(diff);   // pool bots' buffs for the real players they pass
+#endif
         bool const poolLogin = TortoiseBots::pool::PoolScheduler::Update(diff);   // W0-B: the pool's logins and logouts, once a second
         if (!poolLogin)
             TortoiseBots::pool::CreateUpdate(diff);   // W0: at most one pool character per rate tick, and never in a tick with a login
