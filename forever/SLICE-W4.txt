@@ -51,6 +51,7 @@ ai/playerbot/strategy/actions/RemoveAuraAction.cpp
 ai/playerbot/strategy/generic/ClassStrategy.cpp
 ai/playerbot/strategy/generic/CombatStrategy.cpp
 ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
+ai/playerbot/strategy/generic/DuelStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp

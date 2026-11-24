@@ -351,6 +351,10 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     if (!player)
         return;
     combatEngine->addStrategy("racials");
+    // A duel is fought in the combat state, so the combat engine needs the duel strategy too: TB adds it to the
+    // combat kit of every bot outside a battleground (AiFactory.cpp:664-671).
+    if (!player->InBattleGround())
+        combatEngine->addStrategy("duel");
     int const tab = KitSpecTab(player, facade);
 
     switch (player->GetClass())
@@ -460,6 +464,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         // The mount toggle: without it CheckMountStateAction::isUseful refuses every
         // unmounted bot, so a bot that owns a mount would never ride it.
         nonCombatEngine->addStrategy("mount");
+        // TB gives every bot outside a battleground the duel strategy (AiFactory.cpp:1489-1495): its rows answer the
+        // challenge and take the duel's own opponent as the target, for a free bot and a hired one alike.
+        if (player && !player->InBattleGround())
+            nonCombatEngine->addStrategy("duel");
     }
     // A free bot plays the world on its own: grind targets, food, loot, rolls, the class spec and the engine's default handler.
     if (player && sRandomBotFacade.IsFreeBot(player) && !facade->HasRealPlayerMaster())
