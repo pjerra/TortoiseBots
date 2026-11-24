@@ -297,10 +297,6 @@ std::vector<uint32> WorldBuffAction::NeedWorldBuffs(Unit*) { NoteMisc(); return 
 // stays: the use command still refuses a game object on ForeverCore (`GameObjectUseUnportedCompat`).
 
 // ItemUsageValue.cpp is in the slice since slice 9 (package L9): its four stand-ins (IsNeededForQuest, IsFutureUpgrade, QueryItemUsageForEquip, GetRecipeSpell) are gone.
-
-// GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
-// Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
-bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
 
