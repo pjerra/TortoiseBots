@@ -81,7 +81,7 @@ The orders go to the party your binding commands; `.tb cmd` needs a player chara
 | `corpserun [bot]` | Sends a dead bot's ghost back to its corpse. |
 | `loot <my\|guid\|entry:<id>> [bot] [itemId]` | A bot loots a corpse or container. |
 | `open <my\|guid\|entry:<id>> [bot]` | A bot walks to and opens a door, lever, chest or goober. |
-| `use <my\|guid\|entry:<id>> [bot]` | Parsed but refused: item use is not ported. |
+| `use <my\|guid\|entry:<id>> [bot]` | A bot walks to and uses a game object (same path as `open`). Passing an item id (`<itemId>` or `item:<id>`) is refused as `unsupported`. |
 | `gossip <my\|guid\|entry:<id>> [bot] [option]` | A bot picks one gossip option of an allowlisted NPC. |
 | `lootmethod <ffa\|group\|rr\|master\|nbg> [threshold]` | Sets the party's loot method. |
 | `state [bot]` | Reads each bound bot's current task. |
@@ -104,7 +104,7 @@ The leader is a tank bot that leads its party: a warrior tank or a bear druid wi
 
 ## Single-Bot Orders
 
-`.tb order <bot|party [leader]> <verb> [argument]` queues one order for one bot or a bot party. It uses the same engine actions as the commander orders: `follow`, `stay`, `come`, `attack`, `pull`, `endpull` (`end`), `hold`, `assist`, `release`, `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `aoe`, `autocc`, `sap`, `loot`, `corpserun`, `co`/`nc` for strategy changes, and upkeep orders such as `repair`, `sell`, `train` and `rest`. It has no commander binding requirement.
+`.tb order <bot|party [leader]> <verb> [argument]` queues one order for one bot or a bot party. It uses the same engine actions as the commander orders: `follow`, `stay`, `come`, `attack`, `pull`, `pullback`, `focus`, `endpull` (`end`), `hold`, `assist`, `release`, `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `aoe`, `autocc`, `sap`, `loot`, `corpserun`, `co`/`nc` for strategy changes, and upkeep orders such as `repair`, `sell`, `train` and `rest`. It has no commander binding requirement.
 
 One difference from `.tb cmd`: `.tb order party loot on|off|status` is the loot toggle, because `.tb cmd loot` is the object-loot task.
 
@@ -113,5 +113,3 @@ A player with no GameMaster account has the four single-bot orders in chat: `.bo
 ## Not on WoW Forever Yet
 
 The Turtle player commands `.bot commander bind`, `.bot commander unbind`, `.bot commander view`, `.bot cmd` and `.bot run` do not exist here. `AiPlayerbot.RemoteCommander` is not read by any order path, so it gates nothing. The live perception feed (`TBM:VIEW`) and the GameMaster `.bot scout` path tool are not implemented.
-
-**Not on WoW Forever yet.**
