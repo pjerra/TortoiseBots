@@ -157,7 +157,7 @@ The default ceiling is what a spawned bot of that level gets (rare at most); `il
 
 ## Guild Orders
 
-Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder create|list|cancel|status|search|preview|access|rank|reassign ...`, or the addon's Guild tab, which sends `order ...` over the addon channel (no hours given (or `inf`) means no time limit). The full guide is [Guild Orders](../guild-orders.md).
+Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder create|list|cancel|status|work|meet|search|who|preview|steps|access|rank|reassign ...`, or the addon's Guild tab, which sends `order ...` over the addon channel (no hours given (or `inf`) means no time limit). The full guide is [Guild Orders](../guild-orders.md).
 
 ## Other Character Actions
 
@@ -169,5 +169,3 @@ Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder creat
 ## Not on WoW Forever Yet
 
 Mercenary hiring (`.bot hire`, `.bot hire raid`), recruiter menus, capital world-buff services, mercenary contracts, autonomous alt-bots (`.bot alts` summaries, alt progress, `AiPlayerbot.AltBots`), `.bot invite` / `.bot uninvite`, `.bot gear` tier and preset names, `.bot role` spec ids, and the chat `.bot release` / `.bot corpse run` / `.bot learn` / `.bot trade` commands are not in this build. Their settings stay in `aiplayerbot.conf.dist`, but no gameplay code reads them.
-
-**Not on WoW Forever yet.**
