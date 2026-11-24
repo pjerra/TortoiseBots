@@ -32,8 +32,8 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 - Channels *Volley* against grouped mobs, cancelling the channel if fewer than 2 mobs remain in the area or a mob under the party's crowd control stands in it.
 - Multi-Shot and Volley respect [party threat back-off](overview.md#shared-bot-behaviors) when holding 50% or more of the tank's threat.
 - Keeps *Serpent Sting* ticking on high-health targets (skipping targets near death).
-- Replaces Serpent Sting with *Viper Sting* when the hunter's mana is below 50% and the target has mana (10% or more); manual `sting viper` or `sting serpent` orders override this gate.
-- [`.bot choice <bot> sting <serpent|scorpid|viper|auto>`](../play/commands/bot-panel.md#bot-choice) orders one sting per hunter: it goes on any target without a sting, and the automatic Serpent and Viper rows stand down while it is set. Boss tactics that burn a boss's mana with *Viper Sting* still do so.
+- Replaces Serpent Sting with *Viper Sting* when the hunter's mana is below 50% and the target has mana (10% or more); a `.bot choice <bot> sting ...` order overrides this gate.
+- [`.bot choice <bot> sting <serpent|scorpid|viper|auto>`](../play/commands/bot-panel.md#bot-choice) orders one sting per hunter: it goes on any target without a sting, and the automatic Serpent and Viper rows stand down while it is set.
 - Beast Mastery activates *Bestial Wrath* on cooldown. *Rapid Fire* fires for all specs on cooldown.
 - Switches between *Aspect of the Hawk* for damage and *Aspect of the Viper* when low on mana. [`.bot choice`](../play/commands/bot-panel.md#bot-choice) orders one aspect per hunter instead; the Hawk upkeep and the low-mana Viper switch both stand down.
 - Threat handling (Feign Death, Disengage, multi-mob kiting): see [Threat drops](#threat-drops).
@@ -57,7 +57,7 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 <details>
 <summary>Pet management and lifecycle details</summary>
 
-- **Lifecycle:** Hunters obtain their pet at level 10; pool hunters logging in below level 10 give up any previously seeded pet, while player-owned, hired, or adopted hunters keep theirs.
+- **Lifecycle:** Hunters obtain their pet at level 10; pool hunters logging in below level 10 give up any previously seeded pet, while player-owned or adopted hunters keep theirs.
 - Automatically summons, feeds, and revives pets out of combat.
 - Sends pets to attack the primary target, holding them back for about two seconds after the group enters combat so a grouped tank can build a lead first (solo hunters and tankless groups send the pet in at once).
 - Casts *Mend Pet* below 40% in combat (channeled, below rotation shots in priority) and below 70% out of combat.
