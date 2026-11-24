@@ -2,8 +2,8 @@
 id: server-settings-performance
 title: Performance & tick budget settings
 category: server
-summary: Configuration settings for AI time budgets, activity throttling, world tick targets, and core server tuning for large bot populations.
-tags: [config, performance, tick, budget, optimization, mangosd]
+summary: Configuration settings for AI time budgets, activity throttling, the world tick target, and core server tuning for large bot populations.
+tags: [config, performance, tick, budget, optimization]
 relates_to:
   - server-settings-world-population
   - server-dashboard
@@ -11,459 +11,342 @@ relates_to:
 
 # Performance & Tick Budget Settings
 
-These settings control AI execution scheduling, per-tick time budgets, activity throttling, and core server optimizations for hosting large bot populations. Settings go in `aiplayerbot.conf` and `mangosd.conf`; see [How configuration works](../configuration.md).
+These settings control how the bot engine schedules its work, how much CPU time bots may use per server tick, and a few core server settings that matter on a bot-heavy realm.
 
-The total bot population is a major factor in server CPU and memory usage. When hosting hundreds or thousands of bots, adjusting per-tick budgets and core memory caching ensures smooth gameplay.
+- Engine settings go in `aiplayerbot.conf`. The engine reads that file once, when it first starts a bot, so changing them needs a server restart.
+- Core settings go in `worldserver.conf`. Those are the core's own settings; see its comments for the full description.
+
+> **Which bots these settings apply to.** They shape the bot engine. Every bot the pool logs in, and every character a player adds with `.bot add`, runs the engine. A bot a GameMaster logs in with `.tb login <character> <master>` runs it only with `TortoiseBots.Slice.EngineByDefault = 1` in `tortoisebots.conf`, or after `.tb engine <character> on`.
+
+The bot population is the main driver of CPU and memory use. When hosting hundreds or thousands of bots, the per-tick budgets below keep the world tick smooth.
 
 ## Summary
 
 | Setting | Default | What it does |
 | :--- | :---: | :--- |
-| [`AiPlayerbot.DisableActivityPriorities`](#aiplayerbotdisableactivitypriorities) | `1` | Disables bot activity throttling so all bots remain fully reactive. |
-| [`AiPlayerbot.botActiveAlone`](#aiplayerbotbotactivealone) | `10` | Percentage of isolated bots kept active when throttling is enabled. |
-| [`AiPlayerbot.ForceActiveWhenNearPlayer`](#aiplayerbotforceactivewhennearplayer) | `0` | Forces bots within human visibility range to remain fully active. |
-| [`AiPlayerbot.PoolTickBudgetUs`](#aiplayerbotpooltickbudgetus) | `22000` | Microsecond time budget per world tick for processing pool bots. |
-| [`AiPlayerbot.PoolNearPlayerYd`](#aiplayerbotpoolnearplayeryd) | `0` | Yards around a real player whose pool bots run first when the budget cuts (off by default). |
-| [`AiPlayerbot.PoolBudgetWhenTickOverMs`](#aiplayerbotpoolbudgetwhentickoverms) | `0` | World tick latency threshold in milliseconds where budgets engage. |
-| [`AiPlayerbot.TargetWorldTickMs`](#aiplayerbottargetworldtickms) | `100` | Target world tick duration used by the self-tuning budget controller. |
-| [`AiPlayerbot.ValueRefreshAtInterval`](#aiplayerbotvaluerefreshatinterval) | `0` | Refreshes cached AI sensory values at full intervals to reduce CPU usage. |
-| [`AiPlayerbot.TravelPickBudgetUs`](#aiplayerbottravelpickbudgetus) | `4000` | Microsecond budget limit per bot visit for travel destination calculations. |
-| [`AiPlayerbot.AsyncTravelPartitions`](#aiplayerbotasynctravelpartitions) | `0` | Enables asynchronous partitioning of world travel destination lookups. |
-| [`AiPlayerbot.GenerateItemCaches`](#aiplayerbotgenerateitemcaches) | `1` | Builds equipment and item candidate database tables on first boot. |
-| [`AiPlayerbot.GenerateTravelNodes`](#aiplayerbotgeneratetravelnodes) | `1` | Builds the bot travel graph once on startup when the travel tables are empty. |
-| [`AiPlayerbot.LogInGroupOnly`](#aiplayerbotlogingrouponly) | `1` | Restricts detailed per-action logging output to bots currently in groups. |
-| [`AiPlayerbot.Enabled`](#aiplayerbotenabled) | `1` | Master kill-switch enabling or disabling bot artificial intelligence updates. |
-| [`AiPlayerbot.PoolMeleeHoldGround`](#aiplayerbotpoolmeleeholdground) | `0` | Disables generic fleeing behaviors on pool melee classes during combat. |
-| [`AiPlayerbot.FailedActionRetryBase`](#aiplayerbotfailedactionretrybase) | `250` | Base exponential backoff delay in milliseconds for repeated failed actions. |
-| [`AiPlayerbot.FailedActionRetryMax`](#aiplayerbotfailedactionretrymax) | `2000` | Maximum exponential backoff cap in milliseconds for repeated failed actions. |
-| [`AiPlayerbot.FailedActionCacheTtl`](#aiplayerbotfailedactioncachettl) | `30000` | Time-to-live in milliseconds for cached failed action backoff records. |
-| [`AiPlayerbot.FailedActionCacheMaxEntries`](#aiplayerbotfailedactioncachemaxentries) | `64` (built in) | Maximum number of entries stored in the failed action cache. |
-| [`AiPlayerbot.IterationsPerTick`](#aiplayerbotiterationspertick) | `100` | Maximum action evaluation iterations allowed per bot per world tick. |
-| [`AiPlayerbot.MaxWaitForMove`](#aiplayerbotmaxwaitformove) | `3000` | Timeout in milliseconds to wait for a movement arrival before expiring. |
-| [`AiPlayerbot.RemoteCommander`](#aiplayerbotremotecommander) | `0` | Enables remote commander commands for leading bot-only parties from afar. |
-| [`AiPlayerbot.RemoteCommanderViewMs`](#aiplayerbotremotecommanderviewms) | `1000` | Milliseconds between visual perception updates sent to remote commanders. |
+| [`AiPlayerbot.Enabled`](#aiplayerbotenabled) | `1` | Master switch for the bot engine. |
+| [`AiPlayerbot.DisableActivityPriorities`](#aiplayerbotdisableactivitypriorities) | `1` | Turns activity throttling off: every bot runs its AI fully. |
+| [`AiPlayerbot.botActiveAlone`](#aiplayerbotbotactivealone) | `10` | Percentage of lone bots kept fully active when throttling is on. |
+| [`AiPlayerbot.ForceActiveWhenNearPlayer`](#aiplayerbotforceactivewhennearplayer) | `0` | Keeps bots a human can see at full reaction rate. |
+| [`AiPlayerbot.PoolTickBudgetUs`](#aiplayerbotpooltickbudgetus) | `22000` | Microseconds per world tick for pool bots. |
+| [`AiPlayerbot.CombatTickBudgetUs`](#aiplayerbotcombattickbudgetus) | `15000` | Microseconds per world tick added to the pool budget. |
+| [`AiPlayerbot.PoolBudgetWhenTickOverMs`](#aiplayerbotpoolbudgetwhentickoverms) | `0` | Only use the budgets when the previous tick was slower than this. |
+| [`AiPlayerbot.TargetWorldTickMs`](#aiplayerbottargetworldtickms) | `100` | The tick length the self-tuning budget aims for. |
+| [`AiPlayerbot.ValueRefreshAtInterval`](#aiplayerbotvaluerefreshatinterval) | `0` | Refreshes cached values at their full interval to save CPU. |
+| [`AiPlayerbot.TravelPickBudgetUs`](#aiplayerbottravelpickbudgetus) | `4000` | Microseconds one bot may spend picking a travel destination per pass. |
+| [`AiPlayerbot.AsyncTravelPartitions`](#aiplayerbotasynctravelpartitions) | `0` | Spreads travel destination searches over background work. |
+| [`AiPlayerbot.GenerateTravelNodes`](#aiplayerbotgeneratetravelnodes) | `1` | Builds the bot travel network once, when its tables are empty. |
+| [`AiPlayerbot.IterationsPerTick`](#aiplayerbotiterationspertick) | `100` | Action evaluations a bot may do per tick, per queued action. |
+| [`AiPlayerbot.MaxWaitForMove`](#aiplayerbotmaxwaitformove) | `3000` | Milliseconds a move may take before it is given up. |
+| [`AiPlayerbot.FailedActionRetryBase`](#aiplayerbotfailedactionretrybase) | `250` | First retry delay after an action fails, in milliseconds. |
+| [`AiPlayerbot.FailedActionRetryMax`](#aiplayerbotfailedactionretrymax) | `2000` | Longest retry delay after repeated failures. |
+| [`AiPlayerbot.FailedActionCacheTtl`](#aiplayerbotfailedactioncachettl) | `30000` | Milliseconds a failed-action record is kept. |
+| [`AiPlayerbot.FailedActionCacheMaxEntries`](#aiplayerbotfailedactioncachemaxentries) | `64` | Failed actions remembered per bot. |
+| [`AiPlayerbot.LogInGroupOnly`](#aiplayerbotlogingrouponly) | `1` | Restricts detailed per-action logging to grouped bots. |
 
-### Recommended Core Settings (`mangosd.conf`)
+### Core settings (`worldserver.conf`)
 
-| Setting | Recommended | What it does |
+| Setting | Default | What it does |
 | :--- | :---: | :--- |
-| [`CleanupTerrain`](#cleanupterrain) | `0` | Keeps extracted continent terrain in memory, eliminating 2-second map stalls. |
-| [`PlayerSave.Interval`](#playersaveinterval) | `300000` | Increases character save interval to 5 minutes to avoid mass write waves. |
-| [`DynamicRespawn.MaxReductionRate` / `MinRespawnTime`](#dynamicrespawnmaxreductionrate--dynamicrespawnminrespawntime) | `0.75` / `15` | Speeds up mob respawn rates in crowded bot starter and grinding zones. |
-| [`LootsLogFile` / `CharLogFile`](#lootslogfile--charlogfile) | `""` | Disables unrotated core character and loot log files to save disk space. |
+| [`PlayerSaveInterval`](#playersaveinterval) | `90000` | How often characters are saved, in milliseconds. |
+| [`GridUnload`](#gridunload--basemaploadallgrids) | `1` | Unload unused grids to save memory. |
+| [`BaseMapLoadAllGrids`](#gridunload--basemaploadallgrids) | `0` | Load every grid of the base maps at startup. |
+| [`Respawn.DynamicMode`](#respawn-dynamicmode) | `1` | Scale respawn timers with the number of players in the zone. |
 
-## Settings
+## Bot scheduling and budgets
 
-### `AiPlayerbot.DisableActivityPriorities`
-Controls whether distant bots without nearby players are throttled or kept fully active.
-**Default:** `1` · **Values:** `0` throttling on, `1` full activity · **Restart:** needed
+### `AiPlayerbot.Enabled`
+Master switch for the bot engine.
+**Default:** `1` · **Values:** `0` the engine does not start, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Governs how the server handles bots roaming alone in empty zones:
+With `0` the engine never starts. Bots still log in, but with no engine a bot that has a master only follows it on the module's simple follow/assist behaviour, and a masterless bot stands where it is. None of the AI settings on this page or in the other bot settings pages applies. The server log says the engine configuration was not loaded and why.
 
-- `1`: Default behavior. Every bot's AI runs at full capability regardless of whether a human player is nearby. All bots remain active, level, and gather naturally.
-- `0`: Opt-in throttling mode. Bots near human players, in combat, in instances, or grouped with players remain fully active. "Alone" bots have their update rate significantly reduced.
+This is not the module's on/off switch; that is `TortoiseBots.Enable` in `tortoisebots.conf`.
 
-All bots remain logged into the world in either mode; only their AI decision frequency is throttled.
+</details>
+
+### `AiPlayerbot.DisableActivityPriorities`
+Turns activity throttling off.
+**Default:** `1` · **Values:** `0` throttling on, `1` every bot fully active · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+- `1`: every bot's AI runs at full speed whether or not a human is nearby. Bots level, gather and fight on their own schedule.
+- `0`: bots far from humans and not in combat run their AI less often. Bots with a real player master, in combat, in an instance, in a battleground, or visible to a player always run fully.
+
+Every bot stays logged in either way; only the AI update rate changes. The project's default is full activity.
 
 </details>
 
 ### `AiPlayerbot.botActiveAlone`
-Percentage of isolated bots kept fully active when activity throttling is enabled.
-**Default:** `10` · **Values:** percentage (0..100) · **Restart:** needed
+Percentage of lone bots kept fully active when throttling is on.
+**Default:** `10` · **Values:** `0` to `100` percent · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When `DisableActivityPriorities = 0`, this setting defines what percentage of "alone" bots (bots with no human player nearby or in an empty zone) are selected to run full updates. The active subset rotates approximately 1% per minute.
-
-For example, with 20 bots in an empty world, approximately 2 bots will be actively moving and grinding at any given moment.
+Only used with `DisableActivityPriorities = 0`. It sets the share of bots that are alone (no player nearby, empty zone) allowed to run a full update; that subset rotates slowly, about 1 % per minute, so the work spreads across the pool over time.
 
 </details>
 
 ### `AiPlayerbot.ForceActiveWhenNearPlayer`
-Forces bots visible to human players to always run at maximum reaction rates.
+Keeps bots a human can see at the full reaction rate.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Reserved: bots within human visibility range already run at full update frequency, so this flag changes nothing today. Leave it at `0`.
+A bot a player can see already runs its main AI at full rate. This flag additionally lets its reaction engine run fully while visible with throttling on. It does nothing while `DisableActivityPriorities = 1` (the default).
 
 </details>
 
 ### `AiPlayerbot.PoolTickBudgetUs`
-Microsecond execution budget ceiling per world tick for processing pool bots.
-**Default:** `22000` · **Values:** microseconds (1000..100000, or 0) · **Restart:** needed
+Microseconds of each world tick reserved for pool bots.
+**Default:** `22000` · **Values:** microseconds (`1000` to `100000`, or `0`) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Defines the time budget allocated for updating random pool bots during each server world tick (22,000 microseconds = 22 milliseconds).
+Bots with a real player master and owned bots run first, every tick, and never count against this budget. Masterless pool bots share the rest of the pass under the combined budget (`PoolTickBudgetUs + CombatTickBudgetUs`, 37 ms at the defaults). The budget is checked before each bot, so a pass can overshoot by at most one bot; the bot the budget cut becomes the first of the next pass, so no bot waits two rounds.
 
-Player-owned bots and companions hired by online players always update first, on every tick, and are completely exempt from this budget. The random pool runs afterward as one turn queue, most-overdue-first with bots near real players ahead; bots it does not reach run first on the next tick. The budget is checked between bots so a single pass can overshoot by one bot. Setting either budget to `0` disables the whole combined budget.
-
-</details>
-
-
-### `AiPlayerbot.PoolNearPlayerYd`
-Yards around a real player whose pool bots run ahead of the rest when the budget cuts the pass.
-**Default:** `0` · **Values:** yards (0..N; 0 off) · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Due pool bots on the same map and instance within this many yards of a real (network-session) player run first, most overdue first among themselves; the rest keep today's most-overdue order and run after, never dropped, so a bot next to you answers at once (for example it starts its next task right after arriving) while distant bots just wait a little longer. Combat, teleport, death and battleground situation caps still apply inside each group.
-
-Costs nothing measurable: player spots per map are cached once per tick and the radius check is squared 2D distance from positions the server already tracks.
-
-Off by default: with it off every bot is equally late, so distant bots act as smoothly as the ones you see. Turn it on (for example `80`) only for a large pool on a machine that cannot keep up; bots outside the radius then wait longer. If bots still feel slow, raise `PoolTickBudgetUs` first or run fewer bots.
+Setting this to `0` switches the whole budget off. See also `TargetWorldTickMs` for the self-tuning controller that may lower the effective budget.
 
 </details>
+
 ### `AiPlayerbot.CombatTickBudgetUs`
-Microsecond execution budget ceiling per world tick for processing bots in combat.
-**Default:** `15000` · **Values:** microseconds (1000..100000, or 0) · **Restart:** needed
+Microseconds added to the shared pool budget per world tick.
+**Default:** `15000` · **Values:** microseconds (`1000` to `100000`, or `0`) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Combines with `PoolTickBudgetUs` to form the overall module execution ceiling per server tick (the two values are added). The pool runs as one turn queue under this combined budget; combat turns are ordered by the scheduler's urgency (combat has a 400 ms cap, so combat bots naturally sort first when late).
-
-Setting this to `0` disables the whole combined budget, so all pool turns run.
+The second half of the combined pool budget. The two values are added; there is one budget and one rotation order, so this setting only makes the pool's share larger, not a separate combat queue. `0` switches the whole budget off, like `PoolTickBudgetUs = 0`.
 
 </details>
 
 ### `AiPlayerbot.PoolBudgetWhenTickOverMs`
-Latency threshold in milliseconds where per-tick time budgets begin to throttle pool turns.
-**Default:** `0` · **Values:** milliseconds (0..N) · **Restart:** needed
+Only apply the budgets when the previous world tick was slower than this.
+**Default:** `0` · **Values:** milliseconds (`0` = every tick) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Specifies when the tick budget engages based on previous world tick latency:
-
-- `0`: Budgets apply to every tick (recommended). The automated self-tuning controller reclaims unused budget on healthy ticks automatically.
-- `>0`: Budgets only engage when the previous world tick exceeded this duration in milliseconds (for example `150`).
+- `0`: the budgets apply on every tick; the self-tuning controller gives unused budget back on healthy ticks.
+- `> 0`: the budgets only engage when the previous tick took longer than this (for example `150`).
 
 </details>
 
 ### `AiPlayerbot.TargetWorldTickMs`
-Target world tick duration in milliseconds used by the automated self-tuning budget controller.
-**Default:** `100` · **Values:** milliseconds (0..N) · **Restart:** needed
+The world tick length the self-tuning budget aims for.
+**Default:** `100` · **Values:** milliseconds (`0` disables the controller) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-On every tick, the controller feeds the measured world tick through an exponential moving average (window 8) and dynamically scales the effective pool budgets:
+The controller smooths the measured world tick over about eight ticks and moves the effective budgets:
 
-- If the smoothed reading exceeds `TargetWorldTickMs + 10 ms`, budgets shrink fast (x0.7 per tick) — but only when the pool turns are what keep the tick over the line. If the core and other services alone keep the tick over, budgets hold instead of starving bot logic.
-- If the smoothed reading is at or under the target, budgets grow back slowly (+1 ms per tick) up to their configured ceilings.
+- Over `TargetWorldTickMs + 10 ms`, and only when the pool's own turns are what keep the tick over the line, both budgets shrink to 70 % per tick. If the core and the other services alone keep the tick over, the budgets hold instead of starving bots.
+- At or under the target, both budgets grow back by 1 ms per tick, up to the configured ceilings.
+- Neither budget goes below 2 ms.
 
-Setting this to `0` disables dynamic adjustment and locks budgets to static ceilings.
+Setting this to `0` locks the budgets to their configured ceilings.
 
 </details>
 
 ### `AiPlayerbot.ValueRefreshAtInterval`
-Refreshes cached AI sensory values at their full configured interval instead of half-intervals.
-**Default:** `0` · **Values:** `0` half-interval, `1` full interval · **Restart:** needed
+Refreshes cached AI values at their full interval instead of half.
+**Default:** `0` · **Values:** `0` half interval, `1` full interval · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Bots access world data (targets, inventory, quest states) through cached AI values. By default (`0`), caches refresh after half their interval (for example, a 2-second value refreshes every second).
+Bots read the world through cached values. By default a value with a 2-second interval is refreshed every second. With this on, it refreshes every 2 seconds, which cuts recalculation work.
 
-Setting this to `1` refreshes values only after their full interval elapses, cutting calculation overhead by up to half for eligible values. Critical combat and situational values remain on legacy rapid refresh cycles: attackers and attacker counts, aggro, possible attack targets and all targets, nearest adds, stealthed units, possible triggers, damaging traps, boss target, AoE heal, the single-enemy-player value, free-move values, and grind target.
-
-To evaluate performance gains safely, compare `BOTPERF` metrics (`usPerTurn`, `passUs`, and `turnLateAvgMs`) under each setting and verify bot combat responsiveness.
+Values that sense the fight (attackers, aggro, possible targets, hazards, boss target, AoE heal, enemy players), the free-move values and the grind target keep the faster refresh whatever this says, because the bot's reactions depend on them.
 
 </details>
 
 ### `AiPlayerbot.TravelPickBudgetUs`
-Microsecond budget ceiling per bot visit for calculating long-distance travel destinations.
-**Default:** `4000` · **Values:** microseconds (0..N) · **Restart:** needed
+Microseconds one bot may spend picking a travel destination per AI pass.
+**Default:** `4000` · **Values:** microseconds (`0` = no limit) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Bounds the CPU time spent evaluating candidate travel destinations for a single bot during an AI pass. If candidate evaluation exceeds 4,000 microseconds (4 ms), the calculation pauses and resumes on the bot's next update pass.
-
-This bounds worst-case single-bot latency, preventing expensive path evaluations from creating tick latency spikes. Setting this to `0` runs the entire destination search in a single pass.
+Long-distance travel is chosen by scoring candidate destinations. When the search has used this much time, it pauses and resumes on the bot's next pass, so one expensive pick cannot stall the world tick. `0` runs the whole search in one go.
 
 </details>
 
 ### `AiPlayerbot.AsyncTravelPartitions`
-Enables asynchronous partitioning for world travel destination lookups.
+Runs travel destination searches as background work.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Spreads long-range travel destination evaluations across partitioned background passes.
-
-Keep `0` on cores without concurrent terrain loading; only enable on cores with concurrent terrain support to avoid crashes.
-
-</details>
-
-### `AiPlayerbot.GenerateItemCaches`
-Builds equipment and item candidate database tables on first startup.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-On initial server boot, if the `ai_playerbot_equip_cache` and `ai_playerbot_rnditem_cache` character-database tables are empty, this setting generates them from the loaded item prototypes.
-
-Once generated, the tables are loaded directly from SQL on subsequent restarts. Leave this setting enabled; if disabled with empty tables, bots only fill empty slots from loot.
+With this on, the search over map partitions runs asynchronously instead of on the world thread. Off by default; the search is bounded by `TravelPickBudgetUs` either way.
 
 </details>
 
 ### `AiPlayerbot.GenerateTravelNodes`
-Builds the bot travel network once on first startup when the travel tables are empty.
+Builds the bot travel network once, when the travel tables are empty.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-On a fresh install the `ai_playerbot_travelnode`, `ai_playerbot_travelnode_link` and `ai_playerbot_travelnode_path` world-database tables are empty. With this setting on, the module fills them once during server startup, before bots log in: it places nodes at race start areas, flight masters, innkeepers, spirit healers, instance entrances and exits, boats and zeppelins, zone centres and portals, links the nearby nodes by pathfinding over the extracted navigation mesh, prunes unreachable clusters, adds the flight and boat links, and saves everything in one transaction. Later starts load the saved network in seconds and nothing is regenerated.
+On a fresh database the travel-node tables are empty. With this on, the module builds the network once during server startup, before bots log in: nodes at start areas, flight masters, innkeepers, spirit healers, instance entrances, boats, zeppelins, zone centres and portals, linked by pathfinding over the extracted navigation mesh, with unreachable clusters pruned. The build takes minutes and logs progress; later starts load the saved network in seconds.
 
-The first build takes minutes and logs progress every few percent (`travel walk links x/y pairs`). Setting this to `0` skips the build: bots then use only the saved tables, or direct movement when those are empty too. Nothing runs per tick or in the background, and a server without extracted navigation maps gets a network without walking links.
-
-</details>
-
-### `AiPlayerbot.LogInGroupOnly`
-Restricts detailed per-action debug logging output to bots currently in a party.
-**Default:** `1` · **Values:** `0` all bots, `1` grouped bots only · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When detailed engine logging is enabled, setting this to `1` filters out logging lines from roaming pool bots, writing action detail lines only for bots in an active party.
-
-</details>
-
-### `AiPlayerbot.Enabled`
-Master switch enabling or disabling all bot artificial intelligence processing. Set `0` to keep the module built in but inert (no pool bots, no bot AI).
-**Default:** `1` · **Values:** `0` disabled, `1` enabled · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Global enable switch for the playerbot AI subsystem. When enabled, periodic AI performance metrics are logged every 30 seconds at module log level 1 or higher (`TB_LOG_BASIC` / `TortoiseBots.LogLevel = 1`).
-
-</details>
-
-### `AiPlayerbot.PoolMeleeHoldGround`
-Disables generic out-of-combat fleeing behaviors for masterless warrior and rogue pool bots.
-**Default:** `0` · **Values:** `0` flee enabled, `1` hold ground · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When set to `1`, masterless pool warriors and rogues are not granted the generic fleeing strategy at all. Instead, they stand their ground and fight using their own defensive abilities, matching classic melee behaviors.
-
-Grouped pool warriors and rogues without a real master also lose flee; player-owned bots never had it. Party companions are otherwise not affected by this toggle.
-
-</details>
-
-### `AiPlayerbot.FailedActionRetryBase`
-Base exponential backoff delay in milliseconds when an autonomous action repeatedly fails.
-**Default:** `250` · **Values:** milliseconds (`0..2000`; `0` disables failure backoff) · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-When an autonomous bot action fails (such as an unreachable gathering node or a vendor out of line of sight), this value sets the initial delay before the action may be attempted again.
-
-Combat, reactions, owner commands, and player-owned bots are never throttled. Setting base or max to `0` disables failure backoff entirely.
-
-</details>
-
-### `AiPlayerbot.FailedActionRetryMax`
-Maximum exponential backoff delay ceiling in milliseconds for failed actions.
-**Default:** `2000` · **Values:** milliseconds (`0..10000`; clamped >= RetryBase) · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Caps the exponential backoff delay for persistently failing actions, preventing bots from spinning CPU cycles retrying impossible actions while ensuring they periodically re-check valid targets.
-
-</details>
-
-### `AiPlayerbot.FailedActionCacheTtl`
-Time-to-live in milliseconds for cached failed action backoff entries.
-**Default:** `30000` · **Values:** milliseconds (`1000..300000`) · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Defines how long a failed action state remains cached before being purged from memory.
-
-</details>
-
-### `AiPlayerbot.FailedActionCacheMaxEntries`
-Maximum number of entries stored in the failed action cache per bot.
-**Default:** `64` (built in; the key is not in the template — add it to `aiplayerbot.conf` to change it) · **Values:** `1` to `256` · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Limits memory footprint of the failed action backoff cache by capping the maximum number of unique tracked failing actions per bot.
-
-Clamped internally between 1 and 256 entries.
+`0` skips the build: bots use the saved tables if they exist, or move directly when they are empty too.
 
 </details>
 
 ### `AiPlayerbot.IterationsPerTick`
-Maximum action engine evaluation iterations allowed per bot per world tick (multiplied by action queue size).
-**Default:** `100` · **Values:** integer count (1..N) · **Restart:** needed
+How many candidate actions the engine may evaluate per tick.
+**Default:** `100` · **Values:** integer · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Sets an upper limit on how many sequential candidate actions the bot strategy engine evaluates during a single world tick. The engine multiplies this limit by queue size and halves it for minimal moves.
-
-Prevents infinite evaluation loops when complex trigger conditions or multiple falling-through action priorities occur.
+The engine multiplies this by the number of queued actions and halves it for minimal moves. It stops a long chain of "action not applicable" evaluations from running away in one tick.
 
 </details>
 
 ### `AiPlayerbot.MaxWaitForMove`
-Timeout in milliseconds to wait for a movement arrival before expiring the move action.
+Milliseconds a movement may take before the bot gives up on it.
 **Default:** `3000` · **Values:** milliseconds · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Specifies how long the bot waits for movement execution before declaring a movement action timed out.
-
-If pathing fails to arrive at the destination within this duration, the move action expires so the bot can reconsider targets or recalculate paths.
+If a move has not arrived within this time, the move action expires and the bot can pick another target or recalculate its path. It also caps how long the bot waits on a travel move.
 
 </details>
 
-### `AiPlayerbot.RemoteCommander`
-Enables remote commander commands for leading parties from outside them, of up to five bots from another zone.
-**Default:** `0` · **Values:** `0` disabled, `1` enabled · **Restart:** needed
+### `AiPlayerbot.FailedActionRetryBase`
+First retry delay after an action fails.
+**Default:** `250` · **Values:** milliseconds (`0` to `2000`; `0` disables the back-off) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-What it does:
-- remote binds (`.bot commander bind` without `inparty`) and every other `.bot cmd` order typed by a player
-- the commander view (`.bot commander view`)
-- without it (`0`), `inparty` bind, `cmd enter`, `cmd summon`, and the run leader still work
-- with it (`1`), a GameMaster, owner, claimer, or master of every bot binds a bot-only party of up to five
-- that party is commanded by GUID or 3D coordinates from anywhere in the world
-
-When disabled (`0`), remote binds and the other commander orders report that the feature is off and any existing remote bindings terminate (inparty bindings stay while `AiPlayerbot.DungeonSelfClear = 1`).
+When a low-priority background action fails out of combat (an unreachable node, a vendor out of sight), the bot waits this long before trying again, then doubles the wait on each further failure. Combat, reaction triggers, explicit orders, packets and player-owned bots are never delayed.
 
 </details>
 
-### `AiPlayerbot.RemoteCommanderViewMs`
-Milliseconds between visual perception updates sent to remote commanders.
-**Default:** `1000` · **Values:** milliseconds (`250..60000`, clamped) · **Restart:** needed
+### `AiPlayerbot.FailedActionRetryMax`
+The longest such delay.
+**Default:** `2000` · **Values:** milliseconds (`0` to `10000`, at least the base) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Controls how often a bound commander with the feed on gets a `TBM:VIEW` frame. The snapshot is read from what the bots already hold, with no world scan. New bindings start with the feed off.
+Caps the doubling so a persistently failing action still gets retried now and then instead of burning CPU on every tick.
 
 </details>
----
 
-## Core Server Settings (`mangosd.conf`)
-
-When hosting hundreds of always-active bots across both continents, the core server configuration in `mangosd.conf` must be tuned to handle continuous world activity:
-
-### `CleanupTerrain`
-Controls whether unused continent terrain maps are unloaded from memory.
-**Recommended:** `0` · **Restart:** needed
+### `AiPlayerbot.FailedActionCacheTtl`
+How long one failed-action record is kept.
+**Default:** `30000` · **Values:** milliseconds (`1000` to `300000`) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-With terrain cleanup on, terrain maps without active players are freed on a timer. Because roaming bots frequently re-enter these tiles, the core is forced to reload terrain synchronously, creating world server stalls.
-
-Setting `CleanupTerrain = 0` keeps extracted continent maps permanently in memory. This eliminates terrain-reload stalls, at the cost of approximately 2 GB of system RAM.
-
-> [!NOTE]
-> Keep `CleanupTerrain = 0` even with the upstream grid fix ([#588](https://github.com/tortoise-wow/tortoise-wow/pull/588)) on bot-heavy realms.
+After this time without a new failure the record is dropped, so the action starts from the base delay again.
 
 </details>
 
-### `PlayerSave.Interval`
-Defines the interval in milliseconds between periodic character database saves.
-**Recommended:** `300000` (5 minutes) · **Restart:** needed
+### `AiPlayerbot.FailedActionCacheMaxEntries`
+How many failed actions one bot remembers.
+**Default:** `64` · **Values:** `1` to `256` (clamped) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Saving hundreds of active bots every 60 seconds produces severe database I/O write spikes. Increasing this interval to 5 minutes (300,000 ms) smooths database throughput. In the event of a crash, at most 5 minutes of character progress is lost.
+Bounds the memory the back-off takes per bot; the oldest entry is dropped when the cache is full.
 
 </details>
 
-### `DynamicRespawn.MaxReductionRate` / `DynamicRespawn.MinRespawnTime`
-Controls dynamic creature respawn rate acceleration in crowded zones.
-**Recommended:** `0.75` / `15` · **Restart:** needed
+### `AiPlayerbot.LogInGroupOnly`
+Writes detailed action lines only for bots in a party.
+**Default:** `1` · **Values:** `0` all bots, `1` grouped bots only · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-The core shortens creature respawn timers when groups of players gather in the same area. In bot-populated realms, starting valleys and popular grinding camps are cleared rapidly.
-
-The recommended values let creature spawns keep pace with bot grinding demand.
+With this on, the engine's per-action detail log lines are written only for bots that are in a group; masterless pool bots are left out. This gates the engine's log output, not the per-bot action log files described in [Logging](logging.md).
 
 </details>
 
-### `LootsLogFile` / `CharLogFile`
-Specifies log files for recording all character logins and creature looting events.
-**Recommended:** `""` (disabled) · **Core Defaults:** `loot.log` / `char.log` · **Restart:** needed
+### Commanding a bot party
+
+There is no setting that turns this on or off. It is a GameMaster command surface: a GameMaster binds a party of up to five bots to a commander with `.tb master <bot|party> <commander>` and then gives orders with `.tb cmd` from anywhere: `move`, `walk`, `pull`, `pullback`, `attack`, `interrupt`, `focus`, `stay`, `follow`, `hold`, `loot`, `open`, `use`, `place`, `rally`, `fallback`, `resume`, `flee`, `guard` and the tactical toggles. The orders name their target by GUID or a 3D point, so the commander needs neither the group nor the bots in sight.
+
+The Turtle-era keys for this feature, `AiPlayerbot.RemoteCommander` and `AiPlayerbot.RemoteCommanderViewMs`, do nothing here: the bindings do not need the first, and the perception view feed of the second is not ported. See [Commander](../../play/commands/commander.md).
+
+## Core server settings (`worldserver.conf`)
+
+The core's own configuration file. These few settings matter most on a bot-heavy realm; the file's comments describe each one fully.
+
+### `PlayerSaveInterval`
+How often characters are saved, in milliseconds.
+**Default:** `90000` · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Because the core treats every bot as a native player, every bot loot roll and login creates an entry in these files. On a busy realm these files grow fast without log rotation.
-
-Setting both filename keys to empty strings (`""`) disables these files, saving disk space and eliminating unnecessary file writes.
+Saving hundreds of active bots every 90 seconds can produce write spikes. Raising the interval spreads the writes out; the trade-off is that a crash loses up to that much progress. The core saves a character on logout regardless.
 
 </details>
 
----
+### `GridUnload` / `BaseMapLoadAllGrids`
+Whether unused grids are unloaded, and whether the base maps are loaded whole at startup.
+**Defaults:** `GridUnload = 1`, `BaseMapLoadAllGrids = 0` · **Restart:** needed
 
-## AI Pass Telemetry (`BOTPERF`)
+<details>
+<summary>How it works in detail</summary>
 
-When AI is enabled (`AiPlayerbot.Enabled = 1`), the module outputs an AI performance pass summary line to the server log approximately once every 30 seconds at module log level 1 or higher (`TB_LOG_BASIC` / `TortoiseBots.LogLevel = 1`):
+Roaming bots move between grids all day. With `GridUnload = 1` the core frees a grid no one is in and loads it again on the next visit. On a server with enough RAM, `GridUnload = 0` plus `BaseMapLoadAllGrids = 1` keeps everything loaded: the core's own comment puts the cost at around 5 GB of memory and a longer startup, in exchange for no reload stalls when bots move around.
+
+</details>
+
+### `Respawn.DynamicMode`
+Scales creature respawn timers with the number of players in the zone.
+**Default:** `1` · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+On Forever this covers gathering nodes, quest targets under 30 minutes and the open-world combat creatures of the dynamic spawn groups. With a bot population, starting zones and popular camps are cleared quickly, and the dynamic scaling is what keeps them stocked. `0` turns it off; `Respawn.DynamicRateCreature` sets how many players are "normal" for the scaling.
+
+</details>
+
+## The BOTPERF line
+
+While the module is enabled (`TortoiseBots.Enable = 1` in `tortoisebots.conf`), it writes one performance line to the `tortoisebots` log about every 30 seconds of world tick time:
 
 ```text
-TortoiseBots: BOTPERF passUs=812 playerBots=5 ownedBots=5 masterBots=0 poolBots=495 poolProcessed=4 due=9 budgetHit=1 maxUs=9820 ticks=62 poolBudgetUs=10000 combatBudgetUs=15000 turnLateAvgMs=180 turnLateMaxMs=1400 turns=410 usPerTurn=1900 coreMs=78 combatTurns=95 combatLateAvgMs=60 otherTurns=315 otherLateAvgMs=240
+TortoiseBots: BOTPERF passUs=<us> maxUs=<us> ticks=<n> coreMs=<ms> bots=<n> engines=<n> owned=<n> mastered=<n> free=<n> pool=<n>
 ```
 
-The sample above predates `routeReuse`, `routeRebuild`, `keepoutScans`, and `keepoutBudgetMiss`; current log lines always append those four fields.
-
 <details>
-<summary>Field Reference & Log Interpretation</summary>
+<summary>Field reference</summary>
 
-- `passUs`: Average `UpdateBots` pass cost in the window in microseconds.
-- `maxUs`: Worst single-tick bot update cost in the sample window.
-- `ticks`: World ticks in the window.
-- `playerBots`: Count of player-owned bots updated first and unbudgeted. Split into `ownedBots` (owner's own account) and `masterBots` (live real-player master).
-- `poolBots`: Total registered pool bots in the background turn queue.
-- `poolProcessed`: Pool turns run in the last pass of the window, out of `due` bots due.
-- `due`: Number of bots due for evaluation when the window closed.
-- `budgetHit`: Set to `1` when the tick budget halted pool updates before all due bots ran.
-- `poolBudgetUs` / `combatBudgetUs`: Effective microsecond budgets active during that window. Their sum is the one budget; equal to the configured ceilings when the server is healthy.
-- `turnLateAvgMs` / `turnLateMaxMs`: Average and maximum delay beyond a bot's scheduled turn time. This is the direct measure of how far behind the bot queue is running.
-- `turns`: Total pool turns run in the window.
-- `usPerTurn`: Average microseconds to run one pool turn (turn-loop wall time divided by turns).
-- `coreMs`: Average world tick minus the average bot pass (the share of the tick spent by the core and other services, which cutting bots cannot reduce).
-- `combatTurns` / `combatLateAvgMs`: Turn count and average lateness for pool turns whose situation was combat.
-- `otherTurns` / `otherLateAvgMs`: Turn count and average lateness for all other pool turns.
-- `routeReuse` / `routeRebuild`: Counts of movement path lookups answered by cached route versus expensive full recalculations.
-- `keepoutScans` / `keepoutBudgetMiss`: Counts of grid visits made for shared creature-aura hazard snapshots versus lookups due a refresh after the tick's snapshot budget was spent.
+- `passUs`: average cost of the module's world-tick pass, in microseconds.
+- `maxUs`: the worst single pass in the window.
+- `ticks`: world ticks in the window.
+- `coreMs`: average world tick minus the bot pass: the share spent by the core and other services, which cutting bots cannot reduce.
+- `bots`: bots in the module's table.
+- `engines`: bots running the bot engine.
+- `owned`: bots logged in for a player as their own character.
+- `mastered`: bots currently following a master.
+- `free`: masterless bots (the pool).
+- `pool`: bots counted as the pool.
 
-**Tuning Guidance:**
-- `budgetHit = 1` with a low `passUs` indicates the budget throttle is operating normally.
-- High `turnLateAvgMs` with frequent `budgetHit = 1` indicates the pool budget is too tight for the active bot count; increase `PoolTickBudgetUs`.
-- High overall tick latency with low `passUs` and high `coreMs` indicates the bottleneck is inside core server systems rather than the bot module.
+**Reading it:** a high `passUs` with a lot of `pool` bots means the module is doing a lot of AI work; a high `coreMs` means the bottleneck is elsewhere in the server. If bots feel slow, raise `PoolTickBudgetUs` first, or run fewer bots.
 
 </details>
