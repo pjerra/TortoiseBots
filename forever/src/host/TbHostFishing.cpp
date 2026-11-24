@@ -1,5 +1,6 @@
 #include "host/TbHostFishing.h"
 
+#include "host/TbFishingGearPure.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostFishingPure.h"
 #include "host/TbHostGuildMail.h"
@@ -77,6 +78,9 @@ struct Errand
     bool bobberUsed = false;
     std::uint8_t lootTries = 0;
     std::uint32_t itemsGained = 0;
+    // The weapon the pole displaced, put back when the errand ends. A pole
+    // left in hand is a tool the bot then fights with (see RestoreWeapon).
+    ObjectGuid previousMainHand;
 };
 
 struct IdleSession
@@ -676,6 +680,74 @@ float DistanceToSpot(Player* bot, Errand const& errand)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+bool IsMainHandWeaponType(InventoryType inventoryType)
+{
+    return inventoryType == INVTYPE_WEAPON || inventoryType == INVTYPE_2HWEAPON ||
+        inventoryType == INVTYPE_WEAPONMAINHAND;
+}
+
+bool EquipMainHand(Player* bot, Item* item)
+{
+    if (!bot || !item)
+        return false;
+    std::uint16_t dest = 0;
+    if (bot->CanEquipItem(EQUIPMENT_SLOT_MAINHAND, dest, item, true) != EQUIP_ERR_OK ||
+        (dest & 0xFF) != EQUIPMENT_SLOT_MAINHAND)
+        return false;
+    bot->SwapItem(item->GetPos(), std::uint16_t((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_MAINHAND));
+    return !IsFishingPole(MainHand(bot));
+}
+
+// The best carried melee weapon the core accepts in the main hand, a pole
+// never among them. Both the errand end and the login repair use it.
+bool EquipBestCarriedWeapon(Player* bot)
+{
+    if (!bot)
+        return false;
+
+    std::vector<Item*> items;
+    std::vector<TortoiseBots::fishinggear::WeaponCandidate> candidates;
+    ForEachBagItem(bot, [&](Item* item)
+    {
+        ItemTemplate const* proto = item->GetTemplate();
+        if (!proto || proto->GetClass() != ITEM_CLASS_WEAPON || !IsMainHandWeaponType(proto->GetInventoryType()))
+            return;
+        std::uint16_t dest = 0;
+        bool const equippable = bot->CanEquipItem(EQUIPMENT_SLOT_MAINHAND, dest, item, true) == EQUIP_ERR_OK;
+        items.push_back(item);
+        candidates.push_back({ proto->GetId(), std::int32_t(proto->GetBaseItemLevel()), IsFishingPole(item), equippable });
+    });
+
+    std::int32_t const best = TortoiseBots::fishinggear::BestWeaponIndex(candidates);
+    if (best < 0)
+        return false;
+    Item* item = items[std::size_t(best)];
+    if (!EquipMainHand(bot, item))
+        return false;
+    TC_LOG_INFO("tortoisebots", "[W9] fish weapon back bot={} item={} weapon={}", bot->GetName(),
+        kBaseFishingPoleItemId, item->GetEntry());
+    return true;
+}
+
+// A fishing errand ends with the pole still in the hand (Finish runs for a
+// catch, a fight, a death or a logout). Left there the bot fights with a
+// tool: the equip audit only swaps the pole when a bag weapon wins the
+// main-hand compare, so the weapon the pole displaced goes back on here.
+void RestoreWeapon(Player* bot, Errand const& errand)
+{
+    if (!bot || !bot->IsInWorld() || !bot->IsAlive())
+        return;
+    if (!IsFishingPole(MainHand(bot)))
+        return;
+
+    if (!errand.previousMainHand.IsEmpty())
+        if (Item* previous = bot->GetItemByGuid(errand.previousMainHand))
+            if (previous != MainHand(bot) && EquipMainHand(bot, previous))
+                return;
+
+    EquipBestCarriedWeapon(bot);
+}
+
 void Finish(Player* bot, Errand& errand, char const* reason, Facts const* facts = nullptr)
 {
     bool const caught = reason && std::string(reason) == "done";
@@ -700,6 +772,7 @@ void Finish(Player* bot, Errand& errand, char const* reason, Facts const* facts 
         if (caught)
             CaughtFlags()[bot->GetGUID()] = true;
     }
+    RestoreWeapon(bot, errand);
     errand = Errand{};
 }
 
@@ -710,6 +783,17 @@ bool HostAvailable()
     // No loaded fish locations means no spot to walk to: the order refuses
     // like a build without an executor instead of fishing in place forever.
     return tbcompat::FishingStoreLoaded();
+}
+
+bool RepairPoleInHand(Player* bot)
+{
+    if (!bot || !bot->IsInWorld() || !bot->IsAlive())
+        return false;
+    if (!IsFishingPole(MainHand(bot)))
+        return false;
+    // A bot that logged out (or died) mid-errand has no remembered weapon:
+    // the best carried one goes on instead of the pole.
+    return EquipBestCarriedWeapon(bot);
 }
 
 bool CanFishOrder(Player* bot, std::uint32_t itemId)
@@ -864,6 +948,9 @@ static void TickActive(Player* bot, std::uint32_t diffMs)
 
     auto cast = [&]()
     {
+        Item* const before = MainHand(bot);
+        if (before && !IsFishingPole(before) && errand.previousMainHand.IsEmpty())
+            errand.previousMainHand = before->GetGUID();
         if (!EnsurePoleEquipped(bot, errand.zoneSkill))
         {
             Finish(bot, errand, "no-pole");
@@ -993,6 +1080,7 @@ void CancelIdleErrand(Player* bot)
     {
         if (bot->isMoving())
             bot->StopMoving();
+        RestoreWeapon(bot, it->second);
         it->second = Errand{};
     }
     // Keep the ended session: its hourly cooldown survives a free toggle.
