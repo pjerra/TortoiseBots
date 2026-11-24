@@ -794,6 +794,23 @@ bool StoreLootAction::Execute(Event& event)
     // release loot (every window of the loot view: an area-loot core opened the neighbours' windows with this one)
     LootReleaseAllCompat(bot, guid);
 
+    // A skinnable corpse has a second window after its body loot: the skin. Dropping the guid
+    // above made that window depend on a later "add all loot" sweep finding the same corpse
+    // again while the bot was still near it, so a bot that walked off after the kill left the
+    // corpse to decay unskinned. Keep it queued: the next Refresh sees the emptied loot and the
+    // skin flag, and the skin cast follows in this same visit.
+    if ((itemsTaken || gold) && guid.IsCreature())
+    {
+        if (Creature* creature = ai->GetCreature(guid))
+        {
+            if (CorpseSkinnableByCompat(bot, creature))
+            {
+                sLog.outDebug("[BOT LOOT] %s: keep guid=%lu queued for its skin", CStrCompat(bot->GetName()), GuidKeyCompat(guid));
+                lootStack->Add(guid);
+            }
+        }
+    }
+
     ai->AccelerateRespawn(guid);
 
     if (commanderOrder)
