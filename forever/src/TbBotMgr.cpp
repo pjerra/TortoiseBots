@@ -371,6 +371,11 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
     // An owned bot always runs the engine too: `.bot` orders and chat need it.
     bot.useEngine = _engineByDefault || free || owned;
+    // A bot with no master has nothing to follow, so an engine for it is the free kit (engine::Create refuses a
+    // masterless brain without the free flag, and PlayerbotAI's default strategies read the free flag). A login that
+    // asks for the engine without naming a master therefore starts a free bot; with the engine off it stands.
+    if (bot.useEngine && bot.master.IsEmpty())
+        bot.free = true;
     if (bot.wantParty)
     {
         // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
@@ -554,6 +559,17 @@ std::string BotMgr::SetEngine(ObjectGuid characterGuid, bool on)
     {
         if (!engine::Built())
             return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)";
+        if (bot.master.IsEmpty() && !bot.free)
+        {
+            // A bot with no master runs the engine only as a free bot (engine::Create refuses a masterless brain
+            // without the free flag): marking it without switching the free kit on would report success while the
+            // bot stands, as the spike does for a masterless bot.
+            Player* me = bot.session->GetPlayer();
+            if (me && me->GetGroup())
+                return "the bot has no master and is in a party: a free bot plays alone";
+            bot.free = true;
+            TC_LOG_INFO("tortoisebots", "BotMgr: {} runs the engine without a master: it is a free bot", me ? me->GetName() : characterGuid.ToString());
+        }
         // Marked again after a failure: try to build the brain once more.
         bot.useEngine = true;
         bot.engineFailed = false;
@@ -600,7 +616,8 @@ std::vector<std::string> BotMgr::DescribeBrain(ObjectGuid characterGuid) const
     else if (bot.engineFailed)
         lines.push_back("brain: spike (engine requested, not running: " + bot.engineNote + ")");
     else if (bot.useEngine)
-        lines.push_back("brain: spike (engine requested, waiting for the bot to be placed next to its master)");
+        lines.push_back(bot.free ? "brain: spike (engine requested, the free kit builds it on the next tick)"
+                                 : "brain: spike (engine requested, waiting for the bot to be placed next to its master)");
     else
         lines.push_back("brain: spike");
     if (bot.entry.active)

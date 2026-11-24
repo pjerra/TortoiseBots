@@ -741,10 +741,13 @@ public:
             if (Player* caller = Caller(handler))
                 master = caller->GetGUID();
 
-        std::string const error = BotMgr::Instance().Login(GuidByName(name), master, free);
+        ObjectGuid const guid = GuidByName(name);
+        std::string const error = BotMgr::Instance().Login(guid, master, free);
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
-        handler->PSendSysMessage("TortoiseBots: %s is logging in%s.", name.c_str(), free ? " as a free bot" : "");
+        // A bot with no master that takes the engine (EngineByDefault, `owned`) runs the free kit, so say so.
+        bool const freeBot = free || BotMgr::Instance().IsFreeBot(guid);
+        handler->PSendSysMessage("TortoiseBots: %s is logging in%s.", name.c_str(), freeBot ? " as a free bot" : "");
         return true;
     }
 

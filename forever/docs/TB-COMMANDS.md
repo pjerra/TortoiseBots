@@ -96,12 +96,12 @@ first, and a `set` is validated for every target before the first value changes.
 |---|---|
 | `.tb status` | module enabled?, number of bot sessions |
 | `.tb create <account> <name> <race id> <class id> [gender]` | a new level 1 character for a bot. Needs the account-create right (as `.tb pool create`), and only a pool account (`TBPOOL<nnnn>`) or an account named in `TortoiseBots.Create.TestAccounts` takes one; any other account is refused |
-| `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run) |
+| `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run). Without a master and with the engine on (`TortoiseBots.Slice.EngineByDefault`, an owned `.bot`) the bot runs the free kit too; with the engine off it stands, as the spike does for a bot with no master |
 | `.tb free <bot> on\|off` | W1: turns the free kit on or off for a logged-in host bot (on: it must have no master and be in no party; off: a masterless bot stands again). Giving a bot a master (`.tb group`, the commander binding, a run) turns free off by itself. A free bot only starts fights with ordinary hostile or neutral NPCs: never a player or anything a player controls, a quest giver, vendor, trainer, flight master, innkeeper, guard or civilian, a kill that lowers a standing, or a mob another player tapped (it still defends itself) |
 | `.tb logout <character>` | the bot leaves |
 | `.tb group <bot> <master>` / `.tb ungroup <bot>` | the bot joins the master's party (the master leads) / leaves it. A bot that was free stops being free (the free kit and its ghost bookkeeping go) |
 | `.tb raid <master>` | converts the master's party to a raid (a test helper for the "no raid" rule) |
-| `.tb engine <character> on\|off` | the bot runs the real engine (PlayerbotAI) or the spike behaviour |
+| `.tb engine <character> on\|off` | the bot runs the real engine (PlayerbotAI) or the spike behaviour. A bot with no master has nothing to follow: the engine runs it as a free bot (and that bot may not be in a party). The switch lives until logout; a later `.tb login` takes `TortoiseBots.Slice.EngineByDefault` again |
 | `.tb where <character>` | position, health, money, brain, strategies, target, cast-result counters |
 | `.tb go <bot> <dx> <dy>` / `.tb hop <bot> <dx> <dy>` | a bot without a master walks / is teleported that many yards east and north |
 | `.tb attack <bot>` | the spike's attack of the nearest hostile within 40 yd |
