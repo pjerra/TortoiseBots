@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/TbCompatPvP.h"
 #include "EnemyPlayerValue.h"
 #include "WorldPvpSeekChecks.h"
 #include "TargetValue.h"
@@ -142,9 +143,9 @@ bool EnemyPlayersValue::CanEngageFromHere(Unit* target) const
     // The scan behind it ("possible targets") has none of these, so a player behind
     // a wall, down in the flag-room tunnel or across the field qualified, and the
     // bot stood still holding an order it could never carry out.
-    float const aggroDistance = bot->GetHealth() > target->GetHealth() ?
+    float const seekRange = bot->GetHealth() > target->GetHealth() ?
         EnemyPlayerValue::GetMaxAttackDistance(bot) : 20.0f;
-    if (!bot->IsWithinDist(target, aggroDistance))
+    if (!bot->IsWithinDist(target, seekRange))
         return false;
 
     if (fabs(bot->GetPositionZ() - target->GetPositionZ()) >= 30.0f)
@@ -208,8 +209,9 @@ bool HasEnemyPlayersValue::Calculate()
 Unit* EnemyPlayerValue::Calculate()
 {
     // Prioritize the duel opponent
-    if (bot->m_duel && !bot->m_duel->opponent.IsEmpty()) {
-        if (Unit* opp = ObjectAccessor::GetUnit(*bot, bot->m_duel->opponent)) {
+    ObjectGuid const duelOpponent = DuelOpponentGuidCompat(bot);
+    if (!duelOpponent.IsEmpty()) {
+        if (Unit* opp = ObjectAccessor::GetUnit(*bot, duelOpponent)) {
             if (!sServerFacade.IsFriendlyTo(opp, bot))
                 return opp;
         }
@@ -275,23 +277,5 @@ Unit* EnemyPlayerValue::Calculate()
 
 float EnemyPlayerValue::GetMaxAttackDistance(Player* bot)
 {
-    if (!bot->GetBattleGround())
-        return 60.0f;
-
-    if (bot->InBattleGround())
-    {
-        BattleGround* bg = bot->GetBattleGround();
-        if (!bg)
-            return 40.0f;
-
-        BattleGroundTypeId bgType = bg->GetTypeID();
-
-        if (bgType == BATTLEGROUND_AV)
-        {
-            bool strifeTime = bg->GetStartTime() < (uint32)(20 * MINUTE * IN_MILLISECONDS);
-            return strifeTime ? 40.0f : 10.0f;
-        }
-    }
-
-    return 40.0f;
+    return MaxEnemyPlayerAttackDistanceCompat(bot);
 }

@@ -351,6 +351,9 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     if (!player)
         return;
     combatEngine->addStrategy("racials");
+    // TB gives every bot `pvp` (AiFactory.cpp:664-671). Outside a battleground its `enemy player near` row only sees
+    // players already attacking the bot unless it holds the world-PvP seek role (EnemyPlayersValue.cpp).
+    combatEngine->addStrategy("pvp");
     // A duel is fought in the combat state, so the combat engine needs the duel strategy too: TB adds it to the
     // combat kit of every bot outside a battleground (AiFactory.cpp:664-671).
     if (!player->InBattleGround())

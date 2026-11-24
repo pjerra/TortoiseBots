@@ -16,6 +16,7 @@
 #include "host/TbThrownPure.h"
 #include "host/TbHostTaxi.h"
 #include "host/TbHostGuildJoin.h"
+#include "host/TbHostWorldPvp.h"
 #include "host/TbHostTransport.h"
 #include "host/TbOnyxia.h"
 #include "host/TbOnyxiaGround.h"
@@ -435,6 +436,7 @@ Brain* Create(Player* bot, Player* master, std::string& error, bool free)
 
     ai::botdiag::BotActionLog::NoteLogin(brain->guidLow);
     PlayerbotAIStorage::Instance().SetAI(bot, pai);
+    tbhost::worldpvp::ApplyGrantedRole(bot);
 
     if (!Usable(brain.get()))
     {
@@ -527,6 +529,7 @@ void ReapplyStrategies(Brain* brain, bool free)
         return;
     brain->ai->ResetStrategies();
     brain->ai->SetMovementStrategy(free ? "free" : "follow");
+    tbhost::worldpvp::ApplyGrantedRole(brain->bot);
 }
 
 void SetQuestGroupMember(Brain* brain, bool inGroup)

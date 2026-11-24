@@ -1,6 +1,8 @@
 
 #include "playerbot/playerbot.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TbCompatPvP.h"
+#include "playerbot/TbCompatW1.h"
 #include "../../../runtime/PlayerbotAIStorage.h"
 #include "WorldPvpSeekChecks.h"
 #include "EnemyPlayerValue.h"
@@ -10,15 +12,6 @@
 
 using namespace ai;
 
-static bool IsChallengeModeTarget(Player* target)
-{
-    return target->HasChallenge(CHALLENGE_SLOW_AND_STEADY) || target->HasChallenge(CHALLENGE_EXHAUSTION_MODE) ||
-        target->HasChallenge(CHALLENGE_HARDCORE) || target->HasChallenge(CHALLENGE_VAGRANT_MODE) ||
-        target->HasChallenge(CHALLENGE_BOARING_MODE) || target->HasChallenge(CHALLENGE_CRAFTMASTER) ||
-        target->HasChallenge(CHALLENGE_LUNATIC) || target->HasChallenge(CHALLENGE_BREWMASTER) ||
-        target->HasChallenge(CHALLENGE_HEROIC);
-}
-
 // Near a spirit healer of either faction. A fight started there turned into
 // an endless revive-and-kill loop (Raven Hill Cemetery), and bots kept
 // fighting just past 40 yd as they walked away from it.
@@ -26,9 +19,10 @@ static bool NearGraveyard(Player* player)
 {
     for (Team team : { ALLIANCE, HORDE })
     {
-        WorldSafeLocsEntry const* grave = sObjectMgr.GetClosestGraveYard(
-            player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetMapId(), team);
-        if (grave && grave->map_id == player->GetMapId() && player->GetDistance2d(grave->x, grave->y) < 80.0f)
+        WorldSafeLocsEntry const* grave = ClosestGraveyardCompat(player, player->GetMapId(),
+            player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), static_cast<uint32>(team));
+        if (grave && SafeLocMapIdCompat(grave) == player->GetMapId() &&
+            player->GetDistance2d(SafeLocXCompat(grave), SafeLocYCompat(grave)) < 80.0f)
             return true;
     }
     return false;
@@ -58,9 +52,9 @@ bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI* ai, Player* bot, Player* targ
         return false;
     if (!target->IsPvP())
         return false;
-    if (target->IsGameMaster() && !target->IsGMVisible())
+    if (target->IsGameMaster() && !IsGmVisibleCompat(target))
         return false;
-    if (IsChallengeModeTarget(target))
+    if (HasPvpChallengeModeCompat(target))
         return false;
     if (sPlayerbotAIConfig.IsInPvpProhibitedZone(sServerFacade.GetAreaId(target)))
         return false;
@@ -75,9 +69,9 @@ bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI* ai, Player* bot, Player* targ
         TortoiseBots::WorldPvpIgnoreFresh(ai->worldPvpIgnoreStartMs_, nowMs))
         return false;
 
-    float const aggroDistance = bot->GetHealth() > target->GetHealth() ?
-        EnemyPlayerValue::GetMaxAttackDistance(bot) : 20.0f;
-    if (!bot->IsWithinDist(target, aggroDistance))
+    float const seekRange = bot->GetHealth() > target->GetHealth() ?
+        MaxEnemyPlayerAttackDistanceCompat(bot) : 20.0f;
+    if (!bot->IsWithinDist(target, seekRange))
         return false;
     if (fabs(bot->GetPositionZ() - target->GetPositionZ()) >= 30.0f)
         return false;
