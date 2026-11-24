@@ -15,7 +15,9 @@
 
 #include "CharacterCache.h"
 #include "Chat.h"
+#include "Config.h"
 #include "Group.h"
+#include "Log.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Player.h"
@@ -531,6 +533,51 @@ bool CheckPartyLeadAccess(Player const* sender, Player const* leader, std::strin
 bool CheckPartyLeadAccess(ChatHandler* handler, Player const* leader, std::string& code, std::string& detail)
 {
     return CheckPartyLeadAccess(SenderPlayer(handler), leader, code, detail);
+}
+
+// proof-1 A: the `.tb run` observer exemption. The commander chain is followed with CommanderGuid up to 4 hops from the bot; it ends at a real player when
+// a hop is a non-empty guid that is not a host bot (then the party is that player's and even a GM is refused). An empty guid, or four bot hops, ends the
+// chain at the bot side. The guid form serves a run whose leader is not in the world (`rec->leader`); CheckBotAccess allows an empty guid.
+bool CheckRunObserverAccess(ChatHandler* handler, ObjectGuid botGuid, std::string& code, std::string& detail)
+{
+    if (CheckBotAccess(handler, botGuid, code, detail))
+        return true;
+
+    bool chainEndsAtPlayer = false;
+    {
+        ObjectGuid guid = botGuid;
+        for (int hop = 0; hop < 4; ++hop)
+        {
+            ObjectGuid const next = CommanderGuid(guid);
+            if (next.IsEmpty())
+                break;
+            if (!BotMgr::Instance().IsBot(next))
+            {
+                chainEndsAtPlayer = true;
+                break;
+            }
+            guid = next;
+        }
+    }
+    WorldSession* session = handler->GetSession();
+    bool const senderIsGm = session && session->GetSecurity() >= SEC_GAMEMASTER;
+    bool const optionOn = sConfigMgr->GetBoolDefault("TortoiseBots.Run.GmObserver", true);
+    if (!guard::ObserverMayControlRun(optionOn, senderIsGm, chainEndsAtPlayer))
+        return false;
+
+    Player* sender = SenderPlayer(handler);
+    std::string const senderName = sender ? std::string(sender->GetName()) : std::string("the console");
+    Player const* bot = ObjectAccessor::FindPlayer(botGuid);
+    std::string const botName = bot ? std::string(bot->GetName()) : GuidText(botGuid);
+    TC_LOG_INFO("tortoisebots", "TortoiseBots run: GM observer {} allowed on {} (bot commander)", senderName, botName);
+    code.clear();
+    detail.clear();
+    return true;
+}
+
+bool CheckRunObserverAccess(ChatHandler* handler, Player const* bot, std::string& code, std::string& detail)
+{
+    return !bot || CheckRunObserverAccess(handler, bot->GetGUID(), code, detail);
 }
 
 Player* ResolveTestTarget(ChatHandler* handler, std::string_view name, std::string& code, std::string& detail)

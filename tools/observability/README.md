@@ -28,6 +28,8 @@ Each `BOT_BATCH` bot entry carries: `name, guid, player, alt, kind, group, guild
 
 Real players ride the same snapshot cycle as bots: the emitter collects online network sessions (`HasNetworkTransport`, the same predicate behind the heartbeat `humans` count) every 2 s snapshot and appends one row per player with `player: true` and `group` = core group id (0 = solo). Bot-only detail stays empty (no role/strategy/AI age/travel); state is the visible unit state (combat/moving/resting/dead/idle). The daemon stores them in the same roster (list/map/profile join by guid) but excludes them from pool KPIs (grinding rollup, level bands), issue episodes, the level timeline and the class/role census; trails are bot-only. The Bots tab has a Bots + players / Bots / Players filter plus kind chips (pool/hired/claimed/alt/companion/player/own), every row carries its kind badge, map markers are rings in the class colour, tooltips and the profile show group instead of the AI role, and the profile skips the database subtabs (players are not pool bots). Heartbeat `humans` counts the same player rows the batches deliver; `bots` counts bot rows only.
 
+**ForeverCore sender (`forever/src/TbDashboard.cpp`).** The port sends the same v12 datagrams from the running engine: `diff_avg`/`diff_worst`/`lag_p50`/`lag_p95`, the seven macro states, `last_action`/`last_trigger`, the travel fields, real players (a session with `WorldSession::IsBot()` false) and the activity stream. `ai_visits`/`ai_age_ms` and `SERVER_INFO.pool` are absent: the ForeverCore bot manager keeps no AI visit counter and its pool scheduler has no lineage/band counters, so the daemon reads them as empty/absent. `SERVER_INFO.bots` carries the engine's live `AiPlayerbot` getters only when the engine config loaded.
+
 `zone` (snapshot and event rows) is the zone the core caches on the bot (`GetCachedZoneId()`), not a terrain lookup. The core sets it at login and teleport and refreshes it on its one-second zone update, so at a zone border it can trail the bot's position by up to one second. Where the terrain has no area row, the cache keeps the last real zone instead of reporting 0.
 
 Macro states (`state`, heartbeat `states`, `tortoisebots_state_ratio`): `combat` (in combat), `moving` (a movement generator owns the bot), `busy` (standing still but doing real work: looting, casting, sitting to eat/drink, movement within the last 45 s, or a fight/XP gain within the last 60 s), `stalled` (standing still for 45+ s whose only activity was churn — an active travel target or a changing last-action name, no movement/loot/cast/sit and no fight or XP gain in the last 60 s — i.e. standing with a destination and getting nowhere), `resting` (rest flag), `idle` (no movement, action, cast, loot, or active target for 45+ s — really doing nothing), `dead`. `stalled` exists so a bot parked with a travel target is no longer reported as busy. Per-tick cost is member reads + one action-name compare; the 3-min window is unchanged.
@@ -178,6 +180,28 @@ that canvas, so the sizes must not change. It reads Turtle's newer patches
 (their file list is encrypted) and matches patch file names regardless of case.
 Pass `--overlay-dbc` with the server's extracted `WorldMapOverlay.dbc` if the
 client copy is unreadable.
+
+## UI v2
+
+The dashboard ships two skins: v2 (dark navy with gold framing, the default) and v1 (the original). A viewer
+switches from the top-bar button (`UI v2` / `UI v1`); the choice is kept in that browser. A link
+`?ui=v2` or `?ui=v1` switches that page load too and is remembered.
+
+- `--ui v1|v2` / `TBDASH_UI` sets the server default for viewers that have no saved choice
+  (default `v2`). The daemon injects it into the page head as
+  `<meta name="tbdash-ui" content="v1|v2">`, ahead of the switch script, so the first paint is
+  already right; `GET /api/v1/ui` answers `{"default":"v2","model3d":false}` by default behind the GM session.
+- `--ui-3d` / `TBDASH_UI_3D=1` enables the v2 3D model viewer; off by default. It loads Wowhead's
+  viewer only after the operator clicks `Show 3D`, proxies only the modelviewer asset paths behind the
+  GM session, and caches them in `<user cache>/tbdash-model3d`. Gear needs the `display_id` field the
+  module writes into `tortoisebots-items.json`; without it the character still renders, without armour.
+  A dead CDN shows one short line in the stage and leaves the profile usable (no retry loop).
+  Nothing from the game is shipped: models and textures are fetched on demand from Wowhead's public
+  CDN. Meant for a dashboard used locally or on a LAN, not one exposed to the internet.
+- Every v2 rule is scoped under `html[data-ui="v2"]`; with v2 off the page is unchanged.
+
+The v2 palette and layout ideas are adapted from ForeverCMS and SahtoutCMS (both MIT); see
+[`web/THIRD_PARTY_NOTICES.md`](web/THIRD_PARTY_NOTICES.md).
 
 ## Security
 

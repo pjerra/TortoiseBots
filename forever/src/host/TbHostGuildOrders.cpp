@@ -1,5 +1,13 @@
 #include "host/TbHostCraftOrderPure.h"
+#include "host/TbHostGuildOrderEnchant.h"
+#include "host/TbHostGuildOrderFish.h"
+#include "host/TbHostGuildOrderSkin.h"
+#include "host/TbHostFishing.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderAccess.h"
+#include "host/TbHostGuildOrderReassign.h"
+#include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderQueues.h"
 
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -11,6 +19,7 @@
 #include "host/TbH3.h"
 #include "host/TbHostAuction.h"
 #include "host/TbHostGuild.h"
+#include "host/TbHostGuildOrderRead.h"
 #include "host/TbHostGuildPure.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
@@ -34,6 +43,7 @@
 #include "StringFormat.h"
 
 #include "playerbot/policy/ah/AhBuyPolicy.h"
+#include "PlayerbotAIStorage.h"
 #include "runtime/GuildOrderBringPolicy.h"
 #include "runtime/GuildOrderContract.h"
 #include "runtime/GuildOrderDeliveryPolicy.h"
@@ -50,6 +60,14 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+
+// The engine's room-making pass (ai/playerbot/strategy/actions/LootRollAction.cpp).
+// Declared here, not included: that header pulls the bot-brain tree and the cmangos
+// compat shim, whose function-like macros also rename host calls (GetLeaderGuid).
+namespace ai
+{
+bool MakeRoomForGuildOrderLoot(PlayerbotAI* ai, Player* bot, uint32 itemId, uint32 count);
+}
 
 namespace tbhost
 {
@@ -215,6 +233,28 @@ uint32_t BagItemCount(Player* bot, uint32_t itemId)
     return total;
 }
 
+// One more of `itemId` fits: a free slot, or a stack of it that can grow.
+// CanStoreNewItem also refuses on unique-count and other eligibility rules,
+// which are not "bags full".
+bool HasBagRoomForItem(Player* bot, uint32_t itemId)
+{
+    if (!bot || !itemId)
+        return false;
+    auto hasRoom = [&](Item* item) -> bool
+    {
+        return !item || (item->GetEntry() == itemId && item->GetCount() < item->GetMaxStackCount());
+    };
+    for (uint8_t slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        if (hasRoom(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot)))
+            return true;
+    for (uint8_t bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+        if (Bag* bag = bot->GetBagByPos(bagSlot))
+            for (uint32_t slot = 0; slot < bag->GetBagSize(); ++slot)
+                if (hasRoom(bag->GetItemByPos(slot)))
+                    return true;
+    return false;
+}
+
 class HostGatherCraftProvider final : public IGatherCraftProvider
 {
     struct PendingStep
@@ -222,6 +262,7 @@ class HostGatherCraftProvider final : public IGatherCraftProvider
         uint32_t itemId = 0;
         uint32_t beforeCount = 0;
         bool isCraft = false;
+        bool isFish = false;
     };
     std::unordered_map<uint32_t, PendingStep> _pending;
     std::unordered_map<uint32_t, uint32_t> _pendingAhMail;
@@ -330,7 +371,8 @@ public:
     bool CanGather(uint32_t botGuidLow, uint32_t itemId) const override
     {
         Player* bot = FindOnlineBot(botGuidLow);
-        return bot && tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId);
+        return bot && (tbhost::prof::HasGatherableNodeInSight(bot, 150.0f, itemId) ||
+            tbhost::fishing::CanFishOrder(bot, itemId));
     }
 
     bool CanCraft(uint32_t botGuidLow, uint32_t itemId) const override
@@ -358,10 +400,16 @@ public:
 
         if (auto it = _pending.find(botGuidLow); it != _pending.end())
         {
-            uint32_t const afterCount = BagItemCount(bot, it->second.itemId);
-            tbhost::craft_order::PendingStepOutcome const outcome =
-                tbhost::craft_order::EvaluatePendingStep(it->second.beforeCount, afterCount, it->second.isCraft);
+            PendingStep const pending = it->second;
             _pending.erase(it);
+            uint32_t const afterCount = BagItemCount(bot, pending.itemId);
+            if (pending.isFish && tbhost::fishing::TakeCaught(bot))
+            {
+                outReason = "fishing";
+                return true;
+            }
+            tbhost::craft_order::PendingStepOutcome const outcome =
+                tbhost::craft_order::EvaluatePendingStep(pending.beforeCount, afterCount, pending.isCraft);
             outReason = outcome.reason;
             return outcome.ok;
         }
@@ -476,6 +524,21 @@ public:
                 return false;
             }
             outReason = stateOut.empty() ? "craft-failed" : stateOut;
+            return false;
+        }
+
+        if (tbhost::fishing::CanFishOrder(bot, itemId))
+        {
+            std::string fishReason;
+            if (tbhost::fishing::StartOrderErrand(bot, itemId, fishReason))
+            {
+                _pending[botGuidLow] = { itemId, beforeCount, false, true };
+                outReason = "fishing";
+                return false;
+            }
+            // The item is fishing loot, not a node: do not fall through to
+            // the gather search that cannot find it and would hide the reason.
+            outReason = fishReason.empty() ? "no-water" : fishReason;
             return false;
         }
 
@@ -782,11 +845,20 @@ IDeliveryProvider* g_delivery = &g_hostDelivery;
 
 } // namespace
 
+uint32_t BotBagItemCount(Player* bot, uint32_t itemId)
+{
+    return BagItemCount(bot, itemId);
+}
+
 void LoadOrders()
 {
+    tbhost::guild_order_fish::LoadFishingSources();
+    tbhost::guild_order_skin::LoadSkinSources();
+
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
     s.orders.clear();
+    TortoiseBots::h3::guild_read::ForgetAllOrderHistory();
     s.loaded = true;
     s.available = false;
 
@@ -874,6 +946,12 @@ std::optional<OrderRecord> FindOrder(uint32_t botGuidLow)
     return it->second;
 }
 
+bool HasOpenOrder(uint32_t botGuidLow)
+{
+    std::optional<OrderRecord> const order = FindOrder(botGuidLow);
+    return order && !order->cancelled && !IsFinished(order->state);
+}
+
 std::vector<OrderRecord> ListOrdersForGuild(uint32_t guildId)
 {
     StoreState& s = State();
@@ -901,6 +979,11 @@ bool GiveOrder(OrderRecord record)
     if (!record.createdAt)
         record.createdAt = now;
     record.updatedAt = now;
+    // Unspent guild gold outlives the order: the row parks as a refund stub
+    // instead of disappearing, and the refund pass pays it from any banker
+    // visit, then deletes the stub.
+    if (IsFinished(record.state) && record.guildGoldHeld > 0)
+        record.cancelled = true;
 
     std::string const sql = Trinity::StringFormat(
         "REPLACE INTO `tortoise_bots_guild_order` ({}, `ah_gold_spent`) VALUES "
@@ -928,6 +1011,14 @@ bool GiveOrder(OrderRecord record)
     trans->Append(sql.c_str());
     CharacterDatabase.CommitTransaction(trans);
 
+    bool fresh = true;
+    if (auto const existing = s.orders.find(record.botGuidLow); existing != s.orders.end())
+    {
+        fresh = existing->second.createdAt != record.createdAt ||
+            existing->second.itemId != record.itemId || existing->second.type != record.type;
+    }
+    TortoiseBots::h3::guild_read::NoteOrderHistory(record, fresh);
+
     s.orders[record.botGuidLow] = std::move(record);
     return true;
 }
@@ -936,6 +1027,40 @@ bool CancelOrder(uint32_t botGuidLow)
 {
     if (!botGuidLow)
         return false;
+
+    std::optional<OrderRecord> heldGoldRow;
+    {
+        StoreState& s = State();
+        std::lock_guard<std::mutex> lock(s.mutex);
+        if (!EnsureSchema(s))
+            return false;
+        auto const it = s.orders.find(botGuidLow);
+        if (it == s.orders.end())
+            return false;
+        if (it->second.guildGoldHeld > 0)
+            heldGoldRow = it->second;
+    }
+
+    // Unspent guild gold outlives the order: cancelling parks the row as a
+    // refund stub the refund pass pays at the next banker visit, instead of
+    // dropping a debt the guild is still owed.
+    if (heldGoldRow)
+    {
+        OrderRecord stub = *heldGoldRow;
+        stub.cancelled = true;
+        stub.state = OrderState::Working;
+        stub.reason = OrderReason::None;
+        stub.supplyStep = SupplyStep::None;
+        stub.supplyReturnStep = SupplyStep::None;
+        stub.supplyItemId = 0;
+        stub.supplyCount = 0;
+        stub.supplyGoldCount = 0;
+        stub.needItems.clear();
+        stub.needWhispered = false;
+        stub.needBankDenied = false;
+        stub.reportedHave = 0;
+        return GiveOrder(stub);
+    }
 
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
@@ -953,6 +1078,7 @@ bool CancelOrder(uint32_t botGuidLow)
     CharacterDatabase.CommitTransaction(trans);
 
     s.orders.erase(it);
+    TortoiseBots::h3::guild_read::ForgetOrderHistory(botGuidLow);
     return true;
 }
 
@@ -983,6 +1109,9 @@ void OnBotLogout(uint32_t botGuidLow)
 {
     if (!botGuidLow)
         return;
+    DisenchantForgetBot(botGuidLow);
+    ForgetGuildOrderQueueSession(botGuidLow);
+    ForgetEnchantOrder(botGuidLow);
     g_hostGatherCraft.ClearPending(botGuidLow);
     StoreState& s = State();
     std::lock_guard<std::mutex> lock(s.mutex);
@@ -1009,6 +1138,8 @@ bool IsItemNeededByGuildOrder(uint64_t guildId, uint32_t itemId)
         if (o.itemId == itemId)
             return true;
         if (o.type == OrderType::Craft && tbhost::prof::IsReagentForItem(o.itemId, itemId))
+            return true;
+        if (o.type == OrderType::Enchant && IsEnchantReagent(o.itemId, itemId))
             return true;
         for (auto const& ni : o.needItems)
         {
@@ -1044,6 +1175,10 @@ void TickBotOrder(Player* bot)
     }
 
     OrderRecord rec = *ordOpt;
+    if (rec.type == OrderType::Enchant)
+        return; // TickEnchantOrder owns this row: its itemId is a spell
+    if (rec.type == OrderType::Farm)
+        tbhost::fishing::EnsureOrderFishing(bot, rec.itemId);
     uint32_t const inBagsBefore = BagItemCount(bot, rec.itemId);
     tbhost::guild::OrderGoldBudget const budget =
         tbhost::guild::RemainingOrderGoldCap(rec.hasGoldCap, rec.goldCap, rec.ahGoldSpent);
@@ -1060,6 +1195,7 @@ void TickBotOrder(Player* bot)
         : AuctionBuy().CanBuyOnAuction(botGuidLow, rec.itemId, budget.capped ? budget.remainingCopper : 0);
     in.canDeliverBank = Delivery().CanDeliverToBank(botGuidLow, rec.guildId);
     in.canDeliverMail = Delivery().CanDeliverByMail(botGuidLow, rec.giverGuidLow);
+    in.bagsFull = !HasBagRoomForItem(bot, rec.itemId);
 
     OrderStepDecision const dec = DecideOrderStep(in);
     std::string reason;
@@ -1085,6 +1221,8 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::DeliverMail:
         {
             rec.state = OrderState::Delivering;
+            if (std::string(dec.reason) == "bags-full")
+                rec.reason = OrderReason::BagsFull;
             uint32_t const missing = (rec.amount > rec.delivered) ? (rec.amount - rec.delivered) : 0u;
             bool const ok = Delivery().Deliver(botGuidLow, rec.guildId, rec.giverGuidLow, rec.itemId, missing, reason);
             if (!ok)
@@ -1127,6 +1265,12 @@ void TickBotOrder(Player* bot)
                     rec.reason = OrderReason::None;
                     SetOrderWorking(botGuidLow, false);
                 }
+                else if (DeliveryLostItsStock(rec.state, rec.reason, rec.delivered, rec.amount, inBagsAfter))
+                {
+                    // A bags-full delivery handed over what it carried: back to work.
+                    rec.state = OrderState::Working;
+                    rec.reason = OrderReason::None;
+                }
                 GiveOrder(rec);
             }
             TC_LOG_INFO("tortoisebots", "[W9] deliver id={} bot={} item={} have={} want={} mode={} result={}",
@@ -1138,6 +1282,26 @@ void TickBotOrder(Player* bot)
         case OrderStepAction::Craft:
         case OrderStepAction::Gather:
         {
+            // A farm order with full bags and none of the item throws out grey
+            // or white junk to make room; with nothing to throw out it ends now
+            // instead of walking past sources it cannot loot.
+            if (in.bagsFull && FullBagsWithoutStock(rec.type, inBagsBefore))
+            {
+                PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+                if (!ai::MakeRoomForGuildOrderLoot(ai, bot, rec.itemId, 1))
+                {
+                    rec.state = OrderState::Cant;
+                    rec.reason = OrderReason::BagsFull;
+                    GiveOrder(rec);
+                    SetOrderWorking(botGuidLow, false);
+                    TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason=bags-full",
+                        rec.itemId, bot->GetName(), rec.itemId, inBagsBefore, rec.amount);
+                    return;
+                }
+                TC_LOG_INFO("tortoisebots", "[W9] room id={} bot={} item={} have={} want={}",
+                    rec.itemId, bot->GetName(), rec.itemId, inBagsBefore, rec.amount);
+                return;
+            }
             uint64_t const moneyBefore = bot->GetMoney();
             bool const ok = GatherCraft().StepGatherOrCraft(botGuidLow, rec.itemId, dec.remaining, reason,
                 budget.capped, budget.remainingCopper);
@@ -1156,7 +1320,7 @@ void TickBotOrder(Player* bot)
                 GiveOrder(rec);
             }
             std::string const res = ok ? reason : (reason.empty() ? "fail" : reason);
-            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering");
+            bool const inProgress = !ok && (res == "casting" || res == "walking" || res == "gathering" || res == "fishing");
             bool const logInfo = ok || recordTick(false, inProgress, res);
             if (ok)
                 recordTick(true, false, "");
@@ -1214,6 +1378,26 @@ void TickBotOrder(Player* bot)
 
         case OrderStepAction::CannotTravel:
         default:
+        {
+            // A farm order that can neither craft nor gather the item may be a
+            // fishing order: the bot brain's fishing path is not built here, so
+            // the store reports the verdict the fishing plan itself would give
+            // instead of the generic no-source.
+            if (rec.type == OrderType::Farm && (in.delivered + inBagsBefore) < rec.amount &&
+                !in.canCraft && !in.canGather)
+            {
+                if (std::optional<OrderReason> const fishReason =
+                        tbhost::guild_order_fish::ResolveFarmRefusal(bot, rec.itemId))
+                {
+                    rec.state = StateForReason(*fishReason);
+                    rec.reason = *fishReason;
+                    GiveOrder(rec);
+                    SetOrderWorking(botGuidLow, false);
+                    TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason={} fishing=1",
+                        rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount, ReasonToken(*fishReason));
+                    return;
+                }
+            }
             rec.state = OrderState::Cant;
             rec.reason = OrderReason::NoSource;
             GiveOrder(rec);
@@ -1221,6 +1405,7 @@ void TickBotOrder(Player* bot)
             TC_LOG_INFO("tortoisebots", "[W9] refuse id={} bot={} item={} have={} want={} reason=cannot:%20travel",
                 rec.itemId, bot->GetName(), rec.itemId, dec.have, rec.amount);
             return;
+        }
     }
 }
 
@@ -1240,10 +1425,19 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
     if (!RequireBuilt(handler, words, "guildorder"))
         return false;
     if (words.w.empty())
-        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
+        return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|meet|search|who|preview|steps|access|rank|reassign");
 
     std::string const sub = Lower(words.w[0]);
     Player* sender = SenderPlayer(handler);
+
+    if (guild_read::IsReadVerb(sub))
+        return guild_read::Handle(handler, words, sender, sub);
+
+    if (sub == "meet")
+        return tbhost::guild_orders::HandleEnchantMeet(handler, words, sender);
+
+    if (sub == "create" && words.w.size() >= 3 && Lower(words.w[2]) == "enchant")
+        return tbhost::guild_orders::HandleEnchantCreate(handler, words, sender);
 
     if (sub == "create")
     {
@@ -1257,10 +1451,9 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
             return Fail(handler, words, "guildorder", "not-in-guild", bot->GetName());
         if (sender)
         {
-            if (tbhost::guild::GetGuildId(sender) != guildId)
-                return Fail(handler, words, "guildorder", "wrong-guild", bot->GetName());
-            if (!tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
-                return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
         }
         uint32_t const itemId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
         uint32_t const amount = static_cast<uint32_t>(std::strtoul(words.w[3].c_str(), nullptr, 10));
@@ -1352,8 +1545,12 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         if (!bot || !IsHostBot(bot))
             return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
         uint64_t const guildId = tbhost::guild::GetGuildId(bot);
-        if (sender && guildId && !tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
-            return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+        if (sender)
+        {
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
+        }
         if (!tbhost::guild_orders::CancelOrder(bot->GetGUID().GetCounter()))
             return Fail(handler, words, "guildorder", "not-found", bot->GetName());
         tbhost::guild_orders::SetOrderWorking(bot->GetGUID().GetCounter(), false);
@@ -1401,12 +1598,19 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         if (!bot || !IsHostBot(bot))
             return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
         uint64_t const guildId = tbhost::guild::GetGuildId(bot);
-        if (sender && guildId && !tbhost::guild::CanEditOfficerNotes(guildId, sender->GetGUID()))
-            return Fail(handler, words, "guildorder", "no-rank-right", "requires edit officer notes");
+        if (sender)
+        {
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
+        }
 
         auto const ord = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
         if (!ord)
             return Fail(handler, words, "guildorder", "not-found", bot->GetName());
+        if (ord->type == GuildOrders::OrderType::Enchant)
+            return Fail(handler, words, "guildorder", "bad-type",
+                "an enchant order runs without work: meet the bot when it is ready");
         if (words.w.size() >= 3)
         {
             uint32_t const reqId = static_cast<uint32_t>(std::strtoul(words.w[2].c_str(), nullptr, 10));
@@ -1430,7 +1634,105 @@ bool HandleGuildOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)
         return true;
     }
 
-    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work");
+    if (sub == "access")
+    {
+        uint32_t guildId = 0;
+        if (words.w.size() >= 2)
+        {
+            if (Player* bot = FindOnline(words.w[1]))
+                guildId = static_cast<uint32_t>(tbhost::guild::GetGuildId(bot));
+            else
+                guildId = static_cast<uint32_t>(std::strtoul(words.w[1].c_str(), nullptr, 10));
+        }
+        else if (sender)
+            guildId = static_cast<uint32_t>(tbhost::guild::GetGuildId(sender));
+        if (!guildId)
+            return Fail(handler, words, "guildorder", "no-guild", "specify <bot|guild_id>");
+
+        tbhost::guild_order_access::AccessReport report;
+        if (!tbhost::guild_order_access::BuildAccessReport(guildId, sender, report))
+            return Fail(handler, words, "guildorder", "no-guild", "no such guild");
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "access").N("guild", guildId);
+        if (report.enabled)
+            r.N("rank", report.botRank).S("rankname", report.rankName)
+                .S("tabs", report.tabsOk).S("denied", report.tabsDenied);
+        else
+            r.S("rank", "-").S("rankname", "-").S("tabs", "-").S("denied", "-");
+        r.B("cansetrank", report.canSetRank).B("canorder", report.canGiveOrders);
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    if (sub == "rank")
+    {
+        if (words.w.size() < 2)
+            return Fail(handler, words, "guildorder", "usage", "rank <rankIndex>");
+        uint32_t const guildId = sender ? static_cast<uint32_t>(tbhost::guild::GetGuildId(sender)) : 0;
+        if (!sender || !guildId)
+            return Fail(handler, words, "guildorder", "not-guild", "You are not in a guild.");
+        std::string code, detail;
+        if (!tbhost::guild_order_access::MayChangeBotRank(guildId, sender, code, detail))
+            return Fail(handler, words, "guildorder", code, detail);
+
+        uint32_t const wanted = static_cast<uint32_t>(std::strtoul(words.w[1].c_str(), nullptr, 10));
+        uint32_t moved = 0;
+        if (!tbhost::guild_order_access::SetBotRank(guildId, wanted, &code, &detail, &moved))
+            return Fail(handler, words, "guildorder", code, detail);
+
+        tbhost::guild_order_access::AccessReport report;
+        tbhost::guild_order_access::BuildAccessReport(guildId, sender, report);
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "rank").N("guild", guildId).N("rank", wanted).N("bots", moved)
+            .S("rankname", report.rankName).S("tabs", report.tabsOk).S("denied", report.tabsDenied)
+            .B("cansetrank", report.canSetRank).B("canorder", report.canGiveOrders);
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    if (sub == "reassign")
+    {
+        if (words.w.size() < 3)
+            return Fail(handler, words, "guildorder", "usage", "reassign <bot> <newBot>");
+        Player* bot = FindOnline(words.w[1]);
+        if (!bot || !IsHostBot(bot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[1]);
+        Player* newBot = FindOnline(words.w[2]);
+        if (!newBot || !IsHostBot(newBot))
+            return Fail(handler, words, "guildorder", "no-bot", words.w[2]);
+        uint64_t const guildId = tbhost::guild::GetGuildId(bot);
+        if (sender)
+        {
+            std::string code, detail;
+            if (!tbhost::guild_order_access::MayGiveOrders(static_cast<uint32_t>(guildId), sender, code, detail))
+                return Fail(handler, words, "guildorder", code, detail);
+        }
+
+        std::string code, detail;
+        if (!tbhost::guild_orders::ReassignOrder(bot->GetGUID().GetCounter(),
+                newBot->GetGUID().GetCounter(), code, detail))
+            return Fail(handler, words, "guildorder", code, detail);
+
+        Reply reply(handler, words, "guildorder");
+        reply.Begin();
+        Rec r("guildorder");
+        r.S("op", "reassign").S("bot", newBot->GetName()).S("from", bot->GetName());
+        if (auto const ord = tbhost::guild_orders::FindOrder(newBot->GetGUID().GetCounter()))
+            r.N("item", ord->itemId).N("have", ord->delivered).N("want", ord->amount)
+                .S("state", GuildOrders::StateToken(ord->state));
+        reply.Line(r);
+        reply.End(Rec("guildorder-end"));
+        return true;
+    }
+
+    return Fail(handler, words, "guildorder", "usage", "use: create|list|cancel|status|work|meet|search|who|preview|steps|access|rank|reassign");
 }
 
 bool HandleCraftOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)

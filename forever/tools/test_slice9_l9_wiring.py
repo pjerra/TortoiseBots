@@ -96,7 +96,8 @@ class L9Wiring(unittest.TestCase):
         poll = body(F_HEADER, "PollPacketEventCompat")
         self.assertIn("memo.rolls.count({ owner, slot })", poll)
         self.assertIn("memo.rolls.insert({ owner, slot });", poll)
-        self.assertIn("memo.windows.count(loot->GetOwnerGUID())", poll)
+        self.assertIn("memo.windows.count(owner)", poll)
+        self.assertIn("loot->loot_type == LOOT_SKINNING", poll)   # a skin window has no LootOpenCompat of its own
         self.assertIn("IsGameObject()", poll)        # a corpse window is raised by LootOpenCompat, an area-loot neighbour never
         self.assertIn("NoteLootWindowAnnouncedCompat(bot, guid);", I2)
         self.assertIn("PollPacketEventCompat(bot, getName(), *this);", TRIGGER)
@@ -110,7 +111,7 @@ class L9Wiring(unittest.TestCase):
         poll = body(F_HEADER, "PollPacketEventCompat")
         # the roll event is raised only after the gate says so (free-for-all, round robin, master loot and no group: nothing is announced)
         self.assertIn("BotRollsInGroupLootCompat(bot, roll->GetLoot())", poll)
-        self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);"))
+        self.assertLess(poll.index("BotRollsInGroupLootCompat("), poll.index("trigger.ExternalEvent(event, nullptr);", poll.index('name == "loot start roll")')))
         vote = body(F_HEADER, "RollVoteCompat")
         self.assertIn("BotRollsInGroupLootCompat(bot, live->GetLoot())", vote)
         self.assertLess(vote.index("BotRollsInGroupLootCompat("), vote.index("HandleLootRoll(packet)"))

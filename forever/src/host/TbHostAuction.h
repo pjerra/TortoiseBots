@@ -52,7 +52,8 @@ uint64_t GetDeposit(Player const* bot, Creature const* auctioneer, Item const* i
 
 // Read market without sending packets (uses BuildListAuctionItems / BuildListBuckets / BuildListOwnedItems).
 std::vector<AhListingView> QueryMarketByItemId(Player* bot, Creature const* auctioneer, uint32_t itemId);
-std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctioneer, std::string const& nameSubstr);
+std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctioneer, std::string const& nameSubstr,
+    uint32_t offset = 0);
 std::vector<AhOwnedView> Owned(Player* bot, Creature const* auctioneer, uint32_t* outSoldCount = nullptr);
 
 // Core-handler actions (WorldSession::HandleAuction*).

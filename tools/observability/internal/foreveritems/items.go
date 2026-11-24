@@ -36,6 +36,7 @@ type Item struct {
 	Classes      int32      `json:"classes"`
 	Desc         string     `json:"desc"`
 	Spells       [][2]int32 `json:"spells"`
+	DisplayID    uint32     `json:"display_id"`
 }
 
 type Store struct {

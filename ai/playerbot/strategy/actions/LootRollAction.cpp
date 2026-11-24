@@ -4,13 +4,16 @@
 #include "../../policy/loot/LootHistoryPolicy.h"
 #include "../../policy/loot/LootRollPolicy.h"
 #include "../../policy/loot/LootSpecPriorityPolicy.h"
+#include "../../policy/quest/QuestLogPolicy.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/values/LootValues.h"
+#include "playerbot/strategy/ItemVisitors.h"
 #include "../../../runtime/HireLifecycle.h"
 #include "../../../runtime/policy/hire/HireLootPolicy.h"
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
+#include "../../../../runtime/policy/provision/GatherToolPolicy.h"
 #include "playerbot/GroupMembers.h"
 #include "Group/Group.h"
 #include "Maps/Map.h"
@@ -1026,4 +1029,163 @@ bool RollWonLogAction::Execute(Event& event)
     ItemQualifier itemQualifier(itemId, (int32)randomPropertyId);
     sPlayerbotAIConfig.logEvent(ai, "RollWon", proto->Name1, std::to_string(itemId));
     return true;
+}
+
+namespace
+{
+    // Keyring family number of the old core's ItemPrototype::BagFamily (the
+    // ForeverCore mask is converted to that number in compat/TbItemPrototype.cpp).
+    constexpr uint32 kBagFamilyKeys = 9;
+
+    bool IsProfessionToolForRelief(PlayerbotAI* ai, ItemPrototype const* proto)
+    {
+        if (!proto)
+            return false;
+
+        uint32 const itemId = proto->ItemId;
+        if (ItemUsageValue::IsCraftingTool(itemId))
+            return true;
+
+        if (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE)
+            return ai->HasSkill(SKILL_FISHING);
+
+        if (TortoiseBots::HasAnyTool([itemId](uint32 id) { return id == itemId; }, TortoiseBots::kMiningPickIds) ||
+            TortoiseBots::HasAnyTool([itemId](uint32 id) { return id == itemId; }, TortoiseBots::kSkinningKnifeIds))
+            return true;
+
+        switch (itemId)
+        {
+        case 2901:  // Mining Pick
+        case 5956:  // Blacksmith Hammer
+        case 6219:  // Arclight Spanner
+        case 6218:  // Runed Copper Rod
+        case 6339:  // Runed Silver Rod
+        case 11130: // Runed Golden Rod
+        case 11145: // Runed Truesilver Rod
+        case 16207: // Runed Arcanite Rod
+        case 7005:  // Skinning Knife
+        case 4471:  // Flint and Tinder
+        case 4470:  // Simple Wood
+        case 6256:  // Fishing Pole
+        case 5060:  // Thieves' Tools
+        case 9149:  // Philosopher's Stone
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    WonLootReliefCandidate BuildReliefCandidate(PlayerbotAI* ai, Player* bot, Item* item, bool bagFitsWonItem)
+    {
+        WonLootReliefCandidate c;
+        ItemPrototype const* proto = GetItemProtoCompat(item);
+        if (!proto)
+            return c;
+
+        AiObjectContext* context = ai->GetAiObjectContext();
+        ItemQualifier qualifier(item);
+        ItemUsage const usage = AI_VALUE2(ItemUsage, "item usage", qualifier.GetQualifier());
+        ForceItemUsage const forceUsage = AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", proto->ItemId, ForceItemUsage::FORCE_USAGE_NONE);
+
+        c.bag = item->GetBagSlot();
+        c.slot = item->GetSlot();
+        c.itemId = proto->ItemId;
+        c.quality = proto->Quality;
+        c.stackSellValue = proto->SellPrice * item->GetCount();
+        c.usage = static_cast<uint8>(usage);
+        c.bagFitsWonItem = bagFitsWonItem;
+        c.hasForceUsage = HAS_AI_VALUE2("force item usage", proto->ItemId) && forceUsage != ForceItemUsage::FORCE_USAGE_NONE;
+        c.isGuildOrderStock = bot->GetGuildId() != 0 && GuildOrderConsumesItem(bot, proto->ItemId);
+        c.isQuestItem = proto->ItemId != kBoneChewToyItemId &&
+            (proto->Class == ITEM_CLASS_QUEST || proto->StartQuest != 0 ||
+             proto->Bonding == BIND_QUEST_ITEM ||
+             ItemUsageValue::IsNeededForQuest(bot, proto->ItemId, true) ||
+             (ai->GetMaster() && sPlayerbotAIConfig.syncQuestWithPlayer &&
+              ItemUsageValue::IsNeededForQuest(ai->GetMaster(), proto->ItemId, true)));
+        c.isBag = proto->Class == ITEM_CLASS_CONTAINER || proto->Class == ITEM_CLASS_QUIVER;
+        c.isAmmo = proto->Class == ITEM_CLASS_PROJECTILE ||
+            (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_THROWN);
+        c.isKey = proto->Class == ITEM_CLASS_KEY || proto->BagFamily == kBagFamilyKeys;
+        c.isHearthstone = proto->ItemId == 6948;
+        c.isProfessionTool = IsProfessionToolForRelief(ai, proto);
+        c.isReagentOrConsumableUsed =
+            usage == ItemUsage::ITEM_USAGE_USE ||
+            usage == ItemUsage::ITEM_USAGE_KEEP ||
+            usage == ItemUsage::ITEM_USAGE_SKILL ||
+            (proto->Class == ITEM_CLASS_REAGENT && !ItemUsageValue::SpellsUsingItem(proto->ItemId, bot).empty());
+        return c;
+    }
+}
+
+bool ai::MakeRoomForGuildOrderLoot(PlayerbotAI* ai, Player* bot, uint32 itemId, uint32 count)
+{
+    if (!ai || !bot || !itemId)
+        return false;
+
+    uint32 const wantCount = count ? count : 1;
+    // A fresh dest each time: CanStoreNewItem appends to it, and a filled
+    // dest makes the next check fail even after a slot was freed.
+    auto canStore = [&]()
+    {
+        ItemPosCountVec dest;
+        return bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, wantCount) == EQUIP_ERR_OK;
+    };
+    if (canStore())
+        return true;
+
+    ItemQualifier wantedQualifier(itemId, 0);
+
+    // Grey or white junk only: green and better, quest items, tools, ammo,
+    // reagents a spell uses, keys, the hearthstone and order stock stay.
+    while (!canStore())
+    {
+        std::vector<WonLootReliefCandidate> candidates;
+        for (int slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        {
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            ItemPrototype const* itemProto = GetItemProtoCompat(item);
+            if (!itemProto || itemProto->ItemId == itemId || itemProto->Quality > ITEM_QUALITY_NORMAL)
+                continue;
+            candidates.push_back(BuildReliefCandidate(ai, bot, item, true));
+        }
+
+        for (int bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+        {
+            Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot);
+            ItemPrototype const* bagProto = GetItemProtoCompat(bag);
+            if (!bag || !bagProto)
+                continue;
+            // Only a generic bag's free slot helps: a specialty bag holds its
+            // own kind, and those are reagents or ammo the picks keep anyway.
+            bool const bagFits = bagProto->BagFamily == 0;
+            for (uint32 slot = 0; slot < bag->GetBagSize(); ++slot)
+            {
+                Item* item = bag->GetItemByPos(slot);
+                ItemPrototype const* itemProto = GetItemProtoCompat(item);
+                if (!itemProto || itemProto->ItemId == itemId || itemProto->Quality > ITEM_QUALITY_NORMAL)
+                    continue;
+                candidates.push_back(BuildReliefCandidate(ai, bot, item, bagFits));
+            }
+        }
+
+        int const pick = SelectWonLootReliefIndex(candidates.data(), candidates.size(), false);
+        if (pick < 0)
+            break;
+
+        WonLootReliefCandidate const& chosen = candidates[pick];
+        Item* toDestroy = bot->GetItemByPos(chosen.bag, chosen.slot);
+        if (!toDestroy)
+            break;
+
+        ItemQualifier destroyedQualifier(toDestroy);
+        bot->DestroyItem(chosen.bag, chosen.slot, true);
+        AiObjectContext* context = ai->GetAiObjectContext();
+        RESET_AI_VALUE(uint8, "bag space");
+
+        ai->TellPlayerNoFacing(ai->GetMaster() ? ai->GetMaster() : bot,
+            "Destroyed " + ChatHelper::formatItem(destroyedQualifier) + " to make room for " + ChatHelper::formatItem(wantedQualifier),
+            PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, false);
+    }
+
+    return canStore();
 }

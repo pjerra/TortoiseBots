@@ -38,7 +38,7 @@ class RollWonWiring(unittest.TestCase):
     def test_the_trigger_poll_routes_to_the_won_poll(self):
         poll = S9[S9.index("inline void PollPacketEventCompat("):]
         self.assertIn('if (name == "loot roll won")', poll)
-        self.assertIn("PollRollWon(bot, trigger);", poll)
+        self.assertIn("rollwon::PollRollWon(bot, [&](WorldPacket& event) { trigger.ExternalEvent(event, nullptr); });", poll)
         self.assertIn('#include "host/TbRollWon.h"', S9)
 
     def test_trigger_and_log_action_are_registered(self):
@@ -64,9 +64,9 @@ class RollWonWiring(unittest.TestCase):
         for i in range(len(order) - 1):
             self.assertLess(action.index(order[i]), action.index(order[i + 1]))
         self.assertIn("if (winner != bot->getObjectGuid())", action)
-        host = HOST.read_text()
+        host = HOST_CPP.read_text()
         event = host[host.index("WorldPacket event;"):]
-        event = event[:event.index("trigger.ExternalEvent(event, nullptr);")]
+        event = event[:event.index("raiseEvent(event);")]
         writes = ["event << owner;", "event << uint32(won.id.slot);", "event << uint32(won.itemId);",
                   "event << uint32(0);", "event << botGuid;"]
         for i in range(len(writes) - 1):

@@ -55,7 +55,8 @@ class FreeHost(unittest.TestCase):
         self.assertIn("bool free", login)
         self.assertLess(login.index("free && !master.IsEmpty()"), login.index("Bot bot;"))
         self.assertIn("bot.free = free;", login)
-        self.assertIn("bot.useEngine = _engineByDefault || free;", login)
+        # PR #129 (player commands R2) added owned bots to the same line; a free bot still gets an engine.
+        self.assertIn("bot.useEngine = _engineByDefault || free || owned;", login)
         self.assertIn("bool IsFreeBot(ObjectGuid", MGR_H)
         self.assertIn("bool free = false;", func(MGR_H, "struct Bot"))
 
@@ -80,7 +81,7 @@ class FreeHost(unittest.TestCase):
         self.assertIn("RequireOwnedBot(handler, guid)", free)
         self.assertIn("std::string const error = BotMgr::Instance().SetFree(guid, word == \"on\");", free)
         self.assertLess(free.index("RequireOwnedBot(handler, guid)"), free.index("BotMgr::Instance().SetFree(guid"))
-        self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free)", func(SCRIPTS, "static bool HandleLogin("))
+        self.assertIn("BotMgr::Instance().Login(guid, master, free)", func(SCRIPTS, "static bool HandleLogin("))
         self.assertIn("BotMgr::Instance().IsFreeBot(ObjectGuid::Create<HighGuid::Player>(guid))", HOSTBOTS)
 
     def test_the_free_kit_is_the_class_spec_plus_the_world(self):
@@ -90,9 +91,9 @@ class FreeHost(unittest.TestCase):
         self.assertIn("TortoiseBots::world::FreeWorldKit()", kit)
         self.assertIn("for (char const* const* kit = TortoiseBots::world::FreeWorldKit(); *kit; ++kit)", kit)
         policy = (ROOT / "ai/playerbot/policy/world/FreeKitPolicy.h").read_text()
-        self.assertIn('{ "grind", "food", "loot", "roll", "default", "buff", nullptr }', policy)
-        for absent in ('"follow"', '"wander"', '"rpg"', '"travel"', '"maintenance"', '"guild"'):
-            self.assertNotIn(absent, kit, absent)
+        self.assertIn('{ "grind", "travel", "food", "loot", "roll", "default", "buff", "emote", nullptr }', policy)
+        for absent in ('"follow"', '"wander"', '"rpg"', '"maintenance"', '"guild"'):
+            self.assertNotIn(absent, policy, absent)
         self.assertIn("return;", kit)
 
     def test_every_free_death_and_revive_has_one_log_line(self):

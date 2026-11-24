@@ -106,8 +106,11 @@ class Creation(unittest.TestCase):
         # Never stored: the registry's own row carries no password field.
         self.assertNotIn("password", func(REG, "bool StoreAccount("))
 
-    def test_the_pool_caps_characters_per_account_and_paces_creation(self):
-        self.assertIn("kCharactersPerAccount = 10", REG_H)
+    def test_the_pool_places_one_character_per_account_and_paces_creation(self):
+        # One session per account: a second character on an account could never be online, so the pool keeps one per account
+        # and its account rows follow its characters.
+        self.assertIn("kPoolCharactersPerAccount = 1", REGISTRY_POLICY)
+        self.assertIn("kCharactersPerAccount = world::kPoolCharactersPerAccount", REG_H)
         room = func(REG, "std::uint32_t AccountWithRoom(")
         self.assertIn("world::PoolHasRoomForCharacter(std::max(CharactersOnAccount(account.id), present), kCharactersPerAccount)", room)
         self.assertIn("CharactersOnAccountNow(account.id, present)", room)
@@ -452,9 +455,12 @@ class Behaviour(unittest.TestCase):
 
     def build_and_run(self, tmp, registry, create, gxx, compat=None):
         for rel in ("forever/tools/pool_registry_check.cpp", "forever/src/host/pool/TbPoolRegistry.h",
-                    "forever/src/host/pool/TbPoolCreate.h", "forever/src/compat/TbCompat_WL0.h",
+                    "forever/src/host/pool/TbPoolCreate.h", "forever/src/host/pool/TbPoolReset.h",
+                    "forever/src/host/pool/TbPoolReset.cpp",
+                    "forever/src/compat/TbCompat_WL0.h",
                     "forever/src/compat/TbCompat_CharStore.h", "forever/src/compat/TbSqlNames.h",
-                    "ai/playerbot/policy/world/PoolRegistryPolicy.h", "ai/playerbot/policy/world/PoolCompositionPolicy.h"):
+                    "ai/playerbot/policy/world/PoolRegistryPolicy.h", "ai/playerbot/policy/world/PoolCompositionPolicy.h",
+                    "ai/playerbot/policy/world/PoolResetSafetyPolicy.h", "runtime/policy/infra/PoolResetPolicy.h"):
             (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / rel, tmp / rel)
         shutil.copytree(TOOLS / "pool_registry_fakes", tmp / "forever/tools/pool_registry_fakes")
@@ -467,7 +473,8 @@ class Behaviour(unittest.TestCase):
                         "-I", str(tmp / "forever/tools/pool_registry_fakes"), "-I", str(tmp / "forever/src"), "-I", str(tmp),
                         str(tmp / "forever/tools/pool_registry_check.cpp"),
                         str(tmp / "forever/src/host/pool/TbPoolRegistry.cpp"),
-                        str(tmp / "forever/src/host/pool/TbPoolCreate.cpp"), "-o", str(exe)],
+                        str(tmp / "forever/src/host/pool/TbPoolCreate.cpp"),
+                        str(tmp / "forever/src/host/pool/TbPoolReset.cpp"), "-o", str(exe)],
                        check=True, capture_output=True, text=True)
         return subprocess.run([str(exe)], capture_output=True, text=True)
 
@@ -504,7 +511,9 @@ class Scheduler(unittest.TestCase):
         self.assertIn("bool AccountHasBot(uint32 accountId) const;", MGR_H)
         self.assertIn("std::vector<uint32> BotAccounts() const;", MGR_H)
         self.assertIn("itr->second.pool", MGR_H)
-        self.assertIn("std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false);", MGR_H)
+        # PR #129 (player commands R2) appended `bool owned` for `.bot add`; the pool arguments stay as they were.
+        self.assertIn("std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false, "
+                      "bool owned = false);", MGR_H)
         login = func(MGR_CPP, "std::string BotMgr::Login(")
         self.assertIn("bot.pool = pool;", login)
         self.assertIn("if (pool && !free)", login)

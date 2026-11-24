@@ -9,8 +9,10 @@
 
 #include "host/TbH3.h"
 #include "host/run/TbRunGatherPure.h"
+#include "host/run/TbRunRecoverPure.h"
 #include "host/run/TbRunHooks.h"
 #include "runtime/DungeonRunPolicy.h"
+#include "runtime/PlayerLedPolicy.h"
 
 #include "ObjectGuid.h"
 
@@ -26,7 +28,7 @@ namespace run
 {
 constexpr size_t kEventRing = 1024;   // a 63-minute run overflowed 200 events; `events since=` names the oldest seq kept
 
-// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop, and since
+// One entry of a run's event ring (`.tb run events`): kind = start | step | pull | cc | cc-clear | gather-wait | fight-end | rest | death | wipe | revive | pause | resume | done | stop | self-recover | self-recover-stop, and since
 // slice 9 (package C9) open | object | loot | item | clear (a task or a wait step of the plan ended: `unit` = the object's or boss's entry, `why` = what it saw).
 // `step`, `leg` and `unit` are -1 when the event has none (the record then omits the key: an unknown number is never written as a number).
 struct RunEvent
@@ -44,11 +46,27 @@ struct RunEvent
 // party, an evading mob) must not keep a run the owner stopped alive for good. After it the stop takes effect and the run record says so (`why=`).
 constexpr uint32 kStopPendingMaxMs = 90000;
 
+// One place the run summary reports besides counts: milliseconds since the run started, the position, and the role
+// ("" when it was not known). At most kMaxSummarySpots of each list are kept.
+struct RunSpot
+{
+    uint32 tMs = 0;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    std::string role;
+};
+constexpr size_t kMaxSummarySpots = 200;
+
 struct RunRec
 {
     ObjectGuid leader;
     std::string leaderName;
     std::string planName;
+    // Issue #139 (opt-in, `.tb run start <tank> <plan> lead=player`): a non-empty `commander` is the player who leads the party and walks; `leader` above
+    // is then the tank bot (the run's pulls and facts read it), every other bot keeps the player as its commander and follows him, and `pl` is the
+    // Turtle player-led state (runtime/PlayerLedPolicy.h). Empty: the default, a bot-led run (decision D1).
+    ObjectGuid commander;
+    std::string commanderName;
+    PlayerLed::State pl;
     DungeonRun::Run run;        // the Turtle run: state Running|Paused|Done, phase Begin..Hold, the step index, the note
     uint32 startedMs = 0;       // GameTime::GetGameTimeMS() at the start
     uint32 endedMs = 0;         // the same clock when the run stopped or finished; 0 while it goes on (elapsed= stops there)
@@ -60,6 +78,10 @@ struct RunRec
     // The state of each plan boss the run KNOWS: entry -> dead. Only the S6 glue sets an entry (from the boss creature it read), so an entry that was
     // never read is not in the map and the `boss=` list does not name it: a boss is never reported alive by default.
     std::map<uint32, bool> bossDead;
+    // When each boss was first read dead, in ms since the run started (the summary's killed_at_s), and where the
+    // party fell (the summary's wipe and death spots).
+    std::map<uint32, uint32> bossKilledMs;
+    std::vector<RunSpot> wipeSpots, deathSpots;
 
     // ---- S6 (package C6): what the tick keeps between its 1 Hz runs. Plain data and guids only: no Player, Unit or Map pointer is kept across ticks. ----
     // A member's host master and whether it was commanded (`.tb master`) before the run bound it to the tank (decision D1); `.tb run stop` and the end of the
@@ -88,6 +110,7 @@ struct RunRec
     bool seenWipe = false;
     std::set<std::string> seenDead;
     gather::Extension gatherExt;                 // G8: the regroup gather's bounded extensions at the current step (TbRunGatherPure.h)
+    recover::State recover;                     // proof-1 B: the self-recover after "regroups did not hold" pauses, per step and per run (TbRunRecoverPure.h)
     // G8 (review): the bots the run's own `cc` orders marked, name -> mark. Run::ccHolds does not survive a step advance, a resume or a regroup
     // (DungeonRun::ResetStep clears it) and the bots' `rti cc` / `run cc family` do: this is what ClearRunCc resets at the run's end, moving an entry it
     // could not settle to the pending retry (DropPendingCc/RetryPendingCc).
@@ -107,9 +130,11 @@ struct RunRec
     std::string preHolder;                       // ... the first bot that does
 };
 
+inline bool IsPlayerLed(RunRec const& rec) { return !rec.commander.IsEmpty(); }
+
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
 RunRec* Find(ObjectGuid leader);
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs);
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
 bool Remove(ObjectGuid leader);
 std::vector<RunRec*> All();                         // by leader name
 
@@ -154,7 +179,14 @@ struct StartOutcome
     RunRec* rec = nullptr;
 };
 // Checks the party and starts the run (binds every other member to the leader). Nothing changes when a code is returned.
-StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs);
+// `fromStep` (`.tb run start <leader> <plan> from step N|leg L`): a placed start; the run begins at that plan index and a walk back never goes before it.
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
+
+// Issue #139: the opt-in player-led start. `commander` is the player who typed `lead=player` (he leads the party), `tank` the bot named on the command.
+// Nothing is bound (every bot of the party is commanded by the player already, `not-commanded` otherwise); nothing changes when a code is returned.
+// Codes: those of StartRun, plus disabled commander-is-bot not-grouped raid not-leader group-bound no-bots group-too-large not-controllable not-live
+// bot-bound tank-not-in-party tank-not-bot no-tank not-commanded.
+StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan const* plan, uint32 nowMs);
 
 struct StopOutcome
 {

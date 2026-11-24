@@ -192,6 +192,13 @@ inline bool BotWantsCampKit(bool campEnabled,
                                 isHired, hasRealPlayerInGroup, level, minLevel, false, false);
 }
 
+// The kit's tent never takes the last free slot: a bot that just threw out
+// junk to make room for an order would lose that room to the tent.
+inline bool CampTentFitsBags(uint32_t freeBagSlots)
+{
+    return freeBagSlots >= 2;
+}
+
 inline bool ShouldStartCampAtSpot(bool eligible,
                                   bool tentNearby,
                                   bool spellReady,

@@ -194,6 +194,19 @@ inline void BotChatLikePlayerCompat(Player* bot, ChatMsg chatType, uint32 lang, 
 {
     bot->GetSession()->HandleChatMessage(chatType, Language(lang), text);
 }
+// A line in the bot's guild chat (T: the speak right of its rank, then Guild::BroadcastToGuild). F's guild is the same class: the
+// member's rank id and the rank-right query are public (Guild.h:919 HasAnyRankRight, :929 GetMember, :358 Member::GetRankId), so
+// the speak gate is the real one, not a copy of the client's. Failure value: false (not said).
+inline bool GuildSayCompat(Player* bot, Guild const* guild, std::string const& msg)
+{
+    if (!bot || !guild || msg.empty())
+        return false;
+    Guild::Member const* member = guild->GetMember(bot->GetGUID());
+    if (!member || !guild->HasAnyRankRight(member->GetRankId(), GR_RIGHT_GCHATSPEAK))
+        return false;
+    guild->BroadcastToGuild(bot->GetSession(), false, msg, LANG_UNIVERSAL);
+    return true;
+}
 // The queue a raw packet goes to. T QueuePacket(WorldPacket*); F QueuePacket(WorldPacket&&) (WorldSession.h:1112). Transport only:
 // the layout of the packet is its builder's.
 inline void BotQueuePacketCompat(Player* bot, WorldPacket const& packet) { bot->GetSession()->QueuePacket(WorldPacket(packet)); }

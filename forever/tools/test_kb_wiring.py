@@ -154,16 +154,14 @@ def check_wiring(mgr, scripts, party_state, unported_compat, run_tasks):
 
 
 def check_rows(features, unported, commands, listing):
-    if "X(IncomingSpeedChange," not in features or "| incoming: forced speed change |" not in unported:
-        raise AssertionError("the forced-speed row is gone although the legacy packet path names it")
-    if "nothing to ack: ForeverCore applies `SetSpeedRate` at once (the ack only clears the core's resend bookkeeping)" not in unported:
-        raise AssertionError("the forced-speed row is not reworded for S3")
-    if "IncomingKnockBack" not in features or "incoming: knock back" not in unported:
-        raise AssertionError("the knock-back row is still referenced by the legacy packet path")
-    if "jump, fall and knockback" not in features or "jump, fall and knockback" not in unported:
-        raise AssertionError("the jump/fall row is gone")
-    if "no bot-started jumps (D5); thrown landings take the core's fall damage" not in unported:
-        raise AssertionError("the jump/fall row is not reworded")
+    # The legacy 1.12 speed and knock-back cases stay in PlayerbotAIPackets.cpp for the Turtle build, but ForeverCore
+    # acks its own speed changes and flies a bot server-side, so neither is an unported feature any more.
+    for gone in ("X(IncomingSpeedChange,", "X(IncomingKnockBack,"):
+        if gone in features:
+            raise AssertionError("the legacy packet row is back in UnportedFeatures.h: " + gone)
+    for row in ("| incoming: forced speed change |", "| incoming: knock back |"):
+        if row in unported:
+            raise AssertionError("UNPORTED.md still has the row " + row)
     if ".tb knock <bot> <speedXY> <speedZ>" not in commands or ".tb speed <bot> run|walk|swim <rate>" not in commands:
         raise AssertionError("TB-COMMANDS does not document the two commands")
     for key in ("thrown=", "falldmg=", "runrate="):

@@ -14,6 +14,7 @@
 #include "../ai/playerbot/PlayerbotAI.h"
 #include "../ai/playerbot/PlayerbotAIConfig.h"
 #include "../ai/playerbot/ServerFacade.h"
+#include "../ai/playerbot/TbCompatTrace.h"
 #include "../ai/playerbot/strategy/Engine.h"
 #include "../ai/playerbot/strategy/Value.h"
 #include "../host/ModuleLog.h"
@@ -135,29 +136,13 @@ int FacingDegrees(Player* bot, Unit* unit)
     return static_cast<int>(d * 180.0f / kPi + 0.5f);
 }
 
-// The spell id of a harmful area effect the bot stands in: a negative aura from
-// a dynamic object (Rain of Fire, Blizzard) or an area aura of someone else,
-// with a periodic damage effect. Reads the bot's own aura list (a few dozen
-// entries); 0 when none.
+// The spell id of a harmful area effect the bot stands in (a dynamic
+// object's persistent aura or somebody else's area aura with a periodic
+// damage effect). Reads the bot's own aura list (a few dozen entries); 0 when
+// none.
 uint32_t HarmfulGroundAura(Player* bot)
 {
-    ObjectGuid const self = bot->GetObjectGuid();
-    for (auto const& entry : bot->GetSpellAuraHolderMap())
-    {
-        SpellAuraHolder* holder = entry.second;
-        if (!holder || holder->IsPositive() || holder->GetCasterGuid() == self)
-            continue;
-        if (!holder->IsPersistent() && !holder->IsAreaAura())
-            continue;
-        SpellEntry const* spell = GetSpellEntryCompat(holder->GetSpellProto());
-        if (!spell)
-            continue;
-        for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
-            if (spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE ||
-                spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE_PERCENT)
-                return spell->Id;
-    }
-    return 0;
+    return HarmfulGroundAuraCompat(bot);
 }
 
 // One of the bot's guid-list values, only when it already holds a calculated
@@ -180,12 +165,12 @@ Unit* SeenHostile(Player* bot, ObjectGuid guid)
     if (guid.IsEmpty() || guid == bot->GetObjectGuid())
         return nullptr;
     Map* map = bot->FindMap();
-    Unit* unit = map ? map->GetUnit(guid) : nullptr;
+    Unit* unit = map ? UnitInMapCompat(map, guid) : nullptr;
     if (!unit || !unit->IsInWorld() || !unit->IsAlive())
         return nullptr;
     if (BotManager::Instance().IsBot(unit->GetObjectGuid()) || sServerFacade.IsFriendlyTo(unit, bot))
         return nullptr;
-    if (!unit->IsVisibleForOrDetect(bot, bot->GetCamera().GetBody(), true))
+    if (!CanSeeOrDetectCompat(bot, unit))
         return nullptr;
     return unit;
 }
@@ -202,7 +187,7 @@ void RunTraceService::AttachListeners(PlayerbotAI* ai)
 {
     if (!ai || !ai->GetBot())
         return;
-    uint64_t const guid = ai->GetBot()->GetObjectGuid().GetRawValue();
+    uint64_t const guid = GuidKeyCompat(ai->GetBot()->GetObjectGuid());
     for (uint8 i = 0; i < static_cast<uint8>(BotState::BOT_STATE_ALL); ++i)
     {
         ai::Engine* engine = ai->GetEngineByState(static_cast<BotState>(i));
@@ -227,7 +212,7 @@ void RunTraceService::DetachAllListeners()
 {
     detachPending_ = false;
     for (uint64_t guid : attachedGuids_)
-        if (Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(guid)))
+        if (Player* bot = PlayerOfGuidKeyCompat(guid))
             DetachListeners(PlayerbotAIStorage::Instance().GetAI(bot));
     attachedGuids_.clear();
 }
@@ -279,7 +264,7 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
         return false;
     }
 
-    Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(params.anchorGuid));
+    Player* anchor = PlayerOfGuidKeyCompat(params.anchorGuid);
 
     header_ = RunTrace::Header();
     header_.runId = params.runId;
@@ -538,7 +523,7 @@ void RunTraceService::NoteBotEvent(PlayerbotAI* ai, std::string const& eventName
     bool const money = eventName == "LootMoney";
     if (!item && !money)
         return;
-    uint64_t const guid = ai->GetBot()->GetObjectGuid().GetRawValue();
+    uint64_t const guid = GuidKeyCompat(ai->GetBot()->GetObjectGuid());
     if (!scopeGuids_.Contains(guid))
         return;
     RunTrace::Event e;
@@ -562,7 +547,7 @@ void RunTraceService::NoteSpellInterrupted(PlayerbotAI* ai, uint32_t spellId)
     if (!Active() || !worldMark_.IsCurrent() || !ai || !ai->GetBot())
         return;
     Player* bot = ai->GetBot();
-    uint64_t const guid = bot->GetObjectGuid().GetRawValue();
+    uint64_t const guid = GuidKeyCompat(bot->GetObjectGuid());
     if (!scopeGuids_.Contains(guid))
         return;
     RunTrace::Event e;
@@ -582,7 +567,7 @@ void RunTraceService::NoteSpellInterrupted(PlayerbotAI* ai, uint32_t spellId)
 // creature names come from the cached templates.
 void RunTraceService::RefreshContext()
 {
-    Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(anchorGuid_));
+    Player* anchor = PlayerOfGuidKeyCompat(anchorGuid_);
     if (!anchor)
         return;
     if (Map* map = anchor->FindMap())
@@ -605,7 +590,8 @@ void RunTraceService::RefreshContext()
         RunTrace::BossProgress boss;
         boss.entry = entry;
         CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-        boss.name = info && !info->name.empty() ? info->name : "Boss " + std::to_string(entry);
+        boss.name = info && !CreatureNameCompat(info).empty() ? CreatureNameCompat(info)
+                                                              : "Boss " + std::to_string(entry);
         bosses.push_back(std::move(boss));
     }
     digest_.NotePlan(ctx.planName, std::move(bosses));
@@ -629,7 +615,7 @@ void RunTraceService::CheckBossKills(std::vector<Player*> const& bots)
             if ((map = bot->FindMap()))
                 break;
         }
-        Unit* unit = map ? map->GetUnit(ObjectGuid(it->first)) : nullptr;
+        Unit* unit = map ? UnitInMapCompat(map, it->second.guid) : nullptr;
         if (unit && unit->IsInWorld() && !unit->IsAlive())
         {
             if (digest_.NoteBossKill(it->second.entry, elapsedMs_))
@@ -651,7 +637,7 @@ void RunTraceService::CheckBossKills(std::vector<Player*> const& bots)
 void RunTraceService::ResolveBots(std::vector<Player*>& bots)
 {
     bots.clear();
-    Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(anchorGuid_));
+    Player* anchor = PlayerOfGuidKeyCompat(anchorGuid_);
     if (!anchor)
         return;
 
@@ -677,9 +663,9 @@ void RunTraceService::ResolveBots(std::vector<Player*>& bots)
 
     std::vector<RunTrace::ScopeCandidate> candidates;
     candidates.reserve(found.size());
-    bool const online = ObjectAccessor::FindPlayer(ObjectGuid(requesterGuid_)) != nullptr;
+    bool const online = PlayerOfGuidKeyCompat(requesterGuid_) != nullptr;
     for (Player* member : found)
-        candidates.push_back({ member->GetObjectGuid().GetRawValue(),
+        candidates.push_back({ GuidKeyCompat(member->GetObjectGuid()),
             online && mayRecord_ && mayRecord_(requesterGuid_, member) });
     // mayRecord_ already includes the GameMaster exemption.
     for (size_t index : RunTrace::SelectScope(online, candidates))
@@ -701,7 +687,7 @@ void RunTraceService::Sample()
     static std::vector<uint64_t> scopeList;
     scopeList.clear();
     for (Player* bot : bots)
-        scopeList.push_back(bot->GetObjectGuid().GetRawValue());
+        scopeList.push_back(GuidKeyCompat(bot->GetObjectGuid()));
     scopeGuids_.Replace(scopeList);
     if (bots.empty())
     {
@@ -719,7 +705,7 @@ void RunTraceService::Sample()
 
     for (Player* bot : bots)
     {
-        uint64_t const guid = bot->GetObjectGuid().GetRawValue();
+        uint64_t const guid = GuidKeyCompat(bot->GetObjectGuid());
         PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
         AttachListeners(ai);
         attachedGuids_.insert(guid);
@@ -802,13 +788,13 @@ void RunTraceService::Sample()
         if (target.IsEmpty())
             if (Unit* victim = bot->GetVictim())
                 target = victim->GetObjectGuid();
-        s.target = target.GetRawValue();
+        s.target = GuidKeyCompat(target);
         s.casting = CurrentSpellId(bot);
         s.moving = sServerFacade.isMoving(bot);
         s.fire = HarmfulGroundAura(bot);
         if (!target.IsEmpty())
             if (Map* map = bot->FindMap())
-                if (Unit* targetUnit = map->GetUnit(target))
+                if (Unit* targetUnit = UnitInMapCompat(map, target))
                     if (targetUnit != bot && targetUnit->IsInWorld() && !sServerFacade.IsFriendlyTo(targetUnit, bot))
                         s.facing = FacingDegrees(bot, targetUnit);
         if (ai)
@@ -841,23 +827,22 @@ void RunTraceService::Sample()
     // Hostiles: what each bot fights, targets, or is attacked by.
     auto addHostile = [&](Player* bot, ObjectGuid guid)
     {
+        uint64_t const raw = GuidKeyCompat(guid);
         if (mobSamples.size() >= RunTrace::kMaxMobsPerFrame || guid.IsEmpty() ||
-            frameMobs.count(guid.GetRawValue()))
+            frameMobs.count(raw))
             return;
         Unit* unit = SeenHostile(bot, guid);
-        if (!unit || !frameMobs.insert(guid.GetRawValue()).second)
+        if (!unit || !frameMobs.insert(raw).second)
             return;
-        uint64_t const raw = guid.GetRawValue();
         if (bossGuids_.size() < RunTrace::kMaxBosses * 2 && !bossGuids_.count(raw))
         {
             // The plan's boss, a boss of a plan on this map, or any world-boss rank unit: its death is a boss kill.
             Creature const* creature = unit->ToCreature();
-            CreatureInfo const* info = creature ? creature->GetCreatureInfo() : nullptr;
             uint32_t const entry = unit->GetEntry();
-            if (digest_.IsTrackedBoss(entry, info && info->rank == CREATURE_ELITE_WORLDBOSS))
+            if (digest_.IsTrackedBoss(entry, creature && CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS))
             {
                 digest_.NoteSeenBoss(entry, unit->GetName());
-                bossGuids_[raw] = BossUnit{ entry, bot->GetMapId(), bot->GetInstanceId() };
+                bossGuids_[raw] = BossUnit{ entry, bot->GetMapId(), bot->GetInstanceId(), guid };
             }
         }
         if (seenMobs_.size() < RunTrace::kMaxRegistryMobs && seenMobs_.insert(raw).second)
@@ -868,11 +853,10 @@ void RunTraceService::Sample()
             mob.name = unit->GetName();
             mob.level = unit->GetLevel();
             if (Creature* creature = unit->ToCreature())
-                if (CreatureInfo const* info = creature->GetCreatureInfo())
-                {
-                    mob.rank = info->rank;
-                    mob.boss = info->rank == CREATURE_ELITE_WORLDBOSS;
-                }
+            {
+                mob.rank = CreatureRankCompat(creature);
+                mob.boss = mob.rank == CREATURE_ELITE_WORLDBOSS;
+            }
             ++counters_.mobs;
             Emit(builder_->BuildMobs(elapsedMs_, mob));
         }
@@ -882,7 +866,7 @@ void RunTraceService::Sample()
         m.x = unit->GetPositionX();
         m.y = unit->GetPositionY();
         m.z = unit->GetPositionZ();
-        m.target = unit->GetTargetGuid().GetRawValue();
+        m.target = GuidKeyCompat(unit->GetTargetGuid());
         m.casting = CurrentSpellId(unit);
         m.inCombat = unit->IsInCombat();
         Creature* creature = unit->ToCreature();
@@ -890,17 +874,17 @@ void RunTraceService::Sample()
         m.cc = unit->HasUnitState(UNIT_STAT_STUNNED | UNIT_STAT_CONFUSED | UNIT_STAT_FLEEING | UNIT_STAT_ROOT);
         if (unit->IsInCombat() && unit->CanHaveThreatList())
         {
-            ThreatList const& list = unit->GetThreatManager().getThreatList();
+            std::vector<std::pair<float, uint64_t>> entries;
             float top = 0.0f;
-            for (HostileReference const* ref : list)
-                if (ref && ref->getThreat() > top)
-                    top = ref->getThreat();
+            ForEachThreatListEntryCompat(unit, [&](Unit* threatener, float threat)
+            {
+                if (!threatener)
+                    return;
+                top = std::max(top, threat);
+                entries.emplace_back(threat, GuidKeyCompat(threatener->GetObjectGuid()));
+            });
             if (top > 0.0f)
             {
-                std::vector<std::pair<float, uint64_t>> entries;
-                for (HostileReference const* ref : list)
-                    if (ref)
-                        entries.emplace_back(ref->getThreat(), ref->getUnitGuid().GetRawValue());
                 std::sort(entries.begin(), entries.end(),
                     [](std::pair<float, uint64_t> const& a, std::pair<float, uint64_t> const& b) { return a.first > b.first; });
                 for (size_t i = 0; i < entries.size() && i < RunTrace::kThreatTopN; ++i)

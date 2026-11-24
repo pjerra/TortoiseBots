@@ -1,0 +1,568 @@
+/* Dashboard UI v2 (profile). Rules are scoped to one skin, so v1 stays untouched
+   (the model stage carries a v1 guard because a mounting script may unhide it). */
+
+/* ---------- Drawer shell ---------- */
+html[data-ui="v2"] .profile-backdrop {
+  background: rgba(3, 4, 10, .62);
+}
+
+html[data-ui="v2"] .profile-drawer {
+  width: min(1240px, 96vw);
+  background:
+    radial-gradient(120% 55% at 50% 0%, rgba(232, 196, 106, .07), rgba(7, 9, 19, 0) 60%),
+    linear-gradient(165deg, #0b0d1a 0%, #070913 48%, #05060d 100%);
+  border-left: 1px solid var(--v2-line-strong);
+  box-shadow: -24px 0 64px rgba(0, 0, 0, .72), inset 1px 0 0 rgba(232, 196, 106, .12);
+}
+
+html[data-ui="v2"] .profile-drawer.compact {
+  width: min(600px, 96vw);
+}
+
+/* Thin inner frame with gold corner brackets, drawn over the padding only. */
+html[data-ui="v2"] .profile-drawer::before,
+html[data-ui="v2"] .profile-drawer::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+html[data-ui="v2"] .profile-drawer::before {
+  border: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] .profile-drawer::after {
+  background:
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left top / 18px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left top / 1px 18px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right top / 18px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right top / 1px 18px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left bottom / 18px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) left bottom / 1px 18px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right bottom / 18px 1px no-repeat,
+    linear-gradient(var(--v2-gold), var(--v2-gold)) right bottom / 1px 18px no-repeat;
+  opacity: .8;
+}
+
+/* ---------- Header: display name, chips, spec ---------- */
+html[data-ui="v2"] .profile-top {
+  position: relative;
+  justify-content: center;
+  text-align: center;
+  padding: 22px 96px 12px;
+  border-bottom: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] .profile-id {
+  min-width: 0;
+}
+
+html[data-ui="v2"] .armory-name {
+  font-family: var(--v2-font-display);
+  font-size: 2.1rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .8);
+}
+
+html[data-ui="v2"] .armory-subtitle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: .82rem;
+}
+
+html[data-ui="v2"] .armory-sub-sep {
+  display: none;
+}
+
+html[data-ui="v2"] .armory-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  background: rgba(232, 196, 106, .06);
+  color: var(--v2-text);
+  font-size: .68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] .armory-chip-level {
+  color: var(--v2-gold);
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .armory-chip-zone {
+  color: var(--v2-dim);
+  background: transparent;
+}
+
+html[data-ui="v2"] .armory-spec {
+  margin-top: 8px;
+  font-family: var(--v2-font-display);
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--v2-gold);
+}
+
+html[data-ui="v2"] .profile-actions {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+}
+
+html[data-ui="v2"] .profile-drawer .badge {
+  padding: 2px 8px;
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  background: rgba(232, 196, 106, .06);
+  color: var(--v2-dim);
+  font-size: .62rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] .profile-drawer .badge-success {
+  color: var(--v2-green);
+  border-color: rgba(85, 208, 120, .4);
+  background: rgba(85, 208, 120, .1);
+}
+
+html[data-ui="v2"] .profile-drawer .badge-warn {
+  color: var(--v2-gold);
+  border-color: var(--v2-line-strong);
+}
+
+html[data-ui="v2"] .profile-drawer .badge-error {
+  color: var(--v2-red);
+  border-color: rgba(229, 83, 75, .45);
+  background: rgba(229, 83, 75, .1);
+}
+
+/* ---------- Health / power / XP strip ---------- */
+html[data-ui="v2"] .profile-meta {
+  padding: 12px 30px 16px;
+  align-items: center;
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-wrap {
+  height: 15px;
+  background: #04050a;
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .9);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-text {
+  font-family: var(--v2-font-ui);
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px #000, 0 0 8px rgba(0, 0, 0, .8);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-hp {
+  background: linear-gradient(90deg, #123f1e, #2f7d45 55%, #55d078);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-mana {
+  background: linear-gradient(90deg, #10244d, #1e4fa0 55%, #4a8cff);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-rage {
+  background: linear-gradient(90deg, #4d1210, #b23b32 60%, #e5534b);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-energy {
+  background: linear-gradient(90deg, #4d3a10, #b08a2e 60%, #e8c46a);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-bar-xp {
+  background: linear-gradient(90deg, #6b4a12, #b07a26 55%, #e8c46a);
+}
+
+html[data-ui="v2"] .armory-head-right {
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .armory-ilvl {
+  color: var(--v2-gold);
+  letter-spacing: .06em;
+}
+
+html[data-ui="v2"] .armory-played {
+  color: var(--v2-faint);
+  font-size: .66rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* ---------- Sub-tabs as framed buttons ---------- */
+html[data-ui="v2"] .profile-drawer .armory-subtabs {
+  gap: 8px;
+  padding: 0 30px 14px;
+  border-bottom: 1px solid var(--v2-line);
+}
+
+html[data-ui="v2"] .profile-drawer .armory-subtab {
+  min-height: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  background: rgba(9, 10, 20, .7);
+  color: var(--v2-dim);
+  font-family: var(--v2-font-display);
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+
+html[data-ui="v2"] .profile-drawer .armory-subtab:hover {
+  border-color: var(--v2-line-strong);
+  background: rgba(232, 196, 106, .07);
+  color: var(--v2-gold-light);
+}
+
+html[data-ui="v2"] .profile-drawer .armory-subtab.active {
+  border-color: var(--v2-gold);
+  background: linear-gradient(180deg, rgba(232, 196, 106, .2), rgba(232, 196, 106, .05));
+  color: var(--v2-gold-light);
+  box-shadow: inset 0 0 0 1px rgba(232, 196, 106, .15), 0 0 14px rgba(232, 196, 106, .12);
+}
+
+/* ---------- Body and panels ---------- */
+html[data-ui="v2"] .profile-body {
+  padding: 20px 30px 48px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--v2-gold-deep) transparent;
+}
+
+html[data-ui="v2"] .profile-drawer .section-label {
+  color: var(--v2-gold);
+  font-size: .66rem;
+  letter-spacing: .16em;
+}
+
+html[data-ui="v2"] .profile-drawer .section-label::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 1px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--v2-gold);
+}
+
+html[data-ui="v2"] .profile-drawer .kv-card,
+html[data-ui="v2"] .profile-drawer .armory-stat-card {
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(232, 196, 106, .045), rgba(0, 0, 0, 0) 45%), var(--v2-panel-solid);
+}
+
+html[data-ui="v2"] .profile-drawer .kv-row {
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(232, 196, 106, .08);
+}
+
+html[data-ui="v2"] .profile-drawer .kv-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-ui="v2"] .profile-drawer .kv-row > span:first-child {
+  color: var(--v2-dim);
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] .profile-drawer .stat-card-title {
+  color: var(--v2-text);
+  font-family: var(--v2-font-display);
+  letter-spacing: .06em;
+  border-bottom-color: var(--v2-line);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-card-row {
+  border-bottom: 1px solid rgba(232, 196, 106, .07);
+}
+
+html[data-ui="v2"] .profile-drawer .stat-card-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-ui="v2"] .profile-drawer .offline-note {
+  border: 1px solid var(--v2-line);
+  border-left: 3px solid var(--v2-gold);
+  border-radius: 2px;
+  background: rgba(232, 196, 106, .06);
+  color: var(--v2-dim);
+}
+
+html[data-ui="v2"] .profile-drawer .empty-hint {
+  color: var(--v2-faint);
+}
+
+/* ---------- Paperdoll: gear cards, centre model stage, weapons ---------- */
+html[data-ui="v2"] .armory-paperdoll-section {
+  width: 760px;
+  min-width: 760px;
+  max-width: 760px;
+}
+
+html[data-ui="v2"] .armory-gear {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) minmax(0, 1fr);
+  gap: 10px 14px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+html[data-ui="v2"] .armory-gear-col {
+  gap: 8px;
+}
+
+/* Mount point for the 3D model viewer; hidden by the hidden attribute in v1. */
+html[data-ui="v1"] .v2-model-stage {
+  display: none !important;
+}
+
+html[data-ui="v2"] .v2-model-stage {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  min-height: 470px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background:
+    radial-gradient(60% 46% at 50% 34%, rgba(232, 196, 106, .16), rgba(30, 36, 62, .28) 52%, rgba(5, 6, 13, .92) 82%),
+    #080a14;
+  box-shadow: inset 0 0 44px rgba(0, 0, 0, .65), 0 0 0 1px rgba(232, 196, 106, .05);
+}
+
+html[data-ui="v2"] .profile-drawer .gear-slot-row {
+  min-height: 50px;
+  padding: 7px 10px;
+  gap: 10px;
+  border: 1px solid var(--v2-line);
+  border-left: 3px solid var(--v2-gold);
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(232, 196, 106, .09), rgba(232, 196, 106, .02) 42%, rgba(8, 9, 18, .6));
+  transition: border-color .15s ease, background .15s ease;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-slot-row:hover {
+  border-color: var(--v2-line-strong);
+  border-left-color: var(--v2-gold-light);
+  background: linear-gradient(90deg, rgba(232, 196, 106, .14), rgba(232, 196, 106, .03) 48%, rgba(8, 9, 18, .7));
+}
+
+html[data-ui="v2"] .profile-drawer .gear-icon-box {
+  width: 38px;
+  height: 38px;
+  border-width: 1px;
+  border-radius: 2px;
+  background: #05060b;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-slot-row .gear-info {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The slot name sits above the item name, as a small spaced kicker. */
+html[data-ui="v2"] .profile-drawer .gear-slot-row .gear-subrow {
+  order: -1;
+  margin: 0 0 3px;
+  gap: 8px;
+  align-items: baseline;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-subrow > span:first-child {
+  color: var(--v2-gold-deep);
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-subrow .mono {
+  display: none;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-subrow .gear-ilvl {
+  color: var(--v2-faint);
+  font-size: .62rem;
+  letter-spacing: .06em;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-name {
+  font-size: .82rem;
+  letter-spacing: .01em;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-slot-row.gear-empty {
+  opacity: 1;
+  border-left-color: rgba(232, 196, 106, .28);
+  background: rgba(9, 10, 20, .45);
+}
+
+html[data-ui="v2"] .profile-drawer .gear-empty .gear-slot-label {
+  color: var(--v2-gold-deep);
+}
+
+html[data-ui="v2"] .profile-drawer .gear-empty .gear-empty-text {
+  color: var(--v2-faint);
+  font-style: italic;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-empty .gear-icon-box {
+  border-color: var(--v2-line);
+  opacity: .7;
+}
+
+html[data-ui="v2"] .armory-weapons {
+  width: min(100%, 540px);
+  margin: 16px auto 20px;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+html[data-ui="v2"] .profile-drawer .gear-weapon-item {
+  min-height: 118px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px 8px;
+  border: 1px solid var(--v2-line);
+  border-top: 2px solid var(--v2-gold);
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(232, 196, 106, .08), rgba(0, 0, 0, 0) 55%), var(--v2-panel-solid);
+}
+
+html[data-ui="v2"] .profile-drawer .gear-weapon-item .gear-icon-box {
+  width: 48px;
+  height: 48px;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-weapon-item .gear-info {
+  gap: 2px;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-weapon-item .gear-name {
+  order: -1;
+  font-size: .72rem;
+  line-height: 1.25;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-weapon-item .gear-subrow {
+  order: 0;
+  margin: 3px 0 0;
+  justify-content: center;
+}
+
+html[data-ui="v2"] .profile-drawer .gear-weapon-item .gear-enchant-text {
+  font-size: .62rem;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Narrow drawer ---------- */
+@container (max-width: 980px) {
+  html[data-ui="v2"] .armory-paperdoll-section {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  html[data-ui="v2"] .armory-gear {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Phone/compact: the portrait becomes a banner above the gear lists. */
+  html[data-ui="v2"] .v2-model-stage {
+    grid-column: 1;
+    grid-row: auto;
+    order: -1;
+    width: 100%;
+    min-height: 260px;
+  }
+}
+
+@container (max-width: 620px) {
+  html[data-ui="v2"] .profile-top {
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 16px 10px;
+  }
+
+  html[data-ui="v2"] .profile-actions {
+    position: static;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  html[data-ui="v2"] .armory-name {
+    font-size: 1.55rem;
+  }
+
+  html[data-ui="v2"] .profile-meta {
+    padding: 10px 16px 14px;
+  }
+
+  html[data-ui="v2"] .profile-drawer .armory-subtabs {
+    padding: 0 16px 12px;
+  }
+
+  html[data-ui="v2"] .profile-body {
+    padding: 16px 16px 40px;
+  }
+
+  html[data-ui="v2"] .armory-weapons {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  html[data-ui="v2"] .profile-drawer .gear-weapon-item {
+    min-height: 0;
+    padding: 8px 4px;
+  }
+
+  html[data-ui="v2"] .profile-drawer .gear-weapon-item .gear-icon-box {
+    width: 38px;
+    height: 38px;
+  }
+
+  html[data-ui="v2"] .armory-chip {
+    padding: 2px 7px;
+    font-size: .6rem;
+  }
+}
+
+@media (max-width: 900px) {
+  html[data-ui="v2"] .profile-drawer {
+    width: 100vw;
+  }
+}

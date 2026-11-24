@@ -177,3 +177,35 @@ inline constexpr uint32 SPELL_ID_PASSIVE_RESURRECTION_SICKNESS = 15007;
 #define TEXTEMOTE_NOD TEXT_EMOTE_NOD
 #define TEXTEMOTE_NO TEXT_EMOTE_NO
 #define TEXTEMOTE_OPENFIRE TEXT_EMOTE_OPENFIRE
+
+// The legacy bot log levels (T cmangos Log.h's enum). Only the bot's own "log level" value store reads them
+// (LogLevelValue/LogLevelAction); the engine never hands them to the core logger. Mapped in rising detail so
+// the reported words stay the same.
+#define LOG_LVL_MINIMAL LOG_LEVEL_DISABLED
+#define LOG_LVL_BASIC LOG_LEVEL_INFO
+#define LOG_LVL_DETAIL LOG_LEVEL_DEBUG
+#define LOG_LVL_DEBUG LOG_LEVEL_TRACE
+
+// AreaTableEntry's team bits: T `AreaTableEntry::Team`, F `FactionGroupMask` (the same 2 and 4 bits,
+// TbCompat_C.h AreaTeamCompat). The names are the legacy ones the bot prints.
+#ifndef FACTION_GROUP_MASK_ALLIANCE
+#define FACTION_GROUP_MASK_ALLIANCE 0x4
+#endif
+#ifndef FACTION_GROUP_MASK_HORDE
+#define FACTION_GROUP_MASK_HORDE 0x2
+#endif
+
+// The two 1.12 game-object types ForeverCore marks as unused (same numbers: 20 auction house, 28 lottery
+// kiosk). The debug GO reader prints their names; the core has no other names for them.
+#define GAMEOBJECT_TYPE_AUCTIONHOUSE GAMEOBJECT_TYPE_DO_NOT_USE
+#define GAMEOBJECT_TYPE_LOTTERY_KIOSK GAMEOBJECT_TYPE_DO_NOT_USE_2
+
+// The 1.12 spell "delayed" state (cast bar finished, waiting for the launch) is ForeverCore's LAUNCHED.
+#define SPELL_STATE_DELAYED SPELL_STATE_LAUNCHED
+
+// PlayerMenu: T `CloseGossip()`, F `SendCloseGossip()` (the same packet to the client).
+#define CloseGossip SendCloseGossip
+
+// The 1.12 spirit-healer NPC flag (0x20) is ForeverCore's UNIT_NPC_FLAG_SPIRIT_HEALER (0x4000). The
+// spirit-guide and outdoor-PvP flags have no ForeverCore names; their readers skip them there.
+#define UNIT_NPC_FLAG_SPIRITHEALER UNIT_NPC_FLAG_SPIRIT_HEALER

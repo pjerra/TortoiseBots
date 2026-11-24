@@ -15,7 +15,8 @@
 # Scenarios (each one a boot, because every case is a boot-time decision):
 #   a  no travel tables        the guard refuses the queries (never sends one to a missing table), the graph stays empty,
 #                              one line; travel has no graph and the destination build still runs
-#   b  empty tables            one line "dataset is empty", no startup graph generation, no abort
+#   b  empty tables            one line "dataset is empty", then the first-boot generation builds and saves the graph; a
+#                              second boot loads the saved rows and does not generate again
 #   c  two-continent graph     five nodes on maps 0 and 1: a link to a missing node, a "walk" between the two maps (both refused
 #                              at load and counted), a zeppelin (loaded, not a route); the log line of what each node reaches
 #                              shows no continent reaching the other; the server stays up
@@ -95,11 +96,12 @@ stop_server() {
 }
 
 boot() {
+    local tries=${1:-120}
     : > "$LOG"
     : > "$BOTLOG"
     ( cd "$RUN" && ./world.sh start ) >/dev/null 2>&1
     local i
-    for i in $(seq 1 120); do
+    for i in $(seq 1 "$tries"); do
         grep -q "worldserver-daemon) ready..." "$LOG" && return 0
         docker inspect -f '{{.State.Running}}' "$SERVER" 2>/dev/null | grep -q true || return 1
         sleep 2
@@ -134,13 +136,29 @@ scenario_a() {
 }
 
 scenario_b() {
-    printf 'scenario b: empty travel tables\n'
+    printf 'scenario b: empty travel tables build the graph, a second boot loads it\n'
     if ! create_empty; then fail "could not create the empty schema"; return; fi
-    if ! boot; then fail "boot did not come up"; tail -5 "$LOG"; return; fi
+    # The first boot seeds nodes, links them over every map's navmesh, prunes, costs and saves. Turtle took about four
+    # minutes for this on a desktop; allow twenty here.
+    if ! boot 600; then fail "boot did not come up"; tail -5 "$LOG"; return; fi
     common_checks
-    has 'travel-node dataset is empty or unavailable; skipping startup graph generation' "one line for the empty dataset"
+    has 'travel-node dataset is empty; node seeding starts at startup, walk links follow synchronously' "one line for the empty dataset"
     hasnt 'world table `ai_playerbot_travelnode` is missing' "the tables exist, so the guard does not refuse"
-    hasnt 'Calculating mapoffset' "no startup graph generation"
+    has '\-Generating nodes' "the node seeding ran"
+    has 'TortoiseBots: travel walk links started for [0-9]+ nodes \([0-9]+ candidate pairs\)\.' "the walk linking started"
+    has 'TortoiseBots: travel walk links done:' "the walk linking finished"
+    has 'Calculating mapoffset' "the graph's derived data was built"
+    local nodes; nodes=$(sql "SELECT COUNT(*) FROM ai_playerbot_travelnode")
+    if [ "${nodes:-0}" -gt 0 ]; then pass "the generated nodes were saved ($nodes rows)"; else fail "no node row was saved"; fi
+    local links; links=$(sql "SELECT COUNT(*) FROM ai_playerbot_travelnode_link")
+    if [ "${links:-0}" -gt 0 ]; then pass "the generated links were saved ($links rows)"; else fail "no link row was saved"; fi
+    stop_server
+    # Second boot: the saved graph loads, nothing regenerates.
+    if ! boot; then fail "the second boot did not come up"; tail -5 "$LOG"; return; fi
+    common_checks
+    has '>> Loaded [0-9]+ travelNodes\.' "the saved nodes were loaded"
+    hasnt 'travel walk links started' "nothing was regenerated"
+    hasnt 'travel-node dataset is empty' "the graph is not empty"
     stop_server
 }
 

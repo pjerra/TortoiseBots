@@ -1,5 +1,8 @@
 #include "TbDashboard.h"
 #include "TbBotMgr.h"
+#include "dash/TbDashEndpoint.h"
+#include "dash/TbDashboardStatePure.h"
+#include "host/TbEngineBrain.h"
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
@@ -27,13 +30,16 @@
 #include "UpdateTime.h"
 #include "World.h"
 #include "WorldSession.h"
+#include "runtime/PlayerLagWindow.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/udp.hpp>
 #include <ctime>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <unordered_map>
 #include <list>
 #include <map>
@@ -71,11 +77,37 @@ struct Sender
     uint32 serverInfoSinceMs = 0;
     uint32 statsSinceMs = 0;
     bool serverInfoSent = false;
+    TortoiseBots::PlayerLagWindow tickWindow{ 30000 };
     std::vector<std::string> events;   // BOT_EVENTS rows waiting for the next cycle
-    struct Track { float x = 0, y = 0; uint32 map = 0; time_t since = 0; time_t lastStuck = 0; bool alive = true; };
+    struct Track
+    {
+        float x = 0, y = 0;
+        uint32 map = 0;
+        time_t since = 0;
+        time_t lastStuck = 0;
+        bool alive = true;
+        // Activity clock (world milliseconds): last observable work, the start of a churn-only run, the last fight and
+        // the last XP/level change. Read by the macro-state refinement.
+        uint32 lastActivityMs = 0, churnSinceMs = 0, lastCombatMs = 0, lastXpMs = 0;
+        uint32 lastXp = 0, lastLevel = 0;
+        bool seen = false;
+        std::string lastActionName;
+        uint8 state = TortoiseBots::dashboard_state::Idle;
+        // A hostile combat target that stays out of reach or line of sight; the clock restarts when the target changes.
+        ObjectGuid unreachableTarget;
+        uint32 unreachableDurationMs = 0;
+        bool unreachableReported = false;
+        uint32 lastUnreachableReportMs = 0;
+    };
     std::unordered_map<ObjectGuid, Track> track;
+    // Rolling macro-state histogram: 90 buckets of 2 s, one column per state, so the ratios describe the last 3 min.
+    uint64 stateWindow[90][TortoiseBots::dashboard_state::StateCount] = {};
+    size_t stateBucketIndex = 0;
+    uint32 stateBucketElapsedMs = 0;
     struct BrainInfo { std::string role, combat, nonCombat, engine, state; };
     std::unordered_map<ObjectGuid, BrainInfo> brains;   // refreshed with BOT_STATS, read by every roster row
+    struct ActionFailure { uint32 firstMs = 0, lastReportMs = 0, count = 0; bool reported = false; };
+    std::unordered_map<std::string, ActionFailure> actionFailures;   // "guid|action" -> the current 2 s window
 };
 
 // A bot whose position has not changed for this long while its master is far (same map) is reported STUCK, at most once per StuckRepeatSecs.
@@ -120,6 +152,17 @@ char const* Loc(LocalizedString const* str)
     return text ? text : "";
 }
 
+uint32 ParseItemId(std::string const& s)
+{
+    if (s.empty())
+        return 0;
+    char* end = nullptr;
+    unsigned long v = std::strtoul(s.c_str(), &end, 10);
+    if (end == s.c_str() || v == 0 || v > 0x7FFFFFFF)
+        return 0;
+    return uint32(v);
+}
+
 // Hooks run on the map threads (MapUpdate.Threads > 1) while the feed cycle runs on the world thread: one lock over
 // the module's shared state (events, tracked bots, fights).
 std::mutex g_feedLock;
@@ -153,15 +196,28 @@ char const* PowerName(Powers power)
     }
 }
 
-char const* StateOf(Player* bot)
+bool IsCasting(Player* bot)
 {
-    if (!bot->IsAlive())
-        return "dead";
-    if (bot->IsInCombat())
-        return "combat";
-    if (bot->isMoving())
-        return "moving";
-    return "idle";
+    return bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) || bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+}
+
+// The instant part of the macro state; the idle clock refines it (dashboard_state::RefineIdle).
+uint8 BaseMacroState(Player* bot, TortoiseBots::engine::Telemetry const& engineState)
+{
+    using namespace TortoiseBots::dashboard_state;
+    if (!bot->IsAlive() || engineState.deadState)
+        return Dead;
+    if (bot->IsInCombat() || engineState.combatState)
+        return Combat;
+    if (bot->isMoving() || (bot->GetMotionMaster() && (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE ||
+            bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE ||
+            bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE)))
+        return Moving;
+    if (bot->HasPlayerFlag(PLAYER_FLAGS_RESTING))
+        return Resting;
+    if (bot->HasUnitFlag(UNIT_FLAG_LOOTING) || IsCasting(bot) || bot->GetStandState() == UNIT_STAND_STATE_SIT)
+        return Busy;
+    return Idle;
 }
 
 // The bot on the client's own world map: the UiMap the core assigns to its position and where on that map's art it stands (0..100 %).
@@ -248,7 +304,8 @@ void QueueEvent(Player* bot, char const* event, std::string const& info1, std::s
     s.events.push_back(ev.str());
 }
 
-void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details);
+void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details,
+    std::string const& strategy = "", std::string const& lastAction = "");
 
 void Send(std::string const& datagram)
 {
@@ -257,14 +314,16 @@ void Send(std::string const& datagram)
     s.socket->send_to(boost::asio::buffer(datagram), s.target, 0, ec);
 }
 
-void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details)
+void SendAnomaly(Player* bot, char const* type, char const* severity, std::string const& target, std::string const& details,
+    std::string const& strategy, std::string const& lastAction)
 {
     std::ostringstream a;
     a << "{\"ts\":" << GameTime::GetGameTime() << ",\"type\":\"" << type << "\",\"severity\":\"" << severity << "\",\"bot\":\""
       << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter() << ",\"class\":\"" << ClassName(bot->GetClass())
       << "\",\"level\":" << uint32(bot->GetLevel()) << ",\"map\":" << bot->GetMapId() << ",\"zone\":" << bot->GetZoneId()
       << ",\"pos\":{\"x\":" << bot->GetPositionX() << ",\"y\":" << bot->GetPositionY() << ",\"z\":" << bot->GetPositionZ()
-      << "},\"target\":\"" << Escape(target) << "\",\"strategy\":\"\",\"last_action\":\"\",\"details\":\"" << Escape(details) << "\"}";
+      << "},\"target\":\"" << Escape(target) << "\",\"strategy\":\"" << Escape(strategy) << "\",\"last_action\":\"" << Escape(lastAction)
+      << "\",\"details\":\"" << Escape(details) << "\"}";
     Send(a.str());
 }
 
@@ -278,24 +337,39 @@ void SendServerInfo()
        << "\",\"core_date\":\"" << Escape(GitRevision::GetDate()) << "\",\"uptime\":" << GameTime::GetUptime()
        << ",\"max_level\":" << sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL)
        << ",\"rates\":{\"xp_kill\":" << sWorld->getRate(RATE_XP_KILL) << ",\"xp_quest\":" << sWorld->getRate(RATE_XP_QUEST)
-       << ",\"drop_money\":" << sWorld->getRate(RATE_DROP_MONEY) << ",\"reputation\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
+       << ",\"drop_money\":" << sWorld->getRate(RATE_DROP_MONEY) << ",\"rep_gain\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
+       << ",\"reputation\":" << sWorld->getRate(RATE_REPUTATION_GAIN)
        << ",\"xp_explore\":" << sWorld->getRate(RATE_XP_EXPLORE) << ",\"xp_bg_kill\":" << sWorld->getRate(RATE_XP_BG_KILL) << ",\"honor\":" << sWorld->getRate(RATE_HONOR)
+       << ",\"drop_poor\":" << sWorld->getRate(RATE_DROP_ITEM_POOR) << ",\"drop_uncommon\":" << sWorld->getRate(RATE_DROP_ITEM_UNCOMMON)
        << ",\"drop_item_normal\":" << sWorld->getRate(RATE_DROP_ITEM_NORMAL) << ",\"drop_item_rare\":" << sWorld->getRate(RATE_DROP_ITEM_RARE)
-       << ",\"drop_item_epic\":" << sWorld->getRate(RATE_DROP_ITEM_EPIC) << ",\"rest_ingame\":" << sWorld->getRate(RATE_REST_INGAME)
-       << ",\"skill_discovery\":" << sWorld->getRate(RATE_SKILL_DISCOVERY) << "}"
+       << ",\"drop_item_epic\":" << sWorld->getRate(RATE_DROP_ITEM_EPIC) << ",\"drop_legendary\":" << sWorld->getRate(RATE_DROP_ITEM_LEGENDARY)
+       << ",\"rest_ingame\":" << sWorld->getRate(RATE_REST_INGAME)
+       << ",\"skill_discovery\":" << sWorld->getRate(RATE_SKILL_DISCOVERY);
+    if (TortoiseBots::engine::ConfigReady())
+        ss << ",\"bot_xp_mult\":" << TortoiseBots::engine::BotXpRate();
+    ss << "}"
        << ",\"bots\":{\"enabled\":\"" << (mgr.Enabled() ? 1 : 0) << "\",\"online\":" << mgr.Count()
        << ",\"engine_by_default\":\"" << (sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false) ? 1 : 0)
-       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dashboard_interval_ms\":" << s.intervalMs << "}"
-       << ",\"diagnostics\":{\"core\":\"ForeverCore\",\"core_branch\":\"" << Escape(GitRevision::GetBranch()) << "\"}}";
+       << "\",\"master_grace_s\":" << mgr.MasterGraceSeconds() << ",\"dashboard_interval_ms\":" << s.intervalMs;
+    std::string const engineBots = TortoiseBots::engine::ServerBotsJson();
+    if (!engineBots.empty())
+        ss << ',' << engineBots;
+    ss << "},\"diagnostics\":{\"core\":\"ForeverCore\",\"core_branch\":\"" << Escape(GitRevision::GetBranch()) << "\"";
+    std::string const engineDiagnostics = TortoiseBots::engine::ServerDiagnosticsJson();
+    if (!engineDiagnostics.empty())
+        ss << ',' << engineDiagnostics;
+    ss << "}}";
     Send(ss.str());
 }
 
 // Deaths come from the kill hook; this catches the other ones (fall, drowning, a player) and STUCK.
-void TrackBots(std::vector<Player*> const& bots)
+void TrackBots(std::vector<Player*> const& bots, std::unordered_map<ObjectGuid, TortoiseBots::engine::Telemetry> const& telemetry)
 {
+    using namespace TortoiseBots::dashboard_state;
     Sender& s = Get();
     TortoiseBots::BotMgr& mgr = TortoiseBots::BotMgr::Instance();
     time_t const now = GameTime::GetGameTime();
+    uint32 const nowMs = GameTime::GetGameTimeMS();
     std::unordered_map<ObjectGuid, Sender::Track> next;
     for (Player* bot : bots)
     {
@@ -304,6 +378,9 @@ void TrackBots(std::vector<Player*> const& bots)
             t = itr->second;
         else
             t.since = now;
+        auto const engineItr = telemetry.find(bot->GetGUID());
+        static TortoiseBots::engine::Telemetry const noEngine;
+        TortoiseBots::engine::Telemetry const& engineState = engineItr != telemetry.end() ? engineItr->second : noEngine;
         bool const alive = bot->IsAlive();
         if (t.alive && !alive)
         {
@@ -312,11 +389,15 @@ void TrackBots(std::vector<Player*> const& bots)
             QueueEvent(bot, "BotDeath", "", "");
         }
         t.alive = alive;
-        if (bot->GetMapId() != t.map || std::abs(bot->GetPositionX() - t.x) > 1.0f || std::abs(bot->GetPositionY() - t.y) > 1.0f)
-        {
-            t.x = bot->GetPositionX(); t.y = bot->GetPositionY(); t.map = bot->GetMapId(); t.since = now;
-        }
-        else if (alive && now - t.since >= StuckSecs && now - t.lastStuck >= StuckRepeatSecs)
+
+        float const dx = bot->GetPositionX() - t.x;
+        float const dy = bot->GetPositionY() - t.y;
+        bool const moved = dx * dx + dy * dy >= 0.25f;
+        bool const mapChanged = bot->GetMapId() != t.map;
+        if (mapChanged || moved)
+            t.since = now;
+        t.x = bot->GetPositionX(); t.y = bot->GetPositionY(); t.map = bot->GetMapId();
+        if (!mapChanged && !moved && alive && now - t.since >= StuckSecs && now - t.lastStuck >= StuckRepeatSecs)
         {
             Player* master = ObjectAccessor::FindConnectedPlayer(mgr.MasterOf(bot->GetGUID()));
             if (master && master->GetMapId() == bot->GetMapId() && master->GetDistance(bot) > StuckMasterDist)
@@ -326,11 +407,108 @@ void TrackBots(std::vector<Player*> const& bots)
                 t.lastStuck = now;
             }
         }
+
+        bool const fresh = !t.seen;
+        bool const actionChanged = !engineState.lastAction.empty() && engineState.lastAction != t.lastActionName;
+        bool const progress = moved || bot->HasUnitFlag(UNIT_FLAG_LOOTING) || IsCasting(bot) || bot->GetStandState() == UNIT_STAND_STATE_SIT;
+        bool const churn = actionChanged || !engineState.travelPurpose.empty();
+        if (!engineState.lastAction.empty())
+            t.lastActionName = engineState.lastAction;
+        if (progress)
+            t.churnSinceMs = 0;
+        else if (churn && t.churnSinceMs == 0)
+            t.churnSinceMs = nowMs;
+        if (progress || churn)
+            t.lastActivityMs = nowMs;
+        // A freshly seen bot has no past: its idle clock starts expired instead of granting a 45 s grace window.
+        if (fresh && t.lastActivityMs == 0)
+            t.lastActivityMs = nowMs - IdleAfterMs;
+
+        uint8 const base = BaseMacroState(bot, engineState);
+        if (base == Combat)
+            t.lastCombatMs = nowMs;
+        uint32 const curXp = bot->GetXP();
+        uint32 const curLevel = bot->GetLevel();
+        if (t.seen && (curXp != t.lastXp || curLevel != t.lastLevel))
+            t.lastXpMs = nowMs;
+        t.lastXp = curXp;
+        t.lastLevel = curLevel;
+        if (base == Idle && (t.lastActivityMs == 0 || nowMs - t.lastActivityMs >= IdleAfterMs))
+            t.churnSinceMs = 0;
+        t.state = RefineIdle(base, nowMs, t.lastActivityMs, t.churnSinceMs, t.lastCombatMs, t.lastXpMs);
+
+        // A hostile combat target that stays more than 45 yd away or out of line of sight for 10 s is unreachable. The
+        // engine's own "current target" is judged, not the selection, which outlives the fight.
+        if (engineState.currentTarget != t.unreachableTarget)
+        {
+            t.unreachableTarget = engineState.currentTarget;
+            t.unreachableDurationMs = 0;
+            t.unreachableReported = false;
+        }
+        if (t.state == Combat && engineState.combatState && !engineState.currentTarget.IsEmpty() && engineState.targetHostile)
+        {
+            bool const unreachable = engineState.targetDistance > 45.0f || !engineState.targetInLos;
+            if (unreachable)
+            {
+                t.unreachableDurationMs += s.intervalMs;
+                bool const due = !t.unreachableReported || (nowMs - t.lastUnreachableReportMs) >= 30000;
+                if (t.unreachableDurationMs >= 10000 && due)
+                {
+                    t.unreachableReported = true;
+                    t.lastUnreachableReportMs = nowMs;
+                    std::ostringstream details;
+                    details << "Combat target '" << engineState.currentTargetName << "' unreachable / out of LoS for "
+                            << (t.unreachableDurationMs / 1000.0f) << "s (dist=" << std::fixed << std::setprecision(1)
+                            << engineState.targetDistance << ", inLos=" << (engineState.targetInLos ? "true" : "false") << ")";
+                    std::string activeStrategy;
+                    TortoiseBots::engine::Telemetry detail;
+                    if (TortoiseBots::engine::ReadTelemetry(bot, detail, true))
+                        activeStrategy = detail.combatStrategies;
+                    SendAnomaly(bot, "UNREACHABLE_TARGET", "WARN", engineState.currentTargetName, details.str(),
+                        activeStrategy, engineState.lastAction);
+                }
+            }
+            else
+            {
+                t.unreachableDurationMs = 0;
+                t.unreachableReported = false;
+            }
+        }
+        else
+        {
+            t.unreachableDurationMs = 0;
+            t.unreachableReported = false;
+        }
+        t.seen = true;
         next[bot->GetGUID()] = t;
     }
     s.track.swap(next);
     for (auto itr = s.brains.begin(); itr != s.brains.end();)
         itr = s.track.count(itr->first) ? std::next(itr) : s.brains.erase(itr);
+}
+
+void AddStateTime(uint8 state, uint32 diff)
+{
+    using namespace TortoiseBots::dashboard_state;
+    if (state >= StateCount || diff == 0)
+        return;
+    Sender& s = Get();
+    // Fill whole 2 s buckets: a large snapshot (many bots) may span several, and only the newest 90 survive.
+    while (diff > 0)
+    {
+        uint32 const room = (s.stateBucketElapsedMs < 2000 ? 2000 - s.stateBucketElapsedMs : 1);
+        uint32 const add = std::min(room, diff);
+        s.stateWindow[s.stateBucketIndex][state] += add;
+        s.stateBucketElapsedMs += add;
+        diff -= add;
+        if (s.stateBucketElapsedMs >= 2000)
+        {
+            s.stateBucketElapsedMs -= 2000;
+            s.stateBucketIndex = (s.stateBucketIndex + 1) % 90;
+            for (size_t i = 0; i < StateCount; ++i)
+                s.stateWindow[s.stateBucketIndex][i] = 0;
+        }
+    }
 }
 
 // BOT_STATS: the live character sheet of every bot, the values the core itself computes for this client version (the profile's
@@ -850,28 +1028,57 @@ void SendCycle()
         if (Player* bot = mgr.FindBot(guid); bot && bot->IsInWorld() && bot->FindMap() && !bot->IsBeingTeleported())
             bots.push_back(bot);
 
-    TrackBots(bots);
+    // Real players ride the same roster: the sessions with a socket, never the headless bot sessions.
+    std::vector<Player*> players;
+    for (auto const& sessionEntry : sWorld->GetAllSessions())
+    {
+        WorldSession* session = sessionEntry.second;
+        if (!session || session->IsBot())
+            continue;
+        if (Player* player = session->GetPlayer(); player && player->IsInWorld())
+            players.push_back(player);
+    }
 
-    uint32 counts[7] = {}; // combat moving busy stalled resting dead idle
+    std::unordered_map<ObjectGuid, TortoiseBots::engine::Telemetry> telemetry;
+    telemetry.reserve(bots.size());
+    for (Player* bot : bots)
+        TortoiseBots::engine::ReadTelemetry(bot, telemetry[bot->GetGUID()]);
+
+    TrackBots(bots, telemetry);
+
     for (Player* bot : bots)
     {
-        std::string const state = StateOf(bot);
-        counts[state == "combat" ? 0 : state == "moving" ? 1 : state == "dead" ? 5 : 6]++;
+        auto const itr = s.track.find(bot->GetGUID());
+        if (itr != s.track.end())
+            AddStateTime(itr->second.state, s.intervalMs);
     }
-    auto ratio = [&](uint32 n) { return bots.empty() ? 0.0 : double(n) / double(bots.size()); };
 
-    uint32 const sessions = sWorld->GetActiveSessionCount();
-    uint32 const humans = sessions > bots.size() ? uint32(sessions - bots.size()) : 0;
+    uint64 totals[TortoiseBots::dashboard_state::StateCount] = {};
+    for (size_t bucket = 0; bucket < 90; ++bucket)
+        for (size_t state = 0; state < TortoiseBots::dashboard_state::StateCount; ++state)
+            totals[state] += s.stateWindow[bucket][state];
+    uint64 grandTotal = 0;
+    for (size_t state = 0; state < TortoiseBots::dashboard_state::StateCount; ++state)
+        grandTotal += totals[state];
+    auto ratio = [&](size_t state) { return grandTotal ? double(totals[state]) / double(grandTotal) : 0.0; };
+
+    uint32 const humans = uint32(players.size());
     uint64 const seq = ++s.seq;
     time_t const now = GameTime::GetGameTime();
-    size_t const total = bots.empty() ? 0 : (bots.size() + BotsPerBatch - 1) / BotsPerBatch;
+    size_t const rosterSize = bots.size() + players.size();
+    size_t const total = rosterSize == 0 ? 0 : (rosterSize + BotsPerBatch - 1) / BotsPerBatch;
 
     std::ostringstream hb;
+    TortoiseBots::PlayerLagWindow::Stats const tick = s.tickWindow.Compute();
     hb << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
        << ",\"type\":\"HEARTBEAT\",\"uptime\":" << GameTime::GetUptime() << ",\"diff\":" << sWorldUpdateTime.GetLastUpdateTime()
-       << ",\"humans\":" << humans << ",\"bots\":" << bots.size() << ",\"states\":{\"combat\":" << ratio(counts[0])
-       << ",\"moving\":" << ratio(counts[1]) << ",\"busy\":0,\"stalled\":0,\"resting\":0,\"dead\":" << ratio(counts[5])
-       << ",\"idle\":" << ratio(counts[6]) << "}}";
+       << ",\"diff_avg\":" << tick.avgMs << ",\"diff_worst\":" << tick.worstMs
+       << ",\"lag_p50\":" << tick.p50Ms << ",\"lag_p95\":" << tick.p95Ms
+       << ",\"window_secs\":180"
+       << ",\"humans\":" << humans << ",\"bots\":" << bots.size() << ",\"states\":{\"combat\":" << ratio(TortoiseBots::dashboard_state::Combat)
+       << ",\"moving\":" << ratio(TortoiseBots::dashboard_state::Moving) << ",\"busy\":" << ratio(TortoiseBots::dashboard_state::Busy)
+       << ",\"stalled\":" << ratio(TortoiseBots::dashboard_state::Stalled) << ",\"resting\":" << ratio(TortoiseBots::dashboard_state::Resting)
+       << ",\"dead\":" << ratio(TortoiseBots::dashboard_state::Dead) << ",\"idle\":" << ratio(TortoiseBots::dashboard_state::Idle) << "}}";
     Send(hb.str());
     // After the heartbeat: the dashboard drops a SERVER_INFO of a session its heartbeat has not opened yet.
     if (!s.serverInfoSent || s.serverInfoSinceMs >= 60000)
@@ -886,9 +1093,41 @@ void SendCycle()
         std::ostringstream ss;
         ss << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
            << ",\"type\":\"BOT_BATCH\",\"batch_index\":" << batch << ",\"total_batches\":" << total << ",\"bots\":[";
-        size_t const end = std::min(bots.size(), (batch + 1) * BotsPerBatch);
+        size_t const end = std::min(rosterSize, (batch + 1) * BotsPerBatch);
         for (size_t i = batch * BotsPerBatch; i < end; ++i)
         {
+            if (i != batch * BotsPerBatch)
+                ss << ',';
+            if (i >= bots.size())
+            {
+                // A real player: the same list/map fields, no bot-only detail.
+                Player* player = players[i - bots.size()];
+                Powers const power = player->GetPowerType();
+                std::string target;
+                if (Unit* unit = ObjectAccessor::GetUnit(*player, player->GetTarget()))
+                    target = unit->GetName();
+                Group* group = player->GetGroup();
+                TortoiseBots::engine::Telemetry const noEngine;
+                ss << "{\"name\":\"" << Escape(player->GetName()) << "\",\"guid\":" << player->GetGUID().GetCounter()
+                   << ",\"player\":true,\"kind\":\"player\",\"class\":\"" << ClassName(player->GetClass()) << "\",\"role\":\"\""
+                   << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
+                   << ",\"subgroup\":" << (group ? uint32(group->GetMemberGroup(player->GetGUID())) : 0)
+                   << (player->FindMap() && player->FindMap()->IsRaid() ? ",\"raid\":true" : "")
+                   << ",\"level\":" << uint32(player->GetLevel())
+                   << ",\"hp\":" << player->GetHealth() << ",\"max_hp\":" << player->GetMaxHealth()
+                   << ",\"power\":" << ShownPower(player, power, player->GetPower(power))
+                   << ",\"max_power\":" << ShownPower(player, power, player->GetMaxPower(power))
+                   << ",\"power_type\":\"" << PowerName(power) << "\""
+                   << ",\"map\":" << player->GetMapId() << ",\"zone\":" << player->GetZoneId() << ",\"instance\":" << player->GetInstanceId()
+                   << ",\"x\":" << player->GetPositionX() << ",\"y\":" << player->GetPositionY() << ",\"z\":" << player->GetPositionZ()
+                   << ",\"o\":" << player->GetOrientation()
+                   << ",\"target\":\"" << Escape(target) << "\",\"strategy\":\"\",\"state\":\""
+                   << TortoiseBots::dashboard_state::Name(BaseMacroState(player, noEngine)) << "\""
+                   << ",\"xp\":" << player->GetXP() << ",\"next_xp\":" << player->GetXPForNextLevel()
+                   << ",\"guild\":\"" << Escape(player->GetGuildName()) << "\"" << UiMapFields(player) << "}";
+                continue;
+            }
+
             Player* bot = bots[i];
             Powers const power = bot->GetPowerType();
             std::string target;
@@ -896,9 +1135,10 @@ void SendCycle()
                 target = unit->GetName();
             Group* group = bot->GetGroup();
             Sender::BrainInfo const& brain = s.brains[bot->GetGUID()];
-            if (i != batch * BotsPerBatch)
-                ss << ',';
+            TortoiseBots::engine::Telemetry const& engineState = telemetry[bot->GetGUID()];
+            uint8 const botState = s.track.count(bot->GetGUID()) ? s.track[bot->GetGUID()].state : uint8(TortoiseBots::dashboard_state::Idle);
             ss << "{\"name\":\"" << Escape(bot->GetName()) << "\",\"guid\":" << bot->GetGUID().GetCounter()
+               << ",\"player\":false"
                << ",\"kind\":\"" << (mgr.MasterOf(bot->GetGUID()).IsEmpty() ? "pool" : "hired") << "\""
                << ",\"class\":\"" << ClassName(bot->GetClass()) << "\",\"role\":\"" << Escape(brain.role) << "\""
                << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
@@ -912,7 +1152,11 @@ void SendCycle()
                << ",\"x\":" << bot->GetPositionX() << ",\"y\":" << bot->GetPositionY() << ",\"z\":" << bot->GetPositionZ()
                << ",\"o\":" << bot->GetOrientation()
                << ",\"target\":\"" << Escape(target) << "\",\"strategy\":\"" << Escape(brain.combat) << "\",\"strategies_nc\":\"" << Escape(brain.nonCombat)
-               << "\",\"engine\":\"" << brain.engine << "\",\"engine_state\":\"" << Escape(brain.state) << "\",\"state\":\"" << StateOf(bot) << "\""
+               << "\",\"engine\":\"" << brain.engine << "\",\"engine_state\":\"" << Escape(brain.state) << "\",\"state\":\""
+               << TortoiseBots::dashboard_state::Name(botState) << "\""
+               << ",\"last_action\":\"" << Escape(engineState.lastAction) << "\",\"last_trigger\":\"" << Escape(engineState.lastTrigger) << "\""
+               << ",\"travel_purpose\":\"" << Escape(engineState.travelPurpose) << "\",\"travel_to\":\"" << Escape(engineState.travelTo)
+               << "\",\"travel_status\":\"" << Escape(engineState.travelStatus) << "\",\"travel_dist\":" << engineState.travelDist
                << ",\"xp\":" << bot->GetXP() << ",\"next_xp\":" << bot->GetXPForNextLevel()
                << ",\"guild\":\"" << Escape(bot->GetGuildName()) << "\"" << UiMapFields(bot)
                << DriverFields(bot, s.track.count(bot->GetGUID()) ? s.track[bot->GetGUID()].since : now, now) << "}";
@@ -969,15 +1213,14 @@ void LoadConfig()
     if (!s.enabled)
         return;
 
-    boost::system::error_code ec;
-    boost::asio::ip::address const address = boost::asio::ip::make_address(host, ec);
-    if (ec)
+    std::string resolveError;
+    if (!dash::ResolveEndpoint(host, uint16(port), s.target, resolveError))
     {
-        TC_LOG_ERROR("server.loading", "TortoiseBots: dashboard host '{}' is not an IP address; the dashboard gets no data", host);
+        TC_LOG_ERROR("server.loading", "TortoiseBots: cannot resolve dashboard host '{}' ({}); the dashboard gets no data", host, resolveError);
         s.enabled = false;
         return;
     }
-    s.target = boost::asio::ip::udp::endpoint(address, uint16(port));
+    boost::system::error_code ec;
     s.socket = std::make_unique<boost::asio::ip::udp::socket>(s.io);
     s.socket->open(s.target.protocol(), ec);
     if (!ec)
@@ -1001,6 +1244,7 @@ void Update(uint32 diff)
     if (!s.enabled || !s.socket || !BotMgr::Instance().Enabled())
         return;
     s.serverInfoSinceMs += diff;
+    s.tickWindow.Add(diff);
     s.sinceMs += diff;
     if (s.sinceMs < s.intervalMs)
         return;
@@ -1066,6 +1310,15 @@ std::string ItemDetails(ItemTemplate const& item)
         }
     ss << "]";
     return ss.str();
+}
+
+// The ItemDisplayInfo id the dashboard's 3D viewer feeds ZamModelViewer.
+uint32 DisplayOf(uint32 itemId)
+{
+    if (ItemModifiedAppearanceEntry const* modified = TransmogMgr::GetDefaultItemModifiedAppearance(itemId))
+        if (ItemAppearanceEntry const* appearance = sItemAppearanceStore.LookupEntry(modified->ItemAppearanceID))
+            return uint32(appearance->ItemDisplayInfoID);
+    return 0;
 }
 
 uint32 IconOf(uint32 itemId)
@@ -1323,7 +1576,7 @@ void WriteItemsFile()
         out << (n++ ? "," : "") << "{\"id\":" << id << ",\"name\":\"" << Escape(item.GetDefaultLocaleName()) << "\",\"quality\":" << item.GetQuality()
             << ",\"ilvl\":" << item.GetBaseItemLevel() << ",\"req_level\":" << item.GetBaseRequiredLevel() << ",\"class\":" << item.GetClass()
             << ",\"subclass\":" << item.GetSubClass() << ",\"inv_type\":" << uint32(item.GetInventoryType()) << ",\"sell\":" << item.GetSellPrice()
-            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << ItemDetails(item) << "}";
+            << ",\"buy\":" << item.GetBuyPrice() << ",\"icon\":" << IconOf(id) << ",\"display_id\":" << DisplayOf(id) << ItemDetails(item) << "}";
     }
     out << "]}";
     out.close();
@@ -1467,5 +1720,86 @@ void OnQuestStatusChange(Player* player, uint32 questId)
         case QUEST_STATUS_NONE: QueueEvent(player, "QuestDropped", title, std::to_string(questId)); break;
         default: break;
     }
+}
+
+// The engine's bot_events rows, narrowed to what the dashboard's activity rollup reads. Quests, kills, deaths and loot
+// already arrive through the core hooks above; the rest (vendor, trainer, repair, auction, mail, revives, PvP) only exist here.
+void OnBotActivity(std::string const& event, std::string const& info1, std::string const& info2, Player* bot, uint32 /*targetLevel*/)
+{
+    std::lock_guard lock(g_feedLock);
+    if (!IsBot(bot) || !Get().enabled)
+        return;
+    static std::set<std::string> const whitelist = {
+        // quests
+        "QuestRewarded", "AcceptQuestAction", "AcceptQuestShareAction", "TalkToQuestGiverAction", "QuestUpdateCompleteAction",
+        "QuestCompleted", "QuestDropped",
+        // loot & money
+        "StoreLootAction", "GatherLoot", "LootMoney", "RollWon",
+        // vendor / trainer / repair / auction
+        "SellAction", "BuyAction", "RepairAllAction", "TrainerAction", "NearbyService", "AhAction", "AhBidAction",
+        // guild orders: auction buys and relists for the guild, mail taken
+        "GuildAhBuy", "GuildAhRelist", "GuildAhRelistFailed", "MailAction",
+        // deaths, revives (ghost time) and give-ups
+        "BotDeath", "ReviveFromCorpseAction", "ReviveFromSpiritHealerAction", "RepopAction", "LongStuckFallback", "ReachGiveUp",
+        // explicit kill signal from XpGainAction
+        "Kill",
+        // open-world PvP seek: role grants, engagements, kills, deaths
+        "WorldPvpSeekGrant", "WorldPvpEngage", "WorldPvpKill", "WorldPvpDeath",
+    };
+    // Sent by the core hooks already; forwarding them too would count every kill, death, loot and quest twice.
+    static std::set<std::string> const covered = {
+        "Kill", "BotDeath", "StoreLootAction", "AcceptQuestAction", "QuestCompleted", "QuestRewarded", "QuestDropped",
+        "QuestUpdateCompleteAction",
+    };
+    if (!whitelist.count(event) || covered.count(event))
+        return;
+
+    static std::set<std::string> const itemEvents = {
+        "StoreLootAction", "GatherLoot", "SellAction", "BuyAction", "AhAction", "AhBidAction", "RollWon",
+    };
+    std::string extra;
+    if (itemEvents.count(event))
+        if (uint32 const itemId = ParseItemId(info2))
+            if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId))
+            {
+                std::ostringstream e;
+                e << ",\"item_id\":" << itemId << ",\"quality\":" << proto->GetQuality() << ",\"sell\":" << proto->GetSellPrice()
+                  << ",\"buy\":" << proto->GetBuyPrice();
+                extra = e.str();
+            }
+    QueueEvent(bot, event.c_str(), info1, info2, extra);
+}
+
+void OnActionFailed(Player* bot, std::string const& actionName, std::string const& targetName, std::string const& strategy)
+{
+    std::lock_guard lock(g_feedLock);
+    Sender& s = Get();
+    if (!s.enabled || !IsBot(bot) || actionName.empty())
+        return;
+    uint32 const nowMs = GameTime::GetGameTimeMS();
+    std::string const key = std::to_string(bot->GetGUID().GetCounter()) + "|" + actionName;
+    Sender::ActionFailure& rec = s.actionFailures[key];
+    if (rec.firstMs == 0 || nowMs - rec.firstMs > 2000)
+    {
+        rec.firstMs = nowMs;
+        rec.count = 1;
+        rec.reported = false;
+    }
+    else
+        ++rec.count;
+    // One event per bot/action at most every 5 min; the failures keep coming every tick while the loop lasts.
+    if (rec.count >= 5 && !rec.reported && (rec.lastReportMs == 0 || nowMs - rec.lastReportMs > 300000))
+    {
+        rec.reported = true;
+        rec.lastReportMs = nowMs;
+        TortoiseBots::engine::Telemetry telemetry;
+        std::string activeStrategy = strategy;
+        if (activeStrategy.empty() && TortoiseBots::engine::ReadTelemetry(bot, telemetry, true))
+            activeStrategy = telemetry.combatStrategies;
+        SendAnomaly(bot, "ACTION_LOOP", "WARN", targetName, "Action '" + actionName + "' failed >= 5 times within 2 seconds",
+            activeStrategy, actionName);
+    }
+    if (s.actionFailures.size() > 4096)
+        s.actionFailures.clear();
 }
 }

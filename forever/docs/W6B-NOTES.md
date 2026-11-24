@@ -42,3 +42,13 @@
 4. Run `.tb gear <gm_self> set frost 60 quality=epic #s2` -> expect GM's own character equipped with classic frost mage epics (preferring `gear-replacements.csv` items).
 5. Fill a target's bags completely and run `.tb gear <bot> set #s3` on occupied slots -> expect `status=refused code=bags-full` (worn items preserved).
 6. On option-OFF build, run `.tb gear <bot> set #s4` -> expect `error code=engine-not-built`.
+
+## Live result (board ticket #150, 2026-11-22, Waterys Island Test: core b441bf74, main d0d13b9f6)
+
+Run by Audrey in game (Asdasdasd, Horde GM) with host bots; state read from the server log and the database before/after
+(`out/w3-liveproof-150.md` in the worker notes). Setup note: a bot needs `.tb master <bot> <player>` AND `.tb party <player> <bot>`
+(a bot outside the commander's party loses the binding on the next tick, so no engine starts).
+
+- **`.tb gear <bot> set`: PASS.** Horaider (level 60 warrior, nothing worn): `equipped=16 failed=1` (ranged slot `code=no-item`), item
+  levels 56-71, all ids < 25000; DB worn slots none -> 17 items. Needs `forever/sql/world/2026_11_20_20_tortoisebots_weightscales.sql`
+  applied (the test server lacked it; startup then logs `Loaded 29 weightscale class specs`).

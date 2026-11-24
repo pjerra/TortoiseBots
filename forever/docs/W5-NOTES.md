@@ -74,3 +74,21 @@ Branch: `feat/w5-flights` (based on `main`, commit `495ffd943`).
 ## What waits for W4
 
 - Wiring `tbhost::taxi::BuildRuntimeFlightLinks` and `tbhost::taxi`/`tbhost::ride` into W4's `TravelNode` / `TravelLinkUsableCompat` once `origin/world/w4a1`/`w4a2` and W4 round B/C are merged.
+
+## Live result (board ticket #150, 2026-11-22, Waterys Island Test: core b441bf74, main d0d13b9f6)
+
+Run by Audrey in game (Asdasdasd, Horde GM) with host bots; state read from the server log and the database before/after
+(`out/w3-liveproof-150.md` in the worker notes). Setup note: a bot needs `.tb master <bot> <player>` AND `.tb party <player> <bot>`
+(a bot outside the commander's party loses the binding on the next tick, so no engine starts).
+
+- **Flight: PASS.** `taxi-learn` at Doras (Orgrimmar) then `fly 25` (Crossroads): `[W5] taxi-learn bot=Homeleei npc=3310 node=23
+  before=0 after=1 total_known=2`, `[W5] fly-start ... from=23 to=25 fare=110 money_before=100000 money_after=99890`,
+  `[W5] fly-landed ... dest=25`; DB taximask gained node 23; copper -110 per flight; `.tb state` `ord=..:ok onTaxi=no` at the Crossroads.
+  A player who teleports away while the bot flies pulls it along by the party catch-up: take it out of the party (`.tb ungroup`) after
+  `onTaxi=true` (the taxi goes on).
+- **Zeppelin (`ride 164871`, Orgrimmar -> Undercity): FAIL**, own bug ticket. The Approach step walks to the transport's origin instead of
+  a deck/boarding point (the deck is not on the navmesh); `SampleTransportDeckZ` never saw the deck (`ride-board-refused code=off-deck
+  has_deck=0`, 5 of 5, also with the bot teleported onto the docked deck); `AddPassenger` still ran at a wrong spot (the bot was carried
+  beside the hull, then the party follow pulled it off and it fell); the order stayed `pending:aboard` after the bot was off the
+  transport. Fix direction: board from a dock point with a confirmed deck surface, fail when a boarded bot is no longer on the transport,
+  pause follow/stay movement during a ride.

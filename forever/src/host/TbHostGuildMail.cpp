@@ -3,6 +3,7 @@
 #include "TbBotMgr.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostGuild.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostTown.h"
@@ -344,7 +345,8 @@ void TickGuildMail(Player* bot, uint32_t diffMs)
         return;
     }
     if (tbhost::prof::HasActiveErrand(bot) || tbhost::errands::HasActiveErrand(bot) ||
-        tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter()).has_value())
+        tbhost::guild_orders::HasActiveDisenchantErrand(bot) ||
+        tbhost::guild_orders::HasOpenOrder(bot->GetGUID().GetCounter()))
     {
         logRefusal("busy-errand-or-order");
         return;

@@ -271,6 +271,180 @@ def check_cmd_interrupt(src):
             raise AssertionError(f"TryHandleTacticalVerb does not handle interrupt ({pin})")
 
 
+M3_TOGGLES = ("aoe", "autocc", "sap", "loot")
+M3_STRATEGY_KEYS = ("no aoe", "auto cc")
+
+
+def check_slice_keys_m3(src):
+    keys = slice_key_values(src)
+    for key in M3_STRATEGY_KEYS:
+        if key not in keys["strategy"]:
+            raise AssertionError(f"SLICE_KEYS strategy lacks `{key}`")
+
+
+def check_slice_w4_m3(src):
+    lines = [line.strip() for line in src.splitlines()]
+    if "ai/playerbot/strategy/generic/NoAoeStrategy.cpp" not in lines:
+        raise AssertionError("SLICE-W4.txt lacks NoAoeStrategy.cpp")
+
+
+def check_before_tick(src):
+    body = function_body(strip_comments(src), "void BeforeEngineTick(Player* bot")
+    if "tactics::BeforeTick(" not in body:
+        raise AssertionError("BeforeEngineTick does not call tactics::BeforeTick")
+
+
+def check_sap_run(src):
+    body = tactics_run_body(src)
+    sap = body.find('verb == "sap"')
+    if sap < 0:
+        raise AssertionError("TbTactics Run does not handle the sap toggle")
+    rogue = body.find("CLASS_ROGUE")
+    if rogue < 0 or rogue < sap:
+        raise AssertionError("the sap Run does not skip non-rogues (CLASS_ROGUE missing after the branch)")
+
+
+def check_corpserun_refusal(src):
+    body = tactics_run_body(src)
+    corpse = body.find('verb == "corpserun"')
+    if corpse < 0:
+        raise AssertionError("TbTactics Run does not handle corpserun")
+    not_dead = body.find('"fail:not-dead"')
+    if not_dead < 0 or not_dead < corpse:
+        raise AssertionError("the corpserun Run does not refuse an alive bot with fail:not-dead")
+
+
+def check_corpserun_preflight(src):
+    body = function_body(strip_comments(src), "bool Preflight(Player* bot")
+    corpse = body.find('verb == "corpserun"')
+    if corpse < 0:
+        raise AssertionError("TbTactics Preflight does not handle corpserun")
+    not_dead = body.find('"not-dead"')
+    if not_dead < 0 or not_dead < corpse:
+        raise AssertionError("the corpserun Preflight does not refuse an alive bot with not-dead")
+
+
+def check_body_release(src):
+    body = tactics_run_body(src)
+    corpse = body.find('verb == "corpserun"')
+    if corpse < 0:
+        raise AssertionError("TbTactics Run does not handle corpserun")
+    release = body.find('"release"')
+    if release < 0 or release < corpse:
+        raise AssertionError("the corpserun Run does not route the body through the release action")
+
+
+def check_before_tick_toggles(src):
+    c = strip_comments(src)
+    body = function_body(c, "void BeforeTick(Player* bot")
+    for key in ("no aoe", "auto cc", "no sap", "loot"):
+        if f'"{key}"' not in body:
+            raise AssertionError(f"tactics::BeforeTick does not enforce `{key}`")
+    if 'ChangeStrategy(wantNoAoe ? "+no aoe" : "-no aoe"' not in body:
+        raise AssertionError("tactics::BeforeTick does not change the aoe strategy")
+
+
+def check_aoe_strategy_sense(src):
+    c = strip_comments(src)
+    body = function_body(c, "void BeforeTick(Player* bot")
+    if 'bool const wantNoAoe = !t.aoe;' not in body:
+        raise AssertionError("BeforeTick does not invert the aoe toggle (no aoe present = off)")
+    if 'HasStrategy("no aoe"' not in body:
+        raise AssertionError("BeforeTick does not read HasStrategy(\"no aoe\")")
+
+
+def check_status_validates(orders_src, cmd_src):
+    """Codex finding: a toggle `status` read must run the per-bot check (no engine, sap on a non-rogue) like a change does."""
+    o = strip_comments(orders_src)
+    i = o.find("ToggleOp::Status")
+    if i < 0 or "ToggleStatusFault(" not in o[i:i + 1500]:
+        raise AssertionError(".tb order toggle status does not call tactics::ToggleStatusFault")
+    c = strip_comments(cmd_src)
+    j = c.find("ToggleOp::Status")
+    if j < 0 or "ToggleStatusFault(" not in c[j:j + 1500]:
+        raise AssertionError(".tb cmd toggle status does not call tactics::ToggleStatusFault")
+
+
+def check_status_fault_codes(src):
+    body = function_body(strip_comments(src), "bool ToggleStatusFault(Player* bot")
+    for needle in ('"no-rogue"', '"no-engine"', "ReadToggle("):
+        if needle not in body:
+            raise AssertionError(f"ToggleStatusFault lacks {needle}")
+
+
+# ---- M4: `cmd cc` for the whole party ----
+def check_cc_runs_without_a_run(src):
+    c = strip_comments(src)
+    if "DoCc(ctx.runRec, ctx, party, p)" not in c or "DoCcClear(ctx.runRec, ctx, party, p)" not in c:
+        raise AssertionError("IssueOrder no longer hands cc / cc clear to DoCc / DoCcClear with the run pointer")
+    if "ctx.runRec ? DoCc" in c or "ctx.runRec ? DoCcClear" in c or "not carried out by `.tb cmd`.\");\n        case od::Verb::CcClear" in c:
+        raise AssertionError("cc is again refused without a run")
+    case = c[c.find("case od::Verb::Cc:"):c.find("case od::Verb::Open:")]
+    if "unsupported" in case:
+        raise AssertionError("the cc cases still answer unsupported")
+
+
+def check_cc_bookkeeping_only_with_run(src):
+    c = strip_comments(src)
+    for name in ("OrderAnswer DoCc(", "OrderAnswer DoCcClear("):
+        body = function_body(c, name)
+        guard = body.find("if (rec)")
+        for call in ("DropPendingCc(", "h8::CcOwned"):
+            at = body.find(call)
+            if at < 0:
+                raise AssertionError(f"{name}: lost {call}")
+            if guard < 0 or guard > at:
+                raise AssertionError(f"{name}: {call} runs without the run guard `if (rec)`")
+
+
+def check_cc_pick_call(src):
+    body = function_body(strip_comments(src), "OrderAnswer DoCc(")
+    if "tactics::PickCcPlayer(" not in body:
+        raise AssertionError("DoCc does not pick a bot for an order with no bot named")
+    if "h8::ApplyCcOrder(party.lead, bot, p.mark, guid, family" not in body:
+        raise AssertionError("DoCc does not apply the picked family token through h8::ApplyCcOrder")
+    if 'no-cc-bot' not in body:
+        raise AssertionError("DoCc lost the no-cc-bot refusal")
+
+
+def check_cc_clear_all(src):
+    body = function_body(strip_comments(src), "OrderAnswer DoCcClear(")
+    if "targets = party.bots" not in body:
+        raise AssertionError("`cc clear` with no bot no longer clears every bound bot")
+    if "h8::ClearCcOrder(" not in body:
+        raise AssertionError("DoCcClear lost h8::ClearCcOrder")
+    if 'answer.text += " failed=" + failedNames' not in body:
+        raise AssertionError("a partial `cc clear` no longer names the bots it could not clear")
+
+
+def check_cc_pick_rules(src):
+    body = function_body(strip_comments(src), "inline CcPick PickCcBot(")
+    for pin in ("row.autoPick", "row.prePull && (targetEngaged || c.inCombat)", "c.denied & ai::CcPermissions::KindFromSpellName(row.spell)",
+                "DungeonRun::CcFits(row.family, creatureType)", "DungeonRun::RunCcTierRank(row.tier)"):
+        if pin not in body:
+            raise AssertionError(f"PickCcBot lost `{pin}`")
+    token = function_body(strip_comments(src), "inline DungeonRun::CcFamily CcFamilyFromToken(")
+    if 'token == "none"' not in token:
+        raise AssertionError("CcFamilyFromToken treats `none` as a family")
+
+
+def check_cc_parse_none(src):
+    c = strip_comments(src)
+    if 'DungeonRun::CcFamilyTokenNorm(args[2]) != "none"' not in c:
+        raise AssertionError("the 3-word cc form treats `none` as a family")
+    if 'args.size() < 2 || args.size() > 4' not in c:
+        raise AssertionError("cc <mark> <guid> without a bot is not accepted")
+    if "args.size() == 1" not in c:
+        raise AssertionError("`cc clear` alone is not accepted")
+
+
+def check_cc_host_pick(src):
+    body = function_body(strip_comments(src), "Player* PickCcPlayer(")
+    for pin in ('HasStrategy("cc", BotState::BOT_STATE_COMBAT)', "h8::CcDeniedForOwner(", "KnownCcFamilies(bot)", "GetCreatureType()", "target->IsInCombat()"):
+        if pin not in body:
+            raise AssertionError(f"PickCcPlayer lost `{pin}`")
+
+
 SOURCES = {
     "orders": lambda: read(HOST / "TbOrders.cpp"),
     "cmd_orders": lambda: read(CMD / "TbCmdOrders.cpp"),
@@ -278,6 +452,7 @@ SOURCES = {
     "tactics_pure": lambda: read(HOST / "TbTacticsPure.h"),
     "cmd_tactics": lambda: read(CMD / "TbCmdTactics.cpp"),
     "run_orders": lambda: read(HOST / "run" / "TbRunOrders.cpp"),
+    "run_orders_pure": lambda: read(HOST / "run" / "TbRunOrdersPure.h"),
     "gen": lambda: read(ROOT / "forever" / "tools" / "slice_gen_context.py"),
     "w4": lambda: read(ROOT / "forever" / "SLICE-W4.txt"),
 }
@@ -360,6 +535,60 @@ class Wiring(unittest.TestCase):
     def test_cmd_handles_interrupt(self):
         check_cmd_interrupt(self.sources["cmd_tactics"])
 
+    def test_slice_keys_hold_the_m3_strategy_keys(self):
+        check_slice_keys_m3(self.sources["gen"])
+
+    def test_slice_w4_holds_noaoe_strategy(self):
+        check_slice_w4_m3(self.sources["w4"])
+
+    def test_before_engine_tick_calls_before_tick(self):
+        check_before_tick(self.sources["orders"])
+
+    def test_sap_run_skips_non_rogues(self):
+        check_sap_run(self.sources["tactics"])
+
+    def test_corpserun_run_refuses_alive(self):
+        check_corpserun_refusal(self.sources["tactics"])
+
+    def test_corpserun_preflight_refuses_alive(self):
+        check_corpserun_preflight(self.sources["tactics"])
+
+    def test_corpserun_body_routes_through_release(self):
+        check_body_release(self.sources["tactics"])
+
+    def test_before_tick_enforces_toggles(self):
+        check_before_tick_toggles(self.sources["tactics"])
+
+    def test_aoe_strategy_sense(self):
+        check_aoe_strategy_sense(self.sources["tactics"])
+
+    def test_status_reads_validate_per_bot(self):
+        check_status_validates(self.sources["orders"], self.sources["cmd_tactics"])
+
+    def test_status_fault_codes(self):
+        check_status_fault_codes(self.sources["tactics"])
+
+    def test_cc_runs_without_a_run(self):
+        check_cc_runs_without_a_run(self.sources["run_orders"])
+
+    def test_cc_run_bookkeeping_only_with_a_run(self):
+        check_cc_bookkeeping_only_with_run(self.sources["run_orders"])
+
+    def test_cc_picks_a_bot_when_none_is_named(self):
+        check_cc_pick_call(self.sources["run_orders"])
+
+    def test_cc_clear_clears_every_bound_bot(self):
+        check_cc_clear_all(self.sources["run_orders"])
+
+    def test_cc_pick_follows_the_run_table(self):
+        check_cc_pick_rules(self.sources["tactics_pure"])
+
+    def test_cc_grammar_forms(self):
+        check_cc_parse_none(self.sources["run_orders_pure"])
+
+    def test_cc_host_pick_reads_the_live_facts(self):
+        check_cc_host_pick(self.sources["tactics"])
+
 
 MUTATIONS = [
     ("drop-stop-verb", "orders", lambda s: re.sub(r'"stop",', "", s, count=1), check_is_verb),
@@ -368,12 +597,12 @@ MUTATIONS = [
     ("skip-stop-body", "tactics", lambda s: s.replace("CombatStopWithPets(true);", ""), check_stop_run),
     ("drop-d4", "tactics", lambda s: s.replace('EndPullWindow("order")', 'EndPullWindow("run-end")'), check_engage_window_end),
     ("drop-rebuff-anchor", "tactics", lambda s: s.replace('"force rebuff begin ms"', '"force rebuff begin"'), check_rebuff_window),
-    ("drop-slice-strategy", "gen", lambda s: s.replace('"strategy": "dps assist, close, follow, guard"', '"strategy": "dps assist, close, follow"'), check_slice_keys),
+    ("drop-slice-strategy", "gen", lambda s: s.replace('"strategy": "dps assist, close, follow, guard, no aoe, auto cc"', '"strategy": "dps assist, close, follow, no aoe, auto cc"'), check_slice_keys),
     ("drop-w4-guard", "w4", lambda s: s.replace("ai/playerbot/strategy/generic/GuardStrategy.cpp\n", ""), check_slice_w4),
     ("shrink-need-action", "orders", lambda s: s.replace("needAction[3]", "needAction[2]"), check_need_action),
     ("drop-applykit-guard", "orders", lambda s: s.replace('ai->HasStrategy("guard", BotState::BOT_STATE_NON_COMBAT)', 'ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)'), check_applykit_keeps_guard),
     ("drop-alive-refusal", "tactics", lambda s: s.replace("if (!bot->IsAlive())", "if (false)", 1), check_preflight_alive_first),
-    ("cmd-missing-verb-old-list", "cmd_orders", lambda s: s.replace(", stop, flee, guard, stance, engage, rebuff\");", "\");", 1), check_cmd_missing_verb_lists_m1),
+    ("cmd-missing-verb-old-list", "cmd_orders", lambda s: s.replace(", stop, flee, guard, stance, engage, rebuff, aoe, autocc, sap, loot, corpserun\");", "\");", 1), check_cmd_missing_verb_lists_m1),
     ("drop-pull-arg", "run_orders", lambda s: s.replace(".arg = p.pullOption;", "", 1), check_dopull_arg),
     ("reverse-interrupt-order", "tactics_pure", lambda s: s.replace('"counterspell", "silence", "kick"', '"kick", "silence", "counterspell"', 1), check_interrupt_action_order),
     ("ignore-in-range-interrupt", "tactics_pure", lambda s: s.replace("pass == 0 ? probes[i].inRange : probes[i].actions", "probes[i].actions", 1), check_interrupt_prefers_in_range),
@@ -386,6 +615,26 @@ MUTATIONS = [
     ("drop-interrupt-poll", "orders", lambda s: s.replace("tactics::PollPendingInterrupt(", "tactics::Forget(", 1), check_interrupt_poll_hook),
     ("drop-ranged-log", "orders", lambda s: s.replace("opens as a body pull", "opens", 1), check_ranged_pull_diagnostic),
     ("ignore-named-interrupt", "tactics_pure", lambda s: s.replace("anyNamed && !probes[i].named", "false", 1), check_interrupt_named),
+    ("drop-slice-m3-strategy", "gen", lambda s: s.replace('"strategy": "dps assist, close, follow, guard"', '"strategy": "dps assist, close, follow, guard"').replace(", no aoe, auto cc", "").replace("no aoe, auto cc, ", "").replace(", no aoe", "").replace("no aoe, ", "").replace(", auto cc", "").replace("auto cc, ", ""), check_slice_keys_m3),
+    ("drop-w4-noaoe", "w4", lambda s: s.replace("ai/playerbot/strategy/generic/NoAoeStrategy.cpp\n", ""), check_slice_w4_m3),
+    ("drop-before-tick-call", "orders", lambda s: s.replace("tactics::BeforeTick(", "", 1), check_before_tick),
+    ("drop-sap-rogue-check", "tactics", lambda s: s.replace('if (verb == "sap" && bot->GetClass() != CLASS_ROGUE)\n            return "fail:no-rogue";', "", 1), check_sap_run),
+    ("drop-corpserun-not-dead", "tactics", lambda s: s.replace('if (bot->IsAlive())\n            return "fail:not-dead";', "", 1), check_corpserun_refusal),
+    ("invert-aoe-sense", "tactics", lambda s: s.replace('bool const wantNoAoe = !t.aoe;', 'bool const wantNoAoe = t.aoe;'), check_aoe_strategy_sense),
+    ("drop-order-status-validation", "orders", lambda s: s.replace("ToggleStatusFault(", "ReadToggle(", 1), lambda src: check_status_validates(src, read(CMD / "TbCmdTactics.cpp"))),
+    ("drop-cmd-status-validation", "cmd_tactics", lambda s: s.replace("ToggleStatusFault(", "ReadToggle(", 1), lambda src: check_status_validates(read(HOST / "TbOrders.cpp"), src)),
+    ("drop-no-rogue-status-fault", "tactics", lambda s: s.replace('code = "no-rogue";', 'code = "x";', 1), check_status_fault_codes),
+    ("cc-unsupported-without-run", "run_orders", lambda s: s.replace("return DoCc(ctx.runRec, ctx, party, p);", 'return ctx.runRec ? DoCc(ctx.runRec, ctx, party, p) : Refuse("unsupported", "no");', 1), check_cc_runs_without_a_run),
+    ("cc-bookkeeping-without-run", "run_orders", lambda s: s.replace("    if (rec)\n    {\n        DropPendingCc(bot->GetName());      // a newer", "    {\n        DropPendingCc(bot->GetName());      // a newer", 1), check_cc_bookkeeping_only_with_run),
+    ("cc-drop-pick", "run_orders", lambda s: s.replace("tactics::PickCcPlayer(", "tactics::PickInterruptBot(", 1), check_cc_pick_call),
+    ("cc-clear-one-bot", "run_orders", lambda s: s.replace("targets = party.bots;", "targets.push_back(party.lead);", 1), check_cc_clear_all),
+    ("cc-clear-hides-failures", "run_orders", lambda s: s.replace('answer.text += " failed=" + failedNames;', "", 1), check_cc_clear_all),
+    ("cc-drop-prepull", "tactics_pure", lambda s: s.replace("row.prePull && (targetEngaged || c.inCombat)", "false", 1), check_cc_pick_rules),
+    ("cc-drop-deny", "tactics_pure", lambda s: s.replace("c.denied & ai::CcPermissions::KindFromSpellName(row.spell)", "false", 1), check_cc_pick_rules),
+    ("cc-none-is-a-family", "tactics_pure", lambda s: s.replace('token.empty() || token == "none"', "token.empty()", 1), check_cc_pick_rules),
+    ("cc-parse-none-family", "run_orders_pure", lambda s: s.replace(' && DungeonRun::CcFamilyTokenNorm(args[2]) != "none"', "", 1), check_cc_parse_none),
+    ("cc-host-drop-deny", "tactics", lambda s: s.replace("h8::CcDeniedForOwner(", "h8::CcOwnerOf(", 1), check_cc_host_pick),
+    ("drop-before-tick-enforce", "tactics", lambda s: s.replace('if (ai->HasStrategy("no aoe", BotState::BOT_STATE_COMBAT) != wantNoAoe)\n            ai->ChangeStrategy(wantNoAoe ? "+no aoe" : "-no aoe", BotState::BOT_STATE_COMBAT);', "", 1), check_before_tick_toggles),
 ]
 
 

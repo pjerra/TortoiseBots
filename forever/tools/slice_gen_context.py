@@ -23,7 +23,7 @@ OUT = chk.SLICE_CTX
 # forever/docs/SLICE1-R2-NOTES.md; at the time of writing there are none.
 # Slice 2 (R3, decision D6): SLICE2_KEYS below are the 69 keys of forever/docs/SLICE2-KEYS.md, added to the slice-1 lists.
 SLICE_KEYS = {
-    "strategy": "dps assist, close, follow, guard",
+    "strategy": "dps assist, close, follow, guard, no aoe, auto cc",
     "action": "melee, reach melee, follow, stop follow, dps assist, select new target, set combat state, "
               "set non combat state, set dead state, interrupt current spell, formation station, guard chat shortcut, guard, stance",
     "trigger": "combat start, combat end, death, enemy out of melee, invalid target, in pve, in pvp, in raid fight, "
@@ -71,7 +71,7 @@ SLICE2_KEYS = {
              "loot strategy, should get money, inventory item ids, incoming heals",
 }
 # Slice 3 (porting worker, FOREVER-SLICE3-SPEC section 3, listed with creator file:line in forever/docs/SLICE3-KEYS.md): the tank, the pull, the stay
-# and wait strategies and the order actions. Keys the spec deliberately leaves out: `should pull`, `pull nearest target`, `chat`, `pull back`.
+# and wait strategies and the order actions. Keys the spec deliberately leaves out: `chat` (the three pull rows are in PULL_KEYS).
 SLICE3_KEYS = {
     "strategy": "tank assist, threat, stay, free, passive, tank face, wait for attack",
     "action": "tank assist, stay, return to stay position, pull my target, end pull, pull start, pull action, pull end, reach pull, "
@@ -84,12 +84,12 @@ SLICE3_KEYS = {
     "value": "master position",
 }
 # Slice 4 (package P4, FOREVER-SLICE4-SPEC section 3, listed with creator file:line in forever/docs/SLICE4-P-NOTES.md section 4): death and resurrection. Left out on
-# purpose (each one does less): repop, self resurrect, spirit healer, should spirit healer, find corpse, revive from corpse, corpse near, dead (trigger),
+# purpose (each one does less): repop, spirit healer, should spirit healer, find corpse, revive from corpse, corpse near, dead (trigger),
 # falling far, move long stuck, bg reset objective force, corpse run, resurrect request (the host calls the action), area trigger, reach area trigger,
 # within area trigger, use meeting stone, summon.
 SLICE4_KEYS = {
     "strategy": "dead",
-    "action": "auto release, accept resurrect, release, reach party member to resurrect",
+    "action": "auto release, accept resurrect, release, reach party member to resurrect, self resurrect",
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
@@ -136,10 +136,12 @@ SLICE11_KEYS = {
     "value": "pet dead, pet happy, active spell",
 }
 # World-life slice W1 (FOREVER-W1-W6A-SPEC section 1.3, forever/docs/W1-NOTES.md): the grind target value and its strategy, the
-# actions and triggers of the open-world dead kit, and the graveyard values. Left unregistered on purpose (each one does less, spec
-# section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `collision`, `group`, `guild`; the travel
-# target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
-# reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
+# actions and triggers of the open-world dead kit, and the graveyard values. Left out of the free kit on purpose (each one does less, spec
+# section 1.3): `rpg`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
+# COLLISION_KEYS, which a player can add, still not part of the free kit); the travel keys are TRAVEL_KEYS below and `travel`
+# is in the free kit, `rpg` is added by the factory under AutoDoQuests (LIFE_* keys); `need for quest` (false), `enemy flag
+# carrier`; the battleground reset action and the `falling far` / `val::gt32::*` triggers (the host's ghost rescue covers
+# the first; the stuck triggers are STUCK_KEYS).
 W1_KEYS = {
     "strategy": "grind",
     "action": "attack anything, avoid elite, idle wander, find corpse, revive from corpse, spirit healer",
@@ -237,6 +239,21 @@ PC_CHAT_KEYS = {
                "corpse run, e, equip, bb, free, position",
     "value": "",
 }
+# R5 of PLAYER-COMMANDS-SPEC ("chat grammar B"): the chat words that need ONE small legacy action file each, now on the build list
+# (forever/SLICE-W4.txt): `who` (WhoAction.cpp), `c` / `items` / `inventory` / `inv` (`item count`, TellItemCountAction.cpp), `ue`
+# (`unequip`, UnequipAction.cpp), `quests` (ListQuestsActions.cpp), `leave` (LeaveGroupAction.cpp) and `rep` / `reputation`
+# (TellReputationAction.cpp). Every trigger copies its ChatTriggerContext.h creator, every action its ChatActionContext.h creator.
+# `ll` and `ss` (LootStrategyAction.cpp, SkipSpellsListAction.cpp) are not in this round. Who may use a word is the legacy whisper
+# gate's table (PlayerbotAI::AuthTierForCommand), unchanged. Notes: forever/docs/PC-R5-NOTES.md.
+PC_CHAT_B_KEYS = {
+    "strategy": "",
+    "action": "who, item count, unequip, quests, leave, reputation",
+    "trigger": "who, c, items, inventory, inv, ue, quests, leave, rep, reputation",
+    # The values those actions read and the slice did not register (R5 fix, live batch 4): `focus travel target` is read by the
+    # PlayerTravelInfo constructor (TravelMgr.cpp:72) that ListQuestsAction builds on every call (a missing value read as a type the
+    # stand-in lacked crashed the worldserver on `quests`), `experience` and `honor` by LeaveGroupAction.cpp (MEM_AI_VALUE derefs them).
+    "value": "focus travel target, experience, honor",
+}
 # W8 (auction house): ah sell/list, ah buy, ah cancel.
 W8_KEYS = {
     "strategy": "",
@@ -299,7 +316,206 @@ PRESET_KEYS = {
     "trigger": "cs",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS)
+# Rows the compiled kits fire but the slice left unregistered: the AoE dps row, the salvation removal row, the
+# check-values pre-warm, the target books the reach and give-up paths write, the corpse-run timers and three
+# behaviour toggles that stay off until a player enables them.
+S209_KEYS = {
+    "strategy": "dps aoe, "
+                "map, map full, "
+                "attack tagged, preheal, silent",
+    "action": "dps aoe, "
+              "remove blessing of salvation, remove greater blessing of salvation, "
+              "check values",
+    "trigger": "not dps aoe target active, "
+               "has blessing of salvation, has greater blessing of salvation",
+    "value": "all targets, "
+             "keepout set aside, runners let go, unreachable entries, unreachable targets, "
+             "current position, time since last change",
+}
+# The pull rows slice 3 left out. A tank's kit keeps "pull" on the combat engine, so the one row that can start a
+# fight without an order is the non-combat `should pull`: it fires only in a dungeon, on a tank, with a live
+# grouped party where nobody fights and the healer has mana (PullTriggers.cpp), and it pulls a reachable target.
+# "pull back" is the return leg the ordered pulls switch on with ChangeStrategy("+pull back", ALL).
+PULL_KEYS = {
+    "strategy": "pull back",
+    "action": "pull nearest target",
+    "trigger": "should pull",
+    "value": "",
+}
+# The collision row: the bot unstacked itself from a real player in TB. The full factory adds the strategy to every
+# random and real-player bot (AiFactory.cpp:1546, :1588, :1631); the slice kit does not, so the strategy stays a
+# player add (.bot nc collision) and the keys below only make that add work. The action is useful only when the
+# bot overlaps a unit and a non-bot player is within reach (MovementActions.cpp:5492).
+COLLISION_KEYS = {
+    "strategy": "collision",
+    "action": "move out of collision",
+    "trigger": "collision",
+    "value": "nearest non bot players",
+}
+# The sit strategy a player adds to a stayed bot: SitTrigger fires once the stay has lasted SitDelay, SitAction puts
+# the bot in the sit stand state. Nothing adds it to a kit, in TB either.
+SIT_KEYS = {
+    "strategy": "sit",
+    "action": "sit",
+    "trigger": "sit",
+    "value": "",
+}
+# Combat/movement port: the chat `jump` word, the melee kit's `jump::chase` row and the `follow jump` marker that makes
+# a following bot take a jump shortcut, now that JumpAction drives the core's jump spline instead of the 1.12 jump
+# packets (earlier slices left `jump` out because the jump did nothing).
+JUMP_KEYS = {
+    "strategy": "follow jump",
+    "action": "jump",
+    "trigger": "jump",
+    "value": "",
+}
+# TBF #142 (diagnostics): the whisper words `debug`/`cdebug` (the DebugAction families that survive on
+# ForeverCore plus the stubs in forever/src/slice/SliceDebugStubs.cpp), `log` (LogLevelAction), `set value`
+# (SetValueAction) and the log-level value they read. The debug strategies are registered too, so bare
+# `debug` can turn the bot's action-line feedback on (`-debug` turns it off). Kept apart from CH_KEYS so the
+# chat round's own test keeps its exact list.
+DEBUG_KEYS = {
+    "strategy": "debug, debug action, debug move, debug rpg, debug spell, debug travel, debug threat, debug mount, "
+                "debug grind, debug loot, debug log, debug logname, debug stuck, debug xp, debug equip",
+    "action": "debug, cdebug, log, set value",
+    "trigger": "debug, cdebug, log, set value",
+    "value": "log level",
+}
+# Riding (#152, forever/docs/MOUNT-RIDE-NOTES.md): the mount state action, the mount list and the mount
+# speed values, and the travel-target state the action reads to mount on a long walk. Left unregistered on
+# purpose (each one does less): `enemy player target` and `has enemy player targets` (EnemyPlayerValue.cpp is
+# not in the slice, so the dismount decision sees the dps target only), `possible rpg targets`
+# (PossibleRpgTargetsValue.cpp is not in the slice, so the speculative safe-place mount never fires), and the
+# purchase values `mount skilltype`, `can train mount`, `can buy mount`, `available mount vendors`,
+# `full mount list` (the buy/train package registers them).
+MOUNT_KEYS = {
+    "strategy": "mount",
+    "action": "check mount state",
+    "trigger": "check mount state",
+    "value": "mount list, current mount speed, max mount speed, travel target traveling, travel target working",
+}
+# Travel chooser and walker: the travel strategy rows, the actions that pick a destination and walk
+# to it, and the values they read. `travel` joins the free kit (ai/playerbot/policy/world/FreeKitPolicy.h), so a
+# free bot picks a destination and walks there; the rpg keys that would sell on arrival belong to #147. Left out
+# on purpose: `has focus travel target` (only the rpg-quest row reads it, and that row cannot fire without
+# `rpg quest`), `travel target traveling`/`travel target working` (registered with the mount keys).
+TRAVEL_KEYS = {
+    "strategy": "travel, travel once, explore",
+    "action": "travel, choose travel target, choose group travel target, refresh travel target, request travel target, "
+              "request named travel target, request quest travel target, reset travel target, move to travel target",
+    "trigger": "",
+    "value": "travel target active, travel target ready, no active travel destinations, need travel purpose, "
+             "should travel named, should leave outgrown zone, vendor trip needed, not",
+}
+# Stuck rescue: the 5-minute move reset and the 15-minute hearthstone -> repop -> teleport chain, the combat-stuck
+# give-up and the four triggers that fire them (MaintenanceStrategy, ClassStrategy, CombatStrategy, DeadStrategy). `repop` is
+# the DeadStrategy action for the same trigger; `travel target active` and `no active travel destinations` are the travel-target
+# keep/retire state UnstuckAction reads and writes (WP-2's TRAVEL_KEYS also name them; _join registers each once). Values:
+# `distance moved since` and `time since last change` (S209) time the triggers, `money` is their earning test, `home bind` is
+# the rescue's own location. Left unregistered: `falling far` (the host's ghost rescue covers it), `self resurrect`, `spirit
+# healer`, `find corpse`, `revive from corpse` (their strategies' other rows do less on this core).
+STUCK_KEYS = {
+    "strategy": "",
+    "action": "unstuck, reset, hearthstone, repop",
+    "trigger": "move stuck, move long stuck, combat stuck, combat long stuck",
+    "value": "distance moved since, money, home bind, travel target active, no active travel destinations",
+}
+# Free-bot life (TBF #147, packages A/B/C + this wiring package): the rpg brain that picks an NPC and runs its verbs,
+# the quest values the travel quest rows and the rpg quest verbs read, and the town verbs (smart destroy, the 50-yard
+# nearby service, the vendor/repair/mail values). `rpg` is not in the free kit array: the factory adds it on top when
+# AiPlayerbot.AutoDoQuests is on, as the full build does. Left unregistered on purpose (each row then does less; a
+# missing trigger reads as null in RpgAction's next-action search): `rpg camp`, `rpg heal`, `rpg gossip talk`,
+# `rpg repeat quest`, `rpg taxi`, `rpg discover`, `rpg home bind`, `rpg buy petition`, `rpg queue bg`, `rpg trade useful`,
+# `rpg enchant`, `rpg duel`, `rpg spell`, `rpg craft`, `rpg item`, `rpg guild`, `castnc`, `random jump`, `destroy all gray`
+# (no build has a creator for it) and the shared-context values (`vendor map`, `item vendor list`, `entry quest relation`,
+# `quest guidp map`, `quest givers`, `trainable spell map`), which have no LOCAL mapping below.
+LIFE_RPG_KEYS = {
+    "strategy": "rpg, rpg quest, rpg vendor, rpg explore, rpg maintenance",
+    "action": "rpg, choose rpg target, move to rpg target, service nearby npc, rpg stay, rpg work, rpg emote, "
+              "rpg cancel, rpg use, rpg start quest, rpg end quest, rpg sell, rpg buy, rpg repair, rpg train",
+    "trigger": "no rpg target, far from rpg target, rpg, rpg wander, rpg start quest, rpg end quest, rpg sell, "
+               "rpg buy, rpg repair, rpg train, rpg use, rpg quest use",
+    "value": "possible rpg targets, next rpg action, can fight equal",
+}
+# The stock quest values (package B): dialog status for a giver/taker, the log slots, the objective rows and the two
+# item-on-quest answers. The `active quest givers/takers/objectives` spawn-index values stay unregistered (TB registers
+# them nowhere either) and the shared quest maps cannot be generated.
+# `following party` is the group answer every quest travel gate ANDs in before its own verb (TravelMgr.cpp,
+# QuestRelationTravelDestination::IsActive and QuestObjectiveTravelDestination::IsActive read
+# "group or" of "following party,can accept/turn in quest npc::<entry>" and "following party,need quest objective::<q>,<o>").
+# The value answers through the bot's own party, so a free bot with no master is its own authority (PartyFollowPolicy.h);
+# the key itself must exist, or the gate reads the inert false and every quest destination is inactive - no bot walks to
+# a giver, a taker or an objective, and the quest search parks with "rejected[inactive=...]".
+LIFE_QUEST_KEYS = {
+    "strategy": "",
+    "action": "",
+    "trigger": "",
+    "value": "following party, free quest log slots, has rewardable finished quest, dialog status, dialog status quest, "
+             "can accept quest npc, can accept quest low level npc, need quest reward, can turn in quest npc, "
+             "can repeat quest npc, need quest objective, can use item on, need for quest, has nearby quest taker",
+}
+# Town verbs (package C): the bag-pressure destroy action, the quest-log-near-full trigger whose upkeep rows are inert
+# for host bots (IsRandomBot is false), and the vendor/repair/mail/nearby-service values.
+LIFE_TOWN_KEYS = {
+    "strategy": "",
+    "action": "smart destroy item",
+    "trigger": "quest log nearly full",
+    "value": "can sell, can buy, can repair, should repair, should sell, can get mail, vendor has useful item, "
+             "nearby service target, should service nearby npc, nearby service fail parks",
+}
+# TBF #156 (guild participation): the owner's `speak` chat word. Its action is the legacy SayAction, whose `/g` branch
+# calls PlayerbotAI::SayToGuild, now backed by the real guild speak right (forever/src/compat/TbCompat_P.h). The trigger
+# is the ordinary chat command trigger every chat word uses. SayAction.cpp is on the build list (forever/SLICE-W4.txt).
+GUILD_KEYS = {
+    "strategy": "",
+    "action": "speak",
+    "trigger": "speak",
+    "value": "",
+}
+# TBF #158 (social): greeting. The `emote` strategy's only live row is `new player nearby` -> `greet`; its other rows name
+# the `emote`, `talk` and `mount anim` actions and the `seldom`, `receive text emote` and `receive emote` triggers, which the
+# slice does not register, so the engine skips them (the bot does less, never crashes). `already seen players` is the
+# encounter memory GreetAction reads and writes. GreetAction.cpp and EmoteStrategy.cpp are on the build list
+# (forever/SLICE-W4.txt).
+SOCIAL_KEYS = {
+    "strategy": "emote",
+    "action": "greet",
+    "trigger": "new player nearby",
+    "value": "already seen players",
+}
+# Duels: TB's duel strategy (strategy/generic/DuelStrategy.cpp, strategy/generic/DuelStrategy.h): the bot takes
+# its duel opponent as the target (`attack duel opponent` reads `duel target`, registered since slice 1) and the class kit
+# rotates on it. `duel requested` is registered so the row exists, but the Forever bot session receives no duel packet
+# (UnportedFeatures.h), so it never fires; the host answers the core's Player::duel state instead and `accept duel` is
+# therefore not registered. No value is new: DuelTargetValue.cpp is already on the build list.
+DUEL_KEYS = {
+    "strategy": "duel",
+    "action": "attack duel opponent",
+    "trigger": "no attackers, duel requested",
+    "value": "",
+}
+# Open-world PvP seek (TBF #163 P3): TB's `pvp` strategy for every bot and `world pvp` for the free bots the host gives the
+# seek role (forever/src/host/TbHostWorldPvp.cpp). `enemy player near` fires `attack enemy player`, which reads the three
+# enemy-player values; outside a battleground EnemyPlayersValue only scans the proximity list for a bot holding `world pvp`
+# and only takes a PvP-flagged player (WorldPvpSeekChecks). No value is new: EnemyPlayerValue.cpp is on the build list.
+WPVP_KEYS = {
+    "strategy": "pvp, world pvp",
+    "action": "attack enemy player",
+    "trigger": "enemy player near",
+    "value": "enemy player target, enemy player targets, has enemy player targets",
+}
+# Round BG2 (BATTLEGROUNDS-SPEC.md D9, forever/docs/BG2-NOTES.md): the keys of the PvP fight kit that round WPVP did not already register.
+# `battleground` is the strategy PlayerbotAI::UpdateAIGroupMaster looks for in the non-combat engine of a bot inside a match, and the
+# flag carrier values are what BG3's objective play will read (`pvp`, `attack enemy player`, `enemy player near` and the enemy player
+# values came first with the open-world PvP seek port). Left unregistered on purpose: the triggers and actions of the objective play
+# (BG3) and "attack enemy flag carrier" (the carrier is the first rule of the target order).
+BG2_KEYS = {
+    "strategy": "battleground",
+    "action": "",
+    "trigger": "",
+    "value": "enemy flag carrier, team flag carrier",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

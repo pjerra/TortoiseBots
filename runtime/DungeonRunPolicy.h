@@ -451,6 +451,13 @@ inline bool StandAbovePackReach(float x, float y, float z, const std::vector<Sta
 }
 constexpr std::uint32_t kMaxPullsPerStep = 20;
 constexpr std::uint32_t kMaxWalkBackPulls = 8;    // pulls on the way of a walk back (their own count), then pause
+// The healer gate before a pull (Facts::healerPullGate; WC run 8: the tank was the top victim, 24 of 77 deaths, dying first
+// with the healer out of heal range or out of sight): no pull goes out while no living healer is within kPullHealerMaxYd of
+// the tank (inside its 40 yd heal range with room to run in) AND in its line of sight. The hold is bounded: it spends at
+// most kPullHealerHoldMs in the gather phase, then the pull goes out anyway (a healer that cannot get sight must not
+// stop an unattended run).
+constexpr float kPullHealerMaxYd = 30.0f;
+constexpr std::uint32_t kPullHealerHoldMs = 25000;
 // A lead bot on a navmesh island (IslandEscape). Zul'Farrak r3-19z20: the tank
 // chased a Shadowhunter onto a ~3 x 3 yd patch of mesh at 1589 1046 that no
 // path leaves; every walk-back point was refused or a zero-length hop, and the
@@ -1423,6 +1430,9 @@ struct MemberFact
     bool losLead = false;
     bool pathToLead = false;
     float pathLenYd = 0.0f;
+    // A healer's line of sight to the lead bot, read fresh each tick by a host that asks for Facts::healerPullGate (the pull's
+    // healer gate, HealerOutOfReach). Unread: false.
+    bool healerSight = false;
     // How many of its summons the summon portal dropped since the server started (the bot was in combat, dead,
     // teleporting or flying when the portal went: PlayerConvenience::SummonCancels). A rise is a failed summon
     // (UpdateSummonOutcomes), whoever queued it. Unread: 0.
@@ -1702,6 +1712,13 @@ struct Facts
     // AiPlayerbot.DungeonRunWalkBackRescue (default 1): a stuck walk back, and a placed run's lead bot revived behind
     // its start step, are teleported to a safe point (WalkBackStuckRescue, PlacedRunRescue). Off: the old pause.
     bool walkBackRescue = true;
+    // The pull's healer gate (HealerOutOfReach, kPullHealerMaxYd): the host reads each healer's MemberFact::healerSight this tick
+    // (its sight line to the lead bot) and asks for the gate. Off (default): no gate, as before.
+    bool healerPullGate = false;
+    // The most pulls a walk back may make on its way before it pauses (kMaxWalkBackPulls when 0). A host whose dungeon packs
+    // respawn while the run is away (ForeverCore: spawntimesecs 7200 in Wailing Caverns) meets respawned packs on the way
+    // back after a wipe and pulls them one at a time; it raises the cap.
+    std::uint32_t walkBackPullCap = 0;
     // AiPlayerbot.DungeonRunDryWalk (default 0): the run leader's route picks stay off deep water (the glue's
     // DryWayPath and DryWayFor; the policy's DryWalkWanted and DryLegPick).
     bool dryWalk = false;
@@ -2477,6 +2494,9 @@ struct Run
     bool joinerReported = false;   // the pull's line carries its joiner report (once)
     bool joinerReportDue = false;  // the window closed: the report goes on this tick's note (Tick's end)
     std::uint32_t walkBackPulls = 0; // pulls on the way of the walk back (not counted in `pulls`)
+    // The time the pull's healer gate (HealerOutOfReach) has held this pull: its own clock, not the gather phase's (an unrelated gather
+    // that ran long must not spend it). Starts over when a healer covers the tank, when the pull goes out and with the step.
+    std::uint32_t healerHoldMs = 0;
     // Run-wide (kept across steps).
     std::unordered_set<std::uint64_t> unreachable;   // units given up on: never pulled again this run
     // Units that never came (PLAN-ZF-NOFIGHT; Zul'Farrak r3/r6, the island
@@ -3837,6 +3857,7 @@ inline void ResetStep(Run& r)
     r.joinerReported = false;
     r.joinerReportDue = false;
     r.walkBackPulls = 0;
+    r.healerHoldMs = 0;
     r.gatherOrder.clear();
     r.gatherRefusals = 0;
     r.gatherWaived = false;
@@ -7767,10 +7788,11 @@ inline void StrandCountsForStep(Run& r)
 // it may teleport again on the same step (Blackfathom Deeps r29 slot 6: a placed run's second wipe at step 574 found
 // the latch used by the first and walked from the entrance for 23 minutes). Bounded by kAutoRegroupsPerStep; a resume
 // (ResetStep) still keeps the latch, and this step's failed tries (strandTries, strandWaits) stay counted. The death
-// pauses past kAutoRegroupsPerStep (the wipe's, LeadRevivedAway's, WaitForFallen's: 'regroups by itself at this step
-// did not hold') arm it too, so the walk back after their resume may teleport once more (Windhorn Canyon r34 slot B
-// wipe 3 and Hateforge Quarry r32 slot E wipe 5: the resume found the latch used by the wipe before and replayed the
-// placed route from its start, 5-9 min); a resume after any other pause does not.
+// pauses past kAutoRegroupsPerStep (the wipe's, LeadRevivedAway's: 'regroups by itself at this step did not hold'),
+// the dead lead's regroup and the regroup's own revive pause ('still dead after') arm it too, so the walk back after
+// their resume may teleport once more (Windhorn Canyon r34 slot B wipe 3 and Hateforge Quarry r32 slot E wipe 5: the
+// resume found the latch used by the wipe before and replayed the placed route from its start, 5-9 min); a resume
+// after any other pause does not.
 inline void RearmRescueAfterDeath(Run& r)
 {
     r.strandStep = static_cast<std::size_t>(-1);
@@ -8794,78 +8816,14 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     return true;
 }
 
-// A wade row's permission (ai::kPlanFlagWadeOk) covers the whole hop, not just its ends: the run walks a long row in
-// approach hops and in `TooFar` legs, and every one of those points is a point of the row's own way. So an order may
-// wade when the current row carries the bit AND its point is the row's own point, the walk's own target, or a leg of
-// that walk, and that walk goes to the row's point or to an approach hop of it (`hopWalk`). Any other point keeps the
-// liquid rule as it was: a detour's stand-in, a walk-back, a gather, a walk of another row.
-inline bool RowHopWades(Run const& r, PlanStep const& s, float x, float y)
+// The wade permission of an order (TbRunOrders.cpp WadeOrder): a move may wade shallow water only when the run issued it
+// for itself (`runIssued`, the order's origin flag) and the run has a live plan step to act for (`liveStep`). A player's
+// `.tb cmd move` and a run with no live step keep the RFC liquid rule. The depth is not an input: the wade rule judges
+// every sample (TbRunLiquid.h WadePointOf), so deep or swimming water pauses for any origin. The per-row
+// `ai::kPlanFlagWadeOk` stays plan data (the probe's record of the shallow hops); it does not gate the wade.
+inline bool MoveMayWade(bool runIssued, bool liveStep)
 {
-    if (s.kind != PlanStepKind::Move && s.kind != PlanStepKind::Pull && s.kind != PlanStepKind::Boss)
-        return false;                                       // the loader takes the bit on these kinds only
-    if (!(s.flags & ai::kPlanFlagWadeOk))
-        return false;
-    auto const at = [](float px, float py, float qx, float qy)
-    {
-        return std::fabs(px - qx) <= 0.2f && std::fabs(py - qy) <= 0.2f;
-    };
-    if (at(x, y, s.x, s.y))
-        return true;                                        // the row's own point
-    bool const rowWalk = r.phase == Phase::Walk && (at(r.walkX, r.walkY, s.x, s.y) ||
-        (r.hopWalk && at(r.walkX, r.walkY, r.hopX, r.hopY)));   // the walk under way is this row's own
-    if (!rowWalk)
-        return false;
-    if (at(x, y, r.walkX, r.walkY))
-        return true;                                        // the walk's target (also the fresh order)
-    return r.legOn && at(x, y, r.legX, r.legY);             // a leg of that walk
-}
-
-// The moves the run makes on its own inside a leg (a regroup's gather and its walk back to the anchor, an approach
-// stand, the return to the plan point, the follow-up after a pull) are no point of a row's own walk: RowHopWades says
-// no, and the move is refused "crosses or ends in liquid: no walkable path avoids it" although the leg's own hop wades
-// there. They may wade when they stay in the leg's wet area: within kWadeAreaYd of the own hop (the previous row to the
-// row) of a flagged row of the current step's leg. The probe's wet-hop list (forever/data/wc-wet-hops.tsv) is exactly
-// those hops, so a leg with no wet hop has no wet area and keeps the RFC rule; the depth is the core's own measured
-// reading (TbRunLiquid.h: a wade is at most kWadeDepthYd, never UNDER_WATER, deep water always pauses).
-constexpr float kWadeAreaYd = 12.0f;
-
-// Horizontal distance from (px, py) to the segment (ax, ay)-(bx, by).
-inline float WetAreaSegmentYd(float px, float py, float ax, float ay, float bx, float by)
-{
-    float const dx = bx - ax, dy = by - ay;
-    float const len2 = dx * dx + dy * dy;
-    float t = len2 > 0.0f ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0.0f;
-    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-    float const nx = ax + t * dx - px, ny = ay + t * dy - py;
-    return std::sqrt(nx * nx + ny * ny);
-}
-
-// Whether (x, y) lies in the wet area of the current step's leg: within kWadeAreaYd of the own hop of one of the leg's
-// wade-flagged rows. The hop is the pair the probe read (this row and the plan row before it).
-inline bool LegWetAreaAt(Run const& r, float x, float y)
-{
-    if (!r.plan || r.step >= r.plan->steps.size())
-        return false;
-    std::uint8_t const leg = r.plan->steps[r.step].leg;
-    for (std::size_t i = 1; i < r.plan->steps.size(); ++i)
-    {
-        PlanStep const& row = r.plan->steps[i];
-        if (row.leg != leg || !(row.flags & ai::kPlanFlagWadeOk))
-            continue;
-        if (row.kind != PlanStepKind::Move && row.kind != PlanStepKind::Pull && row.kind != PlanStepKind::Boss)
-            continue;                                       // the loader takes the bit on these kinds only
-        PlanStep const& from = r.plan->steps[i - 1];
-        if (WetAreaSegmentYd(x, y, from.x, from.y, row.x, row.y) <= kWadeAreaYd)
-            return true;
-    }
-    return false;
-}
-
-// A move the run makes on its own may wade: a point of the current row's own walk (RowHopWades), or a point inside the
-// current leg's wet area (LegWetAreaAt). The executor asks this for the lead's move and the run's bot walks.
-inline bool MoveMayWade(Run const& r, PlanStep const& s, float x, float y)
-{
-    return RowHopWades(r, s, x, y) || LegWetAreaAt(r, x, y);
+    return runIssued && liveStep;
 }
 
 // Walks the party to a point. True once the lead bot is there; otherwise
@@ -11562,6 +11520,32 @@ inline bool BossGateTick(Run& r, const Facts& f, std::uint32_t entry, std::uint3
     return true;
 }
 
+// The healer gate (Facts::healerPullGate): true when the party has a living healer that is not the lead bot and none of
+// them stands within kPullHealerMaxYd of the lead bot in its line of sight (MemberFact::healerSight, read by the glue this
+// tick). `who` names the healer nearest the lead bot and why it does not cover the tank. A party with no healer, a healer
+// that is itself the lead bot, a raid (its own healer rules) and a host that does not ask for the gate are all "covered".
+inline bool HealerOutOfReach(const Facts& f, std::string& who)
+{
+    if (!f.healerPullGate || f.raid.on)
+        return false;
+    const MemberFact* nearest = nullptr;
+    for (const MemberFact& m : f.members)
+    {
+        if (!m.healer || m.name.empty() || m.name == f.carrier || m.frozen || m.offPlanMap || m.otherCopy)
+            continue;
+        if (m.yd <= kPullHealerMaxYd && m.healerSight)
+            return false; // one healer covers the tank
+        if (!nearest || m.yd < nearest->yd)
+            nearest = &m;
+    }
+    if (!nearest)
+        return false;
+    who = nearest->name + (nearest->yd > kPullHealerMaxYd ? " is " + Num(nearest->yd) + " yd from the tank (more than " +
+                                                                  Num(kPullHealerMaxYd) + ")"
+                                                            : std::string(" has no line of sight to the tank"));
+    return true;
+}
+
 // Gathers the party, crowd-controls the plan's cc targets of the pack (a
 // `cc <mark> <guid> <bot>` each, once per unit and step, PickCcOrder), then
 // sends `pullback <guid>`.
@@ -11646,9 +11630,10 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
         r.standPullShotGuid = 0; // the pull never went out (the cap paused the step)
         return;
     }
-    if (walkBack && r.walkBackPulls >= kMaxWalkBackPulls)
+    std::uint32_t const walkBackCap = f.walkBackPullCap ? f.walkBackPullCap : kMaxWalkBackPulls;
+    if (walkBack && r.walkBackPulls >= walkBackCap)
     {
-        Pause(r, "walk back: " + std::to_string(kMaxWalkBackPulls) + " pulls on the way did not clear it");
+        Pause(r, "walk back: " + std::to_string(walkBackCap) + " pulls on the way did not clear it");
         r.standPullShotGuid = 0; // the pull never went out (the walk-back cap paused the step)
         return;
     }
@@ -11771,6 +11756,32 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
         r.standDisciplineGuid = 0;
         r.standDisciplineMs = 0;
     }
+    // The healer gate (Facts::healerPullGate): the pull waits, in the gather phase, until a healer stands within heal range of
+    // the tank in its line of sight, for at most kPullHealerHoldMs; the walk-back and hop pulls wait too. A body-pull retry
+    // is a fight already on and never waits.
+    std::string healerWhy;
+    if (!body && HealerOutOfReach(f, healerWhy))
+    {
+        bool const spent = r.healerHoldMs >= kPullHealerHoldMs;
+        if (!spent)
+        {
+            bool const first = r.healerHoldMs == 0;
+            r.healerHoldMs += dt;
+            if (r.phase != Phase::Gather)
+            {
+                EnterPhase(r, Phase::Gather);
+                SendGather(r, f, order); // the party forms up on the tank
+            }
+            else if (first)
+                SendGather(r, f, order); // already gathering for another reason: this hold's own gather order, once (Codex review round 2)
+            r.stepIdleMs = dt > r.stepIdleMs ? 0 : r.stepIdleMs - dt; // the wait is the step's work, not idling
+            r.note = "pull held: the healer " + healerWhy;
+            return;
+        }
+        outOfPlace += "; healer gate spent: the healer " + healerWhy;
+    }
+    else if (!body)
+        r.healerHoldMs = 0; // a healer covers the tank: the next uncovered healer starts a fresh hold
     std::uint32_t& tries = r.pullTries[u.guid];
     if (tries >= kMaxPullsPerTarget)
     {
@@ -11804,6 +11815,7 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
     r.joinerReportDue = false;
     r.pullHop = hop;
     r.residuePullGuid = 0; // a residue pull marks its unit after this (PackResidueTick)
+    r.healerHoldMs = 0;    // the pull went out: its healer hold is spent or was never needed
     r.reachStopped = false;
     EndBigWalk(r);
     EnterPhase(r, Phase::AwaitPull);
@@ -12797,13 +12809,57 @@ inline int PickApproachStand(const Run& r, const PlanStep& s, const std::vector<
     return best;
 }
 
+// The last pull or boss step before the current step that the run left cleared: a step it advanced past that
+// notCleared does not name (a skipped, deferred-and-given-up or out-of-reach pack is not cleared), after the run's
+// start step; npos for none. It is the step pointer's own record, not a live reading, so it survives a death, a
+// wipe and a resume: the furthest place on the route the party is known to have walked to (ReplayFloor). A row for
+// the other team counts too: the run walked its leg past it, so a floor there is still behind the party.
+inline std::size_t LastClearedStep(const Run& r)
+{
+    std::size_t found = static_cast<std::size_t>(-1);
+    for (std::size_t i = r.startStep; r.plan && i < r.step && i < r.plan->steps.size(); ++i)
+    {
+        const PlanStep& g = r.plan->steps[i];
+        if ((g.kind == PlanStepKind::Pull || g.kind == PlanStepKind::Boss) && !r.notCleared.count(i))
+            found = i;
+    }
+    return found;
+}
+
+// Whether a direct step (a navmesh hole the route crosses in a straight line) lies in [from, to] of the plan.
+inline bool DirectStepIn(const Run& r, std::size_t from, std::size_t to)
+{
+    for (std::size_t i = from; r.plan && i <= to && i < r.plan->steps.size(); ++i)
+        if (r.plan->steps[i].kind == PlanStepKind::MoveDirect)
+            return true;
+    return false;
+}
+
 // The lowest plan index a walk back may start at: the checkpoint when it is
-// known (a point before it can lie behind a hole the lead bot crossed since),
-// else 0 (as at the entrance: before every hole). Never before the step the
-// run started at (Run::startStep: a placed run never walked the steps before it).
+// known (a point before it can lie behind a hole the lead bot crossed since);
+// with no checkpoint (a death, a wipe's release to the entrance, a pause) the
+// last move point at or before the last cleared step, the furthest point the
+// party is known to have walked to (WC run 6: after the wipe at leg 8 the
+// replay began at the point nearest the lead bot at the entrance, the plan's
+// first move point, and walked the whole route before the next pull); else 0
+// (before every hole). With no checkpoint the lead bot may stand at the
+// entrance, so a direct step (a hole) at or before the last cleared step keeps
+// the old floor: the hole has to be crossed again, and FirstUncrossedDirect
+// still names it. Never before the step the run started at (Run::startStep: a
+// placed run never walked the steps before it).
 inline std::size_t ReplayFloor(const Run& r)
 {
-    return std::max(CheckpointKnown(r) ? r.checkpoint : static_cast<std::size_t>(0), r.startStep);
+    std::size_t floor = r.startStep;
+    if (CheckpointKnown(r))
+        floor = std::max(floor, r.checkpoint);
+    else if (std::size_t const cleared = LastClearedStep(r);
+             cleared != static_cast<std::size_t>(-1) && !DirectStepIn(r, r.startStep, cleared))
+    {
+        for (std::size_t i = r.startStep; i <= cleared && i < r.plan->steps.size(); ++i)
+            if (IsRunMovePoint(r, i))
+                floor = std::max(floor, i);
+    }
+    return floor;
 }
 
 // The first direct step before the current step that the lead bot has not
@@ -20270,8 +20326,12 @@ inline bool LeadRevivedAway(Run& r, const Facts& f)
 // The owner's wait rule: drops the fallen that are back (alive and within
 // kGatherYd of the lead bot), then starts the regroup when one is not. The
 // lead bot dead itself: the regroup's revive brings it back (at the entrance
-// after a release) and the walk back follows; counted against
-// kAutoRegroupsPerStep, past that it pauses. False when nobody is waited for.
+// after a release) and the walk back follows. That wait is NOT counted against
+// kAutoRegroupsPerStep: it is no retry the run can make either way, and the
+// regroup it starts already bounds itself (RezHold's budget, or the
+// `revive party` clock and the "still dead after" pause); counting it made a
+// lead death that came after a wipe's regroups pause on the next tick, before
+// a resurrection had one tick to start. False when nobody is waited for.
 inline bool WaitForFallen(Run& r, const Facts& f)
 {
     for (auto it = r.waitFor.begin(); it != r.waitFor.end();)
@@ -20289,16 +20349,7 @@ inline bool WaitForFallen(Run& r, const Facts& f)
         return false;
     bool const lead = !f.leadAlive;
     if (lead)
-    {
-        if (r.autoRegroups >= kAutoRegroupsPerStep)
-        {
-            RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more
-            Pause(r, "the lead bot is dead: revive it, then .bot run resume (" +
-                std::to_string(kAutoRegroupsPerStep) + " regroups by itself at this step did not hold)");
-            return true;
-        }
-        ++r.autoRegroups;
-    }
+        RearmRescueAfterDeath(r); // a death: the resume after this regroup's own pause may teleport once more
     std::string const note = WaitNote(r, f);
     bool const deathSpotKnown = r.leadDied;
     // The regroup's gather overrides a walk under way: the step starts over

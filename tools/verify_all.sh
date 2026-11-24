@@ -50,6 +50,16 @@ fi
 echo "✓ Engine unit tests passed."
 
 echo ""
+echo "=== 4b. Running the ForeverLua test toolkit checks ==="
+# forever/lua/check.sh: luac -p, luacheck when installed, and the mock test (lua5.4, no server).
+if command -v lua5.4 >/dev/null 2>&1 || command -v lua >/dev/null 2>&1; then
+    bash forever/lua/check.sh
+    echo "✓ ForeverLua test toolkit verified (syntax, lint when available, mock test)."
+else
+    echo "ℹ Skipping the ForeverLua test toolkit checks (no lua5.4/lua on PATH)."
+fi
+
+echo ""
 echo "=== 5. Running Standalone Policy Tests ==="
 if command -v g++ >/dev/null 2>&1; then
     JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
@@ -105,7 +115,7 @@ if command -v g++ >/dev/null 2>&1; then
     compile_one() {
         local src="$1" name
         name="$(basename "${src}" .cpp)"
-        if ! g++ -std=c++17 -Wall -Wextra "${src}" -o "${BUILD_DIR}/${name}" 2> "${BUILD_DIR}/${name}.compile.log"; then
+        if ! g++ -std=c++17 -Wall -Wextra -I. "${src}" -o "${BUILD_DIR}/${name}" 2> "${BUILD_DIR}/${name}.compile.log"; then
             echo "COMPILE FAILED: ${name} (last 20 lines):"
             tail -n 20 "${BUILD_DIR}/${name}.compile.log" | sed 's/^/    /'
             return 1
@@ -185,6 +195,12 @@ echo "=== 8b. Verifying Config Keys Are Actually Used ==="
 python3 tools/verify_config_usage.py
 python3 -m unittest tools/test_verify_config_usage.py
 echo "✓ Config usage verified."
+
+echo ""
+echo "=== 8c. Verifying the Forever Config Ships Only Keys It Reads ==="
+python3 forever/tools/gen_aiplayerbot_conf.py --check
+python3 -m unittest forever/tools/test_config_key_wiring.py
+echo "✓ Forever config keys verified."
 
 echo ""
 echo "=========================================="

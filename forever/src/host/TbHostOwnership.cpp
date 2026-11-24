@@ -21,6 +21,7 @@
 #include "runtime/RandomBotAccountRegistry.h"
 #include "runtime/RunReleaseHold.h"
 #include "host/TbH3.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRunHooks.h"
 #include "TbBotMgr.h"
@@ -126,11 +127,10 @@ PlayerConvenience& PlayerConvenience::Instance()
     return instance;
 }
 
-// The summon of a bot to its master: not ported. False = "not accepted", the callers then do nothing (they test the result). The
-// host's own BotMgr::Think already teleports a bot that is on another map or more than 100 yd from its master.
+// The summon of a bot to its master: false = "not accepted", the callers then do nothing (they test the result). The host's own
+// BotMgr::Think already teleports a bot that is on another map or more than 100 yd from its master.
 bool PlayerConvenience::RequestSummon(Player* /*requester*/, Player* /*bot*/, Player* /*anchor*/)
 {
-    tbcompat::Unported(tbcompat::Feature::PlayerSummon);
     return false;
 }
 
@@ -187,10 +187,9 @@ bool IsOrderProtectedItem(Player* /*bot*/, uint32_t /*itemId*/)
     return false;
 }
 
-std::vector<DisenchantQueueEntry> DisenchantQueued(uint32_t /*botGuidLow*/)
+std::vector<DisenchantQueueEntry> DisenchantQueued(uint32_t botGuidLow)
 {
-    tbcompat::Unported(tbcompat::Feature::PoolServices);
-    return {};
+    return tbhost::guild_orders::DisenchantQueued(botGuidLow);
 }
 
 void NoteDeath(uint32_t /*botGuidLow*/)

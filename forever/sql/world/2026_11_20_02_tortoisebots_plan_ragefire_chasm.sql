@@ -1,6 +1,8 @@
 -- Dungeon plan rows for a server module that runs dungeon plans, exported by forever-agent (plan-export --forever).
 -- The plan file is the single source: edit it there and export again; no row here is set by hand.
 -- A pack is named by creature entry and position; the rows carry no spawn id.
+-- An object row (open, open_proof, use_on, loot, wait_object, wait_clear) names the entry this server uses for the object:
+-- the plan's alt_entries value for it where the plan carries one, the plan's own entry otherwise.
 -- Idempotent: one transaction per plan deletes the plan's own rows from the four plan tables child first, then
 -- inserts the plan's rows parent first and upserts its boss rows by map and entry. The boss table is shared by
 -- every plan on the map, so the export never deletes from it; a boss row's name is only set from a value the plan
@@ -8,14 +10,14 @@
 --
 -- Tables: ai_dungeon_plan, ai_dungeon_leg, ai_dungeon_step, ai_dungeon_step_unit, ai_dungeon_boss.
 
--- ragefire_chasm: map 389, 9 legs, 80 steps, 51 pull groups, 103 unit rows
+-- ragefire_chasm: map 389, 9 legs, 78 steps, 50 pull groups, 103 unit rows
 START TRANSACTION;
 DELETE FROM `ai_dungeon_step_unit` WHERE `plan` = 'ragefire_chasm';
 DELETE FROM `ai_dungeon_step` WHERE `plan` = 'ragefire_chasm';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'ragefire_chasm';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'ragefire_chasm';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('ragefire_chasm', 389, '11319,11324,11322', '11319,11324', '11319', 'forever-agent 63fc3f78 dungeons/ragefire_chasm.json', 'plan v1, mapped (not live-checked)');
+('ragefire_chasm', 389, '11319,11324,11322', '11319,11324', '11319', 'forever-agent 9ca1e5bc dungeons/ragefire_chasm.json', 'plan v1, mapped (not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('ragefire_chasm', 0, 'tunnel', ''),
 ('ragefire_chasm', 1, 'tunnel_end', ''),
@@ -41,14 +43,12 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('ragefire_chasm', 2, 1, 'move', 0, -163.060, -33.170, -39.660, 0.000, 0, 0, 0, 0, '', 'pull group 0 approach'),
 ('ragefire_chasm', 2, 2, 'pull', 0, -181.510, -32.070, -44.430, 20.000, 0, 0, 0, 0, '11318', 'pull group 0'),
 ('ragefire_chasm', 2, 3, 'move', 0, -205.000, -34.000, -49.900, 0.000, 0, 0, 0, 0, '', 'pull group 1 approach'),
-('ragefire_chasm', 2, 4, 'pull', 0, -238.330, -35.950, -56.440, 12.000, 0, 0, 0, 0, '11318', 'pull group 1'),
-('ragefire_chasm', 2, 5, 'move', 0, -221.200, -34.700, -54.700, 0.000, 0, 0, 0, 0, '', 'pull group 2 approach'),
-('ragefire_chasm', 2, 6, 'pull', 0, -263.920, -34.620, -60.630, 12.000, 0, 0, 0, 0, '11319,11318', 'pull group 2'),
-('ragefire_chasm', 2, 7, 'pull', 0, -263.110, -14.450, -60.970, 12.000, 0, 0, 0, 0, '11318', 'pull group 3'),
-('ragefire_chasm', 2, 8, 'pull', 0, -289.530, -21.100, -61.520, 12.000, 0, 0, 0, 0, '11318', 'pull group 4'),
-('ragefire_chasm', 2, 9, 'pull', 0, -215.450, -15.930, -61.800, 6.000, 0, 0, 0, 0, '11318', 'pull group 5'),
-('ragefire_chasm', 2, 10, 'pull', 0, -211.150, -4.540, -61.760, 6.000, 0, 0, 0, 0, '11318,11319', 'pull group 6'),
-('ragefire_chasm', 2, 11, 'pull', 0, -183.390, 2.800, -56.810, 12.000, 0, 0, 0, 0, '11318', 'pull group 7'),
+('ragefire_chasm', 2, 4, 'pull', 0, -256.600, -35.000, -59.430, 20.000, 0, 0, 0, 0, '11318,11319', 'pull group 1'),
+('ragefire_chasm', 2, 5, 'pull', 0, -263.110, -14.450, -60.970, 12.000, 0, 0, 0, 0, '11318', 'pull group 2'),
+('ragefire_chasm', 2, 6, 'pull', 0, -289.530, -21.100, -61.520, 12.000, 0, 0, 0, 0, '11318', 'pull group 3'),
+('ragefire_chasm', 2, 7, 'pull', 0, -215.450, -15.930, -61.800, 6.000, 0, 0, 0, 0, '11318', 'pull group 4'),
+('ragefire_chasm', 2, 8, 'pull', 0, -211.150, -4.540, -61.760, 6.000, 0, 0, 0, 0, '11318,11319', 'pull group 5'),
+('ragefire_chasm', 2, 9, 'pull', 0, -183.390, 2.800, -56.810, 12.000, 0, 0, 0, 0, '11318', 'pull group 6'),
 ('ragefire_chasm', 3, 0, 'move', 0, -176.340, 4.800, -53.460, 0.000, 0, 0, 0, 0, '', 'to'),
 ('ragefire_chasm', 3, 1, 'move', 0, -164.000, 3.600, -46.910, 0.000, 0, 0, 0, 0, '', 'pull group 0 approach'),
 ('ragefire_chasm', 3, 2, 'pull', 0, -150.060, 2.180, -39.870, 12.000, 0, 0, 0, 0, '11318,11319', 'pull group 0'),
@@ -119,22 +119,22 @@ INSERT INTO `ai_dungeon_step_unit` (`plan`, `leg`, `seq`, `idx`, `entry`, `x`, `
 ('ragefire_chasm', 2, 2, 1, 11318, -181.500, -32.100, -44.400, 'patrol', ''),
 ('ragefire_chasm', 2, 4, 0, 11318, -238.660, -31.560, -56.620, 'pack', ''),
 ('ragefire_chasm', 2, 4, 1, 11318, -237.990, -40.350, -56.270, 'pack', ''),
-('ragefire_chasm', 2, 6, 0, 11319, -253.890, -38.880, -60.460, 'pack', ''),
-('ragefire_chasm', 2, 6, 1, 11318, -262.220, -29.890, -60.610, 'pack', ''),
-('ragefire_chasm', 2, 6, 2, 11318, -270.130, -31.880, -60.610, 'pack', ''),
-('ragefire_chasm', 2, 6, 3, 11319, -266.730, -28.030, -60.610, 'pack', ''),
-('ragefire_chasm', 2, 6, 4, 11318, -266.610, -44.400, -60.850, 'pack', ''),
-('ragefire_chasm', 2, 7, 0, 11318, -285.520, -20.880, -60.410, 'pack', ''),
-('ragefire_chasm', 2, 7, 1, 11318, -240.710, -8.030, -61.520, 'pack', ''),
-('ragefire_chasm', 2, 8, 0, 11318, -300.510, -28.410, -60.460, 'pack', ''),
-('ragefire_chasm', 2, 8, 1, 11318, -306.310, -29.130, -60.170, 'pack', ''),
-('ragefire_chasm', 2, 8, 2, 11318, -261.780, -5.760, -63.930, 'pack', ''),
-('ragefire_chasm', 2, 9, 0, 11318, -215.450, -15.930, -61.800, 'pack', ''),
-('ragefire_chasm', 2, 9, 1, 11318, -215.400, -15.900, -61.800, 'patrol', ''),
-('ragefire_chasm', 2, 10, 0, 11318, -217.670, -5.120, -61.800, 'pack', ''),
-('ragefire_chasm', 2, 10, 1, 11319, -211.070, -7.250, -61.800, 'pack', ''),
-('ragefire_chasm', 2, 10, 2, 11318, -204.720, -1.240, -61.680, 'pack', ''),
-('ragefire_chasm', 2, 11, 0, 11318, -183.390, 2.800, -56.810, 'pack', ''),
+('ragefire_chasm', 2, 4, 2, 11319, -253.890, -38.880, -60.460, 'pack', ''),
+('ragefire_chasm', 2, 4, 3, 11318, -262.220, -29.890, -60.610, 'pack', ''),
+('ragefire_chasm', 2, 4, 4, 11318, -270.130, -31.880, -60.610, 'pack', ''),
+('ragefire_chasm', 2, 4, 5, 11319, -266.730, -28.030, -60.610, 'pack', ''),
+('ragefire_chasm', 2, 4, 6, 11318, -266.610, -44.400, -60.850, 'pack', ''),
+('ragefire_chasm', 2, 5, 0, 11318, -285.520, -20.880, -60.410, 'pack', ''),
+('ragefire_chasm', 2, 5, 1, 11318, -240.710, -8.030, -61.520, 'pack', ''),
+('ragefire_chasm', 2, 6, 0, 11318, -300.510, -28.410, -60.460, 'pack', ''),
+('ragefire_chasm', 2, 6, 1, 11318, -306.310, -29.130, -60.170, 'pack', ''),
+('ragefire_chasm', 2, 6, 2, 11318, -261.780, -5.760, -63.930, 'pack', ''),
+('ragefire_chasm', 2, 7, 0, 11318, -215.450, -15.930, -61.800, 'pack', ''),
+('ragefire_chasm', 2, 7, 1, 11318, -215.400, -15.900, -61.800, 'patrol', ''),
+('ragefire_chasm', 2, 8, 0, 11318, -217.670, -5.120, -61.800, 'pack', ''),
+('ragefire_chasm', 2, 8, 1, 11319, -211.070, -7.250, -61.800, 'pack', ''),
+('ragefire_chasm', 2, 8, 2, 11318, -204.720, -1.240, -61.680, 'pack', ''),
+('ragefire_chasm', 2, 9, 0, 11318, -183.390, 2.800, -56.810, 'pack', ''),
 ('ragefire_chasm', 3, 2, 0, 11318, -152.450, 3.910, -40.590, 'pack', ''),
 ('ragefire_chasm', 3, 2, 1, 11319, -147.680, 0.440, -39.150, 'pack', ''),
 ('ragefire_chasm', 3, 3, 0, 11517, -147.550, 38.710, -38.800, 'boss', ''),

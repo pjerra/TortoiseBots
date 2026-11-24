@@ -17,6 +17,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <list>
 #include <string>
@@ -26,9 +27,11 @@
 #include "DataStores/DB2Stores.h"
 #include "DataStores/DB2Structure.h"
 #include "Entities/Creature/CreatureData.h"
+#include "Entities/Creature/GossipDef.h"
 #include "Entities/Player/Player.h"
 #include "Globals/ObjectMgr.h"
 #include "Maps/Map.h"
+#include "Quests/QuestDef.h"
 #include "TbCompat_S5.h"   // WorldQueryCompat: a missing module table answers no rows, never an abort
 #include "World/World.h"
 
@@ -382,10 +385,104 @@ inline void TravelOpenRunLogsCompat() {}
 // The taxi-node zone cache (W5 flight): flights are refused on this core, so no cache is built.
 inline void TravelLoadTaxiZonesCompat(std::unordered_map<uint32, uint32>& zones) { zones.clear(); }
 
-// Fishing locations (W7): no fish destinations on this core.
-inline bool TravelFishingCompat() { return false; }
-inline int32 FishingBaseSkillWL4(uint32 /*areaId*/) { return 0; }
-inline uint32 FishingZoneOfWL4(ai::AsyncGuidPosition const& /*pos*/) { return 0; }
+// Fishing locations (W7): the legacy store, loaded (ForeverCore has the shipped
+// FISH_LOCATION rows and a travel graph). The rows carry the classic area
+// FLAG (Turtle's ExploreFlag, ForeverCore's AreaBit); the store's keys on this
+// core are area ids, so the flag is mapped through the area table once. The
+// same flag can exist on more than one continent, so the row on the spot's map
+// wins, as the legacy flag lookup did.
+inline uint32 AreaIdOfStoredFishFlagWL4(int16 flag, uint32 mapId)
+{
+    if (flag < 0)
+        return 0;
+    struct FlagIndex
+    {
+        std::unordered_map<uint32, uint32> byMapAndFlag;
+        std::unordered_map<uint16, uint32> byFlag;
+    };
+    static FlagIndex const index = []()
+    {
+        FlagIndex out;
+        for (AreaTableEntry const* area : sAreaTableStore)
+        {
+            if (!area || area->AreaBit < 0)
+                continue;
+            uint16 const bit = uint16(area->AreaBit);
+            out.byMapAndFlag.emplace((uint32(area->ContinentID) << 16) | bit, area->ID);
+            out.byFlag.emplace(bit, area->ID);
+        }
+        return out;
+    }();
+    auto const onMap = index.byMapAndFlag.find((mapId << 16) | uint16(flag));
+    if (onMap != index.byMapAndFlag.end())
+        return onMap->second;
+    auto const anyMap = index.byFlag.find(uint16(flag));
+    return anyMap == index.byFlag.end() ? 0u : anyMap->second;
+}
+
+// A fish row's stored classic area flag, as the key this core's positions
+// carry: Turtle keeps the flag, ForeverCore's WorldPosition carries an area
+// id, so the flag is mapped once when the row is loaded.
+inline int32 StoredFishAreaKeyWL4(int32 storedFlag, uint32 mapId)
+{
+    return int32(AreaIdOfStoredFishFlagWL4(int16(storedFlag), mapId));
+}
+
+inline bool TravelFishingCompat() { return true; }
+
+// The area's fishing requirement, read like ObjectMgr::GetFishingBaseSkillLevel
+// (the row, then its parent areas) but without the core's "is not properly
+// defined in skill_fishing_base_level" error line: a sub-area without its own
+// row is the normal case here, and the loader asks for every fish spot.
+inline int32 FishingBaseSkillQuietWL4(uint32 areaId)
+{
+    static std::unordered_map<uint32, int32> const base = []()
+    {
+        std::unordered_map<uint32, int32> out;
+        if (QueryResult result = WorldQueryCompat("SELECT `entry`, `skill` FROM `skill_fishing_base_level`"))
+        {
+            do
+            {
+                Field* fields = result->Fetch();
+                out.emplace(fields[0].GetUInt32(), fields[1].GetInt32());
+            } while (result->NextRow());
+        }
+        return out;
+    }();
+
+    uint32 id = areaId;
+    for (uint32 depth = 0; id && depth < 8; ++depth)
+    {
+        auto const it = base.find(id);
+        if (it != base.end())
+            return it->second;
+        AreaTableEntry const* area = sAreaTableStore.LookupEntry(id);
+        if (!area)
+            break;
+        id = area->ParentAreaID;
+    }
+    return 0;
+}
+
+inline int32 FishingBaseSkillWL4(uint32 areaId)
+{
+    return FishingBaseSkillQuietWL4(areaId);
+}
+
+inline uint32 FishingZoneOfWL4(ai::AsyncGuidPosition const& pos)
+{
+    uint32 const areaId = pos.GetAreaFlag();
+    AreaTableEntry const* area = areaId ? sAreaTableStore.LookupEntry(areaId) : nullptr;
+    if (area && FishingBaseSkillQuietWL4(area->ID))
+        return area->ID;
+
+    uint32 const zoneId = area ? (area->ParentAreaID ? area->ParentAreaID : area->ID) : 0;
+    AreaTableEntry const* zone = zoneId ? sAreaTableStore.LookupEntry(zoneId) : nullptr;
+    if (zone && FishingBaseSkillQuietWL4(zone->ID))
+        return zone->ID;
+
+    return 0;
+}
 
 // Terrain cache trimming at the end of the legacy destination load: the destinations round does not load terrain beyond
 // the spawn area flags, so there is nothing to trim.
@@ -409,4 +506,120 @@ inline bool TravelPrecomputeAreaLevelsCompat() { return true; }
 // Never reached on this core (the fish loader returns first); the batch form needs no transaction here.
 inline void TravelBeginTransactionCompat() {}
 inline void TravelCommitTransactionCompat() {}
+
+// ===============================================================================================================
+// ROUND A3 (the travel chooser, walker and action): the fields and small services those files read, spelled
+// differently on the two cores. Each ForeverCore answer is the same question with the core's own data; where the
+// data does not exist it answers "less" (no banker, no focus, no tracked progress).
+// ===============================================================================================================
+
+// A creature whose gossip offers the guild bank (Turtle gossip_menu_id plus option_id/npc_option_npcflag; ForeverCore
+// a list of menu ids and an option kind).
+inline bool GuildBankerGossipWL4(CreatureInfo const* info)
+{
+    if (!info)
+        return false;
+    bool sawItems = false;
+    for (uint32 menuId : info->GossipMenuIds)
+    {
+        auto bounds = sObjectMgr.GetGossipMenuItemsMapBounds(menuId);
+        for (auto itr = bounds.begin(); itr != bounds.end(); ++itr)
+        {
+            sawItems = true;
+            if (itr->second.OptionNpc == GossipOptionNpc::GuildBanker)
+                return true;
+        }
+    }
+    if (!sawItems)
+    {
+        auto bounds = sObjectMgr.GetGossipMenuItemsMapBounds(0);
+        for (auto itr = bounds.begin(); itr != bounds.end(); ++itr)
+            if (itr->second.OptionNpc == GossipOptionNpc::GuildBanker)
+                return true;
+    }
+    return false;
+}
+
+// The spell focus a game object serves (Turtle spellFocus.focusId, ForeverCore spellFocus.spellFocusType).
+inline uint32 SpellFocusIdWL4(GameObjectInfo const* info)
+{
+    return info && info->type == GAMEOBJECT_TYPE_SPELL_FOCUS ? info->spellFocus.spellFocusType : 0;
+}
+
+// A quest log row's state. ForeverCore removes a rewarded quest from the log, so a row is never rewarded there.
+inline bool QuestStatusRewardedWL4(QuestStatusData const& status) { return status.Status == QUEST_STATUS_REWARDED; }
+inline bool QuestStatusIncompleteWL4(QuestStatusData const& status) { return status.Status == QUEST_STATUS_INCOMPLETE; }
+inline bool QuestStatusCompleteWL4(QuestStatusData const& status) { return status.Status == QUEST_STATUS_COMPLETE; }
+
+// The quest's objective slots the stall check walks (Turtle's flat four-slot arrays; ForeverCore's objective list).
+inline uint32 QuestObjectiveSlotCountWL4(Quest const* quest)
+{
+    return quest ? std::min<uint32>(4, uint32(quest->GetObjectives().size())) : 0;
+}
+
+inline int32 QuestReqCreatureOrGOIdWL4(Quest const* quest, uint32 index)
+{
+    if (!quest || index >= quest->GetObjectives().size())
+        return 0;
+    QuestObjective const& objective = quest->GetObjectives()[index];
+    return objective.Type == QUEST_OBJECTIVE_MONSTER || objective.Type == QUEST_OBJECTIVE_GAMEOBJECT ? objective.ObjectID : 0;
+}
+
+inline uint32 QuestReqCreatureOrGOCountWL4(Quest const* quest, uint32 index)
+{
+    if (!quest || index >= quest->GetObjectives().size())
+        return 0;
+    QuestObjective const& objective = quest->GetObjectives()[index];
+    return objective.Type == QUEST_OBJECTIVE_MONSTER || objective.Type == QUEST_OBJECTIVE_GAMEOBJECT ? uint32(std::max(0, objective.Amount)) : 0;
+}
+
+// The live counters of one objective slot (Turtle m_creatureOrGOcount/m_itemcount; ForeverCore the core's stored value).
+inline void QuestObjectiveCountersWL4(Player* bot, uint32 questId, Quest const* quest, uint32 index, uint32& kill, uint32& item)
+{
+    kill = 0;
+    item = 0;
+    if (!bot || !quest || index >= quest->GetObjectives().size())
+        return;
+    QuestObjective const& objective = quest->GetObjectives()[index];
+    int32 const value = std::max(0, bot->GetQuestObjectiveData(questId, objective.ID));
+    if (objective.Type == QUEST_OBJECTIVE_ITEM)
+        item = uint32(value);
+    else if (objective.Type == QUEST_OBJECTIVE_MONSTER || objective.Type == QUEST_OBJECTIVE_GAMEOBJECT)
+        kill = uint32(value);
+}
+
+// Taxi tables: the node row (Turtle sObjectMgr.GetTaxiNodeEntry, ForeverCore the DB2 store).
+inline TaxiNodesEntry const* TaxiNodeLookupWL4(uint32 nodeId)
+{
+    return sTaxiNodesStore.LookupEntry(nodeId);
+}
+inline char const* TaxiNodeNameWL4(TaxiNodesEntry const* node)
+{
+    return node ? node->Name[LOCALE_enUS] : "";
+}
+
+// The spline's movement origin (Turtle carries the caller's name; ForeverCore does not keep one, so no leg is
+// recognised as the action's own).
+inline char const* MoveSplineOriginWL4(Movement::MoveSpline const& /*spline*/) { return nullptr; }
+inline int32 MoveSplineTimeElapsedWL4(Movement::MoveSpline const& spline) { return spline.timePassed(); }
+
+// Riding a mesa lift: the legacy transport mark (Turtle SetTransportData + MOVEFLAG_ONTRANSPORT; ForeverCore keeps
+// the transport in the movement info and has no on-transport flag).
+inline void LiftSetTransportWL4(Player* bot, ObjectGuid guid, uint32 now)
+{
+    if (!bot)
+        return;
+    bot->m_movementInfo.transport.guid = guid;
+    bot->m_movementInfo.transport.pos.Relocate(0.0f, 0.0f, 0.0f, bot->GetOrientation());
+    bot->m_movementInfo.transport.time = now;
+}
+inline ObjectGuid LiftTransportGuidWL4(Player* bot)
+{
+    return bot ? bot->m_movementInfo.transport.guid : ObjectGuid();
+}
+inline void LiftClearTransportWL4(Player* bot)
+{
+    if (bot)
+        bot->m_movementInfo.ResetTransport();
+}
 }

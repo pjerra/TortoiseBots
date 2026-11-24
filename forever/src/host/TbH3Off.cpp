@@ -3,6 +3,7 @@
 // out of this one and filters THIS file out of the slice build). Every command answers the same refusal the real handlers give when
 // engine::Built() is false: `error code=engine-not-built cmd=<name> msg=<percent-encoded> [#token]` (grammar version 2, forever/docs/TB-COMMANDS.md).
 #include "host/TbH3.h"
+#include "host/TbHostLfgFill.h"
 
 #include "Chat.h"
 
@@ -34,7 +35,9 @@ std::string TokenOf(std::string_view tail)
     }
     return std::string(word);
 }
+} // namespace
 
+// Declared in TbH3.h: the default build's `ai`/`cs` commands answer through it too (TbAddonAi.cpp).
 bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd)
 {
     // The same percent-encoding as the real writers (TbH3.cpp Enc): every byte outside [A-Za-z0-9._-] as %XX.
@@ -61,7 +64,6 @@ bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const
     handler->SetSentErrorMessage(true);
     return false;
 }
-}
 
 bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "order"); }
 bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "role"); }
@@ -86,6 +88,9 @@ bool CheckBotAccess(ChatHandler* /*handler*/, ObjectGuid /*botGuid*/, std::strin
 bool CheckBotAccess(ChatHandler* /*handler*/, Player const* /*bot*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 bool CheckPartyLeadAccess(Player const* /*sender*/, Player const* /*leader*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 bool CheckPartyLeadAccess(ChatHandler* /*handler*/, Player const* /*leader*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+// proof-1 A: the `.tb run` observer guard is an engine-build rule like CheckBotAccess, and in this build it allows like the others.
+bool CheckRunObserverAccess(ChatHandler* /*handler*/, Player const* /*bot*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
+bool CheckRunObserverAccess(ChatHandler* /*handler*/, ObjectGuid /*botGuid*/, std::string& /*code*/, std::string& /*detail*/) { return true; }
 // TB-1: `.tb hurt` and `.tb power` (TbScripts.cpp, compiled in both builds) stop at RequireEngine before they ask who the target is, and
 // `.tb role`, `.tb equip` and `.tb learn` are the NotBuilt stubs above, so this rule is never reached here. The symbol has to exist for the
 // option-OFF link all the same; it answers what the real handlers answer without the engine.
@@ -111,5 +116,14 @@ bool HandleHear(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 {
     return h3::NotBuilt(handler, args, "hear");
 }
+}
+namespace lfg
+{
+// The fill needs the engine's free bots; this build has none.
+bool HandleLfg(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    return h3::NotBuilt(handler, args, "lfg");
+}
+void RegisterScripts() { }
 }
 }

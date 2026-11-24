@@ -72,15 +72,25 @@ void HolyPaladinStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "enemy is close",
         NextAction::array(0, new NextAction("judgement", ACTION_NORMAL), NULL)));
 
-    // Tortoise melee-weave engine: Crusader Strike on cooldown when already
-    // in melee (the "in reach" action never walks the healer in).
-    // 5/5 Blessed Strikes gives CS a chance to reset Holy Shock's cooldown,
-    // and Holy Judgement makes the next Holy Light cast faster, so every CS
-    // contributes to the heal chain. This is THE defining add for the Holy
-    // Paladin in our 37/3/11 melee-weave build.
-    triggers.push_back(new TriggerNode(
-        "crusader strike",
-        NextAction::array(0, new NextAction("crusader strike in reach", ACTION_NORMAL + 4), NULL)));
+    // Melee-weave (AiPlayerbot.HolyPaladinMeleeWeave): while nobody in the
+    // group needs more than the light-heal band, walk into melee of the
+    // current target, keep Seal of Wisdom up and swing. Holy Strike is the
+    // only strike: Forever paladins never learn Crusader Strike, so the old
+    // in-reach row (and its off-state) would be inert and is gone.
+    if (sPlayerbotAIConfig.holyPaladinMeleeWeave)
+    {
+        triggers.push_back(new TriggerNode(
+            "holy melee weave reach",
+            NextAction::array(0, new NextAction("reach melee", ACTION_MOVE), NULL)));
+
+        triggers.push_back(new TriggerNode(
+            "holy melee weave attack",
+            NextAction::array(0, new NextAction("holy melee attack", ACTION_NORMAL + 1), NULL)));
+
+        triggers.push_back(new TriggerNode(
+            "holy strike",
+            NextAction::array(0, new NextAction("holy strike in reach", ACTION_NORMAL + 5), NULL)));
+    }
 
     // Caster interrupt: Hammer of Justice (60-sec CD, 6-sec stun)
     triggers.push_back(new TriggerNode(

@@ -49,7 +49,7 @@ WadeWay WadePointOnMap(Map* map, float x, float y, float z)
         return WadeWay::Refused;            // no terrain to ask: refused (do less)
     GridMapLiquidData data;
     GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, &data);
-    return WadePointOf(static_cast<std::uint32_t>(status), data.level, data.depth_level, z);
+    return WadePointOf(static_cast<std::uint32_t>(status), data.level, data.depth_level, z, data.type_flags);
 }
 
 bool SegmentWadeRefusedOnMap(Map* map, float ax, float ay, float az, float bx, float by, float bz)
@@ -76,7 +76,7 @@ bool SegmentWadeTraceOnMap(Map* map, float ax, float ay, float az, float bx, flo
         float const px = ax + t * dx, py = ay + t * dy, pz = az + t * dz;
         GridMapLiquidData data;
         std::uint32_t const status = static_cast<std::uint32_t>(LiquidStatusCompat(terrain, px, py, pz, MAP_ALL_LIQUIDS, &data));
-        WadeWay const way = WadePointOf(status, data.level, data.depth_level, pz);
+        WadeWay const way = WadePointOf(status, data.level, data.depth_level, pz, data.type_flags);
         out.Keep(way, status, data.level - data.depth_level, px, py, pz);
         refused = refused || way == WadeWay::Refused;
     }

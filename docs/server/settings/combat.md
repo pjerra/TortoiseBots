@@ -42,6 +42,7 @@ These settings configure health and mana trigger percentages, engagement ranges,
 | [`AiPlayerbot.PullBackMaxReturnTime`](#aiplayerbotpullbackmaxreturntime) | `15` | Maximum seconds a tank has to return to group before pullback aborts. |
 | [`AiPlayerbot.MinRandomBotChangeStrategyTime`](#aiplayerbotminrandombotchangestrategytime) | `1800` (built in) | Minimum seconds a pool bot retains its strategy set before periodic refresh. |
 | [`AiPlayerbot.MaxRandomBotChangeStrategyTime`](#aiplayerbotmaxrandombotchangestrategytime) | `7200` (built in) | Maximum seconds a pool bot retains its strategy set before periodic refresh. |
+| [`AiPlayerbot.BotAcceptDuelMinimumLevel`](#aiplayerbotbotacceptduelminimumlevel) | `10` | Lowest bot level that accepts a duel challenge from anyone but its own master. |
 | [`AiPlayerbot.RandomBotForcePvp`](#aiplayerbotrandombotforcepvp) | `1` | Pool bots turn on the `/pvp` preference at every login so players can attack them anywhere. |
 | [`AiPlayerbot.RandomBotForcePvpPercent`](#aiplayerbotrandombotforcepvppercent) | `50` | Share of pool bots that get that PvP flag; the same bots every login. |
 | [`AiPlayerbot.WorldPvpSeek`](#aiplayerbotworldpvpseek) | `2` | Free pool bots seek flagged enemy players (`1`) or players and bots (`2`); `0` off. |
@@ -368,6 +369,21 @@ Maximum duration in seconds a pool bot retains its active strategy configuration
 Sets the upper bound for periodic pool bot strategy updates.
 
 Together with the minimum timer, each bot picks a randomized refresh time between these two bounds.
+
+</details>
+
+### `AiPlayerbot.BotAcceptDuelMinimumLevel`
+Lowest bot level that accepts a duel challenge from a player.
+**Default:** `10` · **Values:** `1` to `255` · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+A bot accepts a challenge when it is alive, out of combat and at least this level. Anyone other than the bot's own real player master must also leave the bot at 90% health or more; the master is accepted at any health. Everything else is declined, so a player cannot catch a bot already fighting something.
+
+The bot fights the duel with its normal class kit: the duel strategy takes the opponent as its target, so the usual rotation casts and swings at it until the core ends the duel. The core leaves the loser at 1 health, so a duel never kills. A bot never starts a fight with a player outside a duel; free bots challenge only other free bots.
+
+The value comes from `aiplayerbot.conf`, the file the bot engine reads (not `worldserver.conf`).
 
 </details>
 

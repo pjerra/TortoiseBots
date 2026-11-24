@@ -31,6 +31,8 @@ struct OrderSpec
     uint32 map = 0;
     uint32 instance = 0;        // move-direct: the Map instance the point was made in (0 = not recorded); two copies of a dungeon share the map id
     bool fromRun = false;
+    bool disengage = false;     // come: a fall back. Stops the swing, the cast and the pet's attack, and holds the bot passive on the way.
+    bool placed = false;        // come: a placement's own order (`.tb cmd place`). Only this one keeps the combat-time behaviour: no Reset mid-fight and no `stay` in the combat state.
 };
 
 // Everything the queue could refuse later, asked now and changing nothing: engine present, the legacy actions the verb needs registered, queue not full,
@@ -40,6 +42,13 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
 
 // Preflight, then queue (the bot's engine runs it at its next tick). `seq` is the order's number for `h3::LastOrder`.
 bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::string& detail, uint32& seq);
+
+// The two role calls the dungeon finder's fill needs, the same ones `.tb role` makes. `BotNaturalRoles` is the bot's own spec mask
+// (ai::BotRoles from AiFactory::GetPlayerRoles; 0 for no bot). `SetBotRole` commits a role now: the stored role, the role map, the
+// strategy snapshots and the kit rebuild, then `follow` of its master; a tank order on a class this slice gives no tank kit is
+// refused (empty string = done, else the refusal code and detail, as `.tb role`). World thread only.
+uint8 BotNaturalRoles(Player* bot);
+bool SetBotRole(Player* bot, uint8 role, std::string& code, std::string& detail);
 
 // R6 (review item 1): the run's cancel. `CancelRunOrders` removes the orders the run's executor queued for this bot (OrderSpec::fromRun) and have not run yet
 // (a hand-typed `.tb order` stays); the bot's last result becomes `fail:cancelled`. Returns how many. `EndRunPull` ends a pull the run started on this bot: the
@@ -51,6 +60,21 @@ void EndRunPull(Player* bot);
 // Issue #15: clears the stay a `place`/`fall back` `come` order wrote, but only while that order (by `seq`) is still the bot's last one and it was a
 // `come`: a bot whose commander changed is left to its new master, never given an order by the old one. Safe with no engine.
 bool ReleasePlaceStay(Player* bot, uint32 seq);
+
+// Issue #15: a fall back's `come` holds the bot passive so it stops fighting on the way. Releases that passivity (and the combat-state stay) once
+// the bot reaches its fall-back spot, but only while the fall-back order (by `seq`) is still its last one. Safe with no engine.
+bool ReleasePlaceDisengage(Player* bot, uint32 seq);
+
+// Issue #15 F1: drops the emergency `passive` of the fall back's own `come` (by `seq`), whatever order owns the bot now, and only while no newer
+// order that sets `passive` itself is the bot's last one: `hold`, `flee` and an owner's `+passive` keep their own, so a fleeing bot never starts
+// fighting again. A passive the fall back did not set (the owner's, a hold's, a flee's) is never touched; the row's own walk-back `come` carries
+// the record. Returns true when the row has no passive record left to serve (released, or never the row's), i.e. the row may stop disengaging;
+// false only with no engine (a bot that is away). Safe with no engine.
+bool ReleasePlacePassive(Player* bot, uint32 seq);
+
+// Issue #15: an `attack`/`pull`/`pullback`/`resume` ended a fall back. Drops the emergency `passive` and `stay` ONLY while the stay position still
+// is the row's spot (the placement's own), so a movement order that wrote its own stay is never touched. Never queues an order. Safe with no engine.
+bool ReleasePlaceHold(Player* bot, float x, float y, float z);
 
 // R6 (review item 5): registers (on) or drops (off) a run's leader: while registered, the bot's engine hook keeps it from following its commander when it is out of
 // combat with no pull under way (it holds on `stay` where it stands). The run calls it at start and at its end.

@@ -14,6 +14,7 @@
 #include "Group.h"
 #include "Player.h"
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -54,10 +55,16 @@ Feature const kFeatures[] = {
     { "auto-food", "TortoiseBots.AutoFood", true, 1, "Auto food" },
     { "class-quests", "TortoiseBots.ClassQuestSpells", true, 0, "Class quest spells" },
     { "world-gather", "TortoiseBots.World.Professions", true, 0, "Free-bot gathering" },
+    { "world-fishing", "TortoiseBots.World.Fishing", true, 1, "Free-bot fishing" },
+    { "world-disenchant", "TortoiseBots.World.Disenchant", true, 1, "Free-bot disenchanting" },
+    { "world-enchant-gear", "TortoiseBots.World.EnchantGear", true, 1, "Free-bot gear enchanting" },
     { "world-auction", "TortoiseBots.World.Auction", true, 0, "Bot auction house" },
     { "group-quests", "TortoiseBots.World.GroupQuests", true, 1, "Group quests" },
     { "capital-errands", "TortoiseBots.World.CapitalErrands", true, 1, "Capital errands" },
     { "guild-mail", "TortoiseBots.World.GuildMail", true, 1, "Guild mail" },
+    { "world-pickpocket", "TortoiseBots.World.Pickpocket", true, 1, "Rogue pickpocket" },
+    { "world-lockboxes", "TortoiseBots.World.Lockboxes", true, 1, "Rogue lockbox opening" },
+    { "world-lockbox-mail", "TortoiseBots.World.LockboxMail", true, 1, "Lockbox by guild mail" },
     { "rest-health", "TortoiseBots.Slice.RestHealthPct", false, 90, "Rest at health %" },
     { "rest-mana", "TortoiseBots.Slice.RestManaPct", false, 80, "Rest at mana %" },
 };
@@ -207,6 +214,14 @@ void HandleRun(Player* requester, std::string_view args)
     // the addon keeps them on bridge instead of hanging the click.
     addon::Err(requester, "run " + request.sub, "unsupported", "not available on this server yet");
 }
+std::vector<std::string> BuildFeaturesChatLines()
+{
+    std::vector<std::string> lines;
+    lines.reserve(std::size(kFeatures));
+    for (Feature const& feature : kFeatures)
+        lines.push_back("TortoiseBots: feature " + std::string(feature.id) + "=" + FeatureValue(feature) + " (" + feature.label + ")");
+    return lines;
+}
 } // namespace
 
 void AppendCcAssign(Player* requester)
@@ -234,6 +249,11 @@ void AppendCcAssign(Player* requester)
     for (auto const& row : rows)
         addon::Send(requester, CcLine(row.first, row.second));
     addon::Send(requester, std::string(kCcEnd));
+}
+
+std::vector<std::string> FeaturesChatLines()
+{
+    return BuildFeaturesChatLines();
 }
 
 void RegisterAddonVerbsInfo()

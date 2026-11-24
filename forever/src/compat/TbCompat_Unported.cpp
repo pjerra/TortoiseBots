@@ -83,7 +83,6 @@ void UnportedPacketHandler(std::string const& name)
 {
     struct Group { Feature feature; std::initializer_list<char const*> handlers; };
     static Group const groups[] = {
-        { Feature::IncomingLoot, { "loot roll", "loot start roll", "loot vote", "loot roll won" } },
         { Feature::IncomingTaxi, { "activate taxi", "taxi done" } },
         { Feature::IncomingGroup, { "group invite", "uninvite", "uninvite guid", "group set leader", "party command", "ready check",
             "summon request", "duel requested" } },
@@ -94,9 +93,6 @@ void UnportedPacketHandler(std::string const& name)
         { Feature::IncomingExperience, { "levelup", "xpgain", "honorgain" } },
         { Feature::IncomingEmotes, { "receive text emote", "receive emote" } },
         { Feature::IncomingObjectUse, { "use game object", "area trigger", "gossip hello" } },
-        { Feature::IncomingDeath, { "release spirit", "revive from corpse", "resurrect request" } },
-        { Feature::IncomingCastFailed, { "cast failed" } },
-        { Feature::IncomingSpeedChange, { "check mount state" } },
     };
     for (Group const& group : groups)
         for (char const* handler : group.handlers)

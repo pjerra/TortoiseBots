@@ -418,8 +418,9 @@ public:
             l.Guid("a", e.a);
         if (e.b)
             l.Guid("b", e.b);
+        // "v" is every record's schema version, so the event's own count is "n".
         if (e.v)
-            l.I("v", e.v);
+            l.I("n", e.v);
         if (!e.s.empty())
             l.Str("s", e.s);
         if (!e.s2.empty())

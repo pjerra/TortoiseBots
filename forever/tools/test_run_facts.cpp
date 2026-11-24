@@ -319,7 +319,7 @@ void BuildFacts(Facts& f, ScriptWorld& w, Run const& r)
         m.yd = i == 0 ? 0.0f : 4.0f + float(i);
         m.x = w.x + m.yd; m.y = w.y; m.z = w.z;
         m.inCombat = e.inCombat;
-        m.tank = i == 0; m.healer = i == 1; m.core = i < 2; m.level = 18;
+        m.tank = i == 0; m.healer = i == 1; m.core = i < 2; m.level = 18; m.healerSight = true;
         m.actedMs = e.inCombat ? 0u : 0xFFFFFFFFu;
         party.push_back(e);
     }

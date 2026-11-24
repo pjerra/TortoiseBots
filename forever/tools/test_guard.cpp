@@ -15,6 +15,32 @@ namespace
 constexpr g::Guid Caller{10, 1}, OtherCmd{20, 1}, BotLead{30, 1}, None{};
 }
 
+// proof-1 A: the narrow GM-observer exemption of `.tb run`. A GM whose commander chain ends at a bot (the run's bot commander) may control the run.
+static void TestObserverGmBotCommander()
+{
+    CHECK(g::ObserverMayControlRun(true, true, false));
+}
+
+// A GM behind a chain that ends at a real player is refused: that player owns the party.
+static void TestObserverGmPlayerOwned()
+{
+    CHECK(!g::ObserverMayControlRun(true, true, true));
+}
+
+// A caller that is not a GM is refused whatever the chain does.
+static void TestObserverNonGm()
+{
+    CHECK(!g::ObserverMayControlRun(true, false, false));
+    CHECK(!g::ObserverMayControlRun(true, false, true));
+}
+
+// The option off (TortoiseBots.Run.GmObserver = 0) refuses the GM too.
+static void TestObserverOptionOff()
+{
+    CHECK(!g::ObserverMayControlRun(false, true, false));
+    CHECK(!g::ObserverMayControlRun(false, false, false));
+}
+
 int main()
 {
     // 1. Foreign bot: bound to another commander via .tb master.
@@ -96,6 +122,11 @@ int main()
         s.partyLeaderIsBot = false;
         CHECK(g::CheckControl(s) == g::Verdict::Allowed);
     }
+
+    TestObserverGmBotCommander();
+    TestObserverGmPlayerOwned();
+    TestObserverNonGm();
+    TestObserverOptionOff();
 
     std::printf("test_guard: %d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;

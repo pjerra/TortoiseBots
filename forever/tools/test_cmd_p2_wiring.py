@@ -401,7 +401,7 @@ def check_player_led(source):
     leader hook keeps the binding when its in-party commander takes the lead and refreshes the flag from the leader the hook is about to store (the
     core fires it before it records the new leader), and a hand-over to anybody else still releases it. An outside-party binding is released as
     before."""
-    bind = function_body(source, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
+    bind = function_body(source, r"void NoteMaster\(std::vector<Player\*> const& bots, std::vector<L::Kind> const& kinds, Player\* leader, Player\* commander, uint32 bgInstance\)\s*\{")
     flags = re.search(r"L::FlagsOf\(([^;]*?)\);", bind)
     assert flags, "the bind's flags are gone"
     if "inParty && group->IsLeader(commander->GetGUID())" not in flags.group(1):
@@ -498,7 +498,7 @@ def check_group_hooks_defer(source, scripts=None):
         raise AssertionError("the tick never runs the releases its group hooks recorded")
     if maintain.index("RunPendingReleases();") > maintain.index("if (s.maintainAtMs"):
         raise AssertionError("the deferred releases wait for the 1 Hz gate instead of the next tick")
-    bind = function_body(source, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
+    bind = function_body(source, r"void NoteMaster\(std::vector<Player\*> const& bots, std::vector<L::Kind> const& kinds, Player\* leader, Player\* commander, uint32 bgInstance\)\s*\{")
     if "DropPending(commander->GetGUID());" not in bind:
         raise AssertionError("a rebind keeps a group event recorded for the binding it replaced")
     # The GroupScript class in TbScripts.cpp only forwards the events: a synchronous release or a group call added to the overrides would run
@@ -556,7 +556,7 @@ def check_restore_leadership(source):
 def check_lead_selection(source):
     """The bind's lead is chosen from what the command named: a host bot of this commander, else (a player leading his own party names himself) a
     bot of that party with a tank preferred - never the arbitrary first bot h3 holds."""
-    bind = function_body(source, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
+    bind = function_body(source, r"void NoteMaster\(std::vector<Player\*> const& bots, std::vector<L::Kind> const& kinds, Player\* leader, Player\* commander, uint32 bgInstance\)\s*\{")
     if "leadFacts.namedLeaderIsBotOfCommander = leader && h3::CommanderGuid(leader->GetGUID()) == commander->GetGUID();" not in bind:
         raise AssertionError("the bind no longer tells a commander's own bot from a player it addressed")
     if "player->GetGroup() != leaderGroup" not in bind:

@@ -3,9 +3,10 @@
 // window, caps, wire lines); the feed is the bot_events.csv rows the slice
 // actions already write (StoreLootAction, LootMoney, LootRoll votes).
 #include "host/TbAddonLootLog.h"
-#include "host/TbAddonLootLogPure.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+
+#include "host/TbAddonLootLogPure.h"
 
 #include "compat/botpch_forever.h"
 #include "host/TbAddonChannel.h"
@@ -341,6 +342,8 @@ bool HandleLootLogChat(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 } // namespace TortoiseBots
 
 #else
+
+#include "Chat.h"
 
 namespace TortoiseBots
 {

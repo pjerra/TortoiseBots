@@ -61,7 +61,7 @@ class D4Wiring(unittest.TestCase):
         self.assertIn("group->RemoveMember(guid, 0)", T_HEADER)
         self.assertIn("sObjectMgr.GetClosestGraveYard(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId(), bot->GetTeam())", T_HEADER)
         self.assertIn("bot->GetRace() == RACE_GOBLIN || bot->GetRace() == RACE_HIGH_ELF", T_HEADER)
-        self.assertIn("bot->TeleportToHomebind();", T_HEADER)
+        self.assertIn("bot->TeleportToHomebind(0, hearthCooldown);", T_HEADER)
         self.assertIn("bot->GetUInt32Value(PLAYER_SELF_RES_SPELL)", T_HEADER)
         self.assertIn("bot->GetSession()->HandleSelfResOpcode(packet);", T_HEADER)
 
@@ -88,13 +88,25 @@ class D4Wiring(unittest.TestCase):
         self.assertIn("PLAYER_FLAGS_GHOST", rep)                 # the answer is what the player is afterwards
 
     def test_forever_fallbacks_do_less(self):
-        # a request from outside the group and not the commander is declined; the bg aura and the self resurrection are counted and not done
+        # a request from outside the group and not the commander is declined; the bg aura is counted and not done
         offer = body(F_HEADER, "ResurrectOffererAcceptableCompat")
         self.assertIn("group->IsMember(offerer)", offer)
         self.assertIn("master->GetGUID() == offerer", offer)
-        self.assertIn("return false;", body(F_HEADER, "SelfResurrectPossibleCompat"))
         self.assertIn("Feature::BattlegroundRelease", F_HEADER)
-        self.assertIn("Feature::SelfResurrection", F_HEADER)
+        self.assertNotIn("Feature::SelfResurrection", F_HEADER)
+
+    def test_forever_self_resurrection_uses_the_core_list_and_typed_packet(self):
+        # the list is the player's own (soulstone, nether, Reincarnation); an id without a SpellInfo would be retried every tick
+        possible = body(F_HEADER, "SelfResurrectPossibleCompat")
+        self.assertIn("SelfResSpells.empty()", possible)
+        self.assertIn("HasAuraType(SPELL_AURA_PREVENT_RESURRECTION)", possible)
+        self.assertIn("sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE)", possible)
+        res = body(F_HEADER, "SelfResurrectCompat")
+        self.assertIn("WorldPackets::Spells::SelfRes packet{ WorldPacket(CMSG_SELF_RES) };", res)
+        self.assertIn("packet.SpellID = spellId;", res)
+        self.assertIn("HandleSelfResOpcode(packet);", res)
+        self.assertIn("SelfResSpells.FindIndex(spellId) < 0", res)
+        self.assertLess(res.index("continue;"), res.index("SelfRes packet"))       # an unknown id is skipped, not sent
 
     def test_a_dungeon_release_waits_for_an_entrance_on_forever_only(self):
         self.assertIn("return true;", body(T_HEADER, "InstanceEntranceKnownCompat"))

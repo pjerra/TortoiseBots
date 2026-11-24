@@ -12,6 +12,8 @@
 #include "host/TbH3.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
+#include "host/run/TbRunFactsPure.h"
+#include "host/run/TbRunPlayerLedPure.h"
 #include "host/run/TbRunStands.h"
 
 #include "GameTime.h"
@@ -21,6 +23,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <vector>
 
 namespace TortoiseBots
 {
@@ -73,10 +76,15 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Words const args = Split(tail);
     if (!RequireBuilt(handler, args, "run"))
         return false;
-    static char const* const usage = ".tb run start <leader> <plan> | stop <leader> [reason] | pause <leader> | resume <leader> | status <leader|all> | events <leader> [since=<seq>]";
+    static char const* const usage = ".tb run start <leader> <plan> [from step <N> | from leg <leg>] [lead=player] | stop <leader> [reason] | pause <leader> | resume <leader> | status <leader|all> | events <leader> [since=<seq>]";
     if (args.w.empty())
         return Fail(handler, args, "run", "missing-argument", usage);
     std::string const verb = Lower(args.w[0]);
+    // Issue #139: `lead=player` (the opt-in player-led run) is taken out of a start's words; every other verb keeps its words as typed.
+    std::vector<std::string> startWords = args.w;
+    playerled::LeadWord const leadWord = verb == "start" ? playerled::TakeLeadWord(startWords) : playerled::LeadWord::None;
+    if (leadWord == playerled::LeadWord::Bad)
+        return Fail(handler, args, "run", "bad-argument", "lead= takes player or bot (once): .tb run start <tank> <plan> lead=player");
 
     // ---- syntax first: nothing is read or changed before the words are known to be well formed ----
     if (verb != "start" && verb != "stop" && verb != "pause" && verb != "resume" && verb != "status" && verb != "events")
@@ -89,10 +97,23 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     std::string reason;
     if (verb == "start")
     {
-        if (args.w.size() < 3)
-            return Fail(handler, args, "run", "missing-argument", ".tb run start <leader> <plan>");
-        if (args.w.size() > 3)
-            return Fail(handler, args, "run", "unexpected-argument", args.w[3]);
+        if (startWords.size() < 3)
+            return Fail(handler, args, "run", "missing-argument", ".tb run start <leader> <plan> [from step <N> | from leg <leg>] [lead=player]");
+        // A placed start (WC run 9: a short live proof starts at the failing leg) is bot-led only: `lead=player` is not combined with it
+        // (RUN-KNOBS-139-NOTES.md, Part 2).
+        if (leadWord == playerled::LeadWord::Player && startWords.size() > 3)
+            return Fail(handler, args, "run", "unexpected-argument", startWords[3]);
+        // `from step <N>` (the step number the status line shows, from 0) or `from leg <number|name>`, the words and the resolution of
+        // the Turtle `.bot run start ... from` (DungeonRun::ParseStartArgs).
+        if (startWords.size() > 3)
+        {
+            std::string joined;
+            for (size_t i = 2; i < startWords.size(); ++i)
+                joined += (joined.empty() ? "" : " ") + Lower(startWords[i]);
+            DungeonRun::StartArgs const parsed = DungeonRun::ParseStartArgs(joined);
+            if (!parsed.ok || parsed.from == DungeonRun::StartFrom::Beginning || parsed.plan != Lower(startWords[2]))
+                return Fail(handler, args, "run", "unexpected-argument", startWords[3]);
+        }
     }
     else if (verb == "stop")
     {
@@ -125,15 +146,16 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (!IsHostBot(leader) || !MayLeadBots(handler, leader->GetGUID()))
             return Fail(handler, args, "run", "not-bot", leaderName + " is not a host bot: a run is led by a bot");
         {
+            // proof-1 A: a GM observer (TortoiseBots.Run.GmObserver) may start a run the ownership guard refuses; the party-lead rule stands for everyone else.
             std::string code, detail;
-            if (!h3::CheckPartyLeadAccess(handler, leader, code, detail))
+            if (!h3::CheckRunObserverAccess(handler, leader, code, detail) && !h3::CheckPartyLeadAccess(handler, leader, code, detail))
                 return Fail(handler, args, "run", code, detail);
             if (Group* group = leader->GetGroup())
             {
                 for (Group::MemberSlot const& slot : group->GetMemberSlots())
                 {
                     Player* m = ObjectAccessor::FindPlayer(slot.guid);
-                    if (m && m->IsInWorld() && h3::IsHostBot(m) && !h3::CheckBotAccess(handler, m, code, detail))
+                    if (m && m->IsInWorld() && h3::IsHostBot(m) && !h3::CheckRunObserverAccess(handler, m, code, detail))
                         return Fail(handler, args, "run", code, detail);
                 }
             }
@@ -141,10 +163,22 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         ai::DungeonPlanTable& table = ai::GetDungeonPlans();
         if (!table.Sealed())
             return Fail(handler, args, "run", "not-loaded", "the dungeon plans are not loaded (the plan loader has not run, or the module is off)");
-        ai::DungeonPlan const* plan = FindPlan(table, args.w[2]);
+        ai::DungeonPlan const* plan = FindPlan(table, startWords[2]);
         if (!plan)
-            return Fail(handler, args, "run", "no-plan", args.w[2] + " is not a loaded dungeon plan (.tb plan list)");
-        StartOutcome const started = StartRun(leader, plan, nowMs);
+            return Fail(handler, args, "run", "no-plan", startWords[2] + " is not a loaded dungeon plan (.tb plan list)");
+        size_t fromStep = 0;
+        if (startWords.size() > 3)
+        {
+            std::string joined;
+            for (size_t i = 2; i < startWords.size(); ++i)
+                joined += (joined.empty() ? "" : " ") + Lower(startWords[i]);
+            DungeonRun::StartArgs const parsed = DungeonRun::ParseStartArgs(joined);
+            if (facts::ResolvePlacedStart(*plan, parsed.from, parsed.value, fromStep) != DungeonRun::FromResult::Ok)
+                return Fail(handler, args, "run", "no-step", startWords[startWords.size() - 1] + " is not a step or leg of " + plan->name + " (.tb plan " + plan->name + " check)");
+        }
+        // `leader` is the tank bot either way; with `lead=player` the sender is the player who leads and walks (a bot-led run is the default, D1).
+        StartOutcome const started = leadWord == playerled::LeadWord::Player ? StartPlayerLedRun(SenderPlayer(handler), leader, plan, nowMs)
+                                                                             : StartRun(leader, plan, nowMs, fromStep);
         if (!started.code.empty())
             return Fail(handler, args, "run", started.code, started.detail);
         Rec end("run");
@@ -206,7 +240,7 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (verb == "stop")
     {
         std::string code, detail;
-        if (!h3::CheckBotAccess(handler, rec->leader, code, detail))
+        if (!h3::CheckRunObserverAccess(handler, rec->leader, code, detail))
             return Fail(handler, args, "run", code, detail);
         StopOutcome const stopped = StopRun(*rec, nowMs, reason.empty() ? std::string("by .tb run stop") : reason);
         if (!stopped.code.empty())
@@ -220,7 +254,7 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
     {
         std::string code, detail;
-        if (!h3::CheckBotAccess(handler, rec->leader, code, detail))
+        if (!h3::CheckRunObserverAccess(handler, rec->leader, code, detail))
             return Fail(handler, args, "run", code, detail);
     }
     StateOutcome const changed = verb == "pause" ? PauseRun(*rec, nowMs) : ResumeRun(*rec, nowMs);

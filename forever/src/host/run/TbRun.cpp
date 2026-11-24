@@ -13,9 +13,12 @@
 #include "host/run/TbRunBindingPure.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
+#include "host/run/TbRunPlayerLed.h"
+#include "host/run/TbRunPlayerLedPure.h"
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "host/run/TbRunTasks.h"
+#include "runtime/DecisionCapture.h"
 #include "runtime/SystemRunPolicy.h"
 
 #include "GameTime.h"
@@ -65,7 +68,7 @@ void CountPulls(RunRec const& rec, uint32& pulls, uint32& done)
         if (plan->steps[i].kind != ai::PlanStepKind::Pull)
             continue;
         ++pulls;
-        if (i < passed && !rec.run.notCleared.count(i) && !listed(rec.run.unreachableSkips, i) && !listed(rec.run.noPathSkips, i)
+        if (i >= rec.run.startStep && i < passed && !rec.run.notCleared.count(i) && !listed(rec.run.unreachableSkips, i) && !listed(rec.run.noPathSkips, i)
             && !listed(rec.run.deferredPulls, i) && !listed(rec.run.deferGivenUp, i))
             ++done;
     }
@@ -88,7 +91,7 @@ void SetEndListener(EndListener listener)
     EndHook = listener;
 }
 
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs)
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
 {
     if (!plan || leader.IsEmpty() || Table().count(leader))
         return nullptr;
@@ -96,15 +99,19 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
     rec->leader = leader;
     rec->leaderName = leaderName;
     rec->planName = plan->name;
-    rec->run = DungeonRun::Start(plan);
+    rec->run = DungeonRun::Start(plan, fromStep);
+    rec->run.startStep = fromStep;      // a placed start: a walk back never goes before it (DungeonRun::ReplayFloor)
     rec->startedMs = nowMs;
     RunRec* raw = rec.get();
     Table()[leader] = std::move(rec);
+    // Decision capture (opt-in, test servers): the run leader's policy facts for this run, one JSONL capture.
+    DecisionCaptureService::Instance().Begin(GuidKeyCompat(leader), leaderName, plan->name, DecisionCaptureNowUnixMs());
     return raw;
 }
 
 bool Remove(ObjectGuid leader)
 {
+    DecisionCaptureService::Instance().End(GuidKeyCompat(leader), "run removed");
     return Table().erase(leader) > 0;
 }
 
@@ -164,6 +171,8 @@ h3::Rec RunRecord(RunRec const& rec, uint32 nowMs)
     std::string const state = StateName(rec);
     Rec out("run");
     out.S("lead", rec.leaderName).S("plan", rec.planName).S("state", state);
+    if (IsPlayerLed(rec))
+        out.S("mode", "player").S("commander", rec.commanderName);
     out.N("step", int64(std::min(rec.run.step, steps))).N("steps", int64(steps));
     // Where the run stands: the leg and kind of the step it is on (absent once it is past the last step: nothing is "current" then).
     if (plan && rec.run.step < steps)
@@ -266,13 +275,28 @@ bool PartyInCombat(RunRec const& rec)
     return false;
 }
 
+// Issue #139: the live run of a party. A bot-led run is keyed by the party leader (the tank bot); a player-led run by its tank bot too, but the party
+// leader is the player, so it is found by the run's commander.
+RunRec* RunOfGroupLeader(ObjectGuid groupLeader)
+{
+    if (RunRec* rec = Find(groupLeader))
+        return rec;
+    for (RunRec* rec : All())
+        if (IsPlayerLed(*rec) && !Ended(*rec) && rec->commander == groupLeader)
+            return rec;
+    return nullptr;
+}
+
 // ---- what the run leader's order executor (package O6, TbRunOrders.h) does not cover: the end of a run and the run's own skull mark ----
 
 // `stay` for the leader and every member at the end of a run, by the action `.tb order <bot> stay` runs (TbOrders.cpp `Run`: "stay chat shortcut"), called here
 // at once on the world thread (the engines tick in BotMgr::Update before this tick, never inside it). Returns how many bots it worked on: the reply says so.
 uint32 StayParty(RunRec const& rec)
 {
-    Player* const owner = InWorld(rec.leader);
+    // A player-led run ends with the bots following the player again (their commander), not standing where the run left them.
+    bool const playerLed = IsPlayerLed(rec);
+    Player* const owner = InWorld(playerLed ? rec.commander : rec.leader);
+    char const* const action = playerLed ? "follow chat shortcut" : "stay chat shortcut";
     uint32 stayed = 0;
     for (ObjectGuid guid : PartyGuids(rec))
     {
@@ -280,7 +304,7 @@ uint32 StayParty(RunRec const& rec)
         PlayerbotAI* ai = bot ? PlayerbotAIStorage::Instance().GetAI(bot) : nullptr;
         if (!ai || !ai->GetAiObjectContext())
             continue;
-        if (ai->DoSpecificAction("stay chat shortcut", Event("tb order", std::string(), owner ? owner : bot), true))
+        if (ai->DoSpecificAction(action, Event("tb order", std::string(), owner ? owner : bot), true))
             ++stayed;
     }
     return stayed;
@@ -578,7 +602,76 @@ bool OutsideOrder(RunRec const& rec, std::string& who, std::string& verb)
     return false;
 }
 
+// Issue #139: a player-led run takes the player's own orders as his (PlayerLed::NotePlayerOrder): a move order is obeyed, a fight order is his pull, `stay`
+// holds the next pull until his `follow`; none of them pauses the run (only `.tb run pause` and `.tb run stop` do). The baseline moves past each one.
+void NotePlayerOrders(RunRec& rec)
+{
+    for (auto& [guid, seen] : rec.orderSeen)
+    {
+        h3::OrderStatus const status = h3::LastOrder(guid);
+        if (status.seq == seen)
+            continue;
+        seen = status.seq;
+        PlayerLed::NotePlayerOrder(rec.pl, rec.run, status.verb);
+    }
+}
+
+// A player-led run orders only the roster it accepted at the start. A bot that left the party, or that somebody else commands now, drops out of the roster and is
+// never ordered again (the Turtle rule: a later joiner is a party member the run never orders). Each drop is one `roster` event.
+void SyncPlayerLedRoster(RunRec& rec, Group* group, uint32 nowMs)
+{
+    std::vector<std::pair<ObjectGuid, char const*>> dropped;
+    for (auto const& entry : rec.bound)
+    {
+        if (!group->IsMember(entry.first))
+            dropped.emplace_back(entry.first, "left the party");
+        else if (h3::CommanderGuid(entry.first) != rec.commander)
+            dropped.emplace_back(entry.first, "is commanded by somebody else now");
+    }
+    for (auto const& [guid, why] : dropped)
+    {
+        Player* bot = InWorld(guid);
+        std::string const name = bot ? std::string(bot->GetName()) : h3::GuidText(guid);
+        h3::CancelRunOrders(guid);         // what the run queued for it before the change dies with the roster entry (CancelRunWork cannot reach it after)
+        if (bot)
+            h3::EndRunPull(bot);
+        rec.bound.erase(guid);
+        rec.orderSeen.erase(guid);
+        Note(rec, nowMs, "roster", -1, name + " " + why + ": the run no longer orders it");
+    }
+}
+
 void NoteStepEnd(RunRec& rec, uint32 nowMs, size_t stepIndex);     // S9 (C9), defined with the other step-event helpers below
+
+// The summary's boss time: the first time the run read a boss dead, in ms since the run started. The dead flag is
+// kept as the policy and `.tb run status` read it.
+void NoteBossKilled(RunRec& rec, uint32 nowMs, uint32 entry)
+{
+    rec.bossDead[entry] = true;
+    rec.bossKilledMs.emplace(entry, nowMs - rec.startedMs);
+}
+
+char const* SpotRole(Player* bot)
+{
+    if (PlayerbotAI::IsTank(bot))
+        return "tank";
+    if (PlayerbotAI::IsHeal(bot))
+        return "heal";
+    return "dps";
+}
+
+void NoteSpot(std::vector<RunSpot>& list, RunRec const& rec, uint32 nowMs, float x, float y, float z, char const* role)
+{
+    if (list.size() >= kMaxSummarySpots)
+        return;
+    RunSpot spot;
+    spot.tMs = nowMs - rec.startedMs;
+    spot.x = x;
+    spot.y = y;
+    spot.z = z;
+    spot.role = role ? role : "";
+    list.push_back(std::move(spot));
+}
 
 // ---- events and counters from what a tick saw ----
 void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
@@ -598,7 +691,7 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
         for (size_t i = rec.seenStep; i < run.step && i < steps; ++i)
         {
             if (plan->steps[i].kind == ai::PlanStepKind::Boss && !run.notCleared.count(i) && plan->steps[i].entry)
-                rec.bossDead[plan->steps[i].entry] = true;
+                NoteBossKilled(rec, nowMs, plan->steps[i].entry);
             NoteStepEnd(rec, nowMs, i);             // S9 (C9)
         }
         if (run.step < steps)
@@ -633,6 +726,9 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
         {
             ++rec.deaths;
             Note(rec, nowMs, "death", current, name);
+            if (Player* fallen = ObjectAccessor::FindPlayerByName(name))
+                NoteSpot(rec.deathSpots, rec, nowMs, fallen->GetPositionX(), fallen->GetPositionY(),
+                    fallen->GetPositionZ(), SpotRole(fallen));
         }
     rec.seenDead = std::move(dead);
     bool const wipe = f->total > 0 && f->alive == 0;
@@ -640,6 +736,23 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
     {
         ++rec.wipes;
         Note(rec, nowMs, "wipe", current);
+        // The spot is the centroid of the party's dead, and the role of the first one in the run's own order.
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        uint32 fallen = 0;
+        char const* firstRole = nullptr;
+        for (ObjectGuid guid : PartyGuids(rec))
+            if (Player* member = InWorld(guid))
+                if (!member->IsAlive())
+                {
+                    x += member->GetPositionX();
+                    y += member->GetPositionY();
+                    z += member->GetPositionZ();
+                    if (!firstRole)
+                        firstRole = SpotRole(member);
+                    ++fallen;
+                }
+        if (fallen)
+            NoteSpot(rec.wipeSpots, rec, nowMs, x / fallen, y / fallen, z / fallen, firstRole);
     }
     rec.seenWipe = wipe;
     // The boss the run stands at: read dead or alive only from what the facts really read (a boss never read is not listed).
@@ -647,7 +760,7 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
     {
         uint32 const entry = plan->steps[current].entry;
         if (f->bossOwnDead || f->bossDeadNearSpot)
-            rec.bossDead[entry] = true;
+            NoteBossKilled(rec, nowMs, entry);
         else if (f->bossSearchRead && f->bossSearchAlive)
         {
             auto const it = rec.bossDead.find(entry);
@@ -676,6 +789,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     if (stopped)
         rec.stopReason = why;
     rec.endedMs = nowMs ? nowMs : 1;
+    DecisionCaptureService::Instance().End(GuidKeyCompat(rec.leader), why);
     ForgetRun(rec.leader);
     ForgetRunOrders(rec.leader);
     tasks::Forget(rec.leader);              // S9 (O9)
@@ -852,9 +966,16 @@ void TickRun(RunRec& rec, uint32 nowMs)
 
     Player* lead = InWorld(rec.leader);
     Group* group = lead ? lead->GetGroup() : nullptr;
-    if (lead && (!group || group->GetLeaderGUID() != rec.leader))
+    bool const playerLed = IsPlayerLed(rec);
+    // A player-led run: the player leads the party, and the mode ends when the key is switched off (a config reload), as the Turtle run does.
+    if (lead && (!group || group->GetLeaderGUID() != (playerLed ? rec.commander : rec.leader)))
     {
-        EndEarly(rec, nowMs, DungeonRun::RunStopNote("the party no longer has this leader"));
+        EndEarly(rec, nowMs, DungeonRun::RunStopNote(playerLed ? "the party no longer has you as its leader" : "the party no longer has this leader"));
+        return;
+    }
+    if (playerLed && !PlayerLedKeyOn())
+    {
+        EndEarly(rec, nowMs, DungeonRun::RunStopNote("player-led runs were switched off (AiPlayerbot.DungeonRunPlayerLed)"));
         return;
     }
     // R6 (review item 4): the run belongs to ONE instance of the plan's map. A leader that stands on the plan's map in ANOTHER instance (a different copy: it
@@ -864,12 +985,21 @@ void TickRun(RunRec& rec, uint32 nowMs)
         EndEarly(rec, nowMs, DungeonRun::RunStopNote("the lead bot is in another instance of the map"));
         return;
     }
-    if (group)
+    if (group && !playerLed)            // a player-led run binds nothing: the bots keep the player as their commander
         SyncBinding(rec, group, lead);
+    if (group && playerLed)
+    {
+        if (h3::CommanderGuid(rec.leader) != rec.commander)
+        {
+            EndEarly(rec, nowMs, DungeonRun::RunStopNote("the tank bot is no longer commanded by you"));
+            return;
+        }
+        SyncPlayerLedRoster(rec, group, nowMs);
+    }
 
-    // A real player in the group pauses a system run until the group is bots only again (T: L6; the binding stands meanwhile).
+    // A real player in the group pauses a system run until the group is bots only again (T: L6; the binding stands meanwhile). A player-led run has one by design.
     bool realPlayer = false;
-    if (group)
+    if (group && !playerLed)
         for (Group::MemberSlot const& slot : group->GetMemberSlots())
             if (!BotMgr::Instance().IsBot(slot.guid))
                 realPlayer = true;
@@ -926,7 +1056,9 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     std::string who, verb;
-    if (OutsideOrder(rec, who, verb))
+    if (playerLed)
+        NotePlayerOrders(rec);
+    else if (OutsideOrder(rec, who, verb))
     {
         DungeonRun::PausePlayer(run, "outside-order: " + who + " was ordered by hand (" + verb + "): .tb run resume goes on");
         PauseWith(rec, "outside-order");
@@ -934,6 +1066,11 @@ void TickRun(RunRec& rec, uint32 nowMs)
         Observe(rec, nowMs, nullptr);
         return;
     }
+
+    // Player-led: where the player stands picks the step before its facts are read (PlayerLed::Pick); the anchor is what Tick reads too.
+    PlayerLed::Anchor anchor;
+    if (playerLed)
+        anchor = PlayerLedPick(rec, lead);
 
     // A pull step none of whose members the unit rows matched to a spawn of this map is skipped as not cleared, never guessed (spec 5.3 "Pack lookup").
     if (ai::PlanStep const* step = DungeonRun::Current(run); step && step->kind == ai::PlanStepKind::Pull &&
@@ -946,7 +1083,15 @@ void TickRun(RunRec& rec, uint32 nowMs)
             size_t const skipped = run.step;
             run.notCleared.insert(skipped);
             Note(rec, nowMs, "step", int32(skipped), "not-cleared: no member of the step matched a spawn of this map");
-            DungeonRun::NextStep(run, "pack skipped, not cleared: no member of step " + std::to_string(skipped + 1) + " matched a spawn of this map");
+            if (playerLed)
+            {
+                // The picker's own cursor: the pack is done (not cleared), the player walks on to the next one.
+                rec.pl.done.insert(skipped);
+                rec.pl.picked = PlayerLed::kNone;
+                rec.run.note = "step " + std::to_string(skipped + 1) + " skipped, not cleared: no member of it matched a spawn of this map";
+            }
+            else
+                DungeonRun::NextStep(run, "pack skipped, not cleared: no member of step " + std::to_string(skipped + 1) + " matched a spawn of this map");
             rec.seenStep = run.step;
             if (run.state == State::Done)
                 Finish(rec, nowMs, false, run.note);
@@ -998,7 +1143,13 @@ void TickRun(RunRec& rec, uint32 nowMs)
         Observe(rec, nowMs, &facts);
         return;
     }
-    std::string const order = DungeonRun::Tick(run, facts, dt);
+    // Decision capture wraps the bot-led policy tick only: a player-led run is a different driver (TB's hook sites).
+    uint64_t const captureKey = GuidKeyCompat(rec.leader);
+    if (!playerLed)
+        DecisionCaptureService::Instance().BeforeTick(captureKey, run, facts, dt);
+    std::string const order = playerLed ? PlayerLed::Tick(run, rec.pl, facts, anchor, dt) : DungeonRun::Tick(run, facts, dt);
+    if (!playerLed)
+        DecisionCaptureService::Instance().AfterTick(captureKey, run, order);
     // G8 (item 5): the regroup's gather ceiling ended in a pause. A revived member that is still walking back (or drinking first) is waited for a bounded time more
     // by the policy's own resume (a fresh regroup, its gather ceiling sized by the farthest bot), instead of a pause nobody asked for; the host has no `summon`
     // (decision D3), this is the choice that does less.
@@ -1010,6 +1161,40 @@ void TickRun(RunRec& rec, uint32 nowMs)
             Note(rec, nowMs, "gather-wait", at, verdict.why);
         else if (!verdict.why.empty())
             Note(rec, nowMs, "gather-stop", at, verdict.why);
+    }
+    // proof-1 B: the policy's own regroups at a step did not hold (its pause note says so, both sites). The host answers that pause itself, once per step and
+    // at most kMaxRecoversPerRun per run, with what a player party does: the dead release their spirits (the core revives them at the entrance, D2) and the
+    // policy's own resume runs a fresh regroup (revive wait, gather, rest, the wc-r9 walk back that pulls the respawned packs one at a time). No teleport,
+    // no GM revive, no summon; the order goes out from the run, so it is not an outside order.
+    if (run.state == State::Paused && recover::IsRegroupsDidNotHoldPause(run.note))
+    {
+        bool const optionOn = sConfigMgr->GetBoolDefault("TortoiseBots.Run.SelfRecover", true);
+        recover::Decision const verdict = recover::Decide(rec.recover, run.step, run.note, facts.maxMemberYd, optionOn);
+        int32 const at = run.step < plan->steps.size() ? int32(run.step) : -1;
+        if (verdict.recover)
+        {
+            bool deadToRelease = false;
+            if (Group* group = lead ? lead->GetGroup() : nullptr)
+                for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                {
+                    Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                    if (member && member->IsInWorld() && BotMgr::Instance().IsBot(member->GetGUID()) && !member->IsAlive() &&
+                        !member->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+                    {
+                        deadToRelease = true;
+                        break;
+                    }
+                }
+            if (deadToRelease)
+            {
+                Issue(rec, "revive party", nowMs);
+                BaselineOrders(rec);
+            }
+            DungeonRun::Resume(run);
+            Note(rec, nowMs, "self-recover", at, verdict.why);
+        }
+        else if (!verdict.why.empty())
+            Note(rec, nowMs, "self-recover-stop", at, verdict.why);
     }
     // The searches the policy asks the glue for after its tick (Commander.cpp:13941-13971), once per request, here and never per tick (N6: ported in
     // TbRunStands.cpp; before N6 both answered "found nothing"). A stalled walk asks for a dry stand-in near the step's point, an approach whose hops
@@ -1146,7 +1331,7 @@ void Update(uint32 diffMs)
     }
 }
 
-StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
 {
     StartOutcome out;
     auto const refuse = [&out](char const* code, std::string detail)
@@ -1213,7 +1398,9 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
         tasks::Forget(leader->GetGUID());   // S9 (O9)
         Remove(leader->GetGUID());
     }
-    RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs);
+    if (fromStep >= plan->steps.size())
+        return refuse("no-step", "the plan has no such step");
+    RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs, fromStep);
     if (!rec)
         return refuse("no-plan", "the run could not be created");
     for (Player* member : others)
@@ -1234,7 +1421,128 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
     rec->seenState = rec->run.state;
     rec->seenPhase = rec->run.phase;
     rec->seenStep = rec->run.step;
-    Note(*rec, nowMs, "start", 0, plan->name);
+    Note(*rec, nowMs, "start", int32(fromStep), plan->name);
+    out.rec = rec;
+    return out;
+}
+
+StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan const* plan, uint32 nowMs)
+{
+    StartOutcome out;
+    auto const refuse = [&out](char const* code, std::string detail)
+    {
+        out.code = code;
+        out.detail = std::move(detail);
+        return out;
+    };
+    if (!commander || !commander->IsInWorld())
+        return refuse("no-commander", "a player-led run is started by the player who leads: type it in game, not on the console");
+    if (!tank || !tank->IsInWorld() || !BotMgr::Instance().IsBot(tank->GetGUID()))
+        return refuse("not-bot", "the tank must be a host bot in the world");
+    if (!plan || plan->steps.empty())
+        return refuse("no-plan", "the plan has no steps");
+    Group* group = commander->GetGroup();
+    playerled::StartObs obs;
+    obs.keyOn = PlayerLedKeyOn();
+    obs.starterIsBot = BotMgr::Instance().IsBot(commander->GetGUID());
+    obs.grouped = group != nullptr;
+    obs.raid = group && group->isRaidGroup();
+    obs.starterLeads = group && group->GetLeaderGUID() == commander->GetGUID();
+    obs.tankName = tank->GetName();
+    std::vector<Player*> bots;                                 // the party's bots, the tank included
+    if (group)
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        {
+            if (slot.guid == commander->GetGUID())
+                continue;
+            Player* member = InWorld(slot.guid);
+            if (!member)
+                return refuse("not-live", slot.name + " is not in the world (an offline member left by an old group keeps the run from starting: `.tb ungroup " + slot.name +
+                    "` it once it is online, then form the party again)");
+            playerled::MemberObs m;
+            m.name = slot.name;
+            m.bot = BotMgr::Instance().IsBot(slot.guid);
+            ObjectGuid const commanded = h3::CommanderGuid(slot.guid);
+            m.commanderIsStarter = commanded == commander->GetGUID();
+            m.commanderOther = !commanded.IsEmpty() && !m.commanderIsStarter;
+            m.owned = m.commanderIsStarter || BotMgr::Instance().MasterOf(slot.guid) == commander->GetGUID();
+            obs.members.push_back(m);
+            if (m.bot)
+                bots.push_back(member);
+        }
+    playerled::StartVerdict const verdict = playerled::DecideStart(obs);
+    if (!verdict.code.empty())
+        return refuse(verdict.code.c_str(), verdict.text);
+    {
+        std::string code, message;
+        if (!PlayerLedStartCheck(tank->GetGUID(), code, message))
+            return refuse(code.empty() ? "not-bot" : code.c_str(), message);
+    }
+    std::string const name = tank->GetName();
+    if (RunRec* old = Find(tank->GetGUID()); old && !Ended(*old))
+        return refuse("already-running", name + " already has a run (.tb run status " + name + ")");
+    // One live run per party: a player has one player-led run, and no bot of this party is in another live run (a second tank in the same party would give two
+    // runs competing orders to the same bots).
+    for (RunRec* other : All())
+    {
+        if (Ended(*other))
+            continue;
+        bool busy = IsPlayerLed(*other) && other->commander == commander->GetGUID();
+        for (Player* bot : bots)
+            busy = busy || other->leader == bot->GetGUID() || other->bound.count(bot->GetGUID());
+        if (busy)
+            return refuse("already-running", "the party is in a run already (.tb run status " + other->leaderName + "): .tb run stop " + other->leaderName + " first");
+    }
+    if (commander->GetMapId() != plan->map)
+        return refuse("wrong-map", std::string(commander->GetName()) + " is not on map " + std::to_string(plan->map) + " (the plan's map)");
+    for (Player* bot : bots)
+    {
+        if (bot->GetMapId() != plan->map || bot->GetInstanceId() != commander->GetInstanceId())
+            return refuse("wrong-map", std::string(bot->GetName()) + " is not in your instance of map " + std::to_string(plan->map));
+        if (bot->GetFreeInventorySlotCount() < tasks::kStartFreeSlots)
+            return refuse("bags", std::string(bot->GetName()) + " has " + std::to_string(bot->GetFreeInventorySlotCount()) + " free bag slots: a run needs at least " +
+                std::to_string(tasks::kStartFreeSlots) + " (the loot code leaves items when two or fewer are free): make room first");
+    }
+    {
+        std::string methodWhy;
+        if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
+            return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot or need-before-greed)");
+    }
+    // Every check passed: nothing is changed before this line. A finished earlier run of the tank gives way to the new one.
+    if (Find(tank->GetGUID()))
+    {
+        ForgetRun(tank->GetGUID());
+        tasks::Forget(tank->GetGUID());
+        Remove(tank->GetGUID());
+    }
+    RunRec* rec = Create(tank->GetGUID(), name, plan, nowMs);
+    if (!rec)
+        return refuse("no-plan", "the run could not be created");
+    rec->commander = commander->GetGUID();
+    rec->commanderName = commander->GetName();
+    rec->pl.on = true;
+    rec->pl.tank = name;
+    PlayerLedConfigure(rec->pl);
+    // Nothing is bound: every bot keeps the player as its commander. The run only watches them (`bound` is the list the party-wide reads and the end-of-run
+    // order walk; the release of an entry leaves the binding alone because the commander is not the tank).
+    for (Player* bot : bots)
+    {
+        if (bot == tank)
+            continue;
+        RunRec::Binding entry;
+        entry.master = commander->GetGUID();
+        entry.commanded = true;
+        rec->bound[bot->GetGUID()] = entry;
+    }
+    rec->run.liveTactics = &ai::GetBossTactics();
+    rec->instanceId = tank->GetInstanceId();
+    rec->lastTickMs = nowMs;
+    BaselineOrders(*rec);
+    rec->seenInit = true;
+    rec->seenState = rec->run.state;
+    rec->seenPhase = rec->run.phase;
+    rec->seenStep = rec->run.step;
+    Note(*rec, nowMs, "start", 0, plan->name + " (player-led: " + rec->commanderName + ")");
     out.rec = rec;
     return out;
 }
@@ -1310,7 +1618,7 @@ StateOutcome ResumeRun(RunRec& rec, uint32 nowMs)
     if (group)
     {
         for (Group::MemberSlot const& slot : group->GetMemberSlots())
-            if (!BotMgr::Instance().IsBot(slot.guid))
+            if (!IsPlayerLed(rec) && !BotMgr::Instance().IsBot(slot.guid))
                 return refuse("player-in-group", slot.name + " is in the group: the run waits until the group is bots only again");
         // The pause reason of a method changed under the run ends only on group loot or need-before-greed: a resume with the method still wrong would pause again at once.
         std::string methodWhy;
@@ -1342,8 +1650,13 @@ namespace
 RunRec* RunOfBot(Player* bot)
 {
     Group* group = bot ? bot->GetGroup() : nullptr;
-    RunRec* rec = group ? Find(group->GetLeaderGUID()) : nullptr;
-    return rec && !Ended(*rec) ? rec : nullptr;
+    RunRec* rec = group ? RunOfGroupLeader(group->GetLeaderGUID()) : nullptr;
+    if (!rec || Ended(*rec))
+        return nullptr;
+    // A player-led run belongs to its roster: a bot that joined after the start, or dropped out of it, gets no run policy (kill-first, armed triggers, plan map).
+    if (IsPlayerLed(*rec) && bot->GetGUID() != rec->leader && !rec->bound.count(bot->GetGUID()))
+        return nullptr;
+    return rec;
 }
 }
 
@@ -1393,7 +1706,7 @@ void AnnotateStateEnd(h3::Rec& end, Player* member)
     Group* group = member->GetGroup();
     if (!group)
         return;
-    if (RunRec const* rec = Find(group->GetLeaderGUID()))
+    if (RunRec const* rec = RunOfGroupLeader(group->GetLeaderGUID()))
         end.S("run", rec->leaderName).S("runstate", StateName(*rec));
 }
 

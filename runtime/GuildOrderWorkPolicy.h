@@ -31,6 +31,8 @@ struct OrderStepInput
     bool canBuyAh = false;
     bool canDeliverBank = false;
     bool canDeliverMail = false;
+    // No room for one more of the order item (a new stack cannot start).
+    bool bagsFull = false;
 };
 
 struct OrderStepDecision
@@ -77,6 +79,26 @@ inline OrderStepDecision DecideOrderStep(OrderStepInput const& in)
         out.action = OrderStepAction::CannotTravel;
         out.reason = "cannot: travel";
         return out;
+    }
+
+    // Full bags stop a farm order from looting: deliver what it carries now
+    // instead of walking past sources it cannot take. Without a delivery
+    // endpoint in reach the ladder below still runs: ending the order here
+    // would lose stock the bot may hand in later.
+    if (in.bagsFull && in.inBags > 0)
+    {
+        if (in.canDeliverBank)
+        {
+            out.action = OrderStepAction::DeliverBank;
+            out.reason = "bags-full";
+            return out;
+        }
+        if (in.canDeliverMail)
+        {
+            out.action = OrderStepAction::DeliverMail;
+            out.reason = "bags-full";
+            return out;
+        }
     }
 
     if (in.type == OrderType::Craft)

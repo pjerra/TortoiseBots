@@ -1,12 +1,14 @@
 // Slice 8, host package H8: crowd control and strategy setup (FOREVER-SLICE-MAGE-ROGUE-SPEC section 6; forever/docs/SLICE8-H-NOTES.md).
 //
 // `.tb cc <bot> <mark> <unit guid | target> [family]` and `.tb cc <bot> clear [<mark> <unit guid>]` give one bot a crowd-control mark; `.tb strategy <bot>
-// co|nc <+name,-name ...>` changes the bot's strategies (test setup, tag SETUP). Both answer in reply grammar version 2 through the ONE encoder (TbH3.h:
-// Enc/Rec/Reply), refuse a bad `#token` first (RequireBuilt), and say only what was read back from the world after the change.
+// co|nc <+name,-name,~name ...> | <bot> reset | role:<tank|healer|dps> co|nc <changes ...>` changes the bot's strategies (test setup, tag SETUP). Both
+// answer in reply grammar version 2 through the ONE encoder (TbH3.h: Enc/Rec/Reply), refuse a bad `#token` first (RequireBuilt), and say only what was
+// read back from the world after the change.
 //
 // ApplyCcOrder / ClearCcOrder are the same work as a CALL (package G8's run verbs `cc <mark> <guid> <bot> [family]` and `cc clear` use them). They are the
-// REWRITE of Turtle's RunCcOrder (commands/Action.cpp:581-835) and `.bot cmd cc` (commands/Commander.cpp:6870-6950), not a port: no cast is started here
-// (the mage's `cc` strategy polymorphs the `rti cc` unit when the fight starts), nothing is saved to a database (the host keeps no bot store).
+// port of Turtle's RunCcOrder (commands/Action.cpp:581-835) and `.bot cmd cc` (commands/Commander.cpp:6870-6950), including its immediate-cast probe (the
+// class action runs once after the read-back; out of reach, the mature action is queued behind its own `reach cc`); the `cc` strategy's fight-start trigger
+// stays the fallback. Nothing is saved to a database (the host keeps no bot store).
 //
 // Compiled with and without TORTOISEBOTS_SLICE1 (the default build answers `error code=engine-not-built`, as TbH4.cpp does).
 // Threading: every function runs on the world thread (TbH3.h).
@@ -60,7 +62,7 @@ void CcSetDenied(uint32 owner, uint8 botClass, uint32 mask);
 void CcSyncBot(Player* bot);
 
 bool HandleCc(ChatHandler* handler, Trinity::ChatCommands::Tail args);         // .tb cc <bot> <mark> <unit guid|target> [family] | .tb cc <bot> clear [<mark> <unit guid>] [#token]
-bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb strategy <bot> co|nc <+name,-name ...> [#token]   (SETUP)
+bool HandleStrategy(ChatHandler* handler, Trinity::ChatCommands::Tail args);   // .tb strategy <bot> co|nc <+name,-name,~name ...> | <bot> reset | role:<tank|healer|dps> co|nc <changes ...> [#token]   (SETUP)
 
 // Defined in the slice build only (TbPartyState.cpp / TbH3.cpp call them).
 // `.tb state` keys appended to every bot record that has an engine: rticc= (the bot's crowd-control mark, empty for "none"), ccfam= (the run's family gate, empty

@@ -6,7 +6,8 @@
 // forever/tools/test_addon_lootlog.cpp.
 #pragma once
 
-#include "playerbot/policy/loot/LootHistoryPolicy.h"
+// The repo-root path, like TbAddonChoicePure.h: the option-OFF build has no `ai/` include dir (CMakeLists.txt adds it to the slice build only).
+#include "ai/playerbot/policy/loot/LootHistoryPolicy.h"
 
 #include <cstdint>
 #include <string>

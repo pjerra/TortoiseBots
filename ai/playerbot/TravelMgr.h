@@ -506,7 +506,22 @@ namespace ai
 		// holds no spot on that map.
 		bool FishZoneNearestSpot(uint32 zoneId, WorldPosition const& from, WorldPosition& spot, float& distanceSq) const;
 
-		EntryDestinationMap GetExploreLocs() const { return destinationMap.at(TravelDestinationPurpose::Explore); };
+		// The nearest fish spot on `from`'s map whose zone requirement (a
+		// non-positive one always passes) is at most `maxZoneSkill`. Order
+		// bots fish where they stand, not through a planned zone, so this is
+		// the host errand's spot pick.
+		bool NearestFishSpotOnMap(uint32 mapId, WorldPosition const& from, float maxDistance,
+			uint32 maxZoneSkill, WorldPosition& spot, uint32& zoneId, int32& zoneSkill) const;
+
+		// Whether the loaded fish dataset holds any spot in a fishable zone: a
+		// build with no spots has no fishing errand to run.
+		bool HasFishSpots() const { return !fishSpotsByZone.empty(); }
+
+		EntryDestinationMap GetExploreLocs() const
+		{
+			auto const itr = destinationMap.find(TravelDestinationPurpose::Explore);
+			return itr != destinationMap.end() ? itr->second : EntryDestinationMap();
+		}
 		DestinationList GetDestinations(const PlayerTravelInfo& info, uint32 purposeFlag = (uint32)TravelDestinationPurpose::None, const std::vector<int32>& entries = {}, bool onlyPossible = true, float maxDistance = 10000.0f) const;
 		void GetPartitionsLock(bool getLock = true);
 		static bool IsLocationLevelValid(const WorldPosition& position, const PlayerTravelInfo& info, uint32 purposeFlag = (uint32)TravelDestinationPurpose::None, int32 grindZoneFloor = 0, uint32 excludeZoneId = 0);

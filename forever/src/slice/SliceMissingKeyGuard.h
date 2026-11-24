@@ -24,6 +24,7 @@
 #include "playerbot/strategy/Value.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/PatchwerkOpeningPolicy.h"
+#include "playerbot/WorldPosition.h"
 #include "playerbot/policy/combat/RunnerFinishPolicy.h"
 #include "playerbot/strategy/values/GuildValues.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
@@ -92,6 +93,10 @@ namespace slice
     // makes the bot do less, decision D2) and std::set<uint32>& (`skip go loot list`, read in LootObjectStack.cpp: an empty list).
     // Slice 9 (L9) adds std::vector<uint32> (`craft spells`) and std::vector<MountValue> (`mount list`), read by ItemUsageValue.cpp: an empty list,
     // so no craft and no mount is planned (the usage then falls to the item's other classes: LESS). `item usage` itself is registered since slice 9.
+    // R5 fix (the `quests` crash, PR #211): `focusQuestTravelList` (= std::set<uint32> BY VALUE; only the reference type was listed) is what the
+    // PlayerTravelInfo constructor reads as `focus travel target` (TravelMgr.cpp:72), and WorldPosition is what `current position` and `home bind`
+    // are read as (ReleaseSpiritAction.h:305, TravelNode.cpp:1743): an empty set / the origin. forever/tools/test_pc_r5_fix.py fails while any
+    // unregistered value is read as a type this list lacks.
     using SliceInertValue = InertValues<
         bool,
         uint8,
@@ -113,7 +118,9 @@ namespace slice
         std::set<uint32>&,
         ItemUsage,
         std::vector<uint32>,
-        std::vector<MountValue>>;
+        std::vector<MountValue>,
+        focusQuestTravelList,
+        WorldPosition>;
 
     // Each missing name is reported once per process (every bot has its own context, the names repeat).
     class MissingKeyLog

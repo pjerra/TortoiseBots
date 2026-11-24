@@ -22,12 +22,11 @@ template <class ThreatEntry>
 inline float SpellFlatThreatCompat(ThreatEntry const& entry) { return static_cast<float>(entry.flatMod); }
 
 // A visual the `debug threat` strategy plays on the bot to show its threat band (high / medium). T `Unit::SendPlaySpellVisual(id)`
-// (Unit.cpp:11625: SMSG_PLAY_SPELL_VISUAL, guid + a SpellVisualKit.dbc index of the 1.12 client). F has no call with that meaning:
-// `Unit::SendPlaySpellVisual(target, spellVisualId, ...)` (Unit.cpp:13122) names a spell visual id of the new client and a target, and
-// `SendPlaySpellVisualKit(id, type, duration)` (:12989) takes a kit id of the new client's DB2, so the two 1.12 numbers (6372, 5036)
-// would show nothing or something unrelated. Unported feature "debug spell visuals": counted, nothing shown (a debug aid; the bot does
-// less, never more).
-inline void DebugSpellVisualCompat(Unit* /*unit*/, uint32 /*kitId*/) { tbcompat::Unported(tbcompat::Feature::DebugVisuals); }
+// (Unit.cpp:11625: SMSG_PLAY_SPELL_VISUAL, the unit's guid + a SpellVisualKit.dbc index of the 1.12 client). F's
+// `SendPlaySpellVisual(target, ...)` (Unit.cpp:13122) names a spell visual id of the new client and a target;
+// `SendPlaySpellVisualKit(id, type, duration)` (Unit.cpp:13159) is the packet of the same shape, a kit id for this unit, so it takes
+// T's kit numbers. A number the 1.60 client does not know draws nothing, as before (a debug aid; the bot does less, never more).
+inline void DebugSpellVisualCompat(Unit* unit, uint32 kitId) { unit->SendPlaySpellVisualKit(kitId, 0, 0); }
 
 // ===============================================================================================================
 // PULL (PullTriggers.cpp)

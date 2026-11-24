@@ -22,6 +22,13 @@
 #include <cstdint>
 #include <string>
 
+// SLICE1 (the shim) redefines sObjectMgr to a reference (`.`); the full forever core keeps the pointer (`->`).
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+#define UpkeepItemTemplate sObjectMgr.GetItemTemplate
+#else
+#define UpkeepItemTemplate sObjectMgr->GetItemTemplate
+#endif
+
 namespace TortoiseBots
 {
 namespace upkeep
@@ -93,7 +100,7 @@ std::uint32_t TopUp(Player* bot, std::uint32_t itemId, std::uint32_t want)
 {
     if (!bot || !itemId || !want)
         return 0;
-    ItemTemplate const* tpl = sObjectMgr.GetItemTemplate(itemId);
+    ItemTemplate const* tpl = UpkeepItemTemplate(itemId);
     if (!tpl || tpl->GetMaxStackSize() == 0)
         return 0;
     std::uint32_t const have = bot->GetItemCount(itemId);
@@ -116,7 +123,7 @@ std::uint32_t TopUpReagents(Player* bot)
             continue;
         if (row.itemId == 17028 && level >= 60)
             continue;
-        ItemTemplate const* tpl = sObjectMgr.GetItemTemplate(row.itemId);
+        ItemTemplate const* tpl = UpkeepItemTemplate(row.itemId);
         if (!tpl || tpl->GetMaxStackSize() == 0)
             continue;
         std::uint32_t want = tpl->GetMaxStackSize() * row.regCount;
@@ -130,7 +137,7 @@ std::uint32_t TopUpReagents(Player* bot)
 std::uint32_t TopUpBandages(Player* bot)
 {
     std::uint32_t const itemId = BandageForSkill(bot->GetSkillValue(kSkillFirstAid));
-    ItemTemplate const* tpl = sObjectMgr.GetItemTemplate(itemId);
+    ItemTemplate const* tpl = UpkeepItemTemplate(itemId);
     if (!tpl || tpl->GetMaxStackSize() == 0)
         return 0;
     return TopUp(bot, itemId, tpl->GetMaxStackSize() / 2);

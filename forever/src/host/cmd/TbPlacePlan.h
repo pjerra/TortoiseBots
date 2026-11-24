@@ -31,14 +31,24 @@ namespace place
 {
 // ---- the command words ----
 
-enum class CommandKind { None, Place, PlaceFollow, RallyHere, Fallback, Resume };
+enum class CommandKind { None, Place, PlaceFollow, RallyShow, RallyHere, RallyClear, RallyAt, Fallback, Resume };
+enum class RallyWord { Show, Here, Clear, At };
+enum class FallbackTo { Default, Rally, Here, At };
 
 struct Command
 {
     CommandKind kind = CommandKind::None;
     Shape shape = Shape::Close;
-    Gap gap = Gap::Normal;
+    Gap gap = Gap::Normal;          // the preset the gap word named (Normal for a number)
+    GapSpec gapSpec;
     Anchor anchor = Anchor::Here;
+    bool hasFace = false;
+    int faceDeg = 0;
+    Vec2 point;
+    float pointZ = 0.0f;
+    bool pointHasZ = false;
+    RallyWord rallyWord = RallyWord::Show;
+    FallbackTo fallbackTo = FallbackTo::Default;
     std::vector<WhoToken> who;
     std::string code;       // a place verb with invalid words: the typed refusal
     std::string detail;
@@ -51,19 +61,63 @@ inline bool IsPlaceVerbWord(std::string_view word)
 }
 
 // The words as typed, verb first (`{"fall", "back"}` is a fall back; `{"back"}` is the chat alias of the same).
+//
+// `place <shape> [<gap>] [<anchor>] [face:<deg>] [who...]`: the options come in any order between the shape and the first who word, each at most once.
+// A bare number is the gap (no who word is a number). `rally` alone is the read-back; `fallback`/`fall back` take at most one target word.
 inline Command ParseCommand(std::vector<std::string> const& words)
 {
     Command out;
     if (words.empty() || !IsPlaceVerbWord(words[0]))
         return out;
     std::string const verb = Lower(words[0]);
+    auto const parsePointWord = [&](std::string const& word) -> bool
+    {
+        if (!ParsePoint(std::string_view(word).substr(3), out.point, out.pointZ, out.pointHasZ))
+        {
+            out.code = "bad-argument";
+            out.detail = "a point is at:<x>,<y> or at:<x>,<y>,<z> (two or three numbers)";
+            return false;
+        }
+        return true;
+    };
+    auto const parseFallbackTail = [&out](std::vector<std::string> const& words, size_t first) -> void
+    {
+        if (words.size() <= first)
+            return;
+        if (words.size() > first + 1)
+        {
+            out.code = "unexpected-argument";
+            out.detail = words[first + 1];
+            return;
+        }
+        std::string const word = Lower(words[first]);
+        if (word == "rally" || word == "last")
+            out.fallbackTo = FallbackTo::Rally;
+        else if (word == "here")
+            out.fallbackTo = FallbackTo::Here;
+        else if (word.compare(0, 3, "at:") == 0)
+        {
+            if (ParsePoint(std::string_view(words[first]).substr(3), out.point, out.pointZ, out.pointHasZ))
+                out.fallbackTo = FallbackTo::At;
+            else
+            {
+                out.code = "bad-argument";
+                out.detail = "a point is at:<x>,<y> or at:<x>,<y>,<z> (two or three numbers)";
+            }
+        }
+        else
+        {
+            out.code = "bad-argument";
+            out.detail = "fallback takes rally, last, here or at:<x>,<y>[,<z>]";
+        }
+    };
     if (verb == "place")
     {
         out.kind = CommandKind::Place;
         if (words.size() <= 1)
         {
             out.code = "missing-argument";
-            out.detail = "place <close|circle|arc|spread|line|column|spear|arrow> [tight|normal|wide] [here|target|cursor] [who...] | place follow [who...]";
+            out.detail = "place <close|circle|arc|spread|line|column|spear|arrow> [tight|normal|wide|<yd>] [here|target|cursor|tank|at:<x>,<y>[,<z>]] [face:<deg>] [who...] | place follow [who...]";
             return out;
         }
         size_t pos = 1;
@@ -85,12 +139,12 @@ inline Command ParseCommand(std::vector<std::string> const& words)
             return out;
         }
         ++pos;
-        bool haveGap = false, haveAnchor = false;
+        bool haveGap = false, haveAnchor = false, haveFace = false;
         for (; pos < words.size(); ++pos)
         {
-            Gap gap;
-            Anchor anchor;
-            if (ParseGap(words[pos], gap))
+            std::string const lower = Lower(words[pos]);
+            GapSpec spec;
+            if (ParseGapWord(words[pos], spec))
             {
                 if (haveGap)
                 {
@@ -98,10 +152,50 @@ inline Command ParseCommand(std::vector<std::string> const& words)
                     out.detail = "the gap is given twice";
                     return out;
                 }
-                out.gap = gap;
+                out.gapSpec = spec;
+                out.gap = spec.preset;
                 haveGap = true;
                 continue;
             }
+            if (LooksNumeric(words[pos]))
+            {
+                out.code = "bad-argument";
+                out.detail = "the gap is 1.5 to 12 yd";
+                return out;
+            }
+            if (lower.compare(0, 5, "face:") == 0)
+            {
+                if (haveFace)
+                {
+                    out.code = "duplicate";
+                    out.detail = "the facing is given twice";
+                    return out;
+                }
+                if (!ParseFace(std::string_view(words[pos]).substr(5), out.faceDeg))
+                {
+                    out.code = "bad-argument";
+                    out.detail = "face:<deg> is 0 to 359 degrees";
+                    return out;
+                }
+                out.hasFace = true;
+                haveFace = true;
+                continue;
+            }
+            if (lower.compare(0, 3, "at:") == 0)
+            {
+                if (haveAnchor)
+                {
+                    out.code = "duplicate";
+                    out.detail = "the anchor is given twice";
+                    return out;
+                }
+                if (!parsePointWord(words[pos]))
+                    return out;
+                out.anchor = Anchor::Point;
+                haveAnchor = true;
+                continue;
+            }
+            Anchor anchor;
             if (ParseAnchor(words[pos], anchor))
             {
                 if (haveAnchor)
@@ -115,6 +209,18 @@ inline Command ParseCommand(std::vector<std::string> const& words)
                 continue;
             }
             break;      // the who list starts here
+        }
+        if (out.hasFace && out.anchor == Anchor::Target)
+        {
+            out.code = "bad-argument";
+            out.detail = "the target anchor faces the target; face: is for here, cursor, tank and at:";
+            return out;
+        }
+        if (out.anchor == Anchor::Tank && out.shape != Shape::Circle && out.shape != Shape::Arc && out.shape != Shape::Spread)
+        {
+            out.code = "bad-argument";
+            out.detail = "the tank anchor takes circle, arc or spread";
+            return out;
         }
         for (; pos < words.size(); ++pos)
         {
@@ -139,33 +245,44 @@ inline Command ParseCommand(std::vector<std::string> const& words)
             out.detail = "the only fall back form is `fall back`";
             return out;
         }
-        if (words.size() > 2)
-        {
-            out.code = "unexpected-argument";
-            out.detail = words[2];
-        }
+        parseFallbackTail(words, 2);
         return out;
     }
     if (verb == "rally")
     {
-        out.kind = CommandKind::RallyHere;
+        out.kind = CommandKind::RallyShow;
+        out.rallyWord = RallyWord::Show;
         if (words.size() <= 1)
-        {
-            out.code = "missing-argument";
-            out.detail = "rally here";
             return out;
-        }
-        if (Lower(words[1]) != "here")
-        {
-            out.code = "bad-argument";
-            out.detail = "the only rally point is `here` (where you stand)";
-            return out;
-        }
         if (words.size() > 2)
         {
             out.code = "unexpected-argument";
             out.detail = words[2];
+            return out;
         }
+        std::string const word = Lower(words[1]);
+        if (word == "here")
+        {
+            out.kind = CommandKind::RallyHere;
+            out.rallyWord = RallyWord::Here;
+            return out;
+        }
+        if (word == "clear")
+        {
+            out.kind = CommandKind::RallyClear;
+            out.rallyWord = RallyWord::Clear;
+            return out;
+        }
+        if (word.compare(0, 3, "at:") == 0)
+        {
+            if (!parsePointWord(words[1]))
+                return out;
+            out.kind = CommandKind::RallyAt;
+            out.rallyWord = RallyWord::At;
+            return out;
+        }
+        out.code = "bad-argument";
+        out.detail = "rally takes here, clear or at:<x>,<y>[,<z>]; no word reads the point back";
         return out;
     }
     if (verb == "resume")
@@ -179,11 +296,16 @@ inline Command ParseCommand(std::vector<std::string> const& words)
         return out;
     }
     out.kind = CommandKind::Fallback;       // fallback | back
-    if (words.size() > 1)
+    if (verb == "back")
     {
-        out.code = "unexpected-argument";
-        out.detail = words[1];
+        if (words.size() > 1)
+        {
+            out.code = "unexpected-argument";
+            out.detail = words[1];
+        }
+        return out;
     }
+    parseFallbackTail(words, 1);
     return out;
 }
 
@@ -198,7 +320,7 @@ inline bool ChatWordsAreCommand(std::vector<std::string> const& words)
     if (verb == "fall")
         return words.size() == 2 && Lower(words[1]) == "back";
     if (verb == "rally")
-        return words.size() == 2 && Lower(words[1]) == "here";
+        return words.size() == 1 || (words.size() == 2 && (Lower(words[1]) == "here" || Lower(words[1]) == "clear"));
     return (verb == "fallback" || verb == "back" || verb == "resume") && words.size() == 1;
 }
 
@@ -225,27 +347,42 @@ struct AnchorFacts
     Vec2 target;
     float targetHalf = 0.0f;
     Vec2 cursor;
-    float z = 0.0f;
+    float z = 0.0f;             // the floor search's base under a slot (the anchor's own z)
+    float anchorZ = 0.0f;       // the lane rule's anchor: the ledge test is against this
     uint32_t map = 0;
     uint32_t instance = 0;
+    Vec2 tankPos;
+    Vec2 tankFacing{ 0.0f, 1.0f };
+    float tankReach = 0.0f;
+    Vec2 point;
+    bool hasFace = false;
+    Vec2 faceFront{ 0.0f, 1.0f };
 };
 
-// The two world questions the plan asks. `ground` fills in the floor under a point (false when there is none, or the point is off the map);
-// `reachable` answers whether that bot can walk there from where it stands.
+// What a path check found: the move rule's own verdict, so the plan only names the refusal. Defined in TbPlacePure.h.
+
+// The world questions the plan asks. `ground` fills in the floor under a point (false when there is none, or the point is off the map);
+// `liquid` is true when a stand point is refused by the run's one liquid rule (water at or above the floor, lava, slime); `reachable` is the
+// path verdict (NoPath, a path that enters liquid, or a detour).
 struct Probe
 {
     std::function<bool(Vec2 const&, float&)> ground;
-    std::function<bool(size_t bot, Vec2 const&, float z)> reachable;
+    std::function<bool(Vec2 const&, float z)> liquid;
+    std::function<PathVerdict(size_t bot, Vec2 const&, float z)> reachable;
 };
+
+// The detour rule lives in TbPlacePure.h (`IsDetour`, shared with the walk-back verdict).
 
 struct Step
 {
     size_t bot = 0;         // index into the facts the plan was given
     bool placed = false;
-    int slot = -1;          // the slot the bot was assigned (its index in the slot order)
+    int slot = -1;          // the slot the bot was assigned (its index in the slot order); -1 when sent to a fall-back centre
     Vec2 pos;
     float z = 0.0f;
-    std::string code;       // the typed refusal when not placed
+    float nudged = 0.0f;    // the slot was moved this far towards the frame centre
+    std::string to;         // a fall-back refusal that still disengaged: centre | commander
+    std::string code;       // the typed refusal when not placed (or the slot's refusal on a to= row)
     std::string detail;
 };
 
@@ -270,7 +407,9 @@ struct Selection
 };
 
 // The selected bots in slot order (tanks, melee, ranged, healers; name breaks a tie). A who word that names no bot is a typed refusal.
-inline Selection SelectBots(std::vector<BotFacts> const& bots, std::vector<WhoToken> const& who)
+// `exclude` is the anchor tank's name: the tank is still a bot the words may name (never `bad-target`), but it is never a step and
+// never takes a slot (it holds its own mob). A selection left empty by the exclusion is `no-bots`.
+inline Selection SelectBots(std::vector<BotFacts> const& bots, std::vector<WhoToken> const& who, std::string_view exclude = {})
 {
     Selection out;
     for (WhoToken const& token : who)
@@ -293,6 +432,8 @@ inline Selection SelectBots(std::vector<BotFacts> const& bots, std::vector<WhoTo
     }
     for (size_t i = 0; i < bots.size(); ++i)
     {
+        if (!exclude.empty() && Lower(bots[i].name) == Lower(exclude))
+            continue;
         BotInfo const info{ bots[i].name, bots[i].className, bots[i].rank, bots[i].group };
         if (Selected(who, info))
             out.order.push_back(i);
@@ -310,48 +451,181 @@ inline Selection SelectBots(std::vector<BotFacts> const& bots, std::vector<WhoTo
     return out;
 }
 
-// One step per selected bot: alive, on the map, a slot left, inside the ceiling, a floor and a path. A refusal never moves the bot.
+// The one rule list for a stand point, in order: a floor, the ledge step, a dry stand, a path, a dry path, a detour. The first failing rule names
+// the code. `too-far` is the slot's own rule (it needs the frame centre) and is asked before this.
+inline bool JudgeSlot(Vec2 point, float anchorZ, size_t bot, Probe const& probe, std::string& code, float& z)
+{
+    z = 0.0f;
+    if (!probe.ground || !probe.ground(point, z))
+    {
+        code = "no-ground";
+        return false;
+    }
+    if (std::fabs(z - anchorZ) > kMaxSlotStepYd)
+    {
+        code = "ledge";
+        return false;
+    }
+    if (probe.liquid && probe.liquid(point, z))
+    {
+        code = "liquid";
+        return false;
+    }
+    if (!probe.reachable)
+    {
+        code = "unreachable";
+        return false;
+    }
+    switch (probe.reachable(bot, point, z))
+    {
+        case PathVerdict::Ok:
+            break;
+        case PathVerdict::NoPath:
+            code = "unreachable";
+            return false;
+        case PathVerdict::LiquidPath:
+            code = "liquid-path";
+            return false;
+        case PathVerdict::Detour:
+            code = "detour";
+            return false;
+    }
+    code.clear();
+    return true;
+}
+
+inline char const* SlotDetail(std::string_view code)
+{
+    if (code == "dead") return "a dead bot cannot walk to its slot";
+    if (code == "other-map") return "the bot is not on the commander's map and instance";
+    if (code == "no-slot") return "the commander's or the tank's own spot leaves no slot for this bot";
+    if (code == "too-far") return "the slot is past the 35 yd ceiling";
+    if (code == "no-ground") return "no floor under the slot";
+    if (code == "ledge") return "the slot is more than 5 yd above or below the anchor";
+    if (code == "liquid") return "the slot is in water or lava";
+    if (code == "liquid-path") return "the path enters water or lava";
+    if (code == "unreachable") return "no walkable path to the slot";
+    if (code == "detour") return "the path is too long for the distance";
+    return "";
+}
+
+// The extra rules a plan adds to the common one. `guardCentre`/`guardHalf`: for a `target` ring a nudge may not walk a
+// bot inside the target (nearer than its combat reach). `nudgeCleared`: a fall back may nudge a slot whose only failure
+// is the commander's or the tank's own spot; a place leaves such a slot empty (round-1 rule).
+struct StepRules
+{
+    Vec2 guardCentre;
+    float guardHalf = 0.0f;
+    bool nudgeCleared = false;
+};
+
+// One step per selected bot: alive, on the map, a slot left, inside the ceiling, then the stand-point rules; a refused slot is nudged up to three
+// times towards the frame centre. A refusal never moves the bot (a fall back turns it into a to= row, PlanFallback).
 inline std::vector<Step> PlanSteps(std::vector<BotFacts> const& bots, std::vector<size_t> const& order, std::vector<Slot> const& slots,
-    std::vector<bool> const& usable, Frame const& frame, Probe const& probe, int& placed, int& refused)
+    std::vector<bool> const& usable, Frame const& frame, Probe const& probe, float anchorZ, float gapYd,
+    std::vector<Vec2> const& cleared, StepRules const& rules, int& placed, int& refused)
 {
     std::vector<Step> steps;
+    std::vector<Vec2> accepted;
     for (size_t i = 0; i < order.size(); ++i)
     {
         Step step;
         step.bot = order[i];
         step.slot = int(i);
         BotFacts const& bot = bots[order[i]];
-        auto const refuse = [&](std::string code, std::string detail)
+        auto const refuse = [&](std::string code)
         {
-            step.code = std::move(code);
-            step.detail = std::move(detail);
+            step.code = code;
+            step.detail = SlotDetail(code);
             ++refused;
         };
+        bool const haveSlot = i < slots.size() && i < usable.size();
+        bool const slotUsable = haveSlot && usable[i];
         if (!bot.alive)
-            refuse("dead", "a dead bot cannot walk to its slot");
+            refuse("dead");
         else if (!bot.sameMap)
-            refuse("other-map", "the bot is not on the commander's map and instance");
-        else if (i >= slots.size() || i >= usable.size() || !usable[i])
-            refuse("no-slot", "the commander's own spot leaves no slot for this bot");
+            refuse("other-map");
+        else if (!haveSlot)
+            refuse("no-slot");
         else
         {
             Vec2 const point = Place(frame, slots[i]);
             float const dx = point.x - frame.centre.x, dy = point.y - frame.centre.y;
             float const reach = std::sqrt(dx * dx + dy * dy);
             float z = 0.0f;
+            std::string code;
+            bool ok = false;
+            if (slotUsable)
+                ok = reach <= kMaxRadiusYd && JudgeSlot(point, anchorZ, step.bot, probe, code, z);
+            if (!slotUsable)
+                code = "no-slot";
             if (reach > kMaxRadiusYd)
-                refuse("too-far", "the slot is past the 35 yd ceiling");
-            else if (!probe.ground || !probe.ground(point, z))
-                refuse("no-ground", "no floor under the slot");
-            else if (!probe.reachable || !probe.reachable(step.bot, point, z))
-                refuse("unreachable", "no walkable path to the slot");
-            else
+                code = "too-far";
+            if (ok)
             {
                 step.placed = true;
                 step.pos = point;
                 step.z = z;
+                accepted.push_back(point);
                 ++placed;
             }
+            else if (code != "too-far" && code != "no-ground" && (slotUsable || rules.nudgeCleared))
+            {
+                // The nudge: the slot's own straight line towards the frame centre, 1, 2, 3 yd; the first dry, reachable, free candidate wins.
+                Vec2 const inward{ frame.centre.x - point.x, frame.centre.y - point.y };
+                float const distance = std::sqrt(inward.x * inward.x + inward.y * inward.y);
+                for (float const stepYd : kNudgeStepsYd)
+                {
+                    if (!(distance > 1e-3f))
+                        break;
+                    Vec2 const candidate{ point.x + inward.x / distance * stepYd, point.y + inward.y / distance * stepYd };
+                    float const cx = candidate.x - frame.centre.x, cy = candidate.y - frame.centre.y;
+                    if (std::sqrt(cx * cx + cy * cy) > kMaxRadiusYd)
+                        continue;
+                    if (rules.guardHalf > 0.0f)
+                    {
+                        float const gx = candidate.x - rules.guardCentre.x, gy = candidate.y - rules.guardCentre.y;
+                        if (std::sqrt(gx * gx + gy * gy) < rules.guardHalf)
+                            continue;
+                    }
+                    bool free = true;
+                    for (Vec2 const& spot : cleared)
+                    {
+                        float const ex = candidate.x - spot.x, ey = candidate.y - spot.y;
+                        if (ex * ex + ey * ey < kCommanderClearYd * kCommanderClearYd)
+                        {
+                            free = false;
+                            break;
+                        }
+                    }
+                    for (Vec2 const& other : accepted)
+                    {
+                        float const ex = candidate.x - other.x, ey = candidate.y - other.y;
+                        if (float const spacing = 0.5f * gapYd; ex * ex + ey * ey < spacing * spacing)
+                        {
+                            free = false;
+                            break;
+                        }
+                    }
+                    if (!free)
+                        continue;
+                    float candidateZ = 0.0f;
+                    std::string candidateCode;
+                    if (!JudgeSlot(candidate, anchorZ, step.bot, probe, candidateCode, candidateZ))
+                        continue;
+                    step.placed = true;
+                    step.pos = candidate;
+                    step.z = candidateZ;
+                    step.nudged = stepYd;
+                    accepted.push_back(candidate);
+                    ++placed;
+                    break;
+                }
+                if (!step.placed)
+                    refuse(code);
+            }
+            else
+                refuse(code);
         }
         steps.push_back(std::move(step));
     }
@@ -363,11 +637,11 @@ inline std::string RingTooFar(int bots)
     return "the ring for " + std::to_string(bots) + " bots (or round a target that size) would be wider than 35 yd: use a smaller gap or a row shape";
 }
 
-inline PlanResult PlanPlace(Shape shape, Gap gap, AnchorFacts const& anchor, std::vector<BotFacts> const& bots,
-    std::vector<WhoToken> const& who, Probe const& probe)
+inline PlanResult PlanPlace(Shape shape, GapSpec const& gap, AnchorFacts const& anchor, std::vector<BotFacts> const& bots,
+    std::vector<WhoToken> const& who, Probe const& probe, std::string_view anchorName = {})
 {
     PlanResult out;
-    Selection const selection = SelectBots(bots, who);
+    Selection const selection = SelectBots(bots, who, anchorName);
     if (!selection.code.empty())
     {
         out.code = selection.code;
@@ -375,19 +649,61 @@ inline PlanResult PlanPlace(Shape shape, Gap gap, AnchorFacts const& anchor, std
         return out;
     }
     out.selected = int(selection.order.size());
-    out.layout = LayoutShape(shape, gap, out.selected, anchor.kind == Anchor::Target ? anchor.targetHalf : 0.0f);
+    if (anchor.kind == Anchor::Point)
+    {
+        float const dx = anchor.point.x - anchor.player.x, dy = anchor.point.y - anchor.player.y;
+        if (std::sqrt(dx * dx + dy * dy) > kPointReachYd)
+        {
+            out.code = "too-far";
+            out.detail = "the point is more than 100 yd from you";
+            return out;
+        }
+    }
+    float const targetHalf = anchor.kind == Anchor::Target ? anchor.targetHalf : (anchor.kind == Anchor::Tank ? anchor.tankReach : 0.0f);
+    out.layout = LayoutShape(shape, gap.yd, out.selected, targetHalf);
     if (out.layout.tooFar)
     {
         out.code = "too-far";
         out.detail = RingTooFar(out.selected);
         return out;
     }
-    out.frame = FrameFor(anchor.kind, out.layout, GapYd(gap), anchor.player, anchor.playerFront, anchor.target, anchor.targetHalf, anchor.cursor);
+    FrameInput in;
+    in.player = anchor.player;
+    in.playerFront = anchor.playerFront;
+    in.target = anchor.target;
+    in.targetHalf = anchor.targetHalf;
+    in.cursor = anchor.cursor;
+    in.tank = anchor.tankPos;
+    in.tankFacing = anchor.tankFacing;
+    in.tankReach = anchor.tankReach;
+    in.point = anchor.point;
+    in.hasFace = anchor.hasFace;
+    in.faceFront = anchor.faceFront;
+    out.frame = FrameFor(anchor.kind, out.layout, gap.yd, in);
     std::vector<Slot> slots = out.layout.slots;
-    std::vector<bool> const usable = ClearCommanderSpot(slots, shape, out.frame, anchor.player, out.selected);
-    out.steps = PlanSteps(bots, selection.order, slots, usable, out.frame, probe, out.placed, out.refused);
+    std::vector<Vec2> spots{ anchor.player };
+    if (anchor.kind == Anchor::Tank)
+        spots.push_back(anchor.tankPos);
+    std::vector<bool> const usable = ClearSpots(slots, shape, out.frame, spots, out.selected);
+    StepRules rules;
+    if (anchor.kind == Anchor::Target && anchor.targetHalf > 0.0f)
+    {
+        // A ring nudge must never walk a bot into the target's own body.
+        rules.guardCentre = anchor.target;
+        rules.guardHalf = anchor.targetHalf;
+    }
+    out.steps = PlanSteps(bots, selection.order, slots, usable, out.frame, probe, anchor.anchorZ, gap.yd, spots, rules, out.placed, out.refused);
     out.ok = true;
     return out;
+}
+
+inline PlanResult PlanPlace(Shape shape, Gap gap, AnchorFacts const& anchor, std::vector<BotFacts> const& bots,
+    std::vector<WhoToken> const& who, Probe const& probe, std::string_view anchorName = {})
+{
+    GapSpec spec;
+    spec.preset = gap;
+    spec.yd = GapYd(gap);
+    return PlanPlace(shape, spec, anchor, bots, who, probe, anchorName);
 }
 
 // The fall-back formation's front: from a stored rally point it faces the commander (the group came from that side), so the tanks stand nearest the
@@ -400,11 +716,66 @@ inline Vec2 FallbackFront(Vec2 centre, Vec2 commander, Vec2 facing, bool storedR
     return Normalized({ commander.x - centre.x, commander.y - centre.y }, fallback);
 }
 
-inline PlanResult PlanFallback(Gap gap, Vec2 centre, Vec2 commander, Vec2 facing, bool storedRally,
-    std::vector<BotFacts> const& bots, Probe const& probe)
+// Where a fall back forms, from the word the commander used. `rally`/`last` insist on the stored point (never the commander's position);
+// `here` ignores it; `at:` is a point the host has already judged.
+struct FallbackChoice
+{
+    bool ok = true;
+    std::string code;
+    std::string detail;
+    Vec2 centre;
+    float z = 0.0f;
+    bool frontStored = false;
+    std::string from = "commander";
+};
+
+inline FallbackChoice ChooseFallback(FallbackTo to, bool stored, Vec2 storedPoint, float storedZ,
+    Vec2 commander, float commanderZ, Vec2 point, float pointZ)
+{
+    FallbackChoice out;
+    out.centre = commander;
+    out.z = commanderZ;
+    switch (to)
+    {
+        case FallbackTo::Default:
+            if (stored)
+            {
+                out.centre = storedPoint;
+                out.z = storedZ;
+                out.frontStored = true;
+                out.from = "memory";
+            }
+            break;
+        case FallbackTo::Rally:
+            if (!stored)
+            {
+                out.ok = false;
+                out.code = "no-rally";
+                out.detail = "no rally point on this map (.tb cmd rally here)";
+                break;
+            }
+            out.centre = storedPoint;
+            out.z = storedZ;
+            out.frontStored = true;
+            out.from = "memory";
+            break;
+        case FallbackTo::Here:
+            break;      // the commander's position and facing, whatever is stored
+        case FallbackTo::At:
+            out.centre = point;
+            out.z = pointZ;
+            out.frontStored = true;
+            out.from = "point";
+            break;
+    }
+    return out;
+}
+
+inline PlanResult PlanFallback(GapSpec const& gap, Vec2 centre, Vec2 commander, Vec2 facing, bool storedRally,
+    float anchorZ, float commanderZ, std::vector<BotFacts> const& bots, Probe const& probe, std::string_view anchorName = {})
 {
     PlanResult out;
-    Selection const selection = SelectBots(bots, {});
+    Selection const selection = SelectBots(bots, {}, anchorName);
     if (!selection.code.empty())
     {
         out.code = selection.code;
@@ -423,13 +794,64 @@ inline PlanResult PlanFallback(Gap gap, Vec2 centre, Vec2 commander, Vec2 facing
             case Rank::Healer: ++counts.healers; break;
         }
     }
-    std::vector<Slot> slots = FallbackSlots(counts, gap);
+    std::vector<Slot> slots = FallbackSlots(counts, gap.yd);
     out.frame.centre = centre;
     out.frame.front = FallbackFront(centre, commander, facing, storedRally);
-    std::vector<bool> const usable = ClearCommanderSpot(slots, Shape::Close, out.frame, commander, out.selected);
-    out.steps = PlanSteps(bots, selection.order, slots, usable, out.frame, probe, out.placed, out.refused);
+    std::vector<Vec2> const spots{ commander };
+    std::vector<bool> const usable = ClearSpots(slots, Shape::Close, out.frame, spots, out.selected);
+    StepRules rules;
+    rules.nudgeCleared = true;      // a fall back may nudge a slot off the commander's own spot
+    out.steps = PlanSteps(bots, selection.order, slots, usable, out.frame, probe, anchorZ, gap.yd, spots, rules, out.placed, out.refused);
+
+    // A fall back is an emergency: a bot whose slot still fails after the nudge is sent to the centre (when the centre itself is standable) or to
+    // the commander, so it drops its target instead of fighting where it stood. Both destinations are judged first: an unstandable point is not
+    // an emergency destination, and a bot that cannot be sent anywhere safe stays refused (only death, another map and the order queue also do).
+    for (Step& step : out.steps)
+    {
+        if (step.placed || step.code == "dead" || step.code == "other-map")
+            continue;
+        std::string const refusal = step.code, detail = step.detail;
+        float z = 0.0f;
+        std::string code;
+        if (JudgeSlot(centre, anchorZ, step.bot, probe, code, z))
+        {
+            step.pos = centre;
+            step.z = z;
+            step.to = "centre";
+        }
+        else
+        {
+            float commanderPointZ = 0.0f;
+            std::string commanderCode;
+            if (!JudgeSlot(commander, commanderZ, step.bot, probe, commanderCode, commanderPointZ))
+            {
+                step.code = refusal;
+                step.detail = detail;
+                continue;
+            }
+            step.pos = commander;
+            step.z = commanderPointZ;
+            step.to = "commander";
+        }
+        step.placed = true;
+        step.slot = -1;
+        step.code = refusal;
+        step.detail = detail;
+        ++out.placed;
+        if (out.refused > 0)
+            --out.refused;
+    }
     out.ok = true;
     return out;
+}
+
+inline PlanResult PlanFallback(Gap gap, Vec2 centre, Vec2 commander, Vec2 facing, bool storedRally,
+    std::vector<BotFacts> const& bots, Probe const& probe, std::string_view anchorName = {})
+{
+    GapSpec spec;
+    spec.preset = gap;
+    spec.yd = GapYd(gap);
+    return PlanFallback(spec, centre, commander, facing, storedRally, 0.0f, 0.0f, bots, probe, anchorName);
 }
 
 // ---- the hold's bookkeeping ----
@@ -464,8 +886,100 @@ struct HoldRow
     uint32_t seq = 0;       // the `come` order that put the bot on the slot
     Rank rank = Rank::Melee;
     uint32_t walkMs = 0;    // when the walk back was last asked for
+    uint32_t disengageMs = 0; // a fall back row: when its passive hold started (the cap's clock; a walk back never restarts it)
     uint32_t walkFails = 0; // failed reachability checks since the last walk back
+    bool disengage = false; // a fall back row: passive until the bot reaches the spot
+    bool placed = false;    // a placement row: its `come` keeps the combat-time behaviour (no Reset, no combat `stay`)
 };
+
+// A `come` order's effects, decided by its kind and the bot's combat state. Every order that is not a placement behaves as it always has: the engine's
+// per-fight state is reset before the walk. Only a placement (`.tb cmd place`) keeps its target in a fight and keeps `stay` out of the combat state, so
+// reach/LOS micro-movement still works; a fall back additionally stops the swing/cast/pet attack and holds the bot passive on the way.
+struct ComePlan
+{
+    bool stopFight = false;         // AttackStop + InterruptNonMeleeSpells + the pet's AttackStop, before the reset
+    bool reset = true;              // the engine rebuilds its per-fight state
+    bool passive = false;           // held out of the fight on the way (a fall back)
+    bool keepCombatStayOut = false; // `stay` is dropped from the combat state (a placement)
+};
+
+inline ComePlan PlanCome(bool placed, bool disengage, bool inCombat)
+{
+    ComePlan out;
+    out.stopFight = disengage;
+    out.passive = disengage;
+    // A run's walk, a rally and a plain `come` reset in combat exactly as before: the stay strategy's "return to stay position" must answer the pull.
+    out.reset = !placed || !inCombat;
+    out.keepCombatStayOut = placed && !disengage;
+    return out;
+}
+
+// The fall-back passivity's two ends besides the row being dropped: the bot is at its spot, or it has stopped short. A bot that is in a fight and no longer
+// walking has stopped short (a blocked or crowded spot): after a short grace it fights again. The cap is the backstop for a bot that never stops moving:
+// the emergency hold must never outlive the walk.
+constexpr uint32_t kDisengageStoppedShortMs = 1500;
+constexpr uint32_t kDisengageMaxMs = 10000;
+
+inline bool DisengageEnds(float distance, bool inCombat, bool walkEnded, uint32_t elapsedMs)
+{
+    if (distance <= kSlotToleranceYd)
+        return true;
+    if (inCombat && walkEnded && elapsedMs >= kDisengageStoppedShortMs)
+        return true;
+    return elapsedMs >= kDisengageMaxMs;
+}
+
+// The walk back re-queues an off-slot idle bot's `come` at most this often (place::Update).
+constexpr uint32_t kWalkBackEveryMs = 5000u;
+
+// A new row: the walk-back clock and the fall back's own clock both start with the row's `come`.
+inline void StartRowClock(HoldRow& row, uint32_t now)
+{
+    row.walkMs = now;
+    row.disengageMs = now;
+}
+
+// F1b (live 11-24): the fall back's passive ends at its spot, when the bot stops short in a fight, or at the cap, all counted from the
+// fall back's start (`disengageMs`). The walk back restarts `walkMs` every kWalkBackEveryMs while the bot is idle off its slot, so a
+// cap on `walkMs` never fired for a bot that stood still out of combat: the passive and the row's re-queued `come` went on until `resume`.
+inline bool RowDisengageEnds(HoldRow const& row, float distance, bool inCombat, bool walkEnded, uint32_t now)
+{
+    return row.disengage && DisengageEnds(distance, inCombat, walkEnded, now - row.disengageMs);
+}
+
+// F1 (cold review): the fall back's passive is the row's own only when the row added it. A bot the owner already held passive
+// (`.bot co +passive`, a `hold`, a `flee`) keeps that passive when the fall back ends, and the row's legal walk-back `come`
+// (`carried`: the bot already carries this row's record) takes the record on under its new order number.
+inline bool PlaceClaimsPassive(bool passiveAlreadyOn, bool carried)
+{
+    return carried || !passiveAlreadyOn;
+}
+
+// F1: an order that sets `passive` itself: `hold`, `flee` (its chat shortcut sets it in both states), an owner's `co/nc +passive`,
+// and a fall back's own `come` (the disengage one; a plain `come` sets no passive).
+inline bool OrderSetsPassive(std::string_view verb, std::string_view arg, bool disengage)
+{
+    if (verb == "come")
+        return disengage;
+    if (verb == "hold" || verb == "flee")
+        return true;
+    if (verb == "co" || verb == "nc")
+        return arg.find("+passive") != std::string_view::npos;
+    return false;
+}
+
+// F1: whether a fall back's exit may drop `passive` now. `claimed` is the row's record (this `come` set the passive itself);
+// `lastPassiveSeq` is the number of the bot's last order that sets `passive` itself (0: none, or one that is not newer than the row).
+// The row drops only what it set, and never while a newer order that sets passive itself is the bot's last one: `flee` and `hold`
+// keep their own, and so does an owner's `+passive`. The row's own `come` (the walk-back carries the row's number) and any newer
+// order that sets no passive leave the release to the row, so the 21 Nov rule "passive is released on every exit path" still holds
+// for the fall back's own passive.
+inline bool PlacePassiveReleasable(bool claimed, uint32_t rowSeq, uint32_t lastPassiveSeq)
+{
+    if (!claimed)
+        return false;
+    return lastPassiveSeq == 0 || lastPassiveSeq <= rowSeq;
+}
 
 // The walk back queued a `come` with a new order number: the row names it, so the stay it leaves can be cleared later
 // (h3::ReleasePlaceStay matches the row's seq against the bot's last order).
@@ -495,7 +1009,9 @@ struct PendingRequest
     uint32_t commander = 0;
     uint32_t deadline = 0;
     Shape shape = Shape::Close;
-    Gap gap = Gap::Normal;
+    GapSpec gap;
+    bool hasFace = false;
+    int faceDeg = 0;
     std::vector<WhoToken> who;
     std::vector<std::string> words;   // the command as typed, for the reply's token
     std::string token;
@@ -509,6 +1025,57 @@ struct State
     std::map<uint32_t, RallyState> rallies;
     std::map<uint32_t, PendingRequest> pendings;
 };
+
+// The stored rally point that applies on this map and instance, or null. A point on another map is no point at all: `fallback
+// last` refuses rather than relabelling the old coordinates with the current map.
+inline RallyState const* StoredRallyFor(State const& state, uint32_t commander, uint32_t map, uint32_t instance)
+{
+    auto const it = state.rallies.find(commander);
+    if (it == state.rallies.end() || !it->second.set)
+        return nullptr;
+    if (it->second.map != map || it->second.instance != instance)
+        return nullptr;
+    return &it->second;
+}
+
+// What `rally here` / `rally at:` would store. The decision is made before any state is touched: a refused `rally at:` answers the
+// typed error and leaves the stored point (absent or older) exactly as it was. The host commits `value` only when `ok`.
+struct RallyDecision
+{
+    bool ok = true;
+    std::string code;
+    std::string detail;
+    RallyState value;
+};
+
+// `judgeAt(point, z, code, detail)` is the host's typed-point rule (ground, liquid, reach, path); it is only called for `At`.
+inline RallyDecision DecideRally(RallyWord word, Vec2 here, float hereZ, uint32_t map, uint32_t instance, Vec2 point,
+    std::function<bool(Vec2&, float&, std::string&, std::string&)> const& judgeAt)
+{
+    RallyDecision out;
+    Vec2 at = point;
+    float atZ = 0.0f;
+    if (word == RallyWord::At)
+    {
+        if (!judgeAt || !judgeAt(at, atZ, out.code, out.detail))
+        {
+            out.ok = false;
+            if (out.code.empty())
+            {
+                out.code = "no-ground";
+                out.detail = "no floor under the point";
+            }
+            return out;
+        }
+    }
+    out.value.set = true;
+    out.value.map = map;
+    out.value.instance = instance;
+    out.value.x = word == RallyWord::At ? at.x : here.x;
+    out.value.y = word == RallyWord::At ? at.y : here.y;
+    out.value.z = word == RallyWord::At ? atZ : hereZ;
+    return out;
+}
 
 // A new placement replaces only the rows of the bots it addressed (placed or refused); the rows of every other bot stay. A command that placed
 // nobody leaves the hold exactly as it was. The dropped rows are returned for their release.
@@ -646,6 +1213,68 @@ inline Release ReleaseOn(RowEnd end, bool stillCommanded)
         default:
             return stillCommanded ? Release::Follow : Release::ClearStay;
     }
+}
+
+// ---- the card keys: who holds which slot, and where the rally point is (TbCmdBinding.cpp's status loop) ----
+
+struct Vec3f
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+// The commander's memory as a card reads it (TbPlace.cpp ViewFor). Absent keys mean empty: no hold row, no rally.
+struct HoldView
+{
+    bool any = false;
+    bool fallback = false;
+    std::vector<std::pair<GuidKey, Vec3f>> slots;
+    bool rallySet = false;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    uint32_t map = 0;
+    uint32_t inst = 0;
+};
+
+struct CardKeys
+{
+    std::string hold;       // "place" | "fallback" | empty (no row)
+    bool hasRally = false;
+    Vec3f rally;
+    uint32_t rmap = 0;
+    uint32_t rinst = 0;
+    std::vector<std::pair<GuidKey, Vec3f>> slots;
+
+    bool SlotOf(GuidKey const& bot, Vec3f& out) const
+    {
+        for (auto const& row : slots)
+            if (row.first == bot)
+            {
+                out = row.second;
+                return true;
+            }
+        return false;
+    }
+};
+
+// The keys the binding and its member records carry. A hold with rows names the verb once on the binding and its slot on exactly those members; a
+// rally point is printed with its own map and instance (it can be another map).
+inline CardKeys CardHoldKeys(HoldView const& view)
+{
+    CardKeys keys;
+    if (view.any && !view.slots.empty())
+    {
+        keys.hold = view.fallback ? "fallback" : "place";
+        keys.slots = view.slots;
+    }
+    if (view.rallySet)
+    {
+        keys.hasRally = true;
+        keys.rally = { view.x, view.y, view.z };
+        keys.rmap = view.map;
+        keys.rinst = view.inst;
+    }
+    return keys;
 }
 }
 }

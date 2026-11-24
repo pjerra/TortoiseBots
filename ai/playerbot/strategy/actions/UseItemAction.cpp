@@ -437,21 +437,6 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
         return false;
     }
 
-    // ForeverCore uses only food and drink (on the bot itself, through the core's own item cast); every other use of an item is not
-    // ported ("item use except food and drink"): opening, quest-giver items, hearthstone, potions, bandages, keys, scrolls, gems.
-    // T: always false. The refusal reads like any other that the action reports (use_command_item_error).
-    if (ItemUseUnportedCompat(IsFood(proto) || IsDrink(proto)))
-    {
-        if (verbose)
-        {
-            std::map<std::string, std::string> replyArgs;
-            replyArgs["%item"] = chat->formatItem(proto);
-            ai->TellPlayerNoFacing(requester, BOT_TEXT2("use_command_item_error", replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-        }
-
-        return false;
-    }
-
     if (proto->Flags & ITEM_FLAG_HAS_LOOT)
     {
         std::list<Item*> items = AI_VALUE2(std::list<Item*>, "inventory items", ChatHelper::formatQItem(itemId));
@@ -578,8 +563,9 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
         }
 
         // One on-use spell of the item. T builds the targets and a BotUseItemSpell of its own for every kind of target (the loop body,
-        // moved word for word into cmangos-compat-s2i.h); F casts food and drink on the bot itself through the core's own item cast and
-        // answers "did not start" for every other use (TbCompat_I2.h, feature "item use except food and drink").
+        // moved word for word into cmangos-compat-s2i.h); F casts an owned item's on-use spell through the core's own item cast with
+        // self, unit or item targets and answers "did not start" for a game-object target or an item without an owned Item* (TbCompat_I2.h,
+        // feature "item use on a game object, openable items and a cast with no bot session").
         ItemSpellUseCompat use = CastItemSpellCompat<BotUseItemSpell>(ai, bot, proto, spellData, spellInfo, itemId, successCasts,
             itemUsed, unit, gameObject, item,
             [&](uint32 forSpellId) -> Item* { return AI_VALUE2(Item*, "item for spell", forSpellId); },
@@ -935,7 +921,7 @@ bool UseAction::OpenItem(Player* requester, Item* item)
         return false;
 
         // Open quest item in inventory, containing related items (e.g Gnarlpine necklace, containing Tallonkai's Jewel)
-        // (the packet: T. F does not open items: "item use except food and drink")
+        // (the packet: T. F does not open items: "item use on a game object, openable items and a cast with no bot session")
         return OpenItemCompat(bot, item);
 }
 

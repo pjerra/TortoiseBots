@@ -6,6 +6,11 @@
 // ForeverCore src/server/game).
 #pragma once
 
+#include "TbCombatClockPure.h"
+
+#include <ctime>
+#include <mutex>
+
 // (PhasingHandler.h is one of the core headers botpch_forever.h includes before the shim.)
 
 // Line of sight between two objects of one map. T Object.cpp:1514: `IsWithinLOSInMap(obj, bool checkDynLos)`, the bool adds
@@ -301,6 +306,10 @@ inline Tokens StrSplit(std::string const& src, std::string const& sep)
 // The bot's own case-insensitive substring search (Helpers.cpp:69), declared for every file as the Turtle shim does
 // (ai/cmangos-compat-shim.h:385); the definition is the bot's, not the core's.
 char* strstri(std::string const& s1, std::string const& s2);
+
+// The faction template a unit wears. T `Unit::GetFactionTemplateId()` (the field on the unit); F `Unit::GetFaction()`
+// (Unit.h:898 returns m_unitData->FactionTemplate, the same number).
+inline uint32 GetFactionTemplateIdCompat(Unit const* unit) { return unit ? unit->GetFaction() : 0; }
 
 // The faction template row by id. T `sObjectMgr.GetFactionTemplateEntry(id)`, F the DB2 store (DB2Stores.h).
 inline FactionTemplateEntry const* GetFactionTemplateEntryCompat(uint32 id) { return sFactionTemplateStore.LookupEntry(id); }
@@ -734,10 +743,22 @@ inline void CombatStartPositionCompat(Creature const* creature, float& x, float&
     z = home.GetPositionZ();
 }
 
-// Seconds since the creature entered combat, -1 when unknown. T Creature.h:833 GetCombatTime (a time_t). F keeps no engage time
-// (Creature::AtEngage is the only hook); lead decision (findings item 14): -1, the value CcMarkHoldPolicy.h already defines for
-// "unknown" (the mark-hold window then stays closed, as for a creature the bot has not seen engage).
-inline time_t CombatTimeCompat(Creature const* /*creature*/) { return time_t(-1); }
+// Seconds since the creature entered combat, -1 when it is not in combat. T Creature.h:833 GetCombatTime (a time_t). F keeps no
+// engage time (Creature::AtEngage is the only hook). The first answer (findings item 14) was a constant -1, which kept the cc
+// mark's fight-start hold window (CcMarkHoldPolicy.h CcMarkHeld) closed on this core: the party fought an ordered mark from the
+// first second and broke every Polymorph (live #208). The module now measures it (TbCombatClockPure.h): the first question while
+// the creature is in combat starts its clock. DIFFERENT ANSWER: a mark first asked about mid-fight starts its clock then.
+inline time_t CombatTimeCompat(Creature const* creature)
+{
+    static std::mutex lock;
+    static TortoiseBots::CombatClock clock;
+    if (!creature)
+        return time_t(-1);
+    bool const inCombat = creature->IsInCombat() && creature->IsAlive();
+    uint64 const key = GuidKeyCompat(creature->GetGUID());
+    std::lock_guard<std::mutex> guard(lock);
+    return time_t(clock.Observe(key, inCombat, time(nullptr)));
+}
 
 // Does an applied aura (T: the spell's aura holder) carry one of the mechanics in a legacy mask (bit `mechanic - 1`). T
 // SpellAuraHolder::HasMechanicMask (SpellAuras.cpp:7443: the spell's mechanic, or the mechanic of an effect the holder applied); F

@@ -8,6 +8,7 @@
 #include "PossibleAttackTargetsValue.h"
 #include "CcMarkHoldPolicy.h"
 #include "playerbot/GroupMembers.h"
+#include "../../../../runtime/CcOrderFamily.h"
 #include "../../../../runtime/CommandedGroupQuery.h"
 #include "../../../../runtime/TotemSpellPolicy.h"
 
@@ -318,5 +319,29 @@ Unit* CcTargetValue::Calculate()
     }
 
     FindTargetForCcStrategy strategy(ai, qualifier);
+
+    // An order assigned a mark (ApplyCcOrder writes `rti cc` and the family
+    // together; a plain Moon mark carries "none"): it is the target at any
+    // range. The tournament below only lists units already fighting the group,
+    // so a mark ordered on a pack that has not opened yet had no `cc target`
+    // at all and the cast never went out (live #208: three accepted `cmd cc`
+    // orders, no Polymorph, the mark killed with the pack). The same rules as
+    // an assigned tournament candidate apply through CheckAttacker: only CC
+    // marks left still refuses (the party kills those last), a party DoT or an
+    // uncastable target still refuses, and `reach cc` closes the distance
+    // before the cast (CcChooserTakesAssignedMark, CcMarkHoldPolicy.h).
+    std::string const family = AI_VALUE(std::string, "run cc family");
+    if (Unit* assigned = AI_VALUE(Unit*, "rti cc target"))
+    {
+        bool const ordered = !family.empty() && family != "none" &&
+            TortoiseBots::DungeonRun::CcOrderFamilyAllows(family, qualifier);
+        if (CcChooserTakesAssignedMark(ordered, strategy.OnlyCcMarksLeft(assigned)))
+        {
+            strategy.CheckAttacker(assigned, nullptr);
+            if (Unit* picked = strategy.GetResult())
+                return picked;
+        }
+    }
+
     return FindTarget(&strategy);
 }

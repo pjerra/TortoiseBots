@@ -140,7 +140,8 @@ void SeedCharacter(std::string name, uint64 guid, uint32 accountId, std::string 
     SeedRow(std::move(name), accountId, std::move(state), true, guid);
 }
 
-// A pool of `characters` ready characters, ten per account, every row and account carrying its stamp (a valid identity).
+// A pool of `characters` ready characters in an existing account layout (ten per account), every row and account carrying
+// its stamp: the cap and prune tests read this shape; new creation places one character per account.
 void SeedPool(uint32 characters)
 {
     uint32 made = 0;
@@ -226,12 +227,14 @@ void TestTrustedRowIsUsed()
 {
     Reset();
     SeedAccount("TBPOOL0001", 3, kStamp, "ready");
-    SeedCharacter("Poolbot", 500, 3, "ready");
 
     CHECK(pool::Accounts().size() == 1);
+    CHECK(pool::AccountWithRoom() == 3);                       // empty: room for the pool's one character
+    SeedCharacter("Poolbot", 500, 3, "ready");
+    pool::LoadConfig();                                        // re-read the rows after the seed
     CHECK(pool::Characters().size() == 1);
+    CHECK(pool::AccountWithRoom() == 0);                       // one character is the whole account
     CHECK(pool::AccountRegistered(3));
-    CHECK(pool::AccountWithRoom() == 3);
     CHECK(At(CharacterDatabase.accounts, 0).state == "ready");
 }
 
@@ -657,7 +660,6 @@ void TestNoCharacterGoesOnAnAccountThatChangedAfterTheLoad()
     {
         Reset();
         SeedAccount("TBPOOL0001", 3, kStamp, "ready");
-        SeedCharacter("Poolbot", 500, 3, "ready");
         CHECK(pool::AccountWithRoom() == 3);                   // the cache is loaded and trusts the account
         std::size_t const accountsBefore = fakeAccounts.size();
         std::size_t const rowsBefore = CharacterDatabase.characters.size();
@@ -678,7 +680,7 @@ void TestNoCharacterGoesOnAnAccountThatChangedAfterTheLoad()
 
         CHECK(fakeBotMgrState.createCalls == 0);               // no character is made on it
         CHECK(CharacterDatabase.characters.size() == rowsBefore);        // and none is even claimed
-        CHECK(CharacterDatabase.coreCharacters.size() == 1);
+        CHECK(CharacterDatabase.coreCharacters.empty());
         CHECK(fakeAccounts.size() <= accountsBefore);          // and no replacement account is made either: the job refuses
         CHECK(!pool::Creating());
         CHECK(pool::StopReason().find("no longer the pool's") != std::string::npos);
@@ -811,21 +813,26 @@ void TestTheNameIsCheckedBeforeAnAccountIsMade()
     CHECK(CharacterDatabase.accounts.size() == 1);
 }
 
-// Finding 3: the cap also bounds the number of pool accounts, and an empty pool account is reused first.
-void TestThePoolAccountCountIsBounded()
+// One character per account, so the account rows follow the characters: a pool of three is three accounts and the
+// character cap is also the account cap; an empty pool account is reused first.
+void TestThePoolAccountsFollowTheCharacters()
 {
     Reset();
-    fakeConfig.ints["TortoiseBots.Pool.MaxCharacters"] = 10;    // one account's worth
+    fakeConfig.ints["TortoiseBots.Pool.MaxCharacters"] = 3;
     pool::LoadConfig();
-    // The only account row is a failed pool account that holds a character (never reused): it counts as the one account.
-    SeedAccount("TBPOOL0001", 3, kStamp, "failed");
-    SeedDatabaseCharacter("Someone", 800, 3);
-    Name("Alarick");
-    CHECK(pool::StartCreate(1).started);
+    TortoiseBots::fakeBotNames = { "Alarick", "Bromley", "Cedric" };
+    TortoiseBots::fakeBotNameIndex = 0;
+    CHECK(pool::StartCreate(3).started);
     RunJob();
-    CHECK(fakeAccounts.size() == 1);                           // no second account
-    CHECK(fakeBotMgrState.createCalls == 0);
-    CHECK(pool::StopReason().find("account") != std::string::npos);
+    CHECK(fakeAccounts.size() == 3);                           // one account per character
+    CHECK(CharacterDatabase.accounts.size() == 3);
+    CHECK(CharacterDatabase.characters.size() == 3);
+    CHECK(At(CharacterDatabase.characters, 0).accountId != At(CharacterDatabase.characters, 1).accountId);
+    CHECK(At(CharacterDatabase.characters, 0).accountId != At(CharacterDatabase.characters, 2).accountId);
+    CHECK(At(CharacterDatabase.characters, 1).accountId != At(CharacterDatabase.characters, 2).accountId);
+    Name("Darianne");
+    CHECK(!pool::StartCreate(1).started);                      // the character cap is the account cap
+    CHECK(fakeBotMgrState.createCalls == 3);
 
     // An empty failed pool account (nothing on it) is reused before any account is made.
     Reset();
@@ -869,18 +876,21 @@ void TestAJobSnapshotsItsConfigAndStopsWhenTheKeyIsTurnedOff()
     CHECK(fakeBotMgrState.createCalls == 2);
 }
 
-void TestACacheReloadDuringAJobDoesNotOpenASecondAccount()
+void TestACacheReloadDuringAJobKeepsOneAccountPerCharacter()
 {
     Reset();
     TortoiseBots::fakeBotNames = { "Alarick", "Bromley", "Cedric" };
     TortoiseBots::fakeBotNameIndex = 0;
     CHECK(pool::StartCreate(3).started);
-    pool::CreateUpdate(1000000);                               // the account is made and the first character queued
+    pool::CreateUpdate(1000000);                               // the first account is made and its character queued
     pool::LoadConfig();                                        // a reload clears the registry's cache mid-job
     RunJob();
-    CHECK(fakeAccounts.size() == 1);
+    CHECK(fakeAccounts.size() == 3);
     CHECK(CharacterDatabase.characters.size() == 3);
     CHECK(fakeBotMgrState.createCalls == 3);
+    CHECK(At(CharacterDatabase.characters, 0).accountId != At(CharacterDatabase.characters, 1).accountId);
+    CHECK(At(CharacterDatabase.characters, 0).accountId != At(CharacterDatabase.characters, 2).accountId);
+    CHECK(At(CharacterDatabase.characters, 1).accountId != At(CharacterDatabase.characters, 2).accountId);
 }
 
 // The test fake's EscapeString really escapes, so text that reaches SQL is tested as text.
@@ -1074,9 +1084,9 @@ int main()
     TestTheCapCountsFailedAndStaleRowsAndPresentCharacters();
     TestAFailedAuthLookupMarksNothingStale();
     TestTheNameIsCheckedBeforeAnAccountIsMade();
-    TestThePoolAccountCountIsBounded();
+    TestThePoolAccountsFollowTheCharacters();
     TestAJobSnapshotsItsConfigAndStopsWhenTheKeyIsTurnedOff();
-    TestACacheReloadDuringAJobDoesNotOpenASecondAccount();
+    TestACacheReloadDuringAJobKeepsOneAccountPerCharacter();
     TestSqlTextIsEscaped();
     TestAnExistingCharacterIsNeverAdoptedWithoutItsOwnClaim();
     TestPruneReconcilesFirstAndKeepsAnAccountWithAClaim();

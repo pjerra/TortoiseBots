@@ -27,7 +27,7 @@ Written for the agent's command-channel round (dungeon plan A6) and for anyone d
 
 ## 1a. `.bot` (players)
 
-Round R1 of the player command layer (issue #129): a player types `.bot` in ordinary chat. The entry is a module `PlayerScript` hook
+Rounds R1-R3 of the player command layer (issue #129): a player types `.bot` in ordinary chat. The entry is a module `PlayerScript` hook
 (`PlayerScript::OnCommand`), which the core calls before its own command lookup and before any RBAC check, so a non-GM sees it. It claims
 exactly the word `bot` (any case, then end or a space): `.bot help` is ours, `.botany` stays the core's. With `TortoiseBots.Enable = 0`, or
 in a build without the engine (`TORTOISEBOTS_SLICE1` off), the hook declines and the core answers as for any unknown command. The console
@@ -38,21 +38,57 @@ account. A caller also gets the tactical verbs on a bot it is master of, command
 a real player. A GameMaster (RBAC 371, the `.tb` permission) may use every verb on every bot. A bot in a running dungeon run refuses every
 `.bot` order to everyone, GMs included. Refusals name a stable code and never an account.
 
-R1 ships two verbs:
+The verbs of rounds R1-R3 (`forever/docs/PC-R1-NOTES.md` .. `PC-R3-NOTES.md`; every later verb answers `unknown-verb` until its round):
 
 | Command | What it does |
 |---|---|
 | `.bot` / `.bot help` | the usage rows the caller may use |
-| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow\|stay\|free`, `engine\|spike`. A GM's `.bot who all` lists every bot |
+| `.bot who` (aliases `roster`, `list`) | the count, then one line per online bot the caller may order: name, level, class, map id, `follow|stay|free`, `engine|spike`. A GM's `.bot who all` lists every bot |
+| `.bot add <name>` | logs one of the caller's own characters in as a bot (a GM: any character not online); it joins the caller's party. Owner verbs below need it first |
+| `.bot logout <bot>` (alias `remove`) | logs the caller's bot out |
+| `.bot follow <bot> [member]`, `.bot stay <bot>`, `.bot attack <bot>`, `.bot flee <bot>` | tactical orders queued for the bot's engine tick (`attack` reads the caller's selected unit; `flee` runs from the fight) |
+| `.bot stats` | TB's fleet line: how many bots the caller may see are online, how many of those the caller owns, and how many run an engine |
+| `.bot stats <bot>` | one line from the bot's own objects: level, class, health %, mana %, money in `g/s/c`, zone id and name, `alive|dead`, and the movement it keeps (`follow|stay|free`) |
+| `.bot version` (aliases `v`, `about`, `credits`) | the build id, the `TBM:VERSION` line and the author notice (`NOTICE.md`); public metadata, shown even when `TortoiseBots.Player.Commands = 0` |
+| `.bot features` | the server's player-facing switches as chat lines, the same list the addon Info window reads (`host/TbAddonInfo.cpp` kFeatures) |
+| `.bot summon <bot>` | brings the bot to the caller's side through the `.tb tele` path. Owner or GM; the caller must be the bot's master (a GM need not be). Refused `teleporting`/`in-flight` while the caller or the bot is being teleported or rides a taxi, and `on-cooldown` inside the per-bot wait |
 | `.bot maintenance <bot>` | refresh one owned bot's kit (reagents, bandages, hunter ammo), repair it for free, save it. Owner tier only (the caller owns the bot, or a GameMaster); pool bots are refused. Off unless `AiPlayerbot.OwnedBotMaintenanceEnabled = 1` (default 0, in `forever/conf/aiplayerbot.conf.dist`); potions, food, paid consumables and thrown top-ups are not ported |
+| `.bot totem <bot\|party> <earth\|fire\|water\|air> <totem\|auto\|none>`, `set <earth>,<fire>,<water>,<air>`, `mode <auto\|prepull\|manual>`, `status` | a shaman's per-slot totem orders, read by the totem triggers (`ShamanTotemCommandPolicy.h`): `auto` keeps the subgroup pick, `none` leaves the slot empty, a totem name holds that totem (short names work: `mana spring`). `set` sets all four at once. Shamans only (`not-shaman`); a totem the bot never trained is refused `not-known`, and a `set` is validated for every slot before any slot of that bot changes. Owner tier; `status` is tactical. Values live until logout (#135 adds persistence) |
+| `.bot behavior <bot\|party> <toggle> <on\|off>`, `status` | the old TB behaviour toggles (`loot`, `aoe` = "no aoe", `autocc`, `savemana` = "conserve mana", `boost`, `threat`, `potions`, `mimic`, `spread`, `hold`, `noblink`, `offheal`, `offdps`): `ChangeStrategy` on the toggle's state, read back with `HasStrategy`. Off-spec toggles (`offheal`, `offdps`) need paladin, priest, shaman or druid (`class`); a strategy this build does not register is `not-in-build`; a change that does not hold is `failed`. Owner tier; `status` is tactical and lists the toggles the class has. Values live until logout (#135 adds persistence) |
+| `.bot blessing <bot\|party> <class> <blessing\|auto>`, `player <name> <blessing\|auto>`, `status` | a paladin's blessing orders (`PaladinBlessingOrderPolicy.h`): the blessing each class gets (`might`, `wisdom`, `kings`, `salvation`, `sanctuary`, `light`, or `auto` for the automatic coverage pick), or a per-character exception (`player <name> <blessing\|auto>`; it wins over the class row). A non-paladin is refused `not-paladin`; a blessing the paladin has not trained is refused `not-known` and never stored. Owner tier; `status` is tactical and lists the class rows, the blessings the bot knows and its player exceptions. Values live until logout (#135 adds persistence) |
+| `.bot choice <bot\|party> <kind> <value\|auto>`, `status` | one ordered choice per kind (`ClassChoicePolicy.h`): `aura` (paladin), `aspect` and `sting` (hunter), `curse` and `pet` (warlock), `poison_mh` and `poison_oh` (rogue, by a usable poison item for that hand). `auto` keeps the automatic pick. A kind the class does not have is refused `class`; a word the bot cannot use is refused `not-known` and never stored. Owner tier; `status` is tactical and lists the kinds of the bot's class with the words it can use. Values live until logout (#135 adds persistence) |
+| `.bot service <bot>` | the bare query (tactical): one line `food=<0\|1> water=<0\|1> healthstone=<0\|1> portals=<id:City,...\|->`, any rank of a conjure line counting |
+| `.bot service <bot> portal <spellId>` | a mage's portal (owner tier): the policy decides first (`MagePortalPolicy.h`: `dead`, `combat`, `busy` while casting, `unknown` for a non-mage, an unknown city or a portal not learned, `group` when the caller is not in the bot's raid), then the rune is granted, the bot stops and stands, and the engine's `cast` action casts it. A build without that action answers `action-not-registered` |
+| `.bot service <bot> conjure <food\|water\|healthstone>` | the highest known rank of the line through the same `cast` action (owner tier): `dead`, `not-known` when the bot has no rank of the line, `action-not-registered` without the action |
+| `.bot lfg join <dungeon id> <tank\|healer\|dps>`, `.bot lfg status`, `.bot lfg leave` | the dungeon fill for the caller's own character (#160): queues it as its party's leader, lists the slots still open and the bots the fill added, and releases them. The same refusals as `.tb lfg`; the caller's own character only, never a named player |
+
+Summon rules (spec D-8): every map, instance, combat and death rule is the shared `TeleportBotNextTo`'s (the function
+`.tb tele <character> to <character>` calls), and its refusal codes pass through unchanged (`in-combat`, `in-flight`, `dead`, `teleporting`,
+`already-on-map`, `not-in-group`, `teleport-refused`, entry codes, ...). Players get no revive. The wait is
+`AiPlayerbot.OwnedBotSummonCooldown` (in `aiplayerbot.conf`; default 300 s, 0 = no wait, capped at 3600) and is stamped only by a summon
+whose teleport started, so a refused try costs nothing; GameMasters are not held by it. The other `AiPlayerbot.OwnedBotSummon*` keys are
+not read here. The refusal `not-a-bot`/`not-found` names no such online bot, `not-yours` a bot outside the caller's reach, `not-master` a
+bot that follows someone else, and `in-run` any verb that names a bot inside a running dungeon run (GMs included; `.tb run pause` is the
+GM's way).
 
 Replies: `TortoiseBots: help: <row>`, `TortoiseBots: who: <n> bot(s)`, `TortoiseBots: who: <Name> level <n> <class> map <id> <move> <brain>`,
-and `TortoiseBots: <verb>: refused <code>: <text>` with `usage`, `unknown-verb`, `players-off` (and later `not-a-bot`, `not-yours`, `in-run`, ...).
+`TortoiseBots: stats <Bot>: ok level <n> <class>, <hp>% hp, <mana>% mana, <g>g <s>s <c>c, zone <id> <Name>, <alive|dead>, <move>`, and
+`TortoiseBots: <verb> <Bot>: ok <text>` or `TortoiseBots: <verb>: refused <code>: <text>` with the codes `usage`, `unknown-verb`,
+`players-off`, `not-found`, `not-a-bot`, `not-yours`, `in-run`, `not-leader`, `already-online`, `too-many`, `no-selection`,
+`not-master`, `in-flight`, `on-cooldown`. A refusal never names an account.
 `TortoiseBots.Player.Commands = 0` refuses players with `players-off`; GMs keep the command. `TortoiseBots.Player.MaxBots` (default 4) caps
-how many of a player's own characters may be in the world at once when `.bot add` arrives. The ordering verbs (`add`, `logout`, `follow`,
-`stay`, `attack`, `flee`, `summon`, `stats`) follow in the next rounds; until then they answer `unknown-verb`. `.bot maintenance` answers
+how many of a player's own characters may be in the world at once when `.bot add` arrives. `.bot maintenance` answers
 `TortoiseBots: maintenance <Name>: ok <n> item(s) granted, repaired, saved`, or `TortoiseBots: maintenance: refused <code>: <text>` with
 `pool` (a pool bot), `disabled` (the flag is off) or `dead`, after the owner-tier `not-a-bot`, `not-yours` and `in-run`.
+
+**The choice verbs (`totem`, `behavior`, `blessing`, `choice`, `service`; #133 rounds 1 and 2).** The scope word is one bot's name
+or `party`: the bots in the caller's group the caller may order by the line's tier, in name order, at most 40 (a refused bot is
+counted, not fatal; there is no `raid` word, party covers a raid group). Every bot of a line is decided by the pure ownership rule
+first, and a `set` is validated for every target before the first value changes. A write replies `TortoiseBots: <verb> <Name>: ok
+<what>` per bot, then for `party` the count line `TortoiseBots: <verb> party: <n> set, <m> refused`; a per-bot refusal is
+`TortoiseBots: <verb> <Name>: refused <code>: <text>` with `usage`, `no-party`, `no-bot`, `not-a-bot`, `not-yours`, `in-run`,
+`no-engine`, `not-shaman`, `not-paladin`, `not-known`, `class`, `not-in-build`, `failed`, `dead`, `unknown`, `group` or
+`action-not-registered`. Persistence is #135: a value set here lives until logout.
 
 ## 2. The older commands (free text, human readable)
 
@@ -60,12 +96,12 @@ how many of a player's own characters may be in the world at once when `.bot add
 |---|---|
 | `.tb status` | module enabled?, number of bot sessions |
 | `.tb create <account> <name> <race id> <class id> [gender]` | a new level 1 character for a bot. Needs the account-create right (as `.tb pool create`), and only a pool account (`TBPOOL<nnnn>`) or an account named in `TortoiseBots.Create.TestAccounts` takes one; any other account is refused |
-| `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run) |
+| `.tb login <character> [master\|free]` | the character joins the world as a bot; follows `master` (from a player: the sender), or `free` = a masterless bot that levels on its own (W1: grind, food, loot, roll, buff; open-world death and corpse run). Without a master and with the engine on (`TortoiseBots.Slice.EngineByDefault`, an owned `.bot`) the bot runs the free kit too; with the engine off it stands, as the spike does for a bot with no master |
 | `.tb free <bot> on\|off` | W1: turns the free kit on or off for a logged-in host bot (on: it must have no master and be in no party; off: a masterless bot stands again). Giving a bot a master (`.tb group`, the commander binding, a run) turns free off by itself. A free bot only starts fights with ordinary hostile or neutral NPCs: never a player or anything a player controls, a quest giver, vendor, trainer, flight master, innkeeper, guard or civilian, a kill that lowers a standing, or a mob another player tapped (it still defends itself) |
 | `.tb logout <character>` | the bot leaves |
 | `.tb group <bot> <master>` / `.tb ungroup <bot>` | the bot joins the master's party (the master leads) / leaves it. A bot that was free stops being free (the free kit and its ghost bookkeeping go) |
 | `.tb raid <master>` | converts the master's party to a raid (a test helper for the "no raid" rule) |
-| `.tb engine <character> on\|off` | the bot runs the real engine (PlayerbotAI) or the spike behaviour |
+| `.tb engine <character> on\|off` | the bot runs the real engine (PlayerbotAI) or the spike behaviour. A bot with no master has nothing to follow: the engine runs it as a free bot (and that bot may not be in a party). The switch lives until logout; a later `.tb login` takes `TortoiseBots.Slice.EngineByDefault` again |
 | `.tb where <character>` | position, health, money, brain, strategies, target, cast-result counters |
 | `.tb go <bot> <dx> <dy>` / `.tb hop <bot> <dx> <dy>` | a bot without a master walks / is teleported that many yards east and north |
 | `.tb attack <bot>` | the spike's attack of the nearest hostile within 40 yd |
@@ -75,11 +111,15 @@ how many of a player's own characters may be in the world at once when `.bot add
 | `.tb castfail <bot> <spell> <reason> [interrupt]`, `.tb castlog <bot> [on\|off]` | inject / read cast results |
 | `.tb pushback <bot> <ms>` | inject a real `SMSG_SPELL_DELAYED` of the bot's own cast (a pushback): the engine's wait grows by the reported delay on its next tick and the action log writes `SPELL_DELAYED`; 0 or more than 1000 ms adds nothing, as the legacy handler had it |
 | `.tb level <bot> <1-60>`, `.tb train <bot>`, `.tb hurt [<character>] <pct>`, `.tb power [<character>] mana\|rage\|energy <pct>`, `.tb rage <bot> <points>` | test setup (`hurt`/`power` with the name left out act on the sender's own character) |
+| `.tb mount <bot> [status\|train\|buy]` | the mount errand by hand: `status` prints the bot's level, riding skill and the nearest riding trainer or racial mount vendor within 150 yd with its price; `train`/`buy` pay that NPC now (the bot's own gold, nothing is granted) and need the bot within interaction range. A free bot near the pair does the same by itself under `TortoiseBots.World.CapitalErrands` |
 | `.tb additem <bot> <item id> [count]`, `.tb removeitem [<character>] <item id> [count]`, `.tb use <bot> <item id> [self]` | items |
 | `.tb spells <bot>`, `.tb spell <id>`, `.tb spellscan`, `.tb item <id>` | what the spell and item mirrors hold |
 | `.tb pool create <n>` / `.tb pool prune [confirm]` / `.tb pool start` / `.tb pool stop` / `.tb pool status` / `.tb pool population <n\|low\|high>` | the bot pool (W0): make n level-1 pool characters at `TortoiseBots.Pool.CreatePerMinute`; list (`confirm` = remove) the unfinished creation rows; start the scheduler (target `TortoiseBots.Pool.TargetOnline`, alternating factions, `LoginsPerMinute` per 60 s, sessions and offline times rolled inside the configured ranges); stop it (every pool bot logs out, 5 per second); one status line (`state= target= online= alliance= horde= size= due= logins_60s= drain= last_pass_us=`, plus `capped by accounts: <n>` when the target is above the accounts left to the pool). One session per account, so the pool holds at most one character of each account; a bot that got a master (`.tb group`, a commander binding) leaves the pool's count and is never logged out by it, and its account is out of the pool's reach until the binding ends (a target above the accounts left shows in `capped by accounts`); a lowered target never logs out a dead or fighting bot; `population` changes the online target at runtime (`low`/`high` are the `TortoiseBots.Pool.PopulationLow`/`High` presets, a number is used as-is; the pool adds or logs out bots gradually, and `.reload config` puts the configured target back) |
-| `.tb guildorder create <bot> <item id> <amount> [farm\|craft\|buy]` / `list` / `cancel <bot>` / `status <bot>` / `work <bot> [id]` | guild orders (W9): the bot farms, crafts or buys the items and delivers them to the guild bank or by mail; `status` shows `done/total` and the step it is on |
+| `.tb guildorder create <bot> <item id> <amount> [farm\|craft\|buy]` / `create <bot> enchant <spell link or id>` / `list` / `cancel <bot>` / `status <bot>` / `work <bot> [id]` / `meet <bot>` / `access [<bot\|guild id>]` / `rank <rank>` / `reassign <bot> <newBot>` | guild orders (W9): the bot farms, crafts or buys the items and delivers them to the guild bank or by mail; `status` shows `done/total` and the step it is on. `create … enchant` places one permanent enchant the bot knows (its Enchanting skill covers it; the giver must be a character) and `meet` is the giver's Meet press, standing in the bot's capital: the bot walks over, takes missing reagents in a materials trade, opens the enchant trade (put the item in the "will not be traded" slot), casts the enchant and confirms it with a whisper (`status` shows `ready`, `coming`, `enchanting`, then `done`). `access` reports the guild's bot rank, the bank tabs that rank may deposit into and whether you may order or change the rank; `rank` (promote+demote right) moves every module-owned bot of your guild to that rank and stores it in `tortoise_bots_guild_bot_rank`; `reassign` moves an order to another guild bot (same permission as giving orders; the target must have no running order) |
+| `.tb guildorder search <bot> <farm\|craft\|buy\|enchant> [cat=<kind>] <text>` / `who [<bot\|guild id>] <craft\|farm\|enchant> <text>` / `preview <bot> <farm\|craft\|buy> <item> <amount>` / `preview <bot> enchant <spell link or id>` / `steps <bot>` | read-only guild order lookups: which orderable items the bot can farm (herb/ore nodes), craft (a known recipe) or buy (AH), which permanent enchants the bot knows (name, slot, required skill, verdict, reagents with bags+mail counts), which online guild bots can make, gather or cast it, what a new order would use and cost (bags, mail, recipe or enchant reagents, AH listing, delivery), and the order's step timeline. `cat=herb\|ore\|leather\|fish\|cloth\|drop\|other`; they never change an order |
 | `.tb craftorder create <bot> <item id> <amount>` / `status <bot>` / `cancel <bot>` | a personal craft order, no guild needed: the crafter bot gets missing reagents (sub-craft, a nearby node that drops them, the auction house within the order's gold cap), keeps a `done/total` counter and mails the items to the ordering character (from the console: to the bot itself) |
+| `.tb trace start <run_id> [party [<leader>] \| bot <Name>] [driver=<model>:<effort>:<run>]` / `.tb trace stop [<run_id>]` / `.tb trace status` | the opt-in run trace (`AiPlayerbot.RunTrace.Enabled`, default 0): records the party's bots as a bt-trace v1 JSONL file plus `<run_id>.summary.json` under `AiPlayerbot.RunTrace.Dir` (relative to `LogsDir`), which `tools/trace_score.py` scores. `party` with no leader uses the caller's group; from the console (no character) name the leader or use `bot <Name>`. One run at a time; a stop writes the end record and the summary on the writer thread. `status` names the run and its counters to a GM |
+| `.tb why <bot> [seconds]` | one bot's AI decisions for a short window (default 30 s, at most 120) as `TBWHY\|` lines in the server log: each tick's chosen action and relevance, the top five that lost and why, the target and its victim, the active strategies, and the chat orders the bot received. One trace per server; it also ends when the bot leaves the world |
 | `.tb perf`, `.tb unported` | tick cost window / the unported-feature counters |
 
 ## 3. Reply grammar, version 2 (every tokened reply of the commands below)
@@ -102,8 +142,9 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
 * **Errors**: `error code=<word> cmd=<word> [msg=<encoded text>] #token`, exactly those keys, one line, nothing else for that command. A per-bot refusal inside an accepted command is the same words on the bot's own line: `order bot=.. verb=.. status=refused code=.. msg=..`.
   Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-character`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
   `no-engine`, `queue-full`, `not-in-group`, `needs-player-sender`, `no-selection`, `mark-empty`, `no-such-spawn`, `target-not-found`, `target-dead`, `not-attackable`, `no-pull-strategy`, `no-commander`, `other-map`, `too-far`, `nothing-to-assist`, `self-master`, `missing-commander`,
-  `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). Slice 4 adds (section 8): `no-trigger`, `not-allowed`, `leader-refused`, `leader-inside`, `not-leader`, `lfg-group`, `not-empty`, `locked`, `no-entrance`,
-`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, `foreign-bot` (owned by another commander or master), `foreign-lead` (in a party led by another real player), and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`, and `ignored` (`.tb cc` names a `.tb ignore` mob, section 14). A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
+  `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). BG2 adds `other-instance` and `other-team` (`.tb master`, section 4: a commander who is another real player, and the bot and the player are not inside the same battleground instance, or are on different teams). Slice 4 adds (section 8): `no-trigger`, `not-allowed`, `leader-refused`, `leader-inside`, `not-leader`, `lfg-group`, `not-empty`, `locked`, `no-entrance`,
+`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, `foreign-bot` (owned by another commander or master), `foreign-lead` (in a party led by another real player), and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`, and `ignored` (`.tb cc` names a `.tb ignore` mob, section 14).
+Section 20 adds `no-tank`, `no-rally`, `no-slot`, `no-fallback`, `cancelled` and the per-slot `ledge` (a floor more than 5 yd above or below the anchor), `liquid` (a stand point in water or lava), `liquid-path` (a path that enters it) and `detour` (a path far longer than the straight line). A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
 * **Addressing.** `<bot>` is a character name (a logged-in host bot). `party <leader>` is every host bot in the party of that character. `party` with no leader is, in this order: the bots bound (`.tb master`) to the sender, or to the one commander there is, or the members of the one bot-led party there is;
   anything else needs the leader's name (`error code=ambiguous-party`). Names are case-insensitive. The `target=` of a reply is `<name>`, `party:<leader>` or `party:commander:<name>` as parts.
   `.tb role`, `.tb equip`, `.tb learn`, `.tb hurt` and `.tb power` also accept the character of the sender (the GM who typed the command), by name; another real player's
@@ -181,6 +222,7 @@ The target is a host bot, the sender's own character, or `party [leader]` (host 
 
 ### `.tb master <bot|party [leader]> <commander|none> [#token]`
 Binds the bots to a commander who stands OUTSIDE their party (decision D2): host master and engine master become the commander, `IsInCommandedGroup` answers true for them, and a commanded bot keeps that master (the engine's adoption step skips it) and follows it; the binding's lead is the bot the command named. When a player leading his own party names that party (`.tb master party Mcmd`), the lead is a bot of it (a tank first), never a bot bound elsewhere. `none` releases them.
+The commander is a host bot or the sender's own character; the one exception (BG2, live row 5) is INSIDE a battleground, where an operator may bind a pool bot to the real player he watches (`host/cmd/TbMasterBindPure.h`): BOTH must be inside the SAME match instance and on the SAME team, else the refusal is `error code=other-instance` or `error code=other-team` (per bot inside an accepted party command). The rule is decided purely and pinned by `forever/tools/test_master_bind_pure.cpp`; every other refusal of the plain rule is unchanged (`not-allowed`, same text).
 `master-begin`, `master bot=Mtank commander=Mcmd commander_in_party=no seq=44 status=queued`, `master-end count=.. records=.. target=.. commander=.. bots=.. queued=..`.
 
 A binding ends by itself when the party it was made on stops being that party: the lead leaves the world or the party, the group leadership goes to anyone but the lead bot, or - for a binding made in the party - its commander (a third real player, or a bot that is not this lead; a commander outside the party gets no such exception), another player joins a commander-outside binding, the party becomes a raid or grows past five, the commander leaves an in-party binding, the lead lies dead past `TortoiseBots.Slice.DeadBackstopSeconds`, or the commander is away past `TortoiseBots.Slice.MasterGraceSeconds` (a server shutdown keeps it). The release restores the followers' own follow targets, clears h3's table and logs one line with the reason (`lead-left`, `lead-dead`, `group-changed`, `leader-changed`, `player-joined`, `group-raid`, `group-full`, `commander-left-party`, `commander-away`, `unbound`, `disabled`). With `TortoiseBots.Commander.KeepBindings = 1` the binding is also written to the characters table `tb_commander_binding` (character guids only) and restored after a restart once the commander and the lead are back in the world; the party is formed again through the lead and every member is bound again.
@@ -455,7 +497,7 @@ error code=no-units cmd=plan msg=the%20plan%20has%20no%20ai_dungeon_step_unit%20
 `.tb run` starts, watches and stops a run of the Turtle dungeon-run policy (`runtime/DungeonRunPolicy.h`, unchanged) on a plan of section 9. The **tank bot is the run's leader** (decision D1, a "system run"): `start` binds every other member of the tank's party to the tank as its commander (`.tb master` binding, the same host calls), and from then on nobody orders a bot from outside. Once a second the module reads the party and the step (`ReadFacts`, package F6), asks the policy for its one order, and hands that order to the executor (package O6: `move`, `pull`, `rest`, `revive party` ...). The fights stay the bots' own combat AI. All replies follow the grammar of section 3: markers `run-begin` / `run-end` (the verb is the end line's `verb=`), `error` on one line, the token last. In the default build (option OFF) every `.tb run` form answers `error code=engine-not-built`.
 
 ```
-.tb run start <leader> <plan> [#token]
+.tb run start <leader> <plan> [from step <N> | from leg <number|name>] [lead=player] [#token]
 .tb run stop <leader> [reason words] [#token]
 .tb run pause <leader> [#token]
 .tb run resume <leader> [#token]
@@ -464,6 +506,10 @@ error code=no-units cmd=plan msg=the%20plan%20has%20no%20ai_dungeon_step_unit%20
 ```
 
 **`start`** checks, in this order, and changes nothing when it refuses: the leader is a host bot in the world (`not-bot`); the plan is loaded (`not-loaded`, `no-plan`); the executor's own check (`no-engine`, `not-leader`, `no-tank`: the leader leads its party, has the tank role (`.tb role <leader> tank`, which the facts' `leadIsTank` reads), is a warrior tank or a bear druid and its combat kit carries `pull` (a shaman or a protection paladin tank order is refused `no-tank`: the role bit alone is not a tank kit; a member with a tank bit on a class that has no tank kit is read as damage, not as a tank) and every member is a host bot with a running engine); the party is not a raid (`group-raid`); no live run of this leader (`already-running`; an ended run is replaced); leader and members stand in the same instance of the plan's map (`wrong-map`); every member is a host bot in the world (`not-bot`, `player-in-group`; an offline member left by an old group is named with `.tb ungroup <member>` as the way out); **every other member is already commanded** (`not-commanded`: bind the party first, `.tb master party <leader> <commander>`; a run does not rebuild an engine kit); the host accepts the binding (`bind-failed`, everything given back). The reply is one `run` record (`state=running`) and `run-end verb=start`.
+
+**`start ... from step <N>` / `from leg <L>`** (WC run 9) is a placed start, for a short live proof at a failing leg: the run begins at that step (`N` is the number `.tb run status` shows as `step=`, counted from 0, so a failing `step=82` restarts with `from step 82`; a leg's first step; a start inside a scripted event moves back to the step that starts it), nothing before it is walked, and a walk back never goes before it. The party must already stand there (`.tb tele party <leader> <map> <x> <y> <z> <o>` to the step's point, then the usual rest). A step or leg the plan lacks is refused with `no-step`.
+
+**`start ... lead=player`** (issue #139, opt-in; the default stays the bot-led run above) starts a **player-led run**: the player who types it leads his own party and walks, `<leader>` is the tank bot that pulls (every other verb names that bot as before), nothing is rebound (the bots keep the player as their commander and follow him), and the run pulls the plan's packs and bosses near him, in the plan's order, never ordering a walk. A placed start (`from step` / `from leg`) is bot-led only: `lead=player` with those words is refused `unexpected-argument`. The refusals, the behaviour and the limits are in `forever/docs/RUN-KNOBS-139-NOTES.md` (Part 2); the master switch is `AiPlayerbot.DungeonRunPlayerLed`. The run record carries `mode=player commander=<name>`; a player's own orders never pause it, and the end of the run sends `follow` instead of `stay` (the end line's `stayed=` counts the bots that took it).
 
 **`stop`** is the run's end for good: out of combat the executor's `stay` goes to the leader and every member, the old commander of each member is restored (`master`/`commander` as they were before `start`, unless somebody rebound the bot meanwhile), the run is `state=stopped` with `why=` the reason (default `stopped: by .tb run stop`), and the end line says `pending=no stayed=<n>` (`n` = bots whose `stay` action ran). **A stop never interrupts a fight:** with any living member or pet in combat the reply is `pending=yes` (no `stayed=`), the run gives no new order from then on, and the stop takes effect, with the same `stay` and release, on the first second without combat (`.tb run status` then shows `state=stopped`). A repeated `stop` while one is pending answers `pending=yes` again. Errors: `not-running` (already ended).
 
@@ -581,7 +627,7 @@ pet-end count=1 records=1 verb=order target=Mhunt ok=1 refused=0 #p1
 
 Routed through the same lifted executor (`run::Issue`) that the self-led dungeon run uses, with the same path, ground, LOS, liquid, and target checks.
 
-* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull|pullback <32-hex guid> [seconds 0-60] [ranged|body]`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`) answer their own `cmd` reply and are described in section 23; `cc` is a judge change of its own round.
+* **Verbs.** `move <x> <y> <z> [direct]`, `walk <bot> <x> <y> <z>`, `pull|pullback <32-hex guid> [seconds 0-60] [ranged|body]`, `attack <32-hex guid> [bot]`, `focus <32-hex guid>`, `rest`, `revive party`, `stay`, `follow`, `hold`, and the placement verbs of section 20 (`place`, `place follow`, `rally here`, `fallback` / `fall back` / `back`, `resume`). (`summon` is refused `unsupported` per decision D3.) The tactical verbs (`stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`) answer their own `cmd` reply and are described in section 23; `cc` is the lifted judge's and answers the usual `cmd` reply (section 23, "Whole-party cc (M4)").
 * **Target icons.** `attack`, `pull`, `pullback`, and `focus` set the group's `skull` raid icon on the target when the lead bot has a live group; with no group, no icon is set.
 * **Run interaction.** If the bound bots are in an active `.tb run`, `.tb cmd` (and task walks queuing `come`) trigger `outside-order` pause on the next run tick so the two paths never fight.
 * **Card log.** Every `.tb cmd` order (accepted or refused) is recorded on the commander's card (`.tb commander status`) and the dashboard's `COMMANDERS` feed via `NoteRunOrder`.
@@ -595,7 +641,7 @@ Bound commanders issue task orders on the shared `TbRunTasks` engine (`forever/s
 
 * **`.tb cmd loot <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<itemId>] [#token]`**: walks the bot (or the binding's lead) to the corpse or chest, opens its loot window via `LootOpenCompat` / `open loot`, and stores loot through `StoreLootAction`. Refuses `busy`, `in-combat`, `not-bound`, `invalid-target`, `too-far`, `no-item`, `locked`. The asynchronous result (`done: <items/copper>` or `failed: <code>: <msg>`) is read from `.tb cmd state`.
 * **`.tb cmd open <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: walks to the door, lever, goober or chest and opens it (`HandleGameObjectUseOpcode` or `open loot`). A door not at rest is never toggled closed (`done: already open ...`).
-* **`.tb cmd use <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: uses a game object via `HandleGameObjectUseOpcode` (or `open loot` for chests). `.tb cmd use <itemId>` is refused `unsupported` (`item use except food and drink`).
+* **`.tb cmd use <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [#token]`**: uses a game object via `HandleGameObjectUseOpcode` (or `open loot` for chests). `.tb cmd use <itemId>` is refused `unsupported` (the run-task verbs carry no `use_item` row); the console command `.tb use <character> <item id> [self]` casts an item from the bot's bags through the core's own `Player::CastItemUseSpell`.
 * **`.tb cmd gossip <my | 32-hex guid | entry:<id>[@x,y,z]> [<bot>] [<index | "text" | text>] [#token]`**: walks to a `UNIT_NPC_FLAG_GOSSIP` NPC, calls `HandleGossipHelloOpcode`, and either lists the menu options (when no option is given) or validates the option via `GossipOrder::MatchOption` (refusing service/coded/missing options) and calls `HandleGossipSelectOptionOpcode`.
 * **`.tb cmd lootmethod <ffa|group|rr|master|nbg> [<threshold 2-5>] [#token]`**: sets the bound party's loot method via `HandleSetLootMethodOpcode`; the bots vote in group loot and need-before-greed and stay silent otherwise (no roll window in free-for-all and round robin; the human master distributes master loot).
 * **`.tb cmd state [<bot>] [#token]`**: reports each bound bot's active or last task (`task bot= busy= status=none|running|done|failed [verb=] [entry=] [text=]`).
@@ -719,60 +765,78 @@ TortoiseBots: Mwar run rate is 0.50 (runrate=0.50).
 
 ## 20. Place, rally and fall back (issue #15)
 
-`.tb cmd` verbs that move the commander's bound bots into a shape and keep them there. They follow the grammar of section 3 (markers named after the command, `cmd-begin` / `cmd-end`, `count=` / `records=`, one `error` line, the token last) and the record kind is `cmd` (the existing `verb=`, `bot=`, `status=`, `code=`, `msg=`, `seq=` keys). The same words work as a **whisper to one of the commander's own bots** or in the **party/raid chat of the group the commander drives** — the reply lines then arrive as system messages. In chat only a commander's words count, and the bare aliases (`back`, `fallback`, `resume`, `rally`) only when the whole message is the command, so ordinary conversation is never an order; a malformed `place ...` still answers with a typed error.
+`.tb cmd` verbs that move the commander's bound bots into a shape and keep them there. They follow the grammar of section 3 (markers named after the command, `cmd-begin` / `cmd-end`, `count=` / `records=`, one `error` line, the token last) and the record kind is `cmd` (the existing `verb=`, `bot=`, `status=`, `code=`, `msg=`, `seq=` keys). The same words work as a **whisper to one of the commander's own bots** or in the **party/raid chat of the group the commander drives** — the reply lines then arrive as system messages. The chat form runs the same control check as `.tb cmd`. Only the binding's lead refuses the whole command; a bound bot owned by another commander or in another player's party is refused on its own row (`status=refused`, the control check's `code=`), so the rest of the command still runs. A party/raid line only counts when that channel holds at least one of the commander's bots. In chat only a commander's words count, and the bare aliases (`back`, `fallback`, `resume`, `rally`, `rally here`, `rally clear`) only when the whole message is the command, so ordinary conversation is never an order; a malformed `place ...` still answers with a typed error. A `place ...` line always takes the new options (`<yd>`, `tank`, `at:`, `face:`); `rally at:` and the `fallback` target words work only through `.tb cmd`.
 
-### `.tb cmd place <shape> [tight|normal|wide] [here|target|cursor] [who...] [#token]`
+### `.tb cmd place <shape> [tight|normal|wide|<yd>] [here|target|cursor|tank|at:<x>,<y>[,<z>]] [face:<deg>] [who...] [#token]`
 
-Shapes: `close` (block two wide), `circle`, `arc` (half ring), `spread` (grid 2.5 gaps apart, no shared splash), `line` (one row, tanks in the middle), `column` (single file), `spear` (wedge, tip first), `arrow` (V, tip first). Gaps: `tight` 2.5 yd, `normal` 4 yd (default), `wide` 8 yd. Anchors:
+Shapes: `close` (block two wide), `circle`, `arc` (half ring), `spread` (grid 2.5 gaps apart, no shared splash), `line` (one row, tanks in the middle), `column` (single file), `spear` (wedge, tip first), `arrow` (V, tip first). Gaps: `tight` 2.5 yd, `normal` 4 yd (default), `wide` 8 yd, or a number `1.5`..`12.0` yd with at most one fraction digit (`5` is `5.0`). Anchors:
 
-* `here` (default): the whole shape along the player's facing, its nearest slot 2 yd from the player and never on the player's own spot.
-* `target`: a ring is centred on the player's creature target, its first slot on the player's side (the tank between the player and the target, the group wrapping round it), and is never smaller than the target's size (its combat reach) plus one gap, so no slot is inside the target. The row shapes stand between the player and the target, the tank row one gap clear of the target's size (nearest the target) and the rest behind it on the player's side.
-* `cursor`: waits up to 30 s for the player's minimap ping (`CMSG_MINIMAP_PING`, read only), centres the shape there and faces it away from the player. A ping that never comes is `error code=timeout`, and no bot moves.
+* `here` (default): the whole shape along the player's facing (or `face:`), its nearest slot 2 yd from the player and never on the player's own spot.
+* `target`: a ring is centred on the player's creature target, its first slot on the player's side (the tank between the player and the target, the group wrapping round it), and is never smaller than the target's size (its combat reach) plus one gap, so no slot is inside the target. The row shapes stand between the player and the target, the tank row one gap clear of the target's size (nearest the target) and the rest behind it on the player's side. The target anchor faces the target; `face:` with it is `bad-argument`.
+* `cursor`: waits up to 30 s for the player's minimap ping (`CMSG_MINIMAP_PING`, read only), centres the shape there and faces it away from the player (or `face:`). A ping that never comes is `error code=timeout`, and no bot moves.
+* `tank`: centred on the commander's anchor tank (the first tank in rank order among every bound bot that is alive, in the world, on the commander's map and instance and still answers to it), slot 0 behind the tank (away from what it faces) and the ring never narrower than the tank's reach plus one gap. Only `circle`, `arc` and `spread` take it (`bad-argument` for any other shape). The tank is never in the shape, its own hold row is untouched, and the head names it (`anchor_bot=`). No living tank on the map is `error code=no-tank`.
+* `at:<x>,<y>[,<z>]`: centred on the typed point (floor-snapped), facing away from the player (or `face:`; within 1 yd the player's facing). A point more than 100 yd from the player (in x, y or z) is `too-far`; a point off the map is `bad-argument`, and one with no dry floor or no safe walk from the player is `no-ground`/`liquid`/`unreachable`. A typed point is judged by the commander's own walk: a spot the bots could stand on but the commander cannot walk to is refused (the slot rules then judge each bot's walk from there).
 
-Who: a bot's name, `all`, `tanks`, `healers`, `melee`, `ranged`, `dps`, a class (`warrior`, `paladin`, ...), `group1`..`group8`; none = every bot the player commands. The options may come in any order between the shape and the first who word. Slot order is always tanks, melee, ranged, healers (the name breaks a tie), and the front slot goes to the first tank. A ring more than 35 yd wide (a huge target, or more bots than the circumference holds) is refused `too-far`; a slot past 35 yd from the anchor centre is skipped (`too-far` on that bot's row).
+`face:<deg>` (0..359) replaces the front for `here`, `cursor`, `tank` and `at:`: the shape's front direction is `(cos(deg·π/180), sin(deg·π/180))` in world (x, y), the same number `.gps` prints as orientation × 180/π (0 = +X, 90 = +Y).
 
-Placed bots keep their slot after every fight: the slot is the bot's stay position (movement `stay`, the engine's own `return to stay position` walk, and the module walks a bot back that lost the slot outside combat; the walk-back re-checks the path and gives up after three failed checks, saying so once). `place follow` or `follow` releases it; `attack`, `pull` and `pullback` do not.
+Who: a bot's name, `all`, `tanks`, `healers`, `melee`, `ranged`, `dps`, a class (`warrior`, `paladin`, ...), `group1`..`group8`; none = every bot the player commands. The options may come in any order between the shape and the first who word, each at most once (`duplicate`); a bare number is always the gap, never a who name. Slot order is always tanks, melee, ranged, healers (the name breaks a tie), and the front slot goes to the first tank. A ring more than 35 yd wide (a huge target, or more bots than the circumference holds) is refused `too-far`; a slot past 35 yd from the anchor centre is skipped (`too-far` on that bot's row).
+
+Each slot is judged before any bot moves: a floor within 25 yd below and 5 yd above the anchor's z (`no-ground`; the core's bounded floor read, never an unbounded search), a floor no more than 5 yd above or below the anchor (`ledge`), a dry stand point by the module's one liquid rule (`liquid`: water at or above the floor, lava, slime), a walkable path (`unreachable`), a path that does not enter liquid after dry ground (`liquid-path`), and a path no longer than 2.5× the straight distance plus 10 yd (`detour`). A slot refused by the floor, ledge, liquid, path or detour rules is nudged up to three times on the straight line towards the shape's centre (1, 2, 3 yd), never onto a cleared spot or within half a gap of an accepted slot; the first dry, reachable, free candidate wins and the row says `nudged=<yd>`; a `target` ring nudge never moves a bot inside the target's combat reach. All three failing refuses the bot with the original slot's code.
+
+Placed bots keep their slot after every fight: the slot is the bot's stay position (movement `stay`, the engine's own `return to stay position` walk, and the module walks a bot back that lost the slot outside combat; the walk-back asks the same path verdict as the placement — liquid path and detour included — and gives up after three failed checks, saying which rule refused). In a fight `stay` is kept out of the combat state, so melee still step in and healers can step for line of sight; the bot returns to its slot out of combat. This combat-time handling belongs to the placement's own `come` only: a run's walk or task stand (`come`) and a plain `.tb order come` reset the bot and keep `stay` in the combat state exactly as before, so a run's pull still gets its "return to stay position" walk. A `place` typed while the group fights therefore moves the bots when that fight ends; ranged bots may leave the slot during it. `place follow` or `follow` releases it; `attack`, `pull` and `pullback` do not.
 
 A placement replaces only the rows of the bots it addressed: `place line tanks` then `place arc healers` keeps the tanks' rows, and a placement that put nobody leaves the old hold exactly as it was. A bot whose row is replaced or refused is released (`follow`, or only the placement's own stay when it changed commander). No slot ever stands on the commander's own spot: a circle turns by half a slot, the row shapes leave that slot empty (its bot answers `no-slot`).
 
 ```
-cmd-begin #t1
-cmd verb=place status=accepted bots=5 shape=circle gap=normal anchor=here radius=6.4 slots=5 #t1
-cmd bot=Mtank verb=place role=tank slot=0 pos=-18.24,-46.69,-21.85 seq=41 #t1
-cmd bot=Mrogue verb=place role=melee slot=1 pos=-16.10,-45.02,-21.85 seq=42 #t1
-cmd bot=Mmage verb=place role=ranged slot=2 pos=-14.50,-48.10,-21.85 seq=43 #t1
-cmd bot=Mpriest verb=place role=healer slot=3 status=refused code=unreachable msg=no%20walkable%20path%20to%20the%20slot #t1
-cmd bot=Mdps verb=place role=melee slot=4 pos=-21.90,-48.10,-21.85 seq=44 #t1
-cmd-end count=6 records=6 verb=place lead=Mtank bots=5 placed=4 refused=1 #t1
+cmd-begin #p1
+cmd verb=place status=accepted bots=4 shape=circle gap=5.0 anchor=tank anchor_bot=Mtank radius=6.5 slots=4 #p1
+cmd bot=Mrogue verb=place role=melee slot=0 pos=-16.10,-45.02,-21.85 seq=42 #p1
+cmd bot=Mage verb=place role=ranged slot=1 pos=-14.50,-48.10,-21.85 seq=43 nudged=2.0 #p1
+cmd bot=Mhunter verb=place role=ranged slot=2 status=refused code=liquid msg=the%20slot%20is%20in%20water%20or%20lava #p1
+cmd bot=Mpriest verb=place role=healer slot=3 pos=-21.90,-48.10,-21.85 seq=44 #p1
+cmd-end count=5 records=5 verb=place lead=Mtank bots=4 placed=3 refused=1 #p1
 ```
+The head carries `gap=` (the typed word, or the number with one fraction digit), `anchor=` (`here`, `target`, `cursor`, `tank` or `at`), `face=` when given, `at=` (the snapped point) for the `at` anchor, and `anchor_bot=` for the tank anchor. A nudged slot's row carries `nudged=<yd>`. The commander's hold is visible on the binding card (`.tb commander status`): `hold=place|fallback` on the `binding` record, `rally=`/`rmap=`/`rinst=` when a rally point is stored, and `hold=`/`slot=` on exactly the held members.
 (The markers are the command's (`cmd`), as for every `.tb cmd` verb; the sample lines are specified, not yet live output.)
 
 A `cursor` placement answers in two replies with the same token: at once `cmd verb=place status=waiting anchor=cursor shape=.. gap=.. wait=30` and `cmd-end ... pending=yes`; then, on the ping, the normal `status=accepted` reply, or `error code=timeout cmd=cmd msg=no%20minimap%20ping%20within%2030%20s%3A%20nothing%20was%20moved #token`. A later command from the commander (any `.tb cmd`, `.tb order` or place/chat command) ends the waiting request first: its token gets `error code=cancelled cmd=cmd msg=a%20later%20command%20from%20the%20commander%20replaced%20this%20cursor%20request`, so a ping can never complete a command the commander replaced.
 
-Per-bot refusals (`status=refused code=`): `no-character` (a bound bot not in the world), `not-in-group` (it no longer answers to this commander), `dead`, `other-map`, `no-ground` (no floor, or outside the map), `unreachable` (no walkable path), `too-far`, and the order queue's own codes (`no-engine`, `queue-full`, ...). Typed errors (`error code= cmd=cmd msg=`): `needs-player-sender`, `not-bound`, `missing-argument`, `bad-argument` (an unknown shape/gap/anchor word, or a bad `rally` word), `duplicate` (a gap or anchor word twice), `unexpected-argument`, `bad-target` (a who name that is not one of your bots; a player/bot as the `target` anchor), `no-selection` (the `target` anchor with no target), `other-map` (the target is elsewhere), `teleporting`, `no-bots` (the selection matches nobody), `too-far`, `timeout`, `no-fallback`.
+Per-bot refusals (`status=refused code=`): `no-character` (a bound bot not in the world), `not-in-group` (it no longer answers to this commander), `dead`, `other-map`, `no-ground` (no floor, or outside the map), `ledge` (a floor more than 5 yd above or below the anchor), `liquid` (the stand point is in water or lava), `unreachable` (no walkable path), `liquid-path` (the path enters water or lava), `detour` (the path is far longer than the straight line), `no-slot` (the commander's or the anchor tank's own spot), `too-far`, and the order queue's own codes (`no-engine`, `queue-full`, ...). Typed errors (`error code= cmd=cmd msg=`): `needs-player-sender`, `not-bound`, `missing-argument`, `bad-argument` (an unknown shape/gap/anchor word, a gap outside 1.5..12 yd, a face outside 0..359, `face:` with the target anchor, a malformed point, a shape the tank anchor does not take, or a bad `rally`/`fallback` word), `duplicate` (a gap, anchor or facing word twice), `unexpected-argument`, `bad-target` (a who name that is not one of your bots; a player/bot as the `target` anchor), `no-selection` (the `target` anchor with no target), `other-map` (the target is elsewhere), `teleporting`, `no-bots` (the selection matches nobody), `no-tank` (the tank anchor with no living tank on the map), `too-far`, `no-rally` (`fallback rally|last` with no point on this map), `timeout`, `no-fallback`.
 
 ### `.tb cmd place follow [who...] [#token]`
 
 Releases the selected bots (`all` when no who word): each gets the engine's `follow` order and leaves the hold. `cmd verb=place status=accepted follow=yes bots=..`, one `cmd bot=.. follow=yes status=queued seq=..` per bot, `cmd-end ... released= refused=`.
 
-### `.tb cmd rally here [#token]`
+### `.tb cmd rally [here|clear|at:<x>,<y>[,<z>]] [#token]`
 
-The fall-back point is where the player stands (memory, map and instance included). Nothing moves.
-```
-cmd verb=rally status=accepted lead=Mcmd pos=-9100.80,-2005.30,132.90 map=1 inst=0 #r1
-cmd-end count=1 records=1 verb=rally set=1 #r1
-```
+The fall-back point is memory only, with the player's map and instance; nothing moves.
 
-### `.tb cmd fallback` (`fall back`, `back`) [#token]
+* `rally` (no word): read-back. `cmd verb=rally status=shown set=yes pos=x,y,z map=<m> inst=<i>` or `cmd verb=rally status=shown set=no`, then `cmd-end ... verb=rally set=1|0`.
+* `rally here`: where the player stands.
+* `rally at:<x>,<y>[,<z>]`: the typed point, floor-snapped and judged by the stand rules (`no-ground`, `liquid`), the 100 yd reach in every axis (`too-far`) and the player's own walk to it (`unreachable`, `liquid-path`, `detour`). The point is decided before anything is stored: a refused `rally at:` answers its error and leaves the stored point (or its absence) unchanged.
+* `rally clear`: forgets the point (`cleared=yes`, or `cleared=no` when nothing was set).
+```
+cmd verb=rally status=shown set=yes pos=-9100.80,-2005.30,132.90 map=1 inst=0 #r3
+cmd-end count=1 records=1 verb=rally set=1 #r3
+```
+A `rally here` / `rally at:` answer is `status=accepted` with the same `lead=`, `pos=`, `map=` and `inst=` keys and `cmd-end ... verb=rally set=1`; `rally at:` and `rally clear` work only through `.tb cmd` (the chat form takes bare `rally`, `rally here` and `rally clear`).
 
-Every bot the player commands drops its target (the `come` order resets the AI) and runs to the rally point — or to the player's position when no `rally here` was given or the stored point is on another map/instance — and forms up there in the normal gap: tanks in a front row facing the threat, melee just behind them, ranged and healers on an arc behind (the healers at its ends). With a stored rally point the front is the direction from the point towards the commander (the side the group came from, so the tanks are nearest the enemy); without one it is the commander's facing. Nobody stands on the rally point, and no slot is on the commander's own spot. The formation holds (the same stay slot and walk-back as `place`) until `attack`, `pull`, `pullback`, `resume` or `follow`; a replaced fall back releases every bot whose old row it dropped. The reply says where it formed and whether the point came from memory or the player:
+### `.tb cmd fallback [rally|last|here|at:<x>,<y>[,<z>]]` (`fall back`, `back`) [#token]
+
+Every bot the player commands disengages (the swing, the cast and the pet's attack stop, and the bot is held passive on the way, so it does not re-engage instead of leaving) and runs to the rally point — or to the player's position when no `rally here` was given or the stored point is on another map/instance — and forms up there in the normal gap: tanks in a front row facing the threat, melee just behind them, ranged and healers on an arc behind (the healers at its ends). With a stored rally point the front is the direction from the point towards the commander (the side the group came from, so the tanks are nearest the enemy); without one it is the commander's facing. Nobody stands on the rally point, and no slot is on the commander's own spot. The formation holds (the same stay slot and walk-back as `place`) until `attack`, `pull`, `pullback`, `resume` or `follow`; a replaced fall back releases every bot whose old row it dropped.
+
+The target words: no word is the stored point while it is on this map and instance, else the player's position (`from=memory|commander`); `rally`/`last` insist on the stored point (`no-rally` when there is none on this map, and nothing moves); `here` is the player's position with the player's facing, ignoring a stored point; `at:<x>,<y>[,<z>]` is a typed point (judged `no-ground`/`liquid`/`too-far`/`unreachable`/`liquid-path`/`detour`) with the front towards the player (`from=point`). A fall-back slot that only collides with the player's or the tank's own spot is nudged off it before anything else. A bot whose slot still fails after the nudge does not stay where it fought: it gets the same `come` to the fall-back centre when the centre itself is standable, else to the player's own position when that point is standable too, with `slot=-1`, `to=centre|commander` and its slot's refusal in `code=`. (Residual: with no stored rally the centre *is* the player's own spot, so a `no-slot` bot whose nudges all failed still ends up on it; the emergency `come` matters more there than the 1.5 yd clearance.) A point that fails the stand rules is not an emergency destination: the bot stays unqueued rather than being sent onto water, off a ledge or through a wall. Only a dead bot, one on another map and an order-queue refusal leave it unqueued. A `to=` row counts as placed.
+
+The reply says where it formed and whether the point came from memory, the player or a typed point:
 ```
-cmd verb=fallback status=accepted bots=5 gap=normal from=memory rally=-9098.20,-2001.10,132.90 slots=5 #f1
-cmd bot=Mtank verb=fallback role=tank slot=0 pos=-9098.20,-1993.10,132.90 seq=51 #f1
-...
-cmd-end count=7 records=7 verb=fallback lead=Mtank bots=5 placed=5 refused=0 #f1
+cmd-begin #f2
+cmd verb=fallback status=accepted bots=3 gap=normal from=point rally=-9098.20,-2001.10,132.90 slots=3 #f2
+cmd bot=Mtank verb=fallback role=tank slot=0 pos=-9098.20,-1997.10,132.90 seq=51 #f2
+cmd bot=Mage verb=fallback role=ranged slot=1 pos=-9101.10,-2005.00,132.90 seq=52 #f2
+cmd bot=Mpriest verb=fallback role=healer slot=-1 to=centre code=ledge pos=-9098.20,-2001.10,132.90 seq=53 #f2
+cmd-end count=4 records=4 verb=fallback lead=Mtank bots=3 placed=3 refused=0 #f2
 ```
-`attack`, `pull` and `pullback` end the hold by themselves (the order is carried out as usual and no fall back walks the bots anywhere afterwards); `follow` ends it and returns the bots to following.
+A fall back ends its passivity when the bot reaches its spot, when it has stopped short in a fight (no longer walking, after a 1.5 s grace: a blocked or crowded slot) or after 10 s on the way, whichever comes first; the bots then fight what follows them and still return to the spot after the fight. A row that is dropped also releases it at once: the fall back is cancelled by another command, replaced by a new one, the bot dies, leaves the world or the binding ends. It releases only the `passive` it set itself: a `hold`, a `flee` or a `+passive` order that came before (or after) the fall back keeps its own, so a fleeing bot does not start fighting again when the fall back ends. `attack`, `pull` and `pullback` end the hold by themselves (the order is carried out as usual, and the emergency stay/passivity is cleared so the bots can move); `follow` ends it and returns the bots to following.
 
 ### `.tb cmd resume [#token]`
 
@@ -830,9 +894,9 @@ Queue and acceptance never go through anything but the core: `WorldSession::Join
 the core: the module holds it back through `WorldScript::CanCreateBattleground` until a human's queue reaches the fill target, and
 re-schedules the core's queue update each pass so bots still waiting follow the human into his instance.
 
-## 23. Issue #131: tactical orders (M1-M2)
+## 23. Issue #131: tactical orders (M1-M4)
 
-The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`).
+The orders the commander or a GM gives mid-fight: `stop`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, the toggles `aoe`/`autocc`/`sap`/`loot`, and `corpserun`. Both surfaces queue the same order for the bot's next engine tick through the h3 queue, so the result arrives in `.tb state` `ord=` (`<seq>:<ok|fail%3A<code>>`, `lastorder=<verb>`), never in the command's own reply. An active run sees the new seq and pauses (`outside-order`). A toggle `status` is a read and answers in the command's own reply.
 
 Every tactical order except `engage` first ends a live engage hold (`HasEngagePullWindow()` → `EndPullWindow("order")`): the hold waits for the commander's first hit, and a new order replaces it. `stop` adds no `passive`, so a bot hit again defends itself; `hold` or `flee` is the order that keeps it out.
 
@@ -862,8 +926,10 @@ Acts on every bot of the caller's binding (lead and members) that is alive, or o
 | `engage [seconds 0-60]` | `seconds=<n>` (the default 4 when left out) | as above |
 | `rebuff` | - | as above |
 | `interrupt <guid> [bot]` | `action=<action>` | `result=bot:<name> 1`: one bot is picked (the named one only, else the first in party order with a castable interrupt) |
+| `aoe\|autocc\|sap\|loot [on\|off\|status] [bot]` | `state=<on\|off\|mixed>` | `result=party <n>` or `result=bot:<name> 1` (a `status` is a read) |
+| `corpserun [bot]` | - | `result=party <n>` or `result=bot:<name> 1` (no bot: every dead bound bot) |
 
-Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=|action=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
+Accepted reply: `cmd-begin` / `cmd verb=<v> status=accepted bots=<n> result=<scope> [stance=|seconds=|action=|state=] [refused=<n>]` / one `cmd bot=.. verb=.. status=refused code=.. msg=..` row per refused bot / `cmd-end count=.. records=.. verb=.. lead=.. bots=.. ok=.. refused=..`. When nothing could be queued the whole reply is the one-line `error code=<first refusal> cmd=cmd msg=..`. A refusal of one bot in a party order does not refuse the order while at least one bot queued.
 
 ```
 cmd-begin #c1
@@ -881,6 +947,38 @@ cmd-end count=1 records=1 verb=engage lead=Mtank bots=5 ok=5 refused=0 #c2
 ### Pull options (M2)
 
 `pull|pullback <guid> [seconds 0-60] [ranged|body]` in `.tb cmd`; `pull <target> [seconds] [ranged|body]` in `.tb order`. `ai::ParsePullOrderOption` parses the words (any order, each once; `ranged` and `body` exclude each other) and the canonical text (`5 ranged`, `body`, ...) travels in the queued order. The seconds replace the party hold's join delay (`kPullJoinDelaySeconds`, 3 s, for both verbs when no seconds are given) and, for `pullback`, the strategy's DPS join delay (`AiPlayerbot.PullBackDpsJoinDelay` when no seconds are given). `ranged`/`body` call `PullStrategy::BeginCommand` for this command only, before `pull my target`, and are rolled back when the request refuses - for `pull` and `pullback` alike. The run policy's one body-pull retry after a ranged pullback refused as unreachable (`pull <guid> body`) now actually walks in (before M2 `body` was parsed and dropped). The kill switch does not cover these options: they are the judge's grammar.
+
+### Toggles and corpse run (M3)
+
+`aoe|autocc|sap|loot [on|off|status]` in both surfaces (`.tb cmd`: `[on|off|status] [bot]`; the two-word `auto cc` is accepted and normalised). A bare verb flips each bot's own state; `status` reads without queuing. The choice is a host setting per bot guid (memory, server uptime; no DB): `h3::BeforeEngineTick` re-enforces it every tick, so a `co`/`nc` change of the same strategy does not win and a `ResetStrategies` is covered. `free` does not clear a toggle. Defaults when never set: aoe on, autocc off, sap on, loot = the kit.
+
+| Toggle | Strategy | Present means |
+|---|---|---|
+| `aoe` | `no aoe` (combat) | off |
+| `autocc` | `auto cc` (combat) | on |
+| `sap` | `no sap` (non-combat) | off (rogues only; a non-rogue is refused `no-rogue`) |
+| `loot` | `loot` (non-combat) | on |
+
+`.tb cmd` answers `state=<on|off|mixed>`: the wanted state for a change, the bots' current state aggregated for a `status` read. `.tb order` answers `status=read state=<on|off>` for a `status`, `status=queued` for a change.
+
+`corpserun` (also `corpse run`) in `.tb order`, and `corpserun [bot]` in `.tb cmd` (no bot: every dead bound bot). An alive bot is refused `not-dead`. A body runs the existing `release` verb with its gates (`no-entrance`), then the W1 dead engine walks; a ghost answers `status=queued` with Run `ok` (the walk is already the engine's). `.tb state` `corpserun=` shows the leg.
+
+### Whole-party cc (M4)
+
+`.tb cmd cc <mark> <guid> [<bot>|<family>] [family]` and `.tb cmd cc clear [<bot> [<mark> <guid>]]` now run without a dungeon run (before M4 they answered `unsupported`). The judge's grammar (`TbRunOrdersPure.h`): with no bot, the module picks one; the run policy's own `cc <mark> <guid> <bot> [family]` is unchanged.
+
+* `cc <mark> <guid>`: the pick. `cc <mark> <guid> <word>`: `<word>` is the family when `CcOrderFamilyKnown` accepts it and it is not `none` (`polymorph`, `shackleundead`, `banish`, `hibernate`, `seduction`, `freezingtrap`, `sap`, `repentance`, `scarebeast`, `fear`), else a bot. A bot named like a family word writes `cc <mark> <guid> <bot> none`. `<guid>` is the 32-hex text `.tb state` prints (or a run handle).
+* The pick reuses the run's table (`DungeonRun::kRunCc`): over every (bot, family) pair the best wins: tier A before S before R, then the table order (polymorph before sap), then the party order. A pair qualifies when the family is an automatic pick (Freezing Trap is not), `CcFits` accepts the target's creature type, the bot carries the `cc` strategy in its combat kit and knows a rank of the spell, and the owner's `.tb cc ... deny` permissions do not deny the family's kind (fear is denied by default). A `prePull` row (Sap) also needs the target and the bot out of combat. A named family limits the pick to it. Candidates are the lead and the bound members. Kits that carry `cc` today: mage and rogue; more with no change here once the kits (#123) carry it.
+* Answer: `result=bot:<name> 1 family=<token>`; the picked bot has `rticc=<mark>` and `ccfam=<token>` in `.tb state` (the same `h8::ApplyCcOrder` as `.tb cc`). No pick: `error code=no-cc-bot msg=<name>:<reason>;...` with the reasons `dead`, `no-cc-kit`, `no-fitting-spell`, `denied`, `in-combat` (Sap). Skull is refused `invalid` (the party's kill mark), as before.
+* The order starts the cast, as TB's `RunCcOrder` does: once the mark, `rti cc` and `ccfam` read back, the bot selects and faces the unit, the class crowd-control action that carries the picked family is found through the action graph and run once; when the unit is out of reach the mature action is queued so its own `reach cc` prerequisite walks the bot in and the cast follows (the fight-start trigger stays the fallback). The chooser also takes the bot's `rti cc target` first, at any range, before the engaged-attacker tournament (`CcChooserTakesAssignedMark`), so an order given before its pack opens still has a target. A hand-written order with no family (`none`) starts no probe.
+* `cc clear` alone clears every bound bot's crowd-control mark and its icon (`h8::ClearCcOrder` for each; `result=party <n cleared>`, with ` failed=<names>` appended when a bot could not be cleared: it keeps its mark). `cc clear <bot> [<mark> <guid>]` is unchanged.
+* The run's own bookkeeping (the pending clear, the bots a run marked) is touched only when a run sent the order.
+
+```
+cmd-begin #c1
+cmd verb=cc status=accepted bots=1 result=bot%3AMmage%201%20family%3Dpolymorph #c1
+cmd-end count=1 records=1 verb=cc lead=Mtank bots=1 #c1
+```
 
 ### State and configuration
 
@@ -909,3 +1007,150 @@ See [ONYXIA.md](ONYXIA.md) for damage gates, checked routes and live-test limits
 
 * `.bot autogear <bot> [quality|ilvl]`: incremental upgrades-only re-gearing for same-account owned bots (and GMs; pool bots refused, bot must be alive, bot in active run refused). Gated by `AiPlayerbot.OwnedBotAutogearEnabled` (default `0`), capped by `AiPlayerbot.OwnedBotAutogearQualityCap` (default `2`, uncommon) and `AiPlayerbot.OwnedBotAutogearIlvlCap` (default `0`, uncapped). Warns if the equipped ranged weapon has no matching ammo in bags.
 * `.autogear [player] <spec> [ilvl]`: top-level command for real players (bots refused; dead, in-combat, or shapeshifted targets refused). GM-only by default (`AiPlayerbot.PlayerAutogearForAll = 0`); when `1`, non-GMs may gear themselves only. Equips upgrades only, moves replaced items to bags or mails them if bags are full, warns on missing ranged ammo, and logs `PlayerAutogear: caller=...`.
+
+## Guilds
+
+Free (pool) bots take part in guilds under `TortoiseBots.World.Guilds` (default 1) and found their own under
+`TortoiseBots.World.GuildForming` (default 0); both keys are documented in `forever/conf/tortoisebots.conf.dist`.
+
+* **Accept and stay.** A free bot with an outstanding guild invite accepts it at its next world tick, unless the guild
+  already holds 1000 members or is on the other side (`AllowTwoSide.Interaction.Guild` off). A refused invite is
+  declined, so it is not re-read every tick. Nothing else takes a bot out of a guild: it leaves only when the guild
+  reaches 1000 members. On joining, the guild-order bot rank rule (`TortoiseBots.World.GuildOrderBotRank`) still
+  applies, because `tbhost::guild::AcceptInvite` is the one join path.
+* **Founding.** With the forming key on, a free bot above level 10 with the core's charter price in its own purse buys
+  a charter at a petitioner NPC within 30 yd, nearby free bots of its faction sign it, and the bot turns it in at a
+  petitioner. The charter is paid by the bot; no money is granted. Log: `[W9] guild-charter`, `guild-sign`,
+  `guild-founded` (and `guild-* -refused`).
+* **Owner whispers** (the whisper must reach the bot at all: the sender is its master, its commander or in its party;
+  among those, only its master or a game master may manage the guild, others are refused): `guild invite <name>`, `guild join`, `guild leave`, `guild promote <name>`, `guild demote <name>`,
+  `guild remove <name>`, `guild leader <name>`. Invite, promote, demote and remove need the bot's own rank right;
+  leader needs the bot to be the guild master. The bot answers in a whisper, and the server log carries
+  `[W9] guild-whisper bot=<bot> from=<sender> cmd=<verb> target=<name> result=ok|fail:<code>`.
+* **Guild chat.** `/w <bot> speak /g <text>` makes the bot say the line in its guild chat, through the guild's real
+  speak right (a rank without `GR_RIGHT_GCHATSPEAK` says nothing).
+
+## Diagnostics (#142)
+
+The GM whisper words are the legacy bot commands; permission is the bot engine's own tier table
+(`PlayerbotAI::AuthTierForCommand`: `debug`, `cdebug`, `log` and `set value` are GameMaster-only).
+
+* `/w <bot> debug` (or `cdebug`) turns the bot's action-line feedback on; `debug off` turns it off;
+  `debug help` lists the subcommands. The lines themselves are the `debug` strategy's
+  (`PlayerbotAIConfig::CanLogAction` reads it), so `co +debug` / `co -debug` work the same way.
+* `/w <bot> debug <remote>` (**no space before the subcommand** in the action name: the engine's own
+  `debug <remote>` path answers these): `state`, `position`, `tpos`, `target`, `hp`, `combat`, `strategy`,
+  `action`, `values`, `travel`, `traveldetail`, `budget`. `debug action` prints the last action the engine
+  ran, which is the headless "action line".
+* `/w <bot> log [debug|detail|minimal|basic|?]` sets or reads the bot's legacy log level.
+* `/w <bot> set value group size <n>`, `guild size <n>`, `rpg style <n>` set the saved preferences.
+* The debug subcommands that need the 1.12 client (fake spell visuals and `SpellAuraHolder` auras,
+  transports and map-ray probes, travel-node readers, the position path planner, item/trade/mail
+  readers) answer `debug <name>: not ported to ForeverCore (...)`; their files are not in the build.
+  The engine text diagnostics (values, actions, strategies, combat facts, quest/level state) are real.
+
+Server-side diagnostics:
+
+* `BOTPERF` — one `TortoiseBots: BOTPERF passUs=... maxUs=... ticks=... coreMs=... bots=... engines=...
+  owned=... mastered=... free=... pool=...` line in the `tortoisebots` log every 30 s of tick time while
+  the module is enabled. `passUs`/`maxUs` are the module pass (the same window `.tb perf` reports), `coreMs`
+  the rest of the world tick, and the six counts are read once from the live bot table.
+* `action_counts.csv` — with `AiPlayerbot.ActionCountsLog = 1`, the engine counts every executed action and
+  the module writes the cumulative snapshot every 5 minutes of tick time (first write truncates and writes
+  the header; later writes append). The file lives under the engine's log directory.
+* `CastCancel` rows in `bot_events.csv` — with `AiPlayerbot.RaidBossDiagnostics = 1` and `bot_events.csv` in
+  `AiPlayerbot.AllowedLogFiles`, every module-side cast cancel writes one row (site, slot, spell, cast
+  percent, target, distance moved).
+
+## 4. Addon order window (`TBM` `order` verb)
+
+`TBFM` (TortoiseBotsForeverManager) speaks the guild-order window over the addon channel. The module
+answers the `order` verb (`forever/src/host/TbAddonOrders.cpp`) and advertises the capability tokens
+`guild-orders`, `guild-order-nobuy` and `guild-order-steps`; `RegisterVerb` also advertises the verb
+itself, so the addon routes the command natively instead of the `.tb` bridge.
+
+Accepted payloads (the reply shapes are the ones `BotOrder.lua:57-75` parses):
+
+| Payload | Answer |
+|---|---|
+| `order list` | `TBM:ORDER_BEGIN`, `TBM:ORDER_ACCESS`, one `TBM:ORDER` per row, `TBM:ORDER_END` |
+| `order access` | one `TBM:ORDER_ACCESS` |
+| `order rank <idx>` | `ACTION_ACK order rank:<idx> 1 rank`, then a fresh `TBM:ORDER_ACCESS` |
+| `order reassign <bot> <newBot>` | `ACTION_ACK order bot:<bot> 1 reassign` |
+| `order <bot> cancel` | `ACTION_ACK order bot:<bot> 1 cancel` |
+| `order <bot> steps` | `TBM:ORDER_STEPS_BEGIN`, `TBM:ORDER_STEP` rows, `TBM:ORDER_STEPS_END` |
+| `order <bot> preview <farm\|craft> <item> <n> [bring=..]` | one `TBM:ORDER_PREVIEW` |
+| `order <bot> <farm\|craft> <item> <n> [hours\|inf] [keep] [gold=..] [bring=..]` | `ACTION_ACK order bot:<bot> 1 <farm\|craft>`, then a fresh list snapshot |
+| `order search <bot> <farm\|craft> [cat=..] <text>` | `TBM:ORDER_ITEMS_BEGIN`, `TBM:ORDER_ITEM` rows, `TBM:ORDER_ITEMS_END` |
+| `order search <bot> enchant <text>` | an empty `TBM:ORDER_ENCHANTS` pair |
+| `order search <craft\|enchant> <text>` | `TBM:ORDER_WHO` rows (empty for enchant) |
+| `order <bot> enchant <spell>` / `meet` | `ACTION_ERR` (enchant orders are not implemented) |
+
+Rules:
+
+* `order list` and `access` read the existing order store and access report; `search`, `who`, `preview`
+  and `steps` replay the existing `.tb guildorder` read verbs through a capturing `ChatHandler` and
+  reshape their stable records, so the two transports cannot drift. Mutations call the same store,
+  access and reassign functions with the same permission gates (`MayGiveOrders`, `MayChangeBotRank`).
+* Buy orders are refused and `guild-order-nobuy` is always advertised (owner rule: no Buy option for
+  players). Enchant search answers an empty pair; enchant create/meet refuse.
+* The store has no live `TBM:ORDER` push yet, so a newly created order is reported with a list snapshot
+  right after the ACK; progress then follows the addon's 30 s `order list` poll.
+* Fields the module's read records do not carry are sent as their protocol's "none" value, never
+  invented: `zone`/`difficulty`/`chance`/`minLevel` on search items, `minutes`/`zone`/`difficulty` on the
+  preview. A preview reagent's shortfall rides the `farm` lane (the order sources it), not the
+  player-must-send lane.
+* The `ORDER_ACCESS` gold bit comes from the bot rank's own `guild_rank.rights` withdraw-gold right and
+  only when the guild has a bank tab.
+
+## Dungeon finder fill (#160)
+
+The 1.60 client has no dungeon finder (the core answers its dungeon list empty), so the fill keeps its own queue and
+builds the party itself. A player queues as one role; every `AiPlayerbot.RandomBotLftUpdateInterval` (default 15000 ms,
+clamped to 5000-60000) the fill adds one free host bot until the party has the composition the core's finder asks for:
+one tank, one healer, three damage. The player's own role takes one of those slots, so a solo damage player gets a tank,
+a healer and two damage bots. `AiPlayerbot.RandomBotLftMaxFillsPerInterval` (default 1, at most 5) caps the bots one
+pass may add; with the defaults four bots take about a minute. `AiPlayerbot.RandomBotLftEnabled = 0` answers `disabled`
+and groups nobody.
+
+A candidate is a host bot in the world with a running engine, free (`BotMgr::IsFreeBot`: no master, not grouped), level
+10 or more, of the player's team, not in a battleground or its queue, not teleporting, not on a taxi, not in combat and
+alive. It fills a slot its own spec covers (`AiFactory::GetPlayerRoles`); with `AiPlayerbot.RandomBotLftAllowRoleBorrow
+= 1` a bot of a class with a kit for the slot may borrow it (a warrior tank, a druid bear, a protection paladin). The
+fill prefers a natural spec, then the smallest level gap to the player, then the lowest guid.
+
+Each bot joins through `BotMgr::GroupWith` (the core's own invite/accept path; the player leads), gets the group's LFG
+role bit (`Group::SetLfgRoles`, which the engine's role resolver reads) and its kit role (the `.tb role` commit, then
+`follow`). When the player leaves by `.tb lfg leave`, logs out or leaves the party, every bot of the fill is ungrouped,
+its role cleared and it plays free again. A bot taken over by someone else meanwhile is left where it is.
+
+| Command | What it does |
+|---|---|
+| `.tb lfg join <dungeon id> <tank\|healer\|dps> [#token]` | queues the sender's own character; the sender must lead the party (or have none). Refused `not-ready` (the engine config is not loaded), `disabled`, `bad-role`, `no-such-dungeon` (not in the client's dungeon list), `already-queued`, `raid`, `not-leader`, `party-full`, `needs-player` (from the console) |
+| `.tb lfg status [<player>] [#token]` | one `lfg` line per entry: player, dungeon id and name, role, `waiting|complete`, `need=` (tank first) and `filled=` |
+| `.tb lfg leave [#token]` | releases the bots and drops the entry; `not-queued` when there is none |
+
+Real output:
+```
+lfg-begin #f1
+lfg player=Flivmage dungeon=39 dungeon_name=Stratholme role=dps state=waiting need=tank;healer;dps;dps filled= #f1
+lfg-end count=1 records=1 state=queued entries=1 #f1
+lfg-begin #f2
+lfg player=Flivmage dungeon=39 dungeon_name=Stratholme role=dps state=waiting need=healer;dps;dps filled=tank:Mtank #f2
+lfg-end count=1 records=1 state=ok entries=1 #f2
+lfg-begin #f3
+lfg player=Flivmage dungeon=39 dungeon_name=Stratholme role=dps state=complete need= filled=tank:Mtank;healer:Mpriest;dps:Mmage;dps:Mrogue #f3
+lfg-end count=1 records=1 state=ok entries=1 #f3
+```
+
+The fill's `Server.log` lines (grep `LFG fill`):
+```
+TortoiseBots: LFG fill: Flivmage queued dps for dungeon 39 (Stratholme); need tank, healer, dps, dps
+TortoiseBots: LFG fill: Mtank joins as tank (Warrior 60), party 2/5
+TortoiseBots: LFG fill: party complete for Flivmage: tank=Mtank, healer=Mpriest, dps=Mmage,Mrogue
+TortoiseBots: LFG fill: released Mtank (player left)
+```
+
+`.bot lfg` is the same service for the caller's own character: `TortoiseBots: lfg: queued dps for Stratholme (39); need
+tank, healer, dps, dps`, `TortoiseBots: lfg: waiting for Stratholme (39) as dps; need ...; filled ...`,
+`TortoiseBots: lfg: left; released 2 bot(s)`, and a refusal as `TortoiseBots: lfg: refused <code>: <text>`.

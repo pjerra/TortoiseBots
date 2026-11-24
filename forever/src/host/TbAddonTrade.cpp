@@ -8,6 +8,7 @@
 #include "host/cmd/TbCmdBinding.h"
 #include "host/player/TbPlayerAuthPure.h"
 #include "host/run/TbRunHooks.h"
+#include "host/TbHostGuildOrderEnchant.h"
 #include "TbBotMgr.h"
 
 #include "BattlenetAccountMgr.h"
@@ -178,6 +179,12 @@ public:
             activeBotCounters.push_back(key);
 
             Player* trader = myTrade->GetTrader();
+            // A guild order's enchant window belongs to the enchant service:
+            // the giver is not the bot owner, and the window's spell and
+            // accept are driven there (TbHostGuildOrderEnchant.cpp).
+            if (trader && tbhost::guild_orders::IsEnchantOrderTrader(bot, trader))
+                continue;
+
             TradeData* hisTrade = trader ? trader->GetTradeData() : nullptr;
 
             TradeTickInput in;

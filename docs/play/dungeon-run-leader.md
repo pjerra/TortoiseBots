@@ -67,7 +67,7 @@ One row is one thing to do, run in `(leg, seq)` order with primary key `(plan, l
 | `radius` | Yards, by kind, at most 100. |
 | `item` | Item entry, by kind, `0` for none. |
 | `param` | By kind: `wait_object` state to wait for, `ritual` bot count (`0` = 3), `gossip` menu option (1-15), `hold` done value. |
-| `flags` | `1` ambush, `2` Alliance, `4` Horde; `64` exact waypoint on `move`; `256` gone-is-done on `loot`, `open`, and `wait_object`; `512` dead-is-done on `gossip`; `8` data, `16` object state, `32` encounter state, `16384` reset-to-gossip, and `32768` dead-gossip-ok on `hold`; `2048` living-creature proof on `open_proof`; `1024` on `pull` never defers unreachable but pauses instead; `4096` on `boss` ends skipped not paused when out of reach; `8192` pulls from the prior move stand; `131072` on `move`, `pull` or `boss` lets every point of that row's own hop wade shallow water (the whole hop, including the approach hops and legs it is walked in; the first wet sub-hop logs its sampled depth and liquid status; deeper than 1.5 yd or swimming still refuses). |
+| `flags` | `1` ambush, `2` Alliance, `4` Horde; `64` exact waypoint on `move`; `256` gone-is-done on `loot`, `open`, and `wait_object`; `512` dead-is-done on `gossip`; `8` data, `16` object state, `32` encounter state, `16384` reset-to-gossip, and `32768` dead-gossip-ok on `hold`; `2048` living-creature proof on `open_proof`; `1024` on `pull` never defers unreachable but pauses instead; `4096` on `boss` ends skipped not paused when out of reach; `8192` pulls from the prior move stand; `131072` on `move`, `pull` or `boss` records a row whose own hop the map probe found wet (plan data; the run's own moves may wade shallow water on any leg, and the first wet sub-hop logs its sampled depth and liquid status). |
 | `timeout_s` | `0` means 60, at most 600 s, and hold steps up to 1800 s. |
 | `entries` | Comma creature entry list, at most 16, by kind. |
 | `comment` | Free text. |
@@ -102,8 +102,8 @@ The loader skips rows it cannot use and names them in the server log: an unknown
 | `gossip` | NPC entry, near point, option 1-15 | Talks to the NPC and picks one menu option, searched within 40 yd after the lead bot walks within 30 yd first. |
 
 A walk refuses a route that crosses or ends in liquid: any liquid at the walked height or up to 0.6 yd below it, and swimming water.
-A row with flag `131072` may cross water on its own hop only, when every sample is wading depth (at most 1.5 yd of water above the ground) and none is swimming; deeper water, lava, and any other hop (an approach stand, a walk back, a detour) keep the refusal.
-Wailing Caverns' river hops carry it; no other shipped plan does.
+A move the run makes on its own (a plan row's walk, a regroup, an approach stand, a return to the plan point, a follow-up, a bot walk) may wade shallow water on any leg of the run, when every sample is at most the game's swim depth (2.0 yd of water above the ground, the core's own under-water threshold) and none is swimming; deep water, lava, and a move a player types (`.tb cmd move`) keep the refusal.
+Flag `131072` records the rows whose own hop the map probe found wet; it is plan data now and no longer the gate (live run 4's step 60 crossed a 0.2 yd cell on an unflagged leg). Wailing Caverns' river hops carry it; no other shipped plan does.
 
 ## Joining a bot LFG group
 

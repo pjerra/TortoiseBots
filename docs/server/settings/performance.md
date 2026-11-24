@@ -30,6 +30,7 @@ The total bot population is a major factor in server CPU and memory usage. When 
 | [`AiPlayerbot.TravelPickBudgetUs`](#aiplayerbottravelpickbudgetus) | `4000` | Microsecond budget limit per bot visit for travel destination calculations. |
 | [`AiPlayerbot.AsyncTravelPartitions`](#aiplayerbotasynctravelpartitions) | `0` | Enables asynchronous partitioning of world travel destination lookups. |
 | [`AiPlayerbot.GenerateItemCaches`](#aiplayerbotgenerateitemcaches) | `1` | Builds equipment and item candidate database tables on first boot. |
+| [`AiPlayerbot.GenerateTravelNodes`](#aiplayerbotgeneratetravelnodes) | `1` | Builds the bot travel graph once on startup when the travel tables are empty. |
 | [`AiPlayerbot.LogInGroupOnly`](#aiplayerbotlogingrouponly) | `1` | Restricts detailed per-action logging output to bots currently in groups. |
 | [`AiPlayerbot.Enabled`](#aiplayerbotenabled) | `1` | Master kill-switch enabling or disabling bot artificial intelligence updates. |
 | [`AiPlayerbot.PoolMeleeHoldGround`](#aiplayerbotpoolmeleeholdground) | `0` | Disables generic fleeing behaviors on pool melee classes during combat. |
@@ -215,6 +216,19 @@ Builds equipment and item candidate database tables on first startup.
 On initial server boot, if the `ai_playerbot_equip_cache` and `ai_playerbot_rnditem_cache` character-database tables are empty, this setting generates them from the loaded item prototypes.
 
 Once generated, the tables are loaded directly from SQL on subsequent restarts. Leave this setting enabled; if disabled with empty tables, bots only fill empty slots from loot.
+
+</details>
+
+### `AiPlayerbot.GenerateTravelNodes`
+Builds the bot travel network once on first startup when the travel tables are empty.
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+On a fresh install the `ai_playerbot_travelnode`, `ai_playerbot_travelnode_link` and `ai_playerbot_travelnode_path` world-database tables are empty. With this setting on, the module fills them once during server startup, before bots log in: it places nodes at race start areas, flight masters, innkeepers, spirit healers, instance entrances and exits, boats and zeppelins, zone centres and portals, links the nearby nodes by pathfinding over the extracted navigation mesh, prunes unreachable clusters, adds the flight and boat links, and saves everything in one transaction. Later starts load the saved network in seconds and nothing is regenerated.
+
+The first build takes minutes and logs progress every few percent (`travel walk links x/y pairs`). Setting this to `0` skips the build: bots then use only the saved tables, or direct movement when those are empty too. Nothing runs per tick or in the background, and a server without extracted navigation maps gets a network without walking links.
 
 </details>
 

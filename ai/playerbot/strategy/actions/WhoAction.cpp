@@ -4,6 +4,7 @@
 #include "playerbot/AiFactory.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/RandomBotFacade.h"
+#include "playerbot/TbCompatPC5.h"
 
 using namespace ai;
 
@@ -48,7 +49,7 @@ bool WhoAction::Execute(Event& event)
     {
         if (AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot)))
         {
-            out << ", (|cffb04040" << areaEntry->Name << "|r)";
+            out << ", (|cffb04040" << AreaNameCompat(areaEntry) << "|r)";
         }
     }
 
@@ -99,16 +100,11 @@ std::string WhoAction::QuerySkill(std::string text)
     std::string skillName = chat->getSkillName(skill);
     uint32 spellId = AI_VALUE2(uint32, "spell id", skillName);
     uint16 value = bot->GetSkillValue(skill);
-#ifdef MANGOS
-    uint16 maxSkill = bot->GetMaxSkillValue(skill);
-#endif
-#ifdef CMANGOS
-    uint16 maxSkill = bot->GetSkillMax(skill);
-#endif
+    uint16 maxSkill = SkillMaxOfCompat(bot, skill);
     ObjectGuid guid = bot->getObjectGuid();
     std::string data = "0";
     out << "|cFFFFFF00|Htrade:" << spellId << ":" << value << ":" << maxSkill << ":"
-            << std::hex << std::uppercase << guid.GetRawValue()
+            << std::hex << std::uppercase << GuidLinkNumberCompat(guid)
             << std::nouppercase << std::dec << ":" << data
             << "|h[" << skillName << "]|h|r"
             << " |h|cff00ff00" << value << "|h|cffffffff/"

@@ -8,6 +8,10 @@
 #include "playerbot/Helpers.h"
 #include "runtime/GuildOrderRelistPolicy.h"
 #include "runtime/GuildOrderStore.h"
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+#include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostThievery.h"
+#endif
 #include "host/ModuleLog.h"
 
 #include <algorithm>
@@ -176,6 +180,17 @@ public:
         if (!GetMailOwner(bot))
             return false;
 
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+        // A guild member's `disenchant` mail is the host service's: taking it
+        // here would put the item in the bags with no queue row and no shield.
+        if (tbhost::guild_orders::IsDisenchantServiceMail(bot, mail))
+            return true;
+        // A guild bot's `lockbox` mail belongs to the thievery service: the
+        // box must be opened and its contents mailed back, not looted here.
+        if (tbhost::thievery::IsLockboxServiceMail(bot, mail))
+            return true;
+#endif
+
         if (!CheckBagSpace(bot))
         {
             ai->TellError(requester, "Not enough bag space");
@@ -342,6 +357,12 @@ uint32_t ai::TakeOrderMail(PlayerbotAI* ai, uint32_t itemId)
             continue;
         if (!MailHasItemsCompat(mail))
             continue;
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+        if (tbhost::guild_orders::IsDisenchantServiceMail(bot, mail))
+            continue;
+        if (tbhost::thievery::IsLockboxServiceMail(bot, mail))
+            continue;
+#endif
         uint32_t wantedGuid = 0;
         uint32_t senderLow = mail->sender;
         for (MailItemInfoVec::const_iterator it = mail->items.begin(); it != mail->items.end(); ++it)

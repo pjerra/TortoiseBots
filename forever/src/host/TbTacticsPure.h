@@ -3,10 +3,15 @@
 //
 // M1: the six verbs of the round, the engage seconds (0-60, empty = the default 4) and the stance word (`turn` is `turnback`).
 // M2: `interrupt` and the probe order the picked bot's action follows. The later rounds append their own functions next to these.
+// M4: `PickCcBot`, the whole-party crowd-control pick over the run's own table (DungeonRun::kRunCc).
 #pragma once
+
+#include "ai/playerbot/policy/combat/CcPermissionPolicy.h"
+#include "runtime/DungeonRunPolicy.h"
 
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -21,7 +26,89 @@ constexpr unsigned kEngageDefaultSeconds = 4;
 inline bool IsTacticalVerb(std::string const& verb)
 {
     return verb == "stop" || verb == "flee" || verb == "guard" || verb == "stance" || verb == "engage" || verb == "rebuff" ||
-        verb == "interrupt";
+        verb == "interrupt" || verb == "aoe" || verb == "autocc" || verb == "sap" || verb == "loot" || verb == "corpserun";
+}
+
+// The toggle verbs (`aoe|autocc|sap|loot`) and the corpse run, normalised: `auto cc` is the two-word form of `autocc`, and
+// `corpse run` is the two-word form of `corpserun` (section 4.3). A caller that split the words already can join them back
+// or pass the first two words straight here.
+inline std::string NormaliseTacticalVerb(std::string const& first, std::string const& second = std::string())
+{
+    if (second == "cc" && first == "auto")
+        return "autocc";
+    if (second == "run" && first == "corpse")
+        return "corpserun";
+    return first;
+}
+
+// M3: the four toggles and their state operations. `Flip` is a bare verb (each bot flips its own state); `Status` reads
+// without queuing; `On`/`Off` set the absolute state. The op is parsed from the first argument after the verb.
+enum class ToggleOp
+{
+    Flip,
+    On,
+    Off,
+    Status
+};
+
+inline ToggleOp ParseToggle(std::string const& text, bool& ok)
+{
+    std::string word;
+    word.reserve(text.size());
+    for (char const c : text)
+        word += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    ok = true;
+    if (word.empty())
+        return ToggleOp::Flip;
+    if (word == "on")
+        return ToggleOp::On;
+    if (word == "off")
+        return ToggleOp::Off;
+    if (word == "status")
+        return ToggleOp::Status;
+    ok = false;
+    return ToggleOp::Flip;
+}
+
+// The wanted state of one bot after the op against its current state. A flip inverts; On/Off set; Status never changes
+// anything (the caller should not call this for a read, but the answer is the current state).
+inline bool ToggleWanted(ToggleOp op, bool current)
+{
+    if (op == ToggleOp::On)
+        return true;
+    if (op == ToggleOp::Off)
+        return false;
+    if (op == ToggleOp::Flip)
+        return !current;
+    return current;
+}
+
+// The `.tb cmd` aggregate answer for a party: "on" when every bot reads on, "off" when every bot reads off, "mixed"
+// otherwise. An empty list is "off" (no bot to call on).
+inline std::string AggregateState(std::vector<bool> const& states)
+{
+    if (states.empty())
+        return "off";
+    bool const first = states.front();
+    for (bool const state : states)
+        if (state != first)
+            return "mixed";
+    return first ? "on" : "off";
+}
+
+// M3: the strategy name each toggle reads or writes (section 4.3), and the state (combat or non-combat) it lives in.
+// `loot` lives in non-combat like `no sap`; the others are combat.
+inline char const* ToggleStrategy(std::string const& verb)
+{
+    if (verb == "aoe")
+        return "no aoe";
+    if (verb == "autocc")
+        return "auto cc";
+    if (verb == "sap")
+        return "no sap";
+    if (verb == "loot")
+        return "loot";
+    return "";
 }
 
 // `engage [seconds]`: empty means the default delay; digits only; more than 60 seconds is refused (the pull window's own limit).
@@ -152,6 +239,102 @@ inline char const* InterruptTickResult(InterruptTick tick)
         case InterruptTick::TimedOut: return "fail:interrupt";
         default: return "pending:interrupt";
     }
+}
+
+// ---- M4: `cc <mark> <guid>` for the whole party (D12) ----
+// One bot as the pick sees it. `known` is the CcBit of every run family the bot has the spell for, `denied` the owner's deny mask in
+// ai::CcPermissions kinds (CcDeniedForOwner), `hasCcKit` whether the bot's combat kit carries the `cc` strategy (today the mage's and the
+// rogue's; #123 adds the rest, and this pick needs no change for them).
+struct CcCandidate
+{
+    std::string name;
+    bool alive = true;
+    bool inCombat = false;
+    bool hasCcKit = false;
+    std::uint32_t known = 0;
+    std::uint32_t denied = 0;
+};
+
+struct CcPick
+{
+    bool found = false;
+    size_t index = 0;                                   // into the candidate list
+    DungeonRun::CcFamily family = DungeonRun::CcFamily::None;
+    std::string familyToken;                            // the token the `cc` order carries (CcFamilyToken)
+    std::string reasons;                                // when !found: `name:reason;...` (dead, no-cc-kit, no-fitting-spell, denied, in-combat)
+};
+
+// The family a token names ("polymorph", "shackleundead", ...): None for "", "none" and anything that is not a family of the run's table.
+inline DungeonRun::CcFamily CcFamilyFromToken(std::string const& text)
+{
+    std::string const token = DungeonRun::CcFamilyTokenNorm(text);
+    if (token.empty() || token == "none")
+        return DungeonRun::CcFamily::None;
+    for (DungeonRun::RunCcSpell const& row : DungeonRun::kRunCc)
+        if (DungeonRun::CcFamilyTokenNorm(row.spell) == token)
+            return row.family;
+    return DungeonRun::CcFamily::None;
+}
+
+// The bot and the family for a `cc <mark> <guid>` with no bot named. Over every (bot, family row) pair of the run's table (the same one the run's
+// automatic crowd control reads) the best one wins: tier A before S before R, then the table order (polymorph before sap), then the party order.
+// A row qualifies when it is an automatic pick (Freezing Trap is not), the target's creature type fits it (CcFits), the bot knows the spell and
+// carries the `cc` kit, and the owner's permissions do not deny its kind. A `prePull` row (Sap) also needs the target and the bot out of combat.
+// `only` (not None) restricts the pick to that family. With no pick `reasons` names each bot's reason.
+inline CcPick PickCcBot(std::vector<CcCandidate> const& cands, std::uint32_t creatureType, bool targetEngaged,
+    DungeonRun::CcFamily only = DungeonRun::CcFamily::None)
+{
+    CcPick best;
+    int bestRank = 0;
+    std::string reasons;
+    for (size_t ci = 0; ci < cands.size(); ++ci)
+    {
+        CcCandidate const& c = cands[ci];
+        char const* reason = nullptr;
+        if (!c.alive)
+            reason = "dead";
+        else if (!c.hasCcKit)
+            reason = "no-cc-kit";
+        else
+        {
+            bool fits = false, denied = false;
+            bool eligible = false;
+            for (size_t ri = 0; ri < sizeof(DungeonRun::kRunCc) / sizeof(DungeonRun::kRunCc[0]); ++ri)
+            {
+                DungeonRun::RunCcSpell const& row = DungeonRun::kRunCc[ri];
+                if (!row.autoPick || (only != DungeonRun::CcFamily::None && row.family != only))
+                    continue;
+                if (!(c.known & DungeonRun::CcBit(row.family)) || !DungeonRun::CcFits(row.family, creatureType))
+                    continue;
+                fits = true;
+                if (c.denied & ai::CcPermissions::KindFromSpellName(row.spell))
+                {
+                    denied = true;
+                    continue;
+                }
+                if (row.prePull && (targetEngaged || c.inCombat))
+                    continue;
+                eligible = true;
+                int const rank = DungeonRun::RunCcTierRank(row.tier) * 100 + int(ri);
+                if (!best.found || rank < bestRank)
+                {
+                    best.found = true;
+                    best.index = ci;
+                    best.family = row.family;
+                    bestRank = rank;
+                }
+            }
+            if (!eligible)
+                reason = !fits ? "no-fitting-spell" : denied ? "denied" : "in-combat";
+        }
+        if (reason)
+            reasons += (reasons.empty() ? "" : ";") + c.name + ":" + reason;
+    }
+    if (best.found)
+        best.familyToken = DungeonRun::CcFamilyToken(best.family);
+    else
+        best.reasons = reasons;
+    return best;
 }
 }
 }

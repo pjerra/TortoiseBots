@@ -146,7 +146,7 @@ namespace ai
     public:
         RpgTrainTrigger(PlayerbotAI* ai, std::string name = "rpg train") : RpgTrigger(ai, name) {}
 
-        static bool IsTrainerOf(CreatureInfo const* cInfo, Player* pPlayer);
+        static bool IsTrainerOf(ai::GuidPosition const& guidP, Player* pPlayer);
 
         //True when this trainer still teaches a GREEN spell the bot can pay for
         //out of "free money for spells". Shared by the trigger and the idle

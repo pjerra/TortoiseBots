@@ -168,6 +168,10 @@ nodes:
     path: server/configuration.md
     category: server
     summary: Configuration files, templates, restart rules, recommended presets, settings index, and removed dead keys.
+  - id: server-config-keys
+    path: server/config-keys.md
+    category: server
+    summary: Generated per-key census of aiplayerbot.conf keys and whether the Forever build consumes them.
   - id: server-settings-party
     path: server/settings/party.md
     category: server

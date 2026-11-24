@@ -360,6 +360,8 @@ void ReadParty(Ctx& c, Facts& f, bool& playerInGroup)
         m.z = bot->GetPositionZ();
         m.healer = e.healer;
         m.tank = IsTankMember(bot);
+        // The pull's healer gate (DungeonRun::HealerOutOfReach): a healer's sight line to the lead bot, read fresh each tick (one LOS query a healer).
+        m.healerSight = bot == lead || (e.healer && sameMap && IsWithinLOSInMapCompat(bot, lead));
         m.core = m.tank || m.healer;
         m.level = bot->GetLevel();
         // G8: the run's crowd control is a mage's Polymorph only (see RunCcHeld). No other class carries a family and no Sap is ordered (canSap stays false: a

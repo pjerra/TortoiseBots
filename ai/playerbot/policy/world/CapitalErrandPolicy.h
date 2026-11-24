@@ -13,7 +13,8 @@ enum class CapitalErrandKind : uint8_t
     Mailbox = 1,
     Trainer = 2,
     Bank = 3,
-    AuctionHouse = 4
+    AuctionHouse = 4,
+    Mount = 5
 };
 
 inline constexpr uint64_t kErrandGlobalIntervalMs = 30000;
@@ -22,6 +23,7 @@ inline constexpr uint64_t kMailboxCooldownMs = 60000;
 inline constexpr uint64_t kTrainerCooldownMs = 120000;
 inline constexpr uint64_t kBankCooldownMs = 180000;
 inline constexpr uint64_t kAuctionCooldownMs = 180000;
+inline constexpr uint64_t kMountCooldownMs = 120000;
 inline constexpr uint32_t kBankFreeSlotsThreshold = 6;
 
 inline constexpr uint64_t kDuelCooldownMs = 120000;
@@ -56,6 +58,7 @@ inline uint64_t CooldownMsForErrand(CapitalErrandKind kind)
         case CapitalErrandKind::Trainer: return kTrainerCooldownMs;
         case CapitalErrandKind::Bank: return kBankCooldownMs;
         case CapitalErrandKind::AuctionHouse: return kAuctionCooldownMs;
+        case CapitalErrandKind::Mount: return kMountCooldownMs;
         default: return 0;
     }
 }
@@ -73,6 +76,7 @@ struct CapitalErrandInput
     bool auctionEnabled = false;
     uint32_t unreadMailCount = 0;
     bool hasTrainableSpell = false;
+    bool needsMountPurchase = false;
     uint32_t freeBagSlots = 0;
     uint32_t bankableItemCount = 0;
     uint32_t ahSellableItemCount = 0;
@@ -82,19 +86,29 @@ struct CapitalErrandInput
     uint64_t trainerCooldownUntilMs = 0;
     uint64_t bankCooldownUntilMs = 0;
     uint64_t ahCooldownUntilMs = 0;
+    uint64_t mountCooldownUntilMs = 0;
 };
 
 inline CapitalErrandKind PickCapitalErrand(CapitalErrandInput const& in)
 {
     if (!in.isFreeBot || in.hasActiveOrder || !in.isAlive || in.inCombat ||
-        in.isMoving || in.isCasting || in.inDuel || !in.inCapital)
+        in.isMoving || in.isCasting || in.inDuel)
         return CapitalErrandKind::None;
 
     if (in.nowMs < in.nextGlobalTryMs)
         return CapitalErrandKind::None;
 
-    if (in.unreadMailCount > 0 && in.nowMs >= in.mailboxCooldownUntilMs)
+    // A mount trainer or vendor sits outside the capitals too (the racial
+    // pairs live in Goldshire, Sen'jin Village, ...), so this errand is not
+    // gated on inCapital.
+    if (in.inCapital && in.unreadMailCount > 0 && in.nowMs >= in.mailboxCooldownUntilMs)
         return CapitalErrandKind::Mailbox;
+
+    if (in.needsMountPurchase && in.nowMs >= in.mountCooldownUntilMs)
+        return CapitalErrandKind::Mount;
+
+    if (!in.inCapital)
+        return CapitalErrandKind::None;
 
     if (in.hasTrainableSpell && in.nowMs >= in.trainerCooldownUntilMs)
         return CapitalErrandKind::Trainer;
@@ -188,16 +202,15 @@ inline bool CanInitiateBotDuel(DuelCandidateInput const& in)
 }
 
 inline bool ShouldAcceptBotDuel(
-    bool botIsFreeBot,
     bool botAlive,
     bool botInCombat,
-    bool challengerIsBot,
+    bool challengerIsMaster,
     uint8_t botLevel,
     uint8_t minDuelLevel,
     uint8_t botHealthPct)
 {
-    return botIsFreeBot && botAlive && !botInCombat && challengerIsBot &&
-           botLevel >= minDuelLevel && botHealthPct >= 90;
+    return botAlive && !botInCombat && botLevel >= minDuelLevel &&
+           (challengerIsMaster || botHealthPct >= 90);
 }
 
 } // namespace world

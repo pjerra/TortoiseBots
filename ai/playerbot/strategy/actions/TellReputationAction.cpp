@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "TellReputationAction.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TbCompatPC5.h"
 
 using namespace ai;
 
@@ -15,18 +16,23 @@ bool TellReputationAction::Execute(Event& event)
     if (selection.IsEmpty())
         return false;
 
-    Unit* unit = requester->GetMap()->GetUnit(selection);
+    Unit* unit = UnitInMapCompat(requester->GetMap(), selection);
     if (!unit)
         return false;
 
     const FactionTemplateEntry *factionTemplate = sServerFacade.GetFactionTemplateEntry(unit);
-    uint32 faction = factionTemplate->faction;
-    const FactionEntry* entry = sFactionStore.LookupEntry
-            (faction);
+    if (!factionTemplate)
+        return false;
+
+    uint32 faction = FactionOfTemplateCompat(factionTemplate);
+    const FactionEntry* entry = FactionEntryOfCompat(faction);
+    if (!entry)
+        return false;
+
     int32 reputation = bot->GetReputationMgr().GetReputation(faction);
 
     std::ostringstream out;
-    out << entry->name[LOCALE_enUS] << ": ";
+    out << FactionNameCompat(entry, LOCALE_enUS) << ": ";
     out << "|cff";
     ReputationRank rank = bot->GetReputationMgr().GetRank(entry);
     switch (rank) {
@@ -61,11 +67,11 @@ bool TellReputationAction::Execute(Event& event)
 
     out << "|cffffffff";
 
-    int32 base = ReputationMgr::Reputation_Cap + 1;
-    for (int i = MAX_REPUTATION_RANK - 1; i >= rank; --i)
-        base -= ReputationMgr::PointsInRank[i];
+    int32 base = 0;
+    int32 points = 0;
+    ReputationRankSpanCompat(rank, base, points);
 
-    out << " (" << (reputation - base) << "/" << ReputationMgr::PointsInRank[rank] << ")";
+    out << " (" << (reputation - base) << "/" << points << ")";
     ai->TellPlayer(requester, out);
 
     return true;

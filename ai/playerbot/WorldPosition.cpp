@@ -3,6 +3,7 @@
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/TravelMgr.h"
 #include "TravelNode.h"
+#include "playerbot/TbCompatWL4n.h"
 #include "playerbot/MagmaHazardPolicy.h"
 #include "playerbot/SwimPathPolicy.h"
 
@@ -1225,7 +1226,12 @@ bool WorldPosition::isVmapLoaded(uint32 /*mapId*/, int /*x*/, int /*y*/)
 
 bool WorldPosition::isMmapLoaded(uint32 mapId, uint32 instanceId, int x, int y)
 {
-    return NavMeshLoadedCompat(mapId, instanceId);
+    // The mesh existing does not mean this tile is loaded: the generator (and any long path) asks about far grids before
+    // loading them. Probe the tile itself; pulling a quarter grid into the tile keeps calcTileLoc from flooring a boundary
+    // corner into the neighbouring one.
+    WorldPosition corner(mapId, mGridPair(x, y));
+    return NavMeshTileLoadedCompat(mapId, instanceId, x, y,
+        corner.getX() - SIZE_OF_GRIDS / 4.0f, corner.getY() - SIZE_OF_GRIDS / 4.0f, corner.getZ());
 }
 
 bool WorldPosition::loadMapAndVMap(uint32 mapId, uint32 instanceId, int x, int y)

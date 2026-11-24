@@ -371,7 +371,6 @@ void RegisterAddonVerbsAi()
 #else
 
 #include "Chat.h"
-#include "host/TbH3.h"
 
 namespace TortoiseBots
 {
@@ -380,14 +379,16 @@ namespace aipreset
 
 namespace
 {
-bool NotBuilt(ChatHandler* handler, Trinity::ChatCommands::Tail args, char const* cmd)
+bool NotBuilt(ChatHandler* handler)
 {
-    return h3::NotBuilt(handler, args, cmd);
+    if (handler)
+        handler->SendSysMessage("error code=engine-not-built");
+    return false;
 }
 } // namespace
 
-bool HandleAiCommand(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "ai"); }
-bool HandleCsCommand(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "cs"); }
+bool HandleAiCommand(ChatHandler* handler, Trinity::ChatCommands::Tail) { return NotBuilt(handler); }
+bool HandleCsCommand(ChatHandler* handler, Trinity::ChatCommands::Tail) { return NotBuilt(handler); }
 void RegisterAddonVerbsAi() { }
 
 } // namespace aipreset

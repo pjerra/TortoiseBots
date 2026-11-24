@@ -60,7 +60,7 @@ Recipe tools stay available as long as [`AiPlayerbot.CraftToolsAlways`](../serve
 | `stocked` | Keep order: delivered, the bank holds the ordered amount, watching it (checks about every 10 minutes). |
 | `mailed` | The bank refused, mailed to the guild master. |
 | `noskill` | The item needs a profession the bot lacks, or its skill is too low. |
-| `cant` | No source in level range, no source at all, only elite sources, a craft recipe the bot may not make (`norecipe` unknown, `enchant`, `bound` item, `needsprofession` item, or `cooldown` recipe), farm time ran out (`timeout`), no new item in 3 worked hours (`noprogress`), or stuck while crafting or delivering. |
+| `cant` | No room in the bags and nothing it may throw out (`bagsfull`), no source in level range, no source at all, only elite sources, a craft recipe the bot may not make (`norecipe` unknown, `enchant`, `bound` item, `needsprofession` item, or `cooldown` recipe), farm time ran out (`timeout`), no new item in 3 worked hours (`noprogress`), or stuck while crafting or delivering. |
 
 ## Requirements
 
@@ -68,11 +68,13 @@ Recipe tools stay available as long as [`AiPlayerbot.CraftToolsAlways`](../serve
 - Guild orders only work while `AiPlayerbot.AutoDoQuests = 1` (the default). With quest travel off, `.bot order` answers `disabled`.
 - Guild bank item withdrawals and guild bank gold use are controlled by [`AiPlayerbot.GuildOrderBankWithdraw`](../server/settings/guild-orders.md#aiplayerbotguildorderbankwithdraw) and [`AiPlayerbot.GuildOrderBankGold`](../server/settings/guild-orders.md#aiplayerbotguildorderbankgold); both default to `1`.
 
-An order on a fish sends the bot to a fishing spot in the planned zone. The bot is granted a pole good enough for the zone plus lures, and re-applies the lure while fishing. If even the best pole and lure cannot reach the zone, the search answers `lowskill`.
+An order on a fish is played as a fishing plan: the bot learns Fishing and the fishing spell of its rank when it has no skill yet, is granted a pole good enough for the zone plus lures, walks to a fishing spot from the shipped fish-location data, casts, uses the bobber when it splashes and takes the catch until the order amount arrives. If even the best pole and lure cannot reach a source zone, the order ends `noskill` with reason `lowskill`.
 
 ## Where the bot gets items
 
 For the ordered item itself, the bot checks its own bags and mailbox, then farms it when it has the skill to. It goes to the auction house only when it cannot farm it (a buy order starts there on purpose). It never takes the finished item from the guild bank: the bank holds crafting materials.
+
+When its bags are full and it has none of the farmed item yet, the bot throws out grey or white junk to make room: grey before white, the cheapest stack first, and never green or better items, quest items, tools, ammo, reagents a spell it knows uses, its hearthstone, keys or bags. If it carries part of the order already, it delivers that instead of farming more (when a banker or mailbox is in reach). With nothing it may throw out, the order stops at once as `cant` with reason `bagsfull` rather than idling at nodes it cannot loot. The camp tent the bot brings along never takes its last free bag slot.
 
 For each missing crafting material, the bot works down a fixed list: its own bags and mailbox, then the guild bank (only the count still missing, skipped when the guild has no bank), then making it itself (crafting, then gathering or farming, or buying it from a shop), then the auction house, then asking another guild bot, and finally your need list (see below). The bot spends gold at the auction house only when it cannot make or farm the material.
 
@@ -143,8 +145,8 @@ If the bot and other guild bots cannot get one of the materials, that item goes 
 Mail items to a guild bot that has Enchanting with the subject `disenchant` and it breaks them down for you, no meeting needed.
 - The bot disenchants what its skill allows, loots the results itself, and mails exactly what that cast made back (`Disenchanted: <item>`); the rest comes back with a reason (`lowskill` when the item needs more skill, `cannot disenchant` for anything with no disenchant loot, `noskill` from a bot without Enchanting).
 - Mail from a guild member without that subject is taken into the bags as usual, never disenchanted.
-- Queued items and landed results are never sold, auctioned, equipped or used for anything else while they wait; the bot casts when it can (not in combat, moving or mounted), collects at a mailbox, and mails every item back with no gold taken and nothing of its own added. A restart re-queues instead of losing the item.
-- **Disenchant by trade:** whisper the bot `disenchant`, then trade it within 2 minutes and put the items in the normal trade slots. The offer must be items only (no gold, nothing of the bot's own) and fit its free room ("I only have room for N items" otherwise); each item is queued exactly like mailed ones and the materials come back by mail. A bot without Enchanting answers "I can't disenchant." instead. A running enchant order's trade with its giver still comes first: the drop-off only applies outside that window.
+- Queued items and landed results are never sold, auctioned, equipped or used for anything else while they wait; the bot casts when it can (not in combat, moving or mounted), collects at a mailbox, and mails every item back with no gold taken and nothing of its own added. The bot pays the normal postage on each result mail, so its own money must cover it. A restart re-queues instead of losing the item.
+- **Disenchant by trade:** whisper the bot `disenchant`, then trade it within 2 minutes and put the items in the normal trade slots. The offer must be items only (no gold, nothing of the bot's own) and fit its free room ("I only have room for N items" otherwise); each item is queued exactly like mailed ones and the materials come back by mail. A bot without Enchanting answers "I can't disenchant." instead. A running enchant order's trade with its giver still comes first: the drop-off only applies outside that window. (The ForeverCore port serves the mail path; the trade drop-off is not ported yet.)
 
 ## Delivery
 

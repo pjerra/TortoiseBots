@@ -13,6 +13,7 @@
 #include "host/TbCc.h"
 #include "host/TbCcPure.h"
 #include "host/TbOrdersApi.h"
+#include "host/TbTactics.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFacts.h"
@@ -122,9 +123,9 @@ bool ReadParty(Party const& ctx, ResolvedParty& party, OrderAnswer& refusal)
     }
     party.lead = lead;
     // A run binds every member to the lead bot itself (SyncBinding -> BindMember), whatever commander the lead may have of its
-    // own; that is the binding the members' orders must line up with, and what the "not-bound" refusal names. Outside a run the
-    // player's own commander stands.
-    party.expectedCommander = ctx.fromRun ? lead->GetGUID() : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
+    // own; that is the binding the members' orders must line up with, and what the "not-bound" refusal names. A player-led run
+    // (issue #139) binds nothing: its members keep the player as their commander. Outside a run the player's own commander stands.
+    party.expectedCommander = ctx.fromRun ? (ctx.commander.IsEmpty() ? lead->GetGUID() : ctx.commander) : (ctx.owner.IsEmpty() ? lead->GetGUID() : ctx.owner);
     party.bots.push_back(lead);
     if (ctx.members.empty())
     {
@@ -195,21 +196,16 @@ void LogLiquidRefusal(Party const& ctx, std::string const& who, liquid::LiquidPr
             who.c_str(), p.Depth(), p.status, p.level, x, y, z, step, leg);
 }
 
-// The run's current plan row lets this order's hop wade (ai::kPlanFlagWadeOk): the row is a move, pull or boss row, and
-// the order's point is the row's own point or one of the points its walk samples on the way there (DungeonRun::RowHopWades:
-// an approach hop or a `TooFar` leg). The hop the probe checked is walked in parts, so the permission covers them all.
-// A move the run makes on its own inside a leg (a regroup's gather, an approach stand, the return to the plan point, the
-// follow-up after a pull) is no point of a row's walk: it keeps that permission when it stays in the leg's wet area
-// (DungeonRun::LegWetAreaAt, kWadeAreaYd of a flagged row's own hop). Both are the same shallow rule: the core's measured
-// depth, never swimming water. A `cmd move` a player sends (fromRun false) and every dry plan keep the RFC rule.
-bool WadeOrder(Party const& ctx, float x, float y)
+// A move the run issues for itself may wade: every leg of a dungeon run, not only a leg whose rows carry the wet bit
+// (live run 4: step 60 of leg 6, the run's move to -30.3 133.5 refused over a 0.2 yd cell outside every flagged hop,
+// -28.5 135.4). The bit stays plan data; the wade rule is the judge at every sample of the walked route
+// (TbRunLiquid.h: dry or at most the core's swim depth, never UNDER_WATER), so deep water still pauses. The permission is
+// DungeonRun::MoveMayWade: the order's origin flag (`ctx.fromRun`; a `cmd move` a player sends has none and keeps the RFC
+// liquid rule) and a live plan step for the run to act for.
+bool WadeOrder(Party const& ctx)
 {
-    if (!ctx.fromRun || !ctx.runRec)
-        return false;
-    RunRec const& rec = *ctx.runRec;
-    if (!rec.run.plan || rec.run.step >= rec.run.plan->steps.size())
-        return false;
-    return DungeonRun::MoveMayWade(rec.run, rec.run.plan->steps[rec.run.step], x, y);
+    bool const liveStep = ctx.runRec && ctx.runRec->run.plan && ctx.runRec->run.step < ctx.runRec->run.plan->steps.size();
+    return DungeonRun::MoveMayWade(ctx.fromRun, liveStep);
 }
 
 // The floor snap and the path of one mover. Differences from Turtle (said in the notes): the snap reads no liquid (a water point is not kept in the
@@ -256,8 +252,8 @@ MoveCheck CheckLeadMove(Player* mover, MovePoint point, bool fromRun, bool gathe
         auto const wet = [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); };
         if (wade)
         {
-            // A wade row's own hop (ai::kPlanFlagWadeOk, WadeOrder): every sample of the walked route may be dry or wading
-            // depth; a swimming sample (UNDER_WATER) or water deeper than kWadeDepthYd refuses it. The deepest wet sample stays
+            // A run-issued move (WadeOrder): every sample of the walked route may be dry or wading
+            // depth; a swimming sample (UNDER_WATER) or water deeper than kSwimDepthYd refuses it. The deepest wet sample stays
             // in the check, so the live log of a wet hop can quote its depth and liquid status.
             check.liquidOnWay = way.size() >= 2
                 ? liquid::PathWadeTraceOnMap(map, way, way.size(), check.wadeTrace)
@@ -492,7 +488,7 @@ OrderAnswer DoMove(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     wanted.x = p.x;
     wanted.y = p.y;
     wanted.z = p.z;
-    bool const wade = WadeOrder(ctx, p.x, p.y);
+    bool const wade = WadeOrder(ctx);
     OrderAnswer answer;
 
     if (p.direct)
@@ -647,8 +643,8 @@ OrderAnswer DoWalk(Party const& ctx, ResolvedParty const& party, od::Parsed cons
     wanted.y = p.y;
     wanted.z = p.z;
     // The run's own `walk <bot>` (a straggler to the lead, a carrier to a stand) is a move inside the leg too: the same
-    // wet-area permission, and the same shallow rule.
-    bool const wade = WadeOrder(ctx, p.x, p.y);
+    // origin gate and the same shallow rule.
+    bool const wade = WadeOrder(ctx);
     MoveCheck const check = CheckLeadMove(bot, wanted, ctx.fromRun, false, wade);
     od::Judged const judged = od::JudgeMove(check.facts);
     if (!judged.ok)
@@ -763,44 +759,107 @@ OrderAnswer DoFocus(Party const& ctx, ResolvedParty const& party, od::Parsed con
 
 // G8: `cc <mark> <handle> <bot> [family]`. The run's crowd-control assignment (the plan's cc rows) is carried out SYNCHRONOUSLY by h8::ApplyCcOrder, the same
 // call `.tb cc` makes: the group's raid icon goes onto the unit, the bot's `rti cc` and `run cc family` are set, and the change is read back (undone when it
-// did not hold). No cast is started here: the mage's `cc` strategy polymorphs the `rti cc` unit when its fight starts. Nothing is queued, so nothing can
-// fail late: the answer is the final one. A refusal changes nothing (ApplyCcOrder puts everything back).
-OrderAnswer DoCc(RunRec& rec, Party const& ctx, ResolvedParty const& party, od::Parsed const& p)
+// did not hold). The order then starts the cast itself (ApplyCcOrder's StartCcCast: TB's immediate probe, the mature action queued behind its own `reach cc`
+// when the unit is out of reach); the `cc` strategy's fight-start trigger stays the fallback. A refusal changes nothing (ApplyCcOrder puts everything back),
+// so an accepted answer is the final one.
+// M4 (tactical orders D12/D13): a commander's `cc <mark> <guid> [family]` names no bot: tactics::PickCcPlayer picks one from the run's own cc table, then the
+// same ApplyCcOrder runs with the picked family token. `rec` is the run when a run sent the order: only then is the run's bookkeeping (a pending clear, the
+// bots it marked) touched; a commander's order has no run behind it.
+OrderAnswer DoCc(RunRec* rec, Party const& ctx, ResolvedParty const& party, od::Parsed const& p)
 {
-    Player* bot = FindBotNamed(party, p.bot);
-    if (!bot)
-        return Refuse("no-bot", "That bot is not in your commanded group.");
-    if (!bot->IsAlive() || bot->IsInFlight() || bot->IsBeingTeleported())
-        return Refuse("unavailable", NameOf(bot) + " is dead, on a taxi or teleporting.");
+    Player* bot = nullptr;
+    bool const pick = p.bot.empty();
+    if (!pick)
+    {
+        bot = FindBotNamed(party, p.bot);
+        if (!bot)
+            return Refuse("no-bot", "That bot is not in your commanded group.");
+        if (!bot->IsAlive() || bot->IsInFlight() || bot->IsBeingTeleported())
+            return Refuse("unavailable", NameOf(bot) + " is dead, on a taxi or teleporting.");
+    }
     ObjectGuid guid;
     od::Judged judged;
     Unit* target = ResolveUnit(ctx, party, p.handle, p.targetToken, guid, judged);
     if (!target)
         return Refuse(judged.ok ? od::Refused("invalid-target", "No unit with that GUID is on the group's map and instance.") : judged);
+    std::string family = p.family;
+    if (pick)
+    {
+        // Skull is the party's kill mark: refused before a bot is picked for it (ApplyCcOrder refuses it too).
+        if (p.mark == "skull")
+            return Refuse("invalid", "skull is the party's kill mark and never a crowd-control mark.");
+        std::string reasons;
+        bot = tactics::PickCcPlayer(party.bots, target, p.family, ObjectAccessor::FindPlayer(ctx.owner), family, reasons);
+        if (!bot)
+            return Refuse("no-cc-bot", reasons.empty() ? std::string("No bot of the group can crowd-control that unit.") : reasons);
+    }
     std::string code, detail;
-    if (!h8::ApplyCcOrder(party.lead, bot, p.mark, guid, p.family, code, &detail))
+    if (!h8::ApplyCcOrder(party.lead, bot, p.mark, guid, family, code, &detail))
         return Refuse(od::CcAnswerCode(code), detail.empty() ? "The crowd-control order was refused (" + code + ")." : detail);
-    DropPendingCc(bot->GetName());      // a newer assignment: an older run's pending clear must leave it alone
-    h8::CcOwnedRecord(rec.ccOwned, bot->GetName(), p.mark);
-    return Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
+    if (rec)
+    {
+        DropPendingCc(bot->GetName());      // a newer assignment: an older run's pending clear must leave it alone
+        h8::CcOwnedRecord(rec->ccOwned, bot->GetName(), p.mark);
+    }
+    OrderAnswer answer = Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
+    if (pick && !family.empty())
+        answer.text += " family=" + family;
+    return answer;
 }
 
 // G8: `cc clear <bot> [<mark> <handle>]`: the bot's `rti cc` and `run cc family` go to none; with a mark and a unit the party's icon goes too, only while it
 // still holds that unit. A handle that no longer names a unit is refused invalid-target (the icon cannot be matched to a unit that is not known).
-OrderAnswer DoCcClear(RunRec& rec, ResolvedParty const& party, od::Parsed const& p)
+// M4 (D13): `cc clear` alone clears every bot of the party (the same call each): `party <n cleared>`.
+OrderAnswer DoCcClear(RunRec* rec, Party const& ctx, ResolvedParty const& party, od::Parsed const& p)
 {
-    Player* bot = FindBotNamed(party, p.bot);
-    if (!bot)
-        return Refuse("no-bot", "That bot is not in your commanded group.");
+    std::vector<Player*> targets;
+    if (p.bot.empty())
+        targets = party.bots;
+    else
+    {
+        Player* named = FindBotNamed(party, p.bot);
+        if (!named)
+            return Refuse("no-bot", "That bot is not in your commanded group.");
+        targets.push_back(named);
+    }
     ObjectGuid guid;
-    if (!p.mark.empty() && !ResolveHandle(rec.leader, p.handle, guid))
-        return Refuse("invalid-target", "No unit with that GUID is known to this run.");
-    std::string code, detail;
-    if (!h8::ClearCcOrder(party.lead, bot, p.mark, guid, code, &detail))
-        return Refuse(od::CcAnswerCode(code), detail.empty() ? "The crowd-control clear was refused (" + code + ")." : detail);
-    DropPendingCc(bot->GetName());
-    h8::CcOwnedForget(rec.ccOwned, bot->GetName());
-    return Accept(OrderAnswer(), "bot:" + NameOf(bot), 1);
+    if (!p.mark.empty())
+    {
+        bool const known = rec ? ResolveHandle(rec->leader, p.handle, guid) : (ctx.resolveTarget && ctx.resolveTarget(p.handle, p.targetToken, guid));
+        if (!known)
+            return Refuse("invalid-target", "No unit with that GUID is known to this run.");
+    }
+    uint32 cleared = 0;
+    std::string firstCode, firstDetail, failedNames;
+    for (Player* bot : targets)
+    {
+        std::string code, detail;
+        if (!h8::ClearCcOrder(party.lead, bot, p.mark, guid, code, &detail))
+        {
+            failedNames += (failedNames.empty() ? "" : ",") + NameOf(bot);
+            if (firstCode.empty())
+            {
+                firstCode = code;
+                firstDetail = detail.empty() ? "The crowd-control clear was refused (" + code + ")." : detail;
+            }
+            continue;
+        }
+        ++cleared;
+        if (rec)
+        {
+            DropPendingCc(bot->GetName());
+            h8::CcOwnedForget(rec->ccOwned, bot->GetName());
+        }
+    }
+    if (!cleared)
+        return Refuse(od::CcAnswerCode(firstCode.empty() ? std::string("failed") : firstCode), firstDetail.empty() ? std::string("No bot of the group had a crowd-control mark to clear.") : firstDetail);
+    if (!p.bot.empty())
+        return Accept(OrderAnswer(), "bot:" + NameOf(targets.front()), 1);
+    // A bot the clear could not reach (no engine, a refused read-back) keeps its mark: the answer says so instead of passing for a full clear.
+    OrderAnswer answer = Accept(OrderAnswer(), "party", cleared);
+    if (!failedNames.empty())
+        answer.text += " failed=" + failedNames;
+    return answer;
 }
 
 // A party-wide order with no argument (rest, stay, follow, hold): the bots that pass their pre-flight take it; at least one must. `verbFor` names the verb per bot.
@@ -835,7 +894,7 @@ OrderAnswer DoReviveParty(Party const& ctx, ResolvedParty const& party, std::str
     {
         if (bot->IsAlive())
         {
-            if (bot != party.lead)
+            if (bot != party.lead || !ctx.commander.IsEmpty())     // a player-led run's tank follows the player like the rest
             {
                 if (h3::CommanderGuid(bot->GetGUID()) != party.expectedCommander)
                     return Refuse("not-bound", NameOf(bot) + " is not bound to the lead bot as its commander (`.tb master`): it would not follow.");
@@ -851,7 +910,7 @@ OrderAnswer DoReviveParty(Party const& ctx, ResolvedParty const& party, std::str
         }
         batch.Add(bot, "release", true, false);
         // After its release the revived bot follows the lead again (the follow runs in the same tick, after the release).
-        if (bot != party.lead && h3::CommanderGuid(bot->GetGUID()) == party.expectedCommander)
+        if ((bot != party.lead || !ctx.commander.IsEmpty()) && h3::CommanderGuid(bot->GetGUID()) == party.expectedCommander)
             batch.Add(bot, "follow", false, false);
     }
     if (!dead)
@@ -899,15 +958,15 @@ OrderAnswer IssueOrder(Party const& ctx, std::string const& order, uint32 nowMs,
         case od::Verb::Stay:
             return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("stay"); });
         case od::Verb::Follow:
-            return DoPartyWide(ctx, party, order, nowMs, [&](Player* bot) { return std::string((ctx.fromRun && bot == party.lead) ? "stay" : "follow"); });
+            return DoPartyWide(ctx, party, order, nowMs, [&](Player* bot) { return std::string((ctx.fromRun && bot == party.lead && ctx.commander.IsEmpty()) ? "stay" : "follow"); });
         case od::Verb::Hold:
             return DoPartyWide(ctx, party, order, nowMs, [](Player*) { return std::string("hold"); });
         case od::Verb::ReviveParty:
             return DoReviveParty(ctx, party, order, nowMs);
         case od::Verb::Cc:
-            return ctx.runRec ? DoCc(*ctx.runRec, ctx, party, p) : Refuse("unsupported", "The order `cc` is not carried out by `.tb cmd`.");
+            return DoCc(ctx.runRec, ctx, party, p);
         case od::Verb::CcClear:
-            return ctx.runRec ? DoCcClear(*ctx.runRec, party, p) : Refuse("unsupported", "The order `cc` is not carried out by `.tb cmd`.");
+            return DoCcClear(ctx.runRec, ctx, party, p);
         // S9 (O9): the object, loot and loot-method orders are the task module's (TbRunTasks.cpp); `use <item>` is refused with its reason.
         case od::Verb::Open:
         case od::Verb::Loot:
@@ -940,6 +999,15 @@ OrderAnswer Issue(RunRec& rec, std::string const& order, uint32 nowMs, bool gath
     Party party;
     party.leader = rec.leader;
     party.owner = rec.leader;
+    party.commander = rec.commander;     // empty for a bot-led run: the members are bound to the lead bot
+    if (IsPlayerLed(rec))
+    {
+        // A player-led run orders only the roster it accepted at the start (`bound` plus the tank), never every bot the group holds now: a bot that joined later, or was
+        // rebound to another commander, is not this player's to order (TickRun drops it from the roster). The tank itself in the list keeps it non-empty (ReadParty skips the lead).
+        party.members.push_back(rec.leader);
+        for (auto const& entry : rec.bound)
+            party.members.push_back(entry.first);
+    }
     party.runRec = &rec;
     party.fromRun = true;
     party.persistentIcons = false;
@@ -1043,6 +1111,64 @@ bool StartCheck(ObjectGuid leader, std::string& code, std::string& message)
             message = slot.name + " is not a host bot in the world.";
             return false;
         }
+        if (!AiOf(member))
+        {
+            code = "no-engine";
+            message = slot.name + " has no running engine (`.tb engine <bot> on`).";
+            return false;
+        }
+    }
+    return true;
+}
+
+// Issue #139: the same question for a player-led run's tank bot (StartCheck's tank tests, kept in step with it by test_slice10_fix_wiring.py's pins on the
+// original). The tank need not lead its group (the player does); it is in a party, and every BOT of that party has a running engine (the real players are not
+// ordered). Codes: not-bot no-engine no-tank not-grouped.
+bool PlayerLedStartCheck(ObjectGuid tank, std::string& code, std::string& message)
+{
+    Player* lead = ObjectAccessor::FindPlayer(tank);
+    if (!Usable(lead) || !IsHostBot(lead))
+    {
+        code = "not-bot";
+        message = "The tank is not a host bot in the world.";
+        return false;
+    }
+    if (!AiOf(lead))
+    {
+        code = "no-engine";
+        message = NameOf(lead) + " has no running engine (`.tb engine <bot> on`).";
+        return false;
+    }
+    Group* group = lead->GetGroup();
+    if (!group)
+    {
+        code = "not-grouped";
+        message = NameOf(lead) + " is not in a party.";
+        return false;
+    }
+    if (!PlayerbotAI::IsTank(lead, true))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " has no tank role: set it with `.tb role " + NameOf(lead) + " tank` and let one engine tick pass, then start the run.";
+        return false;
+    }
+    if (!TortoiseBots::slice::hybrid::CanLeadRun(unsigned(lead->GetClass())))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " cannot lead a run as its tank: only a warrior tank and a bear druid can.";
+        return false;
+    }
+    if (!AiOf(lead)->HasStrategy("pull", BotState::BOT_STATE_COMBAT))
+    {
+        code = "no-tank";
+        message = NameOf(lead) + " has no tank kit with a pull strategy: its role says tank but its kit cannot tank.";
+        return false;
+    }
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        Player* member = ObjectAccessor::FindPlayer(slot.guid);
+        if (slot.guid == tank || !Usable(member) || !IsHostBot(member))
+            continue;
         if (!AiOf(member))
         {
             code = "no-engine";

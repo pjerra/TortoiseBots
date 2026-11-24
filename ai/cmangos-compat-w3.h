@@ -19,6 +19,8 @@ inline auto DbPQueryW3(Db& db, char const* format, Args... args) { return db.PQu
 template <class Field>
 inline std::string FieldTextW3(Field const& field) { return field.GetCppString(); }
 template <class Field>
+inline float FieldDoubleAsFloatW3(Field const& field) { return field.GetFloat(); }
+template <class Field>
 inline bool FieldIsNullW3(Field const& field) { return field.IsNULL(); }
 template <class Db>
 inline void DbEscapeW3(Db& db, std::string& text) { db.escape_string(text); }

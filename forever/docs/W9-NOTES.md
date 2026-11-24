@@ -74,3 +74,16 @@ Expected:
 - Wire `IAuctionBuyProvider` to W8's auction house buy seam.
 - Wire `IDeliveryProvider` to W4's travel/pathing + `tbhost::guild::DepositItem` (with fallback to `tbhost::guild::SendMail` when bank tab right is denied).
 - Port the autonomous guild order tick/actions (`Guild*Action.cpp`, `GuildValues.cpp`, `GuildStrategy`, `GuildTriggers`) and add `W9_KEYS` once those legacy actions are added to `SLICE-W9.txt`.
+
+## Live result (board ticket #150, 2026-11-22, Waterys Island Test: core b441bf74, main d0d13b9f6)
+
+Run by Audrey in game (Asdasdasd, Horde GM) with host bots; state read from the server log and the database before/after
+(`out/w3-liveproof-150.md` in the worker notes). Setup note: a bot needs `.tb master <bot> <player>` AND `.tb party <player> <bot>`
+(a bot outside the commander's party loses the binding on the next tick, so no engine starts).
+
+- **Guild order to the guild bank: PASS.** Guild "Waterys Orders" (bot Guild Master Homeleec, Audrey Officer), bank tab 0;
+  `.tb guildorder create Homeleec 4234 5 farm` + `work` next to the Orgrimmar Guild Vault -> `state=done`, DB bank tab 0 slot 0 = 5 Heavy Leather.
+- **Guild order by mail: PASS.** Same order away from the vault, next to a mailbox -> `state=mailed`; DB mail "Guild Order" from
+  Homeleec to Asdasdasd with 5 Heavy Leather; bot copper -30 (postage).
+- Needs `forever/sql/characters/2026_11_20_01_tb_guild_orders.sql` applied (the test server lacked it). A new guild has no bank tab
+  until one is bought (here inserted while the world was stopped).

@@ -17,7 +17,7 @@ What it proves (each is a bug a green build does not catch):
   * every registered action's .cpp is in the build list (SLICE-W1.txt) — a key without its file links nowhere;
   * chat text handling holds no narrow index and no throwing conversion (the S1-R1 rules);
   * SLICE-CH.txt is SLICE-W1.txt plus this round's files, every path exists, no duplicates;
-  * the `.tb state` block is appended, the unported row and TB-COMMANDS.md say what the round did.
+  * the `.tb state` block is appended, no unported row is left for chat, and TB-COMMANDS.md says what the round did.
 """
 import os
 import re
@@ -146,7 +146,10 @@ def check(hook_cpp, hook_h, cmd_cpp, cmd_h, brain, factory, context, generator, 
     update_body = update[1].split("\nvoid ", 1)[0]
     if "TortoiseBots::chatin::DrainArrivals();" not in update_body:
         raise AssertionError("the arrival drain must be in BotMgr::Update")
-    if update_body.index("TortoiseBots::chatin::DrainArrivals();") > update_body.index("for (auto& [guid, bot] : _bots)"):
+    # #143 (tick budget) walks the bots in the always/turn order and reads them const; the drain still
+    # runs above every bot loop.
+    bot_loop = update_body.index("for (auto const& [guid, bot] : _bots)")
+    if update_body.index("TortoiseBots::chatin::DrainArrivals();") > bot_loop:
         raise AssertionError("the arrival drain must run before the bots' engine steps")
     # the subgroup rule itself, in the pure decision, after the ownership rule
     if "if (facts.kind != KindWhisper && !facts.sameSubGroup)" not in pure_h:
@@ -340,10 +343,8 @@ def check(hook_cpp, hook_h, cmd_cpp, cmd_h, brain, factory, context, generator, 
         raise AssertionError("the state block must write chatin= and chatlast=")
     if "chatin::Forget(leaving);" not in bot_mgr:
         raise AssertionError("a bot's inbox must go with it on logout")
-    if "host hook" not in unported_md or "packet case stays dead" not in unported_md:
-        raise AssertionError("the UNPORTED.md row must say the host hook is real and the packet case stays dead")
-    if "host hook" not in unported_t or "packet case stays dead" not in unported_t:
-        raise AssertionError("UnportedFeatures.h must say the same as the unported row")
+    if "| incoming: chat message |" in unported_md or "X(IncomingChat," in unported_t:
+        raise AssertionError("the chat row is back although the host hook carries every whisper and party line")
     if "`.tb hear" not in docs:
         raise AssertionError("TB-COMMANDS.md does not document .tb hear")
     if "`chatin` `chatlast`" not in docs:
@@ -423,8 +424,8 @@ class ChatInWiring(unittest.TestCase):
                                 "std::string text = RestAfter(std::string_view(tail), 3); (void)std::stoi(text.c_str());")),
             # a narrow index over the text
             (3, CMD_H.replace("class ChatHandler;", "class ChatHandler;\nstatic_assert(sizeof(unsigned char) == 1, \"x\");\ninline void NarrowIndex(std::string const& text) { for (uint8 i = 0; i < text.size(); ++i) {} }")),
-            # the row back to "nothing hears chat"
-            (12, UNPORTED_MD.replace("host hook", "no listener")),
+            # the row back to "nothing hears chat" (#244 dropped it from UNPORTED.md, so the mutation adds it)
+            (12, UNPORTED_MD + "\n| incoming: chat message | whisper and party chat | 0 table rows | handler rows not registered | none |\n"),
             # `.tb hear` undocumented
             (14, DOCS.replace("`.tb hear", "`.tb listen")),
             # the census list trimmed

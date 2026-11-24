@@ -30,6 +30,8 @@ TortoiseBots.ClassQuestSpells = 0
 #
 #    TortoiseBots.Slice.EngineByDefault
 #        Description: A bot that logs in runs on the real bot engine (PlayerbotAI) instead of the spike's follow/assist.
+#                     A bot that logs in without a master has nothing to follow, so the engine runs it as a free bot
+#                     (grind, food, loot, roll, buff; open-world death and corpse run).
 #                     Only has an effect in a build made with TORTOISEBOTS_SLICE1. `.tb engine <character> on|off`
 #                     changes it for one bot that is already logged in.
 #        Default:     0
@@ -149,7 +151,8 @@ TortoiseBots.Dashboard.Enable = 1
 #
 #    TortoiseBots.Dashboard.Host
 #    TortoiseBots.Dashboard.Port
-#        Description: Where the dashboard listens for telemetry (its -udp-host / -udp-port). The host must be an IP address.
+#        Description: Where the dashboard listens for telemetry (its -udp-host / -udp-port). The host may be an IP address
+#                     or a host name, such as a dashboard container's name; a name is resolved when the config loads.
 #        Default:     127.0.0.1, 9195
 #
 
@@ -209,8 +212,40 @@ TortoiseBots.Dashboard.RunSummaryDir = ""
 TortoiseBots.World.Professions = 0
 
 #
+#    TortoiseBots.World.Fishing
+#        Description: Allow free bots (`free`) to fish an occasional session at a fishing hole or nearby open water
+#                     (one session per hour, at most 5 casts / 5 minutes). The bot walks to the bank, casts with its
+#                     own pole and takes the catch; the secondary Fishing skill and a plain pole are granted like the
+#                     legacy factory does. Never in a dungeon or raid, never in combat, and a hostile spawn near the
+#                     bank moves the spot elsewhere.
+#        Default:     1
+#
+
+TortoiseBots.World.Fishing = 1
+#    TortoiseBots.World.Disenchant
+#        Description: Allow free bots (`free`) with Enchanting to break down disenchantable armor and weapons they carry
+#                     (uncommon and above; rare and better only when no real player shares their guild) and collect the
+#                     materials. Bots need no reagents for it.
+#        Default:     1
+#
+
+TortoiseBots.World.Disenchant = 1
+
+#
+#    TortoiseBots.World.EnchantGear
+#        Description: Allow free bots (`free`) with Enchanting to apply the best permanent enchant they know and can pay
+#                     for to their worn gear, when it scores higher than the enchant already there. The profession grants
+#                     its recipes, Disenchant and a rod as the skill allows; reagents come from the bot's own bags.
+#        Default:     1
+#
+
+TortoiseBots.World.EnchantGear = 1
+
+#
 #    TortoiseBots.World.Auction
-#        Description: Allow bots to use the faction auction house (`.tb order ... ah`).
+#        Description: Allow bots to use the faction auction house: `.tb order ... ah`, and — while
+#                     AiPlayerbot.AhMarketEnabled is on — free bots posting their own loot at a nearby
+#                     auctioneer and buying upgrades there.
 #        Default:     0
 #
 
@@ -227,7 +262,9 @@ TortoiseBots.World.GroupQuests = 1
 #
 #    TortoiseBots.World.CapitalErrands
 #        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
-#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates).
+#                     and challenge/accept bot-vs-bot duels in dueling areas (city gates). Also lets a free bot within
+#                     150 yd of a riding trainer or its race's mount vendor learn riding and buy the mount with its own
+#                     gold (normal at 40, epic at 60); nothing is granted.
 #        Default:     1
 #
 
@@ -250,6 +287,68 @@ TortoiseBots.World.GuildMail = 1
 #
 
 TortoiseBots.World.GuildMail.AllowMixedGuild = 0
+
+#
+#    TortoiseBots.World.Guilds
+#        Description: Free (pool) bots take part in guilds: an outstanding guild invite is accepted (and declined when
+#                     the guild already has 1000 members or is on the other side), a bot walks out of a guild that
+#                     reaches 1000 members, and the owner's guild management whispers (guild invite/join/leave/
+#                     promote/demote/remove/leader) are answered. Bots never leave a player's guild otherwise.
+#        Default:     1
+#
+
+TortoiseBots.World.Guilds = 1
+
+#
+#    TortoiseBots.World.GuildForming
+#        Description: Allow a free bot above level 10 with the core's charter price in its own purse, no guild and no
+#                     invite to buy a guild charter at a nearby petitioner, gather signatures from nearby free bots of
+#                     its faction and turn it in, founding "<Bot> Guild". The bot pays the charter itself.
+#        Default:     0
+#
+
+TortoiseBots.World.GuildForming = 0
+
+#
+#    TortoiseBots.World.GuildOrderBotRank
+#        Description: Guild orders: give every module-owned bot in a guild that also has a real player one shared
+#                     guild rank, so the master can open guild bank tabs to it (`.tb guildorder rank <rank>`).
+#                     Off: ranks are never changed and `.tb guildorder access` reports that no rank is managed.
+#        Default:     1
+#
+
+TortoiseBots.World.GuildOrderBotRank = 1
+
+#
+#    TortoiseBots.World.Pickpocket
+#        Description: Allow free and pool rogue bots that know Stealth and Pick Pocket to sneak up on a nearby
+#                     humanoid whose pockets are not empty yet, pick them, and take the loot (coins and items).
+#                     A creature whose pockets were just picked is not retried before its own refill timer.
+#                     Bots without the two spells are skipped; no class spell is granted for this.
+#        Default:     1
+#
+
+TortoiseBots.World.Pickpocket = 1
+
+#
+#    TortoiseBots.World.Lockboxes
+#        Description: Allow free and pool rogue bots with enough Lockpicking to open the lockboxes in their own bags
+#                     (Pick Lock, then open and take the loot).
+#        Default:     1
+#
+
+TortoiseBots.World.Lockboxes = 1
+
+#
+#    TortoiseBots.World.LockboxMail
+#        Description: Allow a bot holding a lockbox it cannot open (not a rogue, no Pick Lock, or Lockpicking too low)
+#                     to mail it to the best rogue bot in its own guild (online or offline), which opens it and mails
+#                     the contents, coins minus the return postage, back to the sender. Only bots are served and only
+#                     bots are mailed; a real player's mail is never taken. With no capable rogue the box stays put.
+#        Default:     1
+#
+
+TortoiseBots.World.LockboxMail = 1
 
 #
 #    TortoiseBots.Dashboard.TraceDir
@@ -283,6 +382,24 @@ TortoiseBots.Pool.Enable = 0
 TortoiseBots.Pool.CreatePerMinute = 30
 
 #
+#    TortoiseBots.Pool.Reset
+#        Description: Rebuild the pool on world startup: delete every ready pool character one per tick, then refill to
+#                     MaxCharacters. `off` (the default) never resets. `once:<token>` resets on the next startup only while
+#                     the token differs from the last completed one (1-128 printable, non-space characters); leaving the same
+#                     token in place makes every later start a no-op. `always` resets on every startup (development only)
+#                     and never overwrites a stored once-token. Anything else is refused with one error line.
+#                     Read only during world startup: `.reload config` never starts a reset, and no `.tb` command does.
+#                     Needs `Pool.Enable = 1` and `Pool.CreatePerMinute > 0` so the pool can be refilled. It deletes only
+#                     `ready` rows of the pool's own accounts; characters on pool accounts without a ready row are kept and
+#                     counted. A pool-led guild with any member outside the pool, a target owning an auction listing, a
+#                     target account with a player session, or an unreadable database refuses the reset before any deletion.
+#                     A reset to MaxCharacters can shrink a pool that was larger than the cap.
+#        Default:     "off"
+#
+
+TortoiseBots.Pool.Reset = "off"
+
+#
 #    TortoiseBots.Pool.MaxCharacters
 #        Description: The ceiling on the pool's total size: characters already made plus the ones being created. `.tb pool create`
 #                     refuses when the pool is at the cap and creates only what still fits when it asks for more. The per-command
@@ -295,13 +412,14 @@ TortoiseBots.Pool.MaxCharacters = 50
 #
 #    TortoiseBots.Pool.TargetOnline
 #        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the
-#                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule
-#                     (the pool puts up to ten characters on an account), so the online count is capped by the number of accounts
+#                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule,
+#                     so the pool keeps one character on each account and the online count is capped by the number of accounts
 #                     the pool's characters sit on. A bot that got a master keeps its account for as long as the binding lasts,
-#                     and the pool cannot end it: that account is out of reach, so the pool needs more accounts than the target to
-#                     refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when the target is above the
-#                     accounts left. Logins alternate factions and take the bot offline longest first; a bot that got a master
-#                     leaves the count. A lowered target logs out the newest sessions first, never a dead or fighting bot.
+#                     and the pool cannot end it: that account is out of reach, so the pool needs more characters (and so accounts)
+#                     than the target to refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when
+#                     the target is above the accounts left. Logins alternate factions and take the bot offline longest first;
+#                     a bot that got a master leaves the count. A lowered target logs out the newest sessions first, never a
+#                     dead or fighting bot.
 #                     0 to 5000.
 #                     `.tb pool population <n|low|high>` changes the target at runtime; `.reload config` puts this value back.
 #        Default:     0
@@ -374,6 +492,19 @@ TortoiseBots.Free.MaxPerMap.Raid40 = 40
 #
 
 TortoiseBots.Create.TestAccounts = ""
+
+#
+#    TortoiseBots.Run.GmObserver / TortoiseBots.Run.SelfRecover
+#        Description: `.tb run start|pause|resume|stop` only. GmObserver lets a GM (SEC_GAMEMASTER) start, pause, resume and stop a run whose bots the
+#                     ownership guard refuses, unless the commander chain from the bot reaches a real player (that player's party is never taken over).
+#                     SelfRecover lets the host answer the policy's "N regroups by itself at this step did not hold" pause itself: the dead bots
+#                     release their spirits and the run regroups again (revive wait, gather, rest, walk back), once per step and at most 3 times per
+#                     run, never when a member is 400+ yd away or on another map. No teleport, no GM revive, no summon.
+#        Default:     GmObserver 1, SelfRecover 1
+#
+
+TortoiseBots.Run.GmObserver = 1
+TortoiseBots.Run.SelfRecover = 1
 
 #
 #    --- BG (BATTLEGROUNDS-SPEC.md, round BG1) ---
@@ -516,3 +647,14 @@ TortoiseBots.AutoHunterPet = 1
 #        Description: Pool and free bots receive level-fitting vendor food (and water for mana users) on login and level-up.
 
 TortoiseBots.AutoFood = 1
+
+#
+#    AiPlayerbot.OwnedBotSummonCooldown (it lives in aiplayerbot.conf, not in this file)
+#        Description: The wait between two `.bot summon <bot>`s of the same bot, in seconds (0 = no wait); capped at 3600. The key
+#                     already belongs to the bot brain's config and that read stays the one that owns it: `.bot summon` reads the
+#                     same key with the same default (300) and the same cap, so the two can never disagree. GameMasters are not
+#                     held by the wait. The other AiPlayerbot.OwnedBotSummon* keys (WhenGroup, AllowInCombat, AllowMasterDead,
+#                     AllowBotDead, Revive, Repair) are not read by `.bot summon`: its refusals are the shared `.tb tele` rules
+#                     (combat, death, instances) plus the master and cooldown checks of the player command spec (D-8).
+#        Default:     300
+#

@@ -178,6 +178,16 @@ int main()
     CHECK(CcChooserKeepsResult(true));
     CHECK(!CcChooserKeepsResult(false));
 
+    // CC chooser's first candidate: a mark an order assigned is the target at
+    // any range, before the engaged-attacker tournament (live #208: `cmd cc`
+    // order before the pack opens, no Polymorph ever); a plain Moon mark
+    // without an order keeps the old pick. It is still dropped once only CC
+    // marks are left (the party kills those last).
+    CHECK(CcChooserTakesAssignedMark(true, false));
+    CHECK(!CcChooserTakesAssignedMark(true, true));
+    CHECK(!CcChooserTakesAssignedMark(false, false));
+    CHECK(!CcChooserTakesAssignedMark(false, true));
+
     // Owner decision: the tank's Taunt (and nothing else) passes the hold,
     // while the held mark is not CC'd yet, no CC cast bar is on it and it is
     // hitting a healer.
@@ -213,6 +223,29 @@ int main()
     // An empty list keeps the CC bot's own area spells off its ready mark
     // and does not reopen area spells.
     CHECK(CcAreaSpellBlocked(false, false, true, CcOnlyMarksLeft(0, false)));
+
+    // TBF #208: a sheep that opened the fight (the cc order casts at once and
+    // pulls its mark alone) is no "last mark": the party does not kill it,
+    // DoT it or splash it while it is in its fight-start window.
+    CHECK(CcOpeningHold(true, 0));
+    CHECK(CcOpeningHold(true, CcMarkHoldSeconds));
+    CHECK(!CcOpeningHold(true, CcMarkHoldSeconds + 1));  // past the window: a lone mark is killed again
+    CHECK(!CcOpeningHold(true, -1));                     // unknown engage time: old answer
+    CHECK(!CcOpeningHold(false, 0));                     // a free mark is no hold
+    CHECK(!CcOnlyMarksLeft(1, false, CcOpeningHold(true, 1)));
+    CHECK(CcOnlyMarksLeft(1, false, CcOpeningHold(true, CcMarkHoldSeconds + 5)));
+    CHECK(CcAreaSpellBlocked(false, false, true, CcOnlyMarksLeft(1, false, CcOpeningHold(true, 1))));
+    // The hold window only opens with a known engage time: ForeverCore's first
+    // CombatTimeCompat answered -1 for every creature, so a ready CC bot's
+    // mark was never held at fight start (TbCombatClockPure.h measures it now).
+    {
+        CcMarkHoldState ready;
+        ready.ccBotReady = true;
+        ready.combatSeconds = -1;
+        CHECK(!CcMarkHeld(ready));
+        ready.combatSeconds = 0;
+        CHECK(CcMarkHeld(ready));
+    }
 
     std::printf("cc mark hold policy: %d checks passed\n", checks);
     return 0;

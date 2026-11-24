@@ -52,7 +52,6 @@ ai/playerbot/strategy/generic/ClassStrategy.cpp
 ai/playerbot/strategy/generic/CombatStrategy.cpp
 ai/playerbot/strategy/generic/DpsAssistStrategy.cpp
 ai/playerbot/strategy/generic/FollowMasterStrategy.cpp
-ai/playerbot/strategy/generic/GuardStrategy.cpp
 ai/playerbot/strategy/generic/MeleeCombatStrategy.cpp
 ai/playerbot/strategy/generic/PullStrategy.cpp
 ai/playerbot/strategy/triggers/BotStateTriggers.cpp
@@ -311,8 +310,19 @@ ai/playerbot/TravelMgr.cpp
 ai/playerbot/strategy/values/TravelValues.cpp
 ai/playerbot/strategy/actions/AhAction.cpp
 ai/playerbot/TravelNode.cpp
+# Round W4-A3 (the chooser, the walker and the travel action): the strategy rows that drive them, the
+# vendor/maintenance values they read, and the stock-worth check in MaintenanceValues.cpp.
+ai/playerbot/strategy/generic/TravelStrategy.cpp
+ai/playerbot/strategy/actions/ChooseTravelTargetAction.cpp
+ai/playerbot/strategy/actions/MoveToTravelTargetAction.cpp
+ai/playerbot/strategy/actions/TravelAction.cpp
+ai/playerbot/strategy/values/MaintenanceValues.cpp
 runtime/BotNameService.cpp
 ai/playerbot/strategy/actions/ResetAiAction.cpp
+
+# Guard and collision files the W1 list no longer carries (the slice still builds them).
+ai/playerbot/strategy/generic/GuardStrategy.cpp
+ai/playerbot/strategy/values/NearestNonBotPlayersValue.cpp
 
 # Reactions: flee, kite, runaway, avoid aoe, racials, mark rti, focus, spread distance, target values
 ai/playerbot/strategy/generic/FleeStrategy.cpp
@@ -338,7 +348,96 @@ ai/playerbot/strategy/values/PartyMemberToSoulstone.cpp
 # Class extras: hunter taming
 ai/playerbot/strategy/actions/TameAction.cpp
 
+# Chat grammar B (R5 of PLAYER-COMMANDS-SPEC): who, items, unequip, quests, leave, reputation
+ai/playerbot/strategy/actions/WhoAction.cpp
+ai/playerbot/strategy/actions/TellItemCountAction.cpp
+ai/playerbot/strategy/actions/UnequipAction.cpp
+ai/playerbot/strategy/actions/ListQuestsActions.cpp
+ai/playerbot/strategy/actions/LeaveGroupAction.cpp
+ai/playerbot/strategy/actions/TellReputationAction.cpp
 # Behavior toggles (#133 c-behsvc)
 ai/playerbot/strategy/generic/NoAoeStrategy.cpp
 ai/playerbot/strategy/generic/ConserveManaStrategy.cpp
 ai/playerbot/strategy/generic/MimicConsumableStrategy.cpp
+
+# Unregistered row keys: the check-values pre-warm and the corpse-run timer
+ai/playerbot/strategy/actions/CheckValuesAction.cpp
+ai/playerbot/strategy/values/StuckValues.cpp
+# Diagnostics (#142): the whisper debug/cdebug/log/set value words, the debug chat strategies,
+# the cast-cancel row and the action-counts dump. The Turtle-only debug families (spell
+# packets, transports, travel nodes, position paths, item/trade/mail) stay out; the stubs that
+# answer them are forever/src/slice/SliceDebugStubs.cpp.
+ai/playerbot/CastCancelLog.cpp
+ai/playerbot/strategy/actions/DebugAction.cpp
+ai/playerbot/strategy/actions/DebugEngineCommands.cpp
+ai/playerbot/strategy/actions/DebugMiscCommands.cpp
+ai/playerbot/strategy/actions/LogLevelAction.cpp
+ai/playerbot/strategy/actions/SetValueAction.cpp
+ai/playerbot/strategy/generic/DebugStrategy.cpp
+
+# Riding (#152): the mount state action and the mount list/speed values. The break-even distance and the
+# dismount policy are pure headers already on both cores. The Turtle-only collection_mount mapping and the
+# rider-skill speed ladder are answered by forever/src/compat/TbCompat_RIDE.h (no collection mounts, static
+# mount aura speeds); see forever/docs/MOUNT-RIDE-NOTES.md.
+ai/playerbot/strategy/actions/CheckMountStateAction.cpp
+ai/playerbot/strategy/values/MountValues.cpp
+
+# Stuck rescue: the legacy move/combat stuck triggers and the unstuck action (5-minute reset, 15-minute
+# hearthstone -> repop -> teleport chain, combat-stuck give-up, travel-target keep/retire). The host's ghost rescue
+# stays; this is the generic pass every bot gets. The navmesh, graveyard and homebind reads go through the W1 pair,
+# the homebind teleport through the D4 pair.
+ai/playerbot/strategy/triggers/StuckTriggers.cpp
+ai/playerbot/strategy/actions/UnstuckAction.cpp
+
+# (free-bot rpg, package A): the rpg brain - pick an NPC/object, walk to it, and run the rpg verbs (accept,
+# turn in, sell, buy, repair, train through the host town seam). The Turtle-only parts (trainer tables, taxi packet
+# fields, duel/social members, gossip menu probes) go through the new TbCompat_Life pair; unported services answer
+# "not there" through forever/src/slice/SliceLinkStubs.cpp (fishing order, downtime window, petitions) and the host
+# camp stub (no camp spots).
+ai/playerbot/strategy/actions/RpgAction.cpp
+ai/playerbot/strategy/actions/RpgSubActions.cpp
+ai/playerbot/strategy/actions/ChooseRpgTargetAction.cpp
+ai/playerbot/strategy/actions/MoveToRpgTargetAction.cpp
+ai/playerbot/strategy/generic/RpgStrategy.cpp
+ai/playerbot/strategy/values/PossibleRpgTargetsValue.cpp
+ai/playerbot/strategy/triggers/RpgTriggers.cpp
+# TBF #147, package B (quest values): the stock quest values the travel quest rows and the rpg quest verbs read (dialog
+# status, free log slots, need quest objective, need for quest, can use item on). The relation walk and the reward-state
+# answers go through the quest compat pair on both cores.
+ai/playerbot/strategy/values/QuestValues.cpp
+# TBF #147 (free-bot life, package C: town verbs): the vendor map and useful-stock values, the bag-pressure destroy
+# action and the 50-yard nearby service bridge. Vendor stock comes through the W2 pair (TbCompat_W2Town.h +
+# ai/cmangos-compat-w2town.h); ForeverCore has no vendor template list, so only the entry list is read there.
+ai/playerbot/strategy/values/VendorValues.cpp
+ai/playerbot/strategy/actions/DestroyItemAction.cpp
+ai/playerbot/strategy/actions/ServiceNearbyNpcAction.cpp
+# Guild participation: the owner's `speak` whisper word, so a guilded bot can talk in guild chat
+# (SayAction -> PlayerbotAI::SayToGuild -> GuildSayCompat, forever/src/compat/TbCompat_P.h). The accept, stay and
+# founding drivers are host code (forever/src/host/TbHostGuildJoin.cpp), not a legacy action.
+ai/playerbot/strategy/actions/SayAction.cpp
+runtime/PassingBuffsService.cpp
+# Social greeting: a commanded bot waves at a real player it has not met in the last GreetCooldown. The `emote` strategy
+# carries the `new player nearby` -> `greet` row; its other emote rows name actions the slice does not register and are
+# skipped. The masters/pool split is GreetAction's own (RandomBotGreet gates pool bots).
+ai/playerbot/strategy/actions/GreetAction.cpp
+ai/playerbot/strategy/generic/EmoteStrategy.cpp
+
+# Duels: the duel strategy (duel target -> attack duel opponent), so a bot fights a duel with its class kit.
+ai/playerbot/strategy/generic/DuelStrategy.cpp
+
+# Open-world PvP seek: the `world pvp` and `pvp` strategies and the enemy-player target values. The host hands the role
+# to a share of free bots (forever/src/host/TbHostWorldPvp.cpp); `EnemyPlayerNear` keeps its own translation unit.
+ai/playerbot/strategy/generic/WorldPvpStrategy.cpp
+ai/playerbot/strategy/generic/AttackEnemyPlayersStrategy.cpp
+ai/playerbot/strategy/values/EnemyPlayerValue.cpp
+ai/playerbot/strategy/values/WorldPvpSeekChecks.cpp
+ai/playerbot/strategy/triggers/EnemyPlayerNearTrigger.cpp
+
+# BG2: the PvP fight kit of a bot inside a battleground (BATTLEGROUNDS-SPEC.md D9). The remaining enemy player values, the
+# flag triggers and the battleground strategy compile against the core through the BG pair (TbCompat_BG.h +
+# ai/cmangos-compat-bg.h); the battleground strategy is the one PlayerbotAI looks for in a bot inside a match.
+# BattleGroundTactics.cpp and the battlemaster queue stay out (BG1 queues through the core). EnemyPlayerValue.cpp and
+# AttackEnemyPlayersStrategy.cpp are listed above (the open-world PvP seek port built them first).
+ai/playerbot/strategy/values/PvpValues.cpp
+ai/playerbot/strategy/triggers/PvpTriggers.cpp
+ai/playerbot/strategy/generic/BattlegroundStrategy.cpp

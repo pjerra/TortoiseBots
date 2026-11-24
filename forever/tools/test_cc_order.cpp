@@ -172,6 +172,25 @@ static void TestTeardownRetries()
     CHECK(pending.size() == 1 && pending["Mpriest"] == "circle");
 }
 
+// ---- the immediate-cast probe's family table (TbCc.cpp StartCcCast) ----
+static void TestFamilySpellNames()
+{
+    CHECK(std::string(cc::CcFamilySpellName("polymorph")) == "polymorph");
+    CHECK(std::string(cc::CcFamilySpellName("shackleundead")) == "shackle undead");
+    CHECK(std::string(cc::CcFamilySpellName("freezingtrap")) == "freezing trap");
+    CHECK(std::string(cc::CcFamilySpellName("scarebeast")) == "scare beast");
+    CHECK(std::string(cc::CcFamilySpellName("seduction")) == "seduction");
+    CHECK(std::string(cc::CcFamilySpellName("banish")) == "banish");
+    CHECK(std::string(cc::CcFamilySpellName("hibernate")) == "hibernate");
+    CHECK(std::string(cc::CcFamilySpellName("sap")) == "sap");
+    CHECK(std::string(cc::CcFamilySpellName("repentance")) == "repentance");
+    CHECK(std::string(cc::CcFamilySpellName("fear")) == "fear");
+    // A hand-written order carries no family and starts no probe.
+    CHECK(cc::CcFamilySpellName("none") == nullptr);
+    CHECK(cc::CcFamilySpellName("") == nullptr);
+    CHECK(cc::CcFamilySpellName("polymorph: pig") == nullptr);
+}
+
 int main()
 {
     TestTarget();
@@ -182,6 +201,7 @@ int main()
     TestIconFirstThenValues();
     TestOwned();
     TestTeardownRetries();
+    TestFamilySpellNames();
     if (g_fail)
     {
         std::printf("FAILED: %d of %d checks\n", g_fail, g_checks);

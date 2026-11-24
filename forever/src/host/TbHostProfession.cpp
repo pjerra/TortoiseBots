@@ -1,4 +1,6 @@
 #include "host/TbHostProfession.h"
+#include "host/TbHostFishing.h"
+#include "host/TbHostProfessionUpkeep.h"
 
 #include "host/TbAutoToolsPure.h"
 #include "host/TbHostCraftOrderPure.h"
@@ -868,6 +870,8 @@ void TickErrands(Player* bot, uint32_t diffMs)
     if (!bot)
         return;
 
+    fishing::TickErrand(bot, diffMs);
+
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return;
@@ -897,6 +901,12 @@ void TickErrands(Player* bot, uint32_t diffMs)
         f.itemsGained = g.itemsGained;
         f.phaseElapsedMs = g.phaseElapsedMs;
 
+        TortoiseBots::prof::BagGain bagGain;
+        bool const lootPhase = g.phase == TortoiseBots::prof::GatherPhase::Casting || g.phase == TortoiseBots::prof::GatherPhase::Looting;
+        if (g.bagsTaken && lootPhase && !f.isCasting && !f.lootAvailable)
+            bagGain = TortoiseBots::prof::BagGainSince(g.bagsBefore, BagCounts(bot));
+        f.bagItemsGained = bagGain.gained;
+
         TortoiseBots::prof::GatherErrandStep const step = TortoiseBots::prof::StepGatherErrand(f);
         if (step.nextPhase != g.phase)
         {
@@ -906,6 +916,13 @@ void TickErrands(Player* bot, uint32_t diffMs)
 
         auto finishOk = [&]()
         {
+            if (g.itemsGained == 0 && bagGain.gained > 0)
+            {
+                g.itemsGained = bagGain.gained;
+                g.gainedItemId = bagGain.itemId;
+                if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(bagGain.itemId))
+                    g.gainedItemName = proto->GetName(LOCALE_enUS);
+            }
             uint16_t const afterSkill = g.lockSkillId ? bot->GetSkillValue(g.lockSkillId) : 0;
             TC_LOG_INFO("tortoisebots", "[W7] gather bot={} node={} skill={} before={} after={} item={} count={}",
                 bot->GetName(), g.nodeEntry, g.lockSkillId, g.beforeSkill, afterSkill,
@@ -1103,6 +1120,7 @@ void CancelOrderErrand(Player const* bot)
 {
     if (!bot)
         return;
+    fishing::CancelErrand(bot);
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return;
@@ -1115,6 +1133,8 @@ bool HasActiveErrand(Player const* bot)
 {
     if (!bot)
         return false;
+    if (fishing::HasActiveErrand(bot))
+        return true;
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return false;
@@ -1125,6 +1145,8 @@ std::string ActiveErrandPhase(Player const* bot)
 {
     if (!bot)
         return {};
+    if (fishing::HasActiveErrand(bot))
+        return fishing::ActiveErrandPhase(bot);
     auto it = Errands().find(bot->GetGUID());
     if (it == Errands().end())
         return {};
@@ -1164,8 +1186,10 @@ void ClearFreeGatherTimer(uint64_t botGuidCounter)
 
 void ClearBotErrands(ObjectGuid const& botGuid)
 {
+    fishing::ClearErrand(botGuid);
     Errands().erase(botGuid);
     FreeGatherTimers().Clear(botGuid.GetCounter());
+    upkeep::ForgetProfessionUpkeep(botGuid.GetCounter());
 }
 
 void TickFreeGather(Player* bot)

@@ -31,7 +31,6 @@ struct TrainerSpell
     uint32 reqLevel = 0;
 };
 
-#define MAIL_STATIONERY_AUCTION MAIL_STATIONERY_NORMAL
 
 inline Creature* VendorIfCanInteractCompat(Player* bot, ObjectGuid const& guid)
 {
@@ -52,6 +51,29 @@ inline bool HasVendorStockCompat(Creature* vendor)
 inline VendorItemData const* VendorTemplateItemsCompat(Creature*)
 {
     return nullptr;
+}
+
+// ForeverCore creature templates have no vendor template id: creature_template's vendor rows are keyed by the
+// creature entry alone (ObjectMgr.h:1647 GetNpcVendorItemList), so the template half of a vendor's stock is empty.
+inline uint32 VendorTemplateIdCompat(CreatureInfo const*)
+{
+    return 0;
+}
+
+inline VendorItemData const* VendorTemplateItemsCompat(uint32)
+{
+    return nullptr;
+}
+
+// A vendor list as pointers on both cores: Turtle keeps VendorItem* in the list, ForeverCore keeps the values.
+inline std::vector<VendorItem const*> VendorItemRefsCompat(VendorItemData const* list)
+{
+    std::vector<VendorItem const*> out;
+    if (!list)
+        return out;
+    for (VendorItem const& item : list->m_items)
+        out.push_back(&item);
+    return out;
 }
 
 inline bool SellItemToVendorCompat(Player* bot, Creature* vendor, ObjectGuid const& /*vendorguid*/, Item* item, uint32 count)

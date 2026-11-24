@@ -72,6 +72,31 @@ static void TestParse()
     CHECK(p.verb == od::Verb::Cc && p.family == "shackleundead");
     p = Parse("cc clear Mmage");
     CHECK(p.verb == od::Verb::CcClear && p.bot == "Mmage" && p.mark.empty());
+    // M4 (tactical orders, D13): `cc <mark> <guid>` is the party pick (no bot named); the third word is the family when it is one, else a bot.
+    p = Parse("cc moon 77");
+    CHECK(p.verb == od::Verb::Cc && p.mark == "moon" && p.handle == 77 && p.bot.empty() && p.family.empty());
+    p = Parse("cc moon 77 polymorph");
+    CHECK(p.verb == od::Verb::Cc && p.bot.empty() && p.family == "polymorph");
+    p = Parse("cc moon 77 Shackleundead");
+    CHECK(p.verb == od::Verb::Cc && p.bot.empty() && p.family == "shackleundead");
+    p = Parse("cc moon 77 Mmage polymorph");
+    CHECK(p.verb == od::Verb::Cc && p.bot == "Mmage" && p.family == "polymorph");
+    // `none` is not a family in the 3-word form: it names a bot. A bot called like a family uses the 4-word form with `none`.
+    p = Parse("cc moon 77 none");
+    CHECK(p.verb == od::Verb::Cc && p.bot == "none" && p.family.empty());
+    p = Parse("cc moon 77 Sap none");
+    CHECK(p.verb == od::Verb::Cc && p.bot == "Sap" && p.family == "none");
+    // The commander's unit word is the 32-hex guid text `.tb state` prints: the handle stays 0 and the token goes to the executor (as pull and attack).
+    p = Parse("cc moon 0000000000000000F130000100000042");
+    CHECK(p.verb == od::Verb::Cc && p.handle == 0 && p.targetToken == "0000000000000000F130000100000042" && p.bot.empty());
+    p = Parse("cc moon 0000000000000000F130000100000042 Mmage");
+    CHECK(p.verb == od::Verb::Cc && p.handle == 0 && p.bot == "Mmage");
+    p = Parse("cc clear Mmage moon 0000000000000000F130000100000042");
+    CHECK(p.verb == od::Verb::CcClear && p.handle == 0 && p.targetToken.size() == 32 && p.bot == "Mmage" && p.mark == "moon");
+    p = Parse("cc clear");
+    CHECK(p.verb == od::Verb::CcClear && p.bot.empty() && p.mark.empty());
+    p = Parse("cc moon 5 Mmage fear");
+    CHECK(p.verb == od::Verb::Cc && p.bot == "Mmage" && p.family == "fear");
     p = Parse("cc clear Mmage moon 77");
     CHECK(p.verb == od::Verb::CcClear && p.bot == "Mmage" && p.mark == "moon" && p.handle == 77);
     {
@@ -87,7 +112,7 @@ static void TestParse()
         p = Parse(DR::CcClearOrder(hold, 4242));
         CHECK(p.verb == od::Verb::CcClear && p.handle == 4242 && p.mark == "moon" && p.bot == "Mmage");
     }
-    for (char const* bad : { "cc", "cc moon", "cc moon 5", "cc blue 5 Mmage", "cc moon 0 Mmage", "cc moon 5 Mmage dance", "cc moon 5 Mmage fear extra", "cc clear", "cc clear Mmage moon", "cc clear Mmage blue 5" })
+    for (char const* bad : { "cc", "cc moon", "cc blue 5", "cc blue 5 Mmage", "cc moon 0", "cc skull x", "cc moon 0 Mmage", "cc moon 5 Mmage dance", "cc moon 5 Mmage fear extra", "cc clear Mmage moon", "cc clear Mmage blue 5" })
     {
         Parse(bad, false);
         CHECK(CodeOf(bad) == "invalid");
@@ -328,53 +353,24 @@ static void TestSettle()
     CHECK(od::Settle(party, 100, look, failure) && !failure.empty());   // a helper's success does not rescue it
 }
 
-static void TestWadeHop()
+static void TestWadeGate()
 {
-    // ai::kPlanFlagWadeOk belongs to the row's hop, and the run walks that hop in approach hops and TooFar legs: every point of the
-    // walk inherits the permission, not only the row's own end. Anything else keeps the RFC liquid rule.
-    DR::Run r;
+    // WadeOrder's permission (DungeonRun::MoveMayWade: the origin flag and a live plan step): a move the run issues for
+    // itself may wade shallow water on any leg. The wet bit (ai::kPlanFlagWadeOk) is plan data, not an input, and the wade
+    // rule (TbRunLiquid.h, test_run_liquid) judges the depth of every sample, so the permission never lets deep water by.
+    CHECK(DR::MoveMayWade(true, true));
+    CHECK(!DR::MoveMayWade(false, true));                     // a player's `.tb cmd move`: never the permission (RFC rule)
+    CHECK(!DR::MoveMayWade(false, false));                    // a player's order with no run behind it
+    CHECK(!DR::MoveMayWade(true, false));                     // the run has no plan, or its step is past the plan's end
+    // The bit still marks the probed shallow hops, and the loader keeps refusing it on other row kinds.
     ai::PlanStep move;
     move.kind = ai::PlanStepKind::Move;
-    move.x = -61.367f;
-    move.y = 323.721f;
-    move.z = -106.561f;
     move.flags = ai::kPlanFlagWadeOk;
-    CHECK(DR::RowHopWades(r, move, -61.4f, 323.7f));          // the row's own point (the hop's end)
-    // The live first river hop: the run's approach hop stood at -32.0 285.2, 40 yd along the way.
-    r.phase = DR::Phase::Walk;
-    r.hopWalk = true;
-    r.hopX = -32.0f;
-    r.hopY = 285.2f;
-    r.hopZ = -105.1f;
-    r.walkX = r.hopX;
-    r.walkY = r.hopY;
-    r.walkZ = r.hopZ;
-    CHECK(DR::RowHopWades(r, move, -32.0f, 285.2f));          // the middle path point wades too
-    CHECK(!DR::RowHopWades(r, move, 10.0f, 100.0f));          // a point of no walk of this row
-    ai::PlanStep plain = move;
-    plain.flags = 0;
-    CHECK(!DR::RowHopWades(r, plain, -32.0f, 285.2f));        // the same middle point without the bit: the RFC pause
-    // WalkTo's TooFar leg is a point of the same walk.
-    r.legOn = true;
-    r.legX = -45.0f;
-    r.legY = 300.0f;
-    r.legZ = -106.0f;
-    CHECK(DR::RowHopWades(r, move, -45.0f, 300.0f));
-    CHECK(!DR::RowHopWades(r, plain, -45.0f, 300.0f));
-    // The walk under way is another row's (or a detour's): its point does not wade, and neither does the row's own point then.
-    r.walkX = -100.0f;
-    r.walkY = 400.0f;
-    r.hopWalk = false;
-    CHECK(!DR::RowHopWades(r, move, -45.0f, 300.0f));
-    CHECK(!DR::RowHopWades(r, move, -100.0f, 400.0f));
-    CHECK(DR::RowHopWades(r, move, -61.4f, 323.7f));          // the row's own point is always its own
-    // A hold row never wades, whatever flags it carries (the loader refuses the bit there too).
+    CHECK(ai::NormalizePlanStep(move) == ai::PlanStepRefusal::None && (move.flags & ai::kPlanFlagWadeOk));
     ai::PlanStep hold;
     hold.kind = ai::PlanStepKind::Hold;
     hold.flags = ai::kPlanFlagWadeOk;
-    hold.x = 1.0f;
-    hold.y = 2.0f;
-    CHECK(!DR::RowHopWades(r, hold, 1.0f, 2.0f));
+    CHECK(ai::NormalizePlanStep(hold) == ai::PlanStepRefusal::BadParam);
 }
 
 static void TestCommanderP3()
@@ -451,7 +447,7 @@ int main()
     TestTexts();
     TestSettle();
     TestCommanderP3();
-    TestWadeHop();
+    TestWadeGate();
     if (g_fail)
     {
         std::printf("RESULT: FAIL (%d of %d checks)\n", g_fail, g_checks);

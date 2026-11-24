@@ -5,6 +5,7 @@
 #pragma once
 
 #include "MiscPackets.h"           // WorldPackets::Misc::RepopRequest / ResurrectResponse (the typed packets of the two handlers)
+#include "SpellPackets.h"          // WorldPackets::Spells::SelfRes (the typed packet of the self-resurrection handler)
 
 // ===============================================================================================================
 // RELEASE SPIRIT (ReleaseSpiritAction.h: ReleaseSpiritAction, AutoReleaseSpiritAction)
@@ -129,13 +130,44 @@ inline bool DeclineResurrectCompat(Player* bot, ObjectGuid const& offerer)
 }
 
 // ===============================================================================================================
-// SELF RESURRECTION (SelfResurrectAction in ReleaseSpiritAction.h; the action is NOT registered in the slice)
+// SELF RESURRECTION (SelfResurrectAction in ReleaseSpiritAction.h)
 // ===============================================================================================================
 
-// T: PLAYER_SELF_RES_SPELL != 0 (soulstone, ankh); the packet CMSG_SELF_RES. F keeps its self-resurrection spells in the player's own list
-// (InitializeSelfResurrectionSpells, Player.cpp:1237) and takes the spell in the typed packet: a later slice. Not possible, not done, counted.
-inline bool SelfResurrectPossibleCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SelfResurrection); return false; }
-inline bool SelfResurrectCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SelfResurrection); return false; }
+// T: PLAYER_SELF_RES_SPELL != 0 (soulstone, ankh) and the packet CMSG_SELF_RES. F: the core keeps the player's own list
+// (InitializeSelfResurrectionSpells on death, Player.cpp:28085: soulstone 3026, Twisting Nether 23700, Reincarnation 21169) and
+// HandleSelfResOpcode casts the id it carries and then removes it (SpellHandler.cpp:445); the questions here are whether a listed
+// id is a spell this core knows and which one to send. An id without a SpellInfo is skipped: the handler would return silently
+// and the dead engine would offer the action again on the next tick.
+inline bool SelfResurrectPossibleCompat(Player* bot)
+{
+    if (!bot || !bot->GetSession() || bot->m_activePlayerData->SelfResSpells.empty())
+        return false;
+    if (bot->HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+        return false;
+    for (int32 spellId : bot->m_activePlayerData->SelfResSpells)
+        if (sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE))
+            return true;
+    return false;
+}
+
+// The list is the core's own priority order. The core either resurrects the player (both effects do) or consumes the spell; when
+// it refused (a resurrection-preventing aura arrived since the check, no SpellInfo for the map difficulty) nothing changed.
+inline bool SelfResurrectCompat(Player* bot)
+{
+    WorldSession* const session = bot ? bot->GetSession() : nullptr;
+    if (!session)
+        return false;
+    for (int32 spellId : bot->m_activePlayerData->SelfResSpells)
+    {
+        if (!sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE))
+            continue;
+        WorldPackets::Spells::SelfRes packet{ WorldPacket(CMSG_SELF_RES) };
+        packet.SpellID = spellId;
+        session->HandleSelfResOpcode(packet);
+        return bot->IsAlive() || bot->m_activePlayerData->SelfResSpells.FindIndex(spellId) < 0;
+    }
+    return false;
+}
 
 // ===============================================================================================================
 // REPOP (RepopAction in ReleaseSpiritAction.h: a random bot without a master goes home; the action is NOT registered in the slice)
@@ -157,6 +189,7 @@ inline WorldSafeLocsEntry const* ClosestGraveyardCompat(Player* bot)
 // point (RepopAction). F: those two custom starts do not exist; every bot has its racial start (PlayerInfo createPosition).
 inline bool RepopUsesHomebindCompat(Player* /*bot*/) { return false; }
 
-// Teleport to the homebind. T `TeleportToHomebind()` then `SendHeartBeat()` (the caller sends the beat through SendHeartBeatCompat). F: the
-// core's own homebind field, the target RepopAtGraveyard uses itself for a ghost under the map (Player.cpp:5285).
-inline bool TeleportToHomebindCompat(Player* bot) { return bot->TeleportTo(bot->m_homebind); }
+// Teleport to the homebind. T `TeleportToHomebind(options, hearthCooldown)` then `SendHeartBeat()` (the caller sends the beat through
+// SendHeartBeatCompat). F: the core's own homebind field, the target RepopAtGraveyard uses itself for a ghost under the map
+// (Player.cpp:5285); a teleport there has no hearthstone cooldown, so the flag only exists to keep the signature shared.
+inline bool TeleportToHomebindCompat(Player* bot, bool /*hearthCooldown*/ = true) { return bot->TeleportTo(bot->m_homebind); }

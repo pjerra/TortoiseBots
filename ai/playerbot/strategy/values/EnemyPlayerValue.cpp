@@ -1,10 +1,22 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/TbCompatPvP.h"
 #include "EnemyPlayerValue.h"
 #include "WorldPvpSeekChecks.h"
 #include "TargetValue.h"
+#include "PositionValue.h"
+#include "playerbot/TbCompatBg.h"
+#include "playerbot/policy/bg/BgIds.h"
+#include "playerbot/policy/bg/BgTargetPolicy.h"
 
 using namespace ai;
+
+// The bot's side for the carrier auras (policy/bg/BgIds.h): a player fights for its own faction here, and the auras are read through the
+// pure mapping so the two ids are never typed twice (forever/tools/test_bg_flag_carrier.cpp pins the mapping).
+static TortoiseBots::bg::BgSide AiSide(Player* bot)
+{
+    return bot->GetTeam() == HORDE ? TortoiseBots::bg::BgSide::Horde : TortoiseBots::bg::BgSide::Alliance;
+}
 
 std::list<ObjectGuid> EnemyPlayersValue::Calculate()
 {
@@ -142,9 +154,9 @@ bool EnemyPlayersValue::CanEngageFromHere(Unit* target) const
     // The scan behind it ("possible targets") has none of these, so a player behind
     // a wall, down in the flag-room tunnel or across the field qualified, and the
     // bot stood still holding an order it could never carry out.
-    float const aggroDistance = bot->GetHealth() > target->GetHealth() ?
+    float const seekRange = bot->GetHealth() > target->GetHealth() ?
         EnemyPlayerValue::GetMaxAttackDistance(bot) : 20.0f;
-    if (!bot->IsWithinDist(target, aggroDistance))
+    if (!bot->IsWithinDist(target, seekRange))
         return false;
 
     if (fabs(bot->GetPositionZ() - target->GetPositionZ()) >= 30.0f)
@@ -208,8 +220,9 @@ bool HasEnemyPlayersValue::Calculate()
 Unit* EnemyPlayerValue::Calculate()
 {
     // Prioritize the duel opponent
-    if (bot->m_duel && !bot->m_duel->opponent.IsEmpty()) {
-        if (Unit* opp = ObjectAccessor::GetUnit(*bot, bot->m_duel->opponent)) {
+    ObjectGuid const duelOpponent = DuelOpponentGuidCompat(bot);
+    if (!duelOpponent.IsEmpty()) {
+        if (Unit* opp = ObjectAccessor::GetUnit(*bot, duelOpponent)) {
             if (!sServerFacade.IsFriendlyTo(opp, bot))
                 return opp;
         }
@@ -217,6 +230,9 @@ Unit* EnemyPlayerValue::Calculate()
 
     Unit* bestEnemyPlayer = nullptr;
     std::list<ObjectGuid> enemyPlayers = AI_VALUE(std::list<ObjectGuid>, "enemy player targets");
+    if (kBgTargetPolicyCompat && bot->InBattleGround())
+        return PickInBattleground(enemyPlayers);
+
     if (!enemyPlayers.empty())
     {
         const bool isMelee = !ai->IsRanged(bot);
@@ -237,9 +253,8 @@ Unit* EnemyPlayerValue::Calculate()
             Unit* target = ai->GetUnit(targetGuid);
             if (target)
             {
-                // Prioritize an enemy player if it has a battleground flag
-                if ((bot->GetTeam() == HORDE && target->HasAura(23333)) ||
-                    (bot->GetTeam() == ALLIANCE && target->HasAura(23335)))
+                // Prioritize an enemy player if it has a battleground flag (the aura the enemy's own side carries, BgIds.h)
+                if (target->HasAura(TortoiseBots::bg::WsgEnemyCarrierAura(AiSide(bot))))
                 {
                     bestEnemyPlayer = target;
                     break;
@@ -275,23 +290,88 @@ Unit* EnemyPlayerValue::Calculate()
 
 float EnemyPlayerValue::GetMaxAttackDistance(Player* bot)
 {
-    if (!bot->GetBattleGround())
-        return 60.0f;
+    return MaxEnemyPlayerAttackDistanceCompat(bot);
+}
 
-    if (bot->InBattleGround())
+// An enemy player counts as a healer for the battleground target order when its spec heals or it is casting a heal now (the test
+// "enemy healer target" makes, without that value's interrupt gate: the pick is about who to hit, not what can be kicked).
+static bool IsEnemyHealer(Unit* enemy)
+{
+    if (Player* player = dynamic_cast<Player*>(enemy))
     {
-        BattleGround* bg = bot->GetBattleGround();
-        if (!bg)
-            return 40.0f;
+        if (PlayerbotAI::IsHeal(player))
+            return true;
+    }
 
-        BattleGroundTypeId bgType = bg->GetTypeID();
+    Spell* spell = enemy->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+    if (spell && PlayerbotAI::IsHealSpell(GetSpellEntryCompat(spell->m_spellInfo)))
+        return true;
+    spell = enemy->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+    return spell && PlayerbotAI::IsHealSpell(GetSpellEntryCompat(spell->m_spellInfo));
+}
 
-        if (bgType == BATTLEGROUND_AV)
+// The battleground target order (policy/bg/BgTargetPolicy.h): the engine's own list of valid enemy players, ranked by the pure policy.
+// The objective the leash reads is the "bg objective" position, which the objective strategy of the match sets.
+Unit* EnemyPlayerValue::PickInBattleground(std::list<ObjectGuid> const& enemyPlayers)
+{
+    if (enemyPlayers.empty())
+        return nullptr;
+
+    uint32 const ownCarrierAura = TortoiseBots::bg::WsgOwnCarrierAura(AiSide(bot));
+    uint32 const enemyCarrierAura = TortoiseBots::bg::WsgEnemyCarrierAura(AiSide(bot));
+
+    TortoiseBots::bg::BgTargetContext policyContext;
+    policyContext.bound = ai->HasRealPlayerMaster();
+
+    PositionEntry objective = context->GetValue<PositionMap&>("position")->Get()["bg objective"];
+    policyContext.hasObjective = objective.isSet() && objective.mapId == bot->GetMapId();
+
+    // The human's target: what he is hitting, else what he has selected ("master target" is the master himself, the follow target).
+    ObjectGuid masterTargetGuid;
+    if (policyContext.bound)
+    {
+        if (Player* master = ai->GetMaster())
         {
-            bool strifeTime = bg->GetStartTime() < (uint32)(20 * MINUTE * IN_MILLISECONDS);
-            return strifeTime ? 40.0f : 10.0f;
+            if (Unit* victim = master->GetVictim())
+                masterTargetGuid = victim->getObjectGuid();
+            else
+                masterTargetGuid = master->GetSelectionGuid();
         }
     }
 
-    return 40.0f;
+    std::vector<Unit*> units;
+    std::vector<TortoiseBots::bg::BgTargetCandidate> candidates;
+    for (ObjectGuid const& guid : enemyPlayers)
+    {
+        Unit* enemy = ai->GetUnit(guid);
+        if (!enemy)
+            continue;
+
+        TortoiseBots::bg::BgTargetCandidate candidate;
+        candidate.handle = uint32(units.size());
+        candidate.distanceYd = enemy->GetDistance(bot);
+        if (policyContext.hasObjective)
+            candidate.objectiveDistanceYd = sServerFacade.getDistance2d(enemy, objective.x, objective.y);
+        candidate.healthPct = enemy->GetHealthPercent();
+        candidate.isFlagCarrier = enemy->HasAura(enemyCarrierAura);
+        candidate.isHealer = IsEnemyHealer(enemy);
+        candidate.isMyAttacker = enemy->GetVictim() == bot;
+        candidate.isMasterTarget = !masterTargetGuid.IsEmpty() && masterTargetGuid == enemy->getObjectGuid();
+        if (Unit* victim = enemy->GetVictim())
+        {
+            if (victim->HasAura(ownCarrierAura))
+                candidate.hitsOurCarrier = true;
+            if (Player* victimPlayer = dynamic_cast<Player*>(victim))
+            {
+                if (victimPlayer->GetTeam() == bot->GetTeam() && PlayerbotAI::IsHeal(victimPlayer))
+                    candidate.hitsOurHealer = true;
+            }
+        }
+
+        units.push_back(enemy);
+        candidates.push_back(candidate);
+    }
+
+    TortoiseBots::bg::BgTargetPick const pick = TortoiseBots::bg::BgPickTarget(candidates, policyContext);
+    return pick.found ? units[pick.handle] : nullptr;
 }

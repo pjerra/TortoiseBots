@@ -104,6 +104,8 @@ std::unordered_map<uint32_t, std::vector<SkillLineAbilityEntry const*>> const& A
     return index;
 }
 
+} // namespace
+
 // Lowest-entry recipe item whose use spell teaches each recipe spell.
 std::unordered_map<uint32_t, uint32_t> const& RecipeItemBySpell()
 {
@@ -173,6 +175,9 @@ std::unordered_map<uint32_t, uint32_t> const& TrainerMinSkillBySpell()
     }();
     return index;
 }
+
+namespace
+{
 
 void FillAbilityRow(AbilityRow& row, uint32_t skillId, SkillLineAbilityEntry const* ability, Player const* bot)
 {

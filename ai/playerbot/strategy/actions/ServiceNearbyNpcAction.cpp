@@ -48,7 +48,7 @@ bool ServiceNearbyNpcAction::Execute(Event& event)
 
         AiObjectContext* context = ai->GetAiObjectContext();
         NearbyServiceFailParks parks = AI_VALUE(NearbyServiceFailParks, "nearby service fail parks");
-        parks.RecordFail(target.GetRawValue(), NearbyServiceRankOf(NearbyServiceKind::Approach), time(0));
+        parks.RecordFail(GuidKeyCompat(target), NearbyServiceRankOf(NearbyServiceKind::Approach), time(0));
         SET_AI_VALUE(NearbyServiceFailParks, "nearby service fail parks", parks);
         RESET_AI_VALUE(GuidPosition, "nearby service target");
         RESET_AI_VALUE(bool, "should service nearby npc");
@@ -162,6 +162,7 @@ bool ServiceNearbyNpcAction::TryVerb(Event& event, GuidPosition target, NearbySe
 bool ServiceNearbyNpcAction::RunVerb(uint64_t npcGuid, int verbId, NearbyServiceKind verbKind,
     std::string const& kind, std::string const& action, Event event, GuidPosition target, time_t now)
 {
+    std::size_t const knownBefore = bot->GetSpellMap().size();
     bool const done = ai->DoSpecificAction(action, event, true);
     AiObjectContext* context = ai->GetAiObjectContext();
     NearbyServiceFailParks parks = AI_VALUE(NearbyServiceFailParks, "nearby service fail parks");
@@ -185,8 +186,10 @@ bool ServiceNearbyNpcAction::RunVerb(uint64_t npcGuid, int verbId, NearbyService
         }
         else
         {
+            // A trainer visit counts only when a spell was learned: a trainer that stops offering
+            // anything after a visit that taught nothing would otherwise be "served" every tick.
             GuidPosition freshTarget(target);
-            progressed = NearbyServiceVerbMadeProgress(verbKind,
+            progressed = bot->GetSpellMap().size() > knownBefore && NearbyServiceVerbMadeProgress(verbKind,
                 RpgTrainTrigger::TeachesAffordableSpell(ai, freshTarget, bot));
         }
     }

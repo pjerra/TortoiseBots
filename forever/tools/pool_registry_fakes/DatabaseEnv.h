@@ -16,12 +16,22 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
 inline std::vector<std::string> fakePoolEvents;
+
+// The characters database's synchronous transaction surface (TbCompat_CharStore.h uses it for the one multi-statement
+// save). The pool's tests never depend on its atomicity: the statements are applied in order like the direct ones.
+class FakeTransaction
+{
+public:
+    void Append(char const* /*sql*/) {}
+};
+using CharacterDatabaseTransaction = std::shared_ptr<FakeTransaction>;
 
 class Field
 {
@@ -30,22 +40,34 @@ public:
     {
         _number = value;
         _text.clear();
+        _null = false;
     }
 
     void SetText(std::string value)
     {
         _text = std::move(value);
         _number = 0;
+        _null = false;
+    }
+
+    // A LEFT JOIN's missing side: the core's Field::IsNull, which a caller must not read as 0 or as an empty name.
+    void SetNull()
+    {
+        _number = 0;
+        _text.clear();
+        _null = true;
     }
 
     uint64 GetUInt64() const { return _number; }
     uint32 GetUInt32() const { return uint32(_number); }
     uint8 GetUInt8() const { return uint8(_number); }
     std::string GetString() const { return _text; }
+    bool IsNull() const { return _null; }
 
 private:
     uint64 _number = 0;
     std::string _text;
+    bool _null = false;
 };
 
 class ResultSet
@@ -113,6 +135,39 @@ public:
     std::vector<AccountRow> accounts;
     std::vector<CharacterRow> characters;
     std::vector<CoreCharacterRow> coreCharacters;
+
+    // The startup reset's world: the guild tables, auctions, the module's row tables and the reset's own state table.
+    // `extraTables` is the information_schema answer for those (a table absent from the map is missing).
+    struct GuildRow
+    {
+        uint32 guildid = 0;
+        std::string name;
+        uint64 leaderGuid = 0;
+    };
+    struct GuildMemberRow
+    {
+        uint32 guildid = 0;
+        uint64 guid = 0;
+    };
+    struct StateRow
+    {
+        std::string poolName;
+        std::string appliedGeneration;
+        std::string completedAt;
+    };
+    std::vector<GuildRow> guilds;
+    std::vector<GuildMemberRow> guildMembers;
+    std::vector<StateRow> stateRows;
+    std::set<uint64> auctionOwners;
+    std::vector<uint64> moduleDbStoreGuids;
+    std::vector<uint64> moduleCustomStrategyOwners;
+    std::vector<uint64> moduleCommanderGuids;
+    std::vector<uint64> moduleOrderBotGuids;
+    std::vector<uint64> moduleDisenchantBotGuids;
+    std::map<std::string, std::set<std::string>> extraTables;
+    bool failGuildReads = false;
+    bool failAuctionReads = false;
+
     std::set<std::string> accountColumns = { "username", "account_id", "stamp", "state", "created" };
     std::set<std::string> characterColumns = { "name", "guid", "account_id", "race", "class", "gender", "state", "created", "last_login", "last_logout" };
     bool haveAccountTable = true;
@@ -172,6 +227,18 @@ public:
                 uint32 const accountId = uint32(std::strtoul(where.substr(std::string("`account` = ").size()).c_str(), nullptr, 10));
                 for (CoreCharacterRow const& row : coreCharacters)
                     if (row.accountId == accountId)
+                        ++count;
+            }
+            else if (where.rfind("`guid` IN (", 0) == 0)
+            {
+                std::size_t const close = where.find(')');
+                if (close == std::string::npos)
+                    return nullptr;
+                std::set<uint64> guids;
+                for (std::string const& part : Split(where.substr(std::string("`guid` IN (").size(), close - std::string("`guid` IN (").size())))
+                    guids.insert(uint64(std::strtoull(part.c_str(), nullptr, 10)));
+                for (CoreCharacterRow const& row : coreCharacters)
+                    if (guids.count(row.guid))
                         ++count;
             }
             else
@@ -237,6 +304,64 @@ public:
                     Text(row.state), Num(uint64(row.created)), Num(uint64(row.lastLogin)), Num(uint64(row.lastLogout)) });
             return MakeResult(std::move(out));
         }
+
+        // --- the startup reset (TbPoolReset.cpp): its own SQL shapes, parsed strictly ---
+        if (sql.rfind("SELECT `guid`, `account`, `name` FROM `characters` WHERE `account` IN (", 0) == 0)
+        {
+            if (failCoreReads)
+                return nullptr;
+            std::string const where = sql.substr(std::string("SELECT `guid`, `account`, `name` FROM `characters` WHERE `account` IN (").size());
+            std::set<uint32> ids;
+            for (std::string const& part : Split(where.substr(0, where.find(')'))))
+                ids.insert(uint32(std::strtoul(part.c_str(), nullptr, 10)));
+            std::vector<std::vector<Field>> out;
+            for (CoreCharacterRow const& row : coreCharacters)
+                if (ids.count(row.accountId))
+                    out.push_back({ Num(row.guid), Num(row.accountId), Text(row.name) });
+            return MakeResult(std::move(out));
+        }
+        if (sql.rfind("SELECT COUNT(*) FROM `guild` g JOIN `guild_member` gm ON gm.`guildid` = g.`guildid` LEFT JOIN `characters` c ON c.`guid` = gm.`guid` LEFT JOIN `tb_pool_character` p ON p.`guid` = gm.`guid` AND p.`state` = 'ready' WHERE ", 0) == 0)
+            return GuildOutsiderAnswer(sql, true);
+        if (sql.rfind("SELECT gm.`guid`, c.`account`, c.`name`, g.`name`, g.`leaderguid` FROM `guild` g JOIN `guild_member` gm ON gm.`guildid` = g.`guildid` LEFT JOIN `characters` c ON c.`guid` = gm.`guid` LEFT JOIN `tb_pool_character` p ON p.`guid` = gm.`guid` AND p.`state` = 'ready' WHERE ", 0) == 0)
+            return GuildOutsiderAnswer(sql, false);
+        if (sql.rfind("SELECT COUNT(*) FROM `auctionhouse` WHERE `owner` IN (", 0) == 0)
+        {
+            if (failAuctionReads)
+                return nullptr;
+            std::string const where = sql.substr(std::string("SELECT COUNT(*) FROM `auctionhouse` WHERE `owner` IN (").size());
+            std::set<uint64> owners;
+            for (std::string const& part : Split(where.substr(0, where.find(')'))))
+                owners.insert(uint64(std::strtoull(part.c_str(), nullptr, 10)));
+            uint64 count = 0;
+            for (uint64 const owner : auctionOwners)
+                if (owners.count(owner))
+                    ++count;
+            return MakeResult({ { Num(count) } });
+        }
+        if (sql.rfind("SELECT COUNT(*) FROM `auctionhouse` WHERE `owner` = ", 0) == 0)
+        {
+            if (failAuctionReads)
+                return nullptr;
+            uint64 const owner = std::strtoull(sql.substr(std::string("SELECT COUNT(*) FROM `auctionhouse` WHERE `owner` = ").size()).c_str(), nullptr, 10);
+            return MakeResult({ { Num(auctionOwners.count(owner) ? 1 : 0) } });
+        }
+        if (sql.rfind("SELECT COUNT(*) FROM `tb_pool_state` WHERE `pool_name` = ", 0) == 0 && HasExtraTable("tb_pool_state"))
+        {
+            std::string const pool = WhereValue(sql, "pool_name");
+            uint64 count = 0;
+            for (StateRow const& row : stateRows)
+                if (row.poolName == pool)
+                    ++count;
+            return MakeResult({ { Num(count) } });
+        }
+        if (sql.rfind("SELECT `applied_generation` FROM `tb_pool_state` WHERE `pool_name` = ", 0) == 0 && HasExtraTable("tb_pool_state"))
+        {
+            std::string const pool = WhereValue(sql, "pool_name");
+            for (StateRow const& row : stateRows)
+                if (row.poolName == pool)
+                    return MakeResult({ { Text(row.appliedGeneration) } });
+            return nullptr;
+        }
         return nullptr;
     }
 
@@ -261,6 +386,15 @@ public:
             }
         }
         text = out;
+    }
+
+    CharacterDatabaseTransaction BeginTransaction()
+    {
+        return std::make_shared<FakeTransaction>();
+    }
+
+    void DirectCommitTransaction(CharacterDatabaseTransaction const& /*trans*/)
+    {
     }
 
     bool DirectExecute(char const* text)
@@ -322,6 +456,83 @@ public:
                 return false;
             std::string const name = WhereValue(sql, "name");
             characters.erase(std::remove_if(characters.begin(), characters.end(), [&](CharacterRow const& row) { return row.name == name; }), characters.end());
+            return true;
+        }
+
+        // --- the startup reset's writes ---
+        if (sql.rfind("CREATE TABLE IF NOT EXISTS `tb_pool_state`", 0) == 0)
+        {
+            ++creates;
+            fakePoolEvents.push_back("CREATE tb_pool_state");
+            if (!HasExtraTable("tb_pool_state"))
+                extraTables["tb_pool_state"] = { "pool_name", "applied_generation", "completed_at" };
+            return true;
+        }
+        if (sql.rfind("INSERT INTO `tb_pool_state`", 0) == 0)
+        {
+            fakePoolEvents.push_back("INSERT tb_pool_state");
+            if (!HasExtraTable("tb_pool_state"))
+                return false;
+            std::size_t const valuesAt = sql.find("VALUES (");
+            if (valuesAt == std::string::npos)
+                return false;
+            std::string const values = sql.substr(valuesAt + std::string("VALUES (").size());
+            std::vector<std::string> const parts = Split(values.substr(0, values.find(')')));
+            if (parts.size() < 2)
+                return false;
+            std::string const pool = ParseValue(parts[0]).text;
+            std::string const generation = ParseValue(parts[1]).text;
+            auto const found = std::find_if(stateRows.begin(), stateRows.end(), [&](StateRow const& row) { return row.poolName == pool; });
+            std::string const completed = "now";
+            if (found == stateRows.end())
+                stateRows.push_back(StateRow{ pool, generation, completed });
+            else if (sql.find("`applied_generation` = VALUES") != std::string::npos)
+                found->appliedGeneration = generation;
+            else if (found->completedAt.empty())
+                found->completedAt = completed;
+            return true;
+        }
+        if (sql.rfind("DELETE FROM `tb_pool_lineage`", 0) == 0)
+        {
+            fakePoolEvents.push_back("DELETE tb_pool_lineage");
+            if (!HasExtraTable("tb_pool_lineage"))
+                return false;
+            extraTables["tb_pool_lineage"] = extraTables["tb_pool_lineage"];
+            return true;
+        }
+        if (sql.rfind("DELETE FROM `ai_playerbot_db_store`", 0) == 0)
+        {
+            uint64 const guid = uint64(std::strtoull(WhereValue(sql, "guid").c_str(), nullptr, 10));
+            fakePoolEvents.push_back("DELETE ai_playerbot_db_store " + std::to_string(guid));
+            moduleDbStoreGuids.erase(std::remove(moduleDbStoreGuids.begin(), moduleDbStoreGuids.end(), guid), moduleDbStoreGuids.end());
+            return true;
+        }
+        if (sql.rfind("DELETE FROM `ai_playerbot_custom_strategy`", 0) == 0)
+        {
+            uint64 const owner = uint64(std::strtoull(WhereValue(sql, "owner").c_str(), nullptr, 10));
+            fakePoolEvents.push_back("DELETE ai_playerbot_custom_strategy " + std::to_string(owner));
+            moduleCustomStrategyOwners.erase(std::remove(moduleCustomStrategyOwners.begin(), moduleCustomStrategyOwners.end(), owner), moduleCustomStrategyOwners.end());
+            return true;
+        }
+        if (sql.rfind("DELETE FROM `tb_commander_binding`", 0) == 0)
+        {
+            uint64 const guid = uint64(std::strtoull(WhereValue(sql, "commander_guid").c_str(), nullptr, 10));
+            fakePoolEvents.push_back("DELETE tb_commander_binding " + std::to_string(guid));
+            moduleCommanderGuids.erase(std::remove(moduleCommanderGuids.begin(), moduleCommanderGuids.end(), guid), moduleCommanderGuids.end());
+            return true;
+        }
+        if (sql.rfind("DELETE FROM `tortoise_bots_guild_order`", 0) == 0)
+        {
+            uint64 const guid = uint64(std::strtoull(WhereValue(sql, "bot_guid").c_str(), nullptr, 10));
+            fakePoolEvents.push_back("DELETE tortoise_bots_guild_order " + std::to_string(guid));
+            moduleOrderBotGuids.erase(std::remove(moduleOrderBotGuids.begin(), moduleOrderBotGuids.end(), guid), moduleOrderBotGuids.end());
+            return true;
+        }
+        if (sql.rfind("DELETE FROM `tortoise_bots_guild_disenchant`", 0) == 0)
+        {
+            uint64 const guid = uint64(std::strtoull(WhereValue(sql, "bot_guid").c_str(), nullptr, 10));
+            fakePoolEvents.push_back("DELETE tortoise_bots_guild_disenchant " + std::to_string(guid));
+            moduleDisenchantBotGuids.erase(std::remove(moduleDisenchantBotGuids.begin(), moduleDisenchantBotGuids.end(), guid), moduleDisenchantBotGuids.end());
             return true;
         }
         return false;
@@ -430,6 +641,72 @@ private:
         if (at == std::string::npos)
             return "";
         return ParseValue(sql.substr(at + marker.size())).text;
+    }
+
+    // The reset's one guild predicate, in both its COUNT and its detail form: a member is outside the pool when the
+    // characters table has no row for it, its account is not in the statement's account list, or no ready pool row
+    // names it. This mirrors the LEFT JOINs in TbPoolReset.cpp.
+    QueryResult GuildOutsiderAnswer(std::string const& sql, bool countOnly)
+    {
+        if (failGuildReads)
+            return nullptr;
+        std::string const where = sql.substr(sql.find(" WHERE ") + std::string(" WHERE ").size());
+        std::set<uint64> leaders;
+        if (where.rfind("g.`leaderguid` IN (", 0) == 0)
+        {
+            std::string const list = where.substr(std::string("g.`leaderguid` IN (").size());
+            for (std::string const& part : Split(list.substr(0, list.find(')'))))
+                leaders.insert(uint64(std::strtoull(part.c_str(), nullptr, 10)));
+        }
+        else if (where.rfind("g.`leaderguid` = ", 0) == 0)
+        {
+            leaders.insert(uint64(std::strtoull(where.c_str() + std::string("g.`leaderguid` = ").size(), nullptr, 10)));
+        }
+        else
+            return nullptr;
+
+        std::set<uint32> accounts;
+        std::size_t const accountsAt = where.find("c.`account` NOT IN (");
+        if (accountsAt != std::string::npos)
+        {
+            std::string const list = where.substr(accountsAt + std::string("c.`account` NOT IN (").size());
+            for (std::string const& part : Split(list.substr(0, list.find(')'))))
+                accounts.insert(uint32(std::strtoul(part.c_str(), nullptr, 10)));
+        }
+
+        std::vector<std::vector<Field>> out;
+        uint64 count = 0;
+        for (GuildMemberRow const& member : guildMembers)
+        {
+            GuildRow const* guild = nullptr;
+            for (GuildRow const& row : guilds)
+                if (row.guildid == member.guildid)
+                    guild = &row;
+            if (!guild || !leaders.count(guild->leaderGuid))
+                continue;
+            CoreCharacterRow const* character = nullptr;
+            for (CoreCharacterRow const& row : coreCharacters)
+                if (row.guid == member.guid)
+                    character = &row;
+            bool readyPoolRow = false;
+            for (CharacterRow const& row : characters)
+                if (row.hasGuid && row.guid == member.guid && row.state == "ready")
+                    readyPoolRow = true;
+            bool const accountOutside = character && !accounts.empty() && !accounts.count(character->accountId);
+            if (character && readyPoolRow && !accountOutside)
+                continue;
+            ++count;
+            if (!countOnly)
+            {
+                if (!character)
+                    out.push_back({ Num(member.guid), Null(), Null(), Text(guild->name), Num(guild->leaderGuid) });
+                else
+                    out.push_back({ Num(member.guid), Num(character->accountId), Text(character->name), Text(guild->name), Num(guild->leaderGuid) });
+            }
+        }
+        if (countOnly)
+            return MakeResult({ { Num(count) } });
+        return MakeResult(std::move(out));
     }
 
     bool InsertAccount(std::string const& sql)
@@ -557,8 +834,27 @@ private:
             std::size_t const start = at + 14;
             table = sql.substr(start, sql.find('\'', start) - start);
         }
-        std::set<std::string> const& columns = table == "tb_pool_account" ? accountColumns : characterColumns;
-        bool const present = table == "tb_pool_account" ? haveAccountTable : table == "tb_pool_character" ? haveCharacterTable : false;
+        std::set<std::string> columns;
+        bool present = false;
+        if (table == "tb_pool_account")
+        {
+            columns = accountColumns;
+            present = haveAccountTable;
+        }
+        else if (table == "tb_pool_character")
+        {
+            columns = characterColumns;
+            present = haveCharacterTable;
+        }
+        else
+        {
+            auto const found = extraTables.find(table);
+            if (found != extraTables.end())
+            {
+                columns = found->second;
+                present = true;
+            }
+        }
         if (!present)
             return MakeResult({ { Num(0) } });
         std::size_t const inAt = sql.find("COLUMN_NAME IN (");
@@ -598,6 +894,18 @@ private:
         Field field;
         field.SetText(std::move(value));
         return field;
+    }
+
+    static Field Null()
+    {
+        Field field;
+        field.SetNull();
+        return field;
+    }
+
+    bool HasExtraTable(std::string const& table) const
+    {
+        return extraTables.count(table) != 0;
     }
 };
 

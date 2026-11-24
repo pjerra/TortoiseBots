@@ -16,6 +16,7 @@
 #ifdef TORTOISEBOTS_SLICE1
 
 #include "host/pool/TbPoolRegistry.h"
+#include "host/pool/TbPoolReset.h"
 #include "TbBotMgr.h"
 
 #include "ai/playerbot/policy/world/PoolCompositionPolicy.h"
@@ -650,6 +651,11 @@ void Reconcile()
 CreateStart StartCreate(std::uint32_t count)
 {
     CreateStart start;
+    if (!Reset::PoolAvailable())
+    {
+        start.message = "a pool reset is in progress or failed: nothing is created until it finishes";
+        return start;
+    }
     if (!Enabled())
     {
         start.message = "the pool is off: TortoiseBots.Pool.Enable = 0, or its tables are missing (see the error line)";
@@ -1010,6 +1016,8 @@ void CreateUpdate(std::uint32_t diff)
     State& s = Get();
     if (!s.remaining)
         return;
+    if (!Reset::PoolAvailable())
+        return;                       // a startup reset owns the pool: the job waits, its claim rows stay as they are
     if (!KeyOn())
     {
         // `.reload config` turned the pool off while the job ran: it stops here. A queued character's row stays `creating`; the

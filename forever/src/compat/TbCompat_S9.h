@@ -56,13 +56,13 @@ constexpr uint8 MAX_ROLL_FROM_CLIENT = 3;
 // ===============================================================================================================
 // THE MEMO of what the engine was already told about (per bot; world thread only)
 // ===============================================================================================================
-// A loot window of a game object and a group-loot roll are announced to the engine ONCE. The core keeps a roll in the player's list until it is
-// decided (up to LOOT_ROLL_TIMEOUT), and a window until it is released, so without the memo every poll would announce them again.
+// A loot window (a game object's or a creature's skin) and a group-loot roll are announced to the engine ONCE. The core keeps a roll in the player's
+// list until it is decided (up to LOOT_ROLL_TIMEOUT), and a window until it is released, so without the memo every poll would announce them again.
 namespace tbs9
 {
 struct BotLootMemo
 {
-    std::set<ObjectGuid> windows;                          // loot owners (game objects) whose window was announced
+    std::set<ObjectGuid> windows;                          // loot owners (game objects, skinned creatures) whose window was announced
     std::set<std::pair<ObjectGuid, uint32>> rolls;         // (loot owner, loot list id) of the rolls announced
     bool bagInit = false;
     std::set<ObjectGuid> bagItems;                         // item guids already seen in bags (item push result poll)
@@ -128,10 +128,11 @@ inline bool BotRollsInGroupLootCompat(Player const* bot, Loot const* loot)
 //  * "loot start roll" (SMSG_LOOT_START_ROLL on T: [creature guid][slot u32][item id u32][random suffix u32][random property i32][timeout u32]): one event
 //    per roll of Player::GetLootRolls() that has started and was not announced yet. The owner guid is the corpse or chest, the slot the loot list id, the
 //    timeout the core's LOOT_ROLL_TIMEOUT (60 s, Loot.h). One event per poll (the trigger holds one): the next roll comes with the next check.
-//  * "loot response" (SMSG_LOOT_RESPONSE): only for the window of a GAME OBJECT (a chest the bot opened by a spell or a use order), which has no
-//    LootOpenCompat of its own. A corpse window is raised by LootOpenCompat (and marked announced there), and windows that the area-loot of the core
-//    opened for neighbouring corpses are never announced (the engine would take items from corpses it did not walk to).
-// Nothing is announced while the trigger still holds the previous event (the Check of an unconsumed event is non-empty).
+//  * "loot response" (SMSG_LOOT_RESPONSE): only for windows this engine did not open itself through LootOpenCompat. LootOpenCompat raises the
+//    event of a corpse window (and marks it announced); the windows left are a GAME OBJECT's (a chest the bot opened by a spell or a use order)
+//    and a SKINNING window on a creature (Player::SendLoot from Spell::EffectSkinning, loot_type LOOT_SKINNING). Area-loot windows that the
+//    core opened for neighbouring corpses (loot_type LOOT_CORPSE) are never announced (the engine would take items from corpses it did not
+//    walk to). Nothing is announced while the trigger still holds the previous event (the Check of an unconsumed event is non-empty).
 template <class TriggerType>
 inline void PollItemPush(Player* bot, tbs9::BotLootMemo& memo, TriggerType& trigger)
 {
@@ -204,7 +205,7 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     }
     if (name == "loot roll won")
     {
-        ::TortoiseBots::rollwon::PollRollWon(bot, trigger);
+        ::TortoiseBots::rollwon::PollRollWon(bot, [&](WorldPacket& event) { trigger.ExternalEvent(event, nullptr); });
         return;
     }
     if (name != "loot start roll" && name != "loot response")
@@ -255,11 +256,16 @@ inline void PollPacketEventCompat(Player* bot, std::string const& name, TriggerT
     for (std::pair<ObjectGuid const, Loot*> const& view : bot->GetAELootView())
     {
         Loot const* loot = view.second;
-        if (!loot || !loot->GetOwnerGUID().IsGameObject() || memo.windows.count(loot->GetOwnerGUID()))
+        if (!loot)
+            continue;
+        ObjectGuid const owner = loot->GetOwnerGUID();
+        bool const announce = owner.IsGameObject() ||
+            (owner.IsCreature() && loot->loot_type == LOOT_SKINNING);   // a skin window has no LootOpenCompat of its own
+        if (!announce || memo.windows.count(owner))
             continue;
         WorldPacket event;
-        event << loot->GetOwnerGUID();
-        memo.windows.insert(loot->GetOwnerGUID());
+        event << owner;
+        memo.windows.insert(owner);
         trigger.ExternalEvent(event, nullptr);
         return;
     }

@@ -508,6 +508,97 @@ static void TestDeadBotIsRevivedBeforeAWalkBackOrADirectStep()
     CHECK(!c.regroup);
 }
 
+// WC run 6 (live, 2026-11-22): after the wipe at leg 8 the party released to the entrance and the route checkpoint
+// was lost. The straight walk back failed for want of a complete path, and the replay started at the point nearest
+// the lead bot -- the plan's first move point, step 4 of 302 -- so the run walked the whole route back and pulled
+// again from there. With no checkpoint the replay starts at the last cleared step instead (ReplayFloor): the
+// furthest point the party is known to have walked to.
+static void TestWipeReplayStartsAtTheLastClearedStep()
+{
+    // The live plan's shape: a move and a camp per leg, no direct step.
+    DungeonPlan plan;
+    for (int i = 0; i < 4; ++i)
+    {
+        plan.steps.push_back(Step(PlanStepKind::Move, float(i) * 40));
+        plan.steps.push_back(PullStep(float(i) * 40 + 20, {1}));
+    }
+    plan.steps.push_back(Step(PlanStepKind::Move, 160));
+    plan.steps.push_back(PullStep(180, {2})); // index 9: the camp the party wipes at
+    Run r = Start(&plan, 9);
+    // A wipe: the lead bot died, so the checkpoint is lost (no death replayed here: the flag is the live one).
+    CHECK(!r.routeKnown);
+    Facts f = Party(-100); // the entrance, where the release put the lead bot
+    f.seen = false;
+    StartWalkBack(r, f);
+    CHECK(r.walkBack && r.walkBackStart == 6); // the straight target: the last clear move point
+    // No complete navmesh path from the entrance: the plan's points are replayed -- from the last cleared step, not
+    // from the point nearest the lead bot (index 0 here, the live run's "step 4").
+    f.approachKnown = true;
+    f.approachIncomplete = true;
+    Tick(r, f);
+    CHECK(r.walkBack);
+    CHECK(r.walkBackIdx == 6);
+    CHECK(r.note.find("replaying the plan's points") != std::string::npos);
+    CHECK(LastClearedStep(r) == 7); // the last camp cleared, its move point 6
+    CHECK(ReplayFloor(r) == 6);
+
+    // Nothing cleared before the step (a run placed at it, or a route whose packs were all skipped): the old floor,
+    // the plan's first point, as before.
+    Run q = Start(&plan, 9);
+    for (std::size_t i : {std::size_t(1), std::size_t(3), std::size_t(5), std::size_t(7)})
+        q.notCleared.insert(i);
+    Facts g = Party(-100);
+    g.seen = false;
+    StartWalkBack(q, g);
+    g.approachKnown = true;
+    g.approachIncomplete = true;
+    Tick(q, g);
+    CHECK(q.walkBackIdx == 0);
+    CHECK(LastClearedStep(q) == static_cast<std::size_t>(-1));
+    CHECK(ReplayFloor(q) == 0);
+
+    // A checkpoint that is known still decides the floor, cleared steps or none.
+    DungeonPlan folded = FoldedPlan();
+    Run k = Start(&folded, 7);
+    NoteCheckpoint(k, 5);
+    CHECK(ReplayFloor(k) == 5);
+    Run c = Start(&folded, 7);
+    NoteCheckpoint(c, 3);
+    CHECK(ReplayFloor(c) == 3);
+
+    // A navmesh hole on the way, before the last cleared camp: with no checkpoint the lead bot may stand at the
+    // entrance (the wipe's release), so the hole has to be crossed again: the old floor and the hole replayed, never
+    // a walk that starts past it.
+    DungeonPlan holed;
+    holed.steps = {Step(PlanStepKind::Move, 0), PullStep(20, {1}), Step(PlanStepKind::MoveDirect, 40),
+        Step(PlanStepKind::Move, 80), PullStep(100, {1}), Step(PlanStepKind::Move, 140), PullStep(160, {2})};
+    Run h = Start(&holed, 6);
+    CHECK(LastClearedStep(h) == 4);
+    CHECK(FirstUncrossedDirect(h) == 2);
+    CHECK(ReplayFloor(h) == 0);
+    Facts hf = Party(-100);
+    hf.seen = false;
+    StartWalkBack(h, hf);
+    hf.approachKnown = true;
+    hf.approachIncomplete = true;
+    Tick(h, hf);
+    CHECK(h.walkBack && h.walkBackIdx == 0);
+    // A hole only after the last cleared camp does not hold the floor back: the camps before it were walked.
+    DungeonPlan holedLate;
+    holedLate.steps = {Step(PlanStepKind::Move, 0), PullStep(20, {1}), Step(PlanStepKind::Move, 80), PullStep(100, {1}),
+        Step(PlanStepKind::MoveDirect, 120), Step(PlanStepKind::Move, 140), PullStep(160, {2})};
+    Run l = Start(&holedLate, 6);
+    CHECK(LastClearedStep(l) == 3);
+    CHECK(ReplayFloor(l) == 2);
+    CHECK(FirstUncrossedDirect(l) == 4);
+
+    // The same route with the wipe's camp before the hole: the hole is still uncrossed and replayed from the point
+    // before it.
+    Run u = Start(&holed, 4);
+    CHECK(FirstUncrossedDirect(u) == 2);
+    CHECK(ReplayFloor(u) == 0); // nothing before the hole's camp but the first move point
+}
+
 int main()
 {
     TestReachStopsOnAggro();
@@ -520,6 +611,7 @@ int main()
     TestRevivePastAllHolesNeedsNoReplay();
     TestNoDirectStepKeepsTheOldWalkBack();
     TestDeadBotIsRevivedBeforeAWalkBackOrADirectStep();
+    TestWipeReplayStartsAtTheLastClearedStep();
     std::cout << "ok\n";
     return 0;
 }

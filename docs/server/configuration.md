@@ -21,7 +21,7 @@ relates_to:
 
 Bot settings live in two files created during installation:
 
-1. `aiplayerbot.conf`: next to `mangosd.conf`. Gameplay flags, party behaviour, AI thresholds, autonomous services. Template: `ai/playerbot/aiplayerbot.conf.dist.in` (installed as `aiplayerbot.conf.dist`). A custom path can be set with `AiPlayerbot.ConfigFile` in `mangosd.conf`.
+1. `aiplayerbot.conf`: next to `mangosd.conf`. Gameplay flags, party behaviour, AI thresholds, autonomous services. Template: `ai/playerbot/aiplayerbot.conf.dist.in` for the Turtle core build, or the generated `forever/conf/aiplayerbot.conf.dist` for the ForeverCore build (each is installed as `aiplayerbot.conf.dist`). A custom path can be set with `AiPlayerbot.ConfigFile` in `mangosd.conf`. The [key census](config-keys.md) names every key the loader advertises and whether the Forever build consumes it; a key the Forever build does not consume is left out of the Forever template.
 2. `modules/tortoise_bots.conf`: in the server configuration directory. Module-level options such as log verbosity. Template: `conf/tortoise_bots.conf.dist`.
 
 ## Install and update
@@ -119,3 +119,10 @@ Raid diagnostics stay opt-in through
 | `TortoiseBots.AutoTools` | `1` | Pool and free bots get the missing tool of a profession they know (pick, knife, hammer, rod, spanner, fishing pole) into their bags. |
 | `TortoiseBots.AutoHunterPet` | `1` | Hunter bots at level 10 without a pet get their race's starter pet and the pet-control spells; an existing pet is never replaced. |
 | `TortoiseBots.AutoFood` | `1` | Pool and free bots carry level-fitting food (and water for mana users), topped up when they run low. |
+| `TortoiseBots.World.Fishing` | `1` | Free bots fish an occasional session at a fishing hole or nearby open water: one session per hour, at most 5 casts or 5 minutes. An unskilled bot is taught the secondary skill and given a plain pole; the catch goes into its own bags. |
+| `TortoiseBots.Pool.Reset` | `off` | Rebuild the pool on world startup (`off`, `once:<token>` or `always`). Startup only; `.reload config` never starts it. Deletes only `ready` pool rows, keeps other characters on pool accounts, and refuses on a pool-led guild with an outsider, an owned auction listing or a player session. See [Managing & Resetting the Bot Pool](bot-pool.md). |
+| `TortoiseBots.World.Pickpocket` | `1` | Free and pool rogue bots that know Stealth and Pick Pocket pick the pockets of a nearby humanoid that still has pickpocket loot, then take the coins and items. A creature is not retried before its own refill timer; bots without the two spells are skipped. |
+| `TortoiseBots.World.Lockboxes` | `1` | Free and pool rogue bots with enough Lockpicking open the lockboxes in their own bags and take the loot. |
+| `TortoiseBots.World.LockboxMail` | `1` | A bot holding a lockbox it cannot open mails it to the best rogue bot in its own guild (online or offline), which opens it and mails the contents, coins minus the return postage, back to the sender. Only bots are served; a real player's mail is never taken. |
+| `TortoiseBots.World.Disenchant` | `1` | Free bots with Enchanting break down disenchantable armor and weapons they carry (uncommon and above; rare and better only when no real player shares their guild) and keep the materials. |
+| `TortoiseBots.World.EnchantGear` | `1` | Free bots with Enchanting apply the best permanent enchant they know and can pay for to their worn gear, when it scores higher than the enchant already there. |

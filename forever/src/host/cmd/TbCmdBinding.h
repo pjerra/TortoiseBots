@@ -23,6 +23,7 @@
 #include "ChatCommand.h"
 #include "Define.h"
 #include "ObjectGuid.h"
+#include "host/cmd/TbCmdBindingLifePure.h"
 #include "host/cmd/TbCmdBindingPure.h"
 
 #include <string>
@@ -41,8 +42,10 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail args);
 
 // ---- hooks (one line each in the file that calls them) ----
 // HandleMaster (TbOrders.cpp), after the bindings were written: `bots` are the bots the command addressed, `leader` the party leader the command named
-// (null for a single bot or a `party` without a leader), `commander` the new commander (null: release).
-void NoteMaster(std::vector<Player*> const& bots, Player* leader, Player* commander);
+// (null for a single bot or a `party` without a leader), `commander` the new commander (null: release). `kinds` is one per bot: the kind the handler
+// read for THAT bot (host/cmd/TbMasterBindPure.h IsBgBind), and `bgInstance` the commander's battleground instance. A bg bot is never stored, is no
+// member of the commander's record and ends only with its match (TbCmdBindingLifePure.h BgBook/CheckBg); the normal bots keep the record's rules.
+void NoteMaster(std::vector<Player*> const& bots, std::vector<life::Kind> const& kinds, Player* leader, Player* commander, uint32 bgInstance);
 // HandleOrder (TbOrders.cpp), once per command: one entry per addressed bot, its refusal code (empty when it queued the order). Logged once per card the
 // addressed bots stand on, each with its own counts and first refusal.
 void NoteOrder(std::vector<std::pair<Player*, std::string>> const& results, std::string const& verb, std::string const& arg);

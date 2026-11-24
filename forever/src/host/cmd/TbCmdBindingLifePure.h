@@ -10,7 +10,9 @@
 //    failing case). The live group is always found through the lead.
 //  * when a standing binding ends, and why: the shared CheckBinding's verdicts (lead left, group changed, leader changed, a player joined, the group
 //    became a raid or grew beyond five, the commander left an in-party binding) plus the two timers P2 adds - a lead dead past its grace and a
-//    commander away past the mastered-bot grace. The timers never release sooner than their grace.
+//    commander away past the mastered-bot grace. The timers never release sooner than their grace. A battleground bind (BG2 live row 5) is apart,
+//    and per BOT: a bg bot is never stored, never a member of the record, no normal rule touches it, and it ends only with the match it was bound
+//    in (`BgBook`, `CheckBg`, `BgBindEnd`); its commander may hold normal members at the same time.
 //  * how a stored row is restored: only with the commander and the lead back in the world (the spec's mutation: restoring with the lead offline must
 //    not happen), then meetings to join and bots to bind, online ones only - and only the members the HOST says are still this commander's
 //    (`Claim`: a bot handed to another commander, or a character that is no host bot, is never taken).
@@ -152,8 +154,245 @@ enum class End : uint8_t
     GroupTooLarge,      // the group grew beyond five (forty for a raid binding)
     CommanderLeftParty, // an in-party binding: the commander is no longer a member
     CommanderAway,      // the commander has been out of the world for the mastered-bot grace
+    BgBotLeft,          // a battleground bind: the bot left the match (or logged out); never a verdict of the party rules
+    BgCommanderLeft,    // a battleground bind: the commander left the match (or logged out)
+    BgMatchEnded,       // a battleground bind: the match it was made in is over
     Unbound,            // the commander's own release; not a verdict of Decide
 };
+
+// ---- a battleground bind (BG2 live row 5) ----
+
+// `.tb master <bot> <human>` inside one battleground instance (host/cmd/TbMasterBindPure.h: both in the same instance, on the same team) is its own
+// short-lived kind: it is never stored, and the rules below do not apply to it. Inside a match the lead's group is the battleground raid, so
+// groupIsBg / groupIsRaidOrBg would release it within one 1 Hz tick (group-raid), and the raid's leader is the human, not the bot (leader-changed).
+// It has exactly one end: the match it was made in, when either side leaves it (the instance changes or goes to 0, which covers a leave, the end of
+// the match and both logouts).
+struct BgFacts
+{
+    uint32_t instance = 0;              // the instance the bind was made in (0 = none recorded: a bind with no match is over)
+    uint32_t botInstance = 0;           // the bot's live GetBattlegroundId(): 0 = no longer inside a match
+    uint32_t commanderInstance = 0;     // the commander's live GetBattlegroundId()
+    bool botOnline = true;
+    bool commanderOnline = true;
+};
+
+enum class BgEnd : uint8_t
+{
+    None,
+    BotLeft,            // the bot left the match, or logged out
+    CommanderLeft,      // the commander left the match, or logged out
+    MatchEnded,         // the match is gone for both (it ended), or the record names none
+};
+
+// Both gone is the match ending; one gone is that one leaving. A logout ends it at once: the kind has no grace, the match is the whole life.
+inline BgEnd BgBindEnd(BgFacts const& facts)
+{
+    if (!facts.instance)
+        return BgEnd::MatchEnded;
+    if (!facts.botOnline)
+        return BgEnd::BotLeft;
+    if (!facts.commanderOnline)
+        return BgEnd::CommanderLeft;
+    bool const botHere = facts.botInstance == facts.instance;
+    bool const commanderHere = facts.commanderInstance == facts.instance;
+    if (!botHere && !commanderHere)
+        return BgEnd::MatchEnded;
+    if (!botHere)
+        return BgEnd::BotLeft;
+    if (!commanderHere)
+        return BgEnd::CommanderLeft;
+    return BgEnd::None;
+}
+
+// The verdict's End, so Decide and the host read one value. No normal end is ever produced for a battleground bind.
+inline End BgEndToEnd(BgEnd end)
+{
+    switch (end)
+    {
+        case BgEnd::BotLeft: return End::BgBotLeft;
+        case BgEnd::CommanderLeft: return End::BgCommanderLeft;
+        case BgEnd::MatchEnded: return End::BgMatchEnded;
+        case BgEnd::None: break;
+    }
+    return End::None;
+}
+
+// ---- the kind is per bound bot (BG2 review F2/F3) ----
+
+// Each bound bot carries its own kind. A NORMAL bot belongs to its commander's binding record (the members, the stored row and the 1 Hz life rules
+// above and below: leader-changed, group-raid, the timers). A BG bot (`.tb master` made inside one battleground instance, TbMasterBindPure.h
+// IsBgBind) is in the BgBook instead: never stored, never in the record, no normal rule reads it, and it is released on its own when THAT bot or its
+// commander leaves the instance it was bound in, the instance ends, or either logs out (BgBindEnd). One commander may hold both kinds at once, and
+// one kind never changes the other's state: a bg bind leaves the record alone, a normal bind leaves the book alone, and a command in which every
+// bot was refused changes nothing.
+enum class Kind : uint8_t
+{
+    Normal,
+    Bg,
+};
+
+struct BgMember
+{
+    uint64_t bot = 0;                   // character guid counter
+    uint64_t commander = 0;
+    uint32_t instance = 0;              // the commander's battleground instance when the bot bound (the handler's, never a bot of the record)
+};
+
+using BgBook = std::vector<BgMember>;   // one entry per bot; a bot not in it is normal
+
+// One bot of a `.tb master` command: whether the host really bound it (h3 and the master written) and the kind the handler read for it.
+struct BindResult
+{
+    uint64_t bot = 0;
+    bool bound = false;
+    Kind kind = Kind::Normal;
+};
+
+inline BgMember const* FindBg(BgBook const& book, uint64_t bot)
+{
+    for (BgMember const& member : book)
+        if (member.bot == bot)
+            return &member;
+    return nullptr;
+}
+
+inline void DropBg(BgBook& book, uint64_t bot)
+{
+    book.erase(std::remove_if(book.begin(), book.end(), [&](BgMember const& member) { return member.bot == bot; }), book.end());
+}
+
+// One command's results into the book: every bot that really bound takes the kind of THIS bind (a bg bot with the commander's instance; a normal
+// bot leaves the book). A refused bot changes nothing. True when anything bound.
+inline bool ApplyBind(BgBook& book, uint64_t commander, std::vector<BindResult> const& results, uint32_t commanderInstance)
+{
+    bool any = false;
+    for (BindResult const& result : results)
+    {
+        if (!result.bound || !result.bot)
+            continue;
+        any = true;
+        DropBg(book, result.bot);
+        if (result.kind == Kind::Bg)
+            book.push_back({ result.bot, commander, commanderInstance });
+    }
+    return any;
+}
+
+// The commander's bots of each kind. `bound` is what h3 binds to him now; the normal ones are those the book does not give him as bg.
+inline std::vector<uint64_t> NormalMembers(BgBook const& book, uint64_t commander, std::vector<uint64_t> const& bound)
+{
+    std::vector<uint64_t> normal;
+    for (uint64_t bot : bound)
+    {
+        BgMember const* member = FindBg(book, bot);
+        if (!member || member->commander != commander)
+            normal.push_back(bot);
+    }
+    return normal;
+}
+
+inline std::vector<uint64_t> BgMembersOf(BgBook const& book, uint64_t commander)
+{
+    std::vector<uint64_t> bots;
+    for (BgMember const& member : book)
+        if (member.commander == commander)
+            bots.push_back(member.bot);
+    return bots;
+}
+
+// What one command does to the commander's NORMAL record (`recordMembers`: its members before the command).
+enum class NormalUpdate : uint8_t
+{
+    Keep,       // no normal bot bound and none left the record: the record, its row and its rules stay exactly as they were
+    Rebind,     // a normal bot bound: the record is rebuilt from the normal members (lead, flags, row)
+    Shrink,     // a member of the record was rebound in a match (now bg): it leaves the record, the rest stands
+    Drop,       // ...and it was the record's last member: the record and its row go, no release (the bot is bound, as bg)
+};
+
+inline NormalUpdate NormalRecordUpdate(std::vector<BindResult> const& results, std::vector<uint64_t> const& recordMembers)
+{
+    bool boundNormal = false;
+    size_t movedOut = 0;
+    for (BindResult const& result : results)
+    {
+        if (!result.bound || !result.bot)
+            continue;
+        if (result.kind == Kind::Normal)
+            boundNormal = true;
+        else if (std::find(recordMembers.begin(), recordMembers.end(), result.bot) != recordMembers.end())
+            ++movedOut;
+    }
+    if (boundNormal)
+        return NormalUpdate::Rebind;
+    if (!movedOut)
+        return NormalUpdate::Keep;
+    return movedOut >= recordMembers.size() ? NormalUpdate::Drop : NormalUpdate::Shrink;
+}
+
+// The live facts of one bg member, read once a second (and at a logout, with that side offline).
+struct BgLive
+{
+    uint64_t bot = 0;
+    bool botOnline = false;
+    uint32_t botInstance = 0;           // the bot's GetBattlegroundId()
+    uint64_t botCommander = 0;          // h3's commander of the bot now (0 = none)
+    bool commanderOnline = false;
+    uint32_t commanderInstance = 0;     // the commander's GetBattlegroundId()
+};
+
+struct BgVerdict
+{
+    uint64_t bot = 0;
+    uint64_t commander = 0;
+    End end = End::None;
+    bool release = false;               // false: only drop the entry (h3 gives the bot to someone else now; releasing would undo that bind)
+};
+
+// The 1 Hz check of every bg member, each on its own facts: a member whose bot left (or logged out, or has no live row) is released alone; the
+// commander leaving releases all of his. A verdict carries no group: a bg release never reaches into the battleground raid or its leader.
+inline std::vector<BgVerdict> CheckBg(BgBook const& book, std::vector<BgLive> const& live, bool enabled)
+{
+    std::vector<BgVerdict> out;
+    for (BgMember const& member : book)
+    {
+        BgLive facts;
+        facts.bot = member.bot;
+        facts.botCommander = member.commander;
+        for (BgLive const& candidate : live)
+            if (candidate.bot == member.bot)
+            {
+                facts = candidate;
+                break;
+            }
+        if (facts.botCommander != member.commander)
+        {
+            out.push_back({ member.bot, member.commander, End::None, false });
+            continue;
+        }
+        if (!enabled)
+        {
+            out.push_back({ member.bot, member.commander, End::Disabled, true });
+            continue;
+        }
+        BgFacts bg;
+        bg.instance = member.instance;
+        bg.botInstance = facts.botInstance;
+        bg.commanderInstance = facts.commanderInstance;
+        bg.botOnline = facts.botOnline;
+        bg.commanderOnline = facts.commanderOnline;
+        End const end = BgEndToEnd(BgBindEnd(bg));
+        if (end != End::None)
+            out.push_back({ member.bot, member.commander, end, true });
+    }
+    return out;
+}
+
+// Does a release reach into a party (the shared in-party rule, which can hand the lead to the commander)? Only a normal record made in the party.
+// A bg member never does: the battleground raid's leader is the match's, not the binding's.
+inline bool ReleaseReachesParty(Kind kind, uint32_t flags)
+{
+    return kind == Kind::Normal && (flags & FlagInParty) != 0;
+}
 
 // What the world says about one standing binding now. Timers are in milliseconds; a grace of 0 releases at once.
 struct Facts
@@ -179,7 +418,8 @@ struct Facts
 
 // The most specific verdict; None while the binding stands. A classic binding (the commander outside the party) ends on a lead, group, leadership,
 // party-size or joined-player change; an in-party or player-led one also when the commander is gone from the party. The two timers end last, so a
-// binding that already lost its group is released with the group's reason, not with the commander's.
+// binding that already lost its group is released with the group's reason, not with the commander's. Only the normal members reach this; a bg
+// member is judged by CheckBg alone.
 inline End Decide(Stored const& stored, Facts const& facts)
 {
     if (!facts.enabled)
@@ -224,6 +464,9 @@ inline char const* EndCode(End end)
         case End::GroupTooLarge: return "group-full";
         case End::CommanderLeftParty: return "commander-left-party";
         case End::CommanderAway: return "commander-away";
+        case End::BgBotLeft: return "bg-bot-left";
+        case End::BgCommanderLeft: return "bg-commander-left";
+        case End::BgMatchEnded: return "bg-match-ended";
         case End::Unbound: return "unbound";
     }
     return "";
@@ -245,6 +488,9 @@ inline char const* EndText(End end)
         case End::GroupTooLarge: return "the group grew beyond its size";
         case End::CommanderLeftParty: return "the commander left the party";
         case End::CommanderAway: return "the commander has been away past the grace";
+        case End::BgBotLeft: return "the bound bot left the battleground";
+        case End::BgCommanderLeft: return "the commander left the battleground";
+        case End::BgMatchEnded: return "the battleground the binding was made in has ended";
         case End::Unbound: return "released by the commander";
     }
     return "unknown";

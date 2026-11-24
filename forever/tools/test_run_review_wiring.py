@@ -90,7 +90,8 @@ class Review(unittest.TestCase):
 
     # 4
     def test_instance_is_remembered(self):
-        start = function_body(self.run, r"StartOutcome StartRun\(Player\* leader, ai::DungeonPlan const\* plan, uint32 nowMs\)\s*\{")
+        # #225 (GM observer exemption and the run's self-recover) added `size_t fromStep` to StartRun.
+        start = function_body(self.run, r"StartOutcome StartRun\(Player\* leader, ai::DungeonPlan const\* plan, uint32 nowMs, size_t fromStep\)\s*\{")
         self.assertIn("rec->instanceId = leader->GetInstanceId()", start)
         tick = function_body(self.run, r"void TickRun\(RunRec& rec, uint32 nowMs\)\s*\{")
         self.assertIn("lead->GetInstanceId() != rec.instanceId", tick)

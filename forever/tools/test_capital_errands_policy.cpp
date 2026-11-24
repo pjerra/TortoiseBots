@@ -72,7 +72,7 @@ int main()
         ++checks;
     }
 
-    // 3. Priority order: Mailbox > Trainer > Bank > AuctionHouse, respecting per-kind cooldowns.
+    // 3. Priority order: Mailbox > Mount > Trainer > Bank > AuctionHouse, respecting per-kind cooldowns.
     {
         auto in = BaseErrandInput();
         in.unreadMailCount = 1;
@@ -94,6 +94,34 @@ int main()
 
         in.auctionEnabled = false;
         assert(PickCapitalErrand(in) == CapitalErrandKind::None);
+        ++checks;
+    }
+
+    // 3b. A mount need runs outside a capital (the racial trainer/vendor pairs
+    // sit in Goldshire, Sen'jin Village and the like) but yields to mail inside
+    // one and honours its own cooldown.
+    {
+        auto in = BaseErrandInput();
+        in.needsMountPurchase = true;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mount);
+
+        in.inCapital = false;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mount);
+
+        in.isMoving = true;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::None);
+        in.isMoving = false;
+
+        in.mountCooldownUntilMs = in.nowMs + 1;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::None);
+
+        in.inCapital = true;
+        in.mountCooldownUntilMs = 0;
+        in.unreadMailCount = 1;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mailbox);
+
+        in.mailboxCooldownUntilMs = in.nowMs + 1000;
+        assert(PickCapitalErrand(in) == CapitalErrandKind::Mount);
         ++checks;
     }
 
@@ -146,12 +174,14 @@ int main()
         ++checks;
     }
 
-    // 6. Accepting bot duels.
+    // 6. Accepting duels: TB accepts at 90% or more, and always from the bot's real player master.
     {
-        assert(ShouldAcceptBotDuel(true, true, false, true, 20, 10, 95));
-        assert(!ShouldAcceptBotDuel(true, true, false, false, 20, 10, 95)); // non-bot challenger
-        assert(!ShouldAcceptBotDuel(false, true, false, true, 20, 10, 95)); // non-free bot
-        assert(!ShouldAcceptBotDuel(true, true, false, true, 5, 10, 95));   // below min level
+        assert(ShouldAcceptBotDuel(true, false, false, 20, 10, 95));  // healthy bot challenged by anyone
+        assert(!ShouldAcceptBotDuel(true, false, false, 20, 10, 89)); // below 90% and not the master
+        assert(ShouldAcceptBotDuel(true, false, true, 20, 10, 50));   // the master, at any health
+        assert(!ShouldAcceptBotDuel(true, false, true, 5, 10, 100));  // the master, but under the level gate
+        assert(!ShouldAcceptBotDuel(false, false, true, 20, 10, 100)); // dead
+        assert(!ShouldAcceptBotDuel(true, true, true, 20, 10, 100));   // in combat
         ++checks;
     }
 

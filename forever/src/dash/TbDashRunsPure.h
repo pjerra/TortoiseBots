@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <map>
 #include <set>
 #include <string>
@@ -63,6 +64,15 @@ struct BossView
     std::string name;
     bool read = false;      // the run read this boss dead or alive at least once (RunRec::bossDead has the entry)
     bool dead = false;
+    int64_t killedAtS = -1; // seconds from the run start, -1 = not killed while the run watched
+};
+
+// One place the run summary reports (a wipe or a death): seconds from the run start and where it happened.
+struct SpotView
+{
+    int64_t tS = 0;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    std::string role;
 };
 
 struct RunView
@@ -90,6 +100,7 @@ struct RunView
     int64_t startedUnix = 0, endedUnix = 0;
     int64_t changedUnix = 0;
     uint32_t deaths = 0, wipes = 0;
+    std::vector<SpotView> wipeSpots, deathSpots;   // TB's wipe/death positions (RunRec::wipeSpots/deathSpots)
 
     std::vector<EventView> events;  // oldest first (the whole ring)
     std::vector<MemberView> members; // the leader first
@@ -384,8 +395,34 @@ struct SummaryMeta
     std::string driver = "human";
 };
 
-// The run summary the Dungeon runs tab indexes (internal/dungeons/run.go): outcome, counts, the plan's bosses (killed_at_s is null: the run
-// keeps no kill time yet, `killed` says what it read), the party at the end, driver and build. Wipes and deaths are counts (no positions yet).
+// The wipe and death places: seconds from the run start and the position, with the dead bot's first role when known.
+inline std::string SpotsJson(std::vector<SpotView> const& spots)
+{
+    auto coord = [](float v)
+    {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%.2f", v);
+        return std::string(buf);
+    };
+    std::string out = "[";
+    for (size_t i = 0; i < spots.size(); ++i)
+    {
+        SpotView const& s = spots[i];
+        if (i)
+            out += ',';
+        out += "{\"t_s\":" + std::to_string(s.tS) + ",\"x\":" + coord(s.x) + ",\"y\":" + coord(s.y) +
+            ",\"z\":" + coord(s.z);
+        if (!s.role.empty())
+            out += ",\"role\":\"" + CT::JsonEscape(s.role) + "\"";
+        out += "}";
+    }
+    out += "]";
+    return out;
+}
+
+// The run summary the Dungeon runs tab indexes (internal/dungeons/run.go): outcome, counts, the plan's bosses (`killed_at_s` is
+// the first time the run read the boss dead, null when it never did; `killed` says what it read), the party at the end, driver
+// and build. `wipes`/`deaths` stay counts (the keys the reader indexes); their places are `wipe_spots`/`death_spots`.
 inline std::string SummaryJson(RunView const& run, SummaryMeta const& meta)
 {
     using CT::JsonEscape;
@@ -415,10 +452,13 @@ inline std::string SummaryJson(RunView const& run, SummaryMeta const& meta)
     {
         BossView const& b = run.bosses[i];
         out += std::string(i ? "," : "") + "{\"entry\":" + std::to_string(b.entry) + ",\"name\":\"" + JsonEscape(b.name) +
-            "\",\"killed_at_s\":null,\"killed\":" + (b.read && b.dead ? "true" : "false") + "}";
+            "\",\"killed_at_s\":" + (b.killedAtS >= 0 ? std::to_string(b.killedAtS) : "null") + ",\"killed\":" +
+            (b.read && b.dead ? "true" : "false") + "}";
     }
     out += "],\"wipes\":" + std::to_string(run.wipes);
     out += ",\"deaths\":" + std::to_string(run.deaths);
+    out += ",\"wipe_spots\":" + SpotsJson(run.wipeSpots);
+    out += ",\"death_spots\":" + SpotsJson(run.deathSpots);
     out += ",\"party\":[";
     for (size_t i = 0; i < run.members.size(); ++i)
     {
@@ -429,6 +469,7 @@ inline std::string SummaryJson(RunView const& run, SummaryMeta const& meta)
     out += "]}";
     return out;
 }
+
 
 // The role of a host bot from the lines `.tb where` prints (BotMgr::DescribeBrain), as the roster does: the engine's role strategies
 // (AiFactory): tanks get "tank assist" / "tank face" / "tank feral", healers "holy" / "discipline" / "restoration". Empty while the

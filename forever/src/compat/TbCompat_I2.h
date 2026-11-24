@@ -4,6 +4,7 @@
 #pragma once
 
 #include "LootPackets.h"           // WorldPackets::Loot::LootUnit / LootRelease / LootMoney (the typed packets of the loot handlers)
+#include "ItemUseCastPolicy.h"     // ShouldStopMovingForItemCast / ItemCastDurationMs (the action duration of an item use)
 #include "../TbBotSession.h"     // TortoiseBots::BotSession, CastResult (the in-tick cast refusal of the item cast, R0 notes U1)
 
 // ===============================================================================================================
@@ -186,14 +187,19 @@ inline void SetLootGuidCompat(Player* /*bot*/, ObjectGuid const& /*guid*/) {}
 // object). The skill a corpse asks for is still named for the code behind the line (T's helper is ai/cmangos-compat-shim.h:59; F: the
 // creature difficulty's own accessor, CreatureData.h:475).
 // Slice 9: a CHEST (GAMEOBJECT_TYPE_CHEST) is opened by the opening cast and its window is read like a corpse's (the poll of TbCompat_S9.h), so a chest
-// is not "unported": false = the code below runs for it. Everything else that needs a cast (a herb or ore node, a skin, a lock the bot picks) stays
-// the named feature and answers true. Spec unknown U3: whether the lock of the gunpowder chest opens for a bot through `open loot`, one boot decides.
+// is not "unported": false = the code below runs for it. Skin is ported too (TbCompat_V2.h CorpseSkinnableByCompat): a creature's Skinning cast runs,
+// and the poll announces its LOOT_SKINNING window. Everything else that needs a cast (a herb or ore node through the brain, a lock the bot picks)
+// stays the named feature and answers true. Spec unknown U3: whether the lock of the gunpowder chest opens for a bot through `open loot`, one boot decides.
 inline bool LootGatherUnportedCompat(WorldObject* object)
 {
     if (object)
+    {
+        if (object->ToCreature())
+            return false;                               // the skinning cast below is ported
         if (GameObject* chest = object->ToGameObject())
             if (chest->GetGoType() == GAMEOBJECT_TYPE_CHEST)
                 return false;
+    }
     tbcompat::Unported(tbcompat::Feature::GatheringLoot);
     return true;
 }
@@ -295,8 +301,9 @@ template <class LootType, class ViewerType, class Body>
 inline bool PersonalItemVisibleCompat(LootType const& loot, ViewerType* viewer, Body&&) { return loot.hasItemFor(viewer); }
 
 // ===============================================================================================================
-// ITEM USE: food and drink on the bot itself go through the core's own item cast; every other use is the named feature
-// "item use except food and drink" (UseItemAction.cpp, lead decisions D3 and "decided one by one")
+// ITEM USE: an owned item's on-use spell (self, unit or item target) goes through the core's own item cast. A game-object
+// target, an openable and a cast with no owned Item* keep the named feature (UseItemAction.cpp, lead decisions D3 and
+// "decided one by one")
 // ===============================================================================================================
 
 struct ItemSpellUseCompat
@@ -365,8 +372,9 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
     }
 
     SpellInfo const* coreSpell = sSpellMgr.GetSpellInfo(spellData.SpellId, DIFFICULTY_NONE);
-    bool const hasCastOrChannel = coreSpell && (coreSpell->CalcCastTime() > 0 || coreSpell->IsChanneled());
-    if (foodOrDrink || hasCastOrChannel)
+    int32 const castTimeMs = coreSpell ? coreSpell->CalcCastTime() : 0;
+    bool const channeled = coreSpell && coreSpell->IsChanneled();
+    if (TortoiseBots::ShouldStopMovingForItemCast(foodOrDrink, castTimeMs, channeled))
         ai->StopMoving();
 
     TortoiseBots::CastResult stale;
@@ -374,10 +382,19 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
 
     uint32 const countBefore = bot->GetItemCount(itemId);
     SpellCastTargets targets;
-    if (item)
-        targets.SetItemTarget(item);
-    else if (unit)
-        targets.SetUnitTarget(unit);
+    switch (TortoiseBots::DecideItemCastTargetKind(item != nullptr, unit != nullptr))
+    {
+        case TortoiseBots::ItemCastTargetKind::Item:
+            targets.SetItemTarget(item);
+            out.item = item;
+            break;
+        case TortoiseBots::ItemCastTargetKind::Unit:
+            targets.SetUnitTarget(unit);
+            out.unit = unit;
+            break;
+        case TortoiseBots::ItemCastTargetKind::Self:
+            break;
+    }
 
     bot->CastItemUseSpell(itemUsed, spellData.SpellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
     // itemUsed may be gone now (the last of a stack is consumed by the cast): not touched again.
@@ -398,12 +415,7 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
         return out;
 
     out.cast = true;
-    if (foodOrDrink)
-        out.castDuration = 24000;                       // food and drink: the sit of the legacy action (UseItemAction.cpp: SetDuration(24000))
-    else if (coreSpell && coreSpell->IsChanneled())
-        out.castDuration = coreSpell->GetDuration() > 0 ? uint32(coreSpell->GetDuration()) : 8000;
-    else if (coreSpell && coreSpell->CalcCastTime() > 0)
-        out.castDuration = uint32(coreSpell->CalcCastTime());
+    out.castDuration = TortoiseBots::ItemCastDurationMs(foodOrDrink, castTimeMs, channeled, coreSpell ? coreSpell->GetDuration() : 0);
     return out;
 }
 
@@ -525,10 +537,6 @@ inline bool BotUseItemOpenLockCheckCompat(SpellType* /*self*/) { tbcompat::Unpor
 // use"). Failure value: false (not used).
 inline bool QueueGameObjectUseCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
 
-inline bool ItemUseUnportedCompat(bool /*foodOrDrink*/)
-{
-    return false;
-}
 inline void RemoveStealthAurasCompat(Player* bot)
 {
     if (bot)

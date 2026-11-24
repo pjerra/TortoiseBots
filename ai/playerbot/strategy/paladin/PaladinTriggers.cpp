@@ -4,7 +4,9 @@
 #include "PaladinActions.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/GroupMembers.h"
+#include "playerbot/DungeonPlanMgr.h"
 #include "runtime/policy/class/JudgementUpkeepPolicy.h"
+#include "runtime/policy/class/HolyMeleeWeavePolicy.h"
 
 using namespace ai;
 
@@ -62,6 +64,28 @@ bool SealInMeleeTrigger::IsActive()
 	return target && bot->CanReachWithMeleeAutoAttack(target);
 }
 
+bool ProtPaladinSealTrigger::IsActive()
+{
+    using namespace TortoiseBots;
+    if (!AI_VALUE2(bool, "combat", "self target"))
+        return false;
+
+    Unit* const target = AI_VALUE(Unit*, "current target");
+    Creature* const creature = target && target->IsCreature() ? static_cast<Creature*>(target) : nullptr;
+    bool const targetIsBoss = creature &&
+        (creature->IsWorldBoss() || ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry()));
+    bool const inFiveMan = bot->IsInWorld() && bot->GetMap() && bot->GetMap()->IsDungeon() && !bot->GetMap()->IsRaid();
+    bool const lowMana = AI_VALUE2(uint8, "mana", "self target") < sPlayerbotAIConfig.mediumMana;
+    bool const knowsWisdom = ai->HasSpell("seal of wisdom");
+
+    ProtPaladinSeal const wanted = ProtPaladinWantedSeal(
+        sPlayerbotAIConfig.protPaladinDungeonWisdom, inFiveMan, targetIsBoss, lowMana, knowsWisdom);
+
+    if (wisdom)
+        return wanted == ProtPaladinSeal::Wisdom && !ai->HasAura("seal of wisdom", bot);
+    return wanted == ProtPaladinSeal::Righteousness && !ai->HasAura("seal of righteousness", bot);
+}
+
 namespace
 {
 // Judgement's range (spell_template rangeIndex 7, the same 10 yd the
@@ -103,6 +127,7 @@ JudgementUpkeepState ReadJudgementUpkeep(PlayerbotAI* ai, Player* bot, bool want
     bool const eliteOrBoss = info && (CreatureRankCompat(creature) == CREATURE_ELITE_ELITE || CreatureRankCompat(creature) == CREATURE_ELITE_RAREELITE ||
         CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS);
     bool const inInstance = bot->GetMap() && bot->GetMap()->IsDungeon();
+    bool const inFiveMan = inInstance && !bot->GetMap()->IsRaid();
     if (!eliteOrBoss && !inInstance)
         return state;
 
@@ -157,7 +182,8 @@ JudgementUpkeepState ReadJudgementUpkeep(PlayerbotAI* ai, Player* bot, bool want
     if (!IsJudgementUpkeepTarget(true, eliteOrBoss, tankTarget && inInstance, (uint8)target->GetHealthPercent()))
         return state;
 
-    state.kind = JudgementKindFor(GuidKeyCompat(bot->GetObjectGuid()), paladins, paladinCount);
+    bool const tankMayOwnWisdom = sPlayerbotAIConfig.protPaladinDungeonWisdom && inFiveMan;
+    state.kind = JudgementKindFor(GuidKeyCompat(bot->GetObjectGuid()), paladins, paladinCount, tankMayOwnWisdom);
     if (state.kind == JudgementKind::None)
         return state;
 
@@ -182,10 +208,13 @@ bool JudgementUpkeepTrigger::IsActive()
     if (step == Step::Judge)
         return ShouldCastUpkeepJudgement(state.kind, state.wantedSealUp, state.needsRefresh);
 
-    // A Seal step fires only for the owner of its own debuff.
+    // A Seal step fires only for the owner of its own debuff. A tank does not
+    // refill an empty slot with Wisdom (it would lose Righteousness threat on
+    // a boss long before the judgement is due); it swaps only for a refresh.
+    bool const refillEmptySlot = !ai->IsTank(bot);
     JudgementKind const mine = step == Step::SealWisdom ? JudgementKind::Wisdom : JudgementKind::Light;
     return state.kind == mine &&
-        ShouldCastUpkeepSeal(state.kind, state.anySealUp, state.wantedSealUp, state.needsRefresh, state.judgementReady);
+        ShouldCastUpkeepSeal(state.kind, state.anySealUp, state.wantedSealUp, state.needsRefresh, state.judgementReady, refillEmptySlot);
 }
 
 bool BlessingTrigger::IsActive()
@@ -540,4 +569,47 @@ bool ExorcismTrigger::IsActive()
     }
 
     return false;
+}
+
+namespace
+{
+bool ReadHolyMeleeWeaveAllowed(PlayerbotAI* ai, Player* bot, Unit* target)
+{
+    using namespace TortoiseBots;
+    HolyMeleeWeaveInput in;
+    in.enabled = sPlayerbotAIConfig.holyPaladinMeleeWeave;
+    in.isHolyPaladin = bot->GetClass() == CLASS_PALADIN && ai->IsHeal(bot);
+    Group* group = bot->GetGroup();
+    in.inGroup = group && group->GetMembersCount() >= 2;
+    in.inRaid = bot->GetMap() && bot->GetMap()->IsRaid();
+    in.hasTarget = target != nullptr;
+    if (target)
+    {
+        in.targetAlive = sServerFacade.IsAlive(target);
+        in.targetIsPlayer = target->IsPlayer();
+        in.targetEngaged = target->IsInCombat();
+    }
+    in.selfHealthPct = ai->GetAiObjectContext()->GetValue<uint8>("health", "self target")->Get();
+    in.partyMemberToHealPct = ai->GetAiObjectContext()->GetValue<uint8>("health", "party member to heal")->Get();
+    in.mediumHealthPct = static_cast<uint8_t>(sPlayerbotAIConfig.mediumHealth);
+    return HolyMeleeWeaveAllowed(in);
+}
+} // namespace
+
+bool HolyMeleeWeaveReachTrigger::IsActive()
+{
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (!ReadHolyMeleeWeaveAllowed(ai, bot, target))
+        return false;
+    return !bot->CanReachWithMeleeAutoAttack(target) || !sServerFacade.IsWithinLOSInMap(bot, target);
+}
+
+bool HolyMeleeWeaveAttackTrigger::IsActive()
+{
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (!ReadHolyMeleeWeaveAllowed(ai, bot, target))
+        return false;
+    if (!bot->CanReachWithMeleeAutoAttack(target))
+        return false;
+    return bot->GetVictim() != target || !bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING);
 }

@@ -49,18 +49,21 @@
 #include "playerbot/strategy/values/MaintenanceValues.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "../../../runtime/GuildOrderStore.h"
+#include "../../../runtime/GuildOrderAccess.h"
+#include "playerbot/strategy/actions/GuildCreateActions.h"
+#include "playerbot/strategy/actions/GuildOrderBuyAction.h"
+#include "../../../runtime/DowntimeService.h"
+#include "playerbot/strategy/triggers/RpgTriggers.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
 #include "playerbot/strategy/actions/WorldBuffAction.h"
 #include "playerbot/strategy/actions/ViscidusActions.h"
 #include "playerbot/strategy/generic/ThreatStrategy.h"
 #include "playerbot/strategy/triggers/EmeraldSanctumDungeonTriggers.h"
-#include "playerbot/strategy/values/EnemyPlayerValue.h"
 #include "playerbot/strategy/values/FankrissSpawnTarget.h"
 #include "playerbot/strategy/values/GrindTargetValue.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/MountValues.h"
-#include "playerbot/strategy/values/WorldPvpSeekChecks.h"
 #include "playerbot/policy/combat/TauntHeldTargetPolicy.h"
 
 #include <algorithm>
@@ -216,19 +219,14 @@ bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 // false exactly as before. StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in either (R9): PositionAction.cpp is in the slice.
 
 // =====================================================================================================================
-// Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
-// =====================================================================================================================
-void BuildGuildOrderEnchantIndex() { NotePool(); }
+// Startup tables of other managers. Owner file: GuildOrderSources.cpp. Nothing is built.
+// (The enchant catalogue is real now: host/TbHostGuildOrderEnchantIndex.cpp.)
 void BuildGuildOrderSourceIndex() { NotePool(); }
 std::vector<GuildOrderEntrySource> GuildOrderSourcesFor(uint32_t) { NotePool(); return {}; }
 
 // =====================================================================================================================
 // Misc legacy services. Owner files named per line.
 // =====================================================================================================================
-// CastCancelLog.cpp: diagnostics only (a log line per cancelled cast), off.
-void LogCastCancel(PlayerbotAI*, const char*, CurrentSpellTypes, float) { NoteMisc(); }
-void LogCastCancelNonMelee(PlayerbotAI*, const char*, bool, float) { NoteMisc(); }
-void LogCastCancelStop(PlayerbotAI*, const char*, float) { NoteMisc(); }
 // FishAction.cpp
 void EndFishingSession(PlayerbotAI*, char const*) { NoteMisc(); }
 // BotAreaTriggers.cpp
@@ -238,17 +236,9 @@ void UpdateBotAreaTriggers(Player*, BotAreaTriggerState&, std::vector<uint32_t> 
 BotCheatMask CheatAction::GetCheatMask(std::string) { NoteMisc(); return BotCheatMask(0); }
 // EmoteAction.cpp: how many chat variants a text emote has. 1 = only the plain one.
 uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { NoteMisc(); return 1; }
-// MountValues.cpp
-bool MountValue::IsMountSpell(uint32) { NoteMisc(); return false; }
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
-// EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
-// The real answer outside a battleground is 60 yd (EnemyPlayerValue.cpp:276). In one the real values are 40 (10 late in Alterac Valley); battlegrounds are
-// not ported, so the shortest of them answers (less).
-float EnemyPlayerValue::GetMaxAttackDistance(Player* bot) { NoteMisc(); return bot && bot->InBattleground() ? 10.0f : 60.0f; }
-bool WorldPvpSeekChecks::IsSeeking(PlayerbotAI*, Player*) { NoteMisc(); return false; }
-bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI*, Player*, Player*) { NoteMisc(); return false; }
 
 // ChatFilter.cpp: the base filter is the real body (ChatFilter.cpp:11, it strips the "@..." prefix). The chain of role, class, race, rti, level and group filters
 // is not ported, so a line that opens with "@" (a command for a role or a group the bot cannot check) is refused (R9): the empty text means "not for this bot".
@@ -304,10 +294,6 @@ std::vector<uint32> WorldBuffAction::NeedWorldBuffs(Unit*) { NoteMisc(); return 
 // stays: the use command still refuses a game object on ForeverCore (`GameObjectUseUnportedCompat`).
 
 // ItemUsageValue.cpp is in the slice since slice 9 (package L9): its four stand-ins (IsNeededForQuest, IsFutureUpgrade, QueryItemUsageForEquip, GetRecipeSpell) are gone.
-
-// GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
-// Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
-bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
 
@@ -322,6 +308,7 @@ bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 double RandomBotFacade::GetBuyMultiplier(Player*) { NotePool(); return 1.0; }
 double RandomBotFacade::GetSellMultiplier(Player*) { NotePool(); return 1.0; }
 void RandomBotFacade::AddTradeDiscount(Player*, Player*, int32) { NotePool(); }
+int32 RandomBotFacade::GetValueValidTime(uint32, std::string) { NotePool(); return 0; }
 std::vector<AuctionEntry> RandomBotFacade::GetAhPrices(uint32, Player*) const { NotePool(); return {}; }
 // The core checks an item it has not created through a temporary Item (Player::CanEquipNewItem); swap=true as on Turtle:
 // the caller compares old and new itself, and an occupied slot must not reject every upgrade.
@@ -329,11 +316,6 @@ InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, 
 {
     return player ? player->CanEquipNewItem(slot, dest, item, true) : EQUIP_ERR_ITEM_NOT_FOUND;
 }
-// MountValues.cpp: the `mount list` value is not registered (an empty list), so no MountValue exists; the members answer "no mount".
-uint32 ai::MountValue::GetMountSpell(uint32) { NoteMisc(); return 0; }
-uint32 ai::MountValue::GetSpeedFor(Player*, uint32) const { NoteMisc(); return 0; }
-uint32 ai::MountValue::GetRiderMountSpeed(Player*) { NoteMisc(); return 0; }
-bool ai::MountValue::IsAllowedFor(Player*) const { NoteMisc(); return false; }
 // GuildOrderStore.cpp (feature "pool and hire services"): no guild order exists, so nothing is protected and no bag-full note is kept.
 namespace TortoiseBots { namespace GuildOrders {
 void RefreshOrderProtectedSet(Player*) { NotePool(); }
@@ -436,22 +418,11 @@ bool SeekCycleSnapshot(std::uint32_t, std::uint64_t, SeekCycleView& out) { NoteB
 
 }
 
-// =====================================================================================================================
-// W1 (world life, grind and live). Owned by W1: no other package edits this block (the slice-9 item stand-ins above belong to W6a).
-// =====================================================================================================================
-namespace ai
-{
-// `can fight elite` is MaintenanceValues.h's inline CanFightEliteValue; its Calculate names ShouldSellValue::GroupMemberLeavingForVendor,
-// which lives in MaintenanceValues.cpp (17 places, not in the slice). A free bot has no group, so the call is never reached; for any other
-// bot the answer "a group member is leaving" makes the value false, so no elite is ever picked (LESS).
-bool ShouldSellValue::GroupMemberLeavingForVendor(PlayerbotAI*) { NoteMisc(); return true; }
-}
-
 // behavior/PlayerConvenience.cpp:207 (read by the stay / guard chat shortcuts): tells the pending-summon bookkeeping that the bot was ordered to hold, so the
 // summon's restore does not put it back on follow. The real function returns false when the bot has no summon record, which is always
-// the case here (the summon feature is unported: Feature::PlayerSummon). Counted under that row. If the host adds it next to the other
-// PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
-bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unported(tbcompat::Feature::PlayerSummon); return false; }
+// the case here (ForeverCore keeps no summon bookkeeping): the host's BotMgr::Think places a far bot next to its master itself.
+// If the host adds it next to the other PlayerConvenience stand-ins in host/TbHostOwnership.cpp, delete this one (duplicate symbol at link).
+bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { return false; }
 
 // =====================================================================================================================
 // W2 (town: sell, buy, repair, trainer, mail read): symbols referenced by the W2 action files whose owners (MaintenanceValues,
@@ -464,11 +435,19 @@ bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { tbcompat::Unpo
 #include "playerbot/TravelMgr.h"
 namespace ai
 {
-bool ShouldSellValue::CantAffordNextSpell(PlayerbotAI*) { NoteMisc(); return false; }
-void ParkVendorErrand(PlayerbotAI*, uint32) { NoteMisc(); }
-// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these three are its plain helpers.
+// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these are its plain helpers.
 uint32 TrainerSpellPrice(TrainerSpell const* tSpell, float discountMod) { return uint32(floor(tSpell->spellCost * discountMod)); }
 bool TrainerTrainsForFree(PlayerbotAI* ai) { return sPlayerbotAIConfig.autoTrainSpells == "free" || ai->HasCheat(BotCheatMask::gold); }
+// The visit's green-row gate. On ForeverCore the visit asks the host seam instead (TrainerAction checks
+// UsesForeverTrainerCompat and CanTeachTrainerSpellForeverCompat), so this body is only reached on a core without the
+// seam: no row is teachable then, which keeps the visit from paying for one.
+bool TrainerSpellLearnableNow(Player* bot, TrainerSpell const* tSpell)
+{
+    (void)bot;
+    (void)tSpell;
+    NoteMisc();
+    return false;
+}
 uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
 {
     if (TrainerTrainsForFree(ai))
@@ -486,6 +465,65 @@ uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
 }
 
 // =====================================================================================================================
+// The travel chooser and walker call the order store, the guild bank access and the trainer trigger helpers. None is
+// ported, so each answers "nothing exists": no order (Find/RelistEntries are the host's), no bank, no trainer.
+// =====================================================================================================================
+namespace TortoiseBots
+{
+namespace GuildOrders
+{
+void SetState(uint32_t, OrderState, OrderReason) { NotePool(); }
+void SetFarmZone(uint32_t, uint32_t, uint8_t, uint32_t, uint32_t) { NotePool(); }
+void SetSupply(uint32_t, SupplyStep, uint32_t, uint32_t, SupplyStep, OrderReason, uint32_t) { NotePool(); }
+void CommitAuctionZone(uint32_t, uint32_t) { NotePool(); }
+void NoteSearchFailed(uint32_t, uint32_t) { NotePool(); }
+void NoteSearchLanded(uint32_t) { NotePool(); }
+void NoteFarmZoneTargetFailed(uint32_t, uint32_t, uint32_t, float, float, float) { NotePool(); }
+uint32_t GuildBankTabCount(uint32_t) { NotePool(); return 0; }
+void NoteBankEmpty(uint32_t, uint32_t) { NotePool(); }
+void NoteMailEmpty(uint32_t, uint32_t) { NotePool(); }
+uint32_t NoteSupplySearchFailed(uint32_t, SupplyStep, uint32_t) { NotePool(); return 0; }
+uint32_t NoteArrivedAuctionVisit(uint32_t, bool) { NotePool(); return 0; }
+bool AuctionReentryAllowed(uint32_t, uint32_t) { NotePool(); return true; }
+}
+}
+
+namespace ai
+{
+// FishValues.cpp (the fishing order session) is not in the slice: no order fishes, so the rpg walk never stands down for
+// one. Owner: ai/playerbot/strategy/values/FishValues.cpp.
+bool IsOrderFishing(PlayerbotAI*) { NoteMisc(); return false; }
+// GuildCreateActions.cpp (the charter errands) is not in the slice: no petition can be bought. Owner:
+// ai/playerbot/strategy/actions/GuildCreateActions.cpp.
+bool BuyPetitionAction::canBuyPetition(Player*) { NoteMisc(); return false; }
+Unit* GuildOrderAuctioneerNear(PlayerbotAI*, Player*) { NotePool(); return nullptr; }
+uint32 OrderMailboxItems(Player*, uint32) { NotePool(); return 0; }
+std::vector<GuildOrderZoneSlice> GuildOrderZonesFor(int32_t) { NotePool(); return {}; }
+bool GuildOrderPreyHostileToBot(Player*, int32_t) { NotePool(); return false; }
+// No spot is screened: every fishing destination counts as guarded and is skipped (LESS: none is walked).
+bool IsFishingSpotGuarded(Player*, WorldPosition const&, float) { NoteMisc(); return true; }
+TortoiseBots::GuildOrders::SourcePlan PlanGuildOrderSources(Player*, uint32_t, TortoiseBots::GuildOrders::OrderType, bool)
+{
+    NotePool();
+    TortoiseBots::GuildOrders::SourcePlan plan;
+    plan.verdict = TortoiseBots::GuildOrders::OrderReason::NoSource;
+    return plan;
+}
+void AdvanceGuildOrderAfterAuction(PlayerbotAI*, Player*, TortoiseBots::GuildOrders::OrderRecord const&, TortoiseBots::GuildOrders::OrderReason) { NotePool(); }
+}
+
+// DowntimeService (runtime/DowntimeService.cpp) is not in the slice: no errand window is ever open, so the rpg quest
+// verbs stay on (the same answer a server without `.tb downtime` gives).
+namespace TortoiseBots
+{
+bool DowntimeService::IsDowntimeActive(PlayerbotAI*) { NoteMisc(); return false; }
+}
+
+// RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no per-bot value store and no pinned-bot set.
+std::string RandomBotFacade::GetData(uint32, std::string) { NotePool(); return std::string(); }
+bool RandomBotFacade::IsPinnedBot(uint32) { NotePool(); return false; }
+
+// =====================================================================================================================
 // W3 (quests): the alt-bot service and the random-bot value store are not ported, so the quest actions record nothing in
 // them: no quest is "taken by an alt" and a drop leaves no pool value behind.
 // =====================================================================================================================
@@ -496,3 +534,11 @@ void AltBotService::AddTakenQuest(Player*, uint32_t) { NotePool(); }
 bool AltBotService::IsTakenQuest(uint32_t, uint32_t) const { NotePool(); return false; }
 }
 void RandomBotFacade::SetValue(Player*, std::string, uint32, std::string, int32) { NotePool(); }
+
+// =====================================================================================================================
+// Free-bot life: the shared value context the rpg/quest/town values reach also builds the trainer table and the
+// battlemaster list. Neither is ported (no trainer travel, no battleground queue from the open world), so both are empty.
+// =====================================================================================================================
+#include "playerbot/strategy/values/PvpValues.h"
+ai::trainableSpellMap* ai::TrainableSpellMapValue::Calculate() { NoteMisc(); return new trainableSpellMap(); }
+std::list<CreatureDataPair const*> ai::BgMastersValue::Calculate() { NoteMisc(); return {}; }

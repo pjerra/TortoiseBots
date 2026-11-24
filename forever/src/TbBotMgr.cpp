@@ -1,10 +1,20 @@
 #include "TbBotMgr.h"
+#include "host/TbTickBudgetPure.h"
 #include "host/TbAutoFood.h"
 #include "host/TbHostGroupQuestPure.h"
 #include "host/TbHostCapitalErrands.h"
+#include "host/TbHostAhMarket.h"
 #include "host/TbHostGuildMail.h"
+#include "host/TbHostGuildJoin.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostGuildOrderQueues.h"
+#include "host/TbHostGuildOrderEnchant.h"
+#include "host/TbHostFishing.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostThievery.h"
+#include "host/TbHostProfessionUpkeep.h"
+#include "host/TbHostWorldPvp.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -68,6 +78,10 @@ constexpr uint32 EntryTimeoutMs = 120000;
 constexpr uint32 DeadBackstopDefaultMs = 180000;   // TortoiseBots.Slice.DeadBackstopSeconds
 // H4: the walk to the trigger makes no progress (the best distance does not shrink by a yard) for this long: `block=stuck`.
 constexpr uint32 EntryNoProgressMs = 20000;
+// A bot the budget skipped gets the time since its own last turn when it runs
+// next, so its AI delays count wall time, not only the ticks it was visited.
+// Capped so a login or a long pause cannot replay a huge step into the engine.
+constexpr uint32 MaxAiElapsedMs = 10000;
 
 // The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1978-2024), in words.
 std::string AbortReasonText(TransferAbortParams const& denied)
@@ -233,9 +247,16 @@ void BotMgr::LoadConfig()
     _capitalErrandsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.CapitalErrands", true);
     _guildMailEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail", true);
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
+    _guildsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Guilds", true);
+    _guildFormingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildForming", false);
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
     _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
-    _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
+    _fishingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Fishing", true);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    tbhost::thievery::LoadConfig(); // the host thievery services are slice-only, like their tick
+#endif
+    _disenchantUpkeepEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Disenchant", true);
+    _enchantGearEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.EnchantGear", true);
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
@@ -350,6 +371,11 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
     // An owned bot always runs the engine too: `.bot` orders and chat need it.
     bot.useEngine = _engineByDefault || free || owned;
+    // A bot with no master has nothing to follow, so an engine for it is the free kit (engine::Create refuses a
+    // masterless brain without the free flag, and PlayerbotAI's default strategies read the free flag). A login that
+    // asks for the engine without naming a master therefore starts a free bot; with the engine off it stands.
+    if (bot.useEngine && bot.master.IsEmpty())
+        bot.free = true;
     if (bot.wantParty)
     {
         // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
@@ -533,6 +559,17 @@ std::string BotMgr::SetEngine(ObjectGuid characterGuid, bool on)
     {
         if (!engine::Built())
             return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)";
+        if (bot.master.IsEmpty() && !bot.free)
+        {
+            // A bot with no master runs the engine only as a free bot (engine::Create refuses a masterless brain
+            // without the free flag): marking it without switching the free kit on would report success while the
+            // bot stands, as the spike does for a masterless bot.
+            Player* me = bot.session->GetPlayer();
+            if (me && me->GetGroup())
+                return "the bot has no master and is in a party: a free bot plays alone";
+            bot.free = true;
+            TC_LOG_INFO("tortoisebots", "BotMgr: {} runs the engine without a master: it is a free bot", me ? me->GetName() : characterGuid.ToString());
+        }
         // Marked again after a failure: try to build the brain once more.
         bot.useEngine = true;
         bot.engineFailed = false;
@@ -579,7 +616,8 @@ std::vector<std::string> BotMgr::DescribeBrain(ObjectGuid characterGuid) const
     else if (bot.engineFailed)
         lines.push_back("brain: spike (engine requested, not running: " + bot.engineNote + ")");
     else if (bot.useEngine)
-        lines.push_back("brain: spike (engine requested, waiting for the bot to be placed next to its master)");
+        lines.push_back(bot.free ? "brain: spike (engine requested, the free kit builds it on the next tick)"
+                                 : "brain: spike (engine requested, waiting for the bot to be placed next to its master)");
     else
         lines.push_back("brain: spike");
     if (bot.entry.active)
@@ -722,7 +760,10 @@ void BotMgr::OnPlayerLogout(Player* player)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     tbhost::prof::ClearBotErrands(leaving);
     tbhost::errands::ClearBotCapitalErrands(leaving);
+    tbhost::ah_market::ClearBotAhMarket(leaving);
     tbhost::guild_mail::ClearBotGuildMail(leaving);
+    tbhost::guildjoin::ForgetBot(leaving);
+    tbhost::thievery::ForgetBot(leaving.GetCounter());
 #endif
     DropBrain(itr->second);
     // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
@@ -1480,6 +1521,61 @@ void BotMgr::ConfirmCreations()
     }
 }
 
+bool BotMgr::Budgetable(Bot const& bot) const
+{
+    // Only a pool bot with AI work to give is cuttable. A bot under a real
+    // player (a live master, or an owner's alt) runs first and whole: a player
+    // waits on its reactions. A bot with no in-world player yet (loading), a
+    // teleport to acknowledge, or a logout pending only does session
+    // bookkeeping, so delaying it buys nothing and can hold a login or a
+    // shutdown.
+    if (!bot.master.IsEmpty() || bot.owned)
+        return false;
+    Player* player = bot.session ? bot.session->GetPlayer() : nullptr;
+    return player && player->IsInWorld() && !player->IsBeingTeleported() && !bot.session->LogoutRequested();
+}
+
+void BotMgr::UpdateTickBudget(uint32 diff)
+{
+    engine::TickBudgetConfig const config = engine::ReadTickBudgetConfig();
+    if (!_budgetSynced ||
+        config.poolUs != _budgetPoolCeilingUs ||
+        config.combatUs != _budgetCombatCeilingUs ||
+        config.targetMs != _budgetTargetMs)
+    {
+        _budgetTargetMs = config.targetMs;
+        _budgetPoolCeilingUs = config.poolUs;
+        _budgetCombatCeilingUs = config.combatUs;
+        _adaptiveBudget = AdaptiveBudget(config.targetMs, config.poolUs, config.combatUs);
+        _budgetSynced = true;
+    }
+    _budgetGateMs = config.gateMs;
+    // The controller decides on the previous world tick and the share of it the
+    // budgeted turns took; both are read from the pass before this one.
+    _adaptiveBudget.Update(diff, _lastPoolTurnsMs);
+
+    uint64 const poolUs = _adaptiveBudget.PoolUs();
+    uint64 const combatUs = _adaptiveBudget.CombatUs();
+    // 0 in either ceiling keeps its "no budget" meaning: one zero switches the
+    // budget off rather than leaving half of it behind.
+    _budgetUs = (poolUs == 0 || combatUs == 0) ? 0 : poolUs + combatUs;
+}
+
+BotMgr::FleetCounts BotMgr::GetFleetCounts() const
+{
+    FleetCounts counts;
+    for (auto const& [guid, bot] : _bots)
+    {
+        ++counts.bots;
+        counts.engines += bot.brain ? 1 : 0;
+        counts.owned += bot.owned ? 1 : 0;
+        counts.mastered += bot.master.IsEmpty() ? 0 : 1;
+        counts.free += bot.free ? 1 : 0;
+        counts.pool += bot.pool ? 1 : 0;
+    }
+    return counts;
+}
+
 void BotMgr::Update(uint32 diff)
 {
     // S1-R2: the chat lines the hook queued since the last update, resolved and judged here, on the world thread, before any bot's
@@ -1489,7 +1585,9 @@ void BotMgr::Update(uint32 diff)
     ConfirmCreations();
     std::vector<ObjectGuid> finished;
 
-    for (auto& [guid, bot] : _bots)
+    UpdateTickBudget(diff);
+
+    auto updateOne = [this, diff, &finished](ObjectGuid const& guid, Bot& bot)
     {
         // The owner logs in to this very character: the core asks the bot to leave and waits. A bot session cannot
         // see that request (it is a private flag), so it watches the account's real session instead.
@@ -1510,7 +1608,7 @@ void BotMgr::Update(uint32 diff)
         if (!bot.session->Tick(diff))
         {
             finished.push_back(guid);
-            continue;
+            return;
         }
 
         // S3: the flight watcher runs before the master-away gate: a bot knocked while its commander is away still flies and
@@ -1521,13 +1619,21 @@ void BotMgr::Update(uint32 diff)
 
         // R10 (S2): a bot whose master is away does nothing (no Think, no engine) until it is back; the grace counts down meanwhile.
         if (bot.masterAway && !UpdateMasterAway(bot, diff))
-            continue;
+            return;
 
         if (!me || !me->IsInWorld() || me->IsBeingTeleported())
-            continue;
+            return;
 
-        bot.followRetryMs = bot.followRetryMs > diff ? bot.followRetryMs - diff : 0;
-        bot.catchUpCooldownMs = bot.catchUpCooldownMs > diff ? bot.catchUpCooldownMs - diff : 0;
+        // A budgeted bot is visited every few ticks, so its own clocks count the
+        // time since ITS last turn, not one world tick: a skipped visit must not
+        // stretch its think cadence, its retries or the engine's delays.
+        uint32 const turnNowMs = getMSTime();
+        uint32 const sinceLastMs = bot.lastTurnMs ? getMSTimeDiff(bot.lastTurnMs, turnNowMs) : diff;
+        bot.lastTurnMs = turnNowMs ? turnNowMs : 1;
+        uint32 const aiElapsed = std::min(sinceLastMs, MaxAiElapsedMs);
+
+        bot.followRetryMs = bot.followRetryMs > sinceLastMs ? bot.followRetryMs - sinceLastMs : 0;
+        bot.catchUpCooldownMs = bot.catchUpCooldownMs > sinceLastMs ? bot.catchUpCooldownMs - sinceLastMs : 0;
 
         // H4: a teleport the host started (`.tb tele`) has finished: where it ended is the answer (`entered=` / `block=teleport-refused`).
         if (bot.landing.pending)
@@ -1548,7 +1654,7 @@ void BotMgr::Update(uint32 diff)
         if (bot.entry.active)
             UpdateEntry(bot, me, diff);
 
-        bot.thinkMs += diff;
+        bot.thinkMs += sinceLastMs;
         if (bot.thinkMs >= ThinkIntervalMs)
         {
             bot.thinkMs = 0;
@@ -1558,23 +1664,49 @@ void BotMgr::Update(uint32 diff)
             Think(bot, me);
         }
 
-        // The engine brain: every tick, with the tick's diff (PlayerbotAIBase::UpdateAI keeps its own delay). World
-        // thread, from WorldScript::OnBeforeMapsUpdate, i.e. before the maps update; the legacy engine takes no map
-        // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
-        // Not in the update in which its logout was requested or its master was lost (R9): Think may have asked for the logout above, and
-        // the brain is gone by then.
+        // The engine brain: every visit, with the time since this bot's own last
+        // turn (PlayerbotAIBase::UpdateAI keeps its own delay): a bot the budget
+        // skipped must not have its delays stretched by the ticks it missed.
+        // World thread, from WorldScript::OnBeforeMapsUpdate, i.e. before the
+        // maps update; the legacy engine takes no map lock and expects none
+        // (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot
+        // on a teleport. Not in the update in which its logout was requested or
+        // its master was lost (R9): Think may have asked for the logout above,
+        // and the brain is gone by then.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // Every bot answers a duel, not only a free one: TB gives the duel strategy to any bot outside a battleground
+        // (AiFactory.cpp:1489-1495), and the core's Player::duel is the only signal a socketless session gets.
+        tbhost::errands::TickDuelResponse(me);
         tbhost::prof::TickErrands(me, diff);
+        tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);
+        if (bot.free)
+            tbhost::thievery::TickThievery(me, diff);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
-            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me));
+            (tbhost::errands::HasActiveErrand(me) || tbhost::ah_market::HasActiveErrand(me) ||
+             tbhost::guild_mail::HasActiveErrand(me) ||
+             tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
+             tbhost::guild_orders::HasActiveEnchantErrand(me) ||
+             tbhost::fishing::HasActiveIdleErrand(me) ||
+             tbhost::thievery::HasActiveErrand(me) ||
+             tbhost::upkeep::HasActiveUpkeepCast(me));
 #else
         bool const pauseEngineForErrand = false;
 #endif
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported() && !pauseEngineForErrand)
-            engine::Tick(bot.brain.get(), diff);
+            engine::Tick(bot.brain.get(), aiElapsed);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // The open-world PvP seek role: rolled at login (the first tick with a brain), re-rolled on the configured
+        // interval, stripped as soon as the bot is no longer a free bot of the flagged share.
+        tbhost::worldpvp::Tick(me);
+        // A free bot answers an outstanding guild invite, keeps clear of the member limit and (when the
+        // founding key is on) founds its own guild. Cheap while no invite stands and forming is off.
+        if (_guildsEnabled && bot.free)
+            tbhost::guildjoin::TickFreeBotGuild(me, _guildFormingEnabled);
         if (me->IsAlive() && !me->IsInCombat() && !me->isMoving() && !me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
             tbhost::guild_orders::TickBotOrder(me);
+        if (me->IsAlive() && !me->IsInCombat() && !me->isMoving())
+            tbhost::guild_orders::TickGuildOrderQueues(me);
+        tbhost::guild_orders::TickEnchantOrder(me);
         if (bot.free && _professionsEnabled)
         {
             if (tbhost::prof::AdvanceFreeGatherTimer(guid.GetCounter(), diff))
@@ -1582,10 +1714,75 @@ void BotMgr::Update(uint32 diff)
         }
         if (bot.free && _capitalErrandsEnabled)
             tbhost::errands::TickCapitalErrands(me, diff);
+        if (bot.free)
+            tbhost::ah_market::Tick(me, diff);
         if (bot.free && _guildMailEnabled)
+        {
+            tbhost::guild_orders::TickDisenchantService(me, diff);
             tbhost::guild_mail::TickGuildMail(me, diff);
+        }
+        if (bot.free && (_disenchantUpkeepEnabled || _enchantGearEnabled))
+            tbhost::upkeep::TickProfessionUpkeep(me, diff, _disenchantUpkeepEnabled, _enchantGearEnabled);
 #endif
+    };
+
+    // One scan splits the pass in two: bots that must not wait (under a real
+    // player, loading, teleporting, logging out) are served first and whole,
+    // the rest is the pool the budget may cut. A bot that changes side mid-pass
+    // gets its one turn and is reclassified next time.
+    _alwaysOrder.clear();
+    _turnOrder.clear();
+    _alwaysOrder.reserve(_bots.size());
+    _turnOrder.reserve(_bots.size());
+    for (auto const& [guid, bot] : _bots)
+        (Budgetable(bot) ? _turnOrder : _alwaysOrder).push_back(guid);
+
+    for (ObjectGuid const& guid : _alwaysOrder)
+        if (auto it = _bots.find(guid); it != _bots.end())
+            updateOne(guid, it->second);
+
+    // Pass 2: the pool, in the order the last pass left. The budget is checked
+    // before each bot, so a pass never starts new work over budget; whoever is
+    // left is first next pass (RotateToFirst), so no bot waits two rounds.
+    if (!_nextPoolTurn.IsEmpty())
+        tickbudget::RotateToFirst(_turnOrder, _nextPoolTurn);
+
+    bool const budgetActive = tickbudget::PassIsBudgeted(_budgetUs, _budgetGateMs, diff);
+    auto const nowUs = []()
+    {
+        return static_cast<uint64>(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+    };
+    uint64 const turnsStartUs = nowUs();
+    uint32 processed = 0;
+    _nextPoolTurn.Clear();
+    for (ObjectGuid const& guid : _turnOrder)
+    {
+        if (budgetActive && nowUs() - turnsStartUs >= _budgetUs)
+        {
+            _nextPoolTurn = guid;
+            break;
+        }
+        auto it = _bots.find(guid);
+        if (it == _bots.end())
+            continue;
+        updateOne(guid, it->second);
+        ++processed;
     }
+    // The cuttable share of this tick, fed to the controller next pass.
+    _lastPoolTurnsMs = static_cast<uint32>((nowUs() - turnsStartUs) / 1000);
+
+    BudgetStats stats;
+    stats.poolUs = static_cast<uint32>(_adaptiveBudget.PoolUs());
+    stats.combatUs = static_cast<uint32>(_adaptiveBudget.CombatUs());
+    stats.budgetUs = static_cast<uint32>(_budgetUs);
+    stats.targetMs = _budgetTargetMs;
+    stats.smoothedTickMs = _adaptiveBudget.SmoothedTickMs();
+    stats.held = _adaptiveBudget.Held();
+    stats.poolBots = static_cast<uint32>(_turnOrder.size());
+    stats.processed = processed;
+    stats.cut = !_nextPoolTurn.IsEmpty();
+    _lastBudget = stats;
 
     for (ObjectGuid const& guid : finished)
     {
@@ -1594,7 +1791,10 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::ClearBotErrands(guid);
         tbhost::errands::ClearBotCapitalErrands(guid);
+        tbhost::ah_market::ClearBotAhMarket(guid);
         tbhost::guild_mail::ClearBotGuildMail(guid);
+        tbhost::guildjoin::ForgetBot(guid);
+        tbhost::thievery::ForgetBot(guid.GetCounter());
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())
             DropBrain(itr->second);
@@ -1602,6 +1802,15 @@ void BotMgr::Update(uint32 diff)
     }
 
     TickQuestGroups(diff);
+
+    // The engine's cumulative action_counts.csv snapshot every five minutes of tick time. The dump itself
+    // checks AiPlayerbot.ActionCountsLog, so the off path is one branch and an add per tick.
+    _actionCountsElapsedMs += diff;
+    if (_actionCountsElapsedMs >= 5u * 60u * 1000u)
+    {
+        _actionCountsElapsedMs = 0;
+        engine::DumpActionCounts();
+    }
 }
 
 void BotMgr::TickQuestGroups(uint32 diff)

@@ -6,6 +6,9 @@
 #include <cstddef>
 #include <memory>
 
+#include "Maps/MoveMap.h" // MMapManager: the navmesh and per-tile probe of the generator
+#include "playerbot/policy/travel/TravelGraphGenPolicy.h"
+
 // The world-database read of the node store: the original expression, the core's Query handed over as a raw QueryResult* the
 // caller used to hold in a unique_ptr. Turtle logs a missing table itself and answers null; `schemaMissing` is always false.
 inline std::unique_ptr<QueryResult> TravelNodeQueryCompat(char const* sql, bool* schemaMissing = nullptr)
@@ -13,6 +16,11 @@ inline std::unique_ptr<QueryResult> TravelNodeQueryCompat(char const* sql, bool*
     if (schemaMissing)
         *schemaMissing = false;
     return std::unique_ptr<QueryResult>(WorldDatabase.Query(sql));
+}
+
+// The travel tables come with this core's migrations.
+inline void TravelNodeEnsureTablesCompat()
+{
 }
 
 // The saver's tables: this core logs a missing table and answers null instead of aborting, so the save is attempted as before.
@@ -138,6 +146,9 @@ inline float TaxiPathNodeXCompat(TaxiPathNodeList const& nodes, std::size_t i) {
 inline float TaxiPathNodeYCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i].y; }
 inline float TaxiPathNodeZCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i].z; }
 inline uint32 TaxiPathNodeDelayCompat(TaxiPathNodeList const& nodes, std::size_t i) { return nodes[i].delay; }
+// Turtle's node list holds values, so a skipped point is a default entry that the callers'
+// isValid() test drops; nothing here is null.
+inline bool TaxiPathNodePresentCompat(TaxiPathNodeList const& nodes, std::size_t i) { return i < nodes.size(); }
 
 // The start position of a race and class: the T fields.
 inline uint32 PlayerInfoMapIdCompat(PlayerInfo const* info) { return info->mapId; }
@@ -176,4 +187,43 @@ inline bool TravelRideBoardCompat(PlayerbotAI* /*ai*/, uint32 /*entry*/, bool* /
 inline bool TravelTransportTeleportCompat()
 {
     return true;
+}
+
+// The generator's navmesh searches: Turtle has one navmesh and one query per map, so both come straight from MMapManager
+// (the same calls TravelNode.cpp always made). There is no per-instance query on this core; instanceId is unused.
+class TravelGenNavMeshCompat
+{
+public:
+    TravelGenNavMeshCompat(uint32 mapId, uint32 /*instanceId*/)
+    {
+        MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
+        _mesh = mmap ? mmap->GetNavMesh(mapId) : nullptr;
+        _query = mmap ? mmap->GetNavMeshQuery(mapId) : nullptr;
+    }
+
+    bool Ready() const { return _mesh && _query; }
+    dtNavMesh const* Mesh() const { return _mesh; }
+    dtNavMeshQuery const* Query() const { return _query; }
+
+private:
+    dtNavMesh const* _mesh = nullptr;
+    dtNavMeshQuery const* _query = nullptr;
+};
+
+// The per-tile probe: the mesh existing is not enough, a Detour query over a missing tile finds no polygon. Detour reads
+// the world point as (y, z, x) and calcTileLoc answers (tx, ty) = (gridY, gridX), the same swap the core's PathInfo made.
+inline bool NavMeshTileLoadedCompat(uint32 mapId, uint32 /*instanceId*/, int gridX, int gridY,
+    float pointX, float pointY, float pointZ)
+{
+    MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
+    dtNavMesh const* navMesh = mmap ? mmap->GetNavMesh(mapId) : nullptr;
+    if (!navMesh)
+        return false;
+
+    float const point[3] = { pointY, pointZ, pointX };
+    int tx = 0, ty = 0;
+    navMesh->calcTileLoc(point, &tx, &ty);
+    if (!ai::TravelGenTileCoordsMatch(tx, ty, gridX, gridY))
+        return false;
+    return navMesh->getTileAt(tx, ty, 0) != nullptr;
 }

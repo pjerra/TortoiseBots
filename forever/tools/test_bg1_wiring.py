@@ -12,7 +12,7 @@ The core calls cannot run without a server, so these pin them in the source; eac
   7 every `TortoiseBots.Bg.*` code fallback equals the value in forever/conf/tortoisebots.conf.dist
   8 slice_gen_context.py --check is clean (the BG actions are not registered by editing the generated file)
   9 no file under the core's src/ is in the diff (needs the base ref; skipped when git cannot answer)
- 10 the BG2 PvP files are not in any slice list (the census for them stays 0 until BG2)
+ 10 (BG1 only: the BG2 PvP files stayed out of every slice list. BG2 put them in SLICE-W4.txt; test_bg2_wiring.py pins them there.)
  11 the pool holds a session only for a bot inside a match, never for one waiting in a queue (TbPoolScheduler passes inBg)
  12 W1's ghost rescue is off inside a battleground (TbBotMgr)
  13 the core's creation hook is vetoed until the fill reaches the target, and a bot-only creation stays off (BgVetoCreate)
@@ -217,26 +217,13 @@ def check_slice_gen_clean():
 
 
 def check_core_untouched():
-    run = subprocess.run(["git", "-C", str(ROOT), "diff", "--name-only", "tbf/main...HEAD"], capture_output=True, text=True)
+    # The base the PR is read against: tbf/dev when the branch is ported on it, else tbf/main.
+    base = "tbf/dev" if subprocess.run(["git", "-C", str(ROOT), "rev-parse", "-q", "--verify", "tbf/dev"], capture_output=True).returncode == 0 else "tbf/main"
+    run = subprocess.run(["git", "-C", str(ROOT), "diff", "--name-only", f"{base}...HEAD"], capture_output=True, text=True)
     if run.returncode != 0:
         raise unittest.SkipTest("git cannot name the base ref")
     touched = [p for p in run.stdout.split() if p.startswith(("src/server/", "src/common/"))]
     assert not touched, f"a core file is in the diff: {touched}"
-
-
-BG2_FILES = (
-    "strategy/values/EnemyPlayerValue.cpp",
-    "strategy/values/PvpValues.cpp",
-    "strategy/triggers/PvpTriggers.cpp",
-    "strategy/generic/AttackEnemyPlayersStrategy.cpp",
-)
-
-
-def check_bg2_census_zero():
-    for slice_list in (ROOT / "forever").glob("SLICE*.txt"):
-        text = slice_list.read_text()
-        for name in BG2_FILES:
-            assert name not in text, f"{name} is in {slice_list.name}: the BG2 census is not 0"
 
 
 def check_pool_hold(sched, policy):
@@ -478,9 +465,6 @@ class Bg1Wiring(unittest.TestCase):
 
     def test_no_core_file_touched(self):
         check_core_untouched()
-
-    def test_bg2_census_is_zero(self):
-        check_bg2_census_zero()
 
     def test_pool_holds_a_battleground_session(self):
         check_pool_hold(SCHED.read_text(), SCHED_POLICY.read_text())

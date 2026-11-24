@@ -10,12 +10,17 @@
 #include "ChatCommand.h"
 
 class ChatHandler;
+class Player;
 
 namespace TortoiseBots
 {
-namespace h3 { class Reply; }
+namespace h3 { class Rec; class Reply; }
 namespace h4
 {
+// One teleport of `source` next to `dest` (the destination's map; into an instance: the destination's instance). This is the ONE teleport path:
+// `.tb tele <character> to <character>` and `.bot summon` both call it, so the map, instance, combat and death rules exist once (player-command
+// spec D-8). True = the core accepted the teleport; the record carries status=started|refused, and on a refusal code= and msg= (grammar v2, TbH3.h).
+bool TeleportBotNextTo(Player* source, Player* dest, bool revive, h3::Rec& rec);
 // `.tb grammar selftest`: one fixed example of every record kind and key this package adds (called by h3::HandleGrammar; defined in the slice build only).
 void SelfTestRecords(h3::Reply& reply);
 

@@ -48,6 +48,26 @@ R4_ACTION_SOURCES = {
     "position": "ai/playerbot/strategy/actions/PositionAction.cpp",
 }
 
+# PLAYER-COMMANDS-SPEC section 6, R5: the words that need one small legacy action file each (WhoAction, TellItemCountAction,
+# UnequipAction, ListQuestsActions, LeaveGroupAction, TellReputationAction). `ll` and `ss` are not in this round.
+R5_TRIGGERS = ["who", "c", "items", "inventory", "inv", "ue", "quests", "leave", "rep", "reputation"]
+R5_ACTIONS = ["who", "item count", "unequip", "quests", "leave", "reputation"]
+R5_ACTION_SOURCES = {
+    "who": "ai/playerbot/strategy/actions/WhoAction.cpp",
+    "item count": "ai/playerbot/strategy/actions/TellItemCountAction.cpp",
+    "unequip": "ai/playerbot/strategy/actions/UnequipAction.cpp",
+    "quests": "ai/playerbot/strategy/actions/ListQuestsActions.cpp",
+    "leave": "ai/playerbot/strategy/actions/LeaveGroupAction.cpp",
+    "reputation": "ai/playerbot/strategy/actions/TellReputationAction.cpp",
+}
+# The legacy whisper gate (PlayerbotAI::AuthTierForCommand, D-5: unchanged by these rounds): who/c/items/inv/inventory answer any
+# group member (Tactical, read only); ue and leave touch the bot's gear and group (OwnerOrGm); quests and rep are listed nowhere, so
+# they fall to the fail-closed default OwnerOrGm. A word a stranger could use to move items or drop the bot from its group must stay owner.
+R5_OWNER_TIER = ["ue", "unequip", "leave", "quests", "rep", "reputation"]
+R5_TACTICAL_TIER = ["who", "c", "items", "inv", "inventory"]
+# The values the R5 actions read that the slice did not register (R5 fix of PR #211: `quests` crashed the worldserver on the first).
+R5_VALUES = ["focus travel target", "experience", "honor"]
+
 KINDS = ("strategy", "action", "trigger", "value")
 BASE_KIND = {"Strategy": "strategy", "Action": "action", "Trigger": "trigger", "UntypedValue": "value"}
 
@@ -89,22 +109,22 @@ def registered(context_text):
     return reg
 
 
-def pc_chat_keys(gen_text):
-    """kind -> list of keys of the generator's PC_CHAT_KEYS block."""
-    m = re.search(r"^PC_CHAT_KEYS = \{", gen_text, re.M)
+def pc_chat_keys(gen_text, name="PC_CHAT_KEYS"):
+    """kind -> list of keys of the generator's PC_CHAT_KEYS (R4) or PC_CHAT_B_KEYS (R5) block."""
+    m = re.search(r"^%s = \{" % name, gen_text, re.M)
     if not m:
-        raise AssertionError("%s has no PC_CHAT_KEYS block: the R4 words register nowhere" % GEN)
+        raise AssertionError("%s has no %s block: its words register nowhere" % (GEN, name))
     end = gen_text.index("\n}", m.end())
     body = gen_text[m.end():end]
     out = {k: [] for k in KINDS}
     seen = re.findall(r'"(\w+)":\s*((?:"(?:[^"\\]|\\.)*"\s*)+)', body)
     for kind, quoted in seen:
         if kind not in out:
-            raise AssertionError("PC_CHAT_KEYS has an unknown entry %r" % kind)
+            raise AssertionError("%s has an unknown entry %r" % (name, kind))
         value = "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', quoted))
         out[kind] = [x.strip() for x in value.split(",") if x.strip()]
     if not any(out.values()):
-        raise AssertionError("PC_CHAT_KEYS is empty")
+        raise AssertionError("%s is empty" % name)
     return out
 
 
@@ -184,6 +204,62 @@ def check(gen_text, strategy_text, context_text, build_list):
             raise AssertionError("action %r is defined in %s, which %s does not list" % (key, src, BUILD_LIST))
 
 
+def check_r5(gen_text, strategy_text, context_text, build_list):
+    """The R5 block: its words, the actions behind them, their sources on the build list."""
+    block = pc_chat_keys(gen_text, "PC_CHAT_B_KEYS")
+    join = re.search(r"^KEYS = _join\(([^)]*)\)", gen_text, re.M)
+    if not join or not re.search(r"\bPC_CHAT_B_KEYS\b", join.group(1)):
+        raise AssertionError("KEYS does not join PC_CHAT_B_KEYS: the R5 words would never be registered")
+    if sorted(block["trigger"]) != sorted(R5_TRIGGERS):
+        missing = [k for k in R5_TRIGGERS if k not in block["trigger"]]
+        extra = [k for k in block["trigger"] if k not in R5_TRIGGERS]
+        raise AssertionError("PC_CHAT_B_KEYS triggers differ from the spec: missing %s, extra %s" % (missing, extra))
+    if sorted(block["action"]) != sorted(R5_ACTIONS):
+        missing = [k for k in R5_ACTIONS if k not in block["action"]]
+        extra = [k for k in block["action"] if k not in R5_ACTIONS]
+        raise AssertionError("PC_CHAT_B_KEYS actions differ from the spec: missing %s, extra %s" % (missing, extra))
+    if block["strategy"]:
+        raise AssertionError("PC_CHAT_B_KEYS registers a strategy: R5 adds triggers, actions and the values they read only")
+    # the values the R5 actions read (the `quests` crash fix; forever/tools/test_pc_r5_fix.py pins the full read set)
+    if sorted(block["value"]) != sorted(R5_VALUES):
+        raise AssertionError("PC_CHAT_B_KEYS values differ from the R5 read set: %s" % block["value"])
+    reg = registered(context_text)
+    for key in block["action"]:
+        if key not in reg["action"]:
+            raise AssertionError("action %r is in PC_CHAT_B_KEYS but not in the generated registry" % key)
+    for key in block["trigger"]:
+        if key not in reg["trigger"]:
+            raise AssertionError("chat trigger %r is in PC_CHAT_B_KEYS but not in the generated registry" % key)
+    supported = supported_words(strategy_text)
+    nodes = trigger_nodes(strategy_text)
+    for key in block["trigger"]:
+        fired = actions_of(key, nodes, supported)
+        if not fired:
+            raise AssertionError("chat trigger %r reaches no strategy node or pass-through action: the word is dead" % key)
+        for action in fired:
+            if action not in reg["action"]:
+                raise AssertionError("chat trigger %r fires action %r, which the slice does not register" % (key, action))
+    lines = set(l.strip() for l in build_list.splitlines() if l.strip() and not l.strip().startswith("#"))
+    for key, src in R5_ACTION_SOURCES.items():
+        if src not in lines:
+            raise AssertionError("action %r is defined in %s, which %s does not list" % (key, src, BUILD_LIST))
+
+
+def tier_of(player_ai_text, word):
+    """The tier PlayerbotAI::AuthTierForCommand gives a word, read from its source: Tactical, OwnerOrGm or GmOnly."""
+    start = player_ai_text.index("PlayerbotAI::AuthTierForCommand(")
+    body = player_ai_text[start:player_ai_text.index("bool PlayerbotAI::IsBotOwnerOrGm", start)]
+    quoted = r'word == "%s"' % re.escape(word)
+    sections = [(m.start(), m.group(1)) for m in re.finditer(r"return BotCommandAuthTier::(\w+);", body)]
+    pos = body.find(quoted)
+    if pos < 0:
+        return "OwnerOrGm"          # unlisted words fall through to the fail-closed default
+    for at, tier in sections:
+        if at > pos:
+            return tier
+    raise AssertionError("no tier return after %r" % word)
+
+
 class Grammar(unittest.TestCase):
     def setUp(self):
         self.gen = read(GEN)
@@ -210,6 +286,77 @@ class Grammar(unittest.TestCase):
                 self.assertTrue(actions_of(key, nodes, words), "chat word %r reaches no node or action (dead word)" % key)
                 for action in actions_of(key, nodes, words):
                     self.assertIn(action, reg["action"], "trigger %r fires unregistered action %r" % (key, action))
+
+    # ---- R5 ----
+    def test_who_trigger_and_action_registered(self):
+        # The first failing case of R5: `who` has a trigger in the registry (CH_KEYS) but no action, so the bot never answers it.
+        reg = registered(self.context)
+        self.assertIn("who", reg["trigger"])
+        self.assertIn("who", reg["action"], "the `who` chat word reaches no action: WhoAction is not registered")
+
+    def test_r5_block_and_generated_registry(self):
+        check_r5(self.gen, self.strategy, self.context, self.build_list)
+
+    def test_every_r5_word_is_reachable(self):
+        reg = registered(self.context)
+        words = supported_words(self.strategy)
+        nodes = trigger_nodes(self.strategy)
+        for key in R5_TRIGGERS:
+            with self.subTest(word=key):
+                self.assertIn(key, reg["trigger"], "chat trigger %r is not registered" % key)
+                self.assertTrue(actions_of(key, nodes, words), "chat word %r reaches no node or action (dead word)" % key)
+                for action in actions_of(key, nodes, words):
+                    self.assertIn(action, reg["action"], "trigger %r fires unregistered action %r" % (key, action))
+
+    def test_r5_permission_tiers(self):
+        text = read("ai/playerbot/PlayerbotAI.cpp")
+        for word in R5_OWNER_TIER:
+            with self.subTest(owner_word=word):
+                self.assertEqual(tier_of(text, word), "OwnerOrGm", "%r must stay owner-or-GM on the whisper gate" % word)
+        for word in R5_TACTICAL_TIER:
+            with self.subTest(tactical_word=word):
+                self.assertEqual(tier_of(text, word), "Tactical", "%r is the read-only tactical surface" % word)
+
+    def test_tactical_words_reach_only_the_bots_own_group(self):
+        # Codex (R5 review): the legacy gate treats a Tactical word as open to anyone the first check lets in, and that check admits
+        # outsiders for a random bot. In this module a line reaches the legacy gate only after the host's own rule (TbChatIn.cpp
+        # Authorized: the bot's master, its commander, or a member of the bot's group); a stranger is dropped as not-authorized. Pin
+        # both halves so `who` / `c` stay a group-member surface.
+        text = read("forever/src/host/chat/TbChatIn.cpp")
+        self.assertIn("facts.authorized = Authorized(bot, sender);", text)
+        body = text[text.index("bool Authorized(Player* bot, Player* sender)"):]
+        body = body[:body.index("\n}\n")]
+        for needle in ("BotMgr::Instance().MasterOf(bot->GetGUID()) == sender->GetGUID()", "cmd::IsCommandedBy(sender, bot)",
+                       "group->IsMember(sender->GetGUID())"):
+            self.assertIn(needle, body)
+        judge = read("forever/src/host/chat/TbChatInPure.h")
+        self.assertRegex(judge, r"if \(!facts\.authorized\)\s*\{\s*verdict\.code = Code::NotAuthorized;")
+
+    def test_r5_mutations_turn_it_red(self):
+        base = (self.gen, self.strategy, self.context, self.build_list)
+        mutations = [
+            (0, self.gen.replace("who, c, items,", "c, items,", 1)),
+            (0, self.gen.replace('"who, item count,', '"item count,', 1)),
+            (0, self.gen.replace(", PC_CHAT_B_KEYS,", ",")),
+            (3, self.build_list.replace("ai/playerbot/strategy/actions/WhoAction.cpp\n", "")),
+            (3, self.build_list.replace("ai/playerbot/strategy/actions/LeaveGroupAction.cpp\n", "")),
+            (2, self.context.replace('creators["unequip"] = [](PlayerbotAI* ai) { return new UnequipAction(ai); };', "", 1)),
+            (2, self.context.replace('creators["rep"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "reputation"); };', "", 1)),
+            (1, self.strategy.replace('        "inv",\n', '        "invx",\n', 1)),
+        ]
+        for i, (slot, mutated) in enumerate(mutations):
+            args = list(base)
+            self.assertNotEqual(mutated, args[slot], "R5 mutation %d changed nothing" % i)
+            args[slot] = mutated
+            with self.assertRaises(AssertionError, msg="R5 mutation %d was not caught" % i):
+                check_r5(*args)
+        # the tier reader sees a loosened tier
+        text = read("ai/playerbot/PlayerbotAI.cpp")
+        loosened = text.replace('word == "e" || word == "equip" || word == "ue" || word == "unequip"', 'word == "e" || word == "equip" || word == "unequip"', 1)
+        self.assertNotEqual(loosened, text)
+        self.assertEqual(tier_of(loosened, "ue"), "OwnerOrGm")   # unlisted still fails closed
+        tactical = text.replace('word == "release"', 'word == "leave2" || word == "release"', 1)
+        self.assertEqual(tier_of(tactical, "leave"), "OwnerOrGm")
 
     def test_mutations_turn_it_red(self):
         base = (self.gen, self.strategy, self.context, self.build_list)

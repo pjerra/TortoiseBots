@@ -36,7 +36,7 @@ class SpeedCasesTest(unittest.TestCase):
 
     def test_the_block_echoes_what_the_server_sent(self):
         block = speed_block()
-        self.assertIn("PackedGuidReadCompat(tbcompat::Feature::IncomingSpeedChange, p, guid)", block)
+        self.assertIn("PackedGuidReadCompat(tbcompat::Feature::PacketHandlerTables, p, guid)", block)
         self.assertIn("p >> counter >> speed;", block)
         self.assertIn("SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), counter, player->m_movementInfo, speed)", block)
         self.assertIn("player->GetSession()->HandleForceSpeedChangeAckOpcodes(ack);", block)

@@ -36,6 +36,7 @@
 #include "RunTraceSummary.h"
 #include "RunTraceWriter.h"
 #include "WorldThreadQueue.h"
+#include "ObjectGuid.h"
 
 class Player;
 class PlayerbotAI;
@@ -156,6 +157,7 @@ private:
         uint32_t entry = 0;
         uint32_t map = 0;
         uint32_t instance = 0;
+        ObjectGuid guid;   // the guid the bot saw alive (a key cannot be turned back into one)
     };
     std::unordered_map<uint64_t, BossUnit> bossGuids_;
     bool (*context_)(uint64_t requesterGuid, Player* anchor, bool wantPlan, RunTrace::Context& out) = nullptr;

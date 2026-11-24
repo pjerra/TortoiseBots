@@ -8,11 +8,13 @@
 #include "host/cmd/TbCmdBinding.h"
 #include "host/pool/TbPoolCreate.h"
 #include "host/pool/TbPoolRegistry.h"
+#include "host/pool/TbPoolReset.h"
 #include "host/pool/TbPoolScheduler.h"
 #include "host/cmd/TbCmdOrders.h"
 #include "host/cmd/TbPlace.h"
 #include "host/cmd/TbCmdFeeds.h"
 #include "host/cmd/TbCmdCombat.h"
+#include "host/cmd/TbCmdTrace.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
@@ -23,12 +25,19 @@
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostGuildOrderAccess.h"
+#include "host/TbHostGuildOrderDisenchant.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
+#include "runtime/DecisionCapture.h"
+#include "runtime/RunTrace.h"
+#include "runtime/WhyTrace.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostWorldPvp.h"
+#include "runtime/PassingBuffsService.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -81,6 +90,7 @@
 #include "host/TbAutoTools.h"
 #include "host/TbAutoHunterPet.h"
 #include "host/TbAutoFood.h"
+#include "host/TbMountShop.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
@@ -88,10 +98,12 @@
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/TbIgnore.h"
 #include "host/TbChatLinkCmd.h"
+#include "host/TbHostLfgFill.h"
 #include "host/chat/TbChatCmd.h"
 #include "host/chat/TbChatIn.h"
 #include "host/TbAddonChannel.h"
 #include "host/TbAddonInfo.h"
+#include "host/TbBotPerfPure.h"
 #include "host/TbAddonActions.h"
 #include "host/TbAddonTotem.h"
 #include "host/TbAddonVerbs.h"
@@ -103,6 +115,7 @@
 #include "host/TbAddonTrade.h"
 #include "host/TbAddonProfessions.h"
 #include "host/TbAddonLootLog.h"
+#include "host/TbAddonOrders.h"
 #include "host/player/TbPlayerCmd.h"
 #include "host/TbAutogear.h"
 
@@ -160,11 +173,29 @@ struct PerfWindow
     uint32 worldMaxMs = 0;
     uint64 botSumUs = 0;
     uint32 botMaxUs = 0;
+    // Tick budget: the effective allocations of the last pass, the turns the
+    // pool pass served against those it could cut, and how often it stopped.
+    uint64 poolBotsSum = 0;
+    uint64 processedSum = 0;
+    uint64 cutTicks = 0;
+    uint64 heldTicks = 0;
+    uint32 lastBudgetUs = 0;
+    uint32 lastPoolUs = 0;
+    uint32 lastCombatUs = 0;
+    uint32 targetMs = 0;
+    double smoothedMs = 0.0;
     void Reset() { *this = PerfWindow(); }
 };
 PerfWindow& Perf()
 {
     static PerfWindow window;
+    return window;
+}
+
+// The BOTPERF line's own window: independent of `.tb perf` (which resets on read), reset when the line is written.
+TortoiseBots::perf::Window& BotPerf()
+{
+    static TortoiseBots::perf::Window window;
     return window;
 }
 
@@ -278,6 +309,8 @@ public:
         TortoiseBots::pool::LoadConfig();      // W0
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B
         TortoiseBots::pool::Reconcile();       // W0: the creations that stopped halfway (a claim row, no account or character yet)
+        // Startup only (the key is read here, never in OnConfigLoad): `.reload config` cannot start a reset.
+        TortoiseBots::pool::Reset::PlanAtStartup(sConfigMgr->GetStringDefault("TortoiseBots.Pool.Reset", "off"));
         TortoiseBots::bg::LoadBgMapData();     // BG1: the flag stands and node banners from the core's spawn store (one pass)
         // The item store is loaded by now (World.cpp:1625, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
@@ -305,11 +338,14 @@ public:
             if (BotMgr::Instance().Enabled())
             {
                 LoadEngineConfig();
+                TortoiseBots::RunTraceService::Instance().Initialize();   // mark summaries the last server never finalised
                 TortoiseBots::gear::InitGearIndex();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
                 tbhost::guild_orders::LoadOrders();  // W9: guarded characters-DB load of tortoise_bots_guild_order
+                tbhost::guild_order_access::LoadBotRankAtStartup();  // the stored guild bot ranks
+                tbhost::guild_orders::LoadDisenchantQueue(); // W9: the disenchant service queue
                 TortoiseBots::h3::RebuildQuestEligibility();
             }
         }
@@ -320,6 +356,10 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        TortoiseBots::pool::Reset::Update(diff);   // the startup reset, one step and at most one deletion per tick
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::PassingBuffsService::Instance().Update(diff);   // pool bots' buffs for the real players they pass
+#endif
         bool const poolLogin = TortoiseBots::pool::PoolScheduler::Update(diff);   // W0-B: the pool's logins and logouts, once a second
         if (!poolLogin)
             TortoiseBots::pool::CreateUpdate(diff);   // W0: at most one pool character per rate tick, and never in a tick with a login
@@ -333,6 +373,34 @@ public:
         perf.worldMaxMs = std::max(perf.worldMaxMs, worldMs);
         perf.botSumUs += us;
         perf.botMaxUs = std::max(perf.botMaxUs, us);
+        BotMgr::BudgetStats const budget = BotMgr::Instance().LastBudget();
+        perf.poolBotsSum += budget.poolBots;
+        perf.processedSum += budget.processed;
+        perf.cutTicks += budget.cut ? 1 : 0;
+        perf.heldTicks += budget.held ? 1 : 0;
+        perf.lastBudgetUs = budget.budgetUs;
+        perf.lastPoolUs = budget.poolUs;
+        perf.lastCombatUs = budget.combatUs;
+        perf.targetMs = budget.targetMs;
+        perf.smoothedMs = budget.smoothedTickMs;
+        if (BotMgr::Instance().Enabled())
+        {
+            TortoiseBots::perf::Window& botPerf = BotPerf();
+            botPerf.elapsedMs += diff;
+            ++botPerf.ticks;
+            botPerf.passSumUs += us;
+            botPerf.maxPassUs = std::max(botPerf.maxPassUs, us);
+            botPerf.worldSumMs += worldMs;
+            if (botPerf.elapsedMs >= 30000)
+            {
+                BotMgr::FleetCounts const counts = BotMgr::Instance().GetFleetCounts();
+                TC_LOG_INFO("tortoisebots", "{}", TortoiseBots::perf::BotPerfLine(botPerf, counts.bots, counts.engines,
+                    counts.owned, counts.mastered, counts.free, counts.pool));
+                botPerf = TortoiseBots::perf::Window();
+            }
+        }
+        else
+            BotPerf() = TortoiseBots::perf::Window();
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
@@ -340,11 +408,20 @@ public:
         TortoiseBots::place::Update();          // #15: the minimap-ping timeouts and the walk back of a placed bot that lost its slot
         TortoiseBots::cmd::UpdateFeeds(diff);   // P4: the live position report (TortoiseBots.Commander.PosMs, 100 ms)
         TortoiseBots::cmd::combat::Update(diff);   // P5: the fight monitor's 1 Hz sample, 250 ms cast poll and COMBAT_FIGHT/EVENTS
+        TortoiseBots::RunTraceService::Instance().Update(diff);   // run trace: the frame, the end poll, listener detach
+        TortoiseBots::WhyTraceService::Instance().Update(diff);   // why trace: the timeout, a bot gone, strategy lines
+        TortoiseBots::DecisionCaptureService::Instance().Update();   // decision capture: reap finished segment writers
 #endif
     }
 
     void OnShutdown() override
     {
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::RunTraceService::Instance().Shutdown();
+        TortoiseBots::WhyTraceService::Instance().Shutdown();
+        TortoiseBots::DecisionCaptureService::Instance().Shutdown();
+#endif
+        TortoiseBots::pool::Reset::Shutdown();
         // Save and remove every bot while the world is still up.
         BotMgr::Instance().LogoutAll("server shutdown");
         BotMgr::Instance().Update(0);
@@ -410,13 +487,13 @@ public:
     }
 
     // #15: the same words in the party or raid chat of a group the commander drives.
-    void OnChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* /*group*/) override
+    void OnChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* group) override
     {
         if (type != CHAT_MSG_PARTY && type != CHAT_MSG_PARTY_LEADER && type != CHAT_MSG_RAID && type != CHAT_MSG_RAID_LEADER)
             return;
         if (!player || BotMgr::Instance().IsBot(player->GetGUID()))
             return;
-        TortoiseBots::place::HandleChat(player, msg);
+        TortoiseBots::place::HandleChat(player, msg, group);
     }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
@@ -432,6 +509,8 @@ public:
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             TortoiseBots::p11::EnsureHunterStarterAmmo(player);
             TortoiseBots::p11::EnsureShamanStarterTotems(player);
+            // The /pvp preference of the flagged share of free bots: a streamless session cannot send CMSG_SET_PVP.
+            tbhost::worldpvp::OnBotLogin(player);
 #endif
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
             tbhost::autotrain::Sync(player, "login");
@@ -525,6 +604,7 @@ public:
             { "castfail", HandleCastFail, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "level",  HandleLevel,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "train",  HandleTrain,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "mount",  HandleMount,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "hurt",   HandleHurt,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "power",  HandlePower,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -533,6 +613,7 @@ public:
             { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "order",  TortoiseBots::h3::HandleOrder,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "role",   TortoiseBots::h3::HandleRole,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "lfg",    TortoiseBots::lfg::HandleLfg,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "master", TortoiseBots::h3::HandleMaster, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "party",  TortoiseBots::h3::HandleParty,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "onyxia", TortoiseBots::onyxia::HandleCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -551,8 +632,10 @@ public:
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "trace",  TortoiseBots::trace::HandleTrace, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // run trace (runtime/RunTrace.cpp)
+            { "why",    TortoiseBots::trace::HandleWhy,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },     // one bot's AI decisions (runtime/WhyTrace.cpp)
             { "cc",       TortoiseBots::h8::HandleCc,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: crowd-control mark of one bot
-            { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot> co|nc +name,-name` (SETUP)
+            { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot|role:...> co|nc +name,-name,~name | <bot> reset` (SETUP)
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
             { "pool",   poolTable },   // W0: `.tb pool create <n>`, `.tb pool prune [confirm]`
@@ -658,10 +741,13 @@ public:
             if (Player* caller = Caller(handler))
                 master = caller->GetGUID();
 
-        std::string const error = BotMgr::Instance().Login(GuidByName(name), master, free);
+        ObjectGuid const guid = GuidByName(name);
+        std::string const error = BotMgr::Instance().Login(guid, master, free);
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
-        handler->PSendSysMessage("TortoiseBots: %s is logging in%s.", name.c_str(), free ? " as a free bot" : "");
+        // A bot with no master that takes the engine (EngineByDefault, `owned`) runs the free kit, so say so.
+        bool const freeBot = free || BotMgr::Instance().IsFreeBot(guid);
+        handler->PSendSysMessage("TortoiseBots: %s is logging in%s.", name.c_str(), freeBot ? " as a free bot" : "");
         return true;
     }
 
@@ -741,6 +827,7 @@ public:
     {
         for (std::string const& line : TortoiseBots::pool::PoolScheduler::Status())
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+        handler->PSendSysMessage("TortoiseBots: pool %s", TortoiseBots::pool::Reset::StatusLine().c_str());
         return true;
     }
 
@@ -1141,6 +1228,70 @@ public:
         return true;
     }
 
+    // .tb mount <bot> [status|train|buy]: what the bot still needs and the nearest riding trainer / racial mount vendor;
+    // `train`/`buy` pay that NPC now and require the bot to stand within interaction range. The bot's own money is spent;
+    // nothing is granted.
+    static bool HandleMount(ChatHandler* handler, std::string name, Optional<std::string> verbArg)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = RequireBot(handler, name);
+        if (!bot)
+            return false;
+
+        std::string const verb = verbArg ? Lower(*verbArg) : std::string("status");
+        if (verb != "status" && verb != "train" && verb != "buy")
+            return Fail(handler, "usage: .tb mount <bot> [status|train|buy].");
+
+        float const range = (verb == "status") ? 150.0f : (INTERACTION_DISTANCE + 1.0f);
+        tbhost::mountshop::Plan const plan = tbhost::mountshop::FindPlan(bot, range);
+        tbhost::mountshop::Need const need = tbhost::mountshop::NeedOf(bot);
+        char const* needText = need == tbhost::mountshop::Need::TrainRiding ? "riding"
+            : need == tbhost::mountshop::Need::BuyMount ? "mount" : "none";
+        handler->PSendSysMessage("TortoiseBots: mount %s: level %u, riding %u/%u, need %s.",
+            bot->GetName().c_str(), uint32(bot->GetLevel()), uint32(bot->GetSkillValue(SKILL_RIDING)),
+            uint32(tbhost::mountshop::RidingTargetForLevel(bot->GetLevel())), needText);
+
+        if (plan.step == tbhost::mountshop::Step::TrainRiding)
+        {
+            Creature* trainer = ObjectAccessor::GetCreature(*bot, plan.npc);
+            handler->PSendSysMessage("TortoiseBots: mount train: %s (%u) %.1f yd, cost %u copper.",
+                trainer ? trainer->GetName().c_str() : "?", trainer ? trainer->GetEntry() : 0,
+                trainer ? bot->GetDistance(trainer) : 0.0f, plan.cost);
+        }
+        else if (plan.step == tbhost::mountshop::Step::BuyMount)
+        {
+            Creature* vendor = ObjectAccessor::GetCreature(*bot, plan.npc);
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(plan.itemId);
+            handler->PSendSysMessage("TortoiseBots: mount buy: %s (%u) %.1f yd, item %u \"%s\", cost %u copper.",
+                vendor ? vendor->GetName().c_str() : "?", vendor ? vendor->GetEntry() : 0,
+                vendor ? bot->GetDistance(vendor) : 0.0f, plan.itemId,
+                proto ? proto->GetName(LOCALE_enUS) : "?", plan.cost);
+        }
+        else if (plan.step == tbhost::mountshop::Step::UseItem)
+            handler->PSendSysMessage("TortoiseBots: mount use: item %u is in the bags.", plan.itemId);
+        else
+            handler->PSendSysMessage("TortoiseBots: mount plan: %s.", plan.reason.c_str());
+
+        if (verb == "status")
+            return true;
+        if (plan.step == tbhost::mountshop::Step::None)
+            return Fail(handler, "mount " + verb + ": " + plan.reason + ".");
+        if (verb == "train" && plan.step != tbhost::mountshop::Step::TrainRiding)
+            return Fail(handler, "mount train: riding is already trained; use `mount buy`.");
+        if (verb == "buy" && plan.step == tbhost::mountshop::Step::TrainRiding)
+            return Fail(handler, "mount buy: learn riding first (mount train).");
+
+        uint32 spent = 0;
+        std::string refusal;
+        bool const ok = tbhost::mountshop::ExecutePlan(bot, plan, &spent, &refusal);
+        if (!ok)
+            return Fail(handler, "mount " + verb + " refused: " + refusal + ".");
+        handler->PSendSysMessage("TortoiseBots: mount %s: ok, %u copper spent, riding %u/%u.", verb.c_str(), spent,
+            uint32(bot->GetSkillValue(SKILL_RIDING)), uint32(tbhost::mountshop::RidingTargetForLevel(bot->GetLevel())));
+        return true;
+    }
+
     // .tb hurt <character> <percent> (the name left out: the sender's own character): sets the character's health to that percent of its maximum (1 at
     // least). A module bot, or the sender's own character (TB-1); never another real player.
     static bool HandleHurt(ChatHandler* handler, Tail args)
@@ -1305,6 +1456,10 @@ public:
         handler->PSendSysMessage("TortoiseBots: perf: %llu ticks; world update time avg %.2f ms, worst %u ms; module (sessions + engines) avg %.0f us, worst %u us; %u bot session(s).",
             (unsigned long long)perf.ticks, double(perf.worldSumMs) / double(perf.ticks), perf.worldMaxMs, double(perf.botSumUs) / double(perf.ticks),
             perf.botMaxUs, uint32(BotMgr::Instance().Count()));
+        handler->PSendSysMessage("TortoiseBots: budget: %u us (pool %u + combat %u; target %u ms, smoothed %.2f ms); %llu of %llu pool turn(s) served, %llu tick(s) cut short, %llu held (core-bound).",
+            perf.lastBudgetUs, perf.lastPoolUs, perf.lastCombatUs, perf.targetMs, perf.smoothedMs,
+            (unsigned long long)perf.processedSum, (unsigned long long)perf.poolBotsSum,
+            (unsigned long long)perf.cutTicks, (unsigned long long)perf.heldTicks);
         perf.Reset();
         return true;
     }
@@ -1772,7 +1927,9 @@ void AddSC_tortoisebots()
     TortoiseBots::professions::RegisterAddonVerbsProfessions(); // #134 P134-D: `professions` verb + `professions` cap (host/TbAddonProfessions.cpp)
     TortoiseBots::lootlog::RegisterAddonVerbsLootLog(); // #134 i-loot: `lootlog` verb + `loot-log` cap (host/TbAddonLootLog.cpp)
     TortoiseBots::aipreset::RegisterAddonVerbsAi(); // #135 P135-C: `ai` verb + `ai` cap (host/TbAddonAi.cpp)
+    TortoiseBots::addonorders::RegisterAddonVerbsOrders(); // #155: `order` verb + guild-order caps (host/TbAddonOrders.cpp)
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
+    TortoiseBots::lfg::RegisterScripts();           // #160: the dungeon-finder fill tick (inert while off)
 }

@@ -60,7 +60,7 @@ Every line is a flat JSON object with the same five leading fields: `"v":1` (sch
 | `party` | per scoped bot, when first seen (also a bot that joins later) | `g`, `name`, `class`, `role` (`tank`/`heal`/`dps`), `level`. |
 | `mobs` | per hostile, the first time a bot sees it (registry, at most 1024 per run) | `g`, `entry`, `name`, `level`, `rank` (0 normal, 1 elite, 2 rare elite, 3 world boss, 4 rare), `boss`. |
 | `frame` | every interval (default 500 ms, clamped to 250-10000 ms) | `bots`: array of bot samples; `mobs`: array of hostile samples. |
-| `event` | on change | `ev`, and when set `a`, `b`, `v`, `s`, `s2`. |
+| `event` | on change | `ev`, and when set `a`, `b`, `n` (`action_loop`: the failures counted), `s`, `s2`. |
 | `action` | an action the engine took out of its queue | `g`, `name`, `res`, `rel`, and when set `src_trigger`, `n`, `tl`. |
 | `end` | once, last | `reason`, `counters`. |
 

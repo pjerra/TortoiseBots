@@ -51,9 +51,25 @@ namespace ai
     // the caller excepts (the CC bot's mark it is about to CC) counts as
     // seen but is never the unmarked enemy, so a mark that is the only enemy
     // left still reads "only marks left": it is killed, not sheeped.
-    inline bool CcOnlyMarksLeft(int liveEnemiesSeen, bool unmarkedEnemySeen)
+    // Not while a seen mark is crowd-controlled inside its fight-start hold
+    // window (CcOpeningHold): the CC opened the fight. A cc order casts at
+    // once (TBF #208 StartCcCast), and a sheep that lands before the rest of
+    // its pack engages pulls the mark alone, so for a moment it is the only
+    // enemy in the attackers list. Read as "only marks left", every bot's
+    // last-mark pick (FindLastCcTarget) took the fresh sheep and broke it
+    // (live #208: Shadow Word: Pain on the mark 0.9 s after the order's
+    // Polymorph). The party waits for the pull instead; past the window a
+    // lone mark is killed as before.
+    inline bool CcOnlyMarksLeft(int liveEnemiesSeen, bool unmarkedEnemySeen, bool openingHoldSeen = false)
     {
-        return liveEnemiesSeen > 0 && !unmarkedEnemySeen;
+        return liveEnemiesSeen > 0 && !unmarkedEnemySeen && !openingHoldSeen;
+    }
+
+    // A mark whose CC opened the fight: crowd-controlled now and within
+    // CcMarkHoldSeconds of the creature's combat start (-1 = unknown: no).
+    inline bool CcOpeningHold(bool crowdControlled, long combatSeconds)
+    {
+        return crowdControlled && combatSeconds >= 0 && combatSeconds <= CcMarkHoldSeconds;
     }
 
     // The CC bot's own area spells spare its mark for the whole fight while
@@ -146,6 +162,22 @@ namespace ai
     inline bool CcChooserKeepsResult(bool resultIsAssignedMark)
     {
         return resultIsAssignedMark;
+    }
+
+    // The CC chooser's first candidate: a mark an ORDER assigned (a family is
+    // on the bot, so `rti cc` came with a cc order, not the default Moon) is
+    // the target at any range, before the tournament over units already
+    // fighting the group. The `reach cc` prerequisite walks the bot in and the
+    // cast itself waits for line of sight and CcCastRangeMargin. Without this
+    // the mark of an order given before its pack opens was no candidate at all
+    // (the tournament lists engaged attackers only), and the ordered cast
+    // never went out (live #208: three accepted `cmd cc` orders, no
+    // Polymorph). Only-marks-left still ends the pick: the party kills the
+    // marks last, so there is nothing to sheep. A plain Moon mark without an
+    // order keeps the old engaged-only pick.
+    inline bool CcChooserTakesAssignedMark(bool assignedByOrder, bool onlyCrowdControlMarksLeft)
+    {
+        return assignedByOrder && !onlyCrowdControlMarksLeft;
     }
 
     // Blade Flurry reach: a running one is cancelled within the cancel

@@ -1,4 +1,5 @@
 #include "host/TbHostAuction.h"
+#include "playerbot/policy/ah/AhListingPolicy.h"
 #include "playerbot/policy/ah/AhSellPolicy.h"
 
 #include "AuctionHouseBotVanilla.h"
@@ -85,38 +86,35 @@ AuctionHouseObject* FactionHouseOf(Creature const* auctioneer)
 
 void AppendItemsFromResult(Player const* bot, AuctionHouseObject* house,
     WorldPackets::AuctionHouse::AuctionListItemsResult const& result,
-    std::vector<AhListingView>& out)
+    std::vector<AhListingView>& out, uint32_t queriedItemId)
 {
     ObjectGuid const botGuid = bot->GetGUID();
     ObjectGuid const botAccGuid = bot->GetSession() ? bot->GetSession()->GetAccountGUID() : ObjectGuid::Empty;
 
-    for (WorldPackets::AuctionHouse::AuctionItem const& ai : result.Items)
+    for (WorldPackets::AuctionHouse::AuctionItem const& listed : result.Items)
     {
-        if (!ai.Item)
+        AuctionPosting* posting = house ? house->GetAuction(static_cast<uint32_t>(listed.AuctionID)) : nullptr;
+
+        ::ai::AhListingIdSources ids;
+        ids.itemFieldId = listed.Item ? listed.Item->ItemID : 0;
+        ids.bucketKeyItemId = listed.AuctionBucketKey ? listed.AuctionBucketKey->ItemID : 0;
+        ids.postingItemId = (posting && !posting->Items.empty()) ? posting->Items.front()->GetEntry() : 0;
+        ids.queriedItemId = queriedItemId;
+        uint32_t const itemId = ::ai::ResolveAhListingItemId(ids);
+        if (!itemId)
             continue;
+
         AhListingView v;
-        v.auctionId = static_cast<uint32_t>(ai.AuctionID);
-        v.itemId = ai.Item->ItemID;
-        v.count = static_cast<uint32_t>(std::max<int32_t>(0, ai.Count));
-        if (ai.UnitPrice)
-        {
-            v.isCommodity = true;
-            v.unitPrice = *ai.UnitPrice;
-            v.buyoutPrice = v.unitPrice * v.count;
-        }
-        else
-        {
-            v.isCommodity = false;
-            v.buyoutPrice = ai.BuyoutPrice.value_or(0);
-            v.unitPrice = (v.count > 0) ? (v.buyoutPrice / v.count) : v.buyoutPrice;
-        }
-        v.minBid = ai.MinBid.value_or(0);
-        v.isOwn = (ai.Owner == botGuid) || (!botAccGuid.IsEmpty() && ai.OwnerAccountID == botAccGuid);
-        if (house)
-        {
-            if (AuctionPosting* posting = house->GetAuction(v.auctionId))
-                v.isCommodity = posting->IsCommodity();
-        }
+        v.auctionId = static_cast<uint32_t>(listed.AuctionID);
+        v.itemId = itemId;
+        v.count = static_cast<uint32_t>(std::max<int32_t>(0, listed.Count));
+        ::ai::AhListingPrices const prices = ::ai::ComputeAhListingPrices(listed.UnitPrice.has_value(), listed.UnitPrice.value_or(0),
+            listed.BuyoutPrice.value_or(0), v.count);
+        v.isCommodity = posting ? posting->IsCommodity() : prices.isCommodity;
+        v.unitPrice = prices.unitPrice;
+        v.buyoutPrice = prices.buyoutPrice;
+        v.minBid = listed.MinBid.value_or(0);
+        v.isOwn = (listed.Owner == botGuid) || (!botAccGuid.IsEmpty() && listed.OwnerAccountID == botAccGuid);
         out.push_back(v);
     }
 }
@@ -210,11 +208,12 @@ std::vector<AhListingView> QueryMarketByItemId(Player* bot, Creature const* auct
 
     WorldPackets::AuctionHouse::AuctionListItemsResult result;
     house->BuildListAuctionItems(result, bot, itemId, 0, {});
-    AppendItemsFromResult(bot, house, result, out);
+    AppendItemsFromResult(bot, house, result, out, itemId);
     return out;
 }
 
-std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctioneer, std::string const& nameSubstr)
+std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctioneer, std::string const& nameSubstr,
+    uint32_t offset)
 {
     std::vector<AhListingView> out;
     if (!bot || !bot->GetSession())
@@ -233,7 +232,7 @@ std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctio
         | AuctionHouseFilterMask::UncommonQuality | AuctionHouseFilterMask::RareQuality | AuctionHouseFilterMask::EpicQuality
         | AuctionHouseFilterMask::LegendaryQuality | AuctionHouseFilterMask::ArtifactQuality;
     house->BuildListBuckets(bucketsResult, bot, wname, 0, MAX_LEVEL, everyQuality,
-        std::nullopt, {}, 0, 0, {});
+        std::nullopt, {}, 0, offset, {});
 
     std::string const lowerSub = LowerAscii(nameSubstr);
     size_t const maxBuckets = std::min<size_t>(bucketsResult.Buckets.size(), 50);
@@ -251,7 +250,7 @@ std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctio
         }
         WorldPackets::AuctionHouse::AuctionListItemsResult itemsResult;
         house->BuildListAuctionItems(itemsResult, bot, itemId, 0, {});
-        AppendItemsFromResult(bot, house, itemsResult, out);
+        AppendItemsFromResult(bot, house, itemsResult, out, itemId);
     }
     return out;
 }

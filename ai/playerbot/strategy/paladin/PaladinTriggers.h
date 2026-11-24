@@ -86,6 +86,23 @@ namespace ai
 		bool IsActive() override;
 	};
 
+    // Protection seal choice (AiPlayerbot.ProtPaladinDungeonWisdom): which
+    // Seal the tank wants is one decision (ProtPaladinWantedSeal); one trigger
+    // per Seal fires while the wanted Seal is missing. On this core a Judgement
+    // leaves the Seal up, so the Righteousness trigger must also fire when
+    // another Seal is up (the tank's Wisdom swap for a judgement) - it is not
+    // only an "empty slot" trigger.
+    class ProtPaladinSealTrigger : public Trigger
+    {
+    public:
+        ProtPaladinSealTrigger(PlayerbotAI* ai, std::string const& name, bool wisdom)
+            : Trigger(ai, name, 1), wisdom(wisdom) {}
+        bool IsActive() override;
+
+    private:
+        bool wisdom;
+    };
+
     // Opt-in Judgement upkeep (AiPlayerbot.PaladinJudgementUpkeep): the
     // owner of Judgement of Wisdom / Light on the group's boss or elite
     // swaps to the matching Seal and judges as the debuff runs out. One
@@ -125,6 +142,22 @@ namespace ai
     CD_TRIGGER(CrusaderStrikeTrigger, "crusader strike");
     CD_TRIGGER(HolyStrikeTrigger, "holy strike");
     CD_TRIGGER(BulwarkTrigger, "bulwark of the righteous");
+
+    // Holy melee-weave (AiPlayerbot.HolyPaladinMeleeWeave): walk in and swing
+    // only while the group is healthy and the target is not a raid one.
+    class HolyMeleeWeaveReachTrigger : public Trigger
+    {
+    public:
+        HolyMeleeWeaveReachTrigger(PlayerbotAI* ai) : Trigger(ai, "holy melee weave reach", 1) {}
+        bool IsActive() override;
+    };
+
+    class HolyMeleeWeaveAttackTrigger : public Trigger
+    {
+    public:
+        HolyMeleeWeaveAttackTrigger(PlayerbotAI* ai) : Trigger(ai, "holy melee weave attack", 1) {}
+        bool IsActive() override;
+    };
 
     // repentance triggers
     INTERRUPT_HEALER_TRIGGER(RepentanceOnHealerTrigger, "repentance on enemy healer");
