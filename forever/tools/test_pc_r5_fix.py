@@ -37,6 +37,7 @@ PLAYER_CMD = "forever/src/host/player/TbPlayerCmd.cpp"
 TRAVEL_MGR = "ai/playerbot/TravelMgr.cpp"
 TRAVEL_MGR_H = "ai/playerbot/TravelMgr.h"
 GUARD = "forever/src/slice/SliceMissingKeyGuard.h"
+CHOOSER = "ai/playerbot/strategy/actions/ChooseTravelTargetAction.cpp"
 
 
 def read(rel):
@@ -126,6 +127,30 @@ def uncovered_stand_in_types(guard_text, context_text):
     return bad
 
 
+def null_dereferred_value_reads(text):
+    """`GetValue<T>(...)` results dashed straight into `->Get()`/`->Set()`: the R5 crash shape (#260).
+
+    `GetValue<T>` is `dynamic_cast<Value<T>*>(GetUntypedValue(name))`; a name the context does not hold gives null.
+    The stand-in covers the types the slice's sources read, but the call itself must never be dashed into a member
+    call: the pointer is named once and the read is null-tested. Returns [(line, call)]."""
+    code = chk.strip_comments(text)
+    out = []
+    for m in re.finditer(r'\bGetValue\s*<', code):
+        i, depth = m.end(), 1                      # inside the template argument list
+        while i < len(code) and depth:
+            depth += {"<": 1, ">": -1}.get(code[i], 0)
+            i += 1
+        if i >= len(code) or code[i] != "(":
+            continue
+        i, depth = i + 1, 1                        # the call's own parentheses
+        while i < len(code) and depth:
+            depth += {"(": 1, ")": -1}.get(code[i], 0)
+            i += 1
+        if re.match(r'\s*->', code[i:]):
+            out.append((code.count("\n", 0, m.start()) + 1, code[m.start():i].strip()))
+    return out
+
+
 # ---- bug 2: the owner gate -----------------------------------------------------------------------------------------------------------
 
 def is_owner_body(player_ai_text):
@@ -190,6 +215,18 @@ class R5CrashFix(unittest.TestCase):
         # slice_registry_check.py lists them as "[stand-in lacks: ...]"; none may remain.
         self.assertEqual(uncovered_stand_in_types(read(GUARD), self.context), [], "unregistered values read as a type the missing-value stand-in lacks")
 
+    def test_the_chooser_never_dashes_a_value_read_into_a_null(self):
+        # #260: the accessor returns null for a name the context does not hold (the stand-in answers a covered type, but
+        # the call itself is a cast). No raw GetValue result in the travel chooser may go straight into ->Get()/->Set().
+        text = read(CHOOSER)
+        self.assertEqual(null_dereferred_value_reads(text), [],
+                         "ChooseTravelTargetAction.cpp dereferences a raw GetValue result without a null test")
+        # #260: the mount purpose reads `available mount vendors` through a named pointer that is tested; the empty list
+        # then skips the purpose (the branch's logged reason).
+        m = re.search(r'Value\s*<\s*std::vector\s*<\s*int32\s*>\s*>\s*\*\s*(\w+)\s*=\s*[^;]*"available mount vendors"', text)
+        self.assertIsNotNone(m, "the mount vendor read is not held in a null-checked Value<std::vector<int32>>*")
+        self.assertRegex(text, r'\b%s\s*\?' % re.escape(m.group(1)), "the mount vendor pointer is not null-tested")
+
     def test_the_crash_mutations_are_caught(self):
         # mutation 1: the value gone from the registry
         mutated = re.sub(r'\n[^\n]*creators\["focus travel target"\][^\n]*', "", self.context)
@@ -200,10 +237,10 @@ class R5CrashFix(unittest.TestCase):
         dropped = re.sub(r"\n\s*focusQuestTravelList,", "", guard)
         self.assertTrue(dropped != guard, "mutation 2 changed nothing (the type is not in the stand-in yet)")
         self.assertTrue(uncovered_stand_in_types(dropped, mutated), "the stand-in without the set type was not caught")
-        # mutation 3: a stand-in type any other unregistered read needs (`current position` / `home bind` read WorldPosition)
-        no_pos = re.sub(r"\n\s*WorldPosition>;", ">;", re.sub(r",\n\s*WorldPosition>;", ">;", guard))
-        self.assertTrue(no_pos != guard, "mutation 3 changed nothing")
-        self.assertTrue(uncovered_stand_in_types(no_pos, self.context), "the stand-in without WorldPosition was not caught")
+        # mutation 3: a stand-in type another unregistered read needs (`rpg bg type` is read as BattleGroundTypeId)
+        no_bg = re.sub(r",\s*\n[ \t]*BattleGroundTypeId(?=[,>])", "", guard, count=1)
+        self.assertTrue(no_bg != guard, "mutation 3 changed nothing")
+        self.assertTrue(uncovered_stand_in_types(no_bg, self.context), "the stand-in without BattleGroundTypeId was not caught")
 
 
 class R5OwnerGate(unittest.TestCase):
