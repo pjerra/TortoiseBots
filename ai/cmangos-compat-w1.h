@@ -44,6 +44,13 @@ inline bool FreeBotStartFightRuleCompat()
     return false;
 }
 
+// #24: the real-player table and the pool-share rule are the Forever host's (the helm/slice build); the Turtle pick keeps its
+// original answer, so a mob next to a player is still a target there.
+inline bool PoolShareMobsSkipCompat(Player* /*bot*/, Unit* /*unit*/)
+{
+    return false;
+}
+
 
 // ===============================================================================================================
 // GRAVEYARDS AND MAPS

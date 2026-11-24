@@ -15,6 +15,7 @@
 #include "host/TbHostThievery.h"
 #include "host/TbHostProfessionUpkeep.h"
 #include "host/TbHostWorldPvp.h"
+#include "host/TbHostShareMobs.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -273,6 +274,15 @@ void BotMgr::LoadConfig()
     _freeMapCaps.raid10 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid10", 10), 0, 1000));
     _freeMapCaps.raid20 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid20", 20), 0, 1000));
     _freeMapCaps.raid40 = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Free.MaxPerMap.Raid40", 40), 0, 1000));
+    // #24: pool bots leave camps and quest mobs to the real players working them. The switch is OFF until the live rows prove it;
+    // the radii, the workers one quest spot feeds and the give-up time are clamped by the policy (5-100, near-150, 1-10, 60-3600).
+    world::ShareMobsConfig shareMobs;
+    shareMobs.enabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.PoolShareMobs", false);
+    shareMobs.nearYd = sConfigMgr->GetFloatDefault("TortoiseBots.World.PoolShareMobs.NearYd", 30.0f);
+    shareMobs.farYd = sConfigMgr->GetFloatDefault("TortoiseBots.World.PoolShareMobs.FarYd", 60.0f);
+    shareMobs.questSpotCap = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.World.PoolShareMobs.QuestSpotCap", 3), 0, 1000));
+    shareMobs.giveUpSeconds = uint32(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.World.PoolShareMobs.GiveUpSeconds", 600), 0, 100000));
+    _shareMobs = world::ClampShareMobsConfig(shareMobs);
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
@@ -1830,6 +1840,11 @@ void BotMgr::Update(uint32 diff)
     }
 
     TickQuestGroups(diff);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    // #24: the real-player table the pool-share rule reads, rebuilt once a second on this thread (the engine's own pick runs in the
+    // same world-thread pass, so no lock is taken). One branch a tick while the switch is off.
+    tbhost::sharemobs::Tick(diff);
+#endif
 
     // The engine's cumulative action_counts.csv snapshot every five minutes of tick time. The dump itself
     // checks AiPlayerbot.ActionCountsLog, so the off path is one branch and an add per tick.

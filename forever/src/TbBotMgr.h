@@ -10,6 +10,7 @@
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
 #include "ai/playerbot/policy/death/GhostRescuePolicy.h"   // W1: when a ghost may be rescued (core-free)
 #include "ai/playerbot/policy/world/FreeMapCapPolicy.h"     // F-population: the per-map free-bot cap (core-free)
+#include "ai/playerbot/policy/world/PoolShareMobsPolicy.h"  // #24: pool bots leave camps to real players (core-free)
 #include <map>
 #include <set>
 #include <unordered_set>
@@ -84,6 +85,11 @@ public:
     // online count and sessions is built from this; `IsFreeBot` tells a pool bot that is still playing free from one that got a
     // master (BindMaster clears `free`, so it leaves the count and is never logged out by the pool).
     bool IsPoolBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.pool; }
+    // D-3: an owner's alt (`.bot add`). Never a free bot, so #24 never applies to one (BotFacts::owned).
+    bool IsOwnedBot(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr != _bots.end() && itr->second.owned; }
+
+    // #24: TortoiseBots.World.PoolShareMobs.*, read and clamped by LoadConfig; the host table (host/TbHostShareMobs.cpp) reads it.
+    world::ShareMobsConfig GetShareMobsConfig() const { return _shareMobs; }
 
     // W0 (D2): a bot of this manager (pool or not, loading or in the world) sits on that account. One session per account is
     // the rule, so the scheduler counts the account as online and a second bot of it is refused.
@@ -375,6 +381,7 @@ private:
     uint32 _deadBackstopMs = 180000;  // N2/N3: TortoiseBots.Slice.DeadBackstopSeconds
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
     world::FreeMapCaps _freeMapCaps;  // F-population: TortoiseBots.Free.MaxPerMap.* (dungeon 5, raids 10/20/40, 0 = no cap)
+    world::ShareMobsConfig _shareMobs;  // #24: TortoiseBots.World.PoolShareMobs.* (off until the live rows prove it)
     // Tick budget (runtime/AdaptiveBudget.h): the controller moves the effective
     // pool/combat ceilings each pass from the measured previous world tick. The
     // configured values stay the hard maximum; 0 in either means no budget.

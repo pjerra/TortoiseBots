@@ -300,6 +300,15 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             }
         }
 
+        // #24: a pool bot leaves the camp to the real player working it - no new pull on a mob he stands next to, nor on one his
+        // open quests need while it is near him. Self-defence is the attackers loop above (already returned for anything fighting
+        // the bot or its group); the rule never reaches it. ForeverCore only (the Turtle pair answers false).
+        if (PoolShareMobsSkipCompat(bot, unit))
+        {
+            logGrind(unit, "ignored (a real player works this area).");
+            continue;
+        }
+
         // No player pull while either side is fresh from a revive: pool bots of
         // both factions revived at one shared spirit healer and killed each
         // other in a loop. Self-defence (the attackers loop above) still fights.
@@ -589,6 +598,10 @@ Unit* GrindTargetValue::FindIdleFallbackTarget()
         // only; the Turtle pick is unchanged).
         if (FreeBotStartFightRuleCompat() && sRandomBotFacade.IsFreeBot(bot) && !ai->HasRealPlayerMaster() &&
             !TortoiseBots::world::FreeBotMayStartFight(FreeGrindFactsOf(unit, bot)))
+            continue;
+
+        // #24: a mob next to a real player, or one his open quests need while it is near him, is no fallback target either.
+        if (PoolShareMobsSkipCompat(bot, unit))
             continue;
 
         if (!PossibleAttackTargetsValue::IsPossibleTarget(unit, bot, ai::GRIND_IDLE_FALLBACK_RANGE_YD, false))

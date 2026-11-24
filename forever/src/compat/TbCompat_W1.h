@@ -16,6 +16,7 @@
 #include "Maps/Map.h"
 #include "MiscPackets.h"          // WorldPackets::Misc::ReclaimCorpse
 #include "NPCPackets.h"            // WorldPackets::NPC::SpiritHealerActivate
+#include "host/TbHostShareMobs.h"  // #24: the real-player table and the pool-share rule (PoolShareMobsPolicy.h)
 
 // ===============================================================================================================
 // GRIND TARGETS (GrindTargetValue.cpp)
@@ -56,6 +57,15 @@ inline bool UnitHasNpcFlagW1Compat(Unit* unit, uint32 flag)
 inline bool FreeBotStartFightRuleCompat()
 {
     return true;
+}
+
+// #24: a pool bot leaves a camp and a quest mob to the real players working them. The rule (PoolShareMobsPolicy.h) and the
+// once-a-second real-player table are the host's (host/TbHostShareMobs.h); the engine only asks, from the two places a NEW pull
+// is picked: the possible-targets loop and the idle fallback of FindTargetForGrinding. Never from the attackers loop, so a mob
+// fighting the bot or its group is still answered. Turtle: no host table there, and its pool bots keep the old pick.
+inline bool PoolShareMobsSkipCompat(Player* bot, Unit* unit)
+{
+    return tbhost::sharemobs::Judge(bot, unit) != TortoiseBots::world::MobVerdict::None;
 }
 
 

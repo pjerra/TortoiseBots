@@ -283,6 +283,54 @@ TortoiseBots.World.Auction = 0
 TortoiseBots.World.GroupQuests = 1
 
 #
+#    TortoiseBots.World.PoolShareMobs
+#        Description: Pool bots (no owner, no master, still playing free) leave the camps and quest mobs of real players:
+#                     they open no fight on a mob within NearYd of a player who is not in their group, nor on a mob within
+#                     FarYd of him that his open quests still need (its kill, or the quest item its loot drops). Owned bots,
+#                     hires, guild-errand bots and bots grouped with a player are never affected, nor is any dungeon, raid,
+#                     battleground or arena. A mob that attacks a bot or its group is always fought back.
+#        Default:     0
+#
+
+TortoiseBots.World.PoolShareMobs = 0
+
+#
+#    TortoiseBots.World.PoolShareMobs.NearYd
+#        Description: Radius in yards of the ring a real player stands in: inside it no pool bot opens a new fight. 5-100.
+#        Default:     30
+#
+
+TortoiseBots.World.PoolShareMobs.NearYd = 30
+
+#
+#    TortoiseBots.World.PoolShareMobs.FarYd
+#        Description: Radius in yards of the wider ring: inside it, a mob his open quests need (or one whose loot drops the
+#                     quest item he needs) is left to him. Never tighter than NearYd, at most 150.
+#        Default:     60
+#
+
+TortoiseBots.World.PoolShareMobs.FarYd = 60
+
+#
+#    TortoiseBots.World.PoolShareMobs.QuestSpotCap
+#        Description: How many workers one quest objective site feeds before a pool bot past the cap gives that objective
+#                     up and picks another: real players first, then companions (bots with a real master or an owner), then
+#                     pool bots, each by guid. 1-10. Round 1 only reads it; the cap acts in round 2.
+#        Default:     3
+#
+
+TortoiseBots.World.PoolShareMobs.QuestSpotCap = 3
+
+#
+#    TortoiseBots.World.PoolShareMobs.GiveUpSeconds
+#        Description: How long (seconds) a pool bot that lost a quest spot to the cap leaves that objective alone. 60-3600.
+#                     Round 1 only reads it; the give-up acts with the cap in round 2.
+#        Default:     600
+#
+
+TortoiseBots.World.PoolShareMobs.GiveUpSeconds = 600
+
+#
 #    TortoiseBots.World.CapitalErrands
 #        Description: Allow free bots (`free`) in a capital to occasionally run mailbox, trainer, bank, and AH errands,
 #                     and challenge/accept bot-vs-bot duels in dueling areas (city gates). Also lets a free bot within
