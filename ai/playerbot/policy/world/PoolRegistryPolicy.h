@@ -292,8 +292,14 @@ inline std::uint32_t AllowedPoolCharacters(std::uint32_t requested, std::uint32_
     return std::min(requested, cap - present);
 }
 
+// The pool keeps one character per account. A bot session occupies its account for every other character of it (one session
+// per account), so a second character on an account can never be online while the first is; packing several on an account
+// caps the online count at the number of accounts. One per account makes every pool character reachable when its turn comes.
+inline constexpr std::uint32_t kPoolCharactersPerAccount = 1;
+
 // How many pool accounts the cap allows: the accounts the cap's characters fill at `perAccount` each (a cap of 50 at 10 is five
-// accounts). An account holding no character still counts, so a creation that keeps failing cannot keep making them.
+// accounts, at the pool's own one per account fifty). An account holding no character still counts, so a creation that keeps
+// failing cannot keep making them.
 inline std::uint32_t MaxPoolAccounts(std::uint32_t capCharacters, std::uint32_t perAccount)
 {
     if (!capCharacters || !perAccount)
