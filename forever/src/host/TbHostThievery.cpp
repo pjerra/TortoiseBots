@@ -19,7 +19,6 @@
 #include "host/TbHostThievery.h"
 
 #include "TbBotMgr.h"
-#include "runtime/GuildOrderContract.h"
 #include "host/TbHostCapitalErrands.h"
 #include "host/TbHostGuild.h"
 #include "host/TbHostGuildMail.h"
@@ -534,9 +533,7 @@ bool AnotherErrandOwns(Player* bot)
         tbhost::guild_orders::HasActiveDisenchantErrand(bot) || tbhost::guild_orders::HasActiveEnchantErrand(bot) ||
         tbhost::prof::HasActiveErrand(bot))
         return true;
-    // A finished or cancelled order stays in the store until the giver collects it; only an open one is work.
-    std::optional<TortoiseBots::GuildOrders::OrderRecord> const order = tbhost::guild_orders::FindOrder(bot->GetGUID().GetCounter());
-    return order && !order->cancelled && !TortoiseBots::GuildOrders::IsFinished(order->state);
+    return tbhost::guild_orders::HasOpenOrder(bot->GetGUID().GetCounter());
 }
 
 void ClearMailTask(BotState& st)
