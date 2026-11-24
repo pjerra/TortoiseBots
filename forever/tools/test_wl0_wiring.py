@@ -106,8 +106,11 @@ class Creation(unittest.TestCase):
         # Never stored: the registry's own row carries no password field.
         self.assertNotIn("password", func(REG, "bool StoreAccount("))
 
-    def test_the_pool_caps_characters_per_account_and_paces_creation(self):
-        self.assertIn("kCharactersPerAccount = 10", REG_H)
+    def test_the_pool_places_one_character_per_account_and_paces_creation(self):
+        # One session per account: a second character on an account could never be online, so the pool keeps one per account
+        # and its account rows follow its characters.
+        self.assertIn("kPoolCharactersPerAccount = 1", REGISTRY_POLICY)
+        self.assertIn("kCharactersPerAccount = world::kPoolCharactersPerAccount", REG_H)
         room = func(REG, "std::uint32_t AccountWithRoom(")
         self.assertIn("world::PoolHasRoomForCharacter(std::max(CharactersOnAccount(account.id), present), kCharactersPerAccount)", room)
         self.assertIn("CharactersOnAccountNow(account.id, present)", room)
