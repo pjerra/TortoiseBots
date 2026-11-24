@@ -64,7 +64,7 @@ Enables the autonomous Auction House market service for free pool bots.
 <details>
 <summary>How it works in detail</summary>
 
-Also needs `TortoiseBots.World.Auction = 1`. When both are on, free masterless bots with loot their own sell rules accept walk to a faction auctioneer in their zone (500 yd at most) and post it; bots already standing at an auctioneer post at once. A traveling bot is a normal candidate: the sweep stops its walk, posts, and the engine's travel target resumes afterwards. Items the bot's own rules would vendor only because a solo trip would not pay for the small markup are still offered; kept, equipped, soulbound, quest, profession-tool and reserved items are not. Listings go through the core's auction handlers, so deposits and throttles are the core's.
+Also needs `TortoiseBots.World.Auction = 1`. When both are on, free masterless bots with loot their own sell rules accept walk to a faction auctioneer in their zone (500 yd at most) and post it; bots already standing at an auctioneer post at once. Listings go through the core's auction handlers, so deposits and throttles are the core's.
 
 This system requires `AiPlayerbot.RandomBotAutologin = 1`. Failed auction attempts are rate-limited per bot to prevent spam.
 

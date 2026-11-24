@@ -13,8 +13,6 @@ namespace ai
     private:
         virtual bool ExecuteCommand(Player* requester, std::string text, Unit* auctioneer);
         bool PostItem(Player* requester, Item* item, uint32 price, Unit* auctioneer, uint32 time);
-        // Set by Execute from the event source: the automatic market (host) posts the bot's surplus, a player order does not.
-        bool marketSurplusSeller_ = false;
 
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "ah"; } //Must equal iternal name
