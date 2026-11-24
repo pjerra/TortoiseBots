@@ -6,22 +6,25 @@
 // it resolves the commander's own bots, snaps each slot to the ground with the module's height helper, skips a slot with no path (the same PathGenerator
 // the move judge reads), and queues the engine's own `come` order per bot. The fall back ends on `attack`, `pull`, `pullback`, `follow` or `resume`.
 //
-// The command surface (forever/docs/TB-COMMANDS.md section 17):
-//   .tb cmd place <close|circle|arc|spread|line|column|spear|arrow> [tight|normal|wide] [here|target|cursor] [who...]
+// The command surface (forever/docs/TB-COMMANDS.md section 20):
+//   .tb cmd place <shape> [tight|normal|wide|<yd>] [here|target|cursor|tank|at:<x>,<y>[,<z>]] [face:<deg>] [who...]
 //   .tb cmd place follow [who...]
-//   .tb cmd rally here
-//   .tb cmd fallback | .tb cmd fall back | .tb cmd back
+//   .tb cmd rally [here|clear|at:<x>,<y>[,<z>]]
+//   .tb cmd fallback | .tb cmd fall back [rally|last|here|at:<x>,<y>[,<z>]]
+//   .tb cmd back
 //   .tb cmd resume
 //
 // Threading: world thread only (commands, the packet hook of ProcessSessionUpdate, the 1 Hz tick of OnBeforeMapsUpdate): plain data, no lock.
 #pragma once
 
 #include "host/TbH3.h"
+#include "host/cmd/TbPlacePlan.h"
 
 #include <string>
 #include <vector>
 
 class ChatHandler;
+class Group;
 class Player;
 class WorldPacket;
 class WorldSession;
@@ -35,8 +38,9 @@ namespace place
 bool Handle(ChatHandler* handler, h3::Words const& args);
 
 // The chat form of the same words (a whisper to one of the commander's bots, or party/raid chat of a group that holds them). `text` is the chat text as
-// typed; the reply lines go to the sender's session. False when the text is not a place command.
-bool HandleChat(Player* sender, std::string const& text);
+// typed; the reply lines go to the sender's session. `group` is the channel of a party/raid line (null for a whisper): the line is only an order when
+// that channel holds at least one of the commander's bots. False when the text is not a place command (or the channel does not hold the bots).
+bool HandleChat(Player* sender, std::string const& text, Group* group = nullptr);
 
 // True when `text` starts with one of the place words (the chat hooks ask this before touching anything). Cheap: no world access.
 bool IsPlaceText(std::string const& text);
@@ -57,5 +61,9 @@ void NoteLogout(Player* player);
 
 // Once a second (the same tick as cmd::Maintain): the cursor timeouts and the walk back of a placed bot that lost its slot.
 void Update();
+
+// The commander's hold rows and rally point as the card reads them (`.tb commander status`): who holds which slot, and whether a rally point is
+// stored (with its own map and instance). World thread only; empty when nothing is held.
+HoldView ViewFor(ObjectGuid commander);
 }
 }

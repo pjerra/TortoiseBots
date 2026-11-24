@@ -17,6 +17,7 @@
 #include "compat/TbCompat_Unit.h"
 #include "host/TbH3.h"
 #include "host/cmd/TbCmdBindingStore.h"
+#include "host/cmd/TbPlace.h"
 #include "host/run/TbRun.h"
 
 #include "CharacterCache.h"
@@ -1485,6 +1486,7 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     for (HostCard const& h : cards)
     {
         P::CardView const& v = h.view;
+        place::CardKeys const holdKeys = place::CardHoldKeys(place::ViewFor(PlayerGuid(v.commanderGuid)));
         Rec b("binding");
         b.S("cmd", v.commanderName).N("cguid", v.commanderGuid).B("online", v.commanderOnline).S("lead", v.leadName);
         if (v.groupId)
@@ -1493,6 +1495,11 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         b.N("boundat", v.boundAt).N("orders", v.orders.size());
         if (v.commanderPlaced)
             b.N("map", v.commanderMap).Coord("pos", v.commanderX, v.commanderY, v.commanderZ);
+        if (!holdKeys.hold.empty())
+            b.S("hold", holdKeys.hold);
+        if (holdKeys.hasRally)
+            b.Coord("rally", holdKeys.rally.x, holdKeys.rally.y, holdKeys.rally.z)
+                .N("rmap", int64(holdKeys.rmap)).N("rinst", int64(holdKeys.rinst));
         reply.Line(b);
         for (P::BotView const& m : v.bots)
         {
@@ -1502,6 +1509,13 @@ bool HandleCommander(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             r.N("map", m.map).N("zone", m.zone).Coord("pos", m.x, m.y, m.z);
             if (m.subgroup >= 0)
                 r.N("sub", m.subgroup);
+            if (!holdKeys.hold.empty())
+            {
+                ObjectGuid const guid = PlayerGuid(m.guid);
+                place::Vec3f slot;
+                if (holdKeys.SlotOf(place::GuidKey{ guid.GetRawValue(1), guid.GetRawValue(0) }, slot))
+                    r.S("hold", holdKeys.hold).Coord("slot", slot.x, slot.y, slot.z);
+            }
             reply.Line(r);
         }
         for (CT::OrderRecord const& o : v.orders)

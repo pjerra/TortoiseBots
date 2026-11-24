@@ -31,6 +31,8 @@ struct OrderSpec
     uint32 map = 0;
     uint32 instance = 0;        // move-direct: the Map instance the point was made in (0 = not recorded); two copies of a dungeon share the map id
     bool fromRun = false;
+    bool disengage = false;     // come: a fall back. Stops the swing, the cast and the pet's attack, and holds the bot passive on the way.
+    bool placed = false;        // come: a placement's own order (`.tb cmd place`). Only this one keeps the combat-time behaviour: no Reset mid-fight and no `stay` in the combat state.
 };
 
 // Everything the queue could refuse later, asked now and changing nothing: engine present, the legacy actions the verb needs registered, queue not full,
@@ -58,6 +60,21 @@ void EndRunPull(Player* bot);
 // Issue #15: clears the stay a `place`/`fall back` `come` order wrote, but only while that order (by `seq`) is still the bot's last one and it was a
 // `come`: a bot whose commander changed is left to its new master, never given an order by the old one. Safe with no engine.
 bool ReleasePlaceStay(Player* bot, uint32 seq);
+
+// Issue #15: a fall back's `come` holds the bot passive so it stops fighting on the way. Releases that passivity (and the combat-state stay) once
+// the bot reaches its fall-back spot, but only while the fall-back order (by `seq`) is still its last one. Safe with no engine.
+bool ReleasePlaceDisengage(Player* bot, uint32 seq);
+
+// Issue #15 F1: drops the emergency `passive` of the fall back's own `come` (by `seq`), whatever order owns the bot now, and only while no newer
+// order that sets `passive` itself is the bot's last one: `hold`, `flee` and an owner's `+passive` keep their own, so a fleeing bot never starts
+// fighting again. A passive the fall back did not set (the owner's, a hold's, a flee's) is never touched; the row's own walk-back `come` carries
+// the record. Returns true when the row has no passive record left to serve (released, or never the row's), i.e. the row may stop disengaging;
+// false only with no engine (a bot that is away). Safe with no engine.
+bool ReleasePlacePassive(Player* bot, uint32 seq);
+
+// Issue #15: an `attack`/`pull`/`pullback`/`resume` ended a fall back. Drops the emergency `passive` and `stay` ONLY while the stay position still
+// is the row's spot (the placement's own), so a movement order that wrote its own stay is never touched. Never queues an order. Safe with no engine.
+bool ReleasePlaceHold(Player* bot, float x, float y, float z);
 
 // R6 (review item 5): registers (on) or drops (off) a run's leader: while registered, the bot's engine hook keeps it from following its commander when it is out of
 // combat with no pull under way (it holds on `stay` where it stands). The run calls it at start and at its end.

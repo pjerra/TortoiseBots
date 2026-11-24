@@ -487,13 +487,13 @@ public:
     }
 
     // #15: the same words in the party or raid chat of a group the commander drives.
-    void OnChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* /*group*/) override
+    void OnChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* group) override
     {
         if (type != CHAT_MSG_PARTY && type != CHAT_MSG_PARTY_LEADER && type != CHAT_MSG_RAID && type != CHAT_MSG_RAID_LEADER)
             return;
         if (!player || BotMgr::Instance().IsBot(player->GetGUID()))
             return;
-        TortoiseBots::place::HandleChat(player, msg);
+        TortoiseBots::place::HandleChat(player, msg, group);
     }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
