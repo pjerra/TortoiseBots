@@ -467,6 +467,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         nonCombatEngine->addStrategy(TortoiseBots::world::FreeSpecStrategy(player->GetClass()));
         for (char const* const* kit = TortoiseBots::world::FreeWorldKit(); *kit; ++kit)
             nonCombatEngine->addStrategy(*kit);
+        // Questing is the owner's config: with AiPlayerbot.AutoDoQuests off a free bot only grinds and travels, exactly
+        // as the full build gates its rpg strategy.
+        if (sPlayerbotAIConfig.autoDoQuests)
+            nonCombatEngine->addStrategy("rpg");
         return;
     }
     if (!player)

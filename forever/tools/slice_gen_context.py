@@ -419,7 +419,44 @@ STUCK_KEYS = {
     "trigger": "move stuck, move long stuck, combat stuck, combat long stuck",
     "value": "distance moved since, money, home bind, travel target active, no active travel destinations",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS)
+# Free-bot life (TBF #147, packages A/B/C + this wiring package): the rpg brain that picks an NPC and runs its verbs,
+# the quest values the travel quest rows and the rpg quest verbs read, and the town verbs (smart destroy, the 50-yard
+# nearby service, the vendor/repair/mail values). `rpg` is not in the free kit array: the factory adds it on top when
+# AiPlayerbot.AutoDoQuests is on, as the full build does. Left unregistered on purpose (each row then does less; a
+# missing trigger reads as null in RpgAction's next-action search): `rpg camp`, `rpg heal`, `rpg gossip talk`,
+# `rpg repeat quest`, `rpg taxi`, `rpg discover`, `rpg home bind`, `rpg buy petition`, `rpg queue bg`, `rpg trade useful`,
+# `rpg enchant`, `rpg duel`, `rpg spell`, `rpg craft`, `rpg item`, `rpg guild`, `castnc`, `random jump`, `destroy all gray`
+# (no build has a creator for it) and the shared-context values (`vendor map`, `item vendor list`, `entry quest relation`,
+# `quest guidp map`, `quest givers`, `trainable spell map`), which have no LOCAL mapping below.
+LIFE_RPG_KEYS = {
+    "strategy": "rpg, rpg quest, rpg vendor, rpg explore, rpg maintenance",
+    "action": "rpg, choose rpg target, move to rpg target, service nearby npc, rpg stay, rpg work, rpg emote, "
+              "rpg cancel, rpg use, rpg start quest, rpg end quest, rpg sell, rpg buy, rpg repair, rpg train",
+    "trigger": "no rpg target, far from rpg target, rpg, rpg wander, rpg start quest, rpg end quest, rpg sell, "
+               "rpg buy, rpg repair, rpg train, rpg use, rpg quest use",
+    "value": "possible rpg targets, next rpg action, can fight equal",
+}
+# The stock quest values (package B): dialog status for a giver/taker, the log slots, the objective rows and the two
+# item-on-quest answers. The `active quest givers/takers/objectives` spawn-index values stay unregistered (TB registers
+# them nowhere either) and the shared quest maps cannot be generated.
+LIFE_QUEST_KEYS = {
+    "strategy": "",
+    "action": "",
+    "trigger": "",
+    "value": "free quest log slots, has rewardable finished quest, dialog status, dialog status quest, "
+             "can accept quest npc, can accept quest low level npc, need quest reward, can turn in quest npc, "
+             "can repeat quest npc, need quest objective, can use item on, need for quest, has nearby quest taker",
+}
+# Town verbs (package C): the bag-pressure destroy action, the quest-log-near-full trigger whose upkeep rows are inert
+# for host bots (IsRandomBot is false), and the vendor/repair/mail/nearby-service values.
+LIFE_TOWN_KEYS = {
+    "strategy": "",
+    "action": "smart destroy item",
+    "trigger": "quest log nearly full",
+    "value": "can sell, can buy, can repair, should repair, should sell, can get mail, vendor has useful item, "
+             "nearby service target, should service nearby npc, nearby service fail parks",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

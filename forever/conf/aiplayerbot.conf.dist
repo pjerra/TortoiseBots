@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 350 keys, 341 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 355 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 360 keys, 351 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 345 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -230,6 +230,9 @@ AiPlayerbot.RepeatDelay = 5000
 # AiPlayerbot.ErrorRepeatDelay  (int, PlayerbotAIConfig.cpp:695)
 AiPlayerbot.ErrorRepeatDelay = 30000
 
+# AiPlayerbot.RpgDelay  (int, PlayerbotAIConfig.cpp:696)
+AiPlayerbot.RpgDelay = 10000
+
 # AiPlayerbot.SitDelay  (int, PlayerbotAIConfig.cpp:697)
 AiPlayerbot.SitDelay = 20000
 
@@ -379,6 +382,9 @@ AiPlayerbot.UsePotionChance = 1.0
 
 # AiPlayerbot.AttackEmoteChance  (float, PlayerbotAIConfig.cpp:769)
 AiPlayerbot.AttackEmoteChance = 0.0
+
+# AiPlayerbot.JumpRandomChance  (float, PlayerbotAIConfig.cpp:773)
+AiPlayerbot.JumpRandomChance = 0.20
 
 # AiPlayerbot.JumpInPlaceChance  (float, PlayerbotAIConfig.cpp:774)
 AiPlayerbot.JumpInPlaceChance = 0.50
@@ -671,11 +677,29 @@ AiPlayerbot.ShamanTankEnabled = 1
 # AiPlayerbot.CampEnabled  (bool, PlayerbotAIConfig.cpp:1025)
 AiPlayerbot.CampEnabled = 1
 
+# AiPlayerbot.CampChancePct  (int, PlayerbotAIConfig.cpp:1026)
+AiPlayerbot.CampChancePct = 15
+
+# AiPlayerbot.CampNightChancePct  (int, PlayerbotAIConfig.cpp:1027)
+AiPlayerbot.CampNightChancePct = 30
+
 # AiPlayerbot.CampMinLevel  (int, PlayerbotAIConfig.cpp:1028)
 AiPlayerbot.CampMinLevel = 10
 
+# AiPlayerbot.CampSitDurationSec  (int, PlayerbotAIConfig.cpp:1029)
+AiPlayerbot.CampSitDurationSec = 1200
+
 # AiPlayerbot.CampKeepRestedXp  (bool, PlayerbotAIConfig.cpp:1030)
 AiPlayerbot.CampKeepRestedXp = 0
+
+# AiPlayerbot.CampJoinChancePct  (int, PlayerbotAIConfig.cpp:1031)
+AiPlayerbot.CampJoinChancePct = 10
+
+# AiPlayerbot.CampJoinMinSec  (int, PlayerbotAIConfig.cpp:1032)
+AiPlayerbot.CampJoinMinSec = 60
+
+# AiPlayerbot.CampJoinMaxSec  (int, PlayerbotAIConfig.cpp:1033)
+AiPlayerbot.CampJoinMaxSec = 180
 
 # AiPlayerbot.HireBaseCostCopper  (int, PlayerbotAIConfig.cpp:1036)
 AiPlayerbot.HireBaseCostCopper = 15000
@@ -886,6 +910,9 @@ AiPlayerbot.GuildOrderSubOrderDepth = 3
 # AiPlayerbot.botActiveAlone  (int, PlayerbotAIConfig.cpp:1415)
 AiPlayerbot.botActiveAlone = 10
 
+# AiPlayerbot.RandombotsWalkingRPG  (bool, PlayerbotAIConfig.cpp:1416)
+AiPlayerbot.RandombotsWalkingRPG = 0
+
 # AiPlayerbot.PullBackDpsJoinDelay  (int, PlayerbotAIConfig.cpp:1419)
 AiPlayerbot.PullBackDpsJoinDelay = 5
 
@@ -1002,6 +1029,9 @@ AiPlayerbot.AllowRepairedTaxiPaths = 0
 
 # AiPlayerbot.BotInstantFlight  (bool, PlayerbotAIConfig.cpp:1491)
 AiPlayerbot.BotInstantFlight = 0
+
+# AiPlayerbot.TurnInRpg  (bool, PlayerbotAIConfig.cpp:1492)
+AiPlayerbot.TurnInRpg = 0
 
 # AiPlayerbot.ShareTargets  (bool, PlayerbotAIConfig.cpp:1493)
 AiPlayerbot.ShareTargets = 1
