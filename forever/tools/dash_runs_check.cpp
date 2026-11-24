@@ -329,7 +329,8 @@ int main(int argc, char** argv)
             "\"run\":\"ragefire_chasm-1763560000-5000-7\"", "\"plan\":\"ragefire_chasm\"", "\"map\":389", "\"dungeon\":{\"map\":389}",
             "\"started\":1763560000", "\"ended\":1763560400", "\"duration_ms\":400000", "\"status\":\"done\"", "\"outcome\":\"cleared\"",
             "\"bosses\":[{\"entry\":11520,\"name\":\"Taragaman the Hungerer\",\"killed_at_s\":null,\"killed\":true}]",
-            "\"wipes\":0", "\"deaths\":1", "\"party\":[{\"class\":\"warrior\",\"role\":\"tank\",\"level\":18}", "\"driver\":\"human\"",
+            "\"wipes\":0", "\"deaths\":1", "\"wipe_spots\":[]", "\"death_spots\":[]",
+            "\"party\":[{\"class\":\"warrior\",\"role\":\"tank\",\"level\":18}", "\"driver\":\"human\"",
             "\"build\":{\"module\":\"forever-port\",\"core\":\"abc123\"}",
         };
         for (char const* w : want)
@@ -347,6 +348,15 @@ int main(int argc, char** argv)
             std::printf("two runs in one second share the file %s\n", SummaryFileName(r).c_str());
         CHECK(SummaryFileName(sameSecond) != SummaryFileName(r));
         CHECK(SummaryJson(sameSecond, meta) != json);
+        // TBF #141: a kill time and the wipe/death places are carried when the run read them
+        RunView spotted = FinishedRfc();
+        spotted.bosses[0].killedAtS = 42;
+        spotted.wipeSpots = { { 5, 1.0f, 2.0f, 3.0f, "tank" } };
+        spotted.deathSpots = { { 7, -1.5f, 2.25f, 3.0f, "dps" } };
+        std::string const withSpots = SummaryJson(spotted, meta);
+        CHECK(withSpots.find("\"killed_at_s\":42") != std::string::npos);
+        CHECK(withSpots.find("\"wipe_spots\":[{\"t_s\":5,\"x\":1.00,\"y\":2.00,\"z\":3.00,\"role\":\"tank\"}]") != std::string::npos);
+        CHECK(withSpots.find("\"death_spots\":[{\"t_s\":7,\"x\":-1.50,\"y\":2.25,\"z\":3.00,\"role\":\"dps\"}]") != std::string::npos);
         // a stopped run names the reason; a run id never carries a character the file name cannot
         RunView s = Rfc();
         s.ended = true;

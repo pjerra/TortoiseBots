@@ -18,6 +18,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "host/run/TbRunTasks.h"
+#include "runtime/DecisionCapture.h"
 #include "runtime/SystemRunPolicy.h"
 
 #include "GameTime.h"
@@ -103,11 +104,14 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
     rec->startedMs = nowMs;
     RunRec* raw = rec.get();
     Table()[leader] = std::move(rec);
+    // Decision capture (opt-in, test servers): the run leader's policy facts for this run, one JSONL capture.
+    DecisionCaptureService::Instance().Begin(GuidKeyCompat(leader), leaderName, plan->name, DecisionCaptureNowUnixMs());
     return raw;
 }
 
 bool Remove(ObjectGuid leader)
 {
+    DecisionCaptureService::Instance().End(GuidKeyCompat(leader), "run removed");
     return Table().erase(leader) > 0;
 }
 
@@ -639,6 +643,36 @@ void SyncPlayerLedRoster(RunRec& rec, Group* group, uint32 nowMs)
 
 void NoteStepEnd(RunRec& rec, uint32 nowMs, size_t stepIndex);     // S9 (C9), defined with the other step-event helpers below
 
+// The summary's boss time: the first time the run read a boss dead, in ms since the run started. The dead flag is
+// kept as the policy and `.tb run status` read it.
+void NoteBossKilled(RunRec& rec, uint32 nowMs, uint32 entry)
+{
+    rec.bossDead[entry] = true;
+    rec.bossKilledMs.emplace(entry, nowMs - rec.startedMs);
+}
+
+char const* SpotRole(Player* bot)
+{
+    if (PlayerbotAI::IsTank(bot))
+        return "tank";
+    if (PlayerbotAI::IsHeal(bot))
+        return "heal";
+    return "dps";
+}
+
+void NoteSpot(std::vector<RunSpot>& list, RunRec const& rec, uint32 nowMs, float x, float y, float z, char const* role)
+{
+    if (list.size() >= kMaxSummarySpots)
+        return;
+    RunSpot spot;
+    spot.tMs = nowMs - rec.startedMs;
+    spot.x = x;
+    spot.y = y;
+    spot.z = z;
+    spot.role = role ? role : "";
+    list.push_back(std::move(spot));
+}
+
 // ---- events and counters from what a tick saw ----
 void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
 {
@@ -657,7 +691,7 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
         for (size_t i = rec.seenStep; i < run.step && i < steps; ++i)
         {
             if (plan->steps[i].kind == ai::PlanStepKind::Boss && !run.notCleared.count(i) && plan->steps[i].entry)
-                rec.bossDead[plan->steps[i].entry] = true;
+                NoteBossKilled(rec, nowMs, plan->steps[i].entry);
             NoteStepEnd(rec, nowMs, i);             // S9 (C9)
         }
         if (run.step < steps)
@@ -692,6 +726,9 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
         {
             ++rec.deaths;
             Note(rec, nowMs, "death", current, name);
+            if (Player* fallen = ObjectAccessor::FindPlayerByName(name))
+                NoteSpot(rec.deathSpots, rec, nowMs, fallen->GetPositionX(), fallen->GetPositionY(),
+                    fallen->GetPositionZ(), SpotRole(fallen));
         }
     rec.seenDead = std::move(dead);
     bool const wipe = f->total > 0 && f->alive == 0;
@@ -699,6 +736,23 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
     {
         ++rec.wipes;
         Note(rec, nowMs, "wipe", current);
+        // The spot is the centroid of the party's dead, and the role of the first one in the run's own order.
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        uint32 fallen = 0;
+        char const* firstRole = nullptr;
+        for (ObjectGuid guid : PartyGuids(rec))
+            if (Player* member = InWorld(guid))
+                if (!member->IsAlive())
+                {
+                    x += member->GetPositionX();
+                    y += member->GetPositionY();
+                    z += member->GetPositionZ();
+                    if (!firstRole)
+                        firstRole = SpotRole(member);
+                    ++fallen;
+                }
+        if (fallen)
+            NoteSpot(rec.wipeSpots, rec, nowMs, x / fallen, y / fallen, z / fallen, firstRole);
     }
     rec.seenWipe = wipe;
     // The boss the run stands at: read dead or alive only from what the facts really read (a boss never read is not listed).
@@ -706,7 +760,7 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
     {
         uint32 const entry = plan->steps[current].entry;
         if (f->bossOwnDead || f->bossDeadNearSpot)
-            rec.bossDead[entry] = true;
+            NoteBossKilled(rec, nowMs, entry);
         else if (f->bossSearchRead && f->bossSearchAlive)
         {
             auto const it = rec.bossDead.find(entry);
@@ -735,6 +789,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     if (stopped)
         rec.stopReason = why;
     rec.endedMs = nowMs ? nowMs : 1;
+    DecisionCaptureService::Instance().End(GuidKeyCompat(rec.leader), why);
     ForgetRun(rec.leader);
     ForgetRunOrders(rec.leader);
     tasks::Forget(rec.leader);              // S9 (O9)
@@ -1088,7 +1143,13 @@ void TickRun(RunRec& rec, uint32 nowMs)
         Observe(rec, nowMs, &facts);
         return;
     }
+    // Decision capture wraps the bot-led policy tick only: a player-led run is a different driver (TB's hook sites).
+    uint64_t const captureKey = GuidKeyCompat(rec.leader);
+    if (!playerLed)
+        DecisionCaptureService::Instance().BeforeTick(captureKey, run, facts, dt);
     std::string const order = playerLed ? PlayerLed::Tick(run, rec.pl, facts, anchor, dt) : DungeonRun::Tick(run, facts, dt);
+    if (!playerLed)
+        DecisionCaptureService::Instance().AfterTick(captureKey, run, order);
     // G8 (item 5): the regroup's gather ceiling ended in a pause. A revived member that is still walking back (or drinking first) is waited for a bounded time more
     // by the policy's own resume (a fresh regroup, its gather ceiling sized by the farthest bot), instead of a pause nobody asked for; the host has no `summon`
     // (decision D3), this is the choice that does less.

@@ -63,6 +63,15 @@ bool BotManager::GetOwnedCharacter(ObjectGuid /*characterGuid*/, OwnedCharacter&
     return false;     // no durable ownership table on this host
 }
 
+// A host bot the engine runs: a BotMgr entry (from Login on) with an AI registered by TbEngineBrain. The trace
+// reads it to decide whether a party member is a bot worth recording; the legacy adapter's own check needs the
+// legacy record, which this host does not keep.
+bool BotManager::IsControllableBot(Player* player) const
+{
+    return player && BotMgr::Instance().IsBot(player->GetGUID()) &&
+        PlayerbotAIStorage::Instance().GetAI(player) != nullptr;
+}
+
 std::vector<Player*> BotManager::GetBotsForMaster(ObjectGuid masterGuid) const
 {
     return BotMgr::Instance().BotsOfMaster(masterGuid);

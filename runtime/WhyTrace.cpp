@@ -6,6 +6,7 @@
 
 #include "PlayerbotAIStorage.h"
 #include "../ai/playerbot/PlayerbotAI.h"
+#include "../ai/playerbot/TbCompatTrace.h"
 #include "../ai/playerbot/PlayerbotAIConfig.h"
 #include "../ai/playerbot/BotState.h"
 #include "../ai/playerbot/strategy/AiObjectContext.h"
@@ -42,9 +43,7 @@ WhyTrace::CastCheck CastCheckOf(uint32 result)
 
 std::string GuidText(ObjectGuid guid)
 {
-    char text[24];
-    std::snprintf(text, sizeof(text), "0x%llx", static_cast<unsigned long long>(guid.GetRawValue()));
-    return text;
+    return GuidTextCompat(guid);
 }
 
 // Reads one action outcome and hands the service what only the live engine and
@@ -100,7 +99,7 @@ public:
                     if (ai::CastSpellAction* cast = dynamic_cast<ai::CastSpellAction*>(action))
                         if (uint32 spellId = cast->GetSpellID())
                             verdict.spellCooldownMs =
-                                static_cast<uint32_t>(bot->GetSpellCooldownDelay(spellId)) * 1000u;
+                                SpellCooldownDelaySecondsCompat(bot, spellId) * 1000u;
             }
         }
 
@@ -144,7 +143,7 @@ void WhyTraceService::AttachListeners(PlayerbotAI* ai)
 {
     if (!ai || !ai->GetBot())
         return;
-    uint64_t const botRaw = ai->GetBot()->GetObjectGuid().GetRawValue();
+    uint64_t const botRaw = GuidKeyCompat(ai->GetBot()->GetObjectGuid());
     for (uint8 i = 0; i < static_cast<uint8>(BotState::BOT_STATE_ALL); ++i)
     {
         ai::Engine* engine = ai->GetEngineByState(static_cast<BotState>(i));
@@ -188,9 +187,9 @@ bool WhyTraceService::Start(Player* bot, unsigned seconds, Player* requester, st
         return false;
     }
 
-    botGuid_ = bot->GetObjectGuid().GetRawValue();
+    botGuid_ = GuidKeyCompat(bot->GetObjectGuid());
     botName_ = bot->GetName();
-    requesterGuid_ = requester ? requester->GetObjectGuid().GetRawValue() : 0;
+    requesterGuid_ = requester ? GuidKeyCompat(requester->GetObjectGuid()) : 0;
     requesterName_ = requester ? requester->GetName() : std::string("console");
     if (!session_.Start(now, seconds))
     {
@@ -245,7 +244,7 @@ void WhyTraceService::Stop(WhyTrace::StopReason reason)
 
     if (attachedAi_)
     {
-        Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(botGuid_));
+        Player* bot = PlayerOfGuidKeyCompat(botGuid_);
         if (bot && PlayerbotAIStorage::Instance().GetAI(bot) == attachedAi_)
             DetachListeners(attachedAi_);
     }
@@ -276,8 +275,8 @@ void WhyTraceService::NotifyRequester(std::string const& text)
 {
     if (!requesterGuid_)
         return;
-    if (Player* requester = ObjectAccessor::FindPlayer(ObjectGuid(requesterGuid_)))
-        ChatHandler(requester).PSendSysMessage("%s", text.c_str());
+    if (Player* requester = PlayerOfGuidKeyCompat(requesterGuid_))
+        TraceSendSysMessageCompat(requester, text);
 }
 
 bool WhyTraceService::Emit(std::string const& line, uint32_t nowMs)
@@ -315,7 +314,7 @@ void WhyTraceService::Update(uint32_t diff)
         Stop(WhyTrace::StopReason::Timeout);
         return;
     }
-    Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(botGuid_));
+    Player* bot = PlayerOfGuidKeyCompat(botGuid_);
     if (!bot || !bot->IsInWorld())
     {
         Stop(WhyTrace::StopReason::BotGone);
@@ -349,7 +348,7 @@ void WhyTraceService::Update(uint32_t diff)
 bool WhyTraceService::Traces(PlayerbotAI* ai) const
 {
     return session_.active() && ai && ai->GetBot() &&
-        ai->GetBot()->GetObjectGuid().GetRawValue() == botGuid_;
+        GuidKeyCompat(ai->GetBot()->GetObjectGuid()) == botGuid_;
 }
 
 void WhyTraceService::NoteTickStart(uint64_t botRaw, std::vector<std::pair<std::string, float>> const& pending)
@@ -375,7 +374,7 @@ void WhyTraceService::NoteOrder(PlayerbotAI* ai, Player* from, std::string const
     if (!session_.active() || !ai || !ai->GetBot())
         return;
     Player* bot = ai->GetBot();
-    if (bot->GetObjectGuid().GetRawValue() != botGuid_)
+    if (GuidKeyCompat(bot->GetObjectGuid()) != botGuid_)
         return;
     // Internal action code re-enters HandleCommand with the bot itself as the
     // sender; those are not orders received.
@@ -394,7 +393,7 @@ void WhyTraceService::NoteOrderAction(PlayerbotAI* ai, Player* from, std::string
     if (!session_.active() || !ai || !ai->GetBot())
         return;
     Player* bot = ai->GetBot();
-    if (bot->GetObjectGuid().GetRawValue() != botGuid_)
+    if (GuidKeyCompat(bot->GetObjectGuid()) != botGuid_)
         return;
     if (!from || from->GetObjectGuid() == bot->GetObjectGuid())
         return;
@@ -408,7 +407,7 @@ void WhyTraceService::FinishTick(PlayerbotAI* ai)
     if (!session_.active() || !ai)
         return;
     Player* bot = ai->GetBot();
-    if (!bot || bot->GetObjectGuid().GetRawValue() != botGuid_)
+    if (!bot || GuidKeyCompat(bot->GetObjectGuid()) != botGuid_)
         return;
     uint32_t const now = WorldTimer::getMSTime();
     session_.NoteTick(now);

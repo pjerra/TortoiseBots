@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 360 keys, 351 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 345 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 364 keys, 355 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 341 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -805,13 +805,25 @@ AiPlayerbot.RemoteCommander = 0
 #   default is computed in the code: static_cast<int>(TortoiseBots::RemoteCommander::View::kDefaultIntervalMs)
 # AiPlayerbot.RemoteCommanderViewMs =
 
+# AiPlayerbot.RunTrace.Enabled  (bool, PlayerbotAIConfig.cpp:1167)
+AiPlayerbot.RunTrace.Enabled = 0
+
 # AiPlayerbot.RunTrace.IntervalMs  (int, PlayerbotAIConfig.cpp:1169)
 #   default is computed in the code: static_cast<int>(TortoiseBots::RunTrace::kDefaultIntervalMs)
 # AiPlayerbot.RunTrace.IntervalMs =
 
+# AiPlayerbot.RunTrace.Dir  (string, PlayerbotAIConfig.cpp:1171)
+AiPlayerbot.RunTrace.Dir = traces
+
 # AiPlayerbot.RunTrace.MaxFileMb  (int, PlayerbotAIConfig.cpp:1174)
 #   default is computed in the code: static_cast<int>(TortoiseBots::RunTrace::kDefaultMaxFileMb)
 # AiPlayerbot.RunTrace.MaxFileMb =
+
+# AiPlayerbot.DecisionCapture.Enabled  (bool, PlayerbotAIConfig.cpp:1177)
+AiPlayerbot.DecisionCapture.Enabled = 0
+
+# AiPlayerbot.DecisionCapture.Dir  (string, PlayerbotAIConfig.cpp:1178)
+AiPlayerbot.DecisionCapture.Dir = decisions
 
 # AiPlayerbot.DecisionCapture.SegmentMiB  (int, PlayerbotAIConfig.cpp:1180)
 AiPlayerbot.DecisionCapture.SegmentMiB = 32

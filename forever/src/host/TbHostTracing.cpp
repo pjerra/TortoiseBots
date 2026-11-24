@@ -2,74 +2,19 @@
 // ForeverCore host. Built only with TORTOISEBOTS_SLICE1 (CMakeLists.txt).
 //
 // The engine calls these hooks from its tick (PlayerbotAI::DoNextAction, Engine::DoNextAction, ...): each one first asks whether
-// its service is on, and the answer here is no. Their real owners (runtime/WhyTrace.cpp, RunTrace.cpp, ObservabilityEmitter.cpp,
-// ai/playerbot/CampMgr.cpp) are not part of the slice. Every function is listed in
-// forever/docs/SLICE1-R6B-NOTES.md (section 3, choice c); none keeps state, so there is nothing to flush at shutdown.
+// its service is on, and the answer here is no. Their real owners (runtime/ObservabilityEmitter.cpp, ai/playerbot/CampMgr.cpp)
+// are not part of the slice. Every function is listed in forever/docs/SLICE1-R6B-NOTES.md (section 3, choice c); none keeps
+// state, so there is nothing to flush at shutdown. The run trace and the why trace are ported (runtime/RunTrace.cpp,
+// runtime/WhyTrace.cpp), so their symbols are no longer answered here.
 // runtime/CombatMonitorService.cpp is compiled and fed by package P5 (host/cmd/TbCmdCombat.cpp), so its two entry points are not stubbed here.
 #include "compat/botpch_forever.h"
 
 #include "playerbot/CampMgr.h"
 #include "runtime/ObservabilityEmitter.h"
-#include "runtime/RunTrace.h"
-#include "runtime/WhyTrace.h"
 #include "TbDashboard.h"
 
 namespace TortoiseBots
 {
-// ---- WhyTraceService: no bot is traced. ----
-WhyTraceService& WhyTraceService::Instance()
-{
-    static WhyTraceService instance;
-    return instance;
-}
-
-bool WhyTraceService::Traces(PlayerbotAI* /*ai*/) const
-{
-    return false;
-}
-
-void WhyTraceService::NoteTickStart(uint64_t /*botRaw*/, std::vector<std::pair<std::string, float>> const& /*pending*/)
-{
-}
-
-void WhyTraceService::NoteOrder(PlayerbotAI* /*ai*/, Player* /*from*/, std::string const& /*text*/)
-{
-}
-
-void WhyTraceService::NoteOrderAction(PlayerbotAI* /*ai*/, Player* /*from*/, std::string const& /*action*/, std::string const& /*source*/)
-{
-}
-
-WhyTraceService::TickScope::~TickScope()
-{
-}
-
-// ---- RunTraceService: inactive (Active() reads its own flag, false); the hooks are called only when it is active. ----
-RunTraceService& RunTraceService::Instance()
-{
-    static RunTraceService instance;
-    return instance;
-}
-
-void RunTraceService::NoteBotEvent(PlayerbotAI* /*ai*/, std::string const& /*eventName*/, std::string const& /*info1*/,
-    std::string const& /*info2*/)
-{
-}
-
-void RunTraceService::NoteSpellInterrupted(PlayerbotAI* /*ai*/, uint32_t /*spellId*/)
-{
-}
-
-// RunTraceService owns a writer object whose inline destructor closes it; no file is ever opened (the service is inactive), so
-// there is nothing to flush (runtime/RunTraceWriter.cpp).
-namespace RunTrace
-{
-WriterStats RunTraceWriter::Close()
-{
-    return WriterStats{};
-}
-}
-
 // ---- ObservabilityEmitter: disabled. ----
 ObservabilityEmitter::ObservabilityEmitter() = default;
 ObservabilityEmitter::~ObservabilityEmitter() = default;
