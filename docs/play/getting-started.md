@@ -47,7 +47,7 @@ Hired companions and claimed guild bots from the Turtle WoW build are not on WoW
 - Up to four of your own characters can be online as bots at once (`TortoiseBots.Player.MaxBots`). An account can hold only one session, so a character already logged in by a person cannot become a bot.
 - Want to play the alt yourself? Log into it from the character screen; the bot session ends by itself.
 - `.bot stats` shows the fleet in one line; `.bot stats <Name>` shows one bot's level, class, health, mana, money, zone and whether it follows, stays or is free.
-- A summoned bot arrives next to you only when it is alive and out of combat; the same bot has a short wait between summons (`AiPlayerbot.OwnedBotSummonCooldown`, 300 seconds by default).
+- A summoned bot arrives next to you only when neither of you is in combat, the bot is alive, and neither of you is on a taxi or being teleported; the same bot has a short wait between summons (`AiPlayerbot.OwnedBotSummonCooldown`, 300 seconds by default).
 
 `.bot help` prints the commands your server allows. The short list is: `add`, `logout`, `who`, `stats`, `summon`, `follow`, `stay`, `attack`, `flee`, `maintenance`, `autogear`, `totem`, `behavior`, `blessing`, `choice`, `service`, `lfg`, `version`, `features`.
 
@@ -87,7 +87,7 @@ Free bots quest, grind, loot, vendor, repair, train, run capital errands, fish, 
 
 ## Guilds
 
-A free bot may accept `/ginvite` from your guild when it has no guild (`TortoiseBots.World.Guilds = 1`, on by default). It keeps living its own life. A server admin or guild leader with `.tb` access can give it [guild orders](guild-orders.md): farm, buy or craft an item for the guild bank, or mail it an item to disenchant.
+A free bot may accept `/ginvite` from your guild when it has no guild (`TortoiseBots.World.Guilds = 1`, on by default). It keeps living its own life. A server admin gives it [guild orders](guild-orders.md) with `.tb` (a guild leader who has no GM rights cannot): farm, buy or craft an item for the guild bank, or mail it an item to disenchant.
 
 A guild invite does **not** make the bot your companion: you cannot order it with `.bot` commands unless it is one of your own characters or the server has bound it to you as a commander.
 
