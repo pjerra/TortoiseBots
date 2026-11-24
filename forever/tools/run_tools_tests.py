@@ -47,10 +47,9 @@ TESTS_GLOB_DIR = os.path.join("forever", "tools")
 # stays visible here; the issue says what the test proves and where the faulty code is. A stale test is
 # updated, never listed here, and a line comes out only when its issue is fixed.
 KNOWN_FAILING = {
-    # issue #260: ChooseTravelTargetAction.cpp:3114 reads `available mount vendors` (std::vector<int32>) from the
-    # slice, where the value has no creator and SliceInertValue lacks the type: a null-cast crash on the travel
-    # `mount` purpose. The test that proves it stays as it is; drop this line when #260 is fixed.
-    "forever/tools/test_pc_r5_fix.py": "issue #260: available mount vendors is unregistered and the stand-in lacks its type",
+    # Empty: #260 (`available mount vendors` unregistered and read as a type the stand-in lacked) is fixed and
+    # forever/tools/test_pc_r5_fix.py passes. A real bug a test catches goes here with its issue number and a
+    # file:line in the issue; never put a file here to get green.
 }
 
 TESTCASE_RE = re.compile(r"^\s*class\s+\w+\s*\(\s*unittest\.TestCase\s*\)\s*:", re.MULTILINE)

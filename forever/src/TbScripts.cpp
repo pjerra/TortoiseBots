@@ -39,6 +39,9 @@
 #include "host/TbHostProfession.h"
 #include "host/TbHostWorldPvp.h"
 #include "runtime/PassingBuffsService.h"
+#if defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+#include "host/TbLuaBots.h"
+#endif
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -221,6 +224,11 @@ public:
     void OnConfigLoad(bool reload) override
     {
         BotMgr::Instance().LoadConfig();
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+        // TBF-B1 third review finding 8: available() follows TortoiseBots.Enable (an atomic word on a config load, so map threads
+        // only read it), and a shutdown stays final.
+        TortoiseBots::luabots::SetEnabled(BotMgr::Instance().Enabled());
+#endif
         TortoiseBots::Dashboard::LoadConfig();
         TortoiseBots::DashRuns::LoadConfig();
         TortoiseBots::pool::LoadConfig();      // W0: the pool key, its rate and the registry rows (re-read on a reload)
@@ -306,6 +314,9 @@ public:
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+        TortoiseBots::luabots::SetEnabled(BotMgr::Instance().Enabled());   // TBF-B1 finding 8 (see OnConfigLoad)
+#endif
         TortoiseBots::Dashboard::LoadConfig();
         TortoiseBots::DashRuns::LoadConfig();
         TortoiseBots::pool::LoadConfig();      // W0
@@ -427,6 +438,11 @@ public:
         // Save and remove every bot while the world is still up.
         BotMgr::Instance().LogoutAll("server shutdown");
         BotMgr::Instance().Update(0);
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+        // TBF-B1 third review finding 8: only now, AFTER every bot is logged out and its last events are in the run table/flush buffer,
+        // does the provider answer available() == false (the engine empties its snapshot; nothing of the shutdown is lost).
+        TortoiseBots::luabots::Shutdown();
+#endif
     }
 };
 
@@ -547,7 +563,29 @@ public:
             TortoiseBots::autotools::Sync(player, "level");
             TortoiseBots::autohunterpet::Sync(player, "level");
             TortoiseBots::autofood::Sync(player, "level");
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+            TortoiseBots::luabots::Invalidate(player->GetGUID());   // TBF-B1: the level's talents change the cached spec/role
+#endif
         }
+    }
+
+    // TBF-B1: the spec/role words the Lua bot snapshot caches change with the talents too (host/TbLuaBots.cpp).
+    void OnFreeTalentPointsChanged(Player* player, uint32 /*points*/) override
+    {
+        if (!player || !BotMgr::Instance().IsBot(player->GetGUID()))
+            return;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+        TortoiseBots::luabots::Invalidate(player->GetGUID());
+#endif
+    }
+
+    void OnTalentsReset(Player* player, bool /*involuntarily*/) override
+    {
+        if (!player || !BotMgr::Instance().IsBot(player->GetGUID()))
+            return;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+        TortoiseBots::luabots::Invalidate(player->GetGUID());
+#endif
     }
 
     void OnLogout(Player* player) override
@@ -1943,4 +1981,7 @@ void AddSC_tortoisebots()
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
     TortoiseBots::lfg::RegisterScripts();           // #160: the dungeon-finder fill tick (inert while off)
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+    TortoiseBots::luabots::Register();              // B1: the ForeverLua bot API provider (host/TbLuaBots.cpp); once, never unregistered
+#endif
 }

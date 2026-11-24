@@ -84,11 +84,24 @@ RunRec* Find(ObjectGuid leader)
 namespace
 {
 EndListener EndHook = nullptr;
+FlushListener FlushHook = nullptr;
+
+// TBF-B1 review finding 3: a monotonic id for every record this table creates (the provider's run cursor keys on it).
+uint32 NextRunId()
+{
+    static uint32 id = 0;
+    return ++id;
+}
 }
 
 void SetEndListener(EndListener listener)
 {
     EndHook = listener;
+}
+
+void SetFlushListener(FlushListener listener)
+{
+    FlushHook = listener;
 }
 
 RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
@@ -102,6 +115,7 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
     rec->run = DungeonRun::Start(plan, fromStep);
     rec->run.startStep = fromStep;      // a placed start: a walk back never goes before it (DungeonRun::ReplayFloor)
     rec->startedMs = nowMs;
+    rec->runId = NextRunId();
     RunRec* raw = rec.get();
     Table()[leader] = std::move(rec);
     // Decision capture (opt-in, test servers): the run leader's policy facts for this run, one JSONL capture.
@@ -111,8 +125,17 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
 
 bool Remove(ObjectGuid leader)
 {
+    auto const it = Table().find(leader);
+    if (it == Table().end())
+        return false;
+    // TBF-B1 review finding 3: the record's unread events go to the provider BEFORE the record dies (the listener copies what it
+    // needs), so a stop + restart in the same tick loses nothing. A removal without a listener (the option-off build has none) is
+    // the same as before.
+    if (FlushHook)
+        FlushHook(*it->second);
     DecisionCaptureService::Instance().End(GuidKeyCompat(leader), "run removed");
-    return Table().erase(leader) > 0;
+    Table().erase(it);
+    return true;
 }
 
 std::vector<RunRec*> All()
@@ -1267,6 +1290,15 @@ void TickRun(RunRec& rec, uint32 nowMs)
 bool Ended(RunRec const& rec)
 {
     return rec.endedMs != 0;
+}
+
+void OnBotLogout(ObjectGuid leader)
+{
+    // TBF-B1 review finding 7: an ended record of a bot that just left the world goes too (Remove flushes its unread events
+    // first). A live run is the tick's: its own rule stops it when the lead is off the plan's map.
+    RunRec* rec = Find(leader);
+    if (rec && Ended(*rec))
+        Remove(leader);
 }
 
 // A newer assignment (an accepted `cc` or `cc clear`) takes the bot over: the old run's pending clear must not touch it.

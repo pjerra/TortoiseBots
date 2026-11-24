@@ -124,6 +124,11 @@ public:
     void OnPlayerLogout(Player* player);
 
     Player* FindBot(ObjectGuid characterGuid) const;
+    // TBF-B1 (review finding 1): the bot as the ForeverLua provider reports it. The character while it is in the world OR on a
+    // far teleport (a cross-map TeleportTo takes it off its map for a tick), and only while its session has not asked for a
+    // logout: the provider keeps such a bot in its snapshot, so a teleport is never a BOT_REMOVED/BOT_ADDED pair. Null = not in
+    // the snapshot (loading, out of the world, or leaving). World thread only.
+    Player* SnapshotBot(ObjectGuid characterGuid) const;
     // The in-world bots whose master is `master` (host/TbHostBotManager.cpp answers the legacy BotManager::GetBotsForMaster with it).
     std::vector<Player*> BotsOfMaster(ObjectGuid master) const;
     // Re-binds a bot's master (empty = none). False when it is not a logged-in bot. A master and free mode are exclusive: a non-empty
@@ -149,6 +154,12 @@ public:
     FleetCounts GetFleetCounts() const;
     // H3 (slice 3): the host master guid of a bot (empty = none or not a bot), and what `.tb state` shows of its follow state.
     ObjectGuid MasterOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? ObjectGuid::Empty : itr->second.master; }
+    // TBF-B1 (review finding 5): the Battle.net account that OWNS the bot's character: its own game account's Battle.net id, cached
+    // at login from the session the module already builds (BotSession hands WorldSession Battlenet::AccountMgr::GetIdByGameAccount,
+    // the module's one lookup at login: nothing is queried on a game thread here). It is the character's account for every login path
+    // (an owner's `.bot add`, a GM's `.bot add` of a foreign character, `.tb login`, a pool login), never the id of whoever added it;
+    // 0 only when the game account has no Battle.net account or the guid is not a bot.
+    uint32 OwnerBnetOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? 0 : itr->second.characterBnet; }
     bool FollowStatus(ObjectGuid characterGuid, bool& away, uint32& awaySeconds, bool& blocked, std::string& blockedWhy, bool& hasBrain) const { auto itr = _bots.find(characterGuid); if (itr == _bots.end()) return false; Bot const& b = itr->second; away = b.masterAway; awaySeconds = (b.graceLeftMs + 999) / 1000; blocked = b.followBlocked; blockedWhy = b.followBlockedWhy; hasBrain = b.brain != nullptr; return true; }
 
     // ---- slice 4, host package H4: entering an instance as a group, the entrance rule, life state ----
@@ -277,7 +288,8 @@ private:
         // the pool's count and is never logged out by the pool.
         bool pool = false;
         bool owned = false;            // D-3: an owner's alt (`.bot add`): logs out with its owner, may share the owner's game accounts
-        uint32 ownerBnet = 0;          // D-3: the owner's Battle.net account at login (the cap and the sharing rule key on it)
+        uint32 ownerBnet = 0;          // D-3: the ADDING owner's Battle.net account at login (the cap and the sharing rule key on it)
+        uint32 characterBnet = 0;      // TBF-B1 finding 5: the character's own game account's Battle.net id (the API's `owner`), from its session
         uint32 kills = 0;
         uint32 deaths = 0;
         uint32 rescues = 0;

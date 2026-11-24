@@ -43,6 +43,10 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
 // Preflight, then queue (the bot's engine runs it at its next tick). `seq` is the order's number for `h3::LastOrder`.
 bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::string& detail, uint32& seq);
 
+// TBF-B1 (review finding 7): the bot's per-bot order state goes with it at logout: the order record and its transition ring, and the
+// accept and role-check wait clocks (the three maps the review found growing with every bot guid). Called from BotMgr::OnPlayerLogout.
+void ForgetBotRecords(ObjectGuid bot);
+
 // The two role calls the dungeon finder's fill needs, the same ones `.tb role` makes. `BotNaturalRoles` is the bot's own spec mask
 // (ai::BotRoles from AiFactory::GetPlayerRoles; 0 for no bot). `SetBotRole` commits a role now: the stored role, the role map, the
 // strategy snapshots and the kit rebuild, then `follow` of its master; a tank order on a class this slice gives no tank kit is

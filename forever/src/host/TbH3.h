@@ -71,6 +71,20 @@ struct OrderStatus
 };
 OrderStatus LastOrder(ObjectGuid bot);
 uint8 WantedRole(ObjectGuid bot);
+// Bot API (TBF-B1, host/TbLuaBots.cpp): the words a Bot handle reads instead of the whole `.tb state` record.
+// RoleText is RoleOf with "" for an unknown role; EngineStateText is the `.tb state` word (combat|non-combat|dead);
+// SpecText is the spec name `.tb state` shows; RoleForced is the `.tb role` override flag. Defined with the slice only,
+// and only when the engine is built in (TBF_WITH_FOREVER_LUA): no other build carries their code.
+#if defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
+std::string RoleText(Player* bot, PlayerbotAI* ai);
+bool RoleForced(ObjectGuid bot);
+std::string SpecText(Player* bot);
+std::string EngineStateText(Player* bot, PlayerbotAI* ai);
+// The next order transition the provider has not taken yet (queued, ok, fail:<code>), in ring order: one per snapshot, so an order
+// that a newer one overwrote still reaches the engine as its own transition (TBF-B1 third review finding 2). LastOrder stays the
+// record's NEWEST word (what `.tb state` shows).
+bool PollOrderEvent(ObjectGuid bot, OrderStatus& out);
+#endif
 // H4 (slice 4): the member of the dead bot's party (or its commander) that offered it a resurrection that is still pending; null when there is none or the
 // bot is alive. Defined with the slice only.
 Player* ResurrectOffererOf(Player* bot);

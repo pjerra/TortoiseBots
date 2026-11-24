@@ -69,6 +69,9 @@ struct RunRec
     PlayerLed::State pl;
     DungeonRun::Run run;        // the Turtle run: state Running|Paused|Done, phase Begin..Hold, the step index, the note
     uint32 startedMs = 0;       // GameTime::GetGameTimeMS() at the start
+    uint32 runId = 0;           // TBF-B1 review finding 3: a monotonic id per record (Create assigns it). The provider's run cursor
+                                // keys on it: the start clock is cached per world tick, so a stop + restart in one tick kept the
+                                // same clock and the new run's events looked old.
     uint32 endedMs = 0;         // the same clock when the run stopped or finished; 0 while it goes on (elapsed= stops there)
     uint32 pauses = 0, deaths = 0, wipes = 0;
     uint32 eventSeq = 0;        // the seq of the newest event (0: none yet)
@@ -144,6 +147,12 @@ std::vector<RunRec*> All();                         // by leader name
 using EndListener = void (*)(RunRec const&);
 void SetEndListener(EndListener listener);
 
+// TBF-B1 review finding 3: one listener for a record that is about to be REMOVED (a restart replaced it before the next tick, or its
+// leader left the world). Remove calls it while the record is whole, so the provider can take the events nobody read yet: a stop and
+// a restart in the same tick lose nothing. It must not keep the record either.
+using FlushListener = void (*)(RunRec const&);
+void SetFlushListener(FlushListener listener);
+
 // Appends an event (the ring drops the oldest past kEventRing) and returns its seq. `tMs` is taken from `nowMs` and the run's start.
 uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step = -1, int32 leg = -1, int32 unit = -1, std::string why = {});
 
@@ -166,7 +175,7 @@ struct TickTotals
 };
 TickTotals const& TickCost();
 
-bool Ended(RunRec const& rec);                          // the run is done or stopped (it stays in the table for `status` and `events` until a new start)
+bool Ended(RunRec const& rec);                          // the run is done or stopped (it stays in the table for `status` and `events` until a new start or its leader's logout)
 
 // G8 (review): a run's cc mark that its teardown could not take back (the bot out of the world, no engine, a read-back that did not take) is retried every
 // world tick until it settles. A newer accepted `cc` / `cc clear` for the bot drops its pending entry first (that order takes the bot over).

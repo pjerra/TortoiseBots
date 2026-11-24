@@ -35,6 +35,11 @@
 #include "StringFormat.h"
 #include "DB2Stores.h"
 #include "host/TbEngineMapPure.h"
+#include "host/TbLuaBotsPure.h"   // TBF-B1 finding 1: KeepInSnapshot, the provider's retention rule, also read here (game-free)
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+#include "host/TbOrdersApi.h"     // TBF-B1 finding 7: ForgetBotRecords (the per-bot order record and ring)
+#include "host/run/TbRunHooks.h"  // TBF-B1 finding 7: OnBotLogout (an ended run record goes with its leader)
+#endif
 #include "host/chat/TbChatIn.h"
 #include "host/TbThrown.h"
 #include "Map.h"
@@ -367,6 +372,10 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     bot.pool = pool;
     bot.owned = owned;
     bot.ownerBnet = ownerBnet;
+    // TBF-B1 (review finding 5): the API's `owner` is the Battle.net account that owns the bot's CHARACTER: the session already
+    // carries it (BotSession hands WorldSession Battlenet::AccountMgr::GetIdByGameAccount(accountId) once, at login), so every path
+    // (`.bot add` by the owner or a GM, `.tb login`, the pool) reports the character's own account, never the adder's and never 0.
+    bot.characterBnet = bot.session->GetBattlenetAccountId();
     bot.wantParty = !master.IsEmpty();
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
     // An owned bot always runs the engine too: `.bot` orders and chat need it.
@@ -772,6 +781,11 @@ void BotMgr::OnPlayerLogout(Player* player)
         player->RemoveFromGroup(GROUP_REMOVEMETHOD_LEAVE);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     tbhost::guild_orders::OnBotLogout(leaving.GetCounter());
+    // TBF-B1 (review finding 7): the bot's per-bot records go with it: its order record and ring (nothing of the order or of the
+    // ring leaks across a relog), the accept/role-check timers, and an ENDED run record it left in the run table (a live one is
+    // the tick's to stop). The run record is removed after the provider took its unread events (run::Remove's flush listener).
+    h3::ForgetBotRecords(leaving);
+    run::OnBotLogout(leaving);
 #endif
 }
 
@@ -959,6 +973,20 @@ std::string BotMgr::AttackNearest(ObjectGuid characterGuid, float range)
     me->Attack(target, true);
     me->GetMotionMaster()->MoveChase(target);
     return "attacking " + target->GetName();
+}
+
+Player* BotMgr::SnapshotBot(ObjectGuid characterGuid) const
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return nullptr;
+    Player* player = itr->second.session->GetPlayer();
+    // TBF-B1 (review finding 1): the provider's rule, in the pure half's words: the character object exists, the session has not
+    // asked for a logout, and the bot is in the world or on a far teleport (IsInWorld() is false for that tick).
+    return luabots::KeepInSnapshot(player != nullptr, player && player->IsInWorld(), player && player->IsBeingTeleportedFar(),
+                                   itr->second.session->LogoutRequested())
+               ? player
+               : nullptr;
 }
 
 Player* BotMgr::FindBot(ObjectGuid characterGuid) const

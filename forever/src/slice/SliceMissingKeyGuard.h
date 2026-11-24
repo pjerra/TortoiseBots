@@ -38,6 +38,9 @@
 #include <set>
 #include <string>
 #include <type_traits>
+#include <vector>
+
+class Item;
 
 namespace ai
 {
@@ -97,6 +100,12 @@ namespace slice
     // PlayerTravelInfo constructor reads as `focus travel target` (TravelMgr.cpp:72), and WorldPosition is what `current position` and `home bind`
     // are read as (ReleaseSpiritAction.h:305, TravelNode.cpp:1743): an empty set / the origin. forever/tools/test_pc_r5_fix.py fails while any
     // unregistered value is read as a type this list lacks.
+    // #260 (the travel `mount` purpose): the travel chooser (#253) reads `available mount vendors` and `available trainers` as std::vector<int32>,
+    // `items useful to give`/`items useful to enchant` as std::list<Item*> (RpgSubActions.cpp, RpgTriggers.cpp), `rpg bg type` as
+    // BattleGroundTypeId (RpgTriggers.cpp:450, `== BATTLEGROUND_TYPE_NONE`) and `trainable spells` as std::vector<TrainerSpell const*>
+    // (ChooseTravelTargetAction.cpp, MaintenanceValues.cpp). None is registered in the slice: `available mount vendors` needs `full mount list` and
+    // `item vendor list` (neither in the slice), `rpg bg type` needs the battleground manager, the item lists need the item values. Each stand-in
+    // answer is the "do less" one: an empty list (the chooser skips the purpose with its logged reason) / BATTLEGROUND_TYPE_NONE (no join).
     using SliceInertValue = InertValues<
         bool,
         uint8,
@@ -112,15 +121,19 @@ namespace slice
         std::map<uint32, uint32>&,
         std::map<ObjectGuid, RunnerLedgeEntry>&,
         std::list<ObjectGuid>,
+        std::list<Item*>,
         std::string,
         std::list<std::string>&,
         std::set<ObjectGuid>&,
         std::set<uint32>&,
         ItemUsage,
         std::vector<uint32>,
+        std::vector<int32>,
         std::vector<MountValue>,
+        std::vector<TrainerSpell const*>,
         focusQuestTravelList,
-        WorldPosition>;
+        WorldPosition,
+        BattleGroundTypeId>;
 
     // Each missing name is reported once per process (every bot has its own context, the names repeat).
     class MissingKeyLog

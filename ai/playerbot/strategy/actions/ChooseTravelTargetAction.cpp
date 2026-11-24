@@ -865,17 +865,21 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
     //If we are heading to a creature/npc clear it from the ignore list.
     if (oldTarget && oldTarget == newTarget && newTarget->GetEntry())
     {
-        std::set<ObjectGuid>& ignoreList = context->GetValue<std::set<ObjectGuid>&>("ignore rpg target")->Get();
-
-        for (auto& i : ignoreList)
+        // #260: a raw GetValue is a dynamic_cast; check it before ->Get()/->Set() instead of dereferencing null.
+        if (Value<std::set<ObjectGuid>&>* ignoreListValue = context->GetValue<std::set<ObjectGuid>&>("ignore rpg target"))
         {
-            if (i.GetEntry() == newTarget->GetEntry())
-            {
-                ignoreList.erase(i);
-            }
-        }
+            std::set<ObjectGuid>& ignoreList = ignoreListValue->Get();
 
-        context->GetValue<std::set<ObjectGuid>&>("ignore rpg target")->Set(ignoreList);
+            for (auto& i : ignoreList)
+            {
+                if (i.GetEntry() == newTarget->GetEntry())
+                {
+                    ignoreList.erase(i);
+                }
+            }
+
+            ignoreListValue->Set(ignoreList);
+        }
     }
 
     //Actually apply the new target to the travel target used by the bot.
@@ -1051,7 +1055,9 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
     // clock, and the workidle release fires seconds after arrival (live
     // 2026-11-01: 112 of 202 workidle kills landed within 30 s of the pick,
     // most of them GenericRpg/AH trips walking into a just-vacated stay).
-    ai->GetAiObjectContext()->GetValue<time_t>("manual time", ai::WorkIdleAnchorKey())->Set(time_t(0));
+    // #260: raw GetValue is a dynamic_cast; test the pointer before writing instead of dereferencing null.
+    if (Value<time_t>* workIdleAnchor = ai->GetAiObjectContext()->GetValue<time_t>("manual time", ai::WorkIdleAnchorKey()))
+        workIdleAnchor->Set(time_t(0));
 
     // A genuinely new destination ends any stuck-keep streak (see UnstuckAction):
     // the streak counts consecutive resets without progress toward one spot,
@@ -3111,7 +3117,11 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
     }
     else if (travelName == "mount")
     {
-        std::vector<int32> mountVendorEntries = AI_VALUE(std::vector <int32>, "available mount vendors");
+        // #260: the slice does not register `available mount vendors` (its creator needs `full mount list` and `item
+        // vendor list`, neither of which the slice has), so its missing-value stand-in answers an empty list. Read
+        // through a named pointer: an unregistered name must never be a null cast, in the slice or the full build.
+        Value<std::vector<int32>>* mountVendorValue = context->GetValue<std::vector<int32>>("available mount vendors");
+        std::vector<int32> mountVendorEntries = mountVendorValue ? mountVendorValue->Get() : std::vector<int32>();
 
         if (mountVendorEntries.empty())
         {

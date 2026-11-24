@@ -50,9 +50,14 @@ option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SL
 # follows the same rule (host/chat/TbChatCmd.cpp: it names the engine's reply types); the chat hook itself (TbChatIn.cpp) is in both builds and inert here.
 if(NOT TORTOISEBOTS_SLICE1)
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported|TbCompat_V|TbCompat_WL4)\\.cpp$")
-  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit|chat/TbChatCmd)\\.cpp$")
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit|TbLuaBots|chat/TbChatCmd)\\.cpp$")
 else()
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/TbH3Off\\.cpp$")
+  # TBF-B1 third review finding 9: the provider is compiled only when the engine is built too (without BUILD_FOREVER_LUA the whole
+  # file is one empty translation unit, so nothing of it may enter the library).
+  if(NOT BUILD_FOREVER_LUA)
+    list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/TbLuaBots\\.cpp$")
+  endif()
 endif()
 
 add_library(tortoisebots STATIC ${PRIVATE_SOURCES})
@@ -71,6 +76,24 @@ target_link_libraries(tortoisebots
     trinity-core-interface
   PUBLIC
     game-interface)
+
+# ForeverLua bot API (SPEC-forever-lua-bot-api.md section 1, TBF-B1): with the engine module built in the same tree, the
+# module's provider (forever/src/host/TbLuaBots.cpp) is compiled and linked against the game-free engine. host/TbLuaBots.cpp
+# belongs to the slice build only (the filter above); the whole file is wrapped in
+# `#if TORTOISEBOTS_SLICE1 && TBF_WITH_FOREVER_LUA`, so without the engine it compiles to nothing.
+if(BUILD_FOREVER_LUA)
+  # TBF-B1 needs the engine's bot API (forever-lua 01c9a36, src/engine/BotProvider.h). Without the header the build used to
+  # stop at compile time with a plain "No such file"; it stops here with what to do instead. The engine module sits beside
+  # this module in the core (src/modules/ForeverLua), so the path is relative and works whichever module configures first.
+  set(TB_ENGINE_BOT_PROVIDER "${CMAKE_CURRENT_SOURCE_DIR}/../ForeverLua/src/engine/BotProvider.h")
+  if(NOT EXISTS "${TB_ENGINE_BOT_PROVIDER}")
+    message(FATAL_ERROR "TortoiseBots: BUILD_FOREVER_LUA=1 but the ForeverLua engine is not beside the module: "
+      "expected ${TB_ENGINE_BOT_PROVIDER} (forever-lua >= 01c9a36). Clone or link forever-lua at <core>/src/modules/ForeverLua, "
+      "or configure with -DBUILD_FOREVER_LUA=0.")
+  endif()
+  target_compile_definitions(tortoisebots PRIVATE TBF_WITH_FOREVER_LUA=1)
+  target_link_libraries(tortoisebots PRIVATE forever-lua-engine)
+endif()
 
 set_target_properties(tortoisebots
   PROPERTIES
