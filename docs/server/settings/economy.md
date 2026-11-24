@@ -22,7 +22,7 @@ For player trading permissions with open-world bots, see [`AiPlayerbot.PoolBotTr
 | :--- | :---: | :--- |
 | [`AiPlayerbot.AhMarketEnabled`](#aiplayerbotahmarketenabled) | `1` | Enables bots posting surplus items and bidding from their own bags on the Auction House. |
 | [`AiPlayerbot.AhMarketInterval`](#aiplayerbotahmarketinterval) | `120` | Interval in seconds between seller ticks that attempt bot auction postings. |
-| [`AiPlayerbot.AhMarketBatchSize`](#aiplayerbotahmarketbatchsize) | `1` | Maximum bots (one listing each) attempted per seller tick (effective 1..5). |
+| [`AiPlayerbot.AhMarketBatchSize`](#aiplayerbotahmarketbatchsize) | `1` | Maximum sellers visited per seller tick (effective 1..5). |
 | [`AiPlayerbot.AhMarketBuyer`](#aiplayerbotahmarketbuyer) | `1` | Pool bots standing at an auctioneer bid on and buy auctions with their own gold. |
 | [`AiPlayerbot.AhMarketBudgetUs`](#aiplayerbotahmarketbudgetus) | `2000` | Microsecond time budget ceiling per world tick for the organic buyer scan. |
 | [`AiPlayerbot.AhMarketMaxOperations`](#aiplayerbotahmarketmaxoperations) | `32` | Maximum organic buyer scan work steps processed per tick. |
@@ -58,20 +58,20 @@ For player trading permissions with open-world bots, see [`AiPlayerbot.PoolBotTr
 ## Settings
 
 ### `AiPlayerbot.AhMarketEnabled`
-Enables the autonomous Auction House market service for pool bots.
+Enables the autonomous Auction House market service for free pool bots.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-When enabled, random pool bots with AH-profitable surplus items in their bags post them to the Auction House using native auction listings.
+Also needs `TortoiseBots.World.Auction = 1`. When both are on, free masterless bots with loot their own sell rules accept walk to a faction auctioneer in their zone (500 yd at most) and post it; bots already standing at an auctioneer post at once. Listings go through the core's auction handlers, so deposits and throttles are the core's.
 
 This system requires `AiPlayerbot.RandomBotAutologin = 1`. Failed auction attempts are rate-limited per bot to prevent spam.
 
 </details>
 
 ### `AiPlayerbot.AhMarketInterval`
-Interval in seconds between seller ticks that attempt bot auction postings.
+Interval in seconds between seller passes.
 **Default:** `120` · **Values:** seconds (5..3600) · **Restart:** needed
 
 <details>
@@ -82,13 +82,13 @@ Defines how frequently the seller loop runs its posting pass for eligible bots.
 </details>
 
 ### `AiPlayerbot.AhMarketBatchSize`
-Maximum bots (one listing each) attempted per seller tick.
+Maximum sellers visited per seller tick.
 **Default:** `1` · **Values:** integers (effective 1..5; 0 is treated as 1) · **Restart:** needed
 
 <details>
 <summary>How it works in detail</summary>
 
-Caps the number of eligible seller bots attempted per seller tick (0 is treated as 1 and values above 5 are capped at 5), with each chosen bot posting one item listing, spreading auction load across server ticks.
+Caps the number of eligible seller bots visited per seller tick (0 is treated as 1 and values above 5 are capped at 5). A visited bot posts every item its own seller rules accept, either at the auctioneer it already stands next to or after walking to a faction auctioneer within 500 yd in its zone; it never teleports and never creates an item.
 
 </details>
 

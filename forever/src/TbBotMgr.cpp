@@ -3,6 +3,7 @@
 #include "host/TbAutoFood.h"
 #include "host/TbHostGroupQuestPure.h"
 #include "host/TbHostCapitalErrands.h"
+#include "host/TbHostAhMarket.h"
 #include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderDisenchant.h"
@@ -730,6 +731,7 @@ void BotMgr::OnPlayerLogout(Player* player)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     tbhost::prof::ClearBotErrands(leaving);
     tbhost::errands::ClearBotCapitalErrands(leaving);
+    tbhost::ah_market::ClearBotAhMarket(leaving);
     tbhost::guild_mail::ClearBotGuildMail(leaving);
 #endif
     DropBrain(itr->second);
@@ -1643,7 +1645,8 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::TickErrands(me, diff);
         bool const pauseEngineForErrand = bot.free && !me->IsInCombat() &&
-            (tbhost::errands::HasActiveErrand(me) || tbhost::guild_mail::HasActiveErrand(me) ||
+            (tbhost::errands::HasActiveErrand(me) || tbhost::ah_market::HasActiveErrand(me) ||
+             tbhost::guild_mail::HasActiveErrand(me) ||
              tbhost::guild_orders::HasActiveDisenchantErrand(me) ||
              tbhost::guild_orders::HasActiveEnchantErrand(me));
 #else
@@ -1664,6 +1667,8 @@ void BotMgr::Update(uint32 diff)
         }
         if (bot.free && _capitalErrandsEnabled)
             tbhost::errands::TickCapitalErrands(me, diff);
+        if (bot.free)
+            tbhost::ah_market::Tick(me, diff);
         if (bot.free && _guildMailEnabled)
         {
             tbhost::guild_orders::TickDisenchantService(me, diff);
@@ -1737,6 +1742,7 @@ void BotMgr::Update(uint32 diff)
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::prof::ClearBotErrands(guid);
         tbhost::errands::ClearBotCapitalErrands(guid);
+        tbhost::ah_market::ClearBotAhMarket(guid);
         tbhost::guild_mail::ClearBotGuildMail(guid);
 #endif
         if (auto itr = _bots.find(guid); itr != _bots.end())

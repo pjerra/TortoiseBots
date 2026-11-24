@@ -211,7 +211,9 @@ TortoiseBots.World.Professions = 0
 
 #
 #    TortoiseBots.World.Auction
-#        Description: Allow bots to use the faction auction house (`.tb order ... ah`).
+#        Description: Allow bots to use the faction auction house: `.tb order ... ah`, and — while
+#                     AiPlayerbot.AhMarketEnabled is on — free bots posting their own loot at a nearby
+#                     auctioneer and buying upgrades there.
 #        Default:     0
 #
 
