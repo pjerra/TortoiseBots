@@ -65,7 +65,7 @@ Every setting is documented in a settings page:
 | Settings Category | Configuration File | What It Covers |
 | :--- | :--- | :--- |
 | [Party & quality-of-life](settings/party.md) | `aiplayerbot.conf` | Owned bot management, follow catching up, pack holds, and party loot. |
-| [Mercenary hiring & recruiters](settings/hiring.md) | `aiplayerbot.conf` | Not on WoW Forever yet: no bot can be hired, so these settings change nothing. |
+| [Mercenary hiring & recruiters](settings/hiring.md) | `aiplayerbot.conf` | Not on ForeverCore yet: no bot can be hired, so these settings change nothing. |
 | [Class behaviour](settings/class-behaviour.md) | `aiplayerbot.conf` | Class-specific AI rules for hunters, paladins, rogues, warlocks, and warriors. |
 | [Dungeons & raids](settings/dungeons-raids.md) | `aiplayerbot.conf` | Creature aura hazards, crowd control, bomb runout, raid reactions, and the fight monitor. |
 | [Combat & reaction thresholds](settings/combat.md) | `aiplayerbot.conf` | Health and mana lines, follow distances, casting pacing, and commanded pulls. |

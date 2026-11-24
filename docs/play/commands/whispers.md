@@ -175,7 +175,7 @@ The module's guild driver answers these whispers itself, before the AI command l
 
 A bot refuses any of these with `Only my owner can manage my guild.` when the sender is neither its master nor a GM.
 
-## Not on WoW Forever yet
+## Not on ForeverCore yet
 
 These words belong to the Turtle build and are not answered here: the `.bot command <Bot> ...` proxy, `hire`, `portal`, `cast`, `castnc`, `talents`, `save ai`, `load ai`, `list ai`, `ll`, `ss`, `bank`, `gbank`, `craft`, `outfit`, `keep`, `t`, `nt`, `wts`, `talk`, `doquest`, `skill`, `faction`, `flag`, `go`, `move style`, `grind`, `home`, `taxi`, `invite`, `join`, `lfg`, `summon`, `bg free`, `give leader`, `warning`, `stance`, `chat`, `emote`, `buff`, `ready`, `focus heal`, `buff target`, `revive target`, `boost target`, `rebuff`, `guard` and `runaway`.
 

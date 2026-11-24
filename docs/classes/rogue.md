@@ -58,13 +58,13 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 ## Custom abilities
 
 - **Death Mark:** learned by the Subtlety preset; the bot does not cast it yet.
-- **Surprise Attack, Noxious Assault, Envenom, Shadow of Death and Mark for Death:** Not on WoW Forever yet.
+- **Surprise Attack, Noxious Assault, Envenom, Shadow of Death and Mark for Death:** Not on ForeverCore yet.
 
 ---
 
 ## Utility & interrupts
 
-- **Poisons:** Automatically applies poisons based on context: raid and generic combat use Instant Poison (main hand) and Deadly Poison (off hand); general PvE uses Instant Poison on both hands; PvP uses Crippling Poison (off hand). Gated by poison item required level and stock. [`.bot choice <bot> poison_mh|poison_oh <instant|deadly|crippling|wound|auto>`](../play/commands/bot-panel.md#bot-choice) orders the poison per hand; every automatic poison row for that hand then stands down, so the two never overwrite each other. Without the poison item (and without the item cheat) the rogue keeps what the weapon carries. *Mind Poison* is Not on WoW Forever yet.
+- **Poisons:** Automatically applies poisons based on context: raid and generic combat use Instant Poison (main hand) and Deadly Poison (off hand); general PvE uses Instant Poison on both hands; PvP uses Crippling Poison (off hand). Gated by poison item required level and stock. [`.bot choice <bot> poison_mh|poison_oh <instant|deadly|crippling|wound|auto>`](../play/commands/bot-panel.md#bot-choice) orders the poison per hand; every automatic poison row for that hand then stands down, so the two never overwrite each other. Without the poison item (and without the item cheat) the rogue keeps what the weapon carries. *Mind Poison* is Not on ForeverCore yet.
 - **Interrupts:** Casts *Kick* immediately to lock out enemy spell casts. Uses *Kidney Shot* as a stun fallback. With `AiPlayerbot.InterruptIgnoresThreat = 1` (recommended) *Kick* also goes out while the rogue is over the threat back-off line, which otherwise holds it, as long as the Kick would not pull the caster off the tank (under 110 % of the tank's threat on it).
 - **Self-Defense CC:** Uses *Gouge* at medium health (50–70%) and *Blind* at critical health (below 20%) to disorient attackers. *Gouge* only works while the target faces the rogue; with `AiPlayerbot.SpellFacingPrecheck = 1` (recommended) a rogue behind its target skips it instead of trying it over and over.
 

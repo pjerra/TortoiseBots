@@ -2,7 +2,7 @@
 id: play-known-limitations
 title: Known Limitations & Quirks
 category: play
-summary: What the WoW Forever build does not do yet, which Turtle WoW features are absent, and the behaviour you should expect from the switches and timers.
+summary: What the ForeverCore build does not do yet, which Turtle WoW features are absent, and the behaviour you should expect from the switches and timers.
 tags: [limitations, non-goals, quirks, engine, port]
 relates_to:
   - play-getting-started
@@ -12,7 +12,7 @@ relates_to:
 
 # Known Limitations & Quirks
 
-TortoiseBots on **WoW Forever** is a port of the Turtle WoW module. The bot engine is large and most of it runs, but some services of the old build are not connected to ForeverCore yet. This page lists what is missing, what is deliberately different, and the timers you will notice.
+TortoiseBots on **ForeverCore** is a port of the Turtle WoW module. The bot engine is large and most of it runs, but some services of the old build are not connected to ForeverCore yet. This page lists what is missing, what is deliberately different, and the timers you will notice.
 
 ## The two switches first
 
@@ -20,7 +20,7 @@ TortoiseBots on **WoW Forever** is a port of the Turtle WoW module. The bot engi
 - **The bot engine is a build option.** With `TORTOISEBOTS_SLICE1=OFF` the module has the session, the pool and the `.tb` commands, but no bot brain: `.bot` is unknown to the core and every engine command answers that the engine is not built in.
 - **Players can lose `.bot`.** `TortoiseBots.Player.Commands = 0` leaves `.bot` to GameMasters only.
 
-## Features that are not on WoW Forever yet
+## Features that are not on ForeverCore yet
 
 | Missing | What to do instead |
 | :--- | :--- |

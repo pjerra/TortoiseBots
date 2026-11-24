@@ -13,7 +13,7 @@ relates_to:
 
 # Commander Commands
 
-On WoW Forever, the commander machinery is a GameMaster command surface: `.tb` typed in chat by a GameMaster, or `tb` on the worldserver console. A normal player's bots take single-bot chat orders (`.bot follow`, `.bot stay`, `.bot attack`, `.bot flee`) and the addon's party action buttons; `.tb master` and `.tb cmd` are not open to players.
+On ForeverCore, the commander machinery is a GameMaster command surface: `.tb` typed in chat by a GameMaster, or `tb` on the worldserver console. A normal player's bots take single-bot chat orders (`.bot follow`, `.bot stay`, `.bot attack`, `.bot flee`) and the addon's party action buttons; `.tb master` and `.tb cmd` are not open to players.
 
 The commander commands bind a group of bots to one commander. The commander usually stands outside the bot party and can give orders from anywhere on their map. The bots' own combat AI still fights; the orders say what to fight, where to stand, and where to walk.
 
@@ -110,6 +110,6 @@ One difference from `.tb cmd`: `.tb order party loot on|off|status` is the loot 
 
 A player with no GameMaster account has the four single-bot orders in chat: `.bot follow <bot> [member]`, `.bot stay <bot>`, `.bot attack <bot>`, `.bot flee <bot>`. See [Tactical Party Actions](party-actions.md).
 
-## Not on WoW Forever Yet
+## Not on ForeverCore Yet
 
 The Turtle player commands `.bot commander bind`, `.bot commander unbind`, `.bot commander view`, `.bot cmd` and `.bot run` do not exist here. `AiPlayerbot.RemoteCommander` is not read by any order path, so it gates nothing. The live perception feed (`TBM:VIEW`) and the GameMaster `.bot scout` path tool are not implemented.

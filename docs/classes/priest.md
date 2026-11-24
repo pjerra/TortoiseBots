@@ -63,7 +63,7 @@ The bot verifies that the target does not have the *Weakened Soul* debuff before
 ## Custom abilities
 
 - **Chastise:** a ranged disorient at interrupt priority, used to stop enemy casters.
-- **Ascendance:** Not on WoW Forever yet.
+- **Ascendance:** Not on ForeverCore yet.
 
 ---
 
@@ -72,7 +72,7 @@ The bot verifies that the target does not have the *Weakened Soul* debuff before
 - **Party Buffs:** Maintains *Power Word: Fortitude*, *Divine Spirit*, and *Shadow Protection*. Replaces single-target casts with group prayers (*Prayer of Fortitude*, etc.) when trained and reagents are stocked.
 - **Fear Ward:** Casts *Fear Ward* on the party tank first to prevent fear-based wipes, re-applying once the cooldown clears.
 - **Dispels:** Uses *Dispel Magic* on allies, and *Abolish Disease* (falling back to *Cure Disease*) on infected party members.
-- **Crowd Control:** Casts *Shackle Undead* on assigned undead CC marks (in dungeons only on the assigned mark unless `auto cc` is on; open world and raids also free-pick). *Psychic Scream* is off in dungeons, raids, and real-player groups (the `aoe fear` override is not registered on WoW Forever yet).
+- **Crowd Control:** Casts *Shackle Undead* on assigned undead CC marks (in dungeons only on the assigned mark unless `auto cc` is on; open world and raids also free-pick). *Psychic Scream* is off in dungeons, raids, and real-player groups (the `aoe fear` override is not registered on ForeverCore yet).
 - **Resurrection:** Revives fallen allies out of combat with *Resurrection* (dropping *Shadowform* first).
 
 ---

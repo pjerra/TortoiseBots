@@ -20,7 +20,7 @@ Shamans provide unmatched group utility through versatile totem sets, elemental 
 | **Enhancement** | Melee DPS | Front-line melee damage, Windfury burst, Stormstrike, and totem utility. |
 | **Elemental** | Ranged DPS | High-damage Lightning Bolt and Chain Lightning spells with instant crits. |
 
-The shaman tank spec is Not on WoW Forever yet.
+The shaman tank spec is Not on ForeverCore yet.
 
 ---
 
@@ -66,12 +66,12 @@ Shamans maintain 4-element totem sets tailored to group composition:
 
 - **Water Shield:** a shaman shield that restores mana; the elemental kit keeps it up.
 - **Totemic Recall:** refunds the standing totem set after a fight.
-- **Earthquake:** Not on WoW Forever yet.
-- **Lightning Strike:** Not on WoW Forever yet.
-- **Spirit Link:** Not on WoW Forever yet.
-- **Ancestral Swiftness:** Not on WoW Forever yet.
-- **Bloodlust:** Not on WoW Forever yet.
-- **Earthshaker Slam:** Not on WoW Forever yet.
+- **Earthquake:** Not on ForeverCore yet.
+- **Lightning Strike:** Not on ForeverCore yet.
+- **Spirit Link:** Not on ForeverCore yet.
+- **Ancestral Swiftness:** Not on ForeverCore yet.
+- **Bloodlust:** Not on ForeverCore yet.
+- **Earthshaker Slam:** Not on ForeverCore yet.
 
 ---
 
@@ -109,4 +109,4 @@ Bots spend one talent point per level from 10 to 60 along a preset build. The se
 
 ## Class settings
 
-The shaman tank spec is Not on WoW Forever yet; there is no tank talent build on this server. An Enhancement shaman can still be put in the tank role, where it uses its melee kit, but it has no taunt.
+The shaman tank spec is Not on ForeverCore yet; there is no tank talent build on this server. An Enhancement shaman can still be put in the tank role, where it uses its melee kit, but it has no taunt.

@@ -2,7 +2,7 @@
 id: play-glossary
 title: Glossary
 category: play
-summary: Short explanations of the abbreviations and TortoiseBots terms used across the WoW Forever documentation.
+summary: Short explanations of the abbreviations and TortoiseBots terms used across the ForeverCore documentation.
 tags: [glossary, terms, abbreviations]
 relates_to:
   - play-getting-started

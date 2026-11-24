@@ -145,7 +145,7 @@ Bots keep themselves going between fights:
 - **Food supply:** pool bots receive level-fitting food and water on login and on level-up (`TortoiseBots.AutoFood`); your own alts buy theirs.
 - **Mage conjuration:** a mage bot in a group conjures food and water and trades it to members who have none, when its own mana allows.
 
-## Not on WoW Forever yet
+## Not on ForeverCore yet
 
 - Flight paths and boat travel for free bots; they walk.
 - The Turtle starting kit (bags, quivers, ammo pouches, thrown-weapon seeding) and the seed-time gear roll.

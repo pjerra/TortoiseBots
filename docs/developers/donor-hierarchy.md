@@ -17,7 +17,7 @@ When implementing or diagnosing behavior in TortoiseBots, do not copy a donor wh
 
 Evaluate evidence in this order:
 
-1. **The WoW Forever client and server at runtime** — ground truth. If it behaves differently from any document, the runtime wins.
+1. **The client and server at runtime** — ground truth. If it behaves differently from any document, the runtime wins.
 2. **ForeverCore at the pinned commit** (`forever/PINNED_CORE`) — engine lifecycle, session behaviour, script hooks, and the server's own spell, item and creature data (DB2 stores, world database).
 3. **mod-playerbots** ([mod-playerbots/mod-playerbots](https://github.com/mod-playerbots/mod-playerbots)) — the primary mature behaviour donor for combat rotations, healing priorities, interrupts, crowd control, dungeon play and tactics. Its code is a reference for behaviour, not a template for structure.
 

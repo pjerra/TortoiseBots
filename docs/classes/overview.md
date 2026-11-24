@@ -44,7 +44,7 @@ GameMasters can use `.tb role <bot> <tank|healer|dps|none>` to override the resu
 Without an override, role detection uses:
 - Party composition, stance or form, and tanking gear.
 - A feral druid plays Bear only when given the tank role; otherwise it plays Cat.
-- The shaman tank spec is Not on WoW Forever yet, so no shaman is detected as a tank from its build.
+- The shaman tank spec is Not on ForeverCore yet, so no shaman is detected as a tank from its build.
 
 ---
 
@@ -79,7 +79,7 @@ When an enemy mob flees below 30% health (fleeing or fleeing for help, still in 
 
 ### Party Threat Back-Off
 
-In groups with the `threat` strategy active, damage dealers watch their threat against the tank. AoE threat at 50% of the tank's pauses area spells (*Volley*, *Multi-Shot*, *Blizzard*, *Flamestrike*, *Rain of Fire*, *Chain Lightning*) until threat stabilizes. Single-target threat pauses nukes only once it is climbing to pass the tank (at or above 80% with a rising trend), not on a flat 80% reading. Boss-specific threat-successor rows (`ai_boss_tactic` kind `threat_successor`) are **Not on WoW Forever yet**; without one, a taunt-immune boss keeps the highest tank as the reference, so the raid still has a working cap. On a taunt-immune target, with or without the row, the back-off also holds in a commanded group while the mob hits a member; elsewhere it still yields.
+In groups with the `threat` strategy active, damage dealers watch their threat against the tank. AoE threat at 50% of the tank's pauses area spells (*Volley*, *Multi-Shot*, *Blizzard*, *Flamestrike*, *Rain of Fire*, *Chain Lightning*) until threat stabilizes. Single-target threat pauses nukes only once it is climbing to pass the tank (at or above 80% with a rising trend), not on a flat 80% reading. Boss-specific threat-successor rows (`ai_boss_tactic` kind `threat_successor`) are **Not on ForeverCore yet**; without one, a taunt-immune boss keeps the highest tank as the reference, so the raid still has a working cap. On a taunt-immune target, with or without the row, the back-off also holds in a commanded group while the mob hits a member; elsewhere it still yields.
 
 ### Healer Off-DPS (`offdps`)
 
@@ -114,7 +114,7 @@ Per bot, use [`.bot behavior <bot|party> offheal|offdps <on|off>`](../play/comma
 - `.tb strategy <bot> co +offdps`, or use `role:<tank|healer|dps>` in place of the bot, for one bot or every bot of a role.
 - Changes are saved per bot.
 - A spec change (`.tb role <bot> <tank|healer|dps|none>`, the addon's role buttons, or a talent respec) sets the new spec's default again: a healer spec gets `offdps` and loses `offheal`, a damage spec the other way round, a tank spec neither.
-- Server admins cannot change the default on WoW Forever yet: `AiPlayerbot.EnableOffSpecStrategies` is not read by this build, and players can still toggle off-spec per bot.
+- Server admins cannot change the default on ForeverCore yet: `AiPlayerbot.EnableOffSpecStrategies` is not read by this build, and players can still toggle off-spec per bot.
 
 ### Spell Downranking
 

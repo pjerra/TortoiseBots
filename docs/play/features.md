@@ -2,7 +2,7 @@
 id: play-features
 title: What Bots Can Do
 category: play
-summary: Catalog of what the WoW Forever build does, with its player commands, bot engine, pool, guild orders, auction market, queues, switches and defaults.
+summary: Catalog of what the ForeverCore build does, with its player commands, bot engine, pool, guild orders, auction market, queues, switches and defaults.
 tags: [features, capabilities, settings, defaults]
 relates_to:
   - play-getting-started
@@ -13,7 +13,7 @@ relates_to:
 
 # What Bots Can Do
 
-This page describes the TortoiseBots module as it runs on **WoW Forever** (ForeverCore, Classic 1.60.1 client). Features of the Turtle WoW version that are not built here are listed at the end: [Not on WoW Forever yet](#not-on-wow-forever-yet).
+This page describes the TortoiseBots module as it runs on **ForeverCore**. Features of the Turtle WoW version that are not built here are listed at the end: [Not on ForeverCore yet](#not-on-forevercore-yet).
 
 How to read the tables:
 
@@ -83,8 +83,8 @@ These are the party orders both the `.tb order` console command and the addon's 
 | A commanded bot's body in a dungeon releases and returns after the backstop | Yes | `TortoiseBots.Slice.DeadBackstopSeconds = 180` | [Wipes](dungeons-and-raids.md#dead-bots) |
 | A bot far behind holds before a skipped pack | No | `AiPlayerbot.DungeonFollowHoldBeforePacks = 0` | [Following](dungeons-and-raids.md#following) |
 | Run leader walks a stored dungeon plan (a server-admin command) | Yes | `AiPlayerbot.DungeonSelfClear = 1` | [Run leader](dungeon-run-leader.md) |
-| Boss-specific raid tactics (Molten Core to Naxxramas) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
-| Turtle custom raids (Emerald Sanctum, Karazhan) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| Boss-specific raid tactics (Molten Core to Naxxramas) | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
+| Turtle custom raids (Emerald Sanctum, Karazhan) | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
 
 ## The Living World
 
@@ -106,9 +106,9 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Free bots chase rare spawns | Yes | `AiPlayerbot.HuntRares = 1` | [Living world](../world/living-world.md) |
 | Free bots pick a destination and travel there by foot, flight path or boat/zeppelin | Always | — (`AiPlayerbot.GenerateTravelNodes = 1` builds and saves the graph) | [Travel](../world/living-world.md) |
 | Travel for quests, grind spots, towns, vendors and repairs, and leaving an outgrown zone | Yes | — | [Living world](../world/living-world.md) |
-| Travel to trainers, the auction house, mail, bosses or gathering nodes as a destination | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
-| Autonomous alt-bots (your alt keeps playing after it leaves your group) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
-| Camp spots and Traveler's Tents | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| Travel to trainers, the auction house, mail, bosses or gathering nodes as a destination | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
+| Autonomous alt-bots (your alt keeps playing after it leaves your group) | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
+| Camp spots and Traveler's Tents | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
 
 ## Levelling, Spells and Gear
 
@@ -143,7 +143,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Bots sell junk and repair at vendors | Always | — | [Economy](../world/economy.md) |
 | Free bots post their own loot at a nearby auctioneer | No | `TortoiseBots.World.Auction = 0` (also needs `AiPlayerbot.AhMarketEnabled = 1`) | [Auction house](../world/economy.md#living-auction-house) |
 | Free bots buy upgrades on the auction house | No | `TortoiseBots.World.Auction = 0` (also needs `AiPlayerbot.AhMarketBuyer = 1`) | [Auction house](../world/economy.md#living-auction-house) |
-| A separate offline auction-house seller (`AiPlayerbot.AhBot.*`) | No | — | [Not on WoW Forever yet](#not-on-wow-forever-yet) |
+| A separate offline auction-house seller (`AiPlayerbot.AhBot.*`) | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
 
 ## Dungeon Fill & Battlegrounds
 
@@ -165,7 +165,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Module log lines in their own category | Yes | `Logger.tortoisebots = 3,Console Server` | [Logging](../server/settings/logging.md) |
 | GameMaster `.tb` commands for the pool, queues and diagnostics | Always | — | [Admin commands](../server/admin-commands.md) |
 
-## Not on WoW Forever yet
+## Not on ForeverCore yet
 
 These are part of the Turtle WoW build that this page used to describe, or of old TortoiseBots releases. None of them is built into the Forever module; none has a setting here.
 

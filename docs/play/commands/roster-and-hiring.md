@@ -12,7 +12,7 @@ relates_to:
 
 # Roster and Character Commands
 
-On WoW Forever you bring your own characters into the world as bots, or a GameMaster logs any bot in. There is no mercenary hiring, no recruiter service and no autonomous alt-bot that plays while you are offline.
+On ForeverCore you bring your own characters into the world as bots, or a GameMaster logs any bot in. There is no mercenary hiring, no recruiter service and no autonomous alt-bot that plays while you are offline.
 
 ## Summary
 
@@ -166,6 +166,6 @@ Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder creat
 - Train at a trainer: `.tb order <bot> train`.
 - Trade: the addon's trade verb (`trade [<bot>]`).
 
-## Not on WoW Forever Yet
+## Not on ForeverCore Yet
 
 Mercenary hiring (`.bot hire`, `.bot hire raid`), recruiter menus, capital world-buff services, mercenary contracts, autonomous alt-bots (`.bot alts` summaries, alt progress, `AiPlayerbot.AltBots`), `.bot invite` / `.bot uninvite`, `.bot gear` tier and preset names, `.bot role` spec ids, and the chat `.bot release` / `.bot corpse run` / `.bot learn` / `.bot trade` commands are not in this build. Their settings stay in `aiplayerbot.conf.dist`, but no gameplay code reads them.

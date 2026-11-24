@@ -63,18 +63,18 @@ Mages provide high-burst ranged spell DPS, dependable crowd control (*Polymorph*
 
 - **Arcane Power:** The bot enforces a 70% mana floor and requires a live hostile target before activating, and never cancels the buff once active.
 - **Evocation:** Arms below 40% mana, channels *Evocation* when out of spell reach, and cancels the channel at 95% mana to resume combat.
-- **Arcane Rupture:** Not on WoW Forever yet.
-- **Icicles:** Not on WoW Forever yet.
+- **Arcane Rupture:** Not on ForeverCore yet.
+- **Icicles:** Not on ForeverCore yet.
 
 ---
 
 ## Utility & interrupts
 
-- **Polymorph CC:** Casts *Polymorph* on targets assigned via `.tb cc <bot> <mark> <unit>` (GameMaster); the addon's party CC pick is not on WoW Forever yet. Stands still during casting and prevents AoE spells near sheeped mobs.
+- **Polymorph CC:** Casts *Polymorph* on targets assigned via `.tb cc <bot> <mark> <unit>` (GameMaster); the addon's party CC pick is not on ForeverCore yet. Stands still during casting and prevents AoE spells near sheeped mobs.
 - **Interrupts:** Casts *Counterspell* immediately upon detecting dangerous enemy spell casts, locking the school.
 - **Food & Drink Conjuration:** Conjures food and water out of combat for itself when it has none. You can also order conjuration with `.bot service <Name> conjure <food|water>` and trade it through the addon.
 - **Portals:** `.bot service <Name>` lists the portals the mage knows, and `.bot service <Name> portal <spellId>` casts one (the addon's service action does the same). Out of combat only, rune is free. Only the mage's group can use the portal, so invite the bot first.
-- **Portal Follow:** Not on WoW Forever yet.
+- **Portal Follow:** Not on ForeverCore yet.
 - **Mana Gems & Runes:** Consumes the strongest mana gem held (Ruby down to Agate) below 40% mana in combat, re-conjuring gems between pulls. Uses *Dark Rune* below 40% mana when no ready gem is held (requires level 50).
 - **Party Buffs:** Maintains *Arcane Intellect* (and *Arcane Brilliance*), refreshing expiring buffs (under 15 seconds) and coordinating buff claims with other mages.
 - **Defensive Wards:** Casts *Mana Shield* at low health (also requires mana above medium) and *Ice Block* at critical health.

@@ -199,7 +199,7 @@ Characters on a challenge mode stay GM-only whatever this says. Bots are never g
 Seconds between two `.bot summon` uses for the same bot.
 **Default:** `300` · **Values:** seconds (`0` to `3600`; `0` no wait) · **Restart:** not needed (`.reload config` applies it)
 
-On WoW Forever this key is read from `worldserver.conf` or `worldserver.conf.d/tortoisebots.conf`, not from `aiplayerbot.conf`.
+On ForeverCore this key is read from `worldserver.conf` or `worldserver.conf.d/tortoisebots.conf`, not from `aiplayerbot.conf`.
 
 <details>
 <summary>How it works in detail</summary>
@@ -245,7 +245,7 @@ When the master has a quest complete and the bot's copy is still incomplete or f
 
 ## Not in this build
 
-These settings from the Turtle WoW version have no effect in the WoW Forever build:
+These settings from the Turtle WoW version have no effect in the ForeverCore build:
 
 - **Autonomous alts** (`AltBots`, `AltBotsLogoutWithOwner`): the autonomous-alt service is not part of this build, so these two keys change nothing.
 - **Automatic summon on group invite** (`OwnedBotSummonWhenGroup`, `OwnedBotSummonAllowInCombat`, `OwnedBotSummonAllowMasterDead`, `OwnedBotSummonAllowBotDead`, `OwnedBotSummonRevive`, `OwnedBotSummonRepair`): use `.bot summon <bot>` instead.

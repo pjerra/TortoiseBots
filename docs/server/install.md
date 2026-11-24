@@ -2,7 +2,7 @@
 id: server-install
 title: Building, Installing & Updating TortoiseBots
 category: server
-summary: How to build the module for WoW Forever (ForeverCore), install its configuration and database files, enable the bot engine, and check the running build.
+summary: How to build the module for ForeverCore, install its configuration and database files, enable the bot engine, and check the running build.
 tags: [server, install, build, cmake, compile, update, version]
 relates_to:
   - server-configuration
@@ -12,7 +12,7 @@ relates_to:
 
 # Building, Installing & Updating TortoiseBots
 
-TortoiseBots compiles as an in-tree module for **ForeverCore**, the TrinityCore-based server for WoW Forever (Classic 1.60.1 client). Unlike the Turtle WoW build, the module has two layers:
+TortoiseBots compiles as an in-tree module for **ForeverCore**, a TrinityCore-based server. Unlike the Turtle WoW build, the module has two layers:
 
 - the session, host services, pool and `.tb` commands, which always build;
 - the legacy bot engine, which builds only with `TORTOISEBOTS_SLICE1=ON`. Without it bots have no brain and `.bot` is unknown to the core.

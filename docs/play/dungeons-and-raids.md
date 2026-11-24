@@ -2,7 +2,7 @@
 id: play-dungeons-and-raids
 title: Dungeon & Raid Tactics Guide
 category: play
-summary: How companion bots fight in WoW Forever instances, including pulling, crowd control, interrupts, hazards, wipe recovery, loot and the GameMaster run leader.
+summary: How companion bots fight in ForeverCore instances, including pulling, crowd control, interrupts, hazards, wipe recovery, loot and the GameMaster run leader.
 tags: [dungeon, raids, tactics, pulling, cc, wipes, instances, loot]
 relates_to:
   - play-commands-party-actions
@@ -13,7 +13,7 @@ relates_to:
 
 # Dungeon & Raid Tactics Guide
 
-A bot party on **WoW Forever** fights with the same class AI it uses in the open world: it assists, interrupts, crowd-controls, loots and follows. This page covers what works inside instances, the orders that help, and the parts that are not built yet.
+A bot party on **ForeverCore** fights with the same class AI it uses in the open world: it assists, interrupts, crowd-controls, loots and follows. This page covers what works inside instances, the orders that help, and the parts that are not built yet.
 
 ## Before you go in
 
@@ -36,7 +36,7 @@ The pullback waits are `AiPlayerbot.PullBackMaxReturnTime` (15 seconds for the t
 ## Crowd control
 
 - Bots use their own class control: Polymorph, Sap, Shackle Undead, Banish, Hibernate, Freezing Trap and fear effects. A bot keeps damage off a unit it is holding.
-- `cc clear` clears the bot's mark. Assigning a mark from the party (`cc <mark>`) is **not on WoW Forever yet**; a GameMaster can set one with `.tb cc <bot> <mark> <unit>`.
+- `cc clear` clears the bot's mark. Assigning a mark from the party (`cc <mark>`) is **not on ForeverCore yet**; a GameMaster can set one with `.tb cc <bot> <mark> <unit>`.
 - Area spells are not the main danger they are in the Turtle build: the engine checks its area targets, but it does not have the full Turtle CC-protection rules. Call your AoE off with the `aoe` behaviour toggle when a pull depends on a sheep or a sap.
 - Pets follow their owner's target. A hunter's pet and a warlock's demon are part of the fight.
 
@@ -89,8 +89,8 @@ See [Dungeon run leader](dungeon-run-leader.md) for the full command set and rou
 ## Raids
 
 - Generic raid behaviour runs: assist, tank assignment, healing, dispels, hazard avoidance and loot.
-- **Boss-specific tactics are not on WoW Forever yet.** The old per-boss rules (Molten Core, Blackwing Lair, Naxxramas, Ahn'Qiraj, the Turtle custom raids) are not loaded, and `AiPlayerbot.RaidReactions` is off. Do not expect a bot to run out with a bomb, turn a dragon, or take a Patchwerk role on its own.
+- **Boss-specific tactics are not on ForeverCore yet.** The old per-boss rules (Molten Core, Blackwing Lair, Naxxramas, Ahn'Qiraj, the Turtle custom raids) are not loaded, and `AiPlayerbot.RaidReactions` is off. Do not expect a bot to run out with a bomb, turn a dragon, or take a Patchwerk role on its own.
 
 ## Turtle content
 
-The [dungeon reference](dungeon-reference.md) is written for WoW Forever and lists the Forever plans and creature entries. Turtle raid guides and Turtle custom raids do not apply to WoW Forever.
+The [dungeon reference](dungeon-reference.md) is written for ForeverCore and lists the Forever plans and creature entries. Turtle raid guides and Turtle custom raids do not apply to ForeverCore.

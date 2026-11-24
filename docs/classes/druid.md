@@ -80,8 +80,8 @@ Movement slows like daze or chill do not break form. Physical roots break form o
 ## Custom abilities
 
 - **Swiftmend:** consumes a running *Rejuvenation* or *Regrowth* heal-over-time for an instant heal, and only casts when one is running.
-- **Tree of Life Form:** Not on WoW Forever yet.
-- **Savage Bite:** Not on WoW Forever yet.
+- **Tree of Life Form:** Not on ForeverCore yet.
+- **Savage Bite:** Not on ForeverCore yet.
 
 ---
 

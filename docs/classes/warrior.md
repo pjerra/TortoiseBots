@@ -57,8 +57,8 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
 
 ## Custom abilities
 
-- **Master Strike:** Not on WoW Forever yet.
-- **Defensive Tactics:** Not on WoW Forever yet.
+- **Master Strike:** Not on ForeverCore yet.
+- **Defensive Tactics:** Not on ForeverCore yet.
 
 ---
 
@@ -69,7 +69,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - *Fury:* Uses *Pummel* (in Berserker Stance).
   - *Arms:* Uses *Pummel* first (stepping into Berserker Stance and back to Battle), falling back to *Shield Bash* without stance dancing.
   - Interrupts only fire on active cast bars or channels; delayed instants never trigger interrupts.
-- **Shouts:** Maintains *Battle Shout* on party members (skipping if an equal or stronger *Blessing of Might* is active, or below 10 rage). Protection maintains *Demoralizing Shout*. *Intimidating Shout* is off in dungeons and raids (the `aoe fear` override is not registered on WoW Forever yet).
+- **Shouts:** Maintains *Battle Shout* on party members (skipping if an equal or stronger *Blessing of Might* is active, or below 10 rage). Protection maintains *Demoralizing Shout*. *Intimidating Shout* is off in dungeons and raids (the `aoe fear` override is not registered on ForeverCore yet).
 - **Rage gates:** *Disarm* is only cast on a target that carries a weapon and only with the 20 rage it costs; *Bloodrage* is held while its cooldown runs, below medium health (70%), or below 20 rage to spend. Unusable rows are skipped, so low-rage ticks go to *Sunder Armor* and *Revenge* instead.
 
 ---
