@@ -56,6 +56,8 @@ Feature const kFeatures[] = {
     { "class-quests", "TortoiseBots.ClassQuestSpells", true, 0, "Class quest spells" },
     { "world-gather", "TortoiseBots.World.Professions", true, 0, "Free-bot gathering" },
     { "world-fishing", "TortoiseBots.World.Fishing", true, 1, "Free-bot fishing" },
+    { "world-disenchant", "TortoiseBots.World.Disenchant", true, 1, "Free-bot disenchanting" },
+    { "world-enchant-gear", "TortoiseBots.World.EnchantGear", true, 1, "Free-bot gear enchanting" },
     { "world-auction", "TortoiseBots.World.Auction", true, 0, "Bot auction house" },
     { "group-quests", "TortoiseBots.World.GroupQuests", true, 1, "Group quests" },
     { "capital-errands", "TortoiseBots.World.CapitalErrands", true, 1, "Capital errands" },

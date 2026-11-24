@@ -220,6 +220,24 @@ TortoiseBots.World.Professions = 0
 #
 
 TortoiseBots.World.Fishing = 1
+#    TortoiseBots.World.Disenchant
+#        Description: Allow free bots (`free`) with Enchanting to break down disenchantable armor and weapons they carry
+#                     (uncommon and above; rare and better only when no real player shares their guild) and collect the
+#                     materials. Bots need no reagents for it.
+#        Default:     1
+#
+
+TortoiseBots.World.Disenchant = 1
+
+#
+#    TortoiseBots.World.EnchantGear
+#        Description: Allow free bots (`free`) with Enchanting to apply the best permanent enchant they know and can pay
+#                     for to their worn gear, when it scores higher than the enchant already there. The profession grants
+#                     its recipes, Disenchant and a rod as the skill allows; reagents come from the bot's own bags.
+#        Default:     1
+#
+
+TortoiseBots.World.EnchantGear = 1
 
 #
 #    TortoiseBots.World.Auction
