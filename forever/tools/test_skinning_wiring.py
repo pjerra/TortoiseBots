@@ -36,6 +36,14 @@ class TestSkinningWiring(unittest.TestCase):
         self.assertIn("if (object->ToCreature())\n            return false;", i2)
         self.assertIn("GAMEOBJECT_TYPE_CHEST", i2)
 
+    def test_body_window_keeps_the_skin_target_queued(self):
+        action = read("ai/playerbot/strategy/actions/LootAction.cpp")
+        if MUTATE:
+            action = action.replace("CorpseSkinnableByCompat(bot, creature)", "false")
+        self.assertIn("if ((itemsTaken || gold) && guid.IsCreature())", action)
+        self.assertIn("CorpseSkinnableByCompat(bot, creature)", action)
+        self.assertIn("lootStack->Add(guid);", action)
+
     def test_skin_window_is_announced(self):
         s9 = read("forever/src/compat/TbCompat_S9.h")
         if MUTATE:
