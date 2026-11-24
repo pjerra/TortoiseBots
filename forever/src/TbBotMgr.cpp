@@ -256,7 +256,6 @@ void BotMgr::LoadConfig()
 #endif
     _disenchantUpkeepEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Disenchant", true);
     _enchantGearEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.EnchantGear", true);
-    _botAcceptDuelMinLevel = static_cast<uint8>(std::clamp<int32>(sConfigMgr->GetIntDefault("AiPlayerbot.BotAcceptDuelMinimumLevel", 10), 1, 255));
     // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
     // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
     // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
@@ -1657,6 +1656,9 @@ void BotMgr::Update(uint32 diff)
         // its master was lost (R9): Think may have asked for the logout above,
         // and the brain is gone by then.
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // Every bot answers a duel, not only a free one: TB gives the duel strategy to any bot outside a battleground
+        // (AiFactory.cpp:1489-1495), and the core's Player::duel is the only signal a socketless session gets.
+        tbhost::errands::TickDuelResponse(me);
         tbhost::prof::TickErrands(me, diff);
         tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);
         if (bot.free)

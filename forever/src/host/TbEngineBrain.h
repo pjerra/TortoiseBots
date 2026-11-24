@@ -134,6 +134,9 @@ std::string ServerDiagnosticsJson();
 // The engine's XP multiplier for bots (rates.bot_xp_mult). 1.0 before the engine config is loaded.
 float BotXpRate();
 
+// AiPlayerbot.BotAcceptDuelMinimumLevel as the engine config holds it, and 10 (the key's default) before that file is read.
+uint32 DuelMinimumLevel();
+
 // Executes a legacy action by key for `bot` (used by host world-life errands).
 bool RunAction(Player* bot, char const* action, char const* param);
 

@@ -202,16 +202,15 @@ inline bool CanInitiateBotDuel(DuelCandidateInput const& in)
 }
 
 inline bool ShouldAcceptBotDuel(
-    bool botIsFreeBot,
     bool botAlive,
     bool botInCombat,
-    bool challengerIsBot,
+    bool challengerIsMaster,
     uint8_t botLevel,
     uint8_t minDuelLevel,
     uint8_t botHealthPct)
 {
-    return botIsFreeBot && botAlive && !botInCombat && challengerIsBot &&
-           botLevel >= minDuelLevel && botHealthPct >= 90;
+    return botAlive && !botInCombat && botLevel >= minDuelLevel &&
+           (challengerIsMaster || botHealthPct >= 90);
 }
 
 } // namespace world
