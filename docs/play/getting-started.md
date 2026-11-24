@@ -20,7 +20,7 @@ TortoiseBots fills a **WoW Forever** realm with bots and lets you take some of t
 
 - A character to play, and one to four more characters on your own account that you want as bots.
 - A server that runs TortoiseBots **with the bot engine** and has the module switched on (`TortoiseBots.Enable = 1`, off by default).
-- The [TortoiseBotsForeverManager](commands/addon.md) addon (`/tbm`) in your client's `Interface/AddOns/` folder. Optional, but easier than typing commands.
+- The [TortoiseBotsForeverManager](commands/addon.md) addon (`/tbfm`, also `/tb`, `/tbot` and `/tortoise`) in your client's `Interface/AddOns/` folder. Optional, but easier than typing commands.
 
 The `.bot` command is for players only while `TortoiseBots.Player.Commands = 1` (the default). A server admin can turn it off; then only GameMasters may use `.bot`.
 
@@ -37,7 +37,7 @@ Hired companions and claimed guild bots from the Turtle WoW build are not on WoW
 
 | Step | With the addon | With chat commands |
 | :--- | :--- | :--- |
-| 1. Log in your alt | `/tbm` → roster → **Login** (the addon sends the same `.bot add`) | `.bot add <Name>` |
+| 1. Log in your alt | `/tbfm` → roster → **Login** (the addon sends the same `.bot add`) | `.bot add <Name>` |
 | 2. See it | roster list | `.bot who` |
 | 3. Bring it to you | **Summon** | `.bot summon <Name>` |
 | 4. Give an order | party action buttons | `.bot follow <Name>`, `.bot stay <Name>`, `.bot attack <Name>`, `.bot flee <Name>` |
