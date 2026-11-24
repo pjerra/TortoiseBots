@@ -115,6 +115,13 @@ inline bool QuestHasObjectiveProgressCompat(Player* bot, Quest const* quest)
     return false;
 }
 
+// The entries a quest's source item must be used on (T ObjectMgr::GetItemRequiredTargetMapBounds). ForeverCore's classic
+// quests carry no required-target table, so no entry is added (the source-item step finds no destination - LESS).
+inline std::vector<int32> QuestRequiredTargetEntriesCompat(uint32 /*itemId*/)
+{
+    return {};
+}
+
 inline int32 QuestRewOrReqMoneyCompat(Quest const* quest)
 {
     if (!quest)
@@ -188,6 +195,19 @@ inline bool QuestIsAvailableStatusCompat(QuestStatus status)
     return status == QUEST_STATUS_NONE;
 }
 
+// Was the quest ever handed in: Turtle sets the log row's `m_rewarded`, ForeverCore writes the rewarded list and drops the
+// row from the log (Player::GetQuestRewardStatus, Player.cpp:17321).
+inline bool QuestEverRewardedCompat(Player* bot, uint32 questId)
+{
+    return bot && bot->IsQuestRewarded(questId);
+}
+
+// The reward of a quest ForeverCore still keeps in the log is always pending: the core drops the row when it is paid out.
+inline bool QuestRewardPendingCompat(Player* bot, uint32 questId)
+{
+    return bot && bot->IsActiveQuest(questId);
+}
+
 inline bool AcceptQuestDirectCompat(Player* bot, Quest const* quest, WorldObject* giver)
 {
     if (!bot || !quest || !giver)
@@ -233,6 +253,34 @@ inline void PushQuestToPartyCompat(Player* bot, uint32 questId)
     WorldPackets::Quest::PushQuestToParty packet{ WorldPacket(CMSG_PUSH_QUEST_TO_PARTY) };
     packet.QuestID = questId;
     bot->GetSession()->HandlePushQuestToParty(packet);
+}
+
+// Visits the quest ids a creature (positive entry) or a game object (negative entry) gives (starter) or takes (ender).
+// Turtle keeps four relation multimaps; ForeverCore keeps the same rows in QuestRelations behind
+// ObjectMgr::GetCreatureQuestRelations / GetCreatureQuestInvolvedRelations / GetGOQuestRelations / GetGOQuestInvolvedRelations
+// (ObjectMgr.h:1261-1266). Those results skip the quests the pool leaves out of rotation, which is the closest answer to
+// Turtle's Quest::IsActive here (Quest::IsTakingQuestEnabled, QuestDef.cpp:466).
+template <class Fn>
+inline void ForEachQuestRelationCompat(int32 entry, bool starter, Fn const& fn)
+{
+    if (!entry)
+        return;
+
+    if (entry > 0)
+    {
+        QuestRelationResult const relations = starter
+            ? sObjectMgr.GetCreatureQuestRelations(uint32(entry))
+            : sObjectMgr.GetCreatureQuestInvolvedRelations(uint32(entry));
+        for (QuestRelationResult::Iterator itr = relations.begin(); itr != relations.end(); ++itr)
+            fn(*itr);
+        return;
+    }
+
+    QuestRelationResult const relations = starter
+        ? sObjectMgr.GetGOQuestRelations(uint32(-entry))
+        : sObjectMgr.GetGOQuestInvolvedRelations(uint32(-entry));
+    for (QuestRelationResult::Iterator itr = relations.begin(); itr != relations.end(); ++itr)
+        fn(*itr);
 }
 
 // Spawned creature/GO entry sets (O(spawns) to build) so every quest filter check is O(1).

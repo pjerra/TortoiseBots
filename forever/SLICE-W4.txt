@@ -388,3 +388,8 @@ ai/playerbot/strategy/values/MountValues.cpp
 # the homebind teleport through the D4 pair.
 ai/playerbot/strategy/triggers/StuckTriggers.cpp
 ai/playerbot/strategy/actions/UnstuckAction.cpp
+
+# TBF #147, package B (quest values): the stock quest values the travel quest rows and the rpg quest verbs read (dialog
+# status, free log slots, need quest objective, need for quest, can use item on). The relation walk and the reward-state
+# answers go through the quest compat pair on both cores.
+ai/playerbot/strategy/values/QuestValues.cpp
