@@ -173,7 +173,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
         AhSellDecision const decision = DecideAhSell(in);
         if (!decision.shouldPost)
         {
-            if (isExplicitSell)
+            if (lastSellFail.empty())
                 lastSellFail = decision.reason;
             continue;
         }

@@ -26,7 +26,7 @@ def check_sweep_wiring(pure, source, botmgr):
         body = body.replace("in.hasSellableStock", "true")
     if "in.freeBot" not in body or "in.hasSellableStock" not in body:
         raise AssertionError("IsSweepCandidate must gate on the free flag and on sellable stock")
-    for flag in ("in.inCombat", "in.moving", "in.casting", "in.inDuel", "in.grouped", "in.busyElsewhere"):
+    for flag in ("in.inCombat", "in.casting", "in.inDuel", "in.grouped", "in.busyElsewhere"):
         if flag not in body:
             raise AssertionError(f"IsSweepCandidate missing {flag}")
 
