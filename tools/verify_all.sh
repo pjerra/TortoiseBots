@@ -50,6 +50,16 @@ fi
 echo "✓ Engine unit tests passed."
 
 echo ""
+echo "=== 4b. Running the ForeverLua test toolkit checks ==="
+# forever/lua/check.sh: luac -p, luacheck when installed, and the mock test (lua5.4, no server).
+if command -v lua5.4 >/dev/null 2>&1 || command -v lua >/dev/null 2>&1; then
+    bash forever/lua/check.sh
+    echo "✓ ForeverLua test toolkit verified (syntax, lint when available, mock test)."
+else
+    echo "ℹ Skipping the ForeverLua test toolkit checks (no lua5.4/lua on PATH)."
+fi
+
+echo ""
 echo "=== 5. Running Standalone Policy Tests ==="
 if command -v g++ >/dev/null 2>&1; then
     JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
