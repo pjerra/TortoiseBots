@@ -48,7 +48,7 @@ The addon sends short verbs over the addon channel, not chat text. The Forever s
 
 | Verb | What it does |
 | :--- | :--- |
-| `action <intent>` | The party-wide orders: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `free`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. |
+| `action <intent>` | The party-wide orders: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. |
 | `roster` / `list` | The roster snapshot, the handshake trailer and the party's movement states. |
 | `who`, `stats`, `add`, `logout`, `remove`, `summon`, `maintenance`, `autogear` | The same words as the `.bot` commands of those names. |
 | `alts` | One line per owned bot playing on its own (free mode). |
@@ -62,7 +62,7 @@ The addon sends short verbs over the addon channel, not chat text. The Forever s
 | `features` | The server's player-facing switches; `features all <text>` searches the module's settings. |
 | `run` | Run status, the nearest plan (`run here`) and the plan list. |
 
-A verb the server cannot run answers one `TBM:ACTION_ERR|<verb>|<code>|<text>` line, so the addon never waits forever.
+A verb the server cannot run answers one `TBM:ACTION_ERR|<verb>|<code>|<text>` line, so the addon never waits forever. The addon's Free button sends `free`, which parses but is currently refused as `unknown-verb`.
 
 ### Capabilities
 

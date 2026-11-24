@@ -64,7 +64,6 @@ The addon's `action` command sends the same party orders a GameMaster can send w
 | Stop moving | `stay` | Holds position. |
 | Follow again | `follow` | Follows you in formation. |
 | Come here | `come`, `hold`, `comestay` | Walks to your spot. |
-| Free a bot | `free` | Stops following; the bot goes its own way. |
 | Flee | `flee` | Runs from the fight. |
 | Guard | `guard` | Guards the spot. |
 | Interrupt | `interrupt` | Picks a party member who can interrupt and sends it. |

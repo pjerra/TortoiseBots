@@ -31,7 +31,7 @@ This page is the index of the command surfaces the Forever build actually has. E
 
 Party-wide orders are the addon channel's `action` verb, not chat text. The addon's Fight, Camp and Party panels send it; a typed `.bot action <intent>` in chat is refused as an unknown verb.
 
-The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `free`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. A parseable intent the server does not run answers one `TBM:ACTION_ERR` line with its reason (raid tactics, party CC picks, behaviour toggles, trade, use-object and ready checks are named there).
+The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. A parseable intent the server does not run answers one `TBM:ACTION_ERR` line with its reason (raid tactics, party CC picks, behaviour toggles, trade, use-object and ready checks are named there).
 
 ## Player commands (`.bot`)
 

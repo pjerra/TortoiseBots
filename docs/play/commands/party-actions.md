@@ -57,7 +57,6 @@ The party and actions panels send `action <intent>` to the server over the addon
 | `end pull` | Aborts the running pull. |
 | `come` / `hold` / `comestay` | Walks the bots to your spot and sets them to stay. |
 | `follow` / `stay` | Formation follow, or stay in place. |
-| `free` | Releases stay/follow so the bot acts on its own. |
 | `focus skull` | Marks your target (or the existing Skull) and orders focused damage. |
 | `cc clear [bot]` | Clears a bot's crowd-control mark. |
 | `release` | Releases dead bots' spirits. |
@@ -148,3 +147,5 @@ Changes the bot's combat (`co`) or non-combat (`nc`) strategy set; `reset` resto
 ## Not on WoW Forever Yet
 
 These Turtle actions are absent here: `.bot action ...`; the other single-bot chat commands (`.bot guard`, `.bot free`, `.bot ready`, `.bot interrupt`, `.bot pullback`, `.bot formation`, `.bot strategy`, `.bot loot`, `.bot repair`, `.bot sell`, `.bot rest`, `.bot downtime`, `.bot use`); per-bot focus marks; ready checks; trade from an order; the `raid ...` intents; auto-CC and Sap from an addon action; and the `use-object` button. Some remain reachable in another form: crowd control through `.tb cc` / `.tb cmd cc`, toggles through `.tb cmd aoe|autocc|sap` and `.bot behavior`, and object use through `.tb cmd open`.
+
+The addon's Free button (the `free` order) is accepted by the parser but currently refused by the server as `unknown-verb`.

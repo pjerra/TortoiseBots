@@ -49,7 +49,7 @@ The bot answers `TortoiseBots: <verb>: ...` on the channel you typed on. A refus
 
 | Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
-| `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `come`, `hold`, `free` orders | Always | — | [Party actions](commands/party-actions.md) |
+| `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `come`, `hold` orders | Always | — | [Party actions](commands/party-actions.md) |
 | `pull`, `pullback`, `end pull` with seconds or `ranged`/`body` | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
 | `interrupt` picks a party member who can interrupt | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
 | `focus skull` marks your target and sends the party at it | Always | — | [Addon actions](commands/party-actions.md#addon-action-buttons) |
