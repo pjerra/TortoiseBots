@@ -441,6 +441,8 @@ static void TestGossip()
     od::Parsed p = Parse("gossip 3678 Mtank 1");
     CHECK(p.verb == od::Verb::Gossip && p.task.verb == tk::Verb::Gossip && p.task.bot == "Mtank");
     CHECK(p.task.gossip.entry == 3678 && p.task.gossip.byIndex && p.task.gossip.index == 1);
+    // the target is the NPC by entry, never a handle of an earlier read (Shadowfang Keep, 2026-11-23: refused invalid-target)
+    CHECK(p.task.spec.ByEntry() && p.task.spec.entry == 3678 && !p.task.spec.hasPoint);
     Parse("gossip 3678 Mtank 0", false);
     Parse("gossip 3678 Mtank 16", false);
     Parse("gossip 0 Mtank 1", false);

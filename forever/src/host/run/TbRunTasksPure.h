@@ -147,6 +147,10 @@ inline bool ParseTaskOrder(std::string const& verb, std::vector<std::string> con
             return invalid("gossip <npc entry> <bot> <option number 1-15 | \"option text\">");
         out.verb = Verb::Gossip;
         out.bot = out.gossip.bot;
+        // The target is the NPC by entry (BeginTask looks it up near the bot). Without it the spec read as a handle of an earlier
+        // read and every run gossip was refused `invalid-target` (Shadowfang Keep live run, 2026-11-23: "cmd gossip 3850 Dmtank 1
+        // refused: invalid-target: No corpse or game object with that handle ...").
+        out.spec.entry = out.gossip.entry;
         return true;
     }
     code = "invalid";
