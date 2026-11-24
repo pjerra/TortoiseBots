@@ -509,6 +509,7 @@ std::vector<LockboxRogueCandidate> GuildRogueCandidates(Player* bot)
             candidate.isRogue = online->GetClass() == CLASS_ROGUE;
             candidate.lockpickingSkill = online->HasSpell(kPickLockSpellId)
                 ? online->GetSkillValue(SKILL_LOCKPICKING) : 0;
+            out.push_back(candidate);
             continue;
         }
         CharacterCacheEntry const* entry = sCharacterCache->GetCharacterCacheByGuid(memberGuid);
@@ -521,6 +522,7 @@ std::vector<LockboxRogueCandidate> GuildRogueCandidates(Player* bot)
         candidate.lockpickingSkill = TortoiseBots::RogueWantsLockpickSkill(entry->Class, entry->Level)
             ? TortoiseBots::LockpickSkillForLevel(entry->Level)
             : 0;
+        out.push_back(candidate);
     }
     return out;
 }

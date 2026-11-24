@@ -126,6 +126,15 @@ class TestThieveryWiring(unittest.TestCase):
         for key in ("Pickpocket", "Lockboxes", "LockboxMail"):
             self.assertIn(f'GetBoolDefault("TortoiseBots.World.{key}", true)', host, key)
 
+    def test_guild_rogue_list_keeps_online_and_offline_rogues(self):
+        host = host_text()
+        body = host.split("std::vector<LockboxRogueCandidate> GuildRogueCandidates(Player* bot)", 1)[1]
+        body = body.split("\n}\n", 1)[0]
+        if MUTATE:
+            body = body.replace("out.push_back(candidate);", "")
+        self.assertEqual(body.count("out.push_back(candidate);"), 2,
+                         "an online and an offline rogue both reach the pick")
+
     def test_pure_test_exists_and_runs_the_gates(self):
         test = read("forever/tools/test_thievery_policy.cpp")
         for symbol in ("EvaluateLockbox", "EvaluatePickpocketBot", "EvaluatePickpocketTarget",
