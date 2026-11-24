@@ -52,14 +52,14 @@ Welcome to the TortoiseBots documentation catalog for **WoW Forever** (ForeverCo
 
 | Page | What you find there |
 | :--- | :--- |
-| [Getting started](play/getting-started.md) | Client setup, `/tbm`, your own alts, first party, free bots. |
+| [Getting started](play/getting-started.md) | Client setup, `/tbfm`, your own alts, first party, free bots. |
 | [What bots can do](play/features.md) | The feature catalog, default states and setting names per area, plus what is not on Forever. |
 | [Command directory](play/commands/README.md) | All player commands, permissions and channel syntax. |
 | [Party actions](play/commands/party-actions.md) | Combat intents: attack, pull, pullback, interrupt, CC clear, toggles and object tasks. |
 | [Roster and character commands](play/commands/roster-and-hiring.md) | Adding and logging out your alts, summoning, maintenance and gearing. |
 | [Bot panel](play/commands/bot-panel.md) | Inspection, gear, inventory and behaviour toggles. |
 | [Whisper commands](play/commands/whispers.md) | One-to-one bot orders grouped by combat, rest, trade and town. |
-| [Addon (TortoiseBotsForeverManager)](play/commands/addon.md) | The `/tbm` UI and the `TBM:` message protocol. |
+| [Addon (TortoiseBotsForeverManager)](play/commands/addon.md) | The `/tbfm` UI and the `TBM:` message protocol. |
 | [Guild orders](play/guild-orders.md) | Sending a bot in your guild to farm, buy or craft; order states and delivery. |
 | [Dungeons and raids](play/dungeons-and-raids.md) | Pulling, CC, interrupts, hazards, wipes, loot and the GameMaster run leader. |
 | [Dungeon reference](play/dungeon-reference.md) | Creature IDs and events of Turtle WoW 5-mans; layouts only for Forever. |
