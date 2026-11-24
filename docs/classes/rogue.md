@@ -28,7 +28,7 @@ Rogues deliver exceptional single-target physical melee DPS, pre-combat crowd co
 - Automatically enters *Stealth* out of combat when a nearby target is present and Stealth is ready.
 - Manoeuvres behind targets to open with *Ambush* (with main-hand daggers) or *Garrote* (bleed, no weapon requirement).
 - Uses *Cheap Shot* as a fallback opener or when lockdown stuns are required.
-- **Pre-pull Sap:** When assigned a crowd control mark on an unpulled humanoid, a rogue with a live-client master stealths forward and casts *Sap* before combat begins. With the setting on (off by default), the approach keeps clear of the other mobs in the pack and is skipped when no safe route exists ([`AiPlayerbot.SapApproachAvoidPack`](../server/settings/class-behaviour.md#aiplayerbotsapapproachavoidpack)). Can be toggled with [`.bot action sap [on|off] [bot]`](../play/commands/party-actions.md#bot-action-sap).
+- **Pre-pull Sap:** When assigned a crowd control mark on an unpulled humanoid, a rogue with a live-client master stealths forward and casts *Sap* before combat begins. With the setting on (off by default), the approach keeps clear of the other mobs in the pack and is skipped when no safe route exists ([`AiPlayerbot.SapApproachAvoidPack`](../server/settings/class-behaviour.md#aiplayerbotsapapproachavoidpack)).
 - A stealthed rogue still ends a pull's join window on time.
 
 ### Combo Points & Finisher Priority
@@ -67,7 +67,6 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 - **Poisons:** Automatically applies poisons based on context: raid and generic combat use Instant Poison (main hand) and Deadly Poison (off hand); general PvE uses Instant Poison on both hands; PvP uses Crippling Poison (off hand). Gated by poison item required level and stock. [`.bot choice <bot> poison_mh|poison_oh <instant|deadly|crippling|wound|auto>`](../play/commands/bot-panel.md#bot-choice) orders the poison per hand; every automatic poison row for that hand then stands down, so the two never overwrite each other. Without the poison item (and without the item cheat) the rogue keeps what the weapon carries. *Mind Poison* is Not on WoW Forever yet.
 - **Interrupts:** Casts *Kick* immediately to lock out enemy spell casts. Uses *Kidney Shot* as a stun fallback. With `AiPlayerbot.InterruptIgnoresThreat = 1` (recommended) *Kick* also goes out while the rogue is over the threat back-off line, which otherwise holds it, as long as the Kick would not pull the caster off the tank (under 110 % of the tank's threat on it).
 - **Self-Defense CC:** Uses *Gouge* at medium health (50–70%) and *Blind* at critical health (below 20%) to disorient attackers. *Gouge* only works while the target faces the rogue; with `AiPlayerbot.SpellFacingPrecheck = 1` (recommended) a rogue behind its target skips it instead of trying it over and over.
-- **Hold Ground Opt-In:** When [PoolMeleeHoldGround](../server/settings/performance.md#aiplayerbotpoolmeleeholdground) is enabled, pool rogues stand their ground using *Evasion* and *Vanish* rather than fleeing when low on health.
 
 ---
 
