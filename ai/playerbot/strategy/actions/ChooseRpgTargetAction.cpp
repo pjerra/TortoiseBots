@@ -134,7 +134,7 @@ std::unordered_map<ObjectGuid, float> ChooseRpgTargetAction::GetTargets(Player* 
     for (auto& target : targets)
         targetList.push_back(target.first);
 
-    std::shuffle(targetList.begin(), targetList.end(), *GetRandomGenerator());
+    ShuffleCompat(targetList.begin(), targetList.end());
 
     //Only check up to 50 targets. Selfbots and bots with a real master can check more.
     uint16 checked = 0, sametarget = 0, maxCheck = 50;
@@ -599,7 +599,7 @@ bool ChooseRpgTargetAction::isUseful()
     {
         GuidPosition center(AI_VALUE(GuidPosition, "free move center"));
 
-        if (center.GetMapId() != bot->GetMapId())
+        if (center.getMapId() != bot->GetMapId())
             return false;
 
         if (center.sqDistance2d(bot) > range * range + sPlayerbotAIConfig.rpgDistance * sPlayerbotAIConfig.rpgDistance)

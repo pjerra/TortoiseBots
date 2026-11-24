@@ -115,6 +115,19 @@ void CampMgr::Load()
     tbcompat::Unported(tbcompat::Feature::CampSpots);
 }
 
+// The camp spot table (ai_playerbot_camp) is not ported: no spot is ever found, so the camp trigger stops here.
+std::optional<CampSpot> CampMgr::FindNearestSpot(uint32, float, float, float, float) const
+{
+    tbcompat::Unported(tbcompat::Feature::CampSpots);
+    return std::nullopt;
+}
+
+std::optional<std::pair<CampSpot, float>> CampMgr::FindNearestSpotWithDist(uint32, float, float, float, float) const
+{
+    tbcompat::Unported(tbcompat::Feature::CampSpots);
+    return std::nullopt;
+}
+
 void CampMgr::ClearActiveCamp(uint32 /*botGuid*/)
 {
 }

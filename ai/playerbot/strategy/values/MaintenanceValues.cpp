@@ -367,7 +367,7 @@ GuidPosition ai::NearbyServiceTarget(PlayerbotAI* ai)
                 kind = NearbyServiceKind::Vendor;
         }
         else if (needsTrainer && guidP.HasNpcFlag(UNIT_NPC_FLAG_TRAINER) &&
-            RpgTrainTrigger::IsTrainerOf(guidP.GetCreatureTemplate(), bot) &&
+            RpgTrainTrigger::IsTrainerOf(guidP, bot) &&
             RpgTrainTrigger::TeachesAffordableSpell(ai, guidP, bot) &&
             !parks.Parked(GuidKeyCompat(guidP), NearbyServiceRankOf(NearbyServiceKind::Trainer), time(0)))
             kind = NearbyServiceKind::Trainer;

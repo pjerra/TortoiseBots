@@ -92,8 +92,9 @@ STAND_INS = (
     "bool GuildOrderPreyHostileToBot(Player*, int32_t) { NotePool(); return false; }",
     "bool IsFishingSpotGuarded(Player*, WorldPosition const&, float) { NoteMisc(); return true; }",
     "Unit* GuildOrderAuctioneerNear(PlayerbotAI*, Player*) { NotePool(); return nullptr; }",
-    "bool RpgTrainTrigger::IsTrainerOf(CreatureInfo const*, Player*) { NoteMisc(); return false; }",
-    "bool RpgTrainTrigger::TeachesAffordableSpell(PlayerbotAI*, GuidPosition, Player*) { NoteMisc(); return false; }",
+    "bool BuyPetitionAction::canBuyPetition(Player*) { NoteMisc(); return false; }",
+    "bool IsOrderFishing(PlayerbotAI*) { NoteMisc(); return false; }",
+    "bool DowntimeService::IsDowntimeActive(PlayerbotAI*) { NoteMisc(); return false; }",
     "std::string RandomBotFacade::GetData(uint32, std::string) { NotePool(); return std::string(); }",
     "bool RandomBotFacade::IsPinnedBot(uint32) { NotePool(); return false; }",
 )
