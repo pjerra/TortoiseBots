@@ -1,6 +1,7 @@
 // Standalone unit tests for forever/src/host/TbTalentsPure.h.
 #include "forever/src/host/TbTalentsPure.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <set>
@@ -62,24 +63,44 @@ int main()
         std::unordered_map<uint32_t, uint8_t> empty;
         auto steps = PlanNextSteps(1, 0, empty);
         check(steps.size() == 51, "warrior arms has 51 single-point steps");
-        if (steps.size() >= 8)
+        if (steps.size() >= 9)
         {
-            // First 5 points are talent 641, next 2 points are talent 127, then 126 (from talent-builds.csv).
+            // Deflection 130 x5, Improved Rend 127 x3, then Improved Charge 126 (talent-builds.csv).
             for (int i = 0; i < 5; ++i)
-                check(steps[i] == 641, "arms first 5 points are 641");
-            for (int i = 5; i < 7; ++i)
-                check(steps[i] == 127, "arms next 2 points are 127");
-            check(steps[7] == 126, "arms 8th point is 126");
+                check(steps[i] == 130, "arms first 5 points are 130");
+            for (int i = 5; i < 8; ++i)
+                check(steps[i] == 127, "arms next 3 points are 127");
+            check(steps[8] == 126, "arms 9th point is 126");
         }
 
-        // Partial progress: 3 points already in 641 -> next 2 should be 641, then 127.
-        std::unordered_map<uint32_t, uint8_t> partial = { { 641, 3 } };
+        // Partial progress: 3 points already in 130 -> next 2 should be 130, then 127.
+        std::unordered_map<uint32_t, uint8_t> partial = { { 130, 3 } };
         auto rem = PlanNextSteps(1, 0, partial);
         check(rem.size() == 48, "partial progress leaves 48 steps");
         if (rem.size() >= 3)
         {
-            check(rem[0] == 641 && rem[1] == 641 && rem[2] == 127, "partial progress resumes at point 4");
+            check(rem[0] == 130 && rem[1] == 130 && rem[2] == 127, "partial progress resumes at point 4");
         }
+    }
+
+    // 5b. Every class and tab spends exactly 51 points at level 60.
+    for (uint8_t cls : classes)
+        for (int tab = 0; tab < 3; ++tab)
+            if (PlanNextSteps(cls, tab, {}).size() != 51)
+            {
+                std::printf("FAIL: class %u tab %d does not plan 51 points\n", unsigned(cls), tab);
+                ++fails;
+            }
+
+    // 5c. A Forever-only talent is named by its trait node ID (Weaponmaster, node 105944, warrior arms), and its
+    //     progress is read under that ID.
+    {
+        check(IsTraitNodeStepId(105944) && !IsTraitNodeStepId(641), "node ids and Talent.db2 ids are told apart");
+        auto steps = PlanNextSteps(1, 0, {});
+        check(std::count(steps.begin(), steps.end(), 105944u) == 5, "arms plans 5 points of Weaponmaster by node id");
+        std::unordered_map<uint32_t, uint8_t> done = { { 105944, 5 } };
+        auto rem = PlanNextSteps(1, 0, done);
+        check(std::count(rem.begin(), rem.end(), 105944u) == 0, "a filled node-id step is not planned again");
     }
 
     // 6. SpecName returns known names and "none" for unset/out-of-range tab.

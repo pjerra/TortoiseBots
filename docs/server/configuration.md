@@ -114,7 +114,7 @@ Raid diagnostics stay opt-in through
 | Key | Default | Meaning |
 | :--- | :--- | :--- |
 | `TortoiseBots.AutoLearnOnLevel` | `1` | Bots learn class trainer and skill-line spells for free on login and level-up. |
-| `TortoiseBots.AutoTalentsOnLevel` | `1` | Bots spend free talent points on login and level-up along a spec build (`.tb spec` wins); spent points are never reset. `.tb talents <bot>` shows and applies. |
+| `TortoiseBots.AutoTalentsOnLevel` | `1` | Bots spend free talent points on login and level-up along a spec build (`.tb spec` wins); spent points are never reset. `.tb talents <bot>` shows and applies. The builds (`forever/data/waterys/talent-builds.csv`, 51 points per spec) follow the class trait trees the server validates; `python3 forever/tools/talent_builds.py --check` checks them. |
 | `TortoiseBots.AutoProfessions` | `1` | Pool bots reaching level 5 learn two primary professions that fit together, plus First Aid and Cooking, for free. |
 | `TortoiseBots.AutoTools` | `1` | Pool and free bots get the missing tool of a profession they know (pick, knife, hammer, rod, spanner, fishing pole) into their bags. |
 | `TortoiseBots.AutoHunterPet` | `1` | Hunter bots at level 10 without a pet get their race's starter pet and the pet-control spells; an existing pet is never replaced. |

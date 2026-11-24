@@ -80,9 +80,12 @@ void ArmsWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "mortal strike",
         NextAction::array(0, new NextAction("mortal strike", ACTION_NORMAL + 3), NULL)));
 
+    // Turtle-only spell: no Forever class can learn it (no SkillLineAbility row on 70959).
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(
         "master strike",
         NextAction::array(0, new NextAction("master strike", ACTION_NORMAL + 4), NULL)));
+#endif
     triggers.push_back(new TriggerNode(
         "whirlwind",
         NextAction::array(0, new NextAction("whirlwind", ACTION_NORMAL + 2), NULL)));

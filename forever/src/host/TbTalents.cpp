@@ -54,6 +54,7 @@ struct ClassTalentCache
     std::unordered_map<int32, int> nodeTab; // TraitNodeID -> 0..2
     std::unordered_map<uint32, ResolvedNode> talentToNode; // Talent.db2 ID -> TraitNode/Entry
     std::unordered_map<int32, uint32> nodeToTalent; // TraitNodeID -> Talent.db2 ID
+    std::unordered_map<uint32, ResolvedNode> nodeById; // TraitNodeID -> node, for build steps that name a node
     std::vector<FallbackNode> fallbackNodes;
 };
 
@@ -97,6 +98,9 @@ ClassTalentCache const& CacheForClass(uint8 classId)
         }
 
         built.nodeTab = TortoiseBots::slice::spec::BuildNodeTabMap(layout);
+
+        for (TraitMgr::NodeEntryInfo const& e : entries)
+            built.nodeById.emplace(uint32(e.TraitNodeID), ResolvedNode{ e.TraitNodeID, e.TraitNodeEntryID, e.MaxRanks });
 
         std::unordered_set<int32> seenFallback;
         for (TraitMgr::NodeEntryInfo const& e : entries)
@@ -149,6 +153,20 @@ ClassTalentCache const& CacheForClass(uint8 classId)
     }
 
     return cache.emplace(classId, std::move(built)).first->second;
+}
+
+ResolvedNode const* FindStepNode(ClassTalentCache const& cache, uint32 stepId)
+{
+    auto tit = cache.talentToNode.find(stepId);
+    if (tit != cache.talentToNode.end())
+        return &tit->second;
+    if (IsTraitNodeStepId(stepId))
+    {
+        auto nit = cache.nodeById.find(stepId);
+        if (nit != cache.nodeById.end())
+            return &nit->second;
+    }
+    return nullptr;
 }
 
 int8 ForcedSpecTab(ObjectGuid guid)
@@ -224,9 +242,11 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
     {
         if (e.Rank <= 0)
             continue;
+        uint8 const rank = uint8(std::min<int32>(255, e.Rank));
         auto nit = cache.nodeToTalent.find(e.TraitNodeID);
         if (nit != cache.nodeToTalent.end())
-            currentRanks[nit->second] = uint8(std::min<int32>(255, e.Rank));
+            currentRanks[nit->second] = rank;
+        currentRanks[uint32(e.TraitNodeID)] = rank;
     }
 
     std::vector<uint32> const plan = PlanNextSteps(bot->GetClass(), report.tab, currentRanks);
@@ -278,14 +298,14 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
     {
         if (report.spent >= expectedTotal)
             break;
-        auto tit = cache.talentToNode.find(talentId);
-        if (tit == cache.talentToNode.end())
+        ResolvedNode const* found = FindStepNode(cache, talentId);
+        if (!found)
         {
             if (!firstUnmapped)
                 firstUnmapped = talentId;
             continue;
         }
-        ResolvedNode const& rn = tit->second;
+        ResolvedNode const& rn = *found;
         bool outOfPoints = false;
         tryAddPoint(rn.traitNodeId, rn.traitNodeEntryId, rn.maxRanks, talentId, outOfPoints);
         if (outOfPoints)
@@ -371,7 +391,7 @@ void LogStartupSelfCheck()
             if (step.classId != cls)
                 continue;
             total += step.ranks;
-            if (cache.talentToNode.find(step.talentId) != cache.talentToNode.end())
+            if (FindStepNode(cache, step.talentId))
                 mapped += step.ranks;
         }
         if (i)

@@ -23,9 +23,12 @@ void FrostMageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "icicles channel check",
         NextAction::array(0, new NextAction("cancel channel", ACTION_HIGH + 3), NULL)));
 
+    // Turtle-only spell: no Forever class can learn it (no SkillLineAbility row on 70959).
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(
         "icicles",
         NextAction::array(0, new NextAction("icicles", ACTION_HIGH), NULL)));
+#endif
 
     // The filler has no "shoot" fallback (a GCD or threat-veto refusal
     // must not start the wand); wand only while its mana cost is out of

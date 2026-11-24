@@ -42,9 +42,12 @@ void ArcaneMageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     // MAG-5: rupture (damage + self buff) while the missiles buff is down;
     // the arcane-missiles default owns the GCD while buffed.
+    // Turtle-only spell: no Forever class can learn it (no SkillLineAbility row on 70959).
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(
         "arcane rupture",
         NextAction::array(0, new NextAction("arcane rupture", ACTION_NORMAL + 1), NULL)));
+#endif
 
     // Frostbolt before the wand: the channel costs 320-410 mana against
     // Frostbolt's 130-195, so a mage that cannot afford missiles but can

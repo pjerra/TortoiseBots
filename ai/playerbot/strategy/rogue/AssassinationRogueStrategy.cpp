@@ -40,9 +40,12 @@ void AssassinationRogueStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
         "slice and dice",
         NextAction::array(0, new NextAction("slice and dice", ACTION_HIGH + 1), NULL)));
 
+    // Turtle-only spell: no Forever class can learn it (no SkillLineAbility row on 70959).
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(
         "envenom",
         NextAction::array(0, new NextAction("envenom", ACTION_HIGH + 1), NULL)));
+#endif
 
     triggers.push_back(new TriggerNode(
         "3 combo",
